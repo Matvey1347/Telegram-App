@@ -1,10 +1,12 @@
-import { Controller, Get, Param, Patch, Query } from '@nestjs/common';
+import { Controller, Get, Param, Patch, Query, UseGuards } from '@nestjs/common';
 import {
   CurrentUser,
   type JwtUser,
 } from '../../../common/current-user.decorator';
+import { JwtAuthGuard } from '../../../common/jwt-auth.guard';
 import { TrashService } from './trash.service';
 
+@UseGuards(JwtAuthGuard)
 @Controller('trash')
 export class TrashController {
   constructor(private readonly trash: TrashService) {}

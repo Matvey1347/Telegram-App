@@ -32,6 +32,12 @@ type CalendarRow = {
   index: number;
 };
 
+function scheduleMode(
+  operation: NonNullable<TelegramUnifiedImportManifest["schedule"]>[number],
+) {
+  return operation.placementMode ?? (operation.slotId ? "SLOT" : "CUSTOM");
+}
+
 export function UnifiedImportCalendarPreview({
   manifest,
   previewItems,
@@ -99,12 +105,18 @@ export function UnifiedImportCalendarPreview({
   };
   const updateSchedule = (
     index: number,
-    value: { slotId: string | null; scheduledAt: string },
+    value: {
+      placementMode: "SLOT" | "CUSTOM";
+      slotId?: string | null;
+      scheduledAt: string;
+    },
   ) => {
     replaceOperation(index, {
       ...operations[index],
       action: "SCHEDULE",
-      slotId: value.slotId ?? undefined,
+      placementMode: value.placementMode,
+      slotId: value.placementMode === "SLOT" ? value.slotId ?? undefined : undefined,
+      slotKind: value.placementMode === "SLOT" ? operations[index].slotKind : undefined,
       scheduledAt: value.scheduledAt,
     });
   };
@@ -150,6 +162,7 @@ export function UnifiedImportCalendarPreview({
                 item.label ||
                 t("telegram.posts.import.untitled");
               const scheduledAt = item.scheduledAt ?? operation.scheduledAt;
+              const placementMode = scheduleMode(operation);
               const failure = failures.find(
                 (candidate) =>
                   candidate.ref === (operation.postRef ?? operation.postId),
@@ -187,6 +200,10 @@ export function UnifiedImportCalendarPreview({
                       <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-[11px] text-neutral-300">
                         {item.slotKind === "AD" ? "📣" : "📝"}{" "}
                         {item.slotTitle || item.slotKind}
+                      </span>
+                    ) : placementMode === "CUSTOM" ? (
+                      <span className="rounded bg-violet-950/70 px-1.5 py-0.5 text-[11px] text-violet-200">
+                        Custom time
                       </span>
                     ) : null}
                     <button
@@ -251,6 +268,7 @@ export function UnifiedImportCalendarPreview({
                           replaceOperation(index, {
                             action: "SCHEDULE",
                             postId: operation.postId,
+                            placementMode: item.slotId ? "SLOT" : "CUSTOM",
                             slotId: item.slotId ?? undefined,
                             scheduledAt: scheduledAt ?? undefined,
                             slotKind: item.slotKind ?? undefined,
@@ -290,17 +308,24 @@ export function UnifiedImportCalendarPreview({
                     </div>
                   ) : null}
                   {editingRef === item.ref ? (
-                    <PublicationSlotOccurrenceSelect
-                      channelId={channelId}
-                      value={
-                        (operation.slotId ?? item.slotId) && scheduledAt
-                          ? `${operation.slotId ?? item.slotId}:${scheduledAt}`
-                          : null
-                      }
-                      scheduledAt={scheduledAt}
-                      disabled={disabled}
-                      onChange={(value) => updateSchedule(index, value)}
-                    />
+                    <div className="space-y-3 rounded-md border border-neutral-800 bg-neutral-900/40 p-3">
+                      <PublicationSlotOccurrenceSelect
+                        channelId={channelId}
+                        value={
+                          (operation.slotId ?? item.slotId) && scheduledAt
+                            ? `${operation.slotId ?? item.slotId}:${scheduledAt}`
+                            : null
+                        }
+                        scheduledAt={scheduledAt}
+                        disabled={disabled}
+                        onChange={(value) =>
+                          updateSchedule(index, {
+                            ...value,
+                            placementMode: value.slotId ? "SLOT" : "CUSTOM",
+                          })
+                        }
+                      />
+                    </div>
                   ) : null}
                   {failure?.error ? (
                     <p className="rounded-md border border-rose-900/70 bg-rose-950/30 px-3 py-2 text-xs text-rose-200">

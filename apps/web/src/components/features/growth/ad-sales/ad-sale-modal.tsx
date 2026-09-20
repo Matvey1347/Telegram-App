@@ -2,7 +2,12 @@
 import type { TelegramAdSaleOrigin } from "@telegram-system/shared";
 import { accountDisplayName } from "@/lib/features/finance/account-display";
 import { expandNetworkChannelIds } from "@/lib/features/growth/telegram-ad-sales";
-import { Button, CustomSelect, FormField, Modal } from "@/components/ui/primitives";
+import {
+  Button,
+  CustomSelect,
+  FormField,
+  Modal,
+} from "@/components/ui/primitives";
 import { MemberSelect } from "@/components/features/workspace/member-select";
 import { ModalDraftPicker } from "@/components/ui/modal-draft-picker";
 import { adSaleOriginOptions } from "./ad-sale-origin";
@@ -76,6 +81,7 @@ export function AdSaleModal(props: AdSaleModalProps) {
     quotePreview,
     paymentCurrency,
     commonTime,
+    effectiveChannelIds,
     commonFormats,
     commonFormatName,
     loadPublishedPosts,
@@ -187,6 +193,7 @@ export function AdSaleModal(props: AdSaleModalProps) {
                 commonTime={commonTime}
                 commonFormatName={commonFormatName}
                 commonFormats={commonFormats}
+                effectiveChannelIds={effectiveChannelIds}
                 networks={networks}
                 channels={channels}
                 networkPricing={

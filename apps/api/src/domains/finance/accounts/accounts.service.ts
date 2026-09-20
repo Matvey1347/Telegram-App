@@ -4,7 +4,7 @@ import {
   createPaginatedResponse,
   normalizePagination,
 } from '../../../common/pagination/pagination.utils';
-import { CurrenciesService } from '../currencies/currencies.service';
+import { FinanceCategoriesService } from '../finance-categories/finance-categories.service';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { WorkspaceService } from '../../../common/workspace.service';
 import { iconToResolvedEmoji } from '../../../common/icons/resolved-emoji';
@@ -23,7 +23,7 @@ export class AccountsService {
     private readonly prisma: PrismaService,
     private readonly workspaceService: WorkspaceService,
     private readonly conversionService: CurrencyConversionService,
-    private readonly currenciesService: CurrenciesService,
+    private readonly financeCategoriesService: FinanceCategoriesService,
     private readonly authorization: WorkspaceAuthorizationService,
   ) {}
 
@@ -237,32 +237,106 @@ export class AccountsService {
       });
       if (!icon) throw new NotFoundException('Icon not found');
     }
-    const account = await this.prisma.account.create({
-      data: {
-        workspaceId,
-        name: dto.name,
-        currency: dto.currency.toUpperCase(),
-        initialBalance: dto.initialBalance,
-        isActive: dto.isActive ?? true,
-        iconId: dto.iconId ?? undefined,
-        assignedMemberId,
-        createdByUserId: userId,
-      },
-      include: {
-        icon: {
-          select: {
-            id: true,
-            type: true,
-            name: true,
-            emoji: true,
-            imageUrl: true,
+    await this.financeCategoriesService.ensureSystemCategories(workspaceId);
+    const currency = dto.currency.toUpperCase();
+    const [workspace, investmentCategory] = await Promise.all([
+      this.prisma.workspace.findUniqueOrThrow({
+        where: { id: workspaceId },
+        select: { primaryCurrency: true },
+      }),
+      this.prisma.transactionCategory.findUniqueOrThrow({
+        where: {
+          workspaceId_type_key: {
+            workspaceId,
+            type: 'income',
+            key: 'investment',
           },
         },
-        assignedMember: WorkspaceService.assignedMemberInclude,
-        createdByUser: WorkspaceService.createdByUserInclude,
-      },
+        select: { id: true, name: true },
+      }),
+    ]);
+    const exchangeRateToPrimary =
+      dto.initialBalance <= 0 || currency === workspace.primaryCurrency
+        ? 1
+        : await this.conversionService.getRate(
+            currency,
+            workspace.primaryCurrency,
+            workspaceId,
+          );
+    if (dto.initialBalance > 0 && exchangeRateToPrimary == null) {
+      throw new NotFoundException(
+        `No exchange rate from ${currency} to ${workspace.primaryCurrency}`,
+      );
+    }
+    const resolvedExchangeRateToPrimary = exchangeRateToPrimary ?? 1;
+    const account = await this.prisma.$transaction(async (tx) => {
+      // An opening balance is money contributed by a member. Keeping it only
+      // on Account made transfers possible without an auditable source.
+      const created = await tx.account.create({
+        data: {
+          workspaceId,
+          name: dto.name,
+          currency,
+          initialBalance: 0,
+          isActive: dto.isActive ?? true,
+          iconId: dto.iconId ?? undefined,
+          assignedMemberId,
+          createdByUserId: userId,
+        },
+        include: {
+          icon: {
+            select: {
+              id: true,
+              type: true,
+              name: true,
+              emoji: true,
+              imageUrl: true,
+            },
+          },
+          assignedMember: WorkspaceService.assignedMemberInclude,
+          createdByUser: WorkspaceService.createdByUserInclude,
+        },
+      });
+      if (dto.initialBalance > 0 && assignedMemberId) {
+        const transaction = await tx.transaction.create({
+          data: {
+            workspaceId,
+            accountId: created.id,
+            type: 'income',
+            amount: dto.initialBalance,
+            currency,
+            amountInPrimaryCurrency:
+              dto.initialBalance * resolvedExchangeRateToPrimary,
+            exchangeRateToPrimary: resolvedExchangeRateToPrimary,
+            category: investmentCategory.name,
+            categoryId: investmentCategory.id,
+            memberId: assignedMemberId,
+            description: 'Opening investment',
+            date: new Date(),
+            createdByUserId: userId,
+            assignedMemberId,
+          },
+        });
+        await tx.investment.create({
+          data: {
+            workspaceId,
+            workspaceMemberId: assignedMemberId,
+            accountId: created.id,
+            transactionId: transaction.id,
+            amount: dto.initialBalance,
+            currency,
+            amountInPrimaryCurrency:
+              dto.initialBalance * resolvedExchangeRateToPrimary,
+            exchangeRateToPrimary: resolvedExchangeRateToPrimary,
+            date: transaction.date,
+            notes: 'Opening investment',
+            createdByUserId: userId,
+            assignedMemberId,
+          },
+        });
+      }
+      return created;
     });
-    await this.currenciesService.ensureRatesForWorkspace(workspaceId);
     return { ...account, iconPresentation: iconToResolvedEmoji(account.icon) };
   }
 
@@ -296,10 +370,11 @@ export class AccountsService {
       if (!icon) throw new NotFoundException('Icon not found');
     }
 
+    const { initialBalance: _initialBalance, ...accountChanges } = dto;
     const updated = await this.prisma.account.update({
       where: { id },
       data: {
-        ...dto,
+        ...accountChanges,
         currency: dto.currency?.toUpperCase(),
         iconId: dto.iconId === undefined ? undefined : dto.iconId,
         assignedMemberId,
@@ -319,7 +394,6 @@ export class AccountsService {
       },
     });
     if (dto.currency && dto.currency.toUpperCase() !== account.currency) {
-      await this.currenciesService.ensureRatesForWorkspace(workspaceId);
     }
     return { ...updated, iconPresentation: iconToResolvedEmoji(updated.icon) };
   }

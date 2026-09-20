@@ -47,6 +47,7 @@ export const messages = {
   "telegram.posts.editorComponents.format.headingLevel": "Heading {level}",
   "telegram.posts.editorComponents.format.inlineCode": "Inline code",
   "telegram.posts.editorComponents.format.insertLink": "Insert link",
+  "telegram.posts.editorComponents.format.insertImage": "Insert image",
   "telegram.posts.editorComponents.format.italic": "Italic",
   "telegram.posts.editorComponents.format.list": "List",
   "telegram.posts.editorComponents.format.numberedList": "Numbered list",

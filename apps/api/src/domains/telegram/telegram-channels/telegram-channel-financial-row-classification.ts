@@ -42,6 +42,7 @@ export function isChannelAdvertisingRevenueTransaction(
     transaction.type === 'income' &&
     !transaction.telegramAdSalePayment &&
     (transaction.categoryRef?.key === 'channel_advertising_revenue' ||
-      normalizedCategoryName(transaction) === 'channel advertising revenue')
+      normalizedCategoryName(transaction) === 'channel advertising revenue' ||
+      normalizedCategoryName(transaction) === 'ad sales')
   );
 }

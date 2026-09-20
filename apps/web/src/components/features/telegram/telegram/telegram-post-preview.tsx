@@ -141,36 +141,8 @@ function renderRichBlocks(
         "block",
       ),
   );
-  value = value.replace(
-    /(?:^|\n)((?:[-*]\s+.+(?:\n|$))+)/g,
-    (_match, items: string) =>
-      token(
-        `<ul class="tg-rich-list" style="list-style-type:disc">${items
-          .trim()
-          .split("\n")
-          .map(
-            (item) =>
-              `<li>${renderTelegramPreviewInlineMarkup(item.replace(/^[-*]\s+/, ""))}</li>`,
-          )
-          .join("")}</ul>`,
-        "block",
-      ),
-  );
-  value = value.replace(
-    /(?:^|\n)((?:\d+\.\s+.+(?:\n|$))+)/g,
-    (_match, items: string) =>
-      token(
-        `<ol class="tg-rich-list" style="list-style-type:decimal">${items
-          .trim()
-          .split("\n")
-          .map(
-            (item) =>
-              `<li>${renderTelegramPreviewInlineMarkup(item.replace(/^\d+\.\s+/, ""))}</li>`,
-          )
-          .join("")}</ol>`,
-        "block",
-      ),
-  );
+  // Telegram accepts list-looking lines as ordinary message text. Keeping the
+  // source untouched avoids browser list indentation in the local preview.
   return value;
 }
 
@@ -192,6 +164,20 @@ function previewHtml(
   const customEmojiInlineStyle =
     "display:inline-block;width:1em;height:1em;max-width:1em;max-height:1em;vertical-align:-0.1em;object-fit:contain";
   let value = renderRichBlocks(raw, token).replace(
+    /^!\[([^\]\n]*)\]\((https?:\/\/[^\s<>()]+)\)$/gim,
+    (_match, alt: string, href: string) => {
+      try {
+        const url = new URL(href);
+        if (!url.hostname.includes(".")) return _match;
+        return token(
+          `<img class="tg-inline-image" src="${escapeHtml(url.toString())}" alt="${escapeHtml(alt)}">`,
+          "block",
+        );
+      } catch {
+        return _match;
+      }
+    },
+  ).replace(
     /!\[([^\]\n]*)\]\(tg:\/\/emoji\?id=([0-9]+)\)/g,
     (_match, alt: string, documentId: string) => {
       const emoji = customEmojiById.get(documentId);

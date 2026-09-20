@@ -1,13 +1,14 @@
 "use client";
 
-import type { ReactNode } from "react";
-import { Pencil, Trash2 } from "lucide-react";
+import { useState, type ReactNode } from "react";
+import { Pencil, Send, Trash2 } from "lucide-react";
 import type { Promo } from "@/lib/api";
 import {
   CardActionsMenu,
   CardMenuAction,
 } from "@/components/ui/card-actions-menu";
 import { renderTelegramPreviewInlineMarkup } from "@/components/features/telegram/telegram/telegram-post-preview-markup";
+import { PromoQuickSendModal } from "./promo-quick-send-modal";
 
 export function PromoCard({
   promo,
@@ -24,11 +25,12 @@ export function PromoCard({
   onEdit: () => void;
   onDelete: () => void;
 }) {
+  const [quickSendOpen, setQuickSendOpen] = useState(false);
   const openingText =
     promo.previewText?.trim() || promo.plainText?.trim() || promo.text?.trim();
 
   return (
-    <article className="group relative min-h-48 overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-950/80 transition duration-200 hover:border-neutral-700">
+    <article className="group relative isolate min-h-48 overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-950/80 transition duration-200 hover:border-neutral-700">
       <button
         type="button"
         className="absolute inset-0 z-0 rounded-2xl focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-neutral-600"
@@ -80,6 +82,11 @@ export function PromoCard({
             onClick={onEdit}
           />
           <CardMenuAction
+            label="Send to bot"
+            icon={<Send size={16} />}
+            onClick={() => setQuickSendOpen(true)}
+          />
+          <CardMenuAction
             danger
             label="Delete"
             icon={<Trash2 size={16} />}
@@ -87,6 +94,12 @@ export function PromoCard({
           />
         </CardActionsMenu>
       </div>
+      {quickSendOpen ? (
+        <PromoQuickSendModal
+          promo={promo}
+          onClose={() => setQuickSendOpen(false)}
+        />
+      ) : null}
     </article>
   );
 }

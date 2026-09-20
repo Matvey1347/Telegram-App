@@ -73,4 +73,23 @@ describe('TelegramUnifiedImportDto', () => {
       validateSync(dto, { whitelist: true, forbidNonWhitelisted: true }),
     ).toEqual([]);
   });
+
+  it('accepts a custom schedule without a publication slot', () => {
+    const dto = plainToInstance(TelegramUnifiedImportDto, {
+      version: 1,
+      schedule: [
+        {
+          action: 'SCHEDULE',
+          placementMode: 'CUSTOM',
+          postId: 'post-1',
+          scheduledAt: '2026-09-21T08:10:00+02:00',
+          imported: false,
+        },
+      ],
+    });
+
+    expect(
+      validateSync(dto, { whitelist: true, forbidNonWhitelisted: true }),
+    ).toEqual([]);
+  });
 });

@@ -445,7 +445,7 @@ export class MemberFinanceService {
         [memberId],
         tx,
       );
-      const available = rows.byMember.get(memberId)?.reinvestment ?? 0;
+      const available = rows.byMember.get(memberId)?.investorEarnings ?? 0;
       if (dto.amount - available > 0.001) {
         throw new BadRequestException('Amount exceeds available reinvestment');
       }

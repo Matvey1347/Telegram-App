@@ -40,7 +40,6 @@ describe("mutualPromotionFoldersApi activation", () => {
         {
           participantId: "participant-1",
           inviteLinkId: "invite-2",
-          inviteLinkMode: "FOLDER_ONLY" as const,
         },
       ],
     };

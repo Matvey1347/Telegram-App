@@ -101,10 +101,11 @@ export function CardActionsMenu({
     };
     place();
     window.addEventListener("resize", place);
-    window.addEventListener("scroll", place, true);
+    const closeOnScroll = () => setOpen(false);
+    window.addEventListener("scroll", closeOnScroll, true);
     return () => {
       window.removeEventListener("resize", place);
-      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("scroll", closeOnScroll, true);
     };
   }, [open]);
 

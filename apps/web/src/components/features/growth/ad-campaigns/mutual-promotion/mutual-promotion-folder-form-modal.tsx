@@ -1,12 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import type {
   CreateMutualPromotionFolderPayload,
   MutualPromotionFolderDetail,
 } from "@telegram-system/shared";
-import type { Account, TelegramChannel } from "@/lib/api";
+import {
+  telegramChannelsApi,
+  type Account,
+  type TelegramChannel,
+} from "@/lib/api";
 import { mutualPromotionFoldersApi } from "@/lib/features/growth/mutual-promotion-folders-api";
 import { mutualPromotionFolderKeys } from "@/lib/query-keys";
 import {
@@ -20,6 +24,7 @@ import {
   emptyFolderDraft,
   folderDetailToDraft,
   folderDraftInstants,
+  normalizeFolderDraft,
   resolveFolderDraftTitle,
   type FolderDraft,
 } from "./mutual-promotion-form-types";
@@ -47,7 +52,20 @@ function validateDraft(draft: FolderDraft, timezone: string) {
   if (draft.participants.some((participant) => !participant.inviteLinkId)) {
     return "Select an invite link for every participating channel.";
   }
+  if (draft.bulkExpense.enabled && !draft.bulkExpense.accountId) {
+    return "Select the Finance account for the shared expense.";
+  }
   if (
+    draft.bulkExpense.enabled &&
+    (!/^\d+(?:\.\d{1,2})?$/.test(draft.bulkExpense.totalAmount.trim()) ||
+      !Number.isSafeInteger(
+        Math.round(Number(draft.bulkExpense.totalAmount) * 100),
+      ))
+  ) {
+    return "Enter a valid total expense to split across the channels.";
+  }
+  if (
+    !draft.bulkExpense.enabled &&
     draft.participants.some(
       (participant) =>
         participant.role === "PAID" &&
@@ -59,7 +77,7 @@ function validateDraft(draft: FolderDraft, timezone: string) {
   return null;
 }
 
-function toPayload(
+export function toPayload(
   draft: FolderDraft,
   timezone: string,
 ): CreateMutualPromotionFolderPayload {
@@ -70,12 +88,19 @@ function toPayload(
     startsAt,
     endsAt,
     notes: draft.notes.trim() || null,
+    expenseAllocation: draft.bulkExpense.enabled
+      ? {
+          mode: "EQUAL",
+          accountId: draft.bulkExpense.accountId,
+          totalAmount: Number(draft.bulkExpense.totalAmount),
+        }
+      : null,
     participants: draft.participants.map((participant) => ({
       telegramChannelId: participant.channelId,
-      role: participant.role,
+      role: draft.bulkExpense.enabled ? "PAID" : participant.role,
       inviteLinkId: participant.inviteLinkId,
-      inviteLinkMode: participant.inviteLinkMode,
       expense:
+        !draft.bulkExpense.enabled &&
         participant.role === "PAID" &&
         participant.accountId &&
         participant.amount
@@ -151,6 +176,7 @@ export function MutualPromotionFolderFormModal({
     enabled: true,
     value: draft,
     createInitialValue: createInitialDraft,
+    normalize: normalizeFolderDraft,
     onRestore: restoreDraft,
     isMeaningful: isMeaningfulDraft,
     previewFor: (value) => ({
@@ -215,6 +241,26 @@ export function MutualPromotionFolderFormModal({
     staleTime: 30_000,
     refetchOnMount: "always",
   });
+  const registerInviteLink = useMutation({
+    mutationFn: ({ channelId, url }: { channelId: string; url: string }) =>
+      telegramChannelsApi.registerInviteLink(channelId, url),
+    onSuccess: async (link, { channelId }) => {
+      await inviteLinksQuery.refetch();
+      setDraft((current) => ({
+        ...current,
+        participants: current.participants.map((participant) =>
+          participant.channelId === channelId
+            ? { ...participant, inviteLinkId: link.id }
+            : participant,
+        ),
+      }));
+      setError("");
+    },
+    onError: () =>
+      setError(
+        "This invite link could not be verified for the selected channel.",
+      ),
+  });
 
   const resolvedParticipants = useMemo(() => {
     const defaults = initialInviteLinksQuery.data;
@@ -233,6 +279,10 @@ export function MutualPromotionFolderFormModal({
     () => ({ ...draft, participants: resolvedParticipants }),
     [draft, resolvedParticipants],
   );
+  const allPaid =
+    resolvedParticipants.length > 0 &&
+    (draft.bulkExpense.enabled ||
+      resolvedParticipants.every((participant) => participant.role === "PAID"));
 
   const submit = async () => {
     const validationError = validateDraft(resolvedDraft, timezone);
@@ -272,11 +322,12 @@ export function MutualPromotionFolderFormModal({
         />
       ) : (
         <>
-          <div className="grid gap-5 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+          <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
             <MutualPromotionFolderDetails
               draft={draft}
               titlePreview={titlePreview}
               editing={Boolean(folder)}
+              allPaid={allPaid}
               onChange={updateDraft}
             />
             {resourcesLoading ? (
@@ -288,6 +339,7 @@ export function MutualPromotionFolderFormModal({
                 channels={channels}
                 accounts={accounts}
                 participants={resolvedParticipants}
+                bulkExpense={draft.bulkExpense}
                 inviteLinks={
                   inviteLinksQuery.data ??
                   initialInviteLinksQuery.data ??
@@ -310,8 +362,11 @@ export function MutualPromotionFolderFormModal({
                 onInviteLinksOpen={() =>
                   setRequestedInviteOptionsKey(inviteOptionsRequestKey)
                 }
-                onChange={(participants) =>
-                  updateDraft({ ...draft, participants })
+                onRegisterInviteLink={async (channelId, url) => {
+                  await registerInviteLink.mutateAsync({ channelId, url });
+                }}
+                onChange={({ participants, bulkExpense }) =>
+                  updateDraft({ ...draft, participants, bulkExpense })
                 }
               />
             )}
@@ -320,12 +375,13 @@ export function MutualPromotionFolderFormModal({
             <FormError message="Could not load available invite links." />
           ) : null}
           <FormError message={error ?? undefined} />
-          <div className="mt-5 flex justify-end gap-2">
+          <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <Button
               type="button"
               variant="secondary"
               onClick={onClose}
               disabled={saving}
+              className="w-full sm:w-auto"
             >
               Cancel
             </Button>
@@ -333,12 +389,15 @@ export function MutualPromotionFolderFormModal({
               type="button"
               onClick={() => void submit()}
               disabled={saving || resourcesLoading || resourcesError}
+              className="w-full sm:w-auto"
             >
               {saving
                 ? "Saving…"
                 : folder
                   ? "Save changes"
-                  : "Create folder & add posts"}
+                  : allPaid
+                    ? "Create folder"
+                    : "Create folder & add posts"}
             </Button>
           </div>
         </>

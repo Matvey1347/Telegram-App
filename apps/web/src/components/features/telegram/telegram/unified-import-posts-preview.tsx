@@ -265,9 +265,16 @@ export function UnifiedImportPostsPreview({
               const nextSchedule = {
                 action: "SCHEDULE" as const,
                 postRef: target.ref,
-                slotId: value.slotId ?? schedule[scheduleIndex]?.slotId ?? "",
+                placementMode: value.placementMode,
+                slotId:
+                  value.placementMode === "SLOT"
+                    ? value.slotId ?? schedule[scheduleIndex]?.slotId ?? ""
+                    : undefined,
                 scheduledAt: value.scheduledAt,
-                slotKind: schedule[scheduleIndex]?.slotKind,
+                slotKind:
+                  value.placementMode === "SLOT"
+                    ? schedule[scheduleIndex]?.slotKind
+                    : undefined,
               };
               if (scheduleIndex >= 0) schedule[scheduleIndex] = nextSchedule;
               else schedule.push(nextSchedule);

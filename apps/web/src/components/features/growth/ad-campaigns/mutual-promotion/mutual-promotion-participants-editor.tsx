@@ -3,9 +3,10 @@
 import type { MutualPromotionInviteLinkOption } from "@telegram-system/shared";
 import { inviteLinkCreatorFallback } from "@/lib/features/telegram/telegram-invite-link-creator";
 import {
-  telegramInviteLinkDefaultBadgeClassName,
+  isTelegramInviteLink,
   telegramInviteLinkOptionLabel,
 } from "@/lib/features/telegram/telegram-invite-link-options";
+import { TelegramInviteLinkOptionLabel } from "@/components/features/telegram/telegram/telegram-invite-link-option-label";
 import { TelegramInviteLinkCreatorAvatar } from "@/components/features/telegram/telegram/telegram-invite-link-creator-avatar";
 import type { Account, TelegramChannel } from "@/lib/api";
 import {
@@ -15,24 +16,35 @@ import {
   MultiSelect,
   Select,
 } from "@/components/ui/primitives";
-import type { ParticipantDraft } from "./mutual-promotion-form-types";
+import type {
+  BulkExpenseDraft,
+  ParticipantDraft,
+} from "./mutual-promotion-form-types";
+import { MutualPromotionBulkExpenseControls } from "./mutual-promotion-bulk-expense-controls";
 
 export function MutualPromotionParticipantsEditor({
   channels,
   accounts,
   participants,
+  bulkExpense,
   inviteLinks,
   inviteLinksLoading,
   onInviteLinksOpen,
+  onRegisterInviteLink,
   onChange,
 }: {
   channels: TelegramChannel[];
   accounts: Account[];
   participants: ParticipantDraft[];
+  bulkExpense: BulkExpenseDraft;
   inviteLinks: MutualPromotionInviteLinkOption[];
   inviteLinksLoading: boolean;
   onInviteLinksOpen?: () => void;
-  onChange: (participants: ParticipantDraft[]) => void;
+  onRegisterInviteLink?: (channelId: string, url: string) => Promise<void>;
+  onChange: (value: {
+    participants: ParticipantDraft[];
+    bulkExpense: BulkExpenseDraft;
+  }) => void;
 }) {
   const byChannel = new Map(
     participants.map((participant) => [participant.channelId, participant]),
@@ -47,23 +59,21 @@ export function MutualPromotionParticipantsEditor({
   });
 
   const selectChannels = (channelIds: string[]) => {
-    onChange(
-      channelIds.flatMap((channelId) => {
-        const current = byChannel.get(channelId);
-        if (current) return [current];
-        if (!channelById.has(channelId)) return [];
-        return [
-          {
-            channelId,
-            role: "PUBLISHER" as const,
-            inviteLinkId: "",
-            inviteLinkMode: "FOLDER_ONLY" as const,
-            accountId: "",
-            amount: "",
-          },
-        ];
-      }),
-    );
+    const nextParticipants = channelIds.flatMap((channelId) => {
+      const current = byChannel.get(channelId);
+      if (current) return [current];
+      if (!channelById.has(channelId)) return [];
+      return [
+        {
+          channelId,
+          role: "PUBLISHER" as const,
+          inviteLinkId: "",
+          accountId: "",
+          amount: "",
+        },
+      ];
+    });
+    onChange({ participants: nextParticipants, bulkExpense });
   };
 
   const update = (
@@ -73,11 +83,19 @@ export function MutualPromotionParticipantsEditor({
     const current = byChannel.get(channelId);
     if (!current) return;
     const next = { ...current, ...patch };
-    onChange(
-      participants.map((participant) =>
+    onChange({
+      participants: participants.map((participant) =>
         participant.channelId === channelId ? next : participant,
       ),
-    );
+      bulkExpense,
+    });
+  };
+
+  const updateBulkExpense = (next: BulkExpenseDraft) => {
+    onChange({
+      participants,
+      bulkExpense: next,
+    });
   };
 
   return (
@@ -104,10 +122,16 @@ export function MutualPromotionParticipantsEditor({
           iconFallback: channel.title,
         }))}
       />
-      <div className="grid max-h-[42vh] gap-2 overflow-y-auto pr-1 md:grid-cols-2">
+      <MutualPromotionBulkExpenseControls
+        value={bulkExpense}
+        channelCount={selectedChannels.length}
+        accounts={accounts}
+        onChange={updateBulkExpense}
+      />
+      <div className="grid min-w-0 gap-2 overflow-visible md:max-h-[42vh] md:overflow-y-auto md:pr-1 xl:grid-cols-2">
         {selectedChannels.map((channel) => {
           const participant = byChannel.get(channel.id)!;
-          const role = participant.role;
+          const role = bulkExpense.enabled ? "PAID" : participant.role;
           const channelLinks = inviteLinks.filter(
             (link) =>
               link.telegramChannelId === channel.id &&
@@ -118,7 +142,7 @@ export function MutualPromotionParticipantsEditor({
               key={channel.id}
               className={`rounded-xl border bg-neutral-950/60 p-3 ${
                 role === "PAID"
-                  ? "border-amber-800/70 md:col-span-2"
+                  ? "border-amber-800/70 xl:col-span-2"
                   : "border-neutral-800"
               }`}
             >
@@ -141,13 +165,16 @@ export function MutualPromotionParticipantsEditor({
               </div>
               <div
                 className={`grid gap-3 ${
-                  role === "PAID" ? "sm:grid-cols-2" : ""
+                  role === "PAID" && !bulkExpense.enabled
+                    ? "lg:grid-cols-2"
+                    : ""
                 }`}
               >
                 <div className="grid content-start gap-3">
                   <FormField label="Participation">
                     <Select
                       value={role}
+                      disabled={bulkExpense.enabled}
                       onChange={(event) =>
                         update(channel.id, {
                           role: event.target.value as ParticipantDraft["role"],
@@ -172,8 +199,9 @@ export function MutualPromotionParticipantsEditor({
                       options={channelLinks.map((link) => ({
                         value: link.id,
                         label: telegramInviteLinkOptionLabel(link),
-                        badgeClassName:
-                          telegramInviteLinkDefaultBadgeClassName(link),
+                        labelContent: (
+                          <TelegramInviteLinkOptionLabel link={link} />
+                        ),
                         meta: link.url,
                         iconFallback: inviteLinkCreatorFallback(link),
                         icon: (
@@ -187,25 +215,27 @@ export function MutualPromotionParticipantsEditor({
                         ),
                         tone: link.available ? undefined : "warning",
                       }))}
+                      canCreateOption={
+                        onRegisterInviteLink
+                          ? (input) =>
+                              isTelegramInviteLink(input) &&
+                              !channelLinks.some(
+                                (link) => link.url === input.trim(),
+                              )
+                          : undefined
+                      }
+                      createOptionLabel={() =>
+                        "Verify and add this invite link"
+                      }
+                      onCreateOption={
+                        onRegisterInviteLink
+                          ? (url) => onRegisterInviteLink(channel.id, url)
+                          : undefined
+                      }
                     />
                   </FormField>
-                  <FormField label="Link use">
-                    <Select
-                      value={participant.inviteLinkMode}
-                      onChange={(event) =>
-                        update(channel.id, {
-                          inviteLinkMode: event.target.value as
-                            | "FOLDER_ONLY"
-                            | "REUSABLE",
-                        })
-                      }
-                    >
-                      <option value="FOLDER_ONLY">📁 Only this folder</option>
-                      <option value="REUSABLE">♻️ Reusable for folders</option>
-                    </Select>
-                  </FormField>
                 </div>
-                {role === "PAID" ? (
+                {role === "PAID" && !bulkExpense.enabled ? (
                   <aside
                     aria-label="Paid participation details"
                     className="grid content-start gap-3 rounded-xl border border-amber-800/60 bg-amber-950/20 p-3"

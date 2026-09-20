@@ -163,15 +163,10 @@ describe("UnifiedImportModal", () => {
     expect(screen.getByRole("button", { name: "Import" })).toBeDisabled();
   });
 
-  it("hides the inline instruction and copies the canonical instruction while downloading context", async () => {
+  it("downloads the canonical instruction together with a context response that lacks it", async () => {
     vi.mocked(telegramChannelsApi.unifiedImportContext).mockResolvedValue(
       new Blob(["full context"]),
     );
-    const writeText = vi.fn().mockResolvedValue(undefined);
-    Object.defineProperty(navigator, "clipboard", {
-      configurable: true,
-      value: { writeText },
-    });
     Object.defineProperty(URL, "createObjectURL", {
       configurable: true,
       value: vi.fn(() => "blob:context"),
@@ -201,7 +196,7 @@ describe("UnifiedImportModal", () => {
 
     fireEvent.click(
       screen.getByRole("button", {
-        name: "Copy instruction + download full context",
+        name: "Download instruction + full context",
       }),
     );
 
@@ -209,10 +204,24 @@ describe("UnifiedImportModal", () => {
       expect(telegramChannelsApi.unifiedImportContext).toHaveBeenCalledWith(
         "channel-1",
       );
-      expect(writeText).toHaveBeenCalledWith(
-        TELEGRAM_UNIFIED_IMPORT_INSTRUCTION,
-      );
+      expect(URL.createObjectURL).toHaveBeenCalledTimes(1);
     });
+    const downloadedBlob = vi.mocked(URL.createObjectURL).mock.calls[0]?.[0];
+    expect(downloadedBlob).toBeInstanceOf(Blob);
+    const downloadedText = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(reader.error);
+      reader.onload = () => resolve(String(reader.result ?? ""));
+      reader.readAsText(downloadedBlob as Blob);
+    });
+    expect(downloadedText.startsWith(TELEGRAM_UNIFIED_IMPORT_INSTRUCTION)).toBe(
+      true,
+    );
+    expect(downloadedText).toContain('"placementMode": "CUSTOM"');
+    expect(downloadedText).toContain(
+      "CUSTOM планирует публикацию на произвольные будущие дату и время",
+    );
+    expect(downloadedText).toContain("full context");
   });
 
   it("automatically builds preview after JSON is pasted", async () => {

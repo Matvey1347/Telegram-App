@@ -785,6 +785,7 @@ describe('TelegramUnifiedImportService', () => {
       schedule: [
         {
           action: 'SCHEDULE' as const,
+          placementMode: 'CUSTOM' as const,
           postId: 'post-custom-time',
           scheduledAt: '2026-10-02T09:25:00.000Z',
         },
@@ -804,6 +805,7 @@ describe('TelegramUnifiedImportService', () => {
       expect.objectContaining({
         action: 'SCHEDULE',
         entityId: 'post-custom-time',
+        placementMode: 'CUSTOM',
         valid: true,
       }),
     );
@@ -815,6 +817,28 @@ describe('TelegramUnifiedImportService', () => {
         scheduledAt: '2026-10-02T09:25:00.000Z',
         publicationSlotId: undefined,
       },
+    );
+  });
+
+  it('rejects a custom schedule that also specifies a slot', async () => {
+    const manifest = {
+      version: 1 as const,
+      schedule: [
+        {
+          action: 'SCHEDULE' as const,
+          placementMode: 'CUSTOM' as const,
+          postId: 'post-custom-time',
+          slotId: 'slot-1',
+          scheduledAt: '2026-10-02T09:25:00.000Z',
+        },
+      ],
+    };
+
+    const preview = await service.preview('user-1', 'channel-1', manifest);
+
+    expect(preview.valid).toBe(false);
+    expect(preview.sections[3].items[0]?.errors).toContain(
+      'CUSTOM scheduling cannot use slotId',
     );
   });
 

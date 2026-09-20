@@ -202,6 +202,65 @@ describe("ConfirmDeleteModal", () => {
 });
 
 describe("CustomSelect", () => {
+  it("keeps a long selected label and URL inside the mobile trigger", () => {
+    const { container } = render(
+      <div className="w-72">
+        <CustomSelect
+          value="invite"
+          onChange={() => {}}
+          searchable={false}
+          options={[
+            {
+              value: "invite",
+              label: "Imported MTProto link · Default for a very long channel",
+              meta: "https://t.me/+a-very-long-invite-link-that-must-not-widen-the-modal",
+            },
+          ]}
+        />
+      </div>,
+    );
+
+    const trigger = screen.getByRole("button", {
+      name: /Imported MTProto link/i,
+    });
+    expect(trigger.parentElement).toHaveClass("min-w-0", "max-w-full");
+    expect(trigger).toHaveClass("min-w-0", "max-w-full", "overflow-hidden");
+    expect(container.querySelector("bdi")).toHaveClass(
+      "min-w-0",
+      "max-w-[45%]",
+      "truncate",
+    );
+  });
+
+  it("renders visual option content while retaining a searchable text label", async () => {
+    render(
+      <CustomSelect
+        value="invite"
+        onChange={() => {}}
+        searchPlaceholder="Search invite links"
+        options={[
+          {
+            value: "invite",
+            label: "Campaign link · Folders",
+            labelContent: (
+              <span>
+                Campaign link <span aria-label="Folders">📁</span>
+              </span>
+            ),
+          },
+        ]}
+      />,
+    );
+    expect(
+      screen.getByRole("button", { name: /Campaign link.*Folders/ }),
+    ).toBeVisible();
+    await userEvent.click(
+      screen.getByRole("button", { name: /Campaign link.*Folders/ }),
+    );
+    expect(screen.getByPlaceholderText("Search invite links")).toBeVisible();
+    expect(screen.getAllByLabelText("Folders")).toHaveLength(2);
+  });
+
   it("marks Telegram Premium emoji instead of presenting it as plain unicode", () => {
     render(
       <CustomSelect
@@ -345,6 +404,27 @@ describe("CustomSelect", () => {
 });
 
 describe("MultiSelect", () => {
+  it("does not let long selected chips define a wider intrinsic trigger", () => {
+    render(
+      <MultiSelect
+        value={["channel-1"]}
+        onChange={() => {}}
+        options={[
+          {
+            value: "channel-1",
+            label: "A channel title that is much wider than a phone viewport",
+          },
+        ]}
+      />,
+    );
+
+    const trigger = screen.getByRole("button", {
+      name: /A channel title that is much wider/i,
+    });
+    expect(trigger.parentElement).toHaveClass("min-w-0", "max-w-full");
+    expect(trigger).toHaveClass("min-w-0", "max-w-full", "overflow-hidden");
+  });
+
   it("renders its options in an adaptive overlay outside modal clipping", async () => {
     const user = userEvent.setup();
     vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({

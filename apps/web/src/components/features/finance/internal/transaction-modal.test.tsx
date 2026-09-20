@@ -202,6 +202,26 @@ describe("internal transaction modal category fields", () => {
     );
   });
 
+  it("requires a channel for Buy Channels before submitting", async () => {
+    vi.spyOn(telegramChannelsApi, "select").mockResolvedValue([]);
+    const user = userEvent.setup();
+    renderModal();
+
+    await user.click(screen.getByRole("button", { name: "Select category" }));
+    await user.click(
+      await screen.findByRole("button", { name: /Buy Channels/ }),
+    );
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    const channelField = screen
+      .getByTestId("transaction-primary-fields")
+      .querySelector('[data-transaction-field="channel"]');
+    expect(channelField).not.toBeNull();
+    expect(
+      await within(channelField as HTMLElement).findByText("Required field"),
+    ).toBeInTheDocument();
+  });
+
   it("shows an optional channel selector for Advertising expenses", async () => {
     vi.spyOn(telegramChannelsApi, "select").mockResolvedValue([
       {

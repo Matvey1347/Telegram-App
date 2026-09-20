@@ -112,11 +112,22 @@ Before adding a primitive or domain wrapper, search for an existing selector, da
 - Import: `@/components/features/telegram/telegram/invite-links-table`
 - Use for invite link lists and attribution views.
 
+### Invite link selectors
+
+- Use `TelegramInviteLinkOptionLabel` for purpose icons in selected values and option rows. Its purpose text is hidden on small screens while each icon retains an accessible label.
+- Offer “Verify and add this invite link” for a typed Telegram invite URL. Use `useRegisterTelegramInviteLink` or the existing verified import flow so the server checks that the link belongs to the selected channel before selecting it.
+
 ### `AdSaleModal`
 
 - Import: `@/components/features/growth/ad-sales/ad-sale-modal`
 - Use for ad sale creation/editing.
 - Existing tests cover selected post loading, format pricing and selector retry behavior.
+
+### `CommonAdSlotOptions`
+
+- Import: `@/components/features/growth/common-ad-slot-options`.
+- Use beside a manual time field when one advertising time should apply to selected channels.
+- Loads when channels and a date are selected, shows advertising schedule times directly beneath the common time field, and enables a time only when it is available in every selected channel. Selecting a time fills the caller's existing time fields; manual entry remains available.
 
 ## New Shared Modules
 

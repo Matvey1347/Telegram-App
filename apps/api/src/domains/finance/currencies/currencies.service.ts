@@ -1,19 +1,8 @@
-import {
-  BadGatewayException,
-  BadRequestException,
-  Injectable,
-  Logger,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, type CurrencyDisplayMode } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { WorkspaceService } from '../../../common/workspace.service';
-import { ApplicationLoggerService } from '../../operations/application-logs/application-logger.service';
-import {
-  CreateCurrencyRateDto,
-  UpdateCurrencySettingsDto,
-  UpdateCurrencyRateDto,
-} from './dto';
+import { UpdateCurrencySettingsDto } from './dto';
 import { WorkspaceAuthorizationService } from '../../workspace/workspace-authorization/workspace-authorization.service';
 import { financeAuthorizationTestFallback } from '../finance-authorization-test-fallback';
 
@@ -41,7 +30,7 @@ const SUPPORTED_CURRENCIES = [
 ] as const;
 
 // One observation per UTC day/pair bounds automatic history growth to
-// workspaces × tracked currencies × days. Keep history while dated Finance
+// tracked currencies × days, regardless of workspace count. Keep history while dated Finance
 // writes depend on it; any future retention job must first protect the oldest
 // supported transaction-entry date and immutable valuation snapshots.
 const utcRateDay = (date: Date) =>
@@ -68,16 +57,10 @@ type WorkspaceCurrencySettingsRow = {
 
 @Injectable()
 export class CurrenciesService {
-  private readonly logger = new Logger(CurrenciesService.name);
-
   constructor(
     private readonly prisma: PrismaService,
     private readonly workspaceService: WorkspaceService,
     private readonly authorization: WorkspaceAuthorizationService = financeAuthorizationTestFallback(workspaceService),
-    private readonly applicationLogger: ApplicationLoggerService = {
-      info: () => undefined,
-      writeStructured: () => undefined,
-    } as unknown as ApplicationLoggerService,
   ) {}
 
   async getSettings(userId: string) {
@@ -128,36 +111,19 @@ export class CurrenciesService {
     `;
     if (!workspace) throw new NotFoundException('Workspace not found');
 
-    try {
-      await this.syncRatesForWorkspace(workspaceId, workspace.primaryCurrency);
-    } catch (error) {
-      this.logger.warn(
-        `Currency settings updated for workspace ${workspaceId}, but auto-sync failed: ${(error as Error).message}`,
-      );
-    }
-
     return {
       ...workspace,
       supportedCurrencies: getSupportedCurrencies(),
     };
   }
 
-  async getRates(userId: string) {
-    const { workspaceId } = await this.authorization.require(userId, 'finance.view');
-    return this.prisma.exchangeRate.findMany({
-      where: { workspaceId },
-      orderBy: { date: 'desc' },
-    });
-  }
-
   async getLatestRates(userId: string) {
-    const { workspaceId } = await this.authorization.require(userId, 'finance.view');
+    await this.authorization.require(userId, 'finance.view');
     return this.prisma.$queryRaw(Prisma.sql`
       SELECT DISTINCT ON (rate."baseCurrency", rate."targetCurrency")
         rate.*
       FROM "ExchangeRate" AS rate
-      WHERE rate."workspaceId" = ${workspaceId}
-        AND rate."date" <= NOW()
+      WHERE rate."date" <= NOW()
       ORDER BY
         rate."baseCurrency" ASC,
         rate."targetCurrency" ASC,
@@ -166,136 +132,14 @@ export class CurrenciesService {
     `);
   }
 
-  async createRate(userId: string, dto: CreateCurrencyRateDto) {
-    const { workspaceId } = await this.authorization.require(userId, 'finance.manageCurrencies');
-    return this.prisma.exchangeRate.create({
-      data: {
-        ...dto,
-        baseCurrency: dto.baseCurrency.toUpperCase(),
-        targetCurrency: dto.targetCurrency.toUpperCase(),
-        workspaceId,
-        date: new Date(dto.date),
-      },
-    });
+  async getRates(userId: string) {
+    await this.authorization.require(userId, 'finance.view');
+    return this.prisma.exchangeRate.findMany({ orderBy: { date: 'desc' } });
   }
 
-  async updateRate(userId: string, id: string, dto: UpdateCurrencyRateDto) {
-    const { workspaceId } = await this.authorization.require(userId, 'finance.manageCurrencies');
-    const row = await this.prisma.exchangeRate.findFirst({
-      where: { id, workspaceId },
-    });
-    if (!row) throw new NotFoundException('Exchange rate not found');
-    return this.prisma.exchangeRate.update({
-      where: { id },
-      data: { ...dto, date: dto.date ? new Date(dto.date) : undefined },
-    });
-  }
-
-  async removeRate(userId: string, id: string) {
-    const { workspaceId } = await this.authorization.require(userId, 'finance.manageCurrencies');
-    const row = await this.prisma.exchangeRate.findFirst({
-      where: { id, workspaceId },
-    });
-    if (!row) throw new NotFoundException('Exchange rate not found');
-    return this.prisma.exchangeRate.delete({ where: { id } });
-  }
-
-  async syncRates(userId: string) {
-    const { workspaceId } = await this.authorization.require(userId, 'finance.manageCurrencies');
-    const workspace = await this.prisma.workspace.findUniqueOrThrow({
-      where: { id: workspaceId },
-      select: { primaryCurrency: true },
-    });
-
-    try {
-      const updated = await this.syncRatesForWorkspace(
-        workspaceId,
-        workspace.primaryCurrency,
-      );
-      return { success: true, updated };
-    } catch {
-      this.applicationLogger.writeStructured({
-        level: 'warn',
-        kind: 'integration',
-        source: CurrenciesService.name,
-        event: 'currencies.sync.failed',
-        message: `Currency sync failed for workspace ${workspaceId}.`,
-        workspaceId,
-      });
-      throw new BadGatewayException(
-        'Failed to sync exchange rates. Manual rates remain available.',
-      );
-    }
-  }
-
-  async ensureRatesForWorkspace(workspaceId: string) {
-    const workspace = await this.prisma.workspace.findUniqueOrThrow({
-      where: { id: workspaceId },
-      select: { primaryCurrency: true },
-    });
-
-    try {
-      return await this.syncRatesForWorkspace(
-        workspaceId,
-        workspace.primaryCurrency,
-      );
-    } catch (error) {
-      this.logger.warn(
-        `Currency auto-sync failed for workspace ${workspaceId}: ${(error as Error).message}`,
-      );
-      return 0;
-    }
-  }
-
-  async syncRatesForWorkspaceTask(workspaceId: string) {
-    const workspace = await this.prisma.workspace.findUniqueOrThrow({
-      where: { id: workspaceId },
-      select: { primaryCurrency: true },
-    });
-    const updated = await this.syncRatesForWorkspace(
-      workspaceId,
-      workspace.primaryCurrency,
-    );
-    return { updated };
-  }
-
-  async syncRatesForAllWorkspaces() {
-    const workspaces = await this.prisma.workspace.findMany({
-      select: { id: true, primaryCurrency: true },
-    });
-
-    let synced = 0;
-    for (const workspace of workspaces) {
-      try {
-        await this.syncRatesForWorkspace(
-          workspace.id,
-          workspace.primaryCurrency,
-        );
-        synced += 1;
-      } catch (error) {
-        this.logger.warn(
-          `Daily auto-sync failed for workspace ${workspace.id}: ${(error as Error).message}`,
-        );
-        this.applicationLogger.writeStructured({
-          level: 'warn',
-          kind: 'cron',
-          source: CurrenciesService.name,
-          event: 'currencies.workspace_sync.failed',
-          message: `Daily auto-sync failed for workspace ${workspace.id}: ${(error as Error).message}`,
-          workspaceId: workspace.id,
-        });
-      }
-    }
-
-    return { synced, total: workspaces.length };
-  }
-
-  private async syncRatesForWorkspace(
-    workspaceId: string,
-    primaryCurrency: string,
-  ) {
+  async syncSystemRates() {
     const response = await fetch(
-      `https://open.er-api.com/v6/latest/${primaryCurrency}`,
+      'https://open.er-api.com/v6/latest/EUR',
     );
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
@@ -310,19 +154,16 @@ export class CurrenciesService {
     }
 
     const now = utcRateDay(new Date());
-    const usedCurrencies = await this.getWorkspaceCurrencyCodes(workspaceId);
-    const rows = [...new Set([...SUPPORTED_CURRENCIES, ...usedCurrencies])]
-      .filter((currency) => currency !== primaryCurrency)
+    const rows = getSupportedCurrencies()
+      .filter((currency) => currency !== 'EUR')
       .map((targetCurrency) => ({
-        workspaceId,
-        baseCurrency: primaryCurrency,
+        baseCurrency: 'EUR',
         targetCurrency,
         rate: payload.rates?.[targetCurrency],
         date: now,
         source: 'open.er-api.com',
       }))
       .filter((row) => row.rate && row.rate > 0) as Array<{
-      workspaceId: string;
       baseCurrency: string;
       targetCurrency: string;
       rate: number;
@@ -342,47 +183,4 @@ export class CurrenciesService {
     return rows.length;
   }
 
-  private async getWorkspaceCurrencyCodes(workspaceId: string) {
-    const [workspaces, accounts, campaigns, financeProfiles, financeAccounts] =
-      await Promise.all([
-        this.prisma.$queryRaw<
-          Array<{
-            primaryCurrency: string;
-            secondaryCurrency: string;
-            tertiaryCurrency: string;
-          }>
-        >`
-        SELECT "primaryCurrency", "secondaryCurrency", "tertiaryCurrency"
-        FROM "Workspace"
-        WHERE id = ${workspaceId}
-        LIMIT 1
-      `,
-        this.prisma.account.findMany({
-          where: { workspaceId },
-          select: { currency: true },
-        }),
-        this.prisma.adCampaign.findMany({
-          where: { workspaceId },
-          select: { currency: true },
-        }),
-        this.prisma.financeProfile.findMany({
-          where: { botIntegration: { workspaceId } },
-          select: { defaultCurrency: true },
-        }),
-        this.prisma.financeAccount.findMany({
-          where: { profile: { botIntegration: { workspaceId } } },
-          select: { currency: true },
-        }),
-      ]);
-    const workspace = workspaces[0] ?? null;
-    return [
-      workspace?.primaryCurrency,
-      workspace?.secondaryCurrency,
-      workspace?.tertiaryCurrency,
-      ...accounts.map((row) => row.currency),
-      ...campaigns.map((row) => row.currency),
-      ...financeProfiles.map((row) => row.defaultCurrency),
-      ...financeAccounts.map((row) => row.currency),
-    ].filter((currency): currency is string => Boolean(currency));
-  }
 }

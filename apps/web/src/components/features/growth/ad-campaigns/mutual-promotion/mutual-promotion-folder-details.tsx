@@ -12,11 +12,13 @@ export function MutualPromotionFolderDetails({
   draft,
   titlePreview,
   editing,
+  allPaid,
   onChange,
 }: {
   draft: FolderDraft;
   titlePreview: string;
   editing: boolean;
+  allPaid: boolean;
   onChange: (draft: FolderDraft) => void;
 }) {
   return (
@@ -50,7 +52,7 @@ export function MutualPromotionFolderDetails({
         </FormField>
       </div>
       <div className="grid grid-cols-[minmax(0,1fr)_110px] gap-2">
-        <FormField label="Ends and removes posts" required>
+        <FormField label={allPaid ? "Ends" : "Ends and removes posts"} required>
           <DateInput
             value={draft.endsDate}
             onChange={(event) => onChange({ ...draft, endsDate: event.target.value })}
@@ -71,7 +73,7 @@ export function MutualPromotionFolderDetails({
           placeholder="Internal notes"
         />
       </FormField>
-      {!editing ? (
+      {!editing && !allPaid ? (
         <div className="rounded-xl border border-blue-800/70 bg-blue-950/25 p-3">
           <div className="flex items-start gap-2">
             <Forward size={17} className="mt-0.5 shrink-0 text-blue-300" />
@@ -89,8 +91,9 @@ export function MutualPromotionFolderDetails({
         </div>
       ) : null}
       <div className="rounded-xl border border-blue-900/60 bg-blue-950/20 p-3 text-sm text-blue-100">
-        Reusable links may be selected in different folders, but active date
-        ranges may not overlap. Links reserved by ordinary Ads are unavailable.
+        Invite links can be used in different folders when their active date
+        ranges do not overlap. Joins are measured during each folder period.
+        Links reserved by ordinary Ads are unavailable.
       </div>
     </div>
   );

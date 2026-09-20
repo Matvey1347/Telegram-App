@@ -39,7 +39,6 @@ export class HistoricalExchangeRateService {
   constructor(private readonly prisma: PrismaService) {}
 
   async ensureCurrentRates(input: {
-    workspaceId: string;
     currencies: string[];
     signal: AbortSignal;
   }): Promise<number> {
@@ -64,7 +63,6 @@ export class HistoricalExchangeRateService {
       );
     const rows = currencies
       .map((targetCurrency) => ({
-        workspaceId: input.workspaceId,
         baseCurrency: 'EUR',
         targetCurrency,
         rate: payload.rates?.[targetCurrency],
@@ -86,7 +84,6 @@ export class HistoricalExchangeRateService {
   }
 
   async ensureRates(input: {
-    workspaceId: string;
     dates: Date[];
     currencies: string[];
     signal: AbortSignal;
@@ -160,10 +157,7 @@ export class HistoricalExchangeRateService {
         }
       }
     }
-    const rows = fetched.map((row) => ({
-      workspaceId: input.workspaceId,
-      ...row,
-    }));
+    const rows = fetched;
     if (!rows.length) return 0;
     await this.prisma.exchangeRate.createMany({
       data: rows,

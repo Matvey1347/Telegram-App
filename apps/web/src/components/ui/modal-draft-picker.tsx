@@ -78,7 +78,7 @@ export function ModalDraftPicker<T>({
           return (
             <div
               key={draft.id}
-              className="flex items-center justify-between gap-3 rounded-lg border border-slate-800 px-3 py-2"
+              className="grid min-w-0 gap-3 rounded-lg border border-slate-800 px-3 py-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
             >
               <div className="flex min-w-0 items-center gap-2.5">
                 {draft.preview?.icon ? (
@@ -111,7 +111,7 @@ export function ModalDraftPicker<T>({
                   </p>
                 </div>
               </div>
-              <div className="flex gap-2">
+              <div className="flex shrink-0 justify-end gap-2">
                 <IconButton
                   type="button"
                   kind="delete"

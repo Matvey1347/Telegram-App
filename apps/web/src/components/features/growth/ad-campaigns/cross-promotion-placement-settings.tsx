@@ -10,6 +10,7 @@ import {
   FormField,
   TimeInput,
 } from "@/components/ui/primitives";
+import { CommonAdSlotOptions } from "../common-ad-slot-options";
 
 export type CrossPromotionPlacementSettingsValue = {
   formatIds: Record<string, string>;
@@ -29,6 +30,7 @@ export function CrossPromotionPlacementSettings({
   defaultTime,
   onDefaultDateChange,
   onChange,
+  showAdSlots = false,
 }: {
   title: string;
   description: string;
@@ -40,6 +42,7 @@ export function CrossPromotionPlacementSettings({
   defaultTime: string;
   onDefaultDateChange?: (date: string) => void;
   onChange: (value: CrossPromotionPlacementSettingsValue) => void;
+  showAdSlots?: boolean;
 }) {
   const selected = channelIds
     .map((id) => channels.find((channel) => channel.id === id))
@@ -146,51 +149,63 @@ export function CrossPromotionPlacementSettings({
         />
       </button>
       {channelIds.length ? (
-        <div
-          data-testid="placement-defaults"
-          className={`grid items-end gap-3 ${
-            onDefaultDateChange
-              ? "grid-cols-[minmax(200px,1.05fr)_minmax(160px,.9fr)_minmax(220px,1fr)]"
-              : "sm:grid-cols-[minmax(170px,220px)_112px] sm:justify-end"
-          }`}
-        >
-          {onDefaultDateChange ? (
-            <FormField label="Publication date" required>
-              <DateInput
-                value={defaultDate}
-                onChange={(event) => setAllDates(event.target.value)}
-              />
-            </FormField>
-          ) : null}
-          <label className="min-w-0 space-y-1 text-xs text-neutral-400">
-            <span>Time for all</span>
-            <TimeInput
-              value={commonTime}
-              onChange={(event) => setAllTimes(event.target.value)}
-              className={onDefaultDateChange ? "h-9 w-full" : "h-9 w-28"}
-            />
-          </label>
-          <label className="min-w-0 space-y-1 text-xs text-neutral-400">
-            <span>Format for all</span>
-            <span className="block [&>div>button]:h-9 [&>div>button]:min-h-0">
-              <CustomSelect
-                value={commonFormatName}
-                onChange={setAllFormats}
-                searchable={false}
-                placeholder={
-                  commonFormats.length
-                    ? "Mixed / select format"
-                    : "No common formats"
-                }
-                disabled={!commonFormats.length}
-                options={commonFormats.map((product) => ({
-                  value: product.name,
-                  label: product.name,
-                }))}
-              />
-            </span>
-          </label>
-        </div>
+        <>
+          <div
+            data-testid="placement-defaults"
+            className={`grid items-start gap-3 ${
+              onDefaultDateChange
+                ? "grid-cols-[minmax(200px,1.05fr)_minmax(160px,.9fr)_minmax(220px,1fr)]"
+                : "sm:grid-cols-[minmax(170px,220px)_112px] sm:justify-end"
+            }`}
+          >
+            {onDefaultDateChange ? (
+              <FormField label="Publication date" required>
+                <DateInput
+                  value={defaultDate}
+                  onChange={(event) => setAllDates(event.target.value)}
+                />
+              </FormField>
+            ) : null}
+            <div className="min-w-0 space-y-2">
+              <label className="block min-w-0 space-y-1 text-xs text-neutral-400">
+                <span>Time for all</span>
+                <TimeInput
+                  value={commonTime}
+                  onChange={(event) => setAllTimes(event.target.value)}
+                  className={onDefaultDateChange ? "h-9 w-full" : "h-9 w-28"}
+                />
+              </label>
+              {showAdSlots ? (
+                <CommonAdSlotOptions
+                  channelIds={channelIds}
+                  date={defaultDate}
+                  selectedTime={commonTime}
+                  onSelect={setAllTimes}
+                />
+              ) : null}
+            </div>
+            <label className="min-w-0 space-y-1 text-xs text-neutral-400">
+              <span>Format for all</span>
+              <span className="block [&>div>button]:h-9 [&>div>button]:min-h-0">
+                <CustomSelect
+                  value={commonFormatName}
+                  onChange={setAllFormats}
+                  searchable={false}
+                  placeholder={
+                    commonFormats.length
+                      ? "Mixed / select format"
+                      : "No common formats"
+                  }
+                  disabled={!commonFormats.length}
+                  options={commonFormats.map((product) => ({
+                    value: product.name,
+                    label: product.name,
+                  }))}
+                />
+              </span>
+            </label>
+          </div>
+        </>
       ) : null}
       {expanded ? (
         <div className="grid gap-2">

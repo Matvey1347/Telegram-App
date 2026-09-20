@@ -55,4 +55,14 @@ describe("telegram publication schedules api", () => {
       silentFeedbackConfig,
     );
   });
+
+  it("requests occurrences for all selected channels in one call", async () => {
+    const http = { get: vi.fn().mockResolvedValue({ data: { c1: [], c2: [] } }) };
+    const client = createTelegramPublicationSchedulesApi(http as never);
+    const range = { from: "2026-10-24T00:00:00.000Z", to: "2026-10-25T00:00:00.000Z" };
+    await expect(client.occurrencesByChannels(["c1", "c2"], range)).resolves.toEqual({ c1: [], c2: [] });
+    expect(http.get).toHaveBeenCalledWith("/telegram-publication-schedules/occurrences", {
+      params: { ...range, channelIds: "c1,c2" },
+    });
+  });
 });

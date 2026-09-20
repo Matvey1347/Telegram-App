@@ -12,7 +12,6 @@ import { AppController } from './app.controller';
 import { AuthModule } from './domains/identity/auth/auth.module';
 import { CommonModule } from './common/common.module';
 import { DashboardModule } from './domains/operations/dashboard/dashboard.module';
-import { ExchangeRatesModule } from './domains/finance/exchange-rates/exchange-rates.module';
 import { CurrenciesModule } from './domains/finance/currencies/currencies.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { PromosModule } from './domains/growth/promos/promos.module';
@@ -60,7 +59,6 @@ import { TelegramChannelMessageTemplatesModule } from './domains/telegram/telegr
     ApplicationLogsModule,
     AuthModule,
     AccountsModule,
-    ExchangeRatesModule,
     CurrenciesModule,
     TransactionsModule,
     TransfersModule,

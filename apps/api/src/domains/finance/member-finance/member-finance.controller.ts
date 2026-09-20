@@ -4,11 +4,7 @@ import {
   type JwtUser,
 } from '../../../common/current-user.decorator';
 import { JwtAuthGuard } from '../../../common/jwt-auth.guard';
-import {
-  DistributeReinvestmentDto,
-  SettleCommissionDto,
-  WithdrawReinvestmentDto,
-} from './dto';
+import { SettleCommissionDto } from './dto';
 import { MemberFinanceService } from './member-finance.service';
 import { MemberFinanceReadService } from './member-finance-read.service';
 
@@ -48,20 +44,4 @@ export class MemberFinanceController {
     return this.service.investCommission(user.sub, memberId, dto);
   }
 
-  @Post(':memberId/withdraw-reinvestment')
-  withdraw(
-    @CurrentUser() user: JwtUser,
-    @Param('memberId') memberId: string,
-    @Body() dto: WithdrawReinvestmentDto,
-  ) {
-    return this.service.withdrawReinvestment(user.sub, memberId, dto);
-  }
-
-  @Post('reinvestment/distribute')
-  distribute(
-    @CurrentUser() user: JwtUser,
-    @Body() dto: DistributeReinvestmentDto,
-  ) {
-    return this.service.distributeReinvestment(user.sub, dto);
-  }
 }

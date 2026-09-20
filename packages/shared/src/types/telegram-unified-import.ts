@@ -45,6 +45,8 @@ export type TelegramUnifiedImportManifest = {
     action?: "SCHEDULE" | "UNSCHEDULE";
     postRef?: string;
     postId?: string;
+    /** SLOT reserves an assigned publication slot; CUSTOM schedules independently. */
+    placementMode?: "SLOT" | "CUSTOM";
     slotId?: string;
     scheduledAt?: string;
     slotKind?: TelegramPublicationSlotKind;
@@ -68,6 +70,7 @@ export type TelegramUnifiedImportPreviewItem = {
   text?: string | null;
   imageUrls?: string[];
   scheduledAt?: string | null;
+  placementMode?: "SLOT" | "CUSTOM" | null;
   slotId?: string | null;
   slotKind?: TelegramPublicationSlotKind | null;
   slotTitle?: string | null;

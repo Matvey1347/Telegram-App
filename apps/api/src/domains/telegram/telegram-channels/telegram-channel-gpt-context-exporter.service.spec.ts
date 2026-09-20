@@ -471,6 +471,10 @@ describe('TelegramChannelGptContextExporter', () => {
     expect(text).toContain('ТОЧНЫЙ ФОРМАТ ОТВЕТА');
     expect(text).toContain('"groups": [');
     expect(text).toContain('"icon": "✍️"');
+    expect(text).toContain('"placementMode": "CUSTOM"');
+    expect(text).toContain(
+      'CUSTOM планирует публикацию на произвольные будущие дату и время',
+    );
     expect(text).toContain('"delete":{"groups":[{"id":"точный id группы"}]');
     expect(text).toContain('Не используй прошедшие и занятые даты/слоты');
     expect(text).toContain('ПОЛНЫЙ КОНТЕКСТ КАНАЛА');

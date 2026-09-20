@@ -273,6 +273,7 @@ export function CrossPromotionPlanView({
                       defaultTime={time}
                       onDefaultDateChange={setDate}
                       onChange={setPublisherSettings}
+                      showAdSlots
                     />
                     {kind === "DIRECT_MUTUAL" ? (
                       <CrossPromotionPublicationPostEditor

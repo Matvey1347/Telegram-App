@@ -4,11 +4,11 @@ import type { TelegramInviteLink } from "@/lib/api";
 import { CustomSelect, FormField } from "@/components/ui/primitives";
 import {
   isTelegramInviteLink,
-  telegramInviteLinkDefaultBadgeClassName,
   telegramInviteLinkOptionLabel,
 } from "@/lib/features/telegram/telegram-invite-link-options";
 import { inviteLinkCreatorFallback } from "@/lib/features/telegram/telegram-invite-link-creator";
 import { TelegramInviteLinkCreatorAvatar } from "./telegram-invite-link-creator-avatar";
+import { TelegramInviteLinkOptionLabel } from "./telegram-invite-link-option-label";
 
 export function ChannelInviteLinkSelectField({
   label,
@@ -47,7 +47,7 @@ export function ChannelInviteLinkSelectField({
         options={links.map((link) => ({
           value: link.id,
           label: telegramInviteLinkOptionLabel(link),
-          badgeClassName: telegramInviteLinkDefaultBadgeClassName(link),
+          labelContent: <TelegramInviteLinkOptionLabel link={link} />,
           meta: link.url,
           iconFallback: inviteLinkCreatorFallback(link),
           icon: (

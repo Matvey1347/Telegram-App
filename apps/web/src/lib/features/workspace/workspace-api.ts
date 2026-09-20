@@ -206,26 +206,6 @@ export function createWorkspaceApi({
     ) =>
       (await api.post(`/member-finance/${memberId}/invest-salary`, payload))
         .data,
-    withdrawReinvestment: async (
-      memberId: string,
-      payload: {
-        amount: number;
-        accountId: string;
-        date?: string;
-        notes?: string;
-      },
-    ) =>
-      (
-        await api.post(
-          `/member-finance/${memberId}/withdraw-reinvestment`,
-          payload,
-        )
-      ).data,
-    distributeReinvestment: async (payload: {
-      dateFrom: string;
-      dateTo: string;
-    }) =>
-      (await api.post("/member-finance/reinvestment/distribute", payload)).data,
   };
 
   return {

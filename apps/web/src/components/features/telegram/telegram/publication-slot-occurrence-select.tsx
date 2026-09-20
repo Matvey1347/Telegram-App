@@ -55,13 +55,13 @@ function PublicationSlotOccurrenceSelectState({
   const { t } = useI18n();
   const initial = scheduledAt ? new Date(scheduledAt) : new Date();
   const [selectedDate, setSelectedDate] = useState(() => dateKey(initial));
-  const [customTime, setCustomTime] = useState(() =>
+  const [publicationTime, setPublicationTime] = useState(() =>
     scheduledAt
       ? `${String(initial.getHours()).padStart(2, "0")}:${String(initial.getMinutes()).padStart(2, "0")}`
       : "",
   );
-  const applyCustomTime = (time: string) => {
-    setCustomTime(time);
+  const applyPublicationTime = (time: string) => {
+    setPublicationTime(time);
     if (!time) return;
     const candidate = new Date(`${selectedDate}T${time}:00`);
     if (!Number.isNaN(candidate.getTime())) {
@@ -78,9 +78,22 @@ function PublicationSlotOccurrenceSelectState({
           disabled={disabled}
           onChange={(event) => {
             setSelectedDate(event.target.value);
-            setCustomTime("");
+            setPublicationTime("");
           }}
         />
+        <div>
+          <p className="mb-2 text-sm font-medium text-neutral-200">
+            Publication time
+          </p>
+          <TimeInput
+            disabled={disabled}
+            value={publicationTime}
+            onChange={(event) => applyPublicationTime(event.target.value)}
+          />
+          <p className="mt-1 text-xs text-neutral-500">
+            Choose any future time, or select a slot below to fill it automatically.
+          </p>
+        </div>
         <PublicationSlotOptions
           channelId={channelId}
           selectedDate={selectedDate}
@@ -88,23 +101,10 @@ function PublicationSlotOccurrenceSelectState({
           scheduledAt={scheduledAt}
           disabled={disabled}
           onChange={(next) => {
-            setCustomTime(next.time);
+            setPublicationTime(next.time);
             onChange(next);
           }}
         />
-        <div className="rounded-lg border border-dashed border-neutral-700 p-3">
-          <p className="mb-2 text-sm font-medium text-neutral-200">
-            {t("telegram.posts.schedules.customTime")}
-          </p>
-          <TimeInput
-            disabled={disabled}
-            value={customTime}
-            onChange={(event) => applyCustomTime(event.target.value)}
-          />
-          <p className="mt-1 text-xs text-neutral-500">
-            {t("telegram.posts.schedules.customTimeHint")}
-          </p>
-        </div>
       </div>
     </FormField>
   );
@@ -187,8 +187,10 @@ export function PublicationSlotOptions({
     <div className="flex flex-wrap gap-2">
       {dayOccurrences.map((item) => {
         const key = `${item.slotId}:${item.scheduledAt}`;
+        const isSelected = key === selectedValue;
+        const isAvailable = item.state === "AVAILABLE";
         const optionDisabled =
-          disabled || (item.state !== "AVAILABLE" && key !== selectedValue);
+          disabled || (!isAvailable && !isSelected);
         const kindLabel =
           item.kind === "AD"
             ? "📣 Advertising / mutual promotion"
@@ -205,7 +207,7 @@ export function PublicationSlotOptions({
             type="button"
             key={key}
             disabled={optionDisabled}
-            aria-pressed={key === selectedValue}
+            aria-pressed={isSelected}
             aria-label={accessibleLabel}
             title={accessibleLabel}
             onClick={() =>
@@ -215,11 +217,17 @@ export function PublicationSlotOptions({
                 time: item.time,
               })
             }
-            className={`inline-flex min-h-8 items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium transition ${key === selectedValue ? "border-blue-500 bg-blue-950/70 text-white ring-1 ring-blue-500/60" : optionDisabled ? "cursor-not-allowed border-neutral-800 bg-neutral-950/40 text-neutral-600 opacity-40" : "border-neutral-800 bg-neutral-950/40 text-neutral-500 opacity-60 hover:border-blue-700 hover:text-neutral-300 hover:opacity-100"}`}
+            className={`inline-flex min-h-8 items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium transition ${isSelected ? "border-blue-500 bg-blue-950/70 text-white ring-1 ring-blue-500/60" : item.state === "AVAILABLE" ? "border-neutral-600 bg-neutral-900 text-neutral-200 hover:border-blue-700 hover:bg-blue-950/30 hover:text-white" : item.state === "OCCUPIED" ? "cursor-not-allowed border-amber-900/70 bg-amber-950/20 text-amber-400/70" : "cursor-not-allowed border-neutral-900 bg-neutral-950/50 text-neutral-600 line-through"}`}
           >
             <span>{item.time}</span>
             <span aria-hidden="true">·</span>
             <span aria-hidden="true">{item.kind === "AD" ? "📣" : "📝"}</span>
+            {!isSelected && item.state === "OCCUPIED" ? (
+              <span aria-hidden="true">🔒</span>
+            ) : null}
+            {!isSelected && item.state === "PAST" ? (
+              <span aria-hidden="true">⌛</span>
+            ) : null}
           </button>
         );
       })}

@@ -1,7 +1,7 @@
 "use client";
 
 import { Plus, X } from "lucide-react";
-import { forwardRef, type KeyboardEvent, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { forwardRef, type ChangeEvent, type ClipboardEvent, type KeyboardEvent, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { authApi, telegramChannelsApi, type TelegramManagedPost, type TelegramManagedPostLinkTarget } from "@/lib/api";
 import { IconAvatar } from "@/components/icons/icon-avatar";
@@ -18,6 +18,7 @@ import { editorWrapActions } from "./telegram-text-editor-commands";
 import { TelegramTextEditorToolbar } from "./telegram-text-editor-toolbar";
 import { telegramPostLinkMarkup } from "./telegram-text-editor-format";
 import { useI18n } from "@/providers/i18n-provider";
+import { useAppToast } from "@/providers/toast-provider";
 
 type TelegramTextEditorProps = {
   value: string;
@@ -59,10 +60,12 @@ type EditorSnapshot = {
 
 export const TelegramTextEditor = forwardRef<TelegramTextEditorHandle, TelegramTextEditorProps>(function TelegramTextEditor({ value, onChange, placeholder, characterCountLabel, disabled, rows = 12, channelId, currentPostId, enableInternalPostLinks = false, internalLinkUsage = "publishNow", internalLinkScheduledAt, highlightInternalLinkTargetId, highlightRequestKey = 0, availableInternalPosts, buttonRows = [], onButtonRowsChange, canPublishInlineButtons = true, onCheckInlineButtonPublishingAccess, enableCustomEmoji = false, customEmojiPacks, onManageCustomEmojiPacks, singleRowToolbar = false }, ref) {
   const { t, ensureNamespaces } = useI18n();
+  const { pushToast } = useAppToast();
   useEffect(() => {
     void ensureNamespaces(["telegram/posts/editor"]);
   }, [ensureNamespaces]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const inlineImageInputRef = useRef<HTMLInputElement>(null);
   const highlightedSelectionRef = useRef<{
     start: number;
     end: number;
@@ -83,6 +86,7 @@ export const TelegramTextEditor = forwardRef<TelegramTextEditorHandle, TelegramT
   const [linkUrl, setLinkUrl] = useState("https://");
   const [linkError, setLinkError] = useState("");
   const [linkMode, setLinkMode] = useState<"external" | "internal">(enableInternalPostLinks && channelId ? "internal" : "external");
+  const [insertingImage, setInsertingImage] = useState(false);
   const [internalSearch, setInternalSearch] = useState("");
   const internalLinksEnabled = enableInternalPostLinks && Boolean(channelId);
   const customEmojiEnabled = enableCustomEmoji;
@@ -447,10 +451,57 @@ export const TelegramTextEditor = forwardRef<TelegramTextEditorHandle, TelegramT
     }
   };
 
+  const insertImagesAtSelection = async (files: File[]) => {
+    const supportedFiles = files.filter(
+      (file) => file.type.startsWith("image/") && file.type !== "image/gif",
+    );
+    if (!supportedFiles.length || disabled || insertingImage) return;
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    setInsertingImage(true);
+    try {
+      const uploaded = await Promise.all(
+        supportedFiles.map((file) => telegramChannelsApi.uploadManagedPostMedia(file)),
+      );
+      const images = uploaded.filter((item) => item.kind === "PHOTO");
+      if (!images.length) throw new Error("The pasted file is not a supported image.");
+      const blocks = images.map((item) => `![Image](${item.url})`).join("\n\n");
+      const current = lastKnownValueRef.current;
+      const insertion = `${start > 0 && !current.slice(0, start).endsWith("\n\n") ? "\n\n" : ""}${blocks}${end < current.length && !current.slice(end).startsWith("\n\n") ? "\n\n" : ""}`;
+      commitValue(
+        `${current.slice(0, start)}${insertion}${current.slice(end)}`,
+        start + insertion.length,
+      );
+      pushToast("Image inserted into the publication text.", "success");
+    } catch (error) {
+      pushToast(
+        error instanceof Error ? error.message : "Could not upload the pasted image.",
+        "error",
+      );
+    } finally {
+      setInsertingImage(false);
+    }
+  };
+
+  const handlePaste = async (event: ClipboardEvent<HTMLTextAreaElement>) => {
+    const files = Array.from(event.clipboardData.files).filter((file) => file.type.startsWith("image/"));
+    if (!files.length || disabled || insertingImage) return;
+    event.preventDefault();
+    await insertImagesAtSelection(files);
+  };
+
+  const handleInlineImageSelect = async (event: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? []);
+    event.target.value = "";
+    await insertImagesAtSelection(files);
+  };
+
   return (
-    <div className="relative overflow-visible rounded-lg border border-neutral-700 bg-neutral-900 focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500">
+    <div className="relative overflow-visible rounded-lg border border-neutral-700 bg-neutral-900 focus-within:border-neutral-700 focus-within:ring-0">
       <TelegramTextEditorToolbar
-        disabled={disabled}
+        disabled={disabled || insertingImage}
         hasButtons={Boolean(onButtonRowsChange)}
         singleRow={singleRowToolbar}
         onCommand={executeCommand}
@@ -460,6 +511,15 @@ export const TelegramTextEditor = forwardRef<TelegramTextEditorHandle, TelegramT
           setPullQuoteAuthorOpen(true);
         }}
         onConfigure={() => setShortcutsOpen(true)}
+        onInsertImage={() => inlineImageInputRef.current?.click()}
+      />
+      <input
+        ref={inlineImageInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        multiple
+        className="sr-only"
+        onChange={handleInlineImageSelect}
       />
       {onButtonRowsChange ? <TelegramInlineKeyboardEditor buttonRows={buttonRows} onChange={onButtonRowsChange} disabled={disabled} open={buttonsEditorOpen} onOpenChange={setButtonsEditorOpen} canPublishInlineButtons={canPublishInlineButtons} onCheckPublishingAccess={onCheckInlineButtonPublishingAccess} /> : null}
       <TelegramCustomEmojiPickerModal
@@ -592,13 +652,15 @@ export const TelegramTextEditor = forwardRef<TelegramTextEditorHandle, TelegramT
         rows={rows}
         value={value}
         disabled={disabled}
+        spellCheck={false}
         onMouseDown={() => {
           highlightedSelectionRef.current = null;
         }}
         onChange={(event) => commitValue(event.target.value)}
+        onPaste={(event) => void handlePaste(event)}
         onKeyDown={handleKeyDown}
         placeholder={placeholder ?? t("telegram.posts.editorComponents.text.placeholder")}
-        className="block w-full resize-y bg-transparent px-4 py-3 text-sm leading-6 text-white outline-none placeholder:text-neutral-500 disabled:opacity-50"
+        className="block w-full resize-y bg-transparent px-4 py-3 text-sm leading-6 text-white outline-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 placeholder:text-neutral-500 disabled:opacity-50"
       />
       {onButtonRowsChange ? <TelegramInlineKeyboardSummary rows={buttonRows} disabled={disabled} onEdit={() => setButtonsEditorOpen(true)} /> : null}
       <div className="flex flex-wrap items-center justify-between gap-2 border-t border-neutral-800 px-3 py-1.5 text-[11px] text-neutral-500">

@@ -16,14 +16,11 @@ import {
   FormError,
   FormField,
   Modal,
-  Select,
 } from "@/components/ui/primitives";
 import { mutualPromotionFoldersApi } from "@/lib/features/growth/mutual-promotion-folders-api";
 import { inviteLinkCreatorFallback } from "@/lib/features/telegram/telegram-invite-link-creator";
-import {
-  telegramInviteLinkDefaultBadgeClassName,
-  telegramInviteLinkOptionLabel,
-} from "@/lib/features/telegram/telegram-invite-link-options";
+import { telegramInviteLinkOptionLabel } from "@/lib/features/telegram/telegram-invite-link-options";
+import { TelegramInviteLinkOptionLabel } from "@/components/features/telegram/telegram/telegram-invite-link-option-label";
 import { mutualPromotionFolderKeys } from "@/lib/query-keys";
 
 type LinkDraft =
@@ -49,7 +46,6 @@ export function MutualPromotionInviteLinksModal({
     folder.participants.map((participant) => ({
       participantId: participant.id,
       inviteLinkId: participant.inviteLink.id,
-      inviteLinkMode: participant.inviteLinkMode,
     })),
   );
   const [importingParticipantId, setImportingParticipantId] = useState<
@@ -140,18 +136,12 @@ export function MutualPromotionInviteLinksModal({
   const original = new Map(
     folder.participants.map((participant) => [
       participant.id,
-      {
-        inviteLinkId: participant.inviteLink.id,
-        inviteLinkMode: participant.inviteLinkMode,
-      },
+      { inviteLinkId: participant.inviteLink.id },
     ]),
   );
   const changed = drafts.some((draft) => {
     const initial = original.get(draft.participantId);
-    return (
-      initial?.inviteLinkId !== draft.inviteLinkId ||
-      initial.inviteLinkMode !== draft.inviteLinkMode
-    );
+    return initial?.inviteLinkId !== draft.inviteLinkId;
   });
   return (
     <Modal open={open} onClose={onClose} title="Edit invite links" size="md">
@@ -185,7 +175,7 @@ export function MutualPromotionInviteLinksModal({
           const selectOptions = options.map((link) => ({
             value: link.id,
             label: telegramInviteLinkOptionLabel(link),
-            badgeClassName: telegramInviteLinkDefaultBadgeClassName(link),
+            labelContent: <TelegramInviteLinkOptionLabel link={link} />,
             meta: link.url,
             iconFallback: inviteLinkCreatorFallback(link),
             icon: (
@@ -226,7 +216,7 @@ export function MutualPromotionInviteLinksModal({
                   </p>
                 </div>
               </div>
-              <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_190px]">
+              <div>
                 <FormField label="Invite link" required>
                   <CustomSelect
                     value={draft.inviteLinkId}
@@ -264,21 +254,6 @@ export function MutualPromotionInviteLinksModal({
                   <FormError
                     message={importErrors[participant.id] || undefined}
                   />
-                </FormField>
-                <FormField label="Link use">
-                  <Select
-                    value={draft.inviteLinkMode}
-                    onChange={(event) =>
-                      update(participant.id, {
-                        inviteLinkMode: event.target.value as
-                          | "FOLDER_ONLY"
-                          | "REUSABLE",
-                      })
-                    }
-                  >
-                    <option value="FOLDER_ONLY">📁 Only this folder</option>
-                    <option value="REUSABLE">♻️ Reusable for folders</option>
-                  </Select>
                 </FormField>
               </div>
             </section>

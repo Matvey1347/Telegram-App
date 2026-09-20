@@ -1,7 +1,12 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { Film, Link2, LoaderCircle, Plus, X } from "lucide-react";
+import {
+  useRef,
+  useState,
+  type ClipboardEvent,
+  type DragEvent,
+} from "react";
+import { FileUp, Link2, LoaderCircle, Plus, Upload, X } from "lucide-react";
 import {
   inferTelegramPostMediaKind,
   type TelegramPostMediaItem,
@@ -27,6 +32,7 @@ export function TelegramPostMediaUpload({
 }) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [dragging, setDragging] = useState(false);
   const [url, setUrl] = useState("");
   const { pushToast } = useAppToast();
   const locked = disabled || uploading;
@@ -96,35 +102,66 @@ export function TelegramPostMediaUpload({
     }
   };
 
+  const pasteFiles = (event: ClipboardEvent<HTMLElement>) => {
+    if (locked || value.length >= 10) return;
+    const files = Array.from(event.clipboardData.files);
+    if (!files.length) return;
+    event.preventDefault();
+    void uploadFiles(files);
+  };
+
+  const dropFiles = (event: DragEvent<HTMLElement>) => {
+    event.preventDefault();
+    setDragging(false);
+    if (locked || value.length >= 10) return;
+    void uploadFiles(Array.from(event.dataTransfer.files));
+  };
+
   return (
     <FormField label="Media (photos, video, GIF)">
       {!readOnly ? (
         <div className="space-y-2">
-          <button
-            type="button"
-            disabled={locked || value.length >= 10}
-            onClick={() => inputRef.current?.click()}
-            className={`flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-neutral-700 text-sm text-neutral-300 hover:border-blue-600 ${compact ? "h-10" : "h-12"}`}
+          <div
+            role="region"
+            aria-label="Media drop and paste area"
+            className={`flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed px-4 py-5 text-center transition ${
+              dragging
+                ? "border-blue-500 bg-blue-950/30 text-white"
+                : "border-neutral-700 text-neutral-300 hover:border-blue-600"
+            } ${compact ? "min-h-20" : "min-h-28"}`}
+            onPaste={pasteFiles}
+            onDragEnter={() => setDragging(true)}
+            onDragLeave={() => setDragging(false)}
+            onDragOver={(event) => event.preventDefault()}
+            onDrop={dropFiles}
+            tabIndex={locked || value.length >= 10 ? -1 : 0}
           >
-            {uploading ? (
-              <LoaderCircle className="animate-spin" size={18} />
-            ) : (
-              <Film size={18} />
-            )}
-            {uploading ? "Uploading media…" : "Upload photos, video or GIF"}
-          </button>
-          <input
-            ref={inputRef}
-            type="file"
-            className="sr-only"
-            accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm"
-            multiple
-            onChange={(event) => {
-              const files = Array.from(event.target.files ?? []);
-              event.target.value = "";
-              void uploadFiles(files);
-            }}
-          />
+            <span className="inline-flex items-center gap-2 text-sm font-medium">
+              {uploading ? <LoaderCircle className="animate-spin" size={18} /> : <FileUp size={18} />}
+              {uploading ? "Uploading media…" : "Drop or paste photos, video or GIF"}
+            </span>
+            <button
+              type="button"
+              disabled={locked || value.length >= 10}
+              onClick={() => inputRef.current?.click()}
+              className="inline-flex h-9 items-center gap-2 rounded-lg border border-blue-500/70 bg-blue-600/15 px-4 text-sm font-medium text-blue-200 transition hover:bg-blue-600/30 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Upload size={14} /> Choose files
+            </button>
+            <span className="text-xs text-neutral-500">Images, GIFs, MP4, or WebM up to 20 MB</span>
+            <input
+              ref={inputRef}
+              type="file"
+              className="sr-only"
+              accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm"
+              multiple
+              onChange={(event) => {
+                const files = Array.from(event.target.files ?? []);
+                event.target.value = "";
+                void uploadFiles(files);
+              }}
+            />
+          </div>
           <div className="flex flex-col gap-2 sm:flex-row">
             <Input
               value={url}

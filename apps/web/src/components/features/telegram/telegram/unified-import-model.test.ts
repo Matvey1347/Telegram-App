@@ -80,6 +80,12 @@ describe("parseUnifiedImportManifest", () => {
     expect(TELEGRAM_UNIFIED_IMPORT_INSTRUCTION).toContain('"imported": false');
     expect(TELEGRAM_UNIFIED_IMPORT_INSTRUCTION).toContain('"approved": false');
     expect(TELEGRAM_UNIFIED_IMPORT_INSTRUCTION).toContain(
+      'массив schedule обязан содержать ровно N отдельных операций SCHEDULE',
+    );
+    expect(TELEGRAM_UNIFIED_IMPORT_INSTRUCTION).toContain(
+      '"placementMode":"CUSTOM","scheduledAt":"2026-09-20T09:02:00+02:00"',
+    );
+    expect(TELEGRAM_UNIFIED_IMPORT_INSTRUCTION).toContain(
       '"delete":{"groups":[{"id":"точный id группы"}]',
     );
   });

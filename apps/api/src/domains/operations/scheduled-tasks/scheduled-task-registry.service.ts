@@ -140,16 +140,16 @@ export class ScheduledTaskRegistryService {
         key: 'currencies.rates.sync',
         name: 'Currency rates sync',
         description:
-          'Fetches exchange rates for the workspace primary currency.',
-        scope: 'WORKSPACE_OPERATION',
+          'Fetches the system-wide official exchange-rate graph once per day.',
+        scope: 'SYSTEM_MAINTENANCE',
         defaultSchedule: {
           frequency: 'DAILY',
           time: '03:00',
           timezone: 'Europe/Warsaw',
         },
-        scheduleEditable: true,
+        scheduleEditable: false,
         supportedFrequencies: ['DAILY'],
-        notificationSupported: true,
+        notificationSupported: false,
         execute: this.executor.executors['currencies.rates.sync'],
       },
       {

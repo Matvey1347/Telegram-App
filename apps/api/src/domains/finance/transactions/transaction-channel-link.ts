@@ -82,7 +82,14 @@ export class TransactionPurchaseChannelLinks {
       }
       return null;
     }
-    if (!requestedChannelId) return null;
+    if (!requestedChannelId) {
+      if (params.category.key === 'buy_channels') {
+        throw new BadRequestException(
+          'telegramChannelId is required for Buy Channels expenses',
+        );
+      }
+      return null;
+    }
     await this.ensureAvailable();
     const rows = await this.prisma.$queryRaw<
       Array<{
@@ -184,7 +191,7 @@ export async function resolveTransactionChannelLink(
   }
   if (!channelId && isRevenue) {
     throw new BadRequestException(
-      'telegramChannelId is required for Channel Advertising Revenue income',
+      'telegramChannelId is required for Ad Sales income',
     );
   }
   if (!channelId) return null;

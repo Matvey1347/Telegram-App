@@ -84,7 +84,8 @@ export function transactionCategoryPurpose(
   if (
     category.type === "income" &&
     (category.key === "channel_advertising_revenue" ||
-      name === "channel advertising revenue")
+      name === "channel advertising revenue" ||
+      name === "ad sales")
   ) {
     return "channel-advertising-revenue";
   }
@@ -243,6 +244,7 @@ export function InternalTransactionModal({
   const isAdvertisingExpense = categoryPurpose === "advertising-expense";
   const isChannelAdvertisingRevenue =
     categoryPurpose === "channel-advertising-revenue";
+  const requiresTelegramChannel = isBuyChannels || isChannelAdvertisingRevenue;
   const showsTelegramChannel =
     isBuyChannels || isAdvertisingExpense || isChannelAdvertisingRevenue;
   const ownChannels = useMemo(
@@ -451,15 +453,13 @@ export function InternalTransactionModal({
                 label={
                   isChannelAdvertisingRevenue ? "Revenue channel" : "Channel"
                 }
-                required={isChannelAdvertisingRevenue}
+                required={requiresTelegramChannel}
                 error={errors.telegramChannelId ? "Required field" : undefined}
               >
                 <Select
                   {...register("telegramChannelId", {
                     validate: (value) =>
-                      !isChannelAdvertisingRevenue ||
-                      Boolean(value) ||
-                      "required",
+                      !requiresTelegramChannel || Boolean(value) || "required",
                   })}
                   value={telegramChannelId}
                   onChange={(event) =>

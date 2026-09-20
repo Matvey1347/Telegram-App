@@ -31,7 +31,8 @@ export const isChannelAdvertisingRevenueCategory = (category: {
   return (
     category.type === 'income' &&
     (category.key === 'channel_advertising_revenue' ||
-      name === 'channel advertising revenue')
+      name === 'channel advertising revenue' ||
+      name === 'ad sales')
   );
 };
 

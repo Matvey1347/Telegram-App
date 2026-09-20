@@ -1,25 +1,15 @@
 'use client';
 
-import { formatDate } from '@/lib/date-format';
-
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useForm } from 'react-hook-form';
 import { AppShell } from '@/components/layout/app-shell';
-import { currenciesApi, Currency, CurrencyDisplayMode, ExchangeRate } from '@/lib/api';
-import { Button, Card, ConfirmDeleteModal, CurrencySelect, DateInput, EmptyState, EntityCard, FormField, IconButton, Input, LoadingState, MasonryGrid, Modal, PageHeader, Select } from '@/components/ui/primitives';
-import { formatRate } from '@/lib/features/finance/money';
-
-type RateValues = { baseCurrency: Currency; targetCurrency: Currency; rate: number; date: string; source?: string };
+import { currenciesApi, Currency, CurrencyDisplayMode } from '@/lib/api';
+import { Button, Card, CurrencySelect, FormField, LoadingState, PageHeader, Select } from '@/components/ui/primitives';
 
 export default function CurrenciesPage() {
   const qc = useQueryClient();
-  const [editing, setEditing] = useState<ExchangeRate | null>(null);
-  const [deleting, setDeleting] = useState<ExchangeRate | null>(null);
-
   const { data: settings, isLoading: loadingSettings } = useQuery({ queryKey: ['currency-settings'], queryFn: currenciesApi.getSettings });
-  const { data: rates, isLoading: loadingRates, error } = useQuery({ queryKey: ['currency-rates'], queryFn: currenciesApi.listRates });
-  const showInitialLoading = (loadingSettings && !settings) || (loadingRates && !rates);
+  const showInitialLoading = loadingSettings && !settings;
 
   const saveSettings = useMutation({
     mutationFn: currenciesApi.updateSettings,
@@ -32,61 +22,15 @@ export default function CurrenciesPage() {
       ]);
     },
   });
-  const updateRate = useMutation({
-    mutationFn: ({ id, payload }: { id: string; payload: Record<string, unknown> }) => currenciesApi.updateRate(id, payload),
-    onSuccess: () => {
-      setEditing(null);
-      void Promise.all([
-        qc.invalidateQueries({ queryKey: ['currency-rates'] }),
-        qc.invalidateQueries({ queryKey: ['currency-rates-latest'] }),
-      ]);
-    },
-  });
-  const deleteRate = useMutation({
-    mutationFn: currenciesApi.removeRate,
-    onSuccess: () => {
-      setDeleting(null);
-      void Promise.all([
-        qc.invalidateQueries({ queryKey: ['currency-rates'] }),
-        qc.invalidateQueries({ queryKey: ['currency-rates-latest'] }),
-      ]);
-    },
-  });
-
   return (
     <AppShell>
       <PageHeader
         title="Currencies"
-        subtitle="Configure primary/secondary currencies and exchange rates"
+        subtitle="Choose workspace display currencies; official rates are maintained system-wide."
       />
 
       {showInitialLoading ? <LoadingState /> : null}
-      {error ? <Card className="text-red-300">Failed to load currency data</Card> : null}
-
       {settings ? <CurrencySettingsCard key={`${settings.primaryCurrency}-${settings.secondaryCurrency}-${settings.tertiaryCurrency}-${settings.currencyDisplayMode}`} settings={settings} onSave={(payload) => saveSettings.mutate(payload)} /> : null}
-
-      <MasonryGrid className="mt-6">
-        {rates?.map((rate) => (
-          <EntityCard
-            key={rate.id}
-            title={`${rate.baseCurrency} -> ${rate.targetCurrency}`}
-            actions={
-              <div className="flex gap-2">
-                <IconButton onClick={() => setEditing(rate)} />
-                <IconButton kind="delete" onClick={() => setDeleting(rate)} />
-              </div>
-            }
-          >
-            <p>Rate: {formatRate(rate.rate)}</p>
-            <p>Date: {formatDate(rate.date)}</p>
-            <p>Source: {rate.source || 'manual'}</p>
-          </EntityCard>
-        ))}
-      </MasonryGrid>
-      {!loadingRates && !error && !rates?.length ? <EmptyState text="No exchange rates yet." /> : null}
-
-      <RateModal open={!!editing} title="Edit Exchange Rate" initial={editing ?? undefined} currencies={settings?.supportedCurrencies ?? ['USD', 'UAH', 'EUR', 'PLN']} onClose={() => setEditing(null)} onSubmit={(v) => editing && updateRate.mutate({ id: editing.id, payload: v })} />
-      <ConfirmDeleteModal open={!!deleting} onClose={() => setDeleting(null)} onConfirm={() => deleting ? deleteRate.mutateAsync(deleting.id) : undefined} entityName={`${deleting?.baseCurrency}->${deleting?.targetCurrency}`} />
     </AppShell>
   );
 }
@@ -127,59 +71,5 @@ function CurrencySettingsCard({ settings, onSave }: { settings: { primaryCurrenc
         </div>
       </form>
     </Card>
-  );
-}
-
-function rateDefaults(initial?: ExchangeRate): RateValues {
-  return initial
-    ? {
-        baseCurrency: initial.baseCurrency,
-        targetCurrency: initial.targetCurrency,
-        rate: Number(initial.rate),
-        date: new Date(initial.date).toISOString().slice(0, 10),
-        source: initial.source ?? 'manual',
-      }
-    : {
-        baseCurrency: 'USD',
-        targetCurrency: 'UAH',
-        rate: 1,
-        date: new Date().toISOString().slice(0, 10),
-        source: 'manual',
-      };
-}
-
-function RateModal({ open, onClose, onSubmit, title, initial, currencies }: { open: boolean; onClose: () => void; onSubmit: (v: RateValues) => void; title: string; initial?: ExchangeRate; currencies: Currency[] }) {
-  const { register, handleSubmit, reset, watch, setValue, formState: { errors } } = useForm<RateValues>({
-    defaultValues: rateDefaults(initial),
-  });
-  useEffect(() => {
-    if (!open) return;
-    reset(rateDefaults(initial));
-  }, [open, initial, reset]);
-
-  return (
-    <Modal open={open} onClose={onClose} title={title}>
-      <form className="space-y-3" onSubmit={handleSubmit(onSubmit)}>
-        <FormField label="Base currency" required error={errors.baseCurrency ? 'Required field' : undefined}>
-          <CurrencySelect value={watch('baseCurrency')} currencies={currencies} onChange={(value) => setValue('baseCurrency', value as Currency, { shouldDirty: true, shouldValidate: true })} />
-        </FormField>
-        <FormField label="Target currency" required error={errors.targetCurrency ? 'Required field' : undefined}>
-          <CurrencySelect value={watch('targetCurrency')} currencies={currencies} onChange={(value) => setValue('targetCurrency', value as Currency, { shouldDirty: true, shouldValidate: true })} />
-        </FormField>
-        <FormField label="Rate">
-          <Input type="number" step="0.0001" {...register('rate', { valueAsNumber: true })} />
-        </FormField>
-        <FormField label="Date" required error={errors.date ? 'Required field' : undefined}>
-          <DateInput {...register('date', { required: true })} />
-        </FormField>
-        <FormField label="Source">
-          <Input {...register('source')} />
-        </FormField>
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
-          <Button type="submit">Save</Button>
-        </div>
-      </form>
-    </Modal>
   );
 }

@@ -1,5 +1,11 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createChannelSettingsDraft } from "./channel-settings-draft";
@@ -46,21 +52,25 @@ vi.mock("@/components/ui/primitives", async (importOriginal) => {
       onOpen?: () => void;
       placeholder?: string;
     }) => (
-      <button
-        type="button"
-        aria-label={!onCreateOption ? placeholder : undefined}
-        onClick={async () => {
-          onOpen?.();
-          if (!onCreateOption) return;
-          try {
-            await onCreateOption("https://t.me/+new-link");
-          } catch {
-            // The mutation owns the visible error state.
-          }
-        }}
-      >
-        {onCreateOption ? "Register invite link" : placeholder}
-      </button>
+      <>
+        <button type="button" aria-label={placeholder} onClick={onOpen}>
+          {placeholder}
+        </button>
+        {onCreateOption ? (
+          <button
+            type="button"
+            onClick={async () => {
+              try {
+                await onCreateOption("https://t.me/+new-link");
+              } catch {
+                // The mutation owns the visible error state.
+              }
+            }}
+          >
+            Register invite link
+          </button>
+        ) : null}
+      </>
     ),
   };
 });
@@ -138,6 +148,28 @@ describe("ChannelPresentationSettingsModal", () => {
       selectPrimaryInviteLink(["old-folder", "older-folder"], "new-folder"),
     ).toEqual(["new-folder", "old-folder", "older-folder"]);
     expect(selectPrimaryInviteLink(["old-folder"], "")).toEqual([]);
+  });
+
+  it.each([
+    ["Invite link for bot", "botInviteLinkId"],
+    ["Invite link for newsletter", "broadcastInviteLinkId"],
+    ["Invite link for audience transfer", "audienceTransferInviteLinkId"],
+  ])("verifies and selects a pasted link in %s", async (label, field) => {
+    mocks.registerInviteLink.mockResolvedValue({ id: "verified-link" });
+    const { onDraftChange } = renderModal();
+    const fieldElement = screen.getByText(label).parentElement!;
+    await userEvent.click(
+      within(fieldElement).getByRole("button", {
+        name: "Register invite link",
+      }),
+    );
+    expect(mocks.registerInviteLink).toHaveBeenCalledWith(
+      "channel-1",
+      "https://t.me/+new-link",
+    );
+    await waitFor(() =>
+      expect(onDraftChange).toHaveBeenCalledWith({ [field]: "verified-link" }),
+    );
   });
 
   it("hydrates saved invite-link purposes when the channel card is compact", async () => {

@@ -130,6 +130,12 @@ export class DashboardService {
     const periodInvestmentTransactions = valuedPeriodTransactions.filter(
       isDashboardInvestmentTransaction,
     );
+    const valuedPeriodInvestments = await valueDashboardTransactions({
+      transactions: periodInvestments,
+      primaryCurrency: workspace.primaryCurrency,
+      workspaceId,
+      conversionService: this.conversionService,
+    });
     const excludedBalanceAdjustmentTransactions =
       valuedPeriodTransactions.filter((transaction) =>
         isDashboardBalanceAdjustmentTransaction(transaction),
@@ -150,7 +156,7 @@ export class DashboardService {
       (a, t) => a + dec(t.amountInPrimaryCurrency),
       0,
     );
-    const investedForPeriod = periodInvestments.reduce(
+    const investedForPeriod = valuedPeriodInvestments.reduce(
       (sum, investment) =>
         sum +
         dec(investment.amountInPrimaryCurrency) *
@@ -159,7 +165,7 @@ export class DashboardService {
     );
     const investmentBreakdownForPeriod = ['EXTERNAL', 'SALARY', 'REINVESTMENT'].map(
       (origin) => {
-        const rows = periodInvestments.filter(
+        const rows = valuedPeriodInvestments.filter(
           (investment) => investment.origin === origin,
         );
         return {
@@ -181,9 +187,12 @@ export class DashboardService {
             currency: investment.currency,
             movementType: investment.movementType,
             notes: investment.notes,
-            member: {
-              id: investment.workspaceMember.id,
-              name: investment.workspaceMember.user.name,
+              member: {
+                id: investment.workspaceMember.id,
+                name: investment.workspaceMember.user.name,
+                avatarPresentation: iconToResolvedEmoji(
+                  investment.workspaceMember.avatarIcon,
+                ),
             },
             account: investment.account,
           })),

@@ -128,9 +128,9 @@ const messages = {
   "telegram.posts.import.unifiedUpload": "Загрузить JSON",
   "telegram.posts.import.unifiedCopyPrompt": "Скопировать общую инструкцию",
   "telegram.posts.import.unifiedCopyAndDownload":
-    "Скопировать инструкцию и скачать полный контекст",
+    "Скачать инструкцию и полный контекст",
   "telegram.posts.import.unifiedContextReady":
-    "Инструкция скопирована, полный контекст импорта скачан.",
+    "Инструкция и полный контекст импорта скачаны.",
   "telegram.posts.import.unifiedContextError":
     "Не удалось подготовить полный контекст импорта.",
   "telegram.posts.import.unifiedDropTitle":

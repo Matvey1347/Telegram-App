@@ -93,7 +93,10 @@ export async function applyUnifiedImportSchedule(input: {
       if (!postId) throw new Error('Post operation did not produce an id');
       await publication.scheduleManagedPost(userId, channelId, postId, {
         scheduledAt: row.scheduledAt!,
-        publicationSlotId: row.slotId?.trim() || undefined,
+        publicationSlotId:
+          row.placementMode === 'CUSTOM'
+            ? undefined
+            : row.slotId?.trim() || undefined,
       });
       results.schedule.scheduled++;
       row.postId = postId;

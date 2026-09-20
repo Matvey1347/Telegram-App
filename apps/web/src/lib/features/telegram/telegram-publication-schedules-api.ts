@@ -5,6 +5,7 @@ import type {
   TelegramPublicationSchedule,
   TelegramPublicationScheduleInput,
   TelegramPublicationSlotOccurrence,
+  TelegramPublicationSlotOccurrencesByChannel,
 } from "@telegram-system/shared";
 
 export function createTelegramPublicationSchedulesApi(
@@ -73,6 +74,16 @@ export function createTelegramPublicationSchedulesApi(
         await api.get<TelegramPublicationSlotOccurrence[]>(
           `/telegram-channels/${channelId}/publication-schedule/occurrences`,
           { params },
+        )
+      ).data,
+    occurrencesByChannels: async (
+      channelIds: string[],
+      params: { from: string; to: string },
+    ) =>
+      (
+        await api.get<TelegramPublicationSlotOccurrencesByChannel>(
+          "/telegram-publication-schedules/occurrences",
+          { params: { ...params, channelIds: channelIds.join(",") } },
         )
       ).data,
   };

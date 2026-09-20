@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { Bot, ChevronUp, PencilLine } from "lucide-react";
+import { Bot, ChevronUp, PencilLine, Send } from "lucide-react";
 import { Button, FormError } from "@/components/ui/primitives";
 
 export function PromoPostEditorSection({
@@ -10,9 +10,11 @@ export function PromoPostEditorSection({
   connected,
   connectionLoading,
   importStatus,
+  sendStatus,
   dots,
   error,
   onImport,
+  onSend,
   onToggleEditor,
   children,
 }: {
@@ -21,9 +23,11 @@ export function PromoPostEditorSection({
   connected: boolean;
   connectionLoading: boolean;
   importStatus: "idle" | "working" | "waiting" | "done";
+  sendStatus: "idle" | "working" | "waiting" | "done";
   dots: number;
   error?: string;
   onImport: () => void;
+  onSend: () => void;
   onToggleEditor: () => void;
   children: ReactNode;
 }) {
@@ -74,6 +78,27 @@ export function PromoPostEditorSection({
                     ? "Try again"
                     : "Import from bot"}
           </Button>
+          {!expanded ? (
+            <Button
+              type="button"
+              variant="secondary"
+              className="h-8 px-3 text-xs"
+              disabled={
+                !connected ||
+                connectionLoading ||
+                sendStatus === "working" ||
+                !hasContent
+              }
+              onClick={onSend}
+            >
+              <Send size={15} />
+              {sendStatus === "working"
+                ? `Sending${".".repeat(dots)}`
+                : sendStatus === "done"
+                  ? "✅ Sent to bot"
+                  : "Send to bot"}
+            </Button>
+          ) : null}
           <Button
             type="button"
             className="h-8 px-3 text-xs"

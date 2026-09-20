@@ -8,6 +8,7 @@ import {
   TelegramChannelScopeSelector,
   type TelegramChannelScopeMode,
 } from "@/components/features/telegram/telegram/telegram-channel-scope-selector";
+import { CommonAdSlotOptions } from "../common-ad-slot-options";
 
 export type AdSaleScopeMode = TelegramChannelScopeMode;
 
@@ -35,6 +36,7 @@ export function AdSalePlacementScope({
   commonTime,
   commonFormatName,
   commonFormats,
+  effectiveChannelIds,
   networks,
   channels,
   networkPricing,
@@ -52,6 +54,7 @@ export function AdSalePlacementScope({
   commonTime: string;
   commonFormatName: string;
   commonFormats: Array<{ id: string; name: string }>;
+  effectiveChannelIds: string[];
   networks: TelegramChannelNetwork[];
   channels: TelegramChannel[];
   networkPricing?: ReactNode;
@@ -87,16 +90,30 @@ export function AdSalePlacementScope({
             className="w-full [&>button]:h-[42px]"
           />
         </div>
-        <label className="space-y-1">
-          <span className="flex h-7 items-center text-sm text-neutral-300">
-            Time for all
-          </span>
-          <TimeInput
-            value={commonTime}
-            onChange={(event) => onCommonTimeChange(event.target.value)}
-            className="h-[42px]"
+        <div className="min-w-0 space-y-2">
+          <label className="block space-y-1">
+            <span className="flex h-7 items-center text-sm text-neutral-300">
+              Time for all
+            </span>
+            <TimeInput
+              value={commonTime}
+              onChange={(event) => onCommonTimeChange(event.target.value)}
+              className="h-[42px]"
+            />
+          </label>
+          <CommonAdSlotOptions
+            channelIds={effectiveChannelIds}
+            date={dateRange.from}
+            selectedTime={commonTime}
+            onSelect={onCommonTimeChange}
           />
-        </label>
+          {dateRange.from && dateRange.to && dateRange.from !== dateRange.to ? (
+            <p className="text-xs text-neutral-500">
+              Status reflects the first date. The selected time applies to every
+              placement date.
+            </p>
+          ) : null}
+        </div>
         <label className="space-y-1">
           <span className="flex h-7 items-center text-sm text-neutral-300">
             Format for all

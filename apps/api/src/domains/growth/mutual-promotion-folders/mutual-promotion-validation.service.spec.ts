@@ -5,7 +5,6 @@ describe('MutualPromotionValidationService', () => {
     telegramChannelId: 'channel-1',
     inviteLinkId: 'invite-1',
     role: 'PUBLISHER' as const,
-    inviteLinkMode: 'REUSABLE' as const,
   };
 
   function transaction(assignments: unknown[]) {
@@ -67,7 +66,7 @@ describe('MutualPromotionValidationService', () => {
     ).rejects.toThrow('overlaps another folder');
   });
 
-  it('keeps a folder-only link globally exclusive outside overlapping dates', async () => {
+  it('allows a legacy folder-only link in a different period', async () => {
     const tx = transaction([
       {
         inviteLinkId: 'invite-1',
@@ -89,7 +88,7 @@ describe('MutualPromotionValidationService', () => {
         endsAt: new Date('2026-09-25T00:00:00.000Z'),
         participants: [participant],
       }),
-    ).rejects.toThrow('Folder-only invite link is already assigned');
+    ).resolves.toBeUndefined();
   });
 
   it('rejects inactive participant channels before activation', async () => {

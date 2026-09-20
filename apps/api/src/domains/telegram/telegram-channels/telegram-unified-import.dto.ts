@@ -86,7 +86,10 @@ class ScheduleRowDto {
   )
   @IsString()
   postId?: string;
-  @ValidateIf((row: ScheduleRowDto) => row.action !== 'UNSCHEDULE')
+  @IsOptional()
+  @IsIn(['SLOT', 'CUSTOM'])
+  placementMode?: 'SLOT' | 'CUSTOM';
+  @IsOptional()
   @IsString()
   slotId?: string;
   @ValidateIf((row: ScheduleRowDto) => row.action !== 'UNSCHEDULE')

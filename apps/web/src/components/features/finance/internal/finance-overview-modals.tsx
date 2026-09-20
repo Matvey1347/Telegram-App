@@ -32,7 +32,7 @@ export function AccountModal({ open, initial, currencies, onClose, onSubmit }: {
     <FormField label="Name" required error={errors.name ? "Required field" : undefined}><Input {...register("name", { required: true })} /></FormField>
     <FormField label="Member"><MemberSelect value={watch("assignedMemberId")} onChange={(value) => setValue("assignedMemberId", value || null)} defaultToCurrent={!initial} /></FormField>
     <FormField label="Currency"><CurrencySelect value={watch("currency")} currencies={currencies} onChange={(value) => setValue("currency", value)} /></FormField>
-    <FormField label="Initial balance"><Input type="number" step="0.01" {...register("initialBalance", { valueAsNumber: true })} /></FormField>
+    {!initial ? <FormField label="Opening investment"><Input type="number" step="0.01" {...register("initialBalance", { valueAsNumber: true })} /></FormField> : null}
     <Actions onClose={onClose} />
   </form></Modal>;
 }

@@ -648,7 +648,6 @@ export const {
   transactionsApi,
   transactionCategoriesApi,
   transfersApi,
-  exchangeRatesApi,
   currenciesApi,
 } = financeApi;
 

@@ -138,7 +138,7 @@ describe("TelegramPostPreview", () => {
     expect(screen.getByText("Media attached in Telegram")).toBeVisible();
   });
 
-  it("shows markers for numbered and bulleted lists despite the global CSS reset", () => {
+  it("keeps list-looking lines as ordinary Telegram text without list indentation", () => {
     const { container } = render(
       <TelegramPostPreview
         channelTitle="Channel"
@@ -147,16 +147,14 @@ describe("TelegramPostPreview", () => {
       />,
     );
 
-    const orderedList = container.querySelector("ol.tg-rich-list");
-    const unorderedList = container.querySelector("ul.tg-rich-list");
-
-    expect(orderedList).toHaveStyle({ listStyleType: "decimal" });
-    expect(orderedList?.querySelectorAll("li")).toHaveLength(2);
-    expect(unorderedList).toHaveStyle({ listStyleType: "disc" });
-    expect(unorderedList?.querySelectorAll("li")).toHaveLength(2);
+    expect(container.querySelector("ol.tg-rich-list")).toBeNull();
+    expect(container.querySelector("ul.tg-rich-list")).toBeNull();
+    expect(container.querySelector(".telegram-preview-text")).toHaveTextContent(
+      "1. First2. Second- Third- Fourth",
+    );
   });
 
-  it("renders inline emphasis in lists and highlights Unicode hashtags", () => {
+  it("renders inline emphasis in plain list-looking text and highlights Unicode hashtags", () => {
     const { container } = render(
       <TelegramPostPreview
         channelTitle="Channel"
@@ -167,11 +165,11 @@ describe("TelegramPostPreview", () => {
       />,
     );
 
-    const orderedItems = container.querySelectorAll("ol.tg-rich-list li");
-    expect(orderedItems[0]?.querySelector("b")).toHaveTextContent(
+    const preview = container.querySelector(".telegram-preview-text");
+    expect(preview?.querySelector("b")).toHaveTextContent(
       "Зупинити дію",
     );
-    expect(orderedItems[1]?.querySelector("i")).toHaveTextContent(
+    expect(preview?.querySelector("i")).toHaveTextContent(
       "Назвати стан",
     );
     expect(container.querySelectorAll(".tg-hashtag")).toHaveLength(2);

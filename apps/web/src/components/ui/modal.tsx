@@ -122,8 +122,8 @@ export function Modal({
         tabIndex={-1}
         className={`relative flex max-h-[calc(100dvh-1rem)] w-full flex-col rounded-lg border border-neutral-700 bg-neutral-900 shadow-2xl sm:max-h-[84vh] ${allowOverflow ? "overflow-visible" : "overflow-hidden"} ${size === "xs" ? "max-w-[400px]" : size === "sm" ? "max-w-[560px]" : size === "xl" ? "max-w-[1280px]" : "max-w-[660px]"}`}
       >
-        <div className="mb-1 flex items-center justify-between gap-3 p-4 pb-3 sm:p-5 sm:pb-3">
-          <div className="flex min-w-0 flex-wrap items-center gap-2 sm:gap-3">
+        <div className="mb-1 flex items-start justify-between gap-3 p-4 pb-3 sm:items-center sm:p-5 sm:pb-3">
+          <div className="flex min-w-0 flex-1 flex-wrap items-start gap-2 sm:items-center sm:gap-3">
             {leadingHeaderAction}
             <span
               data-modal-title-icon="true"
@@ -131,7 +131,10 @@ export function Modal({
             >
               {resolvedTitleIcon}
             </span>
-            <h3 id={titleId} className="text-lg font-semibold sm:text-xl">
+            <h3
+              id={titleId}
+              className="min-w-0 flex-1 text-base font-semibold leading-snug sm:text-xl"
+            >
               {title}
             </h3>
             {headerAction}
@@ -140,7 +143,7 @@ export function Modal({
             type="button"
             aria-label={resolvedCloseLabel}
             onClick={onClose}
-            className="cursor-pointer rounded-lg border border-neutral-700 p-2 hover:bg-neutral-800"
+            className="inline-flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-neutral-700 hover:bg-neutral-800"
           >
             <X size={16} />
           </button>

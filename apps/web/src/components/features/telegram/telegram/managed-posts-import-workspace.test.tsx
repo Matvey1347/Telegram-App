@@ -123,6 +123,7 @@ describe("ManagedPostsImportWorkspace", () => {
     expect(screen.getByText("UPDATE")).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Available slot" }));
     expect(onScheduleChange).toHaveBeenCalledWith(0, {
+      placementMode: "SLOT",
       slotId: "slot-1",
       scheduledAt: "2026-09-20T09:00:00.000Z",
     });

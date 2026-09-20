@@ -169,8 +169,7 @@ export class CurrencyConversionService {
       SELECT DISTINCT ON ("baseCurrency", "targetCurrency")
         "baseCurrency", "targetCurrency", "rate", "date"
       FROM "ExchangeRate"
-      WHERE "workspaceId" = ${workspaceId}
-        ${date ? Prisma.sql`AND "date" <= ${date}` : Prisma.empty}
+      WHERE ${date ? Prisma.sql`"date" <= ${date}` : Prisma.sql`TRUE`}
       ORDER BY "baseCurrency", "targetCurrency", "date" DESC
     `);
     let source = preparedRateSource(await loadRows(), date);
@@ -213,11 +212,10 @@ export class CurrencyConversionService {
   }
 
   private async refreshCurrentPair(workspaceId: string, currencies: string[]) {
-    const key = `${workspaceId}:${currencies.join(':')}`;
+    const key = currencies.join(':');
     const existing = this.currentRefreshes.get(key);
     if (existing) return existing;
     const refresh = this.externalRates!.ensureCurrentRates({
-      workspaceId,
       currencies,
       signal: AbortSignal.timeout(8_000),
     })
@@ -251,8 +249,7 @@ export class CurrencyConversionService {
         SELECT DISTINCT ON ("baseCurrency", "targetCurrency")
           "baseCurrency", "targetCurrency", "rate", "date"
         FROM "ExchangeRate"
-        WHERE "workspaceId" = ${workspaceId}
-          AND "date" <= requested."asOf"
+        WHERE "date" <= requested."asOf"
         ORDER BY "baseCurrency", "targetCurrency", "date" DESC
       ) AS rate
     `);

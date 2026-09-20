@@ -16,27 +16,30 @@ describe('MutualPromotionActivationService', () => {
       position,
       scheduledAt: new Date(startsAt.getTime() + (position + 1) * 60_000),
     }));
-    const participants = Array.from({ length: publisherCount }, (_, index) => ({
-      id: `participant-${index}`,
-      workspaceId: 'workspace-1',
-      folderId: 'folder-1',
-      telegramChannelId: `channel-${index}`,
-      inviteLinkId: `invite-${index}`,
-      role: 'PUBLISHER' as const,
-      inviteLinkMode: 'REUSABLE' as const,
-      subscribersAtStart: null,
-      subscribersAtEnd: null,
-      inviteJoinedAtStart: null,
-      inviteJoinedAtEnd: null,
-      baselineCapturedAt: null,
-      finalCapturedAt: null,
-      createdAt: now,
-      updatedAt: now,
-      telegramChannel: {
-        assignedMemberId: null,
-        currentSubscribersCount: 100,
-      },
-    }));
+    const participants = Array.from(
+      { length: publisherCount || 2 },
+      (_, index) => ({
+        id: `participant-${index}`,
+        workspaceId: 'workspace-1',
+        folderId: 'folder-1',
+        telegramChannelId: `channel-${index}`,
+        inviteLinkId: `invite-${index}`,
+        role: publisherCount ? ('PUBLISHER' as const) : ('PAID' as const),
+        inviteLinkMode: 'REUSABLE' as const,
+        subscribersAtStart: null,
+        subscribersAtEnd: null,
+        inviteJoinedAtStart: null,
+        inviteJoinedAtEnd: null,
+        baselineCapturedAt: null,
+        finalCapturedAt: null,
+        createdAt: now,
+        updatedAt: now,
+        telegramChannel: {
+          assignedMemberId: null,
+          currentSubscribersCount: 100,
+        },
+      }),
+    );
     const folder = {
       id: 'folder-1',
       workspaceId: 'workspace-1',
@@ -160,6 +163,41 @@ describe('MutualPromotionActivationService', () => {
       10,
       10,
     );
+  });
+
+  it('activates a paid-only folder with boundary capture and no publications', async () => {
+    const { service, tx, publication } = setup(0, 0);
+
+    const result = await service.activate('user-1', 'folder-1');
+
+    expect(result.deliveriesCreated).toBe(0);
+    expect(tx.telegramManagedPost.createMany).not.toHaveBeenCalled();
+    expect(tx.mutualPromotionPostDelivery.createMany).not.toHaveBeenCalled();
+    expect(tx.mutualPromotionWorkItem.createMany).toHaveBeenCalledWith({
+      data: [
+        expect.objectContaining({ kind: 'CAPTURE_START_BASELINE' }),
+        expect.objectContaining({ kind: 'FINISH_FOLDER' }),
+      ],
+    });
+    expect(publication.scheduleManagedPostNatively).not.toHaveBeenCalled();
+  });
+
+  it('rejects an empty folder instead of scheduling an empty attribution period', async () => {
+    const { service, tx } = setup(0, 0);
+    tx.mutualPromotionFolder.findFirst.mockResolvedValue({
+      id: 'folder-1',
+      workspaceId: 'workspace-1',
+      status: 'DRAFT',
+      startsAt,
+      endsAt,
+      participants: [],
+      posts: [],
+    });
+
+    await expect(service.activate('user-1', 'folder-1')).rejects.toThrow(
+      'At least one participant is required',
+    );
+    expect(tx.mutualPromotionWorkItem.createMany).not.toHaveBeenCalled();
   });
 
   it('schedules posts sequentially inside each channel to avoid group-numbering deadlocks', async () => {

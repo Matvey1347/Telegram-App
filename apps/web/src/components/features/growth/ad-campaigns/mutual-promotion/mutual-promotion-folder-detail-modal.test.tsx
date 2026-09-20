@@ -12,6 +12,49 @@ vi.mock("./mutual-promotion-saved-post-card", () => ({
 }));
 
 describe("MutualPromotionFolderDetailModal", () => {
+  it("allows a paid-only draft to activate without adding posts", () => {
+    render(
+      <MutualPromotionFolderDetailModal
+        open
+        folder={
+          {
+            id: "folder-paid",
+            title: "Paid folder",
+            status: "DRAFT",
+            startsAt: "2026-09-21T08:00:00.000Z",
+            endsAt: "2026-09-24T08:00:00.000Z",
+            participantCount: 2,
+            publisherCount: 0,
+            paidCount: 2,
+            postCount: 0,
+            participants: [],
+            posts: [],
+          } as never
+        }
+        timezone="Europe/Warsaw"
+        accounts={[]}
+        botConnected={false}
+        botUsername={null}
+        mutating={false}
+        actionError={null}
+        onClose={vi.fn()}
+        onEdit={vi.fn()}
+        onEditInviteLinks={vi.fn()}
+        onActivate={vi.fn()}
+        onCancel={vi.fn()}
+        onAddPost={vi.fn()}
+        onUpdatePost={vi.fn()}
+        onRemovePost={vi.fn()}
+        onSaveExpense={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Activate" })).toBeEnabled();
+    expect(screen.getByText(/No posts are needed/)).toBeVisible();
+    expect(screen.queryByText("Post import")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Publications \(0\)/)).not.toBeInTheDocument();
+  });
+
   it("offers invite-link editing for an active folder", () => {
     const onEditInviteLinks = vi.fn();
     render(

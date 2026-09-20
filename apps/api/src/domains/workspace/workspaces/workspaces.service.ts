@@ -264,6 +264,10 @@ export class WorkspacesService {
   async create(userId: string, dto: CreateWorkspaceDto) {
     const name = dto.name.trim();
     const workspaceId = randomUUID();
+    const userProfile = await this.prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+      select: { profileAvatarIconId: true, telegramUsername: true },
+    });
 
     await this.prisma.$transaction(async (tx) => {
       await tx.$executeRaw(
@@ -285,6 +289,8 @@ export class WorkspacesService {
           userId,
           workspaceId,
           role: WorkspaceRole.owner,
+          avatarIconId: userProfile.profileAvatarIconId,
+          telegramUsername: userProfile.telegramUsername,
         },
       });
     });

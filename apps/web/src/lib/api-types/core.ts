@@ -179,13 +179,13 @@ export type MemberFinanceSummary = {
   investments: {
     external: number;
     salary: number;
-    reinvestment: number;
+    investorEarnings: number;
+    principal: number;
     total: number;
-    reinvestmentPercent: number;
   };
 };
 export type MemberFinanceDetails = MemberFinanceSummary & {
-  member: { id: string; name: string; email: string };
+  member: { id: string; name: string; email: string; avatarPresentation?: ResolvedEmoji | null };
   timeline: Array<{
     id: string;
     type: string;

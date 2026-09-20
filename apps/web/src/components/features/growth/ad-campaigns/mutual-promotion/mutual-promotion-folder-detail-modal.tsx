@@ -142,9 +142,10 @@ export function MutualPromotionFolderDetailModal({
   const editable = folder.status === "DRAFT";
   const canActivate =
     editable &&
-    folder.postCount >= 5 &&
-    folder.publisherCount > 0 &&
-    folder.participantCount > 0;
+    folder.participantCount > 0 &&
+    (folder.publisherCount === 0
+      ? folder.postCount === 0
+      : folder.postCount >= 5);
   const previewChannel =
     folder.participants.find((participant) => participant.role === "PUBLISHER")
       ?.channel ?? folder.participants[0]?.channel;
@@ -198,7 +199,7 @@ export function MutualPromotionFolderDetailModal({
           </div>
         </div>
 
-        {editable && !canActivate ? (
+        {editable && folder.publisherCount > 0 && !canActivate ? (
           <p className="rounded-lg border border-amber-900/60 bg-amber-950/20 p-3 text-sm text-amber-200">
             Activation requires at least five publications and one publishing
             channel.
@@ -206,7 +207,7 @@ export function MutualPromotionFolderDetailModal({
         ) : null}
         <FormError message={actionError ?? undefined} />
 
-        {editable ? (
+        {editable && folder.publisherCount > 0 ? (
           <MutualPromotionPostImport
             folderId={folder.id}
             timezone={timezone}
@@ -309,37 +310,39 @@ export function MutualPromotionFolderDetailModal({
           </div>
         </section>
 
-        <section className="space-y-3">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <h4 className="font-semibold text-white">
-                Publications ({folder.posts.length})
-              </h4>
-              <p className="mt-1 text-sm text-neutral-400">
-                Each post is sent to every publishing channel.
-              </p>
+        {folder.publisherCount > 0 ? (
+          <section className="space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h4 className="font-semibold text-white">
+                  Publications ({folder.posts.length})
+                </h4>
+                <p className="mt-1 text-sm text-neutral-400">
+                  Each post is sent to every publishing channel.
+                </p>
+              </div>
             </div>
-          </div>
-          {!folder.posts.length ? (
-            <EmptyState text="No publications have been added yet." />
-          ) : null}
-          {folder.posts.map((post, index) => (
-            <MutualPromotionSavedPostCard
-              key={post.id}
-              post={post}
-              index={index}
-              editable={editable}
-              timezone={timezone}
-              startsAt={folder.startsAt}
-              endsAt={folder.endsAt}
-              channelTitle={previewChannel?.title ?? folder.title}
-              channelPhotoUrl={previewChannel?.photoUrl}
-              saving={mutating}
-              onSave={onUpdatePost}
-              onRemove={onRemovePost}
-            />
-          ))}
-        </section>
+            {!folder.posts.length ? (
+              <EmptyState text="No publications have been added yet." />
+            ) : null}
+            {folder.posts.map((post, index) => (
+              <MutualPromotionSavedPostCard
+                key={post.id}
+                post={post}
+                index={index}
+                editable={editable}
+                timezone={timezone}
+                startsAt={folder.startsAt}
+                endsAt={folder.endsAt}
+                channelTitle={previewChannel?.title ?? folder.title}
+                channelPhotoUrl={previewChannel?.photoUrl}
+                saving={mutating}
+                onSave={onUpdatePost}
+                onRemove={onRemovePost}
+              />
+            ))}
+          </section>
+        ) : null}
 
         {editable ? (
           <section className="rounded-xl border border-blue-900/70 bg-blue-950/20 p-4">
@@ -353,16 +356,26 @@ export function MutualPromotionFolderDetailModal({
                   <p className="font-medium text-blue-100">
                     What happens when you activate this folder
                   </p>
-                  <p className="text-neutral-300">
-                    Posts without inline buttons are added immediately to
-                    Telegram Scheduled Messages in every 📣 Publisher channel.
-                    Posts with inline buttons stay in our scheduler and are sent
-                    at their selected time. 💳 Paid channels never publish.
-                  </p>
-                  <p className="text-xs text-neutral-400">
-                    Activation locks the folder setup. Published messages are
-                    removed automatically when the folder ends.
-                  </p>
+                  {folder.publisherCount > 0 ? (
+                    <>
+                      <p className="text-neutral-300">
+                        Posts without inline buttons are added immediately to
+                        Telegram Scheduled Messages in every 📣 Publisher
+                        channel. Posts with inline buttons stay in our scheduler
+                        and are sent at their selected time. 💳 Paid channels
+                        never publish.
+                      </p>
+                      <p className="text-xs text-neutral-400">
+                        Activation locks the folder setup. Published messages
+                        are removed automatically when the folder ends.
+                      </p>
+                    </>
+                  ) : (
+                    <p className="text-neutral-300">
+                      No posts are needed. Activation measures invite-link joins
+                      from the folder start until its end.
+                    </p>
+                  )}
                 </div>
               </div>
               <Button

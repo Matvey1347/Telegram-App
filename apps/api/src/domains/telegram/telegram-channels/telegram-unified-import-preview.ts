@@ -104,6 +104,7 @@ const previewItem = (
     | 'text'
     | 'imageUrls'
     | 'scheduledAt'
+    | 'placementMode'
     | 'slotId'
     | 'slotKind'
     | 'slotTitle'
@@ -542,6 +543,8 @@ export function buildUnifiedImportPreviewSections(
     {
       key: 'schedule',
       items: (manifest.schedule ?? []).map((row) => {
+        const placementMode =
+          row.placementMode ?? (row.slotId?.trim() ? 'SLOT' : 'CUSTOM');
         if (row.action === 'UNSCHEDULE') {
           const existing = row.postId ? postsById.get(row.postId) : undefined;
           return previewItem(
@@ -582,6 +585,7 @@ export function buildUnifiedImportPreviewSections(
               scheduledAt: existing?.scheduledAt
                 ? new Date(existing.scheduledAt).toISOString()
                 : (row.scheduledAt ?? null),
+              placementMode: existing?.publicationSlot ? 'SLOT' : null,
               slotId: existing?.publicationSlot?.id ?? row.slotId ?? null,
               slotKind:
                 existing?.publicationSlot?.kind ??
@@ -638,7 +642,18 @@ export function buildUnifiedImportPreviewSections(
                 ...(row.postId && postDeleteIds.has(row.postId)
                   ? ['Post also appears in delete.posts']
                   : []),
-                ...(row.slotId?.trim() && !knownSlots.has(row.slotId)
+                ...(placementMode === 'SLOT' && !row.slotId?.trim()
+                  ? ['slotId is required for SLOT scheduling']
+                  : []),
+                ...(placementMode === 'CUSTOM' && row.slotId?.trim()
+                  ? ['CUSTOM scheduling cannot use slotId']
+                  : []),
+                ...(placementMode === 'CUSTOM' && row.slotKind
+                  ? ['CUSTOM scheduling cannot use slotKind']
+                  : []),
+                ...(placementMode === 'SLOT' &&
+                row.slotId?.trim() &&
+                !knownSlots.has(row.slotId)
                   ? ['Slot is not assigned to this channel']
                   : []),
                 ...(!row.scheduledAt ||
@@ -657,6 +672,7 @@ export function buildUnifiedImportPreviewSections(
             text: post?.text ?? existing?.text,
             imageUrls: post?.imageUrls ?? existing?.imageUrls,
             scheduledAt: row.scheduledAt ?? null,
+            placementMode,
             slotId: row.slotId ?? null,
             slotKind:
               row.slotKind ??

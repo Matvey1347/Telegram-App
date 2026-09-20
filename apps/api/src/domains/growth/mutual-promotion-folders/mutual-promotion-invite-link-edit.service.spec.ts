@@ -59,7 +59,6 @@ describe('MutualPromotionInviteLinkEditService', () => {
       {
         participantId: 'participant-1',
         inviteLinkId: 'new-link',
-        inviteLinkMode: 'FOLDER_ONLY' as const,
       },
     ],
   };
@@ -88,7 +87,7 @@ describe('MutualPromotionInviteLinkEditService', () => {
       where: { id: 'participant-1' },
       data: expect.objectContaining({
         inviteLinkId: 'new-link',
-        inviteLinkMode: 'FOLDER_ONLY',
+        inviteLinkMode: 'REUSABLE',
         subscribersAtStart: 420,
         inviteJoinedAtStart: 35,
         baselineCapturedAt: expect.any(Date),

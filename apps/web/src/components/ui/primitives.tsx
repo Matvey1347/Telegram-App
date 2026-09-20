@@ -672,7 +672,7 @@ export function MultiSelect({
   };
 
   return (
-    <div ref={rootRef} className={`relative ${className}`}>
+    <div ref={rootRef} className={`relative min-w-0 max-w-full ${className}`}>
       <button
         ref={triggerRef}
         type="button"
@@ -684,9 +684,9 @@ export function MultiSelect({
             return !current;
           });
         }}
-        className="flex min-h-9 w-full items-center justify-between rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-left text-sm text-white outline-none ring-blue-500 focus:ring disabled:opacity-50"
+        className="flex min-h-9 w-full min-w-0 max-w-full items-center justify-between overflow-hidden rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-left text-sm text-white outline-none ring-blue-500 focus:ring disabled:opacity-50"
       >
-        <span className="flex min-w-0 flex-wrap items-center gap-1.5">
+        <span className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5 overflow-hidden">
           {loading && !selectedOptions.length ? (
             <span className="inline-flex items-center gap-2 text-neutral-400">
               <LoaderCircle size={15} className="animate-spin" />
@@ -882,6 +882,7 @@ export function StatusPill({ value }: { value: string }) {
 type SelectOption = {
   value: string;
   label: string;
+  labelContent?: React.ReactNode;
   meta?: string;
   iconUrl?: string;
   iconEmoji?: string;
@@ -1066,7 +1067,7 @@ export function CustomSelect({
             : "text-neutral-200";
 
   return (
-    <div ref={rootRef} className="relative">
+    <div ref={rootRef} className="relative min-w-0 max-w-full">
       <button
         ref={triggerRef}
         type="button"
@@ -1077,9 +1078,9 @@ export function CustomSelect({
           else onOpen?.();
           setOpen(!open);
         }}
-        className="flex min-h-9 w-full items-center justify-between rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-left text-sm text-white outline-none ring-blue-500 focus:ring disabled:opacity-50"
+        className="flex min-h-9 w-full min-w-0 max-w-full items-center justify-between overflow-hidden rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-left text-sm text-white outline-none ring-blue-500 focus:ring disabled:opacity-50"
       >
-        <span className="flex min-w-0 flex-1 items-center gap-2">
+        <span className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
           {loading && !selected ? (
             <LoaderCircle
               size={15}
@@ -1096,19 +1097,21 @@ export function CustomSelect({
             />
           ) : null}
           <span
-            className={`${selected?.badgeClassName ? "" : "truncate"} ${selected ? toneClass(selected.tone) : "text-neutral-400"} ${selected?.badgeClassName ?? ""}`}
+            className={`min-w-0 truncate ${selected ? toneClass(selected.tone) : "text-neutral-400"} ${selected?.badgeClassName ?? ""}`}
           >
-            {selected?.label || (loading ? loadingLabel : placeholder)}
+            {selected?.labelContent ??
+              selected?.label ??
+              (loading ? loadingLabel : placeholder)}
           </span>
           {selected?.meta ? (
-            <bdi className="ml-auto rounded-md bg-neutral-800 px-2 py-0.5 text-xs font-normal text-neutral-400">
+            <bdi className="ml-auto min-w-0 max-w-[45%] shrink truncate rounded-md bg-neutral-800 px-2 py-0.5 text-xs font-normal text-neutral-400">
               {selected.meta}
             </bdi>
           ) : null}
         </span>
         <ChevronDown
           size={16}
-          className={`text-neutral-400 transition-transform ${dropdownDirection === "up" && open ? "rotate-180" : ""}`}
+          className={`shrink-0 text-neutral-400 transition-transform ${dropdownDirection === "up" && open ? "rotate-180" : ""}`}
         />
       </button>
       {open && dropdownStyle
@@ -1177,12 +1180,12 @@ export function CustomSelect({
                             fallback={opt.iconFallback}
                           />
                           <span
-                            className={`${opt.badgeClassName ? "" : "truncate"} ${toneClass(opt.tone)} ${opt.badgeClassName ?? ""}`}
+                            className={`min-w-0 truncate ${toneClass(opt.tone)} ${opt.badgeClassName ?? ""}`}
                           >
-                            {opt.label}
+                            {opt.labelContent ?? opt.label}
                           </span>
                           {opt.meta ? (
-                            <bdi className="ml-auto rounded-md bg-neutral-800/80 px-2 py-0.5 text-xs font-normal text-neutral-400">
+                            <bdi className="ml-auto min-w-0 max-w-[45%] shrink truncate rounded-md bg-neutral-800/80 px-2 py-0.5 text-xs font-normal text-neutral-400">
                               {opt.meta}
                             </bdi>
                           ) : null}

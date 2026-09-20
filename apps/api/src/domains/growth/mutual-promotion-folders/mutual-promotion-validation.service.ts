@@ -119,7 +119,6 @@ export class MutualPromotionValidationService {
       },
       select: {
         inviteLinkId: true,
-        inviteLinkMode: true,
         folder: {
           select: { id: true, status: true, startsAt: true, endsAt: true },
         },
@@ -130,15 +129,6 @@ export class MutualPromotionValidationService {
         (row) => row.inviteLinkId === participant.inviteLinkId,
       );
       if (
-        existing.some((row) => row.inviteLinkMode === 'FOLDER_ONLY') ||
-        (participant.inviteLinkMode === 'FOLDER_ONLY' && existing.length > 0)
-      ) {
-        throw new BadRequestException(
-          'Folder-only invite link is already assigned',
-        );
-      }
-      if (
-        participant.inviteLinkMode === 'REUSABLE' &&
         existing.some(
           (row) =>
             row.folder.status !== 'CANCELLED' &&
@@ -147,7 +137,7 @@ export class MutualPromotionValidationService {
         )
       ) {
         throw new BadRequestException(
-          'Reusable invite link overlaps another folder',
+          'Invite link overlaps another folder',
         );
       }
     }

@@ -87,7 +87,6 @@ describe("MutualPromotionInviteLinksModal", () => {
           {
             participantId: "participant-1",
             inviteLinkId: "correct-link",
-            inviteLinkMode: "REUSABLE",
           },
         ],
       }),

@@ -163,10 +163,6 @@ export function createFinanceApi({
         : getAllPaginatedItems<Transfer>("/transfers", params),
   };
 
-  const exchangeRatesApi = {
-    ...quietCrud<ExchangeRate>("/exchange-rates"),
-  };
-
   const currenciesApi = {
     getSettings: async () =>
       (await api.get<CurrencySettings>("/currencies/settings")).data,
@@ -179,13 +175,6 @@ export function createFinanceApi({
     listRates: async () => (await api.get<ExchangeRate[]>("/currencies/rates")).data,
     listLatestRates: async () =>
       (await api.get<ExchangeRate[]>("/currencies/rates/latest")).data,
-    createRate: async (payload: Record<string, unknown>) =>
-      (await api.post<ExchangeRate>("/currencies/rates", payload)).data,
-    updateRate: async (id: string, payload: Record<string, unknown>) =>
-      (await api.patch<ExchangeRate>(`/currencies/rates/${id}`, payload)).data,
-    removeRate: async (id: string) => (await api.delete(`/currencies/rates/${id}`)).data,
-    syncRates: async () =>
-      (await api.post<{ success: boolean; updated: number }>("/currencies/sync-rates")).data,
   };
 
   return {
@@ -193,7 +182,6 @@ export function createFinanceApi({
     transactionsApi,
     transactionCategoriesApi,
     transfersApi,
-    exchangeRatesApi,
     currenciesApi,
   };
 }

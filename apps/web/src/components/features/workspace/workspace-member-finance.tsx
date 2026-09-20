@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowDownToLine, Banknote, History, TrendingUp } from "lucide-react";
+import { Banknote, History, TrendingUp } from "lucide-react";
+import { IconAvatar } from "@/components/icons/icon-avatar";
 import { accountsApi, memberFinanceApi } from "@/lib/api";
 import type { MemberFinanceSummary } from "@/lib/api-types";
 import { formatMoney } from "@/lib/features/finance/money";
@@ -11,7 +12,7 @@ import {
   FormField,
   Input,
   Modal,
-  Select,
+  CustomSelect,
   Skeleton,
 } from "@/components/ui/primitives";
 import {
@@ -21,7 +22,7 @@ import {
   workspaceKeys,
 } from "@/lib/query-keys";
 
-type Action = "pay" | "invest" | "withdraw";
+type Action = "pay" | "invest";
 
 export function WorkspaceMemberFinance({
   member,
@@ -52,12 +53,7 @@ export function WorkspaceMemberFinance({
       const value = Number(amount);
       if (action === "pay")
         return memberFinanceApi.pay(member.id, { amount: value, accountId });
-      if (action === "invest")
-        return memberFinanceApi.investSalary(member.id, { amount: value });
-      return memberFinanceApi.withdrawReinvestment(member.id, {
-        amount: value,
-        accountId,
-      });
+      return memberFinanceApi.investSalary(member.id, { amount: value });
     },
     onSuccess: async () => {
       setAmount("");
@@ -73,13 +69,9 @@ export function WorkspaceMemberFinance({
   if (!summary) return null;
   const currency = summary.primaryCurrency;
   const total = summary.investments.total;
-  const principal = Math.max(
-    0,
-    summary.investments.external + summary.investments.salary,
-  );
-  const reinvest = Math.max(0, summary.investments.reinvestment);
-  const reinvestWidth = total > 0 ? Math.min(100, (reinvest / total) * 100) : 0;
-  const maximum = action === "withdraw" ? reinvest : summary.commissionPayable;
+  const principal = Math.max(0, summary.investments.principal);
+  const investorEarnings = summary.investments.investorEarnings;
+  const maximum = summary.commissionPayable;
   const enteredAmount = Number(amount);
 
   return (
@@ -102,13 +94,7 @@ export function WorkspaceMemberFinance({
           <div className="mt-3">
             <div className="mb-1.5 flex justify-between text-[11px] text-neutral-500">
               <span>Capital {formatMoney(principal, currency)}</span>
-              <span>Reinvest {formatMoney(reinvest, currency)}</span>
-            </div>
-            <div className="flex h-2 overflow-hidden rounded-full bg-sky-500/60">
-              <span
-                className="ml-auto h-full bg-violet-400"
-                style={{ width: `${reinvestWidth}%` }}
-              />
+              <span>Investor profit {formatMoney(investorEarnings, currency)}</span>
             </div>
           </div>
         ) : null}
@@ -119,6 +105,12 @@ export function WorkspaceMemberFinance({
         onClose={() => setOpen(false)}
         title={`${member.user.name} · money history`}
       >
+        {details.data?.member ? (
+          <div className="mb-3 flex items-center gap-2 text-sm text-neutral-300">
+            <IconAvatar icon={details.data.member.avatarPresentation} label={details.data.member.name} size="sm" />
+            <span>{details.data.member.name}</span>
+          </div>
+        ) : null}
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           <Metric
             label="Earned"
@@ -131,7 +123,7 @@ export function WorkspaceMemberFinance({
             currency={currency}
           />
           <Metric label="Capital" value={principal} currency={currency} />
-          <Metric label="Reinvest" value={reinvest} currency={currency} />
+          <Metric label="Investor profit" value={investorEarnings} currency={currency} />
         </div>
 
         {canManage ? (
@@ -151,13 +143,6 @@ export function WorkspaceMemberFinance({
               >
                 Invest salary
               </Button>
-              <Button
-                type="button"
-                variant={action === "withdraw" ? "primary" : "secondary"}
-                onClick={() => setAction("withdraw")}
-              >
-                Withdraw reinvest
-              </Button>
             </div>
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
               <FormField label={`Amount, ${currency}`}>
@@ -169,19 +154,9 @@ export function WorkspaceMemberFinance({
                   onChange={(event) => setAmount(event.target.value)}
                 />
               </FormField>
-              {action !== "invest" ? (
+              {action === "pay" ? (
                 <FormField label="Account">
-                  <Select
-                    value={accountId}
-                    onChange={(event) => setAccountId(event.target.value)}
-                  >
-                    <option value="">Select account</option>
-                    {(accounts.data ?? []).map((account) => (
-                      <option key={account.id} value={account.id}>
-                        {account.name} · {account.currency}
-                      </option>
-                    ))}
-                  </Select>
+                  <CustomSelect value={accountId} onChange={setAccountId} placeholder="Select account" options={(accounts.data ?? []).map((account) => ({ value: account.id, label: account.name, meta: account.currency, iconPresentation: account.iconPresentation ?? undefined, iconFallback: account.currency }))} />
                 </FormField>
               ) : null}
             </div>
@@ -200,17 +175,15 @@ export function WorkspaceMemberFinance({
                 disabled={
                   !enteredAmount ||
                   enteredAmount > maximum ||
-                  (action !== "invest" && !accountId) ||
+                  (action === "pay" && !accountId) ||
                   mutation.isPending
                 }
                 onClick={() => mutation.mutate()}
               >
                 {action === "pay" ? (
                   <Banknote size={15} />
-                ) : action === "invest" ? (
-                  <TrendingUp size={15} />
                 ) : (
-                  <ArrowDownToLine size={15} />
+                  <TrendingUp size={15} />
                 )}
                 Confirm
               </Button>
@@ -299,7 +272,6 @@ function historyLabel(type: string) {
         SALARY_INVESTED: "Salary invested",
         EXTERNAL_CONTRIBUTION: "External investment",
         REINVESTMENT_CONTRIBUTION: "Profit reinvested",
-        REINVESTMENT_WITHDRAWAL: "Reinvestment withdrawn",
       } as Record<string, string>
     )[type] ?? type
   );

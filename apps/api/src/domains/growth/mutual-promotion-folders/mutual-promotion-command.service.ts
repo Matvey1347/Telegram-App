@@ -4,20 +4,20 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
 import { WorkspaceService } from '../../../common/workspace.service';
 import { notifyScheduledTaskDueWorkChanged } from '../../../common/scheduled-task-wake-notifier';
 import { PrismaService } from '../../../prisma/prisma.service';
 import type {
   CreateMutualPromotionFolderDto,
   CreateMutualPromotionPostDto,
-  MutualPromotionParticipantDto,
   UpdateMutualPromotionFolderDto,
   UpdateMutualPromotionPostDto,
 } from './dto';
 import { MutualPromotionReadService } from './mutual-promotion-read.service';
 import { MutualPromotionActivationService } from './mutual-promotion-activation.service';
 import { MutualPromotionExpenseService } from './mutual-promotion-expense.service';
+import { WorkspaceAuthorizationService } from '../../workspace/workspace-authorization/workspace-authorization.service';
+import { financeAuthorizationTestFallback } from '../../finance/finance-authorization-test-fallback';
 import { MutualPromotionValidationService } from './mutual-promotion-validation.service';
 import { TelegramManagedPostRemoteDeletionService } from '../../telegram/telegram-channels/telegram-managed-post-remote-deletion.service';
 import {
@@ -38,9 +38,18 @@ export class MutualPromotionCommandService {
     private readonly validation: MutualPromotionValidationService,
     private readonly read: MutualPromotionReadService,
     private readonly remoteDeletion: TelegramManagedPostRemoteDeletionService,
+    private readonly authorization: WorkspaceAuthorizationService = financeAuthorizationTestFallback(
+      workspaceService,
+    ),
   ) {}
 
   async create(userId: string, dto: CreateMutualPromotionFolderDto) {
+    if (
+      dto.expenseAllocation ||
+      dto.participants.some((item) => item.expense)
+    ) {
+      await this.authorization.require(userId, 'finance.create');
+    }
     const membership =
       await this.workspaceService.resolveWorkspaceMembershipForUser(userId);
     const { startsAt, endsAt } = this.validation.parseInterval(
@@ -74,11 +83,17 @@ export class MutualPromotionCommandService {
           createdByUserId: userId,
         },
       });
-      await this.createParticipants(
+      await this.expenses.createForFolder(
         tx,
-        created.id,
-        membership.workspaceId,
+        {
+          id: created.id,
+          workspaceId: membership.workspaceId,
+          title: created.title,
+          startsAt: created.startsAt,
+          assignedMemberId: created.assignedMemberId,
+        },
         dto.participants,
+        dto.expenseAllocation,
       );
       return created;
     });
@@ -90,6 +105,12 @@ export class MutualPromotionCommandService {
     folderId: string,
     dto: UpdateMutualPromotionFolderDto,
   ) {
+    const createsExpenses = Boolean(
+      dto.expenseAllocation || dto.participants.some((item) => item.expense),
+    );
+    if (createsExpenses) {
+      await this.authorization.require(userId, 'finance.create');
+    }
     const workspaceId =
       await this.workspaceService.resolveWorkspaceIdForUser(userId);
     const { startsAt, endsAt } = this.validation.parseInterval(
@@ -120,14 +141,30 @@ export class MutualPromotionCommandService {
         participants: dto.participants,
       });
       const old = await tx.mutualPromotionFolderParticipant.findMany({
-        where: { folderId },
+        where: { folderId, workspaceId },
         select: { id: true },
       });
-      await tx.transaction.deleteMany({
-        where: {
-          mutualPromotionParticipantId: { in: old.map((row) => row.id) },
-        },
-      });
+      const oldParticipantIds = old.map((row) => row.id);
+      if (oldParticipantIds.length) {
+        if (!createsExpenses) {
+          const existingExpense = await tx.transaction.findFirst({
+            where: {
+              workspaceId,
+              mutualPromotionParticipantId: { in: oldParticipantIds },
+            },
+            select: { id: true },
+          });
+          if (existingExpense) {
+            await this.authorization.require(userId, 'finance.create');
+          }
+        }
+        await tx.transaction.deleteMany({
+          where: {
+            workspaceId,
+            mutualPromotionParticipantId: { in: oldParticipantIds },
+          },
+        });
+      }
       await tx.mutualPromotionFolderParticipant.deleteMany({
         where: { folderId },
       });
@@ -142,11 +179,17 @@ export class MutualPromotionCommandService {
           assignedMemberId,
         },
       });
-      await this.createParticipants(
+      await this.expenses.createForFolder(
         tx,
-        folderId,
-        workspaceId,
+        {
+          id: folderId,
+          workspaceId,
+          title: mutualPromotionFolderTitle(dto.title),
+          startsAt,
+          assignedMemberId,
+        },
         dto.participants,
+        dto.expenseAllocation,
       );
       const invalidPosts = await tx.mutualPromotionFolderPost.count({
         where: {
@@ -443,29 +486,6 @@ export class MutualPromotionCommandService {
     });
     notifyScheduledTaskDueWorkChanged('mutual_promotion.lifecycle');
     return { id: folderId };
-  }
-
-  private async createParticipants(
-    tx: Prisma.TransactionClient,
-    folderId: string,
-    workspaceId: string,
-    participants: MutualPromotionParticipantDto[],
-  ) {
-    for (const input of participants) {
-      const participant = await tx.mutualPromotionFolderParticipant.create({
-        data: {
-          workspaceId,
-          folderId,
-          telegramChannelId: input.telegramChannelId,
-          inviteLinkId: input.inviteLinkId,
-          role: input.role,
-          inviteLinkMode: input.inviteLinkMode,
-        },
-      });
-      if (input.expense) {
-        await this.expenses.sync(tx, participant, input.expense);
-      }
-    }
   }
 
   private async resolveAssignee(

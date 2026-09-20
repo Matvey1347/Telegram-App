@@ -131,4 +131,23 @@ describe("TelegramTextEditorToolbar", () => {
       ?.querySelectorAll('[data-toolbar-divider="true"]')
       .forEach((divider) => expect(divider).toHaveClass("w-px"));
   });
+
+  it("opens the image picker from a visible toolbar action", async () => {
+    const user = userEvent.setup();
+    const onInsertImage = vi.fn();
+    render(
+      <TelegramTextEditorToolbar
+        hasButtons
+        onCommand={vi.fn()}
+        onHeading={vi.fn()}
+        onPullQuoteWithAuthor={vi.fn()}
+        onConfigure={vi.fn()}
+        onInsertImage={onInsertImage}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Insert image" }));
+
+    expect(onInsertImage).toHaveBeenCalledOnce();
+  });
 });

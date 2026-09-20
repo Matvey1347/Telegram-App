@@ -30,7 +30,6 @@ import {
   type MemberFormValues,
 } from "./workspace-member-modal";
 import { WorkspaceMemberFinance } from "./workspace-member-finance";
-import { WorkspaceReinvestmentAction } from "./workspace-reinvestment-action";
 
 const ROLE_LABELS: Record<WorkspaceRole, string> = {
   owner: "Owner",
@@ -210,10 +209,7 @@ export function WorkspaceMembersSection({
             </p>
           </div>
           {canAdd ? (
-            <div className="flex flex-wrap gap-2">
-              {currentRole === "owner" ? <WorkspaceReinvestmentAction /> : null}
-              <Button onClick={() => setOpen(true)}>Add Member</Button>
-            </div>
+            <Button onClick={() => setOpen(true)}>Add Member</Button>
           ) : null}
         </div>
       ) : (

@@ -69,7 +69,6 @@ describe('CurrencyConversionService', () => {
     );
     expect(externalRates.ensureCurrentRates).toHaveBeenCalledWith(
       expect.objectContaining({
-        workspaceId: 'workspace',
         currencies: ['UAH', 'USD'],
       }),
     );
@@ -97,7 +96,7 @@ describe('CurrencyConversionService', () => {
       [{ values: unknown[]; strings: string[] }]
     >;
     const statement = calls[0]?.[0];
-    expect(statement.values).toContain('workspace');
+    expect(statement.values).not.toContain('workspace');
     expect(statement.strings.join(' ')).toContain('SELECT DISTINCT ON');
   });
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { CheckCircle2, Clipboard, Download, LoaderCircle } from "lucide-react";
+import { CheckCircle2, Download, LoaderCircle } from "lucide-react";
 import {
   buildTelegramGptContextFilename,
   TELEGRAM_UNIFIED_IMPORT_INSTRUCTION,
@@ -15,6 +15,7 @@ import { useAppToast } from "@/providers/toast-provider";
 import { useI18n } from "@/providers/i18n-provider";
 import { parseUnifiedImportManifest } from "./unified-import-model";
 import { ManagedPostsImportSource } from "./managed-posts-import-source";
+import { withCurrentUnifiedImportInstruction } from "./unified-import-context-download";
 import { UnifiedImportPreview } from "./unified-import-preview";
 import {
   applyUnifiedImportProgressToManifest,
@@ -25,7 +26,6 @@ import {
   type UnifiedImportProgressEntry,
   type UnifiedImportProgressStatus,
 } from "./unified-import-progress";
-
 export function UnifiedImportModal({
   open,
   channelId,
@@ -137,14 +137,12 @@ export function UnifiedImportModal({
     setResult(null);
     resetProgress();
   };
-  const copyInstructionsAndDownloadContext = async () => {
+  const downloadInstructionAndContext = async () => {
     if (contextBusy) return;
     setContextBusy(true);
     try {
-      const [blob] = await Promise.all([
-        telegramChannelsApi.unifiedImportContext(channelId),
-        navigator.clipboard.writeText(TELEGRAM_UNIFIED_IMPORT_INSTRUCTION),
-      ]);
+      const serverBlob = await telegramChannelsApi.unifiedImportContext(channelId);
+      const blob = await withCurrentUnifiedImportInstruction(serverBlob);
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
@@ -288,15 +286,14 @@ export function UnifiedImportModal({
             type="button"
             variant="secondary"
             disabled={contextBusy}
-            onClick={() => void copyInstructionsAndDownloadContext()}
+            onClick={() => void downloadInstructionAndContext()}
           >
             {contextBusy ? (
               <LoaderCircle className="animate-spin" size={16} />
             ) : (
-              <Clipboard size={16} />
+              <Download size={16} />
             )}
             {t("telegram.posts.import.unifiedCopyAndDownload")}
-            {!contextBusy ? <Download size={15} /> : null}
           </Button>
         </div>
         <ManagedPostsImportSource

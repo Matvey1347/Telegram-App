@@ -268,11 +268,18 @@ export class WorkspaceMembersService {
 
   private async assertAvatarIcon(
     workspaceId: string,
+    targetUserId: string,
     avatarIconId?: string | null,
   ) {
     if (avatarIconId === undefined || avatarIconId === null) return;
     const icon = await this.prisma.icon.findFirst({
-      where: { id: avatarIconId, workspaceId },
+      where: {
+        id: avatarIconId,
+        OR: [
+          { workspaceId },
+          { workspaceId: null, createdByUserId: targetUserId },
+        ],
+      },
       select: { id: true },
     });
     if (!icon) throw new NotFoundException('Avatar image not found');
@@ -466,8 +473,6 @@ export class WorkspaceMembersService {
     if (role === WorkspaceRole.owner && current.role !== WorkspaceRole.owner) {
       throw new ForbiddenException('Only owner can add owner role');
     }
-    await this.assertAvatarIcon(current.workspaceId, dto.avatarIconId);
-
     const existingUser = await this.prisma.user.findUnique({
       where: { email },
     });
@@ -485,6 +490,11 @@ export class WorkspaceMembersService {
         },
       });
     }
+    await this.assertAvatarIcon(current.workspaceId, user.id, dto.avatarIconId);
+    const membershipAvatarIconId =
+      dto.avatarIconId ?? user.profileAvatarIconId ?? null;
+    const membershipTelegramUsername =
+      telegramUsername ?? user.telegramUsername ?? null;
 
     const already = await this.prisma.workspaceMember.findUnique({
       where: {
@@ -500,7 +510,7 @@ export class WorkspaceMembersService {
       await this.assertTelegramUsernameAvailable(
         tx,
         current.workspaceId,
-        telegramUsername,
+        membershipTelegramUsername,
       );
       if (requestedAccountIds.length) {
         const accounts = await tx.telegramUserAccountIntegration.findMany({
@@ -528,8 +538,8 @@ export class WorkspaceMembersService {
           userId: user.id,
           role,
           roleDefinitionId: roleDefinition?.id,
-          avatarIconId: dto.avatarIconId ?? null,
-          telegramUsername,
+          avatarIconId: membershipAvatarIconId,
+          telegramUsername: membershipTelegramUsername,
         },
         include: this.memberInclude,
       });
@@ -624,7 +634,11 @@ export class WorkspaceMembersService {
       if (ownersCount <= 1)
         throw new ForbiddenException('Cannot demote the last owner');
     }
-    await this.assertAvatarIcon(current.workspaceId, dto.avatarIconId);
+    await this.assertAvatarIcon(
+      current.workspaceId,
+      member.userId,
+      dto.avatarIconId,
+    );
     const updated = await this.prisma.$transaction(async (tx) => {
       await this.assertTelegramUsernameAvailable(
         tx,

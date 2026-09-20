@@ -65,7 +65,7 @@ export class MutualPromotionInviteLinkEditService {
             telegramChannelId: participant.telegramChannelId,
             role: participant.role,
             inviteLinkId: edit.inviteLinkId,
-            inviteLinkMode: edit.inviteLinkMode,
+            inviteLinkMode: 'REUSABLE',
           };
         });
       await this.validation.lockInviteLinks(
@@ -96,7 +96,7 @@ export class MutualPromotionInviteLinkEditService {
           where: { id: participant.id },
           data: {
             inviteLinkId: edit.inviteLinkId,
-            inviteLinkMode: edit.inviteLinkMode,
+            inviteLinkMode: 'REUSABLE',
             ...(linkChanged
               ? {
                   subscribersAtStart: boundary?.subscribers ?? null,

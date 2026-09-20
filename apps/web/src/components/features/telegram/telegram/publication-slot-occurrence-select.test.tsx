@@ -45,6 +45,15 @@ describe("PublicationSlotOccurrenceSelect", () => {
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         state: "AVAILABLE",
       },
+      {
+        slotId: "past",
+        scheduledAt: new Date(today.getTime() + 180_000).toISOString(),
+        title: "Past",
+        kind: "CONTENT",
+        time: "23:43",
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        state: "PAST",
+      },
     ]);
     const onChange = vi.fn();
     render(
@@ -52,7 +61,7 @@ describe("PublicationSlotOccurrenceSelect", () => {
         <TestI18nProvider>
           <PublicationSlotOccurrenceSelect
             channelId="channel-1"
-            value={`content:${today.toISOString().replace(".000Z", "Z")}`}
+            value={null}
             scheduledAt={today.toISOString()}
             onChange={onChange}
           />
@@ -64,22 +73,37 @@ describe("PublicationSlotOccurrenceSelect", () => {
       name: /23:40.*Regular publication/i,
     });
     expect(availableSlot).toBeEnabled();
+    // A manually entered time can match a slot without reserving it.
     expect(availableSlot).toHaveAttribute("aria-pressed", "true");
     expect(availableSlot.className).toContain("ring-blue-500");
     const otherSlot = screen.getByRole("button", {
       name: /23:42.*Regular publication/i,
     });
     expect(otherSlot).toHaveAttribute("aria-pressed", "false");
-    expect(otherSlot.className).toContain("opacity-60");
+    expect(otherSlot.className).toContain("border-neutral-600");
     expect(availableSlot).toHaveTextContent("23:40·📝");
-    expect(
-      screen.getByRole("button", { name: /23:41.*Advertising.*Booked post/i }),
-    ).toBeDisabled();
+    const occupiedSlot = screen.getByRole("button", {
+      name: /23:41.*Advertising.*Booked post/i,
+    });
+    expect(occupiedSlot).toBeDisabled();
+    expect(occupiedSlot.className).toContain("border-amber-900");
+    const pastSlot = screen.getByRole("button", {
+      name: /23:43.*Regular publication.*Past slot/i,
+    });
+    expect(pastSlot.className).toContain("line-through");
     fireEvent.click(availableSlot);
     expect(onChange).toHaveBeenCalledWith(
       expect.objectContaining({ slotId: "content" }),
     );
     expect(screen.getByDisplayValue(day)).toBeInTheDocument();
     expect(screen.getByDisplayValue("23:40")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByDisplayValue("23:40"), {
+      target: { value: "23:45" },
+    });
+    expect(onChange).toHaveBeenLastCalledWith({
+      slotId: null,
+      scheduledAt: new Date(`${day}T23:45:00`).toISOString(),
+    });
   });
 });

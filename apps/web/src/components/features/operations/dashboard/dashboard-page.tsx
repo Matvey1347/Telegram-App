@@ -315,35 +315,18 @@ function CashFlowRow({
   details?: DashboardCategory[];
   capitalGroups?: DashboardSummary["investmentBreakdownForPeriod"];
 }) {
-  const [expanded, setExpanded] = useState(false);
   const transactionGroups =
     details ?? breakdown?.flatMap((item) => item.details ?? []) ?? [];
-  const expandable =
-    transactionGroups.length > 0 ||
-    Boolean(capitalGroups?.some((group) => group.movements.length));
+  // Top-level totals are summaries; category-level disclosure is rendered in
+  // the breakdown cards below.
+  const expanded = false;
   return (
     <div className="py-4 first:pt-1 last:pb-1">
       <div className="flex items-center justify-between gap-4">
-        {expandable ? (
-          <button
-            type="button"
-            className="flex items-center gap-3 text-sm font-medium text-neutral-200 hover:text-white"
-            aria-expanded={expanded}
-            onClick={() => setExpanded((current) => !current)}
-          >
-            <Icon size={20} className={tone} />
-            {label}
-            <ChevronDown
-              size={16}
-              className={`text-neutral-500 transition ${expanded ? "rotate-180" : ""}`}
-            />
-          </button>
-        ) : (
-          <div className="flex items-center gap-3 text-sm font-medium text-neutral-200">
-            <Icon size={20} className={tone} />
-            {label}
-          </div>
-        )}
+        <div className="flex items-center gap-3 text-sm font-medium text-neutral-200">
+          <Icon size={20} className={tone} />
+          {label}
+        </div>
         <div className={`tabular-nums text-lg font-semibold ${tone}`}>
           {value}
         </div>

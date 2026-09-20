@@ -41,6 +41,40 @@ describe("TelegramPostMediaUpload", () => {
     expect(uploadManagedPostMedia).toHaveBeenCalledWith(file);
   });
 
+  it("uploads an image pasted anywhere in the media drop area", async () => {
+    uploadManagedPostMedia.mockResolvedValue({
+      kind: "PHOTO",
+      url: "https://cdn.test/pasted.png",
+      mimeType: "image/png",
+    });
+    const onChange = vi.fn();
+    render(<TelegramPostMediaUpload value={[]} onChange={onChange} />);
+    const file = new File(["image"], "pasted.png", { type: "image/png" });
+
+    fireEvent.paste(screen.getByRole("region", { name: "Media drop and paste area" }), {
+      clipboardData: { files: [file] },
+    });
+
+    await waitFor(() =>
+      expect(onChange).toHaveBeenCalledWith([
+        { kind: "PHOTO", url: "https://cdn.test/pasted.png", mimeType: "image/png" },
+      ]),
+    );
+  });
+
+  it("opens the device picker only from the Choose files button", () => {
+    const { container } = render(
+      <TelegramPostMediaUpload value={[]} onChange={vi.fn()} />,
+    );
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+    const click = vi.spyOn(input, "click");
+
+    fireEvent.click(screen.getByRole("region", { name: "Media drop and paste area" }));
+    expect(click).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Choose files" }));
+    expect(click).toHaveBeenCalledOnce();
+  });
+
   it("detects a GIF URL automatically and prevents mixing it with album media", () => {
     render(
       <TelegramPostMediaUpload

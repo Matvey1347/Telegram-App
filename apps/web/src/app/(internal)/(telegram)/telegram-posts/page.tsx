@@ -3195,10 +3195,6 @@ function TelegramPostWorkspace({
       setError(t("telegram.posts.editor.invalidPublishTime"));
       return;
     }
-    if (saveMode === "schedule" && !publicationSlotId) {
-      setError(t("telegram.posts.schedules.slotRequired"));
-      return;
-    }
     const saveScheduledAt =
       saveMode === "schedule"
         ? localDateTimeInputToIso(scheduleDate, scheduleTime)

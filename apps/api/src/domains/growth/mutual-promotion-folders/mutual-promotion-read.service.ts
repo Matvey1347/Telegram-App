@@ -437,7 +437,6 @@ export class MutualPromotionReadService {
             ? { folderId: { not: query.folderId } }
             : undefined,
           select: {
-            inviteLinkMode: true,
             folder: { select: { status: true, startsAt: true, endsAt: true } },
           },
         },
@@ -450,9 +449,6 @@ export class MutualPromotionReadService {
     );
     return hydratedLinks.map((link) => {
       const ads = Boolean(link.adCampaignId || link.snapshots.length);
-      const folderOnly = link.mutualPromotionParticipants.some(
-        (assignment) => assignment.inviteLinkMode === 'FOLDER_ONLY',
-      );
       const overlap =
         startsAt && endsAt
           ? link.mutualPromotionParticipants.some(
@@ -462,13 +458,7 @@ export class MutualPromotionReadService {
                 assignment.folder.endsAt > startsAt,
             )
           : false;
-      const unavailableReason = ads
-        ? 'ADS'
-        : folderOnly
-          ? 'FOLDER_ONLY'
-          : overlap
-            ? 'OVERLAP'
-            : null;
+      const unavailableReason = ads ? 'ADS' : overlap ? 'OVERLAP' : null;
       return {
         id: link.id,
         telegramChannelId: link.telegramChannelId,

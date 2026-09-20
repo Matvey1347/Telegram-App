@@ -7,6 +7,7 @@ const channel = {
   id: "channel-1",
   title: "Publisher One",
 } as TelegramChannel;
+const noBulkExpense = { enabled: false, accountId: "", totalAmount: "" };
 
 describe("MutualPromotionParticipantsEditor", () => {
   it("adds channels from the multi-select and defaults them to publisher", () => {
@@ -16,6 +17,7 @@ describe("MutualPromotionParticipantsEditor", () => {
         channels={[channel]}
         accounts={[] as Account[]}
         participants={[]}
+        bulkExpense={noBulkExpense}
         inviteLinks={[]}
         inviteLinksLoading={false}
         onChange={onChange}
@@ -24,9 +26,12 @@ describe("MutualPromotionParticipantsEditor", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Select channels" }));
     fireEvent.click(screen.getByRole("button", { name: /Publisher One/ }));
-    expect(onChange).toHaveBeenLastCalledWith([
-      expect.objectContaining({ channelId: "channel-1", role: "PUBLISHER" }),
-    ]);
+    expect(onChange).toHaveBeenLastCalledWith({
+      participants: [
+        expect.objectContaining({ channelId: "channel-1", role: "PUBLISHER" }),
+      ],
+      bulkExpense: noBulkExpense,
+    });
 
     rerender(
       <MutualPromotionParticipantsEditor
@@ -37,11 +42,11 @@ describe("MutualPromotionParticipantsEditor", () => {
             channelId: "channel-1",
             role: "PUBLISHER",
             inviteLinkId: "link-1",
-            inviteLinkMode: "FOLDER_ONLY",
             accountId: "",
             amount: "",
           },
         ]}
+        bulkExpense={noBulkExpense}
         inviteLinks={[]}
         inviteLinksLoading={false}
         onChange={onChange}
@@ -49,9 +54,12 @@ describe("MutualPromotionParticipantsEditor", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "📣 Publisher" }));
     fireEvent.click(screen.getByRole("button", { name: "💳 Paid" }));
-    expect(onChange).toHaveBeenLastCalledWith([
-      expect.objectContaining({ channelId: "channel-1", role: "PAID" }),
-    ]);
+    expect(onChange).toHaveBeenLastCalledWith({
+      participants: [
+        expect.objectContaining({ channelId: "channel-1", role: "PAID" }),
+      ],
+      bulkExpense: noBulkExpense,
+    });
   });
 
   it("removes a selected channel through the multi-select", () => {
@@ -65,11 +73,11 @@ describe("MutualPromotionParticipantsEditor", () => {
             channelId: "channel-1",
             role: "PUBLISHER",
             inviteLinkId: "link-1",
-            inviteLinkMode: "REUSABLE",
             accountId: "",
             amount: "",
           },
         ]}
+        bulkExpense={noBulkExpense}
         inviteLinks={[]}
         inviteLinksLoading={false}
         onChange={onChange}
@@ -81,7 +89,10 @@ describe("MutualPromotionParticipantsEditor", () => {
       name: /Publisher One/,
     });
     fireEvent.click(channelButtons[channelButtons.length - 1]);
-    expect(onChange).toHaveBeenCalledWith([]);
+    expect(onChange).toHaveBeenCalledWith({
+      participants: [],
+      bulkExpense: noBulkExpense,
+    });
   });
 
   it("shows the invite-link creator avatar like the ad-campaign selector", () => {
@@ -94,11 +105,11 @@ describe("MutualPromotionParticipantsEditor", () => {
             channelId: "channel-1",
             role: "PUBLISHER",
             inviteLinkId: "",
-            inviteLinkMode: "FOLDER_ONLY",
             accountId: "",
             amount: "",
           },
         ]}
+        bulkExpense={noBulkExpense}
         inviteLinks={[
           {
             id: "link-1",
@@ -160,11 +171,11 @@ describe("MutualPromotionParticipantsEditor", () => {
             channelId: "channel-1",
             role: "PAID",
             inviteLinkId: "",
-            inviteLinkMode: "REUSABLE",
             accountId: "",
             amount: "",
           },
         ]}
+        bulkExpense={noBulkExpense}
         inviteLinks={[]}
         inviteLinksLoading={false}
         onChange={() => {}}
@@ -176,13 +187,41 @@ describe("MutualPromotionParticipantsEditor", () => {
         name: "Paid participation details",
       }),
     ).toBeVisible();
-    expect(
-      screen.getByRole("button", { name: "♻️ Reusable for folders" }),
-    ).toBeVisible();
+    expect(screen.queryByText("Link use")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Add later" }));
     expect(
       screen.getByRole("button", { name: /Poland Card PLN/ }),
     ).toContainHTML("https://example.com/account.jpg");
+  });
+
+  it("offers one total expense and account without overwriting per-channel drafts", () => {
+    const onChange = vi.fn();
+    const participant = {
+      channelId: "channel-1",
+      role: "PUBLISHER" as const,
+      inviteLinkId: "link-1",
+      accountId: "",
+      amount: "",
+    };
+    render(
+      <MutualPromotionParticipantsEditor
+        channels={[channel]}
+        accounts={[]}
+        participants={[participant]}
+        bulkExpense={noBulkExpense}
+        inviteLinks={[]}
+        inviteLinksLoading={false}
+        onChange={onChange}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("checkbox", { name: /All selected channels are paid/ }),
+    );
+    expect(onChange).toHaveBeenCalledWith({
+      participants: [participant],
+      bulkExpense: { ...noBulkExpense, enabled: true },
+    });
   });
 });

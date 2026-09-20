@@ -105,7 +105,7 @@ allowPattern(
 const pageSlice =
   "Frontend page decomposition: move queries, mutations and API access into a feature container.";
 const pageHookAllowances = [
-  ["(finance)/currencies/page.tsx", 6],
+  ["(finance)/currencies/page.tsx", 3],
   ["(growth)/ad-campaigns/[id]/page.tsx", 5],
   ["(growth)/ad-campaigns/page.tsx", 20],
   ["(telegram)/system-bot/connect/page.tsx", 3],
@@ -126,7 +126,7 @@ for (const [suffix, count] of pageHookAllowances) {
 }
 
 const pageApiAllowances = [
-  ["(finance)/currencies/page.tsx", 2],
+  ["(finance)/currencies/page.tsx", 1],
   ["(growth)/ad-campaigns/[id]/page.tsx", 1],
   ["(growth)/ad-campaigns/page.tsx", 2],
   ["(telegram)/system-bot/connect/page.tsx", 1],

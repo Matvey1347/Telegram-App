@@ -299,7 +299,19 @@ export class DashboardReadService {
               movementType: true,
               notes: true,
               workspaceMember: {
-                select: { id: true, user: { select: { name: true } } },
+                select: {
+                  id: true,
+                  avatarIcon: {
+                    select: {
+                      id: true,
+                      type: true,
+                      name: true,
+                      emoji: true,
+                      imageUrl: true,
+                    },
+                  },
+                  user: { select: { name: true } },
+                },
               },
               account: { select: { id: true, name: true, currency: true } },
             },

@@ -164,7 +164,22 @@ export function telegramMarkupToHtml(raw: string, rich = false) {
           rich
             ? `<h${_marks.length}>${render(text)}</h${_marks.length}>`
             : `<b>${escapeHtml(text)}</b>`,
-        ),
+      ),
+    );
+    // Telegram rich messages accept media as standalone blocks. Keep the
+    // editor's uploaded-image marker in place instead of treating it as an
+    // ordinary link or moving the image before the text at publish time.
+    value = value.replace(
+      /^!\[[^\]\n]*\]\((https?:\/\/[^\s<>()]+)\)$/gim,
+      (source: string, href: string) => {
+        try {
+          const url = new URL(href);
+          if (!url.hostname.includes('.')) return source;
+          return token(`<img src="${escapeHtml(url.toString())}"/>`);
+        } catch {
+          return source;
+        }
+      },
     );
     // Keep the stored, GPT-readable custom emoji token out of the generic HTML
     // escaping path. GramJS recognizes this Telegram-specific tag and creates a
@@ -247,7 +262,7 @@ export function telegramMarkupToRichHtml(raw: string) {
 }
 
 export function requiresNativeTelegramRichMessage(raw: string) {
-  return /^(?:#{1,6}\s+|:::(?:table|pullquote)(?:\s|$))/m.test(
+  return /^(?:#{1,6}\s+|:::(?:table|pullquote)(?:\s|$)|!\[[^\]\n]*\]\(https?:\/\/[^\s<>()]+\)$)/m.test(
     raw.replace(/\r\n?/g, '\n'),
   );
 }

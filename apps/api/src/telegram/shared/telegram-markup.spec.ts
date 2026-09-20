@@ -88,6 +88,13 @@ describe('telegramMarkupToHtml', () => {
     ).toBe(true);
     expect(requiresNativeTelegramRichMessage('**ordinary bold**')).toBe(false);
   });
+  it('keeps an uploaded image at its standalone position in a native rich message', () => {
+    const source = 'Before image\n\n![Image](https://cdn.example.test/image.png)\n\nAfter image';
+    expect(requiresNativeTelegramRichMessage(source)).toBe(true);
+    expect(telegramMarkupToRichHtml(source)).toBe(
+      'Before image\n\n<img src="https://cdn.example.test/image.png"/>\n\nAfter image',
+    );
+  });
   it('renders the reported combined rich post without leaking source directives', () => {
     const source = [
       ':::pullquote',

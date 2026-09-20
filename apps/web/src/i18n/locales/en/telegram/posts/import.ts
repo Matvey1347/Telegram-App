@@ -123,9 +123,9 @@ const messages = {
   "telegram.posts.import.unifiedUpload": "Upload JSON",
   "telegram.posts.import.unifiedCopyPrompt": "Copy unified instructions",
   "telegram.posts.import.unifiedCopyAndDownload":
-    "Copy instruction + download full context",
+    "Download instruction + full context",
   "telegram.posts.import.unifiedContextReady":
-    "Instructions copied and complete import context downloaded.",
+    "Instruction and complete import context downloaded.",
   "telegram.posts.import.unifiedContextError":
     "Could not prepare the complete import context.",
   "telegram.posts.import.unifiedDropTitle":

@@ -79,6 +79,8 @@ export class MutualPromotionActivationService {
         const publishers = folder.participants.filter(
           (row) => row.role === 'PUBLISHER',
         );
+        if (!folder.participants.length)
+          throw new BadRequestException('At least one participant is required');
         const now = new Date();
         if (folder.startsAt <= now)
           throw new BadRequestException('Folder start must be in the future');
@@ -92,11 +94,13 @@ export class MutualPromotionActivationService {
             'Every participant channel needs a cached subscriber count before activation',
           );
         }
-        if (!publishers.length)
-          throw new BadRequestException('At least one publisher is required');
-        if (folder.posts.length < 5)
+        if (publishers.length && folder.posts.length < 5)
           throw new BadRequestException(
             'At least five publications are required',
+          );
+        if (!publishers.length && folder.posts.length)
+          throw new BadRequestException(
+            'Folders without publishing channels cannot contain publications',
           );
         if (
           folder.posts.some(
@@ -208,8 +212,10 @@ export class MutualPromotionActivationService {
             });
           }
         }
-        await tx.telegramManagedPost.createMany({ data: managedPosts });
-        await tx.mutualPromotionPostDelivery.createMany({ data: deliveries });
+        if (managedPosts.length)
+          await tx.telegramManagedPost.createMany({ data: managedPosts });
+        if (deliveries.length)
+          await tx.mutualPromotionPostDelivery.createMany({ data: deliveries });
         deliveriesCreated = deliveries.length;
         await tx.mutualPromotionWorkItem.createMany({
           data: [

@@ -59,7 +59,7 @@ export class FinanceCategoriesService {
         key: true,
         name: true,
         isSystem: true,
-        icon: { select: { name: true, emoji: true } },
+        icon: { select: { name: true, emoji: true, imageUrl: true } },
       },
     });
     if (financeSystemCategoriesReady(existingCategories)) return;
@@ -69,6 +69,40 @@ export class FinanceCategoriesService {
       '👛',
       client,
     );
+    const investmentIconId = await this.ensureEmojiIcon(
+      workspaceId,
+      'money bag',
+      '💰',
+      client,
+    );
+    const advertisingIconId = await this.ensureEmojiIcon(
+      workspaceId,
+      'card file box',
+      '🗃️',
+      client,
+    );
+    const buyChannelsIcon = await (client as any).icon.upsert({
+      where: {
+        workspaceId_type_name: {
+          workspaceId,
+          type: 'image',
+          name: 'buy-channels',
+        },
+      },
+      update: {
+        imageUrl:
+          'https://s3.eu-central-003.backblazeb2.com/telegram-system/icons/1780854323445-xbxyq1jk.png',
+      },
+      create: {
+        workspaceId,
+        type: 'image',
+        name: 'buy-channels',
+        imageUrl:
+          'https://s3.eu-central-003.backblazeb2.com/telegram-system/icons/1780854323445-xbxyq1jk.png',
+      },
+      select: { id: true },
+    });
+    const buyChannelsIconId = buyChannelsIcon.id as string;
     const telegramAdSalesReversalIconId = await this.ensureEmojiIcon(
       workspaceId,
       'telegram-ad-sales-reversal',
@@ -130,14 +164,18 @@ export class FinanceCategoriesService {
           key: 'investment',
         },
       },
-      update: { isSystem: true, name: 'Investment' },
+      update: {
+        isSystem: true,
+        name: 'Investment',
+        iconId: investmentIconId,
+      },
       create: {
         workspaceId,
         type: 'income',
         key: 'investment',
         isSystem: true,
         name: 'Investment',
-        iconId: undefined,
+        iconId: investmentIconId,
       },
     });
 
@@ -153,7 +191,7 @@ export class FinanceCategoriesService {
       },
       update: {
         isSystem: true,
-        name: 'Channel Advertising Revenue',
+        name: 'Ad Sales',
         iconId: channelAdvertisingRevenueIconId,
       },
       create: {
@@ -161,7 +199,7 @@ export class FinanceCategoriesService {
         type: 'income',
         key: 'channel_advertising_revenue',
         isSystem: true,
-        name: 'Channel Advertising Revenue',
+        name: 'Ad Sales',
         iconId: channelAdvertisingRevenueIconId,
       },
     });
@@ -231,14 +269,18 @@ export class FinanceCategoriesService {
           key: 'advertising',
         },
       },
-      update: { isSystem: true, name: 'Advertising' },
+      update: {
+        isSystem: true,
+        name: 'Advertising',
+        iconId: advertisingIconId,
+      },
       create: {
         workspaceId,
         type: 'expense',
         key: 'advertising',
         isSystem: true,
         name: 'Advertising',
-        iconId: undefined,
+        iconId: advertisingIconId,
       },
     });
 
@@ -249,6 +291,7 @@ export class FinanceCategoriesService {
           key: 'buy_channels',
           isSystem: true,
           name: 'Buy Channels',
+          iconId: buyChannelsIconId,
         },
       });
     } else {
@@ -267,7 +310,7 @@ export class FinanceCategoriesService {
           key: 'buy_channels',
           isSystem: true,
           name: 'Buy Channels',
-          iconId: undefined,
+          iconId: buyChannelsIconId,
         },
       });
     }

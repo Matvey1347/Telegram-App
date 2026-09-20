@@ -13,9 +13,14 @@ export type ParticipantDraft = {
   channelId: string;
   role: MutualPromotionParticipantRole;
   inviteLinkId: string;
-  inviteLinkMode: "FOLDER_ONLY" | "REUSABLE";
   accountId: string;
   amount: string;
+};
+
+export type BulkExpenseDraft = {
+  enabled: boolean;
+  accountId: string;
+  totalAmount: string;
 };
 
 export type FolderDraft = {
@@ -26,7 +31,31 @@ export type FolderDraft = {
   endsTime: string;
   notes: string;
   participants: ParticipantDraft[];
+  bulkExpense: BulkExpenseDraft;
 };
+
+export function normalizeFolderDraft(value: unknown): FolderDraft | null {
+  if (!value || typeof value !== "object") return null;
+  const candidate = value as Partial<FolderDraft>;
+  if (typeof candidate.title !== "string") return null;
+  if (!Array.isArray(candidate.participants)) return null;
+  const bulkExpense = candidate.bulkExpense;
+  return {
+    ...(candidate as FolderDraft),
+    participants: candidate.participants.map((participant) => ({
+      channelId: participant.channelId,
+      role: participant.role,
+      inviteLinkId: participant.inviteLinkId,
+      accountId: participant.accountId,
+      amount: participant.amount,
+    })),
+    bulkExpense: {
+      enabled: bulkExpense?.enabled === true,
+      accountId: bulkExpense?.accountId ?? "",
+      totalAmount: bulkExpense?.totalAmount ?? "",
+    },
+  };
+}
 
 export function folderDraftTitleValues(draft: FolderDraft) {
   const dateRange =
@@ -51,6 +80,7 @@ export function emptyFolderDraft(timezone: string): FolderDraft {
     endsTime: channelLocalTime(end, timezone),
     notes: "",
     participants: [],
+    bulkExpense: { enabled: false, accountId: "", totalAmount: "" },
   };
 }
 
@@ -69,10 +99,10 @@ export function folderDetailToDraft(
       channelId: participant.telegramChannelId,
       role: participant.role,
       inviteLinkId: participant.inviteLink.id,
-      inviteLinkMode: participant.inviteLinkMode,
       accountId: participant.expense?.accountId ?? "",
       amount: participant.expense ? String(participant.expense.amount) : "",
     })),
+    bulkExpense: { enabled: false, accountId: "", totalAmount: "" },
   };
 }
 

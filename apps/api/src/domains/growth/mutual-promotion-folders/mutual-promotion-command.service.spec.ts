@@ -65,6 +65,126 @@ describe('MutualPromotionCommandService', () => {
     return { service, tx, validation };
   }
 
+  it('requires finance.create before allocating paid-folder expenses', async () => {
+    const prisma = { $transaction: jest.fn() };
+    const authorization = {
+      require: jest.fn().mockRejectedValue(new Error('finance.create denied')),
+    };
+    const service = new MutualPromotionCommandService(
+      prisma as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      authorization as never,
+    );
+    const dto = {
+      title: 'September',
+      startsAt: startsAt.toISOString(),
+      endsAt: endsAt.toISOString(),
+      participants: [
+        {
+          telegramChannelId: 'channel-1',
+          inviteLinkId: 'link-1',
+          role: 'PAID' as const,
+        },
+      ],
+      expenseAllocation: {
+        mode: 'EQUAL' as const,
+        accountId: 'account-1',
+        totalAmount: 10,
+      },
+    };
+    await expect(service.create('user-1', dto)).rejects.toThrow(
+      'finance.create denied',
+    );
+    await expect(service.update('user-1', 'folder-1', dto)).rejects.toThrow(
+      'finance.create denied',
+    );
+    expect(authorization.require).toHaveBeenNthCalledWith(
+      1,
+      'user-1',
+      'finance.create',
+    );
+    expect(authorization.require).toHaveBeenCalledTimes(2);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('cannot remove existing workspace expenses through an expense-free folder edit without finance.create', async () => {
+    const tx = {
+      mutualPromotionFolderParticipant: {
+        findMany: jest.fn().mockResolvedValue([{ id: 'participant-1' }]),
+        deleteMany: jest.fn(),
+      },
+      transaction: {
+        findFirst: jest.fn().mockResolvedValue({ id: 'expense-1' }),
+        deleteMany: jest.fn(),
+      },
+      mutualPromotionFolder: { update: jest.fn() },
+    };
+    const prisma = { $transaction: jest.fn((callback) => callback(tx)) };
+    const authorization = {
+      require: jest.fn().mockRejectedValue(new Error('finance.create denied')),
+    };
+    const validation = {
+      parseInterval: jest.fn().mockReturnValue({ startsAt, endsAt }),
+      lockFolder: jest.fn(),
+      requireFolder: jest.fn().mockResolvedValue({ status: 'DRAFT' }),
+      requireDraft: jest.fn(),
+      lockInviteLinks: jest.fn(),
+      validateParticipants: jest.fn(),
+    };
+    const service = new MutualPromotionCommandService(
+      prisma as never,
+      {
+        resolveWorkspaceIdForUser: jest.fn().mockResolvedValue('workspace-1'),
+      } as never,
+      {} as never,
+      {} as never,
+      validation as never,
+      {} as never,
+      {} as never,
+      authorization as never,
+    );
+
+    await expect(
+      service.update('user-1', 'folder-1', {
+        title: 'Edited title',
+        startsAt: startsAt.toISOString(),
+        endsAt: endsAt.toISOString(),
+        participants: [],
+      }),
+    ).rejects.toThrow('finance.create denied');
+
+    expect(validation.requireFolder).toHaveBeenCalledWith(
+      'workspace-1',
+      'folder-1',
+      tx,
+    );
+    expect(tx.mutualPromotionFolderParticipant.findMany).toHaveBeenCalledWith({
+      where: { folderId: 'folder-1', workspaceId: 'workspace-1' },
+      select: { id: true },
+    });
+    expect(tx.transaction.findFirst).toHaveBeenCalledWith({
+      where: {
+        workspaceId: 'workspace-1',
+        mutualPromotionParticipantId: { in: ['participant-1'] },
+      },
+      select: { id: true },
+    });
+    expect(authorization.require).toHaveBeenCalledWith(
+      'user-1',
+      'finance.create',
+    );
+    expect(tx.transaction.deleteMany).not.toHaveBeenCalled();
+    expect(
+      tx.mutualPromotionFolderParticipant.deleteMany,
+    ).not.toHaveBeenCalled();
+    expect(tx.mutualPromotionFolder.update).not.toHaveBeenCalled();
+  });
+
   it('serializes the folder and consumes one completed System Bot import', async () => {
     const { service, tx, validation } = setup();
 

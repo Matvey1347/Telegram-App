@@ -232,12 +232,21 @@ export class TelegramSystemBotWorkspaceFlowService {
       selectedWorkspaceId = await this.prisma.$transaction(async (tx) => {
         if (payload.mode === 'CREATE') {
           const workspaceId = randomUUID();
+          const userProfile = await tx.user.findUniqueOrThrow({
+            where: { id: scope.userId },
+            select: { profileAvatarIconId: true, telegramUsername: true },
+          });
           await tx.workspace.create({
             data: {
               id: workspaceId,
               name: payload.name!,
               members: {
-                create: { userId: scope.userId, role: WorkspaceRole.owner },
+                create: {
+                  userId: scope.userId,
+                  role: WorkspaceRole.owner,
+                  avatarIconId: userProfile.profileAvatarIconId,
+                  telegramUsername: userProfile.telegramUsername,
+                },
               },
             },
           });

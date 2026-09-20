@@ -2,14 +2,23 @@ type FinanceSystemCategory = {
   key: string | null;
   name: string;
   isSystem: boolean;
-  icon?: { name: string; emoji: string | null } | null;
+  icon?: {
+    name: string;
+    emoji: string | null;
+    imageUrl?: string | null;
+  } | null;
 };
 
 const EXPECTED = [
-  { key: 'investment', name: 'Investment' },
+  {
+    key: 'investment',
+    name: 'Investment',
+    iconName: 'money bag',
+    emoji: '💰',
+  },
   {
     key: 'channel_advertising_revenue',
-    name: 'Channel Advertising Revenue',
+    name: 'Ad Sales',
     iconName: 'channel-advertising-revenue',
     emoji: '👛',
   },
@@ -19,8 +28,19 @@ const EXPECTED = [
     iconName: 'telegram-ad-sales-reversal',
     emoji: '↩️',
   },
-  { key: 'advertising', name: 'Advertising' },
-  { key: 'buy_channels', name: 'Buy Channels' },
+  {
+    key: 'advertising',
+    name: 'Advertising',
+    iconName: 'card file box',
+    emoji: '🗃️',
+  },
+  {
+    key: 'buy_channels',
+    name: 'Buy Channels',
+    iconName: 'buy-channels',
+    imageUrl:
+      'https://s3.eu-central-003.backblazeb2.com/telegram-system/icons/1780854323445-xbxyq1jk.png',
+  },
   {
     key: 'salary',
     name: 'Salary',
@@ -52,9 +72,8 @@ export function financeSystemCategoriesReady(
       return false;
     }
     if (!('iconName' in expected)) return true;
-    return (
-      category.icon?.name === expected.iconName &&
-      category.icon.emoji === expected.emoji
-    );
+    if (category.icon?.name !== expected.iconName) return false;
+    if ('emoji' in expected) return category.icon.emoji === expected.emoji;
+    return category.icon.imageUrl === expected.imageUrl;
   });
 }

@@ -22,7 +22,6 @@ describe('HistoricalExchangeRateService', () => {
 
     await expect(
       service.ensureCurrentRates({
-        workspaceId: 'workspace-1',
         currencies: ['PLN', 'UAH', 'USD'],
         signal: new AbortController().signal,
       }),
@@ -34,8 +33,7 @@ describe('HistoricalExchangeRateService', () => {
     expect(
       calls[0][0].data.find((row) => row.targetCurrency === 'UAH'),
     ).toEqual({
-      workspaceId: 'workspace-1',
-      baseCurrency: 'EUR',
+        baseCurrency: 'EUR',
       targetCurrency: 'UAH',
       rate: 48.5,
       date: new Date('2026-09-14T00:00:00.000Z'),
@@ -61,7 +59,6 @@ describe('HistoricalExchangeRateService', () => {
 
     await expect(
       service.ensureRates({
-        workspaceId: 'workspace-1',
         dates: [new Date('2025-09-28T10:00:00.000Z')],
         currencies: ['PLN', 'USD'],
         signal: new AbortController().signal,
@@ -104,7 +101,6 @@ describe('HistoricalExchangeRateService', () => {
 
     await expect(
       service.ensureRates({
-        workspaceId: 'workspace-1',
         dates: [new Date('2025-09-26T10:00:00.000Z')],
         currencies: ['PLN', 'USD'],
         signal: new AbortController().signal,
@@ -124,7 +120,6 @@ describe('HistoricalExchangeRateService', () => {
 
     await expect(
       service.ensureRates({
-        workspaceId: 'workspace-1',
         dates: [new Date('2025-09-26T10:00:00.000Z')],
         currencies: ['PLN', 'USD'],
         signal: new AbortController().signal,
@@ -169,7 +164,6 @@ describe('HistoricalExchangeRateService', () => {
 
     await expect(
       service.ensureRates({
-        workspaceId: 'workspace-1',
         dates: [new Date('2026-04-07T10:00:00.000Z')],
         currencies: ['PLN', 'UAH', 'USD'],
         signal: new AbortController().signal,
@@ -182,8 +176,7 @@ describe('HistoricalExchangeRateService', () => {
     expect(
       calls[0][0].data.find((row) => row.source === 'bank.gov.ua'),
     ).toEqual({
-      workspaceId: 'workspace-1',
-      baseCurrency: 'EUR',
+        baseCurrency: 'EUR',
       targetCurrency: 'UAH',
       rate: 50.321,
       date: new Date('2026-04-07T00:00:00.000Z'),

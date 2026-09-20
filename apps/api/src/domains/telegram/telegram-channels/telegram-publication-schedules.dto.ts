@@ -53,3 +53,7 @@ export class TelegramPublicationOccurrenceQueryDto {
   @IsDateString() from!: string;
   @IsDateString() to!: string;
 }
+
+export class TelegramPublicationBatchOccurrenceQueryDto extends TelegramPublicationOccurrenceQueryDto {
+  @IsString() channelIds!: string;
+}

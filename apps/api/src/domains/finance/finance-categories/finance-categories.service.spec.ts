@@ -1,12 +1,15 @@
 import { FinanceCategoriesService } from './finance-categories.service';
 
 describe('FinanceCategoriesService', () => {
-  it('merges legacy Telegram Ad Sales income category into Channel Advertising Revenue', async () => {
+  it('merges legacy Telegram Ad Sales income category into Ad Sales', async () => {
     const prisma: any = {
       icon: {
         upsert: jest
           .fn()
           .mockResolvedValueOnce({ id: 'icon-channel' })
+          .mockResolvedValueOnce({ id: 'icon-investment' })
+          .mockResolvedValueOnce({ id: 'icon-advertising' })
+          .mockResolvedValueOnce({ id: 'icon-buy-channels' })
           .mockResolvedValueOnce({ id: 'icon-reversal' })
           .mockResolvedValueOnce({ id: 'icon-salary' }),
       },
@@ -34,7 +37,7 @@ describe('FinanceCategoriesService', () => {
           })
           .mockResolvedValueOnce({
             id: 'channel-revenue-category',
-            name: 'Channel Advertising Revenue',
+            name: 'Ad Sales',
           })
           .mockResolvedValueOnce({
             id: 'reversal-category',
@@ -70,7 +73,7 @@ describe('FinanceCategoriesService', () => {
       },
       data: {
         categoryId: 'channel-revenue-category',
-        category: 'Channel Advertising Revenue',
+        category: 'Ad Sales',
       },
     });
     expect(prisma.transactionCategory.deleteMany).toHaveBeenCalledWith({
@@ -105,10 +108,15 @@ describe('FinanceCategoriesService', () => {
       icon: { upsert: jest.fn() },
       transactionCategory: {
         findMany: jest.fn().mockResolvedValue([
-          { key: 'investment', name: 'Investment', isSystem: true, icon: null },
+          {
+            key: 'investment',
+            name: 'Investment',
+            isSystem: true,
+            icon: { name: 'money bag', emoji: '💰' },
+          },
           {
             key: 'channel_advertising_revenue',
-            name: 'Channel Advertising Revenue',
+            name: 'Ad Sales',
             isSystem: true,
             icon: { name: 'channel-advertising-revenue', emoji: '👛' },
           },
@@ -122,13 +130,18 @@ describe('FinanceCategoriesService', () => {
             key: 'advertising',
             name: 'Advertising',
             isSystem: true,
-            icon: null,
+            icon: { name: 'card file box', emoji: '🗃️' },
           },
           {
             key: 'buy_channels',
             name: 'Buy Channels',
             isSystem: true,
-            icon: null,
+            icon: {
+              name: 'buy-channels',
+              emoji: null,
+              imageUrl:
+                'https://s3.eu-central-003.backblazeb2.com/telegram-system/icons/1780854323445-xbxyq1jk.png',
+            },
           },
           {
             key: 'salary',

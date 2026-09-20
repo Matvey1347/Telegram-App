@@ -18,6 +18,12 @@ describe('TelegramSystemBotWorkspaceFlowService', () => {
   };
   const tx = {
     workspace: { create: jest.fn(), update: jest.fn() },
+    user: {
+      findUniqueOrThrow: jest.fn().mockResolvedValue({
+        profileAvatarIconId: 'profile-icon',
+        telegramUsername: 'global_user',
+      }),
+    },
     workspaceMember: { findFirst: jest.fn() },
     telegramSystemBotConnection: { update: jest.fn() },
     icon: { findFirst: jest.fn(), create: jest.fn() },
@@ -241,7 +247,14 @@ describe('TelegramSystemBotWorkspaceFlowService', () => {
       expect.objectContaining({
         data: expect.objectContaining({
           name: 'Studio',
-          members: { create: { userId: 'user-1', role: 'owner' } },
+          members: {
+            create: {
+              userId: 'user-1',
+              role: 'owner',
+              avatarIconId: 'profile-icon',
+              telegramUsername: 'global_user',
+            },
+          },
         }),
       }),
     );

@@ -8,6 +8,7 @@ describe('MemberFinanceReadService', () => {
     telegramAdSalePayment: { findMany: jest.fn() },
     memberCompensationSettlement: { findMany: jest.fn() },
     investment: { findMany: jest.fn() },
+    transaction: { findMany: jest.fn() },
   };
   const workspaceService = {
     resolveWorkspaceMembershipForUser: jest.fn(),
@@ -72,6 +73,7 @@ describe('MemberFinanceReadService', () => {
         notes: null,
       },
     ]);
+    prisma.transaction.findMany.mockResolvedValue([]);
   });
 
   it('shows only the current member summary to a non-owner', async () => {
@@ -83,8 +85,9 @@ describe('MemberFinanceReadService', () => {
         commissionPayable: 75,
         investments: expect.objectContaining({
           salary: 25,
-          reinvestment: 75,
-          total: 100,
+          investorEarnings: 0,
+          principal: 25,
+          total: 25,
         }),
       }),
     ]);
@@ -95,5 +98,24 @@ describe('MemberFinanceReadService', () => {
       service.details('seller-user', 'another-member'),
     ).rejects.toBeInstanceOf(ForbiddenException);
     expect(prisma.workspaceMember.findFirst).not.toHaveBeenCalled();
+  });
+
+  it('uses each investor share at the time a profit event happened', async () => {
+    prisma.telegramAdSalePayment.findMany.mockResolvedValue([]);
+    prisma.memberCompensationSettlement.findMany.mockResolvedValue([]);
+    prisma.investment.findMany.mockResolvedValue([
+      { id: 'm1-first', workspaceMemberId: 'm1', origin: 'EXTERNAL', movementType: 'CONTRIBUTION', amountInPrimaryCurrency: 100, date: new Date('2026-09-01') },
+      { id: 'm2-first', workspaceMemberId: 'm2', origin: 'EXTERNAL', movementType: 'CONTRIBUTION', amountInPrimaryCurrency: 100, date: new Date('2026-09-01') },
+      { id: 'm1-second', workspaceMemberId: 'm1', origin: 'EXTERNAL', movementType: 'CONTRIBUTION', amountInPrimaryCurrency: 100, date: new Date('2026-09-03') },
+    ]);
+    prisma.transaction.findMany.mockResolvedValue([
+      { id: 'income-before', type: 'income', date: new Date('2026-09-02'), amountInPrimaryCurrency: 100, category: 'Channel revenue', categoryRef: { key: 'channel_advertising_revenue' }, telegramAdSalePayment: null },
+      { id: 'income-after', type: 'income', date: new Date('2026-09-04'), amountInPrimaryCurrency: 120, category: 'Channel revenue', categoryRef: { key: 'channel_advertising_revenue' }, telegramAdSalePayment: null },
+    ]);
+
+    const rows = await service.summaryRows('workspace-1');
+
+    expect(rows.byMember.get('m1')?.investorEarnings).toBe(130);
+    expect(rows.byMember.get('m2')?.investorEarnings).toBe(90);
   });
 });

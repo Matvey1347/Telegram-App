@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/primitives";
 export type CampaignSelectOption = {
   value: string;
   label: string;
+  labelContent?: React.ReactNode;
   iconUrl?: string;
   iconEmoji?: string;
   iconFallback?: string;
@@ -47,6 +48,9 @@ export function CampaignMultiValueSelect({
   onOpen,
   loading = false,
   loadingLabel = "Loading options…",
+  canCreateOption,
+  onCreateOption,
+  createOptionLabel = "Verify and add this invite link",
 }: {
   value: string[];
   onChange: (value: string[]) => void;
@@ -55,9 +59,13 @@ export function CampaignMultiValueSelect({
   onOpen?: () => void;
   loading?: boolean;
   loadingLabel?: string;
+  canCreateOption?: (input: string) => boolean;
+  onCreateOption?: (input: string) => void | Promise<void>;
+  createOptionLabel?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const [creating, setCreating] = useState(false);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const [menuStyle, setMenuStyle] = useState<{
     top: number;
@@ -70,6 +78,9 @@ export function CampaignMultiValueSelect({
     `${option.label} ${option.description || ""} ${option.searchText || ""}`
       .toLocaleLowerCase()
       .includes(search.trim().toLocaleLowerCase()),
+  );
+  const canCreate = Boolean(
+    onCreateOption && search.trim() && canCreateOption?.(search.trim()),
   );
 
   useEffect(() => {
@@ -141,7 +152,7 @@ export function CampaignMultiValueSelect({
               <span
                 className={`${option.badgeClassName ? "" : "truncate"} ${option.badgeClassName ?? ""}`}
               >
-                {option.label}
+                {option.labelContent ?? option.label}
               </span>
             </span>
           ))
@@ -206,7 +217,7 @@ export function CampaignMultiValueSelect({
                           <span
                             className={`${option.badgeClassName ? "" : "block truncate"} ${option.badgeClassName ?? ""}`}
                           >
-                            {option.label}
+                            {option.labelContent ?? option.label}
                           </span>
                           {option.description ? (
                             <span className="block truncate text-xs text-neutral-500">
@@ -219,7 +230,29 @@ export function CampaignMultiValueSelect({
                         </span>
                       </button>
                     ))}
-                  {!loading && !filteredOptions.length ? (
+                  {!loading && canCreate ? (
+                    <button
+                      type="button"
+                      disabled={creating}
+                      onClick={async () => {
+                        if (!onCreateOption) return;
+                        setCreating(true);
+                        try {
+                          await onCreateOption(search.trim());
+                          setSearch("");
+                          setOpen(false);
+                        } catch {
+                          // The registration hook presents the verification error.
+                        } finally {
+                          setCreating(false);
+                        }
+                      }}
+                      className="w-full border-t border-neutral-800 px-3 py-2 text-left text-sm font-medium text-blue-300 hover:bg-neutral-800 disabled:opacity-50"
+                    >
+                      {creating ? "Verifying invite link…" : createOptionLabel}
+                    </button>
+                  ) : null}
+                  {!loading && !filteredOptions.length && !canCreate ? (
                     <p className="px-3 py-3 text-center text-sm text-neutral-500">
                       No options found
                     </p>

@@ -147,7 +147,16 @@ describe('MutualPromotionReadService', () => {
             creatorMember: null,
             adCampaignId: null,
             snapshots: [],
-            mutualPromotionParticipants: [],
+            mutualPromotionParticipants: [
+              {
+                inviteLinkMode: 'FOLDER_ONLY',
+                folder: {
+                  status: 'COMPLETED',
+                  startsAt: new Date('2026-01-01T00:00:00.000Z'),
+                  endsAt: new Date('2026-01-02T00:00:00.000Z'),
+                },
+              },
+            ],
           },
         ]),
       },
@@ -183,6 +192,7 @@ describe('MutualPromotionReadService', () => {
         id: 'folder-1',
         isDefaultForFolders: true,
         available: true,
+        unavailableReason: null,
       }),
     ]);
   });

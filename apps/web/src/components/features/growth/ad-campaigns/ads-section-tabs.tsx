@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { useEffect, useRef } from "react";
 import {
   FlaskConical,
   Images,
@@ -66,31 +69,45 @@ export function resolveAdsSection(
 }
 
 export function AdsSectionTabs({ value }: { value: AdsSection }) {
+  const activeTabRef = useRef<HTMLAnchorElement>(null);
+  useEffect(() => {
+    activeTabRef.current?.scrollIntoView?.({
+      block: "nearest",
+      inline: "center",
+    });
+  }, [value]);
+
   return (
     <div
-      role="tablist"
-      aria-label="Ads sections"
-      className="mb-5 inline-flex rounded-lg border border-neutral-700 bg-neutral-900 p-1"
+      data-testid="ads-section-tabs-scroll"
+      className="mb-5 w-full min-w-0 max-w-full overflow-x-auto overscroll-x-contain"
     >
-      {ADS_SECTIONS.map((section) => {
-        const Icon = section.icon;
-        return (
-          <Link
-            key={section.value}
-            href={section.href}
-            role="tab"
-            aria-selected={value === section.value}
-            className={`inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm transition ${
-              value === section.value
-                ? "bg-blue-600 text-white"
-                : "text-neutral-300 hover:bg-neutral-800"
-            }`}
-          >
-            <Icon size={16} aria-hidden="true" />
-            {section.label}
-          </Link>
-        );
-      })}
+      <div
+        role="tablist"
+        aria-label="Ads sections"
+        className="inline-flex min-w-max rounded-lg border border-neutral-700 bg-neutral-900 p-1"
+      >
+        {ADS_SECTIONS.map((section) => {
+          const Icon = section.icon;
+          return (
+            <Link
+              key={section.value}
+              ref={value === section.value ? activeTabRef : undefined}
+              href={section.href}
+              role="tab"
+              aria-selected={value === section.value}
+              className={`inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-md px-4 py-2 text-sm transition ${
+                value === section.value
+                  ? "bg-blue-600 text-white"
+                  : "text-neutral-300 hover:bg-neutral-800"
+              }`}
+            >
+              <Icon size={16} aria-hidden="true" />
+              {section.label}
+            </Link>
+          );
+        })}
+      </div>
     </div>
   );
 }

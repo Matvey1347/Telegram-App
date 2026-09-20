@@ -600,14 +600,17 @@ export class TransactionsService {
       'finance.deleteOwn',
       'finance.deleteAny',
     );
+    await this.purchaseChannels.ensureAvailable();
     return this.prisma.$transaction(async (tx) => {
       if (existing.investment?.origin === 'EXTERNAL') {
         await this.transactionInvestmentSync.removeContribution(tx, id);
       }
-      return tx.transaction.update({
+      const removed = await tx.transaction.update({
         where: { id },
         data: { deletedAt: new Date() },
       });
+      await this.purchaseChannels.sync(tx, workspaceId, id, null);
+      return removed;
     });
   }
 }

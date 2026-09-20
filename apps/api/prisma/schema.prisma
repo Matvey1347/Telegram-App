@@ -922,8 +922,13 @@ model User {
   name                                      String
   editorShortcuts                           Json?
   locale                                    String                                @default("en")
+  profileAvatarIconId                       String?
+  telegramUsername                          String?
+  profileTelegramUserAccountId              String?                               @unique
   memberships                               WorkspaceMember[]
   icons                                     Icon[]
+  profileAvatarIcon                         Icon?                                 @relation("UserProfileAvatarIcon", fields: [profileAvatarIconId], references: [id], onDelete: SetNull)
+  profileTelegramUserAccount                TelegramUserAccountIntegration?       @relation("UserProfileTelegramAccount", fields: [profileTelegramUserAccountId], references: [id], onDelete: SetNull)
   createdAccounts                           Account[]                             @relation("AccountCreatedBy")
   createdTransactions                       Transaction[]                         @relation("TransactionCreatedBy")
   createdTransfers                          Transfer[]                            @relation("TransferCreatedBy")
@@ -1071,7 +1076,6 @@ model Workspace {
   adHypotheses                           AdHypothesis[]
   adHypothesisCampaigns                  AdHypothesisCampaign[]
   dailyAnalyticsSyncRuns                 DailyAnalyticsSyncRun[]
-  exchangeRates                          ExchangeRate[]
   investments                            Investment[]
   reinvestmentDistributions              ReinvestmentDistribution[]
   memberCompensationSettlements          MemberCompensationSettlement[]
@@ -1134,6 +1138,7 @@ model TelegramUserAccountIntegration {
   workspace                Workspace                        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   assignedMember           WorkspaceMember?                 @relation("TelegramUserAccountAssignedMember", fields: [assignedMemberId], references: [id], onDelete: SetNull)
   createdByUser            User?                            @relation("TelegramUserAccountCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  profileUser              User?                            @relation("UserProfileTelegramAccount")
   channelAdminLinks        TelegramChannelAdminLink[]
   crmConversations         TelegramCrmConversation[]
   crmSyncState             TelegramCrmAccountSyncState?
@@ -5571,19 +5576,17 @@ model TelegramPostMetricSnapshot {
 
 model ExchangeRate {
   id             String   @id @default(cuid())
-  workspaceId    String
   baseCurrency   String   @db.VarChar(3)
   targetCurrency String   @db.VarChar(3)
   rate           Decimal
   date           DateTime
   source         String?
 
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([workspaceId, baseCurrency, targetCurrency, date])
+  @@unique([baseCurrency, targetCurrency, date])
+  @@index([baseCurrency, targetCurrency, date])
 }
 
 model Icon {
@@ -5597,6 +5600,7 @@ model Icon {
 
   workspace                        Workspace?                        @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
   createdByUser                    User?                             @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+  profileUsers                     User[]                            @relation("UserProfileAvatarIcon")
   workspaceAvatars                 Workspace[]                       @relation("WorkspaceAvatarIcon")
   workspaceMembers                 WorkspaceMember[]
   workspaceRoles                   WorkspaceRoleDefinition[]         @relation("WorkspaceRoleIcon")

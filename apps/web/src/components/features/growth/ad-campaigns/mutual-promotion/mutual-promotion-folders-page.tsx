@@ -42,6 +42,10 @@ import { MutualPromotionInviteLinksEditor } from "./mutual-promotion-invite-link
 import { MutualPromotionFolderCard } from "./mutual-promotion-folder-card";
 import { useAppToast } from "@/providers/toast-provider";
 import { adsSectionHeader } from "../ads-section-header";
+import {
+  invalidateMutualPromotionFinance,
+  reconcileMutualPromotionFolder,
+} from "./mutual-promotion-finance-cache";
 
 const listParams = { page: 1, pageSize: 100 } as const;
 
@@ -104,21 +108,8 @@ export function MutualPromotionFoldersPage({
     refetchOnWindowFocus: "always",
   });
 
-  const reconcile = async (folder: MutualPromotionFolderDetail) => {
-    queryClient.setQueryData(
-      mutualPromotionFolderKeys.detail(folder.id),
-      folder,
-    );
-    await Promise.all([
-      queryClient.invalidateQueries({
-        queryKey: mutualPromotionFolderKeys.list(listParams),
-      }),
-      queryClient.invalidateQueries({ queryKey: telegramChannelKeys.lists() }),
-      queryClient.invalidateQueries({
-        queryKey: telegramChannelKeys.trafficAttributions(),
-      }),
-    ]);
-  };
+  const reconcile = (folder: MutualPromotionFolderDetail, financeChanged = false) =>
+    reconcileMutualPromotionFolder(queryClient, folder, listParams, financeChanged);
 
   const saveMutation = useMutation({
     mutationFn: async (payload: CreateMutualPromotionFolderPayload) =>
@@ -126,7 +117,13 @@ export function MutualPromotionFoldersPage({
         ? mutualPromotionFoldersApi.update(editingFolder.id, payload)
         : mutualPromotionFoldersApi.create(payload),
     onSuccess: async (folder) => {
-      await reconcile(folder);
+      await reconcile(
+        folder,
+        Boolean(
+          folder.participants.some((participant) => participant.expense) ||
+            editingFolder?.participants.some((participant) => participant.expense),
+        ),
+      );
       setFormOpen(false);
       setEditingFolder(null);
       setSelectedFolderId(folder.id);
@@ -140,6 +137,9 @@ export function MutualPromotionFoldersPage({
       folderId: string;
       expectedTotal: number;
     }) => {
+      if (expectedTotal === 0) {
+        return mutualPromotionFoldersApi.activate(folderId, () => undefined);
+      }
       const progressId = `mutual-promotion-activation:${folderId}`;
       let successCount = 0;
       let failedCount = 0;
@@ -210,12 +210,15 @@ export function MutualPromotionFoldersPage({
   const cancelMutation = useMutation({
     mutationFn: (folderId: string) =>
       mutualPromotionFoldersApi.cancel(folderId),
-    onSuccess: reconcile,
+    onSuccess: (folder) => reconcile(folder),
   });
   const deleteMutation = useMutation({
     mutationFn: (folderId: string) =>
       mutualPromotionFoldersApi.remove(folderId),
     onSuccess: ({ id }) => {
+      const deletedFolder = queryClient.getQueryData<MutualPromotionFolderDetail>(
+        mutualPromotionFolderKeys.detail(id),
+      );
       queryClient.setQueryData(
         mutualPromotionFolderKeys.list(listParams),
         (current: typeof foldersQuery.data) =>
@@ -238,6 +241,9 @@ export function MutualPromotionFoldersPage({
         queryClient.invalidateQueries({
           queryKey: telegramChannelKeys.trafficAttributions(),
         }),
+        ...(deletedFolder?.participants.some((participant) => participant.expense)
+          ? [invalidateMutualPromotionFinance(queryClient, deletedFolder)]
+          : []),
       ]);
     },
   });
@@ -249,12 +255,12 @@ export function MutualPromotionFoldersPage({
       folderId: string;
       payload: CreateMutualPromotionPostPayload;
     }) => mutualPromotionFoldersApi.addPost(folderId, payload),
-    onSuccess: reconcile,
+    onSuccess: (folder) => reconcile(folder),
   });
   const removePostMutation = useMutation({
     mutationFn: ({ folderId, postId }: { folderId: string; postId: string }) =>
       mutualPromotionFoldersApi.removePost(folderId, postId),
-    onSuccess: reconcile,
+    onSuccess: (folder) => reconcile(folder),
   });
   const updatePostMutation = useMutation({
     mutationFn: ({
@@ -266,7 +272,7 @@ export function MutualPromotionFoldersPage({
       postId: string;
       payload: UpdateMutualPromotionPostPayload;
     }) => mutualPromotionFoldersApi.updatePost(folderId, postId, payload),
-    onSuccess: reconcile,
+    onSuccess: (folder) => reconcile(folder),
   });
   const expenseMutation = useMutation({
     mutationFn: ({
@@ -279,7 +285,7 @@ export function MutualPromotionFoldersPage({
       payload: MutualPromotionExpensePayload;
     }) =>
       mutualPromotionFoldersApi.upsertExpense(folderId, participantId, payload),
-    onSuccess: reconcile,
+    onSuccess: (folder) => reconcile(folder, true),
   });
 
   const folder =

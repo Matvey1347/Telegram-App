@@ -88,6 +88,7 @@ export function ManagedPostsImportWorkspace({
   selectedRowAdornment?: ReactNode;
   selectedRowDetails?: ReactNode;
   scheduleValue?: {
+    placementMode?: "SLOT" | "CUSTOM";
     slotId?: string | null;
     scheduledAt?: string | null;
   } | null;
@@ -98,7 +99,11 @@ export function ManagedPostsImportWorkspace({
   onUpdateHypotheses?: (index: number, refs: string[]) => void;
   onScheduleChange?: (
     index: number,
-    value: { slotId: string | null; scheduledAt: string | null },
+    value: {
+      placementMode: "SLOT" | "CUSTOM";
+      slotId: string | null;
+      scheduledAt: string | null;
+    },
   ) => void;
 }) {
   const { t } = useI18n();
@@ -127,10 +132,13 @@ export function ManagedPostsImportWorkspace({
   const selectedPosition = visibleRowIndices.indexOf(selectedRowIndex);
   const updateScheduledAt = (
     scheduledAt: string | null,
-    slotId = scheduleValue?.slotId ?? null,
   ) => {
     if (onScheduleChange) {
-      onScheduleChange(selectedRowIndex, { slotId, scheduledAt });
+      onScheduleChange(selectedRowIndex, {
+        placementMode: "CUSTOM",
+        slotId: null,
+        scheduledAt,
+      });
       return;
     }
     onUpdateRow(selectedRowIndex, { scheduledAt });
@@ -433,9 +441,13 @@ export function ManagedPostsImportWorkspace({
                       ? `${scheduleValue.slotId}:${scheduleValue.scheduledAt}`
                       : null
                   }
+                  scheduledAt={selectedRow.scheduledAt}
                   disabled={disabled}
                   onChange={(value) =>
-                    onScheduleChange(selectedRowIndex, value)
+                    onScheduleChange(selectedRowIndex, {
+                      ...value,
+                      placementMode: "SLOT",
+                    })
                   }
                 />
               </FormField>
@@ -446,7 +458,7 @@ export function ManagedPostsImportWorkspace({
                 variant="secondary"
                 className="w-full sm:w-auto"
                 disabled={disabled || !selectedRow.scheduledAt}
-                onClick={() => updateScheduledAt(null, null)}
+                onClick={() => updateScheduledAt(null)}
               >
                 {t("telegram.posts.import.clearSchedule")}
               </Button>

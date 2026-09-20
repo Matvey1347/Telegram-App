@@ -13,12 +13,14 @@ import {
   WorkspaceRole,
 } from '@prisma/client';
 import { WorkspaceService } from '../../../common/workspace.service';
+import { iconToResolvedEmoji } from '../../../common/icons/resolved-emoji';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { roundMoney, salesCommission } from './member-finance-calculations';
+import { allocateProfitByCapital } from './member-finance-calculations';
 
 export type MemberFinanceReader = Pick<
   Prisma.TransactionClient,
-  'telegramAdSalePayment' | 'memberCompensationSettlement' | 'investment'
+  'telegramAdSalePayment' | 'memberCompensationSettlement' | 'investment' | 'transaction'
 >;
 
 type MemberTotals = {
@@ -26,7 +28,7 @@ type MemberTotals = {
   commissionSettled: number;
   external: number;
   salary: number;
-  reinvestment: number;
+  investorEarnings: number;
 };
 
 @Injectable()
@@ -51,14 +53,13 @@ export class MemberFinanceReadService {
     memberIds?: string[],
     client: MemberFinanceReader = this.prisma,
   ) {
-    const memberFilter = memberIds?.length ? { in: memberIds } : undefined;
-    const [payments, settlements, investments] = await Promise.all([
+    const [payments, settlements, investments, transactions] = await Promise.all([
       client.telegramAdSalePayment.findMany({
         where: {
           workspaceId,
           status: TelegramAdSalePaymentStatus.ACTIVE,
           sale: {
-            sellerMemberId: memberFilter,
+            sellerMemberId: undefined,
             sellerCommissionEnabled: true,
           },
         },
@@ -78,12 +79,21 @@ export class MemberFinanceReadService {
         },
       }),
       client.memberCompensationSettlement.findMany({
-        where: { workspaceId, workspaceMemberId: memberFilter },
+        where: { workspaceId },
         orderBy: [{ date: 'desc' }, { id: 'desc' }],
       }),
       client.investment.findMany({
-        where: { workspaceId, workspaceMemberId: memberFilter },
+        where: { workspaceId },
         orderBy: [{ date: 'desc' }, { id: 'desc' }],
+      }),
+      client.transaction.findMany({
+        where: { workspaceId, deletedAt: null },
+        select: {
+          id: true, type: true, date: true, amountInPrimaryCurrency: true,
+          category: true, categoryRef: { select: { key: true } },
+          telegramAdSalePayment: { select: { id: true } },
+        },
+        orderBy: [{ date: 'asc' }, { id: 'asc' }],
       }),
     ]);
 
@@ -94,7 +104,7 @@ export class MemberFinanceReadService {
         commissionSettled: 0,
         external: 0,
         salary: 0,
-        reinvestment: 0,
+        investorEarnings: 0,
       };
       byMember.set(id, current);
       return current;
@@ -116,9 +126,31 @@ export class MemberFinanceReadService {
       const value = this.signedInvestment(investment);
       const row = get(investment.workspaceMemberId);
       if (investment.origin === InvestmentOrigin.SALARY) row.salary += value;
-      else if (investment.origin === InvestmentOrigin.REINVESTMENT)
-        row.reinvestment += value;
-      else row.external += value;
+      else if (investment.origin === InvestmentOrigin.EXTERNAL) row.external += value;
+    }
+    const capitalByMember = new Map<string, number>();
+    const events = [
+      ...investments
+        .filter((investment) => investment.origin !== InvestmentOrigin.REINVESTMENT)
+        .map((investment) => ({ kind: 'capital' as const, date: investment.date, id: investment.id, investment })),
+      ...transactions.map((transaction) => ({ kind: 'profit' as const, date: transaction.date, id: transaction.id, transaction })),
+    ].sort((a, b) => a.date.getTime() - b.date.getTime() || a.id.localeCompare(b.id));
+    const commissionByPayment = new Map(payments.map((payment) => [payment.id, salesCommission(Number(payment.amountInPrimaryCurrency), Number(payment.sale.sellerCommissionRate))]));
+    for (const event of events) {
+      if (event.kind === 'capital') {
+        const change = this.signedInvestment(event.investment);
+        capitalByMember.set(event.investment.workspaceMemberId, (capitalByMember.get(event.investment.workspaceMemberId) ?? 0) + change);
+        continue;
+      }
+      const key = event.transaction.categoryRef?.key ?? event.transaction.category.trim().toLowerCase().replace(/\s+/g, '_');
+      if (['investment', 'investment_return', 'balance_adjustment', 'fixing_balance', 'salary'].includes(key)) continue;
+      let profit = Number(event.transaction.amountInPrimaryCurrency ?? 0) * (event.transaction.type === 'income' ? 1 : -1);
+      const paymentId = event.transaction.telegramAdSalePayment?.id;
+      if (paymentId) profit -= commissionByPayment.get(paymentId) ?? 0;
+      const allocations = allocateProfitByCapital(Math.abs(profit), [...capitalByMember].map(([memberId, amount]) => ({ memberId, amount })));
+      for (const allocation of allocations) {
+        get(allocation.memberId).investorEarnings += profit < 0 ? -allocation.amount : allocation.amount;
+      }
     }
     return { byMember, payments, settlements, investments };
   }
@@ -133,9 +165,10 @@ export class MemberFinanceReadService {
       commissionSettled: 0,
       external: 0,
       salary: 0,
-      reinvestment: 0,
+      investorEarnings: 0,
     };
-    const invested = row.external + row.salary + row.reinvestment;
+    const principal = row.external + row.salary;
+    const invested = principal + row.investorEarnings;
     return {
       memberId,
       primaryCurrency,
@@ -147,10 +180,9 @@ export class MemberFinanceReadService {
       investments: {
         external: roundMoney(row.external),
         salary: roundMoney(row.salary),
-        reinvestment: roundMoney(row.reinvestment),
+        investorEarnings: roundMoney(row.investorEarnings),
         total: roundMoney(invested),
-        reinvestmentPercent:
-          invested > 0 ? (row.reinvestment / invested) * 100 : 0,
+        principal: roundMoney(principal),
       },
     };
   }
@@ -207,7 +239,7 @@ export class MemberFinanceReadService {
     const [member, workspace, rows] = await Promise.all([
       this.prisma.workspaceMember.findFirst({
         where: { id: memberId, workspaceId: membership.workspaceId },
-        include: { user: { select: { id: true, name: true, email: true } } },
+        include: { user: { select: { id: true, name: true, email: true } }, avatarIcon: { select: { id: true, type: true, name: true, emoji: true, imageUrl: true } } },
       }),
       this.prisma.workspace.findUniqueOrThrow({
         where: { id: membership.workspaceId },
@@ -252,6 +284,7 @@ export class MemberFinanceReadService {
         id: member.id,
         name: member.user.name,
         email: member.user.email,
+        avatarPresentation: iconToResolvedEmoji(member.avatarIcon),
       },
       ...this.presentSummary(
         memberId,

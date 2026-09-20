@@ -22,6 +22,10 @@ import { UpdateMeDto, UpdatePasswordDto, UpdateWorkspaceDto } from './dto';
 import { normalizeTelegramUsername } from '../../../telegram/shared/telegram-import.helpers';
 import { TelegramInviteAttributionService } from '../../telegram/telegram-channels/telegram-invite-attribution.service';
 import { StructuredHttpException } from '../../../common/http/structured-http-error';
+import {
+  saveGlobalProfileAvatar,
+  type ProfileAvatarSource,
+} from './account-profile-avatar';
 
 const editorCommandIds = new Set<EditorCommandId>([
   'bold',
@@ -92,28 +96,10 @@ export class AccountService {
         createdAt: true,
         editorShortcuts: true,
         locale: true,
-      },
-    });
-    const membership =
-      await this.workspaceService.resolveWorkspaceMembershipForUser(userId);
-    return {
-      ...user,
-      workspaceMemberId: membership.id,
-      editorShortcuts:
-        (user.editorShortcuts as EditorShortcutPreferences | null) ?? {},
-      locale: normalizeAppLocale(user.locale),
-      avatarIconId: membership.avatarIconId,
-      avatarIcon: membership.avatarIcon ?? null,
-      avatarPresentation: iconToResolvedEmoji(membership.avatarIcon),
-      telegramUsername:
-        (membership as { telegramUsername?: string | null }).telegramUsername ??
-        null,
-      assignedTelegramUserAccounts: (
-        await this.prisma.telegramUserAccountIntegration.findMany({
-          where: {
-            workspaceId: membership.workspaceId,
-            assignedMemberId: membership.id,
-          },
+        profileAvatarIconId: true,
+        telegramUsername: true,
+        profileAvatarIcon: true,
+        profileTelegramUserAccount: {
           select: {
             id: true,
             label: true,
@@ -129,9 +115,36 @@ export class AccountService {
             premiumCheckedAt: true,
             premiumCapabilities: true,
           },
-          orderBy: { createdAt: 'asc' },
-        })
-      ).map((account) => ({
+        },
+      },
+    });
+    const membership =
+      await this.workspaceService.resolveWorkspaceMembershipForUser(userId);
+    const profileAccounts = user.profileTelegramUserAccount
+      ? [user.profileTelegramUserAccount]
+      : [];
+    const {
+      profileAvatarIconId,
+      profileAvatarIcon,
+      profileTelegramUserAccount: _profileTelegramUserAccount,
+      ...publicUser
+    } = user;
+    return {
+      ...publicUser,
+      workspaceMemberId: membership.id,
+      editorShortcuts:
+        (user.editorShortcuts as EditorShortcutPreferences | null) ?? {},
+      locale: normalizeAppLocale(user.locale),
+      avatarIconId: profileAvatarIconId ?? membership.avatarIconId,
+      avatarIcon: profileAvatarIcon ?? membership.avatarIcon ?? null,
+      avatarPresentation: iconToResolvedEmoji(
+        profileAvatarIcon ?? membership.avatarIcon,
+      ),
+      telegramUsername:
+        user.telegramUsername ??
+        (membership as { telegramUsername?: string | null }).telegramUsername ??
+        null,
+      assignedTelegramUserAccounts: profileAccounts.map((account) => ({
         ...account,
         capabilities: this.mapAccountCapabilities(account),
       })),
@@ -150,6 +163,7 @@ export class AccountService {
 
   async updateMe(userId: string, dto: UpdateMeDto) {
     const data: Prisma.UserUpdateInput = {};
+    let avatarSource: ProfileAvatarSource | null | undefined;
     const membership =
       await this.workspaceService.resolveWorkspaceMembershipForUser(userId);
     const normalizedTelegramUsername =
@@ -207,7 +221,14 @@ export class AccountService {
 
     if (dto.avatarIconId !== undefined && dto.avatarIconId !== null) {
       const icon = await this.prisma.icon.findFirst({
-        where: { id: dto.avatarIconId, workspaceId: membership.workspaceId },
+        where: {
+          id: dto.avatarIconId,
+          OR: [
+            { workspaceId: membership.workspaceId },
+            { createdByUserId: userId },
+          ],
+        },
+        select: { type: true, emoji: true, imageUrl: true },
       });
       if (!icon) {
         throw new StructuredHttpException(HttpStatus.NOT_FOUND, {
@@ -215,26 +236,34 @@ export class AccountService {
           message: 'Avatar image not found',
         });
       }
-    }
-
-    if (dto.avatarIconId !== undefined) {
-      await this.prisma.workspaceMember.update({
-        where: { id: membership.id },
-        data: { avatarIconId: dto.avatarIconId },
-      });
+      avatarSource = icon;
+    } else if (dto.avatarIconId === null) {
+      avatarSource = null;
     }
 
     await this.prisma.$transaction(async (tx) => {
+      const profileAvatarIconId = avatarSource
+        ? (await saveGlobalProfileAvatar(tx, userId, avatarSource)).id
+        : avatarSource === null
+          ? null
+          : undefined;
       if (normalizedTelegramUsername) {
-        const existingMember = await tx.workspaceMember.findFirst({
+        const existingUser = await tx.user.findFirst({
           where: {
-            workspaceId: membership.workspaceId,
+            id: { not: userId },
             telegramUsername: normalizedTelegramUsername,
-            id: { not: membership.id },
           },
           select: { id: true },
         });
-        if (existingMember) {
+        const conflictingMembership = await tx.workspaceMember.findFirst({
+          where: {
+            userId: { not: userId },
+            telegramUsername: normalizedTelegramUsername,
+            workspace: { members: { some: { userId } } },
+          },
+          select: { id: true },
+        });
+        if (existingUser || conflictingMembership) {
           throw new StructuredHttpException(HttpStatus.CONFLICT, {
             code: 'ACCOUNT_TELEGRAM_USERNAME_ASSIGNED',
             message:
@@ -245,87 +274,67 @@ export class AccountService {
 
       if (dto.telegramUserAccountIds !== undefined) {
         const requestedIds = [...new Set(dto.telegramUserAccountIds)];
+        if (requestedIds.length > 1) {
+          throw new StructuredHttpException(HttpStatus.CONFLICT, {
+            code: 'ACCOUNT_TELEGRAM_ACCOUNTS_ASSIGNED',
+            message: 'Choose one Telegram account for your profile',
+          });
+        }
         const accounts = requestedIds.length
           ? await tx.telegramUserAccountIntegration.findMany({
               where: {
-                workspaceId: membership.workspaceId,
                 id: { in: requestedIds },
+                AND: [
+                  {
+                    OR: [
+                      { assignedMember: { userId } },
+                      { assignedMemberId: null, createdByUserId: userId },
+                    ],
+                  },
+                  {
+                    OR: [
+                      { profileUser: { is: null } },
+                      { profileUser: { is: { id: userId } } },
+                    ],
+                  },
+                ],
               },
-              select: { id: true, assignedMemberId: true },
+              select: { id: true },
             })
           : [];
         if (accounts.length !== requestedIds.length) {
           throw new StructuredHttpException(HttpStatus.NOT_FOUND, {
             code: 'ACCOUNT_TELEGRAM_ACCOUNTS_NOT_FOUND',
-            message:
-              'One or more Telegram accounts were not found in this workspace',
+            message: 'The Telegram account was not found for this user',
           });
         }
-        const occupied = accounts.find(
-          (account) =>
-            account.assignedMemberId &&
-            account.assignedMemberId !== membership.id,
-        );
-        if (occupied) {
-          throw new StructuredHttpException(HttpStatus.CONFLICT, {
-            code: 'ACCOUNT_TELEGRAM_ACCOUNTS_ASSIGNED',
-            message:
-              'One or more Telegram accounts are already linked to another workspace member',
-          });
-        }
-        const currentAccounts =
-          await tx.telegramUserAccountIntegration.findMany({
-            where: {
-              workspaceId: membership.workspaceId,
-              assignedMemberId: membership.id,
-            },
-            select: { id: true },
-          });
-        const currentIds = new Set(
-          currentAccounts.map((account) => account.id),
-        );
-        const requestedSet = new Set(requestedIds);
-        const toAssign = requestedIds.filter((id) => !currentIds.has(id));
-        const toUnassign = currentAccounts
-          .map((account) => account.id)
-          .filter((id) => !requestedSet.has(id));
-        if (toAssign.length) {
-          await tx.telegramUserAccountIntegration.updateMany({
-            where: {
-              workspaceId: membership.workspaceId,
-              id: { in: toAssign },
-              assignedMemberId: null,
-            },
-            data: { assignedMemberId: membership.id },
-          });
-        }
-        if (toUnassign.length) {
-          await tx.telegramUserAccountIntegration.updateMany({
-            where: {
-              workspaceId: membership.workspaceId,
-              id: { in: toUnassign },
-              assignedMemberId: membership.id,
-            },
-            data: { assignedMemberId: null },
-          });
-        }
+        data.profileTelegramUserAccount = requestedIds[0]
+          ? { connect: { id: requestedIds[0] } }
+          : { disconnect: true };
       }
 
       if (
         dto.avatarIconId !== undefined ||
         normalizedTelegramUsername !== undefined
       ) {
-        await tx.workspaceMember.update({
-          where: { id: membership.id },
+        await tx.workspaceMember.updateMany({
+          where: { userId },
           data: {
-            avatarIconId:
-              dto.avatarIconId === undefined ? undefined : dto.avatarIconId,
+            avatarIconId: profileAvatarIconId,
             telegramUsername:
               normalizedTelegramUsername === undefined
                 ? undefined
                 : normalizedTelegramUsername,
           } as Prisma.WorkspaceMemberUpdateInput,
         });
+        if (dto.avatarIconId !== undefined) {
+          data.profileAvatarIcon = profileAvatarIconId
+            ? { connect: { id: profileAvatarIconId } }
+            : { disconnect: true };
+        }
+        if (normalizedTelegramUsername !== undefined) {
+          data.telegramUsername = normalizedTelegramUsername;
+        }
       }
 
       if (Object.keys(data).length) {
@@ -337,8 +346,16 @@ export class AccountService {
       normalizedTelegramUsername !== undefined ||
       dto.telegramUserAccountIds !== undefined
     ) {
-      await this.telegramInviteAttributionService.reattributeWorkspaceInviteLinks(
-        membership.workspaceId,
+      const memberships = await this.prisma.workspaceMember.findMany({
+        where: { userId },
+        select: { workspaceId: true },
+      });
+      await Promise.all(
+        memberships.map(({ workspaceId }) =>
+          this.telegramInviteAttributionService.reattributeWorkspaceInviteLinks(
+            workspaceId,
+          ),
+        ),
       );
     }
 

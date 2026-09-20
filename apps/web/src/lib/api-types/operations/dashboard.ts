@@ -34,7 +34,11 @@ export type DashboardSummary = {
       currency: Currency;
       movementType: "CONTRIBUTION" | "WITHDRAWAL";
       notes?: string | null;
-      member: { id: string; name: string };
+      member: {
+        id: string;
+        name: string;
+        avatarPresentation?: ResolvedEmoji | null;
+      };
       account?: { id: string; name: string; currency: Currency } | null;
     }>;
   }>;

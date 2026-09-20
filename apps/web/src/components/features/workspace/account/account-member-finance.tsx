@@ -40,8 +40,8 @@ export function AccountMemberFinance({
     <Card className="mt-4 max-w-3xl">
       <h3 className="font-semibold text-white">My earnings and investments</h3>
       <p className="mt-1 text-sm text-neutral-500">
-        Open the card to see every commission, salary payment, investment and
-        reinvestment movement.
+        Open the card to see sales earnings, salary payments, investments and
+        your calculated share of workspace profit.
       </p>
       <WorkspaceMemberFinance
         member={{ id: memberId, user: { name } }}

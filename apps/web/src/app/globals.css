@@ -172,6 +172,13 @@ button:disabled,
   margin-bottom: 0;
 }
 
+.telegram-preview-text .tg-inline-image {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.5rem;
+}
+
 .telegram-preview-text code {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
@@ -390,6 +397,22 @@ button:disabled,
 .telegram-preview-text .tg-rich-list {
   margin: 5px 0;
   padding-left: 1.35rem;
+}
+
+/* Telegram's text list marker is a dash. Keep it in every local preview
+   instead of the browser's default round bullet. */
+.telegram-preview-text ul.tg-rich-list {
+  list-style: none;
+}
+
+.telegram-preview-text ul.tg-rich-list > li {
+  position: relative;
+}
+
+.telegram-preview-text ul.tg-rich-list > li::before {
+  position: absolute;
+  right: calc(100% + 0.45rem);
+  content: "-";
 }
 
 .telegram-preview-text .tg-rich-table {

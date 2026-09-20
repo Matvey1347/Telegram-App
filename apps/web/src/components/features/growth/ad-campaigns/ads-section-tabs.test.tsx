@@ -1,5 +1,5 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { AdsSectionTabs, resolveAdsSection } from "./ads-section-tabs";
 
 describe("AdsSectionTabs", () => {
@@ -32,5 +32,27 @@ describe("AdsSectionTabs", () => {
     expect(resolveAdsSection("hypotheses", null)).toBe("hypotheses");
     expect(resolveAdsSection(null, "hypotheses")).toBe("hypotheses");
     expect(resolveAdsSection(null, "promos")).toBe("promo");
+  });
+
+  it("contains dense tabs in a page-width horizontal scroller on mobile", () => {
+    const scrollIntoView = vi.fn();
+    HTMLElement.prototype.scrollIntoView = scrollIntoView;
+    render(<AdsSectionTabs value="promo" />);
+
+    expect(screen.getByTestId("ads-section-tabs-scroll")).toHaveClass(
+      "w-full",
+      "min-w-0",
+      "max-w-full",
+      "overflow-x-auto",
+    );
+    expect(screen.getByRole("tablist")).toHaveClass("min-w-max");
+    expect(screen.getByRole("tab", { name: "Promo" })).toHaveClass(
+      "shrink-0",
+      "whitespace-nowrap",
+    );
+    expect(scrollIntoView).toHaveBeenCalledWith({
+      block: "nearest",
+      inline: "center",
+    });
   });
 });

@@ -57,12 +57,10 @@ export class ScheduledTaskExecutorService {
       this.telegramCrmInitialSyncService().then((service) =>
         service.runWorkspace(this.requireWorkspace(context)),
       ),
-    'currencies.rates.sync': (context: ScheduledTaskExecutionContext) =>
+    'currencies.rates.sync': () =>
       this.currenciesService().then(async (service) => {
-        const result = await service.syncRatesForWorkspaceTask(
-          this.requireWorkspace(context),
-        );
-        return { summary: `Updated ${result.updated} exchange rates.` };
+        const updated = await service.syncSystemRates();
+        return { summary: `Updated ${updated} system exchange rates.` };
       }),
     'telegram_ad_sales.due_deletions': async () => {
       const lifecycle = this.moduleRef.get(

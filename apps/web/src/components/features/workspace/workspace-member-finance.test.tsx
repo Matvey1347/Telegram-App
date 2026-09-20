@@ -18,9 +18,9 @@ const summary = {
   investments: {
     external: 300,
     salary: 100,
-    reinvestment: 600,
+    investorEarnings: 600,
+    principal: 400,
     total: 1_000,
-    reinvestmentPercent: 60,
   },
 };
 
@@ -59,13 +59,13 @@ describe("WorkspaceMemberFinance", () => {
     vi.spyOn(accountsApi, "list").mockResolvedValue([] as never);
   });
 
-  it("shows principal versus reinvestment and lets a member inspect history", async () => {
+  it("shows principal versus investor profit and lets a member inspect history", async () => {
     const user = userEvent.setup();
     renderFinance(false);
 
     expect(screen.getByText("Commission payable")).toBeInTheDocument();
     expect(screen.getByText(/Capital/)).toHaveTextContent("400");
-    expect(screen.getByText(/Reinvest/)).toHaveTextContent("600");
+    expect(screen.getByText(/Investor profit/)).toHaveTextContent("600");
     await user.click(
       screen.getByRole("button", { name: /Commission payable/ }),
     );
@@ -73,7 +73,7 @@ describe("WorkspaceMemberFinance", () => {
     expect(screen.queryByRole("button", { name: "Pay salary" })).toBeNull();
   });
 
-  it("exposes salary and reinvestment decisions only to an owner", async () => {
+  it("exposes salary decisions only to an owner", async () => {
     const user = userEvent.setup();
     renderFinance(true);
     await user.click(
@@ -86,8 +86,6 @@ describe("WorkspaceMemberFinance", () => {
     expect(
       screen.getByRole("button", { name: "Invest salary" }),
     ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Withdraw reinvest" }),
-    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Withdraw reinvest" })).toBeNull();
   });
 });

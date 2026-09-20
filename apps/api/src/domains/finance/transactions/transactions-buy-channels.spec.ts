@@ -3,8 +3,14 @@ import { TransactionsService } from './transactions.service';
 describe('TransactionsService buy channels', () => {
   const makeService = () => {
     const prisma = {
-      workspace: { findUnique: jest.fn().mockResolvedValue({ primaryCurrency: 'USD' }) },
-      account: { findFirst: jest.fn().mockResolvedValue({ id: 'account-1', currency: 'USD' }) },
+      workspace: {
+        findUnique: jest.fn().mockResolvedValue({ primaryCurrency: 'USD' }),
+      },
+      account: {
+        findFirst: jest
+          .fn()
+          .mockResolvedValue({ id: 'account-1', currency: 'USD' }),
+      },
       transactionCategory: {
         findFirst: jest.fn(),
       },
@@ -16,11 +22,15 @@ describe('TransactionsService buy channels', () => {
           categoryId: 'cat-buy',
           category: 'Buy Channels',
         }),
+        findFirst: jest.fn(),
+        update: jest.fn(),
       },
       $queryRaw: jest.fn(),
       $executeRaw: jest.fn(),
       $executeRawUnsafe: jest.fn(),
-      $transaction: jest.fn().mockImplementation(async (callback) => callback(prisma)),
+      $transaction: jest
+        .fn()
+        .mockImplementation(async (callback) => callback(prisma)),
     };
     const workspaceService = {
       resolveAssignedMemberId: jest.fn().mockResolvedValue({
@@ -35,11 +45,20 @@ describe('TransactionsService buy channels', () => {
     const financeCategoriesService = {
       ensureSystemCategories: jest.fn(),
     };
+    const authorization = {
+      require: jest.fn().mockResolvedValue({
+        workspaceId: 'ws-1',
+        memberId: 'member-1',
+      }),
+      can: jest.fn().mockResolvedValue(false),
+      requireOwnOrAny: jest.fn(),
+    };
     const service = new TransactionsService(
       prisma as never,
       workspaceService as never,
       currencyConversionService as never,
       financeCategoriesService as never,
+      authorization as never,
     );
 
     return { prisma, service };
@@ -144,6 +163,52 @@ describe('TransactionsService buy channels', () => {
           title: 'Mentor',
         }),
       }),
+    );
+  });
+
+  it('unlinks a purchased channel when its purchase transaction is deleted', async () => {
+    const { prisma, service } = makeService();
+    prisma.transaction.findFirst.mockResolvedValue({
+      id: 'tx-1',
+      workspaceId: 'ws-1',
+      createdByUserId: 'user-1',
+      assignedMemberId: 'member-1',
+      investment: null,
+      memberCompensationSettlement: null,
+    });
+    prisma.transaction.update.mockResolvedValue({
+      id: 'tx-1',
+      deletedAt: new Date(),
+    });
+
+    await service.remove('user-1', 'tx-1');
+
+    expect(prisma.$executeRaw).toHaveBeenCalledTimes(1);
+    expect(prisma.transaction.update).toHaveBeenCalledWith({
+      where: { id: 'tx-1' },
+      data: { deletedAt: expect.any(Date) },
+    });
+  });
+
+  it('requires a channel for new canonical Buy Channels expenses', async () => {
+    const { prisma, service } = makeService();
+    prisma.transactionCategory.findFirst.mockResolvedValue({
+      id: 'cat-buy',
+      type: 'expense',
+      key: 'buy_channels',
+      name: 'Buy Channels',
+    });
+
+    await expect(
+      service.create('user-1', {
+        accountId: 'account-1',
+        type: 'expense',
+        amount: 1_000,
+        categoryId: 'cat-buy',
+        date: '2026-09-12',
+      }),
+    ).rejects.toThrow(
+      'telegramChannelId is required for Buy Channels expenses',
     );
   });
 });

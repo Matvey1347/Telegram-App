@@ -1,10 +1,10 @@
 import { Module } from '@nestjs/common';
-import { CurrenciesModule } from '../currencies/currencies.module';
+import { FinanceCategoriesModule } from '../finance-categories/finance-categories.module';
 import { AccountsController } from './accounts.controller';
 import { AccountsService } from './accounts.service';
 
 @Module({
-  imports: [CurrenciesModule],
+  imports: [FinanceCategoriesModule],
   controllers: [AccountsController],
   providers: [AccountsService],
 })

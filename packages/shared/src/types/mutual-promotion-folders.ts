@@ -27,11 +27,16 @@ export type MutualPromotionFolderParticipantInput = {
   telegramChannelId: string;
   role: MutualPromotionParticipantRole;
   inviteLinkId: string;
-  inviteLinkMode: MutualPromotionInviteLinkMode;
   expense?: {
     accountId: string;
     amount: number;
   } | null;
+};
+
+export type MutualPromotionExpenseAllocation = {
+  mode: "EQUAL";
+  accountId: string;
+  totalAmount: number;
 };
 
 export type CreateMutualPromotionFolderPayload = {
@@ -42,6 +47,7 @@ export type CreateMutualPromotionFolderPayload = {
   notes?: string | null;
   assignedMemberId?: string | null;
   participants: MutualPromotionFolderParticipantInput[];
+  expenseAllocation?: MutualPromotionExpenseAllocation | null;
 };
 
 export type UpdateMutualPromotionFolderPayload =
@@ -51,7 +57,6 @@ export type UpdateMutualPromotionInviteLinksPayload = {
   participants: Array<{
     participantId: string;
     inviteLinkId: string;
-    inviteLinkMode: MutualPromotionInviteLinkMode;
   }>;
 };
 
@@ -93,7 +98,7 @@ export type MutualPromotionInviteLinkOption = {
   isDefaultForFolders?: boolean;
   isDefaultForMutualPromotion?: boolean;
   available: boolean;
-  unavailableReason: "ADS" | "FOLDER_ONLY" | "OVERLAP" | null;
+  unavailableReason: "ADS" | "OVERLAP" | null;
   creatorUsername: string | null;
   creatorFirstName: string | null;
   creatorPhotoUrl: string | null;

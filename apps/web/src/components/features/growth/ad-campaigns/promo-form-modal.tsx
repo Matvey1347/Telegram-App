@@ -21,6 +21,7 @@ import {
   extractFirstEmoji,
 } from "@/lib/features/telegram/telegram-post-title";
 import { useTelegramInviteLinkOptions } from "@/lib/features/telegram/use-telegram-invite-link-options";
+import { useRegisterTelegramInviteLink } from "@/lib/features/telegram/use-register-telegram-invite-link";
 import { useTelegramSystemBotPostFlow } from "@/hooks/use-telegram-system-bot-post-flow";
 import {
   useWorkspaceModalDrafts,
@@ -30,6 +31,7 @@ import { selectedWorkspaceDraftScope } from "@/lib/workspace-modal-drafts";
 import {
   PROMO_INVITE_LINK_TOKEN,
   promoContainsInviteToken,
+  replacePromoInviteLinksWithToken,
   replacePromoTelegramLinksWithToken,
   renderPromoInviteLink,
   type ReusablePromoPost,
@@ -170,13 +172,21 @@ export function PromoFormModal({
     channelId,
     selectedId:
       inviteLinkId || selectedChannel?.mutualPromotionInviteLinkIds?.[0],
+    seedLinks: initial?.defaultInviteLink ? [initial.defaultInviteLink] : [],
     enabled: open,
   });
   const inviteLinks = inviteLinkOptions.links;
+  const registerInviteLink = useRegisterTelegramInviteLink({
+    channelId,
+    onRegistered: (link) => setInviteLinkId(link.id),
+  });
   const selectedInvite = inviteLinks.find((link) => link.id === inviteLinkId);
-  const renderedPost = selectedInvite?.url
-    ? renderPromoInviteLink(post, selectedInvite.url)
+  const postWithReusableLink = initial?.defaultInviteLink?.url
+    ? replacePromoInviteLinksWithToken(post, [initial.defaultInviteLink.url])
     : post;
+  const renderedPost = selectedInvite?.url
+    ? renderPromoInviteLink(postWithReusableLink, selectedInvite.url)
+    : postWithReusableLink;
 
   const botFlow = useTelegramSystemBotPostFlow({
     mode: "single",
@@ -216,7 +226,7 @@ export function PromoFormModal({
       }
     },
     previewDraft:
-      !selectedInvite?.url && promoContainsInviteToken(post)
+      !selectedInvite?.url && promoContainsInviteToken(postWithReusableLink)
         ? null
         : {
             title: titleValue.trim() || "Promo",
@@ -371,6 +381,9 @@ export function PromoFormModal({
       onMemberChange={(value) => setAssignedMemberId(value || null)}
       onInviteLinkChange={setInviteLinkId}
       onRequestInviteLinks={inviteLinkOptions.requestAll}
+      onRegisterInviteLink={async (url) => {
+        await registerInviteLink.mutateAsync(url);
+      }}
       onToggleEditor={() => setPostEditorExpanded((expanded) => !expanded)}
       onImport={() => void startBotImport()}
       onPreviewTextChange={(text) =>

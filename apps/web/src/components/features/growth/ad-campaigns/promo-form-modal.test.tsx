@@ -37,6 +37,11 @@ vi.mock("@/lib/api", async (importOriginal) => {
 vi.mock("@/components/features/workspace/member-select", () => ({
   MemberSelect: () => <button type="button">Select member</button>,
 }));
+vi.mock("@/providers/toast-provider", () => ({
+  useAppToast: () => ({
+    startOperation: () => ({ succeed: vi.fn(), fail: vi.fn() }),
+  }),
+}));
 vi.mock("@/components/icons/icon-picker", () => ({
   IconPicker: ({ iconId }: { iconId?: string | null }) => (
     <button type="button" data-testid="promo-emoji-picker">
@@ -326,6 +331,70 @@ describe("PromoFormModal", () => {
     expect(
       screen.getByText(/selected invite link is no longer available/i),
     ).toBeVisible();
+  });
+
+  it("quick-sends the rendered promo with the selected invite link without saving", async () => {
+    const onSubmit = vi.fn();
+    mocks.getInitialInviteLink.mockResolvedValue([
+      {
+        id: "default-link",
+        telegramChannelId: "channel-1",
+        name: "Fresh campaign link",
+        url: "https://t.me/+fresh-campaign",
+        joinedCount: 0,
+        requestedCount: 0,
+        isRevoked: false,
+        isDefaultForChannel: true,
+      },
+    ]);
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    render(
+      <QueryClientProvider client={client}>
+        <PromoFormModal
+          open
+          title="Edit Promo"
+          initial={
+            {
+              id: "promo-1",
+              title: "Reusable promo",
+              telegramChannelId: "channel-1",
+              defaultInviteLinkId: "default-link",
+              defaultInviteLink: {
+                id: "default-link",
+                url: "https://t.me/+old-campaign",
+              },
+              text: "Join us: https://t.me/+old-campaign",
+              imageUrls: [],
+              buttonRows: [
+                [{ text: "Join", url: "https://t.me/+old-campaign" }],
+              ],
+            } as never
+          }
+          channels={[{ id: "channel-1", title: "Channel" } as never]}
+          onClose={vi.fn()}
+          onSubmit={onSubmit}
+        />
+      </QueryClientProvider>,
+    );
+
+    const quickSend = await screen.findByRole("button", {
+      name: "Send to bot",
+    });
+    await waitFor(() => expect(quickSend).toBeEnabled());
+    await userEvent.click(quickSend);
+
+    await waitFor(() =>
+      expect(mocks.sendPostPreview).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: "Reusable promo",
+          text: "Join us: https://t.me/+fresh-campaign",
+          buttonRows: [[{ text: "Join", url: "https://t.me/+fresh-campaign" }]],
+        }),
+      ),
+    );
+    expect(onSubmit).not.toHaveBeenCalled();
   });
 
   it("puts the first emoji into the picker when a post is imported from the bot", async () => {

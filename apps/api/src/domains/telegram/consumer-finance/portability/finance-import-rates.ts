@@ -88,7 +88,6 @@ export async function prepareFinanceImportRates(input: {
   if (requiredCurrencies.size) {
     try {
       await input.historicalRates.ensureCurrentRates({
-        workspaceId: input.workspaceId,
         currencies: [...requiredCurrencies],
         signal: input.signal,
       });
@@ -131,7 +130,6 @@ export async function prepareFinanceImportRates(input: {
   if (requirementsMissing.some(Boolean)) {
     try {
       await input.historicalRates.ensureRates({
-        workspaceId: input.workspaceId,
         dates: distinctHistoricalDates,
         currencies: [...requiredCurrencies],
         signal: input.signal,

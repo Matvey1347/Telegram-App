@@ -26,12 +26,19 @@ export class MutualPromotionParticipantDto {
   @IsString() telegramChannelId!: string;
   @IsIn(['PUBLISHER', 'PAID']) role!: 'PUBLISHER' | 'PAID';
   @IsString() inviteLinkId!: string;
-  @IsIn(['FOLDER_ONLY', 'REUSABLE'])
-  inviteLinkMode!: 'FOLDER_ONLY' | 'REUSABLE';
   @IsOptional()
   @ValidateNested()
   @Type(() => MutualPromotionExpenseDto)
   expense?: MutualPromotionExpenseDto | null;
+}
+
+export class MutualPromotionExpenseAllocationDto {
+  @IsIn(['EQUAL']) mode!: 'EQUAL';
+  @IsString() accountId!: string;
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  totalAmount!: number;
 }
 
 export class CreateMutualPromotionFolderDto {
@@ -42,9 +49,14 @@ export class CreateMutualPromotionFolderDto {
   @IsOptional() @IsString() @MaxLength(4000) notes?: string | null;
   @IsOptional() @IsString() assignedMemberId?: string | null;
   @IsArray()
+  @ArrayMinSize(1)
   @ValidateNested({ each: true })
   @Type(() => MutualPromotionParticipantDto)
   participants!: MutualPromotionParticipantDto[];
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => MutualPromotionExpenseAllocationDto)
+  expenseAllocation?: MutualPromotionExpenseAllocationDto | null;
 }
 
 export class UpdateMutualPromotionFolderDto extends CreateMutualPromotionFolderDto {}
@@ -52,8 +64,6 @@ export class UpdateMutualPromotionFolderDto extends CreateMutualPromotionFolderD
 export class MutualPromotionInviteLinkEditDto {
   @IsString() participantId!: string;
   @IsString() inviteLinkId!: string;
-  @IsIn(['FOLDER_ONLY', 'REUSABLE'])
-  inviteLinkMode!: 'FOLDER_ONLY' | 'REUSABLE';
 }
 
 export class UpdateMutualPromotionInviteLinksDto {

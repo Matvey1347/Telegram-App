@@ -5,8 +5,8 @@ import type {
 } from "@telegram-system/shared";
 import type { TelegramChannel, TelegramChannelNetwork } from "@/lib/api";
 import { IconPicker } from "@/components/icons/icon-picker";
-import { CustomSelect, FormField, Input } from "@/components/ui/primitives";
-import { telegramInviteLinkDefaultBadgeClassName } from "@/lib/features/telegram/telegram-invite-link-options";
+import { FormField, Input } from "@/components/ui/primitives";
+import { TelegramMessageTemplateInviteLinkSelect } from "./telegram-message-template-invite-link-select";
 import type { telegramChannelMessageTemplatesApi } from "@/lib/features/telegram/telegram-channel-message-templates-api";
 import { TelegramChannelScopeSelector } from "./telegram-channel-scope-selector";
 import type { readTelegramChannelMessageTemplateLayout } from "./telegram-channel-message-template-format";
@@ -186,7 +186,9 @@ export function TelegramChannelMessageTemplateSettings({
             <div className="mt-3 grid gap-3 md:grid-cols-2">
               {sourceChannels.map((channel) => (
                 <FormField key={channel.id} label={channel.title}>
-                  <CustomSelect
+                  <TelegramMessageTemplateInviteLinkSelect
+                    channelId={channel.id}
+                    links={channel.inviteLinks}
                     value={
                       inviteLinkOverrides[channel.id] ||
                       channel.defaultInviteLinkId ||
@@ -198,15 +200,6 @@ export function TelegramChannelMessageTemplateSettings({
                         [channel.id]: linkId,
                       })
                     }
-                    placeholder="Select invite link"
-                    options={channel.inviteLinks.map((link) => ({
-                      value: link.id,
-                      label: link.name,
-                      badgeClassName: telegramInviteLinkDefaultBadgeClassName({
-                        isDefaultForChannel: link.isDefault,
-                      }),
-                      meta: link.url,
-                    }))}
                   />
                 </FormField>
               ))}

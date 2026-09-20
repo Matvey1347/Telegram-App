@@ -2,11 +2,10 @@ import { Prisma } from '@prisma/client';
 import { CurrenciesService } from './currencies.service';
 
 describe('CurrenciesService.getLatestRates', () => {
-  it('returns one bounded workspace-scoped latest-rate query and performs no writes', async () => {
+  it('returns one bounded system-wide latest-rate query and performs no writes', async () => {
     const rows = [
       {
         id: 'rate-1',
-        workspaceId: 'workspace-1',
         baseCurrency: 'USD',
         targetCurrency: 'EUR',
         rate: 0.9,
@@ -37,7 +36,7 @@ describe('CurrenciesService.getLatestRates', () => {
     await expect(service.getLatestRates('user-1')).resolves.toBe(rows);
 
     const sql = queryRaw.mock.calls[0][0];
-    expect(sql.values).toContain('workspace-1');
+    expect(sql.values).not.toContain('workspace-1');
     expect(sql.strings.join(' ')).toContain('SELECT DISTINCT ON');
     expect(sql.strings.join(' ')).toContain('rate."date" <= NOW()');
     expect(workspaceService.resolveWorkspaceIdForUser).toHaveBeenCalledTimes(1);

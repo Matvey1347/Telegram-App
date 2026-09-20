@@ -14,9 +14,10 @@ import { TelegramInviteLinkCreatorAvatar } from "@/components/features/telegram/
 import { TelegramPostDraftEditor } from "@/components/features/telegram/telegram/telegram-post-draft-editor";
 import { inviteLinkCreatorFallback } from "@/lib/features/telegram/telegram-invite-link-creator";
 import {
-  telegramInviteLinkDefaultBadgeClassName,
+  isTelegramInviteLink,
   telegramInviteLinkOptionLabel,
 } from "@/lib/features/telegram/telegram-invite-link-options";
+import { TelegramInviteLinkOptionLabel } from "@/components/features/telegram/telegram/telegram-invite-link-option-label";
 import {
   Button,
   Card,
@@ -76,6 +77,7 @@ export function PromoFormView(props: {
   onMemberChange: (value: string | null) => void;
   onInviteLinkChange: (value: string) => void;
   onRequestInviteLinks: () => void;
+  onRegisterInviteLink: (url: string) => Promise<void>;
   onToggleEditor: () => void;
   onImport: () => void;
   onPreviewTextChange: (text: string) => void;
@@ -157,7 +159,7 @@ export function PromoFormView(props: {
                 options={p.inviteLinks.map((link) => ({
                   value: link.id,
                   label: telegramInviteLinkOptionLabel(link),
-                  badgeClassName: telegramInviteLinkDefaultBadgeClassName(link),
+                  labelContent: <TelegramInviteLinkOptionLabel link={link} />,
                   meta: link.url,
                   iconFallback: inviteLinkCreatorFallback(link),
                   icon: (
@@ -168,6 +170,12 @@ export function PromoFormView(props: {
                     />
                   ),
                 }))}
+                canCreateOption={(input) =>
+                  isTelegramInviteLink(input) &&
+                  !p.inviteLinks.some((link) => link.url === input.trim())
+                }
+                createOptionLabel={() => "Verify and add this invite link"}
+                onCreateOption={p.onRegisterInviteLink}
               />
             </FormField>
           </div>
@@ -177,9 +185,11 @@ export function PromoFormView(props: {
             connected={p.botConnected}
             connectionLoading={p.botConnectionLoading}
             importStatus={p.importStatus}
+            sendStatus={p.sendStatus}
             dots={p.dots}
             error={p.botError}
             onImport={p.onImport}
+            onSend={p.onSend}
             onToggleEditor={p.onToggleEditor}
           >
             <div className="space-y-3">

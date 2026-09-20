@@ -4,6 +4,7 @@ import {
   Braces,
   ChevronDown,
   Heading,
+  ImagePlus,
   Link as LinkIcon,
   MousePointerClick,
   Quote,
@@ -34,6 +35,7 @@ export function TelegramTextEditorToolbar({
   onHeading,
   onPullQuoteWithAuthor,
   onConfigure,
+  onInsertImage,
 }: {
   disabled?: boolean;
   hasButtons: boolean;
@@ -42,6 +44,7 @@ export function TelegramTextEditorToolbar({
   onHeading: (level: number) => void;
   onPullQuoteWithAuthor: () => void;
   onConfigure: () => void;
+  onInsertImage?: () => void;
 }) {
   const { t } = useI18n();
   const [open, setOpen] = useState<"heading" | "quote" | null>(null);
@@ -144,6 +147,13 @@ export function TelegramTextEditorToolbar({
       icon={LinkIcon}
       disabled={disabled}
       onClick={() => onCommand("link")}
+    />,
+    <ToolbarButton
+      key="image"
+      label={t("telegram.posts.editorComponents.format.insertImage")}
+      icon={ImagePlus}
+      disabled={disabled}
+      onClick={onInsertImage ?? (() => undefined)}
     />,
     <ToolbarButton
       key="emoji"

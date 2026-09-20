@@ -17,11 +17,7 @@ import {
   LoadingState,
   PageHeader,
 } from "@/components/ui/primitives";
-import {
-  accountApi,
-  telegramUserAccountsApi,
-  type TelegramUserAccount,
-} from "@/lib/api";
+import { accountApi, telegramUserAccountsApi } from "@/lib/api";
 import {
   accountKeys,
   authKeys,
@@ -45,8 +41,16 @@ type PasswordValues = {
   newPassword: string;
   confirmNewPassword: string;
 };
+type ProfileTelegramAccount = {
+  id: string;
+  label: string;
+  username?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  photoUrl?: string | null;
+};
 
-const accountTitle = (account: TelegramUserAccount) =>
+const accountTitle = (account: ProfileTelegramAccount) =>
   [account.firstName, account.lastName].filter(Boolean).join(" ") ||
   account.label;
 
@@ -91,11 +95,15 @@ export function AccountWorkspace() {
   }, [account.data]);
 
   const availableAccounts = useMemo(() => {
-    const assignedIds =
-      account.data?.assignedTelegramUserAccounts?.map(({ id }) => id) ?? [];
-    return (telegramAccounts.data ?? []).filter(
-      (item) => !item.assignedMember || assignedIds.includes(item.id),
+    const profileAccounts = account.data?.assignedTelegramUserAccounts ?? [];
+    const assignedIds = new Set(profileAccounts.map(({ id }) => id));
+    const workspaceAccounts = (telegramAccounts.data ?? []).filter(
+      (item) => !item.assignedMember || assignedIds.has(item.id),
     );
+    return [
+      ...profileAccounts,
+      ...workspaceAccounts.filter(({ id }) => !assignedIds.has(id)),
+    ];
   }, [account.data?.assignedTelegramUserAccounts, telegramAccounts.data]);
   const selectedAccountId =
     useWatch({
@@ -258,11 +266,11 @@ function ProfileForm({
   setAvatarIconId: (id: string | null) => void;
   identityMode: IdentityMode;
   setIdentityMode: (mode: IdentityMode) => void;
-  accounts: TelegramUserAccount[];
+  accounts: ProfileTelegramAccount[];
   accountsLoading: boolean;
   accountsError: boolean;
   retryAccounts: () => void;
-  selectedAccount?: TelegramUserAccount;
+  selectedAccount?: ProfileTelegramAccount;
   selectedAccountId: string;
   error: string;
   pending: boolean;
@@ -390,7 +398,7 @@ function ProfileForm({
                     meta: item.username
                       ? `@${item.username.replace(/^@/, "")}`
                       : item.label,
-                    iconUrl: item.photoUrl,
+                    iconUrl: item.photoUrl ?? undefined,
                     iconFallback: accountTitle(item),
                   }))}
                 />
@@ -568,7 +576,7 @@ function Mode({
     </button>
   );
 }
-function SelectedAccount({ account }: { account: TelegramUserAccount }) {
+function SelectedAccount({ account }: { account: ProfileTelegramAccount }) {
   const { t } = useI18n();
   return (
     <div className="flex items-center gap-3 rounded-lg border border-neutral-800 bg-neutral-950/50 p-3">

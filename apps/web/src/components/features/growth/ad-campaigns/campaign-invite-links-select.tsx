@@ -2,11 +2,13 @@
 
 import type { TelegramInviteLink } from "@/lib/api";
 import { useTelegramInviteLinkOptions } from "@/lib/features/telegram/use-telegram-invite-link-options";
+import { useRegisterTelegramInviteLink } from "@/lib/features/telegram/use-register-telegram-invite-link";
 import { inviteLinkCreatorFallback } from "@/lib/features/telegram/telegram-invite-link-creator";
 import {
-  telegramInviteLinkDefaultBadgeClassName,
+  isTelegramInviteLink,
   telegramInviteLinkOptionLabel,
 } from "@/lib/features/telegram/telegram-invite-link-options";
+import { TelegramInviteLinkOptionLabel } from "@/components/features/telegram/telegram/telegram-invite-link-option-label";
 import { TelegramInviteLinkCreatorAvatar } from "@/components/features/telegram/telegram/telegram-invite-link-creator-avatar";
 import { CampaignMultiValueSelect } from "./campaign-multi-value-select";
 
@@ -33,6 +35,10 @@ export function CampaignInviteLinksSelect({
     availableForCampaignId: campaignId,
     seedLinks: initialLinks,
   });
+  const registerLink = useRegisterTelegramInviteLink({
+    channelId,
+    onRegistered: (link) => onChange([...new Set([...value, link.id])]),
+  });
 
   return (
     <CampaignMultiValueSelect
@@ -45,7 +51,7 @@ export function CampaignInviteLinksSelect({
       options={query.links.map((link) => ({
         value: link.id,
         label: telegramInviteLinkOptionLabel(link),
-        badgeClassName: telegramInviteLinkDefaultBadgeClassName(link),
+        labelContent: <TelegramInviteLinkOptionLabel link={link} />,
         description: link.url,
         searchText: link.url,
         iconFallback: inviteLinkCreatorFallback(link),
@@ -57,6 +63,13 @@ export function CampaignInviteLinksSelect({
           />
         ),
       }))}
+      canCreateOption={(input) =>
+        isTelegramInviteLink(input) &&
+        !query.links.some((link) => link.url === input.trim())
+      }
+      onCreateOption={async (url) => {
+        await registerLink.mutateAsync(url);
+      }}
     />
   );
 }

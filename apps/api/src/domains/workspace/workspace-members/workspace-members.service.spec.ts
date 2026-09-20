@@ -21,6 +21,7 @@ describe('WorkspaceMembersService create identity', () => {
     const tx = {
       workspaceMember: {
         create: jest.fn().mockResolvedValue(member),
+        findFirst: jest.fn().mockResolvedValue(null),
         findMany: jest.fn().mockResolvedValue([]),
         findUniqueOrThrow: jest.fn().mockResolvedValue({
           ...member,
@@ -37,7 +38,13 @@ describe('WorkspaceMembersService create identity', () => {
       },
     };
     const prisma = {
-      user: { findUnique: jest.fn().mockResolvedValue(member.user) },
+      user: {
+        findUnique: jest.fn().mockResolvedValue({
+          ...member.user,
+          profileAvatarIconId: 'global-avatar',
+          telegramUsername: 'global_user',
+        }),
+      },
       workspaceRoleDefinition: {
         findFirst: jest.fn().mockResolvedValue(roleDefinition),
       },
@@ -124,6 +131,8 @@ describe('WorkspaceMembersService create identity', () => {
         data: expect.objectContaining({
           role: WorkspaceRole.member,
           roleDefinitionId: 'role-content',
+          avatarIconId: 'global-avatar',
+          telegramUsername: 'global_user',
         }),
       }),
     );

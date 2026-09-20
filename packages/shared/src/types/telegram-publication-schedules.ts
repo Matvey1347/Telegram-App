@@ -69,3 +69,5 @@ export type TelegramPublicationSlotOccurrence = {
   postId?: string | null;
   postTitle?: string | null;
 };
+
+export type TelegramPublicationSlotOccurrencesByChannel = Record<string, TelegramPublicationSlotOccurrence[]>;

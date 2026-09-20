@@ -194,6 +194,13 @@ export const telegramPublicationScheduleKeys = {
       channelId,
       range,
     ] as const,
+  occurrencesByChannels: (channelIds: string[], range: { from: string; to: string }) =>
+    [
+      ...telegramPublicationScheduleKeys.all(),
+      "occurrences-by-channels",
+      [...channelIds].sort(),
+      range,
+    ] as const,
 };
 
 export const telegramContentHypothesisKeys = {

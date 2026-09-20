@@ -1,9 +1,15 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { MutualPromotionFolderFormModal } from "./mutual-promotion-folder-form-modal";
+import {
+  MutualPromotionFolderFormModal,
+  toPayload,
+} from "./mutual-promotion-folder-form-modal";
+import { emptyFolderDraft } from "./mutual-promotion-form-types";
 
-function renderModal(folder: Parameters<typeof MutualPromotionFolderFormModal>[0]["folder"] = null) {
+function renderModal(
+  folder: Parameters<typeof MutualPromotionFolderFormModal>[0]["folder"] = null,
+) {
   return render(
     <QueryClientProvider client={new QueryClient()}>
       <MutualPromotionFolderFormModal
@@ -24,6 +30,37 @@ function renderModal(folder: Parameters<typeof MutualPromotionFolderFormModal>[0
 
 describe("MutualPromotionFolderFormModal drafts", () => {
   beforeEach(() => window.localStorage.clear());
+
+  it("sends one equal-allocation intent without client-side rounding", () => {
+    const draft = emptyFolderDraft("Europe/Warsaw");
+    draft.title = "Paid channels";
+    draft.participants = ["one", "two", "three"].map((channelId) => ({
+      channelId,
+      role: "PUBLISHER",
+      inviteLinkId: `link-${channelId}`,
+      accountId: "",
+      amount: "",
+    }));
+    draft.bulkExpense = {
+      enabled: true,
+      accountId: "finance-account",
+      totalAmount: "10.00",
+    };
+
+    const payload = toPayload(draft, "Europe/Warsaw");
+    expect(payload.expenseAllocation).toEqual({
+      mode: "EQUAL",
+      accountId: "finance-account",
+      totalAmount: 10,
+    });
+    expect(payload.participants).toHaveLength(3);
+    expect(
+      payload.participants.every(
+        (participant) =>
+          participant.role === "PAID" && participant.expense === null,
+      ),
+    ).toBe(true);
+  });
 
   it("offers to continue every saved draft and restores its form", async () => {
     const first = renderModal();
@@ -155,9 +192,9 @@ describe("MutualPromotionFolderFormModal drafts", () => {
         name: "Continue draft Unfinished edited title",
       }),
     );
-    expect(screen.getByPlaceholderText("September // [date-range]")).toHaveValue(
-      "Unfinished edited title",
-    );
+    expect(
+      screen.getByPlaceholderText("September // [date-range]"),
+    ).toHaveValue("Unfinished edited title");
   });
 
   it("highlights the title preview and explains the publication step", () => {
@@ -173,5 +210,40 @@ describe("MutualPromotionFolderFormModal drafts", () => {
     expect(
       screen.getByRole("button", { name: "Create folder & add posts" }),
     ).toBeVisible();
+  });
+
+  it("creates a paid-only folder without a publication step or link-use choice", async () => {
+    const draft = emptyFolderDraft("Europe/Warsaw");
+    draft.title = "Paid only";
+    draft.participants = [
+      {
+        channelId: "channel-1",
+        role: "PAID",
+        inviteLinkId: "link-1",
+        accountId: "account-1",
+        amount: "10",
+      },
+    ];
+    window.localStorage.setItem(
+      "mutual-promotion-folder:draft:default",
+      JSON.stringify({
+        version: 2,
+        drafts: [{ version: 1, id: "paid", form: draft }],
+      }),
+    );
+
+    renderModal();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Continue draft Paid only" }),
+    );
+
+    expect(screen.getByRole("button", { name: "Create folder" })).toBeVisible();
+    expect(screen.queryByText("Link use")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Next: forward and schedule publications"),
+    ).not.toBeInTheDocument();
+    expect(
+      toPayload(draft, "Europe/Warsaw").participants[0],
+    ).not.toHaveProperty("inviteLinkMode");
   });
 });

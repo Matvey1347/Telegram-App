@@ -13,10 +13,10 @@ import { TelegramInviteLinkCreatorAvatar } from "@/components/features/telegram/
 import { CustomSelect, FormField } from "@/components/ui/primitives";
 import { inviteLinkCreatorFallback } from "@/lib/features/telegram/telegram-invite-link-creator";
 import {
-  telegramInviteLinkDefaultBadgeClassName,
   telegramInviteLinkOptionLabel,
   isTelegramInviteLink,
 } from "@/lib/features/telegram/telegram-invite-link-options";
+import { TelegramInviteLinkOptionLabel } from "@/components/features/telegram/telegram/telegram-invite-link-option-label";
 import { useTelegramInviteLinkOptions } from "@/lib/features/telegram/use-telegram-invite-link-options";
 import { useRegisterTelegramInviteLink } from "@/lib/features/telegram/use-register-telegram-invite-link";
 
@@ -174,7 +174,7 @@ export function CrossPromotionTargetEditor({
             options={links.map((link) => ({
               value: link.id,
               label: telegramInviteLinkOptionLabel(link),
-              badgeClassName: telegramInviteLinkDefaultBadgeClassName(link),
+              labelContent: <TelegramInviteLinkOptionLabel link={link} />,
               meta: link.url,
               iconFallback: inviteLinkCreatorFallback(link),
               icon: (

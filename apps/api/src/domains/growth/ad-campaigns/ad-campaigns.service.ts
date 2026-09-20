@@ -801,7 +801,6 @@ export class AdCampaignsService {
 
     const direct = await tx.exchangeRate.findFirst({
       where: {
-        workspaceId,
         baseCurrency: fromCurrency,
         targetCurrency: primaryCurrency,
       },
@@ -811,7 +810,6 @@ export class AdCampaignsService {
 
     const inverse = await tx.exchangeRate.findFirst({
       where: {
-        workspaceId,
         baseCurrency: primaryCurrency,
         targetCurrency: fromCurrency,
       },

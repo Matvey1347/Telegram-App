@@ -156,7 +156,7 @@ export function ChannelPresentationSettingsModal({
   });
   const registerAndSelect = async (
     url: string,
-    target: "default" | "folders" | "vp",
+    target: "default" | "folders" | "vp" | "bot" | "broadcast" | "transfer",
   ) => {
     const result = await registerLink.mutateAsync(url.trim());
     if (target === "default") update({ defaultInviteLinkId: result.id });
@@ -176,6 +176,10 @@ export function ChannelPresentationSettingsModal({
         ),
       });
     }
+    if (target === "bot") update({ botInviteLinkId: result.id });
+    if (target === "broadcast") update({ broadcastInviteLinkId: result.id });
+    if (target === "transfer")
+      update({ audienceTransferInviteLinkId: result.id });
   };
   const save = useMutation({
     mutationFn: () =>
@@ -314,6 +318,7 @@ export function ChannelPresentationSettingsModal({
           loading={linkOptions.loading}
           onOpen={linkOptions.requestAll}
           onChange={(botInviteLinkId) => update({ botInviteLinkId })}
+          onCreate={(url) => registerAndSelect(url, "bot")}
         />
         <ChannelInviteLinkSelectField
           label="Invite link for newsletter"
@@ -327,6 +332,7 @@ export function ChannelPresentationSettingsModal({
           onChange={(broadcastInviteLinkId) =>
             update({ broadcastInviteLinkId })
           }
+          onCreate={(url) => registerAndSelect(url, "broadcast")}
         />
         <ChannelInviteLinkSelectField
           label="Invite link for audience transfer"
@@ -340,6 +346,7 @@ export function ChannelPresentationSettingsModal({
           onChange={(audienceTransferInviteLinkId) =>
             update({ audienceTransferInviteLinkId })
           }
+          onCreate={(url) => registerAndSelect(url, "transfer")}
         />
       </div>
       {registerLink.isError ? (

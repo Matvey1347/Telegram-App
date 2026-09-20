@@ -310,33 +310,16 @@ async function buildChannelSummary(
     stopCpaFrom: channel.stopCpaFrom,
     stopCpa: channel.stopCpa,
   });
-  const economicsTransactions = [
-    ...advertisingExpenseTransactions,
-    ...purchaseTransactions,
-  ];
-  const currencyCounts = new Map<string, number>();
-  for (const transaction of economicsTransactions) {
-    const currency = String(
-      transaction.currency || sources.primaryCurrency,
-    ).toUpperCase();
-    currencyCounts.set(currency, (currencyCounts.get(currency) ?? 0) + 1);
-  }
-  const maxCount = Math.max(0, ...currencyCounts.values());
-  const tiedCurrencies = [...currencyCounts.entries()]
-    .filter(([, count]) => count === maxCount)
-    .map(([currency]) => currency)
-    .sort();
   const requestedCurrency = options.targetCurrency?.trim().toUpperCase();
   const dominantCurrency = requestedCurrency
     ? requestedCurrency
     : options.normalizeToPrimaryCurrency
       ? sources.primaryCurrency.toUpperCase()
-      : (tiedCurrencies.find((currency) => currency === kpiCurrency) ??
-        tiedCurrencies.find(
-          (currency) => currency === sources.primaryCurrency.toUpperCase(),
-        ) ??
-        tiedCurrencies[0] ??
-        kpiCurrency);
+      : String(
+          channel.adBaseCurrency ||
+            channel.kpiCurrency ||
+            sources.primaryCurrency,
+        ).toUpperCase();
   const [purchasePrice, revenue, adSpend, cpm] = await Promise.all([
     purchaseTransactions.length
       ? sumInCurrency(purchaseTransactions, dominantCurrency)

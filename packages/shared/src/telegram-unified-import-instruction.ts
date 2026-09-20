@@ -48,9 +48,17 @@ export const TELEGRAM_UNIFIED_IMPORT_INSTRUCTION = `Подготовь един�
     {
       "action": "SCHEDULE",
       "postRef": "post-001",
+      "placementMode": "SLOT",
       "slotId": "точный slotId из контекста",
       "scheduledAt": "2026-09-15T09:10:00+02:00",
       "slotKind": "AD",
+      "imported": false
+    },
+    {
+      "action": "SCHEDULE",
+      "postRef": "post-002",
+      "placementMode": "CUSTOM",
+      "scheduledAt": "2026-09-15T13:45:00+02:00",
       "imported": false
     },
     {
@@ -99,10 +107,20 @@ imageSearch отображается в редакторе импорта для
 В imageUrls передавай только прямые абсолютные HTTP/HTTPS-ссылки. Поисковые фразы передавай в imageSearch, а не в imageUrls. Markdown-ссылка вида [изображение](https://...) будет очищена автоматически, но предпочтителен чистый URL.
 
 SCHEDULE / UNSCHEDULE
-Для планирования: {"action":"SCHEDULE","postRef":"post-001","slotId":"точный ID назначенного каналу слота","scheduledAt":"ISO-8601 с часовым поясом","slotKind":"CONTENT|AD","imported":false}.
-Для переноса уже существующей публикации на другой слот: {"action":"SCHEDULE","postId":"точный id существующей публикации","slotId":"точный ID назначенного каналу слота","scheduledAt":"ISO-8601 с часовым поясом","slotKind":"CONTENT|AD"}.
+КРИТИЧЕСКОЕ ПРАВИЛО: если пользователь просит создать N постов и запланировать каждый из них, массив schedule обязан содержать ровно N отдельных операций SCHEDULE — по одной для каждого postRef. Не пропускай планирование второго и последующих постов. Любое явно названное пользователем время обязательно передай в scheduledAt, даже когда его нет среди PUBLICATION SLOTS.
+
+Пример задачи: «создай один пост на 08:10 и второй на 09:02». Если 08:10 есть в PUBLICATION SLOTS, а 09:02 там нет, в schedule ДОЛЖНЫ быть обе операции:
+[
+  {"action":"SCHEDULE","postRef":"post-001","placementMode":"SLOT","slotId":"точный slotId слота 08:10 из контекста","scheduledAt":"2026-09-20T08:10:00+02:00","slotKind":"CONTENT","imported":false},
+  {"action":"SCHEDULE","postRef":"post-002","placementMode":"CUSTOM","scheduledAt":"2026-09-20T09:02:00+02:00","imported":false}
+]
+Никогда не заменяй 09:02 ближайшим слотом и не оставляй второй postRef без операции SCHEDULE.
+
+У SCHEDULE есть два режима. SLOT бронирует назначенный каналу слот: {"action":"SCHEDULE","postRef":"post-001","placementMode":"SLOT","slotId":"точный ID назначенного каналу слота","scheduledAt":"ISO-8601 с часовым поясом","slotKind":"CONTENT|AD","imported":false}.
+CUSTOM планирует публикацию на произвольные будущие дату и время, независимо от слотов: {"action":"SCHEDULE","postRef":"post-001","placementMode":"CUSTOM","scheduledAt":"ISO-8601 с часовым поясом","imported":false}. Для CUSTOM не передавай slotId и slotKind: такой пост не бронирует слот и не проверяется по расписанию слотов.
+Для переноса уже существующей публикации используй postId вместо postRef и тот же выбранный режим.
 Для снятия существующей публикации с планирования и возврата в DRAFT: {"action":"UNSCHEDULE","postId":"точный id запланированной публикации из контекста"}.
 Для совместимости отсутствие action означает SCHEDULE. Для SCHEDULE используй либо postRef публикации из этого же манифеста, либо точный postId существующей публикации; никогда не передавай оба сразу. Для UNSCHEDULE используй только точный существующий postId со статусом SCHEDULED. Не передавай slotId, scheduledAt или postRef в операции UNSCHEDULE.
-Используй только слоты из PUBLICATION SLOTS. Время scheduledAt обязано совпадать со временем слота в timezone канала. Не используй прошедшие и занятые даты/слоты, не назначай два поста на один слот и не планируй один postRef дважды. CONTENT предназначен для обычных публикаций, AD — для рекламы или взаимного пиара.
+Для совместимости без placementMode система считает операцию SLOT при наличии slotId и CUSTOM без slotId. В SLOT используй только слоты из PUBLICATION SLOTS: время scheduledAt обязано совпадать со временем слота в timezone канала. Не используй прошедшие и занятые даты/слоты, не назначай два поста на один слот и не планируй один postRef дважды. Для CUSTOM также не используй прошедшую дату. CONTENT предназначен для обычных публикаций, AD — для рекламы или взаимного пиара.
 
 Перед ответом проверь уникальность refs, существование всех ссылок, корректность статусов, ISO-дат и отсутствие конфликтов расписания.`;

@@ -47,6 +47,7 @@ export const messages = {
   "telegram.posts.editorComponents.format.headingLevel": "Заголовок {level}",
   "telegram.posts.editorComponents.format.inlineCode": "Строчный код",
   "telegram.posts.editorComponents.format.insertLink": "Вставить ссылку",
+  "telegram.posts.editorComponents.format.insertImage": "Вставить изображение",
   "telegram.posts.editorComponents.format.italic": "Курсив",
   "telegram.posts.editorComponents.format.list": "Список",
   "telegram.posts.editorComponents.format.numberedList": "Нумерованный список",
