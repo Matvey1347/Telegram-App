@@ -80,6 +80,7 @@ export class CrossPromotionPlanLifecycleService {
           const config = configured.find(
             (item) => item.telegramChannelId === placement.telegramChannelId,
           );
+          // A missing deleteAt is the persistent "no auto-delete" contract.
           return Boolean(
             config?.deleteAt && Date.parse(config.deleteAt) <= now.getTime(),
           );
