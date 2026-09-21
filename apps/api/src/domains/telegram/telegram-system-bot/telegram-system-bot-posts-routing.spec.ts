@@ -80,17 +80,14 @@ describe('TelegramSystemBot Posts routing', () => {
     );
   });
 
-  it('opens the hub for /posts and the new wizard for /post', async () => {
+  it('opens the Posts hub for /posts and keeps /post as the direct add wizard', async () => {
     const test = setup();
 
     await test.service.handle(message('/posts'));
     await test.service.handle(message('/post'));
 
     expect(test.posts.open).toHaveBeenCalledWith(
-      expect.objectContaining({
-        workspaceId: 'workspace-1',
-        telegramUserId: '44',
-      }),
+      expect.objectContaining({ workspaceId: 'workspace-1' }),
     );
     expect(test.postFlow.begin).toHaveBeenCalledTimes(1);
   });

@@ -26,6 +26,7 @@ import {
   MutualPromotionFolderQueryDto,
   MutualPromotionInviteOptionsQueryDto,
   UpdateMutualPromotionFolderDto,
+  UpdateMutualPromotionFolderTitleDto,
   UpdateMutualPromotionInviteLinksDto,
   UpdateMutualPromotionPostDto,
 } from './dto';
@@ -91,6 +92,20 @@ export class MutualPromotionFoldersController {
     @Body() dto: UpdateMutualPromotionFolderDto,
   ) {
     return this.commands.update(user.sub, id, dto);
+  }
+
+  @Patch(':id/title')
+  updateTitle(
+    @CurrentUser() user: JwtUser,
+    @Param('id') id: string,
+    @Body() dto: UpdateMutualPromotionFolderTitleDto,
+  ) {
+    return this.commands.updateTitle(user.sub, id, dto);
+  }
+
+  @Post(':id/refresh-invite-links')
+  refreshInviteLinkData(@CurrentUser() user: JwtUser, @Param('id') id: string) {
+    return this.commands.refreshInviteLinkData(user.sub, id);
   }
 
   @Delete(':id')

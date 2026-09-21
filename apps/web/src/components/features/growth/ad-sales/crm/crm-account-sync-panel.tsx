@@ -105,7 +105,10 @@ export function CrmAccountSyncPanel({ canEdit }: { canEdit: boolean }) {
       <Button
         variant="secondary"
         className="h-11 rounded-xl border border-neutral-700 bg-neutral-900 px-4 hover:bg-neutral-800"
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          void accounts.refetch();
+          setOpen(true);
+        }}
         disabled={!canEdit}
       >
         <Settings2 size={17} />

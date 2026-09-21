@@ -13,6 +13,7 @@ import {
   SaveCrossPromotionPlacementsDto,
 } from './dto';
 import { CrossPromotionPlanReadService } from './cross-promotion-plan-read.service';
+import { TelegramInviteLinkRegistrationService } from '../../telegram/telegram-channels/telegram-invite-link-registration.service';
 
 type CounterBaseline = {
   inviteLinkId: string;
@@ -56,7 +57,35 @@ export class CrossPromotionPlansService {
     private readonly prisma: PrismaService,
     private readonly workspaceService: WorkspaceService,
     private readonly readService: CrossPromotionPlanReadService,
+    private readonly inviteLinkRegistration: TelegramInviteLinkRegistrationService,
   ) {}
+
+  async refreshInviteLinkData(userId: string, id: string) {
+    const workspaceId = await this.workspace(userId);
+    const plan = await this.prisma.crossPromotionPlan.findFirst({
+      where: { id, workspaceId },
+    });
+    if (!plan) throw new NotFoundException('Cross-promotion plan not found');
+    const targets = json<CrossPromotionTargetInput[]>(plan.targets, []);
+    const inviteLinkIds = this.unique(
+      targets.map((target) => target.inviteLinkId),
+    );
+    const links = await this.prisma.telegramInviteLink.findMany({
+      where: { workspaceId, id: { in: inviteLinkIds } },
+      select: { telegramChannelId: true, url: true },
+    });
+    for (const link of links) {
+      await this.inviteLinkRegistration.register(
+        userId,
+        link.telegramChannelId,
+        link.url,
+      );
+    }
+    const refreshed = await this.prisma.crossPromotionPlan.findFirstOrThrow({
+      where: { id, workspaceId },
+    });
+    return this.readService.shape(workspaceId, refreshed);
+  }
 
   private async workspace(userId: string) {
     return this.workspaceService.resolveWorkspaceIdForUser(userId);

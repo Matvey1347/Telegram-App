@@ -8,12 +8,14 @@ import { MutualPromotionFoldersPage } from "./mutual-promotion-folders-page";
 const api = vi.hoisted(() => ({
   get: vi.fn(),
   list: vi.fn(),
+  updateTitle: vi.fn(),
 }));
 
 vi.mock("@/lib/features/growth/mutual-promotion-folders-api", () => ({
   mutualPromotionFoldersApi: {
     get: api.get,
     list: api.list,
+    updateTitle: api.updateTitle,
   },
 }));
 
@@ -55,16 +57,21 @@ vi.mock("./mutual-promotion-folder-detail-modal", () => ({
     open,
     folder,
     onClose,
+    onEdit,
   }: {
     open: boolean;
     folder: { title: string } | null;
     onClose: () => void;
+    onEdit: () => void;
   }) =>
     open && folder ? (
       <div data-testid="folder-detail">
         {folder.title}
         <button type="button" onClick={onClose}>
           Close detail
+        </button>
+        <button type="button" onClick={onEdit}>
+          Edit folder
         </button>
       </div>
     ) : null,
@@ -105,6 +112,7 @@ describe("MutualPromotionFoldersPage", () => {
   beforeEach(() => {
     api.get.mockReset();
     api.list.mockReset();
+    api.updateTitle.mockReset();
   });
 
   it("never shows the previously selected folder while a draft loads", async () => {
@@ -157,5 +165,51 @@ describe("MutualPromotionFoldersPage", () => {
       "Draft folder",
     );
     expect(api.get).toHaveBeenLastCalledWith("draft");
+  });
+
+  it("renames a completed folder without opening the structural edit draft", async () => {
+    const user = userEvent.setup();
+    const completed = folder("completed", "Completed folder", "COMPLETED");
+    api.list.mockResolvedValue({
+      items: [completed],
+      pagination: {
+        page: 1,
+        pageSize: 100,
+        totalItems: 1,
+        totalPages: 1,
+        hasNextPage: false,
+        hasPreviousPage: false,
+      },
+    });
+    api.get.mockResolvedValue(completed);
+    api.updateTitle.mockResolvedValue({ ...completed, title: "New name" });
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MutualPromotionFoldersPage />
+      </QueryClientProvider>,
+    );
+
+    await user.click(
+      await screen.findByRole("button", {
+        name: "Open folder Completed folder",
+      }),
+    );
+    await user.click(screen.getByRole("button", { name: "Edit folder" }));
+
+    expect(
+      screen.getByRole("heading", { name: "Rename folder" }),
+    ).toBeVisible();
+    const input = screen.getByLabelText("Folder title");
+    await user.clear(input);
+    await user.type(input, "New name");
+    await user.click(screen.getByRole("button", { name: "Save name" }));
+
+    expect(api.updateTitle).toHaveBeenCalledWith("completed", {
+      title: "New name",
+    });
   });
 });

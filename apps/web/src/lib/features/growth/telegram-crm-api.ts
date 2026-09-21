@@ -97,6 +97,8 @@ export const telegramCrmApi = {
     ).data,
   listTags: async (signal?: AbortSignal) =>
     (await api.get<CrmTagSummary[]>("/telegram-crm/tags", { signal })).data,
+  createTag: async (payload: { name: string; color?: string | null }) =>
+    (await api.post<CrmTagSummary>("/telegram-crm/tags", payload)).data,
   getContact: async (contactId: string, signal?: AbortSignal) =>
     (
       await api.get<CrmContactDetail>(`/telegram-crm/contacts/${contactId}`, {

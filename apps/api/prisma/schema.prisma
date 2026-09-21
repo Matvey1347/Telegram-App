@@ -4552,6 +4552,8 @@ model FinanceRecurringPaymentRevision {
   currency           String                              @db.VarChar(3)
   accountId          String
   accountName        String
+  /// Snapshot to render historical account context without a frontend join.
+  accountEmoji       String?                             @db.Text
   categoryId         String?
   categoryName       String?
   categoryKey        String?

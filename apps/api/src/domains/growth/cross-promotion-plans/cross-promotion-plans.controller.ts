@@ -66,6 +66,11 @@ export class CrossPromotionPlansController {
     return this.service.rename(user.sub, id, dto.title);
   }
 
+  @Post(':id/refresh-invite-links')
+  refreshInviteLinkData(@CurrentUser() user: JwtUser, @Param('id') id: string) {
+    return this.service.refreshInviteLinkData(user.sub, id);
+  }
+
   @Patch(':id')
   updateCompleted(
     @CurrentUser() user: JwtUser,

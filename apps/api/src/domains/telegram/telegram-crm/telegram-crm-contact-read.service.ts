@@ -43,6 +43,7 @@ import {
 } from './telegram-crm-contact-sales-summary';
 import { loadCrmReplySummaries } from './telegram-crm-reply-summary';
 import {
+  CRM_WORKFLOW_TAG_SYSTEM_KEYS,
   crmTagSelect,
   mapCrmTag,
   TelegramCrmSystemTagsService,
@@ -162,7 +163,15 @@ export class TelegramCrmContactReadService {
     const access = await this.authorization.require(userId, 'adSales.crm.view');
     await this.systemTags?.ensureWorkflowTags(access.workspaceId);
     const rows = await this.prisma.telegramAdvertiserTag.findMany({
-      where: { workspaceId: access.workspaceId },
+      where: {
+        workspaceId: access.workspaceId,
+        OR: [
+          { systemKey: null },
+          {
+            systemKey: { in: CRM_WORKFLOW_TAG_SYSTEM_KEYS },
+          },
+        ],
+      },
       orderBy: [{ position: 'asc' }, { name: 'asc' }, { id: 'asc' }],
       select: crmTagSelect,
     });
@@ -332,6 +341,10 @@ export class TelegramCrmContactReadService {
     const rows = await this.prisma.telegramAdvertiserTag.findMany({
       where: {
         workspaceId,
+        OR: [
+          { systemKey: null },
+          { systemKey: { in: CRM_WORKFLOW_TAG_SYSTEM_KEYS } },
+        ],
         advertisers: { some: { advertiser: contactWhere } },
       },
       orderBy: [{ position: 'asc' }, { name: 'asc' }, { id: 'asc' }],

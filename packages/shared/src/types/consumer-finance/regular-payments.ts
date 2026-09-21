@@ -88,6 +88,8 @@ export type ConsumerFinanceRegularPaymentRevision = {
   currency: string;
   accountId: string;
   accountName: string;
+  /** Present for current revisions; older cached history may omit it. */
+  accountIconPresentation?: ResolvedEmoji;
   categoryId?: string | null;
   categoryName?: string | null;
   categoryKey?: string | null;

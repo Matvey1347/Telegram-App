@@ -28,7 +28,11 @@ describe("consumerFinanceObligationsApi", () => {
     await consumerFinanceObligationsApi.debts("bot", { status: "OPEN" });
     await consumerFinanceObligationsApi.createDebt("bot", input);
     await consumerFinanceObligationsApi.updateDebt("bot", "debt", input);
-    await consumerFinanceObligationsApi.settleDebt("bot", "debt");
+    await consumerFinanceObligationsApi.settleDebt("bot", "debt", {
+      accountId: "cash",
+      amount: "42",
+      settlementDate: "2026-09-21",
+    });
 
     expect(requests.map(({ method, url }) => [method, url])).toEqual([
       ["get", "/finance-bots/bot/debts"],
@@ -37,7 +41,11 @@ describe("consumerFinanceObligationsApi", () => {
       ["post", "/finance-bots/bot/debts/debt/settle"],
     ]);
     expect(requests[0]?.params).toEqual({ status: "OPEN" });
-    expect(JSON.parse(String(requests[3]?.data))).toEqual({});
+    expect(JSON.parse(String(requests[3]?.data))).toEqual({
+      accountId: "cash",
+      amount: "42",
+      settlementDate: "2026-09-21",
+    });
   });
 
   it("uses exact regular-payment occurrence and revision contracts", async () => {

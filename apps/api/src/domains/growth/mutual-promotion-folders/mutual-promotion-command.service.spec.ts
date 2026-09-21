@@ -65,6 +65,114 @@ describe('MutualPromotionCommandService', () => {
     return { service, tx, validation };
   }
 
+  it('renames a completed folder without changing its completed structure', async () => {
+    const tx = {
+      mutualPromotionFolder: { update: jest.fn().mockResolvedValue({}) },
+    };
+    const validation = {
+      lockFolder: jest.fn(),
+      requireFolder: jest.fn().mockResolvedValue({
+        id: 'folder-1',
+        status: 'COMPLETED',
+      }),
+    };
+    const read = {
+      detailForWorkspace: jest.fn().mockResolvedValue({
+        id: 'folder-1',
+        title: 'Renamed folder',
+      }),
+    };
+    const service = new MutualPromotionCommandService(
+      { $transaction: jest.fn((callback) => callback(tx)) } as never,
+      {
+        resolveWorkspaceIdForUser: jest.fn().mockResolvedValue('workspace-1'),
+      } as never,
+      {} as never,
+      {} as never,
+      validation as never,
+      read as never,
+      {} as never,
+    );
+
+    await expect(
+      service.updateTitle('user-1', 'folder-1', { title: ' Renamed folder ' }),
+    ).resolves.toEqual({ id: 'folder-1', title: 'Renamed folder' });
+
+    expect(tx.mutualPromotionFolder.update).toHaveBeenCalledWith({
+      where: { id: 'folder-1' },
+      data: { title: 'Renamed folder', titleTemplate: null },
+    });
+    expect(read.detailForWorkspace).toHaveBeenCalledWith(
+      'workspace-1',
+      'folder-1',
+    );
+  });
+
+  it('refreshes every folder link directly instead of relying on the historical link list', async () => {
+    const registration = {
+      register: jest.fn().mockResolvedValue({
+        id: 'invite-1',
+        currentJoinedCount: 4,
+        currentRequestedCount: 10,
+        joinedWithinPeriod: 2,
+      }),
+    };
+    const service = new MutualPromotionCommandService(
+      {
+        mutualPromotionFolderParticipant: {
+          findMany: jest.fn().mockResolvedValue([
+            {
+              telegramChannelId: 'channel-1',
+              inviteLink: { url: 'https://t.me/+tracked' },
+              folder: { status: 'ACTIVE', startsAt },
+              role: 'PAID',
+              baselineCapturedAt: null,
+            },
+          ]),
+          updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        },
+      } as never,
+      {
+        resolveWorkspaceIdForUser: jest.fn().mockResolvedValue('workspace-1'),
+      } as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {
+        detailForWorkspace: jest.fn().mockResolvedValue({ id: 'folder-1' }),
+      } as never,
+      {} as never,
+      {} as never,
+      registration as never,
+    );
+
+    await service.refreshInviteLinkData('user-1', 'folder-1');
+
+    expect(registration.register).toHaveBeenCalledWith(
+      'user-1',
+      'channel-1',
+      'https://t.me/+tracked',
+      expect.objectContaining({ from: startsAt }),
+    );
+    expect(
+      (
+        service as unknown as {
+          prisma: {
+            mutualPromotionFolderParticipant: { updateMany: jest.Mock };
+          };
+        }
+      ).prisma.mutualPromotionFolderParticipant.updateMany,
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          inviteJoinedAtStart: 2,
+          inviteRequestedAtStart: 0,
+          baselineCapturedAt: startsAt,
+        }),
+      }),
+    );
+  });
+
   it('creates a paid-only folder already active', async () => {
     const created = { id: 'folder-paid', title: 'Paid only' };
     const tx = {
@@ -111,6 +219,81 @@ describe('MutualPromotionCommandService', () => {
         nextDueAt: endsAt,
       }),
     });
+  });
+
+  it('schedules a future paid-only folder until its start boundary', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-09-21T08:00:00.000Z'));
+    const futureStart = new Date('2026-09-22T16:00:00.000Z');
+    const futureEnd = new Date('2026-09-24T15:00:00.000Z');
+    const created = {
+      id: 'folder-scheduled',
+      title: 'Future paid only',
+      startsAt: futureStart,
+      assignedMemberId: null,
+    };
+    const tx = {
+      mutualPromotionFolder: { create: jest.fn().mockResolvedValue(created) },
+      mutualPromotionWorkItem: { createMany: jest.fn() },
+    };
+    const validation = {
+      parseInterval: jest.fn().mockReturnValue({
+        startsAt: futureStart,
+        endsAt: futureEnd,
+      }),
+      lockInviteLinks: jest.fn(),
+      validateParticipants: jest.fn(),
+    };
+    const expenses = { createForFolder: jest.fn() };
+    const service = new MutualPromotionCommandService(
+      { $transaction: jest.fn((callback) => callback(tx)) } as never,
+      {
+        resolveWorkspaceMembershipForUser: jest
+          .fn()
+          .mockResolvedValue({ workspaceId: 'workspace-1' }),
+      } as never,
+      expenses as never,
+      {} as never,
+      validation as never,
+      { detailForWorkspace: jest.fn().mockResolvedValue(created) } as never,
+      {} as never,
+    );
+    try {
+      await service.create('user-1', {
+        title: 'Future paid only',
+        startsAt: futureStart.toISOString(),
+        endsAt: futureEnd.toISOString(),
+        participants: [
+          {
+            telegramChannelId: 'channel-1',
+            inviteLinkId: 'invite-1',
+            role: 'PAID',
+          },
+        ],
+      });
+      expect(tx.mutualPromotionFolder.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          status: 'SCHEDULED',
+          activatedAt: null,
+          nextDueAt: futureStart,
+        }),
+      });
+      expect(expenses.createForFolder).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ captureInviteBaseline: false }),
+        expect.anything(),
+        undefined,
+      );
+      expect(tx.mutualPromotionWorkItem.createMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.arrayContaining([
+            expect.objectContaining({ dueAt: futureStart }),
+            expect.objectContaining({ dueAt: futureEnd }),
+          ]),
+        }),
+      );
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('requires finance.create before allocating paid-folder expenses', async () => {

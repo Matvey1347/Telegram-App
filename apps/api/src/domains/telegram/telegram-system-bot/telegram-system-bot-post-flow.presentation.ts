@@ -22,6 +22,7 @@ import {
 import type { TelegramSystemBotPostFlowOptions } from './telegram-system-bot-post-flow.options';
 
 type ChannelOption = { id: string; title: string };
+type NetworkOption = { id: string; name: string; channelCount: number };
 
 export async function resolveTelegramSystemBotPostCard(input: {
   workflow: TelegramSystemBotPostWorkflow;
@@ -30,9 +31,14 @@ export async function resolveTelegramSystemBotPostCard(input: {
   notice?: string;
 }) {
   const payload = telegramSystemBotPostPayload(input.workflow.payload);
+  const targetPicker = payload.targetPicker ?? 'CHANNELS';
   const channels =
-    input.workflow.step === 'CHOOSE_CHANNEL'
+    input.workflow.step === 'CHOOSE_CHANNEL' && targetPicker === 'CHANNELS'
       ? await input.options.channels(input.scope)
+      : undefined;
+  const networks =
+    input.workflow.step === 'CHOOSE_CHANNEL' && targetPicker === 'NETWORKS'
+      ? await input.options.networks?.(input.scope)
       : undefined;
   const groups =
     input.workflow.step === 'CHOOSE_GROUP' && payload.channelId
@@ -43,6 +49,7 @@ export async function resolveTelegramSystemBotPostCard(input: {
     scope: input.scope,
     payload,
     channels,
+    networks,
     groups,
     notice: input.notice,
   });
@@ -53,10 +60,12 @@ export function renderTelegramSystemBotPostCard(input: {
   scope: TelegramSystemBotPostFlowScope;
   payload: TelegramSystemBotPostPayload;
   channels?: ChannelOption[];
+  networks?: NetworkOption[];
   groups?: TelegramSystemBotPostGroupOption[];
   notice?: string;
 }) {
   const { workflow, scope, payload } = input;
+  const targetPicker = payload.targetPicker ?? 'CHANNELS';
   const prefix = `sbp:${workflow.id}:${workflow.version}:`;
   const preview = telegramSystemBotPostPreview(payload.content);
   const present = <T extends { text: string }>(card: T) =>
@@ -107,17 +116,48 @@ export function renderTelegramSystemBotPostCard(input: {
     });
   }
   if (workflow.step === 'CHOOSE_CHANNEL') {
+    const selectedIds = new Set(
+      targetPicker === 'CHANNELS'
+        ? (payload.selectedChannelIds ?? [])
+        : (payload.selectedNetworkIds ?? []),
+    );
     return present({
-      text: [previewText, '', '<b>Choose a channel:</b>'].join('\n'),
+      text: [previewText, '', '<b>Choose where to publish:</b>'].join('\n'),
       reply_markup: {
         inline_keyboard: [
           ...preview.buttonRows,
+          [
+            {
+              text: `${targetPicker === 'CHANNELS' ? '◉' : '○'} 📣 Channels`,
+              callback_data: `${prefix}target.channels`,
+            },
+            {
+              text: `${targetPicker === 'NETWORKS' ? '◉' : '○'} 🌐 Networks`,
+              callback_data: `${prefix}target.networks`,
+            },
+          ],
           ...compactSystemBotInlineKeyboard(
             (input.channels ?? []).map((channel, index) => ({
-              text: channel.title,
-              callback_data: `${prefix}channel.${index}`,
+              text: `${selectedIds.has(channel.id) ? '☑️' : '☐'} ${channel.title}`,
+              callback_data: `${prefix}target.toggle.channel.${index}`,
             })),
           ),
+          ...compactSystemBotInlineKeyboard(
+            (input.networks ?? []).map((network, index) => ({
+              text: `${selectedIds.has(network.id) ? '☑️' : '☐'} ${network.name} (${network.channelCount})`,
+              callback_data: `${prefix}target.toggle.network.${index}`,
+            })),
+          ),
+          ...(selectedIds.size
+            ? [
+                [
+                  {
+                    text: `Continue (${selectedIds.size})`,
+                    callback_data: `${prefix}target.continue`,
+                  },
+                ],
+              ]
+            : []),
           navigationButtons(prefix),
         ],
       },
@@ -128,8 +168,12 @@ export function renderTelegramSystemBotPostCard(input: {
       text: [
         previewText,
         '',
-        `Channel: ${escapeSystemBotHtml(payload.channelTitle)}`,
-        `Group: ${escapeSystemBotHtml(payload.groupTitle)}`,
+        payload.targetLabel
+          ? `Network: ${escapeSystemBotHtml(payload.targetLabel)}`
+          : `Channel: ${escapeSystemBotHtml(payload.channelTitle)}`,
+        payload.groupTitle
+          ? `Group: ${escapeSystemBotHtml(payload.groupTitle)}`
+          : null,
         '',
         '<b>Choose an action:</b>',
       ].join('\n'),
@@ -149,7 +193,9 @@ export function renderTelegramSystemBotPostCard(input: {
               callback_data: `${prefix}group.change`,
             },
           ],
-          [{ text: '📝 Save draft', callback_data: `${prefix}draft` }],
+          ...(payload.channelIds?.length && payload.channelIds.length > 1
+            ? []
+            : [[{ text: '📝 Save draft', callback_data: `${prefix}draft` }]]),
           [
             { text: '🕒 Schedule', callback_data: `${prefix}schedule` },
             { text: '🚀 Publish now', callback_data: `${prefix}publish` },
@@ -219,8 +265,12 @@ export function renderTelegramSystemBotPostCard(input: {
       previewText,
       '',
       `<b>Confirm post</b>`,
-      `Channel: ${escapeSystemBotHtml(payload.channelTitle)}`,
-      `Group: ${escapeSystemBotHtml(payload.groupTitle)}`,
+      payload.targetLabel
+        ? `Network: ${escapeSystemBotHtml(payload.targetLabel)}`
+        : `Channel: ${escapeSystemBotHtml(payload.channelTitle)}`,
+      payload.groupTitle
+        ? `Group: ${escapeSystemBotHtml(payload.groupTitle)}`
+        : null,
       `Action: ${escapeSystemBotHtml(payload.action)}`,
       payload.scheduledAt
         ? `At: ${escapeSystemBotHtml(payload.scheduledAt)}`

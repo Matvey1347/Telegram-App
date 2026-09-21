@@ -68,6 +68,9 @@ export class TelegramSystemBotHandlerService {
     if (command === '/help') return this.help(chatId);
     if (command?.startsWith('/start'))
       return this.start(telegramUserId, chatId, actor, command);
+    // Weekday labels in the content-plan grid are informational, not actions.
+    // Do not start a typing/loading cycle for their no-op callback.
+    if (callback === 'posts:noop') return;
     this.sendTyping(chatId);
     try {
       const connection =
@@ -82,7 +85,12 @@ export class TelegramSystemBotHandlerService {
         );
         return this.workspaceMenu(chatId, switched, action.callbackMessageId);
       }
-      if (command === '/workspace' || callback === 'workspace')
+      if (
+        command === '/settings' ||
+        command === '/workspace' ||
+        callback === 'settings' ||
+        callback === 'workspace'
+      )
         return this.workspaceMenu(chatId, connection);
       const workspace =
         await this.connections.requireCurrentWorkspace(connection);
@@ -158,7 +166,8 @@ export class TelegramSystemBotHandlerService {
         return this.adSaleFlow.callback(workflowScope, callback);
       if (callback && this.postImport?.isCallback(callback))
         return this.postImport.callback(workflowScope, callback);
-      if (callback === 'posts:new') return this.postFlow?.begin(workflowScope);
+      if (callback === 'posts:add' || callback === 'posts:new')
+        return this.postFlow?.begin(workflowScope);
       if (callback && this.posts?.isCallback(callback))
         return this.posts.callback(
           workflowScope,
@@ -383,7 +392,14 @@ export class TelegramSystemBotHandlerService {
       (await this.connections.workspacesForConnection(connection));
     const payload = {
       chat_id: chatId,
-      text: '🏢 Choose workspace:',
+      text: [
+        '⚙️ <b>Settings</b>',
+        typeof connection !== 'string' && connection.user
+          ? `Nexeloq account: <b>${escapeTelegramHtml(connection.user.name)}</b> (${escapeTelegramHtml(connection.user.email)})`
+          : 'This bot is linked to your Nexeloq account.',
+        'Choose the active workspace, create a new one, or edit the current workspace.',
+      ].join('\n\n'),
+      parse_mode: 'HTML' as const,
       reply_markup: {
         inline_keyboard: [
           ...compactSystemBotInlineKeyboard(
@@ -470,4 +486,11 @@ export class TelegramSystemBotHandlerService {
       parse_mode: 'HTML',
     });
   }
+}
+
+function escapeTelegramHtml(value: string) {
+  return value.replace(
+    /[&<>]/g,
+    (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[character]!,
+  );
 }

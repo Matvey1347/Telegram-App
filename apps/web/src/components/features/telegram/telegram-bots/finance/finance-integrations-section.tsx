@@ -1,15 +1,17 @@
 "use client";
-import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+
+import { useQuery } from "@tanstack/react-query";
+import type { ReactNode } from "react";
+import { Check, CircleAlert, Cpu, Star } from "lucide-react";
 import type { BotBillingProviderConfigView } from "@telegram-system/shared";
-import { Button, Card, FormField, Input } from "@/components/ui/primitives";
+import { Card } from "@/components/ui/primitives";
 import { QueryContentState } from "@/components/ui/query-content-state";
 import {
   botBillingApi,
   financeAiConfigApi,
 } from "@/lib/features/finance/bot-billing-api";
 import { botBillingKeys } from "@/lib/query-keys";
-import { StripeWebhookSigningSecretLabel } from "./stripe-webhook-events-tooltip";
+
 export function FinanceIntegrationsSection({ botId }: { botId: string }) {
   const providers = useQuery({
     queryKey: botBillingKeys.providers(botId),
@@ -34,209 +36,209 @@ export function FinanceIntegrationsSection({ botId }: { botId: string }) {
     >
       {providers.data && ai.data ? (
         <div className="space-y-4">
-          <StripeIntegration
-            botId={botId}
+          <InheritedStripe
             rows={providers.data.filter((row) => row.provider === "STRIPE")}
           />
-          <StarsIntegration
-            botId={botId}
+          <InheritedStars
             row={providers.data.find(
-              (row) => row.provider === "TELEGRAM_STARS",
+              (row) => row.provider === "TELEGRAM_STARS" && row.mode === "LIVE",
             )}
           />
-          <FinanceAiIntegration botId={botId} />
+          <InheritedAi status={ai.data.status} source={ai.data.source} />
         </div>
       ) : null}
     </QueryContentState>
   );
 }
-function sourceLabel(source: BotBillingProviderConfigView["source"]) {
-  return source === "BOT_OVERRIDE"
-    ? "Bot override"
-    : source === "WORKSPACE_DEFAULT"
-      ? "Using global configuration"
-      : "Not configured";
-}
-function StripeIntegration({
-  botId,
-  rows,
+
+function StatusBadge({
+  status,
 }: {
-  botId: string;
-  rows: BotBillingProviderConfigView[];
+  status?: "NOT_CONFIGURED" | "CONNECTED" | "INVALID";
+}) {
+  if (status === "CONNECTED")
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full border border-emerald-800 bg-emerald-950/60 px-2 py-1 text-xs font-medium text-emerald-300">
+        <Check size={12} />
+        Connected
+      </span>
+    );
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full border border-rose-900 bg-rose-950/60 px-2 py-1 text-xs font-medium text-rose-300">
+      <CircleAlert size={12} />
+      {status === "INVALID" ? "Needs attention" : "Not configured"}
+    </span>
+  );
+}
+
+function IntegrationTitle({
+  icon,
+  title,
+  description,
+}: {
+  icon: ReactNode;
+  title: string;
+  description: string;
 }) {
   return (
+    <div className="flex items-start gap-3">
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-neutral-700 bg-neutral-950">
+        {icon}
+      </div>
+      <div>
+        <h2 className="font-semibold text-white">{title}</h2>
+        <p className="mt-0.5 text-sm text-neutral-400">{description}</p>
+      </div>
+    </div>
+  );
+}
+
+function InheritedStripe({ rows }: { rows: BotBillingProviderConfigView[] }) {
+  return (
     <Card>
-      <h2 className="font-semibold">Stripe</h2>
-      <p className="text-sm text-neutral-400">
-        Card payments and subscriptions
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <IntegrationTitle
+          icon={
+            <span className="flex h-7 w-7 items-center justify-center rounded-md bg-[#635bff] text-lg font-bold italic text-white">
+              S
+            </span>
+          }
+          title="Stripe"
+          description="Card payments and recurring subscriptions"
+        />
+        <div className="flex gap-2">
+          {(["TEST", "LIVE"] as const).map((mode) => (
+            <StatusBadge
+              key={mode}
+              status={rows.find((row) => row.mode === mode)?.status}
+            />
+          ))}
+        </div>
+      </div>
+      <p className="mt-4 rounded-lg border border-blue-900/70 bg-blue-950/20 px-3 py-2 text-sm text-blue-100">
+        This bot inherits Stripe credentials from Global bot configuration.
+        Manage keys and validation there.
       </p>
       <div className="mt-4 grid gap-4 xl:grid-cols-2">
         {(["TEST", "LIVE"] as const).map((mode) => (
-          <StripeMode
+          <InheritedStripeMode
             key={mode}
-            botId={botId}
-            row={rows.find((row) => row.mode === mode)}
             mode={mode}
+            row={rows.find((row) => row.mode === mode)}
           />
         ))}
       </div>
     </Card>
   );
 }
-function StripeMode({
-  botId,
-  row,
+
+function InheritedStripeMode({
   mode,
+  row,
 }: {
-  botId: string;
-  row?: BotBillingProviderConfigView;
   mode: "TEST" | "LIVE";
+  row?: BotBillingProviderConfigView;
 }) {
-  const qc = useQueryClient();
-  const [publicKey, setPublicKey] = useState("");
-  const [secretKey, setSecretKey] = useState("");
-  const [webhookSecret, setWebhookSecret] = useState("");
-  const save = useMutation({
-    mutationFn: () =>
-      botBillingApi.saveProvider(botId, "STRIPE", mode, {
-        ...(publicKey ? { publicKey } : {}),
-        ...(secretKey ? { secretKey } : {}),
-        ...(webhookSecret ? { webhookSecret } : {}),
-      }),
-    onSuccess: () => {
-      setPublicKey("");
-      setSecretKey("");
-      setWebhookSecret("");
-      return qc.invalidateQueries({
-        queryKey: botBillingKeys.providers(botId),
-      });
-    },
-  });
-  const useGlobal = useMutation({
-    mutationFn: () => botBillingApi.useGlobalProvider(botId, "STRIPE", mode),
-    onSuccess: () =>
-      qc.invalidateQueries({ queryKey: botBillingKeys.providers(botId) }),
-  });
+  const connected = row?.status === "CONNECTED";
   return (
-    <div className="rounded-lg border border-neutral-800 p-3">
-      <div className="flex justify-between gap-2">
-        <h3 className="font-medium">
-          {mode === "TEST" ? "Test mode" : "Live mode"}
-        </h3>
-        <span className="text-xs text-neutral-500">
-          {row?.status ?? "NOT_CONFIGURED"}
-        </span>
+    <section className="rounded-lg border border-neutral-800 bg-neutral-950/40 p-4">
+      <div className="flex items-center justify-between gap-2">
+        <div>
+          <h3 className="font-medium text-white">
+            {mode === "TEST" ? "Test mode" : "Live mode"}
+          </h3>
+          <p className="mt-0.5 text-xs text-neutral-500">
+            {mode === "TEST"
+              ? "Uses the workspace sandbox connection."
+              : "Uses the workspace live connection."}
+          </p>
+        </div>
+        <StatusBadge status={row?.status} />
       </div>
-      <p className="mt-1 text-xs text-neutral-500">
-        {row ? sourceLabel(row.source) : "Not configured"}
-      </p>
-      <div className="mt-3 space-y-2">
-        <FormField
-          label={`Publishable key${row?.publicKeyConfigured ? ` (${row.publicKeyMasked ?? "configured"})` : ""}`}
-        >
-          <Input
-            type="password"
-            value={publicKey}
-            onChange={(e) => setPublicKey(e.target.value)}
-            placeholder="Leave blank to keep existing"
-          />
-        </FormField>
-        <FormField
-          label={`Secret / restricted key${row?.secretKeyConfigured ? " (configured)" : ""}`}
-        >
-          <Input
-            type="password"
-            value={secretKey}
-            onChange={(e) => setSecretKey(e.target.value)}
-            placeholder="Leave blank to keep existing"
-          />
-        </FormField>
-        <FormField
-          label={
-            <StripeWebhookSigningSecretLabel
-              configured={row?.webhookSecretConfigured}
-            />
+      <dl className="mt-4 space-y-2 text-sm">
+        <ConfigLine
+          label="Configuration"
+          value={
+            connected
+              ? "Inherited from global settings"
+              : "No global connection available"
           }
-        >
-          <Input
-            type="password"
-            value={webhookSecret}
-            onChange={(e) => setWebhookSecret(e.target.value)}
-            placeholder="Leave blank to keep existing"
-          />
-        </FormField>
-      </div>
+        />
+        <ConfigLine
+          label="Publishable key"
+          value={
+            row?.publicKeyConfigured
+              ? row.publicKeyMasked || "Configured"
+              : "Not configured"
+          }
+        />
+        <ConfigLine
+          label="Secret key"
+          value={row?.secretKeyConfigured ? "Configured" : "Not configured"}
+        />
+        <ConfigLine
+          label="Webhook signing secret"
+          value={row?.webhookSecretConfigured ? "Configured" : "Not configured"}
+        />
+      </dl>
       {row?.lastValidationError ? (
-        <p className="mt-2 text-xs text-rose-300">{row.lastValidationError}</p>
+        <p className="mt-3 text-xs text-rose-300">{row.lastValidationError}</p>
       ) : null}
-      <div className="mt-3 flex flex-wrap gap-2">
-        <Button disabled={save.isPending} onClick={() => save.mutate()}>
-          Save & validate
-        </Button>
-        {row?.source === "BOT_OVERRIDE" ? (
-          <Button
-            variant="secondary"
-            disabled={useGlobal.isPending}
-            onClick={() => useGlobal.mutate()}
-          >
-            Use global default
-          </Button>
-        ) : null}
-      </div>
+    </section>
+  );
+}
+
+function ConfigLine({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-md border border-neutral-800 px-3 py-2">
+      <dt className="text-neutral-400">{label}</dt>
+      <dd className="truncate text-right text-neutral-200">{value}</dd>
     </div>
   );
 }
-function StarsIntegration({
-  botId,
-  row,
-}: {
-  botId: string;
-  row?: BotBillingProviderConfigView;
-}) {
-  const qc = useQueryClient();
-  const save = useMutation({
-    mutationFn: () =>
-      botBillingApi.saveProvider(botId, "TELEGRAM_STARS", "LIVE", {}),
-    onSuccess: () =>
-      qc.invalidateQueries({ queryKey: botBillingKeys.providers(botId) }),
-  });
+
+function InheritedStars({ row }: { row?: BotBillingProviderConfigView }) {
   return (
     <Card>
-      <h2 className="font-semibold">Telegram Stars</h2>
-      <p className="mt-1 text-sm text-neutral-400">
-        Telegram-native payments.{" "}
-        {row ? sourceLabel(row.source) : "Not configured"}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <IntegrationTitle
+          icon={<Star size={20} className="text-amber-300" />}
+          title="Telegram Stars"
+          description="Telegram-native payments"
+        />
+        <StatusBadge status={row?.status} />
+      </div>
+      <p className="mt-4 rounded-lg border border-neutral-800 bg-neutral-950/40 px-3 py-2 text-sm text-neutral-300">
+        {row?.status === "CONNECTED"
+          ? "Connected through the global bot configuration."
+          : "Not configured in global bot configuration."}
       </p>
-      <Button
-        className="mt-3"
-        disabled={save.isPending}
-        onClick={() => save.mutate()}
-      >
-        {row?.status === "CONNECTED" ? "Validate" : "Enable"}
-      </Button>
     </Card>
   );
 }
-function FinanceAiIntegration({ botId }: { botId: string }) {
-  const ai = useQuery({
-    queryKey: botBillingKeys.financeAi(botId),
-    queryFn: () => financeAiConfigApi.get(botId),
-  });
-  const config = ai.data;
+
+function InheritedAi({
+  status,
+  source,
+}: {
+  status: "NOT_CONFIGURED" | "CONNECTED" | "INVALID";
+  source: string;
+}) {
   return (
     <Card>
-      <h2 className="font-semibold">AI provider</h2>
-      <p className="mt-1 text-sm text-neutral-400">
-        {config
-          ? `${config.status === "CONNECTED" ? "Connected" : "Not configured"} · ${config.source === "WORKSPACE_DEFAULT" ? "Using the global OpenAI connection" : "Configure OpenAI in Global bot configuration"}`
-          : "Loading"}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <IntegrationTitle
+          icon={<Cpu size={20} className="text-sky-300" />}
+          title="AI provider"
+          description="AI models used by Finance Bot"
+        />
+        <StatusBadge status={status} />
+      </div>
+      <p className="mt-4 rounded-lg border border-neutral-800 bg-neutral-950/40 px-3 py-2 text-sm text-neutral-300">
+        {source === "WORKSPACE_DEFAULT"
+          ? "Connected through the global OpenAI configuration. Models are selected automatically per feature."
+          : "No global OpenAI connection is available for this bot."}
       </p>
-      {config?.lastValidationError ? (
-        <p className="mt-2 text-xs text-rose-300">
-          {config.lastValidationError}
-        </p>
-      ) : null}
-      <p className="mt-3 text-xs text-neutral-500">Models are selected automatically per feature. Usage and cost appear in this bot&apos;s Overview for the selected Local or Production runtime.</p>
     </Card>
   );
 }

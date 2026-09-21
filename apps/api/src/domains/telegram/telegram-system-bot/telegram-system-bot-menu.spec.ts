@@ -13,10 +13,8 @@ describe('Telegram System Bot menu', () => {
       'posts',
       'post',
       'adsale',
-      'channels',
-      'stats',
       'finance',
-      'workspace',
+      'settings',
     ]);
     expect(SYSTEM_BOT_COMMANDS.map(({ command }) => command)).not.toContain(
       'tasks',
@@ -37,16 +35,18 @@ describe('Telegram System Bot menu', () => {
         '📝 Posts',
         '💼 Ad Sale',
         '💰 Finance',
-        '🏢 Workspace',
+        '⚙️ Settings',
       ]),
     );
     expect(labels).not.toContain('⏱ Scheduled Tasks');
+    expect(labels).not.toContain('📢 Channels');
+    expect(labels).not.toContain('📊 Statistics');
+    expect(labels).not.toContain('🏢 Workspace');
     expect(SYSTEM_BOT_HELP_TEXT).not.toContain('/tasks');
   });
 
-  it('maps both the current and legacy workspace labels to the command', () => {
-    expect(systemBotCommandFor('🏢 Workspace')).toBe('/workspace');
-    expect(systemBotCommandFor('🏢 Switch Workspace')).toBe('/workspace');
+  it('maps Settings to the settings command', () => {
+    expect(systemBotCommandFor('⚙️ Settings')).toBe('/settings');
   });
 
   it('does not translate the removed task button into a command', () => {

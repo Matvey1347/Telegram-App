@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  BarChart3,
   CalendarRange,
   CircleDollarSign,
   MessagesSquare,
@@ -20,7 +19,6 @@ const primary = [
   ["nav.contacts", "/ad-sales", Users],
   ["nav.deals", "/ad-sales/sales", CircleDollarSign],
   ["nav.calendar", "/ad-sales/calendar", CalendarRange],
-  ["nav.analytics", "/ad-sales/analytics", BarChart3],
 ] as const;
 
 export function CrmNavigation({
@@ -56,9 +54,7 @@ export function CrmNavigation({
           .filter(([copyKey]) => copyKey !== "nav.inbox" || showInbox)
           .filter(
             ([copyKey]) =>
-              !["nav.deals", "nav.calendar", "nav.analytics"].includes(
-                copyKey,
-              ) || showSales,
+              !["nav.deals", "nav.calendar"].includes(copyKey) || showSales,
           )
           .map(([copyKey, href, Icon]) => {
             const active =

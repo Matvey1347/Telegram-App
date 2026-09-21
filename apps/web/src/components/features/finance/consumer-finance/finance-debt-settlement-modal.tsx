@@ -3,7 +3,15 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { ConsumerFinanceDebt } from "@telegram-system/shared";
-import { Button, ErrorState, FormField, Input, Modal, Select } from "./ui";
+import {
+  Button,
+  DateInput,
+  ErrorState,
+  FormField,
+  Input,
+  Modal,
+  Select,
+} from "./ui";
 import type { FinanceLocale } from "./i18n/core";
 import { financeDebtsCopy } from "./i18n/debts";
 import { consumerFinanceLedgerApi } from "@/lib/features/finance/consumer-finance-ledger-api";
@@ -20,7 +28,11 @@ export function FinanceDebtSettlementModal({
   botId: string;
   locale: FinanceLocale;
   onClose: () => void;
-  onCreate: (accountId: string, amount: string) => Promise<unknown>;
+  onCreate: (
+    accountId: string,
+    amount: string,
+    settlementDate: string,
+  ) => Promise<unknown>;
 }) {
   const t = financeDebtsCopy(locale);
   const [pending, setPending] = useState(false);
@@ -40,11 +52,14 @@ export function FinanceDebtSettlementModal({
     ? accountId
     : (accountOptions[0]?.id ?? "");
   const [amount, setAmount] = useState(debt.amount);
+  const [settlementDate, setSettlementDate] = useState(() =>
+    new Date().toISOString().slice(0, 10),
+  );
   const submit = async () => {
     setPending(true);
     setFailed(false);
     try {
-      await onCreate(selectedAccountId, amount);
+      await onCreate(selectedAccountId, amount, settlementDate);
       onClose();
     } catch {
       setFailed(true);
@@ -100,6 +115,12 @@ export function FinanceDebtSettlementModal({
             onChange={(event) => setAmount(event.target.value)}
           />
         </FormField>
+        <FormField label={t.settlementDate}>
+          <DateInput
+            value={settlementDate}
+            onChange={(event) => setSettlementDate(event.target.value)}
+          />
+        </FormField>
         <p className="text-xs text-neutral-400 sm:col-span-2">
           {t.settleDescription}
         </p>
@@ -111,6 +132,7 @@ export function FinanceDebtSettlementModal({
             disabled={
               pending ||
               !selectedAccountId ||
+              !settlementDate ||
               !(Number(amount) > 0) ||
               Number(amount) > Number(debt.amount)
             }

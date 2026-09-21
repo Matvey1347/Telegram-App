@@ -91,6 +91,7 @@ describe('TelegramInviteLinkRegistrationService', () => {
       id: 'stored-link',
       workspaceId: 'workspace-1',
       currentJoinedCount: 3,
+      currentRequestedCount: 0,
       joinedWithinPeriod: null,
     });
 

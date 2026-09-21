@@ -1,6 +1,7 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
+import Link from "next/link";
 import type {
   CrmContactListItem,
   CrmContactStage,
@@ -18,7 +19,8 @@ import {
   UserRound,
   X,
 } from "lucide-react";
-import { CustomSelect } from "@/components/ui/primitives";
+import { CustomSelect, Modal } from "@/components/ui/primitives";
+import { IconAvatar } from "@/components/icons/icon-avatar";
 import { TelegramEntityAvatar } from "@/components/features/telegram/telegram/telegram-entity-avatar";
 import {
   TelegramCardActionsMenu,
@@ -121,7 +123,7 @@ export function CrmContactCard({
                 </h3>
                 <div
                   aria-label={`Stage for ${contact.displayName}`}
-                  className={`w-fit [&>div>button]:min-h-0 [&>div>button]:rounded-full [&>div>button]:px-1.5 [&>div>button]:py-0.5 [&>div>button]:text-[11px] [&>div>button]:font-medium ${stage.selectClassName}`}
+                  className={`w-fit [&>div>button]:min-h-0 [&>div>button]:rounded-full [&>div>button]:px-2.5 [&>div>button]:py-0.5 [&>div>button]:text-[11px] [&>div>button]:font-medium [&>div>button_svg]:hidden ${stage.selectClassName}`}
                   onClick={(event) => event.stopPropagation()}
                 >
                   <CustomSelect
@@ -138,7 +140,6 @@ export function CrmContactCard({
                         value,
                         label: presentation.label,
                         tone: presentation.tone,
-                        badgeClassName: `shrink-0 whitespace-nowrap rounded-full border px-2.5 py-0 text-[11px] leading-5 ${presentation.className}`,
                       };
                     })}
                   />
@@ -169,6 +170,26 @@ export function CrmContactCard({
           {contact.description}
         </p>
       ) : null}
+      {contact.crossPromotions?.length ? (
+        <section className="mt-3 border-t border-neutral-900 pt-3" aria-label="Mutual promotions">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-neutral-500">
+            🤝 Mutual promotions
+          </p>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {contact.crossPromotions.map((plan) => (
+              <Link
+                key={plan.id}
+                href={`/ad-campaigns/cross-promotion-plans?planId=${encodeURIComponent(plan.id)}`}
+                className="inline-flex max-w-full items-center gap-1 rounded-full border border-violet-800/70 bg-violet-950/20 px-2 py-1 text-[11px] text-violet-200 hover:bg-violet-950/45"
+                title={`${plan.kind} · ${plan.status}`}
+              >
+                <span className="truncate">{plan.title}</span>
+                <span className="text-violet-400">↗</span>
+              </Link>
+            ))}
+          </div>
+        </section>
+      ) : null}
       {contact.tags.length ? (
         <div className="mt-3 flex flex-wrap gap-1.5" aria-label="Contact tags">
           {contact.tags.slice(0, 5).map((tag) => (
@@ -190,6 +211,11 @@ export function CrmContactCard({
           ) : null}
         </div>
       ) : null}
+      {!contact.isUnassignedClient &&
+      (contact.salesSummary.purchaseAudience ||
+        (contact.salesSummary.purchasedChannels?.length ?? 0)) ? (
+        <PurchasedChannels contact={contact} />
+      ) : null}
       {!contact.isUnassignedClient && contact.replySummary.status !== "NONE" ? (
         <ReplySummary
           contact={contact}
@@ -200,6 +226,93 @@ export function CrmContactCard({
       ) : null}
       {hasDeals ? <DealSummary contact={contact} /> : null}
     </article>
+  );
+}
+
+function PurchasedChannels({ contact }: { contact: CrmContactListItem }) {
+  const [open, setOpen] = useState(false);
+  const channels = contact.salesSummary.purchasedChannels ?? [];
+  const audience = contact.salesSummary.purchaseAudience;
+  const label =
+    audience === "ALL"
+      ? "All"
+      : audience === "BUSINESS"
+        ? "Business"
+        : "Improvement";
+  return (
+    <section className="mt-3 border-t border-neutral-900 pt-3">
+      <p className="text-[11px] font-medium uppercase tracking-wide text-neutral-500">
+        Advertising purchased in
+      </p>
+      <div className="mt-2 flex items-center gap-2">
+        {audience ? (
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-sky-900 bg-sky-950/40 px-2 py-0.5 text-[11px] font-medium text-sky-200">
+            <IconAvatar
+              icon={
+                contact.salesSummary.purchaseAudienceIcon ?? {
+                  type: "unicode",
+                  value:
+                    audience === "ALL"
+                      ? "✈️"
+                      : audience === "BUSINESS"
+                        ? "💼"
+                        : "🧘",
+                }
+              }
+              label={label}
+              size="xs"
+            />
+            {label}
+          </span>
+        ) : null}
+        {channels.length ? (
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            className="flex -space-x-1 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            aria-label={`View ${channels.length} purchased channels`}
+          >
+            {channels.slice(0, 5).map((channel) => (
+              <TelegramEntityAvatar
+                key={channel.id}
+                imageUrl={channel.photoUrl}
+                alt=""
+                kind="channel"
+                size="xs"
+              />
+            ))}
+            {channels.length > 5 ? (
+              <span className="relative flex h-5 min-w-5 items-center justify-center rounded-full border border-neutral-600 bg-neutral-800 px-1 text-[9px] text-white">
+                +{channels.length - 5}
+              </span>
+            ) : null}
+          </button>
+        ) : null}
+      </div>
+      <Modal
+        open={open}
+        onClose={() => setOpen(false)}
+        title="Purchased channels"
+        size="sm"
+      >
+        <div className="space-y-2">
+          {channels.map((channel) => (
+            <div
+              key={channel.id}
+              className="flex items-center gap-3 rounded-lg border border-neutral-800 bg-neutral-950 p-2.5"
+            >
+              <TelegramEntityAvatar
+                imageUrl={channel.photoUrl}
+                alt=""
+                kind="channel"
+                size="sm"
+              />
+              <span className="text-sm text-white">{channel.title}</span>
+            </div>
+          ))}
+        </div>
+      </Modal>
+    </section>
   );
 }
 

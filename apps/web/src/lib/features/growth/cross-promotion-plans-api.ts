@@ -51,6 +51,10 @@ export const crossPromotionPlansApi = {
   rename: async (id: string, title: string) =>
     (await api.patch<CrossPromotionPlan>(`${basePath}/${id}/title`, { title }))
       .data,
+  refreshInviteLinkData: async (id: string) =>
+    (
+      await api.post<CrossPromotionPlan>(`${basePath}/${id}/refresh-invite-links`)
+    ).data,
   remove: async (id: string, silent = false): Promise<{ id: string }> =>
     (
       await api.delete<{ id: string }>(`${basePath}/${id}`, {

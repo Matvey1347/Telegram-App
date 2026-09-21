@@ -11,10 +11,12 @@ import type {
 } from "./telegram-crm";
 
 export const CRM_INBOX_PROMOTION_STAGES = [
+  "NEW",
   "LEAD",
   "QUALIFIED",
   "FOLLOW_UP",
   "CUSTOMER",
+  "LOST",
 ] as const satisfies readonly CrmContactStage[];
 
 export type CrmInboxPromotionStage =

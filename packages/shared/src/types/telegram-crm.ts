@@ -192,12 +192,26 @@ export type CrmContactListItem = CrmContact & {
   peer: CrmPeerSummary | null;
   nextOpenTask: CrmTaskSummary | null;
   activeDeal: CrmActiveDealSummary | null;
+  crossPromotions?: Array<{
+    id: string;
+    title: string;
+    kind: string;
+    status: string;
+    scheduledAt: string;
+  }>;
   salesSummary: {
     totalSalesCount: number;
     paidSalesCount: number;
     completedSalesCount: number;
     totalPlacementsCount: number;
     revenueByCurrency: Array<{ currency: string; amount: string }>;
+    purchasedChannels?: Array<{
+      id: string;
+      title: string;
+      photoUrl: string | null;
+    }>;
+    purchaseAudience?: "BUSINESS" | "IMPROVEMENT" | "ALL" | null;
+    purchaseAudienceIcon?: ResolvedEmoji | null;
     lastDealAt: string | null;
     dealMembers: CrmMemberSummary[];
   };

@@ -5,6 +5,7 @@ import {
 } from '@prisma/client';
 import type { PrismaService } from '../../../prisma/prisma.service';
 import type { CrmMemberSummary } from '@telegram-system/shared';
+import { iconToResolvedEmoji } from '../../../common/icons/resolved-emoji';
 import {
   crmMemberSummarySelect,
   mapCrmMemberSummary,
@@ -16,6 +17,13 @@ export type CrmContactSalesSummary = {
   completedSalesCount: number;
   totalPlacementsCount: number;
   revenueByCurrency: Array<{ currency: string; amount: string }>;
+  purchasedChannels: Array<{
+    id: string;
+    title: string;
+    photoUrl: string | null;
+  }>;
+  purchaseAudience: 'BUSINESS' | 'IMPROVEMENT' | 'ALL' | null;
+  purchaseAudienceIcon: ReturnType<typeof iconToResolvedEmoji>;
   lastDealAt: string | null;
   dealMembers: CrmMemberSummary[];
 };
@@ -39,6 +47,9 @@ const emptySummary = (): CrmContactSalesSummary => ({
   completedSalesCount: 0,
   totalPlacementsCount: 0,
   revenueByCurrency: [],
+  purchasedChannels: [],
+  purchaseAudience: null,
+  purchaseAudienceIcon: null,
   lastDealAt: null,
   dealMembers: [],
 });
@@ -111,13 +122,61 @@ export async function loadCrmContactSalesSummaries(
       status: true,
       createdAt: true,
       assignedMember: { select: crmMemberSummarySelect },
-      placements: { select: { agreedPrice: true } },
+      placements: {
+        select: {
+          agreedPrice: true,
+          telegramChannel: {
+            select: {
+              id: true,
+              title: true,
+              photoUrl: true,
+              networkMembers: {
+                select: {
+                  network: { select: { name: true } },
+                },
+              },
+            },
+          },
+        },
+      },
       payments: {
         where: { status: { not: TelegramAdSalePaymentStatus.VOIDED } },
-        select: { amount: true, currency: true },
+        select: {
+          amount: true,
+          currency: true,
+        },
       },
     },
   });
+  const audienceNetworks = prisma.telegramChannelNetwork
+    ? await prisma.telegramChannelNetwork.findMany({
+        where: {
+          workspaceId,
+          name: {
+            in: ['All', 'Business', 'Improvement'],
+            mode: 'insensitive',
+          },
+        },
+        select: {
+          name: true,
+          icon: {
+            select: {
+              id: true,
+              type: true,
+              name: true,
+              emoji: true,
+              imageUrl: true,
+            },
+          },
+        },
+      })
+    : [];
+  const audienceIcons = new Map(
+    audienceNetworks.map((network) => [
+      network.name.trim().toLocaleLowerCase(),
+      iconToResolvedEmoji(network.icon),
+    ]),
+  );
 
   for (const sale of sales) {
     const username = normalizeUsername(
@@ -131,21 +190,32 @@ export async function loadCrmContactSalesSummaries(
     const summary = summaries.get(contactId) ?? emptySummary();
     summary.totalSalesCount += 1;
     summary.totalPlacementsCount += sale.placements.length;
+    for (const placement of sale.placements) {
+      const channel = placement.telegramChannel;
+      if (
+        channel &&
+        !summary.purchasedChannels.some((item) => item.id === channel.id)
+      ) {
+        summary.purchasedChannels.push({
+          id: channel.id,
+          title: channel.title,
+          photoUrl: channel.photoUrl,
+        });
+      }
+    }
     summary.lastDealAt = sale.createdAt.toISOString();
     const member = mapCrmMemberSummary(sale.assignedMember);
     if (member && !summary.dealMembers.some(({ id }) => id === member.id)) {
       summary.dealMembers.push(member);
     }
     if (completedStatuses.has(sale.status)) summary.completedSalesCount += 1;
-    const agreed = sale.placements.reduce(
-      (sum, placement) => sum.add(placement.agreedPrice ?? 0),
-      new Prisma.Decimal(0),
+    // CRM's Paid metric answers whether the customer has paid this deal at
+    // all, matching Deals' “Money received” / “Partially received” state.
+    // It must not reclassify a partially allocated payment as unpaid.
+    const hasReceivedPayment = sale.payments.some((payment) =>
+      new Prisma.Decimal(payment.amount).greaterThan(0),
     );
-    const paid = sale.payments.reduce(
-      (sum, payment) => sum.add(payment.amount),
-      new Prisma.Decimal(0),
-    );
-    if (agreed.greaterThan(0) && paid.greaterThanOrEqualTo(agreed)) {
+    if (hasReceivedPayment || sale.status === TelegramAdSaleStatus.COMPLETED) {
       summary.paidSalesCount += 1;
     }
     summary.revenueByCurrency = mergeRevenue(
@@ -153,6 +223,36 @@ export async function loadCrmContactSalesSummaries(
       sale.payments,
     );
     summaries.set(contactId, summary);
+  }
+  for (const summary of summaries.values()) {
+    const audience = new Set<string>();
+    for (const channel of summary.purchasedChannels) {
+      const source = sales
+        .flatMap((sale) => sale.placements)
+        .find(
+          (placement) => placement.telegramChannel?.id === channel.id,
+        )?.telegramChannel;
+      for (const member of source?.networkMembers ?? []) {
+        const name = member.network.name.trim().toLocaleLowerCase();
+        if (name === 'business') audience.add('BUSINESS');
+        if (name === 'improvement') audience.add('IMPROVEMENT');
+      }
+    }
+    summary.purchaseAudience =
+      audience.size > 1
+        ? 'ALL'
+        : audience.has('BUSINESS')
+          ? 'BUSINESS'
+          : audience.has('IMPROVEMENT')
+            ? 'IMPROVEMENT'
+            : null;
+    const iconKey =
+      summary.purchaseAudience === 'ALL'
+        ? 'all'
+        : (summary.purchaseAudience?.toLocaleLowerCase() ?? null);
+    summary.purchaseAudienceIcon = iconKey
+      ? (audienceIcons.get(iconKey) ?? null)
+      : null;
   }
   return summaries;
 }

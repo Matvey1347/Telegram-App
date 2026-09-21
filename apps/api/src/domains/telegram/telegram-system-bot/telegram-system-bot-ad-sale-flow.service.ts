@@ -173,7 +173,7 @@ export class TelegramSystemBotAdSaleFlowService {
         this.moduleRef,
         scope,
       );
-      return this.transition(scope, workflow, 'CHOOSE_ACCOUNT', {
+      return this.transition(scope, workflow, 'CHOOSE_TARGET', {
         mode: 'NEW',
         assignedMemberId: member.id,
         memberLabel: member.name,
@@ -186,7 +186,7 @@ export class TelegramSystemBotAdSaleFlowService {
     if (action.startsWith('account.') || action.startsWith('member.'))
       return this.chooseBaseOption(scope, workflow, action);
     if (action === 'finance.skip')
-      return this.transition(scope, workflow, 'CHOOSE_TARGET', {
+      return this.transition(scope, workflow, 'CHOOSE_CONTENT', {
         ...payload,
         finance: undefined,
         financeSkipped: true,
@@ -284,7 +284,7 @@ export class TelegramSystemBotAdSaleFlowService {
     if (action.startsWith('account.')) {
       const account = options.accounts?.[Number(action.slice(8))];
       if (!account) throw new NotFoundException('Account is unavailable');
-      return this.transition(scope, workflow, 'CHOOSE_TARGET', {
+      return this.transition(scope, workflow, 'AWAIT_AMOUNT', {
         ...payload,
         finance: {
           accountId: account.id,
@@ -341,12 +341,7 @@ export class TelegramSystemBotAdSaleFlowService {
       if (!payload.target || payload.target.kind !== 'CHANNELS')
         throw new NotFoundException('Select a channel');
       await service.resolve(scope.userId, adSaleCommandTarget(payload.target));
-      return this.transition(
-        scope,
-        workflow,
-        payload.finance ? 'AWAIT_AMOUNT' : 'CHOOSE_CONTENT',
-        payload,
-      );
+      return this.transition(scope, workflow, 'CHOOSE_ACCOUNT', payload);
     }
     const network = options.networks[Number(action.slice(15))];
     if (!network?.selectable)
@@ -357,12 +352,10 @@ export class TelegramSystemBotAdSaleFlowService {
       label: network.name,
     };
     await service.resolve(scope.userId, adSaleCommandTarget(target));
-    return this.transition(
-      scope,
-      workflow,
-      payload.finance ? 'AWAIT_AMOUNT' : 'CHOOSE_CONTENT',
-      { ...payload, target },
-    );
+    return this.transition(scope, workflow, 'CHOOSE_ACCOUNT', {
+      ...payload,
+      target,
+    });
   }
 
   private async chooseManagedPost(
@@ -467,16 +460,16 @@ export class TelegramSystemBotAdSaleFlowService {
   private previousStep(step: string, payload: TelegramSystemBotAdSalePayload) {
     const map: Record<string, string> = {
       CHOOSE_EXISTING_PLACEMENT: 'CHOOSE_SALE_MODE',
-      CHOOSE_ACCOUNT: 'CHOOSE_SALE_MODE',
+      CHOOSE_ACCOUNT: 'CHOOSE_TARGET',
       CHOOSE_MEMBER: 'CHOOSE_ACCOUNT',
-      CHOOSE_TARGET: 'CHOOSE_ACCOUNT',
-      AWAIT_AMOUNT: 'CHOOSE_TARGET',
+      CHOOSE_TARGET: 'CHOOSE_SALE_MODE',
+      AWAIT_AMOUNT: 'CHOOSE_ACCOUNT',
       CHOOSE_CONTENT:
         payload.mode === 'EXISTING'
           ? 'CHOOSE_EXISTING_PLACEMENT'
           : payload.finance
             ? 'AWAIT_AMOUNT'
-            : 'CHOOSE_TARGET',
+            : 'CHOOSE_ACCOUNT',
       AWAIT_CONTENT: 'CHOOSE_CONTENT',
       CHOOSE_EXISTING_POST: 'CHOOSE_CONTENT',
       CHOOSE_FORMAT: 'CHOOSE_CONTENT',

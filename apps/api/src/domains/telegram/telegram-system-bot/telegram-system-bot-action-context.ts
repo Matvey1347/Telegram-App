@@ -60,13 +60,13 @@ export const SYSTEM_BOT_AUTHORIZED_CONNECTION_SELECT = {
   userId: true,
   telegramUserId: true,
   currentWorkspaceId: true,
-  user: { select: { locale: true } },
+  user: { select: { locale: true, name: true, email: true } },
 } as const satisfies Prisma.TelegramSystemBotConnectionSelect;
 
 export type SystemBotAuthorizedConnection = Pick<
   TelegramSystemBotConnection,
   'id' | 'userId' | 'telegramUserId' | 'currentWorkspaceId'
-> & { user?: { locale: string } };
+> & { user?: { locale: string; name: string; email: string } };
 
 export const SYSTEM_BOT_WORKSPACE_MEMBERSHIP_SELECT = {
   workspaceId: true,

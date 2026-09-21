@@ -12,6 +12,7 @@ import type {
 } from "@telegram-system/shared";
 import { formatDateTime } from "@/lib/date-format";
 import { Button, EmptyState } from "@/components/ui/primitives";
+import { Copy, MoreHorizontal } from "lucide-react";
 import { TelegramTextEditor } from "@/components/features/telegram/telegram/telegram-text-editor";
 import { telegramCrmApi } from "@/lib/features/growth/telegram-crm-api";
 import {
@@ -62,6 +63,8 @@ function MessageRow({
   message: CrmMessageListItem;
   onRetry?: () => void;
 }) {
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
   const outbound = message.direction === "OUTBOUND";
   const deliveryProblem =
     message.deliveryState === "FAILED" || message.deliveryState === "PENDING"
@@ -69,9 +72,19 @@ function MessageRow({
       : null;
   return (
     <li className={`flex ${outbound ? "justify-end" : "justify-start"}`}>
-      <div
-        className={`max-w-[88%] rounded-xl border px-3 py-2 ${outbound ? "border-teal-800 bg-teal-950/45" : "border-neutral-800 bg-neutral-900"}`}
-      >
+      <div className="group relative max-w-[88%]">
+        <div
+          className={`rounded-xl border px-3 py-2 ${outbound ? "border-teal-800 bg-teal-950/45" : "border-neutral-800 bg-neutral-900"}`}
+          onClick={() => setActionsOpen((open) => !open)}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              setActionsOpen((open) => !open);
+            }
+          }}
+        >
         <p className="whitespace-pre-wrap break-words text-sm text-neutral-100">
           {message.text || "Unsupported Telegram message"}
         </p>
@@ -85,6 +98,28 @@ function MessageRow({
             Retry
           </Button>
         ) : null}
+        </div>
+        {actionsOpen ? (
+          <div className={`absolute z-10 mt-1 flex min-w-32 gap-1 rounded-lg border border-neutral-700 bg-neutral-950 p-1 shadow-xl ${outbound ? "right-0" : "left-0"}`}>
+            <button
+              type="button"
+              className="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs text-neutral-200 hover:bg-neutral-800"
+              onClick={async (event) => {
+                event.stopPropagation();
+                await navigator.clipboard.writeText(message.text ?? "");
+                setCopied(true);
+                window.setTimeout(() => setCopied(false), 1500);
+              }}
+            >
+              <Copy size={13} /> {copied ? "Copied" : "Copy"}
+            </button>
+          </div>
+        ) : null}
+        <MoreHorizontal
+          aria-hidden
+          size={15}
+          className={`pointer-events-none absolute -top-1 text-neutral-500 opacity-0 transition-opacity group-hover:opacity-100 ${outbound ? "-left-5" : "-right-5"}`}
+        />
       </div>
     </li>
   );

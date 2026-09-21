@@ -136,6 +136,15 @@ describe('TelegramManagedPostPublicationService failure persistence', () => {
           publicationSlotId: 'slot-1',
         }),
       ).rejects.toThrow('Publication slot is already used');
+      expect(
+        (service as any).prisma.telegramManagedPost.findFirst,
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.not.objectContaining({
+            publicationSlotId: expect.anything(),
+          }),
+        }),
+      );
       expect(publisher.publishManagedPost).not.toHaveBeenCalled();
     } finally {
       jest.useRealTimers();

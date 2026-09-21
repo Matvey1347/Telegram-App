@@ -1,25 +1,17 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { ContextIdFactory, ModuleRef } from '@nestjs/core';
+import { ModuleRef } from '@nestjs/core';
 import { TelegramManagedPostStatus } from '@prisma/client';
-import { sanitizeOperationalError } from '../../../common/security/operational-error';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { TelegramBotApiClient } from '../../../telegram/shared/telegram-bot-api.client';
-import { TelegramManagedPostPublicationService } from '../telegram-channels/telegram-managed-post-publication.service';
 import { TelegramSystemBotConfigService } from './telegram-system-bot-config.service';
 import { formatSystemBotDate } from './telegram-system-bot-menu';
 import type { TelegramSystemBotPostFlowScope } from './telegram-system-bot-post-flow.types';
+import { TelegramSystemBotPostFlowOptions } from './telegram-system-bot-post-flow.options';
+import { resolveTelegramSystemBotAdSaleTargets } from './telegram-system-bot-ad-sale-flow.options';
 import { translateSystemBotPosts as t } from './i18n/posts';
 
-type PostsView = 'PUBLISHED' | 'SCHEDULED';
-
-type ManagedPostListItem = {
-  id: string;
-  title: string;
-  scheduledAt: Date | null;
-  publishedAt: Date | null;
-  scheduleMode: string | null;
-  telegramChannel: { title: string };
-};
+type CalendarPickerMode = 'CHANNELS' | 'NETWORKS';
+type CalendarChannel = { id: string; title: string };
 
 @Injectable()
 export class TelegramSystemBotPostsService {
@@ -28,6 +20,7 @@ export class TelegramSystemBotPostsService {
     private readonly api: TelegramBotApiClient,
     private readonly prisma: PrismaService,
     private readonly moduleRef: ModuleRef,
+    private readonly options: TelegramSystemBotPostFlowOptions,
   ) {}
 
   isCallback(value: string | undefined) {
@@ -46,114 +39,49 @@ export class TelegramSystemBotPostsService {
     if (callback === 'posts:home') {
       return this.render(scope, this.homeCard(scope.locale), controlMessageId);
     }
-    if (callback === 'posts:published') {
-      return this.renderList(scope, 'PUBLISHED', controlMessageId);
+    if (callback === 'posts:calendar') {
+      return this.renderCalendarPicker(scope, controlMessageId);
     }
-    if (callback === 'posts:scheduled') {
-      return this.renderList(scope, 'SCHEDULED', controlMessageId);
+    if (callback === 'posts:calendar:channels') {
+      return this.renderCalendarPicker(scope, controlMessageId, 'CHANNELS');
     }
-    if (callback.startsWith('posts:publish:')) {
-      return this.publishNow(
+    if (callback === 'posts:calendar:networks') {
+      return this.renderCalendarPicker(scope, controlMessageId, 'NETWORKS');
+    }
+    if (callback === 'posts:noop') return null;
+    if (callback.startsWith('posts:calendar:network:')) {
+      return this.renderNetworkCalendarPicker(
         scope,
-        callback.slice('posts:publish:'.length),
+        Number(callback.slice('posts:calendar:network:'.length)),
         controlMessageId,
+      );
+    }
+    if (callback.startsWith('posts:calendar:channel:')) {
+      const [channelId, month] = callback
+        .slice('posts:calendar:channel:'.length)
+        .split(':');
+      return this.renderCalendar(scope, channelId, controlMessageId, month);
+    }
+    if (callback.startsWith('posts:calendar:')) {
+      const [index, month] = callback
+        .slice('posts:calendar:'.length)
+        .split(':');
+      const channel = (await this.options.channels(scope))[Number(index)];
+      if (!channel)
+        throw new NotFoundException('Channel is no longer available');
+      return this.renderCalendar(scope, channel.id, controlMessageId, month);
+    }
+    if (callback.startsWith('posts:day:')) {
+      const [channelId, date] = callback.slice('posts:day:'.length).split(':');
+      return this.renderCalendar(
+        scope,
+        channelId,
+        controlMessageId,
+        date.slice(0, 7),
+        date,
       );
     }
     return this.render(scope, this.homeCard(scope.locale), controlMessageId);
-  }
-
-  private async publishNow(
-    scope: TelegramSystemBotPostFlowScope,
-    postId: string,
-    controlMessageId: number | undefined,
-  ) {
-    try {
-      const post = await this.prisma.telegramManagedPost.findFirst({
-        where: {
-          id: postId,
-          ...this.workspaceWhere(scope, TelegramManagedPostStatus.SCHEDULED),
-        },
-        select: { id: true, telegramChannelId: true },
-      });
-      if (!post) throw new NotFoundException(t(scope.locale, 'unavailable'));
-      const publication = await this.resolvePublication(scope.workspaceId);
-      await publication.publishManagedPostNow(
-        scope.userId,
-        post.telegramChannelId,
-        post.id,
-        {},
-      );
-      return this.renderList(
-        scope,
-        'SCHEDULED',
-        controlMessageId,
-        t(scope.locale, 'publishedNotice'),
-      );
-    } catch (error) {
-      return this.renderList(
-        scope,
-        'SCHEDULED',
-        controlMessageId,
-        `⚠️ ${sanitizeOperationalError(error)}`,
-      );
-    }
-  }
-
-  private async renderList(
-    scope: TelegramSystemBotPostFlowScope,
-    view: PostsView,
-    controlMessageId: number | undefined,
-    notice?: string,
-  ) {
-    const posts = await this.posts(scope, view);
-    return this.render(
-      scope,
-      this.listCard(view, posts, scope.timezone, scope.locale, notice),
-      controlMessageId,
-    );
-  }
-
-  private posts(scope: TelegramSystemBotPostFlowScope, view: PostsView) {
-    const status = TelegramManagedPostStatus[view];
-    return this.prisma.telegramManagedPost.findMany({
-      where: this.workspaceWhere(scope, status),
-      orderBy:
-        view === 'SCHEDULED'
-          ? [{ scheduledAt: 'asc' as const }, { createdAt: 'desc' as const }]
-          : [{ publishedAt: 'desc' as const }, { createdAt: 'desc' as const }],
-      take: 8,
-      select: {
-        id: true,
-        title: true,
-        scheduledAt: true,
-        publishedAt: true,
-        scheduleMode: true,
-        telegramChannel: { select: { title: true } },
-      },
-    });
-  }
-
-  private workspaceWhere(
-    scope: TelegramSystemBotPostFlowScope,
-    status: TelegramManagedPostStatus,
-  ) {
-    return {
-      workspaceId: scope.workspaceId,
-      status,
-    };
-  }
-
-  private resolvePublication(workspaceId: string) {
-    const contextId = ContextIdFactory.create();
-    this.moduleRef.registerRequestByContextId(
-      { headers: { 'x-workspace-id': workspaceId } },
-      contextId,
-    );
-    return this.moduleRef.resolve(
-      TelegramManagedPostPublicationService,
-      contextId,
-      { strict: false },
-    );
   }
 
   private homeCard(locale: string | undefined) {
@@ -161,60 +89,281 @@ export class TelegramSystemBotPostsService {
       text: t(locale, 'title'),
       reply_markup: {
         inline_keyboard: [
-          [{ text: t(locale, 'addNew'), callback_data: 'posts:new' }],
+          [{ text: t(locale, 'addNew'), callback_data: 'posts:add' }],
+          [{ text: '🗓 Content plan', callback_data: 'posts:calendar' }],
+        ],
+      },
+    };
+  }
+
+  private async renderCalendarPicker(
+    scope: TelegramSystemBotPostFlowScope,
+    controlMessageId?: number,
+    mode: CalendarPickerMode = 'CHANNELS',
+  ) {
+    const channels =
+      mode === 'CHANNELS' ? await this.options.channels(scope) : [];
+    const networks =
+      mode === 'NETWORKS' ? await this.options.networks(scope) : [];
+    return this.render(
+      scope,
+      {
+        text: '<b>Content plan</b>\n\nChoose channels or a network to view its calendar.',
+        parse_mode: 'HTML',
+        reply_markup: {
+          inline_keyboard: [
+            [
+              {
+                text: `${mode === 'CHANNELS' ? '◉' : '○'} 📣 Channels`,
+                callback_data: 'posts:calendar:channels',
+              },
+              {
+                text: `${mode === 'NETWORKS' ? '◉' : '○'} 🌐 Networks`,
+                callback_data: 'posts:calendar:networks',
+              },
+            ],
+            ...channels.map((channel) => [
+              {
+                text: `🗓 ${channel.title}`,
+                callback_data: `posts:calendar:channel:${channel.id}`,
+              },
+            ]),
+            ...networks.map((network, index) => [
+              {
+                text: `🌐 ${network.name} (${network.channelCount})`,
+                callback_data: `posts:calendar:network:${index}`,
+              },
+            ]),
+            [{ text: t(scope.locale, 'back'), callback_data: 'posts:home' }],
+          ],
+        },
+      },
+      controlMessageId,
+    );
+  }
+
+  private async renderNetworkCalendarPicker(
+    scope: TelegramSystemBotPostFlowScope,
+    networkIndex: number,
+    controlMessageId?: number,
+  ) {
+    const networks = await this.options.networks(scope);
+    const network = networks[networkIndex];
+    if (!network) throw new NotFoundException('Network is no longer available');
+    const targets = await resolveTelegramSystemBotAdSaleTargets(
+      this.moduleRef,
+      scope.workspaceId,
+    );
+    const target = await targets.resolve(scope.userId, {
+      kind: 'NETWORK',
+      networkId: network.id,
+    });
+    const ids = new Set(target.channelIds);
+    const channels = (await this.options.channels(scope)).filter((channel) =>
+      ids.has(channel.id),
+    );
+    if (!channels.length)
+      throw new NotFoundException(
+        'No active channels are available in network',
+      );
+    if (channels.length === 1)
+      return this.renderCalendar(scope, channels[0].id, controlMessageId);
+    return this.render(
+      scope,
+      this.calendarChannelPickerCard(scope, channels, network.name),
+      controlMessageId,
+    );
+  }
+
+  private calendarChannelPickerCard(
+    scope: TelegramSystemBotPostFlowScope,
+    channels: CalendarChannel[],
+    title = 'Content plan',
+  ) {
+    return {
+      text: `<b>${escapeHtml(title)}</b>\n\nChoose a channel calendar.`,
+      parse_mode: 'HTML' as const,
+      reply_markup: {
+        inline_keyboard: [
+          ...channels.map((channel) => [
+            {
+              text: `🗓 ${channel.title}`,
+              callback_data: `posts:calendar:channel:${channel.id}`,
+            },
+          ]),
           [
-            { text: t(locale, 'published'), callback_data: 'posts:published' },
-            { text: t(locale, 'scheduled'), callback_data: 'posts:scheduled' },
+            {
+              text: t(scope.locale, 'back'),
+              callback_data: 'posts:calendar:networks',
+            },
           ],
         ],
       },
     };
   }
 
-  private listCard(
-    view: PostsView,
-    posts: ManagedPostListItem[],
-    timezone: string,
-    locale: string | undefined,
-    notice?: string,
+  private async renderCalendar(
+    scope: TelegramSystemBotPostFlowScope,
+    channelId: string,
+    controlMessageId?: number,
+    monthValue?: string,
+    selectedDate?: string,
   ) {
-    const scheduled = view === 'SCHEDULED';
-    const title = scheduled
-      ? t(locale, 'scheduledTitle')
-      : t(locale, 'publishedTitle');
-    const lines = posts.map((post, index) => {
-      const at = scheduled ? post.scheduledAt : post.publishedAt;
-      const source = scheduled
-        ? ` · ${post.scheduleMode === 'TELEGRAM_NATIVE' ? 'Telegram/MTProto' : 'System Bot'}`
-        : '';
-      return `${index + 1}. ${post.title}\n${post.telegramChannel.title} · ${formatSystemBotDate(at, timezone, locale)}${source}`;
-    });
-    return {
-      text: [notice, title, lines.join('\n\n') || t(locale, 'noPosts')]
-        .filter(Boolean)
-        .join('\n\n'),
-      reply_markup: {
-        inline_keyboard: [
-          ...(scheduled
-            ? posts.map((post) => [
-                {
-                  text: `▶️ ${post.title.slice(0, 40)}`,
-                  callback_data: `posts:publish:${post.id}`,
-                },
-              ])
-            : []),
-          [{ text: t(locale, 'back'), callback_data: 'posts:home' }],
-        ],
+    const date = /^\d{4}-\d{2}$/.test(monthValue ?? '')
+      ? new Date(`${monthValue}-01T00:00:00.000Z`)
+      : new Date();
+    const year = date.getUTCFullYear();
+    const month = date.getUTCMonth();
+    // Include the UTC edges neighbouring the local calendar month. A post close
+    // to midnight must be shown on its calendar date in the workspace timezone.
+    const from = new Date(Date.UTC(year, month, 1) - 86_400_000);
+    const until = new Date(Date.UTC(year, month + 1, 1) + 86_400_000);
+    // The authorization check and compact monthly read are independent, so run
+    // them together. Calendar navigation still costs one bounded DB read.
+    const [availableChannels, posts] = await Promise.all([
+      this.options.channels(scope),
+      this.prisma.telegramManagedPost.findMany({
+        where: {
+          workspaceId: scope.workspaceId,
+          telegramChannelId: channelId,
+          status: {
+            in: [
+              TelegramManagedPostStatus.SCHEDULED,
+              TelegramManagedPostStatus.PUBLISHED,
+            ],
+          },
+          OR: [
+            { scheduledAt: { gte: from, lt: until } },
+            { publishedAt: { gte: from, lt: until } },
+          ],
+        },
+        select: {
+          id: true,
+          title: true,
+          status: true,
+          scheduledAt: true,
+          publishedAt: true,
+          deleteAfterHours: true,
+          plannerFormat: { select: { name: true } },
+        },
+      }),
+    ]);
+    const channel = availableChannels.find((item) => item.id === channelId);
+    if (!channel) throw new NotFoundException('Channel is no longer available');
+    const days = new Set(
+      posts.map((post) =>
+        localCalendarDate(
+          post.scheduledAt ?? post.publishedAt!,
+          scope.timezone,
+        ),
+      ),
+    );
+    const selectedPosts = selectedDate
+      ? posts.filter(
+          (post) =>
+            localCalendarDate(
+              post.scheduledAt ?? post.publishedAt!,
+              scope.timezone,
+            ) === selectedDate,
+        )
+      : [];
+    const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+    const today = localCalendarDate(new Date(), scope.timezone);
+    const leadingEmptyDays =
+      (new Date(Date.UTC(year, month, 1)).getUTCDay() + 6) % 7;
+    const dayButtons = Array.from({ length: leadingEmptyDays }, () => ({
+      text: ' ',
+      callback_data: 'posts:noop',
+    }));
+    dayButtons.push(
+      ...Array.from({ length: daysInMonth }, (_, offset) => {
+        const postDate = `${year}-${String(month + 1).padStart(2, '0')}-${String(offset + 1).padStart(2, '0')}`;
+        const hasPosts = days.has(postDate);
+        return {
+          text: `${selectedDate === postDate ? '▪️ ' : hasPosts ? '📝 ' : postDate === today ? '📍 ' : ''}${offset + 1}`,
+          callback_data: `posts:day:${channel.id}:${postDate}`,
+        };
+      }),
+    );
+    const weeks = Array.from(
+      { length: Math.ceil(dayButtons.length / 7) },
+      (_, row) => dayButtons.slice(row * 7, row * 7 + 7),
+    );
+    const previous = new Date(Date.UTC(year, month - 1, 1))
+      .toISOString()
+      .slice(0, 7);
+    const next = new Date(Date.UTC(year, month + 1, 1))
+      .toISOString()
+      .slice(0, 7);
+    return this.render(
+      scope,
+      {
+        text: [
+          `<b>${escapeHtml(channel.title)} · ${monthName(month, scope.locale)} ${year}</b>`,
+          `📍 today · 📝 ${days.size} day(s) with posts · ▪️ selected day`,
+          selectedDate
+            ? selectedPosts.length
+              ? [
+                  `<b>${selectedDate}</b>`,
+                  ...selectedPosts.map((post) =>
+                    calendarPostSummary(post, scope),
+                  ),
+                ].join('\n')
+              : `<b>${selectedDate}</b>\nNo posts planned for this day.`
+            : 'Choose a day to view its publications.',
+        ].join('\n\n'),
+        parse_mode: 'HTML',
+        reply_markup: {
+          inline_keyboard: [
+            ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((text) => ({
+              text,
+              callback_data: 'posts:noop',
+            })),
+            ...weeks,
+            ...(this.config.frontendUrl && selectedPosts.length
+              ? selectedPosts.map((post) => [
+                  {
+                    text: `✏️ Update and edit: ${post.title.slice(0, 32)}`,
+                    url: managedPostEditorUrl(
+                      this.config.frontendUrl!,
+                      channel.id,
+                      post.id,
+                    ),
+                  },
+                ])
+              : []),
+            [
+              {
+                text: '‹',
+                callback_data: `posts:calendar:channel:${channel.id}:${previous}`,
+              },
+              {
+                text: '›',
+                callback_data: `posts:calendar:channel:${channel.id}:${next}`,
+              },
+            ],
+            [
+              {
+                text: t(scope.locale, 'back'),
+                callback_data: 'posts:calendar',
+              },
+            ],
+          ],
+        },
       },
-    };
+      controlMessageId,
+    );
   }
 
   private async render(
     scope: TelegramSystemBotPostFlowScope,
     card: {
       text: string;
+      parse_mode?: 'HTML';
       reply_markup: {
-        inline_keyboard: Array<Array<{ text: string; callback_data: string }>>;
+        inline_keyboard: Array<
+          Array<{ text: string; callback_data?: string; url?: string }>
+        >;
       };
     },
     controlMessageId?: number,
@@ -235,4 +384,65 @@ export class TelegramSystemBotPostsService {
       ...card,
     });
   }
+}
+
+function monthName(month: number, locale?: string) {
+  return new Intl.DateTimeFormat(locale === 'ru' ? 'ru-RU' : 'en-GB', {
+    month: 'long',
+  }).format(new Date(Date.UTC(2026, month, 1)));
+}
+
+function escapeHtml(value: string) {
+  return value.replace(
+    /[&<>]/g,
+    (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[character]!,
+  );
+}
+
+function localCalendarDate(value: Date, timezone: string) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(value);
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((item) => item.type === type)?.value;
+  return `${part('year')}-${part('month')}-${part('day')}`;
+}
+
+function calendarPostSummary(
+  post: {
+    title: string;
+    status: TelegramManagedPostStatus;
+    scheduledAt: Date | null;
+    publishedAt: Date | null;
+    deleteAfterHours: number | null;
+    plannerFormat: { name: string } | null;
+  },
+  scope: TelegramSystemBotPostFlowScope,
+) {
+  const state =
+    post.status === TelegramManagedPostStatus.PUBLISHED
+      ? '✅ Published'
+      : '🕒 Scheduled';
+  const removeAfter = post.deleteAfterHours
+    ? ` · Remove: ${post.deleteAfterHours / 24}/24`
+    : '';
+  const format = post.plannerFormat?.name
+    ? ` · ${escapeHtml(post.plannerFormat.name)}`
+    : '';
+  return `${state} · ${escapeHtml(post.title)}\n${formatSystemBotDate(post.publishedAt ?? post.scheduledAt, scope.timezone, scope.locale)}${format}${removeAfter}`;
+}
+
+function managedPostEditorUrl(
+  frontendUrl: string,
+  channelId: string,
+  postId: string,
+) {
+  const url = new URL('/telegram-posts', frontendUrl);
+  url.searchParams.set('channelId', channelId);
+  url.searchParams.set('postId', postId);
+  url.searchParams.set('postView', 'editor');
+  return url.toString();
 }

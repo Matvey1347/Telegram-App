@@ -83,6 +83,7 @@ export class TelegramInviteLinkRegistrationService {
       id: persisted.upserted.id,
       workspaceId,
       currentJoinedCount: remote.usage,
+      currentRequestedCount: remote.requested,
       joinedWithinPeriod: remote.joinedWithinPeriod ?? null,
     };
   }

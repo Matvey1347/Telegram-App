@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { ContextIdFactory, ModuleRef } from '@nestjs/core';
 import { TelegramSystemPostGroupsService } from '../telegram-channels/telegram-system-post-groups.service';
 import { TelegramSystemBotDomainGatewayService } from './telegram-system-bot-domain-gateway.service';
+import { resolveTelegramSystemBotAdSaleTargets } from './telegram-system-bot-ad-sale-flow.options';
 import type { TelegramSystemBotPostFlowScope } from './telegram-system-bot-post-flow.types';
 
 @Injectable()
@@ -17,6 +18,15 @@ export class TelegramSystemBotPostFlowOptions {
       .then((channels) =>
         channels.filter((channel) => channel.isActive).slice(0, 8),
       );
+  }
+
+  async networks(scope: TelegramSystemBotPostFlowScope) {
+    const targets = await resolveTelegramSystemBotAdSaleTargets(
+      this.moduleRef,
+      scope.workspaceId,
+    );
+    const options = await targets.options(scope.userId);
+    return options.networks.filter((network) => network.selectable).slice(0, 8);
   }
 
   async groups(scope: TelegramSystemBotPostFlowScope, channelId: string) {

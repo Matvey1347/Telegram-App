@@ -76,6 +76,7 @@ export class MutualPromotionExpenseService {
       title: string;
       startsAt: Date;
       assignedMemberId: string | null;
+      captureInviteBaseline?: boolean;
     },
     participants: MutualPromotionParticipantDto[],
     expenseAllocation?: MutualPromotionExpenseAllocationDto | null,
@@ -98,6 +99,34 @@ export class MutualPromotionExpenseService {
         participant,
       ]),
     );
+    if (folder.captureInviteBaseline) {
+      const links = await tx.telegramInviteLink.findMany({
+        where: {
+          workspaceId: folder.workspaceId,
+          id: {
+            in: participants.map((participant) => participant.inviteLinkId),
+          },
+        },
+        select: { id: true, joinedCount: true, requestedCount: true },
+      });
+      const counters = new Map(links.map((link) => [link.id, link]));
+      await Promise.all(
+        participants.map((participant) => {
+          const link = counters.get(participant.inviteLinkId);
+          if (!link) throw new NotFoundException('Invite link not found');
+          return tx.mutualPromotionFolderParticipant.update({
+            where: {
+              id: createdByChannelId.get(participant.telegramChannelId)!.id,
+            },
+            data: {
+              inviteJoinedAtStart: link.joinedCount,
+              inviteRequestedAtStart: link.requestedCount,
+              baselineCapturedAt: new Date(),
+            },
+          });
+        }),
+      );
+    }
     await this.createMany(tx, {
       workspaceId: folder.workspaceId,
       folderId: folder.id,

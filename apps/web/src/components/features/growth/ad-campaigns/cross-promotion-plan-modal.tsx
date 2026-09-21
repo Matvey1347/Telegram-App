@@ -204,25 +204,11 @@ export function CrossPromotionPlanModal({
     setSelectedIds: setPartnerIds,
     onError: setError,
   });
-  const useResolvedPromo = () => {
-    const first = targets[0];
-    const resolved = first
-      ? resolvedTargets.current.get(first.telegramChannelId)
-      : undefined;
-    if (!resolved?.promo || !resolved.inviteLink) {
-      setError("Select a promo and invite link first.");
-      return;
-    }
-    setPost(renderSelectedPromoDraft(resolved.promo, resolved.inviteLink.url));
-    setError("");
-  };
   const hasRequiredFormat = (channelId: string, formatId?: string) => {
     const products = productsByChannelId[channelId] ?? [];
     return !products.length || Boolean(formatId);
   };
-  const basicsReady =
-    Boolean(title.trim()) &&
-    publisherIds.length > 0;
+  const basicsReady = Boolean(title.trim()) && publisherIds.length > 0;
   const hasOutboundPost = Boolean(
     outboundPost.text.trim() ||
     outboundPost.imageUrls.length ||
@@ -272,6 +258,21 @@ export function CrossPromotionPlanModal({
     };
   };
   const submit = async () => {
+    const hasPostContent = Boolean(
+      post.text.trim() || post.imageUrls.length || post.mediaItems?.length,
+    );
+    const firstTarget = targets[0];
+    const resolved = firstTarget
+      ? resolvedTargets.current.get(firstTarget.telegramChannelId)
+      : undefined;
+    const selectedPromoPost =
+      resolved?.promo && resolved.inviteLink
+        ? renderSelectedPromoDraft(resolved.promo, resolved.inviteLink.url)
+        : null;
+    // Own-channel promotion publishes the selected reusable promo. A manually
+    // composed post remains an explicit optional override, never a requirement.
+    const publicationPost =
+      kind === "OWN_CHANNELS" && !hasPostContent ? selectedPromoPost : post;
     if (
       !title.trim() ||
       !publisherIds.length ||
@@ -286,11 +287,9 @@ export function CrossPromotionPlanModal({
       ) ||
       (outboundMode === "CUSTOM" && !hasOutboundPost) ||
       (kind === "DIRECT_MUTUAL" && !partnerIds.length) ||
-      (!post.text.trim() && !post.imageUrls.length && !post.mediaItems?.length)
+      !publicationPost
     ) {
-      setError(
-        "Complete channels, promos, invite links, publication post, date and time.",
-      );
+      setError("Complete channels, promos, invite links, date and time.");
       return;
     }
     try {
@@ -324,8 +323,8 @@ export function CrossPromotionPlanModal({
         partnerChannelIds: kind === "DIRECT_MUTUAL" ? partnerIds : [],
         targets,
         publicationPost: {
-          ...post,
-          title: post.title.trim() || title.trim(),
+          ...publicationPost,
+          title: publicationPost.title.trim() || title.trim(),
           iconId,
           partnerPostSource: outboundMode,
           publisherPlacements,
@@ -381,10 +380,8 @@ export function CrossPromotionPlanModal({
       botTargetStorageKey={botTargetStorageKey}
       partnerImport={partnerChannelImport}
       resolvedTargets={resolvedTargets}
-      useResolvedPromo={useResolvedPromo}
       basicsReady={basicsReady}
       promoReady={promoReady}
-      placementSettingsReady={placementSettingsReady}
       searchAdvertisers={searchAdvertisers}
       resolveOutboundPreview={() => {
         if (outboundMode === "CUSTOM") return outboundPost;

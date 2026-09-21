@@ -42,6 +42,14 @@ export type TelegramSystemBotPostPayload = {
   channelTitle?: string;
   groupId?: string;
   groupTitle?: string;
+  /** A network target is dispatched through the post-batch pipeline. */
+  channelIds?: string[];
+  networkId?: string;
+  targetLabel?: string;
+  /** Keeps the destination picker focused and avoids loading both target sets. */
+  targetPicker?: 'CHANNELS' | 'NETWORKS';
+  selectedChannelIds?: string[];
+  selectedNetworkIds?: string[];
   action?: TelegramSystemBotPostAction;
   scheduledAt?: string;
 };

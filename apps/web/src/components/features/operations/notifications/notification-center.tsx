@@ -28,7 +28,6 @@ import {
 import { operationsNotificationKeys } from "@/lib/query-keys";
 import { NotificationPanel } from "./notification-panel";
 import { NotificationPushSettings } from "./notification-push-settings";
-import { useNotificationRealtime } from "./use-notification-realtime";
 
 const PAGE_SIZE = 25;
 
@@ -63,7 +62,6 @@ export function NotificationCenter({
     getNextPageParam: (lastPage) => lastPage.nextCursor,
     enabled: enabled && Boolean(workspaceId) && open,
   });
-  useNotificationRealtime({ workspaceId, enabled, panelOpen: open });
 
   const reconcileUnread = (result: OperationsNotificationUnreadCount) => {
     queryClient.setQueryData(

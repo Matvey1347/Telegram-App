@@ -4,6 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { MutualPromotionWorkKind } from '@prisma/client';
 import { WorkspaceService } from '../../../common/workspace.service';
 import { notifyScheduledTaskDueWorkChanged } from '../../../common/scheduled-task-wake-notifier';
 import { PrismaService } from '../../../prisma/prisma.service';
@@ -11,6 +12,7 @@ import type {
   CreateMutualPromotionFolderDto,
   CreateMutualPromotionPostDto,
   UpdateMutualPromotionFolderDto,
+  UpdateMutualPromotionFolderTitleDto,
   UpdateMutualPromotionPostDto,
 } from './dto';
 import { MutualPromotionReadService } from './mutual-promotion-read.service';
@@ -20,6 +22,7 @@ import { WorkspaceAuthorizationService } from '../../workspace/workspace-authori
 import { financeAuthorizationTestFallback } from '../../finance/finance-authorization-test-fallback';
 import { MutualPromotionValidationService } from './mutual-promotion-validation.service';
 import { TelegramManagedPostRemoteDeletionService } from '../../telegram/telegram-channels/telegram-managed-post-remote-deletion.service';
+import { TelegramInviteLinkRegistrationService } from '../../telegram/telegram-channels/telegram-invite-link-registration.service';
 import {
   mutualPromotionFolderTitle,
   mutualPromotionImportedPostCount,
@@ -41,7 +44,64 @@ export class MutualPromotionCommandService {
     private readonly authorization: WorkspaceAuthorizationService = financeAuthorizationTestFallback(
       workspaceService,
     ),
+    private readonly inviteLinkRegistration?: TelegramInviteLinkRegistrationService,
   ) {}
+
+  async refreshInviteLinkData(userId: string, folderId: string) {
+    const workspaceId =
+      await this.workspaceService.resolveWorkspaceIdForUser(userId);
+    const participants =
+      await this.prisma.mutualPromotionFolderParticipant.findMany({
+        where: { folderId, workspaceId },
+        select: {
+          id: true,
+          telegramChannelId: true,
+          role: true,
+          baselineCapturedAt: true,
+          inviteLink: { select: { url: true } },
+          folder: { select: { startsAt: true, status: true } },
+        },
+      });
+    if (!participants.length) {
+      throw new NotFoundException('Mutual-promotion folder not found');
+    }
+    if (!this.inviteLinkRegistration) {
+      throw new NotFoundException('Invite-link refresh is unavailable');
+    }
+    for (const participant of participants) {
+      const refreshed = await this.inviteLinkRegistration.register(
+        userId,
+        participant.telegramChannelId,
+        participant.inviteLink.url,
+        participant.folder.status === 'ACTIVE'
+          ? { from: participant.folder.startsAt, until: new Date() }
+          : undefined,
+      );
+      // Older paid-only folders became ACTIVE before their start counters were
+      // captured. Restore only the missing baseline: historical joined users
+      // are counted by Telegram for the folder interval; join requests are
+      // cumulative, so the safe legacy baseline is zero.
+      if (
+        participant.role === 'PAID' &&
+        participant.folder.status === 'ACTIVE' &&
+        !participant.baselineCapturedAt
+      ) {
+        await this.prisma.mutualPromotionFolderParticipant.updateMany({
+          where: { id: participant.id, baselineCapturedAt: null },
+          data: {
+            inviteJoinedAtStart: Math.max(
+              0,
+              refreshed.currentJoinedCount -
+                (refreshed.joinedWithinPeriod ?? 0),
+            ),
+            inviteRequestedAtStart: 0,
+            baselineCapturedAt: participant.folder.startsAt,
+          },
+        });
+      }
+    }
+    return this.read.detailForWorkspace(workspaceId, folderId);
+  }
 
   async create(userId: string, dto: CreateMutualPromotionFolderDto) {
     if (
@@ -60,8 +120,12 @@ export class MutualPromotionCommandService {
       membership.workspaceId,
       dto.assignedMemberId,
     );
-    const paidOnly = dto.participants.every((participant) => participant.role === 'PAID');
-    const activatedAt = paidOnly ? new Date() : null;
+    const paidOnly = dto.participants.every(
+      (participant) => participant.role === 'PAID',
+    );
+    const now = new Date();
+    const scheduledPaidOnly = paidOnly && startsAt > now;
+    const activatedAt = paidOnly && !scheduledPaidOnly ? now : null;
     const folder = await this.prisma.$transaction(async (tx) => {
       await this.validation.lockInviteLinks(
         tx,
@@ -83,9 +147,13 @@ export class MutualPromotionCommandService {
           notes: dto.notes?.trim() || null,
           assignedMemberId,
           createdByUserId: userId,
-          status: paidOnly ? 'ACTIVE' : 'DRAFT',
+          status: paidOnly
+            ? scheduledPaidOnly
+              ? 'SCHEDULED'
+              : 'ACTIVE'
+            : 'DRAFT',
           activatedAt,
-          nextDueAt: paidOnly ? endsAt : null,
+          nextDueAt: paidOnly ? (scheduledPaidOnly ? startsAt : endsAt) : null,
         },
       });
       await this.expenses.createForFolder(
@@ -96,10 +164,33 @@ export class MutualPromotionCommandService {
           title: created.title,
           startsAt: created.startsAt,
           assignedMemberId: created.assignedMemberId,
+          captureInviteBaseline: paidOnly && !scheduledPaidOnly,
         },
         dto.participants,
         dto.expenseAllocation,
       );
+      if (scheduledPaidOnly) {
+        await tx.mutualPromotionWorkItem.createMany({
+          data: [
+            {
+              workspaceId: membership.workspaceId,
+              folderId: created.id,
+              kind: MutualPromotionWorkKind.CAPTURE_START_BASELINE,
+              idempotencyKey: `mutual-promotion:${created.id}:start`,
+              dueAt: startsAt,
+              nextAttemptAt: startsAt,
+            },
+            {
+              workspaceId: membership.workspaceId,
+              folderId: created.id,
+              kind: MutualPromotionWorkKind.FINISH_FOLDER,
+              idempotencyKey: `mutual-promotion:${created.id}:finish`,
+              dueAt: endsAt,
+              nextAttemptAt: endsAt,
+            },
+          ],
+        });
+      }
       return created;
     });
     return this.read.detailForWorkspace(membership.workspaceId, folder.id);
@@ -210,6 +301,28 @@ export class MutualPromotionCommandService {
           'Every post time must stay inside the folder interval',
         );
       }
+    });
+    return this.read.detailForWorkspace(workspaceId, folderId);
+  }
+
+  async updateTitle(
+    userId: string,
+    folderId: string,
+    dto: UpdateMutualPromotionFolderTitleDto,
+  ) {
+    const workspaceId =
+      await this.workspaceService.resolveWorkspaceIdForUser(userId);
+    const title = mutualPromotionFolderTitle(dto.title);
+    await this.prisma.$transaction(async (tx) => {
+      await this.validation.lockFolder(tx, folderId);
+      await this.validation.requireFolder(workspaceId, folderId, tx);
+      await tx.mutualPromotionFolder.update({
+        where: { id: folderId },
+        data: {
+          title,
+          titleTemplate: dto.titleTemplate?.trim() || null,
+        },
+      });
     });
     return this.read.detailForWorkspace(workspaceId, folderId);
   }

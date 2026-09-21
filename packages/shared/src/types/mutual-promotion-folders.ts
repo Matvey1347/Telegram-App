@@ -53,6 +53,11 @@ export type CreateMutualPromotionFolderPayload = {
 export type UpdateMutualPromotionFolderPayload =
   CreateMutualPromotionFolderPayload;
 
+export type UpdateMutualPromotionFolderTitlePayload = {
+  title: string;
+  titleTemplate?: string | null;
+};
+
 export type UpdateMutualPromotionInviteLinksPayload = {
   participants: Array<{
     participantId: string;

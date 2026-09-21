@@ -6,6 +6,7 @@ import {
   crmContactStagePresentation,
   crmContactStages,
 } from "./crm-contact-stage";
+import { CustomSelect } from "@/components/ui/primitives";
 
 const CRM_CONTACT_STAGE_STORAGE_PREFIX = "telegram-crm:contact-stage";
 const CRM_CONTACT_STAGE_CHANGED_EVENT = "telegram-crm:contact-stage-changed";
@@ -21,27 +22,21 @@ export function CrmContactStageFilters({
 }) {
   const options: Array<CrmContactStage | "ALL"> = ["ALL", ...crmContactStages];
   return (
-    <div
-      role="group"
-      aria-label="Filter contacts by status"
-      className="flex max-w-full gap-1.5 overflow-x-auto p-1"
-    >
-      {options.map((option) => {
-        const selected = option === value;
-        const presentation =
-          option === "ALL" ? null : crmContactStagePresentation(option);
-        return (
-          <button
-            key={option}
-            type="button"
-            aria-pressed={selected}
-            onClick={() => onChange(option)}
-            className={`shrink-0 whitespace-nowrap rounded-full border px-2.5 py-1 text-[11px] font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${presentation?.className ?? "border-neutral-700 bg-neutral-900 text-neutral-300"} ${selected ? "ring-2 ring-blue-500 ring-offset-1 ring-offset-neutral-950" : "opacity-70 hover:opacity-100"}`}
-          >
-            {presentation?.label ?? "ALL"}
-          </button>
-        );
-      })}
+    <div className="w-full sm:max-w-56">
+      <CustomSelect
+        value={value}
+        onChange={(next) => onChange(next as CrmContactStage | "ALL")}
+        ariaLabel="Filter contacts by status"
+        options={options.map((option) => {
+          const presentation =
+            option === "ALL" ? null : crmContactStagePresentation(option);
+          return {
+            value: option,
+            label: presentation?.label ?? "All contacts",
+            badgeClassName: presentation?.className,
+          };
+        })}
+      />
     </div>
   );
 }

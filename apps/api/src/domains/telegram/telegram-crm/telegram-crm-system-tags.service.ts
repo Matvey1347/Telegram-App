@@ -18,17 +18,21 @@ export const CRM_WORKFLOW_TAGS = [
   },
   {
     systemKey: 'WORKFLOW:MUTUAL_PROMOTION',
-    name: '🤝 Mutual promotion',
+    name: '🤝 VP',
     color: '#a78bfa',
     position: 20,
   },
   {
     systemKey: 'WORKFLOW:INBOUND_AD_OFFER',
-    name: '📨 Inbound ad offer',
+    name: '📁🤝 Folder VP',
     color: '#34d399',
     position: 30,
   },
 ] as const;
+
+export const CRM_WORKFLOW_TAG_SYSTEM_KEYS = CRM_WORKFLOW_TAGS.map(
+  (tag) => tag.systemKey,
+);
 
 export const crmTagSelect = {
   id: true,

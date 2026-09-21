@@ -27,7 +27,11 @@ import {
   mapCrmMemberSummary,
   mapCrmPeerSummary,
 } from './telegram-crm-read-model.mapper';
-import { crmTagSelect, mapCrmTag } from './telegram-crm-system-tags.service';
+import {
+  CRM_WORKFLOW_TAG_SYSTEM_KEYS,
+  crmTagSelect,
+  mapCrmTag,
+} from './telegram-crm-system-tags.service';
 
 export const CRM_OPEN_TASK_STATUSES = [
   TelegramAdvertiserTaskStatus.OPEN,
@@ -42,6 +46,14 @@ export const crmContactListSelect = {
   totalSalesCount: true,
   ownerMember: { select: crmMemberSummarySelect },
   tags: {
+    where: {
+      tag: {
+        OR: [
+          { systemKey: null },
+          { systemKey: { in: CRM_WORKFLOW_TAG_SYSTEM_KEYS } },
+        ],
+      },
+    },
     orderBy: [
       { tag: { position: 'asc' as const } },
       { createdAt: 'asc' as const },
@@ -84,6 +96,17 @@ export const crmContactListSelect = {
       },
     },
   },
+  crossPromotionPlans: {
+    orderBy: [{ scheduledAt: 'desc' as const }, { id: 'desc' as const }],
+    take: 5,
+    select: {
+      id: true,
+      title: true,
+      kind: true,
+      status: true,
+      scheduledAt: true,
+    },
+  },
   _count: {
     select: {
       sales: { where: ACTIVE_DEAL_WHERE },
@@ -111,6 +134,14 @@ export const crmContactDetailSelect = {
     },
   },
   tags: {
+    where: {
+      tag: {
+        OR: [
+          { systemKey: null },
+          { systemKey: { in: CRM_WORKFLOW_TAG_SYSTEM_KEYS } },
+        ],
+      },
+    },
     orderBy: { createdAt: 'desc' as const },
     take: CONTACT_DETAIL_RELATION_LIMIT,
     select: { tag: { select: crmTagSelect } },
@@ -184,6 +215,9 @@ export function mapCrmContactListItem(
     completedSalesCount: 0,
     totalPlacementsCount: 0,
     revenueByCurrency: [],
+    purchasedChannels: [],
+    purchaseAudience: null,
+    purchaseAudienceIcon: null,
     lastDealAt: null,
     dealMembers: [],
   };
@@ -215,6 +249,13 @@ export function mapCrmContactListItem(
           paymentStatus: totals?.paymentStatus ?? 'UNPAID',
         }
       : null,
+    crossPromotions: (row.crossPromotionPlans ?? []).map((plan) => ({
+      id: plan.id,
+      title: plan.title,
+      kind: plan.kind,
+      status: plan.status,
+      scheduledAt: plan.scheduledAt.toISOString(),
+    })),
     salesSummary,
   };
 }

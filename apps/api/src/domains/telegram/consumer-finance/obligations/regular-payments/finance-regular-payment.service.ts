@@ -329,7 +329,7 @@ export class FinanceRegularPaymentService {
   private same(existing: FinanceRegularPaymentRow, values: RegularValues) {
     return (
       existing.name === values.name &&
-      existing.emoji === values.emoji &&
+      (existing.emoji ?? null) === values.emoji &&
       existing.amount.equals(values.amount) &&
       existing.currency === values.currency &&
       existing.accountId === values.accountId &&

@@ -18,6 +18,7 @@ import {
   ErrorState,
   FinanceCardActionsMenu,
   LoadingState,
+  Select,
 } from "./ui";
 import { IconAvatar } from "./ui/finance-icon-avatar";
 import { FinanceDebtCreateModal } from "./finance-debt-create-modal";
@@ -63,8 +64,22 @@ export function FinanceDebts({
     getNextPageParam: (page) => page.nextCursor ?? undefined,
   });
   const settle = useMutation({
-    mutationFn: ({ debt, accountId, amount }: { debt: ConsumerFinanceDebt; accountId: string; amount: string }) =>
-      consumerFinanceObligationsApi.settleDebt(botId, debt.id, accountId, amount),
+    mutationFn: ({
+      debt,
+      accountId,
+      amount,
+      settlementDate,
+    }: {
+      debt: ConsumerFinanceDebt;
+      accountId: string;
+      amount: string;
+      settlementDate: string;
+    }) =>
+      consumerFinanceObligationsApi.settleDebt(botId, debt.id, {
+        accountId,
+        amount,
+        settlementDate,
+      }),
     onSuccess: (result) => {
       reconcileConsumerDebtPages(client, botId, result.debt);
       reconcileConsumerTransactionCaches(
@@ -84,21 +99,25 @@ export function FinanceDebts({
   };
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-        <div className="flex flex-wrap gap-2" role="tablist">
-          {(["OPEN", "SETTLED"] as const).map((value) => (
-            <Button
-              key={value}
-              role="tab"
-              aria-selected={status === value}
-              variant={status === value ? "primary" : "secondary"}
-              onClick={() => setStatus(value)}
-            >
-              {value === "OPEN" ? t.openDebts : t.settledDebts}
-            </Button>
-          ))}
+      <div className="space-y-3">
+        <Button className="w-full" onClick={() => setCreating(true)}>
+          {t.addDebt}
+        </Button>
+        <div className="max-w-xs">
+          <label className="mb-1 block text-sm text-neutral-300">
+            {t.status}
+          </label>
+          <Select
+            uiLocale={locale}
+            value={status}
+            onChange={(event) =>
+              setStatus(event.target.value as ConsumerFinanceDebtStatus)
+            }
+          >
+            <option value="OPEN">🟢 {t.openDebts}</option>
+            <option value="SETTLED">✅ {t.settledDebts}</option>
+          </Select>
         </div>
-        <Button onClick={() => setCreating(true)}>{t.addDebt}</Button>
       </div>
       {debts.isLoading ? (
         <LoadingState text={t.loadingDebts} />
@@ -167,7 +186,14 @@ export function FinanceDebts({
           locale={locale}
           onClose={() => setSettling(null)}
           botId={botId}
-          onCreate={(accountId, amount) => settle.mutateAsync({ debt: settling, accountId, amount })}
+          onCreate={(accountId, amount, settlementDate) =>
+            settle.mutateAsync({
+              debt: settling,
+              accountId,
+              amount,
+              settlementDate,
+            })
+          }
         />
       ) : null}
       {settle.isError ? <ErrorState text={t.debtSettleError} /> : null}

@@ -61,6 +61,11 @@ export class CreateMutualPromotionFolderDto {
 
 export class UpdateMutualPromotionFolderDto extends CreateMutualPromotionFolderDto {}
 
+export class UpdateMutualPromotionFolderTitleDto {
+  @IsString() @MaxLength(160) title!: string;
+  @IsOptional() @IsString() @MaxLength(160) titleTemplate?: string | null;
+}
+
 export class MutualPromotionInviteLinkEditDto {
   @IsString() participantId!: string;
   @IsString() inviteLinkId!: string;

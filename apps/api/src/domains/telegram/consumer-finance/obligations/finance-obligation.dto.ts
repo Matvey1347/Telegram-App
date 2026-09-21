@@ -37,6 +37,7 @@ export class FinanceDebtQueryDto {
 export class FinanceDebtSettlementDto {
   @IsOptional() @IsString() accountId?: string;
   @IsOptional() @IsNumberString() amount?: string;
+  @IsOptional() @IsString() @Matches(DATE_ONLY) settlementDate?: string;
 }
 
 export class FinanceSharedExpenseParticipantDto {

@@ -21,6 +21,7 @@ import {
 import { botBillingKeys } from "@/lib/query-keys";
 import { formatBillingDate } from "./finance-billing-format";
 import { financeAdminTimezoneOptions } from "@/lib/features/finance/finance-admin-timezones";
+import { TelegramEntityAvatar } from "@/components/features/telegram/telegram/telegram-entity-avatar";
 
 type FinanceUser = BotBillingUserPage["items"][number];
 
@@ -127,12 +128,21 @@ function UserCard({
       user.telegramUserId;
   return (
     <Card className="flex items-center gap-3 p-3">
-      <span
-        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-sky-950 text-xl"
-        aria-hidden
-      >
-        {user.subscription ? "💎" : "👤"}
-      </span>
+      <TelegramEntityAvatar
+        imageUrl={
+          user.username
+            ? `https://t.me/i/userpic/320/${user.username.replace(/^@+/, "")}.jpg`
+            : undefined
+        }
+        alt={name}
+        kind="person"
+        size="md"
+        fallback={
+          <span className="text-lg" aria-hidden>
+            {user.subscription ? "💎" : "👤"}
+          </span>
+        }
+      />
       <div className="min-w-0 flex-1">
         <p className="truncate font-medium text-white">{name}</p>
         <p className="truncate text-xs text-neutral-500">

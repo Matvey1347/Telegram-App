@@ -81,6 +81,7 @@ export const financeRegularPaymentRevisionSelect = {
   currency: true,
   accountId: true,
   accountName: true,
+  accountEmoji: true,
   categoryId: true,
   categoryName: true,
   categoryKey: true,
@@ -192,7 +193,7 @@ export function financeRegularPaymentView(
     recurrence: row.recurrence,
     intervalCount: row.intervalCount,
     nextOccurrenceAt: row.nextOccurrenceAt.toISOString(),
-    lastPaymentAt: row.occurrences[0]?.confirmedAt.toISOString() ?? null,
+    lastPaymentAt: row.occurrences?.[0]?.confirmedAt.toISOString() ?? null,
     scheduleTimezone: row.scheduleTimezone,
     note: row.note,
     necessity: row.necessity,
@@ -213,6 +214,7 @@ export function financeRegularPaymentView(
 export function financeRegularPaymentRevisionView(row: RevisionRow) {
   return {
     ...row,
+    accountIconPresentation: financeIconPresentation(row.accountEmoji, '💰'),
     amount: row.amount.toString(),
     nextOccurrenceAt: row.nextOccurrenceAt.toISOString(),
     effectiveAt: row.effectiveAt.toISOString(),

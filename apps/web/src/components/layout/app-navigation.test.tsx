@@ -97,11 +97,11 @@ describe("AppNavigation permissions", () => {
       />,
     );
 
-    expect(screen.getByRole("link", { name: "Ads" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "ADS" })).toHaveAttribute(
       "aria-current",
       "page",
     );
-    expect(screen.getAllByRole("link", { name: "Ads" })).toHaveLength(1);
+    expect(screen.getAllByRole("link", { name: "ADS" })).toHaveLength(1);
     expect(screen.getByRole("link", { name: "Settings" })).toBeInTheDocument();
     expect(screen.queryByText("Mutual promotion")).not.toBeInTheDocument();
     expect(screen.queryByText("System logs")).not.toBeInTheDocument();

@@ -30,6 +30,8 @@ import {
   Button,
   EmptyState,
   ErrorState,
+  FormField,
+  Input,
   LoadingState,
   Modal,
   PageHeader,
@@ -62,6 +64,10 @@ export function MutualPromotionFoldersPage({
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [inviteLinksEditorOpen, setInviteLinksEditorOpen] = useState(false);
   const [deleteFolder, setDeleteFolder] = useState<{
+    id: string;
+    title: string;
+  } | null>(null);
+  const [renameFolder, setRenameFolder] = useState<{
     id: string;
     title: string;
   } | null>(null);
@@ -108,8 +114,16 @@ export function MutualPromotionFoldersPage({
     refetchOnWindowFocus: "always",
   });
 
-  const reconcile = (folder: MutualPromotionFolderDetail, financeChanged = false) =>
-    reconcileMutualPromotionFolder(queryClient, folder, listParams, financeChanged);
+  const reconcile = (
+    folder: MutualPromotionFolderDetail,
+    financeChanged = false,
+  ) =>
+    reconcileMutualPromotionFolder(
+      queryClient,
+      folder,
+      listParams,
+      financeChanged,
+    );
 
   const saveMutation = useMutation({
     mutationFn: async (payload: CreateMutualPromotionFolderPayload) =>
@@ -121,11 +135,22 @@ export function MutualPromotionFoldersPage({
         folder,
         Boolean(
           folder.participants.some((participant) => participant.expense) ||
-            editingFolder?.participants.some((participant) => participant.expense),
+          editingFolder?.participants.some(
+            (participant) => participant.expense,
+          ),
         ),
       );
       setFormOpen(false);
       setEditingFolder(null);
+      setSelectedFolderId(folder.id);
+    },
+  });
+  const renameMutation = useMutation({
+    mutationFn: ({ id, title }: { id: string; title: string }) =>
+      mutualPromotionFoldersApi.updateTitle(id, { title }),
+    onSuccess: async (folder) => {
+      await reconcile(folder);
+      setRenameFolder(null);
       setSelectedFolderId(folder.id);
     },
   });
@@ -212,13 +237,19 @@ export function MutualPromotionFoldersPage({
       mutualPromotionFoldersApi.cancel(folderId),
     onSuccess: (folder) => reconcile(folder),
   });
+  const refreshInviteLinksMutation = useMutation({
+    mutationFn: (folderId: string) =>
+      mutualPromotionFoldersApi.refreshInviteLinkData(folderId),
+    onSuccess: (folder) => reconcile(folder),
+  });
   const deleteMutation = useMutation({
     mutationFn: (folderId: string) =>
       mutualPromotionFoldersApi.remove(folderId),
     onSuccess: ({ id }) => {
-      const deletedFolder = queryClient.getQueryData<MutualPromotionFolderDetail>(
-        mutualPromotionFolderKeys.detail(id),
-      );
+      const deletedFolder =
+        queryClient.getQueryData<MutualPromotionFolderDetail>(
+          mutualPromotionFolderKeys.detail(id),
+        );
       queryClient.setQueryData(
         mutualPromotionFolderKeys.list(listParams),
         (current: typeof foldersQuery.data) =>
@@ -241,7 +272,9 @@ export function MutualPromotionFoldersPage({
         queryClient.invalidateQueries({
           queryKey: telegramChannelKeys.trafficAttributions(),
         }),
-        ...(deletedFolder?.participants.some((participant) => participant.expense)
+        ...(deletedFolder?.participants.some(
+          (participant) => participant.expense,
+        )
           ? [invalidateMutualPromotionFinance(queryClient, deletedFolder)]
           : []),
       ]);
@@ -356,6 +389,13 @@ export function MutualPromotionFoldersPage({
                   setFormOpen(true);
                 });
               }}
+              onRefreshInviteLinks={() =>
+                refreshInviteLinksMutation.mutate(item.id)
+              }
+              refreshingInviteLinks={
+                refreshInviteLinksMutation.isPending &&
+                refreshInviteLinksMutation.variables === item.id
+              }
               onDelete={() =>
                 setDeleteFolder({ id: item.id, title: item.title })
               }
@@ -434,6 +474,11 @@ export function MutualPromotionFoldersPage({
         }}
         onEdit={() => {
           if (!folder) return;
+          if (folder.status !== "DRAFT") {
+            setRenameFolder({ id: folder.id, title: folder.title });
+            setSelectedFolderId(null);
+            return;
+          }
           setEditingFolder(folder);
           setSelectedFolderId(null);
           setFormOpen(true);
@@ -473,6 +518,49 @@ export function MutualPromotionFoldersPage({
             .then(() => undefined)
         }
       />
+      <Modal
+        open={Boolean(renameFolder)}
+        onClose={() => setRenameFolder(null)}
+        title="Rename folder"
+        size="sm"
+      >
+        <FormField label="Folder title" required>
+          <Input
+            autoFocus
+            aria-label="Folder title"
+            value={renameFolder?.title ?? ""}
+            onChange={(event) =>
+              setRenameFolder((current) =>
+                current ? { ...current, title: event.target.value } : current,
+              )
+            }
+          />
+        </FormField>
+        <p className="mt-2 text-xs text-neutral-500">
+          This only changes the name. Publications, participants, expenses and
+          invitation statistics stay unchanged.
+        </p>
+        <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => setRenameFolder(null)}
+            disabled={renameMutation.isPending}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            disabled={renameMutation.isPending || !renameFolder?.title.trim()}
+            onClick={() => {
+              if (!renameFolder) return;
+              void renameMutation.mutateAsync(renameFolder);
+            }}
+          >
+            {renameMutation.isPending ? "Saving…" : "Save name"}
+          </Button>
+        </div>
+      </Modal>
       {inviteLinksEditorOpen ? (
         <MutualPromotionInviteLinksEditor
           folder={folder}

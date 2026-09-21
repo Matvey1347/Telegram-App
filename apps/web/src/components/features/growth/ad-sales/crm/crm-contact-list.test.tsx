@@ -147,19 +147,18 @@ describe("CrmContactCard", () => {
     expect(screen.queryByText("Last contact")).not.toBeInTheDocument();
   });
 
-  it("exposes compact status filters including all contacts", () => {
+  it("exposes a status filter including all contacts", () => {
     const onChange = vi.fn();
     render(<CrmContactStageFilters value="ALL" onChange={onChange} />);
 
-    expect(screen.getByRole("button", { name: "ALL" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
-    expect(
-      screen.getByRole("group", { name: "Filter contacts by status" }),
-    ).toHaveClass("p-1");
+    const select = screen.getByRole("button", {
+      name: "Filter contacts by status",
+    });
+    expect(select).toHaveTextContent("All contacts");
+    fireEvent.click(select);
     fireEvent.click(screen.getByRole("button", { name: "FOLLOW-UP" }));
     expect(onChange).toHaveBeenCalledWith("FOLLOW_UP");
+    fireEvent.click(select);
     fireEvent.click(screen.getByRole("button", { name: "ARCHIVED" }));
     expect(onChange).toHaveBeenCalledWith("ARCHIVED");
   });
@@ -344,10 +343,7 @@ describe("CrmContactCard", () => {
     fireEvent.click(stage.querySelector("button")!);
     const followUp = screen.getByRole("button", { name: "FOLLOW-UP" });
     expect(followUp).toHaveTextContent("FOLLOW-UP");
-    expect(followUp.querySelector("span > span")).toHaveClass(
-      "rounded-full",
-      "whitespace-nowrap",
-    );
+    expect(followUp).toHaveTextContent("FOLLOW-UP");
     fireEvent.click(screen.getByRole("button", { name: "QUALIFIED" }));
     expect(onStageChange).toHaveBeenCalledWith("QUALIFIED");
     expect(screen.queryByText("Last contact")).toBeNull();

@@ -268,9 +268,16 @@ export class FinanceDebtService {
     id: string,
     settlementAccountId?: string,
     amount?: string,
+    settlementDate?: string,
   ) {
     const profile = await this.ledger.profileContext(profileId);
-    const now = new Date();
+    const now = settlementDate
+      ? financeObligationDate(
+          settlementDate,
+          profile.timezone ?? 'UTC',
+        ).toISOString()
+      : new Date().toISOString();
+    const settledAt = new Date(now);
     const preflight = await this.prisma.financeDebt.findFirst({
       where: { id, profileId },
       select: { status: true, currency: true },
@@ -281,7 +288,7 @@ export class FinanceDebtService {
         ? await this.ledger.prepareTransactionRateSource(profile, [
             {
               currency: preflight.currency,
-              occurredAt: now.toISOString(),
+              occurredAt: now,
             },
           ])
         : null;
@@ -302,7 +309,7 @@ export class FinanceDebtService {
           throw new ConflictException('Debt settlement transaction is missing');
         return {
           value: {
-            debt: financeDebtView(existing, profile.timezone ?? 'UTC', now),
+            debt: financeDebtView(existing, profile.timezone ?? 'UTC', settledAt),
             transaction: financeTransactionView(transaction),
             duplicate: true,
           },
@@ -328,7 +335,7 @@ export class FinanceDebtService {
             : ('INCOME' as const),
         amount: settledAmount.toString(),
         description: existing.name,
-        occurredAt: now.toISOString(),
+        occurredAt: now,
       };
       if (settlementAccountId && settlementAccountId !== existing.accountId) {
         const account = await tx.financeAccount.findFirst({
@@ -370,7 +377,7 @@ export class FinanceDebtService {
         data: {
           amount: remainingAmount,
           status: fullySettled ? 'SETTLED' : 'OPEN',
-          settledAt: fullySettled ? now : null,
+          settledAt: fullySettled ? settledAt : null,
           settlementTransactionId: fullySettled ? transaction.id : null,
           version: { increment: 1 },
         },
@@ -384,7 +391,7 @@ export class FinanceDebtService {
       await this.delivery.cancelPendingInTransaction(tx, { financeDebtId: id });
       return {
         value: {
-          debt: financeDebtView(debt, profile.timezone ?? 'UTC', now),
+          debt: financeDebtView(debt, profile.timezone ?? 'UTC', settledAt),
           transaction,
           duplicate: false,
         },

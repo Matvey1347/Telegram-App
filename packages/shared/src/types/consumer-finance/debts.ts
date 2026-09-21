@@ -76,3 +76,10 @@ export type ConsumerFinanceDebtSettlement = {
   transaction: ConsumerFinanceTransaction;
   duplicate: boolean;
 };
+
+export type ConsumerFinanceDebtSettlementInput = {
+  accountId?: string;
+  amount?: string;
+  /** Profile-local calendar date in YYYY-MM-DD format. */
+  settlementDate?: string;
+};

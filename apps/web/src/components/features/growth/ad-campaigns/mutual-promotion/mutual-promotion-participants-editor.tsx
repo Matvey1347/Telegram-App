@@ -128,7 +128,7 @@ export function MutualPromotionParticipantsEditor({
         accounts={accounts}
         onChange={updateBulkExpense}
       />
-      <div className="grid min-w-0 gap-2 overflow-visible md:max-h-[42vh] md:overflow-y-auto md:pr-1 xl:grid-cols-2">
+      <div className="grid min-w-0 gap-2 overflow-visible md:max-h-[42vh] md:overflow-y-auto md:pr-1">
         {selectedChannels.map((channel) => {
           const participant = byChannel.get(channel.id)!;
           const role = bulkExpense.enabled ? "PAID" : participant.role;
@@ -141,9 +141,7 @@ export function MutualPromotionParticipantsEditor({
             <div
               key={channel.id}
               className={`rounded-xl border bg-neutral-950/60 p-3 ${
-                role === "PAID"
-                  ? "border-amber-800/70 xl:col-span-2"
-                  : "border-neutral-800"
+                role === "PAID" ? "border-amber-800/70" : "border-neutral-800"
               }`}
             >
               <div className="mb-3 flex min-w-0 items-center gap-2">

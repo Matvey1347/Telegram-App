@@ -106,6 +106,12 @@ function setup() {
   const command = {
     createManagedPost: jest.fn().mockResolvedValue({ id: 'post-1' }),
   };
+  const batchCommand = { createAndDispatch: jest.fn().mockResolvedValue({}) };
+  const targets = {
+    resolve: jest
+      .fn()
+      .mockResolvedValue({ channelIds: ['channel-1', 'channel-2'] }),
+  };
   const publication = {
     publishManagedPostNow: jest.fn(),
     scheduleManagedPost: jest.fn(),
@@ -121,11 +127,15 @@ function setup() {
     resolve: jest
       .fn()
       .mockImplementation((provider) =>
-        provider.name === 'TelegramManagedPostCommandService'
-          ? command
-          : provider.name === 'TelegramSystemPostGroupsService'
-            ? postGroups
-            : publication,
+        provider.name === 'TelegramPostBatchCommandService'
+          ? batchCommand
+          : provider.name === 'TelegramAdSalesBotTargetsService'
+            ? targets
+            : provider.name === 'TelegramManagedPostCommandService'
+              ? command
+              : provider.name === 'TelegramSystemPostGroupsService'
+                ? postGroups
+                : publication,
       ),
   };
   const flowOptions = {
@@ -137,6 +147,11 @@ function setup() {
     groups: jest.fn((input, channelId) =>
       postGroups.optionsForSystemBotPost(input.userId, channelId),
     ),
+    networks: jest
+      .fn()
+      .mockResolvedValue([
+        { id: 'network-1', name: 'Network', channelCount: 2 },
+      ]),
   };
   const postContent = new TelegramSystemBotPostContentService(
     { token: 'token' } as any,
@@ -159,11 +174,36 @@ function setup() {
     media,
     command,
     publication,
+    batchCommand,
     postGroups,
+    flowOptions,
   };
 }
 
 describe('TelegramSystemBotPostFlowService', () => {
+  it('switches the destination picker before loading networks', async () => {
+    const { service, workflows, flowOptions } = setup();
+    const choosing = workflow({
+      step: 'CHOOSE_CHANNEL',
+      payload: { content },
+    });
+    workflows.get.mockResolvedValue(choosing);
+    workflows.transition.mockImplementation(({ payload }) =>
+      workflow({ step: 'CHOOSE_CHANNEL', version: 3, payload }),
+    );
+
+    await service.callback(scope, 'sbp:workflow-1:2:target.networks');
+
+    expect(workflows.transition).toHaveBeenCalledWith(
+      expect.objectContaining({
+        step: 'CHOOSE_CHANNEL',
+        payload: expect.objectContaining({ targetPicker: 'NETWORKS' }),
+      }),
+    );
+    expect(flowOptions.networks).toHaveBeenCalledWith(scope);
+    expect(flowOptions.channels).not.toHaveBeenCalled();
+  });
+
   it('captures a forwarded photo into a persisted managed-post draft payload', async () => {
     const { service, workflows, media, api } = setup();
     const active = workflow();
@@ -272,6 +312,44 @@ describe('TelegramSystemBotPostFlowService', () => {
     );
     expect(publication.publishManagedPostNow).not.toHaveBeenCalled();
     expect(publication.scheduleManagedPost).not.toHaveBeenCalled();
+  });
+
+  it('dispatches a network post as one mass publication to every network channel', async () => {
+    const { service, workflows, batchCommand } = setup();
+    const confirming = workflow({
+      step: 'CONFIRM',
+      payload: {
+        content,
+        channelIds: ['channel-1', 'channel-2'],
+        targetLabel: 'Network',
+        action: 'PUBLISH_NOW',
+      },
+    });
+    const claimed = workflow({
+      step: 'CONFIRM',
+      status: TelegramSystemBotWorkflowStatus.COMMITTING,
+      version: 3,
+      payload: confirming.payload,
+    });
+    const completed = workflow({
+      step: 'CONFIRM',
+      status: TelegramSystemBotWorkflowStatus.COMPLETED,
+      version: 4,
+      payload: confirming.payload,
+    });
+    workflows.get.mockResolvedValue(confirming);
+    workflows.claimCommit.mockResolvedValue(claimed);
+    workflows.complete.mockResolvedValue(completed);
+
+    await service.callback(scope, 'sbp:workflow-1:2:confirm');
+
+    expect(batchCommand.createAndDispatch).toHaveBeenCalledWith(
+      scope.userId,
+      expect.objectContaining({
+        channelIds: ['channel-1', 'channel-2'],
+        posts: [expect.objectContaining({ action: 'PUBLISH_NOW' })],
+      }),
+    );
   });
 
   it('accepts scheduling input in the workspace timezone', async () => {

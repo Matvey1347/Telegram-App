@@ -271,7 +271,6 @@ export class TelegramManagedPostPublicationService {
           workspaceId,
           telegramChannelId: channelId,
           id: { not: postId },
-          publicationSlotId: dto.publicationSlotId,
           scheduledAt,
           status: { in: ['SCHEDULED', 'PUBLISHING', 'PUBLISHED'] },
         },

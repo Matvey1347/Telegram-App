@@ -17,6 +17,7 @@ import { TelegramCrmConversationService } from './telegram-crm-conversation.serv
 import {
   CreateCrmContactDto,
   AttachCrmConversationDto,
+  CreateCrmTagDto,
   CreateCrmConversationDto,
   CrmContactsQueryDto,
   CrmConversationsQueryDto,
@@ -56,6 +57,11 @@ export class TelegramCrmController {
   @Get('tags')
   listTags(@CurrentUser() user: JwtUser) {
     return this.contactRead.listTags(user.sub);
+  }
+
+  @Post('tags')
+  createTag(@CurrentUser() user: JwtUser, @Body() dto: CreateCrmTagDto) {
+    return this.contactCommands.createTag(user.sub, dto);
   }
 
   @Get('contacts/:id')

@@ -304,7 +304,7 @@ export function PostBatchEditor({
       {editable ? (
         <div
           data-testid="post-batch-actions"
-          className="sticky bottom-0 z-20 -mx-4 -mb-4 flex justify-end border-t border-neutral-800 bg-neutral-900/95 px-4 py-4 backdrop-blur sm:-mx-5 sm:-mb-5 sm:px-5"
+          className="flex justify-end border-t border-neutral-800 pt-4"
         >
           <Button type="button" disabled={busy} onClick={() => void dispatch()}>
             {dispatching ? (

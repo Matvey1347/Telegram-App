@@ -3,7 +3,10 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type { TelegramPublicationSlotOccurrence, TelegramPublicationSlotOccurrencesByChannel } from '@telegram-system/shared';
+import type {
+  TelegramPublicationSlotOccurrence,
+  TelegramPublicationSlotOccurrencesByChannel,
+} from '@telegram-system/shared';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { WorkspaceService } from '../../../common/workspace.service';
 import { iconToResolvedEmoji } from '../../../common/icons/resolved-emoji';
@@ -293,7 +296,6 @@ export class TelegramPublicationSchedulesService {
           where: {
             workspaceId,
             telegramChannelId: channelId,
-            publicationSlotId: { in: slotIds },
             status: { in: ['SCHEDULED', 'PUBLISHING', 'PUBLISHED'] },
             OR: [
               { scheduledAt: { gte: from, lt: to } },
@@ -310,12 +312,13 @@ export class TelegramPublicationSchedulesService {
           },
         })
       : [];
-    const reservationByOccurrence = new Map(
+    // A legacy/custom publication at the exact slot time still consumes that
+    // publishing moment.  Do not rely only on publicationSlotId here: older
+    // scheduling paths did not persist it.
+    const reservationByScheduledAt = new Map(
       reservations.flatMap((post) => {
         const date = post.scheduledAt ?? post.publishedAt;
-        return post.publicationSlotId && date
-          ? [[`${post.publicationSlotId}:${date.toISOString()}`, post] as const]
-          : [];
+        return date ? [[date.toISOString(), post] as const] : [];
       }),
     );
     const results: TelegramPublicationSlotOccurrence[] = [];
@@ -338,8 +341,8 @@ export class TelegramPublicationSchedulesService {
           timezone,
         );
         if (scheduledAt >= from && scheduledAt < to) {
-          const reservation = reservationByOccurrence.get(
-            `${slot.id}:${scheduledAt.toISOString()}`,
+          const reservation = reservationByScheduledAt.get(
+            scheduledAt.toISOString(),
           );
           results.push({
             slotId: slot.id,
@@ -365,16 +368,30 @@ export class TelegramPublicationSchedulesService {
     userId: string,
     query: TelegramPublicationBatchOccurrenceQueryDto,
   ): Promise<TelegramPublicationSlotOccurrencesByChannel> {
-    const channelIds = [...new Set(query.channelIds.split(',').map((id) => id.trim()))];
-    if (!channelIds.length || channelIds.length > 100 || channelIds.some((id) => !id))
+    const channelIds = [
+      ...new Set(query.channelIds.split(',').map((id) => id.trim())),
+    ];
+    if (
+      !channelIds.length ||
+      channelIds.length > 100 ||
+      channelIds.some((id) => !id)
+    )
       throw new BadRequestException('Supply between 1 and 100 channel IDs');
-    const from = new Date(query.from), to = new Date(query.to);
-    if (!Number.isFinite(from.getTime()) || !Number.isFinite(to.getTime()) ||
-        !(from < to) || to.getTime() - from.getTime() > 62 * 86400000)
-      throw new BadRequestException('Occurrence range must be positive and no longer than 62 days');
+    const from = new Date(query.from),
+      to = new Date(query.to);
+    if (
+      !Number.isFinite(from.getTime()) ||
+      !Number.isFinite(to.getTime()) ||
+      !(from < to) ||
+      to.getTime() - from.getTime() > 62 * 86400000
+    )
+      throw new BadRequestException(
+        'Occurrence range must be positive and no longer than 62 days',
+      );
     const workspaceId = await this.workspaceId(userId);
     const channels = await this.prisma.telegramChannel.findMany({
-      where: { id: { in: channelIds }, workspaceId }, select: { id: true },
+      where: { id: { in: channelIds }, workspaceId },
+      select: { id: true },
     });
     if (channels.length !== channelIds.length)
       throw new NotFoundException('Telegram channel not found');
@@ -382,50 +399,107 @@ export class TelegramPublicationSchedulesService {
       this.prisma.telegramChannelPublicationScheduleAssignment.findMany({
         where: { workspaceId, channelId: { in: channelIds } },
         select: {
-          channelId: true, selectionMode: true,
+          channelId: true,
+          selectionMode: true,
           selectedSlots: { select: { slotId: true } },
-          schedule: { select: { slots: { select: {
-            id: true, title: true, kind: true, time: true, isActive: true,
-          } } } },
+          schedule: {
+            select: {
+              slots: {
+                select: {
+                  id: true,
+                  title: true,
+                  kind: true,
+                  time: true,
+                  isActive: true,
+                },
+              },
+            },
+          },
         },
       }),
-      this.prisma.workspace.findUnique({ where: { id: workspaceId }, select: { timezone: true } }),
+      this.prisma.workspace.findUnique({
+        where: { id: workspaceId },
+        select: { timezone: true },
+      }),
     ]);
     const timezone = workspace?.timezone || 'UTC';
-    const slotsByChannel = new Map(assignments.map((assignment) => {
-      const selected = new Set(assignment.selectedSlots.map((slot) => slot.slotId));
-      return [assignment.channelId, assignment.schedule.slots.filter((slot) =>
-        slot.isActive && (assignment.selectionMode === 'FULL' || selected.has(slot.id)),
-      )] as const;
-    }));
-    const slotIds = [...new Set([...slotsByChannel.values()].flatMap((slots) => slots.map((slot) => slot.id)))];
-    const reservations = slotIds.length ? await this.prisma.telegramManagedPost.findMany({
-      where: {
-        workspaceId, telegramChannelId: { in: channelIds }, publicationSlotId: { in: slotIds },
-        status: { in: ['SCHEDULED', 'PUBLISHING', 'PUBLISHED'] },
-        OR: [{ scheduledAt: { gte: from, lt: to } }, { publishedAt: { gte: from, lt: to } }],
-      },
-      select: {
-        id: true, title: true, telegramChannelId: true, publicationSlotId: true,
-        scheduledAt: true, publishedAt: true,
-      },
-    }) : [];
-    const occupied = new Map(reservations.flatMap((post) => {
-      const date = post.scheduledAt ?? post.publishedAt;
-      return post.publicationSlotId && date
-        ? [[`${post.telegramChannelId}:${post.publicationSlotId}:${date.toISOString()}`, post] as const]
-        : [];
-    }));
+    const slotsByChannel = new Map(
+      assignments.map((assignment) => {
+        const selected = new Set(
+          assignment.selectedSlots.map((slot) => slot.slotId),
+        );
+        return [
+          assignment.channelId,
+          assignment.schedule.slots.filter(
+            (slot) =>
+              slot.isActive &&
+              (assignment.selectionMode === 'FULL' || selected.has(slot.id)),
+          ),
+        ] as const;
+      }),
+    );
+    const slotIds = [
+      ...new Set(
+        [...slotsByChannel.values()].flatMap((slots) =>
+          slots.map((slot) => slot.id),
+        ),
+      ),
+    ];
+    const reservations = slotIds.length
+      ? await this.prisma.telegramManagedPost.findMany({
+          where: {
+            workspaceId,
+            telegramChannelId: { in: channelIds },
+            status: { in: ['SCHEDULED', 'PUBLISHING', 'PUBLISHED'] },
+            OR: [
+              { scheduledAt: { gte: from, lt: to } },
+              { publishedAt: { gte: from, lt: to } },
+            ],
+          },
+          select: {
+            id: true,
+            title: true,
+            telegramChannelId: true,
+            publicationSlotId: true,
+            scheduledAt: true,
+            publishedAt: true,
+          },
+        })
+      : [];
+    const occupied = new Map(
+      reservations.flatMap((post) => {
+        const date = post.scheduledAt ?? post.publishedAt;
+        return date
+          ? [[`${post.telegramChannelId}:${date.toISOString()}`, post] as const]
+          : [];
+      }),
+    );
     const result: TelegramPublicationSlotOccurrencesByChannel = {};
     const now = Date.now();
-    const uniqueSlots = new Map([...slotsByChannel.values()].flatMap((slots) => slots.map((slot) => [slot.id, slot] as const)));
+    const uniqueSlots = new Map(
+      [...slotsByChannel.values()].flatMap((slots) =>
+        slots.map((slot) => [slot.id, slot] as const),
+      ),
+    );
     const timesBySlot = new Map<string, string[]>();
-    for (let cursor = new Date(Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), from.getUTCDate()));
-      cursor <= to; cursor = new Date(cursor.getTime() + 86400000)) {
+    for (
+      let cursor = new Date(
+        Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), from.getUTCDate()),
+      );
+      cursor <= to;
+      cursor = new Date(cursor.getTime() + 86400000)
+    ) {
       const localDate = this.localDateParts(cursor, timezone);
       for (const slot of uniqueSlots.values()) {
         const [hour, minute] = slot.time.split(':').map(Number);
-        const scheduledAt = this.zonedDate(localDate.year, localDate.month, localDate.day, hour, minute, timezone);
+        const scheduledAt = this.zonedDate(
+          localDate.year,
+          localDate.month,
+          localDate.day,
+          hour,
+          minute,
+          timezone,
+        );
         if (scheduledAt < from || scheduledAt >= to) continue;
         const times = timesBySlot.get(slot.id) ?? [];
         times.push(scheduledAt.toISOString());
@@ -436,16 +510,27 @@ export class TelegramPublicationSchedulesService {
       const rows: TelegramPublicationSlotOccurrence[] = [];
       for (const slot of slotsByChannel.get(channelId) ?? []) {
         for (const scheduledAt of timesBySlot.get(slot.id) ?? []) {
-          const reservation = occupied.get(`${channelId}:${slot.id}:${scheduledAt}`);
+          const reservation = occupied.get(`${channelId}:${scheduledAt}`);
           rows.push({
-            slotId: slot.id, scheduledAt, title: slot.title,
-            kind: slot.kind, time: slot.time, timezone,
-            state: reservation ? 'OCCUPIED' : Date.parse(scheduledAt) <= now ? 'PAST' : 'AVAILABLE',
-            postId: reservation?.id ?? null, postTitle: reservation?.title ?? null,
+            slotId: slot.id,
+            scheduledAt,
+            title: slot.title,
+            kind: slot.kind,
+            time: slot.time,
+            timezone,
+            state: reservation
+              ? 'OCCUPIED'
+              : Date.parse(scheduledAt) <= now
+                ? 'PAST'
+                : 'AVAILABLE',
+            postId: reservation?.id ?? null,
+            postTitle: reservation?.title ?? null,
           });
         }
       }
-      result[channelId] = rows.sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt));
+      result[channelId] = rows.sort((a, b) =>
+        a.scheduledAt.localeCompare(b.scheduledAt),
+      );
     }
     return result;
   }

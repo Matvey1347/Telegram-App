@@ -20,6 +20,7 @@ export function financeRegularPaymentRevisionData(
     currency: row.currency,
     accountId: row.accountId,
     accountName: row.account.name,
+    accountEmoji: row.account.emoji,
     categoryId: row.categoryId,
     categoryName: row.category?.name ?? null,
     categoryKey: row.category?.key ?? null,

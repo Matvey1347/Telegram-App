@@ -10,6 +10,7 @@ import type {
   MutualPromotionInviteLinkOption,
   PaginatedResponse,
   UpdateMutualPromotionFolderPayload,
+  UpdateMutualPromotionFolderTitlePayload,
   UpdateMutualPromotionInviteLinksPayload,
   UpdateMutualPromotionPostPayload,
 } from "@telegram-system/shared";
@@ -32,6 +33,22 @@ export const mutualPromotionFoldersApi = {
   update: async (id: string, payload: UpdateMutualPromotionFolderPayload) =>
     (await api.patch<MutualPromotionFolderDetail>(`${basePath}/${id}`, payload))
       .data,
+  updateTitle: async (
+    id: string,
+    payload: UpdateMutualPromotionFolderTitlePayload,
+  ) =>
+    (
+      await api.patch<MutualPromotionFolderDetail>(
+        `${basePath}/${id}/title`,
+        payload,
+      )
+    ).data,
+  refreshInviteLinkData: async (id: string) =>
+    (
+      await api.post<MutualPromotionFolderDetail>(
+        `${basePath}/${id}/refresh-invite-links`,
+      )
+    ).data,
   remove: async (id: string) =>
     (await api.delete<{ id: string }>(`${basePath}/${id}`)).data,
   updateInviteLinks: async (

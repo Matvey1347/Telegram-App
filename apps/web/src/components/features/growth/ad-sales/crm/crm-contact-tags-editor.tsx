@@ -22,9 +22,7 @@ export function CrmContactTagsEditor({
     queryKey: telegramCrmKeys.tags(),
     queryFn: ({ signal }) => telegramCrmApi.listTags(signal),
   });
-  const automatic = contact.tags.filter(
-    (tag) => tag.assignmentMode === "AUTOMATIC",
-  );
+  const systemTags = (tags.data ?? []).filter((tag) => tag.isSystem);
   const [selected, setSelected] = useState(() =>
     contact.tags
       .filter((tag) => tag.assignmentMode === "MANUAL")
@@ -39,35 +37,54 @@ export function CrmContactTagsEditor({
       });
     },
   });
+  const createTag = useMutation({
+    mutationFn: (name: string) => telegramCrmApi.createTag({ name }),
+    onSuccess: (tag) => {
+      setSelected((current) =>
+        current.includes(tag.id) ? current : [...current, tag.id],
+      );
+      void queryClient.invalidateQueries({ queryKey: telegramCrmKeys.tags() });
+      void queryClient.invalidateQueries({
+        queryKey: telegramCrmKeys.contactLists(),
+      });
+    },
+  });
 
   if (tags.isLoading) return <LoadingState text="Loading tags…" />;
   return (
     <div className="space-y-4">
-      {automatic.length ? (
+      {systemTags.length ? (
         <section>
-          <h3 className="text-sm font-medium text-white">Automatic tags</h3>
+          <h3 className="text-sm font-medium text-white">System tags</h3>
           <p className="mt-1 text-xs text-neutral-500">
-            Added from advertising purchases and their channel networks.
+            Added by Folder and VP workflows. You can also assign them here.
           </p>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {automatic.map((tag) => (
-              <TagChip key={tag.id} tag={tag} />
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {systemTags.map((tag) => (
+              <span
+                key={tag.id}
+                className="inline-flex items-center gap-1.5 rounded-full border border-neutral-800 bg-neutral-950 px-2 py-0.5 text-xs text-neutral-300"
+              >
+                <span
+                  className="h-1.5 w-1.5 rounded-full"
+                  style={{ backgroundColor: tag.color ?? "#737373" }}
+                />
+                {tag.name}
+              </span>
             ))}
           </div>
         </section>
       ) : null}
       <section>
-        <h3 className="text-sm font-medium text-white">Workflow tags</h3>
+        <h3 className="text-sm font-medium text-white">Tags</h3>
         <p className="mt-1 text-xs text-neutral-500">
-          Mark contacts from folders, mutual promotion or inbound ad offers.
+          Add your own tags, then select the tags that describe this client.
         </p>
         <MultiSelect
           value={selected}
           onChange={setSelected}
           disabled={!canEdit || save.isPending}
-          options={(tags.data ?? [])
-            .filter((tag) => tag.assignmentMode === "MANUAL")
-            .map((tag) => ({
+          options={(tags.data ?? []).map((tag) => ({
               value: tag.id,
               label: tag.name,
               icon: (
@@ -77,12 +94,23 @@ export function CrmContactTagsEditor({
                 />
               ),
             }))}
-          placeholder="Select workflow tags"
+          placeholder="Select tags"
           searchPlaceholder="Search tags"
+          canCreateOption={(name) =>
+            !tags.data?.some(
+              (tag) =>
+                tag.name.toLocaleLowerCase() === name.toLocaleLowerCase(),
+            )
+          }
+          createOptionLabel={(name) => `Create tag “${name}”`}
+          onCreateOption={async (name) => {
+            await createTag.mutateAsync(name);
+          }}
+          creatingOption={createTag.isPending}
           className="mt-3"
         />
       </section>
-      {tags.error || save.error ? (
+      {tags.error || save.error || createTag.error ? (
         <p className="text-sm text-rose-300">Tags could not be saved.</p>
       ) : null}
       {canEdit ? (
@@ -93,20 +121,5 @@ export function CrmContactTagsEditor({
         </div>
       ) : null}
     </div>
-  );
-}
-
-function TagChip({ tag }: { tag: CrmContactDetail["tags"][number] }) {
-  return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-neutral-800 bg-neutral-950 px-2.5 py-1 text-xs text-neutral-300">
-      <span
-        className="h-2 w-2 rounded-full"
-        style={{ backgroundColor: tag.color ?? "#737373" }}
-      />
-      {tag.name}
-      {tag.isSystem ? (
-        <span className="text-[10px] uppercase text-neutral-600">System</span>
-      ) : null}
-    </span>
   );
 }

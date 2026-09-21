@@ -4,7 +4,7 @@ import type { CSSProperties, ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { MutualPromotionFolderListItem } from "@telegram-system/shared";
-import { CalendarClock, Pencil, Trash2 } from "lucide-react";
+import { CalendarClock, Pencil, RefreshCw, Trash2 } from "lucide-react";
 import { TelegramEntityAvatar } from "@/components/features/telegram/telegram/telegram-entity-avatar";
 import {
   LifecycleCountdown,
@@ -24,12 +24,16 @@ export function MutualPromotionFolderCard({
   folder,
   onOpen,
   onEdit,
+  onRefreshInviteLinks,
+  refreshingInviteLinks = false,
   onDelete,
   now,
 }: {
   folder: MutualPromotionFolderListItem;
   onOpen: () => void;
   onEdit?: () => void;
+  onRefreshInviteLinks?: () => void;
+  refreshingInviteLinks?: boolean;
   onDelete?: () => void;
   now?: number;
 }) {
@@ -66,13 +70,21 @@ export function MutualPromotionFolderCard({
           </div>
           <div className="pointer-events-auto flex items-start gap-1">
             <MutualPromotionFolderStatusBadge status={folder.status} />
-            {onEdit || onDelete ? (
+            {onEdit || onRefreshInviteLinks || onDelete ? (
               <CardActionsMenu label={`Actions for ${folder.title}`}>
-                {folder.status === "DRAFT" && onEdit ? (
+                {onEdit ? (
                   <CardMenuAction
                     label="Edit folder"
                     icon={<Pencil size={16} />}
                     onClick={onEdit}
+                  />
+                ) : null}
+                {onRefreshInviteLinks ? (
+                  <CardMenuAction
+                    label="Refresh invite-link data"
+                    icon={<RefreshCw size={16} className={refreshingInviteLinks ? "animate-spin" : undefined} />}
+                    disabled={refreshingInviteLinks}
+                    onClick={onRefreshInviteLinks}
                   />
                 ) : null}
                 {onDelete ? (

@@ -13,6 +13,7 @@ import { sanitizeOperationalError } from '../../../common/security/operational-e
 import { TelegramBotApiClient } from '../../../telegram/shared/telegram-bot-api.client';
 import { TelegramManagedPostCommandService } from '../telegram-channels/telegram-managed-post-command.service';
 import { TelegramManagedPostPublicationService } from '../telegram-channels/telegram-managed-post-publication.service';
+import { TelegramPostBatchCommandService } from '../telegram-channels/telegram-post-batch-command.service';
 import { TelegramSystemBotConfigService } from './telegram-system-bot-config.service';
 import type { TelegramSystemBotIncomingMessage } from './telegram-system-bot-forwarded-content.parser';
 import {
@@ -33,9 +34,18 @@ import {
 import { TelegramSystemBotWorkflowStore } from './telegram-system-bot-workflow.store';
 import { TelegramSystemBotPostContentService } from './telegram-system-bot-post-content.service';
 import { TelegramSystemBotPostFlowOptions } from './telegram-system-bot-post-flow.options';
+import { resolveTelegramSystemBotAdSaleTargets } from './telegram-system-bot-ad-sale-flow.options';
 import { resolveSystemBotWorkspaceProvider } from './telegram-system-bot-workspace-provider';
 
 export type { TelegramSystemBotCapturedPostContent } from './telegram-system-bot-post-flow.types';
+
+function toggleId(ids: string[] | undefined, id: string) {
+  const selected = new Set(ids ?? []);
+  if (selected.has(id)) selected.delete(id);
+  else selected.add(id);
+  return [...selected];
+}
+
 @Injectable()
 export class TelegramSystemBotPostFlowService {
   constructor(
@@ -60,7 +70,7 @@ export class TelegramSystemBotPostFlowService {
     const workflow = await this.workflows.create({
       ...scope,
       kind: TelegramSystemBotWorkflowKind.POST_IMPORT,
-      step: 'AWAIT_CONTENT',
+      step: 'CHOOSE_CHANNEL',
       payload: {},
       expiresAt: telegramSystemBotPostWorkflowExpiry(),
     });
@@ -197,6 +207,118 @@ export class TelegramSystemBotPostFlowService {
     if (action === 'confirm') {
       return this.commit(scope, workflow);
     }
+    if (action === 'target.channels' || action === 'target.networks') {
+      return this.transitionAndRender(scope, workflow, 'CHOOSE_CHANNEL', {
+        ...payload,
+        targetPicker: action === 'target.networks' ? 'NETWORKS' : 'CHANNELS',
+      });
+    }
+    if (action.startsWith('target.toggle.channel.')) {
+      const channels = await this.options.channels(scope);
+      const channel =
+        channels[Number(action.slice('target.toggle.channel.'.length))];
+      if (!channel)
+        throw new NotFoundException('Channel is no longer available');
+      return this.transitionAndRender(scope, workflow, 'CHOOSE_CHANNEL', {
+        ...payload,
+        targetPicker: 'CHANNELS',
+        selectedChannelIds: toggleId(payload.selectedChannelIds, channel.id),
+        selectedNetworkIds: undefined,
+      });
+    }
+    if (action.startsWith('target.toggle.network.')) {
+      const networks = await this.options.networks(scope);
+      const network =
+        networks[Number(action.slice('target.toggle.network.'.length))];
+      if (!network)
+        throw new NotFoundException('Network is no longer available');
+      return this.transitionAndRender(scope, workflow, 'CHOOSE_CHANNEL', {
+        ...payload,
+        targetPicker: 'NETWORKS',
+        selectedChannelIds: undefined,
+        selectedNetworkIds: toggleId(payload.selectedNetworkIds, network.id),
+      });
+    }
+    if (action === 'target.continue') {
+      if ((payload.targetPicker ?? 'CHANNELS') === 'CHANNELS') {
+        const ids = new Set(payload.selectedChannelIds ?? []);
+        const channels = (await this.options.channels(scope)).filter(
+          (channel) => ids.has(channel.id),
+        );
+        if (!channels.length)
+          return this.render(workflow, scope, 'Choose at least one channel.');
+        if (channels.length === 1) {
+          const channel = channels[0];
+          const groups = await this.options.groups(scope, channel.id);
+          const group = groups.find((item) => item.isDefault);
+          if (!group)
+            throw new NotFoundException(
+              'System Bot posts group is unavailable',
+            );
+          return this.transitionAndRender(scope, workflow, 'AWAIT_CONTENT', {
+            ...payload,
+            channelId: channel.id,
+            channelTitle: channel.title,
+            groupId: group.id,
+            groupTitle: group.title,
+            channelIds: [channel.id],
+            targetLabel: undefined,
+            selectedChannelIds: undefined,
+          });
+        }
+        return this.transitionAndRender(scope, workflow, 'AWAIT_CONTENT', {
+          ...payload,
+          channelId: undefined,
+          channelTitle: undefined,
+          groupId: undefined,
+          groupTitle: undefined,
+          channelIds: channels.map((channel) => channel.id),
+          targetLabel: `${channels.length} channels`,
+          selectedChannelIds: undefined,
+        });
+      }
+      const ids = new Set(payload.selectedNetworkIds ?? []);
+      const networks = (await this.options.networks(scope)).filter((network) =>
+        ids.has(network.id),
+      );
+      if (!networks.length)
+        return this.render(workflow, scope, 'Choose at least one network.');
+      const targets = await resolveTelegramSystemBotAdSaleTargets(
+        this.moduleRef,
+        scope.workspaceId,
+      );
+      const resolved = await Promise.all(
+        networks.map((network) =>
+          targets.resolve(scope.userId, {
+            kind: 'NETWORK',
+            networkId: network.id,
+          }),
+        ),
+      );
+      const channelIds = [
+        ...new Set(resolved.flatMap((target) => target.channelIds)),
+      ];
+      if (!channelIds.length)
+        return this.render(
+          workflow,
+          scope,
+          'The selected networks have no channels.',
+        );
+      return this.transitionAndRender(scope, workflow, 'AWAIT_CONTENT', {
+        ...payload,
+        channelId: undefined,
+        channelTitle: undefined,
+        groupId: undefined,
+        groupTitle: undefined,
+        channelIds,
+        networkId: networks.length === 1 ? networks[0].id : undefined,
+        targetLabel:
+          networks.length === 1
+            ? networks[0].name
+            : `${networks.length} networks`,
+        selectedNetworkIds: undefined,
+      });
+    }
     if (action.startsWith('channel.')) {
       const channels = await this.options.channels(scope);
       const channel = channels[Number(action.slice('channel.'.length))];
@@ -206,12 +328,41 @@ export class TelegramSystemBotPostFlowService {
       const defaultGroup = groups.find((group) => group.isDefault);
       if (!defaultGroup)
         throw new NotFoundException('System Bot posts group is unavailable');
-      return this.transitionAndRender(scope, workflow, 'CHOOSE_ACTION', {
+      return this.transitionAndRender(scope, workflow, 'AWAIT_CONTENT', {
         ...payload,
         channelId: channel.id,
         channelTitle: channel.title,
         groupId: defaultGroup.id,
         groupTitle: defaultGroup.title,
+        channelIds: [channel.id],
+        networkId: undefined,
+        targetLabel: undefined,
+        targetPicker: undefined,
+      });
+    }
+    if (action.startsWith('network.')) {
+      const networks = await this.options.networks(scope);
+      const network = networks[Number(action.slice('network.'.length))];
+      if (!network)
+        throw new NotFoundException('Network is no longer available');
+      const targets = await resolveTelegramSystemBotAdSaleTargets(
+        this.moduleRef,
+        scope.workspaceId,
+      );
+      const resolved = await targets.resolve(scope.userId, {
+        kind: 'NETWORK',
+        networkId: network.id,
+      });
+      return this.transitionAndRender(scope, workflow, 'AWAIT_CONTENT', {
+        ...payload,
+        channelId: undefined,
+        channelTitle: undefined,
+        groupId: undefined,
+        groupTitle: undefined,
+        channelIds: resolved.channelIds,
+        networkId: network.id,
+        targetLabel: network.name,
+        targetPicker: undefined,
       });
     }
     if (action === 'group.change') {
@@ -293,6 +444,10 @@ export class TelegramSystemBotPostFlowService {
             channelTitle: undefined,
             groupId: undefined,
             groupTitle: undefined,
+            channelIds: undefined,
+            networkId: undefined,
+            targetLabel: undefined,
+            targetPicker: undefined,
           }
         : payload;
     return this.transitionAndRender(scope, workflow, step, nextPayload);
@@ -303,12 +458,17 @@ export class TelegramSystemBotPostFlowService {
     workflow: TelegramSystemBotPostWorkflow,
   ) {
     const payload = telegramSystemBotPostPayload(workflow.payload);
-    if (
-      !payload.content ||
-      !payload.channelId ||
-      !payload.groupId ||
-      !payload.action
-    ) {
+    if (!payload.content || !payload.action) {
+      return this.render(workflow, scope, 'Post workflow is incomplete.');
+    }
+    const channelIds =
+      payload.channelIds ?? (payload.channelId ? [payload.channelId] : []);
+    if (!channelIds.length) {
+      return this.render(workflow, scope, 'Choose a channel or network.');
+    }
+    if (channelIds.length > 1)
+      return this.commitBatch(scope, workflow, { ...payload, channelIds });
+    if (!payload.channelId || !payload.groupId) {
       return this.render(workflow, scope, 'Post workflow is incomplete.');
     }
     const groups = await this.options.groups(scope, payload.channelId);
@@ -399,6 +559,88 @@ export class TelegramSystemBotPostFlowService {
         error: sanitizeOperationalError(error),
       });
       return this.render(failed, scope);
+    }
+  }
+
+  private async commitBatch(
+    scope: TelegramSystemBotPostFlowScope,
+    workflow: TelegramSystemBotPostWorkflow,
+    payload: TelegramSystemBotPostPayload,
+  ) {
+    if (payload.action === 'DRAFT')
+      return this.render(
+        workflow,
+        scope,
+        'Mass publications can be scheduled or published now.',
+      );
+    if (payload.action !== 'PUBLISH_NOW' && payload.action !== 'SCHEDULE')
+      return this.render(
+        workflow,
+        scope,
+        'Choose how to publish the mass publication.',
+      );
+    const action = payload.action;
+    let claimed: TelegramSystemBotPostWorkflow;
+    try {
+      claimed = await this.workflows.claimCommit({
+        ...scope,
+        id: workflow.id,
+        expectedVersion: workflow.version,
+      });
+    } catch (error) {
+      if (!(error instanceof ConflictException)) throw error;
+      return this.render(
+        await this.workflows.get(scope, workflow.id),
+        scope,
+        'This action was already processed.',
+      );
+    }
+    try {
+      const command = await resolveSystemBotWorkspaceProvider(
+        this.moduleRef,
+        TelegramPostBatchCommandService,
+        scope.workspaceId,
+      );
+      await command.createAndDispatch(scope.userId, {
+        title: `Mass publication · ${new Date().toISOString().slice(0, 10)}`,
+        channelIds: payload.channelIds!,
+        defaultDeleteAfterHours: 24,
+        posts: [
+          {
+            title: telegramSystemBotPostTitle(payload.content!),
+            iconId: null,
+            text: payload.content!.text || null,
+            imageUrls: payload.content!.imageUrls,
+            mediaItems: payload.content!.mediaItems ?? [],
+            buttonRows: payload.content!.buttonRows,
+            action,
+            scheduledAt:
+              action === 'SCHEDULE' ? (payload.scheduledAt ?? null) : null,
+            deleteAfterHours: 24,
+            longTextMode: 'IMAGES_THEN_TEXT',
+            channelOverrides: [],
+          },
+        ],
+      });
+      return this.render(
+        await this.workflows.complete({
+          ...scope,
+          id: claimed.id,
+          expectedVersion: claimed.version,
+          resultManagedPostId: null,
+        }),
+        scope,
+      );
+    } catch (error) {
+      return this.render(
+        await this.workflows.fail({
+          ...scope,
+          id: claimed.id,
+          expectedVersion: claimed.version,
+          error: sanitizeOperationalError(error),
+        }),
+        scope,
+      );
     }
   }
 

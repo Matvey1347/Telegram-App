@@ -112,7 +112,7 @@ describe("PostBatchEditor", () => {
   beforeEach(() => {
     apiMocks.occurrences.mockReset().mockResolvedValue([]);
   });
-  it("shows batch-owned labels, removes long-text controls, and docks actions to the modal edge", () => {
+  it("shows batch-owned labels, removes long-text controls, and keeps actions below the editor", () => {
     renderEditor(
       <PostBatchEditor
         batch={batch}
@@ -130,10 +130,8 @@ describe("PostBatchEditor", () => {
       screen.queryByText("telegram.posts.import.icon"),
     ).not.toBeInTheDocument();
     expect(screen.queryByText("Long text mode")).not.toBeInTheDocument();
-    expect(screen.getByTestId("post-batch-actions")).toHaveClass(
-      "-mb-4",
-      "sm:-mb-5",
-    );
+    expect(screen.getByTestId("post-batch-actions")).toHaveClass("pt-4");
+    expect(screen.getByTestId("post-batch-actions")).not.toHaveClass("sticky");
     expect(screen.getByTestId("post-batch-publications")).toHaveClass(
       "lg:col-start-2",
     );

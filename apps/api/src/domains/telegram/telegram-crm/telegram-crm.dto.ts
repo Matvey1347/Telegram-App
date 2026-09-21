@@ -67,6 +67,15 @@ export class SetCrmContactTagsDto {
   tagIds!: string[];
 }
 
+export class CreateCrmTagDto {
+  @IsString() @MaxLength(48) name!: string;
+  @IsOptional()
+  @Transform(trimNullable)
+  @IsString()
+  @Matches(/^#[0-9a-fA-F]{6}$/)
+  color?: string | null;
+}
+
 export class CreateCrmContactDto {
   @IsString() @MaxLength(160) displayName!: string;
   @IsOptional()

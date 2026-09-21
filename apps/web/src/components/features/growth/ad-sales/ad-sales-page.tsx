@@ -10,10 +10,7 @@ import {
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Plus, SlidersHorizontal } from "lucide-react";
 import { formatDate } from "@/lib/date-format";
-import {
-  TELEGRAM_AD_ANALYTICS_MAX_SELECTED_CHANNELS,
-  type TelegramAdAvailabilitySlot,
-} from "@telegram-system/shared";
+import { type TelegramAdAvailabilitySlot } from "@telegram-system/shared";
 import { AppShell } from "@/components/layout/app-shell";
 import { telegramSystemBotKeys } from "@/lib/query-keys";
 import { PageTabHead } from "@/components/layout/page-tab-head";
@@ -23,7 +20,6 @@ import { AdSalesWorkspaceHero } from "@/components/features/growth/ad-sales/ad-s
 import { AdSalesInventoryModal } from "@/components/features/growth/ad-sales/ad-sales-inventory-modal";
 import type { AdSaleScopeMode } from "@/components/features/growth/ad-sales/ad-sale-placement-scope";
 import { CalendarTab } from "@/components/features/growth/ad-sales/ad-sales-calendar-tab";
-import { AdSalesAnalyticsPanel } from "@/components/features/growth/ad-sales/ad-sales-analytics-panel";
 import { SalesTab } from "@/components/features/growth/ad-sales/ad-sales-sales-tab";
 import { useAdSalesLifecycleRefresh } from "@/components/features/growth/ad-sales/use-ad-sales-publication-refresh";
 import { AdSalesPostLinkDialogs } from "@/components/features/growth/ad-sales/ad-sales-post-link-dialogs";
@@ -159,7 +155,8 @@ function LegacyAdSalesPage() {
   useEffect(() => {
     if (
       pathname.startsWith("/ad-sales/settings") ||
-      pathname.startsWith("/ad-sales/pricing")
+      pathname.startsWith("/ad-sales/pricing") ||
+      pathname.startsWith("/ad-sales/analytics")
     ) {
       router.replace(tabRouteMap.calendar);
     }
@@ -208,11 +205,7 @@ function LegacyAdSalesPage() {
   const networksQuery = useQuery({
     queryKey: ["telegram-channel-networks"],
     queryFn: telegramChannelNetworksApi.list,
-    enabled:
-      tab === "calendar" ||
-      tab === "analytics" ||
-      inventoryOpen ||
-      adSaleModalOpen,
+    enabled: tab === "calendar" || inventoryOpen || adSaleModalOpen,
     staleTime: 60 * 1000,
   });
   const networks = useMemo(
@@ -236,11 +229,7 @@ function LegacyAdSalesPage() {
   const preferencesQuery = useQuery({
     queryKey: telegramAdSalesKeys.preferences(),
     queryFn: telegramAdSalesApi.getPreferences,
-    enabled:
-      tab === "calendar" ||
-      tab === "analytics" ||
-      inventoryOpen ||
-      adSaleModalOpen,
+    enabled: tab === "calendar" || inventoryOpen || adSaleModalOpen,
     staleTime: 60 * 1000,
   });
   const { mutate: savePreferences } = useMutation({
@@ -849,15 +838,16 @@ function LegacyAdSalesPage() {
         selectedChannelIds={selectedChannelIds}
         networks={saleableNetworks as TelegramChannelNetwork[]}
         channels={saleableChannels}
-        onClose={() => setInventoryOpen(false)}
+        onClose={() => {
+          setInventoryOpen(false);
+          if (searchParams.get("from") === "crm") {
+            router.replace("/ad-sales");
+          }
+        }}
         onSelectionModeChange={handleInventorySelectionModeChange}
         onNetworkChange={handleSelectedNetworkIdChange}
         onChannelsChange={handleSelectedChannelIdsChange}
-        maxSelectedChannels={
-          tab === "analytics"
-            ? TELEGRAM_AD_ANALYTICS_MAX_SELECTED_CHANNELS
-            : undefined
-        }
+        maxSelectedChannels={undefined}
       />
 
       {tab === "calendar" ? (
@@ -920,14 +910,6 @@ function LegacyAdSalesPage() {
               channelIds: result.channelIds,
             });
           }}
-        />
-      ) : null}
-      {tab === "analytics" ? (
-        <AdSalesAnalyticsPanel
-          selectedChannelIds={effectiveChannelIds}
-          selectedNetworkId={selectedNetworkId || null}
-          settings={settings}
-          rates={rates}
         />
       ) : null}
       <AdSalesCheckoutDialogs

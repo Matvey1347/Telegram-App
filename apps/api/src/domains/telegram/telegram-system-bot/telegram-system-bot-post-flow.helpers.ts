@@ -108,7 +108,11 @@ export async function transitionTelegramSystemBotCapturedContent(input: {
       ...scope,
       id: active.id,
       expectedVersion: active.version,
-      step: sameAlbum ? active.step : 'CHOOSE_CHANNEL',
+      step: sameAlbum
+        ? active.step
+        : payload.channelId || payload.channelIds?.length
+          ? 'CHOOSE_ACTION'
+          : 'CHOOSE_CHANNEL',
       payload: telegramSystemBotPostJson({ ...payload, content }),
     });
   } catch (error) {

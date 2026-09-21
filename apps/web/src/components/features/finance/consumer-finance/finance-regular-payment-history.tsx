@@ -12,6 +12,7 @@ import {
   financeRegularPaymentsCopy,
 } from "./i18n/regular-payments";
 import { localizeFinanceCategory } from "./finance-category-i18n";
+import { IconAvatar } from "./ui/finance-icon-avatar";
 
 export function FinanceRegularPaymentHistory({
   botId,
@@ -51,6 +52,11 @@ export function FinanceRegularPaymentHistory({
     PAUSED: t.paused,
     CANCELED: t.canceled,
   } as const;
+  const statusIcon = {
+    ACTIVE: "🟢",
+    PAUSED: "⏸️",
+    CANCELED: "⛔",
+  } as const;
   return (
     <Modal
       open
@@ -76,10 +82,18 @@ export function FinanceRegularPaymentHistory({
               <p className="mt-1 font-medium text-neutral-200">
                 {revision.name}
               </p>
-              <p className="mt-1 text-neutral-300">
+              <div className="mt-1 flex items-center gap-1.5 text-neutral-300">
+                <IconAvatar
+                  icon={
+                    revision.accountIconPresentation ?? payment.account.iconPresentation
+                  }
+                  label={revision.accountName}
+                  size="xs"
+                  bordered={false}
+                />
                 {formatMoney(revision.amount, revision.currency, "symbol")} ·{" "}
                 {revision.accountName}
-              </p>
+              </div>
               <p className="mt-1 text-neutral-400">
                 {financeRegularPaymentRecurrenceLabel(
                   revision.recurrence,
@@ -90,17 +104,25 @@ export function FinanceRegularPaymentHistory({
                   timeZone: revision.scheduleTimezone,
                 }).format(new Date(revision.nextOccurrenceAt))}
               </p>
-              <p className="mt-1 text-neutral-400">
-                {t.status}: {statusLabel[revision.status]} ·{" "}
-                {t.categorySnapshot}:{" "}
-                {revision.categoryName
-                  ? localizeFinanceCategory(
-                      revision.categoryName,
-                      revision.categoryKey,
-                      locale,
-                    )
-                  : t.noCategory}
-              </p>
+              <div className="mt-1 flex items-center gap-1.5 text-neutral-400">
+                <IconAvatar
+                  icon={{ type: "unicode", value: statusIcon[revision.status] }}
+                  label={statusLabel[revision.status]}
+                  size="xs"
+                  bordered={false}
+                />
+                <span>
+                  {t.status}: {statusLabel[revision.status]} ·{" "}
+                  {t.categorySnapshot}:{" "}
+                  {revision.categoryName
+                    ? localizeFinanceCategory(
+                        revision.categoryName,
+                        revision.categoryKey,
+                        locale,
+                      )
+                    : t.noCategory}
+                </span>
+              </div>
               <p className="mt-1 text-neutral-400">
                 {t.noteSnapshot}: {revision.note ?? t.noNote}
               </p>

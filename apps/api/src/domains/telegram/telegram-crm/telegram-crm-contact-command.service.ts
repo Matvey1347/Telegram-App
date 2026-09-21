@@ -10,6 +10,7 @@ import { PrismaService } from '../../../prisma/prisma.service';
 import { WorkspaceAuthorizationService } from '../../workspace/workspace-authorization/workspace-authorization.service';
 import {
   CreateCrmContactDto,
+  CreateCrmTagDto,
   SetCrmReplyAlertMuteDto,
   UpdateCrmContactDto,
   SetCrmContactTagsDto,
@@ -34,9 +35,30 @@ export class TelegramCrmContactCommandService {
     @Optional() private readonly systemTags?: TelegramCrmSystemTagsService,
   ) {}
 
+  async createTag(userId: string, dto: CreateCrmTagDto) {
+    const access = await this.writeContext(userId);
+    const name = dto.name.trim();
+    if (!name) throw new BadRequestException('Tag name is required');
+    const tag = await this.prisma.telegramAdvertiserTag.upsert({
+      where: { workspaceId_name: { workspaceId: access.workspaceId, name } },
+      create: {
+        workspaceId: access.workspaceId,
+        name,
+        color: dto.color ?? null,
+        position: 1000,
+      },
+      update: {},
+      select: crmTagSelect,
+    });
+    this.responseCache?.clearWorkspacePath(
+      access.workspaceId,
+      '/telegram-crm/contacts',
+    );
+    return mapCrmTag(tag);
+  }
+
   async setTags(userId: string, contactId: string, dto: SetCrmContactTagsDto) {
     const contact = await this.requireWritableContact(userId, contactId);
-    await this.systemTags?.ensureWorkflowTags(contact.workspaceId);
     const tagIds = [...new Set(dto.tagIds)];
     const tags = tagIds.length
       ? await this.prisma.telegramAdvertiserTag.findMany({

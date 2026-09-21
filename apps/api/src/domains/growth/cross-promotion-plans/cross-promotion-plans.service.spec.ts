@@ -193,6 +193,46 @@ function setup() {
 }
 
 describe('CrossPromotionPlansService', () => {
+  it('refreshes the exact tracking link without applying the channel history cutoff', async () => {
+    const registration = {
+      register: jest.fn().mockResolvedValue({ id: 'link-1' }),
+    };
+    const service = new CrossPromotionPlansService(
+      {
+        crossPromotionPlan: {
+          findFirst: jest.fn().mockResolvedValue({
+            id: 'plan-1',
+            workspaceId: 'workspace-1',
+            targets: payload.targets,
+          }),
+          findFirstOrThrow: jest
+            .fn()
+            .mockResolvedValue({ id: 'plan-1', workspaceId: 'workspace-1' }),
+        },
+        telegramInviteLink: {
+          findMany: jest
+            .fn()
+            .mockResolvedValue([
+              { telegramChannelId: 'target-1', url: 'https://t.me/+tracked' },
+            ]),
+        },
+      } as never,
+      {
+        resolveWorkspaceIdForUser: jest.fn().mockResolvedValue('workspace-1'),
+      } as never,
+      { shape: jest.fn().mockResolvedValue({ id: 'plan-1' }) } as never,
+      registration as never,
+    );
+
+    await service.refreshInviteLinkData('user-1', 'plan-1');
+
+    expect(registration.register).toHaveBeenCalledWith(
+      'user-1',
+      'target-1',
+      'https://t.me/+tracked',
+    );
+  });
+
   it('updates completed placement configuration without changing its measured boundary', async () => {
     const { service, prisma } = setup();
     prisma.crossPromotionPlan.findFirst.mockResolvedValueOnce({

@@ -68,10 +68,8 @@ export function CrossPromotionPlanView({
   botTargetStorageKey,
   partnerImport,
   resolvedTargets,
-  useResolvedPromo,
   basicsReady,
   promoReady,
-  placementSettingsReady,
   searchAdvertisers,
   resolveOutboundPreview,
 }: {
@@ -103,10 +101,8 @@ export function CrossPromotionPlanView({
   resolvedTargets: MutableRefObject<
     Map<string, { promo?: Promo; inviteLink?: TelegramInviteLink }>
   >;
-  useResolvedPromo: () => void;
   basicsReady: boolean;
   promoReady: boolean;
-  placementSettingsReady: boolean;
   searchAdvertisers: (query: string) => Promise<TelegramAdvertiser[]>;
   resolveOutboundPreview: () => TelegramSystemBotPostDraft | undefined;
 }) {
@@ -302,7 +298,7 @@ export function CrossPromotionPlanView({
                         sendStatus={postStatus.sendStatus}
                         onImport={() => importPost("post")}
                         onSend={() => sendPost("post")}
-                        onUseSelectedPromo={useResolvedPromo}
+                        onUseSelectedPromo={() => undefined}
                         onChange={setPost}
                       />
                     ) : null}
@@ -375,25 +371,6 @@ export function CrossPromotionPlanView({
               onResolved={(channelId, resolved) =>
                 resolvedTargets.current.set(channelId, resolved)
               }
-            />
-          ) : null}
-          {kind === "OWN_CHANNELS" &&
-          basicsReady &&
-          placementSettingsReady &&
-          promoReady ? (
-            <CrossPromotionPublicationPostEditor
-              directMutual={false}
-              post={post}
-              publishingChannel={allChannels.find(
-                (channel) => channel.id === publisherIds[0],
-              )}
-              botConnected={botConnected}
-              importStatus={postStatus.importStatus}
-              sendStatus={postStatus.sendStatus}
-              onImport={() => importPost("post")}
-              onSend={() => sendPost("post")}
-              onUseSelectedPromo={useResolvedPromo}
-              onChange={setPost}
             />
           ) : null}
           {error || botFlow.error ? (

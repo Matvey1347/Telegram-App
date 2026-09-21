@@ -142,6 +142,18 @@ export function CrossPromotionPlansPage({
       ]);
     },
   });
+  const refreshInviteLinksMutation = useMutation({
+    mutationFn: (id: string) => crossPromotionPlansApi.refreshInviteLinkData(id),
+    onSuccess: async () => {
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: crossPromotionPlanKeys.list(kind) }),
+        qc.invalidateQueries({ queryKey: telegramChannelKeys.lists() }),
+        qc.invalidateQueries({
+          queryKey: telegramChannelKeys.trafficAttributions(),
+        }),
+      ]);
+    },
+  });
   const header = adsSectionHeader(
     kind === "DIRECT_MUTUAL" ? "mutual-promotion" : "own-promotion",
   );
@@ -191,6 +203,13 @@ export function CrossPromotionPlansPage({
                 }}
                 onDelete={() => setDeletePlan(plan)}
                 onOpenPromo={setPreviewPromoId}
+                onRefreshInviteLinks={(source) =>
+                  refreshInviteLinksMutation.mutate(source.id)
+                }
+                refreshingInviteLinks={
+                  refreshInviteLinksMutation.isPending &&
+                  refreshInviteLinksMutation.variables === plan.id
+                }
               />
             ))}
           </MasonryGrid>

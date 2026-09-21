@@ -74,6 +74,12 @@ export class FinanceDebtController {
     @Body() input: FinanceDebtSettlementDto,
   ) {
     const session = this.requests.authenticate(botId, request);
-    return this.debts.settle(session.profileId, id, input.accountId, input.amount);
+    return this.debts.settle(
+      session.profileId,
+      id,
+      input.accountId,
+      input.amount,
+      input.settlementDate,
+    );
   }
 }

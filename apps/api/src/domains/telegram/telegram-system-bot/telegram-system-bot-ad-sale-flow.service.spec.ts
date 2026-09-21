@@ -200,7 +200,7 @@ describe('TelegramSystemBotAdSaleFlowService', () => {
     await state.service.callback(scope, callback(state.current(), 'mode.new'));
 
     expect(state.current()).toMatchObject({
-      step: 'CHOOSE_ACCOUNT',
+      step: 'CHOOSE_TARGET',
       payload: {
         mode: 'NEW',
         assignedMemberId: 'member-1',
@@ -240,7 +240,7 @@ describe('TelegramSystemBotAdSaleFlowService', () => {
     );
 
     expect(state.current()).toMatchObject({
-      step: 'CHOOSE_TARGET',
+      step: 'CHOOSE_CONTENT',
       payload: {
         assignedMemberId: 'member-2',
         memberLabel: 'Bob',
@@ -272,7 +272,7 @@ describe('TelegramSystemBotAdSaleFlowService', () => {
     );
 
     expect(state.current()).toMatchObject({
-      step: 'CHOOSE_CONTENT',
+      step: 'CHOOSE_ACCOUNT',
       payload: {
         target: {
           kind: 'CHANNELS',
@@ -303,7 +303,7 @@ describe('TelegramSystemBotAdSaleFlowService', () => {
     );
 
     expect(state.current()).toMatchObject({
-      step: 'CHOOSE_CONTENT',
+      step: 'CHOOSE_ACCOUNT',
       payload: {
         target: { kind: 'NETWORK', networkId: 'network-1', label: 'Network' },
       },

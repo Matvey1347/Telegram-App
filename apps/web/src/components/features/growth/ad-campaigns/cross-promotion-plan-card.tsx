@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarClock, Copy, Pencil, Trash2 } from "lucide-react";
+import { CalendarClock, Copy, Pencil, RefreshCw, Trash2 } from "lucide-react";
 import type { CrossPromotionPlan } from "@telegram-system/shared";
 import { IconAvatar } from "@/components/icons/icon-avatar";
 import { TelegramChannelAvatarList } from "@/components/features/telegram/telegram/telegram-channel-avatar-list";
@@ -19,6 +19,8 @@ export function CrossPromotionPlanCard({
   onEdit,
   onDelete,
   onOpenPromo,
+  onRefreshInviteLinks,
+  refreshingInviteLinks = false,
 }: {
   plan: CrossPromotionPlan;
   integrations?: CrossPromotionPlan[];
@@ -26,6 +28,8 @@ export function CrossPromotionPlanCard({
   onEdit: (plan: CrossPromotionPlan) => void;
   onDelete: () => void;
   onOpenPromo?: (promoId: string) => void;
+  onRefreshInviteLinks?: (plan: CrossPromotionPlan) => void;
+  refreshingInviteLinks?: boolean;
 }) {
   const publishingChannels = plan.publisherResults.map((channel) => ({
     id: channel.telegramChannelId,
@@ -88,6 +92,14 @@ export function CrossPromotionPlanCard({
                   label="Edit promotion"
                   icon={<Pencil size={16} />}
                   onClick={() => onEdit(plan)}
+                />
+              ) : null}
+              {onRefreshInviteLinks ? (
+                <CardMenuAction
+                  label="Refresh invite-link data"
+                  icon={<RefreshCw size={16} className={refreshingInviteLinks ? "animate-spin" : undefined} />}
+                  disabled={refreshingInviteLinks}
+                  onClick={() => onRefreshInviteLinks(plan)}
                 />
               ) : null}
               <CardMenuAction

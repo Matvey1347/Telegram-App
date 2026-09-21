@@ -70,43 +70,42 @@ function PublicationSlotOccurrenceSelectState({
   };
 
   return (
-    <FormField label={t("telegram.posts.schedules.chooseSlot")} required>
-      <div className="space-y-3">
-        <DateInput
-          value={selectedDate}
-          min={dateKey(new Date())}
-          disabled={disabled}
-          onChange={(event) => {
-            setSelectedDate(event.target.value);
-            setPublicationTime("");
-          }}
-        />
-        <div>
-          <p className="mb-2 text-sm font-medium text-neutral-200">
-            Publication time
-          </p>
+    <div className="space-y-3">
+      <div className="grid gap-3 sm:grid-cols-2 sm:items-end">
+        <FormField label={t("telegram.posts.schedules.chooseSlot")} required>
+          <DateInput
+            value={selectedDate}
+            min={dateKey(new Date())}
+            disabled={disabled}
+            onChange={(event) => {
+              setSelectedDate(event.target.value);
+              setPublicationTime("");
+            }}
+          />
+        </FormField>
+        <FormField label="Publication time">
           <TimeInput
             disabled={disabled}
             value={publicationTime}
             onChange={(event) => applyPublicationTime(event.target.value)}
           />
-          <p className="mt-1 text-xs text-neutral-500">
-            Choose any future time, or select a slot below to fill it automatically.
-          </p>
-        </div>
-        <PublicationSlotOptions
-          channelId={channelId}
-          selectedDate={selectedDate}
-          value={value}
-          scheduledAt={scheduledAt}
-          disabled={disabled}
-          onChange={(next) => {
-            setPublicationTime(next.time);
-            onChange(next);
-          }}
-        />
+        </FormField>
       </div>
-    </FormField>
+      <p className="text-xs text-neutral-500">
+        Choose any future time, or select a slot below to fill it automatically.
+      </p>
+      <PublicationSlotOptions
+        channelId={channelId}
+        selectedDate={selectedDate}
+        value={value}
+        scheduledAt={scheduledAt}
+        disabled={disabled}
+        onChange={(next) => {
+          setPublicationTime(next.time);
+          onChange(next);
+        }}
+      />
+    </div>
   );
 }
 
