@@ -24,6 +24,52 @@ const duePlan = {
 };
 
 describe('CrossPromotionPlanLifecycleService', () => {
+  it('never deletes a published own-channel post configured with no auto-delete', async () => {
+    const plan = {
+      ...duePlan,
+      status: 'ACTIVE',
+      publicationPost: {
+        ...duePlan.publicationPost,
+        publisherPlacements: [
+          {
+            telegramChannelId: 'channel-1',
+            scheduledAt: '2026-09-21T15:10:00.000Z',
+            deleteAt: null,
+          },
+        ],
+      },
+    };
+    const prisma = {
+      crossPromotionPlan: {
+        findMany: jest.fn().mockResolvedValue([plan]),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      telegramManagedPost: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'post-1',
+            status: 'PUBLISHED',
+            telegramRemoteStatus: 'PUBLISHED',
+          },
+        ]),
+      },
+    };
+    const remoteDeletion = { deletePublishedManagedPosts: jest.fn() };
+    const service = new CrossPromotionPlanLifecycleService(
+      prisma as never,
+      remoteDeletion as never,
+    );
+
+    await expect(
+      service.processDueActions(new Date('2026-09-21T16:50:00.000Z')),
+    ).resolves.toMatchObject({ completed: 0 });
+    expect(remoteDeletion.deletePublishedManagedPosts).not.toHaveBeenCalled();
+    expect(prisma.crossPromotionPlan.update).toHaveBeenCalledWith({
+      where: { id: 'plan-1' },
+      data: { status: 'ACTIVE', nextDueAt: null, lastError: null },
+    });
+  });
+
   it('deletes a due Telegram post and completes its plan', async () => {
     const prisma = {
       crossPromotionPlan: {
@@ -108,7 +154,9 @@ describe('CrossPromotionPlanLifecycleService', () => {
         update: jest.fn().mockResolvedValue({}),
       },
       telegramManagedPost: {
-        findMany: jest.fn().mockResolvedValue([{ id: 'post-1', status: 'PUBLISHED' }]),
+        findMany: jest
+          .fn()
+          .mockResolvedValue([{ id: 'post-1', status: 'PUBLISHED' }]),
       },
     };
     const service = new CrossPromotionPlanLifecycleService(

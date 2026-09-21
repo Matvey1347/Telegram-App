@@ -202,7 +202,12 @@ export class CrossPromotionPlanReadService {
           ),
       this.prisma.telegramManagedPost.findMany({
         where: { workspaceId, id: { in: managedPostIds } },
-        select: { id: true, telegramChannelId: true, telegramMessageIds: true },
+        select: {
+          id: true,
+          telegramChannelId: true,
+          telegramMessageIds: true,
+          telegramRemoteStatus: true,
+        },
       }),
       advertiserIds.length
         ? this.prisma.telegramAdvertiser.findMany({
@@ -303,6 +308,15 @@ export class CrossPromotionPlanReadService {
     const channelById = new Map(
       channels.map((channel) => [channel.id, channel]),
     );
+    const publishedManagedPostIds = new Set(
+      managedPosts
+        .filter(
+          (post) =>
+            post.telegramRemoteStatus === 'PUBLISHED' &&
+            post.telegramMessageIds.length > 0,
+        )
+        .map((post) => post.id),
+    );
     const promoById = new Map(promos.map((promo) => [promo.id, promo]));
     const linkById = new Map(links.map((link) => [link.id, link]));
     const advertiserById = new Map(
@@ -339,6 +353,9 @@ export class CrossPromotionPlanReadService {
         : null;
       const placements = placementsByPlan.get(row.id) ?? [];
       const publicationPost = publicationPostsByPlan.get(row.id)!;
+      const ownPlacementPublished = placements.some((placement) =>
+        publishedManagedPostIds.has(placement.managedPostId),
+      );
       const historicalDraft =
         row.status === 'DRAFT' &&
         new Date(row.scheduledAt).getTime() <= Date.now() &&
@@ -377,10 +394,15 @@ export class CrossPromotionPlanReadService {
         ...row,
         status: historicalDraft
           ? 'COMPLETED'
-          : row.status === 'SCHEDULED' &&
-              new Date(row.scheduledAt).getTime() <= Date.now()
-            ? 'ACTIVE'
-            : row.status,
+          : row.kind === 'OWN_CHANNELS' &&
+              (row.status === 'SCHEDULED' || row.status === 'ACTIVE')
+            ? ownPlacementPublished
+              ? 'ACTIVE'
+              : 'SCHEDULED'
+            : row.status === 'SCHEDULED' &&
+                new Date(row.scheduledAt).getTime() <= Date.now()
+              ? 'ACTIVE'
+              : row.status,
         lastError: historicalDraft ? null : row.lastError,
         advertiser: row.advertiserId
           ? (advertiserById.get(row.advertiserId) ?? null)

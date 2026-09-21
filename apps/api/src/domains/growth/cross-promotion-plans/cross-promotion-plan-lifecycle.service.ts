@@ -56,11 +56,13 @@ export class CrossPromotionPlanLifecycleService {
               workspaceId: plan.workspaceId,
               id: { in: stored.map((placement) => placement.managedPostId) },
             },
-            select: { id: true, status: true },
+            select: { id: true, status: true, telegramRemoteStatus: true },
           })
         : [];
       const hasPublishedPost = managedPosts.some(
-        (managedPost) => managedPost.status === 'PUBLISHED',
+        (managedPost) =>
+          managedPost.status === 'PUBLISHED' &&
+          managedPost.telegramRemoteStatus !== 'AUTO_DELETED',
       );
       const partnerPlacements = post.partnerPlacements ?? [];
       // Partner channels are external: their actual Telegram message cannot be
@@ -73,17 +75,13 @@ export class CrossPromotionPlanLifecycleService {
         },
       );
       const isActive = hasPublishedPost || hasPartnerPublicationStarted;
-      const legacyDue = configured.every((placement) => !placement.deleteAt);
       const dueIds = stored
         .filter((placement) => {
           const config = configured.find(
             (item) => item.telegramChannelId === placement.telegramChannelId,
           );
-          return (
-            legacyDue ||
-            Boolean(
-              config?.deleteAt && Date.parse(config.deleteAt) <= now.getTime(),
-            )
+          return Boolean(
+            config?.deleteAt && Date.parse(config.deleteAt) <= now.getTime(),
           );
         })
         .map((placement) => placement.managedPostId);
@@ -107,14 +105,11 @@ export class CrossPromotionPlanLifecycleService {
           data: {
             status: isActive ? 'ACTIVE' : 'SCHEDULED',
             nextDueAt: isActive
-              ? (futureDeletion.length
-                  ? new Date(Math.min(...futureDeletion))
-                  : null)
+              ? futureDeletion.length
+                ? new Date(Math.min(...futureDeletion))
+                : null
               : new Date(
-                  Math.min(
-                    ...futurePublication,
-                    now.getTime() + 60_000,
-                  ),
+                  Math.min(...futurePublication, now.getTime() + 60_000),
                 ),
             lastError: null,
           },
