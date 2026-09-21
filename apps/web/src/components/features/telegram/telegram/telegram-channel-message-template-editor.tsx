@@ -90,7 +90,12 @@ export function TelegramChannelMessageTemplateEditor({
         ? networks.find((network) => network.isSystem)?.id || ""
         : ""),
   );
-  const [channelIds, setChannelIds] = useState(sourceForm.channelIds);
+  const [channelIds, setChannelIds] = useState(
+    sourceForm.scopeMode === "CHANNELS" ? sourceForm.channelIds : [],
+  );
+  const [channelOrderIds, setChannelOrderIds] = useState(sourceForm.channelIds);
+  const [groupChannels, setGroupChannels] = useState(sourceForm.groupChannels ?? false);
+  const [channelGroupLabels, setChannelGroupLabels] = useState(sourceForm.channelGroupLabels ?? {});
   const [activeSection, setActiveSection] =
     useState<TelegramChannelMessageTemplateEditorSection>("details");
   const [layout, setLayout] = useState(() =>
@@ -128,13 +133,16 @@ export function TelegramChannelMessageTemplateEditor({
   const { pushToast } = useAppToast();
   const selectedNetwork = networks.find((network) => network.id === networkId);
   const resolvedChannelIds = useMemo(() => {
-    if (mode === "channels") return channelIds;
-    if (!selectedNetwork) return channelIds;
     const valid = new Set(channels.map((channel) => channel.id));
-    return (selectedNetwork?.channels || [])
-      .map((channel) => channel.id)
-      .filter((id) => valid.has(id));
-  }, [channelIds, channels, mode, selectedNetwork]);
+    const selectedIds = mode === "channels"
+      ? channelIds
+      : (selectedNetwork?.channels || []).map((channel) => channel.id);
+    const available = new Set(selectedIds.filter((id) => valid.has(id)));
+    return [...new Set([
+      ...channelOrderIds.filter((id) => available.has(id)),
+      ...selectedIds.filter((id) => available.has(id)),
+    ])];
+  }, [channelIds, channelOrderIds, channels, mode, selectedNetwork]);
 
   useEffect(() => {
     if (mode !== "network" || networkId) return;
@@ -156,7 +164,9 @@ export function TelegramChannelMessageTemplateEditor({
         mode === "network" && !selectedNetwork?.isSystem
           ? networkId || null
           : null,
-      channelIds: stableSourceIds,
+      channelIds: resolvedChannelIds,
+      groupChannels,
+      channelGroupLabels,
       bodyTemplate,
       overrideInviteLinks,
       inviteLinkOverrides,
@@ -173,6 +183,8 @@ export function TelegramChannelMessageTemplateEditor({
       bundleDiscountPercent,
       bundleOfferEnabled,
       excludedProductNames,
+      groupChannels,
+      channelGroupLabels,
       iconId,
       inviteLinkOverrides,
       mode,
@@ -181,7 +193,7 @@ export function TelegramChannelMessageTemplateEditor({
       priceRounding,
       productNameOverrides,
       selectedNetwork?.isSystem,
-      stableSourceIds,
+      resolvedChannelIds,
       title,
     ],
   );
@@ -191,6 +203,13 @@ export function TelegramChannelMessageTemplateEditor({
     enabled: stableSourceIds.length > 0,
     staleTime: 30_000,
   });
+  const orderedSourceChannels = useMemo(() => {
+    const byId = new Map((sourceQuery.data?.channels || []).map((channel) => [channel.id, channel]));
+    return resolvedChannelIds.flatMap((id) => {
+      const channel = byId.get(id);
+      return channel ? [channel] : [];
+    });
+  }, [resolvedChannelIds, sourceQuery.data?.channels]);
   const availableProductNames = useMemo(
     () =>
       [
@@ -208,8 +227,11 @@ export function TelegramChannelMessageTemplateEditor({
     () =>
       renderTelegramChannelMessageTemplate(
         bodyTemplate,
-        sourceQuery.data?.channels || [],
+        orderedSourceChannels,
         {
+          channelOrder: resolvedChannelIds,
+          groupChannels,
+          channelGroupLabels,
           overrideInviteLinks,
           inviteLinkOverrides,
           excludedProductNames,
@@ -226,11 +248,14 @@ export function TelegramChannelMessageTemplateEditor({
       bundleDiscountPercent,
       bundleOfferEnabled,
       excludedProductNames,
+      groupChannels,
+      channelGroupLabels,
       inviteLinkOverrides,
       overrideInviteLinks,
       priceRounding,
       productNameOverrides,
-      sourceQuery.data?.channels,
+      orderedSourceChannels,
+      resolvedChannelIds,
     ],
   );
 
@@ -298,10 +323,12 @@ export function TelegramChannelMessageTemplateEditor({
             mode={mode}
             networkId={networkId}
             channelIds={channelIds}
+            groupChannels={groupChannels}
+            channelGroupLabels={channelGroupLabels}
             layout={layout}
             overrideInviteLinks={overrideInviteLinks}
             inviteLinkOverrides={inviteLinkOverrides}
-            sourceChannels={sourceQuery.data?.channels}
+            sourceChannels={orderedSourceChannels}
             availableProductNames={availableProductNames}
             excludedProductNames={excludedProductNames}
             priceRounding={priceRounding}
@@ -318,6 +345,9 @@ export function TelegramChannelMessageTemplateEditor({
             onModeChange={setMode}
             onNetworkChange={setNetworkId}
             onChannelsChange={setChannelIds}
+            onOrderChange={setChannelOrderIds}
+            onGroupChannelsChange={setGroupChannels}
+            onChannelGroupLabelsChange={setChannelGroupLabels}
             onLayoutChange={setLayout}
             onOverrideInviteLinksChange={setOverrideInviteLinks}
             onInviteLinkOverridesChange={setInviteLinkOverrides}

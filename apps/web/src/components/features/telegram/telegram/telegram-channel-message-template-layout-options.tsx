@@ -26,9 +26,9 @@ const options: Array<{
     disabled: (value) => !value.showTitle,
   },
   {
-    id: "showUsername",
-    label: "Username",
-    description: "Show @username when the channel has one.",
+    id: "showViews",
+    label: "Views per post",
+    description: "Show the channel's configured views per post when available.",
   },
   {
     id: "showTgStat",

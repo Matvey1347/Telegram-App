@@ -11,6 +11,8 @@ export const emptyTelegramMessageTemplatePayload =
     scopeMode: "CHANNELS",
     networkId: null,
     channelIds: [],
+    groupChannels: false,
+    channelGroupLabels: {},
     bodyTemplate: DEFAULT_CHANNEL_MESSAGE_TEMPLATE,
     overrideInviteLinks: false,
     inviteLinkOverrides: {},

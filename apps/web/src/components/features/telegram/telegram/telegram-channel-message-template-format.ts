@@ -4,7 +4,7 @@ import type {
 } from "@telegram-system/shared";
 
 export const DEFAULT_CHANNEL_MESSAGE_TEMPLATE = `{{#channels}}
-{{emoji}} [{{title}}]({{invite_link}}){{#tgstat}} - [TgStat]({{tgstat_url}}){{/tgstat}}
+{{emoji}} [{{title}}]({{invite_link}}){{#tgstat}} - [TgStat]({{tgstat_url}}){{/tgstat}}
 {{#products}}
 {{product_name}} — **{{product_price}} {{product_currency}}**
 {{/products}}
@@ -20,7 +20,7 @@ export type TelegramChannelMessageTemplateLayout = {
   showEmoji: boolean;
   showTitle: boolean;
   linkTitle: boolean;
-  showUsername: boolean;
+  showViews: boolean;
   showTgStat: boolean;
   showDescription: boolean;
 };
@@ -30,7 +30,7 @@ export const DEFAULT_CHANNEL_MESSAGE_TEMPLATE_LAYOUT: TelegramChannelMessageTemp
     showEmoji: true,
     showTitle: true,
     linkTitle: true,
-    showUsername: false,
+    showViews: false,
     showTgStat: true,
     showDescription: false,
   };
@@ -42,7 +42,7 @@ export function readTelegramChannelMessageTemplateLayout(
     showEmoji: template.includes("{{emoji}}"),
     showTitle: template.includes("{{title}}"),
     linkTitle: template.includes("[{{title}}]({{invite_link}})"),
-    showUsername: template.includes("{{username}}"),
+    showViews: template.includes("{{views}}"),
     showTgStat: template.includes("{{tgstat_url}}"),
     showDescription: template.includes("{{description}}"),
   };
@@ -51,14 +51,13 @@ export function readTelegramChannelMessageTemplateLayout(
 export function buildTelegramChannelMessageTemplate(
   layout: TelegramChannelMessageTemplateLayout,
 ) {
-  const heading = [
-    layout.showEmoji ? "{{emoji}}" : "",
-    layout.showTitle
+  const title = layout.showTitle
       ? layout.linkTitle
         ? "[{{title}}]({{invite_link}})"
         : "{{title}}"
-      : "",
-    layout.showUsername ? "{{#username}}(@{{username}}){{/username}}" : "",
+      : "";
+  const heading = [
+    `${layout.showEmoji ? "{{emoji}}" : ""}${layout.showEmoji && title ? " " : ""}${title}`,
     layout.showTgStat ? "{{#tgstat}}- [TgStat]({{tgstat_url}}){{/tgstat}}" : "",
   ]
     .filter(Boolean)
@@ -66,8 +65,9 @@ export function buildTelegramChannelMessageTemplate(
   const description = layout.showDescription
     ? "\n{{#description}}{{description}}{{/description}}"
     : "";
+  const views = layout.showViews ? "{{#views}}\n👁 {{views}} views/post{{/views}}" : "";
   return `{{#channels}}
-${heading}${description}
+${heading}${description}${views}
 {{#products}}
 {{product_name}} — **{{product_price}} {{product_currency}}**
 {{/products}}
@@ -97,6 +97,9 @@ export function rewriteTelegramChannelMessageTemplatePriceMode(
 }
 
 type TemplateRenderOptions = {
+  channelOrder?: string[];
+  groupChannels?: boolean;
+  channelGroupLabels?: Record<string, string>;
   overrideInviteLinks?: boolean;
   inviteLinkOverrides?: Record<string, string>;
   excludedProductNames?: string[];
@@ -214,12 +217,14 @@ function renderChannel(
     );
   };
   conditional("tgstat", channel.tgStatUrl);
-  conditional("username", channel.username);
+  conditional("username", null);
   conditional("description", channel.description);
+  conditional("views", channel.viewsPerPost == null ? null : String(channel.viewsPerPost));
   rendered = replaceToken(rendered, "emoji", channel.emojiSource || "📣");
   rendered = replaceToken(rendered, "title", channel.title);
   rendered = replaceToken(rendered, "description", channel.description || "");
   rendered = replaceToken(rendered, "username", channel.username || "");
+  rendered = replaceToken(rendered, "views", channel.viewsPerPost?.toLocaleString() || "");
   rendered = replaceToken(rendered, "tgstat_url", channel.tgStatUrl || "");
   return replaceToken(rendered, "invite_link", inviteLink?.url || "");
 }
@@ -229,6 +234,25 @@ export function renderTelegramChannelMessageTemplate(
   channels: TelegramMessageTemplateChannelSource[],
   options?: TemplateRenderOptions,
 ) {
+  const priority = new Map((options?.channelOrder || []).map((id, index) => [id, index]));
+  const orderedChannels = channels.map((channel, index) => ({ channel, index })).sort((left, right) =>
+    (priority.get(left.channel.id) ?? channels.length + left.index) -
+    (priority.get(right.channel.id) ?? channels.length + right.index),
+  ).map(({ channel }) => channel);
+  const groupLabels = options?.channelGroupLabels || {};
+  const channelGroups = new Map<string, TelegramMessageTemplateChannelSource[]>();
+  if (options?.groupChannels) {
+    for (const channel of orderedChannels) {
+      const label = groupLabels[channel.id]?.trim() || "";
+      channelGroups.set(label, [...(channelGroups.get(label) || []), channel]);
+    }
+  }
+  const displayedChannels = options?.groupChannels
+    ? [...channelGroups.values()].flat()
+    : orderedChannels;
+  const firstInGroup = new Set(
+    [...channelGroups.values()].filter((items) => items.length && groupLabels[items[0].id]?.trim()).map((items) => items[0].id),
+  );
   const priceMode = readTelegramChannelMessageTemplatePriceMode(template);
   const overrides = options?.inviteLinkOverrides || {};
   const excludedProductNames = new Set(
@@ -242,9 +266,14 @@ export function renderTelegramChannelMessageTemplate(
     /{{#channels}}([\s\S]*?){{\/channels}}/g,
     (_match, rawBody: string) => {
       const body = rawBody.replace(/^\r?\n/, "");
-      return channels
+      return displayedChannels
         .map((channel, index) => {
-          const rendered = renderChannel(
+          const groupLabel = groupLabels[channel.id]?.trim();
+          const groupCount = groupLabel ? channelGroups.get(groupLabel)?.length || 1 : 0;
+          const groupHeader = options?.groupChannels && groupLabel && firstInGroup.has(channel.id)
+            ? `📂 ${groupLabel} — ${groupCount} ${groupCount === 1 ? "channel" : "channels"}\n`
+            : "";
+          const rendered = groupHeader + renderChannel(
             body,
             channel,
             overrides,
@@ -253,7 +282,7 @@ export function renderTelegramChannelMessageTemplate(
             priceRounding,
             productNameOverrides,
           );
-          return index === channels.length - 1 ? rendered.trimEnd() : rendered;
+          return index === displayedChannels.length - 1 ? rendered.trimEnd() : rendered;
         })
         .join("");
     },

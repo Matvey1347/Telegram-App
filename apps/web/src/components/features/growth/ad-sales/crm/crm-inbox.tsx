@@ -30,10 +30,11 @@ import { Pagination } from "@/components/ui/pagination";
 import { CrmInboxConversation } from "./crm-inbox-conversation";
 
 const promotions: CrmInboxPromotionStage[] = [
+  "NEW",
   "LEAD",
-  "QUALIFIED",
-  "FOLLOW_UP",
   "CUSTOMER",
+  "LOST",
+  "ANOTHER",
 ];
 
 function peerName(item: CrmInboxItem) {

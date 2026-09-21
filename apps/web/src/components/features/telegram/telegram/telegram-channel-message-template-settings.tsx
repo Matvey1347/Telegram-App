@@ -14,6 +14,7 @@ import type { TelegramChannelMessageTemplatePriceMode } from "./telegram-channel
 import type { TelegramChannelMessageTemplateEditorSection } from "./telegram-channel-message-template-editor-tabs";
 import { TelegramChannelMessageTemplateLayoutOptions } from "./telegram-channel-message-template-layout-options";
 import { TelegramChannelMessageTemplatePriceOptions } from "./telegram-channel-message-template-price-options";
+import { TelegramChannelMessageTemplateOrder } from "./telegram-channel-message-template-order";
 
 type Layout = ReturnType<typeof readTelegramChannelMessageTemplateLayout>;
 type SourceChannels = Awaited<
@@ -30,6 +31,8 @@ export function TelegramChannelMessageTemplateSettings({
   mode,
   networkId,
   channelIds,
+  groupChannels,
+  channelGroupLabels,
   layout,
   overrideInviteLinks,
   inviteLinkOverrides,
@@ -47,6 +50,9 @@ export function TelegramChannelMessageTemplateSettings({
   onModeChange,
   onNetworkChange,
   onChannelsChange,
+  onOrderChange,
+  onGroupChannelsChange,
+  onChannelGroupLabelsChange,
   onLayoutChange,
   onOverrideInviteLinksChange,
   onInviteLinkOverridesChange,
@@ -67,6 +73,8 @@ export function TelegramChannelMessageTemplateSettings({
   mode: "network" | "channels";
   networkId: string;
   channelIds: string[];
+  groupChannels: boolean;
+  channelGroupLabels: Record<string, string>;
   layout: Layout;
   overrideInviteLinks: boolean;
   inviteLinkOverrides: TelegramChannelMessageTemplatePayload["inviteLinkOverrides"];
@@ -88,6 +96,9 @@ export function TelegramChannelMessageTemplateSettings({
   onModeChange: (value: "network" | "channels") => void;
   onNetworkChange: (value: string) => void;
   onChannelsChange: (value: string[]) => void;
+  onOrderChange: (value: string[]) => void;
+  onGroupChannelsChange: (value: boolean) => void;
+  onChannelGroupLabelsChange: (value: Record<string, string>) => void;
   onLayoutChange: (value: Layout) => void;
   onOverrideInviteLinksChange: (value: boolean) => void;
   onInviteLinkOverridesChange: (
@@ -144,6 +155,16 @@ export function TelegramChannelMessageTemplateSettings({
           onChannelsChange={onChannelsChange}
           label="Generate for"
         />
+        {sourceChannels?.length ? (
+          <TelegramChannelMessageTemplateOrder
+            channels={sourceChannels}
+            groupChannels={groupChannels}
+            groupLabels={channelGroupLabels}
+            onOrderChange={onOrderChange}
+            onGroupChannelsChange={onGroupChannelsChange}
+            onGroupLabelsChange={onChannelGroupLabelsChange}
+          />
+        ) : null}
       </div>
     );
   }

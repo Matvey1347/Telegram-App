@@ -137,7 +137,6 @@ export class TelegramCrmRecipientSnapshot {
   priority(contact: ContactFact | null, now: Date) {
     if (!contact) return 'LOW' as const;
     if (
-      contact.stage === 'QUALIFIED' ||
       contact.sales.length > 0 ||
       contact.tasks.some((task) => task.dueAt < now)
     ) {

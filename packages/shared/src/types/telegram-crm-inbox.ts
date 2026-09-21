@@ -13,10 +13,9 @@ import type {
 export const CRM_INBOX_PROMOTION_STAGES = [
   "NEW",
   "LEAD",
-  "QUALIFIED",
-  "FOLLOW_UP",
   "CUSTOMER",
   "LOST",
+  "ANOTHER",
 ] as const satisfies readonly CrmContactStage[];
 
 export type CrmInboxPromotionStage =

@@ -2730,7 +2730,7 @@ export class TelegramAdSalesService {
           source: dto.source?.trim() || null,
           stage: stageFromLegacyAdvertiser(dto) ?? TelegramCrmContactStage.NEW,
           archivedAt:
-            stageFromLegacyAdvertiser(dto) === TelegramCrmContactStage.ARCHIVED
+            stageFromLegacyAdvertiser(dto) === TelegramCrmContactStage.ANOTHER
               ? new Date()
               : null,
           ownerMemberId: dto.ownerMemberId ?? null,
@@ -2808,7 +2808,7 @@ export class TelegramAdSalesService {
             : {
                 stage,
                 archivedAt:
-                  stage === TelegramCrmContactStage.ARCHIVED
+                  stage === TelegramCrmContactStage.ANOTHER
                     ? new Date()
                     : null,
               }),
@@ -2874,7 +2874,7 @@ export class TelegramAdSalesService {
       where: { id: advertiserId },
       data: {
         archivedAt: new Date(),
-        stage: TelegramCrmContactStage.ARCHIVED,
+        stage: TelegramCrmContactStage.ANOTHER,
       },
       include: this.advertiserInclude(),
     });

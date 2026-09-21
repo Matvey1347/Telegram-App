@@ -22,6 +22,8 @@ export class TelegramChannelMessageTemplatePayloadDto {
   @ArrayMaxSize(100)
   @IsString({ each: true })
   channelIds!: string[];
+  @IsOptional() @IsBoolean() groupChannels?: boolean;
+  @IsOptional() @IsObject() channelGroupLabels?: Record<string, string>;
   @IsString() @MaxLength(20_000) bodyTemplate!: string;
   @IsBoolean() overrideInviteLinks!: boolean;
   @IsObject() inviteLinkOverrides!: Record<string, string>;

@@ -36,7 +36,7 @@ export function useCrmDealDeepLink(
     description: contact.description,
     source: contact.source,
     status: contact.archivedAt ? "ARCHIVED" : contact.stage === "LOST" ? "LOST" : "ACTIVE",
-    lifecycleStage: contact.stage === "CUSTOMER" ? "CUSTOMER" : contact.stage === "QUALIFIED" ? "QUALIFIED" : "CONTACTED",
+    lifecycleStage: contact.stage === "CUSTOMER" ? "CUSTOMER" : "CONTACTED",
     ownerMemberId: contact.ownerMemberId,
     createdByUserId: null,
     lastContactAt: contact.lastContactAt,

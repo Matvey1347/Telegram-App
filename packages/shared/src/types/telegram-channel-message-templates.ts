@@ -12,6 +12,8 @@ export type TelegramChannelMessageTemplatePayload = {
   scopeMode: TelegramMessageTemplateScopeMode;
   networkId?: string | null;
   channelIds: string[];
+  groupChannels?: boolean;
+  channelGroupLabels?: Record<string, string>;
   bodyTemplate: string;
   overrideInviteLinks: boolean;
   inviteLinkOverrides: Record<string, string>;
@@ -61,6 +63,7 @@ export type TelegramMessageTemplateChannelSource = {
   photoUrl: string | null;
   tgStatUrl: string | null;
   emojiSource: string;
+  viewsPerPost?: number | null;
   iconPresentation: ResolvedEmoji | null;
   defaultInviteLinkId: string | null;
   inviteLinks: TelegramMessageTemplateInviteLink[];

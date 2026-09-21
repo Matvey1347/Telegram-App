@@ -16,13 +16,11 @@ export function legacyAdvertiserStatus(
   stage: TelegramCrmContactStage,
   hasActiveDeal = false,
 ): TelegramAdvertiserStatus {
-  if (stage === TelegramCrmContactStage.ARCHIVED)
-    return TelegramAdvertiserStatus.ARCHIVED;
+  if (stage === TelegramCrmContactStage.ANOTHER)
+    return TelegramAdvertiserStatus.INACTIVE;
   if (stage === TelegramCrmContactStage.LOST)
     return TelegramAdvertiserStatus.LOST;
   if (hasActiveDeal) return TelegramAdvertiserStatus.ACTIVE;
-  if (stage === TelegramCrmContactStage.FOLLOW_UP)
-    return TelegramAdvertiserStatus.INACTIVE;
   return TelegramAdvertiserStatus.LEAD;
 }
 
@@ -30,15 +28,12 @@ export function legacyAdvertiserLifecycleStage(
   stage: TelegramCrmContactStage,
 ): TelegramAdvertiserLifecycleStage {
   switch (stage) {
-    case TelegramCrmContactStage.QUALIFIED:
-      return TelegramAdvertiserLifecycleStage.QUALIFIED;
     case TelegramCrmContactStage.CUSTOMER:
       return TelegramAdvertiserLifecycleStage.CUSTOMER;
-    case TelegramCrmContactStage.FOLLOW_UP:
-      return TelegramAdvertiserLifecycleStage.REACTIVATION;
     case TelegramCrmContactStage.LOST:
-    case TelegramCrmContactStage.ARCHIVED:
       return TelegramAdvertiserLifecycleStage.CHURNED;
+    case TelegramCrmContactStage.ANOTHER:
+      return TelegramAdvertiserLifecycleStage.NEW;
     case TelegramCrmContactStage.LEAD:
       return TelegramAdvertiserLifecycleStage.CONTACTED;
     default:
@@ -51,7 +46,7 @@ export function stageFromLegacyAdvertiser(input: {
   lifecycleStage?: TelegramAdvertiserLifecycleStage;
 }): TelegramCrmContactStage | undefined {
   if (input.status === TelegramAdvertiserStatus.ARCHIVED)
-    return TelegramCrmContactStage.ARCHIVED;
+    return TelegramCrmContactStage.ANOTHER;
   if (
     input.status === TelegramAdvertiserStatus.LOST ||
     input.status === TelegramAdvertiserStatus.BLOCKED ||
@@ -66,12 +61,12 @@ export function stageFromLegacyAdvertiser(input: {
     return TelegramCrmContactStage.CUSTOMER;
   }
   if (input.lifecycleStage === TelegramAdvertiserLifecycleStage.QUALIFIED)
-    return TelegramCrmContactStage.QUALIFIED;
+    return TelegramCrmContactStage.LEAD;
   if (
     input.lifecycleStage === TelegramAdvertiserLifecycleStage.REACTIVATION ||
     input.status === TelegramAdvertiserStatus.INACTIVE
   ) {
-    return TelegramCrmContactStage.FOLLOW_UP;
+    return TelegramCrmContactStage.LEAD;
   }
   if (
     input.lifecycleStage === TelegramAdvertiserLifecycleStage.CONTACTED ||
@@ -103,21 +98,21 @@ export function legacyAdvertiserFilter(input: {
         stage: {
           notIn: [
             TelegramCrmContactStage.LOST,
-            TelegramCrmContactStage.ARCHIVED,
+            TelegramCrmContactStage.ANOTHER,
           ],
         },
         sales: { some: { status: { in: LEGACY_ACTIVE_DEAL_STATUSES } } },
       });
       break;
     case TelegramAdvertiserStatus.INACTIVE:
-      conditions.push({ stage: TelegramCrmContactStage.FOLLOW_UP });
+      conditions.push({ stage: TelegramCrmContactStage.LEAD });
       break;
     case TelegramAdvertiserStatus.LOST:
     case TelegramAdvertiserStatus.BLOCKED:
       conditions.push({ stage: TelegramCrmContactStage.LOST });
       break;
     case TelegramAdvertiserStatus.ARCHIVED:
-      conditions.push({ stage: TelegramCrmContactStage.ARCHIVED });
+      conditions.push({ stage: TelegramCrmContactStage.ANOTHER });
       break;
     case TelegramAdvertiserStatus.LEAD:
       conditions.push({
@@ -125,7 +120,6 @@ export function legacyAdvertiserFilter(input: {
           in: [
             TelegramCrmContactStage.NEW,
             TelegramCrmContactStage.LEAD,
-            TelegramCrmContactStage.QUALIFIED,
             TelegramCrmContactStage.CUSTOMER,
           ],
         },

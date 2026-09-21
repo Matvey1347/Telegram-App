@@ -4,11 +4,9 @@ import type { ResolvedEmoji } from "./resolved-emoji";
 export const CRM_CONTACT_STAGES = [
   "NEW",
   "LEAD",
-  "QUALIFIED",
-  "FOLLOW_UP",
   "CUSTOMER",
   "LOST",
-  "ARCHIVED",
+  "ANOTHER",
 ] as const;
 
 export type CrmContactStage = (typeof CRM_CONTACT_STAGES)[number];

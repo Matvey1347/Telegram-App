@@ -142,7 +142,7 @@ export class TelegramCrmContactCommandService {
         createdByUserId: userId,
         nextContactAt: dto.nextContactAt ? new Date(dto.nextContactAt) : null,
         archivedAt:
-          dto.stage === TelegramCrmContactStage.ARCHIVED ? new Date() : null,
+          null,
       },
       select: crmContactSelect,
     });
@@ -189,9 +189,7 @@ export class TelegramCrmContactCommandService {
         : {
             stage: dto.stage,
             archivedAt:
-              dto.stage === TelegramCrmContactStage.ARCHIVED
-                ? (existing.archivedAt ?? new Date())
-                : null,
+              null,
           }),
       ...(dto.ownerMemberId === undefined
         ? {}
@@ -293,7 +291,7 @@ export class TelegramCrmContactCommandService {
       where: { id: existing.id },
       data: {
         stage: archived
-          ? TelegramCrmContactStage.ARCHIVED
+          ? TelegramCrmContactStage.ANOTHER
           : TelegramCrmContactStage.LEAD,
         archivedAt: archived ? (existing.archivedAt ?? new Date()) : null,
       },

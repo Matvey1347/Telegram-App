@@ -271,11 +271,9 @@ enum TelegramAdvertiserLifecycleStage {
 enum TelegramCrmContactStage {
   NEW
   LEAD
-  QUALIFIED
-  FOLLOW_UP
   CUSTOMER
   LOST
-  ARCHIVED
+  ANOTHER
 }
 
 enum TelegramCrmConversationState {
@@ -2827,6 +2825,8 @@ model TelegramChannelMessageTemplate {
   scopeMode                TelegramMessageTemplateScopeMode     @default(CHANNELS)
   networkId                String?
   channelIds               String[]                             @default([])
+  groupChannels            Boolean                              @default(false)
+  channelGroupLabels       Json                                 @default("{}")
   bodyTemplate             String
   overrideInviteLinks      Boolean                              @default(false)
   inviteLinkOverrides      Json                                 @default("{}")

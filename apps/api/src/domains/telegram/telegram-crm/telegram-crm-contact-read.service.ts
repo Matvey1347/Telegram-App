@@ -294,9 +294,9 @@ export class TelegramCrmContactReadService {
           : {}),
       ...(query.stage ? { stage: query.stage } : {}),
       ...(query.archived === true
-        ? { stage: TelegramCrmContactStage.ARCHIVED }
+        ? { stage: TelegramCrmContactStage.ANOTHER }
         : query.archived === false
-          ? { stage: { not: TelegramCrmContactStage.ARCHIVED } }
+          ? { stage: { not: TelegramCrmContactStage.ANOTHER } }
           : {}),
       ...(due && query.followUpView !== 'TODAY'
         ? {
@@ -391,7 +391,7 @@ export class TelegramCrmContactReadService {
       };
     }
     if (query.followUpView === 'WAITING_FOR_REPLY') {
-      return { stage: TelegramCrmContactStage.FOLLOW_UP };
+      return { stage: TelegramCrmContactStage.LEAD };
     }
     const fields = this.prisma.telegramAdvertiser.fields;
     const wroteNoReply: Prisma.TelegramAdvertiserWhereInput = {

@@ -59,11 +59,11 @@ export async function loadCrmReadNoReplyPage(
   }
   if (query.archived === true) {
     conditions.push(
-      Prisma.sql`advertiser."stage"::text = ${TelegramCrmContactStage.ARCHIVED}`,
+      Prisma.sql`advertiser."stage"::text = ${TelegramCrmContactStage.ANOTHER}`,
     );
   } else if (query.archived === false) {
     conditions.push(
-      Prisma.sql`advertiser."stage"::text <> ${TelegramCrmContactStage.ARCHIVED}`,
+      Prisma.sql`advertiser."stage"::text <> ${TelegramCrmContactStage.ANOTHER}`,
     );
   }
   if (due) {

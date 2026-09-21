@@ -21,19 +21,24 @@ export function CrmContactStageFilters({
   onChange: (value: CrmContactStage | "ALL") => void;
 }) {
   const options: Array<CrmContactStage | "ALL"> = ["ALL", ...crmContactStages];
+  const selectedPresentation =
+    value === "ALL" ? null : crmContactStagePresentation(value);
   return (
-    <div className="w-full sm:max-w-56">
+    <div
+      className={`w-full sm:max-w-56 ${selectedPresentation?.selectClassName ?? ""}`}
+    >
       <CustomSelect
         value={value}
         onChange={(next) => onChange(next as CrmContactStage | "ALL")}
         ariaLabel="Filter contacts by status"
+        searchable={false}
         options={options.map((option) => {
           const presentation =
             option === "ALL" ? null : crmContactStagePresentation(option);
           return {
             value: option,
             label: presentation?.label ?? "All contacts",
-            badgeClassName: presentation?.className,
+            tone: presentation?.tone,
           };
         })}
       />

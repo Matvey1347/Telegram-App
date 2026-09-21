@@ -56,11 +56,45 @@ describe("renderTelegramChannelMessageTemplate", () => {
       DEFAULT_CHANNEL_MESSAGE_TEMPLATE,
       [channel("one", "One"), channel("two", "Two")],
     );
-    expect(rendered).toContain("💼 [One](https://t.me/+one)");
+    expect(rendered).toContain("💼 [One](https://t.me/+one)");
     expect(rendered).toContain("1/24 — **75 UAH**");
-    expect(rendered).toContain("**75 UAH**\n\n💼 [Two]");
-    expect(rendered).not.toContain("**75 UAH**\n\n\n💼 [Two]");
+    expect(rendered).toContain("**75 UAH**\n\n💼 [Two]");
+    expect(rendered).not.toContain("**75 UAH**\n\n\n💼 [Two]");
     expect(rendered.endsWith("\n")).toBe(false);
+  });
+
+  it("uses the saved channel order and groups topics without losing their channels", () => {
+    const first = channel("business-1", "Business One");
+    const second = channel("growth", "Growth");
+    const third = channel("business-2", "Business Two");
+    const rendered = renderTelegramChannelMessageTemplate(
+      DEFAULT_CHANNEL_MESSAGE_TEMPLATE,
+      [first, second, third],
+      {
+        channelOrder: ["business-2", "growth", "business-1"],
+        groupChannels: true,
+        channelGroupLabels: {
+          "business-1": "Business",
+          "business-2": "Business",
+          growth: "Self development",
+        },
+      },
+    );
+
+    expect(rendered).toContain("📂 Business — 2 channels");
+    expect(rendered).toContain("📂 Self development — 1 channel");
+    expect(rendered.indexOf("Business Two")).toBeLessThan(rendered.indexOf("Business One"));
+    expect(rendered.indexOf("Business One")).toBeLessThan(rendered.indexOf("Growth"));
+  });
+
+  it("does not show a username from an old template", () => {
+    const source = channel("one", "One");
+    source.username = "old_username";
+    const rendered = renderTelegramChannelMessageTemplate(
+      "{{#channels}}{{title}}{{#username}} (@{{username}}){{/username}}{{/channels}}",
+      [source],
+    );
+    expect(rendered).toBe("One");
   });
 
   it("uses a per-channel link only when overrides are enabled", () => {
@@ -161,28 +195,28 @@ describe("renderTelegramChannelMessageTemplate", () => {
   it("builds optional channel information without showing empty values", () => {
     const source = channel("one", "One");
     source.description = "A concise channel description";
-    source.username = "one_channel";
+    source.viewsPerPost = 1_250;
     const template = buildTelegramChannelMessageTemplate({
       ...DEFAULT_CHANNEL_MESSAGE_TEMPLATE_LAYOUT,
-      showUsername: true,
+      showViews: true,
       showDescription: true,
       showTgStat: false,
     });
 
     const rendered = renderTelegramChannelMessageTemplate(template, [source]);
 
-    expect(rendered).toContain("(@one_channel)");
+    expect(rendered).toContain("👁 1,250 views/post");
     expect(rendered).toContain("A concise channel description");
     expect(rendered).not.toContain("TgStat");
 
     source.description = null;
-    source.username = null;
+    source.viewsPerPost = null;
     const withoutOptionalValues = renderTelegramChannelMessageTemplate(
       template,
       [source],
     );
     expect(withoutOptionalValues).not.toContain("{{description}}");
-    expect(withoutOptionalValues).not.toContain("@)");
+    expect(withoutOptionalValues).not.toContain("views/post");
   });
 
   it("renders internal CPM calculations and keeps missing internal prices explicit", () => {

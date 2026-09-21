@@ -150,6 +150,36 @@ describe("CrmMessageThread header", () => {
     );
   });
 
+  it("keeps one contextual action menu attached to the selected outbound message", async () => {
+    vi.mocked(telegramCrmApi.listMessages).mockResolvedValue({
+      items: [
+        { ...onlyMessage, id: "outbound-1", text: "First", direction: "OUTBOUND" },
+        { ...onlyMessage, id: "outbound-2", text: "Second", direction: "OUTBOUND" },
+      ],
+      nextCursor: null,
+      hasMore: false,
+    });
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    render(
+      <QueryClientProvider client={client}>
+        <CrmMessageThread conversation={conversation} canSendManual={false} />
+      </QueryClientProvider>,
+    );
+
+    const actionButtons = await screen.findAllByRole("button", {
+      name: "Message actions",
+    });
+    fireEvent.click(actionButtons[0]);
+    expect(screen.getAllByRole("button", { name: "Copy" })).toHaveLength(1);
+
+    fireEvent.click(actionButtons[1]);
+    expect(screen.getAllByRole("button", { name: "Copy" })).toHaveLength(1);
+    expect(actionButtons[0]).toHaveAttribute("aria-expanded", "false");
+    expect(actionButtons[1]).toHaveAttribute("aria-expanded", "true");
+  });
+
   it("loads workspace Premium emoji only after the CRM picker switches tabs", async () => {
     const customEmojiPacks = vi
       .spyOn(telegramChannelsApi, "customEmojiPacks")

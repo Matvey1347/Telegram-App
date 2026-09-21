@@ -23,7 +23,7 @@ const uniqueIds = (values: string[]) => [
   ...new Set(values.map((value) => value.trim()).filter(Boolean)),
 ];
 
-const stringRecord = (value: unknown) =>
+const stringRecord = (value: unknown, limit = 30) =>
   value && typeof value === 'object' && !Array.isArray(value)
     ? Object.fromEntries(
         Object.entries(value)
@@ -31,7 +31,7 @@ const stringRecord = (value: unknown) =>
             (entry): entry is [string, string] =>
               typeof entry[1] === 'string' && Boolean(entry[1].trim()),
           )
-          .slice(0, 30)
+          .slice(0, limit)
           .map(([key, item]) => [key.trim(), item.trim()]),
       )
     : {};
@@ -74,6 +74,8 @@ export class TelegramChannelMessageTemplatesService {
       scopeMode: row.scopeMode,
       networkId: row.networkId,
       channelIds: row.channelIds,
+      groupChannels: row.groupChannels,
+      channelGroupLabels: stringRecord(row.channelGroupLabels, 100),
       bodyTemplate: row.bodyTemplate,
       overrideInviteLinks: row.overrideInviteLinks,
       inviteLinkOverrides: overrides,
@@ -104,6 +106,11 @@ export class TelegramChannelMessageTemplatesService {
         'One or more Telegram channels are unavailable',
       );
     }
+    const channelGroupLabels = Object.fromEntries(
+      Object.entries(dto.channelGroupLabels || {})
+        .filter(([id, label]) => channelIds.includes(id) && typeof label === 'string' && label.trim())
+        .map(([id, label]) => [id, label.trim().slice(0, 80)]),
+    );
     const networkId = dto.networkId?.trim() || null;
     if (networkId) {
       const network = await this.prisma.telegramChannelNetwork.findFirst({
@@ -150,6 +157,8 @@ export class TelegramChannelMessageTemplatesService {
       scopeMode: dto.scopeMode,
       networkId: dto.scopeMode === 'NETWORK' ? networkId : null,
       channelIds,
+      groupChannels: dto.groupChannels ?? false,
+      channelGroupLabels,
       bodyTemplate: dto.bodyTemplate,
       overrideInviteLinks: dto.overrideInviteLinks,
       inviteLinkOverrides: Object.fromEntries(links),
@@ -252,7 +261,11 @@ export class TelegramChannelMessageTemplatesService {
           orderBy: [{ title: 'asc' }, { id: 'asc' }],
           select: { id: true },
         });
-        channelIds = scopedChannels.map((channel) => channel.id);
+        const available = new Set(scopedChannels.map((channel) => channel.id));
+        channelIds = [
+          ...uniqueIds(template.channelIds).filter((id) => available.has(id)),
+          ...scopedChannels.map((channel) => channel.id).filter((id) => !template.channelIds.includes(id)),
+        ];
       } else {
         channelIds = uniqueIds(template.channelIds);
       }
@@ -318,6 +331,7 @@ export class TelegramChannelMessageTemplatesService {
           photoUrl: channel.photoUrl || null,
           tgStatUrl: channel.tgStatUrl || null,
           emojiSource: channel.presentationIcon?.emoji || '📣',
+          viewsPerPost: channel.ownViewsPerPost > 0 ? channel.ownViewsPerPost : null,
           iconPresentation: iconToResolvedEmoji(channel.presentationIcon),
           defaultInviteLinkId: channel.defaultInviteLinkId || null,
           inviteLinks: channel.inviteLinks.map((link) => ({

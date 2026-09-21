@@ -145,6 +145,9 @@ export function TelegramChannelMessageTemplatesModal({
         template.bodyTemplate,
         source.channels,
         {
+          channelOrder: template.channelIds,
+          groupChannels: template.groupChannels,
+          channelGroupLabels: template.channelGroupLabels,
           overrideInviteLinks: template.overrideInviteLinks,
           inviteLinkOverrides: template.inviteLinkOverrides,
           excludedProductNames: template.excludedProductNames,

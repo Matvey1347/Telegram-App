@@ -56,7 +56,7 @@ describe('TelegramChannelMessageTemplatesService', () => {
   it('persists excluded formats and price rounding with the template', async () => {
     const { prisma, service } = setup();
     let createdData: Record<string, unknown> | undefined;
-    prisma.telegramChannel.count.mockResolvedValue(1);
+    prisma.telegramChannel.count.mockResolvedValue(2);
     prisma.telegramChannelMessageTemplate.create.mockImplementation(
       ({ data }: { data: Record<string, unknown> }) => {
         createdData = data;
@@ -75,7 +75,9 @@ describe('TelegramChannelMessageTemplatesService', () => {
       iconId: null,
       scopeMode: 'CHANNELS',
       networkId: null,
-      channelIds: ['channel-1'],
+      channelIds: ['channel-2', 'channel-1'],
+      groupChannels: true,
+      channelGroupLabels: { 'channel-2': 'Business', 'channel-1': 'Business', outsider: 'Ignored' },
       bodyTemplate: '{{#products}}{{product_price}}{{/products}}',
       overrideInviteLinks: false,
       inviteLinkOverrides: {},
@@ -90,6 +92,9 @@ describe('TelegramChannelMessageTemplatesService', () => {
     expect(createdData).toEqual(
       expect.objectContaining({
         excludedProductNames: ['3/72'],
+        channelIds: ['channel-2', 'channel-1'],
+        groupChannels: true,
+        channelGroupLabels: { 'channel-2': 'Business', 'channel-1': 'Business' },
         priceRounding: 'NEAREST_10',
         productNameOverrides: { 'No auto-delete': 'Без видалення' },
         bundleOfferEnabled: true,
@@ -101,6 +106,9 @@ describe('TelegramChannelMessageTemplatesService', () => {
     expect(result).toEqual(
       expect.objectContaining({
         excludedProductNames: ['3/72'],
+        channelIds: ['channel-2', 'channel-1'],
+        groupChannels: true,
+        channelGroupLabels: { 'channel-2': 'Business', 'channel-1': 'Business' },
         priceRounding: 'NEAREST_10',
         productNameOverrides: { 'No auto-delete': 'Без видалення' },
         bundleOfferEnabled: true,
@@ -138,7 +146,7 @@ describe('TelegramChannelMessageTemplatesService', () => {
         photoUrl: null,
         tgStatUrl: 'https://tgstat.com/first',
         currentSubscribersCount: 1_000,
-        ownViewsPerPost: 0,
+        ownViewsPerPost: 1_200,
         adBaseCpm: 300,
         internalCpm: 175.5,
         adBaseCurrency: 'UAH',
@@ -202,6 +210,7 @@ describe('TelegramChannelMessageTemplatesService', () => {
     expect(result.channels[0]).toEqual(
       expect.objectContaining({
         emojiSource: '💼',
+        viewsPerPost: 1_200,
         description: 'Short business description',
         products: [
           expect.objectContaining({

@@ -25,20 +25,6 @@ const stagePresentation: Record<
     selectClassName:
       "[&>div>button]:border-amber-500/50 [&>div>button]:bg-amber-500/10 [&>div>button]:text-amber-200",
   },
-  QUALIFIED: {
-    label: "QUALIFIED",
-    tone: "info",
-    className: "border-violet-500/50 bg-violet-500/10 text-violet-200",
-    selectClassName:
-      "[&>div>button]:border-violet-500/50 [&>div>button]:bg-violet-500/10 [&>div>button]:text-violet-200",
-  },
-  FOLLOW_UP: {
-    label: "FOLLOW-UP",
-    tone: "info",
-    className: "border-sky-500/50 bg-sky-500/10 text-sky-200",
-    selectClassName:
-      "[&>div>button]:border-sky-500/50 [&>div>button]:bg-sky-500/10 [&>div>button]:text-sky-200",
-  },
   CUSTOMER: {
     label: "CUSTOMER",
     tone: "success",
@@ -53,8 +39,8 @@ const stagePresentation: Record<
     selectClassName:
       "[&>div>button]:border-rose-500/50 [&>div>button]:bg-rose-500/10 [&>div>button]:text-rose-200",
   },
-  ARCHIVED: {
-    label: "ARCHIVED",
+  ANOTHER: {
+    label: "ANOTHER",
     tone: "muted",
     className: "border-neutral-700 bg-neutral-800/70 text-neutral-300",
     selectClassName:

@@ -12,7 +12,7 @@ import type {
 } from "@telegram-system/shared";
 import { formatDateTime } from "@/lib/date-format";
 import { Button, EmptyState } from "@/components/ui/primitives";
-import { Copy, MoreHorizontal } from "lucide-react";
+import { Copy, MoreVertical } from "lucide-react";
 import { TelegramTextEditor } from "@/components/features/telegram/telegram/telegram-text-editor";
 import { telegramCrmApi } from "@/lib/features/growth/telegram-crm-api";
 import {
@@ -59,11 +59,14 @@ function optimisticMessage(
 function MessageRow({
   message,
   onRetry,
+  actionsOpen,
+  onActionsOpenChange,
 }: {
   message: CrmMessageListItem;
   onRetry?: () => void;
+  actionsOpen: boolean;
+  onActionsOpenChange: (open: boolean) => void;
 }) {
-  const [actionsOpen, setActionsOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const outbound = message.direction === "OUTBOUND";
   const deliveryProblem =
@@ -75,15 +78,6 @@ function MessageRow({
       <div className="group relative max-w-[88%]">
         <div
           className={`rounded-xl border px-3 py-2 ${outbound ? "border-teal-800 bg-teal-950/45" : "border-neutral-800 bg-neutral-900"}`}
-          onClick={() => setActionsOpen((open) => !open)}
-          role="button"
-          tabIndex={0}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" || event.key === " ") {
-              event.preventDefault();
-              setActionsOpen((open) => !open);
-            }
-          }}
         >
         <p className="whitespace-pre-wrap break-words text-sm text-neutral-100">
           {message.text || "Unsupported Telegram message"}
@@ -99,8 +93,19 @@ function MessageRow({
           </Button>
         ) : null}
         </div>
-        {actionsOpen ? (
-          <div className={`absolute z-10 mt-1 flex min-w-32 gap-1 rounded-lg border border-neutral-700 bg-neutral-950 p-1 shadow-xl ${outbound ? "right-0" : "left-0"}`}>
+        {outbound ? (
+          <button
+            type="button"
+            aria-label="Message actions"
+            aria-expanded={actionsOpen}
+            onClick={() => onActionsOpenChange(!actionsOpen)}
+            className="absolute -right-10 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-lg text-neutral-500 opacity-0 transition-all hover:bg-neutral-800 hover:text-neutral-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300 group-hover:opacity-100"
+          >
+            <MoreVertical size={18} aria-hidden />
+          </button>
+        ) : null}
+        {actionsOpen && outbound ? (
+          <div className="absolute right-0 top-full z-10 mt-2 flex min-w-36 gap-1 rounded-xl border border-neutral-700 bg-neutral-950 p-1.5 shadow-2xl">
             <button
               type="button"
               className="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs text-neutral-200 hover:bg-neutral-800"
@@ -109,17 +114,13 @@ function MessageRow({
                 await navigator.clipboard.writeText(message.text ?? "");
                 setCopied(true);
                 window.setTimeout(() => setCopied(false), 1500);
+                onActionsOpenChange(false);
               }}
             >
               <Copy size={13} /> {copied ? "Copied" : "Copy"}
             </button>
           </div>
         ) : null}
-        <MoreHorizontal
-          aria-hidden
-          size={15}
-          className={`pointer-events-none absolute -top-1 text-neutral-500 opacity-0 transition-opacity group-hover:opacity-100 ${outbound ? "-left-5" : "-right-5"}`}
-        />
       </div>
     </li>
   );
@@ -136,8 +137,10 @@ export function CrmMessageThread({
 }) {
   const queryClient = useQueryClient();
   const messageListRef = useRef<HTMLOListElement>(null);
+  const threadRef = useRef<HTMLElement>(null);
   const initialScrollFor = useRef<string | null>(null);
   const [text, setText] = useState("");
+  const [actionsMessageId, setActionsMessageId] = useState<string | null>(null);
   const [atHistoryBoundary, setAtHistoryBoundary] = useState(false);
   const [telegramHistoryExhausted, setTelegramHistoryExhausted] = useState(
     conversation.historyExhausted,
@@ -194,6 +197,24 @@ export function CrmMessageThread({
       }
     });
   }, [conversation.id, messages.length]);
+  useEffect(() => {
+    setActionsMessageId(null);
+  }, [conversation.id]);
+  useEffect(() => {
+    const closeOnOutside = (event: MouseEvent) => {
+      if (!threadRef.current?.contains(event.target as Node))
+        setActionsMessageId(null);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setActionsMessageId(null);
+    };
+    document.addEventListener("mousedown", closeOnOutside);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("mousedown", closeOnOutside);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, []);
   const markRead = useMutation({
     mutationFn: () => telegramCrmApi.markConversationRead(conversation.id),
     onSuccess: () => {
@@ -256,7 +277,7 @@ export function CrmMessageThread({
     });
   };
   return (
-    <section className="flex h-full min-h-0 flex-col">
+    <section ref={threadRef} className="flex h-full min-h-0 flex-col">
       {(query.isSuccess && conversation.unreadCount > 0) || markRead.error ? (
         <div className="mb-2 flex flex-wrap items-center justify-end gap-2">
           {query.isSuccess && conversation.unreadCount > 0 ? (
@@ -355,6 +376,10 @@ export function CrmMessageThread({
                     failed?.key === message.clientIdempotencyKey
                       ? () => send.mutate(failed)
                       : undefined
+                  }
+                  actionsOpen={actionsMessageId === message.id}
+                  onActionsOpenChange={(open) =>
+                    setActionsMessageId(open ? message.id : null)
                   }
                 />
               ))}
