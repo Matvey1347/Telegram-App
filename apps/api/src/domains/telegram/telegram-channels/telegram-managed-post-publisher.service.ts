@@ -328,6 +328,10 @@ export class TelegramManagedPostPublisherService {
           };
         };
         const operations: TelegramBotDeliveryOperation[] = [];
+        const inlineKeyboard = buttonRows.length
+          ? toTelegramBotInlineKeyboard(buttonRows)
+          : undefined;
+        let replyMarkupIncludedOnMedia = false;
         if (richHtml) {
           operations.push({
             method: 'sendRichMessage',
@@ -339,7 +343,14 @@ export class TelegramManagedPostPublisherService {
           });
         } else if (mediaItems.length) {
           const caption = toBotFormattedText(captionHtml);
-          const delivery = telegramBotMediaDelivery(mediaItems, caption);
+          const delivery = telegramBotMediaDelivery(
+            mediaItems,
+            caption,
+            inlineKeyboard,
+          );
+          replyMarkupIncludedOnMedia = Boolean(
+            inlineKeyboard && delivery.expectedMessageCount === 1,
+          );
           operations.push({
             ...delivery,
             messageIds: (result) =>
@@ -389,13 +400,13 @@ export class TelegramManagedPostPublisherService {
               },
             });
           },
-          ...(buttonRows.length
+          ...(buttonRows.length && !replyMarkupIncludedOnMedia
             ? {
                 applyReplyMarkup: async (lastMessageId: string) => {
                   await this.botApiClient.editMessageReplyMarkup(token, {
                     chat_id: chatId,
                     message_id: Number(lastMessageId),
-                    reply_markup: toTelegramBotInlineKeyboard(buttonRows),
+                    reply_markup: inlineKeyboard,
                   });
                 },
               }

@@ -59,6 +59,16 @@ describe('requestFinanceStructuredResponse', () => {
     expect(requestIds.every((requestId) => requestId.length > 0)).toBe(true);
   });
 
+  it('recovers a second transient gateway failure within the same assistant request', async () => {
+    const fetchMock = jest.fn()
+      .mockResolvedValueOnce(response(502, { error: { type: 'server_error' } }))
+      .mockResolvedValueOnce(response(502, { error: { type: 'server_error' } }))
+      .mockResolvedValueOnce(response(200, { output_text: '{"answer":"ok"}' }));
+    global.fetch = fetchMock as never;
+    await expect(requestFinanceStructuredResponse(input)).resolves.toMatchObject({ text: '{"answer":"ok"}' });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
   it('forwards structured output deltas and returns the completed usage', async () => {
     const encoder = new TextEncoder();
     const stream = new ReadableStream<Uint8Array>({

@@ -2,6 +2,7 @@ import { Type } from 'class-transformer';
 import {
   IsDateString,
   ArrayMaxSize,
+  ArrayMinSize,
   IsIn,
   IsInt,
   IsNumberString,
@@ -96,6 +97,29 @@ export class FinanceUltimateQuestionDto {
 }
 export class FinanceAssistantEntryDto {
   @IsString() @MinLength(1) @MaxLength(2000) text!: string;
+}
+export class UpdateFinanceAssistantProposalOperationDto {
+  @IsNumberString() amount!: string;
+  @IsOptional() @IsNumberString() economicAmount?: string;
+  @IsOptional() @IsString() accountId?: string;
+  @IsOptional() @IsString() categoryId?: string | null;
+  @IsOptional() @IsString() @MaxLength(240) description?: string;
+  @IsDateString() occurredAt!: string;
+  @IsOptional()
+  @IsIn(['ORDINARY', 'REIMBURSEMENT', 'PASS_THROUGH', 'DEBT_REPAYMENT'])
+  purpose?: 'ORDINARY' | 'REIMBURSEMENT' | 'PASS_THROUGH' | 'DEBT_REPAYMENT';
+  @IsOptional()
+  @IsIn(['UNSPECIFIED', 'REQUIRED', 'DISCRETIONARY'])
+  necessity?: 'UNSPECIFIED' | 'REQUIRED' | 'DISCRETIONARY';
+}
+export class UpdateFinanceAssistantProposalDto {
+  @IsOptional() @ArrayMaxSize(10) @IsInt({ each: true }) @Min(0, { each: true })
+  keepIndices?: number[];
+  @ArrayMinSize(1)
+  @ArrayMaxSize(10)
+  @ValidateNested({ each: true })
+  @Type(() => UpdateFinanceAssistantProposalOperationDto)
+  operations!: UpdateFinanceAssistantProposalOperationDto[];
 }
 export class FinanceAssistantHistoryItemDto {
   @IsIn(['user', 'assistant']) role!: 'user' | 'assistant';

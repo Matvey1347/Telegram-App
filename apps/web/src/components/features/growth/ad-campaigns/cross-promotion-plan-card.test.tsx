@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import type { CrossPromotionPlan } from "@telegram-system/shared";
 import { describe, expect, it, vi } from "vitest";
 import { CrossPromotionPlanCard } from "./cross-promotion-plan-card";
+import { formatDateTime } from "@/lib/date-format";
 
 const plan: CrossPromotionPlan = {
   id: "plan-1",
@@ -115,7 +116,7 @@ describe("CrossPromotionPlanCard", () => {
     expect(screen.getByText("Partner channels")).toBeInTheDocument();
     expect(screen.getByText("Mentor")).toBeInTheDocument();
     expect(screen.getByText("✨ Promoted")).toBeInTheDocument();
-    expect(screen.getByText("During placement")).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "During placement: +13" })).toHaveAttribute("title", "During placement: +13");
     expect(screen.getByText("+13")).toBeInTheDocument();
     expect(screen.queryByText(/total on link/)).not.toBeInTheDocument();
     expect(screen.queryByText(/joined.*requests/)).not.toBeInTheDocument();
@@ -133,8 +134,8 @@ describe("CrossPromotionPlanCard", () => {
         name: "Open scheduled post for My Publisher",
       }),
     ).not.toBeInTheDocument();
-    expect(screen.getByText("Views")).toBeInTheDocument();
-    expect(screen.getByText("Audience decline")).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Views: 120" })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Audience decline: −2" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "My channels: 1" }));
     expect(
@@ -214,8 +215,46 @@ describe("CrossPromotionPlanCard", () => {
       />,
     );
 
-    expect(screen.getByText("During placement")).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "During placement: +13" })).toBeInTheDocument();
     expect(screen.getByText("+13")).toBeInTheDocument();
     expect(screen.queryByText(/at tracking end/)).not.toBeInTheDocument();
+  });
+
+  it("shows only owned publishing channels for own-channel promotion", () => {
+    render(
+      <CrossPromotionPlanCard
+        plan={{ ...plan, kind: "OWN_CHANNELS" }}
+        onCopy={vi.fn()}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "My channels: 1" })).toBeInTheDocument();
+    expect(screen.queryByText("Partner channels")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Partner channels/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "During placement: +13" })).toBeInTheDocument();
+  });
+
+  it("shows the actual own-channel placement time instead of a stale plan time", () => {
+    const actualTime = "2026-09-21T15:10:00.000Z";
+    render(
+      <CrossPromotionPlanCard
+        plan={{
+          ...plan,
+          kind: "OWN_CHANNELS",
+          scheduledAt: "2026-09-21T06:10:00.000Z",
+          publicationPost: {
+            ...plan.publicationPost,
+            publisherPlacements: [{ telegramChannelId: "mine-1", scheduledAt: actualTime }],
+          },
+        }}
+        onCopy={vi.fn()}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+      />,
+    );
+    expect(screen.getByText(formatDateTime(actualTime))).toBeInTheDocument();
+    expect(screen.queryByText(formatDateTime("2026-09-21T06:10:00.000Z"))).not.toBeInTheDocument();
   });
 });

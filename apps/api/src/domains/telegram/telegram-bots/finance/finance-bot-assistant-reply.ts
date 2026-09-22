@@ -3,6 +3,7 @@ import type { TelegramBotApplicationContext } from '../core/telegram-bot-update.
 import type { TelegramBotApiClient } from '../../../../telegram/shared/telegram-bot-api.client';
 import type { TelegramBotInteractiveReplyService } from '../../../../telegram/shared/telegram-bot-interactive-reply.service';
 import type { FinanceUltimateService } from '../../consumer-finance/ultimate/finance-ultimate.service';
+import type { FinanceAssistantEntryService } from '../../consumer-finance/ultimate/finance-assistant-entry.service';
 import type { FinanceBotChatResponderService } from './finance-bot-chat-responder.service';
 import { sendFinanceTyping } from './finance-bot-telegram-interactions';
 import { financeMiniAppUrl } from '../../consumer-finance/telegram-presentation/finance-telegram-menu';
@@ -20,6 +21,7 @@ export async function sendFinanceAssistantReply(input: {
   locale: FinanceChatLocale;
   text: string;
   assistant?: FinanceUltimateService;
+  entries?: FinanceAssistantEntryService;
   interactive: TelegramBotInteractiveReplyService;
   botApi: TelegramBotApiClient;
   chat: FinanceBotChatResponderService;
@@ -32,6 +34,7 @@ export async function sendFinanceAssistantReply(input: {
     locale,
     text,
     assistant,
+    entries,
     interactive,
     botApi,
     chat,
@@ -79,6 +82,33 @@ export async function sendFinanceAssistantReply(input: {
           : undefined,
     });
   } catch (error) {
+    try {
+      if (!entries) throw error;
+      const proposal = await entries.fromText(
+        {
+          profileId: profile.id,
+          botIntegrationId: context.bot.id,
+          workspaceId: context.bot.workspaceId,
+          telegramBotUserId,
+        },
+        text,
+      );
+      const preview = proposal.operations
+        .map(
+          (operation, index) =>
+            `${index + 1}. ${operation.type === 'EXPENSE' ? '💸' : '💰'} ${operation.description}\n${operation.amount} ${operation.currency} · ${operation.categoryName || t(locale, 'other')} · ${operation.accountName}`,
+        )
+        .join('\n\n');
+      await interactive.send(context.token, chatId, {
+        text: [t(locale, 'suggested', { count: proposal.operations.length }), preview, t(locale, 'review')]
+          .filter(Boolean)
+          .join('\n\n'),
+        inlineButtons: chat.proposalButtons(proposal.token),
+      });
+      return;
+    } catch {
+      // The fallback deliberately uses the same proposal service as Web/Mini App.
+    }
     const limitReached =
       error instanceof HttpException && error.getStatus() === 429;
     await interactive.send(context.token, chatId, {

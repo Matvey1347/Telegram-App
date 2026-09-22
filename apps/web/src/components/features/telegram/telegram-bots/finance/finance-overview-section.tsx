@@ -58,14 +58,14 @@ function Overview({ data }: { data: BotBillingOverviewView }) {
         <Metric
           icon={UserRoundCheck}
           emoji="💎"
-          label="Paid users"
+          label="Paying users"
           value={analytics.paidUsers}
         />
         <Metric
-          icon={CreditCard}
-          emoji="💳"
-          label="Active subscriptions"
-          value={analytics.activeSubscriptions}
+          icon={Gift}
+          emoji="🎁"
+          label="Granted users"
+          value={analytics.grantedUsers}
         />
         <Metric
           icon={AlertTriangle}
@@ -77,9 +77,15 @@ function Overview({ data }: { data: BotBillingOverviewView }) {
       </div>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <Metric
+          icon={CreditCard}
+          emoji="💳"
+          label="Active subscriptions"
+          value={analytics.activeSubscriptions}
+        />
+        <Metric
           icon={Gift}
-          emoji="🎁"
-          label="Free users"
+          emoji="🆓"
+          label="Without subscription"
           value={analytics.freeUsers}
         />
         <Metric
@@ -148,7 +154,8 @@ function Overview({ data }: { data: BotBillingOverviewView }) {
   );
 }
 
-function formatAiCost(micros: number) {
+function formatAiCost(micros: number | null) {
+  if (micros == null) return "—";
   if (!micros) return "$0";
   if (micros < 10) return "<$0.00001";
   return new Intl.NumberFormat("en-US", {
@@ -177,7 +184,11 @@ function AiUsagePanel({ data }: { data: BotBillingOverviewView["aiUsage"] }) {
           </div>
         </div>
         <p className="text-xl font-semibold tabular-nums text-white">
-          {formatAiCost(data.estimatedCostMicros)}
+          {formatAiCost(
+            data.requests === data.unpricedRequests
+              ? null
+              : data.estimatedCostMicros,
+          )}
         </p>
       </div>
       <div className="mt-4 grid gap-2 sm:grid-cols-4">
@@ -198,8 +209,8 @@ function AiUsagePanel({ data }: { data: BotBillingOverviewView["aiUsage"] }) {
       </div>
       {data.unpricedRequests ? (
         <p className="mt-3 text-xs text-amber-300">
-          {data.unpricedRequests} request(s) use a model without a pricing
-          snapshot and are excluded from cost.
+          {data.unpricedRequests} request(s) have no provider token usage or
+          pricing snapshot yet and are excluded from the cost total.
         </p>
       ) : null}
       <div className="mt-4 grid gap-4 xl:grid-cols-2">
@@ -233,7 +244,7 @@ function UsageTable({
   rows,
 }: {
   title: string;
-  rows: Array<{ key: string; label: string; detail: string; cost: number }>;
+  rows: Array<{ key: string; label: string; detail: string; cost: number | null }>;
 }) {
   return (
     <div>

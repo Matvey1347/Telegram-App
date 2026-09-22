@@ -12,6 +12,7 @@ type SubscriptionMetric = {
   botIntegrationId: string;
   telegramBotUserId: string;
   status: BotSubscriptionStatus;
+  source: 'STRIPE' | 'TELEGRAM_STARS' | 'MANUAL' | 'GIFT';
   currency: string | null;
   interval: BotBillingInterval | null;
   amountMinor: number | null;
@@ -38,9 +39,20 @@ export class BotBillingAnalyticsService {
           item.currentPeriodEnd &&
           item.currentPeriodEnd > now),
     );
-    const paidUsers = new Set(active.map((item) => item.telegramBotUserId));
+    const paidSubscriptions = active.filter(
+      (item) => item.source === 'STRIPE' || item.source === 'TELEGRAM_STARS',
+    );
+    const grantedSubscriptions = active.filter(
+      (item) => item.source === 'MANUAL' || item.source === 'GIFT',
+    );
+    const paidUsers = new Set(
+      paidSubscriptions.map((item) => item.telegramBotUserId),
+    );
+    const grantedUsers = new Set(
+      grantedSubscriptions.map((item) => item.telegramBotUserId),
+    );
     const mrr = Object.entries(
-      active.reduce<Record<string, number>>((totals, item) => {
+      paidSubscriptions.reduce<Record<string, number>>((totals, item) => {
         if (item.currency && item.amountMinor) {
           totals[item.currency] =
             (totals[item.currency] || 0) +
@@ -58,8 +70,12 @@ export class BotBillingAnalyticsService {
     return {
       registeredUsers,
       activeSubscriptions: active.length,
-      freeUsers: Math.max(0, registeredUsers - paidUsers.size),
+      freeUsers: Math.max(
+        0,
+        registeredUsers - new Set([...paidUsers, ...grantedUsers]).size,
+      ),
       paidUsers: paidUsers.size,
+      grantedUsers: grantedUsers.size,
       canceled: liveSubscriptions.filter(
         (item) => item.status === BotSubscriptionStatus.CANCELED,
       ).length,
@@ -89,8 +105,8 @@ export class BotBillingAnalyticsService {
       inputTokens: summary._sum.inputTokens || 0, cachedInputTokens: summary._sum.cachedInputTokens || 0,
       outputTokens: summary._sum.outputTokens || 0, estimatedCostMicros: summary._sum.estimatedCostMicros || 0,
       unpricedRequests: summary._count._all - summary._count.estimatedCostMicros,
-      byModel: models.map((row) => ({ model: row.model, requests: row._count._all, inputTokens: row._sum.inputTokens || 0, outputTokens: row._sum.outputTokens || 0, estimatedCostMicros: row._sum.estimatedCostMicros || 0 })),
-      byUser: users.flatMap((row) => { const identity = row.telegramBotUserId ? identityById.get(row.telegramBotUserId) : null; return identity ? [{ telegramBotUserId: identity.id, telegramUserId: identity.telegramUserId, username: identity.username, firstName: identity.firstName, requests: row._count._all, estimatedCostMicros: row._sum.estimatedCostMicros || 0 }] : []; }),
+      byModel: models.map((row) => ({ model: row.model, requests: row._count._all, inputTokens: row._sum.inputTokens || 0, outputTokens: row._sum.outputTokens || 0, estimatedCostMicros: row._sum.estimatedCostMicros ?? null })),
+      byUser: users.flatMap((row) => { const identity = row.telegramBotUserId ? identityById.get(row.telegramBotUserId) : null; return identity ? [{ telegramBotUserId: identity.id, telegramUserId: identity.telegramUserId, username: identity.username, firstName: identity.firstName, requests: row._count._all, estimatedCostMicros: row._sum.estimatedCostMicros ?? null }] : []; }),
     };
   }
 
@@ -122,6 +138,7 @@ export class BotBillingAnalyticsService {
           bot_user."runtimeInstanceId" AS "runtimeInstanceId",
           COUNT(*) FILTER (WHERE
             provider_subscription."mode" IS DISTINCT FROM 'TEST'
+            AND subscription."source" IN ('STRIPE', 'TELEGRAM_STARS')
             AND (
               subscription."status" = 'ACTIVE'
               OR (
@@ -132,6 +149,7 @@ export class BotBillingAnalyticsService {
           )::int AS "activeSubscriptions",
           COUNT(DISTINCT subscription."telegramBotUserId") FILTER (WHERE
             provider_subscription."mode" IS DISTINCT FROM 'TEST'
+            AND subscription."source" IN ('STRIPE', 'TELEGRAM_STARS')
             AND (
               subscription."status" = 'ACTIVE'
               OR (

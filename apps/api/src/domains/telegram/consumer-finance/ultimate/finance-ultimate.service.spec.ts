@@ -1,4 +1,4 @@
-import { ForbiddenException } from '@nestjs/common';
+import { BadGatewayException, ForbiddenException } from '@nestjs/common';
 import type { ConsumerFinanceAnalytics } from '@telegram-system/shared';
 import { FinanceUltimateService } from './finance-ultimate.service';
 
@@ -181,6 +181,22 @@ function setup() {
       preview: [],
     }),
   };
+  const entries = {
+    fromText: jest.fn().mockResolvedValue({
+      token: 'fallback-proposal-token',
+      operations: [
+        {
+          type: 'EXPENSE',
+          amount: '9',
+          currency: 'PLN',
+          description: 'Bun',
+          occurredAt: '2026-09-20T12:00:00.000Z',
+          accountName: 'Bank',
+          categoryName: 'Food',
+        },
+      ],
+    }),
+  };
   return {
     prisma,
     analytics,
@@ -188,6 +204,7 @@ function setup() {
     entitlements,
     ledger,
     proposals,
+    entries,
     service: new FinanceUltimateService(
       prisma as never,
       analytics as never,
@@ -195,6 +212,7 @@ function setup() {
       entitlements as never,
       ledger as never,
       proposals as never,
+      entries as never,
     ),
   };
 }
@@ -344,6 +362,29 @@ describe('FinanceUltimateService', () => {
           }),
         ],
       }),
+    );
+  });
+
+  it('falls back to the canonical entry parser when the strict AI route is unavailable', async () => {
+    const { service, ai, entries } = setup();
+    ai.routeAssistantMessage.mockRejectedValue(
+      new BadGatewayException('provider response was invalid'),
+    );
+
+    await expect(
+      service.message(context, { text: 'Record a 9 PLN expense called bun' }),
+    ).resolves.toEqual({
+      kind: 'PROPOSAL',
+      message: expect.stringContaining('1'),
+      recommendedScreen: null,
+      proposal: {
+        token: 'fallback-proposal-token',
+        operations: expect.any(Array),
+      },
+    });
+    expect(entries.fromText).toHaveBeenCalledWith(
+      context,
+      'Record a 9 PLN expense called bun',
     );
   });
 });

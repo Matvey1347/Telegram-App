@@ -11,7 +11,6 @@ import { resolveTelegramSystemBotAdSaleTargets } from './telegram-system-bot-ad-
 import { translateSystemBotPosts as t } from './i18n/posts';
 
 type CalendarPickerMode = 'CHANNELS' | 'NETWORKS';
-type CalendarChannel = { id: string; title: string };
 
 @Injectable()
 export class TelegramSystemBotPostsService {
@@ -47,6 +46,15 @@ export class TelegramSystemBotPostsService {
     }
     if (callback === 'posts:calendar:networks') {
       return this.renderCalendarPicker(scope, controlMessageId, 'NETWORKS');
+    }
+    if (callback.startsWith('posts:calendar:select:')) {
+      const mask = Number(callback.slice('posts:calendar:select:'.length));
+      return this.renderCalendarPicker(
+        scope,
+        controlMessageId,
+        'CHANNELS',
+        mask,
+      );
     }
     if (callback === 'posts:noop') return null;
     if (callback.startsWith('posts:calendar:network:')) {
@@ -100,6 +108,7 @@ export class TelegramSystemBotPostsService {
     scope: TelegramSystemBotPostFlowScope,
     controlMessageId?: number,
     mode: CalendarPickerMode = 'CHANNELS',
+    selectedMask = 0,
   ) {
     const channels =
       mode === 'CHANNELS' ? await this.options.channels(scope) : [];
@@ -122,12 +131,22 @@ export class TelegramSystemBotPostsService {
                 callback_data: 'posts:calendar:networks',
               },
             ],
-            ...channels.map((channel) => [
+            ...channels.map((channel, index) => [
               {
-                text: `🗓 ${channel.title}`,
-                callback_data: `posts:calendar:channel:${channel.id}`,
+                text: `${selectedMask & (1 << index) ? '☑️' : '☐'} ${channel.title}`,
+                callback_data: `posts:calendar:select:${selectedMask ^ (1 << index)}`,
               },
             ]),
+            ...(selectedMask
+              ? [
+                  [
+                    {
+                      text: `🗓 View ${channels.filter((_, index) => selectedMask & (1 << index)).length} channel(s)`,
+                      callback_data: `posts:calendar:channel:m${selectedMask}`,
+                    },
+                  ],
+                ]
+              : []),
             ...networks.map((network, index) => [
               {
                 text: `🌐 ${network.name} (${network.channelCount})`,
@@ -159,47 +178,21 @@ export class TelegramSystemBotPostsService {
       networkId: network.id,
     });
     const ids = new Set(target.channelIds);
-    const channels = (await this.options.channels(scope)).filter((channel) =>
-      ids.has(channel.id),
-    );
+    const availableChannels = await this.options.channels(scope);
+    const channels = availableChannels.filter((channel) => ids.has(channel.id));
     if (!channels.length)
       throw new NotFoundException(
         'No active channels are available in network',
       );
-    if (channels.length === 1)
-      return this.renderCalendar(scope, channels[0].id, controlMessageId);
-    return this.render(
+    const mask = availableChannels.reduce(
+      (value, channel, index) => value | (ids.has(channel.id) ? 1 << index : 0),
+      0,
+    );
+    return this.renderCalendar(
       scope,
-      this.calendarChannelPickerCard(scope, channels, network.name),
+      channels.length === 1 ? channels[0].id : `m${mask}`,
       controlMessageId,
     );
-  }
-
-  private calendarChannelPickerCard(
-    scope: TelegramSystemBotPostFlowScope,
-    channels: CalendarChannel[],
-    title = 'Content plan',
-  ) {
-    return {
-      text: `<b>${escapeHtml(title)}</b>\n\nChoose a channel calendar.`,
-      parse_mode: 'HTML' as const,
-      reply_markup: {
-        inline_keyboard: [
-          ...channels.map((channel) => [
-            {
-              text: `🗓 ${channel.title}`,
-              callback_data: `posts:calendar:channel:${channel.id}`,
-            },
-          ]),
-          [
-            {
-              text: t(scope.locale, 'back'),
-              callback_data: 'posts:calendar:networks',
-            },
-          ],
-        ],
-      },
-    };
   }
 
   private async renderCalendar(
@@ -209,6 +202,15 @@ export class TelegramSystemBotPostsService {
     monthValue?: string,
     selectedDate?: string,
   ) {
+    const availableChannels = await this.options.channels(scope);
+    const mask = /^m\d+$/.test(channelId) ? Number(channelId.slice(1)) : null;
+    const selectedChannels =
+      mask === null
+        ? availableChannels.filter((channel) => channel.id === channelId)
+        : availableChannels.filter((_, index) => Boolean(mask & (1 << index)));
+    if (!selectedChannels.length)
+      throw new NotFoundException('Channel is no longer available');
+    const channelIds = selectedChannels.map((channel) => channel.id);
     const date = /^\d{4}-\d{2}$/.test(monthValue ?? '')
       ? new Date(`${monthValue}-01T00:00:00.000Z`)
       : new Date();
@@ -220,52 +222,49 @@ export class TelegramSystemBotPostsService {
     const until = new Date(Date.UTC(year, month + 1, 1) + 86_400_000);
     // The authorization check and compact monthly read are independent, so run
     // them together. Calendar navigation still costs one bounded DB read.
-    const [availableChannels, posts] = await Promise.all([
-      this.options.channels(scope),
-      this.prisma.telegramManagedPost.findMany({
-        where: {
-          workspaceId: scope.workspaceId,
-          telegramChannelId: channelId,
-          status: {
-            in: [
-              TelegramManagedPostStatus.SCHEDULED,
-              TelegramManagedPostStatus.PUBLISHED,
-            ],
-          },
-          OR: [
-            { scheduledAt: { gte: from, lt: until } },
-            { publishedAt: { gte: from, lt: until } },
+    const posts = await this.prisma.telegramManagedPost.findMany({
+      where: {
+        workspaceId: scope.workspaceId,
+        telegramChannelId:
+          channelIds.length === 1 ? channelIds[0] : { in: channelIds },
+        status: {
+          in: [
+            TelegramManagedPostStatus.SCHEDULED,
+            TelegramManagedPostStatus.PUBLISHED,
           ],
         },
-        select: {
-          id: true,
-          title: true,
-          status: true,
-          scheduledAt: true,
-          publishedAt: true,
-          deleteAfterHours: true,
-          plannerFormat: { select: { name: true } },
-        },
-      }),
-    ]);
-    const channel = availableChannels.find((item) => item.id === channelId);
-    if (!channel) throw new NotFoundException('Channel is no longer available');
-    const days = new Set(
-      posts.map((post) =>
-        localCalendarDate(
-          post.scheduledAt ?? post.publishedAt!,
-          scope.timezone,
-        ),
-      ),
+        OR: [
+          { scheduledAt: { gte: from, lt: until } },
+          { publishedAt: { gte: from, lt: until } },
+        ],
+      },
+      select: {
+        id: true,
+        telegramChannelId: true,
+        title: true,
+        status: true,
+        scheduledAt: true,
+        publishedAt: true,
+        deleteAfterHours: true,
+        plannerFormat: { select: { name: true } },
+      },
+    });
+    const channel = selectedChannels[0];
+    const channelTitleById = new Map(
+      selectedChannels.map((item) => [item.id, item.title]),
     );
+    const postsByDay = new Map<string, typeof posts>();
+    for (const post of posts) {
+      const day = localCalendarDate(
+        post.scheduledAt ?? post.publishedAt!,
+        scope.timezone,
+      );
+      const entries = postsByDay.get(day) ?? [];
+      entries.push(post);
+      postsByDay.set(day, entries);
+    }
     const selectedPosts = selectedDate
-      ? posts.filter(
-          (post) =>
-            localCalendarDate(
-              post.scheduledAt ?? post.publishedAt!,
-              scope.timezone,
-            ) === selectedDate,
-        )
+      ? (postsByDay.get(selectedDate) ?? [])
       : [];
     const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
     const today = localCalendarDate(new Date(), scope.timezone);
@@ -278,10 +277,22 @@ export class TelegramSystemBotPostsService {
     dayButtons.push(
       ...Array.from({ length: daysInMonth }, (_, offset) => {
         const postDate = `${year}-${String(month + 1).padStart(2, '0')}-${String(offset + 1).padStart(2, '0')}`;
-        const hasPosts = days.has(postDate);
+        const dayPosts = postsByDay.get(postDate) ?? [];
+        const marker =
+          selectedDate === postDate
+            ? '🔵 '
+            : dayPosts.some(
+                  (post) => post.status === TelegramManagedPostStatus.SCHEDULED,
+                )
+              ? '🟡 '
+              : dayPosts.length
+                ? '🟢 '
+                : postDate === today
+                  ? '📍 '
+                  : '';
         return {
-          text: `${selectedDate === postDate ? '▪️ ' : hasPosts ? '📝 ' : postDate === today ? '📍 ' : ''}${offset + 1}`,
-          callback_data: `posts:day:${channel.id}:${postDate}`,
+          text: `${marker}${offset + 1}`,
+          callback_data: `posts:day:${channelId}:${postDate}`,
         };
       }),
     );
@@ -299,14 +310,15 @@ export class TelegramSystemBotPostsService {
       scope,
       {
         text: [
-          `<b>${escapeHtml(channel.title)} · ${monthName(month, scope.locale)} ${year}</b>`,
-          `📍 today · 📝 ${days.size} day(s) with posts · ▪️ selected day`,
+          `<b>${escapeHtml(selectedChannels.length === 1 ? channel.title : `${selectedChannels.length} channels`)} · ${monthName(month, scope.locale)} ${year}</b>`,
+          `📍 today · 🟡 scheduled · 🟢 published · 🔵 selected · ${postsByDay.size} day(s) with posts`,
           selectedDate
             ? selectedPosts.length
               ? [
                   `<b>${selectedDate}</b>`,
-                  ...selectedPosts.map((post) =>
-                    calendarPostSummary(post, scope),
+                  ...selectedPosts.map(
+                    (post) =>
+                      `${selectedChannels.length > 1 ? `<b>${escapeHtml(channelTitleById.get(post.telegramChannelId) ?? '')}</b> · ` : ''}${calendarPostSummary(post, scope)}`,
                   ),
                 ].join('\n')
               : `<b>${selectedDate}</b>\nNo posts planned for this day.`
@@ -320,26 +332,22 @@ export class TelegramSystemBotPostsService {
               callback_data: 'posts:noop',
             })),
             ...weeks,
-            ...(this.config.frontendUrl && selectedPosts.length
+            ...(selectedPosts.length
               ? selectedPosts.map((post) => [
                   {
-                    text: `✏️ Update and edit: ${post.title.slice(0, 32)}`,
-                    url: managedPostEditorUrl(
-                      this.config.frontendUrl!,
-                      channel.id,
-                      post.id,
-                    ),
+                    text: `✏️ Edit: ${post.title.slice(0, 32)}`,
+                    callback_data: `posts:edit:${availableChannels.findIndex((item) => item.id === post.telegramChannelId)}:${post.id}`,
                   },
                 ])
               : []),
             [
               {
                 text: '‹',
-                callback_data: `posts:calendar:channel:${channel.id}:${previous}`,
+                callback_data: `posts:calendar:channel:${channelId}:${previous}`,
               },
               {
                 text: '›',
-                callback_data: `posts:calendar:channel:${channel.id}:${next}`,
+                callback_data: `posts:calendar:channel:${channelId}:${next}`,
               },
             ],
             [
@@ -433,16 +441,4 @@ function calendarPostSummary(
     ? ` · ${escapeHtml(post.plannerFormat.name)}`
     : '';
   return `${state} · ${escapeHtml(post.title)}\n${formatSystemBotDate(post.publishedAt ?? post.scheduledAt, scope.timezone, scope.locale)}${format}${removeAfter}`;
-}
-
-function managedPostEditorUrl(
-  frontendUrl: string,
-  channelId: string,
-  postId: string,
-) {
-  const url = new URL('/telegram-posts', frontendUrl);
-  url.searchParams.set('channelId', channelId);
-  url.searchParams.set('postId', postId);
-  url.searchParams.set('postView', 'editor');
-  return url.toString();
 }

@@ -5,7 +5,7 @@ export const DEFAULT_FINANCE_CATEGORIES: ReadonlyArray<{
   type: FinanceTransactionType;
   keywords: string[];
 }> = [
-  { name: 'Food', type: 'EXPENSE', keywords: ['сільпо', 'silpo', 'atb', 'novus', 'кава', 'coffee'] },
+  { name: 'Food', type: 'EXPENSE', keywords: ['сільпо', 'silpo', 'atb', 'novus', 'кава', 'coffee', 'food', 'snack', 'булоч', 'булка', 'булочк', 'булочка', 'булочки', 'bakery', 'bread', 'bun'] },
   { name: 'Transport', type: 'EXPENSE', keywords: ['uber', 'uklon', 'bolt', 'метро'] },
   { name: 'Fuel', type: 'EXPENSE', keywords: ['wog', 'okko', 'upg', 'заправ'] },
   { name: 'Home', type: 'EXPENSE', keywords: ['комунал', 'rent', 'оренда'] },

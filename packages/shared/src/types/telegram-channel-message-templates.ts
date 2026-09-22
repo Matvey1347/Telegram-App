@@ -1,6 +1,7 @@
 import type { ResolvedEmoji } from "./resolved-emoji";
 
 export type TelegramMessageTemplateScopeMode = "CHANNELS" | "NETWORK";
+export type TelegramMessageTemplateGroupMode = "CUSTOM" | "NETWORK";
 export type TelegramMessageTemplatePriceRounding =
   | "NONE"
   | "NEAREST_5"
@@ -13,7 +14,12 @@ export type TelegramChannelMessageTemplatePayload = {
   networkId?: string | null;
   channelIds: string[];
   groupChannels?: boolean;
+  groupMode?: TelegramMessageTemplateGroupMode;
   channelGroupLabels?: Record<string, string>;
+  channelGroupHeaderTemplate?: string | null;
+  introText?: string | null;
+  audienceSummaryTemplate?: string | null;
+  outroText?: string | null;
   bodyTemplate: string;
   overrideInviteLinks: boolean;
   inviteLinkOverrides: Record<string, string>;
@@ -23,6 +29,7 @@ export type TelegramChannelMessageTemplatePayload = {
   bundleOfferEnabled?: boolean;
   bundleDiscountPercent?: number;
   bundleBasePriceOverrides?: Record<string, string>;
+  bundleOfferTemplate?: string | null;
 };
 
 export type TelegramChannelMessageTemplate =
@@ -55,6 +62,11 @@ export type TelegramMessageTemplateProduct = {
   currency: string;
 };
 
+export type TelegramMessageTemplateNetworkSource = {
+  name: string;
+  emojiSource: string | null;
+};
+
 export type TelegramMessageTemplateChannelSource = {
   id: string;
   title: string;
@@ -63,6 +75,8 @@ export type TelegramMessageTemplateChannelSource = {
   photoUrl: string | null;
   tgStatUrl: string | null;
   emojiSource: string;
+  subscribersCount: number | null;
+  networkGroups: TelegramMessageTemplateNetworkSource[];
   viewsPerPost?: number | null;
   iconPresentation: ResolvedEmoji | null;
   defaultInviteLinkId: string | null;

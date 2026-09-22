@@ -20,6 +20,8 @@ const channel = (
   photoUrl: null,
   tgStatUrl: `https://tgstat.com/${id}`,
   emojiSource: "💼",
+  subscribersCount: 1_000,
+  networkGroups: [],
   iconPresentation: null,
   defaultInviteLinkId: `${id}-main`,
   inviteLinks: [
@@ -56,10 +58,12 @@ describe("renderTelegramChannelMessageTemplate", () => {
       DEFAULT_CHANNEL_MESSAGE_TEMPLATE,
       [channel("one", "One"), channel("two", "Two")],
     );
-    expect(rendered).toContain("💼 [One](https://t.me/+one)");
-    expect(rendered).toContain("1/24 — **75 UAH**");
-    expect(rendered).toContain("**75 UAH**\n\n💼 [Two]");
-    expect(rendered).not.toContain("**75 UAH**\n\n\n💼 [Two]");
+    expect(rendered).toContain(
+      "💼 [One](https://t.me/+one) - [TgStat](https://tgstat.com/one) — **75 UAH**",
+    );
+    expect(rendered).not.toContain("1/24 — **75 UAH**");
+    expect(rendered).toContain("**75 UAH**\n💼 [Two]");
+    expect(rendered).not.toContain("**75 UAH**\n\n💼 [Two]");
     expect(rendered.endsWith("\n")).toBe(false);
   });
 
@@ -81,10 +85,33 @@ describe("renderTelegramChannelMessageTemplate", () => {
       },
     );
 
-    expect(rendered).toContain("📂 Business — 2 channels");
-    expect(rendered).toContain("📂 Self development — 1 channel");
-    expect(rendered.indexOf("Business Two")).toBeLessThan(rendered.indexOf("Business One"));
-    expect(rendered.indexOf("Business One")).toBeLessThan(rendered.indexOf("Growth"));
+    expect(rendered).toContain("📂 Business — 2 saved channels");
+    expect(rendered).toContain("📂 Self development — 1 saved channels");
+    expect(rendered.indexOf("Business Two")).toBeLessThan(
+      rendered.indexOf("Business One"),
+    );
+    expect(rendered.indexOf("Business One")).toBeLessThan(
+      rendered.indexOf("Growth"),
+    );
+  });
+
+  it("groups channels by their network and uses the custom group heading", () => {
+    const first = channel("business-1", "Business One");
+    const second = channel("business-2", "Business Two");
+    first.networkGroups = [{ name: "Business", emojiSource: "💼" }];
+    second.networkGroups = [{ name: "Business", emojiSource: "💼" }];
+
+    const rendered = renderTelegramChannelMessageTemplate(
+      DEFAULT_CHANNEL_MESSAGE_TEMPLATE,
+      [first, second],
+      {
+        groupChannels: true,
+        groupMode: "NETWORK",
+        channelGroupHeaderTemplate: "{{group}}: {{count}} каналов",
+      },
+    );
+
+    expect(rendered).toContain("💼 Business: 2 каналов");
   });
 
   it("does not show a username from an old template", () => {
@@ -151,7 +178,8 @@ describe("renderTelegramChannelMessageTemplate", () => {
       },
     );
 
-    expect(rendered).toContain("1/24 — **265 UAH**");
+    expect(rendered).toContain("**265 UAH**");
+    expect(rendered).not.toContain("1/24 — **265 UAH**");
     expect(rendered).not.toContain("3/72");
   });
 
@@ -205,7 +233,8 @@ describe("renderTelegramChannelMessageTemplate", () => {
 
     const rendered = renderTelegramChannelMessageTemplate(template, [source]);
 
-    expect(rendered).toContain("👁 1,250 views/post");
+    expect(rendered).toContain("**75 UAH** · 👁 1,000");
+    expect(rendered).toContain("👁 Total views: 1,250");
     expect(rendered).toContain("A concise channel description");
     expect(rendered).not.toContain("TgStat");
 
@@ -216,7 +245,8 @@ describe("renderTelegramChannelMessageTemplate", () => {
       [source],
     );
     expect(withoutOptionalValues).not.toContain("{{description}}");
-    expect(withoutOptionalValues).not.toContain("views/post");
+    expect(withoutOptionalValues).not.toContain("👁");
+    expect(withoutOptionalValues).not.toContain("Total views:");
   });
 
   it("renders internal CPM calculations and keeps missing internal prices explicit", () => {
@@ -246,7 +276,7 @@ describe("renderTelegramChannelMessageTemplate", () => {
     expect(internalTemplate).toContain("{{product_price}} outside");
     expect(
       renderTelegramChannelMessageTemplate(templateWithMetrics, [source]),
-    ).toContain("1/24 — **— UAH · 1500 views · CPM 32.5**");
+    ).toContain("**— UAH · 1,500 views · CPM 32.5**");
   });
 
   it("renames a format and appends a configurable discounted package", () => {
@@ -306,6 +336,7 @@ describe("renderTelegramChannelMessageTemplate", () => {
         bundleOfferEnabled: true,
         bundleDiscountPercent: 10,
         bundleBasePriceOverrides: { "1/24": "495" },
+        outroText: "Closing note",
       },
     );
 
@@ -319,6 +350,7 @@ describe("renderTelegramChannelMessageTemplate", () => {
     expect(rendered).toContain(
       "• Без видалення у всіх каналах: ~~365 UAH~~ → **330 UAH**",
     );
+    expect(rendered).toMatch(/знижка 10%:[\s\S]*Closing note$/);
 
     const internalRendered = renderTelegramChannelMessageTemplate(
       rewriteTelegramChannelMessageTemplatePriceMode(
@@ -339,5 +371,27 @@ describe("renderTelegramChannelMessageTemplate", () => {
     expect(internalRendered).toContain(
       "• Без видалення у всіх каналах: ~~300 UAH~~ → **270 UAH**",
     );
+  });
+
+  it("puts a single format price beside each channel and lets copy control spacing", () => {
+    const first = channel("one", "One");
+    const second = channel("two", "Two");
+
+    const rendered = renderTelegramChannelMessageTemplate(
+      DEFAULT_CHANNEL_MESSAGE_TEMPLATE,
+      [first, second],
+      {
+        introText: "📌 Наші канали:\n",
+        bundleOfferEnabled: true,
+        bundleOfferTemplate:
+          "\n\n💰 {{price}} {{currency}} у всі — {{format}}\n\nВІДГУКИ!\n",
+        outroText: "🙏 Дякую за ваш час!",
+      },
+    );
+
+    expect(rendered).toContain("📌 Наші канали:\n💼 [One]");
+    expect(rendered).not.toContain("1/24 — **75 UAH**");
+    expect(rendered).toContain("💰 135 UAH у всі — 1/24");
+    expect(rendered).toContain("ВІДГУКИ!\n🙏 Дякую за ваш час!");
   });
 });

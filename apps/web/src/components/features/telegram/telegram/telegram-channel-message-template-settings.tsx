@@ -1,11 +1,10 @@
 import type {
-  ResolvedEmoji,
   TelegramChannelMessageTemplatePayload,
   TelegramMessageTemplatePriceRounding,
+  TelegramMessageTemplateGroupMode,
 } from "@telegram-system/shared";
 import type { TelegramChannel, TelegramChannelNetwork } from "@/lib/api";
-import { IconPicker } from "@/components/icons/icon-picker";
-import { FormField, Input } from "@/components/ui/primitives";
+import { FormField } from "@/components/ui/primitives";
 import { TelegramMessageTemplateInviteLinkSelect } from "./telegram-message-template-invite-link-select";
 import type { telegramChannelMessageTemplatesApi } from "@/lib/features/telegram/telegram-channel-message-templates-api";
 import { TelegramChannelScopeSelector } from "./telegram-channel-scope-selector";
@@ -15,6 +14,7 @@ import type { TelegramChannelMessageTemplateEditorSection } from "./telegram-cha
 import { TelegramChannelMessageTemplateLayoutOptions } from "./telegram-channel-message-template-layout-options";
 import { TelegramChannelMessageTemplatePriceOptions } from "./telegram-channel-message-template-price-options";
 import { TelegramChannelMessageTemplateOrder } from "./telegram-channel-message-template-order";
+import { TelegramTextEditor } from "./telegram-text-editor";
 
 type Layout = ReturnType<typeof readTelegramChannelMessageTemplateLayout>;
 type SourceChannels = Awaited<
@@ -25,14 +25,16 @@ export function TelegramChannelMessageTemplateSettings({
   section,
   channels,
   networks,
-  title,
-  iconId,
-  iconPresentation,
   mode,
   networkId,
   channelIds,
   groupChannels,
+  groupMode,
   channelGroupLabels,
+  channelGroupHeaderTemplate,
+  introText,
+  audienceSummaryTemplate,
+  outroText,
   layout,
   overrideInviteLinks,
   inviteLinkOverrides,
@@ -45,14 +47,18 @@ export function TelegramChannelMessageTemplateSettings({
   bundleOfferEnabled,
   bundleDiscountPercent,
   bundleBasePriceOverrides,
-  onTitleChange,
-  onIconChange,
+  bundleOfferTemplate,
   onModeChange,
   onNetworkChange,
   onChannelsChange,
   onOrderChange,
   onGroupChannelsChange,
+  onGroupModeChange,
   onChannelGroupLabelsChange,
+  onChannelGroupHeaderTemplateChange,
+  onIntroTextChange,
+  onAudienceSummaryTemplateChange,
+  onOutroTextChange,
   onLayoutChange,
   onOverrideInviteLinksChange,
   onInviteLinkOverridesChange,
@@ -63,18 +69,21 @@ export function TelegramChannelMessageTemplateSettings({
   onBundleOfferEnabledChange,
   onBundleDiscountPercentChange,
   onBundleBasePriceOverridesChange,
+  onBundleOfferTemplateChange,
 }: {
   section: TelegramChannelMessageTemplateEditorSection;
   channels: TelegramChannel[];
   networks: TelegramChannelNetwork[];
-  title: string;
-  iconId: string;
-  iconPresentation: ResolvedEmoji | null;
   mode: "network" | "channels";
   networkId: string;
   channelIds: string[];
   groupChannels: boolean;
+  groupMode: TelegramMessageTemplateGroupMode;
   channelGroupLabels: Record<string, string>;
+  channelGroupHeaderTemplate: string;
+  introText: string;
+  audienceSummaryTemplate: string;
+  outroText: string;
   layout: Layout;
   overrideInviteLinks: boolean;
   inviteLinkOverrides: TelegramChannelMessageTemplatePayload["inviteLinkOverrides"];
@@ -91,14 +100,18 @@ export function TelegramChannelMessageTemplateSettings({
   bundleBasePriceOverrides: NonNullable<
     TelegramChannelMessageTemplatePayload["bundleBasePriceOverrides"]
   >;
-  onTitleChange: (value: string) => void;
-  onIconChange: (id: string, presentation: ResolvedEmoji | null) => void;
+  bundleOfferTemplate: string;
   onModeChange: (value: "network" | "channels") => void;
   onNetworkChange: (value: string) => void;
   onChannelsChange: (value: string[]) => void;
   onOrderChange: (value: string[]) => void;
   onGroupChannelsChange: (value: boolean) => void;
+  onGroupModeChange: (value: TelegramMessageTemplateGroupMode) => void;
   onChannelGroupLabelsChange: (value: Record<string, string>) => void;
+  onChannelGroupHeaderTemplateChange: (value: string) => void;
+  onIntroTextChange: (value: string) => void;
+  onAudienceSummaryTemplateChange: (value: string) => void;
+  onOutroTextChange: (value: string) => void;
   onLayoutChange: (value: Layout) => void;
   onOverrideInviteLinksChange: (value: boolean) => void;
   onInviteLinkOverridesChange: (
@@ -119,31 +132,45 @@ export function TelegramChannelMessageTemplateSettings({
       TelegramChannelMessageTemplatePayload["bundleBasePriceOverrides"]
     >,
   ) => void;
+  onBundleOfferTemplateChange: (value: string) => void;
 }) {
+  if (section === "text") {
+    return (
+      <div className="space-y-4">
+        <FormField label="Text before the message">
+          <TelegramTextEditor
+            value={introText}
+            onChange={onIntroTextChange}
+            placeholder="Optional opening text for the whole message. Use {{total_subscribers}} for the rounded channel total."
+            rows={7}
+            enableCustomEmoji
+          />
+          <p className="mt-1.5 text-xs text-neutral-400">
+            {"{{total_subscribers}}"} is the total number of readers across all
+            selected channels, rounded down to hundreds. This text touches the
+            channel list by default; add line breaks here when you want space
+            before the first channel.
+          </p>
+        </FormField>
+        <FormField label="Text after the message">
+          <TelegramTextEditor
+            value={outroText}
+            onChange={onOutroTextChange}
+            placeholder="Optional closing text for the whole message"
+            rows={7}
+            enableCustomEmoji
+          />
+          <p className="mt-1.5 text-xs text-neutral-400">
+            Add line breaks here when you want space after the list or package
+            offer.
+          </p>
+        </FormField>
+      </div>
+    );
+  }
   if (section === "details") {
     return (
       <div className="space-y-4">
-        <div className="grid items-end gap-3 sm:grid-cols-[72px_minmax(0,1fr)]">
-          <FormField label="Emoji">
-            <IconPicker
-              compact
-              iconId={iconId || null}
-              icon={iconPresentation}
-              onChange={(value, presentation) =>
-                onIconChange(value || "", presentation ?? null)
-              }
-              allowImages={false}
-              buttonLabel="Choose emoji"
-            />
-          </FormField>
-          <FormField label="Name (optional)">
-            <Input
-              value={title}
-              onChange={(event) => onTitleChange(event.target.value)}
-              placeholder="All channels price list"
-            />
-          </FormField>
-        </div>
         <TelegramChannelScopeSelector
           mode={mode}
           selectedNetworkId={networkId}
@@ -159,10 +186,14 @@ export function TelegramChannelMessageTemplateSettings({
           <TelegramChannelMessageTemplateOrder
             channels={sourceChannels}
             groupChannels={groupChannels}
+            groupMode={groupMode}
             groupLabels={channelGroupLabels}
+            groupHeaderTemplate={channelGroupHeaderTemplate}
             onOrderChange={onOrderChange}
             onGroupChannelsChange={onGroupChannelsChange}
+            onGroupModeChange={onGroupModeChange}
             onGroupLabelsChange={onChannelGroupLabelsChange}
+            onGroupHeaderTemplateChange={onChannelGroupHeaderTemplateChange}
           />
         ) : null}
       </div>
@@ -242,6 +273,7 @@ export function TelegramChannelMessageTemplateSettings({
       bundleOfferEnabled={bundleOfferEnabled}
       bundleDiscountPercent={bundleDiscountPercent}
       bundleBasePriceOverrides={bundleBasePriceOverrides}
+      bundleOfferTemplate={bundleOfferTemplate}
       onExcludedProductNamesChange={onExcludedProductNamesChange}
       onPriceRoundingChange={onPriceRoundingChange}
       onPriceModeChange={onPriceModeChange}
@@ -249,6 +281,7 @@ export function TelegramChannelMessageTemplateSettings({
       onBundleOfferEnabledChange={onBundleOfferEnabledChange}
       onBundleDiscountPercentChange={onBundleDiscountPercentChange}
       onBundleBasePriceOverridesChange={onBundleBasePriceOverridesChange}
+      onBundleOfferTemplateChange={onBundleOfferTemplateChange}
     />
   );
 }

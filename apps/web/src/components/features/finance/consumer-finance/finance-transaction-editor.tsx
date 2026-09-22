@@ -44,6 +44,8 @@ export function FinanceTransactionEditor({
   onSaved,
   initiallyOpenType = null,
   onSpecialAction,
+  onSaveDraft,
+  allowedCurrency,
 }: {
   botId: string;
   accounts: ConsumerFinanceAccount[];
@@ -55,6 +57,9 @@ export function FinanceTransactionEditor({
   onSaved: (item: ConsumerFinanceTransaction) => void;
   initiallyOpenType?: ConsumerFinanceTransactionInput["type"] | null;
   onSpecialAction?: (action: "transfer" | "debt" | "investment") => void;
+  /** Proposal review reuses this form without writing a ledger transaction. */
+  onSaveDraft?: (payload: ConsumerFinanceTransactionInput) => Promise<void>;
+  allowedCurrency?: string;
 }) {
   const client = useQueryClient();
   const t = financeTransactionsCopy(locale);
@@ -71,6 +76,7 @@ export function FinanceTransactionEditor({
   const [meaning, setMeaning] = useState<TransactionMeaning>(
     editing?.purpose ?? "ORDINARY",
   );
+  const linkedInvestment = Boolean(editing?.purpose.startsWith("INVESTMENT_"));
   const purpose = meaning === "SHARED_EXPENSE" ? "ORDINARY" : meaning;
   const [necessity, setNecessity] = useState<ConsumerFinanceExpenseNecessity>(
     editing?.necessity ?? "DISCRETIONARY",
@@ -87,13 +93,20 @@ export function FinanceTransactionEditor({
     { name: "", amount: "", dueDate: financeToday(timezone) },
   ]);
   const activeAccounts = accounts.filter(
-    (item) => !item.archivedAt || item.id === accountId,
+    (item) =>
+      (!item.archivedAt || item.id === accountId) &&
+      (!linkedInvestment || item.currency === editing?.currency) &&
+      (!allowedCurrency || item.currency === allowedCurrency),
   );
   const account =
     activeAccounts.find((item) => item.id === accountId) ?? activeAccounts[0];
+  const categoryParents = new Set(
+    categories.filter((item) => !item.archivedAt && item.parentId).map((item) => item.parentId),
+  );
   const visibleCategories = categories.filter(
     (item) =>
-      (item.type === type && !item.archivedAt) || item.id === categoryId,
+      ((item.type === type && !item.archivedAt && !categoryParents.has(item.id)) ||
+        item.id === categoryId),
   );
   const participantTotal = participants.reduce(
     (sum, participant) => sum + Number(participant.amount || 0),
@@ -159,6 +172,11 @@ export function FinanceTransactionEditor({
           })
           .then((result) => result.transaction);
       }
+      if (onSaveDraft && editing)
+        return onSaveDraft({
+          ...payload,
+          economicAmount: purpose === "ORDINARY" ? economicAmount || amount : undefined,
+        }).then(() => editing);
       return editing
         ? consumerFinanceApi.updateTransaction(botId, editing.id, payload)
         : consumerFinanceApi.createTransaction(botId, payload);
@@ -197,6 +215,7 @@ export function FinanceTransactionEditor({
           <Select
             uiLocale={locale}
             value={type}
+            disabled={linkedInvestment || Boolean(onSaveDraft)}
             onChange={(event) => {
               if (
                 event.target.value === "TRANSFER" ||
@@ -227,7 +246,7 @@ export function FinanceTransactionEditor({
             ) : null}
           </Select>
         </FormField>
-        <FormField label={t.transactionMeaning}>
+        {!linkedInvestment ? <FormField label={t.transactionMeaning}>
           <Select
             uiLocale={locale}
             value={meaning}
@@ -258,7 +277,7 @@ export function FinanceTransactionEditor({
               <option value="SHARED_EXPENSE">{t.sharedExpense}</option>
             ) : null}
           </Select>
-        </FormField>
+        </FormField> : null}
         <FormField
           label={`${t.amount}${account ? ` (${account.currency})` : ""}`}
         >

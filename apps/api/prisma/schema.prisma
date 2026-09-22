@@ -630,6 +630,11 @@ enum TelegramMessageTemplateScopeMode {
   NETWORK
 }
 
+enum TelegramMessageTemplateGroupMode {
+  CUSTOM
+  NETWORK
+}
+
 enum TelegramMessageTemplatePriceRounding {
   NONE
   NEAREST_5
@@ -2826,7 +2831,12 @@ model TelegramChannelMessageTemplate {
   networkId                String?
   channelIds               String[]                             @default([])
   groupChannels            Boolean                              @default(false)
+  groupMode                TelegramMessageTemplateGroupMode     @default(CUSTOM)
   channelGroupLabels       Json                                 @default("{}")
+  channelGroupHeaderTemplate String?
+  introText                 String?
+  audienceSummaryTemplate   String?
+  outroText                 String?
   bodyTemplate             String
   overrideInviteLinks      Boolean                              @default(false)
   inviteLinkOverrides      Json                                 @default("{}")
@@ -2836,6 +2846,7 @@ model TelegramChannelMessageTemplate {
   bundleOfferEnabled       Boolean                              @default(false)
   bundleDiscountPercent    Int                                  @default(10)
   bundleBasePriceOverrides Json                                 @default("{}")
+  bundleOfferTemplate      String?
   createdByUserId          String?
   createdAt                DateTime                             @default(now())
   updatedAt                DateTime                             @updatedAt

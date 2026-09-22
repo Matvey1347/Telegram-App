@@ -14,12 +14,20 @@ import {
   resolveConsumerFinanceApiBase,
 } from "./consumer-finance-http";
 
+export class FinanceAssistantRequestError extends Error {
+  constructor(message: string, readonly code?: string) {
+    super(message);
+    this.name = "FinanceAssistantRequestError";
+  }
+}
+
 export const consumerFinanceAssistantApi = {
   message: async (
     botId: string,
     input: ConsumerFinanceAssistantMessageInput,
     options: {
       onDelta?: (delta: string) => void;
+      onProgress?: (progress: { stage: "UNDERSTANDING" | "PREPARING" | "CHECKING"; completed: number; total: number }) => void;
       signal?: AbortSignal;
     } = {},
   ) => {
@@ -49,8 +57,9 @@ export const consumerFinanceAssistantApi = {
       if (!line.trim()) return;
       const event = JSON.parse(line) as ConsumerFinanceAssistantStreamEvent;
       if (event.type === "delta") options.onDelta?.(event.delta);
+      else if (event.type === "progress") options.onProgress?.(event);
       else if (event.type === "done") result = event.result;
-      else if (event.type === "error") throw new Error(event.message);
+      else if (event.type === "error") throw new FinanceAssistantRequestError(event.message, event.code);
     };
 
     while (true) {
@@ -108,6 +117,28 @@ export const consumerFinanceAssistantApi = {
       await consumerFinanceHttp.post<{ cancelled: boolean }>(
         `${consumerFinanceRoot(botId)}/ultimate/entry/${encodeURIComponent(token)}/cancel`,
         {},
+        consumerRequest(),
+      )
+    ).data,
+  revise: async (
+    botId: string,
+    token: string,
+    operations: Array<{
+      amount: string;
+      economicAmount?: string;
+      accountId?: string;
+      categoryId?: string | null;
+      description?: string;
+      occurredAt: string;
+      purpose?: "ORDINARY" | "REIMBURSEMENT" | "PASS_THROUGH" | "DEBT_REPAYMENT";
+      necessity?: "UNSPECIFIED" | "REQUIRED" | "DISCRETIONARY";
+    }>,
+    keepIndices?: number[],
+  ) =>
+    (
+      await consumerFinanceHttp.post<{ updated: true }>(
+        `${consumerFinanceRoot(botId)}/ultimate/entry/${encodeURIComponent(token)}/revise`,
+        { operations, keepIndices },
         consumerRequest(),
       )
     ).data,

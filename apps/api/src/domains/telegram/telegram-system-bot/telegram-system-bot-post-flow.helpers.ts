@@ -48,6 +48,65 @@ export function telegramSystemBotPostTitle(
   );
 }
 
+export function previousTelegramSystemBotPostStep(
+  workflow: TelegramSystemBotPostWorkflow,
+) {
+  const payload = telegramSystemBotPostPayload(workflow.payload);
+  const previous: Record<string, string> = {
+    CHOOSE_CHANNEL: 'AWAIT_CONTENT',
+    CHOOSE_ACTION: 'CHOOSE_CHANNEL',
+    CHOOSE_GROUP: 'CHOOSE_ACTION',
+    AWAIT_EDIT_TEXT: 'CHOOSE_ACTION',
+    AWAIT_EDIT_BUTTONS: 'CHOOSE_ACTION',
+    AWAIT_EDIT_MEDIA: 'CHOOSE_ACTION',
+    AWAIT_SCHEDULE: 'CHOOSE_ACTION',
+    CONFIRM: payload.action === 'SCHEDULE' ? 'AWAIT_SCHEDULE' : 'CHOOSE_ACTION',
+  };
+  return {
+    step: previous[workflow.step] ?? 'AWAIT_CONTENT',
+    payload:
+      workflow.step === 'CHOOSE_ACTION'
+        ? {
+            ...payload,
+            channelId: undefined,
+            channelTitle: undefined,
+            groupId: undefined,
+            groupTitle: undefined,
+            channelIds: undefined,
+            networkId: undefined,
+            targetLabel: undefined,
+            targetPicker: undefined,
+          }
+        : payload,
+  };
+}
+
+export function toggleTelegramSystemBotId(
+  ids: string[] | undefined,
+  id: string,
+) {
+  const selected = new Set(ids ?? []);
+  if (selected.has(id)) selected.delete(id);
+  else selected.add(id);
+  return [...selected];
+}
+
+export function replaceTelegramSystemBotPostMedia(
+  payload: ReturnType<typeof telegramSystemBotPostPayload>,
+  incoming: TelegramSystemBotCapturedPostContent,
+) {
+  if (!payload.content || !incoming.mediaItems?.length) return null;
+  return {
+    ...payload,
+    content: {
+      ...payload.content,
+      imageUrls: incoming.imageUrls,
+      mediaItems: incoming.mediaItems,
+      mediaGroupId: incoming.mediaGroupId,
+    },
+  };
+}
+
 export function mergeTelegramSystemBotAlbumContent(
   current: TelegramSystemBotCapturedPostContent,
   incoming: TelegramSystemBotCapturedPostContent,

@@ -39,6 +39,7 @@ import { financeIntlLocale, type FinanceLocale } from "./i18n/core";
 import { financeTransfersCopy } from "./i18n/transfers";
 import { financePeriodDateRange } from "./finance-period-selector";
 import { IconAvatar } from "./ui/finance-icon-avatar";
+import { FinanceCursorPagination } from "./ui/finance-cursor-pagination";
 
 export function FinanceTransfers({
   botId,
@@ -69,6 +70,7 @@ export function FinanceTransfers({
   const [deleting, setDeleting] = useState<ConsumerFinanceTransfer | null>(
     null,
   );
+  const [page, setPage] = useState(0);
   const debouncedSearch = useDebouncedValue(filters.search);
   const queryFilters = { ...filters, search: debouncedSearch };
   // Accounts and history are independent and intentionally start together.
@@ -98,7 +100,16 @@ export function FinanceTransfers({
     getNextPageParam: (page) => page.nextCursor ?? undefined,
     enabled: !editorOnly && accounts.isSuccess && activeAccounts.length >= 2,
   });
-  const items = history.data?.pages.flatMap((page) => page.items) ?? [];
+  const items = history.data?.pages[page]?.items ?? [];
+  const hasNextPage = Boolean(history.data?.pages[page]?.nextCursor);
+  const nextPage = async () => {
+    if (!hasNextPage || history.isFetchingNextPage) return;
+    if (!history.data?.pages[page + 1]) {
+      const result = await history.fetchNextPage();
+      if (!result.data?.pages[page + 1]) return;
+    }
+    setPage((current) => current + 1);
+  };
   const invalidateDerived = () => {
     void client.invalidateQueries({
       queryKey: consumerFinanceKeys.accounts(botId),
@@ -115,11 +126,14 @@ export function FinanceTransfers({
     onSuccess: (_, id) => {
       removeConsumerTransferFromCaches(client, botId, id);
       setDeleting(null);
+      if (items.length === 1 && page > 0) setPage(page - 1);
       invalidateDerived();
     },
   });
-  const update = (changes: Partial<ConsumerFinanceTransferQuery>) =>
+  const update = (changes: Partial<ConsumerFinanceTransferQuery>) => {
+    setPage(0);
     setFilters((current) => ({ ...current, ...changes, cursor: undefined }));
+  };
   if (accounts.isLoading)
     return <LoadingState text={t.loadingReferences} context="transfers" />;
   if (accounts.isError)
@@ -238,7 +252,7 @@ export function FinanceTransfers({
           <Button
             variant="secondary"
             className="col-span-2"
-            onClick={() => setFilters({ limit: 30 })}
+            onClick={() => { setPage(0); setFilters({ limit: 30 }); }}
           >
             {t.clearFilters}
           </Button>
@@ -267,16 +281,15 @@ export function FinanceTransfers({
           <EmptyState text={t.noTransfers} context="transfers" />
         )}
       </Card>
-      {history.hasNextPage ? (
-        <Button
-          className="w-full"
-          variant="secondary"
-          disabled={history.isFetchingNextPage}
-          onClick={() => history.fetchNextPage()}
-        >
-          {history.isFetchingNextPage ? t.loading : t.loadMore}
-        </Button>
-      ) : null}
+      <FinanceCursorPagination
+        locale={locale}
+        page={page}
+        hasPrevious={page > 0}
+        hasNext={hasNextPage}
+        loading={history.isFetchingNextPage}
+        onPrevious={() => setPage((current) => Math.max(0, current - 1))}
+        onNext={() => void nextPage()}
+      />
       {remove.isError ? (
         <p className="text-sm text-rose-300">{t.transferDeleteError}</p>
       ) : null}

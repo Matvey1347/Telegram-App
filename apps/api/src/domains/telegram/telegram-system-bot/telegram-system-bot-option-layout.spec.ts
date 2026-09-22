@@ -44,7 +44,7 @@ describe('Telegram System Bot option layouts', () => {
 
     if (!('reply_markup' in card)) throw new Error('Expected post controls');
     expect(card.reply_markup?.inline_keyboard.map((row) => row.length)).toEqual(
-      [2, 2, 1, 2],
+      [2, 2, 2, 1, 2],
     );
   });
 

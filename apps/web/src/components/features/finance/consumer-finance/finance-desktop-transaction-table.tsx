@@ -14,6 +14,8 @@ export function DesktopTransactionTable({
   onDetail,
   onEdit,
   onDelete,
+  selectedIds,
+  onToggle,
 }: {
   items: ConsumerFinanceTransaction[];
   locale: FinanceLocale;
@@ -21,12 +23,15 @@ export function DesktopTransactionTable({
   onDetail: (item: ConsumerFinanceTransaction) => void;
   onEdit: (item: ConsumerFinanceTransaction) => void;
   onDelete: (item: ConsumerFinanceTransaction) => void;
+  selectedIds?: ReadonlySet<string>;
+  onToggle?: (item: ConsumerFinanceTransaction) => void;
 }) {
   const t = financeTransactionsCopy(locale);
   return (
     <Table>
       <thead className="border-b border-neutral-700 text-xs uppercase text-neutral-500">
         <tr>
+          {onToggle ? <th className="w-10 px-2 py-2" aria-label={t.description} /> : null}
           <th className="px-3 py-2 font-medium">{t.description}</th>
           <th className="px-3 py-2 font-medium">{t.date}</th>
           <th className="px-3 py-2 font-medium">{t.account}</th>
@@ -67,6 +72,11 @@ export function DesktopTransactionTable({
                       : undefined;
           return (
             <tr key={item.id} className={rowTone}>
+              {onToggle ? (
+                <td className="px-2 py-2">
+                  <input type="checkbox" aria-label={`${t.description}: ${item.description ?? item.id}`} checked={selectedIds?.has(item.id) ?? false} onChange={() => onToggle(item)} />
+                </td>
+              ) : null}
               <td className="max-w-80 px-3 py-2.5">
                 {hasItemizedDetails ? (
                   <button
@@ -144,24 +154,20 @@ export function DesktopTransactionTable({
                       <List size={16} />
                     </RowAction>
                   ) : null}
-                  {!generated ? (
-                    <>
-                      <RowAction
-                        label={t.editTransactionLabel}
-                        tone="text-neutral-300"
-                        onClick={() => onEdit(item)}
-                      >
-                        <Pencil size={16} />
-                      </RowAction>
-                      <RowAction
-                        label={t.deleteTransactionLabel}
-                        tone="text-rose-300"
-                        onClick={() => onDelete(item)}
-                      >
-                        <Trash2 size={16} />
-                      </RowAction>
-                    </>
-                  ) : null}
+                  <RowAction
+                    label={t.editTransactionLabel}
+                    tone="text-neutral-300"
+                    onClick={() => onEdit(item)}
+                  >
+                    <Pencil size={16} />
+                  </RowAction>
+                  <RowAction
+                    label={t.deleteTransactionLabel}
+                    tone="text-rose-300"
+                    onClick={() => onDelete(item)}
+                  >
+                    <Trash2 size={16} />
+                  </RowAction>
                 </div>
               </td>
             </tr>

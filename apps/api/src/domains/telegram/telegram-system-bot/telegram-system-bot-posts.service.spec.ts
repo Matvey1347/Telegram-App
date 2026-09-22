@@ -27,6 +27,7 @@ function setup() {
     },
   };
   const moduleRef = {
+    registerRequestByContextId: jest.fn(),
     resolve: jest.fn(),
   };
   const options = {
@@ -108,11 +109,73 @@ describe('TelegramSystemBotPostsService', () => {
     );
   });
 
+  it('lets the content plan select multiple channels and reads them in one workspace-scoped query', async () => {
+    const test = setup();
+    test.options.channels.mockResolvedValue([
+      { id: 'channel-1', title: 'News' },
+      { id: 'channel-2', title: 'Ideas' },
+    ]);
+    await test.service.callback(scope, 'posts:calendar:select:3', 77);
+    expect(test.api.editMessageText).toHaveBeenCalledWith(
+      'token',
+      expect.objectContaining({
+        reply_markup: expect.objectContaining({
+          inline_keyboard: expect.arrayContaining([
+            [
+              {
+                text: '🗓 View 2 channel(s)',
+                callback_data: 'posts:calendar:channel:m3',
+              },
+            ],
+          ]),
+        }),
+      }),
+    );
+    await test.service.callback(scope, 'posts:calendar:channel:m3', 77);
+    expect(test.prisma.telegramManagedPost.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          workspaceId: 'workspace-1',
+          telegramChannelId: { in: ['channel-1', 'channel-2'] },
+        }),
+      }),
+    );
+  });
+
+  it('opens a network as one combined calendar instead of forcing a single channel', async () => {
+    const test = setup();
+    test.options.channels.mockResolvedValue([
+      { id: 'channel-1', title: 'News' },
+      { id: 'channel-2', title: 'Ideas' },
+    ]);
+    Object.assign(test.options, {
+      networks: jest
+        .fn()
+        .mockResolvedValue([
+          { id: 'network-1', name: 'Network', channelCount: 2 },
+        ]),
+    });
+    test.moduleRef.resolve.mockResolvedValue({
+      resolve: jest
+        .fn()
+        .mockResolvedValue({ channelIds: ['channel-1', 'channel-2'] }),
+    });
+    await test.service.callback(scope, 'posts:calendar:network:0', 77);
+    expect(test.prisma.telegramManagedPost.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          telegramChannelId: { in: ['channel-1', 'channel-2'] },
+        }),
+      }),
+    );
+  });
+
   it('keeps the selected channel calendar open when a date is chosen', async () => {
     const test = setup();
     test.prisma.telegramManagedPost.findMany.mockResolvedValue([
       {
         id: 'post-1',
+        telegramChannelId: 'channel-1',
         title: 'Calendar post',
         status: TelegramManagedPostStatus.SCHEDULED,
         scheduledAt: new Date('2026-09-21T10:00:00.000Z'),
@@ -155,12 +218,13 @@ describe('TelegramSystemBotPostsService', () => {
     expect(test.api.editMessageText).not.toHaveBeenCalled();
   });
 
-  it('links a selected publication to its full editor', async () => {
+  it('opens a selected publication in the bot editor', async () => {
     const test = setup();
     test.config.frontendUrl = 'https://app.example';
     test.prisma.telegramManagedPost.findMany.mockResolvedValue([
       {
         id: 'post-1',
+        telegramChannelId: 'channel-1',
         title: 'Calendar post',
         status: TelegramManagedPostStatus.SCHEDULED,
         scheduledAt: new Date('2026-09-21T10:00:00.000Z'),
@@ -179,7 +243,7 @@ describe('TelegramSystemBotPostsService', () => {
           inline_keyboard: expect.arrayContaining([
             [
               expect.objectContaining({
-                url: 'https://app.example/telegram-posts?channelId=channel-1&postId=post-1&postView=editor',
+                callback_data: 'posts:edit:0:post-1',
               }),
             ],
           ]),

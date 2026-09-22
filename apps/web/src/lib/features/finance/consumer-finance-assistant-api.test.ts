@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { consumerFinanceAssistantApi } from "./consumer-finance-assistant-api";
+import { consumerFinanceAssistantApi, FinanceAssistantRequestError } from "./consumer-finance-assistant-api";
 import { consumerFinanceHttp } from "./consumer-finance-http";
 
 const originalFetch = global.fetch;
@@ -83,13 +83,12 @@ describe("consumerFinanceAssistantApi.message", () => {
       .fn()
       .mockResolvedValue(
         new Response(
-          '{"type":"start"}\n{"type":"error","message":"Provider failed"}\n',
+          '{"type":"start"}\n{"type":"error","message":"Provider failed","code":"BadGatewayException"}\n',
           { status: 200 },
         ),
       ) as never;
 
-    await expect(
-      consumerFinanceAssistantApi.message("bot", { text: "hello" }),
-    ).rejects.toThrow("Provider failed");
+    await expect(consumerFinanceAssistantApi.message("bot", { text: "hello" }))
+      .rejects.toMatchObject({ name: "FinanceAssistantRequestError", code: "BadGatewayException" } satisfies Partial<FinanceAssistantRequestError>);
   });
 });

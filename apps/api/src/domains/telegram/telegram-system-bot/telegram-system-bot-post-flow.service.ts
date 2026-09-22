@@ -18,6 +18,9 @@ import { TelegramSystemBotConfigService } from './telegram-system-bot-config.ser
 import type { TelegramSystemBotIncomingMessage } from './telegram-system-bot-forwarded-content.parser';
 import {
   parseTelegramSystemBotPostSchedule,
+  previousTelegramSystemBotPostStep,
+  replaceTelegramSystemBotPostMedia,
+  toggleTelegramSystemBotId,
   telegramSystemBotPostTitle,
   telegramSystemBotPostWorkflowExpiry,
   transitionTelegramSystemBotCapturedContent,
@@ -32,19 +35,16 @@ import {
   type TelegramSystemBotPostWorkflow,
 } from './telegram-system-bot-post-flow.types';
 import { TelegramSystemBotWorkflowStore } from './telegram-system-bot-workflow.store';
+import {
+  beginEditingExistingPost,
+  commitExistingPostEdit,
+} from './telegram-system-bot-existing-post-editor';
 import { TelegramSystemBotPostContentService } from './telegram-system-bot-post-content.service';
 import { TelegramSystemBotPostFlowOptions } from './telegram-system-bot-post-flow.options';
 import { resolveTelegramSystemBotAdSaleTargets } from './telegram-system-bot-ad-sale-flow.options';
 import { resolveSystemBotWorkspaceProvider } from './telegram-system-bot-workspace-provider';
 
 export type { TelegramSystemBotCapturedPostContent } from './telegram-system-bot-post-flow.types';
-
-function toggleId(ids: string[] | undefined, id: string) {
-  const selected = new Set(ids ?? []);
-  if (selected.has(id)) selected.delete(id);
-  else selected.add(id);
-  return [...selected];
-}
 
 @Injectable()
 export class TelegramSystemBotPostFlowService {
@@ -61,7 +61,10 @@ export class TelegramSystemBotPostFlowService {
     return Boolean(value?.startsWith('sbp:'));
   }
 
-  async begin(scope: TelegramSystemBotPostFlowScope) {
+  async begin(
+    scope: TelegramSystemBotPostFlowScope,
+    controlMessageId?: number,
+  ) {
     const existing = await this.workflows.activeWithoutPostImport(
       scope,
       TelegramSystemBotWorkflowKind.POST_IMPORT,
@@ -71,8 +74,27 @@ export class TelegramSystemBotPostFlowService {
       ...scope,
       kind: TelegramSystemBotWorkflowKind.POST_IMPORT,
       step: 'CHOOSE_CHANNEL',
+      controlMessageId,
       payload: {},
       expiresAt: telegramSystemBotPostWorkflowExpiry(),
+    });
+    return this.render(workflow, scope);
+  }
+
+  async beginExisting(
+    scope: TelegramSystemBotPostFlowScope,
+    channelIndex: number,
+    postId: string,
+    controlMessageId?: number,
+  ) {
+    const workflow = await beginEditingExistingPost({
+      scope,
+      channelIndex,
+      postId,
+      controlMessageId,
+      options: this.options,
+      moduleRef: this.moduleRef,
+      workflows: this.workflows,
     });
     return this.render(workflow, scope);
   }
@@ -131,7 +153,11 @@ export class TelegramSystemBotPostFlowService {
 
     const capture = await this.content.capture(message);
     if (!capture.ok) {
-      if (!active || active.step === 'AWAIT_CONTENT') {
+      if (
+        !active ||
+        active.step === 'AWAIT_CONTENT' ||
+        active.step === 'AWAIT_EDIT_MEDIA'
+      ) {
         await this.content.removeInput(scope.chatId, message.message_id);
         return active
           ? this.render(
@@ -149,6 +175,16 @@ export class TelegramSystemBotPostFlowService {
     }
 
     const incoming = capture.content;
+    if (active?.step === 'AWAIT_EDIT_MEDIA') {
+      await this.content.removeInput(scope.chatId, message.message_id);
+      const edited = replaceTelegramSystemBotPostMedia(
+        telegramSystemBotPostPayload(active.payload),
+        incoming,
+      );
+      return edited
+        ? this.transitionAndRender(scope, active, 'CHOOSE_ACTION', edited)
+        : this.render(active, scope, 'Send a photo, video or GIF.');
+    }
     if (!active && incoming.warnings.includes('NOT_FORWARDED')) return null;
     if (active) {
       const payload = telegramSystemBotPostPayload(active.payload);
@@ -222,7 +258,10 @@ export class TelegramSystemBotPostFlowService {
       return this.transitionAndRender(scope, workflow, 'CHOOSE_CHANNEL', {
         ...payload,
         targetPicker: 'CHANNELS',
-        selectedChannelIds: toggleId(payload.selectedChannelIds, channel.id),
+        selectedChannelIds: toggleTelegramSystemBotId(
+          payload.selectedChannelIds,
+          channel.id,
+        ),
         selectedNetworkIds: undefined,
       });
     }
@@ -236,7 +275,10 @@ export class TelegramSystemBotPostFlowService {
         ...payload,
         targetPicker: 'NETWORKS',
         selectedChannelIds: undefined,
-        selectedNetworkIds: toggleId(payload.selectedNetworkIds, network.id),
+        selectedNetworkIds: toggleTelegramSystemBotId(
+          payload.selectedNetworkIds,
+          network.id,
+        ),
       });
     }
     if (action === 'target.continue') {
@@ -386,6 +428,12 @@ export class TelegramSystemBotPostFlowService {
         scheduledAt: undefined,
       });
     }
+    if (action === 'save' && payload.existingPostId) {
+      return this.transitionAndRender(scope, workflow, 'CONFIRM', {
+        ...payload,
+        action: 'EDIT',
+      });
+    }
     if (action === 'publish') {
       return this.transitionAndRender(scope, workflow, 'CONFIRM', {
         ...payload,
@@ -409,6 +457,14 @@ export class TelegramSystemBotPostFlowService {
         payload,
       );
     }
+    if (action === 'edit.media') {
+      return this.transitionAndRender(
+        scope,
+        workflow,
+        'AWAIT_EDIT_MEDIA',
+        payload,
+      );
+    }
     if (action === 'schedule') {
       return this.transitionAndRender(scope, workflow, 'AWAIT_SCHEDULE', {
         ...payload,
@@ -422,35 +478,24 @@ export class TelegramSystemBotPostFlowService {
     scope: TelegramSystemBotPostFlowScope,
     workflow: TelegramSystemBotPostWorkflow,
   ) {
-    const previous: Record<string, string> = {
-      CHOOSE_CHANNEL: 'AWAIT_CONTENT',
-      CHOOSE_ACTION: 'CHOOSE_CHANNEL',
-      CHOOSE_GROUP: 'CHOOSE_ACTION',
-      AWAIT_EDIT_TEXT: 'CHOOSE_ACTION',
-      AWAIT_EDIT_BUTTONS: 'CHOOSE_ACTION',
-      AWAIT_SCHEDULE: 'CHOOSE_ACTION',
-      CONFIRM:
-        telegramSystemBotPostPayload(workflow.payload).action === 'SCHEDULE'
-          ? 'AWAIT_SCHEDULE'
-          : 'CHOOSE_ACTION',
-    };
-    const step = previous[workflow.step] ?? 'AWAIT_CONTENT';
-    const payload = telegramSystemBotPostPayload(workflow.payload);
-    const nextPayload =
-      workflow.step === 'CHOOSE_ACTION'
-        ? {
-            ...payload,
-            channelId: undefined,
-            channelTitle: undefined,
-            groupId: undefined,
-            groupTitle: undefined,
-            channelIds: undefined,
-            networkId: undefined,
-            targetLabel: undefined,
-            targetPicker: undefined,
-          }
-        : payload;
-    return this.transitionAndRender(scope, workflow, step, nextPayload);
+    if (
+      workflow.step === 'CHOOSE_ACTION' &&
+      telegramSystemBotPostPayload(workflow.payload).existingPostId
+    ) {
+      const cancelled = await this.workflows.cancel({
+        ...scope,
+        id: workflow.id,
+        expectedVersion: workflow.version,
+      });
+      return this.render(cancelled, scope);
+    }
+    const previous = previousTelegramSystemBotPostStep(workflow);
+    return this.transitionAndRender(
+      scope,
+      workflow,
+      previous.step,
+      previous.payload,
+    );
   }
 
   private async commit(
@@ -460,6 +505,18 @@ export class TelegramSystemBotPostFlowService {
     const payload = telegramSystemBotPostPayload(workflow.payload);
     if (!payload.content || !payload.action) {
       return this.render(workflow, scope, 'Post workflow is incomplete.');
+    }
+    if (payload.existingPostId && payload.action === 'EDIT') {
+      return this.render(
+        await commitExistingPostEdit({
+          scope,
+          workflow,
+          payload,
+          moduleRef: this.moduleRef,
+          workflows: this.workflows,
+        }),
+        scope,
+      );
     }
     const channelIds =
       payload.channelIds ?? (payload.channelId ? [payload.channelId] : []);
@@ -604,7 +661,7 @@ export class TelegramSystemBotPostFlowService {
       await command.createAndDispatch(scope.userId, {
         title: `Mass publication · ${new Date().toISOString().slice(0, 10)}`,
         channelIds: payload.channelIds!,
-        defaultDeleteAfterHours: 24,
+        defaultDeleteAfterHours: null,
         posts: [
           {
             title: telegramSystemBotPostTitle(payload.content!),
@@ -616,7 +673,7 @@ export class TelegramSystemBotPostFlowService {
             action,
             scheduledAt:
               action === 'SCHEDULE' ? (payload.scheduledAt ?? null) : null,
-            deleteAfterHours: 24,
+            deleteAfterHours: null,
             longTextMode: 'IMAGES_THEN_TEXT',
             channelOverrides: [],
           },

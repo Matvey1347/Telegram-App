@@ -1,6 +1,7 @@
 import type {
   TelegramMessageTemplateChannelSource,
   TelegramMessageTemplatePriceRounding,
+  TelegramMessageTemplateGroupMode,
 } from "@telegram-system/shared";
 
 export const DEFAULT_CHANNEL_MESSAGE_TEMPLATE = `{{#channels}}
@@ -42,7 +43,9 @@ export function readTelegramChannelMessageTemplateLayout(
     showEmoji: template.includes("{{emoji}}"),
     showTitle: template.includes("{{title}}"),
     linkTitle: template.includes("[{{title}}]({{invite_link}})"),
-    showViews: template.includes("{{views}}"),
+    showViews:
+      template.includes("{{product_expected_views}}") ||
+      template.includes("{{views}}"),
     showTgStat: template.includes("{{tgstat_url}}"),
     showDescription: template.includes("{{description}}"),
   };
@@ -52,10 +55,10 @@ export function buildTelegramChannelMessageTemplate(
   layout: TelegramChannelMessageTemplateLayout,
 ) {
   const title = layout.showTitle
-      ? layout.linkTitle
-        ? "[{{title}}]({{invite_link}})"
-        : "{{title}}"
-      : "";
+    ? layout.linkTitle
+      ? "[{{title}}]({{invite_link}})"
+      : "{{title}}"
+    : "";
   const heading = [
     `${layout.showEmoji ? "{{emoji}}" : ""}${layout.showEmoji && title ? " " : ""}${title}`,
     layout.showTgStat ? "{{#tgstat}}- [TgStat]({{tgstat_url}}){{/tgstat}}" : "",
@@ -65,11 +68,13 @@ export function buildTelegramChannelMessageTemplate(
   const description = layout.showDescription
     ? "\n{{#description}}{{description}}{{/description}}"
     : "";
-  const views = layout.showViews ? "{{#views}}\n👁 {{views}} views/post{{/views}}" : "";
+  const productViews = layout.showViews
+    ? "{{#views}} · 👁 {{product_expected_views}}{{/views}}"
+    : "";
   return `{{#channels}}
-${heading}${description}${views}
+${heading}${description}
 {{#products}}
-{{product_name}} — **{{product_price}} {{product_currency}}**
+{{product_name}} — **{{product_price}} {{product_currency}}**${productViews}
 {{/products}}
 
 {{/channels}}`;
@@ -99,7 +104,12 @@ export function rewriteTelegramChannelMessageTemplatePriceMode(
 type TemplateRenderOptions = {
   channelOrder?: string[];
   groupChannels?: boolean;
+  groupMode?: TelegramMessageTemplateGroupMode;
   channelGroupLabels?: Record<string, string>;
+  channelGroupHeaderTemplate?: string | null;
+  introText?: string | null;
+  audienceSummaryTemplate?: string | null;
+  outroText?: string | null;
   overrideInviteLinks?: boolean;
   inviteLinkOverrides?: Record<string, string>;
   excludedProductNames?: string[];
@@ -108,6 +118,7 @@ type TemplateRenderOptions = {
   bundleOfferEnabled?: boolean;
   bundleDiscountPercent?: number;
   bundleBasePriceOverrides?: Record<string, string>;
+  bundleOfferTemplate?: string | null;
 };
 
 function replaceToken(source: string, name: string, value: string) {
@@ -121,6 +132,7 @@ function renderProducts(
     excludedProductNames: ReadonlySet<string>;
     priceRounding: TelegramMessageTemplatePriceRounding;
     productNameOverrides: Record<string, string>;
+    hideProductName: boolean;
   },
 ) {
   return source.replace(
@@ -143,6 +155,16 @@ function renderProducts(
         )
         .map((product) => {
           let rendered = rowTemplate;
+          if (options.hideProductName) {
+            rendered = rendered.replace(
+              /{{product_name}}(?:\s*(?:—|-|:)\s*)?/,
+              "",
+            );
+          }
+          rendered = rendered.replace(
+            /{{#views}}([\s\S]*?){{\/views}}/g,
+            channel.viewsPerPost == null ? "" : "$1",
+          );
           rendered = replaceToken(
             rendered,
             "product_name",
@@ -161,7 +183,9 @@ function renderProducts(
           rendered = replaceToken(
             rendered,
             "product_expected_views",
-            product.expectedViews == null ? "—" : String(product.expectedViews),
+            product.expectedViews == null
+              ? "—"
+              : product.expectedViews.toLocaleString(),
           );
           rendered = replaceToken(
             rendered,
@@ -197,7 +221,9 @@ function renderChannel(
   excludedProductNames: ReadonlySet<string>,
   priceRounding: TelegramMessageTemplatePriceRounding,
   productNameOverrides: Record<string, string>,
+  hideProductName: boolean,
 ) {
+  const viewsPerPost = channel.viewsPerPost ?? null;
   const overrideId = overrideInviteLinks
     ? inviteLinkOverrides[channel.id]
     : undefined;
@@ -205,10 +231,15 @@ function renderChannel(
     channel.inviteLinks.find((link) => link.id === overrideId) ||
     channel.inviteLinks.find((link) => link.isDefault) ||
     channel.inviteLinks[0];
-  let rendered = renderProducts(source, channel, {
+  const productSource =
+    hideProductName && !source.includes("{{#description}}")
+      ? source.replace(/\r?\n(?={{#products}})/, " — ")
+      : source;
+  let rendered = renderProducts(productSource, channel, {
     excludedProductNames,
     priceRounding,
     productNameOverrides,
+    hideProductName,
   });
   const conditional = (name: string, value: string | null) => {
     rendered = rendered.replace(
@@ -219,12 +250,16 @@ function renderChannel(
   conditional("tgstat", channel.tgStatUrl);
   conditional("username", null);
   conditional("description", channel.description);
-  conditional("views", channel.viewsPerPost == null ? null : String(channel.viewsPerPost));
+  conditional("views", viewsPerPost == null ? null : String(viewsPerPost));
   rendered = replaceToken(rendered, "emoji", channel.emojiSource || "📣");
   rendered = replaceToken(rendered, "title", channel.title);
   rendered = replaceToken(rendered, "description", channel.description || "");
   rendered = replaceToken(rendered, "username", channel.username || "");
-  rendered = replaceToken(rendered, "views", channel.viewsPerPost?.toLocaleString() || "");
+  rendered = replaceToken(
+    rendered,
+    "views",
+    viewsPerPost?.toLocaleString() || "",
+  );
   rendered = replaceToken(rendered, "tgstat_url", channel.tgStatUrl || "");
   return replaceToken(rendered, "invite_link", inviteLink?.url || "");
 }
@@ -234,16 +269,34 @@ export function renderTelegramChannelMessageTemplate(
   channels: TelegramMessageTemplateChannelSource[],
   options?: TemplateRenderOptions,
 ) {
-  const priority = new Map((options?.channelOrder || []).map((id, index) => [id, index]));
-  const orderedChannels = channels.map((channel, index) => ({ channel, index })).sort((left, right) =>
-    (priority.get(left.channel.id) ?? channels.length + left.index) -
-    (priority.get(right.channel.id) ?? channels.length + right.index),
-  ).map(({ channel }) => channel);
+  const priority = new Map(
+    (options?.channelOrder || []).map((id, index) => [id, index]),
+  );
+  const orderedChannels = channels
+    .map((channel, index) => ({ channel, index }))
+    .sort(
+      (left, right) =>
+        (priority.get(left.channel.id) ?? channels.length + left.index) -
+        (priority.get(right.channel.id) ?? channels.length + right.index),
+    )
+    .map(({ channel }) => channel);
   const groupLabels = options?.channelGroupLabels || {};
-  const channelGroups = new Map<string, TelegramMessageTemplateChannelSource[]>();
+  const groupMode = options?.groupMode ?? "CUSTOM";
+  const groupHeaderTemplate =
+    options?.channelGroupHeaderTemplate?.trim() ||
+    "{{group}} — {{count}} saved channels";
+  const networkGroupLabel = (channel: TelegramMessageTemplateChannelSource) =>
+    channel.networkGroups[0]?.name || "No network";
+  const groupLabelFor = (channel: TelegramMessageTemplateChannelSource) =>
+    groupLabels[channel.id]?.trim() ||
+    (groupMode === "NETWORK" ? networkGroupLabel(channel) : "");
+  const channelGroups = new Map<
+    string,
+    TelegramMessageTemplateChannelSource[]
+  >();
   if (options?.groupChannels) {
     for (const channel of orderedChannels) {
-      const label = groupLabels[channel.id]?.trim() || "";
+      const label = groupLabelFor(channel);
       channelGroups.set(label, [...(channelGroups.get(label) || []), channel]);
     }
   }
@@ -251,7 +304,9 @@ export function renderTelegramChannelMessageTemplate(
     ? [...channelGroups.values()].flat()
     : orderedChannels;
   const firstInGroup = new Set(
-    [...channelGroups.values()].filter((items) => items.length && groupLabels[items[0].id]?.trim()).map((items) => items[0].id),
+    [...channelGroups.values()]
+      .filter((items) => items.length && groupLabelFor(items[0]))
+      .map((items) => items[0].id),
   );
   const priceMode = readTelegramChannelMessageTemplatePriceMode(template);
   const overrides = options?.inviteLinkOverrides || {};
@@ -262,32 +317,87 @@ export function renderTelegramChannelMessageTemplate(
   );
   const priceRounding = options?.priceRounding || "NONE";
   const productNameOverrides = options?.productNameOverrides || {};
+  const visibleProductNames = new Set(
+    displayedChannels.flatMap((channel) =>
+      channel.products
+        .filter(
+          (product) =>
+            !excludedProductNames.has(product.name.toLocaleLowerCase()) &&
+            (Boolean(product.price) || priceMode === "INTERNAL_CPM"),
+        )
+        .map((product) => product.name),
+    ),
+  );
+  const hideProductName = visibleProductNames.size === 1;
   const renderedChannels = template.replace(
     /{{#channels}}([\s\S]*?){{\/channels}}/g,
     (_match, rawBody: string) => {
       const body = rawBody.replace(/^\r?\n/, "");
       return displayedChannels
         .map((channel, index) => {
-          const groupLabel = groupLabels[channel.id]?.trim();
-          const groupCount = groupLabel ? channelGroups.get(groupLabel)?.length || 1 : 0;
-          const groupHeader = options?.groupChannels && groupLabel && firstInGroup.has(channel.id)
-            ? `📂 ${groupLabel} — ${groupCount} ${groupCount === 1 ? "channel" : "channels"}\n`
-            : "";
-          const rendered = groupHeader + renderChannel(
-            body,
-            channel,
-            overrides,
-            Boolean(options?.overrideInviteLinks),
-            excludedProductNames,
-            priceRounding,
-            productNameOverrides,
-          );
-          return index === displayedChannels.length - 1 ? rendered.trimEnd() : rendered;
+          const groupLabel = groupLabelFor(channel);
+          const groupCount = groupLabel
+            ? channelGroups.get(groupLabel)?.length || 1
+            : 0;
+          const groupHeader =
+            options?.groupChannels && groupLabel && firstInGroup.has(channel.id)
+              ? `${channel.networkGroups[0]?.emojiSource || "📂"} ${groupHeaderTemplate.replaceAll("{{group}}", groupLabel).replaceAll("{{count}}", String(groupCount))}\n`
+              : "";
+          const rendered =
+            groupHeader +
+            renderChannel(
+              body,
+              channel,
+              overrides,
+              Boolean(options?.overrideInviteLinks),
+              excludedProductNames,
+              priceRounding,
+              productNameOverrides,
+              hideProductName,
+            );
+          if (index === displayedChannels.length - 1) return rendered.trimEnd();
+          return hideProductName
+            ? rendered.replace(/(?:\r?\n){2,}$/, "\n")
+            : rendered;
         })
         .join("");
     },
   );
-  if (!options?.bundleOfferEnabled) return renderedChannels;
+  const showViews =
+    template.includes("{{product_expected_views}}") ||
+    template.includes("{{views}}");
+  const totalViews = displayedChannels.reduce(
+    (total, channel) => total + (channel.viewsPerPost ?? 0),
+    0,
+  );
+  const renderedMessage =
+    showViews && totalViews > 0
+      ? `${renderedChannels.trimEnd()}\n\n👁 Total views: ${totalViews.toLocaleString()}`
+      : renderedChannels;
+  const rawTotalSubscribers = channels.reduce(
+    (total, channel) => total + (channel.subscribersCount || 0),
+    0,
+  );
+  const totalSubscribers = Math.floor(rawTotalSubscribers / 100) * 100;
+  const replaceAudienceToken = (value: string) =>
+    value.replaceAll(
+      "{{total_subscribers}}",
+      totalSubscribers.toLocaleString("uk-UA"),
+    );
+  const messageBeforeBundle = [
+    options?.introText,
+    options?.audienceSummaryTemplate,
+    renderedMessage,
+  ]
+    .filter((value): value is string => Boolean(value?.trim()))
+    .map(replaceAudienceToken)
+    .join("");
+  const appendOutro = (value: string) =>
+    [value, options?.outroText]
+      .filter((item): item is string => Boolean(item?.trim()))
+      .map(replaceAudienceToken)
+      .join("");
+  if (!options?.bundleOfferEnabled) return appendOutro(messageBeforeBundle);
   const discount = Math.min(
     100,
     Math.max(0, options.bundleDiscountPercent ?? 10),
@@ -319,7 +429,7 @@ export function renderTelegramChannelMessageTemplate(
       grouped.set(key, row);
     }
   }
-  const bundleRows = [...grouped.values()]
+  const bundleItems = [...grouped.values()]
     .filter((row) => row.channelIds.size === channels.length)
     .map((row) => {
       const override = Number(options.bundleBasePriceOverrides?.[row.name]);
@@ -331,8 +441,36 @@ export function renderTelegramChannelMessageTemplate(
         priceRounding,
       );
       const name = productNameOverrides[row.name] || row.name;
-      return `• ${name} у всіх каналах: ~~${original} ${row.currency}~~ → **${discounted} ${row.currency}**`;
+      return {
+        format: name,
+        currency: row.currency,
+        original,
+        price: discounted,
+        row: `• ${name} у всіх каналах: ~~${original} ${row.currency}~~ → **${discounted} ${row.currency}**`,
+      };
     });
-  if (!bundleRows.length) return renderedChannels;
-  return `${renderedChannels.trimEnd()}\n\n🔥 При розміщенні одразу у всіх ${channels.length} каналах — знижка ${discount}%:\n${bundleRows.join("\n")}`;
+  if (!bundleItems.length) return appendOutro(messageBeforeBundle);
+  const bundleTemplate = options?.bundleOfferTemplate?.trim()
+    ? options.bundleOfferTemplate
+    : "\n\n🔥 При розміщенні одразу у всіх {{channel_count}} каналах — знижка {{discount_percent}}%:\n{{bundle_rows}}";
+  const replaceBundleToken = (source: string, name: string, value: string) =>
+    replaceToken(source, name, value);
+  const bundleTokens: Array<[string, string]> = [
+    ["bundle_rows", bundleItems.map((item) => item.row).join("\n")],
+    ["format", bundleItems.map((item) => item.format).join(", ")],
+    ["price", bundleItems.map((item) => item.price).join(", ")],
+    ["original_price", bundleItems.map((item) => item.original).join(", ")],
+    [
+      "currency",
+      [...new Set(bundleItems.map((item) => item.currency))].join(", "),
+    ],
+    ["channel_count", String(channels.length)],
+    ["discount_percent", String(discount)],
+  ];
+  const renderedBundle = bundleTokens.reduce(
+    (value, [name, replacement]) =>
+      replaceBundleToken(value, name, replacement),
+    bundleTemplate,
+  );
+  return appendOutro(`${messageBeforeBundle}${renderedBundle}`);
 }

@@ -12,7 +12,12 @@ export const emptyTelegramMessageTemplatePayload =
     networkId: null,
     channelIds: [],
     groupChannels: false,
+    groupMode: "CUSTOM",
     channelGroupLabels: {},
+    channelGroupHeaderTemplate: "{{group}} — {{count}} saved channels",
+    introText: "",
+    audienceSummaryTemplate: "",
+    outroText: "",
     bodyTemplate: DEFAULT_CHANNEL_MESSAGE_TEMPLATE,
     overrideInviteLinks: false,
     inviteLinkOverrides: {},
@@ -22,6 +27,8 @@ export const emptyTelegramMessageTemplatePayload =
     bundleOfferEnabled: false,
     bundleDiscountPercent: 10,
     bundleBasePriceOverrides: {},
+    bundleOfferTemplate:
+      "\n\n🔥 При розміщенні одразу у всіх {{channel_count}} каналах — знижка {{discount_percent}}%:\n{{bundle_rows}}",
   });
 
 export type TelegramChannelMessageTemplateDraftForm = {

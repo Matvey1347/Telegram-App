@@ -9,7 +9,7 @@ vi.mock("@/lib/features/finance/bot-billing-api", () => ({ botBillingApi: { over
 describe("FinanceOverviewSection AI cost", () => {
   it("renders model and user cost for the logical bot", async () => {
     overview.mockResolvedValue({
-      analytics: { registeredUsers: 1, paidUsers: 1, activeSubscriptions: 1, failedPayments: 0, freeUsers: 0, canceled: 0, monthly: 1, yearly: 0, mrr: [], collectedRevenue: [], conversionRate: 1 },
+      analytics: { registeredUsers: 1, paidUsers: 1, grantedUsers: 0, activeSubscriptions: 1, failedPayments: 0, freeUsers: 0, canceled: 0, monthly: 1, yearly: 0, mrr: [], collectedRevenue: [], conversionRate: 1 },
       aiUsage: { periodStart: "2026-08-01T00:00:00.000Z", requests: 3, inputTokens: 1200, cachedInputTokens: 200, outputTokens: 100, estimatedCostMicros: 5000, unpricedRequests: 0, byModel: [{ model: "gpt-5-mini", requests: 3, inputTokens: 1200, outputTokens: 100, estimatedCostMicros: 5000 }], byUser: [{ telegramBotUserId: "user-1", telegramUserId: "42", username: "alice", firstName: "Alice", requests: 3, estimatedCostMicros: 5000 }] },
       recentActivity: [],
     });

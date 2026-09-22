@@ -225,6 +225,7 @@ export class FinanceAiProviderService {
     text: string;
     timezone: string;
     defaultCurrency: string;
+    signal?: AbortSignal;
   }) {
     if (!input.text.trim() || input.text.length > 2000)
       throw new BadRequestException(
@@ -468,6 +469,7 @@ export class FinanceAiProviderService {
     botIntegrationId: string;
     feature: 'AI_INPUT' | 'RECEIPT_SCAN';
     content: Array<Record<string, unknown>>;
+    signal?: AbortSignal;
   }) {
     const start = Date.now();
     const profileIdentity = await this.prisma.financeProfile.findUnique({
@@ -504,8 +506,9 @@ export class FinanceAiProviderService {
         content: input.content,
         schema: operationSchema,
         schemaName: 'finance_operations',
-        maxOutputTokens: 1200,
+        maxOutputTokens: 2000,
         providerFailureMessage: 'Finance AI provider request failed',
+        signal: input.signal,
       });
       usage = response.usage;
       const parsed = response.text
@@ -526,6 +529,7 @@ export class FinanceAiProviderService {
       status = 'SUCCEEDED';
       return operations;
     } catch (error) {
+      if (input.signal?.aborted) throw error;
       if (
         error instanceof BadRequestException ||
         error instanceof BadGatewayException

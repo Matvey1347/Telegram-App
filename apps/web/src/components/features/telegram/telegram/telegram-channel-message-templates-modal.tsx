@@ -1,8 +1,17 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { MessagesSquare, Plus, Send } from "lucide-react";
+import {
+  Copy,
+  Ellipsis,
+  MessagesSquare,
+  Pencil,
+  Plus,
+  Send,
+  Trash2,
+} from "lucide-react";
 import type {
   ResolvedEmoji,
   TelegramChannelMessageTemplate,
@@ -15,7 +24,6 @@ import {
   Card,
   ConfirmDeleteModal,
   ErrorState,
-  IconButton,
   LoadingState,
   Modal,
 } from "@/components/ui/primitives";
@@ -45,7 +53,8 @@ import {
 type EditorState = {
   initial?:
     | TelegramChannelMessageTemplate
-    | WorkspaceFormDraft<TelegramChannelMessageTemplateDraftForm>;
+    | WorkspaceFormDraft<TelegramChannelMessageTemplateDraftForm>
+    | TelegramChannelMessageTemplateDraftForm;
 };
 
 type DeleteTarget = { kind: "saved"; id: string; name: string };
@@ -83,7 +92,9 @@ export function TelegramChannelMessageTemplatesModal({
   >();
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
   const editingSavedTemplate = Boolean(
-    editor?.initial && !("form" in editor.initial),
+    editor?.initial &&
+    !("form" in editor.initial) &&
+    !("payload" in editor.initial),
   );
   const templates = useQuery({
     queryKey: telegramMessageTemplateKeys.list(),
@@ -139,7 +150,7 @@ export function TelegramChannelMessageTemplatesModal({
   const sendSaved = useMutation({
     mutationFn: async (template: TelegramChannelMessageTemplate) => {
       const source = await telegramChannelMessageTemplatesApi.source({
-        templateId: template.id,
+        channelIds: template.channelIds,
       });
       const text = renderTelegramChannelMessageTemplate(
         template.bodyTemplate,
@@ -147,7 +158,12 @@ export function TelegramChannelMessageTemplatesModal({
         {
           channelOrder: template.channelIds,
           groupChannels: template.groupChannels,
+          groupMode: template.groupMode,
           channelGroupLabels: template.channelGroupLabels,
+          channelGroupHeaderTemplate: template.channelGroupHeaderTemplate,
+          introText: template.introText,
+          audienceSummaryTemplate: template.audienceSummaryTemplate,
+          outroText: template.outroText,
           overrideInviteLinks: template.overrideInviteLinks,
           inviteLinkOverrides: template.inviteLinkOverrides,
           excludedProductNames: template.excludedProductNames,
@@ -156,6 +172,7 @@ export function TelegramChannelMessageTemplatesModal({
           bundleOfferEnabled: template.bundleOfferEnabled,
           bundleDiscountPercent: template.bundleDiscountPercent,
           bundleBasePriceOverrides: template.bundleBasePriceOverrides,
+          bundleOfferTemplate: template.bundleOfferTemplate,
         },
       );
       return telegramSystemBotApi.sendPostPreview({
@@ -172,6 +189,45 @@ export function TelegramChannelMessageTemplatesModal({
         "error",
       ),
   });
+  const duplicateTemplate = (template: TelegramChannelMessageTemplate) => {
+    const duplicatedTitle = template.title
+      ? `${template.title} copy`
+      : "Template copy";
+    const form: TelegramChannelMessageTemplateDraftForm = {
+      payload: {
+        title: duplicatedTitle,
+        iconId: template.iconId,
+        scopeMode: template.scopeMode,
+        networkId: template.networkId,
+        channelIds: template.channelIds,
+        groupChannels: template.groupChannels,
+        groupMode: template.groupMode,
+        channelGroupLabels: template.channelGroupLabels,
+        channelGroupHeaderTemplate: template.channelGroupHeaderTemplate,
+        introText: template.introText,
+        audienceSummaryTemplate: template.audienceSummaryTemplate,
+        outroText: template.outroText,
+        bodyTemplate: template.bodyTemplate,
+        overrideInviteLinks: template.overrideInviteLinks,
+        inviteLinkOverrides: template.inviteLinkOverrides,
+        excludedProductNames: template.excludedProductNames,
+        priceRounding: template.priceRounding,
+        productNameOverrides: template.productNameOverrides,
+        bundleOfferEnabled: template.bundleOfferEnabled,
+        bundleDiscountPercent: template.bundleDiscountPercent,
+        bundleBasePriceOverrides: template.bundleBasePriceOverrides,
+        bundleOfferTemplate: template.bundleOfferTemplate,
+      },
+      savedTemplateId: null,
+    };
+    setLocalDraft(form);
+    setDraftPreview({
+      title: duplicatedTitle,
+      icon: template.iconPresentation ?? null,
+      badge: "Local draft",
+    });
+    setEditor({ initial: form });
+  };
   return (
     <>
       <Modal
@@ -263,30 +319,14 @@ export function TelegramChannelMessageTemplatesModal({
                         suffix={`updated ${new Date(template.updatedAt).toLocaleDateString()}`}
                       />
                     </div>
-                    <Button
-                      type="button"
-                      className="h-10 shrink-0 gap-2 px-3"
-                      aria-label={`Send ${template.title || "template"} to System Bot`}
-                      title="Send to System Bot"
-                      disabled={sendSaved.isPending}
-                      onClick={() => sendSaved.mutate(template)}
-                    >
-                      <Send size={16} aria-hidden="true" />
-                      <span>Send to bot</span>
-                    </Button>
-                    <IconButton
-                      type="button"
-                      aria-label="Edit template"
-                      title="Edit template"
-                      onClick={() => setEditor({ initial: template })}
-                    />
-                    <IconButton
-                      type="button"
-                      kind="delete"
-                      aria-label="Delete template"
-                      title="Delete template"
-                      disabled={removeSaved.isPending}
-                      onClick={() =>
+                    <TemplateActions
+                      template={template}
+                      sending={sendSaved.isPending}
+                      deleting={removeSaved.isPending}
+                      onSend={() => sendSaved.mutate(template)}
+                      onEdit={() => setEditor({ initial: template })}
+                      onDuplicate={() => duplicateTemplate(template)}
+                      onDelete={() =>
                         setDeleteTarget({
                           kind: "saved",
                           id: template.id,
@@ -311,6 +351,125 @@ export function TelegramChannelMessageTemplatesModal({
           return removeSaved.mutateAsync(deleteTarget.id);
         }}
       />
+    </>
+  );
+}
+
+function TemplateActions({
+  template,
+  sending,
+  deleting,
+  onSend,
+  onEdit,
+  onDuplicate,
+  onDelete,
+}: {
+  template: TelegramChannelMessageTemplate;
+  sending: boolean;
+  deleting: boolean;
+  onSend: () => void;
+  onEdit: () => void;
+  onDuplicate: () => void;
+  onDelete: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [position, setPosition] = useState({ top: 0, left: 0 });
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const toggle = () => {
+    const rect = triggerRef.current?.getBoundingClientRect();
+    if (rect) {
+      const menuWidth = 176;
+      const menuHeight = 184;
+      const viewportPadding = 8;
+      setPosition({
+        // The menu lives in document.body, rather than inside the modal, so it
+        // cannot be cropped by a modal/card overflow boundary.  Its top edge is
+        // calculated directly above the trigger — no translate transform whose
+        // containing block can change with the modal layout.
+        top: Math.max(viewportPadding, rect.top - menuHeight - viewportPadding),
+        left: Math.max(
+          viewportPadding,
+          Math.min(
+            window.innerWidth - menuWidth - viewportPadding,
+            rect.right - menuWidth,
+          ),
+        ),
+      });
+    }
+    setOpen((value) => !value);
+  };
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        type="button"
+        aria-label={`Template actions for ${template.title || "template"}`}
+        aria-expanded={open}
+        onClick={toggle}
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-neutral-700 text-neutral-200 hover:bg-neutral-800"
+      >
+        <Ellipsis size={18} />
+      </button>
+      {open &&
+        createPortal(
+          <div
+            role="menu"
+            className="fixed z-[300] w-44 space-y-1 rounded-lg border border-neutral-700 bg-neutral-900 p-1 shadow-xl"
+            style={position}
+          >
+            <button
+              type="button"
+              role="menuitem"
+              aria-label={`Send ${template.title || "template"} to System Bot`}
+              className="flex w-full items-center gap-2 rounded px-2 py-2 text-sm hover:bg-neutral-800"
+              disabled={sending}
+              onClick={() => {
+                setOpen(false);
+                onSend();
+              }}
+            >
+              <Send size={16} /> Send to bot
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              aria-label={`Edit ${template.title || "template"}`}
+              className="flex w-full items-center gap-2 rounded px-2 py-2 text-sm hover:bg-neutral-800"
+              onClick={() => {
+                setOpen(false);
+                onEdit();
+              }}
+            >
+              <Pencil size={16} /> Edit
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              aria-label={`Duplicate ${template.title || "template"}`}
+              className="flex w-full items-center gap-2 rounded px-2 py-2 text-sm hover:bg-neutral-800"
+              onClick={() => {
+                setOpen(false);
+                onDuplicate();
+              }}
+            >
+              <Copy size={16} /> Duplicate
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              aria-label={`Delete ${template.title || "template"}`}
+              className="flex w-full items-center gap-2 rounded px-2 py-2 text-sm text-rose-300 hover:bg-rose-950"
+              disabled={deleting}
+              onClick={() => {
+                setOpen(false);
+                onDelete();
+              }}
+            >
+              <Trash2 size={16} /> Delete
+            </button>
+          </div>,
+          document.body,
+        )}
     </>
   );
 }

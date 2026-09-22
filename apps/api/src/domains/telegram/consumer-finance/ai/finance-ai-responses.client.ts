@@ -50,8 +50,10 @@ export async function requestFinanceStructuredResponse(
   });
 
   let response: Response | undefined;
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    response = await fetch(OPENAI_RESPONSES_URL, {
+  const deadline = AbortSignal.timeout(25_000);
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      response = await fetch(OPENAI_RESPONSES_URL, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${input.apiKey}`,
@@ -60,14 +62,19 @@ export async function requestFinanceStructuredResponse(
       },
       body: requestBody,
       signal: input.signal
-        ? AbortSignal.any([input.signal, AbortSignal.timeout(20_000)])
-        : AbortSignal.timeout(20_000),
-    });
-    if (!RETRYABLE_PROVIDER_STATUSES.has(response.status) || attempt === 1) {
+        ? AbortSignal.any([input.signal, deadline])
+        : deadline,
+      });
+    } catch (error) {
+      if (input.signal?.aborted || deadline.aborted || attempt === 2) throw error;
+      await new Promise((resolve) => setTimeout(resolve, PROVIDER_RETRY_DELAY_MS * (attempt + 1)));
+      continue;
+    }
+    if (!RETRYABLE_PROVIDER_STATUSES.has(response.status) || attempt === 2) {
       break;
     }
     await new Promise((resolve) =>
-      setTimeout(resolve, PROVIDER_RETRY_DELAY_MS),
+      setTimeout(resolve, PROVIDER_RETRY_DELAY_MS * (attempt + 1)),
     );
   }
 

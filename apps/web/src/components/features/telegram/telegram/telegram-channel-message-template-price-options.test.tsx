@@ -3,6 +3,22 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { TelegramChannelMessageTemplatePriceOptions } from "./telegram-channel-message-template-price-options";
 
+vi.mock("./telegram-text-editor", () => ({
+  TelegramTextEditor: ({
+    value,
+    onChange,
+  }: {
+    value: string;
+    onChange: (value: string) => void;
+  }) => (
+    <textarea
+      aria-label="Package offer text editor"
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+    />
+  ),
+}));
+
 describe("TelegramChannelMessageTemplatePriceOptions", () => {
   it("starts with every format selected and exposes rounding choices", async () => {
     const user = userEvent.setup();
@@ -13,6 +29,7 @@ describe("TelegramChannelMessageTemplatePriceOptions", () => {
     const onBundleOfferEnabledChange = vi.fn();
     const onBundleDiscountPercentChange = vi.fn();
     const onBundleBasePriceOverridesChange = vi.fn();
+    const onBundleOfferTemplateChange = vi.fn();
     render(
       <TelegramChannelMessageTemplatePriceOptions
         productNames={["1/24", "3/72"]}
@@ -23,6 +40,7 @@ describe("TelegramChannelMessageTemplatePriceOptions", () => {
         bundleOfferEnabled={false}
         bundleDiscountPercent={10}
         bundleBasePriceOverrides={{}}
+        bundleOfferTemplate="{{bundle_rows}}"
         onExcludedProductNamesChange={onExcludedProductNamesChange}
         onPriceRoundingChange={onPriceRoundingChange}
         onPriceModeChange={onPriceModeChange}
@@ -30,6 +48,7 @@ describe("TelegramChannelMessageTemplatePriceOptions", () => {
         onBundleOfferEnabledChange={onBundleOfferEnabledChange}
         onBundleDiscountPercentChange={onBundleDiscountPercentChange}
         onBundleBasePriceOverridesChange={onBundleBasePriceOverridesChange}
+        onBundleOfferTemplateChange={onBundleOfferTemplateChange}
       />,
     );
 
@@ -37,6 +56,16 @@ describe("TelegramChannelMessageTemplatePriceOptions", () => {
     expect(screen.getByRole("checkbox", { name: "3/72" })).toBeChecked();
     await user.click(screen.getByRole("checkbox", { name: "3/72" }));
     expect(onExcludedProductNamesChange).toHaveBeenCalledWith(["3/72"]);
+
+    fireEvent.change(screen.getByLabelText("Display name for 1/24"), {
+      target: { value: "Добу" },
+    });
+    expect(onProductNameOverridesChange).toHaveBeenCalledWith({
+      "1/24": "Добу",
+      "No auto-delete": "Без видалення",
+    });
+
+    await user.click(screen.getByRole("tab", { name: "Offer settings" }));
 
     await user.click(screen.getByRole("button", { name: "Exact prices" }));
     await user.click(
@@ -50,17 +79,14 @@ describe("TelegramChannelMessageTemplatePriceOptions", () => {
     await user.click(screen.getByRole("button", { name: "Internal CPM" }));
     expect(onPriceModeChange).toHaveBeenCalledWith("INTERNAL_CPM");
 
-    fireEvent.change(screen.getByLabelText("Display name for 1/24"), {
-      target: { value: "Добу" },
-    });
-    expect(onProductNameOverridesChange).toHaveBeenCalledWith({
-      "1/24": "Добу",
-      "No auto-delete": "Без видалення",
-    });
-
     await user.click(
       screen.getByRole("checkbox", { name: "Add package offer" }),
     );
     expect(onBundleOfferEnabledChange).toHaveBeenCalledWith(true);
+
+    fireEvent.change(screen.getByLabelText("Package offer text editor"), {
+      target: { value: "💰 {{price}}" },
+    });
+    expect(onBundleOfferTemplateChange).toHaveBeenCalledWith("💰 {{price}}");
   });
 });

@@ -21,6 +21,17 @@ export type AiTokenUsage = {
 export function priceAiUsage(model: string, usage: AiTokenUsage) {
   const price = prices[model];
   if (!price) return { ...usage, pricingVersion: null, estimatedCostMicros: null, inputPriceMicrosPerMillion: null, cachedInputPriceMicrosPerMillion: null, outputPriceMicrosPerMillion: null };
+  const hasUsage = Object.values(usage).some((value) => value != null);
+  if (!hasUsage) {
+    return {
+      ...usage,
+      pricingVersion: PRICING_VERSION,
+      estimatedCostMicros: null,
+      inputPriceMicrosPerMillion: price.input,
+      cachedInputPriceMicrosPerMillion: price.cached,
+      outputPriceMicrosPerMillion: price.output,
+    };
+  }
   const cached = Math.min(usage.cachedInputTokens || 0, usage.inputTokens || 0);
   const regularInput = Math.max(0, (usage.inputTokens || 0) - cached);
   const billableInput = usage.inputAudioTokens ?? regularInput;

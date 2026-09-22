@@ -3,13 +3,13 @@
 import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { LoaderCircle, X } from "lucide-react";
+import { X } from "lucide-react";
 import type {
   ConsumerFinanceAssistantMessage,
   ConsumerFinanceAssistantProposal,
   ConsumerFinanceAssistantScreen,
 } from "@telegram-system/shared";
-import { consumerFinanceAssistantApi } from "@/lib/features/finance/consumer-finance-assistant-api";
+import { consumerFinanceAssistantApi, FinanceAssistantRequestError } from "@/lib/features/finance/consumer-finance-assistant-api";
 import { consumerFinanceKeys } from "@/lib/features/finance/consumer-finance-query-keys";
 import { Button } from "./ui";
 import type { FinanceLocale } from "./i18n/core";
@@ -37,6 +37,7 @@ type LastRequest =
 export function FinanceAssistantDrawer({
   botId,
   locale,
+  timezone = "UTC",
   open,
   onOpenChange,
   onNavigate,
@@ -44,6 +45,7 @@ export function FinanceAssistantDrawer({
 }: {
   botId: string;
   locale: FinanceLocale;
+  timezone?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onNavigate: (screen: ConsumerFinanceAssistantScreen) => void;
@@ -58,6 +60,8 @@ export function FinanceAssistantDrawer({
   const [text, setText] = useState("");
   const [streamingText, setStreamingText] = useState("");
   const [streamCancelled, setStreamCancelled] = useState(false);
+  const [thinkingStage, setThinkingStage] = useState(0);
+  const [progress, setProgress] = useState<{ completed: number; total: number } | null>(null);
   const [messages, setMessages] = useState<ConsumerFinanceAssistantMessage[]>(
     [],
   );
@@ -98,12 +102,27 @@ export function FinanceAssistantDrawer({
       return consumerFinanceAssistantApi.message(botId, input, {
         signal: controller.signal,
         onDelta: (delta) => setStreamingText((current) => current + delta),
+        onProgress: ({ stage, completed, total }) => {
+          setThinkingStage(
+            stage === "UNDERSTANDING" ? 0 : stage === "PREPARING" ? 1 : 2,
+          );
+          setProgress({ completed, total });
+        },
       });
     },
     onSuccess: (result) => {
       setMessages((current) => [
         ...current,
-        { role: "assistant", text: result.message },
+        {
+          role: "assistant",
+          text:
+            result.proposal && !result.message
+              ? t.preparedProposal.replace(
+                  "{count}",
+                  String(result.proposal.operations.length),
+                )
+              : result.message,
+        },
       ]);
       setProposal(result.proposal ?? null);
       setRecommendedScreen(result.recommendedScreen ?? null);
@@ -111,7 +130,10 @@ export function FinanceAssistantDrawer({
       setLastRequest(null);
       void entitlements.refetch();
     },
-    onError: () => setStreamingText(""),
+    onError: () => {
+      setStreamingText("");
+      if (activeStream.current?.signal.aborted) setStreamCancelled(true);
+    },
     onSettled: () => {
       activeStream.current = null;
     },
@@ -161,8 +183,38 @@ export function FinanceAssistantDrawer({
       setNotice(t.cancelled);
     },
   });
+  const revise = useMutation({
+    mutationFn: ({ operations, keepIndices }: {
+      operations: ConsumerFinanceAssistantProposal["operations"];
+      keepIndices?: number[];
+    }) =>
+      consumerFinanceAssistantApi.revise(
+        botId,
+        proposal!.token,
+        operations.map((operation) => ({
+          amount: operation.amount,
+          economicAmount: operation.economicAmount,
+          accountId: operation.accountId,
+          categoryId: operation.categoryId,
+          description: operation.description,
+          occurredAt: operation.occurredAt,
+          purpose:
+            operation.purpose === "INVESTMENT_CONTRIBUTION" ||
+            operation.purpose === "INVESTMENT_RETURN"
+              ? undefined
+              : operation.purpose,
+          necessity: operation.necessity,
+        })),
+        keepIndices,
+      ),
+    onSuccess: (_result, { operations }) => setProposal((current) =>
+      current ? { ...current, operations } : current,
+    ),
+  });
   const pending = send.isPending || proposeFiles.isPending;
-  const failed = (send.isError && !streamCancelled) || proposeFiles.isError;
+  const failed =
+    (send.isError && !streamCancelled) ||
+    proposeFiles.isError;
 
   useEffect(() => {
     if (open) messageEnd.current?.scrollIntoView?.({ block: "end" });
@@ -195,6 +247,8 @@ export function FinanceAssistantDrawer({
     setNotice(null);
     setStreamingText("");
     setStreamCancelled(false);
+    setProgress(null);
+    setThinkingStage(0);
     send.reset();
     proposeFiles.reset();
   };
@@ -326,17 +380,22 @@ export function FinanceAssistantDrawer({
                   aria-hidden="true"
                   className="ml-0.5 inline-block h-4 w-0.5 animate-pulse bg-cyan-300 align-text-bottom motion-reduce:animate-none"
                 />
+                <Button variant="cancel" className="ml-2 !px-2 !py-1 text-xs" onClick={() => activeStream.current?.abort()}>{t.stop}</Button>
               </AssistantBubble>
             ) : null}
             {pending && (!send.isPending || !streamingText) ? (
               <AssistantBubble>
                 <span className="inline-flex items-center gap-2 text-neutral-400">
-                  <LoaderCircle
-                    className="animate-spin motion-reduce:animate-none"
-                    size={15}
-                  />
-                  {t.thinking}
+                  <span className="relative inline-flex size-5 shrink-0" role="progressbar" aria-label={t.thinking} aria-valuemin={0} aria-valuemax={progress?.total ?? 3} aria-valuenow={progress?.completed ?? 0}>
+                    <svg viewBox="0 0 24 24" className="size-5 -rotate-90" aria-hidden="true">
+                      <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" strokeWidth="3" className="text-neutral-700" />
+                      <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" className="text-cyan-300 transition-all duration-300" strokeDasharray={`${progress ? 56.55 * progress.completed / progress.total : 0} 56.55`} />
+                    </svg>
+                    <span className="absolute inset-0 rounded-full border-2 border-transparent border-t-cyan-100 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+                  </span>
+                  {t.thinkingStages[thinkingStage] ?? t.thinking}
                 </span>
+                <Button variant="cancel" className="ml-2 !px-2 !py-1 text-xs" onClick={() => activeStream.current?.abort()}>{t.stop}</Button>
               </AssistantBubble>
             ) : null}
             {recommendedScreen ? (
@@ -357,22 +416,30 @@ export function FinanceAssistantDrawer({
             {proposal ? (
               <AssistantProposalCard
                 proposal={proposal}
+                botId={botId}
+                locale={locale}
+                timezone={timezone}
+                compact={!isPage}
                 t={t}
                 confirming={confirm.isPending}
                 cancelling={cancel.isPending}
-                onConfirm={() => confirm.mutate()}
-                onCancel={() => cancel.mutate()}
+                revising={revise.isPending}
+                onConfirm={() => confirm.mutateAsync().then(() => undefined)}
+                onCancel={() => cancel.mutateAsync().then(() => undefined)}
+                onRevise={(operations, keepIndices) =>
+                  revise.mutateAsync({ operations, keepIndices }).then(() => undefined)
+                }
               />
             ) : null}
             {notice ? (
               <p className="text-sm text-emerald-300">{notice}</p>
             ) : null}
-            {failed || confirm.isError || cancel.isError ? (
+            {failed || confirm.isError || cancel.isError || revise.isError ? (
               <div
                 role="alert"
                 className="rounded-xl border border-rose-900 bg-rose-950/25 p-3 text-sm text-rose-200"
               >
-                <p>{t.error}</p>
+                <p>{send.error instanceof FinanceAssistantRequestError && send.error.code === "BadGatewayException" ? t.providerError : t.error}</p>
                 <div className="mt-2 flex flex-wrap gap-2">
                   {lastRequest ? (
                     <Button variant="secondary" onClick={retry}>

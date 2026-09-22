@@ -106,6 +106,21 @@ function setup() {
   const command = {
     createManagedPost: jest.fn().mockResolvedValue({ id: 'post-1' }),
   };
+  const history = {
+    updateManagedPost: jest.fn().mockResolvedValue({ id: 'post-1' }),
+  };
+  const prisma = {
+    telegramManagedPost: {
+      findFirst: jest.fn().mockResolvedValue({
+        id: 'post-1',
+        text: 'Existing text',
+        imageUrls: [],
+        mediaItems: [],
+        buttonRows: [],
+        group: { title: 'System Bot posts' },
+      }),
+    },
+  };
   const batchCommand = { createAndDispatch: jest.fn().mockResolvedValue({}) };
   const targets = {
     resolve: jest
@@ -123,19 +138,22 @@ function setup() {
     ]),
   };
   const moduleRef = {
+    get: jest.fn().mockReturnValue(prisma),
     registerRequestByContextId: jest.fn(),
     resolve: jest
       .fn()
       .mockImplementation((provider) =>
         provider.name === 'TelegramPostBatchCommandService'
           ? batchCommand
-          : provider.name === 'TelegramAdSalesBotTargetsService'
-            ? targets
-            : provider.name === 'TelegramManagedPostCommandService'
-              ? command
-              : provider.name === 'TelegramSystemPostGroupsService'
-                ? postGroups
-                : publication,
+          : provider.name === 'TelegramManagedPostHistoryService'
+            ? history
+            : provider.name === 'TelegramAdSalesBotTargetsService'
+              ? targets
+              : provider.name === 'TelegramManagedPostCommandService'
+                ? command
+                : provider.name === 'TelegramSystemPostGroupsService'
+                  ? postGroups
+                  : publication,
       ),
   };
   const flowOptions = {
@@ -173,6 +191,8 @@ function setup() {
     domain,
     media,
     command,
+    history,
+    prisma,
     publication,
     batchCommand,
     postGroups,
@@ -181,6 +201,101 @@ function setup() {
 }
 
 describe('TelegramSystemBotPostFlowService', () => {
+  it('replaces draft media without changing its text or buttons', async () => {
+    const { service, workflows } = setup();
+    workflows.active.mockResolvedValue(
+      workflow({
+        step: 'AWAIT_EDIT_MEDIA',
+        payload: {
+          content: {
+            ...content,
+            buttonRows: [
+              [{ text: 'Open', url: 'https://example.com', style: 'default' }],
+            ],
+          },
+        },
+      }),
+    );
+    workflows.transition.mockImplementation(({ payload }) =>
+      workflow({ step: 'CHOOSE_ACTION', version: 3, payload }),
+    );
+    await service.input(scope, {
+      message_id: 10,
+      photo: [{ file_id: 'photo', file_size: 100 }],
+    });
+    expect(workflows.transition).toHaveBeenCalledWith(
+      expect.objectContaining({
+        step: 'CHOOSE_ACTION',
+        payload: expect.objectContaining({
+          content: expect.objectContaining({
+            text: 'Forwarded post',
+            imageUrls: ['https://cdn/photo.jpg'],
+            buttonRows: [
+              [{ text: 'Open', url: 'https://example.com', style: 'default' }],
+            ],
+          }),
+        }),
+      }),
+    );
+  });
+
+  it('opens an existing calendar post and saves edited text through the managed-post command', async () => {
+    const { service, workflows, history, prisma } = setup();
+    workflows.active.mockResolvedValue(null);
+    workflows.create.mockResolvedValue(
+      workflow({
+        step: 'CHOOSE_ACTION',
+        payload: {
+          existingPostId: 'post-1',
+          channelId: 'channel-1',
+          channelTitle: 'Allowed',
+          content,
+        },
+      }),
+    );
+    await service.beginExisting(scope, 0, 'post-1');
+    expect(prisma.telegramManagedPost.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          id: 'post-1',
+          workspaceId: 'workspace-1',
+          telegramChannelId: 'channel-1',
+        },
+      }),
+    );
+    const confirming = workflow({
+      step: 'CONFIRM',
+      payload: {
+        existingPostId: 'post-1',
+        channelId: 'channel-1',
+        channelTitle: 'Allowed',
+        content: { ...content, text: 'Updated text' },
+        action: 'EDIT',
+      },
+    });
+    workflows.get.mockResolvedValue(confirming);
+    workflows.claimCommit.mockResolvedValue(
+      workflow({ ...confirming, version: 3 }),
+    );
+    workflows.complete.mockResolvedValue(
+      workflow({
+        ...confirming,
+        version: 4,
+        status: TelegramSystemBotWorkflowStatus.COMPLETED,
+      }),
+    );
+    await service.callback(scope, 'sbp:workflow-1:2:confirm');
+    expect(history.updateManagedPost).toHaveBeenCalledWith(
+      scope.userId,
+      'channel-1',
+      'post-1',
+      expect.objectContaining({
+        title: 'Updated text',
+        text: 'Updated text',
+      }),
+    );
+  });
+
   it('switches the destination picker before loading networks', async () => {
     const { service, workflows, flowOptions } = setup();
     const choosing = workflow({

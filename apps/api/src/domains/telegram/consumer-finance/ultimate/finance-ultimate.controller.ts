@@ -15,6 +15,7 @@ import { FinanceConsumerRequestService } from '../http/finance-consumer-request.
 import {
   FinanceAssistantEntryDto,
   FinanceAssistantMessageDto,
+  UpdateFinanceAssistantProposalDto,
   FinanceUltimateQuestionDto,
 } from '../http/finance.dto';
 import { FinanceUltimateService } from './finance-ultimate.service';
@@ -89,6 +90,7 @@ export class FinanceUltimateController {
         {
           signal: abortController.signal,
           onMessageDelta: (delta) => write({ type: 'delta', delta }),
+          onProgress: (stage, completed, total) => write({ type: 'progress', stage, completed, total }),
         },
       );
       write({ type: 'done', result });
@@ -145,6 +147,17 @@ export class FinanceUltimateController {
       transactionIds: result.transactionIds,
       duplicate: result.duplicate,
     };
+  }
+
+  @Post('entry/:token/revise')
+  reviseEntry(
+    @Param('botId') botId: string,
+    @Param('token') token: string,
+    @Req() request: Request,
+    @Body() body: UpdateFinanceAssistantProposalDto,
+  ) {
+    const session = this.requests.authenticate(botId, request);
+    return this.entries.revise(this.identity(session, botId), token, body.operations, body.keepIndices);
   }
 
   @Post('entry/:token/cancel')

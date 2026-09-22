@@ -416,7 +416,7 @@ export class BotBillingService {
   async overview(userId: string, botIntegrationId: string, _environment: 'LOCAL' | 'PRODUCTION' = 'PRODUCTION') {
     const bot = await this.bot(userId, botIntegrationId);
     const [subscriptionMetrics, registeredUsers, revenue, recentEvents, recentSubscriptions, aiUsage] = await Promise.all([
-      this.prisma.botSubscription.findMany({ where: { botIntegrationId, workspaceId: bot.workspaceId }, select: { telegramBotUserId: true, status: true, currency: true, interval: true, amountMinor: true, currentPeriodEnd: true, providerSubscription: { select: { mode: true } } } }),
+      this.prisma.botSubscription.findMany({ where: { botIntegrationId, workspaceId: bot.workspaceId }, select: { telegramBotUserId: true, source: true, status: true, currency: true, interval: true, amountMinor: true, currentPeriodEnd: true, providerSubscription: { select: { mode: true } } } }),
       this.prisma.telegramBotUser.count({ where: { botIntegrationId, workspaceId: bot.workspaceId } }),
       this.prisma.botBillingEvent.groupBy({ by: ['currency'], where: { botIntegrationId, workspaceId: bot.workspaceId, type: 'PAYMENT_SUCCEEDED', mode: BotBillingProviderMode.LIVE }, _sum: { amountMinor: true } }),
       this.prisma.botBillingEvent.findMany({ where: { botIntegrationId, workspaceId: bot.workspaceId, type: { in: ['PAYMENT_SUCCEEDED', 'PAYMENT_FAILED'] } }, orderBy: { occurredAt: 'desc' }, take: 12, select: { id: true, type: true, occurredAt: true, subscriptionId: true, amountMinor: true, currency: true, subscription: { select: { telegramBotUser: { select: { id: true, telegramUserId: true, username: true, firstName: true } }, plan: { select: { id: true, name: true } } } } } }),

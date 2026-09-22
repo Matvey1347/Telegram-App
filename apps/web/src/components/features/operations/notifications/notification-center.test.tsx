@@ -104,7 +104,7 @@ describe("NotificationCenter", () => {
     expect(trigger).toHaveTextContent("99+");
     await userEvent.click(trigger);
     expect(await screen.findByText("High priority")).toBeInTheDocument();
-    expect(screen.getByText("Low priority")).toBeInTheDocument();
+    expect(screen.queryByText("Low priority")).not.toBeInTheDocument();
     expect(screen.getByText("Unread")).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: "Unread HIGH notification" }),

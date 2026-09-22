@@ -3,6 +3,7 @@ import type { TelegramPostMediaItem } from '@telegram-system/shared';
 export function telegramBotMediaDelivery(
   mediaItems: TelegramPostMediaItem[],
   caption: { text: string; entities: unknown[] },
+  replyMarkup?: unknown,
 ) {
   if (mediaItems.length > 1) {
     return {
@@ -38,6 +39,7 @@ export function telegramBotMediaDelivery(
       [field]: item.url,
       caption: caption.text,
       caption_entities: caption.entities,
+      ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
     },
     expectedMessageCount: 1,
   };

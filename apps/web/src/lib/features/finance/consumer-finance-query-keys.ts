@@ -58,6 +58,8 @@ export const consumerFinanceKeys = {
     ["consumer-finance", botId, "investments", filters] as const,
   investment: (botId: string, investmentId: string) =>
     ["consumer-finance", botId, "investment", investmentId] as const,
+  investmentDetails: (botId: string) =>
+    ["consumer-finance", botId, "investment"] as const,
   investmentCashFlows: (botId: string, investmentId: string) =>
     [
       "consumer-finance",

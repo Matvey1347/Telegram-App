@@ -23,7 +23,16 @@ export class TelegramChannelMessageTemplatePayloadDto {
   @IsString({ each: true })
   channelIds!: string[];
   @IsOptional() @IsBoolean() groupChannels?: boolean;
+  @IsOptional() @IsIn(['CUSTOM', 'NETWORK']) groupMode?: 'CUSTOM' | 'NETWORK';
   @IsOptional() @IsObject() channelGroupLabels?: Record<string, string>;
+  @IsOptional() @IsString() @MaxLength(160) channelGroupHeaderTemplate?:
+    | string
+    | null;
+  @IsOptional() @IsString() @MaxLength(2_000) introText?: string | null;
+  @IsOptional() @IsString() @MaxLength(2_000) audienceSummaryTemplate?:
+    | string
+    | null;
+  @IsOptional() @IsString() @MaxLength(2_000) outroText?: string | null;
   @IsString() @MaxLength(20_000) bodyTemplate!: string;
   @IsBoolean() overrideInviteLinks!: boolean;
   @IsObject() inviteLinkOverrides!: Record<string, string>;
@@ -45,6 +54,7 @@ export class TelegramChannelMessageTemplatePayloadDto {
   @Max(100)
   bundleDiscountPercent?: number;
   @IsOptional() @IsObject() bundleBasePriceOverrides?: Record<string, string>;
+  @IsOptional() @IsString() @MaxLength(2_000) bundleOfferTemplate?: string | null;
 }
 
 export class TelegramMessageTemplateSourceDto {

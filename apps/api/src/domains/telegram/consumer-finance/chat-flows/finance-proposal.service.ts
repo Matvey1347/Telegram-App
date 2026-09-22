@@ -198,6 +198,94 @@ export class FinanceProposalService {
     });
   }
 
+  async revise(input: {
+    token: string;
+    botIntegrationId: string;
+    telegramBotUserId: string;
+    profile: { id: string };
+    operations: Array<{
+      amount: string;
+      economicAmount?: string;
+      accountId?: string;
+      categoryId?: string | null;
+      description?: string;
+      occurredAt: string;
+      purpose?: ProposalPayload['purpose'];
+      necessity?: ProposalPayload['necessity'];
+    }>;
+    keepIndices?: number[];
+  }) {
+    const candidate = await this.prisma.financePendingProposal.findUnique({
+      where: { tokenHash: this.hash(input.token) },
+    });
+    if (!candidate || !this.belongsToInput(candidate, input))
+      throw new NotFoundException('Finance proposal not found');
+    if (
+      candidate.status !== FinanceProposalStatus.PENDING ||
+      candidate.expiresAt <= new Date()
+    )
+      throw new BadRequestException('Finance proposal has expired or was cancelled');
+    const stored = candidate.payload as StoredProposal;
+    const current = this.operations(stored);
+    const selected = input.keepIndices
+      ? input.keepIndices.map((index) => current[index])
+      : current;
+    if (selected.some((operation) => !operation) || new Set(input.keepIndices).size !== (input.keepIndices?.length ?? 0))
+      throw new BadRequestException('Invalid proposal operation selection');
+    if (selected.length !== input.operations.length || !selected.length)
+      throw new BadRequestException('Proposal operation count cannot be changed');
+    const [accounts, categories] = await Promise.all([
+      this.prisma.financeAccount.findMany({ where: { profileId: input.profile.id, archivedAt: null }, select: { id: true, currency: true } }),
+      this.prisma.financeCategory.findMany({ where: { profileId: input.profile.id, archivedAt: null }, select: { id: true, parentId: true, type: true } }),
+    ]);
+    const parentIds = new Set(categories.flatMap((category) => category.parentId ? [category.parentId] : []));
+    const operations = selected.map((operation, index) => {
+      const revision = input.operations[index];
+      const accountId = revision.accountId ?? operation.accountId;
+      if (!accounts.some((account) => account.id === accountId && account.currency === operation.currency))
+        throw new BadRequestException('Select an account in the proposal currency');
+      const categoryId = revision.categoryId === undefined ? operation.categoryId : revision.categoryId;
+      if (categoryId && !categories.some((category) => category.id === categoryId && category.type === operation.type && !parentIds.has(category.id)))
+        throw new BadRequestException('Select a leaf category of the matching type');
+      const amount = new Prisma.Decimal(revision.amount);
+      if (!amount.isFinite() || amount.lte(0))
+        throw new BadRequestException('Amount must be positive');
+      const oldAmount = new Prisma.Decimal(operation.amount);
+      const economicAmount = revision.economicAmount ?? (
+        operation.economicAmount &&
+        new Prisma.Decimal(operation.economicAmount).equals(oldAmount)
+          ? amount.toString()
+          : operation.economicAmount);
+      if (
+        economicAmount &&
+        new Prisma.Decimal(economicAmount).gt(amount) &&
+        (revision.purpose ?? operation.purpose ?? 'ORDINARY') === 'ORDINARY'
+      )
+        throw new BadRequestException('Economic amount cannot exceed the amount');
+      return {
+        ...operation,
+        accountId,
+        categoryId,
+        amount: amount.toString(),
+        economicAmount,
+        description: revision.description?.trim() || null,
+        occurredAt: revision.occurredAt,
+        purpose: revision.purpose ?? operation.purpose,
+        necessity: revision.necessity ?? operation.necessity,
+      };
+    });
+    const payload: StoredProposal = 'operations' in stored
+      ? { ...stored, operations }
+      : operations[0];
+    const changed = await this.prisma.financePendingProposal.updateMany({
+      where: { id: candidate.id, status: FinanceProposalStatus.PENDING, expiresAt: { gt: new Date() } },
+      data: { payload: payload as Prisma.InputJsonValue },
+    });
+    if (changed.count !== 1)
+      throw new BadRequestException('Finance proposal is no longer available');
+    return { updated: true };
+  }
+
   private belongsToInput(
     proposal: {
       botIntegrationId: string;
@@ -255,6 +343,7 @@ export class FinanceProposalService {
       occurredAt: string;
       accountHint?: string;
       merchantDisplay?: string;
+      categoryHint?: string;
       items?: Array<{
         displayName: string;
         quantity?: string;
@@ -298,6 +387,7 @@ export class FinanceProposalService {
               input.profile.id,
               item.type,
               item.merchantDisplay || item.description,
+              item.categoryHint,
             )
           : null;
       const payload = {
@@ -347,10 +437,24 @@ export class FinanceProposalService {
     profileId: string,
     type: 'INCOME' | 'EXPENSE',
     description: string | null,
+    explicitHint?: string,
   ) {
     const merchant = description
       ? this.ledger.normalizeMerchant(description)
       : '';
+    const categories = await this.prisma.financeCategory.findMany({
+      where: { profileId, type, archivedAt: null },
+    });
+    const parentIds = new Set(
+      categories.flatMap((category) => category.parentId ? [category.parentId] : []),
+    );
+    const leafCategories = categories.filter((category) => !parentIds.has(category.id));
+    if (explicitHint) {
+      const normalizedHint = this.ledger.normalizeMerchant(explicitHint);
+      return leafCategories.find((category) =>
+        this.ledger.normalizeMerchant(category.name) === normalizedHint,
+      ) || null;
+    }
     if (merchant) {
       const mapping = await this.prisma.financeMerchantMapping.findUnique({
         where: {
@@ -361,9 +465,7 @@ export class FinanceProposalService {
         },
       });
       if (mapping) {
-        const mapped = await this.prisma.financeCategory.findFirst({
-          where: { id: mapping.categoryId, profileId, type, archivedAt: null },
-        });
+        const mapped = leafCategories.find((item) => item.id === mapping.categoryId);
         if (mapped) return mapped;
       }
       const history = await this.prisma.financeTransaction.findFirst({
@@ -377,20 +479,28 @@ export class FinanceProposalService {
         include: { category: true },
         orderBy: { occurredAt: 'desc' },
       });
-      if (history?.category && !history.category.archivedAt)
+      if (
+        history?.category &&
+        !history.category.archivedAt &&
+        leafCategories.some((item) => item.id === history.categoryId)
+      )
         return history.category;
     }
-    const categories = await this.prisma.financeCategory.findMany({
-      where: { profileId, type, archivedAt: null },
-    });
     const defaultMatch = DEFAULT_FINANCE_CATEGORIES.find(
       (item) =>
         item.type === type &&
         item.keywords.some((keyword) => merchant.includes(keyword)),
     );
     return (
-      categories.find((item) => item.name === defaultMatch?.name) ||
-      categories.find(
+      leafCategories.find((item) => item.name === defaultMatch?.name) ||
+      leafCategories.find(
+        (item) =>
+          defaultMatch &&
+          defaultMatch.keywords.some((keyword) =>
+            this.ledger.normalizeMerchant(item.name).includes(keyword),
+          ),
+      ) ||
+      leafCategories.find(
         (item) => item.name === (type === 'INCOME' ? 'Other income' : 'Other'),
       ) ||
       null
@@ -415,18 +525,15 @@ export class FinanceProposalService {
         )
       : [];
     if (hinted.length === 1) return hinted[0];
-    if (hinted.length > 1)
-      throw new BadRequestException(
-        'More than one account matches this AI proposal',
-      );
+    // Accounts are already ordered by creation time. A note without an exact
+    // account name must stay capturable: use that stable default rather than
+    // turning an everyday expense into a blocking question.
+    if (hinted.length > 1) return hinted[0];
     const currencyMatches = accounts.filter(
       (account) => account.currency === currency,
     );
     if (currencyMatches.length === 1) return currencyMatches[0];
-    if (currencyMatches.length > 1)
-      throw new BadRequestException(
-        `More than one ${currency} account is available for this AI proposal`,
-      );
+    if (currencyMatches.length > 1) return currencyMatches[0];
     return accounts[0];
   }
   private hash(token: string) {

@@ -28,16 +28,28 @@ export class FinanceAssistantEntryService {
     private readonly entitlements: FinanceEntitlementService,
   ) {}
 
-  async fromText(identity: AssistantIdentity, text: string) {
+  async fromText(identity: AssistantIdentity, text: string, onProgress?: (completed: number, stage: 'UNDERSTANDING' | 'PREPARING' | 'CHECKING') => void, signal?: AbortSignal) {
+    onProgress?.(0, 'UNDERSTANDING');
+    if (signal?.aborted) throw signal.reason;
     const profile = await this.profile(identity.profileId);
+    onProgress?.(1, 'PREPARING');
     const operations = await this.ai.extractText({
       profileId: identity.profileId,
       botIntegrationId: identity.botIntegrationId,
       text,
       timezone: profile.timezone,
       defaultCurrency: profile.defaultCurrency,
+      signal,
     });
-    return this.propose(identity, profile, operations, 'AI');
+    if (signal?.aborted) throw signal.reason;
+    onProgress?.(2, 'CHECKING');
+    const categoryHint = explicitCategoryHint(text);
+    const proposal = await this.propose(identity, profile, operations.map((operation) => ({
+      ...operation,
+      ...(categoryHint ? { categoryHint, description: stripExplicitCategoryLabel(operation.description) } : {}),
+    })), 'AI');
+    onProgress?.(3, 'CHECKING');
+    return proposal;
   }
 
   async fromFile(identity: AssistantIdentity, file?: Express.Multer.File) {
@@ -125,6 +137,21 @@ export class FinanceAssistantEntryService {
     });
   }
 
+  revise(
+    identity: AssistantIdentity,
+    token: string,
+    operations: Parameters<FinanceProposalService['revise']>[0]['operations'],
+    keepIndices?: number[],
+  ) {
+    return this.proposals.revise({
+      ...identity,
+      profile: { id: identity.profileId },
+      token,
+      operations,
+      keepIndices,
+    });
+  }
+
   private async profile(profileId: string) {
     const profile = await this.prisma.financeProfile.findUnique({
       where: { id: profileId },
@@ -160,9 +187,19 @@ export class FinanceAssistantEntryService {
         currency: item.payload.currency,
         description: item.payload.description || '',
         occurredAt: item.payload.occurredAt,
+        accountId: item.payload.accountId,
+        categoryId: item.payload.categoryId,
         accountName: item.accountName,
         categoryName: item.categoryName,
       })),
     };
   }
+}
+
+export function explicitCategoryHint(text: string) {
+  return /(?:категори[яюи]|категорі[яюї]|category)\s*[:\-]?\s*([\p{L}\p{N}_-]+)/iu.exec(text)?.[1];
+}
+
+export function stripExplicitCategoryLabel(description: string) {
+  return description.replace(/\s*[,([]?\s*(?:категори[яюи]|категорі[яюї]|category)\s*:?\s*[\p{L}\p{N}_-]+\s*[)\]]?\s*$/iu, '').trim() || description;
 }

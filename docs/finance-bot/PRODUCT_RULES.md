@@ -42,6 +42,14 @@ Finance Bot serves people who may have never tracked personal finances before.
 
 - AI input is always a proposal, never a ledger write. Text, receipt images, and
   voice are parsed into a reviewable batch and require explicit confirmation.
+- Assistant proposal previews reuse the consumer Finance transaction row and
+  editor. Editing changes only the pending proposal; ledger writes happen only
+  on confirmation. An explicitly named category resolves to an existing,
+  selectable leaf category or remains unassigned for the user's review.
+- Stream progress reports completed backend stages only. Provider execution is
+  opaque: show an indeterminate activity indicator while it runs, never invent
+  an ETA or a steadily increasing percentage. Stopping an in-flight request
+  aborts provider work and must not start a second hidden fallback request.
 - Web users may preview and submit up to five receipt images as one bounded batch
   (8 MB per file, 16 MB total). Audio remains a single-file input and is never
   mixed with receipt images. Selecting an unavailable voice capability explains

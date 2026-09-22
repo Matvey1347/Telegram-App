@@ -58,8 +58,8 @@ export type BotBillingOverviewView = {
     outputTokens: number;
     estimatedCostMicros: number;
     unpricedRequests: number;
-    byModel: Array<{ model: string; requests: number; inputTokens: number; outputTokens: number; estimatedCostMicros: number }>;
-    byUser: Array<{ telegramBotUserId: string; telegramUserId: string; username: string | null; firstName: string | null; requests: number; estimatedCostMicros: number }>;
+    byModel: Array<{ model: string; requests: number; inputTokens: number; outputTokens: number; estimatedCostMicros: number | null }>;
+    byUser: Array<{ telegramBotUserId: string; telegramUserId: string; username: string | null; firstName: string | null; requests: number; estimatedCostMicros: number | null }>;
   };
   recentActivity: Array<{
     id: string;
@@ -122,6 +122,7 @@ export type BotBillingAnalyticsView = {
   activeSubscriptions: number;
   freeUsers: number;
   paidUsers: number;
+  grantedUsers: number;
   canceled: number;
   failedPayments: number;
   monthly: number;

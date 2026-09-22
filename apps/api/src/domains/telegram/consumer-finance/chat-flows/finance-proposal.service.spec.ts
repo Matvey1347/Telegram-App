@@ -325,4 +325,61 @@ describe('FinanceProposalService confirmation atomicity', () => {
     expect(ledger.prepareTransactionRateSource).not.toHaveBeenCalled();
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
+
+  it('honours an explicit existing leaf category instead of guessing from the purchase name', async () => {
+    const prisma: any = {
+      financeAccount: { findMany: jest.fn().mockResolvedValue([{ id: 'bank', name: 'Bank', currency: 'PLN' }]) },
+      financeCategory: { findMany: jest.fn().mockResolvedValue([
+        { id: 'relationship', name: 'Relationship', parentId: null, type: 'EXPENSE' },
+        { id: 'kity', name: 'Kity', parentId: 'relationship', type: 'EXPENSE' },
+        { id: 'snacks', name: 'Impulse food / snacks', parentId: null, type: 'EXPENSE' },
+      ]) },
+      financePendingProposal: { create: jest.fn().mockResolvedValue({}) },
+    };
+    const ledger = { normalizeMerchant: (text: string) => text.toLowerCase().trim() };
+    const result = await new FinanceProposalService(prisma, ledger as never).createBatch({
+      profile: { id: 'profile-1', defaultCurrency: 'PLN' },
+      botIntegrationId: 'bot-1', telegramBotUserId: 'user-1',
+      operations: [{ type: 'EXPENSE', amount: '9', currency: 'PLN', description: 'bun',
+        occurredAt: new Date().toISOString(), categoryHint: 'kity' }],
+    });
+    expect(result.preview[0]).toMatchObject({ payload: { categoryId: 'kity' }, categoryName: 'Kity' });
+  });
+
+  it('does not silently replace an unknown explicit category with a snack guess', async () => {
+    const prisma: any = {
+      financeAccount: { findMany: jest.fn().mockResolvedValue([{ id: 'bank', name: 'Bank', currency: 'PLN' }]) },
+      financeCategory: { findMany: jest.fn().mockResolvedValue([{ id: 'snacks', name: 'Food', parentId: null, type: 'EXPENSE' }]) },
+      financePendingProposal: { create: jest.fn().mockResolvedValue({}) },
+    };
+    const ledger = { normalizeMerchant: (text: string) => text.toLowerCase().trim() };
+    const result = await new FinanceProposalService(prisma, ledger as never).createBatch({
+      profile: { id: 'profile-1', defaultCurrency: 'PLN' },
+      botIntegrationId: 'bot-1', telegramBotUserId: 'user-1',
+      operations: [{ type: 'EXPENSE', amount: '9', currency: 'PLN', description: 'bun',
+        occurredAt: new Date().toISOString(), categoryHint: 'unknown' }],
+    });
+    expect(result.preview[0].payload.categoryId).toBeNull();
+  });
+
+  it('removes a selected draft operation and validates edited account and leaf category', async () => {
+    const prisma: any = {
+      financePendingProposal: {
+        findUnique: jest.fn().mockResolvedValue(pendingProposal()),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      financeAccount: { findMany: jest.fn().mockResolvedValue([{ id: 'account-1', currency: 'USD' }]) },
+      financeCategory: { findMany: jest.fn().mockResolvedValue([{ id: 'category-1', parentId: null, type: 'EXPENSE' }]) },
+    };
+    const service = new FinanceProposalService(prisma, {} as never);
+    await service.revise({ ...input, keepIndices: [1], operations: [{ amount: '25',
+      description: 'edited second', occurredAt: '2026-01-02T00:00:00.000Z',
+      accountId: 'account-1', categoryId: 'category-1' }] });
+    expect(prisma.financePendingProposal.updateMany).toHaveBeenCalledWith({
+      where: expect.objectContaining({ id: 'proposal-1', status: 'PENDING' }),
+      data: { payload: expect.objectContaining({ operations: [expect.objectContaining({
+        description: 'edited second', amount: '25', categoryId: 'category-1',
+      })] }) },
+    });
+  });
 });

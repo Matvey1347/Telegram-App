@@ -237,7 +237,7 @@ export function NotificationPanel({
                   />
                 ))
               : null}
-            {state.items.length ? (
+            {state.items.length || state.hasMore || state.paginationError ? (
               <div className="p-3 text-center">
                 {state.paginationError ? (
                   <div>

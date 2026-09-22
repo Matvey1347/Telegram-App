@@ -5,9 +5,7 @@ import {
   ArrowDown,
   ArrowLeftRight,
   ArrowUp,
-  HandCoins,
   Plus,
-  TrendingUp,
   X,
 } from "lucide-react";
 import type { FinanceCoreCopy } from "./i18n/core";
@@ -29,20 +27,18 @@ export function ConsumerFinanceActionLauncher({
     { id: "expense", label: copy.expense, Icon: ArrowDown },
     { id: "income", label: copy.income, Icon: ArrowUp },
     { id: "transfer", label: copy.transfers, Icon: ArrowLeftRight },
-    { id: "debt", label: copy.debts, Icon: HandCoins },
-    { id: "investment", label: copy.investments, Icon: TrendingUp },
   ] as const;
-  const quickActions = actions.slice(0, 3);
+  const quickActions = actions;
 
   if (!compact) {
     return (
       <div className="flex flex-wrap items-center gap-2">
-        {actions.map(({ id, label, Icon }, index) => (
+        {actions.map(({ id, label, Icon }) => (
           <button
             key={id}
             type="button"
             onClick={() => onAction(id)}
-            className={`inline-flex min-h-11 items-center gap-2 rounded-lg border px-3 text-sm font-medium outline-none transition focus-visible:ring-2 focus-visible:ring-sky-300 ${index === 0 ? "border-sky-500 bg-sky-500 text-neutral-950" : "border-neutral-700 bg-neutral-900 text-neutral-100 hover:border-neutral-600"}`}
+            className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-neutral-700 bg-neutral-900 px-3 text-sm font-medium text-neutral-100 outline-none transition hover:border-neutral-600 focus-visible:ring-2 focus-visible:ring-sky-300"
           >
             <Icon size={17} aria-hidden="true" />
             {label}

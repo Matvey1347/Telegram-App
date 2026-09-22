@@ -192,7 +192,7 @@ export type ConsumerFinanceCategoryUpdate = {
 };
 
 export type ConsumerFinanceArchiveResult = { archived: true };
-export type ConsumerFinanceDeleteResult = { deleted: true };
+export type ConsumerFinanceDeleteResult = { deleted: true; undoable?: boolean };
 export type ConsumerFinanceUndoResult = {
   undone: true;
   duplicate: boolean;

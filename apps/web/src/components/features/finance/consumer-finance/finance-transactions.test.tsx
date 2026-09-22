@@ -286,7 +286,7 @@ describe("FinanceTransactions receipt detail", () => {
     expect(consumerFinanceApi.transaction).not.toHaveBeenCalled();
   });
 
-  it("keeps investment cash-flow rows inspectable but not directly editable or deletable", async () => {
+  it("offers edit and delete for investment cash-flow rows", async () => {
     vi.mocked(consumerFinanceApi.transactions).mockResolvedValue({
       items: [
         {
@@ -318,11 +318,28 @@ describe("FinanceTransactions receipt detail", () => {
       screen.queryByRole("button", { name: "Purchase details" }),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "Edit transaction" }),
-    ).not.toBeInTheDocument();
+      screen.getByRole("button", { name: "Edit transaction" }),
+    ).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "Delete transaction" }),
-    ).not.toBeInTheDocument();
+      screen.getByRole("button", { name: "Delete transaction" }),
+    ).toBeInTheDocument();
+  });
+
+  it("shows one cursor page at a time and fetches the next page on demand", async () => {
+    vi.mocked(consumerFinanceApi.transactions).mockImplementation(
+      async (_bot, query) =>
+        query?.cursor
+          ? { items: [{ id: "second", accountId: "a", type: "EXPENSE", purpose: "ORDINARY", amount: "2", currency: "USD", occurredAt: "2026-09-02T00:00:00.000Z", description: "Second page" }], nextCursor: null }
+          : { items: [{ id: "first", accountId: "a", type: "EXPENSE", purpose: "ORDINARY", amount: "1", currency: "USD", occurredAt: "2026-09-03T00:00:00.000Z", description: "First page" }], nextCursor: "first" },
+    );
+
+    renderTransactions("browser");
+    expect(await screen.findByText("First page")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(await screen.findByText("Second page")).toBeInTheDocument();
+    expect(screen.queryByText("First page")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Previous" }));
+    expect(await screen.findByText("First page")).toBeInTheDocument();
   });
 
   it("does not offer receipt details for a transaction without itemized receipt data", async () => {

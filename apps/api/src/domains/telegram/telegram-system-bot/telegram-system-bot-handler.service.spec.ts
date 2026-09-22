@@ -199,7 +199,7 @@ describe('TelegramSystemBotHandlerService', () => {
           one_time_keyboard: false,
           keyboard: expect.arrayContaining([
             expect.arrayContaining([
-              expect.objectContaining({ text: '📢 Channels' }),
+              expect.objectContaining({ text: '⚙️ Settings' }),
             ]),
           ]),
         }),
@@ -253,7 +253,7 @@ describe('TelegramSystemBotHandlerService', () => {
     expect(channelAccess.list).toHaveBeenCalledWith('44', 'workspace');
   });
 
-  it('handles a persistent Channels keyboard button as the channels command', async () => {
+  it('handles a persistent Settings keyboard button as workspace settings', async () => {
     const api = {
       sendMessage: jest.fn(),
       editMessageText: jest.fn(),
@@ -270,6 +270,7 @@ describe('TelegramSystemBotHandlerService', () => {
         role: 'admin',
         workspace: { name: 'Business' },
       }),
+      workspacesForConnection: jest.fn().mockResolvedValue([]),
     } as any;
     const channelAccess = { list: jest.fn().mockResolvedValue([]) } as any;
     const service = new TelegramSystemBotHandlerService(
@@ -289,11 +290,17 @@ describe('TelegramSystemBotHandlerService', () => {
       message: {
         chat: { id: 44, type: 'private' },
         from: { id: 44 },
-        text: 'Channels',
+        text: '⚙️ Settings',
       },
     });
 
-    expect(channelAccess.list).toHaveBeenCalledWith('44', 'workspace');
+    expect(channelAccess.list).not.toHaveBeenCalled();
+    expect(api.sendMessage).toHaveBeenCalledWith(
+      'token',
+      expect.objectContaining({
+        text: expect.stringContaining('Settings'),
+      }),
+    );
   });
 
   it('handles channel membership updates before the private-chat guard', async () => {
@@ -551,7 +558,7 @@ describe('TelegramSystemBotHandlerService', () => {
       expect.objectContaining({
         chat_id: '44',
         message_id: 77,
-        text: '🏢 Choose workspace:',
+        text: expect.stringContaining('Settings'),
       }),
     );
     expect(api.sendMessage).not.toHaveBeenCalled();

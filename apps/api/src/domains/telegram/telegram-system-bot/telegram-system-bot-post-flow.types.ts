@@ -2,7 +2,11 @@ import type { Prisma } from '@prisma/client';
 import type { TelegramPostMediaItem } from '@telegram-system/shared';
 import type { TelegramSystemBotWorkflowStore } from './telegram-system-bot-workflow.store';
 
-export type TelegramSystemBotPostAction = 'DRAFT' | 'PUBLISH_NOW' | 'SCHEDULE';
+export type TelegramSystemBotPostAction =
+  | 'DRAFT'
+  | 'PUBLISH_NOW'
+  | 'SCHEDULE'
+  | 'EDIT';
 
 export type TelegramSystemBotPostPreviewDraft = {
   text?: string;
@@ -38,6 +42,7 @@ export type TelegramSystemBotCapturedPostContent = {
 export type TelegramSystemBotPostPayload = {
   destination?: 'MANAGED_POST';
   content?: TelegramSystemBotCapturedPostContent;
+  existingPostId?: string;
   channelId?: string;
   channelTitle?: string;
   groupId?: string;

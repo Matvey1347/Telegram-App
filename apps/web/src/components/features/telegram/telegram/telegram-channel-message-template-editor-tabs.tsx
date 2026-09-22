@@ -3,6 +3,7 @@
 import { Button } from "@/components/ui/primitives";
 
 export type TelegramChannelMessageTemplateEditorSection =
+  | "text"
   | "details"
   | "channel"
   | "prices";
@@ -11,7 +12,8 @@ const sections: Array<{
   id: TelegramChannelMessageTemplateEditorSection;
   label: string;
 }> = [
-  { id: "details", label: "Template" },
+  { id: "text", label: "Text" },
+  { id: "details", label: "Channels" },
   { id: "channel", label: "Channel info" },
   { id: "prices", label: "Prices" },
 ];

@@ -15,6 +15,8 @@ export type ConsumerFinanceAssistantProposal = {
     currency: string;
     description: string;
     occurredAt: string;
+    accountId: string;
+    categoryId: string | null;
     accountName: string;
     categoryName: string | null;
   }>;
@@ -58,6 +60,12 @@ export type ConsumerFinanceAssistantMessageResult = {
 
 export type ConsumerFinanceAssistantStreamEvent =
   | { type: "start" }
+  | {
+      type: "progress";
+      stage: "UNDERSTANDING" | "PREPARING" | "CHECKING";
+      completed: number;
+      total: number;
+    }
   | { type: "delta"; delta: string }
   | { type: "done"; result: ConsumerFinanceAssistantMessageResult }
   | { type: "error"; message: string; code?: string };

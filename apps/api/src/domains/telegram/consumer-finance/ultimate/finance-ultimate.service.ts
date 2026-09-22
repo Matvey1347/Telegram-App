@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadGatewayException, BadRequestException, Injectable } from '@nestjs/common';
 import type {
   ConsumerFinanceAnalytics,
   ConsumerFinanceAssistantMessageResult,
@@ -6,13 +6,14 @@ import type {
 import { PrismaService } from '../../../../prisma/prisma.service';
 import { FinanceAiAnalyticsService } from '../ai/finance-ai-analytics.service';
 import { FinanceAnalyticsService } from '../analytics/finance-analytics.service';
-import { financeChatLocale } from '../i18n/finance-chat-i18n';
+import { financeChatLocale, t } from '../i18n/finance-chat-i18n';
 import type { FinanceUltimateQuestionDto } from '../http/finance.dto';
 import type { FinanceAssistantMessageDto } from '../http/finance.dto';
 import { FinanceEntitlementService } from '../billing/finance-entitlement.service';
 import { AI_MODEL_POLICY } from '../../telegram-bots/core/ai-usage-cost';
 import { FinanceLedgerService } from '../ledger/finance-ledger.service';
 import { FinanceProposalService } from '../chat-flows/finance-proposal.service';
+import { FinanceAssistantEntryService, explicitCategoryHint, stripExplicitCategoryLabel } from './finance-assistant-entry.service';
 
 /** On-demand AI interpretation over the canonical bounded Analytics read model. */
 @Injectable()
@@ -24,6 +25,7 @@ export class FinanceUltimateService {
     private readonly entitlements: FinanceEntitlementService,
     private readonly ledger?: FinanceLedgerService,
     private readonly proposals?: FinanceProposalService,
+    private readonly entries?: FinanceAssistantEntryService,
   ) {}
 
   async message(
@@ -36,9 +38,22 @@ export class FinanceUltimateService {
     dto: FinanceAssistantMessageDto,
     stream?: {
       onMessageDelta: (delta: string) => void;
+      onProgress?: (stage: 'UNDERSTANDING' | 'PREPARING' | 'CHECKING', completed: number, total: number) => void;
       signal?: AbortSignal;
     },
   ): Promise<ConsumerFinanceAssistantMessageResult> {
+    // A plain payment note does not need the expensive conversational router.
+    // Send it through the canonical extractor once; questions still use the
+    // richer analytics-aware route below.
+    if (this.entries && isLikelyFinanceEntry(dto.text)) {
+      const proposal = await this.entries.fromText(input, dto.text, (completed, stage) => stream?.onProgress?.(stage, completed, 3), stream?.signal);
+      return {
+        kind: 'PROPOSAL',
+        message: '',
+        recommendedScreen: null,
+        proposal,
+      };
+    }
     const reservation = await this.entitlements.reserve(
       input,
       'AI_INPUT',
@@ -46,6 +61,7 @@ export class FinanceUltimateService {
     );
     let providerCalled = false;
     try {
+      stream?.onProgress?.('UNDERSTANDING', 1, 4);
       const profile = await this.prisma.financeProfile.findUnique({
         where: { id: input.profileId },
         select: {
@@ -90,45 +106,60 @@ export class FinanceUltimateService {
         }),
       ]);
       providerCalled = true;
-      const route = await this.ai.routeAssistantMessage({
-        profileId: input.profileId,
-        botIntegrationId: input.botIntegrationId,
-        locale: financeChatLocale(
-          profile.locale,
-          profile.telegramUser?.languageCode,
-        ),
-        text: dto.text,
-        history: dto.history || [],
-        facts: {
-          ...compactAnalyticsFacts(analytics),
-          accountBalances: accounts.slice(0, 100).map((account) => ({
-            name: account.name,
-            type: account.type,
-            balance: account.balance,
-            currency: account.currency,
-            archived: Boolean(account.archivedAt),
-          })),
-          recentTransactions: recent.map((transaction) => ({
-            type: transaction.type,
-            purpose: transaction.purpose,
-            amount: transaction.amount.toString(),
-            economicAmount: transaction.economicAmount.toString(),
-            currency: transaction.currency,
-            necessity: transaction.necessity,
-            occurredAt: transaction.occurredAt.toISOString(),
-            description: transaction.description,
-            account: transaction.account.name,
-            category: transaction.category?.name || null,
-          })),
-        },
-        reservationId: reservation?.id,
-        usageContext: {
-          workspaceId: input.workspaceId,
-          telegramBotUserId: input.telegramBotUserId,
-        },
-        onMessageDelta: stream?.onMessageDelta,
-        signal: stream?.signal,
-      });
+      const locale = financeChatLocale(
+        profile.locale,
+        profile.telegramUser?.languageCode,
+      );
+      stream?.onProgress?.('PREPARING', 2, 4);
+      let route;
+      try {
+        route = await this.ai.routeAssistantMessage({
+          profileId: input.profileId,
+          botIntegrationId: input.botIntegrationId,
+          locale,
+          text: dto.text,
+          history: dto.history || [],
+          facts: {
+            ...compactAnalyticsFacts(analytics),
+            accountBalances: accounts.slice(0, 100).map((account) => ({
+              name: account.name,
+              type: account.type,
+              balance: account.balance,
+              currency: account.currency,
+              archived: Boolean(account.archivedAt),
+            })),
+            recentTransactions: recent.map((transaction) => ({
+              type: transaction.type,
+              purpose: transaction.purpose,
+              amount: transaction.amount.toString(),
+              economicAmount: transaction.economicAmount.toString(),
+              currency: transaction.currency,
+              necessity: transaction.necessity,
+              occurredAt: transaction.occurredAt.toISOString(),
+              description: transaction.description,
+              account: transaction.account.name,
+              category: transaction.category?.name || null,
+            })),
+          },
+          reservationId: reservation?.id,
+          usageContext: {
+            workspaceId: input.workspaceId,
+            telegramBotUserId: input.telegramBotUserId,
+          },
+          onMessageDelta: stream?.onMessageDelta,
+          signal: stream?.signal,
+        });
+      } catch (error) {
+        if (!(error instanceof BadGatewayException) || !this.entries) throw error;
+        stream?.onProgress?.('CHECKING', 3, 4);
+        const proposal = await this.entries.fromText(input, dto.text);
+        return {
+          kind: 'PROPOSAL',
+          message: `${t(locale, 'suggested', { count: proposal.operations.length })}\n${t(locale, 'review')}`,
+          recommendedScreen: null,
+          proposal,
+        };
+      }
       if (route.kind !== 'RECORD') {
         return {
           kind: route.kind,
@@ -136,6 +167,8 @@ export class FinanceUltimateService {
           recommendedScreen: route.recommendedScreen,
         };
       }
+      stream?.onProgress?.('CHECKING', 4, 4);
+      const categoryHint = explicitCategoryHint(dto.text);
       const created = await this.requireProposals().createBatch({
         profile: {
           id: input.profileId,
@@ -144,7 +177,10 @@ export class FinanceUltimateService {
         botIntegrationId: input.botIntegrationId,
         telegramBotUserId: input.telegramBotUserId,
         source: 'AI',
-        operations: route.operations,
+        operations: route.operations.map((operation) => ({
+          ...operation,
+          ...(categoryHint ? { categoryHint, description: stripExplicitCategoryLabel(operation.description) } : {}),
+        })),
       });
       const proposal = {
         token: created.token,
@@ -157,6 +193,8 @@ export class FinanceUltimateService {
           currency: item.payload.currency,
           description: item.payload.description || '',
           occurredAt: item.payload.occurredAt,
+          accountId: item.payload.accountId,
+          categoryId: item.payload.categoryId,
           accountName: item.accountName,
           categoryName: item.categoryName,
         })),
@@ -269,6 +307,15 @@ export class FinanceUltimateService {
     if (!this.proposals) throw new Error('FinanceProposalService is required');
     return this.proposals;
   }
+}
+
+function isLikelyFinanceEntry(text: string) {
+  return (
+    /\d+(?:[.,]\d{1,2})?/u.test(text) &&
+    /(?:spent|paid|bought|купил(?:а)?|потратил(?:а)?|заплатил(?:а)?|витратив(?:ла)?|купив(?:ла)?|заплатив(?:ла)?|отримав(?:ла)?|получил(?:а)?)/iu.test(
+      text,
+    )
+  );
 }
 
 function compactAnalyticsFacts(analytics: ConsumerFinanceAnalytics) {

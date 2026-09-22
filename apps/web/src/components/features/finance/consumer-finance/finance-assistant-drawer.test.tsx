@@ -8,10 +8,13 @@ import {
 } from "@testing-library/react";
 import type { ConsumerFinanceAssistantMessageResult } from "@telegram-system/shared";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { consumerFinanceAssistantApi } from "@/lib/features/finance/consumer-finance-assistant-api";
+import { consumerFinanceAssistantApi, FinanceAssistantRequestError } from "@/lib/features/finance/consumer-finance-assistant-api";
 import { FinanceAssistantDrawer } from "./finance-assistant-drawer";
 
 vi.mock("@/lib/features/finance/consumer-finance-assistant-api", () => ({
+  FinanceAssistantRequestError: class FinanceAssistantRequestError extends Error {
+    constructor(message: string, readonly code?: string) { super(message); }
+  },
   consumerFinanceAssistantApi: {
     message: vi.fn(),
     ask: vi.fn(),
@@ -20,6 +23,20 @@ vi.mock("@/lib/features/finance/consumer-finance-assistant-api", () => ({
     proposeFiles: vi.fn(),
     confirm: vi.fn(),
     cancel: vi.fn(),
+    revise: vi.fn(),
+  },
+}));
+
+vi.mock("@/lib/features/finance/consumer-finance-ledger-api", () => ({
+  consumerFinanceLedgerApi: {
+    accounts: vi.fn().mockResolvedValue([{
+      id: "account-1", name: "Card", currency: "PLN",
+      iconPresentation: { type: "unicode", value: "💳" },
+    }]),
+    categories: vi.fn().mockResolvedValue([{
+      id: "category-1", name: "Restaurants", type: "EXPENSE",
+      iconPresentation: { type: "unicode", value: "🍽️" },
+    }]),
   },
 }));
 
@@ -182,6 +199,29 @@ describe("FinanceAssistantDrawer", () => {
     expect(await screen.findByText("I can help now.")).toBeInTheDocument();
   });
 
+  it("can stop an in-flight request without sending a second fallback request", async () => {
+    let signal: AbortSignal | undefined;
+    vi.mocked(consumerFinanceAssistantApi.message).mockImplementation((_botId, _input, options) => {
+      signal = options?.signal;
+      return new Promise((_resolve, reject) => signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError"))));
+    });
+    render(<QueryClientProvider client={new QueryClient()}><FinanceAssistantDrawer botId="bot" locale="en" open onOpenChange={vi.fn()} onNavigate={vi.fn()} /></QueryClientProvider>);
+    fireEvent.change(screen.getByLabelText("Message Jarvis…"), { target: { value: "Spent 9 PLN" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Stop" }));
+    await waitFor(() => expect(signal?.aborted).toBe(true));
+    expect(consumerFinanceAssistantApi.proposeText).not.toHaveBeenCalled();
+  });
+
+  it("identifies a provider outage without blaming the user's entry or silently retrying through another endpoint", async () => {
+    vi.mocked(consumerFinanceAssistantApi.message).mockRejectedValue(new FinanceAssistantRequestError("Finance assistant request failed", "BadGatewayException"));
+    render(<QueryClientProvider client={new QueryClient()}><FinanceAssistantDrawer botId="bot" locale="en" open onOpenChange={vi.fn()} onNavigate={vi.fn()} /></QueryClientProvider>);
+    fireEvent.change(screen.getByLabelText("Message Jarvis…"), { target: { value: "Spent 9 PLN" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    expect(await screen.findByText("The AI service is temporarily unavailable. Nothing was recorded; please try again.")).toBeInTheDocument();
+    expect(consumerFinanceAssistantApi.proposeText).not.toHaveBeenCalled();
+  });
+
   it("shows an AI proposal and writes only after confirmation", async () => {
     vi.mocked(consumerFinanceAssistantApi.message).mockResolvedValue({
       kind: "PROPOSAL",
@@ -198,6 +238,8 @@ describe("FinanceAssistantDrawer", () => {
             currency: "PLN",
             description: "Coffee",
             occurredAt: "2026-09-12T12:00:00.000Z",
+            accountId: "account-1",
+            categoryId: "category-1",
             accountName: "Card",
             categoryName: "Restaurants",
           },
@@ -226,9 +268,16 @@ describe("FinanceAssistantDrawer", () => {
     expect(
       await screen.findByText("Check before recording"),
     ).toBeInTheDocument();
-    expect(screen.getByText("zł 3.00")).toBeInTheDocument();
-    expect(screen.getByText("Ordinary income or expense")).toBeInTheDocument();
-    expect(screen.getByText("Optional")).toBeInTheDocument();
+    expect(await screen.findAllByText("Coffee")).toHaveLength(2);
+    expect(screen.getAllByText("Restaurants").length).toBeGreaterThan(0);
+    expect(consumerFinanceAssistantApi.confirm).not.toHaveBeenCalled();
+    vi.mocked(consumerFinanceAssistantApi.revise).mockResolvedValue({ updated: true });
+    fireEvent.click(screen.getAllByRole("button", { name: "Edit transaction" })[0]);
+    fireEvent.change(screen.getByDisplayValue("Coffee"), { target: { value: "Coffee edited" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save transaction" }));
+    await waitFor(() => expect(consumerFinanceAssistantApi.revise).toHaveBeenCalledWith(
+      "bot", "token", [expect.objectContaining({ description: "Coffee edited", accountId: "account-1", categoryId: "category-1" })], undefined,
+    ));
     expect(consumerFinanceAssistantApi.confirm).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
     await waitFor(() =>
@@ -240,6 +289,28 @@ describe("FinanceAssistantDrawer", () => {
     expect(
       await screen.findByText("Recorded successfully."),
     ).toBeInTheDocument();
+  });
+
+  it("removes one suggested transaction without recording either transaction", async () => {
+    vi.mocked(consumerFinanceAssistantApi.message).mockResolvedValue({
+      kind: "PROPOSAL", message: "", proposal: {
+        token: "token", operations: ["Coffee", "Lunch"].map((description) => ({
+          type: "EXPENSE" as const, amount: "9", currency: "PLN", description,
+          occurredAt: "2026-09-12T12:00:00.000Z", accountId: "account-1",
+          categoryId: "category-1", accountName: "Card", categoryName: "Restaurants",
+        })),
+      },
+    });
+    vi.mocked(consumerFinanceAssistantApi.revise).mockResolvedValue({ updated: true });
+    render(<QueryClientProvider client={new QueryClient()}><FinanceAssistantDrawer botId="bot" locale="en" open onOpenChange={vi.fn()} onNavigate={vi.fn()} /></QueryClientProvider>);
+    fireEvent.change(screen.getByLabelText("Message Jarvis…"), { target: { value: "Coffee and lunch" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    expect(await screen.findAllByText("Coffee")).toHaveLength(2);
+    fireEvent.click(screen.getAllByRole("button", { name: "Delete transaction" })[0]);
+    await waitFor(() => expect(consumerFinanceAssistantApi.revise).toHaveBeenCalledWith(
+      "bot", "token", [expect.objectContaining({ description: "Lunch" })], [1],
+    ));
+    expect(consumerFinanceAssistantApi.confirm).not.toHaveBeenCalled();
   });
 
   it("opens the Finance function selected by the assistant", async () => {

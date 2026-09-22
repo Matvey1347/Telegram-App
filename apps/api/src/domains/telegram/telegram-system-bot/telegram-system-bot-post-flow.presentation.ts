@@ -77,8 +77,23 @@ export function renderTelegramSystemBotPostCard(input: {
     : '';
 
   if (workflow.status === TelegramSystemBotWorkflowStatus.COMPLETED) {
+    const destination =
+      payload.targetLabel ||
+      payload.channelTitle ||
+      `${payload.channelIds?.length ?? 1} channels`;
+    const action =
+      payload.action === 'PUBLISH_NOW'
+        ? (payload.channelIds?.length ?? 0) > 1
+          ? 'queued for publication'
+          : 'published'
+        : payload.action === 'SCHEDULE'
+          ? 'scheduled'
+          : payload.action === 'EDIT'
+            ? 'updated'
+            : 'saved as a draft';
     return {
-      text: `✅ Post saved${workflow.resultManagedPostId ? `\nID: ${workflow.resultManagedPostId}` : ''}`,
+      text: `✅ <b>Post ${action}</b>\n${escapeSystemBotHtml(destination)}\n${escapeSystemBotHtml(payload.content?.plainText || payload.content?.text || 'Media post').slice(0, 120)}`,
+      parse_mode: 'HTML' as const,
     };
   }
   if (workflow.status === TelegramSystemBotWorkflowStatus.CANCELLED) {
@@ -166,13 +181,13 @@ export function renderTelegramSystemBotPostCard(input: {
   if (workflow.step === 'CHOOSE_ACTION') {
     return present({
       text: [
-        previewText,
-        '',
+        '<b>Post editor</b>',
+        `<i>${escapeSystemBotHtml((payload.content?.plainText || payload.content?.text || 'Media post').slice(0, 90))}</i>`,
         payload.targetLabel
-          ? `Network: ${escapeSystemBotHtml(payload.targetLabel)}`
-          : `Channel: ${escapeSystemBotHtml(payload.channelTitle)}`,
+          ? `📣 ${escapeSystemBotHtml(payload.targetLabel)}`
+          : `📣 ${escapeSystemBotHtml(payload.channelTitle)}`,
         payload.groupTitle
-          ? `Group: ${escapeSystemBotHtml(payload.groupTitle)}`
+          ? `📁 ${escapeSystemBotHtml(payload.groupTitle)}`
           : null,
         '',
         '<b>Choose an action:</b>',
@@ -187,19 +202,41 @@ export function renderTelegramSystemBotPostCard(input: {
               callback_data: `${prefix}edit.buttons`,
             },
           ],
-          [
-            {
-              text: '📁 Change group',
-              callback_data: `${prefix}group.change`,
-            },
-          ],
-          ...(payload.channelIds?.length && payload.channelIds.length > 1
+          ...(!payload.existingPostId
+            ? [
+                [
+                  {
+                    text: '🖼 Replace media',
+                    callback_data: `${prefix}edit.media`,
+                  },
+                ],
+              ]
+            : []),
+          ...(payload.existingPostId
+            ? []
+            : [
+                [
+                  {
+                    text: '📁 Change group',
+                    callback_data: `${prefix}group.change`,
+                  },
+                ],
+              ]),
+          ...(payload.existingPostId
+            ? [[{ text: '💾 Save changes', callback_data: `${prefix}save` }]]
+            : []),
+          ...(payload.existingPostId ||
+          (payload.channelIds?.length && payload.channelIds.length > 1)
             ? []
             : [[{ text: '📝 Save draft', callback_data: `${prefix}draft` }]]),
-          [
-            { text: '🕒 Schedule', callback_data: `${prefix}schedule` },
-            { text: '🚀 Publish now', callback_data: `${prefix}publish` },
-          ],
+          ...(!payload.existingPostId
+            ? [
+                [
+                  { text: '🕒 Schedule', callback_data: `${prefix}schedule` },
+                  { text: '🚀 Publish now', callback_data: `${prefix}publish` },
+                ],
+              ]
+            : []),
           navigationButtons(prefix),
         ],
       },
@@ -252,6 +289,12 @@ export function renderTelegramSystemBotPostCard(input: {
       },
     });
   }
+  if (workflow.step === 'AWAIT_EDIT_MEDIA') {
+    return present({
+      text: '<b>Replace media</b>\nSend a new photo, video or GIF. The post text and buttons will stay unchanged.',
+      reply_markup: { inline_keyboard: [navigationButtons(prefix)] },
+    });
+  }
   if (workflow.step === 'AWAIT_SCHEDULE') {
     return present({
       text: `${previewText}\n\nSend publication time as DD.MM.YYYY HH:mm\nTimezone: ${escapeSystemBotHtml(scope.timezone)}`,
@@ -262,16 +305,15 @@ export function renderTelegramSystemBotPostCard(input: {
   }
   return present({
     text: [
-      previewText,
-      '',
-      `<b>Confirm post</b>`,
+      '<b>Confirm publication</b>',
+      `<i>${escapeSystemBotHtml((payload.content?.plainText || payload.content?.text || 'Media post').slice(0, 90))}</i>`,
       payload.targetLabel
         ? `Network: ${escapeSystemBotHtml(payload.targetLabel)}`
         : `Channel: ${escapeSystemBotHtml(payload.channelTitle)}`,
       payload.groupTitle
         ? `Group: ${escapeSystemBotHtml(payload.groupTitle)}`
         : null,
-      `Action: ${escapeSystemBotHtml(payload.action)}`,
+      `Action: ${payload.action === 'EDIT' ? 'Save changes' : escapeSystemBotHtml(payload.action)}`,
       payload.scheduledAt
         ? `At: ${escapeSystemBotHtml(payload.scheduledAt)}`
         : null,

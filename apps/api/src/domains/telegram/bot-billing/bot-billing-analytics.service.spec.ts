@@ -1,6 +1,24 @@
 import { BotBillingAnalyticsService } from './bot-billing-analytics.service';
 
 describe('BotBillingAnalyticsService', () => {
+  it('keeps gifted and manual access out of paying-user and revenue metrics', () => {
+    const service = new BotBillingAnalyticsService({} as never);
+    const now = new Date('2026-09-21T12:00:00.000Z');
+
+    expect(service.calculate(4, [
+      { telegramBotUserId: 'payer', source: 'STRIPE', status: 'ACTIVE', currency: 'USD', interval: 'MONTH', amountMinor: 1_000, currentPeriodEnd: null, providerSubscription: { mode: 'LIVE' } },
+      { telegramBotUserId: 'gifted', source: 'GIFT', status: 'ACTIVE', currency: null, interval: null, amountMinor: null, currentPeriodEnd: null, providerSubscription: null },
+      { telegramBotUserId: 'manual', source: 'MANUAL', status: 'ACTIVE', currency: null, interval: null, amountMinor: null, currentPeriodEnd: null, providerSubscription: null },
+    ], now)).toMatchObject({
+      paidUsers: 1,
+      grantedUsers: 2,
+      activeSubscriptions: 3,
+      freeUsers: 1,
+      monthly: 1,
+      mrr: [{ currency: 'USD', amountMinor: 1_000 }],
+    });
+  });
+
   it('aggregates real AI cost by model and user across a logical bot', async () => {
     const prisma = {
       telegramBotRuntimeInstance: { findFirst: jest.fn().mockResolvedValue({ id: 'runtime-local' }) },

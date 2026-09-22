@@ -50,6 +50,13 @@ import {
   assertFinanceTransactionMutable,
   assertFinanceTransactionRemoved,
 } from './finance-generated-transaction-policy';
+import {
+  findLinkedInvestmentTransaction,
+  lockLinkedInvestment,
+  removeLinkedInvestmentTransaction,
+  refreshLinkedInvestmentTransaction,
+  syncLinkedInvestmentEdit,
+} from './finance-investment-transaction-mutation';
 import { FinanceAssetSummaryService } from '../assets/finance-asset-summary.service';
 import { financeLedgerStats } from './finance-ledger-stats';
 @Injectable()
@@ -366,16 +373,48 @@ export class FinanceLedgerService {
           accountId: true,
           categoryId: true,
           merchantDisplay: true,
+          profileId: true,
+          currency: true,
+          occurredAt: true,
+          type: true,
+          amountInValuationCurrency: true,
           debtSettlement: { select: { id: true } },
           recurringPaymentOccurrence: { select: { id: true } },
-          investmentCashFlow: { select: { id: true } },
+          investmentCashFlow: {
+            select: {
+              id: true,
+              investmentId: true,
+              kind: true,
+              amountInInvestmentCurrency: true,
+              exchangeRateToInvestment: true,
+            },
+          },
           originatedDebts: { select: { id: true }, take: 1 },
         },
       });
       if (!existing)
         throw new NotFoundException('Finance transaction not found');
-      assertFinanceTransactionMutable(existing);
-      return this.createReplacement(tx, profile, existing, dto);
+      if (!existing.investmentCashFlow) {
+        assertFinanceTransactionMutable(existing);
+        return this.createReplacement(tx, profile, existing, dto);
+      }
+      if (existing.debtSettlement || existing.recurringPaymentOccurrence || existing.originatedDebts.length)
+        throw new BadRequestException('Transaction has other linked records');
+      if (dto.type !== existing.type || dto.categoryId)
+        throw new BadRequestException('Investment cash flow type and category cannot be changed');
+      await lockLinkedInvestment(tx, profile.id, existing.investmentCashFlow.investmentId);
+      const current = await refreshLinkedInvestmentTransaction(tx, existing);
+      const updated = await this.createReplacement(
+        tx,
+        profile,
+        current,
+        dto,
+        current.investmentCashFlow!.kind === 'CONTRIBUTION'
+          ? FinanceTransactionPurpose.INVESTMENT_CONTRIBUTION
+          : FinanceTransactionPurpose.INVESTMENT_RETURN,
+      );
+      await syncLinkedInvestmentEdit(tx, current, updated);
+      return updated;
     });
   }
 
@@ -389,9 +428,10 @@ export class FinanceLedgerService {
       merchantDisplay: string | null;
     },
     dto: UpdateFinanceTransactionDto,
+    purposeOverride?: FinanceTransactionPurpose,
   ) {
     const amount = this.positive(dto.amount, 'amount');
-    const purpose = dto.purpose ?? 'ORDINARY';
+    const purpose = purposeOverride ?? dto.purpose ?? 'ORDINARY';
     const economicAmount = this.resolveEconomicAmount(
       amount,
       dto.economicAmount,
@@ -501,6 +541,11 @@ export class FinanceLedgerService {
   }
 
   async removeTransaction(profileId: string, id: string) {
+    const linked = await findLinkedInvestmentTransaction(this.prisma, profileId, id);
+    if (linked?.investmentCashFlow)
+      return this.prisma.$transaction((tx) =>
+        removeLinkedInvestmentTransaction(tx, linked),
+      );
     const result = await this.prisma.financeTransaction.updateMany({
       where: {
         id,
@@ -523,6 +568,13 @@ export class FinanceLedgerService {
   }
 
   async undo(profileId: string, id: string) {
+    const investment = await this.prisma.financeTransaction.findFirst({
+      where: { id, profileId },
+      select: { purpose: true },
+    });
+    if (investment?.purpose === FinanceTransactionPurpose.INVESTMENT_CONTRIBUTION ||
+        investment?.purpose === FinanceTransactionPurpose.INVESTMENT_RETURN)
+      throw new BadRequestException('Investment cash flows cannot be restored through transaction undo');
     const cutoff = new Date(Date.now() - FINANCE_UNDO_TTL_MS);
     const result = await this.prisma.financeTransaction.updateMany({
       where: { id, profileId, deletedAt: { gte: cutoff } },

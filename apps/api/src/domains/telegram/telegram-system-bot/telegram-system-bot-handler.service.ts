@@ -167,7 +167,16 @@ export class TelegramSystemBotHandlerService {
       if (callback && this.postImport?.isCallback(callback))
         return this.postImport.callback(workflowScope, callback);
       if (callback === 'posts:add' || callback === 'posts:new')
-        return this.postFlow?.begin(workflowScope);
+        return this.postFlow?.begin(workflowScope, action.callbackMessageId);
+      if (callback?.startsWith('posts:edit:')) {
+        const [, , channelIndex, postId] = callback.split(':');
+        return this.postFlow?.beginExisting(
+          workflowScope,
+          Number(channelIndex),
+          postId,
+          action.callbackMessageId,
+        );
+      }
       if (callback && this.posts?.isCallback(callback))
         return this.posts.callback(
           workflowScope,

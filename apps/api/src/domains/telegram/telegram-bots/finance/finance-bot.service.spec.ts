@@ -179,6 +179,9 @@ describe('FinanceBotService chat UX', () => {
     const assistant = {
       message: jest.fn(),
     };
+    const assistantEntries = {
+      fromText: jest.fn(),
+    };
     const instance = new FinanceBotService(
       users as any,
       contexts as any,
@@ -196,6 +199,7 @@ describe('FinanceBotService chat UX', () => {
       flowPresenter as any,
       undefined,
       assistant as any,
+      assistantEntries as any,
     );
     return {
       instance,
@@ -212,6 +216,7 @@ describe('FinanceBotService chat UX', () => {
       browserLogin,
       flowPresenter,
       assistant,
+      assistantEntries,
       ...overrides,
     };
   }
@@ -315,6 +320,53 @@ describe('FinanceBotService chat UX', () => {
       'chat-1',
       expect.objectContaining({
         text: 'Your optional spending is within the current limit.',
+      }),
+    );
+  });
+
+  it('falls back to the shared Web and Mini App proposal entry when Jarvis routing fails', async () => {
+    const test = service();
+    test.assistant.message.mockRejectedValue(new Error('invalid route'));
+    test.assistantEntries.fromText.mockResolvedValue({
+      token: 'proposal-1',
+      operations: [
+        {
+          type: 'EXPENSE',
+          amount: '9',
+          currency: 'PLN',
+          description: 'Bun',
+          occurredAt: '2026-09-21T10:00:00.000Z',
+          accountName: 'Bank',
+          categoryName: 'Food',
+        },
+      ],
+    });
+
+    await test.instance.handle({
+      bot,
+      runtime,
+      token: 'bot-token',
+      updateLogId: 'jarvis-fallback-proposal',
+      update: {
+        message: {
+          text: 'I spent 9 PLN on a bun yesterday',
+          chat: { id: 'chat-1' },
+        },
+      },
+    } as any);
+
+    expect(test.assistantEntries.fromText).toHaveBeenCalledWith(
+      expect.objectContaining({
+        profileId: 'profile-1',
+        botIntegrationId: bot.id,
+      }),
+      'I spent 9 PLN on a bun yesterday',
+    );
+    expect(test.delivery.send).toHaveBeenCalledWith(
+      'bot-token',
+      'chat-1',
+      expect.objectContaining({
+        text: expect.stringContaining('Bun'),
       }),
     );
   });

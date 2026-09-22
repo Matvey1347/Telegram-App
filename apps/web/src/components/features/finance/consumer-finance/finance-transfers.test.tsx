@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type {
   ConsumerFinanceAccount,
   ConsumerFinanceDashboard,
+  ConsumerFinanceTransfer,
 } from "@telegram-system/shared";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { consumerFinanceKeys } from "@/lib/features/finance/consumer-finance-query-keys";
@@ -145,5 +146,35 @@ describe("FinanceTransfers account prerequisite", () => {
     expect(
       screen.queryByRole("button", { name: "Create second account" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("shows only the selected transfer page and navigates back without another request", async () => {
+    api.accounts.mockResolvedValue([account("one"), account("two")]);
+    const transfer = (id: string): ConsumerFinanceTransfer => ({
+      id,
+      fromAccountId: "one",
+      toAccountId: "two",
+      fromAmount: "10",
+      toAmount: "10",
+      fromCurrency: "USD",
+      toCurrency: "USD",
+      exchangeRate: "1",
+      occurredAt: "2026-09-19T12:00:00Z",
+      description: `Transfer ${id}`,
+      fromAccount: account("one"),
+      toAccount: account("two"),
+    });
+    api.transfers.mockResolvedValueOnce({ items: [transfer("first")], nextCursor: "next" });
+    api.transfers.mockResolvedValueOnce({ items: [transfer("second")], nextCursor: null });
+    renderTransfers();
+
+    expect(await screen.findByText("Transfer first")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(await screen.findByText("Transfer second")).toBeInTheDocument();
+    expect(screen.queryByText("Transfer first")).not.toBeInTheDocument();
+    expect(api.transfers).toHaveBeenCalledWith("bot", expect.objectContaining({ cursor: "next" }));
+    fireEvent.click(screen.getByRole("button", { name: "Previous" }));
+    expect(await screen.findByText("Transfer first")).toBeInTheDocument();
+    expect(api.transfers).toHaveBeenCalledTimes(2);
   });
 });

@@ -34,6 +34,7 @@ import { FinanceTransactionDetailModal } from "./finance-transaction-detail-moda
 import { FinanceMobileTransactionRow } from "./finance-mobile-transaction-row";
 import { DesktopTransactionTable } from "./finance-desktop-transaction-table";
 import { financePeriodDateRange } from "./finance-period-selector";
+import { FinanceCursorPagination } from "./ui/finance-cursor-pagination";
 
 export function FinanceTransactions({
   botId,
@@ -71,6 +72,7 @@ export function FinanceTransactions({
   );
   const [detail, setDetail] = useState<ConsumerFinanceTransaction | null>(null);
   const [undoable, setUndoable] = useState<string | null>(null);
+  const [page, setPage] = useState(0);
   const debouncedSearch = useDebouncedValue(filters.search);
   const queryFilters = { ...filters, search: debouncedSearch };
   // References and history are independent and intentionally start together.
@@ -96,7 +98,16 @@ export function FinanceTransactions({
     getNextPageParam: (page) => page.nextCursor ?? undefined,
     enabled: !editorOnly,
   });
-  const items = history.data?.pages.flatMap((page) => page.items) ?? [];
+  const items = history.data?.pages[page]?.items ?? [];
+  const hasNextPage = Boolean(history.data?.pages[page]?.nextCursor);
+  const nextPage = async () => {
+    if (!hasNextPage || history.isFetchingNextPage) return;
+    if (!history.data?.pages[page + 1]) {
+      const result = await history.fetchNextPage();
+      if (!result.data?.pages[page + 1]) return;
+    }
+    setPage((current) => current + 1);
+  };
   const invalidateDerived = () => {
     void client.invalidateQueries({
       queryKey: consumerFinanceKeys.dashboard(botId),
@@ -108,12 +119,25 @@ export function FinanceTransactions({
       queryKey: consumerFinanceKeys.accounts(botId),
     });
   };
+  const invalidateInvestment = () => {
+    void client.invalidateQueries({
+      queryKey: consumerFinanceKeys.investmentLists(botId),
+    });
+    void client.invalidateQueries({
+      queryKey: consumerFinanceKeys.investmentSummary(botId),
+    });
+    void client.invalidateQueries({
+      queryKey: consumerFinanceKeys.investmentDetails(botId),
+    });
+  };
   const remove = useMutation({
     mutationFn: (id: string) => consumerFinanceApi.deleteTransaction(botId, id),
-    onSuccess: (_, id) => {
+    onSuccess: (result, id) => {
       removeConsumerTransactionFromCaches(client, botId, id);
-      setUndoable(id);
+      setUndoable(result.undoable === false ? null : id);
       setDeleting(null);
+      if (deleting?.purpose.startsWith("INVESTMENT_")) invalidateInvestment();
+      if (items.length === 1 && page > 0) setPage(page - 1);
       invalidateDerived();
       pushToast(t.transactionDeleted, "info");
     },
@@ -193,6 +217,7 @@ export function FinanceTransactions({
         }}
         onSaved={(item) => {
           reconcileConsumerTransactionCaches(client, botId, item, timezone);
+          if (item.purpose.startsWith("INVESTMENT_")) invalidateInvestment();
           setEditing(null);
           onLauncherClose?.();
           invalidateDerived();
@@ -205,7 +230,7 @@ export function FinanceTransactions({
         categories={categoryRows}
         locale={locale}
         surface={surface}
-        onChange={setFilters}
+        onChange={(next) => { setPage(0); setFilters(next); }}
       />
       <Card className={surface === "telegram" ? "overflow-hidden !p-0" : ""}>
         {history.isLoading ? (
@@ -242,16 +267,15 @@ export function FinanceTransactions({
           <EmptyState text={t.noTransactions} />
         )}
       </Card>
-      {history.hasNextPage ? (
-        <Button
-          variant="secondary"
-          className="w-full"
-          disabled={history.isFetchingNextPage}
-          onClick={() => history.fetchNextPage()}
-        >
-          {history.isFetchingNextPage ? t.loading : t.loadMore}
-        </Button>
-      ) : null}
+      <FinanceCursorPagination
+        locale={locale}
+        page={page}
+        hasPrevious={page > 0}
+        hasNext={hasNextPage}
+        loading={history.isFetchingNextPage}
+        onPrevious={() => setPage((current) => Math.max(0, current - 1))}
+        onNext={() => void nextPage()}
+      />
       {undoable ? (
         <Button
           variant="secondary"

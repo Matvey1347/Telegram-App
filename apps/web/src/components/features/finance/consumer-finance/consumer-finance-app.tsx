@@ -318,6 +318,7 @@ export function ConsumerFinanceApp({ botId }: { botId: string }) {
           <FinanceAssistantDrawer
             botId={botId}
             locale={locale}
+            timezone={profile.timezone}
             open={
               surface === "browser" ? screen === "assistant" : assistantOpen
             }

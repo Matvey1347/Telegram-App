@@ -101,6 +101,7 @@ beforeEach(() => {
         photoUrl: null,
         tgStatUrl: null,
         emojiSource: "📣",
+        networkGroups: [],
         iconPresentation: null,
         defaultInviteLinkId: null,
         inviteLinks: [],
@@ -174,11 +175,23 @@ describe("TelegramChannelMessageTemplatesModal", () => {
     );
 
     await waitFor(() =>
-      expect(mocks.source).toHaveBeenCalledWith({ templateId: "template-1" }),
+      expect(mocks.source).toHaveBeenCalledWith({ channelIds: ["channel-1"] }),
     );
     expect(mocks.sendPostPreview).toHaveBeenCalledWith(
       expect.objectContaining({ title: "All Channels", text: "Channel One" }),
     );
+  });
+
+  it("opens a duplicate as a new editable template", async () => {
+    const user = userEvent.setup();
+    renderModal();
+
+    await user.click(
+      await screen.findByRole("button", { name: "Duplicate All Channels" }),
+    );
+
+    expect(screen.getByDisplayValue("All Channels copy")).toBeVisible();
+    expect(screen.getByText("Draft saved automatically")).toBeVisible();
   });
 
   it("shows only a preview skeleton and never creates a draft while editing a saved template", async () => {

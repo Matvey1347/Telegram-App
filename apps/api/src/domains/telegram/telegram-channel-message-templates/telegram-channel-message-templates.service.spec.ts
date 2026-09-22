@@ -77,7 +77,13 @@ describe('TelegramChannelMessageTemplatesService', () => {
       networkId: null,
       channelIds: ['channel-2', 'channel-1'],
       groupChannels: true,
-      channelGroupLabels: { 'channel-2': 'Business', 'channel-1': 'Business', outsider: 'Ignored' },
+      groupMode: 'NETWORK',
+      channelGroupLabels: {
+        'channel-2': 'Business',
+        'channel-1': 'Business',
+        outsider: 'Ignored',
+      },
+      channelGroupHeaderTemplate: '{{group}}: {{count}} каналов',
       bodyTemplate: '{{#products}}{{product_price}}{{/products}}',
       overrideInviteLinks: false,
       inviteLinkOverrides: {},
@@ -87,6 +93,7 @@ describe('TelegramChannelMessageTemplatesService', () => {
       bundleOfferEnabled: true,
       bundleDiscountPercent: 10,
       bundleBasePriceOverrides: { '1/24': '495' },
+      bundleOfferTemplate: '💰 {{price}} {{currency}} у всі — {{format}}',
     });
 
     expect(createdData).toEqual(
@@ -94,12 +101,18 @@ describe('TelegramChannelMessageTemplatesService', () => {
         excludedProductNames: ['3/72'],
         channelIds: ['channel-2', 'channel-1'],
         groupChannels: true,
-        channelGroupLabels: { 'channel-2': 'Business', 'channel-1': 'Business' },
+        groupMode: 'NETWORK',
+        channelGroupLabels: {
+          'channel-2': 'Business',
+          'channel-1': 'Business',
+        },
+        channelGroupHeaderTemplate: '{{group}}: {{count}} каналов',
         priceRounding: 'NEAREST_10',
         productNameOverrides: { 'No auto-delete': 'Без видалення' },
         bundleOfferEnabled: true,
         bundleDiscountPercent: 10,
         bundleBasePriceOverrides: { '1/24': '495' },
+        bundleOfferTemplate: '💰 {{price}} {{currency}} у всі — {{format}}',
         workspaceId: 'workspace-1',
       }),
     );
@@ -108,12 +121,18 @@ describe('TelegramChannelMessageTemplatesService', () => {
         excludedProductNames: ['3/72'],
         channelIds: ['channel-2', 'channel-1'],
         groupChannels: true,
-        channelGroupLabels: { 'channel-2': 'Business', 'channel-1': 'Business' },
+        groupMode: 'NETWORK',
+        channelGroupLabels: {
+          'channel-2': 'Business',
+          'channel-1': 'Business',
+        },
+        channelGroupHeaderTemplate: '{{group}}: {{count}} каналов',
         priceRounding: 'NEAREST_10',
         productNameOverrides: { 'No auto-delete': 'Без видалення' },
         bundleOfferEnabled: true,
         bundleDiscountPercent: 10,
         bundleBasePriceOverrides: { '1/24': '495' },
+        bundleOfferTemplate: '💰 {{price}} {{currency}} у всі — {{format}}',
       }),
     );
   });
@@ -136,6 +155,7 @@ describe('TelegramChannelMessageTemplatesService', () => {
         updatedAt: new Date('2026-09-14T00:00:00.000Z'),
         defaultInviteLinkId: null,
         presentationIcon: null,
+        networkMembers: [],
         inviteLinks: [],
       },
       {
@@ -159,6 +179,7 @@ describe('TelegramChannelMessageTemplatesService', () => {
           emoji: '💼',
           imageUrl: null,
         },
+        networkMembers: [{ network: { name: 'Business' } }],
         inviteLinks: [
           { id: 'link-main', name: 'Main', url: 'https://t.me/+main' },
         ],
@@ -210,6 +231,7 @@ describe('TelegramChannelMessageTemplatesService', () => {
     expect(result.channels[0]).toEqual(
       expect.objectContaining({
         emojiSource: '💼',
+        networkGroups: [{ name: 'Business', emojiSource: null }],
         viewsPerPost: 1_200,
         description: 'Short business description',
         products: [

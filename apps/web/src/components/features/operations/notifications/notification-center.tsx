@@ -135,6 +135,10 @@ export function NotificationCenter({
     () => listQuery.data?.pages.flatMap((page) => page.items) ?? [],
     [listQuery.data],
   );
+  const unreadItems = useMemo(
+    () => items.filter((item) => !item.readAt),
+    [items],
+  );
   const busy = markRead.isPending || markVisible.isPending || markAll.isPending;
   const mutationError = markRead.error ?? markVisible.error ?? markAll.error;
 
@@ -170,7 +174,7 @@ export function NotificationCenter({
         onClose={close}
         unread={unread}
         state={{
-          items,
+          items: unreadItems,
           loading: listQuery.isLoading,
           error: listQuery.isError && !listQuery.isFetchNextPageError,
           paginationError: listQuery.isFetchNextPageError,
@@ -183,8 +187,7 @@ export function NotificationCenter({
         onMarkAll={() => markAll.mutate(undefined)}
         onMarkVisible={() =>
           markVisible.mutate(
-            items
-              .filter((item) => !item.readAt)
+            unreadItems
               .flatMap((item) =>
                 item.presentation?.kind === "crm-message"
                   ? item.presentation.notificationIds

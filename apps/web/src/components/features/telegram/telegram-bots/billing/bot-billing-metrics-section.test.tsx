@@ -13,6 +13,7 @@ describe("BotBillingMetricsSection", () => {
           registeredUsers: 120,
           freeUsers: 90,
           paidUsers: 30,
+          grantedUsers: 0,
           activeSubscriptions: 24,
           canceled: 4,
           failedPayments: 2,

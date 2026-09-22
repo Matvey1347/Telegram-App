@@ -75,7 +75,12 @@ export class TelegramChannelMessageTemplatesService {
       networkId: row.networkId,
       channelIds: row.channelIds,
       groupChannels: row.groupChannels,
+      groupMode: row.groupMode,
       channelGroupLabels: stringRecord(row.channelGroupLabels, 100),
+      channelGroupHeaderTemplate: row.channelGroupHeaderTemplate,
+      introText: row.introText,
+      audienceSummaryTemplate: row.audienceSummaryTemplate,
+      outroText: row.outroText,
       bodyTemplate: row.bodyTemplate,
       overrideInviteLinks: row.overrideInviteLinks,
       inviteLinkOverrides: overrides,
@@ -85,6 +90,7 @@ export class TelegramChannelMessageTemplatesService {
       bundleOfferEnabled: row.bundleOfferEnabled,
       bundleDiscountPercent: row.bundleDiscountPercent,
       bundleBasePriceOverrides: stringRecord(row.bundleBasePriceOverrides),
+      bundleOfferTemplate: row.bundleOfferTemplate,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     };
@@ -108,7 +114,12 @@ export class TelegramChannelMessageTemplatesService {
     }
     const channelGroupLabels = Object.fromEntries(
       Object.entries(dto.channelGroupLabels || {})
-        .filter(([id, label]) => channelIds.includes(id) && typeof label === 'string' && label.trim())
+        .filter(
+          ([id, label]) =>
+            channelIds.includes(id) &&
+            typeof label === 'string' &&
+            label.trim(),
+        )
         .map(([id, label]) => [id, label.trim().slice(0, 80)]),
     );
     const networkId = dto.networkId?.trim() || null;
@@ -158,7 +169,15 @@ export class TelegramChannelMessageTemplatesService {
       networkId: dto.scopeMode === 'NETWORK' ? networkId : null,
       channelIds,
       groupChannels: dto.groupChannels ?? false,
+      groupMode: dto.groupMode ?? 'CUSTOM',
       channelGroupLabels,
+      channelGroupHeaderTemplate:
+        dto.channelGroupHeaderTemplate?.trim().slice(0, 160) || null,
+      introText: dto.introText?.trim() ? dto.introText : null,
+      audienceSummaryTemplate: dto.audienceSummaryTemplate?.trim()
+        ? dto.audienceSummaryTemplate
+        : null,
+      outroText: dto.outroText?.trim() ? dto.outroText : null,
       bodyTemplate: dto.bodyTemplate,
       overrideInviteLinks: dto.overrideInviteLinks,
       inviteLinkOverrides: Object.fromEntries(links),
@@ -168,6 +187,9 @@ export class TelegramChannelMessageTemplatesService {
       bundleOfferEnabled: dto.bundleOfferEnabled ?? false,
       bundleDiscountPercent: dto.bundleDiscountPercent ?? 10,
       bundleBasePriceOverrides: stringRecord(dto.bundleBasePriceOverrides),
+      bundleOfferTemplate: dto.bundleOfferTemplate?.trim()
+        ? dto.bundleOfferTemplate
+        : null,
     };
   }
 
@@ -264,7 +286,9 @@ export class TelegramChannelMessageTemplatesService {
         const available = new Set(scopedChannels.map((channel) => channel.id));
         channelIds = [
           ...uniqueIds(template.channelIds).filter((id) => available.has(id)),
-          ...scopedChannels.map((channel) => channel.id).filter((id) => !template.channelIds.includes(id)),
+          ...scopedChannels
+            .map((channel) => channel.id)
+            .filter((id) => !template.channelIds.includes(id)),
         ];
       } else {
         channelIds = uniqueIds(template.channelIds);
@@ -290,6 +314,14 @@ export class TelegramChannelMessageTemplatesService {
         updatedAt: true,
         defaultInviteLinkId: true,
         presentationIcon: true,
+        networkMembers: {
+          select: {
+            network: {
+              select: { name: true, icon: { select: { emoji: true } } },
+            },
+          },
+          orderBy: { network: { name: 'asc' } },
+        },
         inviteLinks: {
           where: { isRevoked: false },
           orderBy: [{ name: 'asc' }, { id: 'asc' }],
@@ -323,22 +355,8 @@ export class TelegramChannelMessageTemplatesService {
       channels: channelIds.map((id) => {
         const channel = byId.get(id)!;
         const pricingSource = pricingSources.get(channel.id);
-        return {
-          id: channel.id,
-          title: channel.title,
-          description: channel.shortDescription || null,
-          username: channel.username || null,
-          photoUrl: channel.photoUrl || null,
-          tgStatUrl: channel.tgStatUrl || null,
-          emojiSource: channel.presentationIcon?.emoji || '📣',
-          viewsPerPost: channel.ownViewsPerPost > 0 ? channel.ownViewsPerPost : null,
-          iconPresentation: iconToResolvedEmoji(channel.presentationIcon),
-          defaultInviteLinkId: channel.defaultInviteLinkId || null,
-          inviteLinks: channel.inviteLinks.map((link) => ({
-            ...link,
-            isDefault: link.id === channel.defaultInviteLinkId,
-          })),
-          products: (productsByChannel.get(channel.id) || []).map((product) => {
+        const channelProducts = (productsByChannel.get(channel.id) || []).map(
+          (product) => {
             const preview = pricingSource
               ? this.pricingReader.previewFromSource(pricingSource, product)
               : null;
@@ -361,7 +379,38 @@ export class TelegramChannelMessageTemplatesService {
               currency:
                 preview?.currency || channel.adBaseCurrency || product.currency,
             };
-          }),
+          },
+        );
+        return {
+          id: channel.id,
+          title: channel.title,
+          description: channel.shortDescription || null,
+          username: channel.username || null,
+          photoUrl: channel.photoUrl || null,
+          tgStatUrl: channel.tgStatUrl || null,
+          emojiSource: channel.presentationIcon?.emoji || '📣',
+          subscribersCount:
+            channel.currentSubscribersCount != null &&
+            channel.currentSubscribersCount > 0
+              ? channel.currentSubscribersCount
+              : null,
+          networkGroups: (channel.networkMembers ?? []).map((member) => ({
+            name: member.network.name,
+            emojiSource: member.network.icon?.emoji || null,
+          })),
+          viewsPerPost:
+            channel.ownViewsPerPost > 0
+              ? channel.ownViewsPerPost
+              : (channelProducts.find(
+                  (product) => product.expectedViews != null,
+                )?.expectedViews ?? null),
+          iconPresentation: iconToResolvedEmoji(channel.presentationIcon),
+          defaultInviteLinkId: channel.defaultInviteLinkId || null,
+          inviteLinks: channel.inviteLinks.map((link) => ({
+            ...link,
+            isDefault: link.id === channel.defaultInviteLinkId,
+          })),
+          products: channelProducts,
         };
       }),
     };

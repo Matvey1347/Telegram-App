@@ -9,4 +9,11 @@ describe('priceAiUsage', () => {
     expect(priceAiUsage('gpt-4o-mini-transcribe', { inputAudioTokens: 1_000, outputAudioTokens: 10 })).toMatchObject({ estimatedCostMicros: 1_300 });
     expect(priceAiUsage('future-model', { inputTokens: 100 })).toMatchObject({ estimatedCostMicros: null, pricingVersion: null });
   });
+
+  it('does not treat a missing provider usage payload as a zero-cost request', () => {
+    expect(priceAiUsage('gpt-5-mini', {})).toMatchObject({
+      estimatedCostMicros: null,
+      pricingVersion: 'openai-2026-08-22',
+    });
+  });
 });

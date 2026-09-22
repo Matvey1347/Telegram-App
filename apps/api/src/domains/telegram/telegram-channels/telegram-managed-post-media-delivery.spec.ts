@@ -43,4 +43,21 @@ describe('telegramBotMediaDelivery', () => {
       expectedMessageCount: 2,
     });
   });
+
+  it('sends a single-media keyboard with the original message request', () => {
+    const replyMarkup = {
+      inline_keyboard: [[{ text: '1', url: 'https://example.com' }]],
+    };
+
+    expect(
+      telegramBotMediaDelivery(
+        [{ kind: 'PHOTO', url: 'https://cdn.test/image.jpg' }],
+        { text: 'Caption', entities: [] },
+        replyMarkup,
+      ),
+    ).toMatchObject({
+      method: 'sendPhoto',
+      body: { reply_markup: replyMarkup },
+    });
+  });
 });

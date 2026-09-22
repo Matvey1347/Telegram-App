@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarClock, Copy, Pencil, RefreshCw, Trash2 } from "lucide-react";
+import { CalendarClock, Copy, Eye, Pencil, RefreshCw, Trash2, UserMinus, UserPlus, type LucideIcon } from "lucide-react";
 import type { CrossPromotionPlan } from "@telegram-system/shared";
 import { IconAvatar } from "@/components/icons/icon-avatar";
 import { TelegramChannelAvatarList } from "@/components/features/telegram/telegram/telegram-channel-avatar-list";
@@ -44,6 +44,12 @@ export function CrossPromotionPlanCard({
   const canEdit = plan.status !== "CANCELLED";
   const advertiser = advertiserPresentation(plan.advertiser);
   const orderedIntegrations = integrations?.length ? integrations : [plan];
+  const placementTimes = plan.kind === "OWN_CHANNELS"
+    ? (plan.publicationPost.publisherPlacements ?? []).map((placement) => placement.scheduledAt)
+    : [];
+  const cardScheduledAt = placementTimes.length
+    ? placementTimes.reduce((earliest, current) => Date.parse(current) < Date.parse(earliest) ? current : earliest)
+    : plan.scheduledAt;
   const publisherViews = sumKnown(
     plan.publisherResults.map((channel) => channel.postViews),
   );
@@ -68,7 +74,7 @@ export function CrossPromotionPlanCard({
               </h2>
             </div>
             <p className="mt-1.5 flex items-center gap-1.5 text-[11px] text-neutral-400">
-              <CalendarClock size={14} /> {formatDateTime(plan.scheduledAt)}
+              <CalendarClock size={14} /> {formatDateTime(cardScheduledAt)}
             </p>
             {plan.advertiser ? (
               <div className="mt-2 flex items-center gap-2">
@@ -118,8 +124,8 @@ export function CrossPromotionPlanCard({
         </div>
       </div>
 
-      <div className="mx-4 mt-3 grid grid-cols-2 divide-x divide-white/10 rounded-lg border border-white/5 bg-black/25 py-2">
-        <ChannelMetric channels={partnerChannels} label="Partner channels" />
+      <div className={`mx-4 mt-3 grid rounded-lg border border-white/5 bg-black/25 py-2 ${plan.kind === "OWN_CHANNELS" ? "grid-cols-1" : "grid-cols-2 divide-x divide-white/10"}`}>
+        {plan.kind !== "OWN_CHANNELS" ? <ChannelMetric channels={partnerChannels} label="Partner channels" /> : null}
         <ChannelMetric channels={publishingChannels} label="My channels" />
       </div>
 
@@ -147,6 +153,7 @@ export function CrossPromotionPlanCard({
             <div className="mt-1.5 grid grid-cols-[auto_auto_auto_minmax(0,1fr)] items-end gap-x-3 pl-7 text-[10px]">
               <Stat
                 label="During placement"
+                icon={UserPlus}
                 value={`+${(
                   target.joinedCount + target.requestedCount
                 ).toLocaleString()}`}
@@ -154,6 +161,7 @@ export function CrossPromotionPlanCard({
               />
               <Stat
                 label="Audience decline"
+                icon={UserMinus}
                 value={
                   publisherAudienceDecline == null
                     ? "—"
@@ -163,6 +171,7 @@ export function CrossPromotionPlanCard({
               />
               <Stat
                 label="Views"
+                icon={Eye}
                 value={
                   publisherViews == null ? "—" : publisherViews.toLocaleString()
                 }
@@ -330,17 +339,24 @@ function ChannelMetric({
 
 function Stat({
   label,
+  icon: Icon,
   value,
   tone = "text-neutral-200",
 }: {
   label: string;
+  icon: LucideIcon;
   value: string;
   tone?: string;
 }) {
   return (
-    <div className="min-w-0">
-      <p className="text-neutral-600">{label}</p>
-      <p className={`truncate font-medium tabular-nums ${tone}`}>{value}</p>
-    </div>
+    <span
+      role="img"
+      aria-label={`${label}: ${value}`}
+      title={`${label}: ${value}`}
+      className={`inline-flex min-w-0 items-center gap-1 whitespace-nowrap font-medium tabular-nums ${tone}`}
+    >
+      <Icon size={13} aria-hidden="true" className="shrink-0" />
+      <span aria-hidden="true">{value}</span>
+    </span>
   );
 }

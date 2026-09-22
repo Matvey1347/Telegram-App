@@ -7,11 +7,19 @@ import type {
   TelegramChannelMessageTemplate,
   TelegramChannelMessageTemplatePayload,
   TelegramMessageTemplatePriceRounding,
+  TelegramMessageTemplateGroupMode,
   ResolvedEmoji,
 } from "@telegram-system/shared";
 import type { TelegramChannel, TelegramChannelNetwork } from "@/lib/api";
 import { telegramSystemBotApi } from "@/lib/api";
-import { Button, Card, ErrorState } from "@/components/ui/primitives";
+import {
+  Button,
+  Card,
+  ErrorState,
+  FormField,
+  Input,
+} from "@/components/ui/primitives";
+import { IconPicker } from "@/components/icons/icon-picker";
 import { TelegramPostPreview } from "./telegram-post-preview";
 import {
   readTelegramChannelMessageTemplateLayout,
@@ -52,7 +60,8 @@ export function TelegramChannelMessageTemplateEditor({
   networks: TelegramChannelNetwork[];
   initial?:
     | TelegramChannelMessageTemplate
-    | WorkspaceFormDraft<TelegramChannelMessageTemplateDraftForm>;
+    | WorkspaceFormDraft<TelegramChannelMessageTemplateDraftForm>
+    | TelegramChannelMessageTemplateDraftForm;
   onDraftChange: (
     value: TelegramChannelMessageTemplateDraftForm,
     preview: WorkspaceDraftPreview,
@@ -64,12 +73,16 @@ export function TelegramChannelMessageTemplateEditor({
   const sourceForm = initial
     ? "form" in initial
       ? initial.form.payload
-      : initial
+      : "payload" in initial
+        ? initial.payload
+        : initial
     : emptyTelegramMessageTemplatePayload();
   const savedTemplateId = initial
     ? "form" in initial
       ? initial.form.savedTemplateId
-      : initial.id
+      : "payload" in initial
+        ? initial.savedTemplateId
+        : initial.id
     : null;
   const [title, setTitle] = useState(sourceForm.title || "");
   const [iconId, setIconId] = useState(sourceForm.iconId || "");
@@ -78,7 +91,9 @@ export function TelegramChannelMessageTemplateEditor({
       initial
         ? "form" in initial
           ? (initial.preview?.icon ?? null)
-          : (initial.iconPresentation ?? null)
+          : "payload" in initial
+            ? null
+            : (initial.iconPresentation ?? null)
         : null,
     );
   const [mode, setMode] = useState<"network" | "channels">(
@@ -94,10 +109,26 @@ export function TelegramChannelMessageTemplateEditor({
     sourceForm.scopeMode === "CHANNELS" ? sourceForm.channelIds : [],
   );
   const [channelOrderIds, setChannelOrderIds] = useState(sourceForm.channelIds);
-  const [groupChannels, setGroupChannels] = useState(sourceForm.groupChannels ?? false);
-  const [channelGroupLabels, setChannelGroupLabels] = useState(sourceForm.channelGroupLabels ?? {});
+  const [groupChannels, setGroupChannels] = useState(
+    sourceForm.groupChannels ?? false,
+  );
+  const [groupMode, setGroupMode] = useState<TelegramMessageTemplateGroupMode>(
+    sourceForm.groupMode ?? "CUSTOM",
+  );
+  const [channelGroupLabels, setChannelGroupLabels] = useState(
+    sourceForm.channelGroupLabels ?? {},
+  );
+  const [channelGroupHeaderTemplate, setChannelGroupHeaderTemplate] = useState(
+    sourceForm.channelGroupHeaderTemplate ??
+      "{{group}} — {{count}} saved channels",
+  );
+  const [introText, setIntroText] = useState(sourceForm.introText ?? "");
+  const [audienceSummaryTemplate, setAudienceSummaryTemplate] = useState(
+    sourceForm.audienceSummaryTemplate ?? "",
+  );
+  const [outroText, setOutroText] = useState(sourceForm.outroText ?? "");
   const [activeSection, setActiveSection] =
-    useState<TelegramChannelMessageTemplateEditorSection>("details");
+    useState<TelegramChannelMessageTemplateEditorSection>("text");
   const [layout, setLayout] = useState(() =>
     readTelegramChannelMessageTemplateLayout(sourceForm.bodyTemplate),
   );
@@ -128,20 +159,27 @@ export function TelegramChannelMessageTemplateEditor({
   const [bundleBasePriceOverrides, setBundleBasePriceOverrides] = useState(
     sourceForm.bundleBasePriceOverrides ?? {},
   );
+  const [bundleOfferTemplate, setBundleOfferTemplate] = useState(
+    sourceForm.bundleOfferTemplate ??
+      "\n\n🔥 При розміщенні одразу у всіх {{channel_count}} каналах — знижка {{discount_percent}}%:\n{{bundle_rows}}",
+  );
   const [sendError, setSendError] = useState("");
   const queryClient = useQueryClient();
   const { pushToast } = useAppToast();
   const selectedNetwork = networks.find((network) => network.id === networkId);
   const resolvedChannelIds = useMemo(() => {
     const valid = new Set(channels.map((channel) => channel.id));
-    const selectedIds = mode === "channels"
-      ? channelIds
-      : (selectedNetwork?.channels || []).map((channel) => channel.id);
+    const selectedIds =
+      mode === "channels"
+        ? channelIds
+        : (selectedNetwork?.channels || []).map((channel) => channel.id);
     const available = new Set(selectedIds.filter((id) => valid.has(id)));
-    return [...new Set([
-      ...channelOrderIds.filter((id) => available.has(id)),
-      ...selectedIds.filter((id) => available.has(id)),
-    ])];
+    return [
+      ...new Set([
+        ...channelOrderIds.filter((id) => available.has(id)),
+        ...selectedIds.filter((id) => available.has(id)),
+      ]),
+    ];
   }, [channelIds, channelOrderIds, channels, mode, selectedNetwork]);
 
   useEffect(() => {
@@ -166,7 +204,14 @@ export function TelegramChannelMessageTemplateEditor({
           : null,
       channelIds: resolvedChannelIds,
       groupChannels,
+      groupMode,
       channelGroupLabels,
+      channelGroupHeaderTemplate: channelGroupHeaderTemplate.trim() || null,
+      introText: introText.trim() ? introText : null,
+      audienceSummaryTemplate: audienceSummaryTemplate.trim()
+        ? audienceSummaryTemplate
+        : null,
+      outroText: outroText.trim() ? outroText : null,
       bodyTemplate,
       overrideInviteLinks,
       inviteLinkOverrides,
@@ -176,15 +221,22 @@ export function TelegramChannelMessageTemplateEditor({
       bundleOfferEnabled,
       bundleDiscountPercent,
       bundleBasePriceOverrides,
+      bundleOfferTemplate: bundleOfferTemplate.trim() ? bundleOfferTemplate : null,
     }),
     [
       bodyTemplate,
       bundleBasePriceOverrides,
+      bundleOfferTemplate,
       bundleDiscountPercent,
       bundleOfferEnabled,
       excludedProductNames,
       groupChannels,
+      groupMode,
       channelGroupLabels,
+      channelGroupHeaderTemplate,
+      introText,
+      audienceSummaryTemplate,
+      outroText,
       iconId,
       inviteLinkOverrides,
       mode,
@@ -204,7 +256,12 @@ export function TelegramChannelMessageTemplateEditor({
     staleTime: 30_000,
   });
   const orderedSourceChannels = useMemo(() => {
-    const byId = new Map((sourceQuery.data?.channels || []).map((channel) => [channel.id, channel]));
+    const byId = new Map(
+      (sourceQuery.data?.channels || []).map((channel) => [
+        channel.id,
+        channel,
+      ]),
+    );
     return resolvedChannelIds.flatMap((id) => {
       const channel = byId.get(id);
       return channel ? [channel] : [];
@@ -231,7 +288,12 @@ export function TelegramChannelMessageTemplateEditor({
         {
           channelOrder: resolvedChannelIds,
           groupChannels,
+          groupMode,
           channelGroupLabels,
+          channelGroupHeaderTemplate,
+          introText,
+          audienceSummaryTemplate,
+          outroText,
           overrideInviteLinks,
           inviteLinkOverrides,
           excludedProductNames,
@@ -240,6 +302,7 @@ export function TelegramChannelMessageTemplateEditor({
           bundleOfferEnabled,
           bundleDiscountPercent,
           bundleBasePriceOverrides,
+          bundleOfferTemplate,
         },
       ),
     [
@@ -247,9 +310,15 @@ export function TelegramChannelMessageTemplateEditor({
       bundleBasePriceOverrides,
       bundleDiscountPercent,
       bundleOfferEnabled,
+      bundleOfferTemplate,
       excludedProductNames,
       groupChannels,
+      groupMode,
       channelGroupLabels,
+      channelGroupHeaderTemplate,
+      introText,
+      audienceSummaryTemplate,
+      outroText,
       inviteLinkOverrides,
       overrideInviteLinks,
       priceRounding,
@@ -309,6 +378,28 @@ export function TelegramChannelMessageTemplateEditor({
       />
       <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(300px,.75fr)]">
         <Card className="space-y-4">
+          <div className="grid items-end gap-2 sm:grid-cols-[40px_minmax(0,1fr)]">
+            <FormField label="Emoji">
+              <IconPicker
+                compact
+                iconId={iconId || null}
+                icon={iconPresentation}
+                onChange={(value, presentation) => {
+                  setIconId(value || "");
+                  setIconPresentation(presentation ?? null);
+                }}
+                allowImages={false}
+                buttonLabel="Choose emoji"
+              />
+            </FormField>
+            <FormField label="Name (optional)">
+              <Input
+                value={title}
+                onChange={(event) => setTitle(event.target.value)}
+                placeholder="All channels price list"
+              />
+            </FormField>
+          </div>
           <TelegramChannelMessageTemplateEditorTabs
             value={activeSection}
             onChange={setActiveSection}
@@ -317,14 +408,16 @@ export function TelegramChannelMessageTemplateEditor({
             section={activeSection}
             channels={channels}
             networks={networks}
-            title={title}
-            iconId={iconId}
-            iconPresentation={iconPresentation}
             mode={mode}
             networkId={networkId}
             channelIds={channelIds}
             groupChannels={groupChannels}
+            groupMode={groupMode}
             channelGroupLabels={channelGroupLabels}
+            channelGroupHeaderTemplate={channelGroupHeaderTemplate}
+            introText={introText}
+            audienceSummaryTemplate={audienceSummaryTemplate}
+            outroText={outroText}
             layout={layout}
             overrideInviteLinks={overrideInviteLinks}
             inviteLinkOverrides={inviteLinkOverrides}
@@ -337,17 +430,18 @@ export function TelegramChannelMessageTemplateEditor({
             bundleOfferEnabled={bundleOfferEnabled}
             bundleDiscountPercent={bundleDiscountPercent}
             bundleBasePriceOverrides={bundleBasePriceOverrides}
-            onTitleChange={setTitle}
-            onIconChange={(value, presentation) => {
-              setIconId(value);
-              setIconPresentation(presentation);
-            }}
+            bundleOfferTemplate={bundleOfferTemplate}
             onModeChange={setMode}
             onNetworkChange={setNetworkId}
             onChannelsChange={setChannelIds}
             onOrderChange={setChannelOrderIds}
             onGroupChannelsChange={setGroupChannels}
+            onGroupModeChange={setGroupMode}
             onChannelGroupLabelsChange={setChannelGroupLabels}
+            onChannelGroupHeaderTemplateChange={setChannelGroupHeaderTemplate}
+            onIntroTextChange={setIntroText}
+            onAudienceSummaryTemplateChange={setAudienceSummaryTemplate}
+            onOutroTextChange={setOutroText}
             onLayoutChange={setLayout}
             onOverrideInviteLinksChange={setOverrideInviteLinks}
             onInviteLinkOverridesChange={setInviteLinkOverrides}
@@ -358,6 +452,7 @@ export function TelegramChannelMessageTemplateEditor({
             onBundleOfferEnabledChange={setBundleOfferEnabled}
             onBundleDiscountPercentChange={setBundleDiscountPercent}
             onBundleBasePriceOverridesChange={setBundleBasePriceOverrides}
+            onBundleOfferTemplateChange={setBundleOfferTemplate}
           />
           {sourceQuery.data?.channels.some(
             (channel) => !channel.inviteLinks.length,

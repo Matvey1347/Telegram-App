@@ -24,7 +24,6 @@ export function FinanceMobileTransactionRow({
   const t = financeTransactionsCopy(locale);
   const income = item.type === "INCOME" || item.purpose === "INVESTMENT_RETURN";
   const investment = item.purpose.startsWith("INVESTMENT_");
-  const generated = investment;
   const debt = item.purpose === "DEBT_REPAYMENT";
   const hasItemizedDetails = (item.itemCount ?? 0) > 0;
   const purposeTitle =
@@ -98,6 +97,13 @@ export function FinanceMobileTransactionRow({
               timeZone: timezone,
             }).format(new Date(item.occurredAt))}
             {item.source ? ` · ${sourceLabel}` : ""}
+            {item.category ? (
+              <span className="inline-flex items-center gap-1 align-middle">
+                <span aria-hidden="true"> · </span>
+                <IconAvatar icon={item.category.iconPresentation} label={item.category.name} size="xs" />
+                {localizeFinanceCategory(item.category.name, item.category.key, locale)}
+              </span>
+            ) : null}
             {item.itemCount
               ? ` · ${item.itemCount} ${item.itemCount === 1 ? t.item : t.items}`
               : ""}
@@ -110,24 +116,20 @@ export function FinanceMobileTransactionRow({
           {amount}
         </strong>
       </div>
-      {!generated ? (
-        <MobileRowAction
-          label={t.editTransactionLabel}
-          tone="text-neutral-300"
-          onClick={onEdit}
-        >
-          <Pencil size={16} />
-        </MobileRowAction>
-      ) : null}
-      {!generated ? (
-        <MobileRowAction
-          label={t.deleteTransactionLabel}
-          tone="text-rose-300"
-          onClick={onDelete}
-        >
-          <Trash2 size={16} />
-        </MobileRowAction>
-      ) : null}
+      <MobileRowAction
+        label={t.editTransactionLabel}
+        tone="text-neutral-300"
+        onClick={onEdit}
+      >
+        <Pencil size={16} />
+      </MobileRowAction>
+      <MobileRowAction
+        label={t.deleteTransactionLabel}
+        tone="text-rose-300"
+        onClick={onDelete}
+      >
+        <Trash2 size={16} />
+      </MobileRowAction>
     </div>
   );
 }

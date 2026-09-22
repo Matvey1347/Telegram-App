@@ -44,6 +44,7 @@ import {
 import { FinanceRegularPaymentCallbackHandler } from './finance-regular-payment-callback.handler';
 import { parseFinanceFlowCallback } from './finance-bot-flow-callback';
 import { FinanceUltimateService } from '../../consumer-finance/ultimate/finance-ultimate.service';
+import { FinanceAssistantEntryService } from '../../consumer-finance/ultimate/finance-assistant-entry.service';
 import { sendFinanceAssistantReply } from './finance-bot-assistant-reply';
 @Injectable()
 export class FinanceBotService {
@@ -65,6 +66,7 @@ export class FinanceBotService {
     flowPresenter: FinanceChatFlowPresenterService,
     private readonly regularPaymentCallbacks?: FinanceRegularPaymentCallbackHandler,
     private readonly assistant?: FinanceUltimateService,
+    private readonly assistantEntries?: FinanceAssistantEntryService,
   ) {
     this.flowMessages = new FinanceBotFlowMessenger(
       interactive,
@@ -718,6 +720,7 @@ export class FinanceBotService {
         locale,
         text,
         assistant: this.assistant,
+        entries: this.assistantEntries,
         interactive: this.interactive,
         botApi: this.botApi,
         chat: this.chat,

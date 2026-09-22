@@ -1,5 +1,5 @@
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
-import { FinanceAssistantEntryService } from './finance-assistant-entry.service';
+import { FinanceAssistantEntryService, stripExplicitCategoryLabel } from './finance-assistant-entry.service';
 
 const identity = {
   profileId: 'profile-1',
@@ -45,6 +45,8 @@ function setup() {
             currency: 'PLN',
             description: 'Dinner',
             occurredAt: '2026-09-12T12:00:00.000Z',
+            accountId: 'account-1',
+            categoryId: 'category-1',
           },
           accountName: 'Card',
           categoryName: 'Restaurants',
@@ -96,6 +98,36 @@ describe('FinanceAssistantEntryService', () => {
       }),
     );
     expect(proposals.confirm).not.toHaveBeenCalled();
+  });
+
+  it('passes an explicitly named category to proposal resolution', async () => {
+    const { service, proposals } = setup();
+    await service.fromText(identity, 'привет я потратил 9zł на булочку с банка вчера категория kity');
+    expect(proposals.createBatch).toHaveBeenCalledWith(expect.objectContaining({
+      operations: [expect.objectContaining({ categoryHint: 'kity' })],
+    }));
+  });
+
+  it('reports only completed work and finishes after the proposal is saved', async () => {
+    const { service, proposals } = setup();
+    const progress: Array<[number, string]> = [];
+    proposals.createBatch.mockImplementationOnce(async () => {
+      expect(progress).toEqual([
+        [0, 'UNDERSTANDING'],
+        [1, 'PREPARING'],
+        [2, 'CHECKING'],
+      ]);
+      return { token: 'safe-token', preview: [] };
+    });
+    await service.fromText(identity, 'Paid for dinner', (completed, stage) => {
+      progress.push([completed, stage]);
+    });
+    expect(progress.at(-1)).toEqual([3, 'CHECKING']);
+  });
+
+  it('keeps the purchase description separate from an explicit category label', () => {
+    expect(stripExplicitCategoryLabel('булочка (категория: kity)')).toBe('булочка');
+    expect(stripExplicitCategoryLabel('булочка, категория kity')).toBe('булочка');
   });
 
   it('requires a bounded uploaded file before calling AI', async () => {
