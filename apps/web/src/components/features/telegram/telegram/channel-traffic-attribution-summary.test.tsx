@@ -53,17 +53,26 @@ describe("ChannelTrafficAttributionSummary", () => {
       />,
     );
 
-    const trigger = screen.getByRole("button", {
-      name: "Open traffic attribution for Freudzone",
-    });
-    expect(trigger).toHaveTextContent(/Acquired[\s\S]*1[,.]?234/);
-    expect(trigger).toHaveTextContent(/Lost[\s\S]*234[\s\S]*19%/);
+    expect(
+      screen.getByRole("button", {
+        name: "Open traffic attribution for Freudzone",
+      }),
+    ).toBeInTheDocument();
+    const summary = screen.getByText("Traffic sources").closest("section");
+    expect(summary).toHaveTextContent(/Acquired[\s\S]*1[,.]?234/);
+    expect(summary).toHaveTextContent(/Lost[\s\S]*234[\s\S]*19%/);
     expect(screen.getByText("0.5 USD")).toHaveClass("text-rose-300");
-    expect(trigger).toHaveTextContent("KPI ≤ 0.4 USD");
-    expect(trigger).not.toHaveTextContent("Details");
-    expect(trigger).toHaveTextContent(/Ad campaigns \+1[,.]?234/);
+    expect(summary).not.toHaveTextContent("Details");
+    expect(summary).not.toHaveTextContent("Ad campaigns");
 
-    await userEvent.click(trigger);
+    await userEvent.hover(screen.getByRole("button", { name: /Paid CPA 0.5 USD/i }));
+
+    expect(await screen.findByText("KPI (USD)")).toBeInTheDocument();
+    expect(screen.getByText("target to 0.4 USD")).toBeInTheDocument();
+    expect(screen.getByText("ok —")).toBeInTheDocument();
+    expect(screen.getByText("stop —")).toBeInTheDocument();
+
+    await userEvent.click(summary!);
 
     expect(screen.getByRole("dialog")).toHaveTextContent(
       "Traffic details for Freudzone",

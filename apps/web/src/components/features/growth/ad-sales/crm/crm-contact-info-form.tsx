@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type ChangeEvent, type FormEvent } from "react";
+import { RefreshCw } from "lucide-react";
 import type { CrmContactDetail } from "@telegram-system/shared";
 import type { UpdateCrmContactPayload } from "@/lib/features/growth/telegram-crm-api";
 import { Button, FormField, Input, Textarea } from "@/components/ui/primitives";
@@ -35,12 +36,14 @@ export function CrmContactInfoForm({
   pending,
   error,
   onSave,
+  onSyncTelegram,
 }: {
   contact: CrmContactDetail;
   canEdit: boolean;
   pending: boolean;
   error: boolean;
   onSave: (payload: UpdateCrmContactPayload) => void;
+  onSyncTelegram: (reference: string) => void;
 }) {
   const [values, setValues] = useState(() => valuesFromContact(contact));
   const field = (key: keyof ContactInfoValues) => ({
@@ -70,11 +73,12 @@ export function CrmContactInfoForm({
           <Input {...field("displayName")} aria-label="Name" required />
         </FormField>
         <FormField label="Telegram username">
-          <Input
-            {...field("telegramUsername")}
-            aria-label="Telegram username"
-            placeholder="username"
-          />
+          <div className="flex gap-2">
+            <Input {...field("telegramUsername")} aria-label="Telegram username" placeholder="username" />
+            <Button type="button" variant="secondary" disabled={!canEdit || pending || (!values.telegramUsername.trim() && !values.phone.trim())} onClick={() => onSyncTelegram(values.telegramUsername.trim() || values.phone.trim())} title="Sync profile from Telegram">
+              <RefreshCw size={15} /> Sync
+            </Button>
+          </div>
         </FormField>
         <FormField label="Phone">
           <Input {...field("phone")} aria-label="Phone" />

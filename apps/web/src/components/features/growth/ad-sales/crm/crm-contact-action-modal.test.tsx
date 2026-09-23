@@ -165,8 +165,7 @@ describe("CrmContactActionModal", () => {
     expect(screen.getByDisplayValue("ada@example.com")).toBeTruthy();
     expect(screen.queryByRole("tablist")).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: "CUSTOMER" }));
-    expect(screen.getByText("NEW").className).toContain("text-blue-300");
+    expect(screen.queryByText("CUSTOMER")).toBeNull();
   });
 
   it("edits and saves contact information", async () => {

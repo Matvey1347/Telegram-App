@@ -8,7 +8,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Plus, SlidersHorizontal } from "lucide-react";
+import { Plus } from "lucide-react";
 import { formatDate } from "@/lib/date-format";
 import { type TelegramAdAvailabilitySlot } from "@telegram-system/shared";
 import { AppShell } from "@/components/layout/app-shell";
@@ -17,8 +17,6 @@ import { PageTabHead } from "@/components/layout/page-tab-head";
 import { Button, PageHeader } from "@/components/ui/primitives";
 import { AdSaleModal } from "@/components/features/growth/ad-sales/ad-sale-modal";
 import { AdSalesWorkspaceHero } from "@/components/features/growth/ad-sales/ad-sales-workspace-hero";
-import { AdSalesInventoryModal } from "@/components/features/growth/ad-sales/ad-sales-inventory-modal";
-import type { AdSaleScopeMode } from "@/components/features/growth/ad-sales/ad-sale-placement-scope";
 import { CalendarTab } from "@/components/features/growth/ad-sales/ad-sales-calendar-tab";
 import { SalesTab } from "@/components/features/growth/ad-sales/ad-sales-sales-tab";
 import { useAdSalesLifecycleRefresh } from "@/components/features/growth/ad-sales/use-ad-sales-publication-refresh";
@@ -101,11 +99,6 @@ function LegacyAdSalesPage() {
   } | null>(null);
   const [selectedNetworkId, setSelectedNetworkId] = useState("");
   const [selectedChannelIds, setSelectedChannelIds] = useState<string[]>([]);
-  const [inventorySelectionMode, setInventorySelectionMode] =
-    useState<AdSaleScopeMode>("channels");
-  const [inventoryOpen, setInventoryOpen] = useState(
-    () => searchParams.get("open") === "inventory",
-  );
   const [salesPage, setSalesPage] = useState(1);
   const [salesPageSize, setSalesPageSize] = useState(25);
   const [saleSearch, setSaleSearch] = useState("");
@@ -201,11 +194,11 @@ function LegacyAdSalesPage() {
     query: channelsQuery,
     channels,
     saleableChannels,
-  } = useAdSalesChannels(tab !== "clients" || inventoryOpen || adSaleModalOpen);
+  } = useAdSalesChannels(tab !== "clients" || adSaleModalOpen);
   const networksQuery = useQuery({
     queryKey: ["telegram-channel-networks"],
     queryFn: telegramChannelNetworksApi.list,
-    enabled: tab === "calendar" || inventoryOpen || adSaleModalOpen,
+    enabled: tab === "calendar" || adSaleModalOpen,
     staleTime: 60 * 1000,
   });
   const networks = useMemo(
@@ -229,7 +222,7 @@ function LegacyAdSalesPage() {
   const preferencesQuery = useQuery({
     queryKey: telegramAdSalesKeys.preferences(),
     queryFn: telegramAdSalesApi.getPreferences,
-    enabled: tab === "calendar" || inventoryOpen || adSaleModalOpen,
+    enabled: tab === "calendar" || adSaleModalOpen,
     staleTime: 60 * 1000,
   });
   const { mutate: savePreferences } = useMutation({
@@ -352,7 +345,6 @@ function LegacyAdSalesPage() {
     setSelectedNetworkId((current) =>
       current === nextNetworkId ? current : nextNetworkId,
     );
-    setInventorySelectionMode(nextNetworkId ? "network" : "channels");
     setCalendarRangeMode((current) =>
       current === nextCalendarRangeMode ? current : nextCalendarRangeMode,
     );
@@ -462,47 +454,6 @@ function LegacyAdSalesPage() {
             )
           : addDays(current, direction * 7),
     );
-  };
-
-  const handleSelectedNetworkIdChange = (networkId: string) => {
-    setSelectedNetworkId(networkId);
-    if (!networkId) {
-      persistCalendarPreferences({ selectedNetworkId: null });
-      return;
-    }
-    const network = saleableNetworks.find((item) => item.id === networkId);
-    const nextChannelIds = network?.channels.map((channel) => channel.id) ?? [];
-    setSelectedChannelIds(nextChannelIds);
-    persistCalendarPreferences({
-      selectedNetworkId: networkId || null,
-      selectedChannelIds: nextChannelIds,
-    });
-  };
-
-  const handleSelectedChannelIdsChange = (channelIds: string[]) => {
-    setSelectedChannelIds(channelIds);
-    setSelectedNetworkId("");
-    persistCalendarPreferences({
-      selectedChannelIds: channelIds,
-      selectedNetworkId: null,
-    });
-  };
-
-  const handleInventorySelectionModeChange = (mode: AdSaleScopeMode) => {
-    setInventorySelectionMode(mode);
-    if (mode === "network") {
-      const nextNetworkId =
-        selectedNetworkId ||
-        saleableNetworks.find((network) => network.systemKey === "ALL")?.id ||
-        "";
-      handleSelectedNetworkIdChange(nextNetworkId);
-      return;
-    }
-    setSelectedNetworkId("");
-    persistCalendarPreferences({
-      selectedChannelIds,
-      selectedNetworkId: null,
-    });
   };
 
   const seedProductChannelId = adSaleSeedSlot?.channelId;
@@ -791,14 +742,6 @@ function LegacyAdSalesPage() {
         action={
           <div className="flex flex-wrap items-center gap-2">
             <Button
-              variant="secondary"
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl px-4"
-              onClick={() => setInventoryOpen(true)}
-            >
-              <SlidersHorizontal size={17} />
-              Inventory
-            </Button>
-            <Button
               className="inline-flex h-11 items-center justify-center gap-2 rounded-xl px-5"
               onClick={() => {
                 setAdSaleSeedSlot(null);
@@ -828,27 +771,6 @@ function LegacyAdSalesPage() {
           }}
         />
       ) : null}
-
-      <AdSalesInventoryModal
-        open={inventoryOpen}
-        loading={channelsQuery.isLoading || networksQuery.isLoading}
-        error={channelsQuery.error || networksQuery.error}
-        selectionMode={inventorySelectionMode}
-        selectedNetworkId={selectedNetworkId}
-        selectedChannelIds={selectedChannelIds}
-        networks={saleableNetworks as TelegramChannelNetwork[]}
-        channels={saleableChannels}
-        onClose={() => {
-          setInventoryOpen(false);
-          if (searchParams.get("from") === "crm") {
-            router.replace("/ad-sales");
-          }
-        }}
-        onSelectionModeChange={handleInventorySelectionModeChange}
-        onNetworkChange={handleSelectedNetworkIdChange}
-        onChannelsChange={handleSelectedChannelIdsChange}
-        maxSelectedChannels={undefined}
-      />
 
       {tab === "calendar" ? (
         <CalendarTab

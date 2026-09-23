@@ -8,6 +8,7 @@ import { PrismaService } from '../../../prisma/prisma.service';
 import type {
   TelegramCrmMtprotoCheckpoint,
   TelegramCrmMtprotoDialog,
+  TelegramCrmMtprotoDialogFolder,
   TelegramCrmMtprotoMessage,
   TelegramCrmMtprotoUpdate,
 } from '../../../telegram/shared/telegram-crm-mtproto.types';
@@ -33,6 +34,7 @@ export class TelegramCrmBatchStoreService {
   importDialogs(
     context: BatchContext & {
       dialogs: TelegramCrmMtprotoDialog[];
+      folders?: TelegramCrmMtprotoDialogFolder[];
       checkpoint?: TelegramCrmMtprotoCheckpoint;
       preserveUnread?: boolean;
     },

@@ -1,9 +1,10 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import type {
   CrmContactDetail,
-  CrmContactStage,
+  CrmContactListItem,
 } from "@telegram-system/shared";
 import { authApi, workspaceMembersApi } from "@/lib/api";
 import { authKeys, memberKeys } from "@/lib/query-keys";
@@ -17,7 +18,6 @@ import {
 } from "@/lib/features/growth/telegram-crm-query";
 import {
   Button,
-  CustomSelect,
   EmptyState,
   LoadingState,
   Modal,
@@ -28,28 +28,21 @@ import { CrmChatWindow } from "./crm-chat-window";
 import type { CrmContactChatPreview } from "./crm-contact-chat-preview";
 import { CrmContactDeals } from "./crm-contact-deals";
 import { CrmContactInfoForm } from "./crm-contact-info-form";
-import { CrmContactNotes } from "./crm-contact-notes";
-import { CrmContactTasks } from "./crm-contact-tasks";
 import { CrmContactTagsEditor } from "./crm-contact-tags-editor";
+import { CrmContactTasks } from "./crm-contact-tasks";
 import { crmPermissions } from "./crm-permissions";
-import {
-  crmContactStages,
-  crmContactStagePresentation,
-} from "./crm-contact-stage";
 
 export type CrmContactAction =
   | "conversations"
   | "deals"
-  | "tasks"
-  | "notes"
+  | "reminder"
   | "tags"
   | "info";
 
 export const crmContactActionLabels: Record<CrmContactAction, string> = {
   conversations: "Conversations",
   deals: "Deals",
-  tasks: "Tasks",
-  notes: "Notes / Activities",
+  reminder: "Reminder",
   tags: "Tags",
   info: "Contact info",
 };
@@ -59,8 +52,7 @@ const crmContactActionSizes: Record<
   "md" | "xl"
 > = {
   deals: "xl",
-  tasks: "md",
-  notes: "md",
+  reminder: "md",
   tags: "md",
   info: "md",
 };
@@ -74,6 +66,7 @@ type Props = {
   onSelectChat?: (contactId: string) => void;
   onMinimize?: () => void;
   initialConversationId?: string;
+  initialContact?: CrmContactListItem;
 };
 
 export function CrmContactActionModal(props: Props) {
@@ -97,11 +90,14 @@ function CrmContactDetailActionModal({
   contactId,
   action,
   onClose,
+  initialContact,
 }: Props & { action: Exclude<CrmContactAction, "conversations"> }) {
   const queryClient = useQueryClient();
   const detail = useQuery({
     queryKey: telegramCrmKeys.contactDetail(contactId),
     queryFn: ({ signal }) => telegramCrmApi.getContact(contactId, signal),
+    enabled:
+      !initialContact || (action !== "tags" && action !== "reminder"),
     retry: false,
   });
   const me = useQuery({
@@ -124,14 +120,25 @@ function CrmContactDetailActionModal({
       });
     },
   });
+  const syncTelegram = useMutation({
+    mutationFn: (reference: string) =>
+      telegramCrmApi.syncTelegramContact(contactId, reference),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: telegramCrmKeys.contactDetail(contactId),
+      });
+      await queryClient.invalidateQueries({ queryKey: telegramCrmKeys.contactLists() });
+    },
+  });
   const contact = detail.data;
+  const headerContact = contact ?? initialContact;
   const currentMemberId = members.data?.find(
     (member) => member.isCurrentUser,
   )?.id;
   const canEdit = Boolean(
-    contact &&
+    headerContact &&
     (permissions.canEditAll ||
-      (permissions.canEditOwn && currentMemberId === contact.ownerMemberId)),
+      (permissions.canEditOwn && currentMemberId === headerContact.ownerMemberId)),
   );
   return (
     <Modal
@@ -139,16 +146,16 @@ function CrmContactDetailActionModal({
       onClose={onClose}
       size={crmContactActionSizes[action]}
       title={
-        contact ? (
+        headerContact ? (
           <span className="inline-flex min-w-0 items-center gap-2.5">
             <TelegramEntityAvatar
-              imageUrl={contactAvatarUrl(contact)}
+              imageUrl={contactAvatarUrl(headerContact)}
               alt=""
               kind="person"
               size="sm"
             />
             <span className="truncate">
-              {contact.displayName.replace(/^@+/, "")} ·{" "}
+              {headerContact.displayName.replace(/^@+/, "")} ·{" "}
               {crmContactActionLabels[action]}
             </span>
           </span>
@@ -157,8 +164,8 @@ function CrmContactDetailActionModal({
         )
       }
     >
-      {detail.isLoading ? <LoadingState text="Loading contact…" /> : null}
-      {detail.error || (!detail.isLoading && !contact) ? (
+      {detail.isLoading && !initialContact ? <LoadingState text="Loading contact…" /> : null}
+      {detail.error || (!detail.isLoading && !contact && !initialContact) ? (
         <div>
           <EmptyState text="Contact could not be loaded." />
           <div className="mt-3 text-center">
@@ -168,7 +175,13 @@ function CrmContactDetailActionModal({
           </div>
         </div>
       ) : null}
-      {contact ? (
+      {action === "tags" && initialContact ? (
+        <CrmContactTagsEditor contact={initialContact} canEdit={canEdit} />
+      ) : null}
+      {action === "reminder" && initialContact ? (
+        <CrmContactTasks contact={initialContact} canEdit={canEdit} />
+      ) : null}
+      {contact && action !== "tags" ? (
         <ContactActionContent
           action={action}
           contact={contact}
@@ -177,11 +190,8 @@ function CrmContactDetailActionModal({
           canEditAll={permissions.canEditAll}
           updatePending={update.isPending}
           updateError={Boolean(update.error)}
-          onStageChange={(stage) => update.mutate({ stage })}
-          onOwnerChange={(ownerMemberId) =>
-            update.mutate({ ownerMemberId: ownerMemberId || null })
-          }
           onInfoSave={(payload) => update.mutate(payload)}
+          onSyncTelegram={(reference) => syncTelegram.mutate(reference)}
         />
       ) : null}
     </Modal>
@@ -196,9 +206,8 @@ function ContactActionContent({
   canEditAll,
   updatePending,
   updateError,
-  onStageChange,
-  onOwnerChange,
   onInfoSave,
+  onSyncTelegram,
 }: {
   action: Exclude<CrmContactAction, "conversations">;
   contact: CrmContactDetail;
@@ -207,42 +216,31 @@ function ContactActionContent({
   canEditAll: boolean;
   updatePending: boolean;
   updateError: boolean;
-  onStageChange: (stage: CrmContactStage) => void;
-  onOwnerChange: (memberId: string) => void;
   onInfoSave: (payload: UpdateCrmContactPayload) => void;
+  onSyncTelegram: (reference: string) => void;
 }) {
+  const [ownerMemberId, setOwnerMemberId] = useState(
+    () => contact.ownerMemberId ?? "",
+  );
   if (action === "deals")
     return canViewSales ? (
       <CrmContactDeals contact={contact} />
     ) : (
       <EmptyState text="You do not have access to Deals." />
     );
-  if (action === "tasks")
-    return <CrmContactTasks contact={contact} canEdit={canEdit} />;
-  if (action === "notes")
-    return <CrmContactNotes contact={contact} canEdit={canEdit} />;
   if (action === "tags")
     return <CrmContactTagsEditor contact={contact} canEdit={canEdit} />;
+  if (action === "reminder")
+    return <CrmContactTasks contact={contact} canEdit={canEdit} />;
   return (
     <div className="space-y-4">
       {canEdit ? (
         <div className="grid gap-3 rounded-lg border border-neutral-800 bg-neutral-950 p-3 sm:grid-cols-2">
-          <CustomSelect
-            value={contact.stage}
-            disabled={updatePending}
-            searchable={false}
-            onChange={(stage) => onStageChange(stage as CrmContactStage)}
-            options={crmContactStages.map((stage) => ({
-              value: stage,
-              label: crmContactStagePresentation(stage).label,
-              tone: crmContactStagePresentation(stage).tone,
-            }))}
-          />
           {canEditAll ? (
             <MemberSelect
               allowAssignOthers
-              value={contact.ownerMemberId ?? ""}
-              onChange={onOwnerChange}
+              value={ownerMemberId}
+              onChange={setOwnerMemberId}
             />
           ) : (
             <span className="self-center text-sm text-neutral-500">
@@ -257,23 +255,31 @@ function ContactActionContent({
         </div>
       ) : null}
       <CrmContactInfoForm
-        key={contact.updatedAt}
         contact={contact}
         canEdit={canEdit}
         pending={updatePending}
         error={updateError}
-        onSave={onInfoSave}
+        onSave={(payload) =>
+          onInfoSave({
+            ...payload,
+            ...(canEditAll ? { ownerMemberId: ownerMemberId || null } : {}),
+          })
+        }
+        onSyncTelegram={onSyncTelegram}
       />
     </div>
   );
 }
 
 function contactAvatarUrl(
-  contact: Pick<CrmContactDetail, "telegramUsername" | "peers">,
+  contact:
+    | Pick<CrmContactDetail, "telegramUsername" | "peers">
+    | Pick<CrmContactListItem, "telegramUsername" | "peer">,
 ) {
   const username = contact.telegramUsername?.replace(/^@+/, "");
+  const photoUrl = "peers" in contact ? contact.peers[0]?.photoUrl : contact.peer?.photoUrl;
   return (
-    contact.peers[0]?.photoUrl ??
+    photoUrl ??
     (username ? `https://t.me/i/userpic/320/${username}.jpg` : undefined)
   );
 }

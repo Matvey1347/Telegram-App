@@ -9,10 +9,12 @@ import { Button, Modal, MultiSelect } from "@/components/ui/primitives";
 import { scheduledTaskKeys, telegramAccountKeys } from "@/lib/query-keys";
 import { telegramCrmApi } from "@/lib/features/growth/telegram-crm-api";
 import { telegramCrmKeys } from "@/lib/features/growth/telegram-crm-query";
+import { useAppToast } from "@/providers/toast-provider";
 import { TelegramEntityAvatar } from "@/components/features/telegram/telegram/telegram-entity-avatar";
 
 export function CrmAccountSyncPanel({ canEdit }: { canEdit: boolean }) {
   const queryClient = useQueryClient();
+  const { startOperation } = useAppToast();
   const accounts = useQuery({
     queryKey: telegramAccountKeys.accounts(),
     queryFn: telegramUserAccountsApi.list,
@@ -79,10 +81,47 @@ export function CrmAccountSyncPanel({ canEdit }: { canEdit: boolean }) {
   const sync = useMutation({
     mutationFn: async () => {
       const results = [];
-      for (const accountId of selected) {
-        results.push(await telegramCrmApi.initialSync(accountId));
+      const operation = startOperation({
+        id: "telegram-crm-manual-sync",
+        title: "Telegram CRM sync",
+        message: "Preparing the selected Telegram accounts…",
+        icon: { emoji: "🔄" },
+        current: 0,
+        total: selected.length,
+      });
+      try {
+        for (const [index, accountId] of selected.entries()) {
+          operation.update({
+            message: `Syncing account ${index + 1} of ${selected.length}: importing dialogs, messages, and Telegram folder tags…`,
+            current: index,
+            total: selected.length,
+          });
+          results.push(await telegramCrmApi.initialSync(accountId));
+        }
+        const importedConversations = results.reduce(
+          (total, result) => total + result.importedConversations,
+          0,
+        );
+        const importedMessages = results.reduce(
+          (total, result) => total + result.importedMessages,
+          0,
+        );
+        operation.succeed({
+          title: "Telegram CRM sync complete",
+          message: `Synchronized ${selected.length} account${selected.length === 1 ? "" : "s"}: ${importedConversations} conversations, ${importedMessages} messages, and folder tags refreshed.`,
+          progressSummary: { successful: selected.length, failed: 0 },
+          icon: { emoji: "✅" },
+        });
+        return results;
+      } catch (error) {
+        operation.fail({
+          title: "Telegram CRM sync failed",
+          message: "Conversation sync failed. You can safely retry it.",
+          details: error instanceof Error ? error.message : undefined,
+          icon: { emoji: "⚠️" },
+        });
+        throw error;
       }
-      return results;
     },
     onSettled: async () => {
       await Promise.all([

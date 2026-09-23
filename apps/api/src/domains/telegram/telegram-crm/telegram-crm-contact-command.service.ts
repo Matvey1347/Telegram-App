@@ -19,9 +19,11 @@ import { crmContactSelect, mapCrmContact } from './telegram-crm-contact.mapper';
 import { TelegramCrmInternalNotificationProjector } from './telegram-crm-internal-notification-projector.service';
 import { loadCrmReplySummaries } from './telegram-crm-reply-summary';
 import { ResponseCacheService } from '../../../common/response-cache.service';
+import { TelegramCrmRuntimeManager } from './telegram-crm-runtime-manager.service';
 import {
   crmTagSelect,
   mapCrmTag,
+  TELEGRAM_FOLDER_TAG_PREFIX,
   TelegramCrmSystemTagsService,
 } from './telegram-crm-system-tags.service';
 
@@ -33,6 +35,7 @@ export class TelegramCrmContactCommandService {
     private readonly notifications: TelegramCrmInternalNotificationProjector,
     @Optional() private readonly responseCache?: ResponseCacheService,
     @Optional() private readonly systemTags?: TelegramCrmSystemTagsService,
+    @Optional() private readonly runtime?: TelegramCrmRuntimeManager,
   ) {}
 
   async createTag(userId: string, dto: CreateCrmTagDto) {
@@ -68,6 +71,7 @@ export class TelegramCrmContactCommandService {
             OR: [
               { systemKey: null },
               { systemKey: { startsWith: 'WORKFLOW:' } },
+              { systemKey: { startsWith: TELEGRAM_FOLDER_TAG_PREFIX } },
             ],
           },
           select: { id: true },
@@ -78,6 +82,28 @@ export class TelegramCrmContactCommandService {
         'One or more tags are invalid or managed automatically',
       );
     }
+    const currentFolderTags = await this.prisma.telegramAdvertiserTag.findMany({
+      where: {
+        workspaceId: contact.workspaceId,
+        systemKey: { startsWith: TELEGRAM_FOLDER_TAG_PREFIX },
+        advertisers: { some: { advertiserId: contact.id } },
+      },
+      select: crmTagSelect,
+    });
+    const requestedFolderTags = await this.prisma.telegramAdvertiserTag.findMany({
+      where: {
+        workspaceId: contact.workspaceId,
+        id: { in: tagIds },
+        systemKey: { startsWith: TELEGRAM_FOLDER_TAG_PREFIX },
+      },
+      select: crmTagSelect,
+    });
+    await this.syncTelegramFolderMemberships({
+      workspaceId: contact.workspaceId,
+      contactId: contact.id,
+      current: currentFolderTags,
+      requested: requestedFolderTags,
+    });
     await this.prisma.$transaction(async (tx) => {
       await tx.telegramAdvertiserTagAssignment.deleteMany({
         where: {
@@ -87,6 +113,7 @@ export class TelegramCrmContactCommandService {
             OR: [
               { systemKey: null },
               { systemKey: { startsWith: 'WORKFLOW:' } },
+              { systemKey: { startsWith: TELEGRAM_FOLDER_TAG_PREFIX } },
             ],
           },
         },
@@ -115,7 +142,68 @@ export class TelegramCrmContactCommandService {
       contact.workspaceId,
       '/telegram-crm/contacts',
     );
-    return assigned.map(mapCrmTag);
+    return assigned.map((tag) => mapCrmTag(tag));
+  }
+
+  private async syncTelegramFolderMemberships(input: {
+    workspaceId: string;
+    contactId: string;
+    current: Array<{ id: string; systemKey: string | null }>;
+    requested: Array<{ id: string; systemKey: string | null }>;
+  }) {
+    if (!this.runtime) return;
+    const current = new Set(input.current.map((tag) => tag.id));
+    const requested = new Set(input.requested.map((tag) => tag.id));
+    const changes = [...new Map([...input.current, ...input.requested].map((tag) => [tag.id, tag])).values()]
+      .flatMap((tag) => {
+        const parsed = this.telegramFolderKey(tag.systemKey);
+        if (!parsed || current.has(tag.id) === requested.has(tag.id)) return [];
+        return [{ ...parsed, included: requested.has(tag.id) }];
+      });
+    if (!changes.length) return;
+    const conversations = await this.prisma.telegramCrmConversation.findMany({
+      where: {
+        workspaceId: input.workspaceId,
+        contactId: input.contactId,
+        mtprotoAccountId: { in: [...new Set(changes.map((change) => change.accountId))] },
+      },
+      select: {
+        mtprotoAccountId: true,
+        telegramAccessHash: true,
+        peer: { select: { telegramUserId: true } },
+      },
+    });
+    for (const change of changes) {
+      const conversation = conversations.find(
+        (item) => item.mtprotoAccountId === change.accountId,
+      );
+      if (!conversation?.telegramAccessHash) {
+        // The same CRM tag can classify an Instagram lead or a contact owned
+        // by another Telegram account. Keep that local classification; there
+        // is simply no Telegram dialog to move for this account.
+        continue;
+      }
+      const telegramAccessHash = conversation.telegramAccessHash;
+      await this.runtime.withAccountHandle(
+        input.workspaceId,
+        change.accountId,
+        'sync',
+        (handle) =>
+          handle.setDialogFolderMembership({
+            folderId: change.folderId,
+            telegramUserId: conversation.peer.telegramUserId,
+            telegramAccessHash,
+            included: change.included,
+          }),
+      );
+    }
+  }
+
+  private telegramFolderKey(systemKey: string | null) {
+    const match = systemKey?.match(/^TELEGRAM_FOLDER:([^:]+):(\d+)$/);
+    return match
+      ? { accountId: match[1], folderId: Number(match[2]) }
+      : null;
   }
 
   async create(userId: string, dto: CreateCrmContactDto) {
@@ -271,6 +359,7 @@ export class TelegramCrmContactCommandService {
     );
     return {
       replySummary: summaries.get(contact.id) ?? {
+        hasTelegramConversation: false,
         status: 'NONE' as const,
         inboundMessageCount: 0,
         outboundMessageCount: 0,

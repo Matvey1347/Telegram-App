@@ -46,6 +46,8 @@ describe('TelegramCrmContactCommandService', () => {
         findMany: jest
           .fn()
           .mockResolvedValueOnce([{ id: 'workflow-tag' }])
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([])
           .mockResolvedValueOnce([
             {
               id: 'automatic-tag',

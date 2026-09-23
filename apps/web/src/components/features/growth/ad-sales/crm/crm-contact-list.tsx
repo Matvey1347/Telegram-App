@@ -2,10 +2,14 @@
 
 import { useDeferredValue, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import type {
   CrmContactListItem,
-  CrmContactStage,
   CrmContactsListResult,
 } from "@telegram-system/shared";
 import {
@@ -25,10 +29,7 @@ import {
   telegramCrmApi,
   type CrmContactsParams,
 } from "@/lib/features/growth/telegram-crm-api";
-import {
-  patchCrmContactCaches,
-  telegramCrmKeys,
-} from "@/lib/features/growth/telegram-crm-query";
+import { telegramCrmKeys } from "@/lib/features/growth/telegram-crm-query";
 import { crmText } from "./crm-copy";
 import { crmPermissions } from "./crm-permissions";
 import {
@@ -41,26 +42,16 @@ import {
   type CrmContactChatPreview,
 } from "./crm-contact-chat-preview";
 import {
-  CrmContactStageFilters,
-  crmContactStageFromSearchParams,
-  crmContactStageSearchParams,
-  useCrmContactStagePreference,
-  writeCrmContactStagePreference,
-} from "./crm-contact-stage-filter";
-import {
   CrmContactsSkeleton,
   CrmMinimizedChatLauncher,
 } from "./crm-contact-card-support";
+import {
+  CrmTagEmoji,
+  CrmTelegramFolderBadge,
+  crmTagDisplayName,
+} from "./crm-tag-presentation";
 
 export { CrmContactCard } from "./crm-contact-card";
-export {
-  CrmContactStageFilters,
-  crmContactStageFromSearchParams,
-  crmContactStageSearchParams,
-  readCrmContactStagePreference,
-  useCrmContactStagePreference,
-  writeCrmContactStagePreference,
-} from "./crm-contact-stage-filter";
 
 export function CrmContactList({
   initialContactId,
@@ -74,17 +65,12 @@ export function CrmContactList({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [search, setSearch] = useState("");
-  const urlStageFilter = crmContactStageFromSearchParams(searchParams);
-  const storedStageFilter = useCrmContactStagePreference();
-  const stageFilter = searchParams.has("stage")
-    ? urlStageFilter
-    : storedStageFilter;
   const deferredSearch = useDeferredValue(search.trim());
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(12);
   const [tagIds, setTagIds] = useState<string[]>([]);
   const [localSelectedAction, setLocalSelectedAction] = useState<{
-    contactId: string;
+    contact: CrmContactListItem;
     action: CrmContactAction;
   } | null>(null);
   const persistedContactId =
@@ -133,7 +119,7 @@ export function CrmContactList({
     action: CrmContactAction,
   ) => {
     if (action !== "conversations") {
-      setLocalSelectedAction({ contactId: contact.id, action });
+      setLocalSelectedAction({ contact, action });
       return;
     }
     const nextIds = openChatIds.includes(contact.id)
@@ -176,6 +162,7 @@ export function CrmContactList({
   const members = useQuery({
     queryKey: memberKeys.membersSelect(),
     queryFn: workspaceMembersApi.select,
+    staleTime: 5 * 60_000,
   });
   const permissions = crmPermissions(me.data?.workspace.access);
   const currentMemberId = members.data?.find(
@@ -186,16 +173,23 @@ export function CrmContactList({
       page,
       pageSize,
       search: deferredSearch || undefined,
-      stage: !stageFilter || stageFilter === "ALL" ? undefined : stageFilter,
-      archived: !stageFilter || stageFilter === "ALL" ? false : undefined,
+      archived: false,
       tagIds: tagIds.length ? tagIds : undefined,
     }),
-    [deferredSearch, page, pageSize, stageFilter, tagIds],
+    [deferredSearch, page, pageSize, tagIds],
   );
   const query = useQuery({
     queryKey: telegramCrmKeys.contactList(params),
     queryFn: ({ signal }) => telegramCrmApi.listContacts(params, signal),
-    enabled: stageFilter !== null,
+    placeholderData: keepPreviousData,
+    staleTime: 30_000,
+  });
+  // Warm this tiny catalog while the list is visible. The Tags modal can then
+  // open from the card's already-loaded tags without a loading screen.
+  useQuery({
+    queryKey: telegramCrmKeys.tags(),
+    queryFn: ({ signal }) => telegramCrmApi.listTags(signal),
+    staleTime: 5 * 60_000,
   });
   const visibleChatPreviews = useMemo(() => {
     const result = { ...chatPreviews };
@@ -206,18 +200,10 @@ export function CrmContactList({
     }
     return result;
   }, [chatPreviews, openChatIds, query.data?.items]);
+  // Keep previous data for pagination, but make a tag-filter transition
+  // explicit: old cards must not look like they match the newly chosen tag.
   const showContactsSkeleton =
-    stageFilter === null || query.isLoading || query.isFetching;
-  const updateStage = useMutation({
-    mutationFn: ({
-      contactId,
-      stage,
-    }: {
-      contactId: string;
-      stage: CrmContactStage;
-    }) => telegramCrmApi.updateContact(contactId, { stage }),
-    onSuccess: (contact) => patchCrmContactCaches(queryClient, contact),
-  });
+    query.isLoading || (tagIds.length > 0 && query.isFetching);
   const replyMute = useMutation({
     mutationFn: ({ contactId, muted }: { contactId: string; muted: boolean }) =>
       telegramCrmApi.setReplyAlertMuted(contactId, { muted }),
@@ -268,21 +254,7 @@ export function CrmContactList({
   return (
     <section>
       <div className="mb-4 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-        <div className="min-w-0 flex-1">
-          <CrmContactStageFilters
-            value={stageFilter ?? "ALL"}
-            onChange={(stage) => {
-              setPage(1);
-              setTagIds([]);
-              writeCrmContactStagePreference(window.localStorage, stage);
-              const next = crmContactStageSearchParams(searchParams, stage);
-              router.replace(
-                next.size ? `${pathname}?${next.toString()}` : pathname,
-                { scroll: false },
-              );
-            }}
-          />
-        </div>
+        <div className="min-w-0 flex-1" />
         <div className="flex w-full shrink-0 flex-col gap-2 sm:flex-row lg:max-w-2xl">
           <MultiSelect
             value={tagIds}
@@ -290,17 +262,23 @@ export function CrmContactList({
               setTagIds(value);
               setPage(1);
             }}
-            options={(query.data?.availableTags ?? []).map((tag) => ({
-              value: tag.id,
-              label: `${tag.name} (${tag.contactCount})`,
-              selectedLabel: tag.name,
-              icon: (
-                <span
-                  className="h-2.5 w-2.5 rounded-full"
-                  style={{ backgroundColor: tag.color ?? "#737373" }}
-                />
-              ),
-            }))}
+            options={(query.data?.availableTags ?? []).map((facet) => {
+              return {
+                value: facet.id,
+                label: `${crmTagDisplayName(facet)} (${facet.contactCount})`,
+                selectedLabel: crmTagDisplayName(facet),
+                icon: (
+                  <span className="inline-flex items-center gap-1">
+                    <span
+                      className="h-2.5 w-2.5 rounded-full"
+                      style={{ backgroundColor: facet.color ?? "#737373" }}
+                    />
+                    <CrmTagEmoji tag={facet} />
+                    <CrmTelegramFolderBadge tag={facet} />
+                  </span>
+                ),
+              };
+            })}
             placeholder="Filter by tags"
             searchPlaceholder="Search tags"
             className="min-w-0 flex-1"
@@ -345,18 +323,10 @@ export function CrmContactList({
                   key={contact.id}
                   contact={contact}
                   canViewSales={permissions.canViewSales}
-                  canCreateSales={permissions.canCreateSales}
                   canEdit={Boolean(canEdit)}
-                  stagePending={
-                    updateStage.isPending &&
-                    updateStage.variables?.contactId === contact.id
-                  }
                   replyMutePending={
                     replyMute.isPending &&
                     replyMute.variables?.contactId === contact.id
-                  }
-                  onStageChange={(stage) =>
-                    updateStage.mutate({ contactId: contact.id, stage })
                   }
                   onReplyMuteChange={(muted) =>
                     replyMute.mutate({ contactId: contact.id, muted })
@@ -384,8 +354,9 @@ export function CrmContactList({
       ) : null}
       {localSelectedAction ? (
         <CrmContactActionModal
-          contactId={localSelectedAction.contactId}
+          contactId={localSelectedAction.contact.id}
           action={localSelectedAction.action}
+          initialContact={localSelectedAction.contact}
           onClose={() => setLocalSelectedAction(null)}
         />
       ) : null}

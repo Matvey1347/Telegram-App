@@ -10,6 +10,8 @@ export type TelegramCrmMtprotoPeer = {
   username: string | null;
   firstName: string | null;
   lastName: string | null;
+  /** Available only when Telegram exposes the number to this account. */
+  phone?: string | null;
   photoUrl: string | null;
 };
 
@@ -28,10 +30,19 @@ export type TelegramCrmMtprotoDialog = {
   telegramDialogId: string;
   unreadCount: number;
   lastMessage: TelegramCrmMtprotoMessage | null;
+  folderIds?: number[];
+};
+
+export type TelegramCrmMtprotoDialogFolder = {
+  id: number;
+  title: string;
+  emoticon: string | null;
+  color: number | null;
 };
 
 export type TelegramCrmMtprotoDialogPage = {
   dialogs: TelegramCrmMtprotoDialog[];
+  folders?: TelegramCrmMtprotoDialogFolder[];
   scanned: number;
   total: number;
   nextCursor: string | null;
@@ -86,6 +97,12 @@ export interface TelegramCrmMtprotoHandle {
     cursor?: string | null;
     limit?: number;
   }): Promise<TelegramCrmMtprotoDialogPage>;
+  setDialogFolderMembership(input: {
+    folderId: number;
+    telegramUserId: string;
+    telegramAccessHash: string;
+    included: boolean;
+  }): Promise<void>;
   getHistory(input: {
     telegramUserId: string;
     telegramAccessHash: string;

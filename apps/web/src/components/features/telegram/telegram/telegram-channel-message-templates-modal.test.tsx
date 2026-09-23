@@ -182,6 +182,34 @@ describe("TelegramChannelMessageTemplatesModal", () => {
     );
   });
 
+  it("keeps only one template actions menu open", async () => {
+    const user = userEvent.setup();
+    mocks.list.mockResolvedValue([
+      savedTemplate,
+      { ...savedTemplate, id: "template-2", title: "Second template" },
+    ]);
+    renderModal();
+
+    await user.click(
+      await screen.findByRole("button", {
+        name: "Template actions for All Channels",
+      }),
+    );
+    expect(screen.getAllByRole("menu")).toHaveLength(1);
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "Template actions for Second template",
+      }),
+    );
+    expect(screen.getAllByRole("menu")).toHaveLength(1);
+    expect(
+      screen.getByRole("menuitem", {
+        name: "Send Second template to System Bot",
+      }),
+    ).toBeInTheDocument();
+  });
+
   it("opens a duplicate as a new editable template", async () => {
     const user = userEvent.setup();
     renderModal();

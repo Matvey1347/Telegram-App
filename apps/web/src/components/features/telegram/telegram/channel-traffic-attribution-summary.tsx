@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import { useState } from "react";
 import { UsersRound, UserMinus } from "lucide-react";
+import { Tooltip } from "@/components/ui/primitives";
 import type { TelegramChannel } from "@/lib/api";
 
 const loadTrafficAttributionModal = () =>
@@ -30,6 +31,58 @@ function number(value: unknown, digits = 0) {
     : "—";
 }
 
+function numberOrNull(value: unknown) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function formatKpi(value: number | null, currency: string, prefix: string) {
+  return value == null ? "—" : `${prefix} ${number(value, 2)} ${currency}`;
+}
+
+function KpiRangeChip({
+  tone,
+  label,
+}: {
+  tone: "target" | "ok" | "stop";
+  label: string;
+}) {
+  const className = {
+    target: "border-emerald-700 bg-emerald-950/50 text-emerald-200",
+    ok: "border-yellow-700 bg-yellow-950/50 text-yellow-200",
+    stop: "border-rose-700 bg-rose-950/50 text-rose-200",
+  }[tone];
+
+  return <span className={`rounded border px-2 py-1 ${className}`}>{label}</span>;
+}
+
+function PaidCpaKpiTooltip({ channel }: { channel: TelegramChannel }) {
+  const currency = channel.kpiCurrency || channel.adBaseCurrency || "USD";
+  const targetTo = numberOrNull(channel.targetCpa);
+  const stopFrom =
+    numberOrNull(channel.stopCpaFrom) ?? numberOrNull(channel.stopCpa);
+
+  return (
+    <div className="w-72 space-y-2">
+      <div className="font-semibold text-white">KPI ({currency})</div>
+      <div className="flex flex-wrap gap-1.5">
+        <KpiRangeChip
+          tone="target"
+          label={`target ${formatKpi(targetTo, currency, "to")}`}
+        />
+        <KpiRangeChip
+          tone="ok"
+          label={`ok ${targetTo != null && stopFrom != null ? `${number(targetTo, 2)}–${number(stopFrom, 2)} ${currency}` : "—"}`}
+        />
+        <KpiRangeChip
+          tone="stop"
+          label={`stop ${formatKpi(stopFrom, currency, "from")}`}
+        />
+      </div>
+    </div>
+  );
+}
+
 export function ChannelTrafficAttributionSummary({
   channel,
 }: {
@@ -47,20 +100,20 @@ export function ChannelTrafficAttributionSummary({
 
   return (
     <>
-      <button
-        type="button"
-        className="mt-2 w-full rounded-md border border-neutral-800/80 bg-neutral-950/55 px-2.5 py-2 text-left transition hover:border-neutral-600"
+      <section
+        className="mt-2 w-full cursor-pointer rounded-md border border-neutral-800/80 bg-neutral-950/55 px-2.5 py-2 text-left transition hover:border-neutral-600"
         onClick={() => setOpen(true)}
         onPointerEnter={() => void loadTrafficAttributionModal()}
-        onFocus={() => void loadTrafficAttributionModal()}
-        aria-label={`Open traffic attribution for ${channel.title}`}
       >
-        <span className="flex items-center justify-between gap-2 text-xs">
-          <span className="inline-flex items-center gap-1.5 font-medium text-neutral-300">
+        <button
+          type="button"
+          className="inline-flex items-center gap-1.5 text-xs font-medium text-neutral-300 transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+          onFocus={() => void loadTrafficAttributionModal()}
+          aria-label={`Open traffic attribution for ${channel.title}`}
+        >
             <UsersRound size={14} className="text-violet-300" />
             Traffic sources
-          </span>
-        </span>
+        </button>
         <span className="mt-1.5 grid grid-cols-3 gap-2 text-xs tabular-nums">
           <span>
             <span className="block text-neutral-500">Acquired</span>
@@ -77,32 +130,25 @@ export function ChannelTrafficAttributionSummary({
           </span>
           <span>
             <span className="block text-neutral-500">Paid CPA</span>
-            <strong
-              className={
-                meetsKpi === true
-                  ? "text-emerald-300"
-                  : meetsKpi === false
-                    ? "text-rose-300"
-                    : "text-white"
-              }
-            >
-              {money(paidCpa, summary.currency)}
-            </strong>
-            {meetsKpi != null ? (
-              <span className="block text-[10px] text-neutral-500">
-                KPI ≤{" "}
-                {money(targetCpa, channel.kpiCurrency ?? summary.currency)}
-              </span>
-            ) : null}
+            <Tooltip content={<PaidCpaKpiTooltip channel={channel} />}>
+              <button
+                type="button"
+                className={`cursor-help font-semibold tabular-nums underline decoration-dotted underline-offset-2 ${
+                  meetsKpi === true
+                    ? "text-emerald-300"
+                    : meetsKpi === false
+                      ? "text-rose-300"
+                      : "text-white"
+                }`}
+                aria-label={`Paid CPA ${money(paidCpa, summary.currency)}. Show KPI ranges.`}
+                onClick={(event) => event.stopPropagation()}
+              >
+                {money(paidCpa, summary.currency)}
+              </button>
+            </Tooltip>
           </span>
         </span>
-        <span className="mt-1.5 block truncate text-[11px] text-neutral-500">
-          {summary.sources
-            .slice(0, 4)
-            .map((source) => `${source.label} +${number(source.acquired)}`)
-            .join(" · ")}
-        </span>
-      </button>
+      </section>
       {open ? (
         <ChannelTrafficAttributionModal
           channel={channel}

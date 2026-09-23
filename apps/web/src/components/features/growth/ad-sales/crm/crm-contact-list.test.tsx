@@ -5,14 +5,7 @@ import {
   CrmContactsSkeleton,
   CrmMinimizedChatLauncher,
 } from "./crm-contact-card-support";
-import {
-  CrmContactCard,
-  CrmContactStageFilters,
-  crmContactStageFromSearchParams,
-  crmContactStageSearchParams,
-  readCrmContactStagePreference,
-  writeCrmContactStagePreference,
-} from "./crm-contact-list";
+import { CrmContactCard } from "./crm-contact-list";
 
 const contact: CrmContactListItem = {
   id: "contact-1",
@@ -73,7 +66,6 @@ const contact: CrmContactListItem = {
     lastName: null,
     photoUrl: null,
   },
-  nextOpenTask: null,
   activeDeal: {
     id: "deal-1",
     title: "September placement",
@@ -145,51 +137,6 @@ describe("CrmContactCard", () => {
     expect(screen.queryByText("Orders")).not.toBeInTheDocument();
     expect(screen.queryByText("Members")).not.toBeInTheDocument();
     expect(screen.queryByText("Last contact")).not.toBeInTheDocument();
-  });
-
-  it("exposes a status filter including all contacts", () => {
-    const onChange = vi.fn();
-    render(<CrmContactStageFilters value="ALL" onChange={onChange} />);
-
-    const select = screen.getByRole("button", {
-      name: "Filter contacts by status",
-    });
-    expect(select).toHaveTextContent("All contacts");
-    fireEvent.click(select);
-    fireEvent.click(screen.getByRole("button", { name: "FOLLOW-UP" }));
-    expect(onChange).toHaveBeenCalledWith("FOLLOW_UP");
-    fireEvent.click(select);
-    fireEvent.click(screen.getByRole("button", { name: "ARCHIVED" }));
-    expect(onChange).toHaveBeenCalledWith("ARCHIVED");
-  });
-
-  it("stores the selected status in the URL and restores it", () => {
-    const current = new URLSearchParams("crmContact=contact-1");
-    const selected = crmContactStageSearchParams(current, "CUSTOMER");
-
-    expect(selected.get("stage")).toBe("CUSTOMER");
-    expect(selected.get("crmContact")).toBe("contact-1");
-    expect(crmContactStageFromSearchParams(selected)).toBe("CUSTOMER");
-
-    const all = crmContactStageSearchParams(selected, "ALL");
-    expect(all.has("stage")).toBe(false);
-    expect(crmContactStageFromSearchParams(all)).toBe("ALL");
-  });
-
-  it("persists the last status separately for each workspace", () => {
-    const values = new Map<string, string>([
-      ["selected-workspace-id", "workspace-1"],
-    ]);
-    const storage = {
-      getItem: (key: string) => values.get(key) ?? null,
-      setItem: (key: string, value: string) => values.set(key, value),
-    };
-
-    writeCrmContactStagePreference(storage, "CUSTOMER");
-    expect(readCrmContactStagePreference(storage)).toBe("CUSTOMER");
-
-    values.set("selected-workspace-id", "workspace-2");
-    expect(readCrmContactStagePreference(storage)).toBe("ALL");
   });
 
   it("restores every preserved chat from the minimized launcher", () => {
@@ -304,14 +251,35 @@ describe("CrmContactCard", () => {
     );
     expect(screen.queryByRole("menuitem", { name: "Payments" })).toBeNull();
     expect(screen.getByRole("menuitem", { name: "Tags" })).toBeTruthy();
+    expect(screen.queryByRole("menuitem", { name: "Tasks" })).toBeNull();
+    expect(
+      screen.queryByRole("menuitem", { name: "Notes / Activities" }),
+    ).toBeNull();
     expect(screen.queryByRole("menuitem", { name: "Automation" })).toBeNull();
     expect(screen.queryByText(/Automated messages/i)).toBeNull();
     fireEvent.click(screen.getByRole("menuitem", { name: "Deals" }));
     expect(onAction).toHaveBeenCalledWith("deals");
   });
 
-  it("deduplicates a username, highlights the stage, and omits empty timeline rows", () => {
-    const onStageChange = vi.fn();
+  it("marks contacts without a Telegram chat and does not offer Conversations", () => {
+    render(
+      <CrmContactCard
+        contact={contact}
+        canViewSales
+        onAction={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Not synced with Telegram")).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Actions for Ada Client" }),
+    );
+    expect(
+      screen.queryByRole("menuitem", { name: "Conversations" }),
+    ).toBeNull();
+  });
+
+  it("deduplicates a username and omits legacy status controls and empty timeline rows", () => {
     render(
       <CrmContactCard
         contact={{
@@ -322,7 +290,6 @@ describe("CrmContactCard", () => {
           stage: "NEW",
           lastContactAt: null,
           nextContactAt: null,
-          nextOpenTask: null,
           activeDeal: null,
           activeDealCount: 0,
           salesSummary: { ...contact.salesSummary, lastDealAt: null },
@@ -330,7 +297,6 @@ describe("CrmContactCard", () => {
         canViewSales
         canCreateSales
         canEdit
-        onStageChange={onStageChange}
         onAction={vi.fn()}
       />,
     );
@@ -338,14 +304,7 @@ describe("CrmContactCard", () => {
     expect(screen.getByText("Artur_Pikhulia")).toBeInTheDocument();
     expect(screen.queryByText("@Artur_Pikhulia")).toBeNull();
     expect(screen.queryByText("artur_pikhulia")).toBeNull();
-    const stage = screen.getByLabelText("Stage for @Artur_Pikhulia");
-    expect(stage.className).toContain("button]:text-blue-200");
-    fireEvent.click(stage.querySelector("button")!);
-    const followUp = screen.getByRole("button", { name: "FOLLOW-UP" });
-    expect(followUp).toHaveTextContent("FOLLOW-UP");
-    expect(followUp).toHaveTextContent("FOLLOW-UP");
-    fireEvent.click(screen.getByRole("button", { name: "QUALIFIED" }));
-    expect(onStageChange).toHaveBeenCalledWith("QUALIFIED");
+    expect(screen.queryByLabelText("Stage for @Artur_Pikhulia")).toBeNull();
     expect(screen.queryByText("Last contact")).toBeNull();
     expect(screen.queryByText("Next contact")).toBeNull();
     expect(screen.queryByText("Active deal")).toBeNull();

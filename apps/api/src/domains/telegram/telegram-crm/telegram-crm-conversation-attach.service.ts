@@ -71,4 +71,34 @@ export class TelegramCrmConversationAttachService {
       telegramDialogId: resolved.telegramUserId,
     });
   }
+
+  async attachFromAnyConnectedAccount(
+    userId: string,
+    contactId: string,
+    reference: string,
+  ) {
+    const access = await this.authorization.require(
+      userId,
+      'adSales.crm.editAny',
+    );
+    const account = await this.prisma.telegramUserAccountIntegration.findFirst({
+      where: {
+        workspaceId: access.workspaceId,
+        isActive: true,
+        status: 'connected',
+        sessionEncrypted: { not: null },
+        sessionIv: { not: null },
+        sessionAuthTag: { not: null },
+      },
+      orderBy: { updatedAt: 'desc' },
+      select: { id: true },
+    });
+    if (!account) {
+      throw new NotFoundException('Connect an active MTProto account before syncing Telegram details');
+    }
+    return this.attach(userId, contactId, {
+      accountId: account.id,
+      reference,
+    });
+  }
 }

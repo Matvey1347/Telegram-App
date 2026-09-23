@@ -4,28 +4,26 @@ import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import type {
   CrmContactListItem,
-  CrmContactStage,
+  CrmTagSummary,
 } from "@telegram-system/shared";
 import {
-  Activity,
   BellOff,
   BellRing,
   CircleDollarSign,
   Contact,
-  ListTodo,
+  Link2,
+  Link2Off,
   MessageSquare,
-  Plus,
   Tags,
   UserRound,
   X,
 } from "lucide-react";
-import { CustomSelect, Modal } from "@/components/ui/primitives";
+import { Modal } from "@/components/ui/primitives";
 import { IconAvatar } from "@/components/icons/icon-avatar";
 import { TelegramEntityAvatar } from "@/components/features/telegram/telegram/telegram-entity-avatar";
 import {
   TelegramCardActionsMenu,
   TelegramCardMenuAction,
-  TelegramCardMenuLink,
 } from "@/components/features/telegram/telegram/telegram-card-actions-menu";
 import {
   CrmContactRevenue,
@@ -34,28 +32,25 @@ import {
 } from "./crm-contact-card-support";
 import type { CrmContactAction } from "./crm-contact-action-modal";
 import {
-  crmContactStagePresentation,
-  crmContactStages,
-} from "./crm-contact-stage";
+  CrmTagEmoji,
+  CrmTelegramFolderBadge,
+  crmTagDisplayName,
+} from "./crm-tag-presentation";
 
 export function CrmContactCard({
   contact,
   canViewSales,
-  canCreateSales,
   canEdit = false,
-  stagePending = false,
   replyMutePending = false,
-  onStageChange = () => undefined,
   onReplyMuteChange = () => undefined,
   onAction,
 }: {
   contact: CrmContactListItem;
   canViewSales: boolean;
-  canCreateSales: boolean;
+  /** Retained for callers while the card no longer exposes Create deal. */
+  canCreateSales?: boolean;
   canEdit?: boolean;
-  stagePending?: boolean;
   replyMutePending?: boolean;
-  onStageChange?: (stage: CrmContactStage) => void;
   onReplyMuteChange?: (muted: boolean) => void;
   onAction: (action: CrmContactAction) => void;
 }) {
@@ -63,7 +58,6 @@ export function CrmContactCard({
   const displayName = contact.displayName.replace(/^@+/, "").trim();
   const repeatedUsername =
     telegramUsername?.toLocaleLowerCase() === displayName.toLocaleLowerCase();
-  const stage = crmContactStagePresentation(contact.stage);
   const hasDeals = contact.salesSummary.totalSalesCount > 0;
   const needsReply =
     !contact.replySummary.muted &&
@@ -71,7 +65,7 @@ export function CrmContactCard({
     contact.replySummary.status !== "WAITING_FOR_CLIENT";
   return (
     <article
-      className={`break-inside-avoid rounded-lg border p-3 transition-colors ${
+      className={`break-inside-avoid rounded-xl border p-3.5 shadow-sm transition-colors ${
         contact.isUnassignedClient
           ? "border-dashed border-amber-800/70 bg-amber-950/10 hover:border-amber-700"
           : needsReply
@@ -117,33 +111,10 @@ export function CrmContactCard({
               size="sm"
             />
             <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex min-w-0 items-center gap-2">
                 <h3 className="truncate text-sm font-semibold text-white">
                   {displayName || telegramUsername || contact.displayName}
                 </h3>
-                <div
-                  aria-label={`Stage for ${contact.displayName}`}
-                  className={`w-fit [&>div>button]:min-h-0 [&>div>button]:rounded-full [&>div>button]:px-2.5 [&>div>button]:py-0.5 [&>div>button]:text-[11px] [&>div>button]:font-medium [&>div>button_svg]:hidden ${stage.selectClassName}`}
-                  onClick={(event) => event.stopPropagation()}
-                >
-                  <CustomSelect
-                    value={contact.stage}
-                    disabled={!canEdit || stagePending}
-                    searchable={false}
-                    dropdownClassName="!w-44 [&_button]:px-2 [&_button]:py-1.5"
-                    onChange={(value) =>
-                      onStageChange(value as CrmContactStage)
-                    }
-                    options={crmContactStages.map((value) => {
-                      const presentation = crmContactStagePresentation(value);
-                      return {
-                        value,
-                        label: presentation.label,
-                        tone: presentation.tone,
-                      };
-                    })}
-                  />
-                </div>
               </div>
               {!repeatedUsername || contact.companyName ? (
                 <p className="mt-1 truncate text-sm text-neutral-400">
@@ -152,6 +123,9 @@ export function CrmContactCard({
                   {contact.companyName}
                 </p>
               ) : null}
+              <TelegramConnectionStatus
+                connected={Boolean(contact.replySummary.hasTelegramConversation)}
+              />
             </div>
           </div>
         )}
@@ -159,17 +133,24 @@ export function CrmContactCard({
           <ContactActionsMenu
             contact={contact}
             canViewSales={canViewSales}
-            canCreateSales={canCreateSales}
             onAction={onAction}
           />
         ) : null}
       </div>
 
-      {contact.description ? (
-        <p className="mt-3 line-clamp-2 text-sm leading-5 text-neutral-300">
-          {contact.description}
-        </p>
+      {!contact.isUnassignedClient && contact.tags.length ? (
+        <div className="mt-3 flex flex-wrap gap-1.5 border-t border-neutral-900 pt-2.5">
+          {contact.tags.slice(0, 3).map((tag) => (
+            <ContactTag key={tag.id} tag={tag} />
+          ))}
+          {contact.tags.length > 3 ? (
+            <span className="inline-flex items-center rounded-full border border-neutral-800 px-2 py-0.5 text-[11px] text-neutral-400">
+              +{contact.tags.length - 3}
+            </span>
+          ) : null}
+        </div>
       ) : null}
+
       {contact.crossPromotions?.length ? (
         <section className="mt-3 border-t border-neutral-900 pt-3" aria-label="Mutual promotions">
           <p className="text-[11px] font-medium uppercase tracking-wide text-neutral-500">
@@ -190,27 +171,6 @@ export function CrmContactCard({
           </div>
         </section>
       ) : null}
-      {contact.tags.length ? (
-        <div className="mt-3 flex flex-wrap gap-1.5" aria-label="Contact tags">
-          {contact.tags.slice(0, 5).map((tag) => (
-            <span
-              key={tag.id}
-              className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-neutral-800 bg-neutral-900 px-2 py-0.5 text-[11px] text-neutral-300"
-            >
-              <span
-                className="h-1.5 w-1.5 shrink-0 rounded-full"
-                style={{ backgroundColor: tag.color ?? "#737373" }}
-              />
-              <span className="truncate">{tag.name}</span>
-            </span>
-          ))}
-          {contact.tags.length > 5 ? (
-            <span className="rounded-full border border-neutral-800 px-2 py-0.5 text-[11px] text-neutral-500">
-              +{contact.tags.length - 5}
-            </span>
-          ) : null}
-        </div>
-      ) : null}
       {!contact.isUnassignedClient &&
       (contact.salesSummary.purchaseAudience ||
         (contact.salesSummary.purchasedChannels?.length ?? 0)) ? (
@@ -226,6 +186,25 @@ export function CrmContactCard({
       ) : null}
       {hasDeals ? <DealSummary contact={contact} /> : null}
     </article>
+  );
+}
+
+function ContactTag({ tag }: { tag: CrmTagSummary }) {
+  const color = tag.color ?? "#737373";
+  return (
+    <span
+      className="inline-flex max-w-40 items-center gap-1 rounded-full border px-2 py-1 text-[11px] font-medium"
+      style={{
+        borderColor: `${color}80`,
+        backgroundColor: `${color}22`,
+        color,
+      }}
+      title={tag.name}
+    >
+      <CrmTagEmoji tag={tag} />
+      <span className="truncate">{crmTagDisplayName(tag)}</span>
+      <CrmTelegramFolderBadge tag={tag} />
+    </span>
   );
 }
 
@@ -427,12 +406,10 @@ function DealSummary({ contact }: { contact: CrmContactListItem }) {
             value={formatCrmContactDateTime(contact.lastContactAt)}
           />
         ) : null}
-        {contact.nextOpenTask?.dueAt || contact.nextContactAt ? (
+        {contact.nextContactAt ? (
           <InfoRow
             label="Next contact"
-            value={formatCrmContactDateTime(
-              contact.nextOpenTask?.dueAt ?? contact.nextContactAt,
-            )}
+            value={formatCrmContactDateTime(contact.nextContactAt)}
           />
         ) : null}
         {contact.salesSummary.lastDealAt ? (
@@ -464,8 +441,7 @@ const contactActions: Array<{
 }> = [
   { id: "conversations", label: "Conversations", icon: MessageSquare },
   { id: "deals", label: "Deals", icon: CircleDollarSign, requiresSales: true },
-  { id: "tasks", label: "Tasks", icon: ListTodo },
-  { id: "notes", label: "Notes / Activities", icon: Activity },
+  { id: "reminder", label: "Reminder", icon: BellRing },
   { id: "tags", label: "Tags", icon: Tags },
   { id: "info", label: "Contact info", icon: Contact },
 ];
@@ -473,18 +449,21 @@ const contactActions: Array<{
 function ContactActionsMenu({
   contact,
   canViewSales,
-  canCreateSales,
   onAction,
 }: {
   contact: CrmContactListItem;
   canViewSales: boolean;
-  canCreateSales: boolean;
   onAction: (action: CrmContactAction) => void;
 }) {
   return (
     <TelegramCardActionsMenu label={`Actions for ${contact.displayName}`}>
       {contactActions
-        .filter((action) => !action.requiresSales || canViewSales)
+        .filter(
+          (action) =>
+            (!action.requiresSales || canViewSales) &&
+            (action.id !== "conversations" ||
+              Boolean(contact.replySummary.hasTelegramConversation)),
+        )
         .map((action) => {
           const Icon = action.icon;
           return (
@@ -496,17 +475,26 @@ function ContactActionsMenu({
             />
           );
         })}
-      {canCreateSales ? (
-        <>
-          <div className="my-1 border-t border-neutral-800" />
-          <TelegramCardMenuLink
-            label="Create deal"
-            href={`/ad-sales/sales?contactId=${encodeURIComponent(contact.id)}&createDeal=1`}
-            icon={<Plus size={17} />}
-          />
-        </>
-      ) : null}
     </TelegramCardActionsMenu>
+  );
+}
+
+function TelegramConnectionStatus({ connected }: { connected: boolean }) {
+  const Icon = connected ? Link2 : Link2Off;
+  return (
+    <span
+      className={`mt-1 inline-flex items-center gap-1 text-[10px] ${
+        connected ? "text-sky-400/80" : "text-neutral-500"
+      }`}
+      title={
+        connected
+          ? "A Telegram conversation is synchronized for this contact"
+          : "No Telegram conversation is synchronized for this contact"
+      }
+    >
+      <Icon size={11} aria-hidden="true" />
+      {connected ? "Telegram synced" : "Not synced with Telegram"}
+    </span>
   );
 }
 

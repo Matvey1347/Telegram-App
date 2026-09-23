@@ -58,6 +58,9 @@ describe('TelegramCrmMtprotoAdapter', () => {
     );
     const client = {
       getDialogs: jest.fn().mockResolvedValue(rows),
+      invoke: jest
+        .fn()
+        .mockResolvedValue(new Api.messages.DialogFilters({ filters: [] })),
       addEventHandler: jest.fn(),
       removeEventHandler: jest.fn(),
     };
@@ -86,6 +89,90 @@ describe('TelegramCrmMtprotoAdapter', () => {
     );
     expect(client.getDialogs).toHaveBeenCalledWith(
       expect.not.objectContaining({ ignoreMigrated: true }),
+    );
+  });
+
+  it('maps an account dialog folder onto imported private dialogs', async () => {
+    const user = new Api.User({
+      id: 42 as never,
+      accessHash: 420 as never,
+      username: 'alice',
+      contact: true,
+    });
+    const message = new Api.Message({
+      id: 7,
+      peerId: new Api.PeerUser({ userId: 42 as never }),
+      message: 'hello',
+      date: 1_788_000_000,
+    });
+    const folder = new Api.DialogFilter({
+      id: 9,
+      title: new Api.TextWithEntities({ text: 'Customers', entities: [] }),
+      emoticon: '🤝',
+      color: 3,
+      contacts: true,
+      pinnedPeers: [],
+      includePeers: [],
+      excludePeers: [],
+    });
+    const client = {
+      getDialogs: jest
+        .fn()
+        .mockResolvedValue(
+          Object.assign([{ entity: user, message, id: 42, unreadCount: 0 }], {
+            total: 1,
+          }),
+        ),
+      invoke: jest
+        .fn()
+        .mockResolvedValue(
+          new Api.messages.DialogFilters({ filters: [folder] }),
+        ),
+      addEventHandler: jest.fn(),
+      removeEventHandler: jest.fn(),
+    };
+    jest
+      .mocked(createTelegramMtprotoSession)
+      .mockResolvedValue(client as never);
+
+    const handle = await new TelegramCrmMtprotoAdapter().open({
+      apiId: '1',
+      apiHash: 'hash',
+      session: 'session',
+    });
+
+    await expect(
+      handle.listPrivateDialogs({ limit: 100 }),
+    ).resolves.toMatchObject({
+      folders: [{ id: 9, title: 'Customers', emoticon: '🤝', color: 3 }],
+      dialogs: [expect.objectContaining({ folderIds: [9] })],
+    });
+  });
+
+  it('fails the import instead of silently omitting Telegram folder tags', async () => {
+    const user = new Api.User({
+      id: 42 as never,
+      accessHash: 420 as never,
+    });
+    const client = {
+      getDialogs: jest
+        .fn()
+        .mockResolvedValue(Object.assign([{ entity: user, id: 42 }], { total: 1 })),
+      invoke: jest.fn().mockRejectedValue(new Error('FOLDER_FETCH_FAILED')),
+      addEventHandler: jest.fn(),
+      removeEventHandler: jest.fn(),
+    };
+    jest
+      .mocked(createTelegramMtprotoSession)
+      .mockResolvedValue(client as never);
+    const handle = await new TelegramCrmMtprotoAdapter().open({
+      apiId: '1',
+      apiHash: 'hash',
+      session: 'session',
+    });
+
+    await expect(handle.listPrivateDialogs({ limit: 100 })).rejects.toThrow(
+      'FOLDER_FETCH_FAILED',
     );
   });
 

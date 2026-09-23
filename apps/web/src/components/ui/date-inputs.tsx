@@ -146,6 +146,9 @@ export function DateInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
       <input {...(props as any)} type="hidden" value={value} />
       <button
         type="button"
+        aria-label={
+          props["aria-label"] ? `Select ${props["aria-label"]}` : undefined
+        }
         onClick={() => setOpen((v) => !v)}
         className={`flex min-h-9 w-full items-center justify-between rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-left text-sm outline-none ring-blue-500 focus:ring ${props.className ?? ""}`}
       >
@@ -204,6 +207,7 @@ export function DateInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
               <div className="grid grid-cols-7 gap-1">
                 {cells.map((cell) => {
                   const selected = cell.iso === selectedIso;
+                  const today = cell.iso === formatLocalDate(new Date());
                   return (
                     <button
                       key={`${cell.iso}-${cell.day}`}
@@ -212,7 +216,8 @@ export function DateInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
                         commit(cell.iso);
                         setOpen(false);
                       }}
-                      className={`rounded px-1 py-1.5 text-sm ${selected ? "bg-blue-600 text-white" : cell.muted ? "text-neutral-500 hover:bg-neutral-800" : "text-white hover:bg-neutral-800"}`}
+                      aria-label={today ? `${cell.day} (${ui.today})` : String(cell.day)}
+                      className={`rounded px-1 py-1.5 text-sm ${selected ? "bg-blue-600 text-white" : today ? "bg-sky-950/60 font-semibold text-sky-200 ring-1 ring-sky-600/80 hover:bg-sky-900/60" : cell.muted ? "text-neutral-500 hover:bg-neutral-800" : "text-white hover:bg-neutral-800"}`}
                     >
                       {cell.day}
                     </button>

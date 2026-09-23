@@ -2,30 +2,41 @@
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { CrmContactDetail } from "@telegram-system/shared";
-import { Button, LoadingState, MultiSelect } from "@/components/ui/primitives";
+import type { CrmContact, CrmTagSummary } from "@telegram-system/shared";
+import { Button, MultiSelect } from "@/components/ui/primitives";
 import { telegramCrmApi } from "@/lib/features/growth/telegram-crm-api";
 import {
   patchCrmContactCaches,
   telegramCrmKeys,
 } from "@/lib/features/growth/telegram-crm-query";
+import {
+  CrmTagEmoji,
+  CrmTelegramFolderBadge,
+  crmTagDisplayName,
+} from "./crm-tag-presentation";
 
 export function CrmContactTagsEditor({
   contact,
   canEdit,
 }: {
-  contact: CrmContactDetail;
+  contact: Pick<CrmContact, "id"> & {
+    tags: CrmTagSummary[];
+  };
   canEdit: boolean;
 }) {
   const queryClient = useQueryClient();
   const tags = useQuery({
     queryKey: telegramCrmKeys.tags(),
     queryFn: ({ signal }) => telegramCrmApi.listTags(signal),
+    staleTime: 5 * 60_000,
   });
-  const systemTags = (tags.data ?? []).filter((tag) => tag.isSystem);
   const [selected, setSelected] = useState(() =>
     contact.tags
-      .filter((tag) => tag.assignmentMode === "MANUAL")
+      .filter(
+        (tag) =>
+          tag.assignmentMode === "MANUAL" ||
+          tag.systemKey?.startsWith("TELEGRAM_FOLDER:"),
+      )
       .map((tag) => tag.id),
   );
   const save = useMutation({
@@ -50,48 +61,29 @@ export function CrmContactTagsEditor({
     },
   });
 
-  if (tags.isLoading) return <LoadingState text="Loading tags…" />;
   return (
     <div className="space-y-4">
-      {systemTags.length ? (
-        <section>
-          <h3 className="text-sm font-medium text-white">System tags</h3>
-          <p className="mt-1 text-xs text-neutral-500">
-            Added by Folder and VP workflows. You can also assign them here.
-          </p>
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            {systemTags.map((tag) => (
-              <span
-                key={tag.id}
-                className="inline-flex items-center gap-1.5 rounded-full border border-neutral-800 bg-neutral-950 px-2 py-0.5 text-xs text-neutral-300"
-              >
-                <span
-                  className="h-1.5 w-1.5 rounded-full"
-                  style={{ backgroundColor: tag.color ?? "#737373" }}
-                />
-                {tag.name}
-              </span>
-            ))}
-          </div>
-        </section>
-      ) : null}
       <section>
         <h3 className="text-sm font-medium text-white">Tags</h3>
         <p className="mt-1 text-xs text-neutral-500">
-          Add your own tags, then select the tags that describe this client.
+          Telegram-folder tags are marked with a Telegram icon and sync back to the connected Telegram account.
         </p>
         <MultiSelect
           value={selected}
           onChange={setSelected}
           disabled={!canEdit || save.isPending}
-          options={(tags.data ?? []).map((tag) => ({
+          options={(tags.data ?? contact.tags).map((tag) => ({
               value: tag.id,
-              label: tag.name,
+              label: crmTagDisplayName(tag),
               icon: (
-                <span
-                  className="h-2.5 w-2.5 rounded-full"
-                  style={{ backgroundColor: tag.color ?? "#737373" }}
-                />
+                <span className="inline-flex items-center gap-1">
+                  <span
+                    className="h-2.5 w-2.5 rounded-full"
+                    style={{ backgroundColor: tag.color ?? "#737373" }}
+                  />
+                  <CrmTagEmoji tag={tag} />
+                  <CrmTelegramFolderBadge tag={tag} />
+                </span>
               ),
             }))}
           placeholder="Select tags"

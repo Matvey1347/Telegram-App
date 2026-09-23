@@ -5,20 +5,24 @@ import { PrismaService } from '../../../prisma/prisma.service';
 import type {
   TelegramCrmMtprotoCheckpoint,
   TelegramCrmMtprotoDialog,
+  TelegramCrmMtprotoDialogFolder,
 } from '../../../telegram/shared/telegram-crm-mtproto.types';
 import { TelegramCrmMessageBatchWriter } from './telegram-crm-message-batch-writer.service';
+import { TelegramCrmSystemTagsService } from './telegram-crm-system-tags.service';
 
 @Injectable()
 export class TelegramCrmDialogBatchWriter {
   constructor(
     private readonly prisma: PrismaService,
     private readonly messages: TelegramCrmMessageBatchWriter,
+    private readonly systemTags: TelegramCrmSystemTagsService,
   ) {}
 
   async store(context: {
     workspaceId: string;
     accountId: string;
     dialogs: TelegramCrmMtprotoDialog[];
+    folders?: TelegramCrmMtprotoDialogFolder[];
     checkpoint?: TelegramCrmMtprotoCheckpoint;
     preserveUnread?: boolean;
     autoContact?: { ownerMemberId: string | null; createdByUserId: string };
@@ -135,26 +139,44 @@ export class TelegramCrmDialogBatchWriter {
               }),
             ),
           ];
-          const matchingContacts = usernames.length
+          const normalizedPhone = (value: string | null | undefined) =>
+            value?.replace(/[^\d]/g, '') || null;
+          const phones = [
+            ...new Set(
+              unlinkedPeers.flatMap((peer) => {
+                const phone = normalizedPhone(
+                  dialogByUserId.get(peer.telegramUserId)?.peer.phone,
+                );
+                return phone ? [phone] : [];
+              }),
+            ),
+          ];
+          const matchingContacts = usernames.length || phones.length
             ? await tx.telegramAdvertiser.findMany({
                 where: {
                   workspaceId: context.workspaceId,
-                  OR: usernames.flatMap((username) => [
-                    {
-                      telegramUsername: {
-                        equals: username,
-                        mode: 'insensitive',
+                  OR: [
+                    ...usernames.flatMap((username) => [
+                      {
+                        telegramUsername: {
+                          equals: username,
+                          mode: 'insensitive' as const,
+                        },
                       },
-                    },
-                    {
-                      telegramUsername: {
-                        equals: `@${username}`,
-                        mode: 'insensitive',
+                      {
+                        telegramUsername: {
+                          equals: `@${username}`,
+                          mode: 'insensitive' as const,
+                        },
                       },
-                    },
-                  ]),
+                    ]),
+                    ...phones.flatMap((phone) => [
+                      { phone: { equals: phone } },
+                      { phone: { equals: `+${phone}` } },
+                    ]),
+                  ],
                 },
-                select: { id: true, telegramUsername: true },
+                select: { id: true, telegramUsername: true, phone: true },
               })
             : [];
           const contactIdByUsername = new Map<string, string>();
@@ -170,14 +192,27 @@ export class TelegramCrmDialogBatchWriter {
               contactIdByUsername.set(username, contact.id);
             }
           }
+          const contactIdByPhone = new Map<string, string>();
+          const ambiguousPhones = new Set<string>();
+          for (const contact of matchingContacts) {
+            const phone = normalizedPhone(contact.phone);
+            if (!phone) continue;
+            const existingContactId = contactIdByPhone.get(phone);
+            if (existingContactId && existingContactId !== contact.id) {
+              ambiguousPhones.add(phone);
+              contactIdByPhone.delete(phone);
+            } else if (!ambiguousPhones.has(phone)) {
+              contactIdByPhone.set(phone, contact.id);
+            }
+          }
           const matchedContactIdByPeerId = new Map<string, string>();
           for (const peer of unlinkedPeers) {
-            const username = normalizedUsername(
-              dialogByUserId.get(peer.telegramUserId)?.peer.username,
-            );
-            const contactId = username
-              ? contactIdByUsername.get(username)
-              : undefined;
+            const dialog = dialogByUserId.get(peer.telegramUserId)!;
+            const username = normalizedUsername(dialog.peer.username);
+            const phone = normalizedPhone(dialog.peer.phone);
+            const contactId =
+              (username ? contactIdByUsername.get(username) : undefined) ??
+              (phone ? contactIdByPhone.get(phone) : undefined);
             if (contactId) matchedContactIdByPeerId.set(peer.id, contactId);
           }
           const peersNeedingContact = unlinkedPeers.filter(
@@ -202,6 +237,7 @@ export class TelegramCrmDialogBatchWriter {
                   workspaceId: context.workspaceId,
                   displayName,
                   telegramUsername: dialog.peer.username,
+                  phone: dialog.peer.phone ?? null,
                   source: 'TELEGRAM_MTPROTO_IMPORT',
                   ownerMemberId: context.autoContact!.ownerMemberId,
                   createdByUserId: context.autoContact!.createdByUserId,
@@ -239,8 +275,47 @@ export class TelegramCrmDialogBatchWriter {
               null,
           }));
         }
+        const dialogByTelegramUserId = new Map(
+          context.dialogs.map((dialog) => [
+            dialog.peer.telegramUserId,
+            dialog,
+          ]),
+        );
+        const phonesToFill = peers.flatMap((peer) => {
+          const phone = dialogByTelegramUserId.get(peer.telegramUserId)?.peer
+            .phone;
+          return peer.contactId && phone ? [[peer.contactId, phone] as const] : [];
+        });
+        if (phonesToFill.length) {
+          await tx.$executeRaw(Prisma.sql`
+            UPDATE "TelegramAdvertiser" AS contact
+            SET "phone" = incoming."phone", "updatedAt" = NOW()
+            FROM (
+              VALUES ${Prisma.join(
+                phonesToFill.map(([contactId, phone]) =>
+                  Prisma.sql`(${contactId}, ${phone})`,
+                ),
+              )}
+            ) AS incoming("id", "phone")
+            WHERE contact."id" = incoming."id"
+              AND contact."workspaceId" = ${context.workspaceId}
+              AND (contact."phone" IS NULL OR contact."phone" = '')
+          `);
+        }
         const peerByTelegramId = new Map(
           peers.map((peer) => [peer.telegramUserId, peer]),
+        );
+        await this.systemTags.syncTelegramFolderTags(
+          {
+            workspaceId: context.workspaceId,
+            accountId: context.accountId,
+            folders: context.folders,
+            dialogs: context.dialogs,
+            contactIdByTelegramUserId: new Map(
+              peers.map((peer) => [peer.telegramUserId, peer.contactId]),
+            ),
+          },
+          tx,
         );
         const importedConversations = (
           await tx.telegramCrmConversation.createMany({

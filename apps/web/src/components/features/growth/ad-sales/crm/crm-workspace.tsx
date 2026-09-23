@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Plus } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/layout/app-shell";
 import { PageTabHead } from "@/components/layout/page-tab-head";
-import { LoadingState, PageHeader } from "@/components/ui/primitives";
+import { Button, Input, LoadingState, Modal, PageHeader } from "@/components/ui/primitives";
 import { telegramCrmKeys } from "@/lib/features/growth/telegram-crm-query";
 import { CrmContactList } from "./crm-contact-list";
 import { CrmAccountSyncPanel } from "./crm-account-sync-panel";
@@ -25,6 +25,9 @@ export function CrmWorkspace({
   surface: Exclude<AdSalesSurface, { kind: "legacy" }>;
 }) {
   const router = useRouter();
+  const queryClient = useQueryClient();
+  const [addingClient, setAddingClient] = useState(false);
+  const [clientName, setClientName] = useState("");
   const me = useQuery({
     queryKey: authKeys.me(),
     queryFn: authApi.me,
@@ -37,6 +40,14 @@ export function CrmWorkspace({
     queryKey: telegramCrmKeys.unread(),
     queryFn: ({ signal }) => telegramCrmApi.getUnread(signal),
     enabled: hasCrmView,
+  });
+  const createClient = useMutation({
+    mutationFn: () => telegramCrmApi.createContact({ displayName: clientName.trim() }),
+    onSuccess: async () => {
+      setClientName("");
+      setAddingClient(false);
+      await queryClient.invalidateQueries({ queryKey: telegramCrmKeys.contactLists() });
+    },
   });
   useEffect(() => {
     if (me.isSuccess && !hasCrmView && canViewSales)
@@ -72,6 +83,11 @@ export function CrmWorkspace({
             {surface.kind === "contacts" ? (
               <CrmAccountSyncPanel canEdit={permissions.canEditAll} />
             ) : null}
+            {surface.kind === "contacts" && (permissions.canEditOwn || permissions.canEditAll) ? (
+              <Button className="h-11" onClick={() => setAddingClient(true)}>
+                <Plus size={18} /> Add client
+              </Button>
+            ) : null}
             <Link
               className="inline-flex h-11 items-center gap-2 rounded-xl bg-blue-600 px-5 text-sm font-medium text-white hover:bg-blue-500"
               href="/ad-sales/calendar?open=sell"
@@ -106,6 +122,20 @@ export function CrmWorkspace({
           </p>
         )
       ) : null}
+      <Modal open={addingClient} onClose={() => setAddingClient(false)} title="Add client" size="sm">
+        <form
+          className="space-y-3"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (clientName.trim()) createClient.mutate();
+          }}
+        >
+          <Input className="focus:ring-1" value={clientName} onChange={(event) => setClientName(event.target.value)} aria-label="Client name" placeholder="Client name" autoFocus required />
+          <p className="text-xs text-neutral-500">You can add tags and a reminder after creating the client.</p>
+          {createClient.error ? <p className="text-sm text-rose-300">Client could not be created.</p> : null}
+          <div className="flex justify-end"><Button type="submit" disabled={createClient.isPending || !clientName.trim()}>{createClient.isPending ? "Adding…" : "Add client"}</Button></div>
+        </form>
+      </Modal>
     </AppShell>
   );
 }

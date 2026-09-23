@@ -146,6 +146,19 @@ export class TelegramCrmController {
     return this.conversationAttach.attach(user.sub, id, dto);
   }
 
+  @Post('contacts/:id/sync-telegram')
+  syncTelegramContact(
+    @CurrentUser() user: JwtUser,
+    @Param('id') id: string,
+    @Body() dto: Pick<AttachCrmConversationDto, 'reference'>,
+  ) {
+    return this.conversationAttach.attachFromAnyConnectedAccount(
+      user.sub,
+      id,
+      dto.reference,
+    );
+  }
+
   @Get('conversations')
   listConversations(
     @CurrentUser() user: JwtUser,

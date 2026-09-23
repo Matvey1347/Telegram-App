@@ -22,6 +22,7 @@ const peerMetadata = {
   photoUrl: null,
 };
 const peer = { id: 'peer-1', telegramUserId: '42', contactId: null };
+const systemTags = { syncTelegramFolderTags: jest.fn() };
 const conversation = (accountId: string) => ({
   id: `conversation-${accountId}`,
   telegramCrmPeerId: 'peer-1',
@@ -35,7 +36,15 @@ const conversation = (accountId: string) => ({
 });
 
 describe('TelegramCrmDialogBatchWriter', () => {
-  it('links an imported peer to the single existing workspace contact with the same normalized username', async () => {
+  it('links a phone-only imported peer to the existing workspace contact by phone', async () => {
+    const phoneOnlyDialog = {
+      ...dialog,
+      peer: {
+        ...dialog.peer,
+        username: null,
+        phone: '+380667828277',
+      },
+    };
     const tx = {
       telegramCrmPeer: {
         findMany: jest
@@ -49,7 +58,11 @@ describe('TelegramCrmDialogBatchWriter', () => {
         findMany: jest
           .fn()
           .mockResolvedValue([
-            { id: 'contact-existing', telegramUsername: '@ALICE' },
+            {
+              id: 'contact-existing',
+              telegramUsername: null,
+              phone: '+380667828277',
+            },
           ]),
         createMany: jest.fn(),
       },
@@ -81,17 +94,18 @@ describe('TelegramCrmDialogBatchWriter', () => {
         ),
       } as never,
       messages as never,
+      systemTags as never,
     );
 
     await writer.store({
       workspaceId: 'workspace-1',
       accountId: 'account-1',
-      dialogs: [dialog],
+      dialogs: [phoneOnlyDialog],
       autoContact: { ownerMemberId: 'member-1', createdByUserId: 'user-1' },
       advanceCheckpoint: jest.fn(),
     });
 
-    expect(tx.$executeRaw).toHaveBeenCalledTimes(1);
+    expect(tx.$executeRaw).toHaveBeenCalledTimes(2);
     expect(tx.telegramAdvertiser.createMany).not.toHaveBeenCalled();
     expect(tx.telegramCrmConversation.createMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -139,6 +153,7 @@ describe('TelegramCrmDialogBatchWriter', () => {
     const writer = new TelegramCrmDialogBatchWriter(
       prisma as never,
       messages as never,
+      systemTags as never,
     );
     const advanceCheckpoint = jest.fn();
 

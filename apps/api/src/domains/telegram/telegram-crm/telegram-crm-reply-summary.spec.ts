@@ -12,6 +12,15 @@ const base = {
 };
 
 describe('CRM reply summary', () => {
+  it('distinguishes a contact with no Telegram conversation', () => {
+    expect(
+      summarizeReply({ id: 'contact-1', replyAlertMutedAt: null }, []),
+    ).toMatchObject({ hasTelegramConversation: false, status: 'NONE' });
+    expect(
+      summarizeReply({ id: 'contact-1', replyAlertMutedAt: null }, [base]),
+    ).toMatchObject({ hasTelegramConversation: true });
+  });
+
   it.each([
     [0, 'FIRST_INBOUND_READ'],
     [1, 'FIRST_INBOUND_UNREAD'],

@@ -42,6 +42,7 @@ import { TelegramChannelAvatarList } from "./telegram-channel-avatar-list";
 import { renderTelegramChannelMessageTemplate } from "./telegram-channel-message-template-format";
 import { telegramSystemBotApi } from "@/lib/api";
 import { useAppToast } from "@/providers/toast-provider";
+import { useDismissiblePopover } from "@/hooks/use-dismissible-popover";
 import { ModalDraftPicker } from "@/components/ui/modal-draft-picker";
 import { useWorkspaceModalDrafts } from "@/hooks/use-workspace-modal-drafts";
 import {
@@ -91,6 +92,9 @@ export function TelegramChannelMessageTemplatesModal({
     WorkspaceDraftPreview | undefined
   >();
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
+  const [openTemplateActionsId, setOpenTemplateActionsId] = useState<
+    string | null
+  >(null);
   const editingSavedTemplate = Boolean(
     editor?.initial &&
     !("form" in editor.initial) &&
@@ -321,6 +325,10 @@ export function TelegramChannelMessageTemplatesModal({
                     </div>
                     <TemplateActions
                       template={template}
+                      open={openTemplateActionsId === template.id}
+                      onOpenChange={(open) =>
+                        setOpenTemplateActionsId(open ? template.id : null)
+                      }
                       sending={sendSaved.isPending}
                       deleting={removeSaved.isPending}
                       onSend={() => sendSaved.mutate(template)}
@@ -357,6 +365,8 @@ export function TelegramChannelMessageTemplatesModal({
 
 function TemplateActions({
   template,
+  open,
+  onOpenChange,
   sending,
   deleting,
   onSend,
@@ -365,6 +375,8 @@ function TemplateActions({
   onDelete,
 }: {
   template: TelegramChannelMessageTemplate;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   sending: boolean;
   deleting: boolean;
   onSend: () => void;
@@ -372,9 +384,15 @@ function TemplateActions({
   onDuplicate: () => void;
   onDelete: () => void;
 }) {
-  const [open, setOpen] = useState(false);
   const [position, setPosition] = useState({ top: 0, left: 0 });
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  useDismissiblePopover({
+    open,
+    onDismiss: () => onOpenChange(false),
+    triggerRef,
+    contentRef: menuRef,
+  });
   const toggle = () => {
     const rect = triggerRef.current?.getBoundingClientRect();
     if (rect) {
@@ -396,7 +414,7 @@ function TemplateActions({
         ),
       });
     }
-    setOpen((value) => !value);
+    onOpenChange(!open);
   };
   return (
     <>
@@ -413,6 +431,7 @@ function TemplateActions({
       {open &&
         createPortal(
           <div
+            ref={menuRef}
             role="menu"
             className="fixed z-[300] w-44 space-y-1 rounded-lg border border-neutral-700 bg-neutral-900 p-1 shadow-xl"
             style={position}
@@ -424,7 +443,7 @@ function TemplateActions({
               className="flex w-full items-center gap-2 rounded px-2 py-2 text-sm hover:bg-neutral-800"
               disabled={sending}
               onClick={() => {
-                setOpen(false);
+                onOpenChange(false);
                 onSend();
               }}
             >
@@ -436,7 +455,7 @@ function TemplateActions({
               aria-label={`Edit ${template.title || "template"}`}
               className="flex w-full items-center gap-2 rounded px-2 py-2 text-sm hover:bg-neutral-800"
               onClick={() => {
-                setOpen(false);
+                onOpenChange(false);
                 onEdit();
               }}
             >
@@ -448,7 +467,7 @@ function TemplateActions({
               aria-label={`Duplicate ${template.title || "template"}`}
               className="flex w-full items-center gap-2 rounded px-2 py-2 text-sm hover:bg-neutral-800"
               onClick={() => {
-                setOpen(false);
+                onOpenChange(false);
                 onDuplicate();
               }}
             >
@@ -461,7 +480,7 @@ function TemplateActions({
               className="flex w-full items-center gap-2 rounded px-2 py-2 text-sm text-rose-300 hover:bg-rose-950"
               disabled={deleting}
               onClick={() => {
-                setOpen(false);
+                onOpenChange(false);
                 onDelete();
               }}
             >

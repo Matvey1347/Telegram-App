@@ -133,7 +133,9 @@ export function ChannelTrafficAttributionModal({
   )?.kind;
   const visibleKinds = selectedLinkKind
     ? [selectedLinkKind]
-    : (query.data?.sources.map((source) => source.kind) ?? []);
+    : activeKind
+      ? [activeKind]
+      : (query.data?.sources.map((source) => source.kind) ?? []);
   const selectedLink = query.data?.items
     .flatMap((item) => item.inviteLinks ?? [])
     .find((link) => link.id === selectedInviteLinkId);
@@ -209,20 +211,29 @@ export function ChannelTrafficAttributionModal({
                   <h3 className="text-sm font-semibold text-white">
                     {selectedLink
                       ? `Invite link: ${selectedLink.name}`
+                      : activeKind
+                        ? `${selectedSource?.label ?? sourceLabels[activeKind]} invite counters`
                       : "Attributed invite counters by source"}
                   </h3>
-                  {selectedLink ? (
+                  {selectedLink || activeKind ? (
                     <Button
                       variant="secondary"
                       className="h-7 px-2 text-xs"
-                      onClick={() => setSelectedInviteLinkId(null)}
+                      onClick={() => {
+                        setSelectedInviteLinkId(null);
+                        setActiveKind(null);
+                      }}
                     >
-                      Show all links
+                      Show all sources
                     </Button>
                   ) : null}
                 </div>
                 <p className="text-xs text-neutral-500">
-                  Stored invite-link counters grouped by their current source.
+                  {selectedLink
+                    ? "Stored counters for this invite link."
+                    : activeKind
+                      ? "Stored invite-link counters for this source."
+                      : "Stored invite-link counters grouped by their current source."}
                 </p>
               </div>
               <div className="h-72 w-full">
@@ -280,8 +291,26 @@ export function ChannelTrafficAttributionModal({
                 role="tablist"
                 aria-label="Traffic sources"
               >
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={activeKind === null && !selectedInviteLinkId}
+                  className={`shrink-0 rounded-md px-3 py-1.5 text-xs font-medium ${
+                    activeKind === null && !selectedInviteLinkId
+                      ? "bg-blue-950/70 text-blue-200"
+                      : "text-neutral-400 hover:bg-neutral-900 hover:text-neutral-200"
+                  }`}
+                  onClick={() => {
+                    setSelectedInviteLinkId(null);
+                    setActiveKind(null);
+                  }}
+                >
+                  All sources
+                </button>
                 {query.data.sources.map((source) => {
-                  const active = source.kind === selectedSource.kind;
+                  const active =
+                    source.kind === activeKind ||
+                    (activeKind === null && selectedLinkKind === source.kind);
                   return (
                     <button
                       key={source.kind}
@@ -293,7 +322,10 @@ export function ChannelTrafficAttributionModal({
                           ? "bg-blue-950/70 text-blue-200"
                           : "text-neutral-400 hover:bg-neutral-900 hover:text-neutral-200"
                       }`}
-                      onClick={() => setActiveKind(source.kind)}
+                      onClick={() => {
+                        setSelectedInviteLinkId(null);
+                        setActiveKind(source.kind);
+                      }}
                     >
                       {source.label} · {number(source.acquired)}
                     </button>
@@ -382,9 +414,10 @@ export function ChannelTrafficAttributionModal({
                                         : "border-neutral-700 text-neutral-400 hover:border-neutral-500 hover:text-neutral-200"
                                     }`}
                                     title={link.url}
-                                    onClick={() =>
-                                      setSelectedInviteLinkId(link.id)
-                                    }
+                                    onClick={() => {
+                                      setActiveKind(item.kind);
+                                      setSelectedInviteLinkId(link.id);
+                                    }}
                                   >
                                     {link.name}
                                   </button>

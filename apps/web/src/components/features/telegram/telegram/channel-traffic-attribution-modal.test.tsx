@@ -17,7 +17,9 @@ vi.mock("recharts", () => ({
   ),
   CartesianGrid: () => null,
   Legend: () => null,
-  Line: () => null,
+  Line: ({ dataKey }: { dataKey: string }) => (
+    <div data-testid="chart-line">{dataKey}</div>
+  ),
   Tooltip: () => null,
   XAxis: () => null,
   YAxis: () => null,
@@ -196,5 +198,74 @@ describe("ChannelTrafficAttributionModal", () => {
       screen.getByRole("columnheader", { name: "Peak" }),
     ).toBeInTheDocument();
     expect(document.querySelector(".table-scroll")).not.toBeNull();
+  });
+
+  it("shows only the selected source on the chart", async () => {
+    vi.spyOn(telegramChannelsApi, "trafficAttribution").mockResolvedValue({
+      ...emptyDetail,
+      sources: [
+        {
+          kind: "AD_CAMPAIGNS",
+          label: "Ad campaigns",
+          sourceCount: 1,
+          linkCount: 1,
+          acquired: 20,
+          retained: 15,
+          unsubscribed: 5,
+          unsubscribePercent: 25,
+          spend: 100,
+          averageSubscriberCost: 5,
+          retainedSubscriberCost: 6.67,
+          currency: "USD",
+        },
+        {
+          kind: "FOLDERS",
+          label: "Folders",
+          sourceCount: 1,
+          linkCount: 1,
+          acquired: 4,
+          retained: 4,
+          unsubscribed: 0,
+          unsubscribePercent: 0,
+          spend: null,
+          averageSubscriberCost: null,
+          retainedSubscriberCost: null,
+          currency: "USD",
+        },
+      ],
+      items: [],
+      points: [
+        {
+          at: "2026-09-01T00:00:00.000Z",
+          kind: "AD_CAMPAIGNS",
+          acquired: 10,
+          retained: 10,
+          unsubscribed: 0,
+        },
+        {
+          at: "2026-09-01T00:00:00.000Z",
+          kind: "FOLDERS",
+          acquired: 4,
+          retained: 4,
+          unsubscribed: 0,
+        },
+        {
+          at: "2026-09-02T00:00:00.000Z",
+          kind: "AD_CAMPAIGNS",
+          acquired: 20,
+          retained: 15,
+          unsubscribed: 5,
+        },
+      ],
+    });
+
+    renderModal();
+
+    expect(await screen.findAllByTestId("chart-line")).toHaveLength(2);
+    await userEvent.click(screen.getByRole("tab", { name: /Folders · 4/ }));
+
+    expect(screen.getByText("Folders invite counters")).toBeInTheDocument();
+    expect(screen.getAllByTestId("chart-line")).toHaveLength(1);
+    expect(screen.getByTestId("chart-line")).toHaveTextContent("FOLDERS");
   });
 });

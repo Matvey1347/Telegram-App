@@ -2,8 +2,8 @@
 
 import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Plus } from "lucide-react";
-import type { CrmContactDetail } from "@telegram-system/shared";
+import { ArrowLeft, BellRing, Plus } from "lucide-react";
+import type { CrmContact } from "@telegram-system/shared";
 import {
   Button,
   DateInput,
@@ -16,22 +16,36 @@ import {
 import { telegramAdSalesApi } from "@/lib/api";
 import { telegramCrmKeys } from "@/lib/features/growth/telegram-crm-query";
 import { formatDateTime } from "@/lib/date-format";
+import { MemberSelect } from "@/components/features/workspace/member-select";
 
 const taskKey = (contactId: string) =>
   ["telegram-ad-sales", "crm-contact", contactId, "tasks"] as const;
+
+function defaultReminderDate() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+const DEFAULT_REMINDER_TIME = "10:00";
 
 export function CrmContactTasks({
   contact,
   canEdit,
 }: {
-  contact: CrmContactDetail;
+  contact: Pick<CrmContact, "id" | "ownerMemberId">;
   canEdit: boolean;
 }) {
   const queryClient = useQueryClient();
   const [creating, setCreating] = useState(false);
   const [title, setTitle] = useState("");
-  const [dueDate, setDueDate] = useState("");
-  const [dueTime, setDueTime] = useState("");
+  const [dueDate, setDueDate] = useState(defaultReminderDate);
+  const [dueTime, setDueTime] = useState(DEFAULT_REMINDER_TIME);
+  const [assignedMemberId, setAssignedMemberId] = useState(
+    () => contact.ownerMemberId ?? "",
+  );
   const query = useQuery({
     queryKey: taskKey(contact.id),
     queryFn: () =>
@@ -55,15 +69,15 @@ export function CrmContactTasks({
     mutationFn: () =>
       telegramAdSalesApi.createAdvertiserTask(contact.id, {
         type: "MANUAL",
-        assignedMemberId: contact.ownerMemberId,
+        assignedMemberId,
         priority: "NORMAL",
         title: title.trim(),
         dueAt: localDateTimeInputToIso(dueDate, dueTime)!,
       }),
     onSuccess: async () => {
       setTitle("");
-      setDueDate("");
-      setDueTime("");
+      setDueDate(defaultReminderDate());
+      setDueTime(DEFAULT_REMINDER_TIME);
       setCreating(false);
       await refresh();
     },
@@ -78,7 +92,7 @@ export function CrmContactTasks({
       title.trim() &&
       dueDate &&
       isValidTimeInputValue(dueTime) &&
-      contact.ownerMemberId
+      assignedMemberId
     )
       create.mutate();
   };
@@ -88,14 +102,14 @@ export function CrmContactTasks({
       {canEdit ? (
         <div className="flex justify-end">
           <Button onClick={() => setCreating(true)}>
-            <Plus size={16} /> Add task
+            <Plus size={16} /> Add reminder
           </Button>
         </div>
       ) : null}
       <Modal
         open={creating}
         onClose={() => setCreating(false)}
-        title="Create task"
+        title="Add reminder"
         size="sm"
         allowOverflow
         leadingHeaderAction={
@@ -113,11 +127,23 @@ export function CrmContactTasks({
           <Input
             value={title}
             onChange={(event) => setTitle(event.target.value)}
-            placeholder="Task title"
-            aria-label="Task title"
+            placeholder="Reminder text"
+            aria-label="Reminder text"
             required
             autoFocus
           />
+          <div>
+            <label className="mb-1 block text-xs font-medium text-neutral-300">
+              Reminder owner
+            </label>
+            <MemberSelect
+              value={assignedMemberId}
+              onChange={setAssignedMemberId}
+              defaultToCurrent
+              allowAssignOthers
+              disabled={create.isPending}
+            />
+          </div>
           <DateInput
             value={dueDate}
             onChange={(event) => setDueDate(event.target.value)}
@@ -130,37 +156,37 @@ export function CrmContactTasks({
             aria-label="Task due time"
             required
           />
-          {!contact.ownerMemberId ? (
+          {!assignedMemberId ? (
             <p className="text-xs text-amber-300">
-              Assign an owner before creating a task.
+              Select who should receive this reminder.
             </p>
           ) : null}
           {create.error ? (
-            <p className="text-xs text-rose-300">Task could not be created.</p>
+            <p className="text-xs text-rose-300">Reminder could not be created.</p>
           ) : null}
           <div className="flex justify-end">
             <Button
               type="submit"
               disabled={
                 create.isPending ||
-                !contact.ownerMemberId ||
+                !assignedMemberId ||
                 !title.trim() ||
                 !dueDate ||
                 !isValidTimeInputValue(dueTime)
               }
             >
-              {create.isPending ? "Creating…" : "Create task"}
+              {create.isPending ? "Creating…" : "Add reminder"}
             </Button>
           </div>
         </form>
       </Modal>
       {query.isLoading ? (
-        <p className="py-6 text-sm text-neutral-500">Loading tasks…</p>
+        <p className="py-6 text-sm text-neutral-500">Loading reminders…</p>
       ) : null}
       {query.error ? (
         <div className="py-4">
           <p className="mb-2 text-sm text-rose-300">
-            Tasks could not be loaded.
+            Reminders could not be loaded.
           </p>
           <Button variant="secondary" onClick={() => query.refetch()}>
             Retry
@@ -168,8 +194,9 @@ export function CrmContactTasks({
         </div>
       ) : null}
       {!query.isLoading && !query.error && !query.data?.items.length ? (
-        <p className="rounded-lg border border-dashed border-neutral-800 px-3 py-4 text-sm text-neutral-500">
-          No tasks yet.
+        <p className="flex items-center gap-2 rounded-lg border border-dashed border-neutral-800 px-3 py-4 text-sm text-neutral-500">
+          <BellRing size={16} className="text-amber-300" />
+          No reminders yet — add one for the next follow-up.
         </p>
       ) : null}
       {query.data?.items.length ? (

@@ -53,6 +53,8 @@ export const CRM_REPLY_STATUSES = [
 export type CrmReplyStatus = (typeof CRM_REPLY_STATUSES)[number];
 
 export type CrmReplySummary = {
+  /** Whether an active Telegram conversation exists for the contact. */
+  hasTelegramConversation?: boolean;
   status: CrmReplyStatus;
   inboundMessageCount: number;
   outboundMessageCount: number;
@@ -145,6 +147,8 @@ export type CrmTagSummary = {
   systemKey: string | null;
   isSystem: boolean;
   assignmentMode: "AUTOMATIC" | "MANUAL";
+  /** Telegram Premium asset resolved for a synced dialog-folder tag. */
+  emojiPresentation?: ResolvedEmoji | null;
 };
 
 export type CrmTagOption = CrmTagSummary & {
@@ -188,7 +192,6 @@ export type CrmContactListItem = CrmContact & {
   replySummary: CrmReplySummary;
   ownerMember: CrmMemberSummary | null;
   peer: CrmPeerSummary | null;
-  nextOpenTask: CrmTaskSummary | null;
   activeDeal: CrmActiveDealSummary | null;
   crossPromotions?: Array<{
     id: string;

@@ -231,6 +231,34 @@ describe('TelegramCrmContactReadService', () => {
     ).toBeUndefined();
   });
 
+  it('includes Telegram folder tags in CRM tag facets', async () => {
+    const tagFindMany = jest.fn().mockResolvedValue([]);
+    const service = new TelegramCrmContactReadService(
+      {
+        telegramAdvertiserTag: { findMany: tagFindMany },
+      } as never,
+      {
+        require: jest.fn().mockResolvedValue({ workspaceId: 'workspace-1' }),
+      } as never,
+      { ensureWorkflowTags: jest.fn() } as never,
+    );
+
+    await service.listTags('user-1');
+
+    expect(tagFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          workspaceId: 'workspace-1',
+          OR: expect.arrayContaining([
+            expect.objectContaining({
+              systemKey: { startsWith: 'TELEGRAM_FOLDER:' },
+            }),
+          ]),
+        }),
+      }),
+    );
+  });
+
   it('uses the newest unanswered outbound across all account Conversations for READ_NO_REPLY', async () => {
     const query = await captureReadNoReplySql();
 

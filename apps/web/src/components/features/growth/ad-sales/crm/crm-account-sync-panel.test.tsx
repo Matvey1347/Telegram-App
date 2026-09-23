@@ -7,6 +7,10 @@ const mocks = vi.hoisted(() => ({
   list: vi.fn(),
   updateAccountCapabilities: vi.fn(),
   initialSync: vi.fn(),
+  startOperation: vi.fn(),
+  operationUpdate: vi.fn(),
+  operationSucceed: vi.fn(),
+  operationFail: vi.fn(),
 }));
 
 vi.mock("@/lib/api", () => ({
@@ -18,6 +22,10 @@ vi.mock("@/lib/features/growth/telegram-crm-api", () => ({
     updateAccountCapabilities: mocks.updateAccountCapabilities,
     initialSync: mocks.initialSync,
   },
+}));
+
+vi.mock("@/providers/toast-provider", () => ({
+  useAppToast: () => ({ startOperation: mocks.startOperation }),
 }));
 
 function renderPanel() {
@@ -50,7 +58,18 @@ describe("CrmAccountSyncPanel", () => {
       },
     ]);
     mocks.updateAccountCapabilities.mockReset().mockResolvedValue({});
-    mocks.initialSync.mockReset().mockResolvedValue({});
+    mocks.initialSync.mockReset().mockResolvedValue({
+      importedConversations: 2,
+      importedMessages: 3,
+    });
+    mocks.operationUpdate.mockReset();
+    mocks.operationSucceed.mockReset();
+    mocks.operationFail.mockReset();
+    mocks.startOperation.mockReset().mockReturnValue({
+      update: mocks.operationUpdate,
+      succeed: mocks.operationSucceed,
+      fail: mocks.operationFail,
+    });
   });
 
   it("keeps source controls in a compact modal and explains daily sync", async () => {
@@ -76,6 +95,20 @@ describe("CrmAccountSyncPanel", () => {
       expect(mocks.initialSync).toHaveBeenCalledWith("account-1"),
     );
     expect(mocks.initialSync).toHaveBeenCalledTimes(1);
+    expect(mocks.startOperation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "Telegram CRM sync",
+        message: "Preparing the selected Telegram accounts…",
+      }),
+    );
+    expect(mocks.operationUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: expect.stringContaining("importing dialogs, messages, and Telegram folder tags"),
+      }),
+    );
+    expect(mocks.operationSucceed).toHaveBeenCalledWith(
+      expect.objectContaining({ message: expect.stringContaining("folder tags refreshed") }),
+    );
   });
 
   it("keeps a visible retry-safe alert when synchronization fails", async () => {
@@ -92,5 +125,10 @@ describe("CrmAccountSyncPanel", () => {
       ),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Sync" })).toBeEnabled();
+    expect(mocks.operationFail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: "Conversation sync failed. You can safely retry it.",
+      }),
+    );
   });
 });

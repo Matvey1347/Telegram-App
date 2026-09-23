@@ -218,6 +218,7 @@ export class TelegramCrmInitialSyncService {
               workspaceId,
               accountId,
               dialogs,
+              folders: page.folders,
               autoContact: { ownerMemberId: memberId, createdByUserId: userId },
             });
             importedPeers += stored.importedPeers;

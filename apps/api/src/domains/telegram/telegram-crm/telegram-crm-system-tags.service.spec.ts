@@ -1,6 +1,103 @@
 import { TelegramCrmSystemTagsService } from './telegram-crm-system-tags.service';
 
 describe('TelegramCrmSystemTagsService', () => {
+  it('creates colored Telegram folder tags and assigns them to imported contacts', async () => {
+    const tagFindMany = jest
+      .fn()
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        { id: 'tag-folder', systemKey: 'TELEGRAM_FOLDER:account-1:9' },
+      ]);
+    const assignmentCreateMany = jest.fn().mockResolvedValue({ count: 1 });
+    const prisma = {
+      telegramAdvertiserTag: {
+        findMany: tagFindMany,
+        createMany: jest.fn().mockResolvedValue({ count: 1 }),
+        updateMany: jest.fn(),
+      },
+      telegramAdvertiserTagAssignment: {
+        findMany: jest.fn().mockResolvedValue([]),
+        createMany: assignmentCreateMany,
+        deleteMany: jest.fn(),
+      },
+    };
+    const service = new TelegramCrmSystemTagsService(prisma as never);
+
+    await service.syncTelegramFolderTags(
+      {
+        workspaceId: 'workspace-1',
+        accountId: 'account-1',
+        folders: [{ id: 9, title: 'Customers', emoticon: '🤝', color: 3 }],
+        dialogs: [
+          {
+            peer: { telegramUserId: '42' },
+            folderIds: [9],
+          },
+        ] as never,
+        contactIdByTelegramUserId: new Map([['42', 'advertiser-1']]),
+      },
+      prisma as never,
+    );
+
+    expect(prisma.telegramAdvertiserTag.createMany).toHaveBeenCalledWith({
+      data: [
+        expect.objectContaining({
+          systemKey: 'TELEGRAM_FOLDER:account-1:9',
+          name: '🤝 Customers',
+          color: '#22c55e',
+        }),
+      ],
+      skipDuplicates: true,
+    });
+    expect(assignmentCreateMany).toHaveBeenCalledWith({
+      data: [
+        {
+          workspaceId: 'workspace-1',
+          advertiserId: 'advertiser-1',
+          tagId: 'tag-folder',
+        },
+      ],
+      skipDuplicates: true,
+    });
+  });
+
+  it('does not invent an emoji for a Telegram folder without one', async () => {
+    const prisma = {
+      telegramAdvertiserTag: {
+        findMany: jest.fn().mockResolvedValueOnce([]).mockResolvedValueOnce([]),
+        createMany: jest.fn().mockResolvedValue({ count: 1 }),
+        updateMany: jest.fn(),
+      },
+      telegramAdvertiserTagAssignment: {
+        findMany: jest.fn().mockResolvedValue([]),
+        createMany: jest.fn(),
+        deleteMany: jest.fn(),
+      },
+    };
+    const service = new TelegramCrmSystemTagsService(prisma as never);
+
+    await service.syncTelegramFolderTags(
+      {
+        workspaceId: 'workspace-1',
+        accountId: 'account-1',
+        folders: [{ id: 9, title: 'Внут', emoticon: null, color: 5 }],
+        dialogs: [],
+        contactIdByTelegramUserId: new Map(),
+      },
+      prisma as never,
+    );
+
+    expect(prisma.telegramAdvertiserTag.createMany).toHaveBeenCalledWith({
+      data: [
+        expect.objectContaining({
+          name: 'Внут',
+          color: '#3b82f6',
+        }),
+      ],
+      skipDuplicates: true,
+    });
+  });
+
   it('creates and assigns network and channel tags for completed purchases', async () => {
     const tagFindMany = jest
       .fn()

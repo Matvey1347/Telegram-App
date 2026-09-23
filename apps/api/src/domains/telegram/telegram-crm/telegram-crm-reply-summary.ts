@@ -18,6 +18,7 @@ type ReplyConversation = {
 };
 
 const EMPTY_REPLY_SUMMARY: CrmReplySummary = {
+  hasTelegramConversation: false,
   status: 'NONE',
   inboundMessageCount: 0,
   outboundMessageCount: 0,
@@ -105,6 +106,7 @@ export function summarizeReply(
         ? 'CONVERSATION_UNANSWERED_UNREAD'
         : 'CONVERSATION_UNANSWERED_READ';
   return {
+    hasTelegramConversation: true,
     status,
     inboundMessageCount,
     outboundMessageCount,

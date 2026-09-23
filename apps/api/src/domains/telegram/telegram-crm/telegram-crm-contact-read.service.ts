@@ -43,7 +43,7 @@ import {
 } from './telegram-crm-contact-sales-summary';
 import { loadCrmReplySummaries } from './telegram-crm-reply-summary';
 import {
-  CRM_WORKFLOW_TAG_SYSTEM_KEYS,
+  CRM_VISIBLE_TAG_WHERE,
   crmTagSelect,
   mapCrmTag,
   TelegramCrmSystemTagsService,
@@ -145,12 +145,7 @@ export class TelegramCrmContactReadService {
     return {
       ...createPaginatedResponse(
         rows.map((row) =>
-          mapCrmContactListItem(
-            row,
-            dealTotals,
-            salesSummaries,
-            replySummaries,
-          ),
+          mapCrmContactListItem(row, dealTotals, salesSummaries, replySummaries),
         ),
         totalItems,
         pagination,
@@ -165,17 +160,12 @@ export class TelegramCrmContactReadService {
     const rows = await this.prisma.telegramAdvertiserTag.findMany({
       where: {
         workspaceId: access.workspaceId,
-        OR: [
-          { systemKey: null },
-          {
-            systemKey: { in: CRM_WORKFLOW_TAG_SYSTEM_KEYS },
-          },
-        ],
+        ...CRM_VISIBLE_TAG_WHERE,
       },
       orderBy: [{ position: 'asc' }, { name: 'asc' }, { id: 'asc' }],
       select: crmTagSelect,
     });
-    return rows.map(mapCrmTag);
+    return rows.map((tag) => mapCrmTag(tag));
   }
 
   async get(userId: string, contactId: string): Promise<CrmContactDetail> {
@@ -196,20 +186,21 @@ export class TelegramCrmContactReadService {
       select: crmContactDetailSelect,
     });
     if (!row) throw new NotFoundException('CRM Contact not found');
-    const [paymentSummary, dealCount, unread] = await Promise.all([
-      this.paymentSummary(access.workspaceId, contactId),
-      this.prisma.telegramAdSale.count({
-        where: { workspaceId: access.workspaceId, advertiserId: contactId },
-      }),
-      this.prisma.telegramCrmConversation.aggregate({
-        where: {
-          workspaceId: access.workspaceId,
-          contactId,
-          state: TelegramCrmConversationState.ACTIVE,
-        },
-        _sum: { unreadCount: true },
-      }),
-    ]);
+    const [paymentSummary, dealCount, unread] =
+      await Promise.all([
+        this.paymentSummary(access.workspaceId, contactId),
+        this.prisma.telegramAdSale.count({
+          where: { workspaceId: access.workspaceId, advertiserId: contactId },
+        }),
+        this.prisma.telegramCrmConversation.aggregate({
+          where: {
+            workspaceId: access.workspaceId,
+            contactId,
+            state: TelegramCrmConversationState.ACTIVE,
+          },
+          _sum: { unreadCount: true },
+        }),
+      ]);
     return mapCrmContactDetail(
       row,
       paymentSummary,
@@ -341,10 +332,7 @@ export class TelegramCrmContactReadService {
     const rows = await this.prisma.telegramAdvertiserTag.findMany({
       where: {
         workspaceId,
-        OR: [
-          { systemKey: null },
-          { systemKey: { in: CRM_WORKFLOW_TAG_SYSTEM_KEYS } },
-        ],
+        ...CRM_VISIBLE_TAG_WHERE,
         advertisers: { some: { advertiser: contactWhere } },
       },
       orderBy: [{ position: 'asc' }, { name: 'asc' }, { id: 'asc' }],

@@ -28,7 +28,7 @@ import {
   mapCrmPeerSummary,
 } from './telegram-crm-read-model.mapper';
 import {
-  CRM_WORKFLOW_TAG_SYSTEM_KEYS,
+  CRM_VISIBLE_TAG_WHERE,
   crmTagSelect,
   mapCrmTag,
 } from './telegram-crm-system-tags.service';
@@ -48,10 +48,7 @@ export const crmContactListSelect = {
   tags: {
     where: {
       tag: {
-        OR: [
-          { systemKey: null },
-          { systemKey: { in: CRM_WORKFLOW_TAG_SYSTEM_KEYS } },
-        ],
+        ...CRM_VISIBLE_TAG_WHERE,
       },
     },
     orderBy: [
@@ -65,19 +62,6 @@ export const crmContactListSelect = {
     orderBy: [{ updatedAt: 'desc' as const }, { id: 'desc' as const }],
     take: 1,
     select: crmPeerSummarySelect,
-  },
-  tasks: {
-    where: { status: { in: [...CRM_OPEN_TASK_STATUSES] } },
-    orderBy: [{ dueAt: 'asc' as const }, { id: 'asc' as const }],
-    take: 1,
-    select: {
-      id: true,
-      title: true,
-      dueAt: true,
-      status: true,
-      type: true,
-      priority: true,
-    },
   },
   sales: {
     where: ACTIVE_DEAL_WHERE,
@@ -136,10 +120,7 @@ export const crmContactDetailSelect = {
   tags: {
     where: {
       tag: {
-        OR: [
-          { systemKey: null },
-          { systemKey: { in: CRM_WORKFLOW_TAG_SYSTEM_KEYS } },
-        ],
+        ...CRM_VISIBLE_TAG_WHERE,
       },
     },
     orderBy: { createdAt: 'desc' as const },
@@ -206,7 +187,6 @@ export function mapCrmContactListItem(
   salesSummaries: Map<string, CrmContactSalesSummary>,
   replySummaries: Map<string, CrmReplySummary>,
 ): CrmContactListItem {
-  const task = row.tasks[0];
   const deal = row.sales[0];
   const totals = deal ? dealTotals.get(deal.id) : null;
   const salesSummary = salesSummaries.get(row.id) ?? {
@@ -226,6 +206,7 @@ export function mapCrmContactListItem(
     tags: row.tags.map(({ tag }) => mapCrmTag(tag)),
     isUnassignedClient: isUnassignedCrmContact(row),
     replySummary: replySummaries.get(row.id) ?? {
+      hasTelegramConversation: false,
       status: 'NONE',
       inboundMessageCount: 0,
       outboundMessageCount: 0,
@@ -235,7 +216,6 @@ export function mapCrmContactListItem(
     },
     ownerMember: mapCrmMemberSummary(row.ownerMember),
     peer: row.crmPeers[0] ? mapCrmPeerSummary(row.crmPeers[0]) : null,
-    nextOpenTask: task ? { ...task, dueAt: task.dueAt.toISOString() } : null,
     activeDeal: deal
       ? {
           id: deal.id,

@@ -9,11 +9,14 @@ const mocks = vi.hoisted(() => ({
   listTasks: vi.fn(),
   createTask: vi.fn(),
   completeTask: vi.fn(),
+  selectMembers: vi.fn(),
   listActivities: vi.fn(),
   createNote: vi.fn(),
 }));
 
 vi.mock("@/lib/api", () => ({
+  authApi: { me: vi.fn() },
+  workspaceMembersApi: { select: mocks.selectMembers },
   telegramAdSalesApi: {
     listCrmTasks: mocks.listTasks,
     createAdvertiserTask: mocks.createTask,
@@ -50,6 +53,9 @@ describe("CRM contact workflows", () => {
         },
       ],
     });
+    mocks.selectMembers.mockResolvedValue([
+      { id: "member-1", isCurrentUser: true, user: { name: "Owner" } },
+    ]);
     mocks.createTask.mockResolvedValue({ id: "task-2" });
     mocks.completeTask.mockResolvedValue({ id: "task-1", status: "COMPLETED" });
     mocks.listActivities.mockResolvedValue({ items: [] });
@@ -65,17 +71,23 @@ describe("CRM contact workflows", () => {
       expect(mocks.completeTask).toHaveBeenCalledWith("task-1"),
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Add task" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Add reminder" }),
+    );
 
-    fireEvent.change(screen.getByLabelText("Task title"), {
+    fireEvent.change(screen.getByLabelText("Reminder text"), {
       target: { value: "Prepare offer" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Select start date" }));
+    fireEvent.click(screen.getByRole("button", { name: "Select Task due date" }));
     fireEvent.click(screen.getAllByRole("button", { name: "5" })[0]);
     fireEvent.change(screen.getByLabelText("Task due time"), {
       target: { value: "12:00" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Create task" }));
+    fireEvent.click(
+      screen
+        .getAllByRole("button", { name: "Add reminder" })
+        .find((button) => button.getAttribute("type") === "submit") as HTMLButtonElement,
+    );
     await waitFor(() =>
       expect(mocks.createTask).toHaveBeenCalledWith(
         "contact-1",

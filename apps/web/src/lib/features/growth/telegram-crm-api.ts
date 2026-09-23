@@ -92,6 +92,9 @@ export const telegramCrmApi = {
     (
       await api.get<CrmContactsListResult>("/telegram-crm/contacts", {
         params,
+        // Nest's query DTO expects `tagIds=value`; Axios otherwise emits
+        // `tagIds[]=value`, which validation correctly rejects as unknown.
+        paramsSerializer: { indexes: null },
         signal,
       })
     ).data,
@@ -215,6 +218,13 @@ export const telegramCrmApi = {
       await api.post<CrmConversationListItem>(
         `/telegram-crm/contacts/${contactId}/conversations/attach`,
         payload,
+      )
+    ).data,
+  syncTelegramContact: async (contactId: string, reference: string) =>
+    (
+      await api.post<CrmConversationListItem>(
+        `/telegram-crm/contacts/${contactId}/sync-telegram`,
+        { reference },
       )
     ).data,
   listMessages: async (

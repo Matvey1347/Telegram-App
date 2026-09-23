@@ -71,6 +71,7 @@ export function parseTelegramCrmPeer(
     username: user.username || null,
     firstName: user.firstName || null,
     lastName: user.lastName || null,
+    phone: user.phone ? `+${user.phone}` : null,
     photoUrl: user.username
       ? `https://t.me/i/userpic/320/${user.username}.jpg`
       : null,
