@@ -47,6 +47,13 @@ export class FinanceInvestmentInputDto {
   @IsString() @MinLength(1) @MaxLength(120) @Matches(/\S/u) name!: string;
   @IsOptional() @IsString() @MaxLength(2000) description?: string | null;
   @IsIn(TYPES) type!: (typeof TYPES)[number];
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(80)
+  @Matches(/\S/u)
+  customTypeName?: string | null;
+  @IsOptional() @IsString() @MaxLength(64) customTypeEmoji?: string | null;
   @IsString() @Matches(CURRENCY) currency!: string;
   @IsDateString() startedAt!: string;
 }
@@ -55,6 +62,13 @@ export class FinanceInvestmentUpdateDto {
   @IsString() @MinLength(1) @MaxLength(120) @Matches(/\S/u) name!: string;
   @IsOptional() @IsString() @MaxLength(2000) description?: string | null;
   @IsIn(TYPES) type!: (typeof TYPES)[number];
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(80)
+  @Matches(/\S/u)
+  customTypeName?: string | null;
+  @IsOptional() @IsString() @MaxLength(64) customTypeEmoji?: string | null;
   @IsDateString() startedAt!: string;
 }
 

@@ -271,11 +271,31 @@ export class FinanceCoreService {
       where: { id, profileId },
     });
     if (!row) throw new NotFoundException('Finance account not found');
+    const currency = dto.currency?.toUpperCase();
+    if (currency && currency !== row.currency) {
+      const [transactions, outgoingTransfers, incomingTransfers] =
+        await Promise.all([
+          this.prisma.financeTransaction.count({
+            where: { profileId, accountId: id },
+          }),
+          this.prisma.financeTransfer.count({
+            where: { profileId, fromAccountId: id },
+          }),
+          this.prisma.financeTransfer.count({
+            where: { profileId, toAccountId: id },
+          }),
+        ]);
+      if (transactions || outgoingTransfers || incomingTransfers)
+        throw new ConflictException(
+          'Account currency cannot change after transactions or transfers exist',
+        );
+    }
     return this.prisma.financeAccount.update({
       where: { id },
       data: {
         ...(dto.name ? { name: dto.name.trim() } : {}),
         ...(dto.type ? { type: dto.type } : {}),
+        ...(currency ? { currency } : {}),
         ...(Object.prototype.hasOwnProperty.call(dto, 'emoji')
           ? { emoji: dto.emoji || null }
           : {}),

@@ -13,6 +13,8 @@ export const financeInvestmentSelect = {
   name: true,
   description: true,
   type: true,
+  customTypeName: true,
+  customTypeEmoji: true,
   currency: true,
   status: true,
   startedAt: true,

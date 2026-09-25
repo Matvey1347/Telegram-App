@@ -32,11 +32,17 @@ const TYPES: ConsumerFinanceInvestmentType[] = [
   "PHYSICAL_ASSET",
   "OTHER",
 ];
+type InvestmentTypeChoice = ConsumerFinanceInvestmentType | "CUSTOM";
 
 export function investmentTypeLabel(
-  type: ConsumerFinanceInvestmentType,
+  investment: Pick<
+    ConsumerFinanceInvestment,
+    "type" | "customTypeName" | "customTypeEmoji"
+  >,
   t: ReturnType<typeof financeInvestmentsCopy>,
 ) {
+  if (investment.type === "OTHER" && investment.customTypeName)
+    return `${investment.customTypeEmoji ?? "🏷️"} ${investment.customTypeName}`;
   return {
     BUSINESS: t.business,
     REAL_ESTATE: t.realEstate,
@@ -45,7 +51,7 @@ export function investmentTypeLabel(
     DIGITAL_ASSET: t.digitalAsset,
     PHYSICAL_ASSET: t.physicalAsset,
     OTHER: t.other,
-  }[type];
+  }[investment.type];
 }
 
 export function FinanceInvestmentEditor({
@@ -70,8 +76,14 @@ export function FinanceInvestmentEditor({
   const t = financeInvestmentsCopy(locale);
   const [name, setName] = useState(investment?.name ?? "");
   const [description, setDescription] = useState(investment?.description ?? "");
-  const [type, setType] = useState<ConsumerFinanceInvestmentType>(
-    investment?.type ?? "OTHER",
+  const [type, setType] = useState<InvestmentTypeChoice>(
+    investment?.customTypeName ? "CUSTOM" : (investment?.type ?? "OTHER"),
+  );
+  const [customTypeName, setCustomTypeName] = useState(
+    investment?.customTypeName ?? "",
+  );
+  const [customTypeEmoji, setCustomTypeEmoji] = useState(
+    investment?.customTypeEmoji ?? "",
   );
   const [currency, setCurrency] = useState(
     investment?.currency ?? defaultCurrency,
@@ -92,7 +104,13 @@ export function FinanceInvestmentEditor({
           onSubmit({
             name: name.trim(),
             description: description.trim() || null,
-            type,
+            type: type === "CUSTOM" ? "OTHER" : type,
+            ...(type === "CUSTOM"
+              ? {
+                  customTypeName: customTypeName.trim(),
+                  customTypeEmoji: customTypeEmoji.trim(),
+                }
+              : {}),
             currency,
             startedAt: dateInputToIso(startedAt),
           });
@@ -109,17 +127,35 @@ export function FinanceInvestmentEditor({
           <Select
             uiLocale={locale}
             value={type}
-            onChange={(e) =>
-              setType(e.target.value as ConsumerFinanceInvestmentType)
-            }
+            onChange={(e) => setType(e.target.value as InvestmentTypeChoice)}
           >
             {TYPES.map((value) => (
               <option key={value} value={value}>
-                {investmentTypeLabel(value, t)}
+                {investmentTypeLabel({ type: value }, t)}
               </option>
             ))}
+            <option value="CUSTOM">{t.customType}</option>
           </Select>
         </FormField>
+        {type === "CUSTOM" ? (
+          <>
+            <FormField label={t.customTypeName} required>
+              <Input
+                value={customTypeName}
+                maxLength={80}
+                onChange={(e) => setCustomTypeName(e.target.value)}
+              />
+            </FormField>
+            <FormField label={t.customTypeEmoji} required>
+              <Input
+                value={customTypeEmoji}
+                maxLength={16}
+                placeholder="💎"
+                onChange={(e) => setCustomTypeEmoji(e.target.value)}
+              />
+            </FormField>
+          </>
+        ) : null}
         <FormField label={t.currency} required>
           <FinanceCurrencySelect
             locale={locale}
@@ -144,7 +180,15 @@ export function FinanceInvestmentEditor({
           <Button type="button" variant="cancel" onClick={onClose}>
             {t.cancel}
           </Button>
-          <Button type="submit" disabled={pending || !name.trim()}>
+          <Button
+            type="submit"
+            disabled={
+              pending ||
+              !name.trim() ||
+              (type === "CUSTOM" &&
+                (!customTypeName.trim() || !customTypeEmoji.trim()))
+            }
+          >
             {pending ? t.saving : investment ? t.update : t.create}
           </Button>
         </div>

@@ -25,7 +25,6 @@ describe("FinanceOnboarding", () => {
     expect(screen.getByPlaceholderText("Search…")).toBeInTheDocument();
     fireEvent.click(timezone);
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-    fireEvent.click(screen.getByRole("button", { name: "Open my finances" }));
 
     expect(
       await screen.findByText("Finance could not be loaded."),
@@ -36,7 +35,33 @@ describe("FinanceOnboarding", () => {
       locale: "en",
     });
     expect(
-      screen.getByRole("button", { name: "Open my finances" }),
+      screen.getByRole("button", { name: "Continue" }),
     ).toBeEnabled();
+  });
+
+  it("starts the interactive tour after setting up their preferences", async () => {
+    const onComplete = vi.fn().mockResolvedValue(undefined);
+    render(
+      <FinanceOnboarding
+        profile={{
+          id: "profile-1",
+          defaultCurrency: "USD",
+          timezone: "UTC",
+          locale: "en",
+          onboardingCompletedAt: null,
+          telegramUser: { displayName: "Ada", username: null, avatarUrl: null },
+        }}
+        onComplete={onComplete}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    expect(onComplete).toHaveBeenCalledWith({
+      defaultCurrency: "USD",
+      timezone: "UTC",
+      locale: "en",
+    });
   });
 });

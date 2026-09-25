@@ -30,6 +30,8 @@ export type ConsumerFinanceInvestment = {
   name: string;
   description?: string | null;
   type: ConsumerFinanceInvestmentType;
+  customTypeName?: string | null;
+  customTypeEmoji?: string | null;
   currency: string;
   status: ConsumerFinanceInvestmentStatus;
   startedAt: string;
@@ -49,13 +51,20 @@ export type ConsumerFinanceInvestmentInput = {
   name: string;
   description?: string | null;
   type: ConsumerFinanceInvestmentType;
+  customTypeName?: string | null;
+  customTypeEmoji?: string | null;
   currency: string;
   startedAt: string;
 };
 
 export type ConsumerFinanceInvestmentUpdate = Pick<
   ConsumerFinanceInvestmentInput,
-  "name" | "description" | "type" | "startedAt"
+  | "name"
+  | "description"
+  | "type"
+  | "customTypeName"
+  | "customTypeEmoji"
+  | "startedAt"
 >;
 
 export type ConsumerFinanceInvestmentPage = {

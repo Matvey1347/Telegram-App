@@ -82,6 +82,8 @@ export function FinanceInvestmentDetailScreen({
         name: payload.name,
         description: payload.description,
         type: payload.type,
+        customTypeName: payload.customTypeName,
+        customTypeEmoji: payload.customTypeEmoji,
         startedAt: payload.startedAt,
       };
       return consumerFinanceInvestmentsApi.update(botId, investmentId, update);
@@ -298,7 +300,7 @@ export function FinanceInvestmentDetailScreen({
             <h2 className="text-xl font-semibold">{item.name}</h2>
             <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-neutral-400">
               <span>
-                {investmentTypeLabel(item.type, t)} · {item.currency}
+                {investmentTypeLabel(item, t)} · {item.currency}
               </span>
               <span
                 className={`rounded-md border px-2 py-0.5 text-xs ${statusTone}`}

@@ -8,6 +8,8 @@ function row(invested: string, returned: string, value: string) {
     name: 'Business',
     description: null,
     type: 'BUSINESS' as const,
+    customTypeName: null,
+    customTypeEmoji: null,
     currency: 'USD',
     status: 'ACTIVE' as const,
     startedAt: now,

@@ -172,7 +172,7 @@ export type ConsumerFinanceAccountInput = {
 
 export type ConsumerFinanceAccountUpdate = Pick<
   ConsumerFinanceAccountInput,
-  "name" | "type" | "emoji"
+  "name" | "type" | "emoji" | "currency"
 >;
 
 export type ConsumerFinanceCategoryInput = {

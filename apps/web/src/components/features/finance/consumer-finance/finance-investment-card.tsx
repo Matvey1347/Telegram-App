@@ -50,7 +50,7 @@ export function FinanceInvestmentCard({
             </span>
           </div>
           <p className="mt-1 text-xs text-neutral-500">
-            {investmentTypeLabel(investment.type, t)} · {investment.currency}
+            {investmentTypeLabel(investment, t)} · {investment.currency}
           </p>
         </div>
         {investment.status !== "ARCHIVED" ? (

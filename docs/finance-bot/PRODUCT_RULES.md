@@ -124,6 +124,20 @@ Finance Bot is multilingual from the start. Every user-facing feature supports
 - Do not add incidental hardcoded user-facing text. A Finance feature is incomplete
   when any supported language is missing.
 
+## Guided onboarding
+
+- First-run onboarding is an interactive tour of the real Finance screens, not a
+  static description. It must keep the Overview, Transactions, Analytics and
+  Jarvis route guidance current, and offer the optional detailed route for
+  accounts, categories and transfers.
+- Any change to a consumer Finance navigation item, primary action, onboarding
+  destination, or the user-facing purpose of one of these screens must update
+  `finance-onboarding-tour.tsx`, all three locale copies, and its behavioural
+  tests in the same change. Review this requirement before merging the change.
+- Jarvis is always the final tour step and must state that it prepares a
+  reviewable proposal rather than writing a financial operation without user
+  confirmation.
+
 ## Paywalls
 
 Every paid/Pro message must give the user a next action: a button, Mini App link,

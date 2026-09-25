@@ -7,6 +7,54 @@ import { FinanceCoreService } from './finance-core.service';
 import { Prisma } from '@prisma/client';
 
 describe('FinanceCoreService consumer read models', () => {
+  it('changes the currency of an account without financial movements', async () => {
+    const update = jest.fn();
+    const prisma: any = {
+      financeAccount: {
+        findFirst: jest
+          .fn()
+          .mockResolvedValue({ id: 'account-1', currency: 'USD' }),
+        update,
+      },
+      financeTransaction: { count: jest.fn().mockResolvedValue(0) },
+      financeTransfer: { count: jest.fn().mockResolvedValue(0) },
+    };
+
+    await new FinanceCoreService(prisma).updateAccount(
+      'profile-1',
+      'account-1',
+      {
+        name: 'Cash',
+        type: 'CASH',
+        currency: 'eur',
+      },
+    );
+
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ currency: 'EUR' }),
+      }),
+    );
+  });
+
+  it('keeps account currency immutable after a financial movement', async () => {
+    const prisma: any = {
+      financeAccount: {
+        findFirst: jest
+          .fn()
+          .mockResolvedValue({ id: 'account-1', currency: 'USD' }),
+      },
+      financeTransaction: { count: jest.fn().mockResolvedValue(1) },
+      financeTransfer: { count: jest.fn().mockResolvedValue(0) },
+    };
+
+    await expect(
+      new FinanceCoreService(prisma).updateAccount('profile-1', 'account-1', {
+        currency: 'EUR',
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
+  });
+
   it('maps an explicit locale override and Telegram fallback deterministically', async () => {
     const prisma: any = {
       financeProfile: {

@@ -202,8 +202,9 @@ export class FinanceContextService {
         : preloadedProfile;
     if (existingProfile) return existingProfile;
     try {
-      // Nested defaults commit atomically with the new profile. Established
-      // profiles never enter a transaction or rerun initialization.
+      // Categories are a useful shared vocabulary from the first entry. An
+      // account is deliberately not a default: the owner chooses what they
+      // want to track during their first visit.
       return await this.prisma.financeProfile.create({
         data: {
           botIntegrationId,
@@ -214,9 +215,6 @@ export class FinanceContextService {
               type: item.type,
               key: item.name.toLowerCase().replace(/\s+/g, '-'),
             })),
-          },
-          accounts: {
-            create: { name: 'Cash', type: 'CASH', currency: 'UAH' },
           },
         },
       });

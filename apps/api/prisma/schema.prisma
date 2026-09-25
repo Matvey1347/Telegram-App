@@ -4670,6 +4670,9 @@ model FinanceInvestment {
   name                             String
   description                      String?                      @db.Text
   type                             FinanceInvestmentType        @default(OTHER)
+  customTypeName                   String?                      @db.VarChar(80)
+  /// Unicode emoji shown when this investment uses a personal type.
+  customTypeEmoji                  String?                      @db.Text
   currency                         String                       @db.VarChar(3)
   status                           FinanceInvestmentStatus      @default(ACTIVE)
   startedAt                        DateTime

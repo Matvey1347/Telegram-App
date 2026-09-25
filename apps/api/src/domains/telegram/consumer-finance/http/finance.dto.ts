@@ -34,6 +34,7 @@ export class UpdateFinanceAccountDto {
     | 'CARD'
     | 'SAVINGS'
     | 'OTHER';
+  @IsOptional() @IsString() @MinLength(3) @MaxLength(3) currency?: string;
 }
 export class FinanceTransactionItemDto {
   @IsString() @MinLength(1) @MaxLength(240) displayName!: string;
@@ -113,7 +114,10 @@ export class UpdateFinanceAssistantProposalOperationDto {
   necessity?: 'UNSPECIFIED' | 'REQUIRED' | 'DISCRETIONARY';
 }
 export class UpdateFinanceAssistantProposalDto {
-  @IsOptional() @ArrayMaxSize(10) @IsInt({ each: true }) @Min(0, { each: true })
+  @IsOptional()
+  @ArrayMaxSize(10)
+  @IsInt({ each: true })
+  @Min(0, { each: true })
   keepIndices?: number[];
   @ArrayMinSize(1)
   @ArrayMaxSize(10)

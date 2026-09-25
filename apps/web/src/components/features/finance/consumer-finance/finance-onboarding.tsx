@@ -4,10 +4,7 @@ import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { ConsumerFinanceProfile } from "@telegram-system/shared";
 import { Button, Card, FormField } from "./ui";
-import {
-  normalizeFinanceLocale,
-  type FinanceLocale,
-} from "./i18n/core";
+import { normalizeFinanceLocale, type FinanceLocale } from "./i18n/core";
 import { financeAuthCopy } from "./i18n/auth";
 import { FinanceLanguageSelect } from "./ui/finance-language-select";
 import { FinanceTimezoneSelect } from "./ui/finance-timezone-select";
@@ -18,9 +15,11 @@ import { consumerFinanceKeys } from "@/lib/features/finance/consumer-finance-que
 export function FinanceOnboardingScreen({
   botId,
   profile,
+  onTourStart,
 }: {
   botId: string;
   profile: ConsumerFinanceProfile;
+  onTourStart?: () => void;
 }) {
   const client = useQueryClient();
   return (
@@ -31,6 +30,7 @@ export function FinanceOnboardingScreen({
           botId,
           input,
         );
+        onTourStart?.();
         client.setQueryData(consumerFinanceKeys.session(botId), {
           authenticated: true,
           profile: updated,
@@ -106,6 +106,7 @@ export function FinanceOnboarding({
               copy={t}
               value={locale}
               onChange={setLocale}
+              fullWidth
             />
           </FormField>
           <FormField label={t.mainCurrency}>
@@ -123,27 +124,17 @@ export function FinanceOnboarding({
               onChange={setTimezone}
             />
           </FormField>
-          <Button className="w-full" onClick={() => setStep(2)}>
-            {t.continue}
-          </Button>
-        </>
-      ) : null}
-      {step === 2 ? (
-        <>
-          <h1 className="text-xl font-semibold">{t.onboardingChat}</h1>
-          <p className="text-sm text-neutral-400">{t.onboardingChatHelp}</p>
-          <p className="text-sm text-neutral-400">{t.onboardingAccount}</p>
           <Button
             className="w-full"
             disabled={!timezone || pending}
             onClick={() => void finish()}
           >
-            {pending ? t.saving : t.finish}
+            {pending ? t.saving : t.continue}
           </Button>
-          {error ? (
-            <p className="text-sm text-rose-300">{t.financeUnavailable}</p>
-          ) : null}
         </>
+      ) : null}
+      {error ? (
+        <p className="text-sm text-rose-300">{t.financeUnavailable}</p>
       ) : null}
     </Card>
   );

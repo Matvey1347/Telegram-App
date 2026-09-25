@@ -13,6 +13,7 @@ import { FinanceInvestments } from "./finance-investments";
 const api = vi.hoisted(() => ({
   savings: vi.fn(),
   investments: vi.fn(),
+  createInvestment: vi.fn(),
   summary: vi.fn(),
   accounts: vi.fn(),
   addCashFlow: vi.fn(),
@@ -27,6 +28,7 @@ vi.mock("@/lib/features/finance/consumer-finance-savings-goals-api", () => ({
 vi.mock("@/lib/features/finance/consumer-finance-investments-api", () => ({
   consumerFinanceInvestmentsApi: {
     list: api.investments,
+    create: api.createInvestment,
     summary: api.summary,
     addCashFlow: api.addCashFlow,
   },
@@ -66,6 +68,7 @@ beforeEach(() => {
   });
   api.allocate.mockReset();
   api.addCashFlow.mockReset();
+  api.createInvestment.mockReset();
 });
 
 describe("Consumer Finance savings and investments screens", () => {
@@ -274,39 +277,8 @@ describe("Consumer Finance savings and investments screens", () => {
     );
   });
 
-  it("records a return through the add-investment flow as an investment cash flow", async () => {
-    const investment = {
-      id: "studio",
-      name: "Photo studio",
-      type: "BUSINESS",
-      currency: "USD",
-      status: "ACTIVE" as const,
-      startedAt: "2026-01-01",
-      totalInvested: "100",
-      totalReturned: "0",
-      currentValue: "100",
-      profitLoss: "0",
-      returnPercentage: 0,
-      createdAt: "2026-01-01",
-      updatedAt: "2026-01-01",
-    };
-    api.investments.mockResolvedValue({
-      items: [investment],
-      nextCursor: null,
-    });
-    api.accounts.mockResolvedValue([
-      {
-        id: "cash",
-        name: "Cash",
-        type: "CASH",
-        currency: "USD",
-        openingBalance: "0",
-        balance: "0",
-        defaultCurrency: "USD",
-        iconPresentation: { type: "unicode", value: "💵" },
-      },
-    ]);
-    api.addCashFlow.mockResolvedValue({ investment, cashFlow: null });
+  it("opens a new investment directly and saves a named emoji custom type", async () => {
+    api.createInvestment.mockResolvedValue({ id: "studio" });
     host(
       <FinanceInvestments
         botId="bot"
@@ -319,41 +291,33 @@ describe("Consumer Finance savings and investments screens", () => {
     fireEvent.click(
       await screen.findByRole("button", { name: "Add investment" }),
     );
-    const picker = await screen.findByRole("dialog", {
+    const editor = await screen.findByRole("dialog", {
       name: "Add investment",
     });
-    fireEvent.click(
-      within(picker).getByRole("button", { name: "New investment" }),
-    );
-    fireEvent.click(
-      await screen.findByRole("option", {
-        name: "Return from an existing investment",
-      }),
-    );
-    fireEvent.click(
-      within(picker).getByRole("button", { name: "Choose an investment" }),
-    );
-    fireEvent.click(
-      await screen.findByRole("option", { name: /Photo studio/ }),
-    );
-    fireEvent.click(within(picker).getByRole("button", { name: "Continue" }));
-
-    const action = await screen.findByRole("dialog", {
-      name: /Return: Photo studio/,
+    expect(within(editor).queryByText("What do you want to add?")).toBeNull();
+    fireEvent.change(within(editor).getAllByRole("textbox")[0], {
+      target: { value: "My collection" },
     });
-    fireEvent.change(action.querySelector('input[inputmode="decimal"]')!, {
-      target: { value: "25" },
+    fireEvent.click(within(editor).getByRole("button", { name: "Other" }));
+    fireEvent.click(await screen.findByRole("option", { name: "Custom type" }));
+    fireEvent.change(within(editor).getAllByRole("textbox")[1], {
+      target: { value: "Collectibles" },
     });
-    fireEvent.click(within(action).getByRole("button", { name: "Return" }));
+    fireEvent.change(within(editor).getAllByRole("textbox")[2], {
+      target: { value: "🧸" },
+    });
+    fireEvent.click(
+      within(editor).getByRole("button", { name: "Create investment" }),
+    );
 
     await waitFor(() =>
-      expect(api.addCashFlow).toHaveBeenCalledWith(
+      expect(api.createInvestment).toHaveBeenCalledWith(
         "bot",
-        "studio",
         expect.objectContaining({
-          kind: "RETURN",
-          accountId: "cash",
-          amount: "25",
+          name: "My collection",
+          type: "OTHER",
+          customTypeName: "Collectibles",
+          customTypeEmoji: "🧸",
         }),
       ),
     );

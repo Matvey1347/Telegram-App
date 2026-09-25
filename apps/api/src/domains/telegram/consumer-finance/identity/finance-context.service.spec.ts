@@ -144,12 +144,14 @@ describe('FinanceContextService consumer bootstrap persistence', () => {
       financeProfiles: [profile],
     });
 
-    await expect(service.findBotUpdateContext({
-      workspaceId: 'workspace-1',
-      botIntegrationId: 'bot-1',
-      runtimeInstanceId: 'runtime-1',
-      telegramUserId: '12345',
-    })).resolves.toEqual({
+    await expect(
+      service.findBotUpdateContext({
+        workspaceId: 'workspace-1',
+        botIntegrationId: 'bot-1',
+        runtimeInstanceId: 'runtime-1',
+        telegramUserId: '12345',
+      }),
+    ).resolves.toEqual({
       telegramUser: expect.objectContaining({ id: 'user-1' }),
       profile,
     });
@@ -287,7 +289,7 @@ describe('FinanceContextService consumer bootstrap persistence', () => {
     expect(prisma.financeProfile.create).not.toHaveBeenCalled();
   });
 
-  it('initializes defaults exactly once for a first Finance profile', async () => {
+  it('initializes categories but leaves account creation to the user', async () => {
     const { service, prisma } = setup();
     prisma.financeProfile.findUnique.mockResolvedValue(null);
     prisma.financeProfile.create.mockResolvedValue({
@@ -308,7 +310,6 @@ describe('FinanceContextService consumer bootstrap persistence', () => {
             key: item.name.toLowerCase().replace(/\s+/g, '-'),
           })),
         },
-        accounts: { create: { name: 'Cash', type: 'CASH', currency: 'UAH' } },
       },
     });
     expect(prisma.financeProfile.findUnique).not.toHaveBeenCalled();
@@ -346,9 +347,9 @@ describe('FinanceContextService consumer bootstrap persistence', () => {
       }),
     );
 
-    await expect(
-      service.ensureProfile('bot-1', 'user-1', null),
-    ).resolves.toBe(profile);
+    await expect(service.ensureProfile('bot-1', 'user-1', null)).resolves.toBe(
+      profile,
+    );
     expect(prisma.financeProfile.create).toHaveBeenCalledTimes(1);
     expect(prisma.financeProfile.findUnique).toHaveBeenCalledTimes(1);
   });

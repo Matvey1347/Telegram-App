@@ -88,6 +88,8 @@ export function FinanceInvestments({
         name: payload.name,
         description: payload.description,
         type: payload.type,
+        customTypeName: payload.customTypeName,
+        customTypeEmoji: payload.customTypeEmoji,
         startedAt: payload.startedAt,
       };
       return consumerFinanceInvestmentsApi.update(botId, editing!.id, update);

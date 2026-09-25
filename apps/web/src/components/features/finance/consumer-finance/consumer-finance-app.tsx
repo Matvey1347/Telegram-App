@@ -38,6 +38,7 @@ import {
 } from "./consumer-finance-navigation";
 import { useFinanceBotBranding } from "./use-finance-bot-branding";
 import { FinanceAssistantDrawer } from "./finance-assistant-drawer";
+import { FinanceOnboardingTour } from "./finance-onboarding-tour";
 
 const subscribeToStaticBrowserState = () => () => undefined;
 
@@ -130,6 +131,7 @@ export function ConsumerFinanceApp({ botId }: { botId: string }) {
   >(null);
   const [actionRequestId, setActionRequestId] = useState(0);
   const [assistantOpen, setAssistantOpen] = useState(false);
+  const [tourActive, setTourActive] = useState(false);
   const [regularPaymentTarget, setRegularPaymentTarget] =
     useState<ReturnType<typeof readConsumerFinanceRegularPaymentTarget>>(null);
   const [regularPaymentTargetMalformed, setRegularPaymentTargetMalformed] =
@@ -314,6 +316,13 @@ export function ConsumerFinanceApp({ botId }: { botId: string }) {
           </p>
         ) : null}
         {children}
+        {tourActive && profile?.onboardingCompletedAt ? (
+          <FinanceOnboardingTour
+            locale={locale}
+            onNavigate={navigate}
+            onFinish={() => setTourActive(false)}
+          />
+        ) : null}
         {profile?.onboardingCompletedAt ? (
           <FinanceAssistantDrawer
             botId={botId}
@@ -436,6 +445,10 @@ export function ConsumerFinanceApp({ botId }: { botId: string }) {
       investmentId={investmentId}
       onInvestmentOpen={openInvestment}
       onInvestmentBack={closeInvestment}
+      onTourStart={() => {
+        setTourActive(true);
+        navigate("home");
+      }}
     />,
   );
 }

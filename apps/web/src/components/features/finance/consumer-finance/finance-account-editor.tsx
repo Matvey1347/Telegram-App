@@ -131,6 +131,7 @@ export function FinanceAccountEditor({
         : consumerFinanceLedgerApi.updateAccount(botId, account!.id, {
             name: name.trim(),
             type,
+            currency,
             ...(iconSource === undefined ? {} : { emoji: iconSource }),
           }),
     onSuccess: (saved) => {
@@ -214,15 +215,11 @@ export function FinanceAccountEditor({
             </Select>
           </FormField>
           <FormField label={t.currency}>
-            {creating ? (
-              <FinanceCurrencySelect
-                value={currency}
-                onChange={setCurrency}
-                locale={locale}
-              />
-            ) : (
-              <Input value={currency} readOnly aria-readonly="true" />
-            )}
+            <FinanceCurrencySelect
+              value={currency}
+              onChange={setCurrency}
+              locale={locale}
+            />
           </FormField>
           {creating ? (
             <>

@@ -126,6 +126,7 @@ export function ConsumerFinanceScreens({
   investmentId = null,
   onInvestmentOpen = () => undefined,
   onInvestmentBack = () => undefined,
+  onTourStart,
 }: {
   botId: string;
   profile: ConsumerFinanceProfile;
@@ -148,6 +149,7 @@ export function ConsumerFinanceScreens({
   investmentId?: string | null;
   onInvestmentOpen?: (investmentId: string) => void;
   onInvestmentBack?: () => void;
+  onTourStart?: () => void;
 }) {
   const queryClient = useQueryClient();
   const [period, setPeriod] = useState<ConsumerFinanceAnalyticsQuery>({
@@ -176,7 +178,11 @@ export function ConsumerFinanceScreens({
   if (!financeProfile.onboardingCompletedAt)
     return (
       <Suspense fallback={<LoadingState text={t.loadingReferences} />}>
-        <FinanceOnboarding botId={botId} profile={financeProfile} />
+        <FinanceOnboarding
+          botId={botId}
+          profile={financeProfile}
+          onTourStart={onTourStart}
+        />
       </Suspense>
     );
   if (screen === "home" && dashboard.isLoading && !switchingDashboardPeriod)

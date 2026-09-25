@@ -69,12 +69,14 @@ export class FinanceInvestmentService {
   }
 
   async create(profileId: string, input: FinanceInvestmentInputDto) {
+    const customType = this.customType(input);
     const row = await this.prisma.financeInvestment.create({
       data: {
         profileId,
         name: input.name.trim(),
         description: this.note(input.description),
         type: input.type,
+        ...customType,
         currency: input.currency.toUpperCase(),
         startedAt: new Date(input.startedAt),
       },
@@ -89,6 +91,7 @@ export class FinanceInvestmentService {
     input: FinanceInvestmentUpdateDto,
   ) {
     const startedAt = new Date(input.startedAt);
+    const customType = this.customType(input);
     await this.prisma.$transaction(async (tx) => {
       await this.valuationWriter.lock(tx, profileId, id);
       const [existing, firstCashFlow, firstValuation] = await Promise.all([
@@ -132,6 +135,7 @@ export class FinanceInvestmentService {
           name: input.name.trim(),
           description: this.note(input.description),
           type: input.type,
+          ...customType,
           startedAt,
           version: { increment: 1 },
         },
@@ -140,6 +144,23 @@ export class FinanceInvestmentService {
         throw new ConflictException('Investment changed concurrently');
     });
     return this.reads.investment(profileId, id);
+  }
+
+  private customType(input: {
+    type: string;
+    customTypeName?: string | null;
+    customTypeEmoji?: string | null;
+  }) {
+    const name = input.customTypeName?.trim();
+    const emoji = input.customTypeEmoji?.trim();
+    if (input.type !== 'OTHER')
+      return { customTypeName: null, customTypeEmoji: null };
+    if (!name && !emoji) return { customTypeName: null, customTypeEmoji: null };
+    if (!name || !emoji)
+      throw new BadRequestException(
+        'A custom investment type needs both a name and an emoji',
+      );
+    return { customTypeName: name, customTypeEmoji: emoji };
   }
 
   async recordCashFlow(

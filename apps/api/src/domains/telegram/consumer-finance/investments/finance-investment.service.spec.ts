@@ -3,6 +3,58 @@ import { financeRequestFingerprint } from '../assets/finance-asset-idempotency';
 import { FinanceInvestmentService } from './finance-investment.service';
 
 describe('FinanceInvestmentService', () => {
+  it('stores a personal investment type with its name and emoji', async () => {
+    const create = jest.fn().mockResolvedValue({ id: 'investment-1' });
+    const reads = {
+      investment: jest.fn().mockResolvedValue({ id: 'investment-1' }),
+    };
+    const service = new FinanceInvestmentService(
+      { financeInvestment: { create } } as never,
+      {} as never,
+      reads as never,
+      {} as never,
+      {} as never,
+    );
+
+    await service.create('profile-1', {
+      name: 'My collection',
+      type: 'OTHER',
+      customTypeName: 'Collectibles',
+      customTypeEmoji: '🧸',
+      currency: 'USD',
+      startedAt: '2026-09-23T00:00:00.000Z',
+    });
+
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          customTypeName: 'Collectibles',
+          customTypeEmoji: '🧸',
+        }),
+      }),
+    );
+  });
+
+  it('rejects an incomplete personal investment type', async () => {
+    const service = new FinanceInvestmentService(
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+
+    await expect(
+      service.create('profile-1', {
+        name: 'My collection',
+        type: 'OTHER',
+        customTypeName: 'Collectibles',
+        currency: 'USD',
+        startedAt: '2026-09-23T00:00:00.000Z',
+      }),
+    ).rejects.toThrow('custom investment type needs both a name and an emoji');
+  });
+
   it('closes atomically with an explicit zero valuation and preserves history', async () => {
     const now = new Date('2026-09-08T00:00:00.000Z');
     const valuation = {
