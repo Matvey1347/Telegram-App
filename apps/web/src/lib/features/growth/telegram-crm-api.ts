@@ -71,6 +71,7 @@ export type CreateCrmContactPayload = Pick<CrmContact, "displayName"> &
       | "source"
       | "stage"
       | "ownerMemberId"
+      | "avatarIconId"
       | "nextContactAt"
     >
   >;

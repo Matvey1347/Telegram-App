@@ -94,7 +94,7 @@ const contactRow = () => ({
 });
 
 describe('TelegramCrmContactReadService', () => {
-  it('reports cumulative unique-client and buyer growth and divides paid revenue by buyers', async () => {
+  it('derives buyer growth and average paid order value from non-voided payments', async () => {
     const service = new TelegramCrmContactReadService(
       {
         workspace: {
@@ -105,19 +105,38 @@ describe('TelegramCrmContactReadService', () => {
         telegramAdvertiser: {
           findMany: jest.fn().mockResolvedValue([
             {
+              id: 'contact-1',
               createdAt: new Date('2026-01-10T00:00:00.000Z'),
-              firstPurchaseAt: new Date('2026-02-10T00:00:00.000Z'),
-              totalRevenueInPrimaryCurrency: new Prisma.Decimal(500),
             },
             {
+              id: 'contact-2',
               createdAt: new Date('2026-03-10T00:00:00.000Z'),
-              firstPurchaseAt: new Date('2026-03-15T00:00:00.000Z'),
-              totalRevenueInPrimaryCurrency: new Prisma.Decimal(300),
             },
             {
+              id: 'contact-3',
               createdAt: new Date('2026-04-10T00:00:00.000Z'),
-              firstPurchaseAt: null,
-              totalRevenueInPrimaryCurrency: new Prisma.Decimal(0),
+            },
+          ]),
+        },
+        telegramAdSalePayment: {
+          findMany: jest.fn().mockResolvedValue([
+            {
+              amountInPrimaryCurrency: new Prisma.Decimal(200),
+              paidAt: new Date('2026-02-10T00:00:00.000Z'),
+              telegramAdSaleId: 'sale-1',
+              sale: { advertiserId: 'contact-1' },
+            },
+            {
+              amountInPrimaryCurrency: new Prisma.Decimal(300),
+              paidAt: new Date('2026-02-12T00:00:00.000Z'),
+              telegramAdSaleId: 'sale-1',
+              sale: { advertiserId: 'contact-1' },
+            },
+            {
+              amountInPrimaryCurrency: new Prisma.Decimal(300),
+              paidAt: new Date('2026-03-15T00:00:00.000Z'),
+              telegramAdSaleId: 'sale-2',
+              sale: { advertiserId: 'contact-2' },
             },
           ]),
         },
@@ -134,7 +153,7 @@ describe('TelegramCrmContactReadService', () => {
       clients: 3,
       buyers: 2,
       conversionRate: 66.7,
-      averageBuyerValue: '400.00',
+      averagePaidOrderValue: '400.00',
       currency: 'UAH',
     });
     expect(result.points).toHaveLength(12);

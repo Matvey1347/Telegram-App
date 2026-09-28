@@ -21,6 +21,10 @@ export type TelegramAdSaleCheckoutPlacement = {
   managedPostDraft?: {
     title: string;
     text: string;
+    /** Imported Telegram source text retained for the composer preview. */
+    plainText?: string;
+    /** Sanitized imported Telegram HTML retained for the composer preview. */
+    formattedHtml?: string;
     imageUrls: string[];
     buttonRows: Array<
       Array<{

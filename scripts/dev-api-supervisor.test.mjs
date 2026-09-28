@@ -6,6 +6,26 @@ import {
   waitForHealthyBackend,
 } from "./dev-api-supervisor.mjs";
 
+test("allows a cold database-backed Nest bootstrap to finish", async () => {
+  let currentTime = 0;
+  let attempts = 0;
+  const result = await waitForHealthyBackend({
+    timeoutMs: 120_000,
+    intervalMs: 1_000,
+    now: () => currentTime,
+    delayImpl: async (duration) => {
+      currentTime += duration;
+    },
+    fetchImpl: async () => {
+      attempts += 1;
+      if (attempts <= 66) throw new Error("connection refused");
+      return { ok: true };
+    },
+  });
+
+  assert.deepEqual(result, { attempts: 67, elapsedMs: 66_000 });
+});
+
 test("recognizes a successful Nest watch compilation", () => {
   assert.equal(
     isSuccessfulCompilationLine(

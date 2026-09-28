@@ -185,6 +185,29 @@ describe('TelegramAdSalesCheckoutService', () => {
     ]);
   });
 
+  it('accepts System Bot source-text fields in every managed post draft', () => {
+    const raw = checkoutDto();
+    raw.placements[0].managedPostDraft = {
+      title: 'Imported campaign',
+      text: 'Visible campaign text',
+      plainText: 'Visible campaign text',
+      formattedHtml: '<b>Visible</b> campaign text',
+      imageUrls: [],
+      buttonRows: [],
+    };
+    const dto = plainToInstance(CreateTelegramAdSaleCheckoutDto, raw);
+
+    expect(
+      validateSync(dto, { whitelist: true, forbidNonWhitelisted: true }),
+    ).toEqual([]);
+    expect(dto.placements[0].managedPostDraft).toEqual(
+      expect.objectContaining({
+        plainText: 'Visible campaign text',
+        formattedHtml: '<b>Visible</b> campaign text',
+      }),
+    );
+  });
+
   it('reports a failed post operation and retries only unfinished workflow steps', async () => {
     const { service, salesService } = setup();
     const dto = {
@@ -486,7 +509,7 @@ describe('TelegramAdSalesCheckoutService', () => {
           status: 'PUBLISHED',
           telegramPostId: 'post-1',
           publishedAt: postDate,
-          plannedDeleteAt: new Date('2026-08-21T10:16:00.000Z'),
+          plannedDeleteAt: new Date('2026-08-21T09:16:00.000Z'),
         }),
       }),
     );

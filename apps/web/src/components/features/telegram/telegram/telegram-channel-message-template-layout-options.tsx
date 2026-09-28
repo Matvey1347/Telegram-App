@@ -1,6 +1,7 @@
 "use client";
 
 import { Check } from "lucide-react";
+import { Select } from "@/components/ui/primitives";
 import type { TelegramChannelMessageTemplateLayout } from "./telegram-channel-message-template-format";
 
 const options: Array<{
@@ -18,12 +19,6 @@ const options: Array<{
     id: "showTitle",
     label: "Channel title",
     description: "Include the channel name.",
-  },
-  {
-    id: "linkTitle",
-    label: "Link channel title",
-    description: "Open the invite link when the title is clicked.",
-    disabled: (value) => !value.showTitle,
   },
   {
     id: "showViews",
@@ -88,6 +83,22 @@ export function TelegramChannelMessageTemplateLayoutOptions({
           </button>
         );
       })}
+      <label className="rounded-lg border border-neutral-800 bg-neutral-950/50 p-3 sm:col-span-2">
+        <span className="block text-sm font-medium text-white">Channel title link</span>
+        <span className="mt-0.5 block text-xs text-neutral-400">Choose whether a channel title is hidden, plain text, or a link.</span>
+        <Select
+          className="mt-2"
+          value={!value.showTitle ? "HIDDEN" : value.linkTitle ? "LINK" : "PLAIN"}
+          onChange={(event) => {
+            const mode = event.target.value;
+            onChange({ ...value, showTitle: mode !== "HIDDEN", linkTitle: mode === "LINK" });
+          }}
+        >
+          <option value="HIDDEN">Do not show</option>
+          <option value="PLAIN">Show plain title</option>
+          <option value="LINK">Show title as link</option>
+        </Select>
+      </label>
     </div>
   );
 }

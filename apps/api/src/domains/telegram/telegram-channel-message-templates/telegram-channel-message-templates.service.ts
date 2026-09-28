@@ -86,6 +86,8 @@ export class TelegramChannelMessageTemplatesService {
       inviteLinkOverrides: overrides,
       excludedProductNames: row.excludedProductNames,
       priceRounding: row.priceRounding,
+      priceCurrency: row.priceCurrency,
+      targetTotal: row.targetTotal?.toString() ?? null,
       productNameOverrides: stringRecord(row.productNameOverrides),
       bundleOfferEnabled: row.bundleOfferEnabled,
       bundleDiscountPercent: row.bundleDiscountPercent,
@@ -183,6 +185,11 @@ export class TelegramChannelMessageTemplatesService {
       inviteLinkOverrides: Object.fromEntries(links),
       excludedProductNames: uniqueIds(dto.excludedProductNames || []),
       priceRounding: dto.priceRounding || 'NONE',
+      priceCurrency: dto.priceCurrency || 'UAH',
+      targetTotal:
+        dto.targetTotal && Number(dto.targetTotal) > 0
+          ? new Prisma.Decimal(dto.targetTotal).toString()
+          : null,
       productNameOverrides: stringRecord(dto.productNameOverrides),
       bundleOfferEnabled: dto.bundleOfferEnabled ?? false,
       bundleDiscountPercent: dto.bundleDiscountPercent ?? 10,

@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/primitives";
 import { TelegramEntityAvatar } from "@/components/features/telegram/telegram/telegram-entity-avatar";
 import { MemberSelect } from "@/components/features/workspace/member-select";
+import { IconPicker } from "@/components/icons/icon-picker";
 import { CrmChatWindow } from "./crm-chat-window";
 import type { CrmContactChatPreview } from "./crm-contact-chat-preview";
 import { CrmContactDeals } from "./crm-contact-deals";
@@ -115,9 +116,27 @@ function CrmContactDetailActionModal({
     mutationFn: (payload: UpdateCrmContactPayload) =>
       telegramCrmApi.updateContact(contactId, payload),
     onSuccess: (contact) => {
-      patchCrmContactCaches(queryClient, contact);
-      void queryClient.invalidateQueries({
-        queryKey: telegramCrmKeys.contactDetail(contactId),
+      const owner =
+        contact.ownerMemberId === null
+          ? null
+          : members.data?.find((member) => member.id === contact.ownerMemberId);
+      patchCrmContactCaches(queryClient, {
+        ...contact,
+        // PATCH returns the compact contact contract. Hydrate just the member
+        // presentation from the already-loaded workspace member catalog so
+        // this card updates immediately without refetching every client.
+        ...(contact.ownerMemberId !== undefined
+          ? {
+              ownerMember: owner
+                ? {
+                    id: owner.id,
+                    name: owner.user.name,
+                    email: owner.user.email,
+                    avatarPresentation: owner.avatarPresentation ?? null,
+                  }
+                : null,
+            }
+          : {}),
       });
     },
   });
@@ -225,6 +244,7 @@ function ContactActionContent({
   const [ownerMemberId, setOwnerMemberId] = useState(
     () => contact.ownerMemberId ?? "",
   );
+  const [avatarIconId, setAvatarIconId] = useState(contact.avatarIconId ?? "");
   if (action === "deals")
     return canViewSales ? (
       <CrmContactDeals contact={contact} />
@@ -239,6 +259,17 @@ function ContactActionContent({
     <div className="space-y-4">
       {canEdit ? (
         <div className="grid gap-3 sm:grid-cols-2">
+          <div className="flex items-center gap-2">
+            <IconPicker
+              compact
+              allowImages
+              iconId={avatarIconId || null}
+              icon={contact.avatarPresentation}
+              buttonLabel="Contact avatar"
+              onChange={(value) => setAvatarIconId(value || "")}
+            />
+            <span className="text-xs text-neutral-400">Custom contact avatar</span>
+          </div>
           {canEditAll ? (
             <MemberSelect
               allowAssignOthers
@@ -273,6 +304,7 @@ function ContactActionContent({
           onInfoSave({
             ...payload,
             ...(canEditAll ? { ownerMemberId: ownerMemberId || null } : {}),
+            avatarIconId: avatarIconId || null,
           })
         }
         onSyncTelegram={onSyncTelegram}

@@ -196,10 +196,13 @@ describe("CrmContactCard", () => {
 
     expect(screen.getByText("735 UAH")).toBeTruthy();
     expect(screen.getByText("4 -")).toBeTruthy();
-    expect(screen.getByTitle("Card owner: Matthew")).toBeInTheDocument();
+    const owner = screen.getByLabelText("Show contact manager: Matthew");
+    expect(owner).toBeInTheDocument();
     expect(
-      screen.getByTitle("Participant in a sale: Matthew"),
+      screen.getByTitle("Deal closer: Matthew. Closes sales to this client."),
     ).toBeInTheDocument();
+    fireEvent.click(owner);
+    expect(screen.getByText("Contact manager: Matthew")).toBeInTheDocument();
     expect(screen.getByText("Network · Business")).toBeInTheDocument();
     expect(screen.queryByText("Can we book the next placement?")).toBeNull();
     expect(screen.queryByText(/via @sales/u)).toBeNull();
@@ -408,7 +411,7 @@ describe("CrmContactCard", () => {
 
     expect(screen.queryByText("No messages yet")).toBeNull();
     expect(screen.queryByText("0 conversations")).toBeNull();
-    const preview = screen.getByLabelText("Show 2 deal members");
+    const preview = screen.getByLabelText("Show 2 deal closers");
     expect(preview.querySelectorAll("img")).toHaveLength(1);
     expect(preview).toHaveTextContent("🌿");
     expect(preview.querySelector('img[alt="Matthew"]')).toHaveAttribute(

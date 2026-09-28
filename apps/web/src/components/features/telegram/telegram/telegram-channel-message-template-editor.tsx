@@ -147,6 +147,8 @@ export function TelegramChannelMessageTemplateEditor({
     useState<TelegramMessageTemplatePriceRounding>(
       sourceForm.priceRounding ?? "NONE",
     );
+  const [priceCurrency, setPriceCurrency] = useState(sourceForm.priceCurrency ?? "UAH");
+  const [targetTotal, setTargetTotal] = useState(sourceForm.targetTotal ?? "");
   const [productNameOverrides, setProductNameOverrides] = useState(
     sourceForm.productNameOverrides ?? {},
   );
@@ -217,6 +219,8 @@ export function TelegramChannelMessageTemplateEditor({
       inviteLinkOverrides,
       excludedProductNames,
       priceRounding,
+      priceCurrency: priceCurrency || "UAH",
+      targetTotal: targetTotal.trim() || null,
       productNameOverrides,
       bundleOfferEnabled,
       bundleDiscountPercent,
@@ -243,8 +247,10 @@ export function TelegramChannelMessageTemplateEditor({
       networkId,
       overrideInviteLinks,
       priceRounding,
+      priceCurrency,
       productNameOverrides,
       selectedNetwork?.isSystem,
+      targetTotal,
       resolvedChannelIds,
       title,
     ],
@@ -298,6 +304,8 @@ export function TelegramChannelMessageTemplateEditor({
           inviteLinkOverrides,
           excludedProductNames,
           priceRounding,
+          priceCurrency,
+          targetTotal: targetTotal.trim() || null,
           productNameOverrides,
           bundleOfferEnabled,
           bundleDiscountPercent,
@@ -322,9 +330,11 @@ export function TelegramChannelMessageTemplateEditor({
       inviteLinkOverrides,
       overrideInviteLinks,
       priceRounding,
+      priceCurrency,
       productNameOverrides,
       orderedSourceChannels,
       resolvedChannelIds,
+      targetTotal,
     ],
   );
 
@@ -454,6 +464,17 @@ export function TelegramChannelMessageTemplateEditor({
             onBundleBasePriceOverridesChange={setBundleBasePriceOverrides}
             onBundleOfferTemplateChange={setBundleOfferTemplate}
           />
+          {activeSection === "prices" ? (
+            <div className="grid gap-3 rounded-xl border border-neutral-800 bg-neutral-950/50 p-3 sm:grid-cols-2">
+              <FormField label="Display currency">
+                <Input value={priceCurrency} maxLength={8} onChange={(event) => setPriceCurrency(event.target.value)} placeholder="грн" />
+              </FormField>
+              <FormField label="Target total (optional)">
+                <Input inputMode="decimal" value={targetTotal} onChange={(event) => setTargetTotal(event.target.value.replace(/[^\d.,]/g, "").replace(",", "."))} placeholder="1150" />
+                <p className="mt-1 text-xs text-neutral-400">Prices are proportionally adjusted in the preview; actual total: {targetTotal || "channel prices"} {priceCurrency || "UAH"}.</p>
+              </FormField>
+            </div>
+          ) : null}
           {sourceQuery.data?.channels.some(
             (channel) => !channel.inviteLinks.length,
           ) ? (

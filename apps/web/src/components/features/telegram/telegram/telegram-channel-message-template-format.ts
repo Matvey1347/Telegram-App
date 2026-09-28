@@ -7,7 +7,7 @@ import type {
 export const DEFAULT_CHANNEL_MESSAGE_TEMPLATE = `{{#channels}}
 {{emoji}} [{{title}}]({{invite_link}}){{#tgstat}} - [TgStat]({{tgstat_url}}){{/tgstat}}
 {{#products}}
-{{product_name}} — **{{product_price}} {{product_currency}}**
+{{product_name}} - **{{product_price}} {{product_currency}}**
 {{/products}}
 
 {{/channels}}`;
@@ -74,7 +74,7 @@ export function buildTelegramChannelMessageTemplate(
   return `{{#channels}}
 ${heading}${description}
 {{#products}}
-{{product_name}} — **{{product_price}} {{product_currency}}**${productViews}
+{{product_name}} - **{{product_price}} {{product_currency}}**${productViews}
 {{/products}}
 
 {{/channels}}`;
@@ -119,7 +119,12 @@ type TemplateRenderOptions = {
   bundleDiscountPercent?: number;
   bundleBasePriceOverrides?: Record<string, string>;
   bundleOfferTemplate?: string | null;
+  priceCurrency?: string;
+  targetTotal?: string | null;
 };
+
+const stripTitleEmoji = (value: string) =>
+  value.replace(/[\p{Extended_Pictographic}\uFE0F\u200D]/gu, "").replace(/\s{2,}/g, " ").trim();
 
 function replaceToken(source: string, name: string, value: string) {
   return source.split(`{{${name}}}`).join(value);
@@ -133,6 +138,8 @@ function renderProducts(
     priceRounding: TelegramMessageTemplatePriceRounding;
     productNameOverrides: Record<string, string>;
     hideProductName: boolean;
+    priceCurrency?: string;
+    targetPrices?: Map<string, string>;
   },
 ) {
   return source.replace(
@@ -173,12 +180,12 @@ function renderProducts(
           rendered = replaceToken(
             rendered,
             "product_price",
-            roundPrice(product.price || "—", options.priceRounding),
+            roundPrice(options.targetPrices?.get(`${channel.id}\u0000${product.name}`) || product.price || "—", options.priceRounding),
           );
           rendered = replaceToken(
             rendered,
             "product_internal_price",
-            roundPrice(product.internalPrice || "—", options.priceRounding),
+            roundPrice(options.targetPrices?.get(`${channel.id}\u0000${product.name}`) || product.internalPrice || "—", options.priceRounding),
           );
           rendered = replaceToken(
             rendered,
@@ -197,7 +204,7 @@ function renderProducts(
             "product_internal_cpm",
             product.internalCpm || "—",
           );
-          return replaceToken(rendered, "product_currency", product.currency);
+          return replaceToken(rendered, "product_currency", options.priceCurrency || product.currency);
         })
         .join("\n");
       return rows ? `${beforeRows}${rows}${afterRows}` : "";
@@ -222,6 +229,8 @@ function renderChannel(
   priceRounding: TelegramMessageTemplatePriceRounding,
   productNameOverrides: Record<string, string>,
   hideProductName: boolean,
+  priceCurrency?: string,
+  targetPrices?: Map<string, string>,
 ) {
   const viewsPerPost = channel.viewsPerPost ?? null;
   const overrideId = overrideInviteLinks
@@ -240,6 +249,8 @@ function renderChannel(
     priceRounding,
     productNameOverrides,
     hideProductName,
+    priceCurrency,
+    targetPrices,
   });
   const conditional = (name: string, value: string | null) => {
     rendered = rendered.replace(
@@ -252,7 +263,7 @@ function renderChannel(
   conditional("description", channel.description);
   conditional("views", viewsPerPost == null ? null : String(viewsPerPost));
   rendered = replaceToken(rendered, "emoji", channel.emojiSource || "📣");
-  rendered = replaceToken(rendered, "title", channel.title);
+  rendered = replaceToken(rendered, "title", stripTitleEmoji(channel.title));
   rendered = replaceToken(rendered, "description", channel.description || "");
   rendered = replaceToken(rendered, "username", channel.username || "");
   rendered = replaceToken(
@@ -269,6 +280,11 @@ export function renderTelegramChannelMessageTemplate(
   channels: TelegramMessageTemplateChannelSource[],
   options?: TemplateRenderOptions,
 ) {
+  // Keep saved legacy templates consistent with the current editor defaults.
+  template = template.replace(/\{\{product_name\}\}\s+—\s+\*\*/g, "{{product_name}} - **");
+  if (options?.priceCurrency) {
+    template = template.replace(/\{\{product_price\}\}\s+\{\{product_currency\}\}/g, "{{product_price}}{{product_currency}}");
+  }
   const priority = new Map(
     (options?.channelOrder || []).map((id, index) => [id, index]),
   );
@@ -309,12 +325,30 @@ export function renderTelegramChannelMessageTemplate(
       .map((items) => items[0].id),
   );
   const priceMode = readTelegramChannelMessageTemplatePriceMode(template);
-  const overrides = options?.inviteLinkOverrides || {};
+  const targetTotal = Number(options?.targetTotal);
   const excludedProductNames = new Set(
     (options?.excludedProductNames || []).map((name) =>
       name.trim().toLocaleLowerCase(),
     ),
   );
+  const priceRows = displayedChannels.flatMap((channel) =>
+    channel.products
+      .filter((product) => !excludedProductNames.has(product.name.toLocaleLowerCase()))
+      .map((product) => ({ channel, product, amount: Number(priceMode === "INTERNAL_CPM" ? product.internalPrice : product.price) })),
+  );
+  const sourceTotal = priceRows.reduce((total, row) => total + (Number.isFinite(row.amount) ? row.amount : 0), 0);
+  const targetPrices = new Map<string, string>();
+  if (Number.isFinite(targetTotal) && targetTotal > 0 && sourceTotal > 0) {
+    let remaining = targetTotal;
+    priceRows.forEach((row, index) => {
+      const value = index === priceRows.length - 1
+        ? remaining
+        : Math.round((targetTotal * row.amount / sourceTotal) * 100) / 100;
+      remaining = Math.round((remaining - value) * 100) / 100;
+      targetPrices.set(`${row.channel.id}\u0000${row.product.name}`, String(value));
+    });
+  }
+  const overrides = options?.inviteLinkOverrides || {};
   const priceRounding = options?.priceRounding || "NONE";
   const productNameOverrides = options?.productNameOverrides || {};
   const visibleProductNames = new Set(
@@ -354,6 +388,8 @@ export function renderTelegramChannelMessageTemplate(
               priceRounding,
               productNameOverrides,
               hideProductName,
+              options?.priceCurrency,
+              targetPrices,
             );
           if (index === displayedChannels.length - 1) return rendered.trimEnd();
           return hideProductName

@@ -23,6 +23,8 @@ export const emptyTelegramMessageTemplatePayload =
     inviteLinkOverrides: {},
     excludedProductNames: [],
     priceRounding: "NONE",
+    priceCurrency: "UAH",
+    targetTotal: null,
     productNameOverrides: {},
     bundleOfferEnabled: false,
     bundleDiscountPercent: 10,

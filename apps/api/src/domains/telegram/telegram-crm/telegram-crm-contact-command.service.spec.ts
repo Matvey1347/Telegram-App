@@ -172,10 +172,12 @@ describe('TelegramCrmContactCommandService', () => {
       contactVisibilityChanged: jest.fn(),
       invalidateVisibility: jest.fn(),
     };
+    const responseCache = { clearWorkspacePath: jest.fn() };
     const service = new TelegramCrmContactCommandService(
       prisma as never,
       authorization as never,
       notifications as never,
+      responseCache as never,
     );
 
     await expect(
@@ -269,10 +271,12 @@ describe('TelegramCrmContactCommandService', () => {
       contactVisibilityChanged: jest.fn().mockResolvedValue(['member-1']),
       invalidateVisibility: jest.fn(),
     };
+    const responseCache = { clearWorkspacePath: jest.fn() };
     const service = new TelegramCrmContactCommandService(
       prisma as never,
       authorization as never,
       notifications as never,
+      responseCache as never,
     );
 
     await service.update('user-1', 'contact-1', {
@@ -287,6 +291,17 @@ describe('TelegramCrmContactCommandService', () => {
     expect(notifications.invalidateVisibility).toHaveBeenCalledWith(
       'workspace-1',
       ['member-1'],
+    );
+    expect(tx.telegramAdvertiser.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          ownerMember: { connect: { id: 'member-2' }, disconnect: false },
+        }),
+      }),
+    );
+    expect(responseCache.clearWorkspacePath).toHaveBeenCalledWith(
+      'workspace-1',
+      '/telegram-crm/contacts',
     );
   });
 

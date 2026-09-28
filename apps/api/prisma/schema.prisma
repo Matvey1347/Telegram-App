@@ -2373,6 +2373,7 @@ model TelegramAdvertiser {
   source                             String?
   stage                              TelegramCrmContactStage        @default(NEW)
   ownerMemberId                      String?
+  avatarIconId                       String?
   createdByUserId                    String?
   lastContactAt                      DateTime?
   lastInboundAt                      DateTime?
@@ -2396,6 +2397,7 @@ model TelegramAdvertiser {
 
   workspace            Workspace                               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   ownerMember          WorkspaceMember?                        @relation("TelegramAdvertiserOwner", fields: [ownerMemberId], references: [id], onDelete: SetNull)
+  avatarIcon           Icon?                                   @relation("TelegramAdvertiserAvatarIcon", fields: [avatarIconId], references: [id], onDelete: SetNull)
   createdByUser        User?                                   @relation("TelegramAdvertiserCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
   contacts             TelegramAdvertiserContact[]
   sales                TelegramAdSale[]
@@ -2410,6 +2412,7 @@ model TelegramAdvertiser {
   @@unique([id, workspaceId])
   @@index([workspaceId, stage, updatedAt, id])
   @@index([workspaceId, ownerMemberId])
+  @@index([avatarIconId])
   @@index([workspaceId, lastPurchaseAt])
   @@index([workspaceId, nextContactAt])
 }
@@ -2849,6 +2852,8 @@ model TelegramChannelMessageTemplate {
   inviteLinkOverrides      Json                                 @default("{}")
   excludedProductNames     String[]                             @default([])
   priceRounding            TelegramMessageTemplatePriceRounding @default(NONE)
+  priceCurrency            String                               @default("UAH") @db.VarChar(3)
+  targetTotal              Decimal?
   productNameOverrides     Json                                 @default("{}")
   bundleOfferEnabled       Boolean                              @default(false)
   bundleDiscountPercent    Int                                  @default(10)
@@ -5639,6 +5644,7 @@ model Icon {
   telegramChannelNetworks          TelegramChannelNetwork[]
   telegramChannelPresentationIcons TelegramChannel[]                 @relation("TelegramChannelPresentationIcon")
   telegramChannelMessageTemplates  TelegramChannelMessageTemplate[]
+  telegramAdvertiserAvatars        TelegramAdvertiser[]             @relation("TelegramAdvertiserAvatarIcon")
   telegramPublicationScheduleSlots TelegramPublicationScheduleSlot[] @relation("TelegramPublicationScheduleSlotIcon")
   telegramPublicationSchedules     TelegramPublicationSchedule[]     @relation("TelegramPublicationScheduleIcon")
   telegramContentHypotheses        TelegramContentHypothesis[]       @relation("TelegramContentHypothesisIcon")

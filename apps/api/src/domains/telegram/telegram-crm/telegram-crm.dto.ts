@@ -111,6 +111,7 @@ export class CreateCrmContactDto {
 }
 
 export class UpdateCrmContactDto {
+  @IsOptional() @IsString() avatarIconId?: string | null;
   @IsOptional() @IsString() @MaxLength(160) displayName?: string;
   @IsOptional()
   @Transform(trimNullable)

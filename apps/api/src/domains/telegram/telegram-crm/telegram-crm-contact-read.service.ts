@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import {
   Prisma,
+  TelegramAdSaleStatus,
   TelegramAdSalePaymentStatus,
   TelegramCrmContactStage,
   TelegramCrmConversationState,
@@ -192,12 +193,47 @@ export class TelegramCrmContactReadService {
           ...ownedWhere,
         },
         select: {
+          id: true,
           createdAt: true,
-          firstPurchaseAt: true,
-          totalRevenueInPrimaryCurrency: true,
         },
       }),
     ]);
+    const contactIds = contacts.map((contact) => contact.id);
+    // Payments are the source of truth here. Advertiser revenue aggregates are
+    // maintained for CRM lists, but can lag behind payment corrections.
+    const payments = contactIds.length
+      ? await this.prisma.telegramAdSalePayment.findMany({
+          where: {
+            workspaceId: access.workspaceId,
+            status: { not: TelegramAdSalePaymentStatus.VOIDED },
+            sale: {
+              status: { not: TelegramAdSaleStatus.CANCELLED },
+              advertiserId: { in: contactIds },
+            },
+          },
+          select: {
+            amountInPrimaryCurrency: true,
+            paidAt: true,
+            telegramAdSaleId: true,
+            sale: { select: { advertiserId: true } },
+          },
+        })
+      : [];
+    const firstPaymentByContact = new Map<string, Date>();
+    const paidSaleIds = new Set<string>();
+    const revenue = payments.reduce((sum, payment) => {
+      const contactId = payment.sale.advertiserId;
+      if (contactId) {
+        const firstPayment = firstPaymentByContact.get(contactId);
+        if (!firstPayment || payment.paidAt < firstPayment) {
+          firstPaymentByContact.set(contactId, payment.paidAt);
+        }
+      }
+      if (new Prisma.Decimal(payment.amountInPrimaryCurrency).greaterThan(0)) {
+        paidSaleIds.add(payment.telegramAdSaleId);
+      }
+      return sum.add(payment.amountInPrimaryCurrency);
+    }, new Prisma.Decimal(0));
     const now = new Date();
     const start = new Date(now.getFullYear(), now.getMonth() - 11, 1);
     const months = Array.from({ length: 12 }, (_, offset) =>
@@ -208,8 +244,8 @@ export class TelegramCrmContactReadService {
     const points = months.map((month) => {
       const end = new Date(month.getFullYear(), month.getMonth() + 1, 1);
       const clients = contacts.filter((contact) => contact.createdAt < end).length;
-      const buyers = contacts.filter(
-        (contact) => contact.firstPurchaseAt && contact.firstPurchaseAt < end,
+      const buyers = [...firstPaymentByContact.values()].filter(
+        (firstPayment) => firstPayment < end,
       ).length;
       return {
         date: monthKey(month),
@@ -218,19 +254,15 @@ export class TelegramCrmContactReadService {
         conversionRate: clients ? Math.round((buyers / clients) * 1000) / 10 : 0,
       };
     });
-    const buyers = contacts.filter((contact) => Boolean(contact.firstPurchaseAt));
-    const revenue = contacts.reduce(
-      (sum, contact) => sum.add(contact.totalRevenueInPrimaryCurrency),
-      new Prisma.Decimal(0),
-    );
+    const buyers = firstPaymentByContact.size;
     return {
       clients: contacts.length,
-      buyers: buyers.length,
+      buyers,
       conversionRate: contacts.length
-        ? Math.round((buyers.length / contacts.length) * 1000) / 10
+        ? Math.round((buyers / contacts.length) * 1000) / 10
         : 0,
-      averageBuyerValue: buyers.length
-        ? revenue.div(buyers.length).toFixed(2)
+      averagePaidOrderValue: paidSaleIds.size
+        ? revenue.div(paidSaleIds.size).toFixed(2)
         : '0.00',
       currency: workspace.primaryCurrency,
       points,

@@ -1539,7 +1539,10 @@ describe('TelegramAdSalesService', () => {
     expect(telegramChannelsService.createManagedPost).toHaveBeenCalledWith(
       'user-1',
       'channel-1',
-      expect.objectContaining({ title: 'Advertising post' }),
+      expect.objectContaining({
+        title: 'Advertising post',
+        deleteAfterHours: 24,
+      }),
       { groupId: 'advertise-group-1' },
     );
   });

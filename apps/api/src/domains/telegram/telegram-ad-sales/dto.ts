@@ -688,6 +688,11 @@ export class VoidTelegramAdSalePaymentDto {
 export class CreatePlacementManagedPostDto {
   @IsOptional() @IsString() title?: string;
   @IsOptional() @IsString() text?: string | null;
+  // System Bot imports retain the original rendered content beside `text` for
+  // preview fidelity. Managed posts publish `text`, but checkout must accept
+  // these optional import fields rather than rejecting the entire sale.
+  @IsOptional() @IsString() plainText?: string | null;
+  @IsOptional() @IsString() formattedHtml?: string | null;
   @IsOptional() @IsArray() @IsString({ each: true }) imageUrls?: string[];
   @IsOptional() @Allow() mediaItems?: unknown[];
   @IsOptional() @IsString() assignedMemberId?: string | null;

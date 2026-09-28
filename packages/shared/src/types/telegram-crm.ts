@@ -184,6 +184,8 @@ export type CrmContact = {
   source: string | null;
   stage: CrmContactStage;
   ownerMemberId: string | null;
+  avatarIconId?: string | null;
+  avatarPresentation?: ResolvedEmoji | null;
   lastContactAt: string | null;
   lastInboundAt: string | null;
   lastOutboundAt: string | null;
@@ -267,7 +269,7 @@ export type CrmAnalyticsSummary = {
   clients: number;
   buyers: number;
   conversionRate: number;
-  averageBuyerValue: string;
+  averagePaidOrderValue: string;
   currency: string;
   points: CrmAnalyticsPoint[];
 };

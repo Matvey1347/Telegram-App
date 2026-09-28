@@ -45,6 +45,8 @@ export class TelegramChannelMessageTemplatePayloadDto {
   @IsOptional()
   @IsIn(['NONE', 'NEAREST_5', 'NEAREST_10'])
   priceRounding?: 'NONE' | 'NEAREST_5' | 'NEAREST_10';
+  @IsOptional() @IsString() @MaxLength(3) priceCurrency?: string;
+  @IsOptional() @IsString() @MaxLength(24) targetTotal?: string | null;
   @IsOptional() @IsObject() productNameOverrides?: Record<string, string>;
   @IsOptional() @IsBoolean() bundleOfferEnabled?: boolean;
   @IsOptional()

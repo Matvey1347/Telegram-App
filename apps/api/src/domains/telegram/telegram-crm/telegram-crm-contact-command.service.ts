@@ -258,6 +258,13 @@ export class TelegramCrmContactCommandService {
 
   async update(userId: string, contactId: string, dto: UpdateCrmContactDto) {
     const existing = await this.requireWritableContact(userId, contactId);
+    if (dto.avatarIconId) {
+      const icon = await this.prisma.icon.findFirst({
+        where: { id: dto.avatarIconId, OR: [{ workspaceId: existing.workspaceId }, { workspaceId: null }] },
+        select: { id: true },
+      });
+      if (!icon) throw new NotFoundException('Avatar icon not found');
+    }
     if (dto.ownerMemberId !== undefined) {
       await this.requireOwnerInWorkspace(
         existing.workspaceId,
@@ -308,6 +315,9 @@ export class TelegramCrmContactCommandService {
               disconnect: dto.ownerMemberId === null,
             },
           }),
+      ...(dto.avatarIconId === undefined
+        ? {}
+        : { avatarIcon: dto.avatarIconId ? { connect: { id: dto.avatarIconId } } : { disconnect: true } }),
       ...(dto.nextContactAt === undefined
         ? {}
         : {
@@ -345,6 +355,13 @@ export class TelegramCrmContactCommandService {
         invalidatedMemberIds,
       );
     }
+    // Contact list/detail GETs are response-cached. Without clearing them an
+    // ownership update appears to save successfully but the next card/detail
+    // read can still return the old unassigned owner.
+    this.responseCache?.clearWorkspacePath(
+      existing.workspaceId,
+      '/telegram-crm/contacts',
+    );
     return mapCrmContact(row);
   }
 

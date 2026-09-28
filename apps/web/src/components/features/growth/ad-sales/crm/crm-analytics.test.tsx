@@ -8,7 +8,7 @@ const analytics = vi.hoisted(() => ({
     clients: 136,
     buyers: 8,
     conversionRate: 5.9,
-    averageBuyerValue: "449.45",
+    averagePaidOrderValue: "449.45",
     currency: "UAH",
     points: [],
   },
@@ -31,14 +31,14 @@ vi.mock("recharts", () => ({
 }));
 
 describe("CrmAnalytics", () => {
-  it("places buyer conversion before buyers and shows paid revenue per buyer", () => {
+  it("places buyer conversion before buyers and shows paid revenue per order", () => {
     render(<CrmAnalytics />);
 
     const labels = [
       "Unique clients",
       "Buyer conversion",
       "Buyers",
-      "Average paid per buyer",
+      "Average paid per order",
     ].map((label) => screen.getByText(label));
 
     for (let index = 1; index < labels.length; index += 1) {
@@ -48,7 +48,7 @@ describe("CrmAnalytics", () => {
     }
     expect(screen.getByText("449.45 UAH")).toBeVisible();
     expect(
-      screen.getByText("Total recorded payments divided by buyers"),
+      screen.getByText("Recorded payments divided by paid orders"),
     ).toBeVisible();
   });
 });

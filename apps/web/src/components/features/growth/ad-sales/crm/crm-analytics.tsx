@@ -26,7 +26,7 @@ export function CrmAnalytics() {
       <Metric label="Unique clients" value={data.clients} hint="Active CRM client cards" />
       <Metric label="Buyer conversion" value={`${data.conversionRate}%`} hint="Buyers of all unique clients" />
       <Metric label="Buyers" value={data.buyers} hint="Clients with a first purchase" />
-      <Metric label="Average paid per buyer" value={`${data.averageBuyerValue} ${data.currency}`} hint="Total recorded payments divided by buyers" />
+      <Metric label="Average paid per order" value={`${data.averagePaidOrderValue} ${data.currency}`} hint="Recorded payments divided by paid orders" />
     </div>
     <Card className="border-neutral-800 bg-[#171717] p-5">
       <div className="mb-4"><h2 className="font-semibold text-white">Client growth</h2><p className="text-sm text-neutral-500">Cumulative unique clients and buyers over the last 12 months.</p></div>

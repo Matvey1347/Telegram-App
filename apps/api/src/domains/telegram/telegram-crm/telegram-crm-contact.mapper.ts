@@ -4,6 +4,7 @@ import {
   TelegramAdSaleStatus,
 } from '@prisma/client';
 import type { CrmContact } from '@telegram-system/shared';
+import { iconToResolvedEmoji } from '../../../common/icons/resolved-emoji';
 
 export const ACTIVE_DEAL_STATUSES = [
   TelegramAdSaleStatus.RESERVED,
@@ -41,6 +42,8 @@ export const crmContactSelect = {
   source: true,
   stage: true,
   ownerMemberId: true,
+  avatarIconId: true,
+  avatarIcon: { select: { id: true, type: true, name: true, emoji: true, imageUrl: true } },
   lastContactAt: true,
   lastInboundAt: true,
   lastOutboundAt: true,
@@ -75,6 +78,8 @@ export function mapCrmContact(row: ContactRow): CrmContact {
     source: row.source,
     stage: row.stage,
     ownerMemberId: row.ownerMemberId,
+    avatarIconId: row.avatarIconId,
+    avatarPresentation: iconToResolvedEmoji(row.avatarIcon),
     lastContactAt: row.lastContactAt?.toISOString() ?? null,
     lastInboundAt: row.lastInboundAt?.toISOString() ?? null,
     lastOutboundAt: row.lastOutboundAt?.toISOString() ?? null,

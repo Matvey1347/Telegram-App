@@ -89,7 +89,9 @@ export function CrmContactCard({
           </div>
         ) : (
           <div className="flex min-w-0 flex-1 items-center gap-2.5">
-            <TelegramEntityAvatar
+            {contact.avatarPresentation ? (
+              <IconAvatar icon={contact.avatarPresentation} label={contact.displayName} size="sm" />
+            ) : <TelegramEntityAvatar
               imageUrl={
                 contact.peer?.photoUrl ??
                 (telegramUsername
@@ -99,7 +101,7 @@ export function CrmContactCard({
               alt={contact.displayName}
               kind="person"
               size="sm"
-            />
+            />}
             <div className="min-w-0 flex-1">
               <div className="flex min-w-0 items-center gap-1.5">
                 <h3
@@ -213,7 +215,7 @@ function PurchasedChannels({ contact }: { contact: CrmContactListItem }) {
         label={`View ${channels.length} purchased channels`}
         trigger={
           <span className="flex -space-x-1 rounded-full">
-          {channels.slice(0, 4).map((channel) => (
+          {channels.slice(0, 3).map((channel) => (
             <TelegramEntityAvatar
               key={channel.id}
               imageUrl={channel.photoUrl}
@@ -222,9 +224,9 @@ function PurchasedChannels({ contact }: { contact: CrmContactListItem }) {
               size="xs"
             />
           ))}
-          {channels.length > 4 ? (
+          {channels.length > 3 ? (
             <span className="relative flex h-5 min-w-5 items-center justify-center rounded-full border border-neutral-600 bg-neutral-800 px-1 text-[9px] text-white">
-              +{channels.length - 4}
+              +{channels.length - 3}
             </span>
           ) : null}
           </span>
@@ -259,9 +261,10 @@ function DealSummary({
   hasDeals: boolean;
 }) {
   if (!hasDeals) return null;
+  const purchasedChannels = contact.salesSummary.purchasedChannels ?? [];
   return (
     <>
-      <div className="mt-2 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 text-sm">
+      <div className="mt-2 flex items-start justify-between gap-3 text-sm">
         <Metric
           label="💰"
           value={
@@ -273,20 +276,17 @@ function DealSummary({
             </span>
           }
         />
-        <div className="min-w-0">
-          <p className="text-xs uppercase text-neutral-500">📣</p>
-          <div className="mt-1 flex justify-end">
-            <PurchasedChannels contact={contact} />
-          </div>
-        </div>
+        <p className="shrink-0 text-xs uppercase text-neutral-500">📣</p>
       </div>
-      <div className="mt-2 flex min-h-5 items-center justify-between gap-3 text-[11px] text-neutral-400">
-        <OwnerPreview contact={contact} />
-        {hasDeals ? (
-          contact.salesSummary.dealMembers.length ? (
-            <DealMembersPreview members={contact.salesSummary.dealMembers} />
-          ) : null
+      <div className="mt-2 flex min-h-5 items-center gap-2 text-[11px] text-neutral-400">
+        {contact.salesSummary.dealMembers.length ? (
+          <DealMembersPreview members={contact.salesSummary.dealMembers} />
         ) : null}
+        {contact.salesSummary.dealMembers.length &&
+        purchasedChannels.length ? (
+          <span aria-hidden="true" className="text-neutral-600">—</span>
+        ) : null}
+        <PurchasedChannels contact={contact} />
       </div>
     </>
   );
@@ -341,24 +341,42 @@ function ContactActionsMenu({
 function OwnerPreview({ contact }: { contact: CrmContactListItem }) {
   if (!contact.ownerMember) return null;
   return (
-    <span
-      className="flex shrink-0"
-      title={`Card owner: ${contact.ownerMember.name}`}
+    <CrmCardPreviewPopover
+      label={`Show contact manager: ${contact.ownerMember.name}`}
+      trigger={
+        <span
+          className="flex shrink-0"
+          title={`Contact manager: ${contact.ownerMember.name}. Maintains this client relationship.`}
+        >
+          <IconAvatar
+            icon={contact.ownerMember.avatarPresentation}
+            label={contact.ownerMember.name}
+            size="xs"
+          />
+        </span>
+      }
     >
-      <IconAvatar
-        icon={contact.ownerMember.avatarPresentation}
-        label={contact.ownerMember.name}
-        size="xs"
-      />
-    </span>
+      <div className="absolute left-0 top-full z-30 mt-2 flex min-w-56 items-center gap-2 rounded-lg border border-neutral-700 bg-neutral-950 p-2 shadow-xl">
+        <IconAvatar
+          icon={contact.ownerMember.avatarPresentation}
+          label={contact.ownerMember.name}
+          size="xs"
+        />
+        <div>
+          <p className="whitespace-nowrap text-xs text-neutral-200">
+            Contact manager: {contact.ownerMember.name}
+          </p>
+          <p className="text-[11px] text-neutral-500">Maintains this client relationship</p>
+        </div>
+      </div>
+    </CrmCardPreviewPopover>
   );
 }
 
 function ContactChannelsStatus({ contact }: { contact: CrmContactListItem }) {
   const channels = contact.contactChannels;
-  if (channels.length) {
-    return (
-      <span className="mt-1 flex items-center gap-1.5" aria-label="Contact channels">
+  const contactChannels = channels.length ? (
+    <>
         {channels.slice(0, 4).map((channel) => {
           const name = channelName(channel);
           return (
@@ -374,14 +392,22 @@ function ContactChannelsStatus({ contact }: { contact: CrmContactListItem }) {
             </a>
           );
         })}
-      </span>
-    );
-  }
-  return contact.replySummary.hasTelegramConversation ? (
-    <span className="mt-1 flex items-center" title="Telegram contact">
+    </>
+  ) : contact.replySummary.hasTelegramConversation ? (
+    <span title="Telegram contact">
       <CrmContactChannelMark channel="Telegram" className="h-3.5 w-3.5" />
     </span>
   ) : null;
+  if (!contact.ownerMember && !contactChannels) return null;
+  return (
+    <div className="mt-1 flex items-center gap-1.5" aria-label="Contact manager and channels">
+      <OwnerPreview contact={contact} />
+      {contact.ownerMember && contactChannels ? (
+        <span aria-hidden="true" className="text-neutral-600">—</span>
+      ) : null}
+      {contactChannels}
+    </div>
+  );
 }
 
 function channelName(channel: CrmContactListItem["contactChannels"][number]): CrmContactChannelName {

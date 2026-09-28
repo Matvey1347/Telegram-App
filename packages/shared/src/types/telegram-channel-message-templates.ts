@@ -25,6 +25,8 @@ export type TelegramChannelMessageTemplatePayload = {
   inviteLinkOverrides: Record<string, string>;
   excludedProductNames?: string[];
   priceRounding?: TelegramMessageTemplatePriceRounding;
+  priceCurrency?: string;
+  targetTotal?: string | null;
   productNameOverrides?: Record<string, string>;
   bundleOfferEnabled?: boolean;
   bundleDiscountPercent?: number;

@@ -85,6 +85,9 @@ describe("SaleDetailsModal", () => {
       screen.getByText("Choose the placement you want to edit."),
     ).toBeTruthy();
     expect(
+      screen.getByText("Format 2/48 · Auto-delete after 48h"),
+    ).toBeTruthy();
+    expect(
       screen.getByRole("button", { name: "Edit transaction" }),
     ).toBeTruthy();
     expect(screen.queryByLabelText("Price (UAH)")).toBeNull();
@@ -485,6 +488,10 @@ const sale = {
       id: "placement-1",
       telegramChannelId: "channel-1",
       telegramAdProductId: "format-1",
+      topDurationMinutesSnapshot: 120,
+      feedDurationHoursSnapshot: 48,
+      deleteAfterHoursSnapshot: 48,
+      isPermanentSnapshot: false,
       scheduledAt: "2026-08-25T16:00:00.000Z",
       timezone: "Europe/Warsaw",
       agreedPrice: "102",

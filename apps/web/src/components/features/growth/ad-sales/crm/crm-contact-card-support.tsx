@@ -96,14 +96,14 @@ export function DealMembersPreview({
 }) {
   return (
     <CrmCardPreviewPopover
-      label={`Show ${members.length} deal ${members.length === 1 ? "member" : "members"}`}
+      label={`Show ${members.length} deal ${members.length === 1 ? "closer" : "closers"}`}
       trigger={
         <span className="flex -space-x-2">
           {members.map((member) => (
             <span
               key={member.id}
               className="rounded-full ring-2 ring-neutral-950"
-              title={`Participant in a sale: ${member.name}`}
+              title={`Deal closer: ${member.name}. Closes sales to this client.`}
             >
               <IconAvatar
                 icon={member.avatarPresentation}
@@ -124,7 +124,7 @@ export function DealMembersPreview({
               size="xs"
             />
             <span className="whitespace-nowrap text-xs text-neutral-200">
-              {member.name}
+              {member.name} <span className="text-neutral-500">· Deal closer</span>
             </span>
           </div>
         ))}

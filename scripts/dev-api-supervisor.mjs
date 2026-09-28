@@ -9,7 +9,10 @@ const nestBinary = fileURLToPath(
 );
 const apiPort = Number(process.env.PORT || 4000);
 const healthUrl = `http://127.0.0.1:${apiPort}/api/health`;
-const readinessTimeoutMs = 30_000;
+// Nest initializes database-backed modules before opening its HTTP socket.
+// On a cold Neon connection that can exceed the old 30-second restart window,
+// causing the watcher to kill a healthy process before it can listen.
+const readinessTimeoutMs = 120_000;
 const readinessIntervalMs = 500;
 const maximumAutomaticRecoveries = 3;
 

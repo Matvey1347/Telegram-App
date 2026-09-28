@@ -13,6 +13,8 @@ import type { PublishedPostOption } from "../ad-sale-types";
 export type PlacementManagedPostDraft = {
   title: string;
   text: string;
+  plainText?: string;
+  formattedHtml?: string;
   imageUrls: string[];
   mediaItems?: TelegramPostMediaItem[];
   buttonRows: TelegramPostButtonRows;

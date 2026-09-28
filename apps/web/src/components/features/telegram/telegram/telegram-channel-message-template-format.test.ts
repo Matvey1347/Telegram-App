@@ -340,7 +340,7 @@ describe("renderTelegramChannelMessageTemplate", () => {
       },
     );
 
-    expect(rendered).toContain("Без видалення — **165 UAH**");
+    expect(rendered).toContain("Без видалення - **165 UAH**");
     expect(rendered).toContain(
       "🔥 При розміщенні одразу у всіх 2 каналах — знижка 10%:",
     );
@@ -364,7 +364,7 @@ describe("renderTelegramChannelMessageTemplate", () => {
         productNameOverrides: { "No auto-delete": "Без видалення" },
       },
     );
-    expect(internalRendered).toContain("1/24 — **100 UAH**");
+    expect(internalRendered).toContain("1/24 - **100 UAH**");
     expect(internalRendered).toContain(
       "• 1/24 у всіх каналах: ~~200 UAH~~ → **180 UAH**",
     );

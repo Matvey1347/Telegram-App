@@ -4420,6 +4420,11 @@ export class TelegramAdSalesService {
     );
     if (!placement)
       throw new NotFoundException('Telegram ad sale placement not found');
+    const managedPostDeleteAfterHours = placement.isPermanentSnapshot
+      ? null
+      : ([24, 48, 72] as const).find(
+          (hours) => hours === placement.deleteAfterHoursSnapshot,
+        ) ?? null;
     const advertiseGroup =
       await this.telegramPostGroupsService.ensureAdvertiseSystemGroup(
         workspaceId,
@@ -4440,6 +4445,9 @@ export class TelegramAdSalesService {
           assignedMemberId:
             dto.assignedMemberId ?? sale.assignedMemberId ?? undefined,
           icon: dto.icon ?? null,
+          // Keep the managed post's removal policy in sync with the immutable
+          // format snapshot stored on this placement.
+          deleteAfterHours: managedPostDeleteAfterHours,
           buttonRows: dto.buttonRows ?? [],
         },
         { groupId: advertiseGroup.id },

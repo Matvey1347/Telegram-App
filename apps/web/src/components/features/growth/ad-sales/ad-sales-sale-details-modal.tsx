@@ -29,7 +29,10 @@ import {
   zonedDateTimeToUtc,
 } from "@/lib/features/growth/telegram-ad-sales";
 import { formatDateTime } from "@/lib/date-format";
-import { placementRunWindow } from "./ad-placement-lifecycle";
+import {
+  placementFormatLabel,
+  placementRunWindow,
+} from "./ad-placement-lifecycle";
 import { AdSalePostMetrics, PostMetrics } from "./ad-sale-post-metrics";
 import { AdSaleSharedPostEditor } from "./ad-sale-shared-post-editor";
 import type { RegisterPaymentPayload } from "./register-payment-form";
@@ -598,6 +601,16 @@ function DealOverview(props: {
                       `Scheduled ${formatDateTime(p.scheduledAt)}`}
                   </p>
                   <PlacementDeletionCountdown placement={p} now={now} />
+                  {placementFormatLabel(p) ? (
+                    <p className="mt-1 text-xs text-neutral-400">
+                      Format {placementFormatLabel(p)}
+                      {p.isPermanentSnapshot
+                        ? " · Permanent"
+                        : p.deleteAfterHoursSnapshot != null
+                          ? ` · Auto-delete after ${p.deleteAfterHoursSnapshot}h`
+                          : " · No auto-delete"}
+                    </p>
+                  ) : null}
                 </div>
                 <IconButton
                   type="button"
