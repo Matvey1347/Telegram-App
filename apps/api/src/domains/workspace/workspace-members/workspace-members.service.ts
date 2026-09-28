@@ -5,13 +5,18 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, WorkspaceRole } from '@prisma/client';
+import {
+  Prisma,
+  TelegramInviteLinkCreatorMatchSource,
+  WorkspaceRole,
+} from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { randomBytes } from 'crypto';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { WorkspaceService } from '../../../common/workspace.service';
-import { iconToResolvedEmoji } from '../../../common/icons/resolved-emoji';
 import { CreateWorkspaceMemberDto, UpdateWorkspaceMemberDto } from './dto';
+import { toWorkspaceMemberResponse } from './workspace-member-response';
+import { findWorkspaceMemberInvestmentTransactions } from './workspace-member-investments-read';
 import {
   attributeInviteLinkCreator,
   buildInviteLinkAttributionMaps,
@@ -77,42 +82,6 @@ export class WorkspaceMembersService {
     ]);
   }
 
-  private toResponse<T extends { userId: string }>(
-    row: T,
-    currentUserId: string,
-  ) {
-    const avatarIcon = (
-      row as { avatarIcon?: Parameters<typeof iconToResolvedEmoji>[0] }
-    ).avatarIcon;
-    const roleDefinition = (
-      row as {
-        roleDefinition?: {
-          id: string;
-          name: string;
-          systemKey: string | null;
-          icon: Parameters<typeof iconToResolvedEmoji>[0];
-        } | null;
-      }
-    ).roleDefinition;
-    return {
-      ...row,
-      salesCommissionRate:
-        'salesCommissionRate' in row && row.salesCommissionRate != null
-          ? Number(row.salesCommissionRate)
-          : null,
-      avatarPresentation: iconToResolvedEmoji(avatarIcon),
-      roleDefinition: roleDefinition
-        ? {
-            id: roleDefinition.id,
-            name: roleDefinition.name,
-            systemKey: roleDefinition.systemKey === 'OWNER' ? 'OWNER' : null,
-            iconPresentation: iconToResolvedEmoji(roleDefinition.icon),
-          }
-        : null,
-      isCurrentUser: row.userId === currentUserId,
-    };
-  }
-
   private async roleDefinitionInWorkspace(
     workspaceId: string,
     roleDefinitionId: string,
@@ -155,16 +124,13 @@ export class WorkspaceMembersService {
     }
   }
 
-  private async reattributeWorkspaceInviteLinksTx(
-    tx: Prisma.TransactionClient,
-    workspaceId: string,
-  ) {
+  private async reattributeWorkspaceInviteLinks(workspaceId: string) {
     const [members, integrations, links] = await Promise.all([
-      tx.workspaceMember.findMany({
+      this.prisma.workspaceMember.findMany({
         where: { workspaceId },
         select: { id: true, telegramUsername: true },
       }),
-      tx.telegramUserAccountIntegration.findMany({
+      this.prisma.telegramUserAccountIntegration.findMany({
         where: { workspaceId },
         select: {
           telegramUserId: true,
@@ -172,7 +138,7 @@ export class WorkspaceMembersService {
           assignedMemberId: true,
         },
       }),
-      tx.telegramInviteLink.findMany({
+      this.prisma.telegramInviteLink.findMany({
         where: { workspaceId },
         select: {
           id: true,
@@ -181,23 +147,51 @@ export class WorkspaceMembersService {
           creatorFirstName: true,
           creatorLastName: true,
           creatorPhotoUrl: true,
+          creatorMemberId: true,
+          creatorMatchSource: true,
         },
       }),
     ]);
 
     const maps = buildInviteLinkAttributionMaps({ members, integrations });
+    const updates = new Map<
+      string,
+      {
+        ids: string[];
+        creatorMemberId: string | null;
+        creatorMatchSource: TelegramInviteLinkCreatorMatchSource;
+        creatorUsername: string | null;
+      }
+    >();
+
+    for (const link of links) {
+      const attribution = attributeInviteLinkCreator(link, maps);
+      if (
+        link.creatorMemberId === attribution.creatorMemberId &&
+        link.creatorMatchSource === attribution.creatorMatchSource
+      ) {
+        continue;
+      }
+      const key = `${attribution.creatorMemberId ?? ''}:${attribution.creatorMatchSource}:${attribution.creatorUsername ?? ''}`;
+      const update = updates.get(key) ?? {
+        ids: [],
+        ...attribution,
+      };
+      update.ids.push(link.id);
+      updates.set(key, update);
+    }
+
     await Promise.all(
-      links.map((link) => {
-        const attribution = attributeInviteLinkCreator(link, maps);
-        return tx.telegramInviteLink.update({
-          where: { id: link.id },
+      [...updates.values()].map(({ ids, ...data }) =>
+        this.prisma.telegramInviteLink.updateMany({
+          where: { workspaceId, id: { in: ids } },
           data: {
-            creatorMemberId: attribution.creatorMemberId,
-            creatorMatchSource: attribution.creatorMatchSource,
-            creatorUsername: attribution.creatorUsername,
+            creatorMemberId: data.creatorMemberId,
+            creatorMatchSource: data.creatorMatchSource,
+            creatorUsername: data.creatorUsername,
           },
-        });
-      }),
+        }),
+      ),
     );
   }
 
@@ -336,7 +330,7 @@ export class WorkspaceMembersService {
     );
 
     return rows.map((row) => ({
-      ...this.toResponse(row, userId),
+      ...toWorkspaceMemberResponse(row, userId),
       investmentSummary: this.buildInvestmentSummary(
         row.id,
         Boolean(row.isHidden),
@@ -355,27 +349,27 @@ export class WorkspaceMembersService {
       orderBy: { createdAt: 'asc' },
     });
 
-    return rows.map((row) => this.toResponse(row, userId));
+    return rows.map((row) => toWorkspaceMemberResponse(row, userId));
   }
 
   async memberInvestments(userId: string, memberId: string) {
     const membership =
       await this.workspaceService.resolveWorkspaceMembershipForUser(userId);
+    if (membership.role !== WorkspaceRole.owner && membership.id !== memberId) {
+      throw new ForbiddenException(
+        'You can only view your own investment transactions',
+      );
+    }
     const member = await this.prisma.workspaceMember.findFirst({
       where: { id: memberId, workspaceId: membership.workspaceId },
     });
     if (!member) throw new NotFoundException('Workspace member not found');
 
-    return (this.prisma as any).transaction.findMany({
-      where: {
-        workspaceId: membership.workspaceId,
-        memberId,
-        type: 'income',
-        categoryRef: { key: 'investment' },
-      },
-      include: { account: true, categoryRef: true },
-      orderBy: { date: 'desc' },
-    });
+    return findWorkspaceMemberInvestmentTransactions(
+      this.prisma,
+      membership.workspaceId,
+      memberId,
+    );
   }
 
   async investmentsSummary(userId: string) {
@@ -560,9 +554,6 @@ export class WorkspaceMembersService {
         }
       }
 
-      if (telegramUsername || requestedAccountIds.length) {
-        await this.reattributeWorkspaceInviteLinksTx(tx, current.workspaceId);
-      }
       return requestedAccountIds.length
         ? tx.workspaceMember.findUniqueOrThrow({
             where: { id: member.id },
@@ -571,8 +562,12 @@ export class WorkspaceMembersService {
         : member;
     });
 
+    if (telegramUsername || requestedAccountIds.length) {
+      await this.reattributeWorkspaceInviteLinks(current.workspaceId);
+    }
+
     return {
-      ...this.toResponse(created, userId),
+      ...toWorkspaceMemberResponse(created, userId),
       temporaryPassword: dto.password ? undefined : temporaryPassword,
     };
   }
@@ -756,16 +751,15 @@ export class WorkspaceMembersService {
         });
       }
 
-      if (
-        nextTelegramUsername !== undefined ||
-        dto.telegramUserAccountIds !== undefined
-      ) {
-        await this.reattributeWorkspaceInviteLinksTx(tx, current.workspaceId);
-      }
-
       return saved;
     });
-    return this.toResponse(updated, userId);
+    if (
+      nextTelegramUsername !== undefined ||
+      dto.telegramUserAccountIds !== undefined
+    ) {
+      await this.reattributeWorkspaceInviteLinks(current.workspaceId);
+    }
+    return toWorkspaceMemberResponse(updated, userId);
   }
 
   async remove(userId: string, memberId: string) {

@@ -2,6 +2,7 @@ export const OPERATIONS_NOTIFICATION_TYPES = [
   "CRM_MESSAGE_RECEIVED",
   "CRM_FOLLOW_UP_DUE",
   "CRM_PLACEMENT_FAILURE",
+  "TELEGRAM_ACCOUNT_REAUTH_REQUIRED",
 ] as const;
 
 export type OperationsNotificationType =
@@ -20,6 +21,7 @@ export const OPERATIONS_NOTIFICATION_COPY_KEYS = [
   "crm.notification.messageReceived",
   "crm.notification.followUpDue",
   "crm.notification.placementFailure",
+  "telegram.notification.accountReauthRequired",
 ] as const;
 
 export type OperationsNotificationCopyKey =

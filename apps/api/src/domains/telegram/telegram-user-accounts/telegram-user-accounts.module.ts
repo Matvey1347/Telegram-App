@@ -8,9 +8,10 @@ import { TelegramUserAccountLoginFinalizer } from './telegram-user-account-login
 import { TelegramUserAccountQrLoginService } from './telegram-user-account-qr-login.service';
 import { TelegramUserAccountRemovalService } from './telegram-user-account-removal.service';
 import { TelegramUserAccountCapabilityRefreshService } from './telegram-user-account-capability-refresh.service';
+import { OperationsNotificationsModule } from '../../operations/notifications/operations-notifications.module';
 
 @Module({
-  imports: [TelegramChannelsModule],
+  imports: [TelegramChannelsModule, OperationsNotificationsModule],
   controllers: [TelegramUserAccountsController],
   providers: [
     TelegramUserAccountsService,

@@ -318,6 +318,10 @@ export async function syncPurchasedCrmTags(
       network: { select: { id: true, name: true } },
     },
   });
+  const purchaseSetting = await db.telegramAdCrmWorkspaceSettings.findUnique({
+    where: { workspaceId },
+    select: { purchaseTagId: true },
+  });
 
   const definitions = new Map<
     string,
@@ -396,13 +400,23 @@ export async function syncPurchasedCrmTags(
     automaticAssignments.map((assignment) => assignment.tagId),
   );
   const missingAssignments = tags.filter((tag) => !assignedTagIds.has(tag.id));
-  if (!missingAssignments.length) return;
-  await db.telegramAdvertiserTagAssignment.createMany({
-    data: missingAssignments.map((tag) => ({
+  const configuredTag = purchaseSetting?.purchaseTagId
+    ? await db.telegramAdvertiserTag.findFirst({
+        where: { id: purchaseSetting.purchaseTagId, workspaceId },
+        select: { id: true },
+      })
+    : null;
+  const assignments = [
+    ...missingAssignments.map((tag) => ({
       workspaceId,
       advertiserId,
       tagId: tag.id,
     })),
+    ...(configuredTag ? [{ workspaceId, advertiserId, tagId: configuredTag.id }] : []),
+  ];
+  if (!assignments.length) return;
+  await db.telegramAdvertiserTagAssignment.createMany({
+    data: assignments,
     skipDuplicates: true,
   });
 }

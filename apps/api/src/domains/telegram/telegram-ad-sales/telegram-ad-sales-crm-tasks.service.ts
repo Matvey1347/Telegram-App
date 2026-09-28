@@ -90,6 +90,7 @@ export class TelegramAdSalesCrmTasksService {
       });
       await this.activity(tx, created, userId, 'FOLLOW_UP_CREATED');
       await this.notifications.refreshTask(tx, created);
+      await this.syncContactReminder(tx, workspaceId, created.advertiserId);
       return created;
     });
     this.notifications.dueWorkChanged();
@@ -139,6 +140,8 @@ export class TelegramAdSalesCrmTasksService {
         },
       });
       if (changedSchedule) await this.notifications.refreshTask(tx, updated);
+      if (changedSchedule)
+        await this.syncContactReminder(tx, workspaceId, updated.advertiserId);
       return updated;
     });
     if (changedSchedule) this.notifications.dueWorkChanged();
@@ -180,6 +183,7 @@ export class TelegramAdSalesCrmTasksService {
         );
       }
       await this.notifications.refreshTask(tx, updated);
+      await this.syncContactReminder(tx, workspaceId, updated.advertiserId);
       return updated;
     });
     this.notifications.dueWorkChanged();
@@ -214,6 +218,7 @@ export class TelegramAdSalesCrmTasksService {
         dto.reason?.trim() || null,
       );
       await this.notifications.refreshTask(tx, updated);
+      await this.syncContactReminder(tx, workspaceId, updated.advertiserId);
       return updated;
     });
     this.notifications.dueWorkChanged();
@@ -277,6 +282,33 @@ export class TelegramAdSalesCrmTasksService {
         description: description ?? null,
         occurredAt: new Date(),
       },
+    });
+  }
+
+  /** Keeps the compact CRM card aware of the next open reminder without a
+   * per-card task query. This runs only when a task is changed. */
+  private async syncContactReminder(
+    tx: Prisma.TransactionClient,
+    workspaceId: string,
+    advertiserId: string,
+  ) {
+    const next = await tx.telegramAdvertiserTask.findFirst({
+      where: {
+        workspaceId,
+        advertiserId,
+        status: {
+          in: [
+            TelegramAdvertiserTaskStatus.OPEN,
+            TelegramAdvertiserTaskStatus.IN_PROGRESS,
+          ],
+        },
+      },
+      orderBy: [{ dueAt: 'asc' }, { id: 'asc' }],
+      select: { dueAt: true },
+    });
+    await tx.telegramAdvertiser.update({
+      where: { id: advertiserId },
+      data: { nextContactAt: next?.dueAt ?? null },
     });
   }
 

@@ -75,7 +75,11 @@ export function createTelegramChannelHelpers({
         .data,
     syncTelegramChannelPostMetrics: async (
       channelId: string,
-      payload: { telegramUserAccountId?: string; postLimit?: number },
+      payload: {
+        telegramUserAccountId?: string;
+        postLimit?: number;
+        messageIds?: string[];
+      },
       silent = false,
     ) =>
       (

@@ -84,13 +84,16 @@ describe("internal finance overview list rows", () => {
       "relative",
       "pr-12",
       "md:pr-4",
-      "md:grid-cols-[minmax(0,1fr)_minmax(4rem,0.45fr)_minmax(0,1fr)]",
+      "md:grid-cols-2",
     );
     expect(actions).toHaveClass("absolute", "right-3", "top-3");
     expect(actions).not.toHaveClass("md:static");
     expect(arrow).toHaveClass(
       "justify-start",
       "pl-3",
+      "md:absolute",
+      "md:left-1/2",
+      "md:-translate-x-1/2",
       "md:justify-center",
       "md:pl-0",
     );

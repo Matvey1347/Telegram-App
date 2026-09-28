@@ -59,6 +59,11 @@ export class TelegramCrmController {
     return this.contactRead.listTags(user.sub);
   }
 
+  @Get('analytics')
+  analytics(@CurrentUser() user: JwtUser) {
+    return this.contactRead.analytics(user.sub);
+  }
+
   @Post('tags')
   createTag(@CurrentUser() user: JwtUser, @Body() dto: CreateCrmTagDto) {
     return this.contactCommands.createTag(user.sub, dto);

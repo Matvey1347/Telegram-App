@@ -48,7 +48,17 @@ describe('WorkspaceMembersService create identity', () => {
       workspaceRoleDefinition: {
         findFirst: jest.fn().mockResolvedValue(roleDefinition),
       },
-      workspaceMember: { findUnique: jest.fn().mockResolvedValue(null) },
+      workspaceMember: {
+        findUnique: jest.fn().mockResolvedValue(null),
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+      telegramUserAccountIntegration: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+      telegramInviteLink: {
+        findMany: jest.fn().mockResolvedValue([]),
+        updateMany: jest.fn(),
+      },
       $transaction: jest.fn((callback: (client: typeof tx) => unknown) =>
         callback(tx),
       ),
@@ -92,6 +102,29 @@ describe('WorkspaceMembersService create identity', () => {
     expect(tx.workspaceMember.findUniqueOrThrow).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: 'member-1' } }),
     );
+  });
+
+  it('does not rewrite unresolved invite links when their attribution is unchanged', async () => {
+    const { service, prisma } = setup([]);
+    prisma.telegramInviteLink.findMany.mockResolvedValue([
+      {
+        id: 'invite-link-1',
+        creatorTelegramUserId: null,
+        creatorUsername: '@unassigned_creator',
+        creatorFirstName: null,
+        creatorLastName: null,
+        creatorPhotoUrl: null,
+        creatorMemberId: null,
+        creatorMatchSource: 'UNRESOLVED',
+      },
+    ]);
+
+    await service.create('owner-user', {
+      email: 'new@example.com',
+      telegramUsername: '@new_user',
+    });
+
+    expect(prisma.telegramInviteLink.updateMany).not.toHaveBeenCalled();
   });
 
   it('rejects an account outside the active workspace', async () => {

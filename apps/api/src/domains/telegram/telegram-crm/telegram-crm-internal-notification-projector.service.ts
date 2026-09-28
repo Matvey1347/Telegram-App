@@ -26,6 +26,7 @@ type TaskFact = {
   dueAt: Date;
   remindAt: Date | null;
   snoozedUntil: Date | null;
+  metadata?: Prisma.JsonValue | null;
 };
 
 @Injectable()
@@ -71,6 +72,13 @@ export class TelegramCrmInternalNotificationProjector
     const contact = snapshot.contact(task.advertiserId);
     const recipient = snapshot.recipient(contact);
     if (!contact || !recipient) return [];
+    const reminderEmoji =
+      task.metadata &&
+      typeof task.metadata === 'object' &&
+      !Array.isArray(task.metadata) &&
+      typeof (task.metadata as Record<string, unknown>).emoji === 'string'
+        ? (task.metadata as Record<string, string>).emoji.slice(0, 16)
+        : '';
     return this.notifications.insertMany(tx, [
       {
         workspaceId: task.workspaceId,
@@ -79,9 +87,16 @@ export class TelegramCrmInternalNotificationProjector
         priority: task.dueAt <= new Date() ? 'HIGH' : 'NORMAL',
         sourceKey: `${prefix}${deliverAt.toISOString()}`,
         copyKey: 'crm.notification.followUpDue',
-        title: 'CRM follow-up due',
-        body: task.title.slice(0, 240),
-        metadata: { taskId: task.id, contactId: contact.id },
+        title: `Reminder · ${contact.displayName}`.slice(0, 160),
+        body: `${reminderEmoji ? `${reminderEmoji} ` : ''}${task.title} · Due ${deliverAt.toISOString()}`.slice(
+          0,
+          240,
+        ),
+        metadata: {
+          taskId: task.id,
+          contactId: contact.id,
+          reminderEmoji: reminderEmoji || null,
+        },
         targetUrl: `/ad-sales/contacts/${encodeURIComponent(contact.id)}?workspaceId=${encodeURIComponent(task.workspaceId)}`,
         deliverAt,
         publishedAt: null,

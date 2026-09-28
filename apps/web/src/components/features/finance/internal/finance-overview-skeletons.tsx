@@ -91,14 +91,14 @@ export function TransferRowsSkeleton({ count }: { count: number }) {
         <div
           key={index}
           data-skeleton-row={index + 1}
-          className={`relative min-h-[86px] gap-3 rounded-xl border border-neutral-800 bg-neutral-950 px-4 py-3 pr-12 md:grid-cols-[minmax(0,1fr)_minmax(4rem,0.45fr)_minmax(0,1fr)] md:items-center md:pr-4 ${index >= 5 ? "hidden sm:grid" : "grid"}`}
+          className={`relative min-h-[86px] gap-3 rounded-xl border border-neutral-800 bg-neutral-950 px-4 py-3 pr-12 md:grid-cols-2 md:items-center md:pr-4 ${index >= 5 ? "hidden sm:grid" : "grid"}`}
         >
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 md:pr-10">
             <AvatarSkeleton />
             <TextSkeleton />
           </div>
-          <Skeleton className="hidden h-5 w-5 md:block" />
-          <div className="flex items-center gap-3 md:pr-8">
+          <Skeleton className="absolute left-1/2 top-1/2 hidden h-5 w-5 -translate-x-1/2 -translate-y-1/2 md:block" />
+          <div className="flex items-center gap-3 md:pl-10 md:pr-8">
             <AvatarSkeleton />
             <TextSkeleton />
           </div>

@@ -10,6 +10,7 @@ const TYPE_LABELS: Record<OperationsNotificationItem["type"], string> = {
   CRM_MESSAGE_RECEIVED: "Message received",
   CRM_FOLLOW_UP_DUE: "Follow-up due",
   CRM_PLACEMENT_FAILURE: "Placement failure",
+  TELEGRAM_ACCOUNT_REAUTH_REQUIRED: "Telegram account disconnected",
 };
 
 export function NotificationRow({
@@ -21,6 +22,7 @@ export function NotificationRow({
 }) {
   const unread = !notification.readAt;
   const lowPriority = notification.priority === "LOW";
+  const critical = notification.type === "TELEGRAM_ACCOUNT_REAUTH_REQUIRED";
   const crmMessage =
     notification.presentation?.kind === "crm-message"
       ? notification.presentation
@@ -31,7 +33,11 @@ export function NotificationRow({
       onClick={() => onOpen(notification)}
       aria-label={`${unread ? "Unread " : ""}${notification.title}`}
       className={`group block border-b border-neutral-800/80 px-4 py-3 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 ${
-        unread ? "bg-blue-950/20 hover:bg-blue-950/30" : "hover:bg-neutral-900"
+        unread
+          ? critical
+            ? "bg-rose-950/25 hover:bg-rose-950/35"
+            : "bg-blue-950/20 hover:bg-blue-950/30"
+          : "hover:bg-neutral-900"
       } ${lowPriority ? "opacity-75" : ""}`}
     >
       <div className="flex items-start gap-3">
@@ -43,7 +49,13 @@ export function NotificationRow({
             size="sm"
           />
         ) : (
-          <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-neutral-700 bg-neutral-900 text-neutral-300">
+          <span
+            className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${
+              critical
+                ? "border-rose-700/80 bg-rose-950/50 text-rose-300"
+                : "border-neutral-700 bg-neutral-900 text-neutral-300"
+            }`}
+          >
             {notification.priority === "HIGH" ? (
               <AlertTriangle size={16} aria-hidden="true" />
             ) : (
@@ -54,8 +66,14 @@ export function NotificationRow({
         <span className="min-w-0 flex-1">
           <span className="flex flex-wrap items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-neutral-500">
             {notification.priority === "HIGH" ? (
-              <span className="rounded border border-amber-800/80 bg-amber-950/35 px-1.5 py-0.5 text-amber-300">
-                High priority
+              <span
+                className={`rounded border px-1.5 py-0.5 ${
+                  critical
+                    ? "border-rose-700/80 bg-rose-950/50 text-rose-200"
+                    : "border-amber-800/80 bg-amber-950/35 text-amber-300"
+                }`}
+              >
+                {critical ? "Reconnect required" : "High priority"}
               </span>
             ) : null}
             {notification.priority === "LOW" ? (
@@ -67,7 +85,9 @@ export function NotificationRow({
           </span>
           <span className="mt-1 flex items-start gap-2">
             {unread ? (
-              <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-blue-400" />
+              <span
+                className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${critical ? "bg-rose-400" : "bg-blue-400"}`}
+              />
             ) : null}
             <span className="min-w-0 flex-1">
               <span className="flex items-center gap-2 text-sm font-semibold text-neutral-100">

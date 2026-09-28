@@ -115,4 +115,55 @@ describe('TelegramUserAccountCapabilityRefreshService', () => {
       reason: 'revoked',
     });
   });
+
+  it('publishes one high-priority QR recovery notification when Telegram revokes a session', async () => {
+    const accountWithOwner = { ...account, assignedMemberId: 'member-1' };
+    const notificationStore = {
+      upsertMany: jest.fn().mockResolvedValue([{ id: 'notification-1' }]),
+    };
+    const notificationPublisher = {
+      publish: jest.fn().mockResolvedValue(undefined),
+    };
+    const prisma = {
+      telegramUserAccountIntegration: {
+        update: jest.fn().mockResolvedValue({
+          ...accountWithOwner,
+          status: TelegramUserAccountStatus.error,
+          createdByUserId: null,
+        }),
+      },
+      $transaction: jest.fn((operation) => operation({})),
+    };
+    const service = new TelegramUserAccountCapabilityRefreshService(
+      prisma as never,
+      { decrypt: jest.fn().mockReturnValue('decrypted') } as never,
+      {
+        getAccountProfile: jest
+          .fn()
+          .mockRejectedValue(new Error('AUTH_KEY_UNREGISTERED')),
+      } as never,
+      { writeStructured: jest.fn() } as never,
+      { wake: jest.fn() } as never,
+      notificationStore as never,
+      notificationPublisher as never,
+    );
+
+    await service.refreshOne(accountWithOwner, { force: true });
+
+    expect(notificationStore.upsertMany).toHaveBeenCalledWith(
+      expect.anything(),
+      [
+        expect.objectContaining({
+          recipientMemberId: 'member-1',
+          type: 'TELEGRAM_ACCOUNT_REAUTH_REQUIRED',
+          priority: 'HIGH',
+          metadata: { accountId: 'account-1', action: 'qr-login' },
+          targetUrl: '/telegram-channels?tab=accounts&accountTab=mtproto',
+        }),
+      ],
+    );
+    expect(notificationPublisher.publish).toHaveBeenCalledWith([
+      'notification-1',
+    ]);
+  });
 });

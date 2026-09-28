@@ -59,7 +59,10 @@ import {
   reconcileTelegramAdSaleCache,
   telegramAdSalesKeys,
 } from "@/lib/features/growth/telegram-ad-sales-query";
-import { resolveAdSalesPreferenceSelection } from "@/lib/features/growth/ad-sales-preferences-hydration";
+import {
+  resolveAdSalesPreferenceSelection,
+  revealCreatedPlacementChannels,
+} from "@/lib/features/growth/ad-sales-preferences-hydration";
 import { useAppToast } from "@/providers/toast-provider";
 import { CrmWorkspace } from "./crm/crm-workspace";
 import { CrmNavigation } from "./crm/crm-navigation";
@@ -272,6 +275,10 @@ function LegacyAdSalesPage() {
     () => saleableChannels.map((channel) => channel.id),
     [saleableChannels],
   );
+  const allCalendarChannelIds = useMemo(
+    () => channels.map((channel) => channel.id),
+    [channels],
+  );
   const saleableChannelIds = useMemo(
     () => new Set(saleableChannelIdsList),
     [saleableChannelIdsList],
@@ -304,6 +311,10 @@ function LegacyAdSalesPage() {
       selectedNetworkId,
     ],
   );
+  // Calendar is an operational overview: a saved sales-filter must never hide
+  // an existing placement from it. The selection still applies to sales forms.
+  const calendarChannelIds =
+    tab === "calendar" ? allCalendarChannelIds : effectiveChannelIds;
 
   useEffect(() => {
     const preferences = preferencesQuery.data;
@@ -492,14 +503,17 @@ function LegacyAdSalesPage() {
     () => ({
       from: from.toISOString(),
       to: to.toISOString(),
-      channelIds: [...effectiveChannelIds].sort(),
+      channelIds: [...calendarChannelIds].sort(),
+      // Availability is cached server-side. Bump the calendar read contract so
+      // open clients cannot retain the pre-deal-total placement representation.
+      cacheBust: "calendar-sale-totals-v1",
     }),
-    [effectiveChannelIds, from, to],
+    [calendarChannelIds, from, to],
   );
   const calendarAvailabilityQuery = useQuery({
     queryKey: telegramAdSalesKeys.availability(calendarAvailabilityParams),
     queryFn: () => telegramAdSalesApi.availability(calendarAvailabilityParams),
-    enabled: tab === "calendar" && effectiveChannelIds.length > 0,
+    enabled: tab === "calendar" && calendarChannelIds.length > 0,
     ...adSalesDataCacheOptions,
   });
   const filteredSlots = useMemo(
@@ -571,6 +585,31 @@ function LegacyAdSalesPage() {
         type: "create",
         sale: reserved,
       });
+      const calendarSelection = revealCreatedPlacementChannels({
+        selectedChannelIds,
+        selectedNetworkId,
+        activeChannelIds: effectiveChannelIds,
+        saleableChannelIds: saleableChannelIdsList,
+        createdChannelIds: reserved.placements.map(
+          (placement) => placement.telegramChannelId,
+        ),
+      });
+      if (
+        !sameStringArray(
+          selectedChannelIds,
+          calendarSelection.selectedChannelIds,
+        ) || selectedNetworkId !== calendarSelection.selectedNetworkId
+      ) {
+        setSelectedChannelIds(calendarSelection.selectedChannelIds);
+        setSelectedNetworkId(calendarSelection.selectedNetworkId);
+        savePreferences({
+          selectedChannelIds: calendarSelection.selectedChannelIds,
+          selectedNetworkId: calendarSelection.selectedNetworkId || null,
+          calendarView:
+            calendarRangeMode === "threeMonths" ? "month" : calendarRangeMode,
+          initialized: true,
+        });
+      }
       await invalidateTelegramAdSalesDerivedQueries(queryClient, {
         availability: true,
         analytics: true,
@@ -775,18 +814,18 @@ function LegacyAdSalesPage() {
       {tab === "calendar" ? (
         <CalendarTab
           loadingChannelIds={
-            calendarAvailabilityQuery.isLoading ? effectiveChannelIds : []
+            calendarAvailabilityQuery.isLoading ? calendarChannelIds : []
           }
           failedChannelIds={
-            calendarAvailabilityQuery.isError ? effectiveChannelIds : []
+            calendarAvailabilityQuery.isError ? calendarChannelIds : []
           }
           calendarRangeMode={calendarRangeMode}
           calendarCursor={calendarCursor}
           calendarFrom={from}
           calendarTo={to}
           calendarDays={calendarDays}
-          channels={saleableChannels}
-          selectedChannelIds={selectedChannelIds}
+          channels={channels}
+          selectedChannelIds={calendarChannelIds}
           filteredSlots={filteredSlots}
           daySummaries={calendarAvailabilityQuery.data?.summaries ?? []}
           settings={settings}

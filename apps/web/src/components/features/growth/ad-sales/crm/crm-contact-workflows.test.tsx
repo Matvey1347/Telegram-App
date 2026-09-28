@@ -24,6 +24,14 @@ vi.mock("@/lib/api", () => ({
     listAdvertiserActivities: mocks.listActivities,
     createAdvertiserNote: mocks.createNote,
   },
+  iconsApi: {
+    get: vi.fn(),
+    list: vi.fn(),
+    createEmoji: vi.fn(),
+    createCustom: vi.fn(),
+    createTemporaryImage: vi.fn(),
+    upload: vi.fn(),
+  },
 }));
 
 const contact = {

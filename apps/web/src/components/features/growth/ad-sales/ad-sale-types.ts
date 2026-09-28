@@ -26,6 +26,9 @@ export type PublishedPostOption = {
   id: string;
   title: string;
   publishedAt: string;
+  telegramPostUrl?: string | null;
+  viewsCount?: number | null;
+  reactionsCount?: number | null;
 };
 
 export type QuoteRequestDraft = {

@@ -280,6 +280,8 @@ export class PromosService {
     const iconId =
       dto.iconId === undefined
         ? undefined
+        : dto.iconId === existing.iconId
+          ? existing.iconId
         : await this.resolveIconId(existing.workspaceId, dto.iconId);
     const telegramChannelId =
       dto.telegramChannelId ?? existing.telegramChannelId;

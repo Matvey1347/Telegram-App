@@ -7,12 +7,14 @@ import type { CrmContact } from "@telegram-system/shared";
 import {
   Button,
   DateInput,
+  FormField,
   Input,
   Modal,
   TimeInput,
   isValidTimeInputValue,
   localDateTimeInputToIso,
 } from "@/components/ui/primitives";
+import { IconPicker } from "@/components/icons/icon-picker";
 import { telegramAdSalesApi } from "@/lib/api";
 import { telegramCrmKeys } from "@/lib/features/growth/telegram-crm-query";
 import { formatDateTime } from "@/lib/date-format";
@@ -29,7 +31,10 @@ function defaultReminderDate() {
   return `${year}-${month}-${day}`;
 }
 
-const DEFAULT_REMINDER_TIME = "10:00";
+function defaultReminderTime() {
+  const now = new Date();
+  return `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+}
 
 export function CrmContactTasks({
   contact,
@@ -41,8 +46,9 @@ export function CrmContactTasks({
   const queryClient = useQueryClient();
   const [creating, setCreating] = useState(false);
   const [title, setTitle] = useState("");
+  const [emoji, setEmoji] = useState("⏰");
   const [dueDate, setDueDate] = useState(defaultReminderDate);
-  const [dueTime, setDueTime] = useState(DEFAULT_REMINDER_TIME);
+  const [dueTime, setDueTime] = useState(defaultReminderTime);
   const [assignedMemberId, setAssignedMemberId] = useState(
     () => contact.ownerMemberId ?? "",
   );
@@ -72,12 +78,14 @@ export function CrmContactTasks({
         assignedMemberId,
         priority: "NORMAL",
         title: title.trim(),
+        metadata: { emoji: emoji.trim().slice(0, 16) || null },
         dueAt: localDateTimeInputToIso(dueDate, dueTime)!,
       }),
     onSuccess: async () => {
       setTitle("");
+      setEmoji("⏰");
       setDueDate(defaultReminderDate());
-      setDueTime(DEFAULT_REMINDER_TIME);
+      setDueTime(defaultReminderTime());
       setCreating(false);
       await refresh();
     },
@@ -124,38 +132,52 @@ export function CrmContactTasks({
         }
       >
         <form onSubmit={submit} className="space-y-3">
-          <Input
-            value={title}
-            onChange={(event) => setTitle(event.target.value)}
-            placeholder="Reminder text"
-            aria-label="Reminder text"
-            required
-            autoFocus
-          />
-          <div>
-            <label className="mb-1 block text-xs font-medium text-neutral-300">
-              Reminder owner
-            </label>
-            <MemberSelect
-              value={assignedMemberId}
-              onChange={setAssignedMemberId}
-              defaultToCurrent
-              allowAssignOthers
-              disabled={create.isPending}
+          <div className="flex items-center gap-2">
+            <IconPicker
+              compact
+              ariaLabel="Reminder emoji"
+              icon={{ type: "unicode", value: emoji }}
+              onChange={() => undefined}
+              onEmojiChange={(value) => setEmoji(value ?? "⏰")}
+            />
+            <Input
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              placeholder="Reminder text"
+              aria-label="Reminder text"
+              required
+              autoFocus
             />
           </div>
-          <DateInput
-            value={dueDate}
-            onChange={(event) => setDueDate(event.target.value)}
-            aria-label="Task due date"
-            required
-          />
-          <TimeInput
-            value={dueTime}
-            onChange={(event) => setDueTime(event.target.value)}
-            aria-label="Task due time"
-            required
-          />
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="sm:col-span-2">
+              <FormField label="Reminder owner">
+                <MemberSelect
+                  value={assignedMemberId}
+                  onChange={setAssignedMemberId}
+                  defaultToCurrent
+                  allowAssignOthers
+                  disabled={create.isPending}
+                />
+              </FormField>
+            </div>
+            <FormField label="Date">
+              <DateInput
+                value={dueDate}
+                onChange={(event) => setDueDate(event.target.value)}
+                aria-label="Task due date"
+                required
+              />
+            </FormField>
+            <FormField label="Time">
+              <TimeInput
+                value={dueTime}
+                onChange={(event) => setDueTime(event.target.value)}
+                aria-label="Task due time"
+                required
+              />
+            </FormField>
+          </div>
           {!assignedMemberId ? (
             <p className="text-xs text-amber-300">
               Select who should receive this reminder.
@@ -211,6 +233,9 @@ export function CrmContactTasks({
               >
                 <div className="min-w-0">
                   <p className="truncate font-medium text-white">
+                    {typeof task.metadata?.emoji === "string"
+                      ? `${task.metadata.emoji} `
+                      : ""}
                     {task.title}
                   </p>
                   <p className="mt-1 text-xs text-neutral-500">

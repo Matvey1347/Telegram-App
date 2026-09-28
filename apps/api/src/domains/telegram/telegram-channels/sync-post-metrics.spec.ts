@@ -91,6 +91,16 @@ describe('TelegramChannelsService syncPostsMetricsForWorkspace', () => {
     );
   });
 
+  it('fetches requested post IDs directly instead of synchronizing a history window', async () => {
+    await service.syncPostsMetricsForWorkspace('workspace-1', 'channel-1', {
+      messageIds: ['8431'],
+    });
+
+    expect(mtprotoClient.getChannelPostsMetrics).toHaveBeenCalledWith(
+      expect.objectContaining({ messageIds: ['8431'] }),
+    );
+  });
+
   it('keeps manual metrics sync available for a channel with auto sync disabled', async () => {
     prisma.telegramChannel.findFirst.mockResolvedValueOnce({
       id: 'channel-1',

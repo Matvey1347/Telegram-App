@@ -3,17 +3,13 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { CrmContact, CrmTagSummary } from "@telegram-system/shared";
-import { Button, MultiSelect } from "@/components/ui/primitives";
+import { Button } from "@/components/ui/primitives";
 import { telegramCrmApi } from "@/lib/features/growth/telegram-crm-api";
 import {
   patchCrmContactCaches,
   telegramCrmKeys,
 } from "@/lib/features/growth/telegram-crm-query";
-import {
-  CrmTagEmoji,
-  CrmTelegramFolderBadge,
-  crmTagDisplayName,
-} from "./crm-tag-presentation";
+import { CrmTagMultiSelect } from "./crm-tag-multi-select";
 
 export function CrmContactTagsEditor({
   contact,
@@ -66,28 +62,14 @@ export function CrmContactTagsEditor({
       <section>
         <h3 className="text-sm font-medium text-white">Tags</h3>
         <p className="mt-1 text-xs text-neutral-500">
-          Telegram-folder tags are marked with a Telegram icon and sync back to the connected Telegram account.
+          Telegram-folder tags are marked with a Telegram icon and sync back to
+          the connected Telegram account.
         </p>
-        <MultiSelect
+        <CrmTagMultiSelect
           value={selected}
           onChange={setSelected}
           disabled={!canEdit || save.isPending}
-          options={(tags.data ?? contact.tags).map((tag) => ({
-              value: tag.id,
-              label: crmTagDisplayName(tag),
-              icon: (
-                <span className="inline-flex items-center gap-1">
-                  <span
-                    className="h-2.5 w-2.5 rounded-full"
-                    style={{ backgroundColor: tag.color ?? "#737373" }}
-                  />
-                  <CrmTagEmoji tag={tag} />
-                  <CrmTelegramFolderBadge tag={tag} />
-                </span>
-              ),
-            }))}
-          placeholder="Select tags"
-          searchPlaceholder="Search tags"
+          tags={tags.data ?? contact.tags}
           canCreateOption={(name) =>
             !tags.data?.some(
               (tag) =>

@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   CalendarRange,
   CircleDollarSign,
-  MessagesSquare,
+  ChartNoAxesCombined,
   Users,
 } from "lucide-react";
 import { crmText } from "./crm-copy";
@@ -15,17 +15,18 @@ import { authKeys } from "@/lib/query-keys";
 import { crmPermissions } from "./crm-permissions";
 
 const primary = [
-  ["nav.inbox", "/ad-sales/inbox", MessagesSquare],
   ["nav.contacts", "/ad-sales", Users],
   ["nav.deals", "/ad-sales/sales", CircleDollarSign],
   ["nav.calendar", "/ad-sales/calendar", CalendarRange],
+  ["nav.analytics", "/ad-sales/analytics", ChartNoAxesCombined],
 ] as const;
 
 export function CrmNavigation({
-  canViewInbox,
+  canViewInbox: _canViewInbox,
   canViewSales,
-  inboxUnread = 0,
+  inboxUnread: _inboxUnread,
 }: {
+  /** Kept temporarily for callers; Inbox is no longer exposed in CRM navigation. */
   canViewInbox?: boolean;
   canViewSales?: boolean;
   inboxUnread?: number;
@@ -35,10 +36,9 @@ export function CrmNavigation({
     queryKey: authKeys.me(),
     queryFn: authApi.me,
     staleTime: 5 * 60_000,
-    enabled: canViewInbox === undefined || canViewSales === undefined,
+    enabled: canViewSales === undefined,
   });
   const permissions = crmPermissions(me.data?.workspace.access);
-  const showInbox = canViewInbox ?? permissions.canViewAll;
   const showSales = canViewSales ?? permissions.canViewSales;
   const contactsActive =
     pathname === "/ad-sales" ||
@@ -51,10 +51,9 @@ export function CrmNavigation({
     >
       <div className="flex overflow-x-auto px-2">
         {primary
-          .filter(([copyKey]) => copyKey !== "nav.inbox" || showInbox)
           .filter(
             ([copyKey]) =>
-              !["nav.deals", "nav.calendar"].includes(copyKey) || showSales,
+              !["nav.deals", "nav.calendar", "nav.analytics"].includes(copyKey) || showSales,
           )
           .map(([copyKey, href, Icon]) => {
             const active =
@@ -65,11 +64,6 @@ export function CrmNavigation({
               <Link key={href} href={href} className={linkClass(active)}>
                 <Icon size={16} />
                 <span>{crmText(copyKey)}</span>
-                {copyKey === "nav.inbox" && inboxUnread ? (
-                  <span className="rounded-full bg-blue-600 px-1.5 py-0.5 text-[10px] font-semibold text-white">
-                    {inboxUnread}
-                  </span>
-                ) : null}
               </Link>
             );
           })}

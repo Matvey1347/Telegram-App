@@ -182,6 +182,27 @@ describe("PlacementPostComposer", () => {
     });
   });
 
+  it("shows the linked post URL and engagement metrics", () => {
+    renderComposer({
+      existingPostId: "post-linked",
+      publishedPosts: [
+        {
+          id: "post-linked",
+          title: "Linked post",
+          publishedAt: "2026-08-20T10:00:00.000Z",
+          telegramPostUrl: "https://t.me/example/42",
+          viewsCount: 1_250,
+          reactionsCount: 56,
+        },
+      ],
+    });
+
+    expect(screen.getByText("Post linked")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /https:\/\/t\.me\/example\/42/ })).toBeInTheDocument();
+    expect(screen.getByText("1,250 views")).toBeInTheDocument();
+    expect(screen.getByText("56 reactions")).toBeInTheDocument();
+  });
+
   it("uses explicit select and link inputs for a past placement", async () => {
     const onLoadPublishedPosts = vi.fn().mockResolvedValue({
       id: "post-past",
@@ -213,5 +234,36 @@ describe("PlacementPostComposer", () => {
       publishedAt: "2026-08-20T10:00:00.000Z",
       draft: null,
     });
+  });
+
+  it("shows progress while resolving a pasted link", async () => {
+    let resolvePost: ((post: { id: string; title: string; publishedAt: string }) => void) | undefined;
+    const onLoadPublishedPosts = vi.fn(
+      () =>
+        new Promise<{ id: string; title: string; publishedAt: string }>(
+          (resolve) => {
+            resolvePost = resolve;
+          },
+        ),
+    );
+    renderComposer({ canCreate: false, onLoadPublishedPosts });
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole("button", { name: "Paste link" }));
+    await user.type(
+      screen.getByRole("textbox", { name: "Telegram post link" }),
+      "https://t.me/channel/42",
+    );
+    await user.click(screen.getByRole("button", { name: "Use link" }));
+
+    expect(screen.getByRole("button", { name: "Loading..." })).toBeDisabled();
+    resolvePost?.({
+      id: "post-loading",
+      title: "Loaded post",
+      publishedAt: "2026-08-20T10:00:00.000Z",
+    });
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Use link" })).toBeEnabled(),
+    );
   });
 });

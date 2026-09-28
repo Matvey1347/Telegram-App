@@ -37,14 +37,22 @@ export class TelegramAdvertiserCheckoutResolverService {
     if (!input.createAdvertiser) return null;
 
     const username = this.usernameFromInput(input);
-    if (username) {
-      const contact = await tx.telegramAdvertiserContact.findFirst({
+    const contact = this.contactFromInput(input, username);
+    if (username || contact) {
+      const where = username
+        ? {
+            type: TelegramAdvertiserContactType.TELEGRAM_USERNAME,
+            normalizedValue: username,
+          }
+        : contact!;
+      const matchedContact = await tx.telegramAdvertiserContact.findFirst({
         where: {
           workspaceId: context.workspaceId,
-          type: TelegramAdvertiserContactType.TELEGRAM_USERNAME,
-          normalizedValue: username,
+          ...where,
         },
         select: {
+          type: true,
+          normalizedValue: true,
           advertiser: {
             select: {
               id: true,
@@ -55,11 +63,20 @@ export class TelegramAdvertiserCheckoutResolverService {
           },
         },
       });
-      if (contact?.advertiser) return contact.advertiser;
+      if (matchedContact?.advertiser) return matchedContact.advertiser;
       const legacy = await tx.telegramAdvertiser.findFirst({
         where: {
           workspaceId: context.workspaceId,
-          telegramUsername: { equals: username, mode: 'insensitive' },
+          ...(username
+            ? { telegramUsername: { equals: username, mode: 'insensitive' } }
+            : contact?.type === TelegramAdvertiserContactType.PHONE
+              ? { phone: contact.normalizedValue }
+              : {
+                  email: {
+                    equals: contact!.normalizedValue,
+                    mode: 'insensitive',
+                  },
+                }),
         },
         select: {
           id: true,
@@ -90,17 +107,20 @@ export class TelegramAdvertiserCheckoutResolverService {
         companyName: true,
       },
     });
-    if (username) {
+    if (username || contact) {
       await tx.telegramAdvertiserContact.create({
         data: {
           workspaceId: context.workspaceId,
           advertiserId: created.id,
-          type: TelegramAdvertiserContactType.TELEGRAM_USERNAME,
-          value:
-            input.advertiserTelegram?.trim() ||
-            input.advertiserContact?.trim() ||
-            username,
-          normalizedValue: username,
+          type: username
+            ? TelegramAdvertiserContactType.TELEGRAM_USERNAME
+            : contact!.type,
+          value: username
+            ? input.advertiserTelegram?.trim() ||
+              input.advertiserContact?.trim() ||
+              username
+            : input.advertiserContact!.trim(),
+          normalizedValue: username ?? contact!.normalizedValue,
           isPrimary: true,
         },
       });
@@ -142,6 +162,21 @@ export class TelegramAdvertiserCheckoutResolverService {
 
   private normalizeUsername(value: string) {
     return value.trim().replace(/^@+/, '').toLowerCase();
+  }
+
+  private contactFromInput(input: AdvertiserInput, username: string | null) {
+    if (username) return null;
+    const phone = this.normalizePhone(input.advertiserContact);
+    if (phone) {
+      return {
+        type: TelegramAdvertiserContactType.PHONE,
+        normalizedValue: phone,
+      };
+    }
+    const email = this.normalizeEmail(input.advertiserContact);
+    return email
+      ? { type: TelegramAdvertiserContactType.EMAIL, normalizedValue: email }
+      : null;
   }
 
   private normalizePhone(value?: string | null) {

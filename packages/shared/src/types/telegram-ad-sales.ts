@@ -351,6 +351,9 @@ export type TelegramAdAvailabilitySlot = {
     paymentStatus?: TelegramAdSaleComputedPaymentStatus | null;
     agreedPrice?: string;
     currency?: string;
+    saleAgreedAmount?: string;
+    settlementCurrency?: string;
+    advertiserPhotoUrl?: string | null;
     viewsCount?: number | null;
   } | null;
   organicPostsCountForDay: number;

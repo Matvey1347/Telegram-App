@@ -140,7 +140,8 @@ export class TelegramChannelLifecycleService {
     }
     const [presentationIcon, defaultInviteLink, purposeInviteLinksCount] =
       await Promise.all([
-        dto.presentationIconId
+        dto.presentationIconId &&
+        dto.presentationIconId !== existing.presentationIconId
           ? this.prisma.icon.findFirst({
               where: {
                 id: dto.presentationIconId,
@@ -172,7 +173,11 @@ export class TelegramChannelLifecycleService {
             })
           : Promise.resolve(0),
       ]);
-    if (dto.presentationIconId && !presentationIcon) {
+    if (
+      dto.presentationIconId &&
+      dto.presentationIconId !== existing.presentationIconId &&
+      !presentationIcon
+    ) {
       throw new BadRequestException('Channel emoji is unavailable');
     }
     if (dto.defaultInviteLinkId && !defaultInviteLink) {

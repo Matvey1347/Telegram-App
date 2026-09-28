@@ -85,6 +85,38 @@ describe('TelegramAdvertiserCheckoutResolverService', () => {
     });
   });
 
+  it('reuses a client by normalized phone number when no Telegram username exists', async () => {
+    const { service, tx } = setup();
+    tx.telegramAdvertiserContact.findFirst.mockResolvedValue({ advertiser });
+
+    await expect(
+      service.resolve(
+        tx as never,
+        {
+          advertiserName: 'Phone-only client',
+          advertiserContact: '+380 (66) 123-45-67',
+          createAdvertiser: true,
+        },
+        {
+          workspaceId: 'workspace-1',
+          userId: 'user-1',
+          ownerMemberId: null,
+          selected: null,
+        },
+      ),
+    ).resolves.toEqual(advertiser);
+
+    expect(tx.telegramAdvertiserContact.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          type: 'PHONE',
+          normalizedValue: '+380661234567',
+        }),
+      }),
+    );
+    expect(tx.telegramAdvertiser.create).not.toHaveBeenCalled();
+  });
+
   it('rejects an invalid explicit Telegram username', async () => {
     const { service, tx } = setup();
     await expect(

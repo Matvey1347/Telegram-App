@@ -139,6 +139,12 @@ export function createTelegramAdSalesApi({
           payload,
         )
       ).data,
+    setPrimaryAdvertiserContact: async (id: string, contactId: string) =>
+      (
+        await api.post<TelegramAdvertiserContact>(
+          `/telegram-ad-sales/advertisers/${id}/contacts/${contactId}/set-primary`,
+        )
+      ).data,
     listAdvertiserActivities: async (id: string, params?: PaginationParams) =>
       getPaginated<TelegramAdvertiserActivity>(
         `/telegram-ad-sales/advertisers/${id}/activities`,

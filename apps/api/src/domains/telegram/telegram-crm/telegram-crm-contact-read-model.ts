@@ -63,6 +63,11 @@ export const crmContactListSelect = {
     take: 1,
     select: crmPeerSummarySelect,
   },
+  contacts: {
+    orderBy: [{ isPrimary: 'desc' as const }, { createdAt: 'asc' as const }],
+    take: 8,
+    select: { id: true, type: true, value: true, label: true, isPrimary: true },
+  },
   sales: {
     where: ACTIVE_DEAL_WHERE,
     orderBy: [{ updatedAt: 'desc' as const }, { id: 'desc' as const }],
@@ -105,6 +110,11 @@ export const crmContactDetailSelect = {
     orderBy: [{ updatedAt: 'desc' as const }, { id: 'desc' as const }],
     take: CONTACT_DETAIL_RELATION_LIMIT,
     select: crmPeerSummarySelect,
+  },
+  contacts: {
+    orderBy: [{ isPrimary: 'desc' as const }, { createdAt: 'asc' as const }],
+    take: 20,
+    select: { id: true, type: true, value: true, label: true, isPrimary: true },
   },
   crmConversations: {
     where: { state: TelegramCrmConversationState.ACTIVE },
@@ -216,6 +226,13 @@ export function mapCrmContactListItem(
     },
     ownerMember: mapCrmMemberSummary(row.ownerMember),
     peer: row.crmPeers[0] ? mapCrmPeerSummary(row.crmPeers[0]) : null,
+    contactChannels: row.contacts.map((contact) => ({
+      id: contact.id,
+      type: contact.type,
+      value: contact.value,
+      label: contact.label,
+      isPrimary: contact.isPrimary,
+    })),
     activeDeal: deal
       ? {
           id: deal.id,
@@ -262,6 +279,13 @@ export function mapCrmContactDetail(
       CONTACT_ACCOUNT_LIMIT,
     ),
     tags: row.tags.map(({ tag }) => mapCrmTag(tag)),
+    contactChannels: row.contacts.map((contact) => ({
+      id: contact.id,
+      type: contact.type,
+      value: contact.value,
+      label: contact.label,
+      isPrimary: contact.isPrimary,
+    })),
     paymentSummary: paymentSummary.map((item) => ({
       currency: item.currency,
       agreedAmount: String(item.agreedAmount),

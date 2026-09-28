@@ -117,17 +117,13 @@ export function TelegramMtprotoAccountCard({
             </Button>
           ) : null}
           {sessionRefreshRequired ? (
-            <Button variant="secondary" onClick={onRefreshQr}>
-              Refresh via QR
-            </Button>
+            <Button onClick={onRefreshQr}>Reconnect via QR</Button>
           ) : null}
           {account.status === "needs_code" ? (
             <>
+              <Button onClick={onRefreshQr}>Login via QR</Button>
               <Button variant="secondary" onClick={onEnterCode}>
-                Enter code
-              </Button>
-              <Button variant="secondary" onClick={onRefreshQr}>
-                Login via QR
+                Use code instead
               </Button>
             </>
           ) : null}

@@ -216,6 +216,7 @@ export class CrmMessagesQueryDto {
 
 export class UpdateCrmWorkspaceSettingsDto {
   @IsOptional() @IsString() defaultCrmSenderAccountId?: string | null;
+  @IsOptional() @IsString() purchaseTagId?: string | null;
 }
 
 export class UpdateCrmAccountCapabilitiesDto {

@@ -19,6 +19,7 @@ import type {
 
 export const telegramCrmKeys = {
   root: ["telegram-crm"] as const,
+  analytics: () => ["telegram-crm", "analytics"] as const,
   contactLists: () => ["telegram-crm", "contacts", "list"] as const,
   contactList: (params: CrmContactsParams) =>
     ["telegram-crm", "contacts", "list", params] as const,

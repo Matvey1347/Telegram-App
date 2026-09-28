@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   formatCalendarTransactionMoney,
+  calendarDealAmount,
   groupCalendarSoldSlotsBySale,
 } from "./ad-sales-calendar-tab";
 
@@ -12,6 +13,22 @@ describe("formatCalendarTransactionMoney", () => {
     expect(label).not.toContain("USD");
     expect(label).not.toContain("PLN");
     expect(label).not.toContain("/");
+  });
+});
+
+describe("calendarDealAmount", () => {
+  it("uses the same deal total and settlement currency as Deals", () => {
+    expect(
+      calendarDealAmount(
+        {
+          agreedPrice: "189.70",
+          currency: "USD",
+          saleAgreedAmount: "310.00",
+          settlementCurrency: "UAH",
+        },
+        "USD",
+      ),
+    ).toEqual({ amount: 310, currency: "UAH" });
   });
 });
 

@@ -7,17 +7,20 @@ import { transactionAvatar } from "./transaction-avatar";
 
 export function FinanceTransactionRow({
   transaction,
-  onEdit,
-  onDelete,
+  onEdit = () => undefined,
+  onDelete = () => undefined,
+  readOnly = false,
 }: {
   transaction: Transaction;
-  onEdit: () => void;
-  onDelete: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
+  /** Reuse the Finance row in a read-only financial context. */
+  readOnly?: boolean;
 }) {
   return (
     <div
       data-finance-row="transaction"
-      className="relative grid gap-3 border-b border-neutral-800 bg-neutral-950 px-4 py-3 pr-12 last:border-0 sm:grid-cols-[minmax(0,1fr)_auto_32px] sm:items-center sm:pr-4"
+      className={`relative grid gap-3 border-b border-neutral-800 bg-neutral-950 px-4 py-3 last:border-0 sm:items-center ${readOnly ? "sm:grid-cols-[minmax(0,1fr)_auto]" : "pr-12 sm:grid-cols-[minmax(0,1fr)_auto_32px] sm:pr-4"}`}
     >
       <div className="flex min-w-0 items-center gap-3">
         <IconAvatar
@@ -31,9 +34,32 @@ export function FinanceTransactionRow({
               transaction.categoryRef?.name ||
               "Transaction"}
           </div>
-          <div className="truncate text-xs text-neutral-500">
-            {transaction.categoryRef?.name || transaction.category} ·{" "}
-            {transaction.account?.name} · {formatDate(transaction.date)}
+          <div className="flex min-w-0 items-center gap-1.5 overflow-hidden text-xs text-neutral-500">
+            <span className="flex min-w-0 items-center gap-1">
+              <IconAvatar
+                icon={transaction.categoryRef?.iconPresentation}
+                label={transaction.categoryRef?.name || transaction.category}
+                size="xs"
+                bordered={false}
+                className="!h-3.5 !w-3.5 !bg-transparent text-[10px]"
+              />
+              <span className="truncate">
+                {transaction.categoryRef?.name || transaction.category}
+              </span>
+            </span>
+            <span aria-hidden="true">·</span>
+            <span className="flex min-w-0 items-center gap-1">
+              <IconAvatar
+                icon={transaction.account?.iconPresentation}
+                label={transaction.account?.name || "Account"}
+                size="xs"
+                bordered={false}
+                className="!h-3.5 !w-3.5 !bg-transparent text-[10px]"
+              />
+              <span className="truncate">{transaction.account?.name}</span>
+            </span>
+            <span aria-hidden="true" className="hidden sm:inline">·</span>
+            <span className="hidden shrink-0 sm:inline">{formatDate(transaction.date)}</span>
           </div>
         </div>
       </div>
@@ -46,16 +72,18 @@ export function FinanceTransactionRow({
         currency={transaction.currency}
         className={`font-semibold ${transaction.type === "income" ? "text-emerald-300" : "text-rose-300"}`}
       />
-      <div
-        data-finance-row-actions="true"
-        className="absolute right-3 top-3 sm:static"
-      >
-        <FinanceActionMenu
-          label="transaction"
-          onEdit={onEdit}
-          onDelete={onDelete}
-        />
-      </div>
+      {!readOnly ? (
+        <div
+          data-finance-row-actions="true"
+          className="absolute right-3 top-3 sm:static"
+        >
+          <FinanceActionMenu
+            label="transaction"
+            onEdit={onEdit}
+            onDelete={onDelete}
+          />
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -72,17 +100,19 @@ export function FinanceTransferRow({
   return (
     <div
       data-finance-row="transfer"
-      className="relative grid gap-3 rounded-xl border border-neutral-800 bg-neutral-950 px-4 py-3 pr-12 md:grid-cols-[minmax(0,1fr)_minmax(4rem,0.45fr)_minmax(0,1fr)] md:items-center md:pr-4"
+      className="relative grid gap-3 rounded-xl border border-neutral-800 bg-neutral-950 px-4 py-3 pr-12 md:grid-cols-2 md:items-center md:pr-4"
     >
-      <TransferAccount
-        account={transfer.fromAccount}
-        label="Withdrawn"
-        amount={-Number(transfer.fromAmount)}
-        currency={transfer.fromCurrency}
-        amountClassName="text-rose-300"
-      />
+      <div className="min-w-0 md:pr-10">
+        <TransferAccount
+          account={transfer.fromAccount}
+          label="Withdrawn"
+          amount={-Number(transfer.fromAmount)}
+          currency={transfer.fromCurrency}
+          amountClassName="text-rose-300"
+        />
+      </div>
       <TransferFlowArrow />
-      <div className="min-w-0 md:pr-8">
+      <div className="min-w-0 md:pl-10 md:pr-8">
         <TransferAccount
           account={transfer.toAccount}
           label="Received"
@@ -139,7 +169,7 @@ export function TransferFlowArrow() {
       data-testid="transfer-flow-arrow"
       aria-label="Transfer direction"
       role="img"
-      className="flex h-10 items-center justify-start pl-3 text-neutral-600 md:h-auto md:w-full md:justify-center md:pl-0"
+      className="flex h-10 items-center justify-start pl-3 text-neutral-600 md:absolute md:inset-y-0 md:left-1/2 md:h-auto md:w-[72px] md:-translate-x-1/2 md:justify-center md:pl-0"
     >
       <div className="flex h-full flex-col items-center md:hidden">
         <svg className="min-h-0 w-3 flex-1" aria-hidden="true">

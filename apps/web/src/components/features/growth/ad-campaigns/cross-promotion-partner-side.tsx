@@ -172,7 +172,7 @@ export function CrossPromotionPartnerSide({
               onChange={onSettingsChange}
             />
           ) : null}
-          {basicsReady ? (
+          {basicsReady || partnerIds.length > 0 ? (
             <>
               <div className="grid items-end gap-3 md:grid-cols-[minmax(260px,.8fr)_minmax(0,1.2fr)]">
                 <FormField label="My promo source" required>
@@ -287,7 +287,7 @@ export function CrossPromotionPartnerSide({
             </>
           ) : (
             <p className="rounded-lg border border-dashed border-neutral-700 p-3 text-sm text-neutral-500">
-              Add a title and choose where you publish to configure your promo.
+              Select a partner channel to choose the promo they will publish.
             </p>
           )}
         </>

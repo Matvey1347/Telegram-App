@@ -84,4 +84,32 @@ describe("TelegramMtprotoAccountCard capabilities", () => {
     expect(onSynchronize).toHaveBeenCalledOnce();
     expect(screen.queryByText("Check account")).toBeNull();
   });
+
+  it("makes QR recovery the primary action for an expired session", () => {
+    const onRefreshQr = vi.fn();
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <TelegramMtprotoAccountCard
+          account={{
+            ...account,
+            status: "error",
+            lastErrorMessage:
+              "The connected Telegram account session is no longer valid. Reconnect the account and retry.",
+          }}
+          isStartingLogin={false}
+          onStartLogin={vi.fn()}
+          onRefreshQr={onRefreshQr}
+          onEnterCode={vi.fn()}
+          onPassword={vi.fn()}
+          onSynchronize={vi.fn()}
+          onSync={vi.fn()}
+          onDelete={vi.fn()}
+        />
+      </QueryClientProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Reconnect via QR" }));
+    expect(onRefreshQr).toHaveBeenCalledOnce();
+    expect(screen.queryByRole("button", { name: "Start login" })).toBeNull();
+  });
 });

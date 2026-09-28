@@ -3,8 +3,6 @@ import type { ResolvedEmoji, Transaction } from "@/lib/api";
 export function transactionAvatar(
   transaction: Transaction,
 ): ResolvedEmoji | null | undefined {
-  if (transaction.iconPresentation) return transaction.iconPresentation;
-
   const channel =
     transaction.telegramChannel ?? transaction.purchasedTelegramChannel;
   if (channel?.photoUrl) {
@@ -25,12 +23,11 @@ export function transactionAvatar(
     Boolean(transaction.investment) ||
     categoryKey === "investment" ||
     categoryName === "investment";
-  if (isInvestment && investorAvatar) {
-    return investorAvatar;
+  if (isInvestment && investorAvatar) return investorAvatar;
+
+  if (transaction.categoryRef?.iconPresentation) {
+    return transaction.categoryRef.iconPresentation;
   }
 
-  return (
-    transaction.categoryRef?.iconPresentation ??
-    transaction.account?.iconPresentation
-  );
+  return transaction.account?.iconPresentation ?? transaction.iconPresentation;
 }

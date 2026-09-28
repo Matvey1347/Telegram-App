@@ -47,7 +47,11 @@ export class TelegramPostMetricsService {
   async syncPostsMetrics(
     userId: string,
     channelId: string,
-    dto: { telegramUserAccountId?: string; postLimit?: number },
+    dto: {
+      telegramUserAccountId?: string;
+      postLimit?: number;
+      messageIds?: string[];
+    },
     onProgress?: BulkProgressCallback,
     progressStep = { current: 3, total: 8 },
   ) {
@@ -70,7 +74,11 @@ export class TelegramPostMetricsService {
   async syncPostsMetricsForWorkspace(
     workspaceId: string,
     channelId: string,
-    dto: { telegramUserAccountId?: string; postLimit?: number },
+    dto: {
+      telegramUserAccountId?: string;
+      postLimit?: number;
+      messageIds?: string[];
+    },
     onProgress?: BulkProgressCallback,
     progressStep = { current: 3, total: 8 },
   ) {
@@ -101,6 +109,7 @@ export class TelegramPostMetricsService {
       const metrics = await this.mtprotoClient.getChannelPostsMetrics({
         ...this.telegramChannelAccessService.accountCredentials(account),
         channel: channelReference,
+        messageIds: dto.messageIds,
         postLimit: Math.min(
           MAX_TELEGRAM_CHANNEL_POST_SYNC_LIMIT,
           Math.max(1, dto.postLimit || this.defaultPostSyncLimit),

@@ -8,7 +8,7 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { Plus } from "lucide-react";
+import { Archive, ArchiveRestore, Plus } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { IconAvatar } from "@/components/icons/icon-avatar";
 import {
@@ -41,6 +41,7 @@ import {
 } from "@/components/ui/primitives";
 import { Pagination } from "@/components/ui/pagination";
 import { useAppToast } from "@/providers/toast-provider";
+import { patchFinanceAccountCache } from "@/lib/features/finance/account-cache";
 import { FinanceActionMenu } from "./finance-action-menu";
 import { AccountPreview, CurrencyAmount } from "./finance-format";
 import {
@@ -69,6 +70,10 @@ import {
   resizeFinanceListPage,
   type FinancePageState,
 } from "./finance-overview-pagination";
+import {
+  groupAccountsByOwner,
+  type AccountScope,
+} from "./account-groups";
 
 type Editor =
   | { kind: "account"; item?: Account }
@@ -85,6 +90,7 @@ export function InternalFinanceOverview() {
   const [categoryType, setCategoryType] = useState<TransactionType>("expense");
   const [editor, setEditor] = useState<Editor>(null);
   const [deleting, setDeleting] = useState<Target | null>(null);
+  const [accountScope, setAccountScope] = useState<AccountScope>("mine");
   const [accountPage, setAccountPage] = useState<PageState>({
     page: 1,
     pageSize: 10,
@@ -121,9 +127,13 @@ export function InternalFinanceOverview() {
     () => financeOverviewQuery(period, transferPage),
     [period, transferPage],
   );
+  const accountQuery = useMemo(
+    () => ({ ...accountPage, scope: accountScope }),
+    [accountPage, accountScope],
+  );
   const accounts = useQuery({
-    queryKey: [...accountKeys.accounts(), "overview", accountPage],
-    queryFn: () => accountsApi.listPage(accountPage),
+    queryKey: [...accountKeys.accounts(), "overview", accountQuery],
+    queryFn: () => accountsApi.listPage(accountQuery),
     placeholderData: keepPreviousData,
   });
   const settings = useQuery({
@@ -171,14 +181,6 @@ export function InternalFinanceOverview() {
     enabled: editor?.kind === "transaction",
   });
 
-  const refresh = () =>
-    Promise.all([
-      qc.invalidateQueries({ queryKey: accountKeys.accounts() }),
-      qc.invalidateQueries({ queryKey: accountKeys.transactions() }),
-      qc.invalidateQueries({ queryKey: ["transfers"] }),
-      qc.invalidateQueries({ queryKey: ["transaction-categories-admin"] }),
-      qc.invalidateQueries({ queryKey: ["transaction-categories"] }),
-    ]);
   const save = useMutation<unknown, Error, { target: Target; value: unknown }>({
     mutationFn: ({ target, value }: { target: Target; value: unknown }) => {
       if (target.kind === "account")
@@ -208,6 +210,24 @@ export function InternalFinanceOverview() {
     },
     onSuccess: async (_, variables) => {
       setEditor(null);
+      if (variables.target.kind === "account") {
+        const updated = _ as Account;
+        const previous = variables.target.item;
+        const ownershipChanged =
+          previous && previous.assignedMemberId !== updated.assignedMemberId;
+        const currencyChanged = previous && previous.currency !== updated.currency;
+        if (previous && !ownershipChanged && !currencyChanged) {
+          patchFinanceAccountCache(qc, updated);
+          return;
+        }
+        await Promise.all([
+          qc.invalidateQueries({ queryKey: accountKeys.accounts() }),
+          ...(Number((variables.value as AccountFormValues).initialBalance) > 0
+            ? [qc.invalidateQueries({ queryKey: accountKeys.transactions() })]
+            : []),
+        ]);
+        return;
+      }
       if (variables.target.kind === "transaction") {
         setTransactionPage((value) => ({ ...value, page: 1 }));
         const nextChannelId = (variables.value as InternalTransactionValues)
@@ -230,9 +250,22 @@ export function InternalFinanceOverview() {
       }
       if (variables.target.kind === "transfer")
         setTransferPage((value) => ({ ...value, page: 1 }));
-      if (variables.target.kind === "account")
-        setAccountPage((value) => ({ ...value, page: 1 }));
-      await refresh();
+      if (variables.target.kind === "transaction") {
+        await Promise.all([
+          qc.invalidateQueries({ queryKey: accountKeys.accounts() }),
+          qc.invalidateQueries({ queryKey: accountKeys.transactions() }),
+        ]);
+      } else if (variables.target.kind === "transfer") {
+        await Promise.all([
+          qc.invalidateQueries({ queryKey: accountKeys.accounts() }),
+          qc.invalidateQueries({ queryKey: ["transfers"] }),
+        ]);
+      } else {
+        await Promise.all([
+          qc.invalidateQueries({ queryKey: ["transaction-categories-admin"] }),
+          qc.invalidateQueries({ queryKey: accountKeys.transactions() }),
+        ]);
+      }
     },
   });
   const remove = useMutation({
@@ -245,11 +278,46 @@ export function InternalFinanceOverview() {
         return transactionCategoriesApi.remove(target.item.id);
       return transfersApi.remove(target.item.id);
     },
-    onSuccess: async () => {
+    onSuccess: async (_, target) => {
       setDeleting(null);
-      await refresh();
+      if (target.kind === "account") {
+        await qc.invalidateQueries({ queryKey: accountKeys.accounts() });
+      } else if (target.kind === "transaction") {
+        await Promise.all([
+          qc.invalidateQueries({ queryKey: accountKeys.accounts() }),
+          qc.invalidateQueries({ queryKey: accountKeys.transactions() }),
+        ]);
+      } else if (target.kind === "transfer") {
+        await Promise.all([
+          qc.invalidateQueries({ queryKey: accountKeys.accounts() }),
+          qc.invalidateQueries({ queryKey: ["transfers"] }),
+        ]);
+      } else {
+        await Promise.all([
+          qc.invalidateQueries({ queryKey: ["transaction-categories-admin"] }),
+          qc.invalidateQueries({ queryKey: accountKeys.transactions() }),
+        ]);
+      }
     },
   });
+  const restoreAccount = useMutation({
+    mutationFn: (accountId: string) =>
+      accountsApi.update(accountId, { isActive: true }),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: accountKeys.accounts() });
+    },
+  });
+  const archiveAccount = useMutation({
+    mutationFn: (accountId: string) =>
+      accountsApi.update(accountId, { isActive: false }),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: accountKeys.accounts() });
+    },
+  });
+  const accountGroups = useMemo(
+    () => groupAccountsByOwner(accounts.data?.items ?? []),
+    [accounts.data?.items],
+  );
 
   const submit = async (target: Target, value: unknown) => {
     const operation = startOperation({
@@ -305,8 +373,16 @@ export function InternalFinanceOverview() {
         <Section
           id="accounts"
           title="Accounts"
-          hint="Balances in each account currency"
-          create={() => setEditor({ kind: "account" })}
+          hint={
+            accountScope === "archived"
+              ? "Archived accounts keep their full financial history"
+              : "Balances in each account currency"
+          }
+          create={
+            accountScope === "archived"
+              ? undefined
+              : () => setEditor({ kind: "account" })
+          }
           query={accounts}
           skeleton={
             <AccountCardsSkeleton count={accounts.data?.items.length || 4} />
@@ -321,28 +397,91 @@ export function InternalFinanceOverview() {
               />
             ) : null
           }
+          toolbar={
+            <div
+              className="mb-3 flex w-full overflow-x-auto rounded-lg border border-neutral-800 bg-neutral-950 p-1 sm:w-fit"
+              role="tablist"
+              aria-label="Account scope"
+            >
+              {(
+                [
+                  ["mine", "My accounts"],
+                  ["all", "All accounts"],
+                  ["archived", "Archived"],
+                ] as Array<[AccountScope, string]>
+              ).map(([scope, label]) => (
+                <button
+                  key={scope}
+                  type="button"
+                  role="tab"
+                  aria-selected={accountScope === scope}
+                  onClick={() => {
+                    setAccountScope(scope);
+                    setAccountPage((state) => ({ ...state, page: 1 }));
+                  }}
+                  className={`min-h-9 shrink-0 rounded-md px-3 text-sm font-medium transition ${accountScope === scope ? "bg-blue-600 text-white" : "text-neutral-400 hover:bg-neutral-800 hover:text-white"}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          }
         >
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            {accounts.data?.items.map((a) => (
-              <Card key={a.id} className="!p-4">
-                <div className="flex items-start justify-between gap-2">
-                  <AccountPreview account={a} />
-                  <FinanceActionMenu
-                    label={a.name}
-                    onEdit={() => setEditor({ kind: "account", item: a })}
-                    onDelete={() => setDeleting({ kind: "account", item: a })}
-                  />
+          <div className="space-y-5">
+            {accountGroups.map((group) => (
+              <div key={group.key}>
+                <div className="mb-2 flex items-center gap-2 text-sm font-medium text-neutral-300">
+                  {group.member ? (
+                    <IconAvatar
+                      icon={group.member.avatarPresentation}
+                      label={group.member.user.name}
+                      size="xs"
+                    />
+                  ) : null}
+                  <span>{group.label}</span>
+                  <span className="text-xs font-normal text-neutral-500">
+                    {group.accounts.length}
+                  </span>
                 </div>
-                <div className="mt-4 text-xl font-semibold">
-                  <CurrencyAmount
-                    amount={a.balance ?? a.calculatedBalance}
-                    currency={a.currency}
-                  />
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  {group.accounts.map((account) => {
+                    const archived = !account.isActive;
+                    return (
+                      <Card key={account.id} className="!p-4">
+                        <div className="flex items-start justify-between gap-2">
+                          <AccountPreview account={account} />
+                          <FinanceActionMenu
+                            label={account.name}
+                            onEdit={() =>
+                              setEditor({ kind: "account", item: account })
+                            }
+                            onDelete={() => {
+                              if (archived) restoreAccount.mutate(account.id);
+                              else archiveAccount.mutate(account.id);
+                            }}
+                            destructiveActionLabel={
+                              archived ? "Restore" : "Archive"
+                            }
+                            destructiveActionIcon={
+                              archived ? ArchiveRestore : Archive
+                            }
+                            destructive={false}
+                          />
+                        </div>
+                        <div className="mt-4 text-xl font-semibold">
+                          <CurrencyAmount
+                            amount={account.balance ?? account.calculatedBalance}
+                            currency={account.currency}
+                          />
+                        </div>
+                        <div className="mt-1 text-xs text-neutral-500">
+                          {account.transactionStats?.count ?? 0} transactions
+                        </div>
+                      </Card>
+                    );
+                  })}
                 </div>
-                <div className="mt-1 text-xs text-neutral-500">
-                  {a.transactionStats?.count ?? 0} transactions
-                </div>
-              </Card>
+              </div>
             ))}
           </div>
           {!accounts.data?.items.length && (
@@ -563,7 +702,7 @@ function Section({
   id: string;
   title: string;
   hint: string;
-  create: () => void;
+  create?: () => void;
   query: { isLoading: boolean; isPlaceholderData: boolean; error: unknown };
   skeleton: ReactNode;
   toolbar?: ReactNode;
@@ -578,13 +717,15 @@ function Section({
           <h2 className="text-lg font-semibold text-white">{title}</h2>
           <p className="mt-0.5 text-sm leading-5 text-neutral-500">{hint}</p>
         </div>
-        <Button
-          variant="secondary"
-          onClick={create}
-          className="shrink-0 px-3 sm:px-4"
-        >
-          <Plus size={16} /> <span className="hidden sm:inline">Create</span>
-        </Button>
+        {create ? (
+          <Button
+            variant="secondary"
+            onClick={create}
+            className="shrink-0 px-3 sm:px-4"
+          >
+            <Plus size={16} /> <span className="hidden sm:inline">Create</span>
+          </Button>
+        ) : null}
       </div>
       {toolbar}
       {query.error ? (

@@ -34,7 +34,7 @@ export function AdSaleModal(props: AdSaleModalProps) {
     accounts,
     channels,
     networks,
-    productsByChannelId,
+    productsByChannelId: providedProductsByChannelId,
     workspaceTimezone,
     onSearchAdvertisers,
     busy = false,
@@ -84,6 +84,7 @@ export function AdSaleModal(props: AdSaleModalProps) {
     effectiveChannelIds,
     commonFormats,
     commonFormatName,
+    productsByChannelId,
     loadPublishedPosts,
     canSubmit,
     openSlotPicker,
@@ -95,7 +96,10 @@ export function AdSaleModal(props: AdSaleModalProps) {
     continueDraft,
     deleteDraft,
     createNewDraft,
-  } = useAdSaleModalController(props);
+  } = useAdSaleModalController({
+    ...props,
+    productsByChannelId: providedProductsByChannelId,
+  });
   return (
     <>
       <Modal

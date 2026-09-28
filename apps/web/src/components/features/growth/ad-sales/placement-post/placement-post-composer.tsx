@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { ExternalLink, Eye, Smile } from "lucide-react";
 import {
   type TelegramPostButtonRows,
   type TelegramPostMediaItem,
 } from "@telegram-system/shared";
 import { TelegramPostDraftEditor } from "@/components/features/telegram/telegram/telegram-post-draft-editor";
 import { Input, Select, Tooltip } from "@/components/ui/primitives";
+import type { PublishedPostOption } from "../ad-sale-types";
 
 export type PlacementManagedPostDraft = {
   title: string;
@@ -15,8 +17,6 @@ export type PlacementManagedPostDraft = {
   mediaItems?: TelegramPostMediaItem[];
   buttonRows: TelegramPostButtonRows;
 };
-
-type PublishedPostOption = { id: string; title: string; publishedAt: string };
 
 export function PlacementPostComposer({
   channelTitle,
@@ -56,6 +56,31 @@ export function PlacementPostComposer({
     "select",
   );
   const [postUrl, setPostUrl] = useState("");
+  const [linkLoading, setLinkLoading] = useState(false);
+  const [linkError, setLinkError] = useState("");
+  const linkedPost = publishedPosts.find((post) => post.id === existingPostId);
+  const linkPost = async (url: string) => {
+    setLinkLoading(true);
+    setLinkError("");
+    try {
+      const post = await onLoadPublishedPosts(url);
+      if (!post) {
+        setLinkError("The post was not found in this channel.");
+        return null;
+      }
+      onChange({
+        telegramPostId: post.id,
+        publishedAt: post.publishedAt,
+        draft: null,
+      });
+      return post;
+    } catch {
+      setLinkError("Could not load the Telegram post. Try again.");
+      return null;
+    } finally {
+      setLinkLoading(false);
+    }
+  };
   const updateDraft = (patch: Partial<PlacementManagedPostDraft>) => {
     const current = draft ?? {
       title: "Advertising post",
@@ -159,14 +184,7 @@ export function PlacementPostComposer({
               searchPlaceholder="Search posts or paste a Telegram link"
               onSearchPaste={async (value) => {
                 if (!/^https?:\/\/(?:www\.)?t\.me\//i.test(value)) return false;
-                const post = await onLoadPublishedPosts(value);
-                if (!post) return false;
-                onChange({
-                  telegramPostId: post.id,
-                  publishedAt: post.publishedAt,
-                  draft: null,
-                });
-                return true;
+                return Boolean(await linkPost(value));
               }}
               onChange={(event) => {
                 const post = publishedPosts.find(
@@ -201,22 +219,41 @@ export function PlacementPostComposer({
               />
               <button
                 type="button"
-                disabled={postsLoading || !postUrl.trim()}
-                onClick={async () => {
-                  const post = await onLoadPublishedPosts(postUrl.trim());
-                  if (!post) return;
-                  onChange({
-                    telegramPostId: post.id,
-                    publishedAt: post.publishedAt,
-                    draft: null,
-                  });
-                }}
+                disabled={postsLoading || linkLoading || !postUrl.trim()}
+                onClick={() => void linkPost(postUrl.trim())}
                 className="rounded-md bg-blue-600 px-3 text-sm font-medium text-white disabled:opacity-50"
               >
-                Use link
+                {linkLoading ? "Loading..." : "Use link"}
               </button>
             </div>
           )}
+          {linkError ? <p className="text-xs text-rose-300">{linkError}</p> : null}
+          {linkedPost ? (
+            <div className="rounded-md border border-emerald-800/70 bg-emerald-950/20 px-3 py-2 text-xs text-neutral-300">
+              <p className="font-medium text-emerald-200">Post linked</p>
+              {linkedPost.telegramPostUrl ? (
+                <a
+                  href={linkedPost.telegramPostUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-1 inline-flex max-w-full items-center gap-1 break-all text-sky-300 hover:text-sky-200 hover:underline"
+                >
+                  <span>{linkedPost.telegramPostUrl}</span>
+                  <ExternalLink size={12} className="shrink-0" />
+                </a>
+              ) : null}
+              <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-neutral-400">
+                <span className="inline-flex items-center gap-1">
+                  <Eye size={13} aria-hidden="true" />
+                  {Number(linkedPost.viewsCount ?? 0).toLocaleString()} views
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <Smile size={13} aria-hidden="true" />
+                  {Number(linkedPost.reactionsCount ?? 0).toLocaleString()} reactions
+                </span>
+              </div>
+            </div>
+          ) : null}
         </div>
       )}
     </div>

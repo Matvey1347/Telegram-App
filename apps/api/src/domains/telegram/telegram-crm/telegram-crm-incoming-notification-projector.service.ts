@@ -28,6 +28,8 @@ export class TelegramCrmIncomingNotificationProjector {
     inputs: readonly CrmMessageBatchInput[],
     created: readonly CrmMessageRow[],
   ) {
+    if (!this.incomingMessageNotificationsEnabled()) return [];
+
     if (mode !== 'live' || !created.length) return [];
     const inputByKey = new Map(
       inputs.map((input) => [
@@ -319,5 +321,11 @@ export class TelegramCrmIncomingNotificationProjector {
   private preview(text: string | null) {
     const value = text?.trim().replace(/\s+/g, ' ') || 'New inbound message';
     return value.slice(0, 240);
+  }
+
+  private incomingMessageNotificationsEnabled() {
+    // Telegram conversations remain available in CRM, but incoming messages
+    // are intentionally not surfaced as Operations notifications or web push.
+    return false;
   }
 }

@@ -402,6 +402,7 @@ enum OperationsNotificationType {
   CRM_MESSAGE_RECEIVED
   CRM_FOLLOW_UP_DUE
   CRM_PLACEMENT_FAILURE
+  TELEGRAM_ACCOUNT_REAUTH_REQUIRED
 }
 
 enum OperationsNotificationPriority {
@@ -1414,6 +1415,7 @@ model Account {
 
   @@index([workspaceId, assignedMemberId])
   @@index([workspaceId, deletedAt])
+  @@index([workspaceId, isActive, assignedMemberId])
 }
 
 model Transaction {
@@ -2444,6 +2446,7 @@ model TelegramAdvertiserTag {
 
   workspace   Workspace                         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   advertisers TelegramAdvertiserTagAssignment[]
+  purchaseTagSettings TelegramAdCrmWorkspaceSettings[] @relation("TelegramCrmPurchaseTag")
 
   @@unique([workspaceId, name])
   @@unique([workspaceId, systemKey])
@@ -2571,11 +2574,15 @@ model TelegramAdCrmWorkspaceSettings {
   inactivityThresholdDays           Int                    @default(60)
   highValueCustomerThreshold        Decimal                @default(0)
   defaultCrmSenderAccountId         String?
+  purchaseTagId                     String?
   createdAt                         DateTime               @default(now())
   updatedAt                         DateTime               @updatedAt
 
   workspace               Workspace                       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   defaultCrmSenderAccount TelegramUserAccountIntegration? @relation("TelegramCrmDefaultSenderAccount", fields: [defaultCrmSenderAccountId, workspaceId], references: [id, workspaceId], onDelete: Restrict, map: "TelegramAdCrmWorkspaceSettings_defaultSender_fkey")
+  purchaseTag              TelegramAdvertiserTag?          @relation("TelegramCrmPurchaseTag", fields: [purchaseTagId], references: [id], onDelete: SetNull, map: "TelegramAdCrmWorkspaceSettings_purchaseTag_fkey")
+
+  @@index([purchaseTagId])
 }
 
 model TelegramCrmPeer {

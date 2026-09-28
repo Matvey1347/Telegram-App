@@ -51,7 +51,8 @@ function RoleBadge({ member }: { member: WorkspaceMember }) {
           : "border-neutral-700 bg-neutral-800 text-neutral-200";
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium ${tone}`}
+      className={`inline-flex max-w-full shrink-0 items-center gap-1 whitespace-nowrap rounded-full border px-2 py-0.5 text-xs font-medium ${tone}`}
+      title={definition?.name ?? ROLE_LABELS[role]}
     >
       {definition?.iconPresentation ? (
         <IconAvatar
@@ -64,7 +65,7 @@ function RoleBadge({ member }: { member: WorkspaceMember }) {
       ) : role === "owner" ? (
         <ShieldCheck size={12} />
       ) : null}
-      {definition?.name ?? ROLE_LABELS[role]}
+      <span className="truncate">{definition?.name ?? ROLE_LABELS[role]}</span>
     </span>
   );
 }

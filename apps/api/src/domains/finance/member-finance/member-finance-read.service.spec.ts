@@ -88,9 +88,9 @@ describe('MemberFinanceReadService', () => {
         commissionPayable: 75,
         investments: expect.objectContaining({
           salary: 25,
-          investorEarnings: 0,
+          investorEarnings: 75,
           principal: 25,
-          total: 25,
+          total: 100,
         }),
       }),
     ]);
@@ -101,6 +101,100 @@ describe('MemberFinanceReadService', () => {
       service.details('seller-user', 'another-member'),
     ).rejects.toBeInstanceOf(ForbiddenException);
     expect(prisma.workspaceMember.findFirst).not.toHaveBeenCalled();
+  });
+
+  it('keeps another member’s payments, settlements and investments out of a member timeline', async () => {
+    workspaceService.resolveWorkspaceMembershipForUser.mockResolvedValue({
+      id: 'owner-1',
+      workspaceId: 'workspace-1',
+      role: 'owner',
+    });
+    prisma.workspaceMember.findFirst.mockResolvedValue({
+      id: 'seller-1',
+      user: { id: 'seller-user', name: 'Seller', email: 'seller@example.com' },
+      avatarIcon: null,
+    });
+    prisma.telegramAdSalePayment.findMany.mockResolvedValue([
+      {
+        id: 'payment-1',
+        paidAt: new Date('2026-09-12T10:00:00Z'),
+        amountInPrimaryCurrency: 1_000,
+        sale: {
+          id: 'sale-1',
+          title: 'Seller sale',
+          advertiserName: 'Advertiser',
+          sellerMemberId: 'seller-1',
+          sellerCommissionRate: 10,
+        },
+      },
+      {
+        id: 'payment-other',
+        paidAt: new Date('2026-09-13T10:00:00Z'),
+        amountInPrimaryCurrency: 1_000,
+        sale: {
+          id: 'sale-other',
+          title: 'Other sale',
+          advertiserName: 'Other advertiser',
+          sellerMemberId: 'member-other',
+          sellerCommissionRate: 10,
+        },
+      },
+    ]);
+    prisma.memberCompensationSettlement.findMany.mockResolvedValue([
+      {
+        id: 'settlement-1',
+        workspaceMemberId: 'seller-1',
+        type: 'INVESTMENT',
+        amountInPrimaryCurrency: 25,
+        date: new Date('2026-09-12T11:00:00Z'),
+        notes: 'Seller settlement',
+      },
+      {
+        id: 'settlement-other',
+        workspaceMemberId: 'member-other',
+        type: 'PAYOUT',
+        amountInPrimaryCurrency: 50,
+        date: new Date('2026-09-13T11:00:00Z'),
+        notes: 'Other settlement',
+      },
+    ]);
+    prisma.investment.findMany.mockResolvedValue([
+      {
+        id: 'investment-1',
+        workspaceMemberId: 'seller-1',
+        origin: 'REINVESTMENT',
+        movementType: 'CONTRIBUTION',
+        amountInPrimaryCurrency: 75,
+        date: new Date('2026-09-12T12:00:00Z'),
+        notes: 'Seller reinvestment',
+      },
+      {
+        id: 'investment-other',
+        workspaceMemberId: 'member-other',
+        origin: 'REINVESTMENT',
+        movementType: 'CONTRIBUTION',
+        amountInPrimaryCurrency: 50,
+        date: new Date('2026-09-13T12:00:00Z'),
+        notes: 'Other reinvestment',
+      },
+    ]);
+
+    const details = await service.details('owner-user', 'seller-1');
+
+    expect(details.timeline.map((item) => item.title)).toEqual(
+      expect.arrayContaining([
+        'Seller sale',
+        'Seller settlement',
+        'Seller reinvestment',
+      ]),
+    );
+    expect(details.timeline.map((item) => item.title)).not.toEqual(
+      expect.arrayContaining([
+        'Other sale',
+        'Other settlement',
+        'Other reinvestment',
+      ]),
+    );
   });
 
   it('divides all earned revenue by the current visible investor shares', async () => {

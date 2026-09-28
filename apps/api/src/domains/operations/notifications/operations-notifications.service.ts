@@ -3,6 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { OperationsNotificationType } from '@prisma/client';
 import type {
   OperationsNotificationPage,
   OperationsNotificationPreferences,
@@ -47,6 +48,7 @@ export class OperationsNotificationsService {
       where: {
         workspaceId: access.workspaceId,
         recipientMemberId: access.memberId,
+        type: { not: OperationsNotificationType.CRM_MESSAGE_RECEIVED },
         publishedAt: { not: null, lte: now },
         expiresAt: { gt: now },
         ...this.permissions.visibilityWhere(
@@ -112,6 +114,7 @@ export class OperationsNotificationsService {
         where: {
           workspaceId: access.workspaceId,
           recipientMemberId: access.memberId,
+          type: { not: OperationsNotificationType.CRM_MESSAGE_RECEIVED },
           readAt: null,
           publishedAt: { not: null, lte: now },
           expiresAt: { gt: now },

@@ -30,6 +30,22 @@ export function formatCalendarTransactionMoney(
   return formatMoney(amount, currency, settings?.currencyDisplayMode ?? "code");
 }
 
+export function calendarDealAmount(
+  placement: {
+    agreedPrice?: string | null;
+    currency?: string | null;
+    saleAgreedAmount?: string | null;
+    settlementCurrency?: string | null;
+  } | null | undefined,
+  fallbackCurrency: string,
+) {
+  return {
+    amount: toNumber(placement?.saleAgreedAmount ?? placement?.agreedPrice),
+    currency:
+      placement?.settlementCurrency ?? placement?.currency ?? fallbackCurrency,
+  };
+}
+
 export function groupCalendarSoldSlotsBySale<
   T extends {
     slot: { existingPlacement?: { saleId: string } | null };
@@ -151,14 +167,26 @@ export function CalendarTab(props: {
       currency: placement?.currency || slot.currency,
     };
   };
+  const saleDetails = (slots: ReturnType<typeof buildAdCalendarSlots>) => {
+    const placement = slots[0]?.existingPlacement;
+    return calendarDealAmount(placement, slots[0]?.currency ?? "");
+  };
   const summarizeRevenue = (slots: ReturnType<typeof buildAdCalendarSlots>) => {
     const totals = new Map<string, number>();
+    const countedSales = new Set<string>();
     for (const slot of slots) {
       const details = placementDetailsForSlot(slot);
       if (!details.placement) continue;
-      totals.set(
+      const saleId = details.placement.saleId;
+      if (countedSales.has(saleId)) continue;
+      countedSales.add(saleId);
+      const { amount: price, currency } = calendarDealAmount(
+        details.placement,
         details.currency,
-        (totals.get(details.currency) ?? 0) + details.price,
+      );
+      totals.set(
+        currency,
+        (totals.get(currency) ?? 0) + price,
       );
     }
     return Array.from(totals.entries()).map(([currency, amount]) => ({
@@ -277,17 +305,10 @@ export function CalendarTab(props: {
                         const details = placementDetailsForSlot(
                           firstEntry.slot,
                         );
-                        const dealRevenue = summarizeRevenue(
-                          deal.entries.map(({ slot }) => slot),
-                        );
-                        const dealChannels = Array.from(
-                          new Map(
-                            deal.entries.map(({ channel }) => [
-                              channel.id,
-                              channel,
-                            ]),
-                          ).values(),
-                        );
+                        const dealSaleDetails = saleDetails(deal.entries.map(({ slot }) => slot));
+                        const dealRevenue = dealSaleDetails.currency ? [
+                          { currency: dealSaleDetails.currency, amount: dealSaleDetails.amount, label: formatCalendarTransactionMoney(dealSaleDetails.amount, dealSaleDetails.currency, props.settings) },
+                        ] : [];
                         const dealLabel =
                           details.placement?.advertiserName ||
                           details.placement?.title ||
@@ -300,17 +321,12 @@ export function CalendarTab(props: {
                             title={`${dealLabel} · ${deal.entries.length} placement${deal.entries.length === 1 ? "" : "s"} · ${dealRevenue.map((item) => item.label).join(" · ")}`}
                             className="flex w-full items-center gap-1.5 rounded-md border border-sky-800/70 bg-sky-950/20 px-1.5 py-1 text-left text-[10px] font-medium text-sky-100 transition hover:border-sky-500"
                           >
-                            <span className="flex shrink-0 -space-x-1">
-                              {dealChannels.slice(0, 2).map((channel) => (
-                                <TelegramEntityAvatar
-                                  key={channel.id}
-                                  imageUrl={channel.photoUrl}
-                                  kind="channel"
-                                  alt={channel.title}
-                                  size="xs"
-                                />
-                              ))}
-                            </span>
+                            <TelegramEntityAvatar
+                              imageUrl={details.placement?.advertiserPhotoUrl ?? null}
+                              kind="person"
+                              alt={dealLabel}
+                              size="xs"
+                            />
                             <span className="min-w-0 flex-1 truncate">
                               {dealLabel}
                               {deal.entries.length > 1

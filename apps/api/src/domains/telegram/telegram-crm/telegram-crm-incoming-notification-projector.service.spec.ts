@@ -61,7 +61,7 @@ describe('TelegramCrmIncomingNotificationProjector', () => {
     };
   }
 
-  it('creates one same-transaction notification with the canonical Contact deep link', async () => {
+  it('does not create Operations notifications for incoming Telegram messages', async () => {
     const contact = {
       id: 'contact-1',
       displayName: 'Ada',
@@ -78,31 +78,11 @@ describe('TelegramCrmIncomingNotificationProjector', () => {
         [input],
         [message as never],
       ),
-    ).resolves.toEqual([{ id: 'notification-1' }]);
-    expect(notifications.upsertMany).toHaveBeenCalledWith(expect.anything(), [
-      expect.objectContaining({
-        sourceKey: 'contact:contact-1',
-        targetUrl:
-          '/ad-sales/contacts/contact-1/conversations/conversation-1?workspaceId=workspace-1',
-        visibilityMemberId: 'member-1',
-        visibilityResourceKey: 'crm-contact:contact-1',
-      }),
-    ]);
-    expect(tx.operationsNotification.deleteMany).toHaveBeenCalledWith({
-      where: {
-        workspaceId: 'workspace-1',
-        type: 'CRM_MESSAGE_RECEIVED',
-        OR: [
-          {
-            recipientMemberId: 'member-1',
-            sourceKey: { in: ['conversation:conversation-1'] },
-          },
-        ],
-      },
-    });
+    ).resolves.toEqual([]);
+    expect(notifications.upsertMany).not.toHaveBeenCalled();
   });
 
-  it('uses the bounded Inbox deep link for an unpromoted peer', async () => {
+  it('does not create notifications for unpromoted Telegram peers', async () => {
     const { projector, notifications } = setup(null);
     await projector.project(
       txWithContactUnread(5) as never,
@@ -111,15 +91,10 @@ describe('TelegramCrmIncomingNotificationProjector', () => {
       [{ ...input, conversation: { ...input.conversation, contactId: null } }],
       [message as never],
     );
-    expect(notifications.upsertMany).toHaveBeenCalledWith(expect.anything(), [
-      expect.objectContaining({
-        targetUrl:
-          '/ad-sales/inbox?conversationId=conversation-1&peerId=peer-1&workspaceId=workspace-1',
-      }),
-    ]);
+    expect(notifications.upsertMany).not.toHaveBeenCalled();
   });
 
-  it('coalesces fresh inbound rows into one Conversation notification with peer presentation', async () => {
+  it('does not project grouped inbound messages into notifications', async () => {
     const { projector, notifications } = setup(null);
     const withPeer = {
       ...input,
@@ -152,20 +127,7 @@ describe('TelegramCrmIncomingNotificationProjector', () => {
       ],
     );
 
-    const rows = (
-      notifications.upsertMany.mock.calls as unknown[][]
-    )[0]?.[1] as Array<Record<string, unknown>> | undefined;
-    if (!rows) throw new Error('Expected a projected notification row');
-    expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({
-      sourceKey: 'contact:contact-1',
-      metadata: {
-        presentationKind: 'crm-message',
-        senderName: 'Ada Lovelace',
-        avatarUrl: 'https://cdn.example/ada.jpg',
-        messageCount: 5,
-      },
-    });
+    expect(notifications.upsertMany).not.toHaveBeenCalled();
   });
 
   it('removes a read Conversation group only inside its workspace', async () => {

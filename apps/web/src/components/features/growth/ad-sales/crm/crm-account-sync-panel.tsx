@@ -11,6 +11,7 @@ import { telegramCrmApi } from "@/lib/features/growth/telegram-crm-api";
 import { telegramCrmKeys } from "@/lib/features/growth/telegram-crm-query";
 import { useAppToast } from "@/providers/toast-provider";
 import { TelegramEntityAvatar } from "@/components/features/telegram/telegram/telegram-entity-avatar";
+import { CrmTagMultiSelect } from "./crm-tag-multi-select";
 
 export function CrmAccountSyncPanel({ canEdit }: { canEdit: boolean }) {
   const queryClient = useQueryClient();
@@ -29,6 +30,22 @@ export function CrmAccountSyncPanel({ canEdit }: { canEdit: boolean }) {
   const [selectedDraft, setSelectedDraft] = useState<string[] | null>(null);
   const selected = selectedDraft ?? savedSelected;
   const [open, setOpen] = useState(false);
+  const settings = useQuery({
+    queryKey: telegramCrmKeys.settings(),
+    queryFn: () => telegramCrmApi.getSettings(),
+    enabled: open,
+  });
+  const tags = useQuery({
+    queryKey: telegramCrmKeys.tags(),
+    queryFn: ({ signal }) => telegramCrmApi.listTags(signal),
+    enabled: open,
+  });
+  const [purchaseTagDraft, setPurchaseTagDraft] = useState<string[] | null>(
+    null,
+  );
+  const purchaseTagId =
+    purchaseTagDraft ??
+    (settings.data?.purchaseTagId ? [settings.data.purchaseTagId] : []);
 
   const save = useMutation({
     mutationFn: async () => {
@@ -39,6 +56,11 @@ export function CrmAccountSyncPanel({ canEdit }: { canEdit: boolean }) {
       for (const account of changed) {
         await telegramCrmApi.updateAccountCapabilities(account.id, {
           crmSyncEnabled: selectedSet.has(account.id),
+        });
+      }
+      if (purchaseTagDraft !== null) {
+        await telegramCrmApi.updateSettings({
+          purchaseTagId: purchaseTagId[0] ?? null,
         });
       }
       return { changed };
@@ -61,6 +83,7 @@ export function CrmAccountSyncPanel({ canEdit }: { canEdit: boolean }) {
         }),
         queryClient.invalidateQueries({ queryKey: telegramCrmKeys.unread() }),
         queryClient.invalidateQueries({ queryKey: scheduledTaskKeys.root }),
+        queryClient.invalidateQueries({ queryKey: telegramCrmKeys.settings() }),
       ]);
     },
     onSettled: async () => {
@@ -135,9 +158,10 @@ export function CrmAccountSyncPanel({ canEdit }: { canEdit: boolean }) {
       ]);
     },
   });
-  const hasUnsavedChanges = connected.some(
-    (account) => account.crmSyncEnabled !== selected.includes(account.id),
-  );
+  const hasUnsavedChanges =
+    connected.some(
+      (account) => account.crmSyncEnabled !== selected.includes(account.id),
+    ) || purchaseTagDraft !== null;
 
   return (
     <>
@@ -158,6 +182,7 @@ export function CrmAccountSyncPanel({ canEdit }: { canEdit: boolean }) {
         onClose={() => {
           if (save.isPending || sync.isPending) return;
           setSelectedDraft(null);
+          setPurchaseTagDraft(null);
           setOpen(false);
         }}
         title="Telegram CRM sources"
@@ -195,6 +220,28 @@ export function CrmAccountSyncPanel({ canEdit }: { canEdit: boolean }) {
                 : "Select MTProto accounts"
             }
             allSelectedLabel="All connected accounts"
+          />
+        </div>
+        <div className="mt-3">
+          <label className="mb-1 block text-sm font-medium text-white">
+            Purchase tag
+          </label>
+          <p className="mb-2 text-xs text-neutral-500">
+            Applied automatically to buyers. A Telegram-folder tag also moves
+            their Telegram chat into that folder.
+          </p>
+          <CrmTagMultiSelect
+            value={purchaseTagId}
+            onChange={(value) => setPurchaseTagDraft(value.slice(-1))}
+            disabled={
+              !canEdit ||
+              settings.isLoading ||
+              tags.isLoading ||
+              save.isPending ||
+              sync.isPending
+            }
+            tags={tags.data ?? []}
+            placeholder={tags.isLoading ? "Loading tags…" : "Select tags"}
           />
         </div>
         <div className="mt-4 flex justify-end gap-2">

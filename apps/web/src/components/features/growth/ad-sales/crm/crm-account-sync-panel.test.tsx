@@ -5,6 +5,9 @@ import { CrmAccountSyncPanel } from "./crm-account-sync-panel";
 
 const mocks = vi.hoisted(() => ({
   list: vi.fn(),
+  listTags: vi.fn(),
+  getSettings: vi.fn(),
+  updateSettings: vi.fn(),
   updateAccountCapabilities: vi.fn(),
   initialSync: vi.fn(),
   startOperation: vi.fn(),
@@ -21,6 +24,9 @@ vi.mock("@/lib/features/growth/telegram-crm-api", () => ({
   telegramCrmApi: {
     updateAccountCapabilities: mocks.updateAccountCapabilities,
     initialSync: mocks.initialSync,
+    listTags: mocks.listTags,
+    getSettings: mocks.getSettings,
+    updateSettings: mocks.updateSettings,
   },
 }));
 
@@ -58,6 +64,28 @@ describe("CrmAccountSyncPanel", () => {
       },
     ]);
     mocks.updateAccountCapabilities.mockReset().mockResolvedValue({});
+    mocks.getSettings.mockReset().mockResolvedValue({ purchaseTagId: null });
+    mocks.updateSettings.mockReset().mockResolvedValue({ purchaseTagId: null });
+    mocks.listTags.mockReset().mockResolvedValue([
+      {
+        id: "manual-tag",
+        name: "Manual buyer tag",
+        color: "#22c55e",
+        systemKey: null,
+        isSystem: false,
+        assignmentMode: "MANUAL",
+        emojiPresentation: null,
+      },
+      {
+        id: "automatic-tag",
+        name: "Automatic tag",
+        color: "#3b82f6",
+        systemKey: null,
+        isSystem: true,
+        assignmentMode: "AUTOMATIC",
+        emojiPresentation: null,
+      },
+    ]);
     mocks.initialSync.mockReset().mockResolvedValue({
       importedConversations: 2,
       importedMessages: 3,
@@ -75,20 +103,26 @@ describe("CrmAccountSyncPanel", () => {
   it("keeps source controls in a compact modal and explains daily sync", async () => {
     renderPanel();
 
-    expect(await screen.findByRole("button", { name: "Manage sources" })).toBeTruthy();
+    expect(
+      await screen.findByRole("button", { name: "Manage sources" }),
+    ).toBeTruthy();
     expect(screen.queryByText("1 selected · automatic sync daily")).toBeNull();
     expect(screen.queryByText(/Selected MTProto accounts keep/)).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Manage sources" }));
 
-    expect(screen.getByRole("dialog", { name: "Telegram CRM sources" })).toBeTruthy();
+    expect(
+      screen.getByRole("dialog", { name: "Telegram CRM sources" }),
+    ).toBeTruthy();
     expect(screen.getByText(/sync automatically once a day/)).toBeTruthy();
     expect(screen.getByRole("button", { name: "Sync" })).toBeEnabled();
   });
 
   it("runs manual sync only for the saved selected accounts", async () => {
     renderPanel();
-    fireEvent.click(await screen.findByRole("button", { name: "Manage sources" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Manage sources" }),
+    );
     fireEvent.click(screen.getByRole("button", { name: "Sync" }));
 
     await waitFor(() =>
@@ -103,12 +137,28 @@ describe("CrmAccountSyncPanel", () => {
     );
     expect(mocks.operationUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
-        message: expect.stringContaining("importing dialogs, messages, and Telegram folder tags"),
+        message: expect.stringContaining(
+          "importing dialogs, messages, and Telegram folder tags",
+        ),
       }),
     );
     expect(mocks.operationSucceed).toHaveBeenCalledWith(
-      expect.objectContaining({ message: expect.stringContaining("folder tags refreshed") }),
+      expect.objectContaining({
+        message: expect.stringContaining("folder tags refreshed"),
+      }),
     );
+  });
+
+  it("uses the same searchable tag selector as the contact Tags modal", async () => {
+    renderPanel();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Manage sources" }),
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Select tags" }));
+
+    expect(await screen.findByPlaceholderText("Search tags")).toBeVisible();
+    expect(screen.getByText("Manual buyer tag")).toBeVisible();
+    expect(screen.getByText("Automatic tag")).toBeVisible();
   });
 
   it("keeps a visible retry-safe alert when synchronization fails", async () => {

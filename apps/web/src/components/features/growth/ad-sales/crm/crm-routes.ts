@@ -9,7 +9,8 @@ export type AdSalesSurface =
       kind: "inbox";
       conversationId: string | null;
       peerId: string | null;
-    };
+    }
+  | { kind: "analytics" };
 
 export function resolveAdSalesSurface(
   pathname: string,
@@ -21,7 +22,9 @@ export function resolveAdSalesSurface(
     pathname === "/ad-sales/calendar" ||
     pathname === "/ad-sales/analytics"
   ) {
-    return { kind: "legacy" };
+    return pathname === "/ad-sales/analytics"
+      ? { kind: "analytics" }
+      : { kind: "legacy" };
   }
   if (pathname === "/ad-sales/inbox") {
     return {

@@ -167,6 +167,17 @@ export class TelegramAdSalesAvailabilityReader {
             title: true,
             advertiserName: true,
             advertiserNameSnapshot: true,
+            settlementCurrency: true,
+            advertiser: {
+              select: {
+                crmPeers: {
+                  where: { photoUrl: { not: null } },
+                  orderBy: { updatedAt: 'desc' },
+                  take: 1,
+                  select: { photoUrl: true },
+                },
+              },
+            },
             status: true,
             placements: { select: { agreedPrice: true } },
             payments: {
@@ -195,6 +206,9 @@ export class TelegramAdSalesAvailabilityReader {
             advertiserNameSnapshot: sale.advertiserNameSnapshot,
             status: sale.status,
             paymentStatus: paymentStatus(totalPaid, totalAgreed),
+            saleAgreedAmount: totalAgreed,
+            settlementCurrency: sale.settlementCurrency,
+            advertiserPhotoUrl: sale.advertiser?.crmPeers[0]?.photoUrl ?? null,
           },
         ] as const;
       }),

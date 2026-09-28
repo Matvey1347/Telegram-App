@@ -66,6 +66,7 @@ const contact: CrmContactListItem = {
     lastName: null,
     photoUrl: null,
   },
+  contactChannels: [],
   activeDeal: {
     id: "deal-1",
     title: "September placement",
@@ -134,7 +135,7 @@ describe("CrmContactCard", () => {
 
     expect(screen.getByText("Ada Client")).toBeInTheDocument();
     expect(screen.queryByText("Revenue")).not.toBeInTheDocument();
-    expect(screen.queryByText("Orders")).not.toBeInTheDocument();
+    expect(screen.queryByText("0 -")).not.toBeInTheDocument();
     expect(screen.queryByText("Members")).not.toBeInTheDocument();
     expect(screen.queryByText("Last contact")).not.toBeInTheDocument();
   });
@@ -152,56 +153,28 @@ describe("CrmContactCard", () => {
     expect(onRestore).toHaveBeenCalledOnce();
   });
 
-  it.each([
-    ["WAITING_FOR_CLIENT", "Waiting for client"],
-    ["FIRST_INBOUND_READ", "First message · read"],
-    ["FIRST_INBOUND_UNREAD", "First message · unread"],
-    ["CONVERSATION_UNANSWERED_READ", "Awaiting reply · read"],
-    ["CONVERSATION_UNANSWERED_UNREAD", "Awaiting reply · unread"],
-  ] as const)(
-    "renders %s reply state with directional totals",
-    (status, label) => {
-      const onMute = vi.fn();
-      const { container } = render(
-        <CrmContactCard
-          contact={{
-            ...contact,
-            replySummary: {
-              status,
-              inboundMessageCount: 7,
-              outboundMessageCount: 3,
-              countsComplete: false,
-              unreadCount: status.endsWith("UNREAD") ? 1 : 0,
-              muted: false,
-            },
-          }}
-          canViewSales
-          canCreateSales
-          canEdit
-          onReplyMuteChange={onMute}
-          onAction={vi.fn()}
-        />,
-      );
+  it("does not spend card space on reply-alert status", () => {
+    render(
+      <CrmContactCard
+        contact={{
+          ...contact,
+          replySummary: {
+            ...contact.replySummary,
+            status: "CONVERSATION_UNANSWERED_UNREAD",
+            inboundMessageCount: 7,
+            outboundMessageCount: 3,
+          },
+        }}
+        canViewSales
+        onAction={vi.fn()}
+      />,
+    );
 
-      expect(screen.getByText(label)).toBeInTheDocument();
-      expect(screen.getByText("In 7+ · Out 3+")).toBeInTheDocument();
-      expect(container.querySelector("article")).toHaveClass(
-        status === "WAITING_FOR_CLIENT"
-          ? "border-neutral-800"
-          : "border-rose-800/80",
-      );
-      if (status.startsWith("CONVERSATION_")) {
-        fireEvent.click(
-          screen.getByRole("button", { name: /Mute reply alert/u }),
-        );
-        expect(onMute).toHaveBeenCalledWith(true);
-      } else {
-        expect(
-          screen.queryByRole("button", { name: /Mute reply alert/u }),
-        ).toBeNull();
-      }
-    },
-  );
+    expect(screen.queryByText(/Awaiting reply|In 7/u)).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: /Mute reply alert/u }),
+    ).toBeNull();
+  });
 
   it("renders the loading state as the same three-column card grid", () => {
     render(<CrmContactsSkeleton count={3} />);
@@ -210,7 +183,7 @@ describe("CrmContactCard", () => {
     expect(screen.getAllByLabelText("Loading contact card")).toHaveLength(3);
   });
 
-  it("keeps legacy client metrics and layers conversation state onto the card", () => {
+  it("uses a compact metrics row with channel avatars", () => {
     const onAction = vi.fn();
     render(
       <CrmContactCard
@@ -221,11 +194,13 @@ describe("CrmContactCard", () => {
       />,
     );
 
-    expect(screen.getByText("Revenue")).toBeTruthy();
     expect(screen.getByText("735 UAH")).toBeTruthy();
-    expect(screen.getByText("Orders")).toBeTruthy();
-    expect(screen.getByText("Paid")).toBeTruthy();
-    expect(screen.getByText("Network · Business")).toBeTruthy();
+    expect(screen.getByText("4 -")).toBeTruthy();
+    expect(screen.getByTitle("Card owner: Matthew")).toBeInTheDocument();
+    expect(
+      screen.getByTitle("Participant in a sale: Matthew"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Network · Business")).toBeInTheDocument();
     expect(screen.queryByText("Can we book the next placement?")).toBeNull();
     expect(screen.queryByText(/via @sales/u)).toBeNull();
     expect(screen.getByRole("img", { name: "Ada Client" })).toHaveAttribute(
@@ -233,6 +208,121 @@ describe("CrmContactCard", () => {
       "https://t.me/i/userpic/320/ada.jpg",
     );
     expect(screen.queryByText("Open conversations")).toBeNull();
+  });
+
+  it("keeps folder tags in the header and gives long names an ellipsis boundary", () => {
+    const longName = "A client name that should not widen every CRM card";
+    render(
+      <CrmContactCard
+        contact={{
+          ...contact,
+          displayName: longName,
+          tags: [
+            {
+              id: "folder-tag",
+              name: "Purchases",
+              color: "#22c55e",
+              systemKey: "TELEGRAM_FOLDER:purchases",
+              isSystem: true,
+              assignmentMode: "AUTOMATIC",
+            },
+          ],
+        }}
+        canViewSales
+        onAction={vi.fn()}
+      />,
+    );
+
+    const name = screen.getByRole("heading", { name: longName });
+    expect(name).toHaveClass("max-w-[12rem]", "truncate");
+    expect(name.parentElement).toContainElement(screen.getByText("Purchases"));
+  });
+
+  it("shows every folder tag from the compact +N control", () => {
+    render(
+      <CrmContactCard
+        contact={{
+          ...contact,
+          tags: [
+            "Inbox",
+            "Purchased",
+            "Priority",
+          ].map((name, index) => ({
+            id: `folder-tag-${index}`,
+            name,
+            color: "#22c55e",
+            systemKey: `TELEGRAM_FOLDER:${name.toLowerCase()}`,
+            isSystem: true,
+            assignmentMode: "AUTOMATIC" as const,
+          })),
+        }}
+        canViewSales
+        onAction={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByLabelText("Show all 3 contact tags"));
+    expect(screen.getByText("Priority")).toBeInTheDocument();
+  });
+
+  it("shows saved contact services on the card and highlights the active one", () => {
+    render(
+      <CrmContactCard
+        contact={{
+          ...contact,
+          contactChannels: [
+            {
+              id: "telegram-channel",
+              type: "TELEGRAM_USERNAME",
+              value: "ada",
+              label: "Telegram",
+              isPrimary: true,
+            },
+            {
+              id: "instagram-channel",
+              type: "OTHER",
+              value: "https://instagram.com/ada",
+              label: "Instagram",
+              isPrimary: false,
+            },
+          ],
+        }}
+        canViewSales
+        onAction={vi.fn()}
+      />,
+    );
+
+    const activeTelegram = screen.getByTitle("Active contact: Telegram");
+    expect(activeTelegram).toHaveAttribute("href", "https://t.me/ada");
+    expect(screen.getByTitle("Contact: Instagram")).toHaveAttribute(
+      "href",
+      "https://instagram.com/ada",
+    );
+  });
+
+  it("opens purchased channels in the same compact popover pattern as deal members", () => {
+    render(
+      <CrmContactCard
+        contact={{
+          ...contact,
+          salesSummary: {
+            ...contact.salesSummary,
+            purchasedChannels: [
+              { id: "channel-1", title: "Channel One", photoUrl: null },
+              { id: "channel-2", title: "Channel Two", photoUrl: null },
+            ],
+          },
+        }}
+        canViewSales
+        onAction={vi.fn()}
+      />,
+    );
+
+    const preview = screen.getByLabelText("View 2 purchased channels");
+    fireEvent.click(preview);
+    expect(preview.closest("details")).toHaveAttribute("open");
+    expect(screen.getByText("Channel One")).toBeInTheDocument();
+    expect(screen.getByText("Channel Two")).toBeInTheDocument();
   });
 
   it("opens focused client actions from the shared three-dot menu", () => {
@@ -263,14 +353,10 @@ describe("CrmContactCard", () => {
 
   it("marks contacts without a Telegram chat and does not offer Conversations", () => {
     render(
-      <CrmContactCard
-        contact={contact}
-        canViewSales
-        onAction={vi.fn()}
-      />,
+      <CrmContactCard contact={contact} canViewSales onAction={vi.fn()} />,
     );
 
-    expect(screen.getByText("Not synced with Telegram")).toBeInTheDocument();
+    expect(screen.queryByText("Not synced")).toBeNull();
     fireEvent.click(
       screen.getByRole("button", { name: "Actions for Ada Client" }),
     );

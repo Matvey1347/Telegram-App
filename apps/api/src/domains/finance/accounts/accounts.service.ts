@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { CurrencyConversionService } from '../../../common/currency-conversion.service';
 import {
   createPaginatedResponse,
@@ -154,17 +155,20 @@ export class AccountsService {
   async findAll(userId: string, query: AccountQueryDto = {}) {
     const access = await this.authorization.require(userId, 'finance.view');
     const workspaceId = access.workspaceId;
-    const ownershipScope =
+    const ownOnly =
       (await this.authorization.can(userId, 'finance.editOwn')) &&
-      !(await this.authorization.can(userId, 'finance.editAny'))
-        ? { assignedMemberId: access.memberId }
-        : {};
-    const where = {
+      !(await this.authorization.can(userId, 'finance.editAny'));
+    const scope = query.scope ?? 'all';
+    const assignedMemberId =
+      ownOnly || scope === 'mine'
+        ? access.memberId
+        : query.assignedMemberId || undefined;
+    const where: Prisma.AccountWhereInput = {
       workspaceId,
       deletedAt: null,
-      assignedMemberId: query.assignedMemberId || undefined,
+      isActive: scope !== 'archived',
+      assignedMemberId,
       OR: [{ assignedMemberId: null }, { assignedMember: { isHidden: false } }],
-      ...ownershipScope,
     };
     const pagination = normalizePagination(query);
     const [accounts, totalItems] = await this.prisma.$transaction([
@@ -414,7 +418,8 @@ export class AccountsService {
 
     return this.prisma.account.update({
       where: { id },
-      data: { isActive: false, deletedAt: new Date() },
+      // Archiving is reversible and preserves all financial history.
+      data: { isActive: false, deletedAt: null },
     });
   }
 }

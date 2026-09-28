@@ -96,6 +96,7 @@ export type CrmAccountSummary = {
 export type CrmWorkspaceSettings = {
   workspaceId: string;
   defaultCrmSenderAccountId: string | null;
+  purchaseTagId: string | null;
   createdAt: string | null;
   updatedAt: string | null;
 };
@@ -162,6 +163,14 @@ export type CrmContactPaymentSummary = {
   outstandingAmount: string;
 };
 
+export type CrmContactChannelSummary = {
+  id: string;
+  type: "TELEGRAM_USERNAME" | "TELEGRAM_USER_ID" | "PHONE" | "EMAIL" | "WEBSITE" | "OTHER";
+  value: string;
+  label: string | null;
+  isPrimary: boolean;
+};
+
 export type CrmContact = {
   id: string;
   workspaceId: string;
@@ -192,6 +201,7 @@ export type CrmContactListItem = CrmContact & {
   replySummary: CrmReplySummary;
   ownerMember: CrmMemberSummary | null;
   peer: CrmPeerSummary | null;
+  contactChannels: CrmContactChannelSummary[];
   activeDeal: CrmActiveDealSummary | null;
   crossPromotions?: Array<{
     id: string;
@@ -224,6 +234,7 @@ export type CrmContactDetail = CrmContact & {
   conversationAccounts: CrmAccountSummary[];
   unreadCount: number;
   tags: CrmTagSummary[];
+  contactChannels: CrmContactChannelSummary[];
   paymentSummary: CrmContactPaymentSummary[];
   counts: {
     conversations: number;
@@ -243,6 +254,22 @@ export type CrmChatContactContext = Pick<
 
 export type CrmContactsListResult = PaginatedResponse<CrmContactListItem> & {
   availableTags: CrmTagOption[];
+};
+
+export type CrmAnalyticsPoint = {
+  date: string;
+  clients: number;
+  buyers: number;
+  conversionRate: number;
+};
+
+export type CrmAnalyticsSummary = {
+  clients: number;
+  buyers: number;
+  conversionRate: number;
+  averageBuyerValue: string;
+  currency: string;
+  points: CrmAnalyticsPoint[];
 };
 
 export type CrmPeer = {

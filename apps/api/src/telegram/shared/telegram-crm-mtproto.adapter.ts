@@ -336,7 +336,24 @@ class GramJsTelegramCrmHandle implements TelegramCrmMtprotoHandle {
     }
     const peer = parseTelegramCrmPeer(entity);
     if (!peer) throw new BadRequestException('Telegram peer is not eligible');
-    return peer;
+    return {
+      ...peer,
+      // A public userpic URL exists only for usernames. Download the actual
+      // profile photo so contacts resolved by phone receive their avatar too.
+      photoUrl: (await this.profilePhotoDataUrl(entity)) ?? peer.photoUrl,
+    };
+  }
+
+  private async profilePhotoDataUrl(entity: Api.User) {
+    try {
+      const photo = await this.client.downloadProfilePhoto(entity, {
+        isBig: false,
+      });
+      if (!Buffer.isBuffer(photo) || photo.length === 0) return null;
+      return `data:image/jpeg;base64,${photo.toString('base64')}`;
+    } catch {
+      return null;
+    }
   }
 
   async sendText(input: {

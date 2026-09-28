@@ -2430,12 +2430,34 @@ export class TelegramMtprotoClient {
     };
   }
 
-  async getChannelPostsMetrics(params: { apiId: string; apiHash: string; session: string; channelRef?: string; channel?: StoredTelegramChannelReference; postLimit?: number; beforeMessageId?: string | number | null; postsFrom?: Date | null }) {
+  async getChannelPostsMetrics(params: { apiId: string; apiHash: string; session: string; channelRef?: string; channel?: StoredTelegramChannelReference; messageIds?: Array<string | number>; postLimit?: number; beforeMessageId?: string | number | null; postsFrom?: Date | null }) {
     const client = await this.createClient(params);
     try {
       const resolved = params.channel ? await this.resolveStoredChannel(client, params.channel) : null;
       const entity = resolved ? resolved.entity : await client.getEntity(params.channelRef as string);
-      const messages = params.postsFrom
+      const requestedMessageIds = [...new Set(params.messageIds ?? [])];
+      const normalizedMessageIds = requestedMessageIds
+        .map((messageId) => this.toFiniteNumber(messageId))
+        .filter(
+          (messageId): messageId is number =>
+            messageId != null &&
+            Number.isInteger(messageId) &&
+            messageId > 0 &&
+            messageId <= 2_147_483_647,
+        );
+      if (
+        requestedMessageIds.length > 0 &&
+        normalizedMessageIds.length !== requestedMessageIds.length
+      ) {
+        throw new BadRequestException('Invalid Telegram message ID');
+      }
+      const messages = normalizedMessageIds.length
+        ? await this.withTimeout(
+            client.getMessages(entity, { ids: normalizedMessageIds }),
+            this.telegramMetadataTimeoutMs,
+            'Telegram post lookup by message ID',
+          )
+        : params.postsFrom
         ? await this.getChannelMessagesFromCutoff(client, entity, {
             postLimit: params.postLimit,
             beforeMessageId: params.beforeMessageId,

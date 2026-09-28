@@ -23,12 +23,10 @@ describe("CrmNavigation", () => {
     expect(screen.getByRole("link", { name: "Clients" }).className).toContain(
       "after:bg-blue-500",
     );
-    expect(screen.getByRole("link", { name: /Inbox/ })).toHaveAttribute(
-      "href",
-      "/ad-sales/inbox",
-    );
+    expect(screen.queryByRole("link", { name: /Inbox/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "All contacts" })).toBeNull();
     expect(screen.queryByText("Follow-up")).toBeNull();
+    expect(screen.getByRole("link", { name: "Analytics" })).toBeTruthy();
   });
 
   it("does not expose tabs that the member cannot access", () => {

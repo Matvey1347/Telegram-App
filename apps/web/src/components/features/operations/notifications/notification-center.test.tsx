@@ -230,4 +230,34 @@ describe("NotificationCenter", () => {
     expect(screen.queryByRole("dialog", { name: "Notifications" })).toBeNull();
     expect(trigger).toHaveFocus();
   });
+
+  it("renders a Telegram reauthentication alert in red", async () => {
+    vi.spyOn(operationsNotificationsApi, "list").mockResolvedValue({
+      items: [
+        {
+          ...item("telegram-reauth", "HIGH"),
+          type: "TELEGRAM_ACCOUNT_REAUTH_REQUIRED",
+          copyKey: "telegram.notification.accountReauthRequired",
+          title: "Telegram account disconnected",
+          body: "@publisher needs to be reconnected via QR.",
+          targetUrl: "/telegram-channels?tab=accounts&accountTab=mtproto",
+        },
+      ],
+      nextCursor: null,
+    });
+    renderCenter();
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Notifications, 101 unread" }),
+    );
+
+    expect(await screen.findByText("Reconnect required")).toBeInTheDocument();
+    expect(screen.getAllByText("Telegram account disconnected")).toHaveLength(
+      2,
+    );
+    expect(
+      screen.getByRole("link", {
+        name: "Unread Telegram account disconnected",
+      }),
+    ).toHaveClass("bg-rose-950/25");
+  });
 });

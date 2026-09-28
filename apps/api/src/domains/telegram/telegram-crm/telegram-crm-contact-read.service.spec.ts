@@ -37,6 +37,7 @@ const contactRow = () => ({
     },
     user: { name: 'Owner', email: 'owner@example.com' },
   },
+  contacts: [],
   tags: [],
   crmPeers: [
     {
@@ -93,6 +94,52 @@ const contactRow = () => ({
 });
 
 describe('TelegramCrmContactReadService', () => {
+  it('reports cumulative unique-client and buyer growth and divides paid revenue by buyers', async () => {
+    const service = new TelegramCrmContactReadService(
+      {
+        workspace: {
+          findUniqueOrThrow: jest
+            .fn()
+            .mockResolvedValue({ primaryCurrency: 'UAH' }),
+        },
+        telegramAdvertiser: {
+          findMany: jest.fn().mockResolvedValue([
+            {
+              createdAt: new Date('2026-01-10T00:00:00.000Z'),
+              firstPurchaseAt: new Date('2026-02-10T00:00:00.000Z'),
+              totalRevenueInPrimaryCurrency: new Prisma.Decimal(500),
+            },
+            {
+              createdAt: new Date('2026-03-10T00:00:00.000Z'),
+              firstPurchaseAt: new Date('2026-03-15T00:00:00.000Z'),
+              totalRevenueInPrimaryCurrency: new Prisma.Decimal(300),
+            },
+            {
+              createdAt: new Date('2026-04-10T00:00:00.000Z'),
+              firstPurchaseAt: null,
+              totalRevenueInPrimaryCurrency: new Prisma.Decimal(0),
+            },
+          ]),
+        },
+      } as never,
+      {
+        require: jest.fn().mockResolvedValue({ workspaceId: 'workspace-1' }),
+        scope: jest.fn().mockResolvedValue({}),
+      } as never,
+    );
+
+    const result = await service.analytics('user-1');
+
+    expect(result).toMatchObject({
+      clients: 3,
+      buyers: 2,
+      conversionRate: 66.7,
+      averageBuyerValue: '400.00',
+      currency: 'UAH',
+    });
+    expect(result.points).toHaveLength(12);
+  });
+
   const captureReadNoReplySql = async () => {
     const queryRaw = jest
       .fn()

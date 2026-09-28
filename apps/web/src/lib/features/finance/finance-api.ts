@@ -43,6 +43,11 @@ export type TransactionQuery = {
   search?: string;
 };
 
+export type AccountQuery = {
+  assignedMemberId?: string;
+  scope?: "mine" | "all" | "archived";
+};
+
 export type TransferQuery = {
   assignedMemberId?: string;
   dateFrom?: string;
@@ -85,7 +90,7 @@ export function createFinanceApi({
 }) {
   const accountsApi = {
     ...quietCrud<Account>("/accounts"),
-    listPage: async (params?: PaginationParams & { assignedMemberId?: string }) =>
+    listPage: async (params?: PaginationParams & AccountQuery) =>
       getPaginated<Account>("/accounts", params),
     list: async () => getAllPaginatedItems<Account>("/accounts"),
   };

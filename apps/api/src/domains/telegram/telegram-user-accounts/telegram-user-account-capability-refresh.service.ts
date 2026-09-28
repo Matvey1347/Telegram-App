@@ -1,5 +1,10 @@
-import { Injectable } from '@nestjs/common';
-import { TelegramUserAccountStatus } from '@prisma/client';
+import { Injectable, Optional } from '@nestjs/common';
+import {
+  OperationsNotificationPriority,
+  OperationsNotificationType,
+  TelegramUserAccountStatus,
+  WorkspaceRole,
+} from '@prisma/client';
 import { TelegramAccountRuntimeNotifier } from '../../../common/telegram-account-runtime-notifier.service';
 import { TokenEncryptionService } from '../../../common/security/token-encryption.service';
 import { WorkspaceService } from '../../../common/workspace.service';
@@ -12,6 +17,8 @@ import {
   withTelegramTimeout,
 } from '../../../telegram/shared/telegram-session-errors';
 import { ApplicationLoggerService } from '../../operations/application-logs/application-logger.service';
+import { OperationsNotificationPublisherService } from '../../operations/notifications/operations-notification-publisher.service';
+import { OperationsNotificationStoreService } from '../../operations/notifications/operations-notification-store.service';
 import { TELEGRAM_ACCOUNT_CAPABILITY_CONFIG } from './telegram-capability.config';
 import { telegramAccountCapabilityUpdate } from './telegram-user-account-login-finalizer';
 
@@ -19,6 +26,8 @@ export type TelegramCapabilityRefreshAccount = {
   id: string;
   workspaceId: string;
   label: string;
+  assignedMemberId?: string | null;
+  createdByUserId?: string | null;
   isActive?: boolean;
   status: TelegramUserAccountStatus;
   isPremium: boolean;
@@ -42,6 +51,10 @@ export class TelegramUserAccountCapabilityRefreshService {
     private readonly mtproto: TelegramMtprotoClient,
     private readonly logger: ApplicationLoggerService,
     private readonly runtimeNotifier: TelegramAccountRuntimeNotifier,
+    @Optional()
+    private readonly notifications?: OperationsNotificationStoreService,
+    @Optional()
+    private readonly notificationPublisher?: OperationsNotificationPublisherService,
   ) {}
 
   async refreshOne(
@@ -122,6 +135,7 @@ export class TelegramUserAccountCapabilityRefreshService {
         accountId: account.id,
         reason: 'revoked',
       });
+      await this.notifyReauthenticationRequired(updated);
       return updated;
     }
   }
@@ -168,6 +182,59 @@ export class TelegramUserAccountCapabilityRefreshService {
   private hasConnectedSession(account: TelegramCapabilityRefreshAccount) {
     return Boolean(
       account.sessionEncrypted && account.sessionIv && account.sessionAuthTag,
+    );
+  }
+
+  private async notifyReauthenticationRequired(account: {
+    id: string;
+    workspaceId: string;
+    label: string;
+    assignedMemberId: string | null;
+    createdByUserId: string | null;
+  }) {
+    if (!this.notifications || !this.notificationPublisher) return;
+    const creator = account.createdByUserId
+      ? await this.prisma.workspaceMember.findFirst({
+          where: {
+            workspaceId: account.workspaceId,
+            userId: account.createdByUserId,
+          },
+          select: { id: true },
+        })
+      : null;
+    const owner =
+      account.assignedMemberId || creator
+        ? null
+        : await this.prisma.workspaceMember.findFirst({
+            where: {
+              workspaceId: account.workspaceId,
+              role: WorkspaceRole.owner,
+            },
+            orderBy: { createdAt: 'asc' },
+            select: { id: true },
+          });
+    const recipientMemberId =
+      account.assignedMemberId ?? creator?.id ?? owner?.id;
+    if (!recipientMemberId) return;
+
+    const notificationIds = await this.prisma.$transaction((tx) =>
+      this.notifications!.upsertMany(tx, [
+        {
+          workspaceId: account.workspaceId,
+          recipientMemberId,
+          type: OperationsNotificationType.TELEGRAM_ACCOUNT_REAUTH_REQUIRED,
+          priority: OperationsNotificationPriority.HIGH,
+          sourceKey: `telegram-account:${account.id}:reauth-required`,
+          copyKey: 'telegram.notification.accountReauthRequired',
+          title: 'Telegram account disconnected',
+          body: `${account.label} needs to be reconnected via QR.`,
+          metadata: { accountId: account.id, action: 'qr-login' },
+          targetUrl: '/telegram-channels?tab=accounts&accountTab=mtproto',
+        },
+      ]),
+    );
+    await this.notificationPublisher.publish(
+      notificationIds.map(({ id }) => id),
     );
   }
 }

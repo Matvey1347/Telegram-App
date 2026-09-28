@@ -61,6 +61,9 @@ export function NotificationCenter({
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage) => lastPage.nextCursor,
     enabled: enabled && Boolean(workspaceId) && open,
+    // The unread badge can be updated by the realtime stream while a previous
+    // empty panel response is still fresh. Opening must always load its rows.
+    refetchOnMount: "always",
   });
 
   const reconcileUnread = (result: OperationsNotificationUnreadCount) => {

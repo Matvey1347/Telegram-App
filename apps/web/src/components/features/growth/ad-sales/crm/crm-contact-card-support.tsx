@@ -1,7 +1,7 @@
 "use client";
 
 import { MessageSquare } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type {
   CrmContactListItem,
   CrmMemberSummary,
@@ -40,10 +40,14 @@ function formatAmount(value: string) {
     : value;
 }
 
-export function DealMembersPreview({
-  members,
+export function CrmCardPreviewPopover({
+  label,
+  trigger,
+  children,
 }: {
-  members: CrmMemberSummary[];
+  label: string;
+  trigger: ReactNode;
+  children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDetailsElement>(null);
@@ -71,18 +75,35 @@ export function DealMembersPreview({
       onClick={(event) => event.stopPropagation()}
     >
       <summary
-        aria-label={`Show ${members.length} deal ${members.length === 1 ? "member" : "members"}`}
+        aria-label={label}
         onClick={(event) => {
           event.preventDefault();
           setOpen((current) => !current);
         }}
-        className="flex cursor-pointer list-none items-center justify-end rounded-md outline-none focus-visible:ring-2 focus-visible:ring-blue-500 [&::-webkit-details-marker]:hidden"
+        className="flex cursor-pointer list-none items-center rounded-md outline-none focus-visible:ring-2 focus-visible:ring-blue-500 [&::-webkit-details-marker]:hidden"
       >
+        {trigger}
+      </summary>
+      {children}
+    </details>
+  );
+}
+
+export function DealMembersPreview({
+  members,
+}: {
+  members: CrmMemberSummary[];
+}) {
+  return (
+    <CrmCardPreviewPopover
+      label={`Show ${members.length} deal ${members.length === 1 ? "member" : "members"}`}
+      trigger={
         <span className="flex -space-x-2">
           {members.map((member) => (
             <span
               key={member.id}
               className="rounded-full ring-2 ring-neutral-950"
+              title={`Participant in a sale: ${member.name}`}
             >
               <IconAvatar
                 icon={member.avatarPresentation}
@@ -92,7 +113,8 @@ export function DealMembersPreview({
             </span>
           ))}
         </span>
-      </summary>
+      }
+    >
       <div className="absolute right-0 top-full z-30 mt-2 min-w-56 space-y-1 rounded-lg border border-neutral-700 bg-neutral-950 p-2 shadow-xl">
         {members.map((member) => (
           <div key={member.id} className="flex items-center gap-2 px-1 py-1">
@@ -107,7 +129,7 @@ export function DealMembersPreview({
           </div>
         ))}
       </div>
-    </details>
+    </CrmCardPreviewPopover>
   );
 }
 

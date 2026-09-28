@@ -25,6 +25,7 @@ export type MemberFinanceReader = Pick<
   | 'telegramAdSalePayment'
   | 'memberCompensationSettlement'
   | 'investment'
+  | 'reinvestmentDistribution'
   | 'transaction'
   | 'workspaceMember'
   | 'workspace'
@@ -100,6 +101,11 @@ export class MemberFinanceReadService {
       client.investment.findMany({
         where: { workspaceId },
         orderBy: [{ date: 'desc' }, { id: 'desc' }],
+        include: {
+          reinvestmentDistribution: {
+            select: { periodStart: true, periodEnd: true },
+          },
+        },
       }),
       client.transaction.findMany({
         where: { workspaceId, deletedAt: null },
@@ -163,6 +169,8 @@ export class MemberFinanceReadService {
       if (investment.origin === InvestmentOrigin.SALARY) row.salary += value;
       else if (investment.origin === InvestmentOrigin.EXTERNAL)
         row.external += value;
+      else if (investment.origin === InvestmentOrigin.REINVESTMENT)
+        row.investorEarnings += value;
     }
     const visibleMemberIds = new Set(members.map((member) => member.id));
     const capitalByMember = new Map<string, number>();
@@ -188,9 +196,17 @@ export class MemberFinanceReadService {
         ),
       ]),
     );
-    // Investor profit is a single current balance: all earned revenue less
-    // sales commission is divided by today's visible investor capital. Do not
-    // allocate historical income against a past capital snapshot.
+    const fixedPeriods = investments.flatMap((investment) => {
+      const distribution = investment.reinvestmentDistribution;
+      if (!distribution?.periodStart || !distribution.periodEnd) return [];
+      const periodStart = new Date(distribution.periodStart);
+      const periodEnd = new Date(distribution.periodEnd);
+      return Number.isNaN(periodStart.getTime()) || Number.isNaN(periodEnd.getTime())
+        ? []
+        : [{ periodStart, periodEnd }];
+    });
+    // A recorded distribution is an immutable historical allocation. Revenue
+    // in that period must not be divided again using today's investor capital.
     const revenueTransactions = valuedTransactions.flatMap((transaction) => {
       const key =
         transaction.categoryRef?.key ??
@@ -203,6 +219,14 @@ export class MemberFinanceReadService {
           'balance_adjustment',
           'fixing_balance',
         ].includes(key)
+      )
+        return [];
+      if (
+        fixedPeriods.some(
+          (period) =>
+            new Date(transaction.date) >= period.periodStart &&
+            new Date(transaction.date) <= period.periodEnd,
+        )
       )
         return [];
       let revenue = Number(transaction.amountInPrimaryCurrency ?? 0);
@@ -362,7 +386,9 @@ export class MemberFinanceReadService {
     ]);
     if (!member) throw new NotFoundException('Workspace member not found');
     const timeline = [
-      ...rows.payments.map((payment) => ({
+      ...rows.payments
+        .filter((payment) => payment.sale.sellerMemberId === memberId)
+        .map((payment) => ({
         id: `commission:${payment.id}`,
         type: 'COMMISSION_EARNED',
         date: payment.paidAt.toISOString(),
@@ -372,7 +398,9 @@ export class MemberFinanceReadService {
         ),
         title: payment.sale.title || payment.sale.advertiserName,
       })),
-      ...rows.settlements.map((settlement) => ({
+      ...rows.settlements
+        .filter((settlement) => settlement.workspaceMemberId === memberId)
+        .map((settlement) => ({
         id: `settlement:${settlement.id}`,
         type:
           settlement.type === MemberCompensationSettlementType.PAYOUT
@@ -383,7 +411,11 @@ export class MemberFinanceReadService {
         title: settlement.notes,
       })),
       ...rows.investments
-        .filter((investment) => investment.origin !== InvestmentOrigin.SALARY)
+        .filter(
+          (investment) =>
+            investment.workspaceMemberId === memberId &&
+            investment.origin !== InvestmentOrigin.SALARY,
+        )
         .map((investment) => ({
           id: `investment:${investment.id}`,
           type: `${investment.origin}_${investment.movementType}`,

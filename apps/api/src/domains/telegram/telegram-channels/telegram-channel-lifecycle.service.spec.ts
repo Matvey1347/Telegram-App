@@ -2,6 +2,27 @@ import { BadRequestException } from '@nestjs/common';
 import { TelegramChannelLifecycleService } from './telegram-channel-lifecycle.service';
 
 describe('TelegramChannelLifecycleService system groups', () => {
+  it('allows a CPM-only update when the channel keeps an unavailable legacy emoji', async () => {
+    const update = jest.fn().mockResolvedValue({ id: 'channel-1' });
+    const prisma = {
+      icon: { findFirst: jest.fn() },
+      telegramInviteLink: { findFirst: jest.fn(), count: jest.fn().mockResolvedValue(0) },
+      telegramChannel: { update },
+      $transaction: jest.fn(async (work) => work({ telegramChannel: { update } })),
+    };
+    const service = new TelegramChannelLifecycleService(
+      prisma as never,
+      {} as never,
+      { workspace: jest.fn().mockResolvedValue('workspace-1'), normalizeUsername: jest.fn() } as never,
+      { resolveImportPolicy: jest.fn().mockResolvedValue({}) } as never,
+      {} as never,
+      { findOne: jest.fn().mockResolvedValue({ id: 'channel-1', targetCpa: null, stopCpaFrom: null, presentationIconId: 'legacy-icon' }) } as never,
+      {} as never,
+    );
+
+    await expect(service.update('user-1', 'channel-1', { externalCpm: 100, presentationIconId: 'legacy-icon' })).resolves.toBeDefined();
+    expect(prisma.icon.findFirst).not.toHaveBeenCalled();
+  });
   it('provisions required system groups atomically when a channel is created', async () => {
     const tx = {
       telegramChannel: {

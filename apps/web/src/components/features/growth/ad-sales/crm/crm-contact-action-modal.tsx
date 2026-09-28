@@ -28,6 +28,7 @@ import { CrmChatWindow } from "./crm-chat-window";
 import type { CrmContactChatPreview } from "./crm-contact-chat-preview";
 import { CrmContactDeals } from "./crm-contact-deals";
 import { CrmContactInfoForm } from "./crm-contact-info-form";
+import { CrmContactChannels } from "./crm-contact-channels";
 import { CrmContactTagsEditor } from "./crm-contact-tags-editor";
 import { CrmContactTasks } from "./crm-contact-tasks";
 import { crmPermissions } from "./crm-permissions";
@@ -130,7 +131,9 @@ function CrmContactDetailActionModal({
       await queryClient.invalidateQueries({ queryKey: telegramCrmKeys.contactLists() });
     },
   });
-  const contact = detail.data;
+  // The list already contains every field needed by Contact info. Render it
+  // immediately and let the detail request refresh richer relationships behind it.
+  const contact = detail.data ?? (initialContact ? detailFromListItem(initialContact) : undefined);
   const headerContact = contact ?? initialContact;
   const currentMemberId = members.data?.find(
     (member) => member.isCurrentUser,
@@ -181,7 +184,7 @@ function CrmContactDetailActionModal({
       {action === "reminder" && initialContact ? (
         <CrmContactTasks contact={initialContact} canEdit={canEdit} />
       ) : null}
-      {contact && action !== "tags" ? (
+      {contact && action !== "tags" && !(action === "reminder" && initialContact) ? (
         <ContactActionContent
           action={action}
           contact={contact}
@@ -235,7 +238,7 @@ function ContactActionContent({
   return (
     <div className="space-y-4">
       {canEdit ? (
-        <div className="grid gap-3 rounded-lg border border-neutral-800 bg-neutral-950 p-3 sm:grid-cols-2">
+        <div className="grid gap-3 sm:grid-cols-2">
           {canEditAll ? (
             <MemberSelect
               allowAssignOthers
@@ -254,6 +257,13 @@ function ContactActionContent({
           ) : null}
         </div>
       ) : null}
+      <CrmContactChannels
+        contactId={contact.id}
+        canEdit={canEdit}
+        telegramUsername={contact.telegramUsername}
+        peerUsername={contact.peers[0]?.username}
+        initialChannels={contact.contactChannels}
+      />
       <CrmContactInfoForm
         contact={contact}
         canEdit={canEdit}
@@ -269,6 +279,22 @@ function ContactActionContent({
       />
     </div>
   );
+}
+
+function detailFromListItem(contact: CrmContactListItem): CrmContactDetail {
+  return {
+    ...contact,
+    peers: contact.peer ? [contact.peer] : [],
+    conversationAccounts: [],
+    unreadCount: contact.replySummary.unreadCount,
+    paymentSummary: [],
+    counts: {
+      conversations: contact.replySummary.hasTelegramConversation ? 1 : 0,
+      deals: contact.activeDealCount,
+      openTasks: 0,
+      activities: 0,
+    },
+  };
 }
 
 function contactAvatarUrl(

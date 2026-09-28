@@ -13,11 +13,26 @@ const resolvedPeer = {
 describe('TelegramCrmConversationAttachService', () => {
   const setup = (contact: { id: string } | null = { id: 'contact-target' }) => {
     const prisma = {
-      telegramAdvertiser: { findFirst: jest.fn().mockResolvedValue(contact) },
+      $transaction: jest.fn().mockResolvedValue([]),
+      telegramAdvertiser: {
+        findFirst: jest
+          .fn()
+          .mockResolvedValue(
+            contact ? { ...contact, phone: '+380661234567' } : null,
+          ),
+      },
+      telegramAdSale: { updateMany: jest.fn().mockResolvedValue({ count: 2 }) },
       telegramCrmPeer: {
         findUnique: jest
           .fn()
           .mockResolvedValue({ contactId: 'contact-source' }),
+      },
+      telegramAdvertiserContact: {
+        findUnique: jest.fn().mockResolvedValue(null),
+        findFirst: jest.fn().mockResolvedValue(null),
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        update: jest.fn().mockResolvedValue({ id: 'channel-1' }),
+        create: jest.fn().mockResolvedValue({ id: 'channel-1' }),
       },
     };
     const authorization = {
@@ -52,6 +67,7 @@ describe('TelegramCrmConversationAttachService', () => {
       peers,
       conversations,
       merges,
+      prisma,
     };
   };
 
@@ -82,6 +98,20 @@ describe('TelegramCrmConversationAttachService', () => {
       expect.objectContaining({
         accountId: 'account-1',
         contactId: 'contact-target',
+      }),
+    );
+    expect(context.prisma.telegramAdSale.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { advertiserId: 'contact-target' },
+      }),
+    );
+    expect(context.prisma.telegramAdvertiserContact.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          advertiserId: 'contact-target',
+          type: 'TELEGRAM_USERNAME',
+          isPrimary: true,
+        }),
       }),
     );
   });

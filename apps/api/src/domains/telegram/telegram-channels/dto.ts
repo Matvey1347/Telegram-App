@@ -215,6 +215,11 @@ export class DeepSyncDto {
 export class SyncPostsMetricsDto {
   @IsOptional() @IsString() telegramUserAccountId?: string;
   @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(20)
+  @IsString({ each: true })
+  messageIds?: string[];
+  @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)

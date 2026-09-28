@@ -12,6 +12,7 @@ import {
 } from '@prisma/client';
 import type {
   CrmContactDetail,
+  CrmAnalyticsSummary,
   CrmChatContactContext,
   CrmContactsListResult,
   CrmTagSummary,
@@ -166,6 +167,74 @@ export class TelegramCrmContactReadService {
       select: crmTagSelect,
     });
     return rows.map((tag) => mapCrmTag(tag));
+  }
+
+  async analytics(userId: string): Promise<CrmAnalyticsSummary> {
+    const access = await this.authorization.require(userId, 'adSales.crm.view');
+    const ownership = await this.authorization.scope(
+      userId,
+      'adSales.crm.viewOwn',
+      'adSales.crm.viewAny',
+    );
+    const ownedWhere =
+      'assignedMemberId' in ownership
+        ? { ownerMemberId: ownership.assignedMemberId }
+        : {};
+    const [workspace, contacts] = await Promise.all([
+      this.prisma.workspace.findUniqueOrThrow({
+        where: { id: access.workspaceId },
+        select: { primaryCurrency: true },
+      }),
+      this.prisma.telegramAdvertiser.findMany({
+        where: {
+          workspaceId: access.workspaceId,
+          archivedAt: null,
+          ...ownedWhere,
+        },
+        select: {
+          createdAt: true,
+          firstPurchaseAt: true,
+          totalRevenueInPrimaryCurrency: true,
+        },
+      }),
+    ]);
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth() - 11, 1);
+    const months = Array.from({ length: 12 }, (_, offset) =>
+      new Date(start.getFullYear(), start.getMonth() + offset, 1),
+    );
+    const monthKey = (value: Date) =>
+      `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}`;
+    const points = months.map((month) => {
+      const end = new Date(month.getFullYear(), month.getMonth() + 1, 1);
+      const clients = contacts.filter((contact) => contact.createdAt < end).length;
+      const buyers = contacts.filter(
+        (contact) => contact.firstPurchaseAt && contact.firstPurchaseAt < end,
+      ).length;
+      return {
+        date: monthKey(month),
+        clients,
+        buyers,
+        conversionRate: clients ? Math.round((buyers / clients) * 1000) / 10 : 0,
+      };
+    });
+    const buyers = contacts.filter((contact) => Boolean(contact.firstPurchaseAt));
+    const revenue = contacts.reduce(
+      (sum, contact) => sum.add(contact.totalRevenueInPrimaryCurrency),
+      new Prisma.Decimal(0),
+    );
+    return {
+      clients: contacts.length,
+      buyers: buyers.length,
+      conversionRate: contacts.length
+        ? Math.round((buyers.length / contacts.length) * 1000) / 10
+        : 0,
+      averageBuyerValue: buyers.length
+        ? revenue.div(buyers.length).toFixed(2)
+        : '0.00',
+      currency: workspace.primaryCurrency,
+      points,
+    };
   }
 
   async get(userId: string, contactId: string): Promise<CrmContactDetail> {

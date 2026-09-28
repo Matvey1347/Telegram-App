@@ -12,8 +12,6 @@ type ContactInfoValues = {
   phone: string;
   email: string;
   website: string;
-  companyName: string;
-  source: string;
   description: string;
 };
 
@@ -24,8 +22,6 @@ function valuesFromContact(contact: CrmContactDetail): ContactInfoValues {
     phone: contact.phone ?? "",
     email: contact.email ?? "",
     website: contact.website ?? "",
-    companyName: contact.companyName ?? "",
-    source: contact.source ?? "",
     description: contact.description ?? "",
   };
 }
@@ -60,8 +56,6 @@ export function CrmContactInfoForm({
       phone: values.phone.trim() || null,
       email: values.email.trim() || null,
       website: values.website.trim() || null,
-      companyName: values.companyName.trim() || null,
-      source: values.source.trim() || null,
       description: values.description.trim() || null,
     });
   };
@@ -88,12 +82,6 @@ export function CrmContactInfoForm({
         </FormField>
         <FormField label="Website">
           <Input {...field("website")} aria-label="Website" />
-        </FormField>
-        <FormField label="Company">
-          <Input {...field("companyName")} aria-label="Company" />
-        </FormField>
-        <FormField label="Source">
-          <Input {...field("source")} aria-label="Source" />
         </FormField>
         <div className="sm:col-span-2">
           <FormField label="Description">

@@ -64,11 +64,22 @@ describe('OperationsNotificationsService', () => {
         where: expect.objectContaining({
           workspaceId: 'workspace-1',
           recipientMemberId: 'member-1',
+          type: { not: 'CRM_MESSAGE_RECEIVED' },
           AND: expect.any(Array),
         }),
         take: 51,
       }),
     );
+  });
+
+  it('hides legacy incoming Telegram-message notifications from the list and unread badge', async () => {
+    const { service, prisma } = setup();
+    await service.unreadCount('user-1');
+    expect(prisma.operationsNotification.count).toHaveBeenCalledWith({
+      where: expect.objectContaining({
+        type: { not: 'CRM_MESSAGE_RECEIVED' },
+      }),
+    });
   });
 
   it('does not write an absent preference when requested value is already false', async () => {

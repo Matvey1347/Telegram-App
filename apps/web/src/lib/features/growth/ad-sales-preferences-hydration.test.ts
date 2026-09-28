@@ -1,6 +1,9 @@
 import type { TelegramAdSalesMemberPreferences } from "@telegram-system/shared";
 import { describe, expect, it } from "vitest";
-import { resolveAdSalesPreferenceSelection } from "./ad-sales-preferences-hydration";
+import {
+  resolveAdSalesPreferenceSelection,
+  revealCreatedPlacementChannels,
+} from "./ad-sales-preferences-hydration";
 
 const preferences: TelegramAdSalesMemberPreferences = {
   id: "preferences-1",
@@ -61,5 +64,49 @@ describe("resolveAdSalesPreferenceSelection", () => {
         requestedChannelId: "channel-2",
       }),
     ).toEqual({ selectedChannelIds: ["channel-2"], selectedNetworkId: "" });
+  });
+});
+
+describe("revealCreatedPlacementChannels", () => {
+  it("adds a newly booked channel and clears a restrictive network scope", () => {
+    expect(
+      revealCreatedPlacementChannels({
+        selectedChannelIds: ["channel-1"],
+        selectedNetworkId: "network-1",
+        activeChannelIds: ["channel-1"],
+        saleableChannelIds: ["channel-1", "channel-2"],
+        createdChannelIds: ["channel-2"],
+      }),
+    ).toEqual({
+      selectedChannelIds: ["channel-1", "channel-2"],
+      selectedNetworkId: "",
+    });
+  });
+
+  it("keeps the all-channels selection unchanged", () => {
+    expect(
+      revealCreatedPlacementChannels({
+        selectedChannelIds: [],
+        selectedNetworkId: "",
+        activeChannelIds: ["channel-1"],
+        saleableChannelIds: ["channel-1"],
+        createdChannelIds: ["channel-1"],
+      }),
+    ).toEqual({ selectedChannelIds: [], selectedNetworkId: "" });
+  });
+
+  it("expands an empty network selection with the active network channels", () => {
+    expect(
+      revealCreatedPlacementChannels({
+        selectedChannelIds: [],
+        selectedNetworkId: "network-1",
+        activeChannelIds: ["channel-1"],
+        saleableChannelIds: ["channel-1", "channel-2"],
+        createdChannelIds: ["channel-2"],
+      }),
+    ).toEqual({
+      selectedChannelIds: ["channel-1", "channel-2"],
+      selectedNetworkId: "",
+    });
   });
 });

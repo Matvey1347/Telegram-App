@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import type { TelegramAdAvailabilitySlot } from "@telegram-system/shared";
+import { telegramAdSalesApi } from "@/lib/api";
+import { telegramAdSalesKeys } from "@/lib/features/growth/telegram-ad-sales-query";
 import {
   expandNetworkChannelIds,
   toNumber,
@@ -33,7 +36,8 @@ import type { AdSaleModalProps } from "./ad-sale-modal-types";
 export function useAdSaleModalController(options: AdSaleModalProps) {
   // prettier-ignore
   const {
-    open, onClose, accounts, channels, networks, productsByChannelId,
+    open, onClose, accounts, channels, networks,
+    productsByChannelId: providedProductsByChannelId,
     defaultCurrency, workspaceTimezone, onLoadAvailableSlots,
     onLoadPublishedPosts, onRequestQuotePreview, onSubmit,
   } = options;
@@ -84,6 +88,27 @@ export function useAdSaleModalController(options: AdSaleModalProps) {
         networks,
       }),
     [channelSelectionMode, networks, selectedChannelIds, selectedNetworkId],
+  );
+  const missingProductChannelIds = useMemo(
+    () =>
+      effectiveChannelIds.filter(
+        (channelId) => !(channelId in providedProductsByChannelId),
+      ),
+    [effectiveChannelIds, providedProductsByChannelId],
+  );
+  const modalProductsQuery = useQuery({
+    queryKey: telegramAdSalesKeys.productsByChannels(missingProductChannelIds),
+    queryFn: () =>
+      telegramAdSalesApi.listProductsByChannels(missingProductChannelIds),
+    enabled: open && missingProductChannelIds.length > 0,
+    staleTime: 60_000,
+  });
+  const productsByChannelId = useMemo(
+    () => ({
+      ...providedProductsByChannelId,
+      ...(modalProductsQuery.data ?? {}),
+    }),
+    [modalProductsQuery.data, providedProductsByChannelId],
   );
   const selectedAccount = useMemo(
     () => accounts.find((account) => account.id === accountId),
@@ -388,6 +413,7 @@ export function useAdSaleModalController(options: AdSaleModalProps) {
     publishedPostsByPlacement, postsLoadingByPlacement, paymentAmount, networkPricing,
     quotePreview,
     effectiveChannelIds, paymentCurrency, commonTime, commonFormats, commonFormatName,
+    productsByChannelId,
     loadPublishedPosts, canSubmit, openSlotPicker, applySlot, submit, slotPickerPlacement,
     slotsByDate, sharedPostActive, continueDraft, deleteDraft,
     createNewDraft,

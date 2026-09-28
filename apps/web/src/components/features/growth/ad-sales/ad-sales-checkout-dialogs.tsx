@@ -18,6 +18,18 @@ import {
 import { zonedDateTimeToUtc } from "@/lib/features/growth/telegram-ad-sales";
 import { AdSaleModal } from "./ad-sale-modal";
 
+export function telegramMessageIdFromUrl(value?: string) {
+  if (!value) return undefined;
+  try {
+    const url = new URL(value);
+    if (url.hostname.toLowerCase() !== "t.me") return undefined;
+    const messageId = url.pathname.split("/").filter(Boolean).at(-1);
+    return messageId && /^\d+$/.test(messageId) ? messageId : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function AdSalesCheckoutDialogs({
   adSaleModalOpen,
   setAdSaleModalOpen,
@@ -104,8 +116,7 @@ export function AdSalesCheckoutDialogs({
             "23:59:59",
             timezone,
           ).toISOString();
-          const telegramMessageId =
-            telegramPostUrl?.match(/\/(\d+)(?:[/?#].*)?$/)?.[1];
+          const telegramMessageId = telegramMessageIdFromUrl(telegramPostUrl);
           const params = {
             page: 1,
             pageSize: 100,
@@ -121,12 +132,12 @@ export function AdSalesCheckoutDialogs({
                     String(post.telegramMessageId) === telegramMessageId,
                 )
               : result.items.length > 0;
-          if (!hasRequestedPost()) {
+          if (!hasRequestedPost() && telegramMessageId) {
             try {
               await syncTelegramChannelPostMetrics(
                 channelId,
                 {
-                  postLimit: 100,
+                  messageIds: [telegramMessageId],
                 },
                 true,
               );
@@ -147,6 +158,9 @@ export function AdSalesCheckoutDialogs({
               post.text?.trim().split("\n").find(Boolean)?.slice(0, 90) ||
               "Telegram post",
             publishedAt: post.postDate,
+            telegramPostUrl: post.primaryTelegramMessageUrl ?? telegramPostUrl ?? null,
+            viewsCount: post.viewsCount ?? null,
+            reactionsCount: post.reactionsCount ?? null,
           }));
         }}
         onSubmit={submitAdSale}

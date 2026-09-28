@@ -2,21 +2,16 @@ import { describe, expect, it } from "vitest";
 import { transactionAvatar } from "./transaction-avatar";
 
 describe("transactionAvatar", () => {
-  it("keeps the transaction's explicitly selected icon", () => {
+  it("uses the transaction's explicitly selected icon only as a final fallback", () => {
     const icon = { type: "unicode", value: "💸" } as const;
     expect(
       transactionAvatar({
         iconPresentation: icon,
-        telegramChannel: {
-          id: "channel-1",
-          title: "News",
-          photoUrl: "https://cdn.example.com/channel.jpg",
-        },
       } as never),
     ).toEqual(icon);
   });
 
-  it("uses the channel avatar before category and member fallbacks", () => {
+  it("uses channel artwork before the category emoji", () => {
     expect(
       transactionAvatar({
         iconPresentation: null,

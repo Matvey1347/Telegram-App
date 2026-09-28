@@ -5,7 +5,11 @@ import {
   NotFoundException,
   Optional,
 } from '@nestjs/common';
-import { Prisma, TelegramCrmContactStage } from '@prisma/client';
+import {
+  Prisma,
+  TelegramAdvertiserContactType,
+  TelegramCrmContactStage,
+} from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { WorkspaceAuthorizationService } from '../../workspace/workspace-authorization/workspace-authorization.service';
 import {
@@ -214,12 +218,13 @@ export class TelegramCrmContactCommandService {
       access.memberId,
       dto.ownerMemberId,
     );
+    const telegramUsername = this.username(dto.telegramUsername);
     const row = await this.prisma.telegramAdvertiser.create({
       data: {
         workspaceId: access.workspaceId,
         displayName: this.requiredText(dto.displayName, 'Display name'),
         companyName: dto.companyName ?? null,
-        telegramUsername: this.username(dto.telegramUsername),
+        telegramUsername,
         phone: dto.phone ?? null,
         email: dto.email?.toLowerCase() ?? null,
         website: dto.website ?? null,
@@ -231,6 +236,20 @@ export class TelegramCrmContactCommandService {
         nextContactAt: dto.nextContactAt ? new Date(dto.nextContactAt) : null,
         archivedAt:
           null,
+        ...(telegramUsername
+          ? {
+              contacts: {
+                create: {
+                  workspaceId: access.workspaceId,
+                  type: TelegramAdvertiserContactType.TELEGRAM_USERNAME,
+                  value: telegramUsername,
+                  normalizedValue: telegramUsername,
+                  label: 'Telegram',
+                  isPrimary: true,
+                },
+              },
+            }
+          : {}),
       },
       select: crmContactSelect,
     });

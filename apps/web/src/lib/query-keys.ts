@@ -29,6 +29,8 @@ export const accountKeys = {
 export const memberFinanceKeys = {
   summaries: () => ["member-finance", "summaries"] as const,
   detail: (memberId: string) => ["member-finance", "detail", memberId] as const,
+  investmentTransactions: (memberId: string) =>
+    ["member-finance", "investment-transactions", memberId] as const,
 };
 
 export const telegramAdSalesKeys = {

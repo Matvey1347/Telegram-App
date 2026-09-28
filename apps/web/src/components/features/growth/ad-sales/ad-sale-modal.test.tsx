@@ -3,6 +3,7 @@ import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { renderWithI18n as render } from "@/test/render-with-i18n";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { telegramAdSalesApi } from "@/lib/api";
 import { AdSaleModal, defaultAdSaleAccountId } from "./ad-sale-modal";
 import { resolveAdSaleCurrency } from "./ad-sale-placement-draft";
 
@@ -134,6 +135,34 @@ describe("AdSaleModal", () => {
       expect(
         window.localStorage.getItem("telegram-ad-sales:draft:default"),
       ).toBeNull(),
+    );
+  });
+
+  it("loads formats for a channel selected only inside the modal", async () => {
+    const productLoader = vi
+      .spyOn(telegramAdSalesApi, "listProductsByChannels")
+      .mockResolvedValue({
+        "channel-1": [
+          {
+            id: "format-sponsored",
+            name: "Sponsored post",
+            currency: "UAH",
+            defaultPricingMode: "FIXED",
+            defaultCpm: null,
+            defaultFixedPrice: "200",
+            minimumPrice: "200",
+            estimatedViews: 1_000,
+            estimatedPrice: "200",
+            isActive: true,
+            position: 0,
+          },
+        ],
+      } as never);
+
+    renderModal({ productsByChannelId: {} });
+
+    await waitFor(() =>
+      expect(productLoader).toHaveBeenCalledWith(["channel-1"]),
     );
   });
 

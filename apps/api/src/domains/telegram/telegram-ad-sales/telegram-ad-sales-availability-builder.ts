@@ -47,6 +47,9 @@ export type AvailabilityPlacement = {
     advertiserNameSnapshot: string | null;
     status: unknown;
     paymentStatus?: 'UNPAID' | 'PARTIALLY_PAID' | 'PAID' | 'OVERPAID' | null;
+    saleAgreedAmount?: Prisma.Decimal;
+    settlementCurrency?: string;
+    advertiserPhotoUrl?: string | null;
   } | null;
 };
 
@@ -321,6 +324,11 @@ export function buildAdSalesAvailability(input: AvailabilityBuildInput) {
                 paymentStatus: existing.sale?.paymentStatus ?? null,
                 agreedPrice: decimalToString(existing.agreedPrice),
                 currency: existing.currency,
+                saleAgreedAmount: existing.sale?.saleAgreedAmount
+                  ? decimalToString(existing.sale.saleAgreedAmount)
+                  : undefined,
+                settlementCurrency: existing.sale?.settlementCurrency,
+                advertiserPhotoUrl: existing.sale?.advertiserPhotoUrl ?? null,
                 viewsCount:
                   existing.telegramPost?.viewsCount ??
                   existing.actualViewsFinal ??

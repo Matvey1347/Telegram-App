@@ -36,6 +36,9 @@ vi.mock("@/lib/api", () => ({
   authApi: { me: mocks.me },
   workspaceMembersApi: { select: mocks.members },
   telegramAdSalesApi: {
+    getAdvertiser: vi.fn().mockResolvedValue({ contacts: [] }),
+    addAdvertiserContact: vi.fn(),
+    setPrimaryAdvertiserContact: vi.fn(),
     listSalesPage: mocks.listSalesPage,
     deleteSale: vi.fn(),
   },
@@ -85,6 +88,7 @@ const contact: CrmContactDetail = {
       photoUrl: null,
     },
   ],
+  contactChannels: [],
   conversationAccounts: [
     {
       id: "account-1",

@@ -1,6 +1,7 @@
 import { Transform, Type } from 'class-transformer';
 import {
   IsBoolean,
+  IsIn,
   IsNumber,
   IsOptional,
   IsString,
@@ -64,4 +65,8 @@ export class UpdateAccountDto {
 
 export class AccountQueryDto extends PaginationQueryDto {
   @IsOptional() @IsString() assignedMemberId?: string;
+  @IsOptional() @IsIn(['mine', 'all', 'archived']) scope?:
+    | 'mine'
+    | 'all'
+    | 'archived';
 }
