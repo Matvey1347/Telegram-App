@@ -1753,12 +1753,16 @@ function TelegramPostWorkspace({
       .filter((section): section is PostSidebarSection => Boolean(section));
   }, [sidebarOrderKeys, sidebarSections]);
   const channelPostIds = (posts.data || []).map((post) => post.id);
+  const tabPostIds = visiblePosts.map((post) => post.id);
   const selectedPosts = selectedPostIds
     .map((id) => posts.data?.find((post) => post.id === id))
     .filter((post): post is TelegramManagedPost => Boolean(post));
   const allChannelPostsSelected =
     channelPostIds.length > 0 &&
     channelPostIds.every((id) => selectedPostIds.includes(id));
+  const allTabPostsSelected =
+    tabPostIds.length > 0 &&
+    tabPostIds.every((id) => selectedPostIds.includes(id));
   const allGroupIds = [
     ...new Set([
       ...(postGroups.data || []).map((group) => group.id),
@@ -2974,6 +2978,15 @@ function TelegramPostWorkspace({
         return current.filter((id) => !channelPostIds.includes(id));
       }
       return [...new Set([...current, ...channelPostIds])];
+    });
+  };
+
+  const toggleAllTabPosts = () => {
+    setSelectedPostIds((current) => {
+      if (allTabPostsSelected) {
+        return current.filter((id) => !tabPostIds.includes(id));
+      }
+      return [...new Set([...current, ...tabPostIds])];
     });
   };
 
@@ -5455,9 +5468,13 @@ function TelegramPostWorkspace({
             <FormField label="Remove after publication">
               <div className="space-y-1.5">
                 <Select
-                  value={postBatchFormatValue(deleteAfterHours as 24 | 48 | 72 | null)}
+                  value={postBatchFormatValue(
+                    deleteAfterHours as 24 | 48 | 72 | null,
+                  )}
                   onChange={(event) =>
-                    setDeleteAfterHours(postBatchLifetimeFromFormat(event.target.value))
+                    setDeleteAfterHours(
+                      postBatchLifetimeFromFormat(event.target.value),
+                    )
                   }
                 >
                   {POST_BATCH_FORMAT_OPTIONS.map((option) => (
@@ -5969,18 +5986,32 @@ function TelegramPostWorkspace({
                     );
                   })}
                 </div>
-                <div className="mt-3 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-lg border border-neutral-800 bg-neutral-950/70 px-2 py-2">
+                <div className="mt-3 rounded-lg border border-neutral-800 bg-neutral-950/70 px-2 py-2">
                   <div className="flex min-w-0 items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={toggleAllChannelPosts}
-                      className="rounded-md px-2 py-1 text-xs text-neutral-300 hover:bg-neutral-800 hover:text-white"
-                      title={t("telegram.posts.editor.selectAll")}
-                    >
-                      {allChannelPostsSelected
-                        ? t("telegram.posts.editor.clearAll")
-                        : t("telegram.posts.editor.all")}
-                    </button>
+                    <div className="flex flex-col items-start gap-1">
+                      <button
+                        type="button"
+                        onClick={toggleAllTabPosts}
+                        className="rounded-md px-2 py-1 text-xs text-neutral-300 hover:bg-neutral-800 hover:text-white"
+                        title={t("telegram.posts.editor.selectAllInTab")}
+                      >
+                        {allTabPostsSelected
+                          ? t("telegram.posts.editor.clearTab")
+                          : t("telegram.posts.editor.allInThisTab")}
+                      </button>
+                      {allTabPostsSelected ? (
+                        <button
+                          type="button"
+                          onClick={toggleAllChannelPosts}
+                          className="rounded-md px-2 py-1 text-xs text-neutral-300 hover:bg-neutral-800 hover:text-white"
+                          title={t("telegram.posts.editor.selectAll")}
+                        >
+                          {allChannelPostsSelected
+                            ? t("telegram.posts.editor.clearAll")
+                            : t("telegram.posts.editor.all")}
+                        </button>
+                      ) : null}
+                    </div>
                     <span
                       className={`min-w-9 rounded-md border px-2 py-1 text-center text-xs ${
                         selectedPosts.length
@@ -5991,7 +6022,7 @@ function TelegramPostWorkspace({
                       {selectedPosts.length || 0}
                     </span>
                   </div>
-                  <div className="flex items-center justify-end gap-2">
+                  <div className="mt-2 flex items-center justify-end gap-2 border-t border-neutral-800 pt-2">
                     <ManagedPostExportButton posts={selectedPosts} />
                     <Button
                       type="button"
