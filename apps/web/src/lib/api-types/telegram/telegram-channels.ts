@@ -89,6 +89,7 @@ export type TelegramChannel = EntityAssignment & {
   description?: string;
   shortDescription?: string | null;
   tgStatUrl?: string | null;
+  publicInviteLinkId?: string | null;
   presentationIconId?: string | null;
   presentationIconPresentation?: ResolvedEmoji | null;
   defaultInviteLinkId?: string | null;

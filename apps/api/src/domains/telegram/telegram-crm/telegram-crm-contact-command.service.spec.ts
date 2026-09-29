@@ -181,7 +181,7 @@ describe('TelegramCrmContactCommandService', () => {
     );
 
     await expect(
-      service.update('user-1', 'contact-1', { stage: 'QUALIFIED' }),
+      service.update('user-1', 'contact-1', { stage: 'LEAD' }),
     ).rejects.toBeInstanceOf(ForbiddenException);
 
     expect(prisma.telegramAdvertiser.findFirst).toHaveBeenCalledWith(

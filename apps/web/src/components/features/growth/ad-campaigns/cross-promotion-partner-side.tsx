@@ -1,6 +1,6 @@
 "use client";
 
-import { Bot, ChevronDown, Send } from "lucide-react";
+import { Bot, ChevronDown, Plus, Send, Trash2 } from "lucide-react";
 import type {
   CrossPromotionTargetInput,
   TelegramAdProduct,
@@ -8,7 +8,12 @@ import type {
   TelegramSystemBotPostDraft,
 } from "@telegram-system/shared";
 import type { Promo, TelegramChannel, TelegramInviteLink } from "@/lib/api";
-import { Button, FormField, MultiSelect } from "@/components/ui/primitives";
+import {
+  Button,
+  CustomSelect,
+  FormField,
+  MultiSelect,
+} from "@/components/ui/primitives";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { MutualPromotionPostComposer } from "./mutual-promotion/mutual-promotion-post-composer";
 import { CrossPromotionTargetEditor } from "./cross-promotion-target-editor";
@@ -42,11 +47,9 @@ export function CrossPromotionPartnerSide({
   onDefaultDateChange,
   defaultTime,
   onSettingsChange,
-  basicsReady,
-  targetIds,
   targets,
-  onTargetIdsChange,
   onTargetsChange,
+  onAddTarget,
   onResolved,
   outboundMode,
   onOutboundModeChange,
@@ -58,6 +61,7 @@ export function CrossPromotionPartnerSide({
   onImportPost,
   onSendPost,
   promoReady,
+  showValidationErrors = false,
 }: {
   expanded: boolean;
   onExpandedChange: (expanded: boolean) => void;
@@ -80,11 +84,9 @@ export function CrossPromotionPartnerSide({
   onDefaultDateChange: (date: string) => void;
   defaultTime: string;
   onSettingsChange: (value: CrossPromotionPlacementSettingsValue) => void;
-  basicsReady: boolean;
-  targetIds: string[];
   targets: CrossPromotionTargetInput[];
-  onTargetIdsChange: (ids: string[]) => void;
   onTargetsChange: (targets: CrossPromotionTargetInput[]) => void;
+  onAddTarget?: () => void;
   onResolved: (
     channelId: string,
     value: { promo?: Promo; inviteLink?: TelegramInviteLink },
@@ -97,8 +99,9 @@ export function CrossPromotionPartnerSide({
   importStatus: FlowStatus;
   sendStatus: FlowStatus;
   onImportPost: () => void;
-  onSendPost: () => void;
+  onSendPost: (targetIndex: number) => void;
   promoReady: boolean;
+  showValidationErrors?: boolean;
 }) {
   const channelOptions = (items: TelegramChannel[]) =>
     items.map((channel) => ({
@@ -122,8 +125,8 @@ export function CrossPromotionPartnerSide({
         <span>
           <h3 className="font-semibold text-white">Partner side</h3>
           <p className="text-xs text-neutral-400">
-            Optional now — add the client and their publication later, when
-            they are ready to place your promo.
+            Optional now — add the client and their publication later, when they
+            are ready to place your promo.
           </p>
         </span>
         <ChevronDown
@@ -158,138 +161,188 @@ export function CrossPromotionPartnerSide({
               />
             </FormField>
           </div>
-          {partnerIds.length ? (
-            <CrossPromotionPlacementSettings
-              title="Formats in partner channels"
-              description="Set the planned publication date, time, and format for every partner channel."
-              channelIds={partnerIds}
-              channels={channels}
-              productsByChannelId={productsByChannelId}
-              value={settings}
-              defaultDate={defaultDate}
-              defaultTime={defaultTime}
-              onDefaultDateChange={onDefaultDateChange}
-              onChange={onSettingsChange}
-            />
-          ) : null}
-          {basicsReady || partnerIds.length > 0 ? (
-            <>
-              <div className="grid items-end gap-3 md:grid-cols-[minmax(260px,.8fr)_minmax(0,1.2fr)]">
-                <FormField label="My promo source" required>
-                  <div className="flex h-[42px] items-center rounded-lg border border-neutral-700 bg-neutral-950 px-2">
-                    <SegmentedControl
-                      value={outboundMode}
-                      onChange={onOutboundModeChange}
-                      ariaLabel="My promo source"
-                      options={[
-                        { value: "PROMO", label: "Saved promo" },
-                        { value: "CUSTOM", label: "Custom post" },
-                      ]}
-                    />
-                  </div>
-                </FormField>
-                <FormField label="My channels being promoted" required>
-                  <MultiSelect
-                    value={targetIds}
-                    onChange={onTargetIdsChange}
-                    options={channelOptions(ownChannels)}
-                    placeholder="Select the channel promoted by my promo"
-                    searchPlaceholder="Search your channels"
-                  />
-                </FormField>
-              </div>
-              <div className="grid gap-3">
-                {targets.map((target) => {
-                  const channel = channels.find(
-                    (item) => item.id === target.telegramChannelId,
-                  );
-                  return channel ? (
+          <CrossPromotionPlacementSettings
+            title="Formats in partner channels"
+            description="Set the planned publication date, time, and format for every partner channel."
+            channelIds={partnerIds}
+            channels={channels}
+            productsByChannelId={productsByChannelId}
+            value={settings}
+            defaultDate={defaultDate}
+            defaultTime={defaultTime}
+            onDefaultDateChange={onDefaultDateChange}
+            onChange={onSettingsChange}
+            formatErrorChannelIds={
+              showValidationErrors
+                ? partnerIds.filter((channelId) => {
+                    const products = productsByChannelId[channelId] ?? [];
+                    return (
+                      products.length > 0 && !settings.formatIds[channelId]
+                    );
+                  })
+                : []
+            }
+          />
+          <>
+            <div className="grid gap-3">
+              {targets.map((target, index) => {
+                const channel = channels.find(
+                  (item) => item.id === target.telegramChannelId,
+                );
+                if (!channel) return null;
+                return (
+                  <section
+                    key={`${channel.id}-${index}`}
+                    className="space-y-3 rounded-xl border border-neutral-800 bg-neutral-950/55 p-3"
+                  >
+                    <div className="grid items-end gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+                      <FormField label="My channel being promoted" required>
+                        <CustomSelect
+                          value={target.telegramChannelId}
+                          onChange={(telegramChannelId) =>
+                            onTargetsChange(
+                              targets.map((item, itemIndex) =>
+                                itemIndex === index
+                                  ? {
+                                      telegramChannelId,
+                                      promoId:
+                                        outboundMode === "CUSTOM" ? null : "",
+                                      inviteLinkId: "",
+                                    }
+                                  : item,
+                              ),
+                            )
+                          }
+                          placeholder="Select my channel"
+                          options={channelOptions(ownChannels)}
+                        />
+                      </FormField>
+                      <FormField label="My promo source" required>
+                        <div className="flex h-[42px] items-center rounded-lg border border-neutral-700 bg-neutral-950 px-2">
+                          <SegmentedControl
+                            value={outboundMode}
+                            onChange={onOutboundModeChange}
+                            ariaLabel={`My promo source for placement ${index + 1}`}
+                            options={[
+                              { value: "PROMO", label: "Saved promo" },
+                              { value: "CUSTOM", label: "Custom post" },
+                            ]}
+                          />
+                        </div>
+                      </FormField>
+                      {targets.length > 1 ? (
+                        <Button
+                          type="button"
+                          variant="danger"
+                          aria-label={`Remove promo placement ${index + 1}`}
+                          onClick={() =>
+                            onTargetsChange(
+                              targets.filter(
+                                (_, itemIndex) => itemIndex !== index,
+                              ),
+                            )
+                          }
+                        >
+                          <Trash2 size={16} />
+                        </Button>
+                      ) : null}
+                    </div>
                     <CrossPromotionTargetEditor
-                      key={channel.id}
                       channel={channel}
                       value={target}
                       showPromo={outboundMode === "PROMO"}
+                      showChannelIdentity={false}
+                      framed={false}
+                      trailing={
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          disabled={
+                            !botConnected ||
+                            sendStatus === "working" ||
+                            !target.inviteLinkId ||
+                            (outboundMode === "PROMO" && !target.promoId) ||
+                            (outboundMode === "CUSTOM" && !promoReady)
+                          }
+                          onClick={() => onSendPost(index)}
+                        >
+                          <Send size={15} />{" "}
+                          {sendStatus === "working"
+                            ? "Sending…"
+                            : sendStatus === "done"
+                              ? "✅ Sent to bot"
+                              : "Send to bot"}
+                        </Button>
+                      }
                       onChange={(next) =>
                         onTargetsChange(
-                          targets.map((item) =>
-                            item.telegramChannelId === channel.id ? next : item,
+                          targets.map((item, itemIndex) =>
+                            itemIndex === index ? next : item,
                           ),
                         )
                       }
-                      onResolved={(value) => onResolved(channel.id, value)}
-                    />
-                  ) : null;
-                })}
-              </div>
-              {outboundMode === "CUSTOM" ? (
-                <section className="space-y-3 rounded-xl border border-neutral-800 bg-neutral-950/55 p-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div>
-                      <h4 className="text-sm font-semibold text-white">
-                        My custom promo
-                      </h4>
-                      <p className="text-xs text-neutral-500">
-                        Forward it through the system bot or compose it here.
-                      </p>
-                    </div>
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      disabled={
-                        !botConnected ||
-                        importStatus === "working" ||
-                        importStatus === "waiting"
+                      onResolved={(value) =>
+                        onResolved(`target:${index}`, value)
                       }
-                      onClick={onImportPost}
-                    >
-                      <Bot size={15} />{" "}
-                      {importStatus === "working"
-                        ? "Loading…"
-                        : importStatus === "waiting"
-                          ? "Waiting for bot…"
-                          : importStatus === "done"
-                            ? "✅ Imported from bot"
-                            : "Import from bot"}
-                    </Button>
-                  </div>
-                  <MutualPromotionPostComposer
-                    draft={outboundPost}
-                    channelTitle={
-                      channels.find((channel) => channel.id === targetIds[0])
-                        ?.title ?? "Promoted channel"
-                    }
-                    channelPhotoUrl={
-                      channels.find((channel) => channel.id === targetIds[0])
-                        ?.photoUrl
-                    }
-                    channelId={targetIds[0]}
-                    onChange={onOutboundPostChange}
-                  />
-                </section>
-              ) : null}
-              <div className="flex justify-end">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  disabled={
-                    !botConnected || sendStatus === "working" || !promoReady
-                  }
-                  onClick={onSendPost}
-                >
-                  <Send size={15} />{" "}
-                  {sendStatus === "working"
-                    ? "Sending…"
-                    : sendStatus === "done"
-                      ? "✅ Sent to bot"
-                      : "Send my promo to bot"}
+                    />
+                  </section>
+                );
+              })}
+              <div className="flex">
+                <Button type="button" onClick={onAddTarget}>
+                  <Plus size={15} /> Add promo placement
                 </Button>
               </div>
-            </>
-          ) : (
-            <p className="rounded-lg border border-dashed border-neutral-700 p-3 text-sm text-neutral-500">
-              Select a partner channel to choose the promo they will publish.
-            </p>
-          )}
+            </div>
+            {outboundMode === "CUSTOM" ? (
+              <section className="space-y-3 rounded-xl border border-neutral-800 bg-neutral-950/55 p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h4 className="text-sm font-semibold text-white">
+                      My custom promo
+                    </h4>
+                    <p className="text-xs text-neutral-500">
+                      Forward it through the system bot or compose it here.
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    disabled={
+                      !botConnected ||
+                      importStatus === "working" ||
+                      importStatus === "waiting"
+                    }
+                    onClick={onImportPost}
+                  >
+                    <Bot size={15} />{" "}
+                    {importStatus === "working"
+                      ? "Loading…"
+                      : importStatus === "waiting"
+                        ? "Waiting for bot…"
+                        : importStatus === "done"
+                          ? "✅ Imported from bot"
+                          : "Import from bot"}
+                  </Button>
+                </div>
+                <MutualPromotionPostComposer
+                  draft={outboundPost}
+                  channelTitle={
+                    channels.find(
+                      (channel) => channel.id === targets[0]?.telegramChannelId,
+                    )?.title ?? "Promoted channel"
+                  }
+                  channelPhotoUrl={
+                    channels.find(
+                      (channel) => channel.id === targets[0]?.telegramChannelId,
+                    )?.photoUrl
+                  }
+                  channelId={targets[0]?.telegramChannelId}
+                  onChange={onOutboundPostChange}
+                />
+              </section>
+            ) : null}
+          </>
         </>
       ) : null}
     </section>

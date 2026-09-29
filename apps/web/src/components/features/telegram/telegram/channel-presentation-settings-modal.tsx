@@ -39,6 +39,7 @@ export function ChannelPresentationSettingsModal({
   const [localDraft, setLocalDraft] = useState({
     description: channel.shortDescription || "",
     tgStatUrl: channel.tgStatUrl || "",
+    publicInviteLinkId: channel.publicInviteLinkId || "",
     presentationIconId: channel.presentationIconId || "",
     defaultInviteLinkId: channel.defaultInviteLinkId || "",
     botInviteLinkId: channel.botInviteLinkId || "",
@@ -57,6 +58,7 @@ export function ChannelPresentationSettingsModal({
     selectedId: values.defaultInviteLinkId,
     selectedIds: [
       values.defaultInviteLinkId,
+      values.publicInviteLinkId,
       values.botInviteLinkId,
       values.broadcastInviteLinkId,
       values.audienceTransferInviteLinkId,
@@ -156,10 +158,11 @@ export function ChannelPresentationSettingsModal({
   });
   const registerAndSelect = async (
     url: string,
-    target: "default" | "folders" | "vp" | "bot" | "broadcast" | "transfer",
+    target: "default" | "public" | "folders" | "vp" | "bot" | "broadcast" | "transfer",
   ) => {
     const result = await registerLink.mutateAsync(url.trim());
     if (target === "default") update({ defaultInviteLinkId: result.id });
+    if (target === "public") update({ publicInviteLinkId: result.id });
     if (target === "folders") {
       update({
         folderDefaultInviteLinkIds: selectPrimaryInviteLink(
@@ -186,6 +189,7 @@ export function ChannelPresentationSettingsModal({
       telegramChannelsApi.updateQuiet(channel.id, {
         shortDescription: values.description.trim() || null,
         tgStatUrl: values.tgStatUrl.trim() || null,
+        publicInviteLinkId: values.publicInviteLinkId || null,
         presentationIconId: values.presentationIconId || null,
         defaultInviteLinkId: selectedInviteLinkId || null,
         botInviteLinkId: values.botInviteLinkId || null,
@@ -251,6 +255,18 @@ export function ChannelPresentationSettingsModal({
         />
       </FormField>
       <div className="grid gap-3 sm:grid-cols-2">
+        <ChannelInviteLinkSelectField
+          label="Public channel link"
+          value={values.publicInviteLinkId}
+          links={links}
+          placeholder="Select public link"
+          helpText="Used in publication confirmations sent through the bot."
+          disabled={registerLink.isPending}
+          loading={linkOptions.loading}
+          onOpen={linkOptions.requestAll}
+          onChange={(publicInviteLinkId) => update({ publicInviteLinkId })}
+          onCreate={(url) => registerAndSelect(url, "public")}
+        />
         <ChannelInviteLinkSelectField
           label="Main invite link"
           value={selectedInviteLinkId}

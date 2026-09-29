@@ -7,11 +7,7 @@ import {
   type Dispatch,
   type SetStateAction,
 } from "react";
-import type {
-  TelegramAdAvailabilitySlot,
-  TelegramAdSaleOrigin,
-  TelegramAdvertiser,
-} from "@telegram-system/shared";
+import type { TelegramAdSaleOrigin, TelegramAdvertiser } from "@telegram-system/shared";
 import type { Account } from "@/lib/api";
 import type { useAdSaleNetworkPricing } from "./ad-sale-network-pricing";
 import { createPlacementDraft } from "./ad-sale-placement-draft";
@@ -96,14 +92,6 @@ export function useAdSaleModalSession(
     to: "",
   });
   const [submissionError, setSubmissionError] = useState("");
-  const [slotPickerPlacementKey, setSlotPickerPlacementKey] = useState<
-    string | null
-  >(null);
-  const [slotPickerSlots, setSlotPickerSlots] = useState<
-    TelegramAdAvailabilitySlot[]
-  >([]);
-  const [slotPickerLoading, setSlotPickerLoading] = useState(false);
-  const [slotPickerError, setSlotPickerError] = useState("");
   const [publishedPostsByPlacement, setPublishedPostsByPlacement] = useState<
     Record<string, PublishedPostOption[]>
   >({});
@@ -193,9 +181,6 @@ export function useAdSaleModalSession(
       networkPricing.setMode(draft.networkPricingMode);
       networkPricing.setTotalPrice(draft.networkTotalPrice);
     setSubmissionError("");
-    setSlotPickerPlacementKey(null);
-    setSlotPickerSlots([]);
-    setSlotPickerError("");
     setPublishedPostsByPlacement({});
     setPostsLoadingByPlacement({});
     },
@@ -305,14 +290,6 @@ export function useAdSaleModalSession(
     submissionError,
     setSubmissionError,
     pendingDrafts: drafts.pendingDrafts,
-    slotPickerPlacementKey,
-    setSlotPickerPlacementKey,
-    slotPickerSlots,
-    setSlotPickerSlots,
-    slotPickerLoading,
-    setSlotPickerLoading,
-    slotPickerError,
-    setSlotPickerError,
     publishedPostsByPlacement,
     setPublishedPostsByPlacement,
     postsLoadingByPlacement,

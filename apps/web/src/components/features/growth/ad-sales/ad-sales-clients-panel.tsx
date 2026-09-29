@@ -136,7 +136,7 @@ export function AdSalesClientsPanel() {
 
   const clients = clientsQuery.data?.items ?? [];
   const clientsLoading =
-    clientsQuery.isLoading || clientsQuery.isPlaceholderData;
+    clientsQuery.isLoading || clientsQuery.isFetching;
   const nowMs = clientsQuery.dataUpdatedAt;
   const overdueTaskCount = clients.filter((client) =>
     client.nextOpenTask?.dueAt

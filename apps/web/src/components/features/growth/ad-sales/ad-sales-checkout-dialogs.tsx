@@ -89,17 +89,6 @@ export function AdSalesCheckoutDialogs({
         onRequestQuotePreview={(requests, signal) =>
           telegramAdSalesApi.previewQuotes({ requests }, signal)
         }
-        onLoadAvailableSlots={async ({ channelId, productId, from, to }) => {
-          const result = await telegramAdSalesApi.availability({
-            from,
-            to,
-            channelIds: [channelId],
-            ...(productId ? { productIds: [productId] } : {}),
-          });
-          return result.slots.filter(
-            (slot) => slot.state === "AVAILABLE" || slot.state === "PAST",
-          );
-        }}
         onLoadPublishedPosts={async ({
           channelId,
           date,

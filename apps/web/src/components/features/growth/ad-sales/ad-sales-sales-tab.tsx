@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { TelegramAdSaleListItem } from "@telegram-system/shared";
-import { MoreVertical, Pencil, Trash2 } from "lucide-react";
+import { Bot, MoreVertical, Pencil, Trash2 } from "lucide-react";
 import { IconAvatar } from "@/components/icons/icon-avatar";
 import { TelegramEntityAvatar } from "@/components/features/telegram/telegram/telegram-entity-avatar";
 import { AdSaleOriginPreview } from "./ad-sale-origin";
@@ -14,8 +14,10 @@ import {
   ConfirmDeleteModal,
   Input,
   TableLoadingState,
+  Button,
+  Modal,
 } from "@/components/ui/primitives";
-import { currenciesApi, type TelegramChannel } from "@/lib/api";
+import { currenciesApi, telegramAdSalesApi, type TelegramChannel } from "@/lib/api";
 import { nativeAdSalePayment } from "./ad-sale-native-payment";
 import { AdSalePostMetrics } from "./ad-sale-post-metrics";
 import { AdSalePlacementLifecyclePreview } from "./ad-sale-placement-lifecycle-preview";
@@ -82,6 +84,10 @@ export function SalesTab(props: {
     null,
   );
   const [now, setNow] = useState(() => Date.now());
+  const [botConfirmationSale, setBotConfirmationSale] = useState<TelegramAdSaleListItem | null>(null);
+  const [botText, setBotText] = useState<string | null>(null);
+  const [botError, setBotError] = useState(false);
+  const [sendingBotConfirmation, setSendingBotConfirmation] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!menuSaleId) return;
@@ -98,6 +104,16 @@ export function SalesTab(props: {
       document.removeEventListener("keydown", closeOnEscape);
     };
   }, [menuSaleId]);
+  useEffect(() => {
+    if (!botConfirmationSale) return;
+    let active = true;
+    setBotText(null);
+    setBotError(false);
+    telegramAdSalesApi.previewBotNotification(botConfirmationSale.id)
+      .then((result) => { if (active) setBotText(result.text); })
+      .catch(() => { if (active) setBotError(true); });
+    return () => { active = false; };
+  }, [botConfirmationSale]);
   useEffect(() => {
     const hasCountdown = props.sales.some((sale) =>
       sale.placements.some(
@@ -294,6 +310,17 @@ export function SalesTab(props: {
                               <button
                                 type="button"
                                 role="menuitem"
+                                className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-neutral-200 hover:bg-neutral-800"
+                                onClick={() => {
+                                  setMenuSaleId(null);
+                                  setBotConfirmationSale(sale);
+                                }}
+                              >
+                                <Bot size={16} /> Bot confirmation
+                              </button>
+                              <button
+                                type="button"
+                                role="menuitem"
                                 className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-rose-300 hover:bg-rose-950/50"
                                 onClick={() => {
                                   setMenuSaleId(null);
@@ -319,6 +346,27 @@ export function SalesTab(props: {
           ) : null}
         </div>
       ) : null}
+
+      <Modal
+        open={Boolean(botConfirmationSale)}
+        onClose={() => { if (!sendingBotConfirmation) setBotConfirmationSale(null); }}
+        title="Preview bot confirmation"
+      >
+        <div className="space-y-4">
+          {!botText && !botError ? <TableLoadingState /> : null}
+          {botError ? <ErrorState text="Could not prepare the bot confirmation." /> : null}
+          {botText ? <div className="max-h-[55dvh] overflow-y-auto whitespace-pre-wrap rounded-xl border border-neutral-800 bg-neutral-950/55 p-4 text-sm text-neutral-200 [&_a]:text-blue-300 [&_a]:underline" dangerouslySetInnerHTML={{ __html: botText }} /> : null}
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="secondary" disabled={sendingBotConfirmation} onClick={() => setBotConfirmationSale(null)}>Cancel</Button>
+            <Button type="button" disabled={!botText || sendingBotConfirmation} onClick={async () => {
+              if (!botConfirmationSale) return;
+              setSendingBotConfirmation(true);
+              try { await telegramAdSalesApi.sendToBot(botConfirmationSale.id); setBotConfirmationSale(null); }
+              finally { setSendingBotConfirmation(false); }
+            }}>{sendingBotConfirmation ? "Sending…" : "Send to bot"}</Button>
+          </div>
+        </div>
+      </Modal>
 
       {props.pagination ? (
         <Pagination

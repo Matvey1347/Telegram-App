@@ -12,7 +12,10 @@ const scope = {
 };
 
 function setup() {
-  const config = { token: 'token', frontendUrl: null };
+  const config: { token: string; frontendUrl: string | null } = {
+    token: 'token',
+    frontendUrl: null,
+  };
   const api = {
     sendMessage: jest.fn().mockResolvedValue({ message_id: 90 }),
     editMessageText: jest.fn().mockResolvedValue({ message_id: 77 }),

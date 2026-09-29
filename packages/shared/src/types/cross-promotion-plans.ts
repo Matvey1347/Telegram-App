@@ -23,12 +23,29 @@ export type CrossPromotionChannelPlacementInput = {
   expectedViews?: number | null;
 };
 
+/**
+ * One side of a direct promotion can contain more than one publication.  This
+ * is deliberately separate from a channel: the same channel may occur in
+ * several publication items, provided their slots differ.
+ */
+export type CrossPromotionPublicationItem = {
+  id: string;
+  post: TelegramSystemBotPostDraft;
+  placements: CrossPromotionChannelPlacementInput[];
+  /** The promo/link advertised by this item on the partner side. */
+  target?: CrossPromotionTargetInput;
+};
+
 export type CrossPromotionPlacementPost = TelegramSystemBotPostDraft & {
   iconId?: string | null;
   partnerPublicationPost?: TelegramSystemBotPostDraft | null;
   partnerPostSource?: "PROMO" | "CUSTOM";
   publisherPlacements?: CrossPromotionChannelPlacementInput[];
   partnerPlacements?: CrossPromotionChannelPlacementInput[];
+  /** Partner posts published in this workspace's channels. */
+  publisherPublications?: CrossPromotionPublicationItem[];
+  /** This workspace's promos published by the partner. */
+  partnerPublications?: CrossPromotionPublicationItem[];
 };
 
 export type CreateCrossPromotionPlanPayload = {
@@ -78,6 +95,7 @@ export type CrossPromotionPlan = CreateCrossPromotionPlanPayload & {
   }>;
   targetResults: Array<{
     telegramChannelId: string;
+    inviteLinkId: string;
     title: string;
     photoUrl: string | null;
     promoId: string | null;

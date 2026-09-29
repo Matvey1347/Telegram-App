@@ -59,6 +59,7 @@ const plan: CrossPromotionPlan = {
   targetResults: [
     {
       telegramChannelId: "promoted-1",
+      inviteLinkId: "link-1",
       title: "Mentor",
       photoUrl: "https://cdn.example/promoted.jpg",
       promoId: "promo-1",
@@ -95,12 +96,10 @@ const plan: CrossPromotionPlan = {
 describe("CrossPromotionPlanCard", () => {
   it("renders only the publications owned by our workspace", () => {
     const onEdit = vi.fn();
-    const onCopy = vi.fn();
     const onDelete = vi.fn();
     render(
       <CrossPromotionPlanCard
         plan={plan}
-        onCopy={onCopy}
         onEdit={onEdit}
         onDelete={onDelete}
       />,
@@ -145,14 +144,13 @@ describe("CrossPromotionPlanCard", () => {
     fireEvent.click(
       screen.getByRole("button", { name: "Actions for Mentor ↔ Business" }),
     );
-    fireEvent.click(
-      screen.getByRole("menuitem", { name: "Add new integration" }),
-    );
-    expect(onCopy).toHaveBeenCalledTimes(1);
+    expect(
+      screen.queryByRole("menuitem", { name: "Combine published cards" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("menuitem", { name: "Add new integration" }),
+    ).not.toBeInTheDocument();
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "Actions for Mentor ↔ Business" }),
-    );
     fireEvent.click(screen.getByRole("menuitem", { name: "Edit promotion" }));
     expect(onEdit).toHaveBeenCalledTimes(1);
 
@@ -168,7 +166,6 @@ describe("CrossPromotionPlanCard", () => {
     render(
       <CrossPromotionPlanCard
         plan={plan}
-        onCopy={vi.fn()}
         onEdit={vi.fn()}
         onDelete={vi.fn()}
         onOpenPromo={onOpenPromo}
@@ -177,6 +174,38 @@ describe("CrossPromotionPlanCard", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Calm mind/ }));
     expect(onOpenPromo).toHaveBeenCalledWith("promo-1");
+  });
+
+  it("renders multiple results for the same channel without duplicate React keys", () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const duplicateChannelPlan: CrossPromotionPlan = {
+      ...plan,
+      targetResults: [
+        ...plan.targetResults,
+        {
+          ...plan.targetResults[0],
+          inviteLinkId: "link-2",
+          promoId: "promo-2",
+          promoTitle: "Second placement",
+        },
+      ],
+    };
+
+    render(
+      <CrossPromotionPlanCard
+        plan={duplicateChannelPlan}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+      />,
+    );
+
+    expect(screen.getAllByText("Mentor")).toHaveLength(2);
+    expect(
+      consoleError.mock.calls.some(([message]) =>
+        String(message).includes("Encountered two children with the same key"),
+      ),
+    ).toBe(false);
+    consoleError.mockRestore();
   });
 
   it("does not repeat a CRM username already used as the client name", () => {
@@ -191,7 +220,6 @@ describe("CrossPromotionPlanCard", () => {
             photoUrl: null,
           },
         }}
-        onCopy={vi.fn()}
         onEdit={vi.fn()}
         onDelete={vi.fn()}
       />,
@@ -209,7 +237,6 @@ describe("CrossPromotionPlanCard", () => {
     render(
       <CrossPromotionPlanCard
         plan={{ ...plan, status: "COMPLETED" }}
-        onCopy={vi.fn()}
         onEdit={vi.fn()}
         onDelete={vi.fn()}
       />,
@@ -224,7 +251,6 @@ describe("CrossPromotionPlanCard", () => {
     render(
       <CrossPromotionPlanCard
         plan={{ ...plan, kind: "OWN_CHANNELS" }}
-        onCopy={vi.fn()}
         onEdit={vi.fn()}
         onDelete={vi.fn()}
       />,
@@ -249,7 +275,6 @@ describe("CrossPromotionPlanCard", () => {
             publisherPlacements: [{ telegramChannelId: "mine-1", scheduledAt: actualTime }],
           },
         }}
-        onCopy={vi.fn()}
         onEdit={vi.fn()}
         onDelete={vi.fn()}
       />,

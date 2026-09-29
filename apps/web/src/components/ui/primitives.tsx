@@ -913,6 +913,7 @@ export function CustomSelect({
   canCreateOption,
   createOptionLabel,
   onCreateOption,
+  className = "",
 }: {
   value?: string;
   onChange: (value: string) => void;
@@ -932,6 +933,7 @@ export function CustomSelect({
   canCreateOption?: (search: string) => boolean;
   createOptionLabel?: (search: string) => React.ReactNode;
   onCreateOption?: (search: string) => void | Promise<void>;
+  className?: string;
 }) {
   const i18n = useOptionalI18n(),
     ui = uiCopy(uiLocale ?? i18n?.locale);
@@ -1067,7 +1069,7 @@ export function CustomSelect({
             : "text-neutral-200";
 
   return (
-    <div ref={rootRef} className="relative min-w-0 max-w-full">
+    <div ref={rootRef} className={`relative min-w-0 max-w-full ${className}`}>
       <button
         ref={triggerRef}
         type="button"

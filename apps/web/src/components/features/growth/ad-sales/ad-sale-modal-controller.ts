@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import type { TelegramAdAvailabilitySlot } from "@telegram-system/shared";
 import { telegramAdSalesApi } from "@/lib/api";
 import { telegramAdSalesKeys } from "@/lib/features/growth/telegram-ad-sales-query";
 import {
@@ -38,7 +37,7 @@ export function useAdSaleModalController(options: AdSaleModalProps) {
   const {
     open, onClose, accounts, channels, networks,
     productsByChannelId: providedProductsByChannelId,
-    defaultCurrency, workspaceTimezone, onLoadAvailableSlots,
+    defaultCurrency, workspaceTimezone,
     onLoadPublishedPosts, onRequestQuotePreview, onSubmit,
   } = options;
   const [postMode, setPostMode] = useState<"shared" | "individual">("shared");
@@ -65,9 +64,7 @@ export function useAdSaleModalController(options: AdSaleModalProps) {
     channelSelectionMode, setChannelSelectionMode, selectedNetworkId, setSelectedNetworkId,
     selectedChannelIds, setSelectedChannelIds, placementDateRange, setPlacementDateRange,
     submissionError, setSubmissionError,
-    pendingDrafts, slotPickerPlacementKey, setSlotPickerPlacementKey,
-    slotPickerSlots, setSlotPickerSlots, slotPickerLoading, setSlotPickerLoading,
-    slotPickerError, setSlotPickerError, publishedPostsByPlacement,
+    pendingDrafts, publishedPostsByPlacement,
     setPublishedPostsByPlacement, postsLoadingByPlacement, setPostsLoadingByPlacement,
     clearCurrentDraft,
     continueDraft, deleteDraft, createNewDraft,
@@ -231,16 +228,11 @@ export function useAdSaleModalController(options: AdSaleModalProps) {
     workspaceTimezone,
   ]);
 
-  const { loadPublishedPosts, openSlotPicker } = useAdSalePlacementLoaders({
-    onLoadAvailableSlots,
+  const { loadPublishedPosts } = useAdSalePlacementLoaders({
     onLoadPublishedPosts,
     postsLoadingByPlacement,
     setPostsLoadingByPlacement,
     setPublishedPostsByPlacement,
-    setSlotPickerPlacementKey,
-    setSlotPickerSlots,
-    setSlotPickerLoading,
-    setSlotPickerError,
   });
 
   const quoteRequests = useMemo<QuoteRequestDraft[]>(
@@ -282,25 +274,6 @@ export function useAdSaleModalController(options: AdSaleModalProps) {
     (!networkPricing.allocation ||
       Math.round(paymentAmount * 100) ===
         Math.round(networkPricing.allocation.totalAmount * 100));
-
-  function applySlot(slot: TelegramAdAvailabilitySlot) {
-    if (!slotPickerPlacementKey) return;
-    setPlacements((current) =>
-      current.map((item) =>
-        item.key === slotPickerPlacementKey
-          ? {
-              ...item,
-              date: slot.date,
-              timezone: slot.timezone,
-              inventoryOpportunityKey: null,
-              conflict: null,
-              telegramPostId: null,
-            }
-          : item,
-      ),
-    );
-    setSlotPickerPlacementKey(null);
-  }
 
   async function submit() {
     setSubmissionError("");
@@ -384,16 +357,6 @@ export function useAdSaleModalController(options: AdSaleModalProps) {
     }
   }
 
-  const slotPickerPlacement =
-    placements.find((item) => item.key === slotPickerPlacementKey) ?? null;
-  const slotsByDate = Array.from(
-    slotPickerSlots.reduce((groups, slot) => {
-      const items = groups.get(slot.date) ?? [];
-      items.push(slot);
-      groups.set(slot.date, items);
-      return groups;
-    }, new Map<string, TelegramAdAvailabilitySlot[]>()),
-  ).sort(([left], [right]) => left.localeCompare(right));
   const sharedPostActive =
     postMode === "shared" &&
     placements.length >= 1 &&
@@ -409,13 +372,11 @@ export function useAdSaleModalController(options: AdSaleModalProps) {
     channelSelectionMode, setChannelSelectionMode, selectedNetworkId, setSelectedNetworkId,
     selectedChannelIds, setSelectedChannelIds, placementDateRange, setPlacementDateRange,
     postMode, setPostMode, placements, setPlacements, submissionError, pendingDrafts,
-    slotPickerPlacementKey, setSlotPickerPlacementKey, slotPickerLoading, slotPickerError,
     publishedPostsByPlacement, postsLoadingByPlacement, paymentAmount, networkPricing,
     quotePreview,
     effectiveChannelIds, paymentCurrency, commonTime, commonFormats, commonFormatName,
     productsByChannelId,
-    loadPublishedPosts, canSubmit, openSlotPicker, applySlot, submit, slotPickerPlacement,
-    slotsByDate, sharedPostActive, continueDraft, deleteDraft,
+    loadPublishedPosts, canSubmit, submit, sharedPostActive, continueDraft, deleteDraft,
     createNewDraft,
   };
 }

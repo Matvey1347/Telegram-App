@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type Dispatch, type SetStateAction } from "react";
-import { CalendarSearch, FilePenLine, MoreHorizontal, Settings2 } from "lucide-react";
+import { FilePenLine, MoreHorizontal, Settings2 } from "lucide-react";
 import type { TelegramAdProduct } from "@telegram-system/shared";
 import type { TelegramChannel } from "@/lib/api";
 import {
@@ -33,7 +33,6 @@ export function AdSalePlacementCard({
   publishedPosts,
   postsLoading,
   setPlacements,
-  onFindNearbyDate,
   onLoadPublishedPosts,
   onManualPriceEdit,
 }: {
@@ -46,7 +45,6 @@ export function AdSalePlacementCard({
   publishedPosts: PublishedPostOption[];
   postsLoading: boolean;
   setPlacements: Dispatch<SetStateAction<SalePlacementDraft[]>>;
-  onFindNearbyDate: () => void;
   onLoadPublishedPosts: (telegramPostUrl?: string) => Promise<PublishedPostOption | null>;
   onManualPriceEdit: () => void;
 }) {
@@ -115,9 +113,6 @@ export function AdSalePlacementCard({
                 onClick={() => runMenuAction(() => setDetailsOpen((value) => !value))}
               >
                 {detailsOpen ? "Hide channel settings" : "Edit channel settings"}
-              </MenuButton>
-              <MenuButton icon={CalendarSearch} onClick={() => runMenuAction(onFindNearbyDate)}>
-                Find nearby date
               </MenuButton>
               {!isPastPlacement ? (
                 <MenuButton

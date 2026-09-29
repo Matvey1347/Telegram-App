@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarClock, Copy, Eye, Pencil, RefreshCw, Send, Trash2, UserMinus, UserPlus, type LucideIcon } from "lucide-react";
+import { CalendarClock, Eye, Pencil, RefreshCw, Send, Trash2, UserMinus, UserPlus, type LucideIcon } from "lucide-react";
 import type { CrossPromotionPlan } from "@telegram-system/shared";
 import { IconAvatar } from "@/components/icons/icon-avatar";
 import { TelegramChannelAvatarList } from "@/components/features/telegram/telegram/telegram-channel-avatar-list";
@@ -14,7 +14,6 @@ import { MutualPromotionFolderStatusBadge } from "./mutual-promotion/mutual-prom
 
 export function CrossPromotionPlanCard({
   plan,
-  onCopy,
   onEdit,
   onDelete,
   onResume,
@@ -24,7 +23,6 @@ export function CrossPromotionPlanCard({
   refreshingInviteLinks = false,
 }: {
   plan: CrossPromotionPlan;
-  onCopy: (plan: CrossPromotionPlan) => void;
   onEdit: (plan: CrossPromotionPlan) => void;
   onDelete: () => void;
   onResume?: (plan: CrossPromotionPlan) => void;
@@ -43,6 +41,10 @@ export function CrossPromotionPlanCard({
     title: channel.title,
     photoUrl: channel.photoUrl,
   }));
+  const publisherPublicationCount =
+    plan.publicationPost.publisherPublications?.length ?? 1;
+  const partnerPublicationCount =
+    plan.publicationPost.partnerPublications?.length ?? 1;
   const canEdit = plan.status !== "CANCELLED";
   const advertiser = advertiserPresentation(plan.advertiser);
   const placementTimes = plan.kind === "OWN_CHANNELS"
@@ -124,11 +126,6 @@ export function CrossPromotionPlanCard({
                 />
               ) : null}
               <CardMenuAction
-                label="Add new integration"
-                icon={<Copy size={16} />}
-                onClick={() => onCopy(plan)}
-              />
-              <CardMenuAction
                 danger
                 label="Delete"
                 icon={<Trash2 size={16} />}
@@ -140,8 +137,8 @@ export function CrossPromotionPlanCard({
       </div>
 
       <div className={`mx-4 mt-3 grid rounded-lg border border-white/5 bg-black/25 py-2 ${plan.kind === "OWN_CHANNELS" ? "grid-cols-1" : "grid-cols-2 divide-x divide-white/10"}`}>
-        {plan.kind !== "OWN_CHANNELS" ? <ChannelMetric channels={partnerChannels} label="Partner channels" /> : null}
-        <ChannelMetric channels={publishingChannels} label="My channels" />
+        {plan.kind !== "OWN_CHANNELS" ? <ChannelMetric channels={partnerChannels} label="Partner channels" publicationCount={partnerPublicationCount} /> : null}
+        <ChannelMetric channels={publishingChannels} label="My channels" publicationCount={publisherPublicationCount} />
       </div>
 
       {plan.status === "DRAFT" ? (
@@ -156,7 +153,7 @@ export function CrossPromotionPlanCard({
       <div className="mx-4 mb-4 mt-3 overflow-hidden rounded-lg border border-neutral-800 bg-black/20">
         {plan.targetResults.map((target) => (
           <div
-            key={`target:${target.telegramChannelId}`}
+            key={`target:${target.telegramChannelId}:${target.inviteLinkId}`}
             className="px-2.5 py-2"
           >
             <ChannelIdentity
@@ -303,9 +300,11 @@ function ChannelIdentity({
 function ChannelMetric({
   channels,
   label,
+  publicationCount = 1,
 }: {
   channels: Array<{ id: string; title: string; photoUrl: string | null }>;
   label: string;
+  publicationCount?: number;
 }) {
   return (
     <div className="flex min-w-0 flex-col items-center justify-center">
@@ -313,7 +312,10 @@ function ChannelMetric({
         channels={channels}
         ariaLabel={`${label}: ${channels.length}`}
       />
-      <p className="mt-0.5 text-[11px] text-neutral-500">{label}</p>
+      <p className="mt-0.5 text-[11px] text-neutral-500">
+        {label}
+        {publicationCount > 1 ? ` · ${publicationCount} publications` : ""}
+      </p>
     </div>
   );
 }

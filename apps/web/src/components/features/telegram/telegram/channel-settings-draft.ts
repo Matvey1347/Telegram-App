@@ -8,6 +8,7 @@ export type ChannelSettingsDraft = {
   presentationIconId: string;
   description: string;
   tgStatUrl: string;
+  publicInviteLinkId: string;
   defaultInviteLinkId: string;
   botInviteLinkId: string;
   broadcastInviteLinkId: string;
@@ -35,6 +36,7 @@ export function createChannelSettingsDraft(
     presentationIconId: channel.presentationIconId || "",
     description: channel.shortDescription || "",
     tgStatUrl: channel.tgStatUrl || "",
+    publicInviteLinkId: channel.publicInviteLinkId || "",
     defaultInviteLinkId: channel.defaultInviteLinkId || "",
     botInviteLinkId: channel.botInviteLinkId || "",
     broadcastInviteLinkId: channel.broadcastInviteLinkId || "",
@@ -72,6 +74,7 @@ export function buildChannelSettingsPayload(draft: ChannelSettingsDraft) {
     presentationIconId: draft.presentationIconId || null,
     shortDescription: draft.description.trim() || null,
     tgStatUrl: draft.tgStatUrl.trim() || null,
+    publicInviteLinkId: draft.publicInviteLinkId || null,
     defaultInviteLinkId: draft.defaultInviteLinkId || null,
     botInviteLinkId: draft.botInviteLinkId || null,
     broadcastInviteLinkId: draft.broadcastInviteLinkId || null,

@@ -1,10 +1,21 @@
-import { Injectable } from '@nestjs/common';
-import type { CrossPromotionPlacementPost } from '@telegram-system/shared';
+import { forwardRef, Inject, Injectable } from '@nestjs/common';
+import type {
+  CrossPromotionChannelPlacementInput,
+  CrossPromotionPlacementPost,
+} from '@telegram-system/shared';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { notifyScheduledTaskDueWorkChanged } from '../../../common/scheduled-task-wake-notifier';
 import { TelegramManagedPostRemoteDeletionService } from '../../telegram/telegram-channels/telegram-managed-post-remote-deletion.service';
+import { CrossPromotionPlanBotNotificationService } from './cross-promotion-plan-bot-notification.service';
 
-type Placement = { telegramChannelId: string; managedPostId: string };
+type Placement = {
+  telegramChannelId: string;
+  managedPostId: string;
+  publicationId?: string | null;
+};
+type ConfiguredPlacement = CrossPromotionChannelPlacementInput & {
+  publicationId?: string;
+};
 const json = <T>(value: unknown, fallback: T): T =>
   value && typeof value === 'object' ? (value as T) : fallback;
 
@@ -13,6 +24,8 @@ export class CrossPromotionPlanLifecycleService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly remoteDeletion: TelegramManagedPostRemoteDeletionService,
+    @Inject(forwardRef(() => CrossPromotionPlanBotNotificationService))
+    private readonly notifications: CrossPromotionPlanBotNotificationService,
   ) {}
 
   async nextDueAt() {
@@ -49,14 +62,28 @@ export class CrossPromotionPlanLifecycleService {
         buttonRows: [],
       });
       const stored = json<Placement[]>(plan.placementPostIds, []);
-      const configured = post.publisherPlacements ?? [];
+      const configured: ConfiguredPlacement[] = post.publisherPublications
+        ?.length
+        ? post.publisherPublications.flatMap((publication) =>
+            publication.placements.map((placement) => ({
+              ...placement,
+              publicationId: publication.id,
+            })),
+          )
+        : (post.publisherPlacements ?? []);
       const managedPosts = stored.length
         ? await this.prisma.telegramManagedPost.findMany({
             where: {
               workspaceId: plan.workspaceId,
               id: { in: stored.map((placement) => placement.managedPostId) },
             },
-            select: { id: true, status: true, telegramRemoteStatus: true },
+            select: {
+              id: true,
+              status: true,
+              telegramRemoteStatus: true,
+              telegramChannelId: true,
+              telegramMessageUrls: true,
+            },
           })
         : [];
       const hasPublishedPost = managedPosts.some(
@@ -64,7 +91,52 @@ export class CrossPromotionPlanLifecycleService {
           managedPost.status === 'PUBLISHED' &&
           managedPost.telegramRemoteStatus !== 'AUTO_DELETED',
       );
-      const partnerPlacements = post.partnerPlacements ?? [];
+      const allPublished = Boolean(stored.length) && managedPosts.length === stored.length &&
+        managedPosts.every((managedPost) => managedPost.status === 'PUBLISHED');
+      if (allPublished && !plan.botPublicationConfirmedAt) {
+        const claim = await this.prisma.crossPromotionPlan.updateMany({
+          where: { id: plan.id, botPublicationConfirmedAt: null },
+          data: { botPublicationConfirmedAt: now },
+        });
+        if (claim.count) {
+          const usedConfiguredPlacements = new Set<number>();
+          const publishedPosts = managedPosts.map((managedPost) => {
+            const storedPlacement = stored.find(
+              (placement) => placement.managedPostId === managedPost.id,
+            );
+            const configuredIndex = configured.findIndex(
+              (placement, index) =>
+                !usedConfiguredPlacements.has(index) &&
+                placement.telegramChannelId === managedPost.telegramChannelId &&
+                (storedPlacement?.publicationId == null ||
+                  placement.publicationId === storedPlacement.publicationId),
+            );
+            if (configuredIndex >= 0) usedConfiguredPlacements.add(configuredIndex);
+            const configuredPlacement =
+              configuredIndex >= 0 ? configured[configuredIndex] : undefined;
+            return {
+              telegramChannelId: managedPost.telegramChannelId,
+              telegramMessageUrls: managedPost.telegramMessageUrls,
+              publicationId:
+                storedPlacement?.publicationId ?? configuredPlacement?.publicationId,
+              scheduledAt: configuredPlacement?.scheduledAt,
+              deleteAt: configuredPlacement?.deleteAt,
+            };
+          });
+          await this.notifications.sendPublicationConfirmation({
+            workspaceId: plan.workspaceId,
+            userId: plan.createdByUserId,
+            title: plan.title,
+            publicationPost: plan.publicationPost,
+            posts: publishedPosts,
+          });
+        }
+      }
+      const partnerPlacements = post.partnerPublications?.length
+        ? post.partnerPublications.flatMap(
+            (publication) => publication.placements,
+          )
+        : (post.partnerPlacements ?? []);
       // Partner channels are external: their actual Telegram message cannot be
       // queried from our account. Once their planned time has arrived, the
       // placement is underway and the promotion must no longer be Scheduled.
@@ -78,7 +150,10 @@ export class CrossPromotionPlanLifecycleService {
       const dueIds = stored
         .filter((placement) => {
           const config = configured.find(
-            (item) => item.telegramChannelId === placement.telegramChannelId,
+            (item) =>
+              item.telegramChannelId === placement.telegramChannelId &&
+              (!placement.publicationId ||
+                item.publicationId === placement.publicationId),
           );
           // A missing deleteAt is the persistent "no auto-delete" contract.
           return Boolean(

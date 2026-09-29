@@ -27,6 +27,7 @@ import {
   normalizeCrossPromotionModalDraft,
   placementSettingsFromStored,
   type CrossPromotionModalDraft,
+  type AdditionalCrossPromotionPublisherPost,
 } from "./cross-promotion-plan-draft";
 import type { CrossPromotionPlacementSettingsValue } from "./cross-promotion-placement-settings";
 
@@ -39,12 +40,10 @@ export function useCrossPromotionDraftState({
   open,
   initial,
   kind,
-  isNewIntegration = false,
 }: {
   open: boolean;
   initial: CrossPromotionPlan | null;
   kind: CrossPromotionPlanKind;
-  isNewIntegration?: boolean;
 }) {
   const [iconId, setIconId] = useState<string | null>(null);
   const [iconPresentation, setIconPresentation] =
@@ -62,6 +61,9 @@ export function useCrossPromotionDraftState({
   const [partnerTelegram, setPartnerTelegram] = useState("");
   const [targets, setTargets] = useState<CrossPromotionTargetInput[]>([]);
   const [post, setPost] = useState<TelegramSystemBotPostDraft>(emptyPost);
+  const [additionalPublisherPosts, setAdditionalPublisherPosts] = useState<
+    AdditionalCrossPromotionPublisherPost[]
+  >([]);
   const [date, setDate] = useState("");
   const [partnerDate, setPartnerDate] = useState("");
   const [time, setTime] = useState("10:00");
@@ -94,14 +96,10 @@ export function useCrossPromotionDraftState({
       const firstScheduledAt =
         publisherPlacements[0]?.scheduledAt ??
         partnerPlacements[0]?.scheduledAt;
-      const instant = isNewIntegration
-        ? new Date()
-        : firstScheduledAt
+      const instant = firstScheduledAt
           ? new Date(firstScheduledAt)
           : new Date(Date.now() + 86_400_000);
-      const partnerInstant = isNewIntegration
-        ? instant
-        : partnerPlacements[0]?.scheduledAt
+      const partnerInstant = partnerPlacements[0]?.scheduledAt
           ? new Date(partnerPlacements[0].scheduledAt)
           : instant;
       setIconId(initialPost?.iconId ?? null);
@@ -119,7 +117,20 @@ export function useCrossPromotionDraftState({
       );
       setPartnerTelegram(initial?.advertiser?.telegramUsername ?? "");
       setTargets(initial?.targets ?? []);
-      setPost(initial?.publicationPost ?? emptyPost());
+      const storedPublications = initialPost?.publisherPublications ?? [];
+      setPost(
+        storedPublications[0]?.post ?? initial?.publicationPost ?? emptyPost(),
+      );
+      setAdditionalPublisherPosts(
+        storedPublications.slice(1).map((publication) => ({
+          id: publication.id,
+          post: publication.post,
+          settings: placementSettingsFromStored(
+            publication.placements,
+            timezone,
+          ),
+        })),
+      );
       setDate(channelLocalDateKey(instant, timezone));
       setPartnerDate(channelLocalDateKey(partnerInstant, timezone));
       setTime(channelLocalTime(instant, timezone));
@@ -132,14 +143,10 @@ export function useCrossPromotionDraftState({
         timezone,
       );
       setPublisherSettings(
-        isNewIntegration
-          ? { formatIds: publisherStored.formatIds, times: {} }
-          : publisherStored,
+        publisherStored,
       );
       setPartnerSettings(
-        isNewIntegration
-          ? { formatIds: partnerStored.formatIds, times: {} }
-          : partnerStored,
+        partnerStored,
       );
       setOutboundMode(initialPost?.partnerPostSource ?? "PROMO");
       setOutboundPost(initialPost?.partnerPublicationPost ?? emptyPost());
@@ -149,7 +156,7 @@ export function useCrossPromotionDraftState({
     return () => {
       cancelled = true;
     };
-  }, [initial, isNewIntegration, open, timezone]);
+  }, [initial, open, timezone]);
 
   const draftValue = useMemo<CrossPromotionModalDraft>(
     () => ({
@@ -164,6 +171,7 @@ export function useCrossPromotionDraftState({
       partnerTelegram,
       targets,
       post,
+      additionalPublisherPosts,
       date,
       partnerDate,
       time,
@@ -193,6 +201,7 @@ export function useCrossPromotionDraftState({
       targets,
       time,
       title,
+      additionalPublisherPosts,
     ],
   );
   const restoreDraft = useCallback(
@@ -212,6 +221,7 @@ export function useCrossPromotionDraftState({
       setPartnerTelegram(draft.partnerTelegram ?? "");
       setTargets(draft.targets);
       setPost(draft.post);
+      setAdditionalPublisherPosts(draft.additionalPublisherPosts ?? []);
       setDate(draft.date);
       setPartnerDate(draft.partnerDate ?? draft.date);
       setTime(draft.time);
@@ -238,6 +248,7 @@ export function useCrossPromotionDraftState({
       partnerTelegram: "",
       targets: [],
       post: emptyPost(),
+      additionalPublisherPosts: [],
       date: channelLocalDateKey(instant, timezone),
       partnerDate: channelLocalDateKey(instant, timezone),
       time: channelLocalTime(instant, timezone),
@@ -287,6 +298,8 @@ export function useCrossPromotionDraftState({
     setTargets,
     post,
     setPost,
+    additionalPublisherPosts,
+    setAdditionalPublisherPosts,
     date,
     setDate,
     partnerDate,

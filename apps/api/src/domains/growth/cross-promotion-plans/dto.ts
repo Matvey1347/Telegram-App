@@ -49,6 +49,11 @@ export class RenameCrossPromotionPlanDto {
   @IsString() @MaxLength(160) title!: string;
 }
 
+/** Move an already published direct-exchange record into this one. */
+export class MergeCrossPromotionPlanDto {
+  @IsString() sourcePlanId!: string;
+}
+
 export class CrossPromotionPlacementDto {
   @IsString() telegramChannelId!: string;
   @IsString() managedPostId!: string;

@@ -77,13 +77,13 @@ describe('TelegramCrmInboxCommandService', () => {
     );
 
     await expect(
-      service.promote('user-1', 'peer-1', { stage: 'QUALIFIED' }),
+      service.promote('user-1', 'peer-1', { stage: 'LEAD' }),
     ).resolves.toMatchObject({
       peerId: 'peer-1',
       linkedConversationCount: 2,
       contact: {
         id: 'contact-1',
-        stage: 'QUALIFIED',
+        stage: 'LEAD',
       },
     });
     const createContactCall = callArgument(tx.telegramAdvertiser.create);

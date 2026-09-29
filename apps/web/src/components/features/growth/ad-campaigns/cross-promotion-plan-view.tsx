@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type MutableRefObject } from "react";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Plus, Trash2 } from "lucide-react";
 import type {
   CrossPromotionPlan,
   CrossPromotionPlanKind,
@@ -72,6 +72,9 @@ export function CrossPromotionPlanView({
   promoReady,
   searchAdvertisers,
   resolveOutboundPreview,
+  onImportPublisherPost,
+  onSendPublisherPost,
+  showValidationErrors,
 }: {
   open: boolean;
   kind: CrossPromotionPlanKind;
@@ -91,8 +94,8 @@ export function CrossPromotionPlanView({
   updateTargetIds: (ids: string[]) => void;
   botConnected: boolean;
   botFlow: BotFlow;
-  botFlowTarget: "post" | "outbound";
-  setBotFlowTarget: (target: "post" | "outbound") => void;
+  botFlowTarget: string;
+  setBotFlowTarget: (target: string) => void;
   botTargetStorageKey?: string;
   partnerImport: {
     importing: boolean;
@@ -104,10 +107,18 @@ export function CrossPromotionPlanView({
   basicsReady: boolean;
   promoReady: boolean;
   searchAdvertisers: (query: string) => Promise<TelegramAdvertiser[]>;
-  resolveOutboundPreview: () => TelegramSystemBotPostDraft | undefined;
+  resolveOutboundPreview: (
+    targetIndex?: number,
+  ) => TelegramSystemBotPostDraft | undefined;
+  onImportPublisherPost: (id: string) => void;
+  onSendPublisherPost: (id: string, post: TelegramSystemBotPostDraft) => void;
+  showValidationErrors: boolean;
 }) {
   const [mySideOpen, setMySideOpen] = useState(true);
   const [partnerSideOpen, setPartnerSideOpen] = useState(true);
+  const [publisherPostOpen, setPublisherPostOpen] = useState<
+    Record<string, boolean>
+  >({});
   const {
     iconId,
     setIconId,
@@ -132,6 +143,8 @@ export function CrossPromotionPlanView({
     setTargets,
     post,
     setPost,
+    additionalPublisherPosts,
+    setAdditionalPublisherPosts,
     date,
     setDate,
     partnerDate,
@@ -175,13 +188,13 @@ export function CrossPromotionPlanView({
       window.localStorage.setItem(botTargetStorageKey, target);
     void botFlow.startImport();
   };
-  const sendPost = (target: "post" | "outbound") => {
+  const sendPost = (target: "post" | "outbound", targetIndex?: number) => {
     setBotFlowTarget(target);
     if (target === "post") {
       void botFlow.send(post);
       return;
     }
-    const preview = resolveOutboundPreview();
+    const preview = resolveOutboundPreview(targetIndex);
     if (preview) void botFlow.send(preview);
   };
   return (
@@ -272,35 +285,223 @@ export function CrossPromotionPlanView({
                 />
                 {publisherIds.length ? (
                   <>
-                    <CrossPromotionPlacementSettings
-                      title="Formats in my channels"
-                      description="Expected views use the same channel pricing data as Ad Sale."
-                      channelIds={publisherIds}
-                      channels={allChannels}
-                      productsByChannelId={productsByChannelId}
-                      value={publisherSettings}
-                      defaultDate={date}
-                      defaultTime={time}
-                      onDefaultDateChange={setDate}
-                      onChange={setPublisherSettings}
-                      showAdSlots
-                      managedPostUrls={publisherManagedPostUrls}
-                    />
                     {kind === "DIRECT_MUTUAL" ? (
-                      <CrossPromotionPublicationPostEditor
-                        directMutual
-                        post={post}
-                        publishingChannel={allChannels.find(
-                          (channel) => channel.id === publisherIds[0],
-                        )}
-                        botConnected={botConnected}
-                        importStatus={postStatus.importStatus}
-                        sendStatus={postStatus.sendStatus}
-                        onImport={() => importPost("post")}
-                        onSend={() => sendPost("post")}
-                        onUseSelectedPromo={() => undefined}
-                        onChange={setPost}
-                      />
+                      <>
+                        <section className="space-y-3 rounded-xl border border-neutral-800 p-3">
+                          <div className="flex items-center justify-between gap-2">
+                            <div>
+                              <h4 className="text-sm font-semibold text-white">
+                                Partner post 1
+                              </h4>
+                              <p className="text-xs text-neutral-500">
+                                Forward the partner&apos;s advertising post
+                                through the bot or compose it manually.
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              className="rounded-md p-1 text-neutral-400 transition-colors hover:bg-neutral-800 hover:text-white"
+                              aria-label="Toggle partner post 1"
+                              aria-expanded={publisherPostOpen.primary ?? true}
+                              onClick={() =>
+                                setPublisherPostOpen((current) => ({
+                                  ...current,
+                                  primary: !(current.primary ?? true),
+                                }))
+                              }
+                            >
+                              <ChevronDown
+                                size={17}
+                                className={`transition-transform ${(publisherPostOpen.primary ?? true) ? "rotate-180" : ""}`}
+                              />
+                            </button>
+                          </div>
+                          {(publisherPostOpen.primary ?? true) ? (
+                            <>
+                              <CrossPromotionPlacementSettings
+                                title="Slots for this post"
+                                description="Expected views use the same channel pricing data as Ad Sale."
+                                channelIds={publisherIds}
+                                channels={allChannels}
+                                productsByChannelId={productsByChannelId}
+                                value={publisherSettings}
+                                defaultDate={date}
+                                defaultTime={time}
+                                onDefaultDateChange={setDate}
+                                onChange={setPublisherSettings}
+                                showAdSlots
+                                managedPostUrls={publisherManagedPostUrls}
+                              />
+                              <CrossPromotionPublicationPostEditor
+                                title="Partner post 1"
+                                directMutual
+                                post={post}
+                                publishingChannel={allChannels.find(
+                                  (channel) => channel.id === publisherIds[0],
+                                )}
+                                botConnected={botConnected}
+                                importStatus={postStatus.importStatus}
+                                sendStatus={postStatus.sendStatus}
+                                onImport={() => importPost("post")}
+                                onSend={() => sendPost("post")}
+                                onUseSelectedPromo={() => undefined}
+                                onChange={setPost}
+                              />
+                            </>
+                          ) : null}
+                        </section>
+                        {additionalPublisherPosts.map((publication, index) => (
+                          <section
+                            key={publication.id}
+                            className="space-y-3 rounded-xl border border-neutral-800 p-3"
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <span>
+                                <h4 className="text-sm font-semibold text-white">
+                                  Partner post {index + 2}
+                                </h4>
+                                <p className="text-xs text-neutral-500">
+                                  A separate post with its own publication
+                                  slots.
+                                </p>
+                              </span>
+                              <div className="flex items-center gap-1">
+                                <Button
+                                  type="button"
+                                  variant="danger"
+                                  aria-label={`Remove partner post ${index + 2}`}
+                                  onClick={() =>
+                                    setAdditionalPublisherPosts((current) =>
+                                      current.filter(
+                                        (item) => item.id !== publication.id,
+                                      ),
+                                    )
+                                  }
+                                >
+                                  <Trash2 size={16} />
+                                </Button>
+                                <button
+                                  type="button"
+                                  className="rounded-md p-1 text-neutral-400 transition-colors hover:bg-neutral-800 hover:text-white"
+                                  aria-label={`Toggle partner post ${index + 2}`}
+                                  aria-expanded={
+                                    publisherPostOpen[publication.id] ?? true
+                                  }
+                                  onClick={() =>
+                                    setPublisherPostOpen((current) => ({
+                                      ...current,
+                                      [publication.id]: !(
+                                        current[publication.id] ?? true
+                                      ),
+                                    }))
+                                  }
+                                >
+                                  <ChevronDown
+                                    size={17}
+                                    className={`transition-transform ${(publisherPostOpen[publication.id] ?? true) ? "rotate-180" : ""}`}
+                                  />
+                                </button>
+                              </div>
+                            </div>
+                            {(publisherPostOpen[publication.id] ?? true) ? (
+                              <>
+                                <CrossPromotionPlacementSettings
+                                  title="Slots for this post"
+                                  description="The same channel can be selected again at another time."
+                                  channelIds={publisherIds}
+                                  channels={allChannels}
+                                  productsByChannelId={productsByChannelId}
+                                  value={publication.settings}
+                                  defaultDate={date}
+                                  defaultTime={time}
+                                  onDefaultDateChange={(nextDate) =>
+                                    setAdditionalPublisherPosts((current) =>
+                                      current.map((item) =>
+                                        item.id === publication.id
+                                          ? {
+                                              ...item,
+                                              settings: {
+                                                ...item.settings,
+                                                dates: Object.fromEntries(
+                                                  publisherIds.map(
+                                                    (channelId) => [
+                                                      channelId,
+                                                      nextDate,
+                                                    ],
+                                                  ),
+                                                ),
+                                              },
+                                            }
+                                          : item,
+                                      ),
+                                    )
+                                  }
+                                  onChange={(settings) =>
+                                    setAdditionalPublisherPosts((current) =>
+                                      current.map((item) =>
+                                        item.id === publication.id
+                                          ? { ...item, settings }
+                                          : item,
+                                      ),
+                                    )
+                                  }
+                                  showAdSlots
+                                />
+                                <CrossPromotionPublicationPostEditor
+                                  title={`Partner post ${index + 2}`}
+                                  directMutual
+                                  post={publication.post}
+                                  publishingChannel={allChannels.find(
+                                    (channel) => channel.id === publisherIds[0],
+                                  )}
+                                  botConnected={botConnected}
+                                  importStatus="idle"
+                                  sendStatus="idle"
+                                  onImport={() =>
+                                    onImportPublisherPost(publication.id)
+                                  }
+                                  onSend={() =>
+                                    onSendPublisherPost(
+                                      publication.id,
+                                      publication.post,
+                                    )
+                                  }
+                                  onUseSelectedPromo={() => undefined}
+                                  onChange={(nextPost) =>
+                                    setAdditionalPublisherPosts((current) =>
+                                      current.map((item) =>
+                                        item.id === publication.id
+                                          ? { ...item, post: nextPost }
+                                          : item,
+                                      ),
+                                    )
+                                  }
+                                />
+                              </>
+                            ) : null}
+                          </section>
+                        ))}
+                        <Button
+                          type="button"
+                          onClick={() =>
+                            setAdditionalPublisherPosts((current) => [
+                              ...current,
+                              {
+                                id: crypto.randomUUID(),
+                                post: {
+                                  title: "",
+                                  text: "",
+                                  imageUrls: [],
+                                  buttonRows: [],
+                                },
+                                settings: { formatIds: {}, times: {} },
+                              },
+                            ])
+                          }
+                        >
+                          <Plus size={15} /> Add partner post
+                        </Button>
+                      </>
                     ) : null}
                   </>
                 ) : null}
@@ -332,11 +533,25 @@ export function CrossPromotionPlanView({
               onDefaultDateChange={setPartnerDate}
               defaultTime={time}
               onSettingsChange={setPartnerSettings}
-              basicsReady={basicsReady}
-              targetIds={targetIds}
               targets={targets}
-              onTargetIdsChange={updateTargetIds}
               onTargetsChange={setTargets}
+              onAddTarget={() => {
+                const source = targets.at(-1) ?? targets[0];
+                const channelId =
+                  source?.telegramChannelId ?? ownChannels[0]?.id;
+                if (!channelId) return;
+                setTargets((current) => [
+                  ...current,
+                  {
+                    telegramChannelId: channelId,
+                    promoId:
+                      outboundMode === "CUSTOM"
+                        ? null
+                        : (source?.promoId ?? ""),
+                    inviteLinkId: source?.inviteLinkId ?? "",
+                  },
+                ]);
+              }}
               onResolved={(channelId, resolved) =>
                 resolvedTargets.current.set(channelId, resolved)
               }
@@ -356,8 +571,9 @@ export function CrossPromotionPlanView({
               importStatus={outboundStatus.importStatus}
               sendStatus={outboundStatus.sendStatus}
               onImportPost={() => importPost("outbound")}
-              onSendPost={() => sendPost("outbound")}
+              onSendPost={(targetIndex) => sendPost("outbound", targetIndex)}
               promoReady={promoReady}
+              showValidationErrors={showValidationErrors}
             />
           ) : null}
           {kind === "OWN_CHANNELS" && basicsReady ? (

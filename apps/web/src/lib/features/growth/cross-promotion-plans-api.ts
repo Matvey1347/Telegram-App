@@ -59,10 +59,15 @@ export const crossPromotionPlansApi = {
     ),
   sendToBot: async (id: string) =>
     (await api.post<{ status: "SENT" | "NOT_CONNECTED" }>(`${basePath}/${id}/send-to-bot`)).data,
+  previewBotNotification: async (id: string) =>
+    (await api.get<{ text: string }>(`${basePath}/${id}/bot-notification-preview`)).data,
   updateCompleted: async (
     id: string,
     payload: CreateCrossPromotionPlanPayload,
   ) => (await api.patch<CrossPromotionPlan>(`${basePath}/${id}`, payload)).data,
+  mergeHistorical: async (id: string, sourcePlanId: string) =>
+    (await api.post<CrossPromotionPlan>(`${basePath}/${id}/merge`, { sourcePlanId }))
+      .data,
   rename: async (id: string, title: string) =>
     (await api.patch<CrossPromotionPlan>(`${basePath}/${id}/title`, { title }))
       .data,

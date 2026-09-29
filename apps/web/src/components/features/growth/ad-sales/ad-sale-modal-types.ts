@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 import type {
-  TelegramAdAvailabilitySlot,
   TelegramAdProduct,
   TelegramAdQuotePreviewBatchResponse,
   TelegramAdQuotePreviewRequest,
@@ -23,12 +22,6 @@ export type AdSaleModalProps = {
   productsByChannelId: Record<string, TelegramAdProduct[]>;
   defaultCurrency: string;
   workspaceTimezone: string;
-  onLoadAvailableSlots: (params: {
-    channelId: string;
-    productId?: string;
-    from: string;
-    to: string;
-  }) => Promise<TelegramAdAvailabilitySlot[]>;
   onLoadPublishedPosts: (params: {
     channelId: string;
     date: string;

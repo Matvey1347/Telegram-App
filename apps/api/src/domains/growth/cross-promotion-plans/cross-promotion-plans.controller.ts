@@ -19,6 +19,7 @@ import { JwtAuthGuard } from '../../../common/jwt-auth.guard';
 import { CrossPromotionPlansService } from './cross-promotion-plans.service';
 import {
   CreateCrossPromotionPlanDto,
+  MergeCrossPromotionPlanDto,
   RenameCrossPromotionPlanDto,
 } from './dto';
 import { StreamResponseService } from '../../../common/stream/stream-response.service';
@@ -66,6 +67,15 @@ export class CrossPromotionPlansController {
     @Body() dto: RenameCrossPromotionPlanDto,
   ) {
     return this.service.rename(user.sub, id, dto.title);
+  }
+
+  @Post(':id/merge')
+  mergeHistorical(
+    @CurrentUser() user: JwtUser,
+    @Param('id') id: string,
+    @Body() dto: MergeCrossPromotionPlanDto,
+  ) {
+    return this.service.mergeHistorical(user.sub, id, dto.sourcePlanId);
   }
 
   @Post(':id/refresh-invite-links')
@@ -120,5 +130,10 @@ export class CrossPromotionPlansController {
   @Post(':id/send-to-bot')
   sendToBot(@CurrentUser() user: JwtUser, @Param('id') id: string) {
     return this.botNotification.send(user.sub, id);
+  }
+
+  @Get(':id/bot-notification-preview')
+  previewBotNotification(@CurrentUser() user: JwtUser, @Param('id') id: string) {
+    return this.botNotification.preview(user.sub, id);
   }
 }

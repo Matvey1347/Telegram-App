@@ -58,7 +58,6 @@ export function CrossPromotionPlanModal({
     open,
     initial,
     kind,
-    isNewIntegration: mode === "copy",
   });
   const {
     iconId,
@@ -74,6 +73,7 @@ export function CrossPromotionPlanModal({
     setTargets,
     post,
     setPost,
+    additionalPublisherPosts,
     date,
     partnerDate,
     time,
@@ -88,14 +88,16 @@ export function CrossPromotionPlanModal({
     timezone,
     drafts,
   } = state;
-  const [botFlowTarget, setBotFlowTarget] = useState<"post" | "outbound">(
-    "post",
-  );
+  const [botFlowTarget, setBotFlowTarget] = useState("post");
+  const [showValidationErrors, setShowValidationErrors] = useState(false);
   const resolvedTargets = useRef(
     new Map<string, { promo?: Promo; inviteLink?: TelegramInviteLink }>(),
   );
   useEffect(() => {
-    if (open) resolvedTargets.current.clear();
+    if (open) {
+      resolvedTargets.current.clear();
+      setShowValidationErrors(false);
+    }
   }, [initial, open, timezone]);
 
   const allChannels = useMemo(
@@ -157,6 +159,9 @@ export function CrossPromotionPlanModal({
     };
   }, [botTargetStorageKey, open]);
   const targetIds = targets.map((target) => target.telegramChannelId);
+  const resolvedTarget = (target: (typeof targets)[number], index: number) =>
+    resolvedTargets.current.get(`target:${index}`) ??
+    resolvedTargets.current.get(target.telegramChannelId);
   const updateTargetIds = (ids: string[]) =>
     setTargets(
       ids.map(
@@ -179,9 +184,18 @@ export function CrossPromotionPlanModal({
       const storedTarget = botTargetStorageKey
         ? window.localStorage.getItem(botTargetStorageKey)
         : null;
-      const target = storedTarget === "outbound" ? "outbound" : botFlowTarget;
+      const target = storedTarget ?? botFlowTarget;
       if (target === "outbound") setOutboundPost(draft);
-      else setPost(draft);
+      else if (target.startsWith("publisher:")) {
+        const publicationId = target.slice("publisher:".length);
+        state.setAdditionalPublisherPosts((current) =>
+          current.map((publication) =>
+            publication.id === publicationId
+              ? { ...publication, post: draft }
+              : publication,
+          ),
+        );
+      } else setPost(draft);
       if (botTargetStorageKey)
         window.localStorage.removeItem(botTargetStorageKey);
     },
@@ -221,13 +235,6 @@ export function CrossPromotionPlanModal({
         target.inviteLinkId &&
         (outboundMode === "CUSTOM" ? hasOutboundPost : target.promoId),
     );
-  const placementSettingsReady =
-    publisherIds.every((channelId) =>
-      hasRequiredFormat(channelId, publisherSettings.formatIds[channelId]),
-    ) &&
-    partnerIds.every((channelId) =>
-      hasRequiredFormat(channelId, partnerSettings.formatIds[channelId]),
-    );
   const placement = (
     channelId: string,
     settings: CrossPromotionPlacementSettingsValue,
@@ -262,9 +269,7 @@ export function CrossPromotionPlanModal({
       post.text.trim() || post.imageUrls.length || post.mediaItems?.length,
     );
     const firstTarget = targets[0];
-    const resolved = firstTarget
-      ? resolvedTargets.current.get(firstTarget.telegramChannelId)
-      : undefined;
+    const resolved = firstTarget ? resolvedTarget(firstTarget, 0) : undefined;
     const selectedPromoPost =
       resolved?.promo && resolved.inviteLink
         ? renderSelectedPromoDraft(resolved.promo, resolved.inviteLink.url)
@@ -273,24 +278,85 @@ export function CrossPromotionPlanModal({
     // composed post remains an explicit optional override, never a requirement.
     const publicationPost =
       kind === "OWN_CHANNELS" && !hasPostContent ? selectedPromoPost : post;
-    if (
-      !title.trim() ||
-      !publisherIds.length ||
-      !targets.length ||
-      !date ||
-      !time ||
-      !placementSettingsReady ||
-      targets.some(
-        (target) =>
-          !target.inviteLinkId || (outboundMode === "PROMO" && !target.promoId),
-      ) ||
-      (outboundMode === "CUSTOM" && !hasOutboundPost) ||
-      !publicationPost
-    ) {
-      setError("Complete channels, promos, invite links, date and time.");
+    const channelNames = (channelIds: string[]) =>
+      channelIds
+        .map(
+          (channelId) =>
+            allChannels.find((channel) => channel.id === channelId)?.title ??
+            "Unknown channel",
+        )
+        .join(", ");
+    const missingPublisherFormats = publisherIds.filter(
+      (channelId) =>
+        !hasRequiredFormat(channelId, publisherSettings.formatIds[channelId]),
+    );
+    const missingPartnerFormats = partnerIds.filter(
+      (channelId) =>
+        !hasRequiredFormat(channelId, partnerSettings.formatIds[channelId]),
+    );
+    const missingAdditionalFormats = additionalPublisherPosts.flatMap(
+      (publication, index) => {
+        const missing = publisherIds.filter(
+          (channelId) =>
+            !hasRequiredFormat(
+              channelId,
+              publication.settings.formatIds[channelId],
+            ),
+        );
+        return missing.length
+          ? [`Partner post ${index + 2}: choose a format for ${channelNames(missing)}.`]
+          : [];
+      },
+    );
+    const validationErrors = [
+      !title.trim() ? "Enter a promotion title." : null,
+      !publisherIds.length ? "Choose at least one channel on My side." : null,
+      !date ? "Choose a publication date for Partner post 1." : null,
+      !time ? "Choose a publication time for Partner post 1." : null,
+      missingPublisherFormats.length
+        ? `Partner post 1: choose a format for ${channelNames(missingPublisherFormats)}.`
+        : null,
+      kind === "DIRECT_MUTUAL" && !hasPostContent
+        ? "Partner post 1: add text or media before scheduling."
+        : null,
+      ...additionalPublisherPosts.flatMap((publication, index) =>
+        publication.post.text.trim() ||
+        publication.post.imageUrls.length ||
+        publication.post.mediaItems?.length
+          ? []
+          : [`Partner post ${index + 2}: add text or media before scheduling.`],
+      ),
+      ...missingAdditionalFormats,
+      !targets.length ? "Add at least one promo placement on Partner side." : null,
+      ...targets.flatMap((target, index) => [
+        !target.telegramChannelId
+          ? `Promo placement ${index + 1}: choose the promoted channel.`
+          : null,
+        outboundMode === "PROMO" && !target.promoId
+          ? `Promo placement ${index + 1}: choose a saved promo.`
+          : null,
+        !target.inviteLinkId
+          ? `Promo placement ${index + 1}: choose a tracking invite link.`
+          : null,
+      ]),
+      missingPartnerFormats.length
+        ? `Partner side: choose a format for ${channelNames(missingPartnerFormats)}.`
+        : null,
+      outboundMode === "CUSTOM" && !hasOutboundPost
+        ? "My custom promo: add text or media before scheduling."
+        : null,
+      !publicationPost ? "Choose or compose the post to publish." : null,
+    ].filter((message): message is string => Boolean(message));
+    if (validationErrors.length) {
+      setShowValidationErrors(true);
+      setError("Fix the highlighted fields before saving.");
       return;
     }
+    // `publicationPost` is covered by the validation above. Keep this guard
+    // explicit so the persisted payload can never contain a null post.
+    if (!publicationPost) return;
     try {
+      setShowValidationErrors(false);
       setError("");
       const advertiserId =
         kind === "DIRECT_MUTUAL" && partnerContact.trim()
@@ -307,19 +373,43 @@ export function CrossPromotionPlanModal({
       const partnerPlacements = partnerIds.map((channelId) =>
         placement(channelId, partnerSettings, partnerDate),
       );
+      const publisherPublications = [
+        {
+          id: "publisher-1",
+          post: {
+            ...publicationPost,
+            title: publicationPost.title.trim() || title.trim(),
+          },
+          placements: publisherPlacements,
+        },
+        ...additionalPublisherPosts.map((publication) => ({
+          id: publication.id,
+          post: {
+            ...publication.post,
+            title: publication.post.title.trim() || title.trim(),
+          },
+          placements: publisherIds.map((channelId) =>
+            placement(channelId, publication.settings, date),
+          ),
+        })),
+      ];
       // Keep the plan anchor aligned with the first post Telegram will really
       // publish. Individual channel settings can override the form default;
       // sending that stale default made a future per-channel schedule look
       // historical to the reschedule endpoint.
       const scheduledAt = new Date(
         Math.min(
-          ...publisherPlacements.map((placement) =>
-            Date.parse(placement.scheduledAt),
+          ...publisherPublications.flatMap((publication) =>
+            publication.placements.map((placement) =>
+              Date.parse(placement.scheduledAt),
+            ),
           ),
         ),
       ).toISOString();
       const trackingBoundaries = [
-        ...publisherPlacements,
+        ...publisherPublications.flatMap(
+          (publication) => publication.placements,
+        ),
         ...partnerPlacements,
       ].flatMap((item) => {
         return item.deleteAt ? [new Date(item.deleteAt)] : [];
@@ -338,12 +428,27 @@ export function CrossPromotionPlanModal({
           partnerPostSource: outboundMode,
           publisherPlacements,
           partnerPlacements,
+          publisherPublications,
+          partnerPublications: targets.map((target, index) => {
+            const resolved = resolvedTarget(target, index);
+            const generated =
+              outboundMode === "PROMO" && resolved?.promo && resolved.inviteLink
+                ? renderSelectedPromoDraft(
+                    resolved.promo,
+                    resolved.inviteLink.url,
+                  )
+                : outboundPost;
+            return {
+              id: `partner-${index + 1}`,
+              target,
+              post: generated,
+              placements: partnerPlacements,
+            };
+          }),
           partnerPublicationPost: (() => {
             if (outboundMode === "CUSTOM") return outboundPost;
             const first = targets[0];
-            const resolved = first
-              ? resolvedTargets.current.get(first.telegramChannelId)
-              : undefined;
+            const resolved = first ? resolvedTarget(first, 0) : undefined;
             return resolved?.promo && resolved.inviteLink
               ? renderSelectedPromoDraft(
                   resolved.promo,
@@ -391,16 +496,29 @@ export function CrossPromotionPlanModal({
       resolvedTargets={resolvedTargets}
       basicsReady={basicsReady}
       promoReady={promoReady}
+      showValidationErrors={showValidationErrors}
       searchAdvertisers={searchAdvertisers}
-      resolveOutboundPreview={() => {
+      resolveOutboundPreview={(targetIndex = 0) => {
         if (outboundMode === "CUSTOM") return outboundPost;
-        const first = targets[0];
-        const resolved = first
-          ? resolvedTargets.current.get(first.telegramChannelId)
-          : undefined;
+        const target = targets[targetIndex];
+        const resolved = target ? resolvedTarget(target, targetIndex) : undefined;
         return resolved?.promo && resolved.inviteLink
           ? renderSelectedPromoDraft(resolved.promo, resolved.inviteLink.url)
           : undefined;
+      }}
+      onImportPublisherPost={(id) => {
+        const target = `publisher:${id}`;
+        setBotFlowTarget(target);
+        if (botTargetStorageKey)
+          window.localStorage.setItem(botTargetStorageKey, target);
+        void botFlow.startImport();
+      }}
+      onSendPublisherPost={(id, publisherPost) => {
+        const target = `publisher:${id}`;
+        setBotFlowTarget(target);
+        if (botTargetStorageKey)
+          window.localStorage.setItem(botTargetStorageKey, target);
+        void botFlow.send(publisherPost);
       }}
     />
   );

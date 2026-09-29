@@ -10,6 +10,7 @@ import { MutualPromotionPostComposer } from "./mutual-promotion/mutual-promotion
 type FlowStatus = "idle" | "working" | "waiting" | "done";
 
 export function CrossPromotionPublicationPostEditor({
+  title,
   directMutual,
   post,
   publishingChannel,
@@ -21,6 +22,7 @@ export function CrossPromotionPublicationPostEditor({
   onUseSelectedPromo,
   onChange,
 }: {
+  title?: string;
   directMutual: boolean;
   post: TelegramSystemBotPostDraft;
   publishingChannel?: TelegramChannel;
@@ -46,9 +48,9 @@ export function CrossPromotionPublicationPostEditor({
       >
         <div>
           <h3 className="font-semibold text-white">
-            {directMutual
+            {title ?? (directMutual
               ? "Partner post I publish"
-              : "Post published in my channels"}
+              : "Post published in my channels")}
           </h3>
           <p className="text-xs text-neutral-400">
             {directMutual

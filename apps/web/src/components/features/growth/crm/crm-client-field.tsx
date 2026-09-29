@@ -49,11 +49,20 @@ export function CrmClientField(props: {
 
   const onSearchAdvertisers = props.onSearchAdvertisers;
   useEffect(() => {
-    if (mode !== "existing") return;
+    const query = search.trim();
+    // Do not wake the CRM endpoint merely by opening the selector. A broad
+    // list is both slower and capped; client lookup is a search interaction.
+    if (mode !== "existing" || query.length < 2) {
+      setAdvertisers((current) =>
+        current.filter((item) => item.id === props.selectedAdvertiserId),
+      );
+      setLoading(false);
+      return;
+    }
     let active = true;
     const timeout = window.setTimeout(() => {
       setLoading(true);
-      void onSearchAdvertisers(search)
+      void onSearchAdvertisers(query)
         .then((items) => {
           if (!active) return;
           // Keep the selected option available while the next server search
@@ -121,7 +130,13 @@ export function CrmClientField(props: {
         ) : (
           <CustomSelect
             value={props.selectedAdvertiserId ?? ""}
-            placeholder={loading ? "Loading clients..." : "Select client"}
+            placeholder={
+              loading
+                ? "Loading clients..."
+                : search.trim().length < 2
+                  ? "Type at least 2 characters"
+                  : "Select client"
+            }
             options={advertisers.map((advertiser) => {
               const username = advertiser.telegramUsername?.replace(/^@+/, "");
               return {

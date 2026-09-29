@@ -133,6 +133,15 @@ export function AdSaleSharedPost({
               </Button>
             ) : null
           ) : null}
+          {mode === "shared" ? (
+            <Button
+              type="button"
+              className="h-8 px-3 text-xs"
+              onClick={() => setExpanded((value) => !value)}
+            >
+              {draftHasContent ? "✅ Edit shared post" : "Create shared post"}
+            </Button>
+          ) : null}
           {mode === "shared" && systemBotConnected === true ? (
             <Button
               type="button"
@@ -178,15 +187,6 @@ export function AdSaleSharedPost({
             >
               Connect bot
             </a>
-          ) : null}
-          {mode === "shared" ? (
-            <Button
-              type="button"
-              className="h-8 px-3 text-xs"
-              onClick={() => setExpanded((value) => !value)}
-            >
-              {draftHasContent ? "✅ Edit shared post" : "Create shared post"}
-            </Button>
           ) : null}
         </div>
       </div>

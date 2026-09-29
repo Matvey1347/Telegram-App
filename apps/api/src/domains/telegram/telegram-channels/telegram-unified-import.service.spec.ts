@@ -157,7 +157,7 @@ describe('TelegramUnifiedImportService', () => {
           value: {
             name: 'New hypothesis',
             description: 'New description',
-            status: 'COMPLETED',
+            status: 'SUCCESSFUL',
           },
         },
       ],

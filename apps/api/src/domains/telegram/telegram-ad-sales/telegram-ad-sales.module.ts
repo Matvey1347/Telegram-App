@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { ApplicationLogsModule } from '../../operations/application-logs/application-logs.module';
 import { FinanceCategoriesModule } from '../../finance/finance-categories/finance-categories.module';
 import { TelegramChannelsModule } from '../telegram-channels/telegram-channels.module';
@@ -28,6 +28,8 @@ import { TelegramAdSalesLegacyCrmService } from './telegram-ad-sales-legacy-crm.
 import { TelegramAdSalesCrmTasksService } from './telegram-ad-sales-crm-tasks.service';
 import { TelegramAdSalePaymentDeletionService } from './telegram-ad-sale-payment-deletion.service';
 import { TelegramAdSalesWorkspaceSettingsService } from './telegram-ad-sales-workspace-settings.service';
+import { TelegramSystemBotModule } from '../telegram-system-bot/telegram-system-bot.module';
+import { TelegramAdSaleBotNotificationService } from './telegram-ad-sale-bot-notification.service';
 
 @Module({
   imports: [
@@ -36,6 +38,7 @@ import { TelegramAdSalesWorkspaceSettingsService } from './telegram-ad-sales-wor
     ApplicationLogsModule,
     FinanceCategoriesModule,
     TelegramCrmModule,
+    forwardRef(() => TelegramSystemBotModule),
   ],
   controllers: [
     TelegramAdSalesReadController,
@@ -64,6 +67,7 @@ import { TelegramAdSalesWorkspaceSettingsService } from './telegram-ad-sales-wor
     TelegramAdvertiserCheckoutResolverService,
     TelegramBotApiClient,
     TelegramAdSalesCrmTasksService,
+    TelegramAdSaleBotNotificationService,
   ],
   exports: [
     TelegramAdSalesService,

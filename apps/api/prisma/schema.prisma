@@ -1604,6 +1604,7 @@ model TelegramChannel {
   lastEntityResolvedAt         DateTime?
   inviteLink                   String?
   tgStatUrl                    String?
+  publicInviteLinkId           String?
   presentationIconId           String?
   defaultInviteLinkId          String?
   botInviteLinkId              String?
@@ -1669,6 +1670,7 @@ model TelegramChannel {
   purchaseTransaction        Transaction?        @relation("TelegramChannelPurchaseTransaction", fields: [purchaseTransactionId], references: [id], onDelete: SetNull)
   presentationIcon           Icon?               @relation("TelegramChannelPresentationIcon", fields: [presentationIconId], references: [id], onDelete: SetNull)
   defaultInviteLink          TelegramInviteLink? @relation("TelegramChannelDefaultInviteLink", fields: [defaultInviteLinkId], references: [id], onDelete: SetNull)
+  publicInviteLink           TelegramInviteLink? @relation("TelegramChannelPublicInviteLink", fields: [publicInviteLinkId], references: [id], onDelete: SetNull)
   botInviteLink              TelegramInviteLink? @relation("TelegramChannelBotInviteLink", fields: [botInviteLinkId], references: [id], onDelete: SetNull)
   broadcastInviteLink        TelegramInviteLink? @relation("TelegramChannelBroadcastInviteLink", fields: [broadcastInviteLinkId], references: [id], onDelete: SetNull)
   audienceTransferInviteLink TelegramInviteLink? @relation("TelegramChannelAudienceTransferInviteLink", fields: [audienceTransferInviteLinkId], references: [id], onDelete: SetNull)
@@ -2261,6 +2263,8 @@ model TelegramAdSale {
   sellerMemberId             String?
   sellerCommissionEnabled    Boolean                @default(false)
   sellerCommissionRate       Decimal                @default(0)
+  scheduledBotConfirmationSentAt DateTime?
+  publishedBotConfirmationSentAt DateTime?
   createdAt                  DateTime               @default(now())
   updatedAt                  DateTime               @updatedAt
 
@@ -3376,6 +3380,7 @@ model TelegramInviteLink {
   mutualPromotionParticipants MutualPromotionFolderParticipant[]
   defaultForPromos            Promo[]                            @relation("PromoDefaultInviteLink")
   defaultForChannels          TelegramChannel[]                  @relation("TelegramChannelDefaultInviteLink")
+  publicForChannels           TelegramChannel[]                  @relation("TelegramChannelPublicInviteLink")
   defaultForChannelBots       TelegramChannel[]                  @relation("TelegramChannelBotInviteLink")
   defaultForChannelBroadcasts TelegramChannel[]                  @relation("TelegramChannelBroadcastInviteLink")
   defaultForAudienceTransfers TelegramChannel[]                  @relation("TelegramChannelAudienceTransferInviteLink")
@@ -3463,6 +3468,7 @@ model CrossPromotionPlan {
   baselineTargetCounters       Json                     @default("[]")
   baselinePublisherSubscribers Json                     @default("[]")
   placementPostIds             Json                     @default("[]")
+  botPublicationConfirmedAt    DateTime?
   lastError                    String?
   createdByUserId              String
   createdAt                    DateTime                 @default(now())

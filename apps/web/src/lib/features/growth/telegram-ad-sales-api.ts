@@ -278,6 +278,10 @@ export function createTelegramAdSalesApi({
       ).data,
     getSale: async (id: string) =>
       (await api.get<TelegramAdSale>(`/telegram-ad-sales/${id}`)).data,
+    previewBotNotification: async (id: string) =>
+      (await api.get<{ text: string }>(`/telegram-ad-sales/${id}/bot-notification-preview`)).data,
+    sendToBot: async (id: string) =>
+      (await api.post(`/telegram-ad-sales/${id}/send-to-bot`)).data,
     createSale: async (payload: Record<string, unknown>, silent = false) =>
       (
         await api.post<TelegramAdSale>(

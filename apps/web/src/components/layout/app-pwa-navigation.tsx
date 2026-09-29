@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
-import { Megaphone, MessageCircle, Settings } from "lucide-react";
+import { Megaphone, MessageCircle } from "lucide-react";
 import type { TranslationKey } from "@/i18n/catalog";
 import navigationEn from "@/i18n/locales/en/navigation";
 import { workspaceFeatureIcons } from "@/lib/features/workspace/workspace-feature-icons";
@@ -64,33 +64,22 @@ export function buildPwaNavigation(
     });
   }
 
-  const canUseCrm = hasAny(featureIds, ["adSales.crm", "adSales.sales"]);
-  const canUseAds = hasAny(featureIds, ["advertising"]);
-  if (canUseCrm || canUseAds) {
+  if (hasAny(featureIds, ["adSales.crm", "adSales.sales"])) {
     items.push({
-      key: "growth",
-      label: canUseCrm ? "navigation.crm" : "navigation.ads",
-      href: canUseCrm ? "/ad-sales" : "/ad-campaigns",
+      key: "crm",
+      label: "navigation.crm",
+      href: "/ad-sales",
       Icon: Megaphone,
-      active: (pathname) =>
-        canUseCrm
-          ? pathname.startsWith("/ad-sales")
-          : pathname.startsWith("/ad-campaigns"),
+      active: (pathname) => pathname.startsWith("/ad-sales"),
     });
   }
-
-  if (hasAny(featureIds, ["workspace", "operations", "members"])) {
+  if (hasAny(featureIds, ["advertising"])) {
     items.push({
-      key: "workspace",
-      label: "navigation.workspaceSettings",
-      href: "/settings",
-      Icon: Settings,
-      active: (pathname) =>
-        pathname.startsWith("/settings") ||
-        pathname.startsWith("/workspace-members") ||
-        pathname.startsWith("/roles") ||
-        pathname.startsWith("/trash") ||
-        pathname.startsWith("/scheduled-tasks"),
+      key: "ads",
+      label: "navigation.ads",
+      href: "/ad-campaigns",
+      Icon: Megaphone,
+      active: (pathname) => pathname.startsWith("/ad-campaigns"),
     });
   }
   return items;

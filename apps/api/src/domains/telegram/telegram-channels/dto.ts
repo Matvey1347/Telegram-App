@@ -56,6 +56,7 @@ export class UpdateTelegramChannelDto {
   @IsOptional() @IsString() description?: string;
   @IsOptional() @IsString() @MaxLength(240) shortDescription?: string | null;
   @IsOptional() @IsUrl({ require_protocol: true }) tgStatUrl?: string | null;
+  @IsOptional() @IsString() publicInviteLinkId?: string | null;
   @IsOptional() @IsString() presentationIconId?: string | null;
   @IsOptional() @IsString() defaultInviteLinkId?: string | null;
   @IsOptional() @IsString() botInviteLinkId?: string | null;

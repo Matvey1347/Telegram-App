@@ -4,11 +4,15 @@ import { PrismaService } from '../../../prisma/prisma.service';
 import { calculateAdPlacementDeleteAt } from './domain/sales-text';
 import { adPlacementLifecycleReadyWhere } from '../../operations/scheduled-tasks/due-work-predicates';
 import { notifyScheduledTaskDueWorkChanged } from '../../../common/scheduled-task-wake-notifier';
+import { TelegramAdSaleBotNotificationService } from './telegram-ad-sale-bot-notification.service';
 
 /** Synchronizes the sales lifecycle only after the managed post identity is verified. */
 @Injectable()
 export class TelegramAdPlacementLifecycleService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly botConfirmation?: TelegramAdSaleBotNotificationService,
+  ) {}
 
   async reconcilePublishedPlacements(limit = 100) {
     const placements = await this.prisma.telegramAdSalePlacement.findMany({
@@ -67,6 +71,9 @@ export class TelegramAdPlacementLifecycleService {
     }
     if (reconciled) {
       notifyScheduledTaskDueWorkChanged('telegram_ad_sales.due_deletions');
+      const botConfirmation = this.botConfirmation;
+      await Promise.allSettled((botConfirmation ? [...new Set(placements.map((placement) => placement.telegramAdSaleId))] : [])
+        .map((saleId) => botConfirmation!.sendPublishedOnce(saleId)));
     }
     return { reconciled };
   }

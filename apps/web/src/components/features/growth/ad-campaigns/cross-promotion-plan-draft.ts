@@ -11,6 +11,12 @@ import {
 import type { TelegramChannelScopeMode } from "@/components/features/telegram/telegram/telegram-channel-scope-selector";
 import type { CrossPromotionPlacementSettingsValue } from "./cross-promotion-placement-settings";
 
+export type AdditionalCrossPromotionPublisherPost = {
+  id: string;
+  post: TelegramSystemBotPostDraft;
+  settings: CrossPromotionPlacementSettingsValue;
+};
+
 export const emptyCrossPromotionPost = (): TelegramSystemBotPostDraft => ({
   title: "",
   text: "",
@@ -60,6 +66,7 @@ export type CrossPromotionModalDraft = {
   partnerTelegram?: string;
   targets: CrossPromotionTargetInput[];
   post: TelegramSystemBotPostDraft;
+  additionalPublisherPosts?: AdditionalCrossPromotionPublisherPost[];
   date: string;
   partnerDate?: string;
   time: string;
@@ -87,6 +94,9 @@ export function normalizeCrossPromotionModalDraft(
     partnerSettings: draft.partnerSettings ?? { formatIds: {}, times: {} },
     outboundMode: draft.outboundMode ?? "PROMO",
     outboundPost: draft.outboundPost ?? emptyCrossPromotionPost(),
+    additionalPublisherPosts: Array.isArray(draft.additionalPublisherPosts)
+      ? draft.additionalPublisherPosts
+      : [],
     importedChannels: Array.isArray(draft.importedChannels)
       ? draft.importedChannels
       : [],
@@ -96,10 +106,10 @@ export function normalizeCrossPromotionModalDraft(
 function hasPostContent(post: TelegramSystemBotPostDraft) {
   return Boolean(
     post.title?.trim() ||
-      post.text.trim() ||
-      post.imageUrls.length ||
-      post.mediaItems?.length ||
-      post.buttonRows?.some((row) => row.length),
+    post.text.trim() ||
+    post.imageUrls.length ||
+    post.mediaItems?.length ||
+    post.buttonRows?.some((row) => row.length),
   );
 }
 
@@ -108,19 +118,22 @@ export function hasMeaningfulCrossPromotionDraft(
 ) {
   return Boolean(
     draft.title.trim() ||
-      draft.iconId ||
-      draft.publisherIds.length ||
-      draft.publisherNetworkId ||
-      draft.partnerIds.length ||
-      draft.partnerAdvertiserId ||
-      draft.partnerContact?.trim() ||
-      draft.partnerTelegram?.trim() ||
-      draft.targets.length ||
-      hasPostContent(draft.post) ||
-      hasPostContent(draft.outboundPost) ||
-      Object.keys(draft.publisherSettings?.formatIds ?? {}).length ||
-      Object.keys(draft.publisherSettings?.times ?? {}).length ||
-      Object.keys(draft.partnerSettings?.formatIds ?? {}).length ||
-      Object.keys(draft.partnerSettings?.times ?? {}).length
+    draft.iconId ||
+    draft.publisherIds.length ||
+    draft.publisherNetworkId ||
+    draft.partnerIds.length ||
+    draft.partnerAdvertiserId ||
+    draft.partnerContact?.trim() ||
+    draft.partnerTelegram?.trim() ||
+    draft.targets.length ||
+    hasPostContent(draft.post) ||
+    Boolean(
+      draft.additionalPublisherPosts?.some((item) => hasPostContent(item.post)),
+    ) ||
+    hasPostContent(draft.outboundPost) ||
+    Object.keys(draft.publisherSettings?.formatIds ?? {}).length ||
+    Object.keys(draft.publisherSettings?.times ?? {}).length ||
+    Object.keys(draft.partnerSettings?.formatIds ?? {}).length ||
+    Object.keys(draft.partnerSettings?.times ?? {}).length,
   );
 }

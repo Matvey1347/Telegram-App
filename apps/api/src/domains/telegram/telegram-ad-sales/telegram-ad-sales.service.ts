@@ -168,6 +168,7 @@ import {
 import { hydrateManagedTelegramPosts } from './telegram-ad-sales-managed-post-metrics';
 import { TelegramCrmInternalNotificationProjector } from '../telegram-crm/telegram-crm-internal-notification-projector.service';
 import { syncPurchasedCrmTags } from '../telegram-crm/telegram-crm-system-tags.service';
+import { TelegramAdSaleBotNotificationService } from './telegram-ad-sale-bot-notification.service';
 @Injectable()
 export class TelegramAdSalesService {
   private readonly pricingReader: TelegramAdSalesPricingReader;
@@ -191,6 +192,7 @@ export class TelegramAdSalesService {
     private readonly encryptionService: TokenEncryptionService,
     private readonly telegramChannelAccessService: TelegramChannelAccessService,
     private readonly telegramBotApiClient: TelegramBotApiClient,
+    private readonly botConfirmation: TelegramAdSaleBotNotificationService,
     @Optional()
     private readonly notificationProjector?: TelegramCrmInternalNotificationProjector,
   ) {
@@ -4751,6 +4753,7 @@ export class TelegramAdSalesService {
         data: { status: TelegramAdSaleStatus.IN_PROGRESS },
       });
     }
+    await this.botConfirmation.sendScheduledOnce(userId, saleId);
     return this.mapPlacement(this.appendPlacementFinancials(updated));
   }
 
@@ -4839,6 +4842,7 @@ export class TelegramAdSalesService {
         });
       }
     }
+    await this.botConfirmation.sendScheduledOnce(userId, saleId);
     return { saleId, results };
   }
 
@@ -4883,6 +4887,8 @@ export class TelegramAdSalesService {
       include: { paymentAllocations: { include: { payment: true } } },
     });
     this.notifyAdDeletionDueWorkChanged();
+    await this.botConfirmation.sendScheduledOnce(userId, saleId);
+    await this.botConfirmation.sendPublishedOnce(saleId);
     return this.mapPlacement(this.appendPlacementFinancials(updated));
   }
 

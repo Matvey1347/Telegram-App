@@ -187,6 +187,7 @@ function setup() {
       prisma as never,
       workspace as never,
       new CrossPromotionPlanReadService(prisma as never),
+      { register: jest.fn() } as never,
     ),
     prisma,
   };
@@ -264,6 +265,41 @@ describe('CrossPromotionPlansService', () => {
           status: 'COMPLETED',
           nextDueAt: null,
           trackingEndsAt: new Date('2026-09-17T08:00:00.000Z'),
+        }),
+      }),
+    );
+  });
+
+  it('keeps an edited historical placement active until its scheduled deletion', async () => {
+    const { service, prisma } = setup();
+    const deleteAt = new Date(Date.now() + 48 * 3_600_000).toISOString();
+    prisma.crossPromotionPlan.findFirst.mockResolvedValueOnce({
+      id: 'plan-1',
+      status: 'COMPLETED',
+      scheduledAt: new Date('2026-09-15T08:00:00.000Z'),
+      baselineTargetCounters: [],
+      placementPostIds: [],
+    });
+
+    await service.updateCompleted('user-1', 'plan-1', {
+      ...payload,
+      publicationPost: {
+        ...payload.publicationPost,
+        publisherPlacements: [
+          {
+            telegramChannelId: 'publisher-1',
+            scheduledAt: payload.scheduledAt,
+            deleteAt,
+          },
+        ],
+      },
+    });
+
+    expect(prisma.crossPromotionPlan.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: 'ACTIVE',
+          nextDueAt: new Date(deleteAt),
         }),
       }),
     );
@@ -534,5 +570,74 @@ describe('CrossPromotionPlansService', () => {
     await expect(
       service.placementsForReschedule('user-1', 'plan-1'),
     ).resolves.toEqual([]);
+  });
+
+  it('combines historical direct exchanges without deleting their managed posts', async () => {
+    const { service, prisma } = setup();
+    const historical = {
+      id: 'plan-1',
+      workspaceId: 'workspace-1',
+      advertiserId: 'advertiser-1',
+      kind: 'DIRECT_MUTUAL',
+      status: 'COMPLETED',
+      title: 'Partner',
+      publisherChannelIds: ['publisher-1'],
+      partnerChannelIds: ['partner-1'],
+      targets: payload.targets,
+      publicationPost: {
+        ...payload.publicationPost,
+        publisherPlacements: [
+          {
+            telegramChannelId: 'publisher-1',
+            scheduledAt: '2020-01-01T08:00:00.000Z',
+          },
+        ],
+      },
+      scheduledAt: new Date('2020-01-01T08:00:00.000Z'),
+      trackingEndsAt: new Date('2020-01-02T08:00:00.000Z'),
+      nextDueAt: null,
+      placementPostIds: [
+        { telegramChannelId: 'publisher-1', managedPostId: 'post-1' },
+      ],
+      baselineTargetCounters: [],
+      baselinePublisherSubscribers: [],
+      createdByUserId: 'user-1',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    const second = {
+      ...historical,
+      id: 'plan-2',
+      placementPostIds: [
+        { telegramChannelId: 'publisher-1', managedPostId: 'post-2' },
+      ],
+    };
+    prisma.crossPromotionPlan.findFirst
+      .mockResolvedValueOnce(historical)
+      .mockResolvedValueOnce(second);
+    prisma.crossPromotionPlan.update.mockResolvedValue({
+      ...historical,
+      placementPostIds: [
+        ...historical.placementPostIds,
+        ...second.placementPostIds,
+      ],
+    });
+
+    await service.mergeHistorical('user-1', 'plan-1', 'plan-2');
+
+    expect(prisma.telegramManagedPost.deleteMany).not.toHaveBeenCalled();
+    expect(prisma.crossPromotionPlan.delete).toHaveBeenCalledWith({
+      where: { id: 'plan-2' },
+    });
+    expect(prisma.crossPromotionPlan.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          placementPostIds: expect.arrayContaining([
+            expect.objectContaining({ managedPostId: 'post-1' }),
+            expect.objectContaining({ managedPostId: 'post-2' }),
+          ]),
+        }),
+      }),
+    );
   });
 });

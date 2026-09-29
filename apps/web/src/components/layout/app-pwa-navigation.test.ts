@@ -13,26 +13,48 @@ describe("installed Nexeloq navigation", () => {
     expect(items.map(({ key, href }) => [key, href])).toEqual([
       ["overview", "/"],
       ["telegram", "/telegram-posts"],
-      ["growth", "/ad-campaigns"],
-      ["workspace", "/settings"],
+      ["ads", "/ad-campaigns"],
     ]);
     expect(
       items.find(({ key }) => key === "telegram")?.active("/telegram-bots"),
     ).toBe(true);
     expect(
-      items.find(({ key }) => key === "growth")?.active("/ad-sales/crm"),
+      items.find(({ key }) => key === "ads")?.active("/ad-sales/crm"),
     ).toBe(false);
-    expect(items.find(({ key }) => key === "growth")?.label).toBe(
+    expect(items.find(({ key }) => key === "ads")?.label).toBe(
       "navigation.ads",
     );
   });
 
   it("uses the CRM destination when CRM access is available", () => {
-    const growth = buildPwaNavigation(["adSales.crm"]).find(
-      ({ key }) => key === "growth",
+    const crm = buildPwaNavigation(["adSales.crm"]).find(
+      ({ key }) => key === "crm",
     );
-    expect(growth?.href).toBe("/ad-sales");
-    expect(growth?.label).toBe("navigation.crm");
-    expect(growth?.active("/ad-campaigns")).toBe(false);
+    expect(crm?.href).toBe("/ad-sales");
+    expect(crm?.label).toBe("navigation.crm");
+    expect(crm?.active("/ad-campaigns")).toBe(false);
+  });
+
+  it("keeps Ads visible alongside CRM and omits Settings", () => {
+    const items = buildPwaNavigation([
+      "dashboard",
+      "finance",
+      "channels",
+      "adSales.crm",
+      "advertising",
+      "workspace",
+    ]);
+
+    expect(items.map(({ key }) => key)).toEqual([
+      "overview",
+      "finance",
+      "telegram",
+      "crm",
+      "ads",
+    ]);
+    expect(
+      items.find(({ key }) => key === "ads")?.active("/ad-campaigns"),
+    ).toBe(true);
+    expect(items.find(({ key }) => key === "workspace")).toBeUndefined();
   });
 });

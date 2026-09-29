@@ -76,7 +76,6 @@ function renderModal(
     defaultCurrency: "UAH",
     workspaceTimezone: "Europe/Warsaw",
     initialChannelId: "channel-1",
-    onLoadAvailableSlots: vi.fn().mockResolvedValue([]),
     onLoadPublishedPosts: vi.fn().mockResolvedValue([]),
     onRequestQuotePreview: vi.fn().mockImplementation((requests) =>
       Promise.resolve({
@@ -390,7 +389,7 @@ describe("AdSaleModal", () => {
       "[&>div>button]:min-h-0",
     );
     expect(screen.queryByText(/Currency is taken automatically/)).toBeNull();
-    expect(screen.queryByText("Network sale price")).toBeNull();
+    expect(screen.getByText("Channel sale price")).toBeTruthy();
     expect(
       screen
         .getByRole("button", { name: "Channels" })
@@ -517,39 +516,6 @@ describe("AdSaleModal", () => {
     expect(screen.getAllByText(/· 18:30 · 2\/48/)).toHaveLength(2);
     expect(screen.getByText(/expected value \(views × CPM\)/i)).toBeTruthy();
     expect(screen.queryByRole("button", { name: /Bulk sales/ })).toBeNull();
-  });
-
-  it("uses nearby only for the date and marks past and available dates", async () => {
-    renderModal({
-      onLoadAvailableSlots: vi.fn().mockResolvedValue([
-        {
-          channelId: "channel-1",
-          date: "2000-01-01",
-          scheduledAt: "2000-01-01T08:00:00.000Z",
-          timezone: "Europe/Warsaw",
-          state: "PAST",
-        },
-        {
-          channelId: "channel-1",
-          date: "2099-01-01",
-          scheduledAt: "2099-01-01T18:00:00.000Z",
-          timezone: "Europe/Warsaw",
-          state: "AVAILABLE",
-        },
-      ] as never),
-    });
-
-    fireEvent.click(
-      screen.getByRole("button", { name: "Actions for Example channel" }),
-    );
-    fireEvent.click(screen.getByRole("button", { name: "Find nearby date" }));
-    const pastDate = await screen.findByText("Past date");
-    const availableDate = await screen.findByText("Available");
-    expect(pastDate.closest("button")?.className).toContain("rose");
-    expect(availableDate.closest("button")?.className).toContain("emerald");
-
-    fireEvent.click(availableDate.closest("button")!);
-    expect(screen.getByText(/2099-01-01 · 12:00/)).toBeTruthy();
   });
 
   it("loads published posts on open and uses the selected post time", async () => {

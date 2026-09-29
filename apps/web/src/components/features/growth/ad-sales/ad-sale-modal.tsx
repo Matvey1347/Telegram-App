@@ -21,7 +21,6 @@ import {
   useAdSaleModalController,
   type AdSaleModalProps,
 } from "./ad-sale-modal-controller";
-import { AdSaleSlotPickerModal } from "./ad-sale-slot-picker-modal";
 
 export type { SalePlacementDraft } from "./ad-sale-types";
 
@@ -72,9 +71,6 @@ export function AdSaleModal(props: AdSaleModalProps) {
     setPlacements,
     submissionError,
     pendingDrafts,
-    setSlotPickerPlacementKey,
-    slotPickerLoading,
-    slotPickerError,
     publishedPostsByPlacement,
     postsLoadingByPlacement,
     networkPricing,
@@ -87,11 +83,7 @@ export function AdSaleModal(props: AdSaleModalProps) {
     productsByChannelId,
     loadPublishedPosts,
     canSubmit,
-    openSlotPicker,
-    applySlot,
     submit,
-    slotPickerPlacement,
-    slotsByDate,
     sharedPostActive,
     continueDraft,
     deleteDraft,
@@ -201,7 +193,7 @@ export function AdSaleModal(props: AdSaleModalProps) {
                 networks={networks}
                 channels={channels}
                 networkPricing={
-                  placements.length >= 2 ? (
+                  placements.length >= 1 ? (
                     <AdSaleNetworkPricing
                       mode={networkPricing.mode}
                       totalPrice={networkPricing.totalPrice}
@@ -302,9 +294,6 @@ export function AdSaleModal(props: AdSaleModalProps) {
                             postsLoadingByPlacement[postsKey] ?? false
                           }
                           setPlacements={setPlacements}
-                          onFindNearbyDate={() =>
-                            void openSlotPicker(placement)
-                          }
                           onLoadPublishedPosts={(telegramPostUrl) =>
                             loadPublishedPosts(placement, telegramPostUrl)
                           }
@@ -354,16 +343,6 @@ export function AdSaleModal(props: AdSaleModalProps) {
         )}
       </Modal>
 
-      <AdSaleSlotPickerModal
-        placement={slotPickerPlacement}
-        channels={channels}
-        workspaceTimezone={workspaceTimezone}
-        loading={slotPickerLoading}
-        error={slotPickerError}
-        slotsByDate={slotsByDate}
-        onClose={() => setSlotPickerPlacementKey(null)}
-        onApply={applySlot}
-      />
     </>
   );
 }

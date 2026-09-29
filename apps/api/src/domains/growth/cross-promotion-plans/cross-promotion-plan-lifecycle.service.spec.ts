@@ -43,6 +43,7 @@ describe('CrossPromotionPlanLifecycleService', () => {
       crossPromotionPlan: {
         findMany: jest.fn().mockResolvedValue([plan]),
         update: jest.fn().mockResolvedValue({}),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
       telegramManagedPost: {
         findMany: jest.fn().mockResolvedValue([
@@ -58,6 +59,7 @@ describe('CrossPromotionPlanLifecycleService', () => {
     const service = new CrossPromotionPlanLifecycleService(
       prisma as never,
       remoteDeletion as never,
+      { sendPublicationConfirmation: jest.fn() } as never,
     );
 
     await expect(
@@ -75,6 +77,7 @@ describe('CrossPromotionPlanLifecycleService', () => {
       crossPromotionPlan: {
         findMany: jest.fn().mockResolvedValue([duePlan]),
         update: jest.fn().mockResolvedValue({}),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
       telegramManagedPost: { findMany: jest.fn().mockResolvedValue([]) },
     };
@@ -87,6 +90,7 @@ describe('CrossPromotionPlanLifecycleService', () => {
     const service = new CrossPromotionPlanLifecycleService(
       prisma as never,
       remoteDeletion as never,
+      { sendPublicationConfirmation: jest.fn() } as never,
     );
 
     await expect(
@@ -113,6 +117,7 @@ describe('CrossPromotionPlanLifecycleService', () => {
       crossPromotionPlan: {
         findMany: jest.fn().mockResolvedValue([duePlan]),
         update: jest.fn().mockResolvedValue({}),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
       telegramManagedPost: { findMany: jest.fn().mockResolvedValue([]) },
     };
@@ -127,6 +132,7 @@ describe('CrossPromotionPlanLifecycleService', () => {
     const service = new CrossPromotionPlanLifecycleService(
       prisma as never,
       remoteDeletion as never,
+      { sendPublicationConfirmation: jest.fn() } as never,
     );
 
     await expect(service.processDueActions(now)).resolves.toMatchObject({
@@ -152,6 +158,7 @@ describe('CrossPromotionPlanLifecycleService', () => {
       crossPromotionPlan: {
         findMany: jest.fn().mockResolvedValue([plan]),
         update: jest.fn().mockResolvedValue({}),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
       telegramManagedPost: {
         findMany: jest
@@ -162,6 +169,7 @@ describe('CrossPromotionPlanLifecycleService', () => {
     const service = new CrossPromotionPlanLifecycleService(
       prisma as never,
       { deletePublishedManagedPosts: jest.fn() } as never,
+      { sendPublicationConfirmation: jest.fn() } as never,
     );
 
     await service.processDueActions(new Date('2026-09-15T10:01:00.000Z'));
@@ -194,12 +202,14 @@ describe('CrossPromotionPlanLifecycleService', () => {
       crossPromotionPlan: {
         findMany: jest.fn().mockResolvedValue([plan]),
         update: jest.fn().mockResolvedValue({}),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
       telegramManagedPost: { findMany: jest.fn().mockResolvedValue([]) },
     };
     const service = new CrossPromotionPlanLifecycleService(
       prisma as never,
       { deletePublishedManagedPosts: jest.fn() } as never,
+      { sendPublicationConfirmation: jest.fn() } as never,
     );
 
     await service.processDueActions(new Date('2026-09-15T10:01:00.000Z'));

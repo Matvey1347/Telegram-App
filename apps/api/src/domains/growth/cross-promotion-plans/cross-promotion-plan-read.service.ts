@@ -23,12 +23,16 @@ type Placement = {
   telegramChannelId: string;
   managedPostId: string;
   postGroupId?: string | null;
+  publicationId?: string | null;
 };
 const json = <T>(value: unknown, fallback: T): T =>
   value && typeof value === 'object' ? (value as T) : fallback;
 
 function partnerTrackingEndsAt(post: CrossPromotionPlacementPost) {
-  const timestamps = (post.partnerPlacements ?? [])
+  const placements = post.partnerPublications?.length
+    ? post.partnerPublications.flatMap((publication) => publication.placements)
+    : (post.partnerPlacements ?? []);
+  const timestamps = placements
     .flatMap((placement) =>
       placement.deleteAt ? [Date.parse(placement.deleteAt)] : [],
     )
@@ -356,6 +360,14 @@ export class CrossPromotionPlanReadService {
       const ownPlacementPublished = placements.some((placement) =>
         publishedManagedPostIds.has(placement.managedPostId),
       );
+      const hasLiveOwnPlacement = placements.some((placement) => {
+        const managedPost = managedPosts.find(
+          (post) => post.id === placement.managedPostId,
+        );
+        return Boolean(
+          managedPost && managedPost.telegramRemoteStatus !== 'AUTO_DELETED',
+        );
+      });
       const historicalDraft =
         row.status === 'DRAFT' &&
         new Date(row.scheduledAt).getTime() <= Date.now() &&
@@ -394,6 +406,8 @@ export class CrossPromotionPlanReadService {
         ...row,
         status: historicalDraft
           ? 'COMPLETED'
+          : row.status === 'COMPLETED' && hasLiveOwnPlacement
+            ? 'ACTIVE'
           : row.kind === 'OWN_CHANNELS' &&
               (row.status === 'SCHEDULED' || row.status === 'ACTIVE')
             ? ownPlacementPublished
@@ -432,6 +446,7 @@ export class CrossPromotionPlanReadService {
           );
           return {
             telegramChannelId: target.telegramChannelId,
+            inviteLinkId: target.inviteLinkId,
             title: channel?.title ?? 'Unavailable channel',
             photoUrl: channel?.photoUrl ?? null,
             promoId: target.promoId ?? null,
@@ -459,32 +474,42 @@ export class CrossPromotionPlanReadService {
           const after =
             channelAtEnd(channelId)?.subscribersCount ??
             channel?.currentSubscribersCount;
-          const managedPostId = placements.find(
+          const channelPlacements = placements.filter(
             (placement) => placement.telegramChannelId === channelId,
-          )?.managedPostId;
-          const managedPost = managedPosts.find(
-            (post) => post.id === managedPostId,
           );
-          const scheduledAt = publicationPost.publisherPlacements?.find(
-            (placement) => placement.telegramChannelId === channelId,
-          )?.scheduledAt;
+          const managedPostsForChannel = managedPosts.filter((post) =>
+            channelPlacements.some((placement) => placement.managedPostId === post.id),
+          );
+          const scheduledTimes = (
+            publicationPost.publisherPublications?.length
+              ? publicationPost.publisherPublications.flatMap(
+                  (publication) => publication.placements,
+                )
+              : publicationPost.publisherPlacements ?? []
+          )
+            .filter((placement) => placement.telegramChannelId === channelId)
+            .map((placement) => Date.parse(placement.scheduledAt))
+            .filter(Number.isFinite);
           // A scheduled post can retain old imported message metadata while
           // Telegram has not published this placement yet. Never present that
           // as an actual campaign reach before its configured publication time.
           const publicationHasStarted =
-            !scheduledAt || Date.parse(scheduledAt) <= Date.now();
+            !scheduledTimes.length || Math.min(...scheduledTimes) <= Date.now();
           const publishedRows = telegramPosts.filter(
             (post) =>
               post.telegramChannelId === channelId &&
-              managedPost?.telegramMessageIds.includes(post.telegramMessageId),
+              managedPostsForChannel.some((managedPost) =>
+                managedPost.telegramMessageIds.includes(post.telegramMessageId),
+              ),
           );
-          const resultPosts = publicationHasStarted && publishedRows.length
-            ? publishedRows
-            : publicationHasStarted
-              ? recoveredTelegramPosts.filter(
-                (post) => post.telegramChannelId === channelId,
-              )
-              : [];
+          const resultPosts =
+            publicationHasStarted && publishedRows.length
+              ? publishedRows
+              : publicationHasStarted
+                ? recoveredTelegramPosts.filter(
+                    (post) => post.telegramChannelId === channelId,
+                  )
+                : [];
           return {
             telegramChannelId: channelId,
             title: channel?.title ?? 'Unavailable channel',

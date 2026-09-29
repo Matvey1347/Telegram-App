@@ -3,7 +3,10 @@ import type { CrossPromotionSchedulingProgress } from '@telegram-system/shared';
 import { TelegramChannelsService } from '../../telegram/telegram-channels/telegram-channels.service';
 import { TelegramSystemPostGroupsService } from '../../telegram/telegram-channels/telegram-system-post-groups.service';
 import type { CreateTelegramManagedPostDto } from '../../telegram/telegram-channels/dto';
-import type { CrossPromotionChannelPlacementInput } from '@telegram-system/shared';
+import type {
+  CrossPromotionChannelPlacementInput,
+  CrossPromotionPublicationItem,
+} from '@telegram-system/shared';
 import { CreateCrossPromotionPlanDto } from './dto';
 import { CrossPromotionPlansService } from './cross-promotion-plans.service';
 import { TelegramManagedPostRemoteDeletionService } from '../../telegram/telegram-channels/telegram-managed-post-remote-deletion.service';
@@ -17,7 +20,29 @@ type ScheduledPost = {
   telegramChannelId: string;
   managedPostId: string;
   postGroupId?: string | null;
+  publicationId?: string | null;
 };
+
+type PublisherPublication = CrossPromotionPublicationItem;
+
+function publisherPublications(
+  dto: CreateCrossPromotionPlanDto,
+): PublisherPublication[] {
+  const configured = dto.publicationPost.publisherPublications;
+  if (configured?.length) return configured;
+  return [
+    {
+      id: 'legacy-publisher-publication',
+      post: dto.publicationPost,
+      placements:
+        dto.publicationPost.publisherPlacements ??
+        dto.publisherChannelIds.map((telegramChannelId) => ({
+          telegramChannelId,
+          scheduledAt: dto.scheduledAt,
+        })),
+    },
+  ];
+}
 
 /**
  * The plan-level timestamp is a display/tracking anchor.  Telegram posts are
@@ -26,13 +51,9 @@ type ScheduledPost = {
  * because an old default timestamp was left on the plan.
  */
 function publisherScheduleTimes(dto: CreateCrossPromotionPlanDto) {
-  const placements = dto.publicationPost.publisherPlacements ?? [];
-  return dto.publisherChannelIds.map((channelId) => {
-    const placement = placements.find(
-      (item) => item.telegramChannelId === channelId,
-    );
-    return Date.parse(placement?.scheduledAt ?? dto.scheduledAt);
-  });
+  return publisherPublications(dto)
+    .flatMap((publication) => publication.placements)
+    .map((placement) => Date.parse(placement.scheduledAt ?? dto.scheduledAt));
 }
 
 @Injectable()
@@ -67,7 +88,7 @@ export class CrossPromotionPlanSchedulingService {
     onProgress: Progress,
     signal: AbortSignal,
   ) {
-    const total = dto.publisherChannelIds.length + 2;
+    const total = publisherScheduleTimes(dto).length + 2;
     const createdPosts: ScheduledPost[] = [];
     let planId: string | null = null;
     onProgress(
@@ -136,7 +157,7 @@ export class CrossPromotionPlanSchedulingService {
     signal: AbortSignal,
   ) {
     const context = await this.plans.resumeSchedulingContext(userId, id);
-    const total = context.dto.publisherChannelIds.length + 2;
+    const total = publisherScheduleTimes(context.dto).length + 2;
     const posts = [...context.placements];
     onProgress(
       { phase: 'VALIDATING', message: 'Resuming promotion placement' },
@@ -199,7 +220,7 @@ export class CrossPromotionPlanSchedulingService {
         'Every publishing post must be scheduled in the future',
       );
     }
-    const total = dto.publisherChannelIds.length + 2;
+    const total = publisherScheduleTimes(dto).length + 2;
     const createdPosts: ScheduledPost[] = [];
     onProgress(
       { phase: 'VALIDATING', message: 'Validating promotion changes' },
@@ -276,15 +297,25 @@ export class CrossPromotionPlanSchedulingService {
     onPlacementSaved?: () => Promise<void>,
   ) {
     if (validate) await this.plans.validateForScheduling(userId, dto);
-    const scheduledChannelIds = new Set(
-      createdPosts.map((post) => post.telegramChannelId),
+    const scheduledPublicationKeys = new Set(
+      createdPosts.map(
+        (post) => `${post.publicationId}:${post.telegramChannelId}`,
+      ),
     );
-    for (const [index, channelId] of dto.publisherChannelIds.entries()) {
-      if (scheduledChannelIds.has(channelId)) continue;
+    const usesPublicationItems = Boolean(
+      dto.publicationPost.publisherPublications?.length,
+    );
+    const publications = publisherPublications(dto);
+    const scheduled = publications.flatMap((publication) =>
+      publication.placements.map((placement) => ({ publication, placement })),
+    );
+    for (const [index, item] of scheduled.entries()) {
+      const { publication, placement } = item;
+      const channelId = placement.telegramChannelId;
+      const publicationId = usesPublicationItems ? publication.id : undefined;
+      const key = `${publicationId}:${channelId}`;
+      if (scheduledPublicationKeys.has(key)) continue;
       signal.throwIfAborted();
-      const placement = dto.publicationPost.publisherPlacements?.find(
-        (item) => item.telegramChannelId === channelId,
-      );
       const group = await this.systemPostGroups.ensureMutualPromotionGroup(
         userId,
         channelId,
@@ -292,7 +323,7 @@ export class CrossPromotionPlanSchedulingService {
       const post = await this.telegramChannels.createManagedPost(
         userId,
         channelId,
-        this.managedPostPayload(dto, placement),
+        this.managedPostPayload(dto, publication.post, placement),
         { groupId: group.id },
       );
       await this.telegramChannels.scheduleManagedPost(
@@ -305,12 +336,13 @@ export class CrossPromotionPlanSchedulingService {
         telegramChannelId: channelId,
         managedPostId: post.id,
         postGroupId: group.id,
+        ...(publicationId ? { publicationId } : {}),
       });
       await onPlacementSaved?.();
       onProgress(
         {
           phase: 'SCHEDULING',
-          message: `Scheduled ${index + 1} of ${dto.publisherChannelIds.length} posts`,
+          message: `Scheduled ${index + 1} of ${scheduled.length} posts`,
           telegramChannelId: channelId,
           success: true,
         },
@@ -322,9 +354,9 @@ export class CrossPromotionPlanSchedulingService {
 
   private managedPostPayload(
     dto: CreateCrossPromotionPlanDto,
+    post: CreateCrossPromotionPlanDto['publicationPost'],
     placement?: CrossPromotionChannelPlacementInput,
   ): CreateTelegramManagedPostDto {
-    const post = dto.publicationPost;
     return {
       title: post.title?.trim() || dto.title.trim(),
       text: post.text ?? '',
@@ -347,7 +379,8 @@ export class CrossPromotionPlanSchedulingService {
     if (!placement?.deleteAt) return null;
     const scheduledAt = Date.parse(placement.scheduledAt);
     const deleteAt = Date.parse(placement.deleteAt);
-    if (!Number.isFinite(scheduledAt) || !Number.isFinite(deleteAt)) return null;
+    if (!Number.isFinite(scheduledAt) || !Number.isFinite(deleteAt))
+      return null;
     const hours = Math.round((deleteAt - scheduledAt) / 3_600_000);
     return hours === 24 || hours === 48 || hours === 72 ? hours : null;
   }

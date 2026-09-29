@@ -40,6 +40,7 @@ export function CrossPromotionPlacementSettings({
   onChange,
   showAdSlots = false,
   managedPostUrls = {},
+  formatErrorChannelIds = [],
 }: {
   title: string;
   description: string;
@@ -53,6 +54,7 @@ export function CrossPromotionPlacementSettings({
   onChange: (value: CrossPromotionPlacementSettingsValue) => void;
   showAdSlots?: boolean;
   managedPostUrls?: Record<string, string>;
+  formatErrorChannelIds?: string[];
 }) {
   const selected = channelIds
     .map((id) => channels.find((channel) => channel.id === id))
@@ -126,7 +128,9 @@ export function CrossPromotionPlacementSettings({
         value.dates?.[channelId] !== defaultDate,
     );
   const shouldRestoreExpanded = Boolean(
-    value.hasIndividualOverrides || hasLegacyIndividualOverrides,
+    value.hasIndividualOverrides ||
+      hasLegacyIndividualOverrides ||
+      formatErrorChannelIds.length,
   );
   const [expanded, setExpanded] = useState(shouldRestoreExpanded);
   const previousRestoreState = useRef(shouldRestoreExpanded);
@@ -258,6 +262,7 @@ export function CrossPromotionPlacementSettings({
             const selectedProduct = products.find(
               (product) => product.id === value.formatIds[channel.id],
             );
+            const hasFormatError = formatErrorChannelIds.includes(channel.id);
             return (
               <div
                 key={channel.id}
@@ -303,7 +308,15 @@ export function CrossPromotionPlacementSettings({
                     ) : null}
                   </div>
                 </div>
-                <FormField label="Format" required>
+                <FormField
+                  label="Format"
+                  required
+                  error={
+                    hasFormatError
+                      ? "Choose a format for this channel."
+                      : undefined
+                  }
+                >
                   <CustomSelect
                     value={value.formatIds[channel.id] ?? ""}
                     onChange={(formatId) =>
@@ -320,6 +333,11 @@ export function CrossPromotionPlacementSettings({
                       products.length ? "Select format" : "No formats"
                     }
                     disabled={!products.length}
+                    className={
+                      hasFormatError
+                        ? "rounded-lg ring-1 ring-rose-500"
+                        : undefined
+                    }
                     options={products.map((product) => ({
                       value: product.id,
                       label: product.name,

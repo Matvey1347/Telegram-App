@@ -107,6 +107,13 @@ export class TelegramChannelLifecycleService {
       ...(dto.folderDefaultInviteLinkIds ??
         existing.folderDefaultInviteLinkIds ??
         []),
+      ...(dto.publicInviteLinkId === undefined
+        ? existing.publicInviteLinkId
+          ? [existing.publicInviteLinkId]
+          : []
+        : dto.publicInviteLinkId
+          ? [dto.publicInviteLinkId]
+          : []),
       ...(dto.mutualPromotionInviteLinkIds ??
         existing.mutualPromotionInviteLinkIds ??
         []),

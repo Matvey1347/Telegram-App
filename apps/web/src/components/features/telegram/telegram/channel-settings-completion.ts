@@ -38,6 +38,7 @@ export function getChannelSettingsCompletion(
       Boolean((draft?.tgStatUrl ?? channel.tgStatUrl)?.trim()),
       Boolean((draft?.description ?? channel.shortDescription)?.trim()),
       Boolean(draft?.defaultInviteLinkId ?? channel.defaultInviteLinkId),
+      Boolean(draft?.publicInviteLinkId ?? channel.publicInviteLinkId),
       Boolean(draft?.botInviteLinkId ?? channel.botInviteLinkId),
       Boolean(draft?.broadcastInviteLinkId ?? channel.broadcastInviteLinkId),
       Boolean(

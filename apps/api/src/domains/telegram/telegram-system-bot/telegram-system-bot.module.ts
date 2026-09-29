@@ -37,7 +37,7 @@ import { TelegramSystemBotPostImportService } from './telegram-system-bot-post-i
     TransfersModule,
     forwardRef(() => ScheduledTasksModule),
     TelegramChannelsModule,
-    TelegramAdSalesModule,
+    forwardRef(() => TelegramAdSalesModule),
   ],
   controllers: [TelegramSystemBotController],
   providers: [

@@ -74,6 +74,7 @@ import { TelegramAdSalesCrmSettingsService } from './telegram-ad-sales-crm-setti
 import { TelegramAdSalesService } from './telegram-ad-sales.service';
 import { TelegramAdSalesLegacyCrmService } from './telegram-ad-sales-legacy-crm.service';
 import { TelegramAdSalesWorkspaceSettingsService } from './telegram-ad-sales-workspace-settings.service';
+import { TelegramAdSaleBotNotificationService } from './telegram-ad-sale-bot-notification.service';
 
 @UseGuards(JwtAuthGuard)
 @Controller('telegram-ad-sales')
@@ -86,8 +87,19 @@ export class TelegramAdSalesController {
     private readonly crmSettingsService: TelegramAdSalesCrmSettingsService,
     private readonly legacyCrmService: TelegramAdSalesLegacyCrmService,
     private readonly workspaceSettingsService: TelegramAdSalesWorkspaceSettingsService,
+    private readonly botConfirmation: TelegramAdSaleBotNotificationService,
     private readonly streamResponse: StreamResponseService,
   ) {}
+
+  @Get(':saleId/bot-notification-preview')
+  botNotificationPreview(@CurrentUser() user: JwtUser, @Param('saleId') saleId: string) {
+    return this.botConfirmation.preview(user.sub, saleId);
+  }
+
+  @Post(':saleId/send-to-bot')
+  sendToBot(@CurrentUser() user: JwtUser, @Param('saleId') saleId: string) {
+    return this.botConfirmation.send(user.sub, saleId);
+  }
 
   @Get('settings/workspace')
   getWorkspaceSettings(@CurrentUser() user: JwtUser) {

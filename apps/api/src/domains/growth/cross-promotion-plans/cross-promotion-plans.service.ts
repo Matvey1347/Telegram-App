@@ -4,7 +4,10 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import type { CrossPromotionTargetInput } from '@telegram-system/shared';
+import type {
+  CrossPromotionPlacementPost,
+  CrossPromotionTargetInput,
+} from '@telegram-system/shared';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { WorkspaceService } from '../../../common/workspace.service';
 import { notifyScheduledTaskDueWorkChanged } from '../../../common/scheduled-task-wake-notifier';
@@ -28,14 +31,29 @@ type ScheduledPlacement = {
   telegramChannelId: string;
   managedPostId: string;
   postGroupId?: string | null;
+  publicationId?: string | null;
 };
 const json = <T>(value: unknown, fallback: T): T =>
   value && typeof value === 'object' ? (value as T) : fallback;
 
+function nextPublisherDeletionAt(post: CrossPromotionPlacementPost) {
+  const placements = post.publisherPublications?.length
+    ? post.publisherPublications.flatMap((publication) => publication.placements)
+    : (post.publisherPlacements ?? []);
+  const timestamps = placements
+    .flatMap((placement) => (placement.deleteAt ? [Date.parse(placement.deleteAt)] : []))
+    .filter((timestamp) => Number.isFinite(timestamp) && timestamp > Date.now());
+  return timestamps.length ? new Date(Math.min(...timestamps)) : null;
+}
+
 function firstLifecycleAt(dto: CreateCrossPromotionPlanDto) {
   const timestamps = [
-    ...(dto.publicationPost.publisherPlacements ?? []),
-    ...(dto.publicationPost.partnerPlacements ?? []),
+    ...publisherPlacements(
+      dto.publicationPost,
+      dto.publisherChannelIds,
+      dto.scheduledAt,
+    ),
+    ...partnerPlacements(dto.publicationPost),
   ]
     .flatMap((placement) => [placement.scheduledAt, placement.deleteAt])
     .filter((value): value is string => Boolean(value))
@@ -45,10 +63,56 @@ function firstLifecycleAt(dto: CreateCrossPromotionPlanDto) {
 }
 
 function firstPartnerPublicationAt(dto: CreateCrossPromotionPlanDto) {
-  const timestamps = (dto.publicationPost.partnerPlacements ?? [])
+  const timestamps = partnerPlacements(dto.publicationPost)
     .map((placement) => Date.parse(placement.scheduledAt))
     .filter(Number.isFinite);
   return timestamps.length ? new Date(Math.min(...timestamps)) : null;
+}
+
+function publisherPlacements(
+  post: CrossPromotionPlacementPost,
+  publisherChannelIds: string[] = [],
+  scheduledAt?: string,
+): Array<{
+  telegramChannelId: string;
+  scheduledAt: string;
+  deleteAt?: string | null;
+}> {
+  if (post.publisherPublications?.length) {
+    return post.publisherPublications.flatMap(
+      (publication) => publication.placements,
+    );
+  }
+  return (
+    post.publisherPlacements ??
+    publisherChannelIds.map((telegramChannelId) => ({
+      telegramChannelId,
+      scheduledAt: scheduledAt ?? '',
+    }))
+  );
+}
+
+function partnerPlacements(
+  post: CrossPromotionPlacementPost,
+): Array<{
+  telegramChannelId: string;
+  scheduledAt: string;
+  deleteAt?: string | null;
+}> {
+  if (post.partnerPublications?.length) {
+    return post.partnerPublications.flatMap(
+      (publication) => publication.placements,
+    );
+  }
+  return post.partnerPlacements ?? [];
+}
+
+function hasPostContent(
+  post?: { text?: string; imageUrls?: string[]; mediaItems?: unknown[] } | null,
+) {
+  return Boolean(
+    post?.text?.trim() || post?.imageUrls?.length || post?.mediaItems?.length,
+  );
 }
 
 @Injectable()
@@ -191,20 +255,47 @@ export class CrossPromotionPlansService {
         );
     }
     const publicationPost = dto.publicationPost;
+    const publisherPublications = publicationPost.publisherPublications;
     if (
-      !publicationPost?.text?.trim() &&
-      !publicationPost?.imageUrls?.length &&
-      !publicationPost?.mediaItems?.length
+      publisherPublications?.length
+        ? publisherPublications.some(
+            (publication) =>
+              !publication.id ||
+              !publication.placements.length ||
+              !hasPostContent(publication.post),
+          )
+        : !hasPostContent(publicationPost)
     )
       throw new BadRequestException('Publication post is empty');
+    const configuredPublisherPlacements = publisherPlacements(
+      publicationPost,
+      publisherChannelIds,
+      dto.scheduledAt,
+    );
+    if (!configuredPublisherPlacements.length)
+      throw new BadRequestException('Add at least one publishing slot');
+    if (
+      configuredPublisherPlacements.some(
+        (placement) =>
+          !publisherChannelIds.includes(placement.telegramChannelId) ||
+          !Number.isFinite(Date.parse(placement.scheduledAt)),
+      )
+    )
+      throw new BadRequestException(
+        'Every publisher publication must use a selected channel and valid slot',
+      );
     const configuredPost = publicationPost;
     const partnerPost = configuredPost.partnerPublicationPost;
     if (
       dto.kind === 'DIRECT_MUTUAL' &&
       dto.targets.some((target) => !target.promoId) &&
-      !partnerPost?.text?.trim() &&
-      !partnerPost?.imageUrls?.length &&
-      !partnerPost?.mediaItems?.length
+      !hasPostContent(partnerPost) &&
+      !configuredPost.partnerPublications?.every(
+        (publication) =>
+          publication.id &&
+          publication.placements.length &&
+          hasPostContent(publication.post),
+      )
     )
       throw new BadRequestException('Partner publication post is empty');
     return { publisherChannelIds, partnerChannelIds, links };
@@ -338,14 +429,18 @@ export class CrossPromotionPlansService {
       throw new BadRequestException(
         'One or more scheduled posts are unavailable',
       );
+    const configuredPost = row.publicationPost as CrossPromotionPlacementPost;
+    const expectedPlacements = publisherPlacements(
+      configuredPost,
+      row.publisherChannelIds,
+      row.scheduledAt.toISOString(),
+    ).length;
     const updated = await this.prisma.crossPromotionPlan.update({
       where: { id },
       data: {
         placementPostIds: dto.placements as unknown as Prisma.InputJsonValue,
         status:
-          dto.placements.length === row.publisherChannelIds.length
-            ? 'SCHEDULED'
-            : 'DRAFT',
+          dto.placements.length === expectedPlacements ? 'SCHEDULED' : 'DRAFT',
         lastError: dto.lastError ?? null,
       },
     });
@@ -402,7 +497,8 @@ export class CrossPromotionPlansService {
         publisherChannelIds: row.publisherChannelIds,
         partnerChannelIds: row.partnerChannelIds,
         targets: json<CrossPromotionTargetInput[]>(row.targets, []),
-        publicationPost: row.publicationPost as CreateCrossPromotionPlanDto['publicationPost'],
+        publicationPost:
+          row.publicationPost as CreateCrossPromotionPlanDto['publicationPost'],
         scheduledAt: row.scheduledAt.toISOString(),
         trackingEndsAt: row.trackingEndsAt?.toISOString() ?? null,
       } satisfies CreateCrossPromotionPlanDto,
@@ -427,6 +523,7 @@ export class CrossPromotionPlansService {
         status: true,
         scheduledAt: true,
         baselineTargetCounters: true,
+        placementPostIds: true,
       },
     });
     if (!existing)
@@ -440,6 +537,24 @@ export class CrossPromotionPlansService {
       );
     }
     const normalized = await this.validateInput(workspaceId, dto);
+    const nextDeletionAt = nextPublisherDeletionAt(dto.publicationPost);
+    const storedPlacements = json<ScheduledPlacement[]>(
+      existing.placementPostIds,
+      [],
+    );
+    const managedPosts = storedPlacements.length
+      ? await this.prisma.telegramManagedPost.findMany({
+          where: {
+            workspaceId,
+            id: { in: storedPlacements.map((placement) => placement.managedPostId) },
+          },
+          select: { id: true, telegramRemoteStatus: true },
+        })
+      : [];
+    const hasLiveManagedPost = managedPosts.some(
+      (post) => post.telegramRemoteStatus !== 'AUTO_DELETED',
+    );
+    const remainsActive = Boolean(nextDeletionAt || hasLiveManagedPost);
     const previousBaselines = new Map(
       json<CounterBaseline[]>(existing.baselineTargetCounters, []).map(
         (baseline) => [baseline.inviteLinkId, baseline],
@@ -482,12 +597,186 @@ export class CrossPromotionPlansService {
         trackingEndsAt: dto.trackingEndsAt
           ? new Date(dto.trackingEndsAt)
           : null,
-        status: 'COMPLETED',
-        nextDueAt: null,
+        status: remainsActive ? 'ACTIVE' : 'COMPLETED',
+        nextDueAt: nextDeletionAt,
         lastError: null,
       },
     });
     return this.readService.shape(workspaceId, updated);
+  }
+
+  /**
+   * A direct exchange is one commercial agreement even when its two sides
+   * publish a different number of posts.  Older records represented every
+   * extra post as another plan.  Merge their immutable history rather than
+   * scheduling, deleting, or re-sending anything to Telegram.
+   */
+  async mergeHistorical(userId: string, id: string, sourcePlanId: string) {
+    const workspaceId = await this.workspace(userId);
+    if (!sourcePlanId || sourcePlanId === id) {
+      throw new BadRequestException('Choose a different promotion to combine');
+    }
+    const [target, source] = await Promise.all(
+      [id, sourcePlanId].map((planId) =>
+        this.prisma.crossPromotionPlan.findFirst({
+          where: { id: planId, workspaceId },
+        }),
+      ),
+    );
+    if (!target || !source) {
+      throw new NotFoundException('Cross-promotion plan not found');
+    }
+    const now = Date.now();
+    if (
+      target.kind !== 'DIRECT_MUTUAL' ||
+      source.kind !== 'DIRECT_MUTUAL' ||
+      target.status === 'CANCELLED' ||
+      source.status === 'CANCELLED' ||
+      target.scheduledAt.getTime() > now ||
+      source.scheduledAt.getTime() > now ||
+      !target.advertiserId ||
+      target.advertiserId !== source.advertiserId
+    ) {
+      throw new BadRequestException(
+        'Only historical direct exchanges with the same CRM partner can be combined',
+      );
+    }
+
+    const targetPost = target.publicationPost as CrossPromotionPlacementPost;
+    const sourcePost = source.publicationPost as CrossPromotionPlacementPost;
+    const publicationItems = (
+      planId: string,
+      post: CrossPromotionPlacementPost,
+      side: 'publisherPublications' | 'partnerPublications',
+      placements: 'publisherPlacements' | 'partnerPlacements',
+    ) => {
+      const items = post[side];
+      if (items?.length) {
+        return items.map((item, index) => ({
+          ...item,
+          id: `${planId}:${item.id || index + 1}`,
+        }));
+      }
+      const fallbackPost =
+        side === 'publisherPublications' ? post : post.partnerPublicationPost;
+      const fallbackPlacements = post[placements] ?? [];
+      return fallbackPost && fallbackPlacements.length
+        ? [
+            {
+              id: `${planId}:${side}:1`,
+              post: fallbackPost,
+              placements: fallbackPlacements,
+            },
+          ]
+        : [];
+    };
+    const targetPublisher = publicationItems(
+      target.id,
+      targetPost,
+      'publisherPublications',
+      'publisherPlacements',
+    );
+    const sourcePublisher = publicationItems(
+      source.id,
+      sourcePost,
+      'publisherPublications',
+      'publisherPlacements',
+    );
+    const targetPartner = publicationItems(
+      target.id,
+      targetPost,
+      'partnerPublications',
+      'partnerPlacements',
+    );
+    const sourcePartner = publicationItems(
+      source.id,
+      sourcePost,
+      'partnerPublications',
+      'partnerPlacements',
+    );
+    const targetPlacements = json<ScheduledPlacement[]>(
+      target.placementPostIds,
+      [],
+    );
+    const sourcePlacements = json<ScheduledPlacement[]>(
+      source.placementPostIds,
+      [],
+    );
+    const uniqueBy = <T>(items: T[], key: (item: T) => string) =>
+      [...new Map(items.map((item) => [key(item), item])).values()];
+    const combinedPost: CrossPromotionPlacementPost = {
+      ...targetPost,
+      publisherPublications: [...targetPublisher, ...sourcePublisher],
+      partnerPublications: [...targetPartner, ...sourcePartner],
+      publisherPlacements: [...targetPublisher, ...sourcePublisher].flatMap(
+        (item) => item.placements,
+      ),
+      partnerPlacements: [...targetPartner, ...sourcePartner].flatMap(
+        (item) => item.placements,
+      ),
+    };
+    const combinedTargets = uniqueBy(
+      [
+        ...json<CrossPromotionTargetInput[]>(target.targets, []),
+        ...json<CrossPromotionTargetInput[]>(source.targets, []),
+      ],
+      (item) => `${item.telegramChannelId}:${item.promoId ?? ''}:${item.inviteLinkId}`,
+    );
+    const combinedPlacements = uniqueBy(
+      [...targetPlacements, ...sourcePlacements],
+      (item) => item.managedPostId,
+    );
+    const combinedBaselines = uniqueBy(
+      [
+        ...json<CounterBaseline[]>(target.baselineTargetCounters, []),
+        ...json<CounterBaseline[]>(source.baselineTargetCounters, []),
+      ],
+      (item) => item.inviteLinkId,
+    );
+    const combinedSubscribers = uniqueBy(
+      [
+        ...json<SubscriberBaseline[]>(target.baselinePublisherSubscribers, []),
+        ...json<SubscriberBaseline[]>(source.baselinePublisherSubscribers, []),
+      ],
+      (item) => item.telegramChannelId,
+    );
+    const ends = [target.trackingEndsAt, source.trackingEndsAt].filter(
+      (value): value is Date => Boolean(value),
+    );
+    const merged = await this.prisma.$transaction(async (tx) => {
+      const row = await tx.crossPromotionPlan.update({
+        where: { id: target.id },
+        data: {
+          publisherChannelIds: this.unique([
+            ...target.publisherChannelIds,
+            ...source.publisherChannelIds,
+          ]),
+          partnerChannelIds: this.unique([
+            ...target.partnerChannelIds,
+            ...source.partnerChannelIds,
+          ]),
+          targets: combinedTargets as unknown as Prisma.InputJsonValue,
+          publicationPost: combinedPost as unknown as Prisma.InputJsonValue,
+          placementPostIds: combinedPlacements as unknown as Prisma.InputJsonValue,
+          baselineTargetCounters: combinedBaselines as unknown as Prisma.InputJsonValue,
+          baselinePublisherSubscribers:
+            combinedSubscribers as unknown as Prisma.InputJsonValue,
+          scheduledAt: new Date(
+            Math.min(target.scheduledAt.getTime(), source.scheduledAt.getTime()),
+          ),
+          trackingEndsAt: ends.length
+            ? new Date(Math.max(...ends.map((value) => value.getTime())))
+            : null,
+          status: 'COMPLETED',
+          nextDueAt: null,
+          lastError: null,
+        },
+      });
+      // No managed post is deleted: its id is now owned by the merged plan.
+      await tx.crossPromotionPlan.delete({ where: { id: source.id } });
+      return row;
+    });
+    return this.readService.shape(workspaceId, merged);
   }
 
   async rename(userId: string, id: string, title: string) {

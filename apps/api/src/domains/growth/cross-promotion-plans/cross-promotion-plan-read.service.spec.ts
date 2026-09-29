@@ -47,9 +47,9 @@ describe('CrossPromotionPlanReadService', () => {
       ],
       createdAt: new Date('2020-01-01T08:00:00.000Z'),
       updatedAt: new Date('2020-01-01T08:00:00.000Z'),
-    } as never;
+    } as Record<string, unknown>;
 
-    expect((await service.shape('workspace-1', plan)).status).toBe('SCHEDULED');
+    expect((await service.shape('workspace-1', plan as never)).status).toBe('SCHEDULED');
     expect(
       (
         await service.shape('workspace-1', {
@@ -59,9 +59,9 @@ describe('CrossPromotionPlanReadService', () => {
       ).status,
     ).toBe('SCHEDULED');
     managedPosts[0].telegramMessageIds.push('42');
-    expect((await service.shape('workspace-1', plan)).status).toBe('ACTIVE');
+    expect((await service.shape('workspace-1', plan as never)).status).toBe('ACTIVE');
     managedPosts[0].telegramRemoteStatus = 'AUTO_DELETED';
-    expect((await service.shape('workspace-1', plan)).status).toBe('SCHEDULED');
+    expect((await service.shape('workspace-1', plan as never)).status).toBe('SCHEDULED');
   });
 
   it('does not show stale message views before a future placement starts', async () => {
@@ -219,6 +219,7 @@ describe('CrossPromotionPlanReadService', () => {
 
     expect(result.targetResults[0]).toEqual(
       expect.objectContaining({
+        inviteLinkId: 'link-1',
         inviteLinkTotalJoinedCount: 15,
         inviteLinkTotalRequestedCount: 6,
         joinedCount: 5,

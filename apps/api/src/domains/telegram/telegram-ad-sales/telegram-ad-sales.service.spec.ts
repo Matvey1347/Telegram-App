@@ -390,6 +390,10 @@ function createService() {
     invalidateVisibility: jest.fn(),
     publish: jest.fn(),
   };
+  const botConfirmation: any = {
+    sendScheduledOnce: jest.fn().mockResolvedValue(undefined),
+    sendPublishedOnce: jest.fn().mockResolvedValue(undefined),
+  };
   const service = new TelegramAdSalesService(
     prisma,
     workspaceService,
@@ -406,6 +410,7 @@ function createService() {
     encryptionService,
     telegramChannelAccessService,
     telegramBotApiClient,
+    botConfirmation,
     notificationProjector,
   );
   return {
@@ -424,6 +429,7 @@ function createService() {
     mtprotoClient,
     encryptionService,
     notificationProjector,
+    botConfirmation,
   };
 }
 
@@ -885,7 +891,7 @@ describe('TelegramAdSalesService', () => {
     expect(prisma.telegramAdSalePlacement.update).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          plannedDeleteAt: new Date('2026-08-20T09:00:00.000Z'),
+          plannedDeleteAt: new Date('2026-08-20T08:00:00.000Z'),
         }),
       }),
     );
@@ -1598,7 +1604,7 @@ describe('TelegramAdSalesService', () => {
           status: TelegramAdPlacementStatus.PUBLISHED,
           telegramPostId: 'post-1',
           publishedAt: new Date('2026-08-01T18:00:00.000Z'),
-          plannedDeleteAt: new Date('2026-08-02T19:00:00.000Z'),
+          plannedDeleteAt: new Date('2026-08-02T18:00:00.000Z'),
         }),
       }),
     );
@@ -1629,6 +1635,13 @@ describe('TelegramAdSalesService', () => {
 
   it('creates immutable price snapshots', async () => {
     const { service, prisma } = createService();
+    mockPricingPreview(service, {
+      expectedViews: 1000,
+      targetCpm: '10',
+      recommendedPrice: '10',
+      minimumPrice: '10',
+      currency: 'USD',
+    });
     prisma.telegramChannel.findFirst.mockResolvedValue({
       id: 'channel-1',
       workspaceId: 'ws-1',

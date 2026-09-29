@@ -27,7 +27,7 @@ describe('legacy CRM compatibility', () => {
     );
   });
 
-  it.each([TelegramCrmContactStage.LOST, TelegramCrmContactStage.ARCHIVED])(
+  it.each([TelegramCrmContactStage.LOST, TelegramCrmContactStage.ANOTHER])(
     'does not expose %s as ACTIVE even when a Deal is active',
     (stage) => {
       expect(legacyAdvertiserStatus(stage, true)).not.toBe(

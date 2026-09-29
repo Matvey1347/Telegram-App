@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type { CrossPromotionTargetInput } from "@telegram-system/shared";
 import {
   promosApi,
@@ -26,6 +26,9 @@ export function CrossPromotionTargetEditor({
   onChange,
   onResolved,
   showPromo = true,
+  showChannelIdentity = true,
+  framed = true,
+  trailing,
 }: {
   channel: TelegramChannel;
   value: CrossPromotionTargetInput;
@@ -35,6 +38,9 @@ export function CrossPromotionTargetEditor({
     inviteLink?: TelegramInviteLink;
   }) => void;
   showPromo?: boolean;
+  showChannelIdentity?: boolean;
+  framed?: boolean;
+  trailing?: ReactNode;
 }) {
   const [registeredLinks, setRegisteredLinks] = useState<TelegramInviteLink[]>(
     [],
@@ -98,8 +104,8 @@ export function CrossPromotionTargetEditor({
   }, [linkOptions.initialLink, onChange, value]);
 
   return (
-    <section className="rounded-xl border border-neutral-800 bg-neutral-950/55 p-3">
-      <div className="mb-3 flex items-center gap-2">
+    <section className={framed ? "rounded-xl border border-neutral-800 bg-neutral-950/55 p-3" : "p-0"}>
+      {showChannelIdentity ? <div className="mb-3 flex items-center gap-2">
         {channel.photoUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -118,8 +124,16 @@ export function CrossPromotionTargetEditor({
           </p>
           <p className="text-xs text-neutral-500">Channel being promoted</p>
         </div>
-      </div>
-      <div className={`grid gap-3 ${showPromo ? "md:grid-cols-2" : ""}`}>
+      </div> : null}
+      <div
+        className={`grid gap-3 ${
+          showPromo
+            ? trailing
+              ? "md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]"
+              : "md:grid-cols-2"
+            : ""
+        }`}
+      >
         {showPromo ? (
           <FormField label="Promo" required>
             <CustomSelect
@@ -195,6 +209,7 @@ export function CrossPromotionTargetEditor({
             }}
           />
         </FormField>
+        {trailing ? <div className="flex items-end">{trailing}</div> : null}
       </div>
       {registerLink.isError ? (
         <p className="mt-2 text-xs text-rose-300">

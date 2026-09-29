@@ -4,36 +4,40 @@ import { CrossPromotionPartnerSide } from "./cross-promotion-partner-side";
 
 vi.mock("./cross-promotion-placement-settings", () => ({
   CrossPromotionPlacementSettings: ({
+    title,
     defaultDate,
     onDefaultDateChange,
   }: {
+    title: string;
     defaultDate: string;
     onDefaultDateChange: (value: string) => void;
   }) => (
-    <button type="button" onClick={() => onDefaultDateChange("2026-09-20")}>
-      Partner publication date {defaultDate}
-    </button>
+    <div>
+      <span>{title}</span>
+      <button type="button" onClick={() => onDefaultDateChange("2026-09-20")}>
+        Partner publication date {defaultDate}
+      </button>
+    </div>
   ),
 }));
 
 describe("CrossPromotionPartnerSide", () => {
-  it("allows a separate partner date and promoting a channel used on my side", () => {
+  it("shows partner formats and own promo placement without partner channels", () => {
     const onDefaultDateChange = vi.fn();
-    const onOutboundModeChange = vi.fn();
+    const onAddTarget = vi.fn();
 
     render(
       <CrossPromotionPartnerSide
         expanded
         onExpandedChange={vi.fn()}
         channels={[
-          { id: "partner-1", title: "Partner" } as never,
           { id: "own-1", title: "My selected publishing channel" } as never,
         ]}
-        partnerChannels={[{ id: "partner-1", title: "Partner" } as never]}
+        partnerChannels={[]}
         ownChannels={[
           { id: "own-1", title: "My selected publishing channel" } as never,
         ]}
-        partnerIds={["partner-1"]}
+        partnerIds={[]}
         onPartnerIdsChange={vi.fn()}
         partnerAdvertiserId={null}
         partnerContact=""
@@ -49,14 +53,12 @@ describe("CrossPromotionPartnerSide", () => {
         onDefaultDateChange={onDefaultDateChange}
         defaultTime="17:00"
         onSettingsChange={vi.fn()}
-        basicsReady
-        targetIds={[]}
         targets={[]}
-        onTargetIdsChange={vi.fn()}
         onTargetsChange={vi.fn()}
+        onAddTarget={onAddTarget}
         onResolved={vi.fn()}
         outboundMode="PROMO"
-        onOutboundModeChange={onOutboundModeChange}
+        onOutboundModeChange={vi.fn()}
         outboundPost={{ title: "", text: "", imageUrls: [], buttonRows: [] }}
         onOutboundPostChange={vi.fn()}
         botConnected
@@ -76,16 +78,12 @@ describe("CrossPromotionPartnerSide", () => {
     expect(onDefaultDateChange).toHaveBeenCalledWith("2026-09-20");
     expect(screen.getByText("Client")).toBeVisible();
     expect(screen.getByText("Partner channels (optional)")).toBeVisible();
-
-    fireEvent.click(screen.getByRole("button", { name: "Custom post" }));
-    expect(onOutboundModeChange).toHaveBeenCalledWith("CUSTOM");
+    expect(screen.getByText("Formats in partner channels")).toBeVisible();
 
     fireEvent.click(
-      screen.getByRole("button", {
-        name: "Select the channel promoted by my promo",
-      }),
+      screen.getByRole("button", { name: "Add promo placement" }),
     );
-    expect(screen.getByText("My selected publishing channel")).toBeVisible();
+    expect(onAddTarget).toHaveBeenCalledTimes(1);
   });
 
   it("can hide the partner side without clearing its fields", () => {
@@ -113,10 +111,7 @@ describe("CrossPromotionPartnerSide", () => {
         onDefaultDateChange={vi.fn()}
         defaultTime="17:00"
         onSettingsChange={vi.fn()}
-        basicsReady={false}
-        targetIds={[]}
         targets={[]}
-        onTargetIdsChange={vi.fn()}
         onTargetsChange={vi.fn()}
         onResolved={vi.fn()}
         outboundMode="PROMO"

@@ -186,6 +186,74 @@ describe('CrossPromotionPlanSchedulingService', () => {
     );
   });
 
+  it('schedules several partner posts in one channel at their individual slots', async () => {
+    const { service, telegram } = setup();
+    const multiPostPayload = {
+      ...payload,
+      publisherChannelIds: ['channel-1'],
+      publicationPost: {
+        ...payload.publicationPost,
+        publisherPublications: [
+          {
+            id: 'partner-post-1',
+            post: {
+              title: 'First',
+              text: 'First partner promo',
+              imageUrls: [],
+              buttonRows: [],
+            },
+            placements: [
+              {
+                telegramChannelId: 'channel-1',
+                scheduledAt: '2026-09-15T08:00:00.000Z',
+              },
+            ],
+          },
+          {
+            id: 'partner-post-2',
+            post: {
+              title: 'Second',
+              text: 'Second partner promo',
+              imageUrls: [],
+              buttonRows: [],
+            },
+            placements: [
+              {
+                telegramChannelId: 'channel-1',
+                scheduledAt: '2026-09-15T12:00:00.000Z',
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    await service.createAndSchedule(
+      'user-1',
+      multiPostPayload,
+      jest.fn(),
+      new AbortController().signal,
+    );
+
+    expect(telegram.createManagedPost).toHaveBeenNthCalledWith(
+      2,
+      'user-1',
+      'channel-1',
+      expect.objectContaining({
+        title: 'Second',
+        text: 'Second partner promo',
+      }),
+      expect.any(Object),
+    );
+    expect(telegram.scheduleManagedPost).toHaveBeenNthCalledWith(
+      2,
+      'user-1',
+      'channel-1',
+      'post-2',
+      { scheduledAt: '2026-09-15T12:00:00.000Z' },
+    );
+  });
+
   it('keeps a resumable plan when Telegram scheduling fails', async () => {
     const { service, plans, telegram, systemPostGroups } = setup();
     telegram.scheduleManagedPost.mockRejectedValueOnce(

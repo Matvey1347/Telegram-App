@@ -139,13 +139,16 @@ export function AdSaleNetworkPricing({
     <section className="rounded-xl border border-neutral-800 bg-neutral-950/50 p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <p className="text-sm font-medium text-white">Network sale price</p>
+          <p className="text-sm font-medium text-white">
+            {placementCount === 1 ? "Channel sale price" : "Network sale price"}
+          </p>
           <p className="text-xs text-neutral-400">
-            The total is split by each placement&apos;s expected value (views ×
-            CPM).
+            {placementCount === 1
+              ? "Set the agreed price for this channel."
+              : "The total is split by each placement's expected value (views × CPM)."}
           </p>
         </div>
-        <div className="inline-grid shrink-0 grid-cols-2 rounded-md border border-neutral-700 bg-neutral-950 p-px">
+        {placementCount > 1 ? <div className="inline-grid shrink-0 grid-cols-2 rounded-md border border-neutral-700 bg-neutral-950 p-px">
           <button
             type="button"
             aria-pressed={mode === "total"}
@@ -170,11 +173,11 @@ export function AdSaleNetworkPricing({
           >
             Per channel
           </button>
-        </div>
+        </div> : null}
       </div>
       {mode === "total" ? (
         <div className="mt-2 grid gap-3 sm:grid-cols-3">
-          <FormField label="Sold total" required>
+          <FormField label={placementCount === 1 ? "Sale price" : "Sold total"} required>
             <Input
               value={totalPrice}
               inputMode="decimal"

@@ -150,6 +150,7 @@ describe("SalesTab", () => {
     expect(screen.queryByText("Fulfillment status")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Actions for buyer" }));
     expect(screen.getByRole("menuitem", { name: "Edit deal" })).toBeTruthy();
+    expect(screen.getByRole("menuitem", { name: "Bot confirmation" })).toBeTruthy();
     expect(screen.getByRole("menuitem", { name: "Delete deal" })).toBeTruthy();
     fireEvent.click(screen.getByRole("menuitem", { name: "Delete deal" }));
     expect(
