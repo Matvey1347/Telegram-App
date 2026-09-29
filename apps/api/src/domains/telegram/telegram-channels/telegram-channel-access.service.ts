@@ -279,6 +279,11 @@ export class TelegramChannelAccessService {
 
   public async botTokenForSource(workspaceId: string, sourceId: string) {
     if (sourceId === TELEGRAM_PRODUCTION_SYSTEM_BOT_SOURCE_ID) {
+      if (!this.isProductionDeliveryRuntime()) {
+        throw new BadRequestException(
+          'Production bot delivery is available only in the production runtime',
+        );
+      }
       const token = this.systemBotConfig.productionToken;
       if (!token)
         throw new BadRequestException('Production bot is not configured');
@@ -313,6 +318,12 @@ export class TelegramChannelAccessService {
       iv: bot.botTokenIv,
       authTag: bot.botTokenAuthTag,
     });
+  }
+
+  /** Durable scheduled delivery belongs only to the always-on production API. */
+  public isProductionDeliveryRuntime() {
+    const runtime = telegramBotRuntimeEnvironmentName();
+    return runtime ? runtime === 'PRODUCTION' : isProductionEnvironment();
   }
 
   public channelRef(channel: {

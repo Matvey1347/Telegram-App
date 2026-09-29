@@ -1,9 +1,17 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { ChevronDown, ExternalLink, Eye, Radio, Users } from "lucide-react";
-import type { TelegramAdProduct } from "@telegram-system/shared";
-import type { TelegramChannel } from "@/lib/api";
+import type {
+  TelegramAdProduct,
+  TelegramPublicationSlotOccurrence,
+} from "@telegram-system/shared";
+import {
+  telegramPublicationSchedulesApi,
+  type TelegramChannel,
+} from "@/lib/api";
+import { telegramPublicationScheduleKeys } from "@/lib/query-keys";
 import {
   CustomSelect,
   DateInput,
@@ -49,6 +57,37 @@ export function CrossPromotionPlacementSettings({
   const selected = channelIds
     .map((id) => channels.find((channel) => channel.id === id))
     .filter((channel): channel is TelegramChannel => Boolean(channel));
+  const slotDates = channelIds
+    .map((channelId) => value.dates?.[channelId] ?? defaultDate)
+    .filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date));
+  const slotRange = useMemo(() => {
+    const dates = [...new Set(slotDates)].sort();
+    const first = dates[0] ?? defaultDate;
+    const last = dates.at(-1) ?? defaultDate;
+    return {
+      from: new Date(`${first}T00:00:00.000Z`).toISOString(),
+      to: new Date(
+        new Date(`${last}T00:00:00.000Z`).getTime() + 2 * 86_400_000,
+      ).toISOString(),
+    };
+  }, [defaultDate, slotDates.join("|")]);
+  const slotOccurrences = useQuery({
+    queryKey: telegramPublicationScheduleKeys.occurrencesByChannels(
+      [...channelIds].sort(),
+      slotRange,
+    ),
+    queryFn: () =>
+      telegramPublicationSchedulesApi.occurrencesByChannels(
+        channelIds,
+        slotRange,
+      ),
+    enabled: showAdSlots && channelIds.length > 0 && slotDates.length > 0,
+    staleTime: 30_000,
+  });
+  const occurrencesByChannel: Record<
+    string,
+    TelegramPublicationSlotOccurrence[]
+  > = slotOccurrences.data ?? {};
   const commonFormats = (productsByChannelId[channelIds[0] ?? ""] ?? []).filter(
     (product, index, products) =>
       products.findIndex((candidate) => candidate.name === product.name) ===
@@ -156,7 +195,7 @@ export function CrossPromotionPlacementSettings({
             data-testid="placement-defaults"
             className={`grid items-start gap-3 ${
               onDefaultDateChange
-                ? "grid-cols-[minmax(200px,1.05fr)_minmax(160px,.9fr)_minmax(220px,1fr)]"
+                ? "grid-cols-1 lg:grid-cols-[minmax(200px,1.05fr)_minmax(160px,.9fr)_minmax(220px,1fr)]"
                 : "sm:grid-cols-[minmax(170px,220px)_112px] sm:justify-end"
             }`}
           >
@@ -183,6 +222,8 @@ export function CrossPromotionPlacementSettings({
                   date={defaultDate}
                   selectedTime={commonTime}
                   onSelect={setAllTimes}
+                  occurrencesByChannel={occurrencesByChannel}
+                  loading={slotOccurrences.isPending}
                 />
               ) : null}
             </div>
@@ -319,6 +360,24 @@ export function CrossPromotionPlacementSettings({
                     }
                   />
                 </FormField>
+                {showAdSlots ? (
+                  <div className="col-span-full">
+                    <CommonAdSlotOptions
+                      channelIds={[channel.id]}
+                      date={value.dates?.[channel.id] ?? defaultDate}
+                      selectedTime={value.times[channel.id] ?? defaultTime}
+                      onSelect={(time) =>
+                        onChange({
+                          ...value,
+                          hasIndividualOverrides: true,
+                          times: { ...value.times, [channel.id]: time },
+                        })
+                      }
+                      occurrencesByChannel={occurrencesByChannel}
+                      loading={slotOccurrences.isPending}
+                    />
+                  </div>
+                ) : null}
               </div>
             );
           })}

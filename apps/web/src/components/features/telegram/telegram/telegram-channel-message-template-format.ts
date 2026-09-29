@@ -326,6 +326,10 @@ export function renderTelegramChannelMessageTemplate(
   );
   const priceMode = readTelegramChannelMessageTemplatePriceMode(template);
   const targetTotal = Number(options?.targetTotal);
+  const bundleDiscount = Math.min(
+    100,
+    Math.max(0, options?.bundleDiscountPercent ?? 10),
+  );
   const excludedProductNames = new Set(
     (options?.excludedProductNames || []).map((name) =>
       name.trim().toLocaleLowerCase(),
@@ -338,12 +342,22 @@ export function renderTelegramChannelMessageTemplate(
   );
   const sourceTotal = priceRows.reduce((total, row) => total + (Number.isFinite(row.amount) ? row.amount : 0), 0);
   const targetPrices = new Map<string, string>();
-  if (Number.isFinite(targetTotal) && targetTotal > 0 && sourceTotal > 0) {
-    let remaining = targetTotal;
+  // The entered package total is what the client pays after the package
+  // discount. The individual prices must therefore add up to its
+  // pre-discount equivalent, otherwise the offer promises a wrong total.
+  const targetPriceBeforeDiscount = options?.bundleOfferEnabled
+    ? targetTotal / (1 - bundleDiscount / 100)
+    : targetTotal;
+  if (
+    Number.isFinite(targetPriceBeforeDiscount) &&
+    targetPriceBeforeDiscount > 0 &&
+    sourceTotal > 0
+  ) {
+    let remaining = targetPriceBeforeDiscount;
     priceRows.forEach((row, index) => {
       const value = index === priceRows.length - 1
         ? remaining
-        : Math.round((targetTotal * row.amount / sourceTotal) * 100) / 100;
+        : Math.round((targetPriceBeforeDiscount * row.amount / sourceTotal) * 100) / 100;
       remaining = Math.round((remaining - value) * 100) / 100;
       targetPrices.set(`${row.channel.id}\u0000${row.product.name}`, String(value));
     });
@@ -434,10 +448,7 @@ export function renderTelegramChannelMessageTemplate(
       .map(replaceAudienceToken)
       .join("");
   if (!options?.bundleOfferEnabled) return appendOutro(messageBeforeBundle);
-  const discount = Math.min(
-    100,
-    Math.max(0, options.bundleDiscountPercent ?? 10),
-  );
+  const discount = bundleDiscount;
   const grouped = new Map<
     string,
     { name: string; currency: string; total: number; channelIds: Set<string> }
@@ -460,7 +471,9 @@ export function renderTelegramChannelMessageTemplate(
         total: 0,
         channelIds: new Set<string>(),
       };
-      row.total += amount;
+      row.total += Number(
+        targetPrices.get(`${channel.id}\u0000${product.name}`) || amount,
+      );
       row.channelIds.add(channel.id);
       grouped.set(key, row);
     }
@@ -469,11 +482,12 @@ export function renderTelegramChannelMessageTemplate(
     .filter((row) => row.channelIds.size === channels.length)
     .map((row) => {
       const override = Number(options.bundleBasePriceOverrides?.[row.name]);
-      const base =
-        Number.isFinite(override) && override > 0 ? override : row.total;
+      const base = Math.round(
+        (Number.isFinite(override) && override > 0 ? override : row.total) * 100,
+      ) / 100;
       const original = roundPrice(String(base), priceRounding);
       const discounted = roundPrice(
-        String(base * (1 - discount / 100)),
+        String(Math.round(base * (1 - discount / 100) * 100) / 100),
         priceRounding,
       );
       const name = productNameOverrides[row.name] || row.name;

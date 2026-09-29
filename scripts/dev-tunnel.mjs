@@ -262,6 +262,10 @@ async function startCloudflareTunnel() {
           ),
         );
       });
+      // Quick Tunnel URLs are printed before Cloudflare DNS has necessarily
+      // propagated. Do not hand such a dead URL to Telegram: its webhook
+      // would accept a prompt but never receive the forwarded post.
+      await assertTunnelReachable(url);
     } catch (error) {
       lastError = error;
       if (attempt < 3) {
@@ -285,6 +289,25 @@ async function startCloudflareTunnel() {
     `  ${withBotRuntime ? "Telegram calls this HTTPS URL; the localhost browser continues to call http://localhost:4000/api directly." : "The local web app continues to call http://localhost:4000/api."}`,
   );
   return url;
+}
+
+async function assertTunnelReachable(url) {
+  let lastError;
+  for (let attempt = 1; attempt <= 6; attempt += 1) {
+    try {
+      const response = await fetch(url, { signal: AbortSignal.timeout(5_000) });
+      // The gateway can legitimately return 502 until API/web have started.
+      // A Cloudflare 530 (or DNS failure) means the public tunnel is unusable.
+      if (response.status !== 530) return;
+      lastError = new Error('Cloudflare returned HTTP 530');
+    } catch (error) {
+      lastError = error;
+    }
+    await new Promise((resolve) => setTimeout(resolve, attempt * 1_000));
+  }
+  throw new Error(
+    `quick Tunnel URL is not publicly reachable: ${lastError instanceof Error ? lastError.message : 'unknown error'}`,
+  );
 }
 
 function startBotGateway() {

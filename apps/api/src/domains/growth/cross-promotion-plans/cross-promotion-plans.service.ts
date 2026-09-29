@@ -105,8 +105,6 @@ export class CrossPromotionPlansService {
       throw new BadRequestException('Select at least one publishing channel');
     if (!dto.targets.length)
       throw new BadRequestException('Select at least one promoted channel');
-    if (dto.kind === 'DIRECT_MUTUAL' && !partnerChannelIds.length)
-      throw new BadRequestException('Select at least one partner channel');
     if (dto.advertiserId) {
       const advertiser = await this.prisma.telegramAdvertiser.findFirst({
         where: { id: dto.advertiserId, workspaceId },
@@ -371,6 +369,45 @@ export class CrossPromotionPlansService {
       throw new BadRequestException('Cancelled promotions cannot be edited');
     }
     return json<ScheduledPlacement[]>(row.placementPostIds, []);
+  }
+
+  async resumeSchedulingContext(userId: string, id: string) {
+    const workspaceId = await this.workspace(userId);
+    const row = await this.prisma.crossPromotionPlan.findFirst({
+      where: { id, workspaceId },
+      select: {
+        id: true,
+        status: true,
+        kind: true,
+        advertiserId: true,
+        title: true,
+        publisherChannelIds: true,
+        partnerChannelIds: true,
+        targets: true,
+        publicationPost: true,
+        scheduledAt: true,
+        trackingEndsAt: true,
+        placementPostIds: true,
+      },
+    });
+    if (!row) throw new NotFoundException('Cross-promotion plan not found');
+    if (row.status !== 'DRAFT') {
+      throw new BadRequestException('Only an incomplete promotion can resume');
+    }
+    return {
+      dto: {
+        kind: row.kind,
+        advertiserId: row.advertiserId,
+        title: row.title,
+        publisherChannelIds: row.publisherChannelIds,
+        partnerChannelIds: row.partnerChannelIds,
+        targets: json<CrossPromotionTargetInput[]>(row.targets, []),
+        publicationPost: row.publicationPost as CreateCrossPromotionPlanDto['publicationPost'],
+        scheduledAt: row.scheduledAt.toISOString(),
+        trackingEndsAt: row.trackingEndsAt?.toISOString() ?? null,
+      } satisfies CreateCrossPromotionPlanDto,
+      placements: json<ScheduledPlacement[]>(row.placementPostIds, []),
+    };
   }
 
   /**

@@ -16,7 +16,6 @@ import {
   Button,
   EmptyState,
   Input,
-  MasonryGrid,
   MultiSelect,
 } from "@/components/ui/primitives";
 import {
@@ -315,7 +314,7 @@ export function CrmContactList({
       ) : null}
       {!showContactsSkeleton && query.data?.items.length ? (
         <div aria-label="Contacts">
-          <MasonryGrid>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
             {query.data.items.map((contact) => {
               const canEdit =
                 !contact.isUnassignedClient &&
@@ -339,7 +338,7 @@ export function CrmContactList({
                 />
               );
             })}
-          </MasonryGrid>
+          </div>
         </div>
       ) : null}
       {!showContactsSkeleton && query.data ? (

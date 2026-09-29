@@ -18,12 +18,15 @@ describe('TelegramManagedPostReconciliationService local delivery', () => {
         .mockRejectedValueOnce(new Error('bot unavailable'))
         .mockResolvedValueOnce({ status: 'PUBLISHED' }),
     };
+    const access = {
+      isProductionDeliveryRuntime: jest.fn().mockReturnValue(true),
+    };
     const service = new TelegramManagedPostReconciliationService(
       prisma as never,
       {} as never,
       {} as never,
       {} as never,
-      {} as never,
+      access as never,
       {} as never,
       {} as never,
       publication as never,
@@ -34,6 +37,31 @@ describe('TelegramManagedPostReconciliationService local delivery', () => {
       service.publishDueLocallyScheduledManagedPosts(),
     ).resolves.toEqual({ considered: 2, published: 1, failed: 1 });
     expect(publication.publishManagedPost).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not let a local runtime consume the production delivery queue', async () => {
+    const prisma = { telegramManagedPost: { findMany: jest.fn() } };
+    const access = {
+      isProductionDeliveryRuntime: jest.fn().mockReturnValue(false),
+    };
+    const publication = { publishManagedPost: jest.fn() };
+    const service = new TelegramManagedPostReconciliationService(
+      prisma as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      access as never,
+      {} as never,
+      {} as never,
+      publication as never,
+      {} as never,
+    );
+
+    await expect(
+      service.publishDueLocallyScheduledManagedPosts(),
+    ).resolves.toEqual({ considered: 0, published: 0, failed: 0 });
+    expect(prisma.telegramManagedPost.findMany).not.toHaveBeenCalled();
+    expect(publication.publishManagedPost).not.toHaveBeenCalled();
   });
 });
 

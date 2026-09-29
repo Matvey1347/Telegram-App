@@ -147,7 +147,7 @@ export function TelegramChannelMessageTemplateEditor({
     useState<TelegramMessageTemplatePriceRounding>(
       sourceForm.priceRounding ?? "NONE",
     );
-  const [priceCurrency, setPriceCurrency] = useState(sourceForm.priceCurrency ?? "UAH");
+  const [priceCurrency, setPriceCurrency] = useState(sourceForm.priceCurrency?.trim() || "UAH");
   const [targetTotal, setTargetTotal] = useState(sourceForm.targetTotal ?? "");
   const [productNameOverrides, setProductNameOverrides] = useState(
     sourceForm.productNameOverrides ?? {},
@@ -467,7 +467,7 @@ export function TelegramChannelMessageTemplateEditor({
           {activeSection === "prices" ? (
             <div className="grid gap-3 rounded-xl border border-neutral-800 bg-neutral-950/50 p-3 sm:grid-cols-2">
               <FormField label="Display currency">
-                <Input value={priceCurrency} maxLength={8} onChange={(event) => setPriceCurrency(event.target.value)} placeholder="грн" />
+                <Input value={priceCurrency} maxLength={8} onChange={(event) => setPriceCurrency(event.target.value.trimStart())} placeholder="грн" />
               </FormField>
               <FormField label="Target total (optional)">
                 <Input inputMode="decimal" value={targetTotal} onChange={(event) => setTargetTotal(event.target.value.replace(/[^\d.,]/g, "").replace(",", "."))} placeholder="1150" />

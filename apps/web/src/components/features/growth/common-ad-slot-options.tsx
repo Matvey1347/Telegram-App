@@ -83,11 +83,16 @@ export function CommonAdSlotOptions({
   date,
   selectedTime,
   onSelect,
+  occurrencesByChannel,
+  loading = false,
 }: {
   channelIds: string[];
   date: string;
   selectedTime: string;
   onSelect: (time: string) => void;
+  /** Lets a multi-channel editor reuse one availability query for its rows. */
+  occurrencesByChannel?: Record<string, TelegramPublicationSlotOccurrence[]>;
+  loading?: boolean;
 }) {
   const ids = useMemo(() => [...new Set(channelIds)].sort(), [channelIds]);
   const range = useMemo(() => dayRange(date), [date]);
@@ -95,21 +100,27 @@ export function CommonAdSlotOptions({
     queryKey: telegramPublicationScheduleKeys.occurrencesByChannels(ids, range),
     queryFn: () =>
       telegramPublicationSchedulesApi.occurrencesByChannels(ids, range),
-    enabled: ids.length > 0 && /^\d{4}-\d{2}-\d{2}$/.test(date),
+    enabled:
+      occurrencesByChannel === undefined && !loading &&
+      ids.length > 0 &&
+      /^\d{4}-\d{2}-\d{2}$/.test(date),
     staleTime: 30_000,
   });
   const options = useMemo(
-    () => commonAdSlotOptions(ids, date, query.data ?? {}),
-    [ids, date, query.data],
+    () => commonAdSlotOptions(ids, date, occurrencesByChannel ?? query.data ?? {}),
+    [ids, date, occurrencesByChannel, query.data],
+  );
+  const availableOptions = options.filter(
+    (option) => option.state === "AVAILABLE",
   );
   if (!ids.length || !date) return null;
   return (
     <div className="space-y-2">
       <p className="text-xs text-neutral-500">Advertising slots · {date}</p>
-      {query.isPending ? (
+      {loading || (occurrencesByChannel === undefined && query.isPending) ? (
         <p className="text-xs text-neutral-400">Loading slots…</p>
       ) : null}
-      {query.isError ? (
+      {occurrencesByChannel === undefined && query.isError ? (
         <p role="alert" className="text-xs text-rose-300">
           Could not load slots.{" "}
           <button
@@ -121,10 +132,10 @@ export function CommonAdSlotOptions({
           </button>
         </p>
       ) : null}
-      {query.isSuccess ? (
-        options.length ? (
+      {occurrencesByChannel !== undefined || query.isSuccess ? (
+        availableOptions.length ? (
           <div className="flex flex-wrap gap-2">
-            {options.map((option) => {
+            {availableOptions.map((option) => {
               const selected = option.time === selectedTime;
               const label = `${option.time} · Advertising / mutual promotion · ${option.detail}`;
               return (
@@ -134,25 +145,17 @@ export function CommonAdSlotOptions({
                   aria-label={label}
                   title={label}
                   aria-pressed={selected}
-                  disabled={option.state !== "AVAILABLE"}
                   onClick={() => onSelect(option.time)}
-                  className={`min-h-8 rounded-md border px-2 py-1 text-xs font-medium focus-visible:outline-2 focus-visible:outline-blue-500 ${selected ? "border-blue-500 bg-blue-950/70 text-white ring-1 ring-blue-500/60" : option.state === "AVAILABLE" ? "border-neutral-600 bg-neutral-900 text-neutral-200 hover:border-blue-700 hover:bg-blue-950/30" : option.state === "OCCUPIED" ? "cursor-not-allowed border-amber-900/70 bg-amber-950/20 text-amber-400/70" : "cursor-not-allowed border-neutral-900 bg-neutral-950/50 text-neutral-500 line-through"}`}
+                  className={`min-h-8 rounded-md border px-2 py-1 text-xs font-medium focus-visible:outline-2 focus-visible:outline-blue-500 ${selected ? "border-blue-500 bg-blue-950/70 text-white ring-1 ring-blue-500/60" : "border-neutral-600 bg-neutral-900 text-neutral-200 hover:border-blue-700 hover:bg-blue-950/30"}`}
                 >
-                  {option.time} · 📣{" "}
-                  {option.state === "OCCUPIED"
-                    ? "🔒"
-                    : option.state === "PAST"
-                      ? "⌛"
-                      : option.state === "UNAVAILABLE"
-                        ? "—"
-                        : ""}
+                  {option.time} · 📣
                 </button>
               );
             })}
           </div>
         ) : (
           <p className="text-xs text-neutral-500">
-            No advertising slots for this date.
+            No available advertising slots for this date.
           </p>
         )
       ) : null}

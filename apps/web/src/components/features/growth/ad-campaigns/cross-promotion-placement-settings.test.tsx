@@ -2,6 +2,10 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { CrossPromotionPlacementSettings } from "./cross-promotion-placement-settings";
 
+vi.mock("@tanstack/react-query", () => ({
+  useQuery: () => ({ data: {}, isPending: false }),
+}));
+
 describe("CrossPromotionPlacementSettings", () => {
   it("shows the Ad Sale view estimate for the selected channel format", () => {
     render(
@@ -122,7 +126,7 @@ describe("CrossPromotionPlacementSettings", () => {
     expect(within(defaults).getByText("Format for all")).toBeVisible();
     expect(within(defaults).getByText("Time for all")).toBeVisible();
     expect(defaults.className).toContain(
-      "grid-cols-[minmax(200px,1.05fr)_minmax(160px,.9fr)_minmax(220px,1fr)]",
+      "grid-cols-1 lg:grid-cols-[minmax(200px,1.05fr)_minmax(160px,.9fr)_minmax(220px,1fr)]",
     );
     expect(
       within(defaults)

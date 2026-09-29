@@ -465,16 +465,26 @@ export class CrossPromotionPlanReadService {
           const managedPost = managedPosts.find(
             (post) => post.id === managedPostId,
           );
+          const scheduledAt = publicationPost.publisherPlacements?.find(
+            (placement) => placement.telegramChannelId === channelId,
+          )?.scheduledAt;
+          // A scheduled post can retain old imported message metadata while
+          // Telegram has not published this placement yet. Never present that
+          // as an actual campaign reach before its configured publication time.
+          const publicationHasStarted =
+            !scheduledAt || Date.parse(scheduledAt) <= Date.now();
           const publishedRows = telegramPosts.filter(
             (post) =>
               post.telegramChannelId === channelId &&
               managedPost?.telegramMessageIds.includes(post.telegramMessageId),
           );
-          const resultPosts = publishedRows.length
+          const resultPosts = publicationHasStarted && publishedRows.length
             ? publishedRows
-            : recoveredTelegramPosts.filter(
+            : publicationHasStarted
+              ? recoveredTelegramPosts.filter(
                 (post) => post.telegramChannelId === channelId,
-              );
+              )
+              : [];
           return {
             telegramChannelId: channelId,
             title: channel?.title ?? 'Unavailable channel',

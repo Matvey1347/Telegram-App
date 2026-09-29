@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { DashboardModule } from '../../operations/dashboard/dashboard.module';
 import { ScheduledTasksModule } from '../../operations/scheduled-tasks/scheduled-tasks.module';
 import { TelegramBotApiClient } from '../../../telegram/shared/telegram-bot-api.client';
@@ -35,7 +35,7 @@ import { TelegramSystemBotPostImportService } from './telegram-system-bot-post-i
     TransactionsModule,
     AccountsModule,
     TransfersModule,
-    ScheduledTasksModule,
+    forwardRef(() => ScheduledTasksModule),
     TelegramChannelsModule,
     TelegramAdSalesModule,
   ],

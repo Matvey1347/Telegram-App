@@ -48,8 +48,8 @@ describe("CommonAdSlotOptions", () => {
       }),
     ).toBeEnabled();
     expect(
-      screen.getByRole("button", { name: /11:00.*Occupied/ }),
-    ).toBeDisabled();
+      screen.queryByRole("button", { name: /11:00.*Occupied/ }),
+    ).not.toBeInTheDocument();
     fireEvent.click(
       screen.getByRole("button", { name: /10:00.*Available in all channels/ }),
     );
@@ -80,7 +80,7 @@ describe("CommonAdSlotOptions", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     expect(
-      await screen.findByText("No advertising slots for this date."),
+      await screen.findByText("No available advertising slots for this date."),
     ).toBeVisible();
   });
 
@@ -102,7 +102,7 @@ describe("CommonAdSlotOptions", () => {
     );
     const { rerender } = render(content(["a"]));
     expect(
-      await screen.findByText("No advertising slots for this date."),
+      await screen.findByText("No available advertising slots for this date."),
     ).toBeVisible();
     rerender(content(["a", "b"]));
     expect(await screen.findByText("Loading slots…")).toBeVisible();

@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { ApplicationLogsModule } from '../application-logs/application-logs.module';
 import { CurrenciesModule } from '../../finance/currencies/currencies.module';
 import { PrismaModule } from '../../../prisma/prisma.module';
@@ -29,7 +29,7 @@ import { CrossPromotionPlansModule } from '../../growth/cross-promotion-plans/cr
     ApplicationLogsModule,
     OperationsNotificationsModule,
     MutualPromotionFoldersModule,
-    CrossPromotionPlansModule,
+    forwardRef(() => CrossPromotionPlansModule),
   ],
   controllers: [ScheduledTasksController],
   providers: [

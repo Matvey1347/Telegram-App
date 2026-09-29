@@ -278,7 +278,6 @@ export function CrossPromotionPlanModal({
       !publisherIds.length ||
       !targets.length ||
       !date ||
-      (kind === "DIRECT_MUTUAL" && !partnerDate) ||
       !time ||
       !placementSettingsReady ||
       targets.some(
@@ -286,7 +285,6 @@ export function CrossPromotionPlanModal({
           !target.inviteLinkId || (outboundMode === "PROMO" && !target.promoId),
       ) ||
       (outboundMode === "CUSTOM" && !hasOutboundPost) ||
-      (kind === "DIRECT_MUTUAL" && !partnerIds.length) ||
       !publicationPost
     ) {
       setError("Complete channels, promos, invite links, date and time.");
@@ -295,7 +293,7 @@ export function CrossPromotionPlanModal({
     try {
       setError("");
       const advertiserId =
-        kind === "DIRECT_MUTUAL"
+        kind === "DIRECT_MUTUAL" && partnerContact.trim()
           ? await ensureCrossPromotionPartnerClient({
               advertiserId: partnerAdvertiserId,
               contact: partnerContact,
@@ -309,6 +307,17 @@ export function CrossPromotionPlanModal({
       const partnerPlacements = partnerIds.map((channelId) =>
         placement(channelId, partnerSettings, partnerDate),
       );
+      // Keep the plan anchor aligned with the first post Telegram will really
+      // publish. Individual channel settings can override the form default;
+      // sending that stale default made a future per-channel schedule look
+      // historical to the reschedule endpoint.
+      const scheduledAt = new Date(
+        Math.min(
+          ...publisherPlacements.map((placement) =>
+            Date.parse(placement.scheduledAt),
+          ),
+        ),
+      ).toISOString();
       const trackingBoundaries = [
         ...publisherPlacements,
         ...partnerPlacements,
@@ -343,7 +352,7 @@ export function CrossPromotionPlanModal({
               : null;
           })(),
         },
-        scheduledAt: zonedDateTimeToUtc(date, time, timezone).toISOString(),
+        scheduledAt,
         trackingEndsAt: trackingBoundaries.length
           ? new Date(
               Math.max(...trackingBoundaries.map((item) => item.getTime())),

@@ -126,6 +126,12 @@ export function CrossPromotionPlansPage({
       setCopyFrom(null);
       setEditingPlan(null);
     },
+    // A stream can disconnect after the server has already persisted a
+    // partial plan. Refresh it so the user can continue that exact plan
+    // instead of submitting the browser draft as a duplicate.
+    onError: async () => {
+      await qc.invalidateQueries({ queryKey: crossPromotionPlanKeys.list(kind) });
+    },
   });
   const deleteMutation = useMutation({
     mutationFn: (id: string) => crossPromotionPlansApi.remove(id),
@@ -142,6 +148,40 @@ export function CrossPromotionPlansPage({
       ]);
     },
   });
+  const resumeMutation = useMutation({
+    mutationFn: async (plan: CrossPromotionPlan) => {
+      const operation = startOperation({
+        id: `cross-promotion-resume-${plan.id}`,
+        title: "Continuing mutual promotion",
+        message: "Checking saved publication progress…",
+        current: 0,
+        total: plan.publisherChannelIds.length + 2,
+      });
+      try {
+        const resumed = await crossPromotionPlansApi.resume(
+          plan.id,
+          (progress, current, total) =>
+            operation.update({ message: progress.message, current, total }),
+        );
+        operation.succeed({ message: "Promotion scheduling completed." });
+        return resumed;
+      } catch (error) {
+        operation.fail({
+          message:
+            error instanceof Error
+              ? error.message
+              : "Could not continue the promotion.",
+        });
+        throw error;
+      }
+    },
+    onSettled: async () => {
+      await qc.invalidateQueries({ queryKey: crossPromotionPlanKeys.list(kind) });
+    },
+  });
+  const sendToBotMutation = useMutation({
+    mutationFn: (plan: CrossPromotionPlan) => crossPromotionPlansApi.sendToBot(plan.id),
+  });
   const refreshInviteLinksMutation = useMutation({
     mutationFn: (id: string) => crossPromotionPlansApi.refreshInviteLinkData(id),
     onSuccess: async () => {
@@ -157,7 +197,10 @@ export function CrossPromotionPlansPage({
   const header = adsSectionHeader(
     kind === "DIRECT_MUTUAL" ? "mutual-promotion" : "own-promotion",
   );
-  const planGroups = groupPlansByPartner(plansQuery.data ?? []);
+  // A promotion is its own scheduling and tracking record. Do not collapse
+  // records that happen to share an advertiser or partner channels: doing so
+  // hides real placements behind an "Integrations" list.
+  const plans = plansQuery.data ?? [];
   return (
     <AppShell>
       <PageHeader
@@ -182,15 +225,14 @@ export function CrossPromotionPlansPage({
           <LoadingState />
         ) : plansQuery.isError ? (
           <ErrorState text="Could not load promotion placements." />
-        ) : !planGroups.length ? (
+        ) : !plans.length ? (
           <EmptyState text="No placements yet." />
         ) : (
           <MasonryGrid className="xl:grid-cols-2">
-            {planGroups.map(({ plan, integrations }) => (
+            {plans.map((plan) => (
               <CrossPromotionPlanCard
                 key={plan.id}
                 plan={plan}
-                integrations={integrations}
                 onCopy={(source) => {
                   setEditingPlan(null);
                   setCopyFrom(source);
@@ -202,6 +244,8 @@ export function CrossPromotionPlansPage({
                   setOpen(true);
                 }}
                 onDelete={() => setDeletePlan(plan)}
+                onResume={(source) => resumeMutation.mutate(source)}
+                onSendToBot={(source) => sendToBotMutation.mutate(source)}
                 onOpenPromo={setPreviewPromoId}
                 onRefreshInviteLinks={(source) =>
                   refreshInviteLinksMutation.mutate(source.id)
@@ -263,25 +307,6 @@ export function CrossPromotionPlansPage({
       />
     </AppShell>
   );
-}
-
-function groupPlansByPartner(plans: CrossPromotionPlan[]) {
-  const groups = new Map<string, CrossPromotionPlan[]>();
-  for (const plan of plans) {
-    const key = plan.advertiserId
-      ? `advertiser:${plan.advertiserId}`
-      : `partner-channels:${[...plan.partnerChannelIds].sort().join(",") || plan.id}`;
-    const group = groups.get(key) ?? [];
-    group.push(plan);
-    groups.set(key, group);
-  }
-  return [...groups.values()].map((integrations) => {
-    const ordered = [...integrations].sort(
-      (left, right) =>
-        Date.parse(right.scheduledAt) - Date.parse(left.scheduledAt),
-    );
-    return { plan: ordered[0], integrations: ordered };
-  });
 }
 
 export function MutualPromotionModeTabs({

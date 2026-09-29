@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarClock, Copy, Eye, Pencil, RefreshCw, Trash2, UserMinus, UserPlus, type LucideIcon } from "lucide-react";
+import { CalendarClock, Copy, Eye, Pencil, RefreshCw, Send, Trash2, UserMinus, UserPlus, type LucideIcon } from "lucide-react";
 import type { CrossPromotionPlan } from "@telegram-system/shared";
 import { IconAvatar } from "@/components/icons/icon-avatar";
 import { TelegramChannelAvatarList } from "@/components/features/telegram/telegram/telegram-channel-avatar-list";
@@ -14,19 +14,21 @@ import { MutualPromotionFolderStatusBadge } from "./mutual-promotion/mutual-prom
 
 export function CrossPromotionPlanCard({
   plan,
-  integrations,
   onCopy,
   onEdit,
   onDelete,
+  onResume,
+  onSendToBot,
   onOpenPromo,
   onRefreshInviteLinks,
   refreshingInviteLinks = false,
 }: {
   plan: CrossPromotionPlan;
-  integrations?: CrossPromotionPlan[];
   onCopy: (plan: CrossPromotionPlan) => void;
   onEdit: (plan: CrossPromotionPlan) => void;
   onDelete: () => void;
+  onResume?: (plan: CrossPromotionPlan) => void;
+  onSendToBot?: (plan: CrossPromotionPlan) => void;
   onOpenPromo?: (promoId: string) => void;
   onRefreshInviteLinks?: (plan: CrossPromotionPlan) => void;
   refreshingInviteLinks?: boolean;
@@ -43,7 +45,6 @@ export function CrossPromotionPlanCard({
   }));
   const canEdit = plan.status !== "CANCELLED";
   const advertiser = advertiserPresentation(plan.advertiser);
-  const orderedIntegrations = integrations?.length ? integrations : [plan];
   const placementTimes = plan.kind === "OWN_CHANNELS"
     ? (plan.publicationPost.publisherPlacements ?? []).map((placement) => placement.scheduledAt)
     : [];
@@ -98,6 +99,20 @@ export function CrossPromotionPlanCard({
                   label="Edit promotion"
                   icon={<Pencil size={16} />}
                   onClick={() => onEdit(plan)}
+                />
+              ) : null}
+              {plan.status === "DRAFT" && onResume ? (
+                <CardMenuAction
+                  label="Continue scheduling"
+                  icon={<RefreshCw size={16} />}
+                  onClick={() => onResume(plan)}
+                />
+              ) : null}
+              {onSendToBot ? (
+                <CardMenuAction
+                  label="Send schedule to bot"
+                  icon={<Send size={16} />}
+                  onClick={() => onSendToBot(plan)}
                 />
               ) : null}
               {onRefreshInviteLinks ? (
@@ -170,7 +185,7 @@ export function CrossPromotionPlanCard({
                 tone="text-rose-300"
               />
               <Stat
-                label="Views"
+                label="Actual views"
                 icon={Eye}
                 value={
                   publisherViews == null ? "—" : publisherViews.toLocaleString()
@@ -187,40 +202,6 @@ export function CrossPromotionPlanCard({
         ))}
       </div>
 
-      {orderedIntegrations.length > 1 ? (
-        <section className="mx-4 mt-3 rounded-lg border border-neutral-800 bg-black/20 p-2.5">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">
-            Integrations · {orderedIntegrations.length}
-          </p>
-          <div className="mt-2 space-y-1.5">
-            {orderedIntegrations.map((integration) => (
-              <button
-                key={integration.id}
-                type="button"
-                onClick={() => onEdit(integration)}
-                className="flex w-full items-center justify-between gap-2 rounded-md px-1.5 py-1 text-left text-xs hover:bg-neutral-800/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-              >
-                <span className="truncate text-neutral-200">
-                  {formatDateTime(integration.scheduledAt)} ·{" "}
-                  {integration.targetResults
-                    .map((target) => target.title)
-                    .join(", ")}
-                </span>
-                <span className="shrink-0 tabular-nums text-emerald-300">
-                  +
-                  {integration.targetResults
-                    .reduce(
-                      (total, target) =>
-                        total + target.joinedCount + target.requestedCount,
-                      0,
-                    )
-                    .toLocaleString()}
-                </span>
-              </button>
-            ))}
-          </div>
-        </section>
-      ) : null}
     </article>
   );
 }

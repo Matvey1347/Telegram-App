@@ -371,6 +371,22 @@ describe("renderTelegramChannelMessageTemplate", () => {
     expect(internalRendered).toContain(
       "• Без видалення у всіх каналах: ~~300 UAH~~ → **270 UAH**",
     );
+
+    const targetAfterDiscount = renderTelegramChannelMessageTemplate(
+      DEFAULT_CHANNEL_MESSAGE_TEMPLATE,
+      [first, second],
+      {
+        targetTotal: "700",
+        bundleOfferEnabled: true,
+        bundleDiscountPercent: 10,
+      },
+    );
+    expect(targetAfterDiscount).toContain(
+      "• 1/24 у всіх каналах: ~~316.17 UAH~~ → **284.55 UAH**",
+    );
+    expect(targetAfterDiscount).toContain(
+      "• No auto-delete у всіх каналах: ~~461.61 UAH~~ → **415.45 UAH**",
+    );
   });
 
   it("puts a single format price beside each channel and lets copy control spacing", () => {

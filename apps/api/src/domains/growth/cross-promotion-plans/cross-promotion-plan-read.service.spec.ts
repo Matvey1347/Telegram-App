@@ -64,6 +64,70 @@ describe('CrossPromotionPlanReadService', () => {
     expect((await service.shape('workspace-1', plan)).status).toBe('SCHEDULED');
   });
 
+  it('does not show stale message views before a future placement starts', async () => {
+    const service = new CrossPromotionPlanReadService({
+      telegramChannel: { findMany: jest.fn().mockResolvedValue([]) },
+      promo: { findMany: jest.fn().mockResolvedValue([]) },
+      telegramInviteLink: { findMany: jest.fn().mockResolvedValue([]) },
+      telegramInviteLinkSnapshot: { findMany: jest.fn().mockResolvedValue([]) },
+      telegramChannelAudienceSnapshot: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+      telegramManagedPost: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'post-1',
+            telegramChannelId: 'channel-1',
+            telegramMessageIds: ['42'],
+            telegramRemoteStatus: 'PUBLISHED',
+          },
+        ]),
+      },
+      telegramPost: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            telegramChannelId: 'channel-1',
+            telegramMessageId: '42',
+            viewsCount: 3943,
+            reactionsCount: 0,
+          },
+        ]),
+      },
+    } as never);
+
+    const result = await service.shape('workspace-1', {
+      id: 'plan-1',
+      workspaceId: 'workspace-1',
+      createdByUserId: 'user-1',
+      kind: 'DIRECT_MUTUAL',
+      title: 'Future placement',
+      advertiserId: null,
+      status: 'SCHEDULED',
+      publisherChannelIds: ['channel-1'],
+      partnerChannelIds: [],
+      targets: [],
+      publicationPost: {
+        title: '', text: '', imageUrls: [], buttonRows: [],
+        publisherPlacements: [{
+          telegramChannelId: 'channel-1',
+          scheduledAt: '2099-01-01T10:00:00.000Z',
+        }],
+      },
+      scheduledAt: new Date('2099-01-01T10:00:00.000Z'),
+      trackingEndsAt: null,
+      nextDueAt: null,
+      baselineTargetCounters: [],
+      baselinePublisherSubscribers: [],
+      placementPostIds: [
+        { telegramChannelId: 'channel-1', managedPostId: 'post-1' },
+      ],
+      createdAt: new Date('2026-09-28T10:00:00.000Z'),
+      updatedAt: new Date('2026-09-28T10:00:00.000Z'),
+    } as never);
+
+    expect(result.publisherResults[0].postViews).toBeNull();
+  });
+
   it('uses workspace-scoped tracking-end counters for totals and placement deltas', async () => {
     const trackingEndsAt = new Date('2026-09-17T12:00:00.000Z');
     const telegramInviteLinkSnapshot = {

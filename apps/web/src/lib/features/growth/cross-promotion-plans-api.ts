@@ -44,6 +44,21 @@ export const crossPromotionPlansApi = {
       payload,
       onProgress,
     ),
+  resume: (
+    id: string,
+    onProgress: (
+      item: CrossPromotionSchedulingProgress,
+      current: number,
+      total: number,
+    ) => void,
+  ) =>
+    streamProgressAction<CrossPromotionPlan, CrossPromotionSchedulingProgress>(
+      `${basePath}/${id}/resume-stream`,
+      undefined,
+      onProgress,
+    ),
+  sendToBot: async (id: string) =>
+    (await api.post<{ status: "SENT" | "NOT_CONNECTED" }>(`${basePath}/${id}/send-to-bot`)).data,
   updateCompleted: async (
     id: string,
     payload: CreateCrossPromotionPlanPayload,

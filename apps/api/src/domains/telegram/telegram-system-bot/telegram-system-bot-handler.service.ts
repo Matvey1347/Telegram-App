@@ -240,10 +240,19 @@ export class TelegramSystemBotHandlerService {
   }
 
   async sendTaskNotification(input: { chatId: string; text: string }) {
+    return this.sendSystemMessage({ chatId: input.chatId, text: `🔔 ${input.text}` });
+  }
+
+  async sendSystemMessage(input: {
+    chatId: string;
+    text: string;
+    parseMode?: string;
+  }) {
     if (!this.config.token) return { status: 'NOT_CONFIGURED' as const };
     await this.api.sendMessage(this.config.token, {
       chat_id: input.chatId,
-      text: `🔔 ${input.text}`,
+      text: input.text,
+      ...(input.parseMode ? { parse_mode: input.parseMode } : {}),
     });
     return { status: 'SENT' as const };
   }

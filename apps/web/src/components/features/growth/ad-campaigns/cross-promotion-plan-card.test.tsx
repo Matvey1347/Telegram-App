@@ -134,7 +134,7 @@ describe("CrossPromotionPlanCard", () => {
         name: "Open scheduled post for My Publisher",
       }),
     ).not.toBeInTheDocument();
-    expect(screen.getByRole("img", { name: "Views: 120" })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Actual views: 120" })).toBeInTheDocument();
     expect(screen.getByRole("img", { name: "Audience decline: −2" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "My channels: 1" }));

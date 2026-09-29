@@ -39,6 +39,7 @@ export function CrmClientField(props: {
     props.selectedAdvertiserId,
   );
   const [advertisers, setAdvertisers] = useState<TelegramAdvertiser[]>([]);
+  const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
 
   if (props.selectedAdvertiserId !== previousSelectedId) {
@@ -52,9 +53,19 @@ export function CrmClientField(props: {
     let active = true;
     const timeout = window.setTimeout(() => {
       setLoading(true);
-      void onSearchAdvertisers("")
+      void onSearchAdvertisers(search)
         .then((items) => {
-          if (active) setAdvertisers(items);
+          if (!active) return;
+          // Keep the selected option available while the next server search
+          // is loading or when its result no longer contains that client.
+          setAdvertisers((current) => {
+            const selected = current.find(
+              (item) => item.id === props.selectedAdvertiserId,
+            );
+            return selected && !items.some((item) => item.id === selected.id)
+              ? [selected, ...items]
+              : items;
+          });
         })
         .catch(() => {
           if (active) setAdvertisers([]);
@@ -67,7 +78,7 @@ export function CrmClientField(props: {
       active = false;
       window.clearTimeout(timeout);
     };
-  }, [mode, onSearchAdvertisers]);
+  }, [mode, onSearchAdvertisers, props.selectedAdvertiserId, search]);
 
   const invalidUsername =
     mode === "new" &&
@@ -111,7 +122,6 @@ export function CrmClientField(props: {
           <CustomSelect
             value={props.selectedAdvertiserId ?? ""}
             placeholder={loading ? "Loading clients..." : "Select client"}
-            disabled={loading}
             options={advertisers.map((advertiser) => {
               const username = advertiser.telegramUsername?.replace(/^@+/, "");
               return {
@@ -128,6 +138,10 @@ export function CrmClientField(props: {
                 iconFallback: advertiser.displayName,
               };
             })}
+            loading={loading}
+            loadingLabel="Searching clients…"
+            onSearchChange={setSearch}
+            searchPlaceholder="Search all clients"
             onChange={(id) => {
               const advertiser = advertisers.find((item) => item.id === id);
               if (!advertiser) return;

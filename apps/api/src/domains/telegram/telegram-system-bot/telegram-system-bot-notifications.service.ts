@@ -15,6 +15,28 @@ export class TelegramSystemBotNotificationsService {
     private readonly handler: TelegramSystemBotHandlerService,
   ) {}
 
+  async sendToWorkspaceUser(input: {
+    workspaceId: string;
+    userId: string;
+    text: string;
+    parseMode?: string;
+  }) {
+    const connection = await this.prisma.telegramSystemBotConnection.findFirst({
+      where: {
+        userId: input.userId,
+        enabled: true,
+        user: { memberships: { some: { workspaceId: input.workspaceId } } },
+      },
+      select: { telegramChatId: true },
+    });
+    if (!connection) return { status: 'NOT_CONNECTED' as const };
+    return this.handler.sendSystemMessage({
+      chatId: connection.telegramChatId,
+      text: input.text,
+      parseMode: input.parseMode,
+    });
+  }
+
   async notify(input: {
     taskKey: string;
     taskName: string;

@@ -75,7 +75,7 @@ describe("CrossPromotionPartnerSide", () => {
     );
     expect(onDefaultDateChange).toHaveBeenCalledWith("2026-09-20");
     expect(screen.getByText("Client")).toBeVisible();
-    expect(screen.getByText("Partner channels")).toBeVisible();
+    expect(screen.getByText("Partner channels (optional)")).toBeVisible();
 
     fireEvent.click(screen.getByRole("button", { name: "Custom post" }));
     expect(onOutboundModeChange).toHaveBeenCalledWith("CUSTOM");

@@ -186,9 +186,23 @@ export class TelegramManagedPostPublisherService {
       );
     }
     if (scheduleAt && source.sourceType !== TelegramSourceType.MTPROTO) {
-      // Local delivery must be executable by this runtime. Otherwise a post
-      // would look scheduled until the due worker discovers the missing bot.
-      await this.telegramChannelAccessService.botTokenForSource(workspaceId, source.sourceId);
+      // A scheduled Bot API delivery must be executable by the production
+      // runtime. Otherwise a post would look scheduled until the due worker
+      // discovers the missing bot.
+      // A LOCAL dashboard may create a production-owned scheduled delivery,
+      // but it must not read the production token merely to do so. The
+      // production worker validates and uses that token when the post is due.
+      if (this.telegramChannelAccessService.isProductionDeliveryRuntime()) {
+        await this.telegramChannelAccessService.botTokenForSource(
+          workspaceId,
+          source.sourceId,
+        );
+      } else if (source.sourceId !== TELEGRAM_PRODUCTION_SYSTEM_BOT_SOURCE_ID) {
+        throw telegramPostsBadRequest(
+          'TELEGRAM_POST_PUBLISH_SOURCE_UNAVAILABLE',
+          'Scheduled Bot API delivery must use the production bot',
+        );
+      }
       const scheduled = await this.prisma.telegramManagedPost.update({
         where: { id: post.id },
         data: {

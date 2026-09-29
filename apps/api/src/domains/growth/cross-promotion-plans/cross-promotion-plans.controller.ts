@@ -23,6 +23,7 @@ import {
 } from './dto';
 import { StreamResponseService } from '../../../common/stream/stream-response.service';
 import { CrossPromotionPlanSchedulingService } from './cross-promotion-plan-scheduling.service';
+import { CrossPromotionPlanBotNotificationService } from './cross-promotion-plan-bot-notification.service';
 
 @UseGuards(JwtAuthGuard)
 @Controller('cross-promotion-plans')
@@ -31,6 +32,7 @@ export class CrossPromotionPlansController {
     private readonly service: CrossPromotionPlansService,
     private readonly scheduling: CrossPromotionPlanSchedulingService,
     private readonly streamResponse: StreamResponseService,
+    private readonly botNotification: CrossPromotionPlanBotNotificationService,
   ) {}
 
   @Get()
@@ -99,5 +101,24 @@ export class CrossPromotionPlansController {
           signal,
         ),
     });
+  }
+
+  @Post(':id/resume-stream')
+  resume(
+    @CurrentUser() user: JwtUser,
+    @Param('id') id: string,
+    @Res() res: Response,
+  ) {
+    return this.streamResponse.stream(res, {
+      eventPrefix: 'cross_promotion_plan.resume_stream',
+      persistLifecycleLogs: false,
+      action: (onProgress, signal) =>
+        this.scheduling.resume(user.sub, id, onProgress, signal),
+    });
+  }
+
+  @Post(':id/send-to-bot')
+  sendToBot(@CurrentUser() user: JwtUser, @Param('id') id: string) {
+    return this.botNotification.send(user.sub, id);
   }
 }

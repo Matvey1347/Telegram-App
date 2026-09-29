@@ -62,6 +62,16 @@ function setup() {
       },
     ]),
     markRescheduling: jest.fn().mockResolvedValue(undefined),
+    resumeSchedulingContext: jest.fn().mockResolvedValue({
+      dto: payload,
+      placements: [
+        {
+          telegramChannelId: 'channel-1',
+          managedPostId: 'post-1',
+          postGroupId: 'group-1',
+        },
+      ],
+    }),
     replaceScheduled: jest
       .fn()
       .mockResolvedValue({ ...plan, status: 'SCHEDULED' }),
@@ -106,7 +116,7 @@ describe('CrossPromotionPlanSchedulingService', () => {
     jest.useRealTimers();
   });
 
-  it('streams channel progress and persists a plan only after every post is scheduled', async () => {
+  it('persists a plan before scheduling and checkpoints every scheduled channel', async () => {
     const { service, plans, telegram, systemPostGroups } = setup();
     const progress = jest.fn();
 
@@ -151,8 +161,8 @@ describe('CrossPromotionPlanSchedulingService', () => {
       },
       { groupId: 'group-1' },
     );
-    expect(telegram.createManagedPost.mock.invocationCallOrder[1]).toBeLessThan(
-      plans.create.mock.invocationCallOrder[0],
+    expect(plans.create.mock.invocationCallOrder[0]).toBeLessThan(
+      telegram.createManagedPost.mock.invocationCallOrder[0],
     );
     expect(plans.savePlacements).toHaveBeenCalledWith('user-1', 'plan-1', {
       placements: [
@@ -176,7 +186,7 @@ describe('CrossPromotionPlanSchedulingService', () => {
     );
   });
 
-  it('rolls back created posts and never creates a plan when Telegram scheduling fails', async () => {
+  it('keeps a resumable plan when Telegram scheduling fails', async () => {
     const { service, plans, telegram, systemPostGroups } = setup();
     telegram.scheduleManagedPost.mockRejectedValueOnce(
       new Error('Telegram rejected scheduling'),
@@ -191,11 +201,15 @@ describe('CrossPromotionPlanSchedulingService', () => {
       ),
     ).rejects.toThrow('Telegram rejected scheduling');
 
-    expect(plans.create).not.toHaveBeenCalled();
-    expect(telegram.deleteManagedPost).toHaveBeenCalledWith(
+    expect(plans.create).toHaveBeenCalled();
+    expect(telegram.deleteManagedPost).not.toHaveBeenCalled();
+    expect(plans.savePlacements).toHaveBeenLastCalledWith(
       'user-1',
-      'channel-1',
-      'post-1',
+      'plan-1',
+      expect.objectContaining({
+        placements: [],
+        lastError: 'Telegram rejected scheduling',
+      }),
     );
     expect(systemPostGroups.ensureMutualPromotionGroup).toHaveBeenCalledTimes(
       1,
@@ -214,13 +228,53 @@ describe('CrossPromotionPlanSchedulingService', () => {
         jest.fn(),
         new AbortController().signal,
       ),
-    ).rejects.toThrow('Historical promotions must be updated');
+    ).rejects.toThrow('Every publishing post must be scheduled in the future');
 
     expect(plans.markRescheduling).not.toHaveBeenCalled();
     expect(telegram.deleteManagedPost).not.toHaveBeenCalled();
   });
 
-  it('removes the plan and scheduled posts when final persistence fails', async () => {
+  it('uses each publisher placement time when replacing a plan', async () => {
+    const { service, plans, telegram } = setup();
+    jest.setSystemTime(new Date('2026-09-18T08:00:00.000Z'));
+    const editedPayload = {
+      ...payload,
+      // This is the old default value retained for tracking/display. The
+      // actual posts below are explicitly scheduled for a future time.
+      scheduledAt: '2026-09-15T08:00:00.000Z',
+      publicationPost: {
+        ...payload.publicationPost,
+        publisherPlacements: payload.publicationPost.publisherPlacements.map(
+          (placement, index) => ({
+            ...placement,
+            scheduledAt: `2026-09-20T0${8 + index}:00:00.000Z`,
+          }),
+        ),
+      },
+    };
+
+    await service.replaceAndSchedule(
+      'user-1',
+      'plan-1',
+      editedPayload,
+      jest.fn(),
+      new AbortController().signal,
+    );
+
+    expect(plans.markRescheduling).toHaveBeenCalledWith(
+      'user-1',
+      'plan-1',
+      'Rescheduling in progress',
+    );
+    expect(telegram.scheduleManagedPost).toHaveBeenCalledWith(
+      'user-1',
+      'channel-1',
+      'post-1',
+      { scheduledAt: '2026-09-20T08:00:00.000Z' },
+    );
+  });
+
+  it('keeps the plan for retry when a progress checkpoint cannot be saved', async () => {
     const { service, plans, telegram } = setup();
     plans.savePlacements.mockRejectedValueOnce(new Error('Persistence failed'));
 
@@ -233,8 +287,39 @@ describe('CrossPromotionPlanSchedulingService', () => {
       ),
     ).rejects.toThrow('Persistence failed');
 
-    expect(telegram.deleteManagedPost).toHaveBeenCalledTimes(2);
-    expect(plans.remove).toHaveBeenCalledWith('user-1', 'plan-1');
+    expect(telegram.deleteManagedPost).not.toHaveBeenCalled();
+    expect(plans.remove).not.toHaveBeenCalled();
+  });
+
+  it('resumes only channels without a saved managed post', async () => {
+    const { service, plans, telegram, systemPostGroups } = setup();
+    telegram.createManagedPost.mockReset().mockResolvedValue({ id: 'post-2' });
+    systemPostGroups.ensureMutualPromotionGroup
+      .mockReset()
+      .mockResolvedValue({ id: 'group-2' });
+
+    await service.resume(
+      'user-1',
+      'plan-1',
+      jest.fn(),
+      new AbortController().signal,
+    );
+
+    expect(telegram.createManagedPost).toHaveBeenCalledTimes(1);
+    expect(telegram.createManagedPost).toHaveBeenCalledWith(
+      'user-1',
+      'channel-2',
+      expect.any(Object),
+      { groupId: 'group-2' },
+    );
+    expect(telegram.scheduleManagedPost).toHaveBeenCalledTimes(1);
+    expect(plans.savePlacements).toHaveBeenLastCalledWith('user-1', 'plan-1', {
+      placements: [
+        expect.objectContaining({ telegramChannelId: 'channel-1' }),
+        expect.objectContaining({ telegramChannelId: 'channel-2' }),
+      ],
+      lastError: null,
+    });
   });
 
   it('cancels the old scheduled post and reuses permanent mutual-promotion groups', async () => {
@@ -293,7 +378,7 @@ describe('CrossPromotionPlanSchedulingService', () => {
       ),
     ).rejects.toThrow('Telegram rejected edited schedule');
 
-    expect(telegram.deleteManagedPost).toHaveBeenCalledWith(
+    expect(telegram.deleteManagedPost).not.toHaveBeenCalledWith(
       'user-1',
       'channel-1',
       'post-1',

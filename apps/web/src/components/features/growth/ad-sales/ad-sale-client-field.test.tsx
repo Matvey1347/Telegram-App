@@ -38,7 +38,7 @@ describe("AdSaleClientField", () => {
     expect(canonicalTelegramUsername("bad name")).toBe("");
   });
 
-  it("loads one bounded client list and renders avatar-backed options", async () => {
+  it("loads client suggestions and renders avatar-backed options", async () => {
     const search = vi.fn().mockResolvedValue([
       {
         id: "client-1",
@@ -76,7 +76,7 @@ describe("AdSaleClientField", () => {
     );
   });
 
-  it("uses the select's built-in search when the client list is large", async () => {
+  it("searches the whole CRM instead of filtering only the first page", async () => {
     vi.useFakeTimers();
     const search = vi.fn().mockResolvedValue(
       Array.from({ length: 6 }, (_, index) => ({
@@ -104,11 +104,12 @@ describe("AdSaleClientField", () => {
     expect(search).toHaveBeenCalledWith("");
 
     fireEvent.click(screen.getByRole("button", { name: "Select client" }));
-    const selectSearch = screen.getByPlaceholderText("Search…");
+    const selectSearch = screen.getByPlaceholderText("Search all clients");
     fireEvent.change(selectSearch, { target: { value: "Client 6" } });
-    expect(screen.getByRole("button", { name: /Client 6/ })).toBeVisible();
-    expect(screen.queryByRole("button", { name: /Client 1/ })).toBeNull();
-    expect(search).toHaveBeenCalledOnce();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(250);
+    });
+    expect(search).toHaveBeenLastCalledWith("Client 6");
     vi.useRealTimers();
   });
 

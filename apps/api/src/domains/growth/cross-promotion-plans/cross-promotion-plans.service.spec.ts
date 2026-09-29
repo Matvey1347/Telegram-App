@@ -360,11 +360,15 @@ describe('CrossPromotionPlansService', () => {
     );
   });
 
-  it('requires a partner channel for direct mutual promotion', async () => {
-    const { service } = setup();
+  it('allows scheduling my side before a direct mutual partner is known', async () => {
+    const { service, prisma } = setup();
+    prisma.telegramChannel.findMany.mockResolvedValueOnce([
+      { id: 'publisher-1', adminLinks: [{ id: 'admin-1' }] },
+      { id: 'target-1', adminLinks: [] },
+    ]);
     await expect(
       service.create('user-1', { ...payload, partnerChannelIds: [] }),
-    ).rejects.toBeInstanceOf(BadRequestException);
+    ).resolves.toEqual(expect.objectContaining({ id: 'plan-1' }));
   });
 
   it('links the mutual promotion to a workspace CRM client', async () => {

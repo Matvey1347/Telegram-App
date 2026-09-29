@@ -16,8 +16,24 @@ type Progress = (
 type ScheduledPost = {
   telegramChannelId: string;
   managedPostId: string;
-  postGroupId: string;
+  postGroupId?: string | null;
 };
+
+/**
+ * The plan-level timestamp is a display/tracking anchor.  Telegram posts are
+ * actually scheduled from the per-publisher placements, which may override
+ * that default date and time.  Do not reject a valid future placement merely
+ * because an old default timestamp was left on the plan.
+ */
+function publisherScheduleTimes(dto: CreateCrossPromotionPlanDto) {
+  const placements = dto.publicationPost.publisherPlacements ?? [];
+  return dto.publisherChannelIds.map((channelId) => {
+    const placement = placements.find(
+      (item) => item.telegramChannelId === channelId,
+    );
+    return Date.parse(placement?.scheduledAt ?? dto.scheduledAt);
+  });
+}
 
 @Injectable()
 export class CrossPromotionPlanSchedulingService {
@@ -53,7 +69,7 @@ export class CrossPromotionPlanSchedulingService {
   ) {
     const total = dto.publisherChannelIds.length + 2;
     const createdPosts: ScheduledPost[] = [];
-    let createdPlanId: string | null = null;
+    let planId: string | null = null;
     onProgress(
       { phase: 'VALIDATING', message: 'Validating promotion placement' },
       0,
@@ -61,6 +77,12 @@ export class CrossPromotionPlanSchedulingService {
     );
 
     try {
+      // Persist the intent before the first Telegram call. A disconnected
+      // browser or a transient Telegram error must leave a resumable job,
+      // never an untracked subset of posts.
+      await this.plans.validateForScheduling(userId, dto);
+      const plan = await this.plans.create(userId, dto);
+      planId = plan.id;
       await this.schedulePosts(
         userId,
         dto,
@@ -68,6 +90,13 @@ export class CrossPromotionPlanSchedulingService {
         onProgress,
         total,
         signal,
+        true,
+        async () => {
+          await this.plans.savePlacements(userId, plan.id, {
+            placements: createdPosts,
+            lastError: null,
+          });
+        },
       );
 
       signal.throwIfAborted();
@@ -76,8 +105,6 @@ export class CrossPromotionPlanSchedulingService {
         total - 1,
         total,
       );
-      const plan = await this.plans.create(userId, dto);
-      createdPlanId = plan.id;
       const saved = await this.plans.savePlacements(userId, plan.id, {
         placements: createdPosts,
         lastError: null,
@@ -89,10 +116,67 @@ export class CrossPromotionPlanSchedulingService {
       );
       return saved;
     } catch (error) {
-      await this.rollback(userId, createdPosts, onProgress, total);
-      if (createdPlanId) {
-        await this.plans.remove(userId, createdPlanId).catch(() => undefined);
+      if (planId) {
+        await this.plans
+          .savePlacements(userId, planId, {
+            placements: createdPosts,
+            lastError:
+              error instanceof Error ? error.message : 'Scheduling failed',
+          })
+          .catch(() => undefined);
       }
+      throw error;
+    }
+  }
+
+  async resume(
+    userId: string,
+    id: string,
+    onProgress: Progress,
+    signal: AbortSignal,
+  ) {
+    const context = await this.plans.resumeSchedulingContext(userId, id);
+    const total = context.dto.publisherChannelIds.length + 2;
+    const posts = [...context.placements];
+    onProgress(
+      { phase: 'VALIDATING', message: 'Resuming promotion placement' },
+      posts.length,
+      total,
+    );
+    try {
+      await this.schedulePosts(
+        userId,
+        context.dto,
+        posts,
+        onProgress,
+        total,
+        signal,
+        true,
+        async () => {
+          await this.plans.savePlacements(userId, id, {
+            placements: posts,
+            lastError: null,
+          });
+        },
+      );
+      const saved = await this.plans.savePlacements(userId, id, {
+        placements: posts,
+        lastError: null,
+      });
+      onProgress(
+        { phase: 'SAVING', message: 'Promotion scheduled', success: true },
+        total,
+        total,
+      );
+      return saved;
+    } catch (error) {
+      await this.plans
+        .savePlacements(userId, id, {
+          placements: posts,
+          lastError:
+            error instanceof Error ? error.message : 'Scheduling failed',
+        })
+        .catch(() => undefined);
       throw error;
     }
   }
@@ -106,9 +190,13 @@ export class CrossPromotionPlanSchedulingService {
   ) {
     // A past placement must never be moved to DRAFT by attempting to recreate
     // its already-published posts. Use the metadata PATCH flow instead.
-    if (new Date(dto.scheduledAt).getTime() <= Date.now()) {
+    if (
+      publisherScheduleTimes(dto).some(
+        (time) => !Number.isFinite(time) || time <= Date.now(),
+      )
+    ) {
       throw new BadRequestException(
-        'Historical promotions must be updated without rescheduling',
+        'Every publishing post must be scheduled in the future',
       );
     }
     const total = dto.publisherChannelIds.length + 2;
@@ -185,9 +273,14 @@ export class CrossPromotionPlanSchedulingService {
     total: number,
     signal: AbortSignal,
     validate = true,
+    onPlacementSaved?: () => Promise<void>,
   ) {
     if (validate) await this.plans.validateForScheduling(userId, dto);
+    const scheduledChannelIds = new Set(
+      createdPosts.map((post) => post.telegramChannelId),
+    );
     for (const [index, channelId] of dto.publisherChannelIds.entries()) {
+      if (scheduledChannelIds.has(channelId)) continue;
       signal.throwIfAborted();
       const placement = dto.publicationPost.publisherPlacements?.find(
         (item) => item.telegramChannelId === channelId,
@@ -202,17 +295,18 @@ export class CrossPromotionPlanSchedulingService {
         this.managedPostPayload(dto, placement),
         { groupId: group.id },
       );
-      createdPosts.push({
-        telegramChannelId: channelId,
-        managedPostId: post.id,
-        postGroupId: group.id,
-      });
       await this.telegramChannels.scheduleManagedPost(
         userId,
         channelId,
         post.id,
         { scheduledAt: placement?.scheduledAt ?? dto.scheduledAt },
       );
+      createdPosts.push({
+        telegramChannelId: channelId,
+        managedPostId: post.id,
+        postGroupId: group.id,
+      });
+      await onPlacementSaved?.();
       onProgress(
         {
           phase: 'SCHEDULING',

@@ -122,8 +122,8 @@ export function CrossPromotionPartnerSide({
         <span>
           <h3 className="font-semibold text-white">Partner side</h3>
           <p className="text-xs text-neutral-400">
-            Where the partner publishes my promo and which invite link tracks
-            the exchange.
+            Optional now — add the client and their publication later, when
+            they are ready to place your promo.
           </p>
         </span>
         <ChevronDown
@@ -144,7 +144,7 @@ export function CrossPromotionPartnerSide({
               onSelect={onPartnerAdvertiserChange}
               onSearchAdvertisers={onSearchAdvertisers}
             />
-            <FormField label="Partner channels" required>
+            <FormField label="Partner channels (optional)">
               <MultiSelect
                 value={partnerIds}
                 onChange={onPartnerIdsChange}

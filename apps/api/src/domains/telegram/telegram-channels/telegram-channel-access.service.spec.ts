@@ -194,6 +194,26 @@ describe('TelegramChannelAccessService production bot access', () => {
     expect(result.status).toBe('MISSING_POST_PERMISSION');
     expect(result.connected).toBe(false);
   });
+
+  it('does not expose the production bot token to a local runtime', async () => {
+    const { service } = setup();
+    const previousRuntime = process.env.TELEGRAM_BOT_RUNTIME_ENVIRONMENT;
+    process.env.TELEGRAM_BOT_RUNTIME_ENVIRONMENT = 'LOCAL';
+
+    try {
+      await expect(
+        service.botTokenForSource('workspace-1', 'system-bot-production'),
+      ).rejects.toThrow(
+        'Production bot delivery is available only in the production runtime',
+      );
+    } finally {
+      if (previousRuntime === undefined) {
+        delete process.env.TELEGRAM_BOT_RUNTIME_ENVIRONMENT;
+      } else {
+        process.env.TELEGRAM_BOT_RUNTIME_ENVIRONMENT = previousRuntime;
+      }
+    }
+  });
 });
 
 describe('TelegramChannelAccessService MTProto account selection', () => {

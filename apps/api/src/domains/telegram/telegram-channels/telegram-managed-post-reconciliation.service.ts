@@ -137,6 +137,12 @@ export class TelegramManagedPostReconciliationService {
   }
 
   public async publishDueLocallyScheduledManagedPosts() {
+    // Posts with inline buttons use Bot API delivery instead of Telegram's
+    // native schedule. The shared durable queue is consumed only by the
+    // always-on production runtime, never by a local development process.
+    if (!this.telegramChannelAccessService.isProductionDeliveryRuntime()) {
+      return { considered: 0, published: 0, failed: 0 };
+    }
     const now = new Date();
     const stalePublishingCutoff = new Date(
       now.getTime() - MANAGED_POST_LOCAL_PUBLISHING_STALE_MS,
