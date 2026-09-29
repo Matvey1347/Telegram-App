@@ -69,7 +69,7 @@ export function buildPwaNavigation(
       key: "crm",
       label: "navigation.crm",
       href: "/ad-sales",
-      Icon: Megaphone,
+      Icon: workspaceFeatureIcons["adSales.sales"],
       active: (pathname) => pathname.startsWith("/ad-sales"),
     });
   }

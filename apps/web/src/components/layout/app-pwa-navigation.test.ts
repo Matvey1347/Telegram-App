@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { workspaceFeatureIcons } from "@/lib/features/workspace/workspace-feature-icons";
 import { buildPwaNavigation } from "./app-pwa-navigation";
 
 describe("installed Nexeloq navigation", () => {
@@ -32,6 +33,7 @@ describe("installed Nexeloq navigation", () => {
     );
     expect(crm?.href).toBe("/ad-sales");
     expect(crm?.label).toBe("navigation.crm");
+    expect(crm?.Icon).toBe(workspaceFeatureIcons["adSales.sales"]);
     expect(crm?.active("/ad-campaigns")).toBe(false);
   });
 
