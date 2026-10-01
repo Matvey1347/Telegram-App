@@ -81,6 +81,7 @@ export function useAdSaleModalSession(
   >([]);
   const [assignedMemberId, setAssignedMemberId] = useState("");
   const [saleOrigin, setSaleOrigin] = useState<TelegramAdSaleOrigin>("DIRECT");
+  const [financeSkipped, setFinanceSkipped] = useState(false);
   const [accountId, setAccountId] = useState("");
   const [channelSelectionMode, setChannelSelectionMode] = useState<
     "network" | "channels"
@@ -125,6 +126,7 @@ export function useAdSaleModalSession(
       selectedAdvertiserId: initialAdvertiser?.id ?? null,
       assignedMemberId: "",
       saleOrigin: "DIRECT",
+      financeSkipped: false,
       accountId: defaultAdSaleAccountId(accounts, ""),
       channelSelectionMode: initialChannelId ? "channels" : "network",
       selectedNetworkId: "",
@@ -170,6 +172,7 @@ export function useAdSaleModalSession(
       setAdvertiserMatches([]);
       setAssignedMemberId(draft.assignedMemberId);
       setSaleOrigin(draft.saleOrigin);
+      setFinanceSkipped(draft.financeSkipped ?? false);
       accountManuallySelectedRef.current = Boolean(draft.accountId);
       setAccountId(draft.accountId);
       setChannelSelectionMode(draft.channelSelectionMode);
@@ -194,6 +197,7 @@ export function useAdSaleModalSession(
       selectedAdvertiserId,
       assignedMemberId,
       saleOrigin,
+      financeSkipped,
       accountId,
       channelSelectionMode,
       selectedNetworkId,
@@ -216,6 +220,7 @@ export function useAdSaleModalSession(
       placements,
       postMode,
       saleOrigin,
+      financeSkipped,
       selectedAdvertiserId,
       selectedChannelIds,
       selectedNetworkId,
@@ -276,6 +281,8 @@ export function useAdSaleModalSession(
     setAssignedMemberId,
     saleOrigin,
     setSaleOrigin,
+    financeSkipped,
+    setFinanceSkipped,
     accountId,
     setAccountId,
     accountManuallySelectedRef,

@@ -29,6 +29,7 @@ export function AdSalePlacementCard({
   products,
   currency,
   priceLocked,
+  showPricing,
   sharedPostActive,
   publishedPosts,
   postsLoading,
@@ -41,6 +42,7 @@ export function AdSalePlacementCard({
   products: TelegramAdProduct[];
   currency: string;
   priceLocked: boolean;
+  showPricing: boolean;
   sharedPostActive: boolean;
   publishedPosts: PublishedPostOption[];
   postsLoading: boolean;
@@ -91,8 +93,8 @@ export function AdSalePlacementCard({
               {channel?.title ?? placement.channelId}
             </p>
             <p className="truncate text-xs text-neutral-400">
-              {placement.date} · {placement.time} · {product?.name ?? "Default"} ·{" "}
-              {placement.agreedPrice} {currency}
+              {placement.date} · {placement.time} · {product?.name ?? "Default"}
+              {showPricing ? ` · ${placement.agreedPrice} ${currency}` : ""}
             </p>
           </div>
         </div>
@@ -172,7 +174,7 @@ export function AdSalePlacementCard({
               ))}
             </Select>
           </FormField>
-          <FormField label="Price">
+          {showPricing ? <FormField label="Price">
             <div className="space-y-1">
               <Input
                 value={placement.agreedPrice}
@@ -196,7 +198,7 @@ export function AdSalePlacementCard({
                 Recommended: {placement.recommendedPrice} {currency}
               </p>
             </div>
-          </FormField>
+          </FormField> : null}
         </div>
       ) : null}
 
@@ -230,7 +232,7 @@ export function AdSalePlacementCard({
         </div>
       ) : null}
 
-      {priceSummary.isBelowMinimum ? (
+      {showPricing && priceSummary.isBelowMinimum ? (
         <div className="mt-3">
           <FormField label="Reason for low price" required>
             <Textarea

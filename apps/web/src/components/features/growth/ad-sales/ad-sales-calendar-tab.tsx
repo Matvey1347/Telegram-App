@@ -7,6 +7,7 @@ import { Plus } from "lucide-react";
 import type { TelegramAdAvailabilitySlot } from "@telegram-system/shared";
 import { CalendarSlotCard } from "@/components/features/growth/ad-sales/calendar-slot-card";
 import { TelegramEntityAvatar } from "@/components/features/telegram/telegram/telegram-entity-avatar";
+import { IconAvatar } from "@/components/icons/icon-avatar";
 import { Skeleton } from "@/components/ui/primitives";
 import type { CurrencySettings, TelegramChannel } from "@/lib/api";
 import {
@@ -22,6 +23,15 @@ function dateKey(value: Date) {
   return channelLocalDateKey(value);
 }
 
+export function calendarAdvertiserAvatarUrl(
+  photoUrl: string | null | undefined,
+  telegramUsername: string | null | undefined,
+) {
+  if (photoUrl) return photoUrl;
+  const username = telegramUsername?.trim().replace(/^@+/, "");
+  return username ? `https://t.me/i/userpic/320/${username}.jpg` : null;
+}
+
 export function formatCalendarTransactionMoney(
   amount: number,
   currency: string,
@@ -31,19 +41,67 @@ export function formatCalendarTransactionMoney(
 }
 
 export function calendarDealAmount(
-  placement: {
-    agreedPrice?: string | null;
-    currency?: string | null;
-    saleAgreedAmount?: string | null;
-    settlementCurrency?: string | null;
-  } | null | undefined,
+  placement:
+    | {
+        agreedPrice?: string | null;
+        currency?: string | null;
+        saleReceivedAmount?: string | null;
+        saleAgreedAmount?: string | null;
+        settlementCurrency?: string | null;
+      }
+    | null
+    | undefined,
   fallbackCurrency: string,
 ) {
   return {
-    amount: toNumber(placement?.saleAgreedAmount ?? placement?.agreedPrice),
+    amount: toNumber(
+      placement?.saleReceivedAmount ??
+        placement?.saleAgreedAmount ??
+        placement?.agreedPrice,
+    ),
     currency:
       placement?.settlementCurrency ?? placement?.currency ?? fallbackCurrency,
   };
+}
+
+export function calendarSaleAmounts(
+  slots: Array<
+    Pick<TelegramAdAvailabilitySlot, "currency" | "existingPlacement">
+  >,
+) {
+  const totals = new Map<string, { amount: number; currency: string }>();
+  const placementIdsBySale = new Map<string, Set<string>>();
+  for (const slot of slots) {
+    const placement = slot.existingPlacement;
+    if (!placement) continue;
+    const currency =
+      placement.settlementCurrency ?? placement.currency ?? slot.currency;
+    if (placement.saleReceivedAmount != null) {
+      totals.set(placement.saleId, {
+        amount: toNumber(placement.saleReceivedAmount),
+        currency,
+      });
+      continue;
+    }
+    if (placement.saleAgreedAmount != null) {
+      totals.set(placement.saleId, {
+        amount: toNumber(placement.saleAgreedAmount),
+        currency,
+      });
+      continue;
+    }
+    const seenPlacementIds =
+      placementIdsBySale.get(placement.saleId) ?? new Set();
+    if (seenPlacementIds.has(placement.id)) continue;
+    seenPlacementIds.add(placement.id);
+    placementIdsBySale.set(placement.saleId, seenPlacementIds);
+    const current = totals.get(placement.saleId);
+    totals.set(placement.saleId, {
+      amount: (current?.amount ?? 0) + toNumber(placement.agreedPrice),
+      currency: current?.currency ?? currency,
+    });
+  }
+  return totals;
 }
 
 export function groupCalendarSoldSlotsBySale<
@@ -105,6 +163,10 @@ export function CalendarTab(props: {
     }
     return grouped;
   }, [filteredSlots]);
+  const saleAmountsById = useMemo(
+    () => calendarSaleAmounts(filteredSlots),
+    [filteredSlots],
+  );
 
   const daySummariesByChannelDay = useMemo(() => {
     const grouped = new Map<
@@ -169,6 +231,8 @@ export function CalendarTab(props: {
   };
   const saleDetails = (slots: ReturnType<typeof buildAdCalendarSlots>) => {
     const placement = slots[0]?.existingPlacement;
+    const total = placement ? saleAmountsById.get(placement.saleId) : undefined;
+    if (total) return total;
     return calendarDealAmount(placement, slots[0]?.currency ?? "");
   };
   const summarizeRevenue = (slots: ReturnType<typeof buildAdCalendarSlots>) => {
@@ -180,14 +244,8 @@ export function CalendarTab(props: {
       const saleId = details.placement.saleId;
       if (countedSales.has(saleId)) continue;
       countedSales.add(saleId);
-      const { amount: price, currency } = calendarDealAmount(
-        details.placement,
-        details.currency,
-      );
-      totals.set(
-        currency,
-        (totals.get(currency) ?? 0) + price,
-      );
+      const { amount: price, currency } = saleDetails([slot]);
+      totals.set(currency, (totals.get(currency) ?? 0) + price);
     }
     return Array.from(totals.entries()).map(([currency, amount]) => ({
       currency,
@@ -220,144 +278,179 @@ export function CalendarTab(props: {
       adsCountForDay: 0,
     };
   };
-
   return (
     <div className="space-y-5">
       {props.calendarRangeMode !== "week" ? (
         <div className={adSalesPanelClass}>
-          <div className="overflow-hidden rounded-xl border border-slate-800/80">
-            <div className="grid grid-cols-7 border-b border-slate-800/80 bg-[#09111e]">
-              {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(
-                (label) => (
-                  <div
-                    key={label}
-                    className="border-r border-slate-800/80 px-3 py-2 text-center text-xs font-medium text-neutral-400 last:border-r-0"
-                  >
-                    {label}
-                  </div>
-                ),
-              )}
-            </div>
-            <div className="grid grid-cols-7">
-              {props.calendarDays.map((day) => {
-                const dayDateKey = dateKey(day);
-                const outsideMonth =
-                  day < props.calendarFrom || day > props.calendarTo;
-                const daySlots = visibleChannels.flatMap((channel) =>
-                  (
-                    slotsByChannelDay.get(`${channel.id}:${dayDateKey}`) ?? []
-                  ).map((slot) => ({
-                    channel,
-                    slot,
-                  })),
-                );
-                const soldSlots = daySlots.filter(({ slot }) =>
-                  Boolean(slot.existingPlacement),
-                );
-                const soldDeals = groupCalendarSoldSlotsBySale(soldSlots);
-                const addSlotChannel = visibleChannels[0] ?? null;
-                const revenue = summarizeRevenue(
-                  soldSlots.map(({ slot }) => slot),
-                );
-                return (
-                  <div
-                    key={day.toISOString()}
-                    className={`group/day relative min-h-[72px] border-b border-r border-slate-900/70 p-1.5 ${outsideMonth ? "bg-black/20 opacity-45" : "bg-[#111111]"}`}
-                  >
-                    <div className="mb-1 flex items-center justify-between gap-2">
-                      <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
-                        <div className="flex shrink-0 items-center gap-1.5">
-                          <span className="text-sm font-semibold text-white">
-                            {day.getDate()}
-                          </span>
-                          {dayDateKey === todayKey ? (
-                            <span className="rounded-full bg-blue-600 px-1.5 py-0.5 text-[9px] font-semibold text-white">
-                              Today
+          <div className="overflow-x-auto rounded-xl border border-slate-800/80">
+            <div className="min-w-[700px]">
+              <div className="grid grid-cols-7 border-b border-slate-800/80 bg-[#09111e]">
+                {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(
+                  (label) => (
+                    <div
+                      key={label}
+                      className="border-r border-slate-800/80 px-3 py-2 text-center text-xs font-medium text-neutral-400 last:border-r-0"
+                    >
+                      {label}
+                    </div>
+                  ),
+                )}
+              </div>
+              <div className="grid grid-cols-7">
+                {props.calendarDays.map((day) => {
+                  const dayDateKey = dateKey(day);
+                  const outsideMonth =
+                    day < props.calendarFrom || day > props.calendarTo;
+                  const daySlots = visibleChannels.flatMap((channel) =>
+                    (
+                      slotsByChannelDay.get(`${channel.id}:${dayDateKey}`) ?? []
+                    ).map((slot) => ({
+                      channel,
+                      slot,
+                    })),
+                  );
+                  const soldSlots = daySlots.filter(({ slot }) =>
+                    Boolean(slot.existingPlacement),
+                  );
+                  const soldDeals = groupCalendarSoldSlotsBySale(soldSlots);
+                  const addSlotChannel = visibleChannels[0] ?? null;
+                  const revenue = summarizeRevenue(
+                    soldSlots.map(({ slot }) => slot),
+                  );
+                  return (
+                    <div
+                      key={day.toISOString()}
+                      className={`group/day relative min-h-[72px] border-b border-r border-slate-900/70 p-1.5 ${outsideMonth ? "bg-black/20" : "bg-[#111111]"}`}
+                    >
+                      <div className="mb-1 flex items-center justify-between gap-2">
+                        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
+                          <div className="flex shrink-0 items-center gap-1.5">
+                            <span className="text-sm font-semibold text-white">
+                              {day.getDate()}
                             </span>
+                            {dayDateKey === todayKey ? (
+                              <span className="rounded-full bg-blue-600 px-1.5 py-0.5 text-[9px] font-semibold text-white">
+                                Today
+                              </span>
+                            ) : null}
+                          </div>
+                          {revenue.length ? (
+                            <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 text-[10px] font-semibold leading-tight text-emerald-300">
+                              {revenue.map((item) => (
+                                <span
+                                  key={item.currency}
+                                  className="whitespace-nowrap"
+                                >
+                                  {item.label}
+                                </span>
+                              ))}
+                            </div>
                           ) : null}
                         </div>
-                        {revenue.length ? (
-                          <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 text-[10px] font-semibold leading-tight text-emerald-300">
-                            {revenue.map((item) => (
-                              <span key={item.currency}>{item.label}</span>
-                            ))}
-                          </div>
+                        {addSlotChannel ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              props.onCreateFromSlot(
+                                createManualSlot(addSlotChannel, day),
+                              )
+                            }
+                            className="inline-flex shrink-0 items-center gap-1 rounded-md border border-emerald-700/70 bg-emerald-950/80 px-2 py-1 text-[10px] font-semibold text-emerald-100 opacity-0 shadow-sm transition hover:border-emerald-500 focus-visible:opacity-100 group-hover/day:opacity-100"
+                          >
+                            <Plus size={11} aria-hidden="true" />
+                            Add slot
+                          </button>
                         ) : null}
                       </div>
-                      {addSlotChannel ? (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            props.onCreateFromSlot(
-                              createManualSlot(addSlotChannel, day),
-                            )
-                          }
-                          className="inline-flex shrink-0 items-center gap-1 rounded-md border border-emerald-700/70 bg-emerald-950/80 px-2 py-1 text-[10px] font-semibold text-emerald-100 opacity-0 shadow-sm transition hover:border-emerald-500 focus-visible:opacity-100 group-hover/day:opacity-100"
-                        >
-                          <Plus size={11} aria-hidden="true" />
-                          Add slot
-                        </button>
-                      ) : null}
-                    </div>
-                    <div className="space-y-1">
-                      {soldDeals.slice(0, 3).map((deal) => {
-                        const firstEntry = deal.entries[0];
-                        const details = placementDetailsForSlot(
-                          firstEntry.slot,
-                        );
-                        const dealSaleDetails = saleDetails(deal.entries.map(({ slot }) => slot));
-                        const dealRevenue = dealSaleDetails.currency ? [
-                          { currency: dealSaleDetails.currency, amount: dealSaleDetails.amount, label: formatCalendarTransactionMoney(dealSaleDetails.amount, dealSaleDetails.currency, props.settings) },
-                        ] : [];
-                        const dealLabel =
-                          details.placement?.advertiserName ||
-                          details.placement?.title ||
-                          "Direct sale";
-                        return (
+                      <div className="space-y-1">
+                        {soldDeals.slice(0, 3).map((deal) => {
+                          const firstEntry = deal.entries[0];
+                          const details = placementDetailsForSlot(
+                            firstEntry.slot,
+                          );
+                          const dealSaleDetails = saleDetails(
+                            deal.entries.map(({ slot }) => slot),
+                          );
+                          const dealRevenue = dealSaleDetails.currency
+                            ? [
+                                {
+                                  currency: dealSaleDetails.currency,
+                                  amount: dealSaleDetails.amount,
+                                  label: formatCalendarTransactionMoney(
+                                    dealSaleDetails.amount,
+                                    dealSaleDetails.currency,
+                                    props.settings,
+                                  ),
+                                },
+                              ]
+                            : [];
+                          const dealLabel =
+                            details.placement?.advertiserName ||
+                            details.placement?.title ||
+                            "Direct sale";
+                          return (
+                            <button
+                              key={deal.saleId}
+                              type="button"
+                              onClick={() => props.onOpenSale(deal.saleId)}
+                              title={`${dealLabel} · ${deal.entries.length} placement${deal.entries.length === 1 ? "" : "s"} · ${dealRevenue.map((item) => item.label).join(" · ")}`}
+                              className="flex w-full items-center gap-1.5 rounded-md border border-sky-800/70 bg-sky-950/20 px-1.5 py-1 text-left text-[10px] font-medium text-sky-100 transition hover:border-sky-500"
+                            >
+                              {details.placement
+                                ?.advertiserAvatarPresentation ? (
+                                <IconAvatar
+                                  icon={
+                                    details.placement
+                                      .advertiserAvatarPresentation
+                                  }
+                                  label={dealLabel}
+                                  size="xs"
+                                />
+                              ) : (
+                                <TelegramEntityAvatar
+                                  imageUrl={calendarAdvertiserAvatarUrl(
+                                    details.placement?.advertiserPhotoUrl,
+                                    details.placement?.advertiserTelegram,
+                                  )}
+                                  kind="person"
+                                  alt={dealLabel}
+                                  size="xs"
+                                />
+                              )}
+                              <span className="min-w-0 flex-1 truncate max-md:hidden">
+                                {dealLabel}
+                                {deal.entries.length > 1
+                                  ? ` · ${deal.entries.length}`
+                                  : ""}
+                              </span>
+                              <span className="ml-auto shrink-0 whitespace-nowrap text-[9px] opacity-80">
+                                {dealRevenue
+                                  .map((item) => item.label)
+                                  .join(" · ")}
+                              </span>
+                            </button>
+                          );
+                        })}
+                        {soldDeals.length > 3 ? (
                           <button
-                            key={deal.saleId}
                             type="button"
-                            onClick={() => props.onOpenSale(deal.saleId)}
-                            title={`${dealLabel} · ${deal.entries.length} placement${deal.entries.length === 1 ? "" : "s"} · ${dealRevenue.map((item) => item.label).join(" · ")}`}
-                            className="flex w-full items-center gap-1.5 rounded-md border border-sky-800/70 bg-sky-950/20 px-1.5 py-1 text-left text-[10px] font-medium text-sky-100 transition hover:border-sky-500"
+                            onClick={() =>
+                              props.onOpenSale(soldDeals[3].saleId)
+                            }
+                            className="w-full rounded-md border border-neutral-800 bg-neutral-950/70 px-2 py-1 text-left text-[10px] font-medium text-neutral-300 transition hover:border-neutral-600"
                           >
-                            <TelegramEntityAvatar
-                              imageUrl={details.placement?.advertiserPhotoUrl ?? null}
-                              kind="person"
-                              alt={dealLabel}
-                              size="xs"
-                            />
-                            <span className="min-w-0 flex-1 truncate">
-                              {dealLabel}
-                              {deal.entries.length > 1
-                                ? ` · ${deal.entries.length}`
-                                : ""}
-                            </span>
-                            <span className="ml-auto shrink-0 text-[9px] opacity-80">
-                              {dealRevenue
-                                .map((item) => item.label)
-                                .join(" · ")}
-                            </span>
+                            +{soldDeals.length - 3} more deal
+                            {soldDeals.length - 3 === 1 ? "" : "s"}
                           </button>
-                        );
-                      })}
-                      {soldDeals.length > 3 ? (
-                        <button
-                          type="button"
-                          onClick={() => props.onOpenSale(soldDeals[3].saleId)}
-                          className="w-full rounded-md border border-neutral-800 bg-neutral-950/70 px-2 py-1 text-left text-[10px] font-medium text-neutral-300 transition hover:border-neutral-600"
-                        >
-                          +{soldDeals.length - 3} more deal
-                          {soldDeals.length - 3 === 1 ? "" : "s"}
-                        </button>
-                      ) : null}
-                      {props.loadingChannelIds.length ? (
-                        <Skeleton className="h-6 w-full" />
-                      ) : null}
+                        ) : null}
+                        {props.loadingChannelIds.length ? (
+                          <Skeleton className="h-6 w-full" />
+                        ) : null}
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
           </div>
         </div>

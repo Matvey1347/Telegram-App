@@ -30,7 +30,8 @@ export class TelegramAdSaleBotNotificationService {
     const sale = await this.sale(workspaceId, saleId);
     if (sale.scheduledBotConfirmationSentAt || !isFullyScheduled(sale.placements)) return;
     const message = this.render(sale, 'scheduled');
-    await this.notifications.sendToWorkspaceUser({ workspaceId, userId, text: message, parseMode: 'HTML' });
+    const delivery = await this.notifications.sendToWorkspaceUser({ workspaceId, userId, text: message, parseMode: 'HTML' });
+    if (delivery.status !== 'SENT') return;
     await this.prisma.telegramAdSale.update({ where: { id: saleId }, data: { scheduledBotConfirmationSentAt: new Date() } });
   }
 
@@ -40,7 +41,8 @@ export class TelegramAdSaleBotNotificationService {
     const detail = await this.sale(sale.workspaceId, saleId);
     if (!isFullyPublished(detail.placements)) return;
     const message = this.render(detail, 'published');
-    await this.notifications.sendToWorkspaceUser({ workspaceId: sale.workspaceId, userId: sale.createdByUserId, text: message, parseMode: 'HTML' });
+    const delivery = await this.notifications.sendToWorkspaceUser({ workspaceId: sale.workspaceId, userId: sale.createdByUserId, text: message, parseMode: 'HTML' });
+    if (delivery.status !== 'SENT') return;
     await this.prisma.telegramAdSale.update({ where: { id: saleId }, data: { publishedBotConfirmationSentAt: new Date() } });
   }
 

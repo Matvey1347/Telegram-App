@@ -42,7 +42,7 @@ export function CrossPromotionPublicationPostEditor({
   const expanded = !directMutual || (!manuallyCollapsed && (opened || hasPost));
 
   return (
-    <section className="rounded-xl border border-neutral-800 p-3">
+    <section className="border-y border-neutral-800 py-3 sm:rounded-xl sm:border sm:p-3">
       <div
         className={`${expanded ? "mb-3" : ""} flex flex-wrap items-center justify-between gap-2`}
       >

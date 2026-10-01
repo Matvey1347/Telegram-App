@@ -202,6 +202,28 @@ describe("ConfirmDeleteModal", () => {
 });
 
 describe("CustomSelect", () => {
+  it("keeps focus on its trigger when opened so mobile does not summon the keyboard", async () => {
+    const user = userEvent.setup();
+    render(
+      <CustomSelect
+        value="one"
+        onChange={() => {}}
+        searchPlaceholder="Search clients"
+        options={[
+          { value: "one", label: "One" },
+          { value: "two", label: "Two" },
+          { value: "three", label: "Three" },
+        ]}
+      />,
+    );
+
+    const trigger = screen.getByRole("button", { name: "One" });
+    await user.click(trigger);
+
+    expect(screen.getByPlaceholderText("Search clients")).toBeVisible();
+    expect(document.activeElement).toBe(trigger);
+  });
+
   it("keeps a long selected label and URL inside the mobile trigger", () => {
     const { container } = render(
       <div className="w-72">
@@ -404,6 +426,24 @@ describe("CustomSelect", () => {
 });
 
 describe("MultiSelect", () => {
+  it("keeps focus on its trigger when opened so mobile does not summon the keyboard", async () => {
+    const user = userEvent.setup();
+    render(
+      <MultiSelect
+        value={[]}
+        onChange={() => {}}
+        options={[{ value: "channel-1", label: "Channel one" }]}
+        placeholder="Choose channels"
+      />,
+    );
+
+    const trigger = screen.getByRole("button", { name: "Choose channels" });
+    await user.click(trigger);
+
+    expect(screen.getByPlaceholderText("Search")).toBeVisible();
+    expect(document.activeElement).toBe(trigger);
+  });
+
   it("does not let long selected chips define a wider intrinsic trigger", () => {
     render(
       <MultiSelect

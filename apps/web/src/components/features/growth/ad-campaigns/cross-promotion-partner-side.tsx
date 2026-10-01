@@ -7,7 +7,7 @@ import type {
   TelegramAdvertiser,
   TelegramSystemBotPostDraft,
 } from "@telegram-system/shared";
-import type { Promo, TelegramChannel, TelegramInviteLink } from "@/lib/api";
+import type { Promo, TelegramChannel, TelegramInviteLinkOption } from "@/lib/api";
 import {
   Button,
   CustomSelect,
@@ -89,7 +89,7 @@ export function CrossPromotionPartnerSide({
   onAddTarget?: () => void;
   onResolved: (
     channelId: string,
-    value: { promo?: Promo; inviteLink?: TelegramInviteLink },
+    value: { promo?: Promo; inviteLink?: TelegramInviteLinkOption },
   ) => void;
   outboundMode: "PROMO" | "CUSTOM";
   onOutboundModeChange: (value: "PROMO" | "CUSTOM") => void;
@@ -115,7 +115,7 @@ export function CrossPromotionPartnerSide({
     }));
 
   return (
-    <section className="space-y-4 rounded-xl border border-emerald-900/70 bg-emerald-950/10 p-4">
+    <section className="space-y-4 border-y border-emerald-900/70 py-4 sm:rounded-xl sm:border sm:bg-emerald-950/10 sm:p-4">
       <button
         type="button"
         className="flex w-full items-start justify-between gap-3 text-left"
@@ -193,7 +193,7 @@ export function CrossPromotionPartnerSide({
                 return (
                   <section
                     key={`${channel.id}-${index}`}
-                    className="space-y-3 rounded-xl border border-neutral-800 bg-neutral-950/55 p-3"
+                    className="space-y-3 border-t border-neutral-800 pt-3 sm:rounded-xl sm:border sm:bg-neutral-950/55 sm:p-3"
                   >
                     <div className="grid items-end gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
                       <FormField label="My channel being promoted" required>
@@ -295,7 +295,7 @@ export function CrossPromotionPartnerSide({
               </div>
             </div>
             {outboundMode === "CUSTOM" ? (
-              <section className="space-y-3 rounded-xl border border-neutral-800 bg-neutral-950/55 p-3">
+              <section className="space-y-3 border-t border-neutral-800 pt-3 sm:rounded-xl sm:border sm:bg-neutral-950/55 sm:p-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
                     <h4 className="text-sm font-semibold text-white">

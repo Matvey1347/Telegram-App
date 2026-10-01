@@ -7,18 +7,11 @@ import { promosApi, telegramSystemBotApi, type Promo } from "@/lib/api";
 import { telegramSystemBotKeys } from "@/lib/query-keys";
 import { useTelegramInviteLinkOptions } from "@/lib/features/telegram/use-telegram-invite-link-options";
 import { useTelegramSystemBotPostFlow } from "@/hooks/use-telegram-system-bot-post-flow";
-import { TelegramInviteLinkCreatorAvatar } from "@/components/features/telegram/telegram/telegram-invite-link-creator-avatar";
+import { TelegramInviteLinkSelect } from "@/components/features/telegram/telegram/telegram-invite-link-select";
 import { IconAvatar } from "@/components/icons/icon-avatar";
-import { inviteLinkCreatorFallback } from "@/lib/features/telegram/telegram-invite-link-creator";
-import {
-  isTelegramInviteLink,
-  telegramInviteLinkOptionLabel,
-} from "@/lib/features/telegram/telegram-invite-link-options";
-import { TelegramInviteLinkOptionLabel } from "@/components/features/telegram/telegram/telegram-invite-link-option-label";
 import { useRegisterTelegramInviteLink } from "@/lib/features/telegram/use-register-telegram-invite-link";
 import {
   Button,
-  CustomSelect,
   FormError,
   FormField,
   Modal,
@@ -132,7 +125,7 @@ export function PromoQuickSendModal({
           <FormError message="Could not load the promo post." />
         ) : null}
         <FormField label="Invite link" required>
-          <CustomSelect
+          <TelegramInviteLinkSelect
             value={selectedLink?.id ?? ""}
             onChange={setInviteLinkId}
             onOpen={inviteOptions.requestAll}
@@ -140,26 +133,8 @@ export function PromoQuickSendModal({
             loading={resolvingLink || inviteOptions.loading}
             loadingLabel="Loading invite link…"
             placeholder="Select invite link"
-            options={(resolvingLink ? [] : inviteOptions.links).map((link) => ({
-              value: link.id,
-              label: telegramInviteLinkOptionLabel(link),
-              labelContent: <TelegramInviteLinkOptionLabel link={link} />,
-              meta: link.url,
-              iconFallback: inviteLinkCreatorFallback(link),
-              icon: (
-                <TelegramInviteLinkCreatorAvatar
-                  photoUrl={link.creatorPhotoUrl}
-                  memberAvatar={link.creatorMember?.avatarPresentation}
-                  label={inviteLinkCreatorFallback(link)}
-                />
-              ),
-            }))}
-            canCreateOption={(input) =>
-              isTelegramInviteLink(input) &&
-              !inviteOptions.links.some((link) => link.url === input.trim())
-            }
-            createOptionLabel={() => "Verify and add this invite link"}
-            onCreateOption={async (url) => {
+            links={resolvingLink ? [] : inviteOptions.links}
+            onCreate={async (url) => {
               await registerLink.mutateAsync(url);
             }}
           />

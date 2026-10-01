@@ -516,6 +516,7 @@ export type {
   TelegramChannelSyncSelection,
   TelegramChannelTimePost,
   TelegramInviteLink,
+  TelegramInviteLinkOption,
   TelegramInviteLinkHistory,
   TelegramManagedPost,
   TelegramManagedPostGroupSummary,

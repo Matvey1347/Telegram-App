@@ -14,6 +14,27 @@ export function isValidTelegramUsernameInput(value: string) {
   return Boolean(canonicalTelegramUsername(value));
 }
 
+/**
+ * Telegram usernames are case-insensitive identity keys. Older imports can
+ * contain two CRM rows for the same username, but a picker must never offer
+ * two visually indistinguishable clients for one Telegram account.
+ */
+export function dedupeAdvertisersByTelegramIdentity(
+  advertisers: TelegramAdvertiser[],
+) {
+  const seen = new Set<string>();
+  return advertisers.filter((advertiser) => {
+    const username = advertiser.telegramUsername
+      ?.trim()
+      .replace(/^@+/, "")
+      .toLowerCase();
+    const key = username ? `telegram:${username}` : `advertiser:${advertiser.id}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 function advertiserContact(advertiser: TelegramAdvertiser) {
   return (
     advertiser.telegramUsername ??
@@ -71,9 +92,11 @@ export function CrmClientField(props: {
             const selected = current.find(
               (item) => item.id === props.selectedAdvertiserId,
             );
-            return selected && !items.some((item) => item.id === selected.id)
-              ? [selected, ...items]
-              : items;
+            const next =
+              selected && !items.some((item) => item.id === selected.id)
+                ? [selected, ...items]
+                : items;
+            return dedupeAdvertisersByTelegramIdentity(next);
           });
         })
         .catch(() => {
@@ -138,7 +161,6 @@ export function CrmClientField(props: {
                   : "Select client"
             }
             options={advertisers.map((advertiser) => {
-              const username = advertiser.telegramUsername?.replace(/^@+/, "");
               return {
                 value: advertiser.id,
                 label: advertiser.displayName,
@@ -147,9 +169,9 @@ export function CrmClientField(props: {
                   advertiser.email ||
                   advertiser.phone ||
                   `${advertiser.totalSalesCount} sales`,
-                iconUrl: username
-                  ? `https://t.me/i/userpic/320/${username}.jpg`
-                  : undefined,
+                // Telegram does not provide a stable public userpic endpoint.
+                // Using t.me/i/userpic here produces 404s for private or changed
+                // handles, so fall back to the deterministic client initial.
                 iconFallback: advertiser.displayName,
               };
             })}

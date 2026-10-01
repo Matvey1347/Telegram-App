@@ -1,5 +1,7 @@
 import {
   BadRequestException,
+  forwardRef,
+  Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -17,6 +19,7 @@ import { TelegramManagedPostPublicationService } from '../../telegram/telegram-c
 import { MutualPromotionReadService } from './mutual-promotion-read.service';
 import { runMutualPromotionBounded } from './mutual-promotion-lifecycle.utils';
 import { MutualPromotionValidationService } from './mutual-promotion-validation.service';
+import { MutualPromotionBotNotificationService } from './mutual-promotion-bot-notification.service';
 
 type ActivationDelivery = {
   deliveryId: string;
@@ -39,6 +42,8 @@ export class MutualPromotionActivationService {
     private readonly validation: MutualPromotionValidationService,
     private readonly read: MutualPromotionReadService,
     private readonly publication: TelegramManagedPostPublicationService,
+    @Inject(forwardRef(() => MutualPromotionBotNotificationService))
+    private readonly botConfirmation?: MutualPromotionBotNotificationService,
   ) {}
 
   async activate(
@@ -400,6 +405,7 @@ export class MutualPromotionActivationService {
         `${schedulingErrors.length} publication delivery(s) could not be added to Telegram Scheduled Messages: ${schedulingErrors[0]}`,
       );
     }
+    await this.botConfirmation?.sendScheduledOnce(folderId);
     return {
       folder: await this.read.detailForWorkspace(
         membership.workspaceId,

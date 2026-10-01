@@ -9,6 +9,7 @@ import { TelegramWorkspaceFullSyncService } from '../../telegram/telegram-sync/t
 import { ScheduledTaskExecutorService } from './scheduled-task-executor.service';
 import { ScheduledTaskRegistryService } from './scheduled-task-registry.service';
 import { TelegramManagedPostReconciliationService } from '../../telegram/telegram-channels/telegram-managed-post-reconciliation.service';
+import { TelegramAdPlacementLifecycleService } from '../../telegram/telegram-ad-sales/telegram-ad-placement-lifecycle.service';
 import { TelegramCrmInitialSyncService } from '../../telegram/telegram-crm/telegram-crm-initial-sync.service';
 import { MutualPromotionLifecycleService } from '../../growth/mutual-promotion-folders/mutual-promotion-lifecycle.service';
 import { CrossPromotionPlanLifecycleService } from '../../growth/cross-promotion-plans/cross-promotion-plan-lifecycle.service';
@@ -49,6 +50,7 @@ describe('scheduled task registry executors', () => {
         verified: 2,
         missing: 1,
         localDelivery: { considered: 2, published: 1, failed: 1 },
+        autoDeletion: { deleted: 0 },
       }),
     };
     const crmSync = {
@@ -56,6 +58,9 @@ describe('scheduled task registry executors', () => {
         summary: 'Synchronized 2 MTProto CRM sources.',
         details: { accountsProcessed: 2 },
       }),
+    };
+    const placementLifecycle = {
+      reconcilePublishedPlacements: jest.fn().mockResolvedValue({ reconciled: 1 }),
     };
     const mutualPromotion = {
       processDueActions: jest.fn().mockResolvedValue({
@@ -85,6 +90,7 @@ describe('scheduled task registry executors', () => {
       [TelegramAdSalesService, {}],
       [ApplicationLogsService, {}],
       [TelegramManagedPostReconciliationService, managedPosts],
+      [TelegramAdPlacementLifecycleService, placementLifecycle],
       [TelegramCrmInitialSyncService, crmSync],
       [MutualPromotionLifecycleService, mutualPromotion],
       [CrossPromotionPlanLifecycleService, directPromotion],
@@ -93,6 +99,7 @@ describe('scheduled task registry executors', () => {
       resolve: jest.fn((token: unknown) =>
         Promise.resolve(services.get(token)),
       ),
+      get: jest.fn((token: unknown) => services.get(token)),
     };
     const executor = new ScheduledTaskExecutorService(moduleRef as never);
     return {
@@ -103,6 +110,7 @@ describe('scheduled task registry executors', () => {
       automations,
       retention,
       managedPosts,
+      placementLifecycle,
       crmSync,
       mutualPromotion,
       directPromotion,
@@ -139,13 +147,15 @@ describe('scheduled task registry executors', () => {
   });
 
   it('reconciles only the bounded due managed-post queue', async () => {
-    const { executor, managedPosts } = setup();
+    const { executor, managedPosts, placementLifecycle } = setup();
     const result =
       await executor.executors['telegram.managed_posts.reconcile_due']();
     expect(managedPosts.reconcileAllDueManagedPosts).toHaveBeenCalledTimes(1);
+    expect(placementLifecycle.reconcilePublishedPlacements).toHaveBeenCalledTimes(1);
     expect(result.summary).toContain('verified 2');
     expect(result.summary).toContain('Published 1 locally scheduled');
     expect(result.summary).toContain('1 failed');
+    expect(result.summary).toContain('Reconciled 1 ad placements');
   });
 
   it('processes a bounded greeter expiry batch', async () => {

@@ -39,6 +39,17 @@ describe('TelegramChannelsService inviteLinksForSelect', () => {
     expect(findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { workspaceId: 'ws-1', telegramChannelId: 'channel-1' },
+        select: {
+          id: true,
+          telegramChannelId: true,
+          name: true,
+          url: true,
+          creatorTelegramUserId: true,
+          creatorUsername: true,
+          creatorFirstName: true,
+          creatorLastName: true,
+          creatorPhotoUrl: true,
+        },
       }),
     );
     expect(result[0].id).toBe('assigned-link');

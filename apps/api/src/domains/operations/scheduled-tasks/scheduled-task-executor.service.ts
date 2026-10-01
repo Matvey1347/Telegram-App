@@ -31,8 +31,16 @@ export class ScheduledTaskExecutorService {
       const result = await (
         await this.telegramManagedPostReconciliationService()
       ).reconcileAllDueManagedPosts();
+      // Native Telegram scheduling changes the managed-post identity first.
+      // Reconcile the dependent ad-sale placement in the same due wake so its
+      // publication confirmation is not deferred until an unrelated action.
+      const lifecycle = this.moduleRef.get(
+        TelegramAdPlacementLifecycleService,
+        { strict: false },
+      );
+      const lifecycleResult = await lifecycle.reconcilePublishedPlacements();
       return {
-        summary: `Published ${result.localDelivery.published} locally scheduled managed posts; ${result.localDelivery.failed} failed. Checked ${result.checked} identities; verified ${result.verified}, missing ${result.missing}. Deleted ${result.autoDeletion.deleted} posts whose lifetime elapsed.`,
+        summary: `Published ${result.localDelivery.published} locally scheduled managed posts; ${result.localDelivery.failed} failed. Checked ${result.checked} identities; verified ${result.verified}, missing ${result.missing}. Reconciled ${lifecycleResult.reconciled} ad placements. Deleted ${result.autoDeletion.deleted} posts whose lifetime elapsed.`,
       };
     },
     'telegram.channels.full_sync': (context: ScheduledTaskExecutionContext) =>

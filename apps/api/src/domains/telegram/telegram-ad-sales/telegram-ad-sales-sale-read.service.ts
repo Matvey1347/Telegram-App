@@ -66,6 +66,21 @@ const SALE_LIST_SELECT = {
     select: {
       displayName: true,
       telegramUsername: true,
+      avatarIcon: {
+        select: {
+          id: true,
+          type: true,
+          name: true,
+          emoji: true,
+          imageUrl: true,
+        },
+      },
+      crmPeers: {
+        where: { photoUrl: { not: null } },
+        orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+        take: 1,
+        select: { photoUrl: true },
+      },
     },
   },
   placements: {
@@ -165,11 +180,16 @@ export class TelegramAdSalesSaleReadService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly workspaceService: WorkspaceService,
-    private readonly authorization: WorkspaceAuthorizationService = adSalesAuthorizationTestFallback(workspaceService),
+    private readonly authorization: WorkspaceAuthorizationService = adSalesAuthorizationTestFallback(
+      workspaceService,
+    ),
   ) {}
 
   async listSales(userId: string, query: TelegramAdSalesQueryDto) {
-    const access = await this.authorization.require(userId, 'adSales.sales.view');
+    const access = await this.authorization.require(
+      userId,
+      'adSales.sales.view',
+    );
     const workspaceId = access.workspaceId;
     const pagination = normalizePagination(query);
     const advertiser = query.advertiserId
@@ -186,7 +206,8 @@ export class TelegramAdSalesSaleReadService {
     if (
       (await this.authorization.can(userId, 'adSales.sales.editOwn')) &&
       !(await this.authorization.can(userId, 'adSales.sales.editAny'))
-    ) where.assignedMemberId = access.memberId;
+    )
+      where.assignedMemberId = access.memberId;
     const [sales, totalItems] = await this.prisma.$transaction([
       this.prisma.telegramAdSale.findMany({
         where,
@@ -303,6 +324,8 @@ export class TelegramAdSalesSaleReadService {
         ? {
             displayName: sale.advertiser.displayName,
             telegramUsername: sale.advertiser.telegramUsername,
+            photoUrl: sale.advertiser.crmPeers?.[0]?.photoUrl ?? null,
+            avatarPresentation: iconToResolvedEmoji(sale.advertiser.avatarIcon),
           }
         : null,
       title: sale.title,

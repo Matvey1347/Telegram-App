@@ -27,11 +27,7 @@ import {
   mapCrmMemberSummary,
   mapCrmPeerSummary,
 } from './telegram-crm-read-model.mapper';
-import {
-  CRM_VISIBLE_TAG_WHERE,
-  crmTagSelect,
-  mapCrmTag,
-} from './telegram-crm-system-tags.service';
+import { crmTagSelect, mapCrmTag } from './telegram-crm-system-tags.service';
 
 export const CRM_OPEN_TASK_STATUSES = [
   TelegramAdvertiserTaskStatus.OPEN,
@@ -46,11 +42,7 @@ export const crmContactListSelect = {
   totalSalesCount: true,
   ownerMember: { select: crmMemberSummarySelect },
   tags: {
-    where: {
-      tag: {
-        ...CRM_VISIBLE_TAG_WHERE,
-      },
-    },
+    where: {},
     orderBy: [
       { tag: { position: 'asc' as const } },
       { createdAt: 'asc' as const },
@@ -128,11 +120,7 @@ export const crmContactDetailSelect = {
     },
   },
   tags: {
-    where: {
-      tag: {
-        ...CRM_VISIBLE_TAG_WHERE,
-      },
-    },
+    where: {},
     orderBy: { createdAt: 'desc' as const },
     take: CONTACT_DETAIL_RELATION_LIMIT,
     select: { tag: { select: crmTagSelect } },

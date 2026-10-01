@@ -171,6 +171,14 @@ export class TelegramCrmContactMergeService {
           data: { advertiserId: targetContactId },
         }),
       );
+      if (tx.crossPromotionPlan)
+        await move(
+          'crossPromotionPlans',
+          tx.crossPromotionPlan.updateMany({
+            where: { workspaceId, advertiserId: sourceContactId },
+            data: { advertiserId: targetContactId },
+          }),
+        );
       await tx.telegramAdvertiser.update({
         where: { id: targetContactId },
         data: {

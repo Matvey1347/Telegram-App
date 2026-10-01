@@ -7,6 +7,29 @@ vi.mock("@tanstack/react-query", () => ({
 }));
 
 describe("CrossPromotionPlacementSettings", () => {
+  it("does not crash edit mode when a stored placement has an invalid date", () => {
+    expect(() =>
+      render(
+        <CrossPromotionPlacementSettings
+          title="Slots"
+          description="Restored placement"
+          channelIds={["channel-1"]}
+          channels={[{ id: "channel-1", title: "Mentor" } as never]}
+          productsByChannelId={{}}
+          value={{
+            formatIds: {},
+            dates: { "channel-1": "2026-99-99" },
+            times: {},
+          }}
+          defaultDate=""
+          defaultTime="10:00"
+          onChange={vi.fn()}
+          showAdSlots
+        />,
+      ),
+    ).not.toThrow();
+  });
+
   it("shows the Ad Sale view estimate for the selected channel format", () => {
     render(
       <CrossPromotionPlacementSettings

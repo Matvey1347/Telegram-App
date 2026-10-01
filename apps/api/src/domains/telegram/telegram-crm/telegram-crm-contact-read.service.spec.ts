@@ -247,8 +247,11 @@ describe('TelegramCrmContactReadService', () => {
 
     await service.list('user-1', { page: 1, pageSize: 25 });
 
-    expect(prisma.telegramAdvertiser.findMany.mock.calls[0][0].where).toEqual({
+    expect(
+      prisma.telegramAdvertiser.findMany.mock.calls[0][0].where,
+    ).toMatchObject({
       workspaceId: 'workspace-1',
+      OR: expect.any(Array),
     });
   });
 
@@ -315,11 +318,7 @@ describe('TelegramCrmContactReadService', () => {
       expect.objectContaining({
         where: expect.objectContaining({
           workspaceId: 'workspace-1',
-          OR: expect.arrayContaining([
-            expect.objectContaining({
-              systemKey: { startsWith: 'TELEGRAM_FOLDER:' },
-            }),
-          ]),
+          systemKey: { startsWith: 'TELEGRAM_FOLDER:' },
         }),
       }),
     );

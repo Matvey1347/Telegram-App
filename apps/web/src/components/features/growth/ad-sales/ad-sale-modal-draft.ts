@@ -6,6 +6,7 @@ export type AdSaleModalDraft = {
   selectedAdvertiserId: string | null;
   assignedMemberId: string;
   saleOrigin: TelegramAdSaleOrigin;
+  financeSkipped?: boolean;
   accountId: string;
   channelSelectionMode: "network" | "channels";
   selectedNetworkId: string;
@@ -33,6 +34,7 @@ export function normalizeAdSaleModalDraft(
     selectedAdvertiserId: draft.selectedAdvertiserId ?? null,
     assignedMemberId: draft.assignedMemberId ?? "",
     saleOrigin: draft.saleOrigin ?? "DIRECT",
+    financeSkipped: draft.financeSkipped ?? false,
     accountId: draft.accountId ?? "",
     channelSelectionMode: draft.channelSelectionMode ?? "channels",
     selectedNetworkId: draft.selectedNetworkId ?? "",

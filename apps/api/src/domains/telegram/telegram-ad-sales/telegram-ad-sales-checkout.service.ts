@@ -87,9 +87,30 @@ export class TelegramAdSalesCheckoutService {
     userId: string,
     dto: CreateTelegramAdSaleCheckoutDto,
   ): Promise<TelegramAdSale> {
+    if (dto.financeSkipped) {
+      if (dto.payment) {
+        throw new BadRequestException(
+          'A finance-skipped sale cannot include a payment',
+        );
+      }
+      const idempotencyKey = dto.idempotencyKey?.trim() ?? undefined;
+      if (!idempotencyKey) {
+        throw new BadRequestException(
+          'An idempotency key is required for a finance-skipped sale',
+        );
+      }
+      return this.reserveWithoutPayment(userId, {
+        ...dto,
+        idempotencyKey,
+        financeSkipped: true,
+      });
+    }
+    if (!dto.payment) {
+      throw new BadRequestException('Payment is required');
+    }
     return this.createReservation(userId, {
       ...dto,
-      idempotencyKey: dto.payment.idempotencyKey,
+      idempotencyKey: dto.payment.idempotencyKey ?? undefined,
       financeSkipped: false,
       payment: dto.payment,
     });

@@ -81,7 +81,13 @@ export class TelegramCrmContactReadService {
             this.dueFilter(query),
           )
         : null;
-    const baseWhere = this.contactWhere(access.workspaceId, ownership, query);
+    const importTagIds = await this.importTagIds(access.workspaceId);
+    const baseWhere = this.contactWhere(
+      access.workspaceId,
+      ownership,
+      query,
+      importTagIds,
+    );
     let rows: ContactListRow[];
     let totalItems: number;
     if (readNoReplyPage) {
@@ -112,11 +118,19 @@ export class TelegramCrmContactReadService {
         this.prisma.telegramAdvertiser.count({ where: baseWhere }),
       ]);
     }
-    const facetWhere = this.contactWhere(access.workspaceId, ownership, {
-      ...query,
-      search: undefined,
-      tagIds: undefined,
-    });
+    const facetWhere = this.contactWhere(
+      access.workspaceId,
+      ownership,
+      {
+        ...query,
+        search: undefined,
+        tagIds: undefined,
+      },
+      importTagIds,
+    );
+    for (const row of rows) {
+      row.tags = row.tags.filter(({ tag }) => importTagIds.includes(tag.id));
+    }
     const [dealTotals, salesSummaries, replySummaries, availableTags] =
       await Promise.all([
         this.activeDealTotals(
@@ -147,7 +161,12 @@ export class TelegramCrmContactReadService {
     return {
       ...createPaginatedResponse(
         rows.map((row) =>
-          mapCrmContactListItem(row, dealTotals, salesSummaries, replySummaries),
+          mapCrmContactListItem(
+            row,
+            dealTotals,
+            salesSummaries,
+            replySummaries,
+          ),
         ),
         totalItems,
         pagination,
@@ -158,11 +177,10 @@ export class TelegramCrmContactReadService {
 
   async listTags(userId: string): Promise<CrmTagSummary[]> {
     const access = await this.authorization.require(userId, 'adSales.crm.view');
-    await this.systemTags?.ensureWorkflowTags(access.workspaceId);
     const rows = await this.prisma.telegramAdvertiserTag.findMany({
       where: {
         workspaceId: access.workspaceId,
-        ...CRM_VISIBLE_TAG_WHERE,
+        systemKey: { startsWith: 'TELEGRAM_FOLDER:' },
       },
       orderBy: [{ position: 'asc' }, { name: 'asc' }, { id: 'asc' }],
       select: crmTagSelect,
@@ -181,23 +199,25 @@ export class TelegramCrmContactReadService {
       'assignedMemberId' in ownership
         ? { ownerMemberId: ownership.assignedMemberId }
         : {};
-    const [workspace, contacts] = await Promise.all([
+    const [workspace, importTagIds] = await Promise.all([
       this.prisma.workspace.findUniqueOrThrow({
         where: { id: access.workspaceId },
         select: { primaryCurrency: true },
       }),
-      this.prisma.telegramAdvertiser.findMany({
-        where: {
-          workspaceId: access.workspaceId,
-          archivedAt: null,
-          ...ownedWhere,
-        },
-        select: {
-          id: true,
-          createdAt: true,
-        },
-      }),
+      this.importTagIds(access.workspaceId),
     ]);
+    const contacts = await this.prisma.telegramAdvertiser.findMany({
+      where: {
+        workspaceId: access.workspaceId,
+        archivedAt: null,
+        ...ownedWhere,
+        ...this.crmClientScope(importTagIds),
+      },
+      select: {
+        id: true,
+        createdAt: true,
+      },
+    });
     const contactIds = contacts.map((contact) => contact.id);
     // Payments are the source of truth here. Advertiser revenue aggregates are
     // maintained for CRM lists, but can lag behind payment corrections.
@@ -236,14 +256,18 @@ export class TelegramCrmContactReadService {
     }, new Prisma.Decimal(0));
     const now = new Date();
     const start = new Date(now.getFullYear(), now.getMonth() - 11, 1);
-    const months = Array.from({ length: 12 }, (_, offset) =>
-      new Date(start.getFullYear(), start.getMonth() + offset, 1),
+    const months = Array.from(
+      { length: 12 },
+      (_, offset) =>
+        new Date(start.getFullYear(), start.getMonth() + offset, 1),
     );
     const monthKey = (value: Date) =>
       `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}`;
     const points = months.map((month) => {
       const end = new Date(month.getFullYear(), month.getMonth() + 1, 1);
-      const clients = contacts.filter((contact) => contact.createdAt < end).length;
+      const clients = contacts.filter(
+        (contact) => contact.createdAt < end,
+      ).length;
       const buyers = [...firstPaymentByContact.values()].filter(
         (firstPayment) => firstPayment < end,
       ).length;
@@ -251,7 +275,9 @@ export class TelegramCrmContactReadService {
         date: monthKey(month),
         clients,
         buyers,
-        conversionRate: clients ? Math.round((buyers / clients) * 1000) / 10 : 0,
+        conversionRate: clients
+          ? Math.round((buyers / clients) * 1000) / 10
+          : 0,
       };
     });
     const buyers = firstPaymentByContact.size;
@@ -287,21 +313,20 @@ export class TelegramCrmContactReadService {
       select: crmContactDetailSelect,
     });
     if (!row) throw new NotFoundException('CRM Contact not found');
-    const [paymentSummary, dealCount, unread] =
-      await Promise.all([
-        this.paymentSummary(access.workspaceId, contactId),
-        this.prisma.telegramAdSale.count({
-          where: { workspaceId: access.workspaceId, advertiserId: contactId },
-        }),
-        this.prisma.telegramCrmConversation.aggregate({
-          where: {
-            workspaceId: access.workspaceId,
-            contactId,
-            state: TelegramCrmConversationState.ACTIVE,
-          },
-          _sum: { unreadCount: true },
-        }),
-      ]);
+    const [paymentSummary, dealCount, unread] = await Promise.all([
+      this.paymentSummary(access.workspaceId, contactId),
+      this.prisma.telegramAdSale.count({
+        where: { workspaceId: access.workspaceId, advertiserId: contactId },
+      }),
+      this.prisma.telegramCrmConversation.aggregate({
+        where: {
+          workspaceId: access.workspaceId,
+          contactId,
+          state: TelegramCrmConversationState.ACTIVE,
+        },
+        _sum: { unreadCount: true },
+      }),
+    ]);
     return mapCrmContactDetail(
       row,
       paymentSummary,
@@ -373,12 +398,14 @@ export class TelegramCrmContactReadService {
     workspaceId: string,
     ownership: { assignedMemberId: string } | Record<string, never>,
     query: CrmContactsQueryDto,
+    importTagIds: string[],
   ): Prisma.TelegramAdvertiserWhereInput {
     const search = query.search?.trim();
     const due = this.dueFilter(query);
     const followUp = this.followUpFilter(query, due);
     return {
       workspaceId,
+      ...this.crmClientScope(importTagIds),
       ...('assignedMemberId' in ownership
         ? { ownerMemberId: ownership.assignedMemberId }
         : query.ownerMemberId
@@ -423,6 +450,29 @@ export class TelegramCrmContactReadService {
     };
   }
 
+  private crmClientScope(
+    importTagIds: string[],
+  ): Prisma.TelegramAdvertiserWhereInput {
+    return {
+      OR: [
+        { source: { not: 'TELEGRAM_MTPROTO_IMPORT' } },
+        importTagIds.length
+          ? { tags: { some: { tagId: { in: importTagIds } } } }
+          : { id: { in: [] } },
+      ],
+    };
+  }
+
+  private async importTagIds(workspaceId: string) {
+    if (!this.prisma.telegramAdCrmWorkspaceSettings) return [];
+    const settings =
+      await this.prisma.telegramAdCrmWorkspaceSettings.findUnique({
+        where: { workspaceId },
+        select: { importTagIds: true },
+      });
+    return settings?.importTagIds ?? [];
+  }
+
   private async listTagFacets(
     workspaceId: string,
     contactWhere: Prisma.TelegramAdvertiserWhereInput,
@@ -433,7 +483,7 @@ export class TelegramCrmContactReadService {
     const rows = await this.prisma.telegramAdvertiserTag.findMany({
       where: {
         workspaceId,
-        ...CRM_VISIBLE_TAG_WHERE,
+        id: { in: await this.importTagIds(workspaceId) },
         advertisers: { some: { advertiser: contactWhere } },
       },
       orderBy: [{ position: 'asc' }, { name: 'asc' }, { id: 'asc' }],

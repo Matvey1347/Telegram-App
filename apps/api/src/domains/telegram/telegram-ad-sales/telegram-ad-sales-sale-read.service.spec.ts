@@ -49,6 +49,14 @@ describe('TelegramAdSalesSaleReadService', () => {
       advertiser: {
         displayName: 'Current buyer',
         telegramUsername: 'current_buyer',
+        avatarIcon: {
+          id: 'advertiser-avatar',
+          type: 'image',
+          name: 'Buyer logo',
+          emoji: null,
+          imageUrl: 'https://cdn.example/buyer-logo.png',
+        },
+        crmPeers: [{ photoUrl: 'https://cdn.example/current-buyer.jpg' }],
       },
       placements: [
         {
@@ -164,6 +172,13 @@ describe('TelegramAdSalesSaleReadService', () => {
         advertiserSummary: {
           displayName: 'Current buyer',
           telegramUsername: 'current_buyer',
+          photoUrl: 'https://cdn.example/current-buyer.jpg',
+          avatarPresentation: {
+            type: 'image',
+            id: 'advertiser-avatar',
+            name: 'Buyer logo',
+            url: 'https://cdn.example/buyer-logo.png',
+          },
         },
       }),
     );
@@ -188,7 +203,13 @@ describe('TelegramAdSalesSaleReadService', () => {
     expect(listQuery.where).toEqual({ workspaceId: 'ws-1' });
     expect(listQuery.select).not.toHaveProperty('payments');
     expect(listQuery.select.advertiser).toEqual({
-      select: { displayName: true, telegramUsername: true },
+      select: expect.objectContaining({
+        displayName: true,
+        telegramUsername: true,
+        crmPeers: expect.objectContaining({
+          select: { photoUrl: true },
+        }),
+      }),
     });
     expect(workspaceService.resolveWorkspaceIdForUser).toHaveBeenCalledTimes(1);
     expect(prisma.telegramAdSale.findMany).toHaveBeenCalledTimes(1);

@@ -183,7 +183,8 @@ describe("PromoCard", () => {
     expect(onDelete).not.toHaveBeenCalled();
   });
 
-  it("waits for the saved invite link before showing a selection or send preview", async () => {
+  it("uses the saved invite link immediately without a duplicate initial request", async () => {
+    mocks.getInitialInviteLinks.mockClear();
     const savedLink = {
       id: "saved-link",
       telegramChannelId: "channel-1",
@@ -193,20 +194,6 @@ describe("PromoCard", () => {
       requestedCount: 0,
       isRevoked: false,
     };
-    const otherLink = {
-      ...savedLink,
-      id: "other-link",
-      name: "Other link",
-      url: "https://t.me/+other",
-      isDefaultForChannel: true,
-    };
-    let finishLinks!: (links: (typeof savedLink)[]) => void;
-    mocks.getInitialInviteLinks.mockImplementationOnce(
-      () =>
-        new Promise((resolve) => {
-          finishLinks = resolve;
-        }),
-    );
     mocks.getPromo.mockResolvedValue({
       ...promo,
       text: "Join https://t.me/+saved",
@@ -229,18 +216,9 @@ describe("PromoCard", () => {
       screen.getByRole("menuitem", { name: "Send to bot" }),
     );
     expect(
-      await screen.findByRole("button", { name: "Loading invite link…" }),
-    ).toBeDisabled();
-    expect(
-      screen.queryByText(/The bot will receive this link/),
-    ).not.toBeInTheDocument();
-    finishLinks([otherLink, savedLink]);
-    expect(
       await screen.findByRole("button", { name: /Saved link/ }),
     ).toBeEnabled();
-    expect(
-      screen.queryByRole("button", { name: /Other link/ }),
-    ).not.toBeInTheDocument();
+    expect(mocks.getInitialInviteLinks).not.toHaveBeenCalled();
     expect(screen.getByText("The bot will receive this link:")).toBeVisible();
     expect(
       within(

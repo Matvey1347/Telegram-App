@@ -1,9 +1,29 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import type { TelegramAdSale } from "@telegram-system/shared";
-import { adSaleClientLabel, SalesTab } from "./ad-sales-sales-tab";
+import type {
+  TelegramAdSale,
+  TelegramAdSaleListItem,
+} from "@telegram-system/shared";
+import {
+  adSaleClientLabel,
+  advertiserAvatarUrl,
+  SalesTab,
+} from "./ad-sales-sales-tab";
 
 describe("SalesTab", () => {
+  it("uses the persisted CRM avatar instead of constructing a public Telegram URL", () => {
+    expect(
+      advertiserAvatarUrl({
+        advertiserSummary: {
+          displayName: "A20_admin",
+          telegramUsername: "A20_admin",
+          photoUrl: "https://cdn.example/a20.jpg",
+          avatarPresentation: null,
+        },
+      } as TelegramAdSaleListItem),
+    ).toBe("https://cdn.example/a20.jpg");
+  });
+
   it("shows one canonical label for the same linked client", () => {
     const linkedClient = {
       advertiserId: "advertiser-1",
@@ -39,6 +59,17 @@ describe("SalesTab", () => {
       advertiserNameSnapshot: null,
       advertiserName: null,
       advertiserContact: null,
+      advertiserSummary: {
+        displayName: "Buyer",
+        telegramUsername: "buyer",
+        photoUrl: null,
+        avatarPresentation: {
+          type: "image",
+          id: "buyer-logo",
+          name: "Buyer logo",
+          url: "https://cdn.example/buyer-logo.png",
+        },
+      },
       settlementCurrency: "USD",
       origin: "REPEAT",
       assignedMember: {
@@ -125,7 +156,11 @@ describe("SalesTab", () => {
       />,
     );
 
-    expect(screen.getByText("buyer")).toBeTruthy();
+    expect(screen.getByText("Buyer")).toBeTruthy();
+    expect(screen.getByAltText("Buyer")).toHaveAttribute(
+      "src",
+      "https://cdn.example/buyer-logo.png",
+    );
     expect(screen.getByText(/Published .*28\/08\/2026/)).toBeTruthy();
     expect(screen.queryByText(/28\/08\/2026.*→.*29\/08\/2026/)).toBeNull();
     const channelPreview = screen.getByLabelText("Show 2 placement channels");
@@ -148,9 +183,11 @@ describe("SalesTab", () => {
     expect(screen.queryByText("Untitled Sale")).toBeNull();
     expect(screen.queryByText("Payment status")).toBeNull();
     expect(screen.queryByText("Fulfillment status")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Actions for buyer" }));
+    fireEvent.click(screen.getByRole("button", { name: "Actions for Buyer" }));
     expect(screen.getByRole("menuitem", { name: "Edit deal" })).toBeTruthy();
-    expect(screen.getByRole("menuitem", { name: "Bot confirmation" })).toBeTruthy();
+    expect(
+      screen.getByRole("menuitem", { name: "Bot confirmation" }),
+    ).toBeTruthy();
     expect(screen.getByRole("menuitem", { name: "Delete deal" })).toBeTruthy();
     fireEvent.click(screen.getByRole("menuitem", { name: "Delete deal" }));
     expect(

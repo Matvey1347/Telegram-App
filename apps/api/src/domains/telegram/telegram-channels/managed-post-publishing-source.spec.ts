@@ -96,37 +96,29 @@ describe('selectManagedPostPublishingSource', () => {
 });
 
 describe('managedPostRequiresBotApi', () => {
-  it('routes a new advertising post through Bot API before buttons are added', () => {
+  it('allows an advertising media post without bot-only features to use MTProto', () => {
     expect(
       managedPostRequiresBotApi({
         hasInlineButtons: false,
         requiresRichMessage: false,
-        isAdvertisingPost: true,
-        existingSourceType: null,
-      }),
-    ).toBe(true);
-  });
-
-  it('does not silently migrate an existing MTProto publication', () => {
-    expect(
-      managedPostRequiresBotApi({
-        hasInlineButtons: false,
-        requiresRichMessage: false,
-        isAdvertisingPost: true,
-        existingSourceType: TelegramSourceType.MTPROTO,
-        hasExistingPublication: true,
       }),
     ).toBe(false);
   });
 
-  it('moves an unpublished advertising post from MTProto scheduling to Bot API', () => {
+  it('requires Bot API for inline buttons', () => {
+    expect(
+      managedPostRequiresBotApi({
+        hasInlineButtons: true,
+        requiresRichMessage: false,
+      }),
+    ).toBe(true);
+  });
+
+  it('requires Bot API for rich Telegram messages', () => {
     expect(
       managedPostRequiresBotApi({
         hasInlineButtons: false,
-        requiresRichMessage: false,
-        isAdvertisingPost: true,
-        existingSourceType: TelegramSourceType.MTPROTO,
-        hasExistingPublication: false,
+        requiresRichMessage: true,
       }),
     ).toBe(true);
   });

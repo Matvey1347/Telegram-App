@@ -183,7 +183,7 @@ export function PlacementEditor(props: {
 
   return (
     <div className="space-y-5">
-      <section className="rounded-xl border border-neutral-800 bg-neutral-950/45 p-4">
+      <section className="border-y border-neutral-800 py-4 sm:rounded-xl sm:border sm:bg-neutral-950/45 sm:p-4">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2.5">
             <TelegramEntityAvatar
@@ -250,7 +250,7 @@ export function PlacementEditor(props: {
           ) : null}
         </div>
       </section>
-      <section className="rounded-xl border border-neutral-800 bg-neutral-950/45 p-4">
+      <section className="border-y border-neutral-800 py-4 sm:rounded-xl sm:border sm:bg-neutral-950/45 sm:p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             {hasLinkedPost ? (

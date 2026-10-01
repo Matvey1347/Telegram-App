@@ -15,7 +15,11 @@ import {
 } from 'class-validator';
 import { PaginationQueryDto } from '../../../common/pagination/pagination-query.dto';
 
-export class MutualPromotionFolderQueryDto extends PaginationQueryDto {}
+export class MutualPromotionFolderQueryDto extends PaginationQueryDto {
+  @IsOptional()
+  @IsIn(['ACTIVE', 'SCHEDULED', 'COMPLETED'])
+  status?: 'ACTIVE' | 'SCHEDULED' | 'COMPLETED';
+}
 
 export class MutualPromotionExpenseDto {
   @IsString() accountId!: string;

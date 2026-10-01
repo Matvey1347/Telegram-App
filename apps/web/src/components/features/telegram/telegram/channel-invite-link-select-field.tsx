@@ -1,14 +1,8 @@
 "use client";
 
-import type { TelegramInviteLink } from "@/lib/api";
-import { CustomSelect, FormField } from "@/components/ui/primitives";
-import {
-  isTelegramInviteLink,
-  telegramInviteLinkOptionLabel,
-} from "@/lib/features/telegram/telegram-invite-link-options";
-import { inviteLinkCreatorFallback } from "@/lib/features/telegram/telegram-invite-link-creator";
-import { TelegramInviteLinkCreatorAvatar } from "./telegram-invite-link-creator-avatar";
-import { TelegramInviteLinkOptionLabel } from "./telegram-invite-link-option-label";
+import type { TelegramInviteLinkOption } from "@/lib/api";
+import { FormField } from "@/components/ui/primitives";
+import { TelegramInviteLinkSelect } from "./telegram-invite-link-select";
 
 export function ChannelInviteLinkSelectField({
   label,
@@ -24,7 +18,7 @@ export function ChannelInviteLinkSelectField({
 }: {
   label: string;
   value: string;
-  links: TelegramInviteLink[];
+  links: TelegramInviteLinkOption[];
   placeholder: string;
   helpText?: string;
   disabled?: boolean;
@@ -35,40 +29,15 @@ export function ChannelInviteLinkSelectField({
 }) {
   return (
     <FormField label={label}>
-      <CustomSelect
+      <TelegramInviteLinkSelect
         value={value}
+        links={links}
         onChange={onChange}
         disabled={disabled}
         onOpen={onOpen}
         loading={loading}
-        loadingLabel="Loading invite links…"
         placeholder={placeholder}
-        searchPlaceholder="Search invite links"
-        options={links.map((link) => ({
-          value: link.id,
-          label: telegramInviteLinkOptionLabel(link),
-          labelContent: <TelegramInviteLinkOptionLabel link={link} />,
-          meta: link.url,
-          iconFallback: inviteLinkCreatorFallback(link),
-          icon: (
-            <TelegramInviteLinkCreatorAvatar
-              photoUrl={link.creatorPhotoUrl}
-              memberAvatar={link.creatorMember?.avatarPresentation}
-              label={inviteLinkCreatorFallback(link)}
-            />
-          ),
-        }))}
-        canCreateOption={
-          onCreate
-            ? (input) =>
-                isTelegramInviteLink(input) &&
-                !links.some((link) => link.url === input.trim())
-            : undefined
-        }
-        createOptionLabel={
-          onCreate ? () => "Verify and add this invite link" : undefined
-        }
-        onCreateOption={onCreate}
+        onCreate={onCreate}
       />
       {helpText ? <p className="text-xs text-neutral-500">{helpText}</p> : null}
     </FormField>

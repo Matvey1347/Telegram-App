@@ -113,7 +113,7 @@ describe('MutualPromotionLifecycleService', () => {
     );
   });
 
-  it('does not duplicate a post already scheduled in Telegram natively', async () => {
+  it('waits for Telegram to confirm a natively scheduled post before marking VP delivery published', async () => {
     const publication = { publishManagedPost: jest.fn() };
     const update = jest.fn().mockResolvedValue({});
     const scheduledAt = new Date('2026-09-07T12:00:00.000Z');
@@ -152,20 +152,15 @@ describe('MutualPromotionLifecycleService', () => {
       {} as never,
     );
 
-    await service['publishPost'](
-      { folderId: 'folder-1', folderPostId: 'post-1' } as never,
-      scheduledAt,
-    );
+    await expect(
+      service['publishPost'](
+        { folderId: 'folder-1', folderPostId: 'post-1' } as never,
+        scheduledAt,
+      ),
+    ).rejects.toThrow('awaiting publication confirmation');
 
     expect(publication.publishManagedPost).not.toHaveBeenCalled();
-    expect(update).toHaveBeenCalledWith({
-      where: { id: 'delivery-native' },
-      data: {
-        status: 'PUBLISHED',
-        publishedAt: scheduledAt,
-        lastError: null,
-      },
-    });
+    expect(update).not.toHaveBeenCalled();
   });
 
   it('does not finish while publication work is pending or in flight', async () => {

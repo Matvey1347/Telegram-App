@@ -3,8 +3,9 @@ import { Prisma } from '@prisma/client';
 import type {
   MutualPromotionFolderDetail,
   MutualPromotionFolderListItem,
+  MutualPromotionFolderListResponse,
+  MutualPromotionFolderListStatus,
   MutualPromotionInviteLinkOption,
-  PaginatedResponse,
 } from '@telegram-system/shared';
 import { normalizeTelegramPostMediaItems } from '@telegram-system/shared';
 import { WorkspaceService } from '../../../common/workspace.service';
@@ -94,13 +95,23 @@ export class MutualPromotionReadService {
   async list(
     userId: string,
     query: MutualPromotionFolderQueryDto,
-  ): Promise<PaginatedResponse<MutualPromotionFolderListItem>> {
+  ): Promise<MutualPromotionFolderListResponse> {
     const workspaceId = await this.workspace(userId);
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 10;
-    const [rows, totalItems] = await Promise.all([
+    const statusGroups: Record<
+      MutualPromotionFolderListStatus,
+      Prisma.MutualPromotionFolderScalarWhereInput['status']
+    > = {
+      ACTIVE: { in: ['ACTIVE', 'DELETING'] },
+      SCHEDULED: { in: ['DRAFT', 'SCHEDULED'] },
+      COMPLETED: { in: ['COMPLETED', 'CANCELLED'] },
+    };
+    const status = query.status ?? 'ACTIVE';
+    const where = { workspaceId, status: statusGroups[status] };
+    const [rows, totalItems, statusCounts] = await Promise.all([
       this.prisma.mutualPromotionFolder.findMany({
-        where: { workspaceId },
+        where,
         orderBy: [{ startsAt: 'desc' }, { id: 'desc' }],
         skip: (page - 1) * pageSize,
         take: pageSize,
@@ -144,8 +155,16 @@ export class MutualPromotionReadService {
           },
         },
       }),
-      this.prisma.mutualPromotionFolder.count({ where: { workspaceId } }),
+      this.prisma.mutualPromotionFolder.count({ where }),
+      this.prisma.mutualPromotionFolder.groupBy({
+        by: ['status'],
+        where: { workspaceId },
+        _count: { _all: true },
+      }),
     ]);
+    const countsByStatus = new Map(
+      statusCounts.map((item) => [item.status, item._count._all]),
+    );
     const items = rows.map((row) => ({
       id: row.id,
       title: row.title,
@@ -191,6 +210,17 @@ export class MutualPromotionReadService {
         totalPages,
         hasNextPage: page < totalPages,
         hasPreviousPage: page > 1,
+      },
+      statusCounts: {
+        ACTIVE:
+          (countsByStatus.get('ACTIVE') ?? 0) +
+          (countsByStatus.get('DELETING') ?? 0),
+        SCHEDULED:
+          (countsByStatus.get('DRAFT') ?? 0) +
+          (countsByStatus.get('SCHEDULED') ?? 0),
+        COMPLETED:
+          (countsByStatus.get('COMPLETED') ?? 0) +
+          (countsByStatus.get('CANCELLED') ?? 0),
       },
     };
   }

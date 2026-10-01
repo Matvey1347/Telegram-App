@@ -6,7 +6,7 @@ import {
   getAllTelegramChannelInviteLinks,
   getTelegramChannelInitialInviteLink,
   getTelegramChannelInviteLinksForSelect,
-  type TelegramInviteLink,
+  type TelegramInviteLinkOption,
 } from "@/lib/api";
 import { telegramChannelKeys } from "@/lib/query-keys";
 
@@ -26,13 +26,20 @@ export function useTelegramInviteLinkOptions({
   enabled?: boolean;
   includeUnavailable?: boolean;
   availableForCampaignId?: string;
-  seedLinks?: TelegramInviteLink[];
+  seedLinks?: TelegramInviteLinkOption[];
   loadAllInitially?: boolean;
 }) {
   const normalizedChannelId = channelId || "";
   const [expandedChannelId, setExpandedChannelId] = useState("");
   const allRequested =
     loadAllInitially || expandedChannelId === normalizedChannelId;
+  const hasSeededInitialLink = seedLinks.some(
+    (link) =>
+      link.telegramChannelId === normalizedChannelId &&
+      (selectedId
+        ? link.id === selectedId
+        : Boolean(link.isDefaultForChannel)),
+  );
   const initialQuery = useQuery({
     queryKey: telegramChannelKeys.inviteLinkInitial(
       normalizedChannelId,
@@ -45,7 +52,11 @@ export function useTelegramInviteLinkOptions({
         selectedId || undefined,
         selectedIds,
       ),
-    enabled: enabled && Boolean(normalizedChannelId) && !loadAllInitially,
+    enabled:
+      enabled &&
+      Boolean(normalizedChannelId) &&
+      !loadAllInitially &&
+      !hasSeededInitialLink,
     staleTime: 30_000,
   });
   const allQuery = useQuery({
@@ -63,7 +74,7 @@ export function useTelegramInviteLinkOptions({
     staleTime: 30_000,
   });
   const links = useMemo(() => {
-    const byId = new Map<string, TelegramInviteLink>();
+    const byId = new Map<string, TelegramInviteLinkOption>();
     for (const link of seedLinks) {
       if (link.telegramChannelId === normalizedChannelId)
         byId.set(link.id, link);
@@ -77,10 +88,6 @@ export function useTelegramInviteLinkOptions({
     [normalizedChannelId],
   );
   const initialLink =
-    initialQuery.data?.find((link) => link.id === selectedId) ??
-    initialQuery.data?.find((link) => link.isDefaultForChannel) ??
-    allQuery.data?.find((link) => link.id === selectedId) ??
-    allQuery.data?.find((link) => link.isDefaultForChannel) ??
     seedLinks.find(
       (link) =>
         link.telegramChannelId === normalizedChannelId &&
@@ -88,6 +95,10 @@ export function useTelegramInviteLinkOptions({
           ? link.id === selectedId
           : Boolean(link.isDefaultForChannel)),
     ) ??
+    initialQuery.data?.find((link) => link.id === selectedId) ??
+    initialQuery.data?.find((link) => link.isDefaultForChannel) ??
+    allQuery.data?.find((link) => link.id === selectedId) ??
+    allQuery.data?.find((link) => link.isDefaultForChannel) ??
     null;
 
   return {

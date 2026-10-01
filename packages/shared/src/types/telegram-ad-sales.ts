@@ -352,8 +352,11 @@ export type TelegramAdAvailabilitySlot = {
     agreedPrice?: string;
     currency?: string;
     saleAgreedAmount?: string;
+    saleReceivedAmount?: string;
     settlementCurrency?: string;
     advertiserPhotoUrl?: string | null;
+    advertiserTelegram?: string | null;
+    advertiserAvatarPresentation?: ResolvedEmoji | null;
     viewsCount?: number | null;
   } | null;
   organicPostsCountForDay: number;

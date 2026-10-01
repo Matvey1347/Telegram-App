@@ -91,7 +91,8 @@ export type CreateCrmConversationPayload = {
 
 export const telegramCrmApi = {
   getAnalytics: async (signal?: AbortSignal) =>
-    (await api.get<CrmAnalyticsSummary>("/telegram-crm/analytics", { signal })).data,
+    (await api.get<CrmAnalyticsSummary>("/telegram-crm/analytics", { signal }))
+      .data,
   listContacts: async (params: CrmContactsParams, signal?: AbortSignal) =>
     (
       await api.get<CrmContactsListResult>("/telegram-crm/contacts", {
@@ -276,6 +277,7 @@ export const telegramCrmApi = {
       .data,
   updateSettings: async (payload: {
     defaultCrmSenderAccountId?: string | null;
+    importTagIds?: string[];
     purchaseTagId?: string | null;
   }) =>
     (await api.patch<CrmWorkspaceSettings>("/telegram-crm/settings", payload))

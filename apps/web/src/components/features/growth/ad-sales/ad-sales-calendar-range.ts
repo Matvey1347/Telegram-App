@@ -54,6 +54,20 @@ export function monthGridDaysForRange(from: Date, to: Date) {
   return listDaysInRange(start, end);
 }
 
+/** The availability request must cover outside-month cells shown in the grid. */
+export function rangeForVisibleCalendarDays(
+  days: Date[],
+  fallback: { from: Date; to: Date },
+) {
+  const firstVisibleDay = days[0] ?? fallback.from;
+  const lastVisibleDay = days.at(-1) ?? fallback.to;
+  const from = new Date(firstVisibleDay);
+  const to = new Date(lastVisibleDay);
+  from.setHours(0, 0, 0, 0);
+  to.setHours(23, 59, 59, 999);
+  return { from, to };
+}
+
 export function rangeForCalendarMode(
   view: TelegramAdSalesCalendarRangeMode,
   cursor: Date,
@@ -113,4 +127,3 @@ export function routeTabFromPathname(pathname: string): TelegramAdSalesTab {
   if (pathname.startsWith("/ad-sales/sales")) return "sales";
   return "calendar";
 }
-

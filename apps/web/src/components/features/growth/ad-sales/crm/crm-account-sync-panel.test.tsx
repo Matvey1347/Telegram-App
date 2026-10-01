@@ -64,23 +64,18 @@ describe("CrmAccountSyncPanel", () => {
       },
     ]);
     mocks.updateAccountCapabilities.mockReset().mockResolvedValue({});
-    mocks.getSettings.mockReset().mockResolvedValue({ purchaseTagId: null });
-    mocks.updateSettings.mockReset().mockResolvedValue({ purchaseTagId: null });
+    mocks.getSettings
+      .mockReset()
+      .mockResolvedValue({ purchaseTagId: null, importTagIds: [] });
+    mocks.updateSettings
+      .mockReset()
+      .mockResolvedValue({ purchaseTagId: null, importTagIds: [] });
     mocks.listTags.mockReset().mockResolvedValue([
       {
-        id: "manual-tag",
-        name: "Manual buyer tag",
+        id: "telegram-folder-tag",
+        name: "Buyers",
         color: "#22c55e",
-        systemKey: null,
-        isSystem: false,
-        assignmentMode: "MANUAL",
-        emojiPresentation: null,
-      },
-      {
-        id: "automatic-tag",
-        name: "Automatic tag",
-        color: "#3b82f6",
-        systemKey: null,
+        systemKey: "TELEGRAM_FOLDER:account-1:7",
         isSystem: true,
         assignmentMode: "AUTOMATIC",
         emojiPresentation: null,
@@ -149,16 +144,17 @@ describe("CrmAccountSyncPanel", () => {
     );
   });
 
-  it("uses the same searchable tag selector as the contact Tags modal", async () => {
+  it("offers only Telegram folder tags for the CRM import cohort", async () => {
     renderPanel();
     fireEvent.click(
       await screen.findByRole("button", { name: "Manage sources" }),
     );
-    fireEvent.click(await screen.findByRole("button", { name: "Select tags" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Select Telegram tags" }),
+    );
 
     expect(await screen.findByPlaceholderText("Search tags")).toBeVisible();
-    expect(screen.getByText("Manual buyer tag")).toBeVisible();
-    expect(screen.getByText("Automatic tag")).toBeVisible();
+    expect(screen.getByText("Buyers")).toBeVisible();
   });
 
   it("keeps a visible retry-safe alert when synchronization fails", async () => {

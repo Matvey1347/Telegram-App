@@ -3,6 +3,7 @@ import {
   TelegramAdPlacementStatus,
   TelegramAdSlotStrategy,
 } from '@prisma/client';
+import type { ResolvedEmoji } from '@telegram-system/shared';
 import { decimalToString } from './domain/decimal';
 import { utcDateKey, zonedDateTimeToUtc } from './domain/timezone';
 import { AdSalesPricingPreview } from './telegram-ad-sales-pricing-reader';
@@ -48,8 +49,11 @@ export type AvailabilityPlacement = {
     status: unknown;
     paymentStatus?: 'UNPAID' | 'PARTIALLY_PAID' | 'PAID' | 'OVERPAID' | null;
     saleAgreedAmount?: Prisma.Decimal;
+    saleReceivedAmount?: Prisma.Decimal;
     settlementCurrency?: string;
     advertiserPhotoUrl?: string | null;
+    advertiserTelegram?: string | null;
+    advertiserAvatarPresentation?: ResolvedEmoji | null;
   } | null;
 };
 
@@ -327,8 +331,15 @@ export function buildAdSalesAvailability(input: AvailabilityBuildInput) {
                 saleAgreedAmount: existing.sale?.saleAgreedAmount
                   ? decimalToString(existing.sale.saleAgreedAmount)
                   : undefined,
+                saleReceivedAmount:
+                  existing.sale?.saleReceivedAmount != null
+                    ? decimalToString(existing.sale.saleReceivedAmount)
+                    : undefined,
                 settlementCurrency: existing.sale?.settlementCurrency,
                 advertiserPhotoUrl: existing.sale?.advertiserPhotoUrl ?? null,
+                advertiserTelegram: existing.sale?.advertiserTelegram ?? null,
+                advertiserAvatarPresentation:
+                  existing.sale?.advertiserAvatarPresentation ?? null,
                 viewsCount:
                   existing.telegramPost?.viewsCount ??
                   existing.actualViewsFinal ??

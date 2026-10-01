@@ -395,6 +395,29 @@ describe('TelegramAdSalesCheckoutService', () => {
     expect(tx.telegramAdSalePayment.create).not.toHaveBeenCalled();
   });
 
+  it('creates a finance-skipped checkout without a payment', async () => {
+    const { service, prisma, tx, expectedSale } = setup();
+    const { payment: _payment, ...reservation } = checkoutDto();
+    void _payment;
+
+    await expect(
+      service.create('user-1', {
+        ...reservation,
+        financeSkipped: true,
+        idempotencyKey: 'web-ad-sale:free-1',
+      } as CreateTelegramAdSaleCheckoutDto),
+    ).resolves.toEqual(expectedSale);
+
+    expect(tx.telegramAdSale.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ financeSkipped: true }),
+      }),
+    );
+    expect(prisma.account.findFirst).not.toHaveBeenCalled();
+    expect(tx.transaction.create).not.toHaveBeenCalled();
+    expect(tx.telegramAdSalePayment.create).not.toHaveBeenCalled();
+  });
+
   it('atomically creates the reserved sale, finance transaction and payment', async () => {
     const { service, prisma, tx, expectedSale } = setup();
 

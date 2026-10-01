@@ -27,6 +27,14 @@ export type CrossPromotionPlacementSettingsValue = {
   hasIndividualOverrides?: boolean;
 };
 
+function validDateKey(value: string | undefined) {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return Number.isFinite(date.getTime()) && date.toISOString().startsWith(value)
+    ? value
+    : null;
+}
+
 export function CrossPromotionPlacementSettings({
   title,
   description,
@@ -59,20 +67,21 @@ export function CrossPromotionPlacementSettings({
   const selected = channelIds
     .map((id) => channels.find((channel) => channel.id === id))
     .filter((channel): channel is TelegramChannel => Boolean(channel));
+  const fallbackSlotDate = validDateKey(defaultDate) ?? new Date().toISOString().slice(0, 10);
   const slotDates = channelIds
-    .map((channelId) => value.dates?.[channelId] ?? defaultDate)
-    .filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date));
+    .map((channelId) => validDateKey(value.dates?.[channelId] ?? defaultDate))
+    .filter((date): date is string => Boolean(date));
   const slotRange = useMemo(() => {
     const dates = [...new Set(slotDates)].sort();
-    const first = dates[0] ?? defaultDate;
-    const last = dates.at(-1) ?? defaultDate;
+    const first = dates[0] ?? fallbackSlotDate;
+    const last = dates.at(-1) ?? fallbackSlotDate;
     return {
       from: new Date(`${first}T00:00:00.000Z`).toISOString(),
       to: new Date(
         new Date(`${last}T00:00:00.000Z`).getTime() + 2 * 86_400_000,
       ).toISOString(),
     };
-  }, [defaultDate, slotDates.join("|")]);
+  }, [fallbackSlotDate, slotDates.join("|")]);
   const slotOccurrences = useQuery({
     queryKey: telegramPublicationScheduleKeys.occurrencesByChannels(
       [...channelIds].sort(),
@@ -171,7 +180,7 @@ export function CrossPromotionPlacementSettings({
     });
 
   return (
-    <section className="space-y-3 rounded-xl border border-neutral-800 bg-neutral-950/55 p-3">
+    <section className="space-y-3 border-y border-neutral-800 py-3 sm:rounded-xl sm:border sm:bg-neutral-950/55 sm:p-3">
       <button
         type="button"
         className="flex w-full items-start justify-between gap-3 text-left"

@@ -5,6 +5,7 @@ import type {
   TelegramAdSalePlacement,
 } from "./telegram-ad-sales";
 import type { PaginatedResponse } from "../pagination";
+import type { ResolvedEmoji } from "./resolved-emoji";
 
 /**
  * Supports the product's 100-channel, three-month quote surface in one request
@@ -42,6 +43,8 @@ export type TelegramAdSaleListItem = Omit<
   advertiserSummary?: {
     displayName: string;
     telegramUsername: string | null;
+    photoUrl: string | null;
+    avatarPresentation: ResolvedEmoji | null;
   } | null;
   placements: TelegramAdSaleListPlacement[];
 };

@@ -42,8 +42,9 @@ export type AdSaleModalProps = {
     notes?: string;
     origin: TelegramAdSaleOrigin;
     assignedMemberId?: string | null;
-    accountId: string;
-    paymentAmount: number;
+    financeSkipped: boolean;
+    accountId?: string;
+    paymentAmount?: number;
     paymentCurrency: string;
     priceAllocation?: AdSalePriceAllocation;
     placements: Array<{

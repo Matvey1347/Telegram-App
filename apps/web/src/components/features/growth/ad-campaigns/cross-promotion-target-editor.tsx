@@ -8,15 +8,10 @@ import {
   type Promo,
   type TelegramChannel,
   type TelegramInviteLink,
+  type TelegramInviteLinkOption,
 } from "@/lib/api";
-import { TelegramInviteLinkCreatorAvatar } from "@/components/features/telegram/telegram/telegram-invite-link-creator-avatar";
+import { TelegramInviteLinkSelect } from "@/components/features/telegram/telegram/telegram-invite-link-select";
 import { CustomSelect, FormField } from "@/components/ui/primitives";
-import { inviteLinkCreatorFallback } from "@/lib/features/telegram/telegram-invite-link-creator";
-import {
-  telegramInviteLinkOptionLabel,
-  isTelegramInviteLink,
-} from "@/lib/features/telegram/telegram-invite-link-options";
-import { TelegramInviteLinkOptionLabel } from "@/components/features/telegram/telegram/telegram-invite-link-option-label";
 import { useTelegramInviteLinkOptions } from "@/lib/features/telegram/use-telegram-invite-link-options";
 import { useRegisterTelegramInviteLink } from "@/lib/features/telegram/use-register-telegram-invite-link";
 
@@ -35,7 +30,7 @@ export function CrossPromotionTargetEditor({
   onChange: (value: CrossPromotionTargetInput) => void;
   onResolved?: (value: {
     promo?: Promo;
-    inviteLink?: TelegramInviteLink;
+    inviteLink?: TelegramInviteLinkOption;
   }) => void;
   showPromo?: boolean;
   showChannelIdentity?: boolean;
@@ -169,7 +164,7 @@ export function CrossPromotionTargetEditor({
           </FormField>
         ) : null}
         <FormField label="Tracking invite link" required>
-          <CustomSelect
+          <TelegramInviteLinkSelect
             value={value.inviteLinkId}
             onChange={(inviteLinkId) => {
               const next = { ...value, inviteLinkId };
@@ -183,28 +178,9 @@ export function CrossPromotionTargetEditor({
             }}
             onOpen={linkOptions.requestAll}
             loading={linkOptions.loading}
-            loadingLabel="Loading invite links…"
             placeholder="Select invite link"
-            options={links.map((link) => ({
-              value: link.id,
-              label: telegramInviteLinkOptionLabel(link),
-              labelContent: <TelegramInviteLinkOptionLabel link={link} />,
-              meta: link.url,
-              iconFallback: inviteLinkCreatorFallback(link),
-              icon: (
-                <TelegramInviteLinkCreatorAvatar
-                  photoUrl={link.creatorPhotoUrl}
-                  memberAvatar={link.creatorMember?.avatarPresentation}
-                  label={inviteLinkCreatorFallback(link)}
-                />
-              ),
-            }))}
-            canCreateOption={(input) =>
-              isTelegramInviteLink(input) &&
-              !links.some((link) => link.url === input.trim())
-            }
-            createOptionLabel={() => "Verify and add this invite link"}
-            onCreateOption={async (url) => {
+            links={links}
+            onCreate={async (url) => {
               await registerLink.mutateAsync(url);
             }}
           />

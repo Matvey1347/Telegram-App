@@ -14,6 +14,8 @@ import { useOptionalI18n } from "@/providers/i18n-provider";
 import { featureModalIconForTitle } from "./feature-modal-icons";
 
 const subscribeToClientRuntime = () => () => undefined;
+let openModalCount = 0;
+let bodyOverflowBeforeModalLock = "";
 
 export function Modal({
   open,
@@ -58,6 +60,10 @@ export function Modal({
 
   useEffect(() => {
     if (!open) return;
+    if (openModalCount === 0)
+      bodyOverflowBeforeModalLock = document.body.style.overflow;
+    openModalCount += 1;
+    document.body.style.overflow = "hidden";
     const previousFocus = document.activeElement as HTMLElement | null;
     const dialog = dialogRef.current;
     const selector =
@@ -101,6 +107,9 @@ export function Modal({
     return () => {
       window.cancelAnimationFrame(frame);
       document.removeEventListener("keydown", onKeyDown);
+      openModalCount = Math.max(0, openModalCount - 1);
+      if (openModalCount === 0)
+        document.body.style.overflow = bodyOverflowBeforeModalLock;
       if (previousFocus?.isConnected) previousFocus.focus();
     };
   }, [open]);
@@ -120,7 +129,7 @@ export function Modal({
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className={`relative flex max-h-[calc(100dvh-1rem)] w-full flex-col rounded-lg border border-neutral-700 bg-neutral-900 shadow-2xl sm:max-h-[84vh] ${allowOverflow ? "overflow-visible" : "overflow-hidden"} ${size === "xs" ? "max-w-[400px]" : size === "sm" ? "max-w-[560px]" : size === "xl" ? "max-w-[1280px]" : "max-w-[660px]"}`}
+        className={`relative flex max-h-[calc(100dvh-2rem)] w-full min-w-0 max-w-[calc(100vw-2rem)] flex-col rounded-lg border border-neutral-700 bg-neutral-900 shadow-2xl sm:max-h-[84vh] ${allowOverflow ? "overflow-visible" : "overflow-hidden"} ${size === "xs" ? "max-w-[400px]" : size === "sm" ? "max-w-[560px]" : size === "xl" ? "max-w-[1280px]" : "max-w-[660px]"}`}
       >
         <div className="mb-1 flex items-start justify-between gap-3 p-4 pb-3 sm:items-center sm:p-5 sm:pb-3">
           <div className="flex min-w-0 flex-1 flex-wrap items-start gap-2 sm:items-center">
@@ -149,7 +158,7 @@ export function Modal({
           </button>
         </div>
         <div
-          className={`min-h-0 px-4 pb-4 sm:px-5 sm:pb-5 ${allowOverflow ? "overflow-visible" : "overflow-y-auto"}`}
+          className={`min-h-0 min-w-0 overscroll-contain px-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-5 sm:pb-5 ${allowOverflow ? "overflow-visible" : "overflow-x-hidden overflow-y-auto"}`}
         >
           {children}
         </div>

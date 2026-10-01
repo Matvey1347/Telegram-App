@@ -6,18 +6,12 @@ import type {
   Icon,
   Promo,
   TelegramChannel,
-  TelegramInviteLink,
+  TelegramInviteLinkOption,
 } from "@/lib/api";
 import { MemberSelect } from "@/components/features/workspace/member-select";
 import { IconPicker } from "@/components/icons/icon-picker";
-import { TelegramInviteLinkCreatorAvatar } from "@/components/features/telegram/telegram/telegram-invite-link-creator-avatar";
+import { TelegramInviteLinkSelect } from "@/components/features/telegram/telegram/telegram-invite-link-select";
 import { TelegramPostDraftEditor } from "@/components/features/telegram/telegram/telegram-post-draft-editor";
-import { inviteLinkCreatorFallback } from "@/lib/features/telegram/telegram-invite-link-creator";
-import {
-  isTelegramInviteLink,
-  telegramInviteLinkOptionLabel,
-} from "@/lib/features/telegram/telegram-invite-link-options";
-import { TelegramInviteLinkOptionLabel } from "@/components/features/telegram/telegram/telegram-invite-link-option-label";
 import {
   Button,
   Card,
@@ -50,12 +44,12 @@ export function PromoFormView(props: {
   assignedMemberId: string | null;
   channelId: string;
   inviteLinkId: string;
-  inviteLinks: TelegramInviteLink[];
+  inviteLinks: TelegramInviteLinkOption[];
   inviteLinksLoading: boolean;
   post: ReusablePromoPost;
   renderedPost: ReusablePromoPost;
   selectedChannel?: TelegramChannel;
-  selectedInvite?: TelegramInviteLink;
+  selectedInvite?: TelegramInviteLinkOption;
   postEditorExpanded: boolean;
   botConnected: boolean;
   botConnectionLoading: boolean;
@@ -148,34 +142,15 @@ export function PromoFormView(props: {
               />
             </FormField>
             <FormField label="Invite link">
-              <CustomSelect
+              <TelegramInviteLinkSelect
                 value={p.inviteLinkId}
                 onChange={p.onInviteLinkChange}
                 disabled={!p.channelId}
                 onOpen={p.onRequestInviteLinks}
                 loading={p.inviteLinksLoading}
-                loadingLabel="Loading invite links…"
                 placeholder="Select invite link"
-                options={p.inviteLinks.map((link) => ({
-                  value: link.id,
-                  label: telegramInviteLinkOptionLabel(link),
-                  labelContent: <TelegramInviteLinkOptionLabel link={link} />,
-                  meta: link.url,
-                  iconFallback: inviteLinkCreatorFallback(link),
-                  icon: (
-                    <TelegramInviteLinkCreatorAvatar
-                      photoUrl={link.creatorPhotoUrl}
-                      memberAvatar={link.creatorMember?.avatarPresentation}
-                      label={inviteLinkCreatorFallback(link)}
-                    />
-                  ),
-                }))}
-                canCreateOption={(input) =>
-                  isTelegramInviteLink(input) &&
-                  !p.inviteLinks.some((link) => link.url === input.trim())
-                }
-                createOptionLabel={() => "Verify and add this invite link"}
-                onCreateOption={p.onRegisterInviteLink}
+                links={p.inviteLinks}
+                onCreate={p.onRegisterInviteLink}
               />
             </FormField>
           </div>

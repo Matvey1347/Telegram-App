@@ -9,6 +9,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   AdSaleClientField,
   canonicalTelegramUsername,
+  dedupeAdvertisersByTelegramIdentity,
 } from "./ad-sale-client-field";
 
 describe("AdSaleClientField", () => {
@@ -38,7 +39,25 @@ describe("AdSaleClientField", () => {
     expect(canonicalTelegramUsername("bad name")).toBe("");
   });
 
-  it("loads client suggestions and renders avatar-backed options", async () => {
+  it("offers one client when legacy records share a Telegram username", () => {
+    const deduped = dedupeAdvertisersByTelegramIdentity([
+      {
+        id: "client-first",
+        displayName: "@Mishamanager",
+        telegramUsername: "mishamanager",
+      },
+      {
+        id: "client-legacy",
+        displayName: "Михайло Менеджер",
+        telegramUsername: "Mishamanager",
+      },
+    ] as never);
+
+    expect(deduped).toHaveLength(1);
+    expect(deduped[0]?.id).toBe("client-first");
+  });
+
+  it("loads client suggestions without requesting an unreliable Telegram avatar URL", async () => {
     const search = vi.fn().mockResolvedValue([
       {
         id: "client-1",
@@ -58,18 +77,18 @@ describe("AdSaleClientField", () => {
         onSearchAdvertisers={search}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Existing client" }));
-    await waitFor(() => expect(search).toHaveBeenCalledWith(""));
-    expect(
-      screen.queryByLabelText("Search existing clients"),
-    ).not.toBeInTheDocument();
     fireEvent.click(
-      await screen.findByRole("button", { name: "Select client" }),
+      screen.getByRole("button", { name: "Existing client" }),
     );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Type at least 2 characters" }),
+    );
+    fireEvent.change(screen.getByPlaceholderText("Search all clients"), {
+      target: { value: "Bu" },
+    });
+    await waitFor(() => expect(search).toHaveBeenCalledWith("Bu"));
     const option = await screen.findByRole("button", { name: /Buyer/ });
-    expect(option.querySelector("img")?.getAttribute("src")).toContain(
-      "/buyer.jpg",
-    );
+    expect(option.querySelector("img")).toBeNull();
     fireEvent.click(option);
     expect(select).toHaveBeenCalledWith(
       expect.objectContaining({ id: "client-1" }),
@@ -97,19 +116,16 @@ describe("AdSaleClientField", () => {
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: "Existing client" }));
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(250);
-    });
-    expect(search).toHaveBeenCalledOnce();
-    expect(search).toHaveBeenCalledWith("");
-
-    fireEvent.click(screen.getByRole("button", { name: "Select client" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Type at least 2 characters" }),
+    );
     const selectSearch = screen.getByPlaceholderText("Search all clients");
     fireEvent.change(selectSearch, { target: { value: "Client 6" } });
     await act(async () => {
       await vi.advanceTimersByTimeAsync(250);
     });
-    expect(search).toHaveBeenLastCalledWith("Client 6");
+    expect(search).toHaveBeenCalledOnce();
+    expect(search).toHaveBeenCalledWith("Client 6");
     vi.useRealTimers();
   });
 

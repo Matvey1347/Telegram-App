@@ -263,7 +263,7 @@ describe("ChannelPresentationSettingsModal", () => {
     resolveRegistration({ id: "invite-1" });
     await waitFor(() => expect(mocks.succeed).toHaveBeenCalledOnce());
     expect(onDraftChange).toHaveBeenCalledWith({
-      defaultInviteLinkId: "invite-1",
+      publicInviteLinkId: "invite-1",
     });
     expect(pending).toHaveBeenLastCalledWith(false);
   });

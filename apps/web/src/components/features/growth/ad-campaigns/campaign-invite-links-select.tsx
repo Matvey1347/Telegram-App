@@ -58,7 +58,6 @@ export function CampaignInviteLinksSelect({
         icon: (
           <TelegramInviteLinkCreatorAvatar
             photoUrl={link.creatorPhotoUrl}
-            memberAvatar={link.creatorMember?.avatarPresentation}
             label={inviteLinkCreatorFallback(link)}
           />
         ),

@@ -28,7 +28,7 @@ import { CrossPromotionPlansModule } from '../../growth/cross-promotion-plans/cr
     TelegramBotsModule,
     ApplicationLogsModule,
     OperationsNotificationsModule,
-    MutualPromotionFoldersModule,
+    forwardRef(() => MutualPromotionFoldersModule),
     forwardRef(() => CrossPromotionPlansModule),
   ],
   controllers: [ScheduledTasksController],

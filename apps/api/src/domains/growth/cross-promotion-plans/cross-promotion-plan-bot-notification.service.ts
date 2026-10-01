@@ -1,5 +1,7 @@
 import {
   BadRequestException,
+  forwardRef,
+  Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -46,6 +48,7 @@ export class CrossPromotionPlanBotNotificationService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly workspaces: WorkspaceService,
+    @Inject(forwardRef(() => TelegramSystemBotNotificationsService))
     private readonly notifications: TelegramSystemBotNotificationsService,
   ) {}
 

@@ -57,6 +57,11 @@ describe('MutualPromotionReadService', () => {
           },
         ]),
         count: jest.fn().mockResolvedValue(1),
+        groupBy: jest.fn().mockResolvedValue([
+          { status: 'ACTIVE', _count: { _all: 1 } },
+          { status: 'SCHEDULED', _count: { _all: 2 } },
+          { status: 'COMPLETED', _count: { _all: 3 } },
+        ]),
       },
     };
     const service = new MutualPromotionReadService(
@@ -98,6 +103,10 @@ describe('MutualPromotionReadService', () => {
     ]);
     expect(prisma.mutualPromotionFolder.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
+        where: {
+          workspaceId: 'workspace-1',
+          status: { in: ['ACTIVE', 'DELETING'] },
+        },
         include: expect.objectContaining({
           participants: expect.objectContaining({
             select: expect.objectContaining({
@@ -109,6 +118,11 @@ describe('MutualPromotionReadService', () => {
         }),
       }),
     );
+    expect(result.statusCounts).toEqual({
+      ACTIVE: 1,
+      SCHEDULED: 2,
+      COMPLETED: 3,
+    });
   });
 
   it('loads every preferred folder link and falls back to the main link', async () => {

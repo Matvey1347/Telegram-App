@@ -6,6 +6,7 @@ import {
   TelegramManagedPostStatus,
 } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { iconToResolvedEmoji } from '../../../common/icons/resolved-emoji';
 import { ACTIVE_TELEGRAM_AD_PLACEMENT_STATUSES } from './telegram-ad-sales-reservation';
 import { TelegramAdAvailabilityQueryDto } from './dto';
 import {
@@ -166,10 +167,21 @@ export class TelegramAdSalesAvailabilityReader {
             id: true,
             title: true,
             advertiserName: true,
+            advertiserTelegram: true,
             advertiserNameSnapshot: true,
+            advertiserTelegramSnapshot: true,
             settlementCurrency: true,
             advertiser: {
               select: {
+                avatarIcon: {
+                  select: {
+                    id: true,
+                    type: true,
+                    name: true,
+                    emoji: true,
+                    imageUrl: true,
+                  },
+                },
                 crmPeers: {
                   where: { photoUrl: { not: null } },
                   orderBy: { updatedAt: 'desc' },
@@ -204,11 +216,17 @@ export class TelegramAdSalesAvailabilityReader {
             title: sale.title,
             advertiserName: sale.advertiserName,
             advertiserNameSnapshot: sale.advertiserNameSnapshot,
+            advertiserTelegram:
+              sale.advertiserTelegramSnapshot ?? sale.advertiserTelegram,
             status: sale.status,
             paymentStatus: paymentStatus(totalPaid, totalAgreed),
             saleAgreedAmount: totalAgreed,
+            saleReceivedAmount: totalPaid,
             settlementCurrency: sale.settlementCurrency,
             advertiserPhotoUrl: sale.advertiser?.crmPeers[0]?.photoUrl ?? null,
+            advertiserAvatarPresentation: iconToResolvedEmoji(
+              sale.advertiser?.avatarIcon,
+            ),
           },
         ] as const;
       }),

@@ -48,6 +48,22 @@ export class TelegramInvitePersistenceService {
     creatorMember: WorkspaceService.assignedMemberInclude,
   } as const;
 
+  // Select controls only render the link identity, its purpose badges, and
+  // the Telegram creator avatar. Keep this deliberately separate from the
+  // operational invite-link read model: loading every counter, timestamp,
+  // campaign and workspace member for a dropdown is expensive at scale.
+  private readonly inviteLinkOptionSelect = {
+    id: true,
+    telegramChannelId: true,
+    name: true,
+    url: true,
+    creatorTelegramUserId: true,
+    creatorUsername: true,
+    creatorFirstName: true,
+    creatorLastName: true,
+    creatorPhotoUrl: true,
+  } as const;
+
   private readonly inviteLinkSyncUpsertSelect = {
     id: true,
     workspaceId: true,
@@ -308,7 +324,21 @@ export class TelegramInvitePersistenceService {
       | Prisma.TelegramInviteLinkOrderByWithRelationInput[];
     skip?: number;
     take?: number;
+    compact?: boolean;
   }) {
+    if (params.compact) {
+      // The public legacy read method still has a full read-model return type.
+      // Its compact caller immediately maps this to selector fields, so keep
+      // the compatibility signature while avoiding a second near-duplicate
+      // persistence API.
+      return (await this.prisma.telegramInviteLink.findMany({
+        where: params.where,
+        orderBy: params.orderBy,
+        skip: params.skip,
+        take: params.take,
+        select: this.inviteLinkOptionSelect,
+      })) as never;
+    }
     const run = async (includeRequestedCount: boolean) => {
       const links = await this.prisma.telegramInviteLink.findMany({
         where: params.where,

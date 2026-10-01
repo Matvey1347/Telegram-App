@@ -51,7 +51,11 @@ export type TelegramAdSaleCheckoutRequest = {
     mode: "PROPORTIONAL_BY_AUDIENCE";
     totalAmount: number;
   };
-  payment: {
+  /** Creates the reservation without a Finance payment or transaction. */
+  financeSkipped?: boolean;
+  /** Required by paymentless checkout retries. */
+  idempotencyKey?: string;
+  payment?: {
     accountId: string;
     amount: number;
     currency: string;

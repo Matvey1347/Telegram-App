@@ -432,6 +432,37 @@ describe("AdSaleModal", () => {
     );
   });
 
+  it("creates a free deal without showing finance fields or submitting a payment", async () => {
+    const onSubmit = vi.fn().mockResolvedValue({});
+    renderModal({ onSubmit });
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Without financial transaction",
+      }),
+    );
+
+    expect(screen.queryByText("Financial account")).toBeNull();
+    expect(screen.queryByText("Channel sale price")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Create sale" }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit.mock.calls[0][0]).toEqual(
+      expect.objectContaining({
+        financeSkipped: true,
+        accountId: undefined,
+        paymentAmount: undefined,
+      }),
+    );
+    expect(onSubmit.mock.calls[0][0].placements[0]).toEqual(
+      expect.objectContaining({
+        agreedPrice: 0,
+        recommendedPrice: 0,
+        minimumPrice: 0,
+      }),
+    );
+  });
+
   it("submits a new client username in canonical Telegram form", async () => {
     const onSubmit = vi.fn().mockResolvedValue({});
     renderModal({ onSubmit });

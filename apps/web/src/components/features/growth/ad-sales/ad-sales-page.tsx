@@ -30,6 +30,7 @@ import {
   monthGridDays,
   monthGridDaysForRange,
   rangeForCalendarMode,
+  rangeForVisibleCalendarDays,
   routeTabFromPathname,
   sameStringArray,
   tabRouteMap,
@@ -100,6 +101,8 @@ function LegacyAdSalesPage() {
     from: string;
     to: string;
   } | null>(null);
+  const [calendarPreferencesReady, setCalendarPreferencesReady] =
+    useState(false);
   const [selectedNetworkId, setSelectedNetworkId] = useState("");
   const [selectedChannelIds, setSelectedChannelIds] = useState<string[]>([]);
   const [salesPage, setSalesPage] = useState(1);
@@ -178,6 +181,10 @@ function LegacyAdSalesPage() {
     }
     return listDaysInRange(from, to);
   }, [calendarCursor, calendarRangeMode, calendarRangeSelection, from, to]);
+  const calendarAvailabilityRange = useMemo(
+    () => rangeForVisibleCalendarDays(calendarDays, { from, to }),
+    [calendarDays, from, to],
+  );
   const { data: settings } = useQuery({
     queryKey: ["currency-settings"],
     queryFn: currenciesApi.getSettings,
@@ -228,6 +235,13 @@ function LegacyAdSalesPage() {
     enabled: tab === "calendar" || adSaleModalOpen,
     staleTime: 60 * 1000,
   });
+  useEffect(() => {
+    if (!preferencesQuery.isSuccess && !preferencesQuery.isError) return;
+    // Wait for the persisted range and channel selection before starting the
+    // expensive calendar read. This prevents a transient week request followed
+    // immediately by the saved month request on every page open.
+    setCalendarPreferencesReady(true);
+  }, [preferencesQuery.isError, preferencesQuery.isSuccess]);
   const { mutate: savePreferences } = useMutation({
     mutationFn: (payload: Record<string, unknown>) =>
       telegramAdSalesApi.updatePreferences(payload),
@@ -501,19 +515,22 @@ function LegacyAdSalesPage() {
   const filteredSales = salesQuery.data?.items ?? [];
   const calendarAvailabilityParams = useMemo(
     () => ({
-      from: from.toISOString(),
-      to: to.toISOString(),
+      from: calendarAvailabilityRange.from.toISOString(),
+      to: calendarAvailabilityRange.to.toISOString(),
       channelIds: [...calendarChannelIds].sort(),
       // Availability is cached server-side. Bump the calendar read contract so
-      // open clients cannot retain the pre-deal-total placement representation.
-      cacheBust: "calendar-sale-totals-v1",
+      // open clients cannot retain the pre-Received-total placement response.
+      cacheBust: "calendar-received-totals-v3",
     }),
-    [calendarChannelIds, from, to],
+    [calendarAvailabilityRange, calendarChannelIds],
   );
   const calendarAvailabilityQuery = useQuery({
     queryKey: telegramAdSalesKeys.availability(calendarAvailabilityParams),
     queryFn: () => telegramAdSalesApi.availability(calendarAvailabilityParams),
-    enabled: tab === "calendar" && calendarChannelIds.length > 0,
+    enabled:
+      tab === "calendar" &&
+      calendarPreferencesReady &&
+      calendarChannelIds.length > 0,
     ...adSalesDataCacheOptions,
   });
   const filteredSlots = useMemo(
@@ -545,6 +562,8 @@ function LegacyAdSalesPage() {
         origin: payload.origin,
         settlementCurrency: payload.paymentCurrency,
         assignedMemberId: payload.assignedMemberId,
+        financeSkipped: payload.financeSkipped,
+        idempotencyKey: payload.financeSkipped ? idempotencyKey : undefined,
         priceAllocation: payload.priceAllocation,
         placements: payload.placements.map((placement) => ({
           telegramChannelId: placement.channelId,
@@ -562,13 +581,15 @@ function LegacyAdSalesPage() {
           telegramPostId: placement.telegramPostId,
           managedPostDraft: placement.managedPostDraft,
         })),
-        payment: {
-          accountId: payload.accountId,
-          amount: payload.paymentAmount,
-          currency: payload.paymentCurrency,
-          paidAt: new Date().toISOString(),
-          idempotencyKey,
-        },
+        payment: payload.financeSkipped
+          ? undefined
+          : {
+              accountId: payload.accountId!,
+              amount: payload.paymentAmount!,
+              currency: payload.paymentCurrency,
+              paidAt: new Date().toISOString(),
+              idempotencyKey,
+            },
       },
       onProgress ?? (() => undefined),
     );
@@ -598,7 +619,8 @@ function LegacyAdSalesPage() {
         !sameStringArray(
           selectedChannelIds,
           calendarSelection.selectedChannelIds,
-        ) || selectedNetworkId !== calendarSelection.selectedNetworkId
+        ) ||
+        selectedNetworkId !== calendarSelection.selectedNetworkId
       ) {
         setSelectedChannelIds(calendarSelection.selectedChannelIds);
         setSelectedNetworkId(calendarSelection.selectedNetworkId);

@@ -8,6 +8,7 @@ import type {
   CreateMutualPromotionPostPayload,
   MutualPromotionExpensePayload,
   MutualPromotionFolderDetail,
+  MutualPromotionFolderListStatus,
   UpdateMutualPromotionPostPayload,
 } from "@telegram-system/shared";
 import {
@@ -49,7 +50,15 @@ import {
   reconcileMutualPromotionFolder,
 } from "./mutual-promotion-finance-cache";
 
-const listParams = { page: 1, pageSize: 100 } as const;
+const listPageParams = { page: 1, pageSize: 100 } as const;
+const folderTabs: Array<{
+  value: MutualPromotionFolderListStatus;
+  label: string;
+}> = [
+  { value: "ACTIVE", label: "Active" },
+  { value: "SCHEDULED", label: "Scheduled" },
+  { value: "COMPLETED", label: "Completed" },
+];
 
 export function MutualPromotionFoldersPage({
   sectionTabs,
@@ -71,6 +80,8 @@ export function MutualPromotionFoldersPage({
     id: string;
     title: string;
   } | null>(null);
+  const [folderStatus, setFolderStatus] =
+    useState<MutualPromotionFolderListStatus>("ACTIVE");
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -78,6 +89,7 @@ export function MutualPromotionFoldersPage({
     return () => window.clearInterval(timer);
   }, []);
 
+  const listParams = { ...listPageParams, status: folderStatus } as const;
   const foldersQuery = useQuery({
     queryKey: mutualPromotionFolderKeys.list(listParams),
     queryFn: () => mutualPromotionFoldersApi.list(listParams),
@@ -364,6 +376,42 @@ export function MutualPromotionFoldersPage({
       />
       {sectionTabs}
 
+      <div
+        className="flex w-full gap-1 overflow-x-auto rounded-xl border border-neutral-800 bg-neutral-900/70 p-1"
+        role="tablist"
+        aria-label="Mutual-promotion folder status"
+      >
+        {folderTabs.map((tab) => {
+          const active = tab.value === folderStatus;
+          const count = foldersQuery.data?.statusCounts?.[tab.value] ?? 0;
+          return (
+            <button
+              key={tab.value}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              onClick={() => setFolderStatus(tab.value)}
+              className={`inline-flex min-h-10 shrink-0 items-center gap-2 rounded-lg px-3 text-sm font-medium transition ${
+                active
+                  ? "bg-blue-600 text-white"
+                  : "text-neutral-300 hover:bg-neutral-800 hover:text-white"
+              }`}
+            >
+              {tab.label}
+              <span
+                className={`rounded-full px-1.5 py-0.5 text-xs tabular-nums ${
+                  active
+                    ? "bg-white/15 text-white"
+                    : "bg-neutral-800 text-neutral-400"
+                }`}
+              >
+                {count}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
       {foldersQuery.isLoading ? (
         <LoadingState text="Loading mutual-promotion folders…" />
       ) : null}
@@ -371,7 +419,9 @@ export function MutualPromotionFoldersPage({
         <ErrorState text="Could not load mutual-promotion folders." />
       ) : null}
       {foldersQuery.data && !foldersQuery.data.items.length ? (
-        <EmptyState text="No mutual-promotion folders yet. Create one to prepare channels and publications." />
+        <EmptyState
+          text={`No ${folderTabs.find((tab) => tab.value === folderStatus)?.label.toLowerCase()} mutual-promotion folders.`}
+        />
       ) : null}
       {foldersQuery.data?.items.length ? (
         <div className="grid items-start gap-4 md:grid-cols-2 xl:grid-cols-3">

@@ -38,6 +38,16 @@ describe('TelegramAdSalesAvailabilityReader sale summaries', () => {
           title: 'Campaign',
           advertiserName: 'Buyer',
           advertiserNameSnapshot: 'Buyer',
+          advertiser: {
+            avatarIcon: {
+              id: 'advertiser-avatar',
+              type: 'image',
+              name: 'Buyer logo',
+              emoji: null,
+              imageUrl: 'https://cdn.example/buyer-logo.png',
+            },
+            crmPeers: [{ photoUrl: 'https://cdn.example/buyer-peer.jpg' }],
+          },
           status: TelegramAdSaleStatus.CONFIRMED,
           placements: [{ agreedPrice: new Prisma.Decimal(100) }],
           payments: [
@@ -138,6 +148,15 @@ describe('TelegramAdSalesAvailabilityReader sale summaries', () => {
       expect.objectContaining({
         saleStatus: TelegramAdSaleStatus.CONFIRMED,
         paymentStatus: 'PARTIALLY_PAID',
+        saleAgreedAmount: '100',
+        saleReceivedAmount: '40',
+        advertiserPhotoUrl: 'https://cdn.example/buyer-peer.jpg',
+        advertiserAvatarPresentation: {
+          type: 'image',
+          id: 'advertiser-avatar',
+          name: 'Buyer logo',
+          url: 'https://cdn.example/buyer-logo.png',
+        },
       }),
     );
     expect(prisma.telegramAdSale.findMany).toHaveBeenCalledTimes(1);

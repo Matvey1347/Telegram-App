@@ -517,8 +517,8 @@ function DealOverview(props: {
     return () => window.clearInterval(timer);
   }, [props.sale.placements]);
   return (
-    <div className="space-y-5">
-      <section className="grid gap-3 rounded-xl border border-neutral-800 bg-neutral-950/45 p-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] xl:items-end">
+    <div className="min-w-0 space-y-5">
+      <section className="grid min-w-0 gap-3 border-y border-neutral-800 py-4 sm:rounded-xl sm:border sm:bg-neutral-950/45 sm:p-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] xl:items-end">
         <FormField label="Buyer">
           <Input
             value={props.buyerContact}
@@ -539,7 +539,7 @@ function DealOverview(props: {
         <SaleStatusActions sale={props.sale} onAction={props.onAction} />
       </section>
       <section>
-        <div className="mb-3 grid grid-cols-[1fr_auto_1fr] items-center gap-4">
+        <div className="mb-3 flex min-w-0 flex-col gap-3 sm:grid sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:items-center sm:gap-4">
           <div>
             <h4 className="font-semibold text-white">Placements</h4>
             <p className="text-sm text-neutral-500">
@@ -551,7 +551,7 @@ function DealOverview(props: {
           props.sale.placements.every(
             (placement) => placement.managedPostId && placement.managedPost,
           ) ? (
-            <Button onClick={props.onSharedPost}>
+            <Button className="w-full sm:w-auto" onClick={props.onSharedPost}>
               <span className="inline-flex items-center gap-2">
                 <Pencil size={16} aria-hidden="true" />
                 Edit shared post
@@ -560,7 +560,7 @@ function DealOverview(props: {
           ) : (
             <span aria-hidden="true" />
           )}
-          <div className="text-right">
+          <div className="text-left sm:text-right">
             <span className="block text-[10px] font-medium uppercase tracking-wider text-neutral-600">
               Deal value
             </span>
@@ -574,7 +574,7 @@ function DealOverview(props: {
           {props.sale.placements.map((p) => (
             <div
               key={p.id}
-              className="rounded-xl border border-neutral-800 bg-neutral-950 p-4 text-left"
+              className="border-y border-neutral-800 py-4 text-left sm:rounded-xl sm:border sm:bg-neutral-950 sm:p-4"
             >
               <div className="flex justify-between gap-3">
                 <div className="min-w-0">
@@ -618,8 +618,8 @@ function DealOverview(props: {
                   onClick={() => props.onPlacement(p.id)}
                 />
               </div>
-              <div className="mt-4 flex justify-between border-t border-neutral-800 pt-3 text-sm">
-                <div>
+              <div className="mt-4 flex min-w-0 flex-col gap-2 border-t border-neutral-800 pt-3 text-sm sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                     <span
                       className={
@@ -678,7 +678,7 @@ function DealOverview(props: {
                     />
                   ) : null}
                 </div>
-                <span className="font-semibold text-white">
+                <span className="shrink-0 font-semibold text-white">
                   {p.agreedPrice} {p.currency}
                 </span>
               </div>

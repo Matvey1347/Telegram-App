@@ -2581,6 +2581,7 @@ model TelegramAdCrmWorkspaceSettings {
   inactivityThresholdDays           Int                    @default(60)
   highValueCustomerThreshold        Decimal                @default(0)
   defaultCrmSenderAccountId         String?
+  importTagIds                      String[]               @default([])
   purchaseTagId                     String?
   createdAt                         DateTime               @default(now())
   updatedAt                         DateTime               @updatedAt
@@ -3431,6 +3432,7 @@ model MutualPromotionFolder {
   assignedMemberId String?
   createdByUserId  String
   activatedAt      DateTime?
+  scheduledBotConfirmationSentAt DateTime?
   cancelledAt      DateTime?
   completedAt      DateTime?
   nextDueAt        DateTime?
@@ -3528,6 +3530,7 @@ model MutualPromotionFolderPost {
   buttonRows  Json?
   scheduledAt DateTime
   position    Int
+  publishedBotConfirmationSentAt DateTime?
 
   workspace      Workspace                     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   folder         MutualPromotionFolder         @relation(fields: [folderId], references: [id], onDelete: Cascade)

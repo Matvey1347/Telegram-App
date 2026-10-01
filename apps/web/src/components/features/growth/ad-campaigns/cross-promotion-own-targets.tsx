@@ -1,7 +1,7 @@
 "use client";
 
 import type { CrossPromotionTargetInput } from "@telegram-system/shared";
-import type { Promo, TelegramChannel, TelegramInviteLink } from "@/lib/api";
+import type { Promo, TelegramChannel, TelegramInviteLinkOption } from "@/lib/api";
 import { FormField, MultiSelect } from "@/components/ui/primitives";
 import { CrossPromotionTargetEditor } from "./cross-promotion-target-editor";
 
@@ -22,7 +22,7 @@ export function CrossPromotionOwnTargets({
   onTargetsChange: (targets: CrossPromotionTargetInput[]) => void;
   onResolved: (
     channelId: string,
-    value: { promo?: Promo; inviteLink?: TelegramInviteLink },
+    value: { promo?: Promo; inviteLink?: TelegramInviteLinkOption },
   ) => void;
 }) {
   const available = channels.filter(

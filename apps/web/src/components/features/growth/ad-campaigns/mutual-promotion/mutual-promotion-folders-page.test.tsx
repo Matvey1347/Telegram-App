@@ -115,6 +115,48 @@ describe("MutualPromotionFoldersPage", () => {
     api.updateTitle.mockReset();
   });
 
+  it("loads Active first and only requests another folder inbox after its tab is opened", async () => {
+    const user = userEvent.setup();
+    api.list.mockImplementation(() =>
+      Promise.resolve({
+        items: [],
+        pagination: {
+          page: 1,
+          pageSize: 100,
+          totalItems: 0,
+          totalPages: 1,
+          hasNextPage: false,
+          hasPreviousPage: false,
+        },
+        statusCounts: { ACTIVE: 4, SCHEDULED: 2, COMPLETED: 9 },
+      }),
+    );
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MutualPromotionFoldersPage />
+      </QueryClientProvider>,
+    );
+
+    await screen.findByRole("tab", { name: "Scheduled 2" });
+    expect(api.list).toHaveBeenCalledWith({
+      page: 1,
+      pageSize: 100,
+      status: "ACTIVE",
+    });
+    expect(api.list).toHaveBeenCalledTimes(1);
+
+    await user.click(screen.getByRole("tab", { name: "Scheduled 2" }));
+    expect(api.list).toHaveBeenLastCalledWith({
+      page: 1,
+      pageSize: 100,
+      status: "SCHEDULED",
+    });
+  });
+
   it("never shows the previously selected folder while a draft loads", async () => {
     const user = userEvent.setup();
     const completed = folder("completed", "Completed folder", "COMPLETED");

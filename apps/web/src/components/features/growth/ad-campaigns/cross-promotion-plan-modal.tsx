@@ -14,7 +14,7 @@ import {
   type Promo,
   type TelegramChannel,
   type TelegramChannelNetwork,
-  type TelegramInviteLink,
+  type TelegramInviteLinkOption,
 } from "@/lib/api";
 import { zonedDateTimeToUtc } from "@/lib/features/growth/telegram-ad-sales";
 import { renderSelectedPromoDraft } from "./promo-invite-template";
@@ -91,7 +91,7 @@ export function CrossPromotionPlanModal({
   const [botFlowTarget, setBotFlowTarget] = useState("post");
   const [showValidationErrors, setShowValidationErrors] = useState(false);
   const resolvedTargets = useRef(
-    new Map<string, { promo?: Promo; inviteLink?: TelegramInviteLink }>(),
+    new Map<string, { promo?: Promo; inviteLink?: TelegramInviteLinkOption }>(),
   );
   useEffect(() => {
     if (open) {

@@ -1,6 +1,7 @@
 import type { TelegramPostButtonRows } from "./telegram-post-buttons";
 import type { TelegramPostMediaItem } from "./telegram-post-media";
 import type { ResolvedEmoji } from "./resolved-emoji";
+import type { PaginatedResponse } from "../pagination";
 
 export type MutualPromotionFolderStatus =
   | "DRAFT"
@@ -9,6 +10,12 @@ export type MutualPromotionFolderStatus =
   | "DELETING"
   | "COMPLETED"
   | "CANCELLED";
+
+/** The three operational inboxes used by the folders screen. */
+export type MutualPromotionFolderListStatus =
+  | "ACTIVE"
+  | "SCHEDULED"
+  | "COMPLETED";
 
 export type MutualPromotionParticipantRole = "PUBLISHER" | "PAID";
 
@@ -154,6 +161,11 @@ export type MutualPromotionFolderListItem = {
   createdAt: string;
   updatedAt: string;
 };
+
+export type MutualPromotionFolderListResponse =
+  PaginatedResponse<MutualPromotionFolderListItem> & {
+    statusCounts: Record<MutualPromotionFolderListStatus, number>;
+  };
 
 export type MutualPromotionFolderExpense = {
   transactionId: string;

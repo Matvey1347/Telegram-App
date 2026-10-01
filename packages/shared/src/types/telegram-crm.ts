@@ -96,6 +96,8 @@ export type CrmAccountSummary = {
 export type CrmWorkspaceSettings = {
   workspaceId: string;
   defaultCrmSenderAccountId: string | null;
+  /** Telegram dialog-folder tags that define the visible CRM client cohort. */
+  importTagIds: string[];
   purchaseTagId: string | null;
   createdAt: string | null;
   updatedAt: string | null;
@@ -165,7 +167,13 @@ export type CrmContactPaymentSummary = {
 
 export type CrmContactChannelSummary = {
   id: string;
-  type: "TELEGRAM_USERNAME" | "TELEGRAM_USER_ID" | "PHONE" | "EMAIL" | "WEBSITE" | "OTHER";
+  type:
+    | "TELEGRAM_USERNAME"
+    | "TELEGRAM_USER_ID"
+    | "PHONE"
+    | "EMAIL"
+    | "WEBSITE"
+    | "OTHER";
   value: string;
   label: string | null;
   isPrimary: boolean;

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { forwardRef, Inject, Injectable } from '@nestjs/common';
 import {
   MutualPromotionWorkItem,
   MutualPromotionWorkKind,
@@ -14,6 +14,7 @@ import {
   refreshMutualPromotionFolderDueTimes,
   runMutualPromotionBounded,
 } from './mutual-promotion-lifecycle.utils';
+import { MutualPromotionBotNotificationService } from './mutual-promotion-bot-notification.service';
 
 export type MutualPromotionLifecycleResult = {
   considered: number;
@@ -31,6 +32,8 @@ export class MutualPromotionLifecycleService {
     private readonly boundaries: MutualPromotionBoundaryService,
     private readonly publication: TelegramManagedPostPublicationService,
     private readonly remoteDeletion: TelegramManagedPostRemoteDeletionService,
+    @Inject(forwardRef(() => MutualPromotionBotNotificationService))
+    private readonly botConfirmation?: MutualPromotionBotNotificationService,
   ) {}
 
   async nextDueAt(): Promise<Date | null> {
@@ -185,7 +188,8 @@ export class MutualPromotionLifecycleService {
   }
 
   private async publishPost(work: MutualPromotionWorkItem, now: Date) {
-    if (!work.folderPostId) throw new Error('Publish work has no logical post');
+    const folderPostId = work.folderPostId;
+    if (!folderPostId) throw new Error('Publish work has no logical post');
     const folder = await this.prisma.mutualPromotionFolder.findUnique({
       where: { id: work.folderId },
       select: { status: true, endsAt: true },
@@ -213,7 +217,7 @@ export class MutualPromotionLifecycleService {
     }
     const deliveries = await this.prisma.mutualPromotionPostDelivery.findMany({
       where: {
-        folderPostId: work.folderPostId,
+        folderPostId,
         status: { in: ['PENDING', 'PUBLISHING', 'FAILED'] },
         managedPostId: { not: null },
       },
@@ -239,21 +243,18 @@ export class MutualPromotionLifecycleService {
           where: { id: delivery.id },
           data: { status: 'PUBLISHED', publishedAt: now, lastError: null },
         });
+        await this.botConfirmation?.sendPublishedOnce(folderPostId);
         return;
       }
       if (
         delivery.managedPost?.status === 'SCHEDULED' &&
         delivery.managedPost.scheduleMode === 'TELEGRAM_NATIVE'
       ) {
-        await this.prisma.mutualPromotionPostDelivery.update({
-          where: { id: delivery.id },
-          data: {
-            status: 'PUBLISHED',
-            publishedAt: delivery.managedPost.scheduledAt ?? now,
-            lastError: null,
-          },
-        });
-        return;
+        // Telegram has accepted the native scheduled message, but it has not
+        // confirmed that the message is published yet. Let identity
+        // reconciliation promote the managed post first; otherwise VP can
+        // report a publication (and lack its link) before Telegram publishes.
+        throw new Error('Telegram native scheduled post is awaiting publication confirmation');
       }
       await this.prisma.mutualPromotionPostDelivery.update({
         where: { id: delivery.id },
@@ -269,6 +270,7 @@ export class MutualPromotionLifecycleService {
           where: { id: delivery.id },
           data: { status: 'PUBLISHED', publishedAt: now, lastError: null },
         });
+        await this.botConfirmation?.sendPublishedOnce(folderPostId);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         errors.push(message);

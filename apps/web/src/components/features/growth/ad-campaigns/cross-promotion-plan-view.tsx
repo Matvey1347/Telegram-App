@@ -13,7 +13,7 @@ import type {
   Promo,
   TelegramChannel,
   TelegramChannelNetwork,
-  TelegramInviteLink,
+  TelegramInviteLinkOption,
 } from "@/lib/api";
 import {
   Button,
@@ -102,7 +102,7 @@ export function CrossPromotionPlanView({
     importReferences: (input: string) => void | Promise<void>;
   };
   resolvedTargets: MutableRefObject<
-    Map<string, { promo?: Promo; inviteLink?: TelegramInviteLink }>
+    Map<string, { promo?: Promo; inviteLink?: TelegramInviteLinkOption }>
   >;
   basicsReady: boolean;
   promoReady: boolean;
@@ -217,7 +217,7 @@ export function CrossPromotionPlanView({
           onCreateNew={drafts.createNewDraft}
         />
       ) : (
-        <div className="space-y-4">
+        <div className="min-w-0 space-y-4">
           <div className="grid gap-3 md:grid-cols-[auto_minmax(0,1fr)]">
             <FormField label="Emoji">
               <IconPicker
@@ -239,7 +239,7 @@ export function CrossPromotionPlanView({
               />
             </FormField>
           </div>
-          <section className="space-y-4 rounded-xl border border-blue-900/70 bg-blue-950/10 p-4">
+          <section className="space-y-4 border-y border-blue-900/70 py-4 sm:rounded-xl sm:border sm:bg-blue-950/10 sm:p-4">
             <button
               type="button"
               className="flex w-full items-start justify-between gap-3 text-left"
@@ -287,7 +287,7 @@ export function CrossPromotionPlanView({
                   <>
                     {kind === "DIRECT_MUTUAL" ? (
                       <>
-                        <section className="space-y-3 rounded-xl border border-neutral-800 p-3">
+                        <section className="space-y-3 border-t border-neutral-800 pt-3 sm:rounded-xl sm:border sm:p-3">
                           <div className="flex items-center justify-between gap-2">
                             <div>
                               <h4 className="text-sm font-semibold text-white">
@@ -353,7 +353,7 @@ export function CrossPromotionPlanView({
                         {additionalPublisherPosts.map((publication, index) => (
                           <section
                             key={publication.id}
-                            className="space-y-3 rounded-xl border border-neutral-800 p-3"
+                            className="space-y-3 border-t border-neutral-800 pt-3 sm:rounded-xl sm:border sm:p-3"
                           >
                             <div className="flex items-center justify-between gap-2">
                               <span>
@@ -592,11 +592,16 @@ export function CrossPromotionPlanView({
           {error || botFlow.error ? (
             <FormError message={error || botFlow.error} />
           ) : null}
-          <div className="flex justify-end gap-2">
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <Button type="button" variant="secondary" onClick={onClose}>
               Cancel
             </Button>
-            <Button type="button" disabled={saving} onClick={onSubmit}>
+            <Button
+              type="button"
+              className="w-full sm:w-auto"
+              disabled={saving}
+              onClick={onSubmit}
+            >
               {saving
                 ? mode === "edit"
                   ? "Updating…"

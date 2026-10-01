@@ -11,19 +11,17 @@ type PublishSource = {
 export function managedPostRequiresBotApi(input: {
   hasInlineButtons: boolean;
   requiresRichMessage: boolean;
-  isAdvertisingPost: boolean;
+  // Kept as compatibility inputs while callers migrate. Neither is a
+  // transport requirement: plain advertising copy can use MTProto.
+  isAdvertisingPost?: boolean;
   existingSourceType?: TelegramSourceType | null;
   hasExistingPublication?: boolean;
 }) {
-  return (
-    input.hasInlineButtons ||
-    input.requiresRichMessage ||
-    (input.isAdvertisingPost &&
-      !(
-        input.existingSourceType === TelegramSourceType.MTPROTO &&
-        input.hasExistingPublication
-      ))
-  );
+  // Advertising is content, not a transport constraint. Forcing every ad
+  // through Bot API silently discards the larger caption capability of a
+  // connected Premium MTProto account and splits otherwise valid media posts.
+  // Only Telegram features that Bot API actually owns require that transport.
+  return input.hasInlineButtons || input.requiresRichMessage;
 }
 
 function accountCheckTime(source: PublishSource) {

@@ -151,34 +151,35 @@ export class TelegramCrmDialogBatchWriter {
               }),
             ),
           ];
-          const matchingContacts = usernames.length || phones.length
-            ? await tx.telegramAdvertiser.findMany({
-                where: {
-                  workspaceId: context.workspaceId,
-                  OR: [
-                    ...usernames.flatMap((username) => [
-                      {
-                        telegramUsername: {
-                          equals: username,
-                          mode: 'insensitive' as const,
+          const matchingContacts =
+            usernames.length || phones.length
+              ? await tx.telegramAdvertiser.findMany({
+                  where: {
+                    workspaceId: context.workspaceId,
+                    OR: [
+                      ...usernames.flatMap((username) => [
+                        {
+                          telegramUsername: {
+                            equals: username,
+                            mode: 'insensitive' as const,
+                          },
                         },
-                      },
-                      {
-                        telegramUsername: {
-                          equals: `@${username}`,
-                          mode: 'insensitive' as const,
+                        {
+                          telegramUsername: {
+                            equals: `@${username}`,
+                            mode: 'insensitive' as const,
+                          },
                         },
-                      },
-                    ]),
-                    ...phones.flatMap((phone) => [
-                      { phone: { equals: phone } },
-                      { phone: { equals: `+${phone}` } },
-                    ]),
-                  ],
-                },
-                select: { id: true, telegramUsername: true, phone: true },
-              })
-            : [];
+                      ]),
+                      ...phones.flatMap((phone) => [
+                        { phone: { equals: phone } },
+                        { phone: { equals: `+${phone}` } },
+                      ]),
+                    ],
+                  },
+                  select: { id: true, telegramUsername: true, phone: true },
+                })
+              : [];
           const contactIdByUsername = new Map<string, string>();
           const ambiguousUsernames = new Set<string>();
           for (const contact of matchingContacts) {
@@ -276,15 +277,14 @@ export class TelegramCrmDialogBatchWriter {
           }));
         }
         const dialogByTelegramUserId = new Map(
-          context.dialogs.map((dialog) => [
-            dialog.peer.telegramUserId,
-            dialog,
-          ]),
+          context.dialogs.map((dialog) => [dialog.peer.telegramUserId, dialog]),
         );
         const phonesToFill = peers.flatMap((peer) => {
           const phone = dialogByTelegramUserId.get(peer.telegramUserId)?.peer
             .phone;
-          return peer.contactId && phone ? [[peer.contactId, phone] as const] : [];
+          return peer.contactId && phone
+            ? [[peer.contactId, phone] as const]
+            : [];
         });
         if (phonesToFill.length) {
           await tx.$executeRaw(Prisma.sql`
@@ -292,8 +292,8 @@ export class TelegramCrmDialogBatchWriter {
             SET "phone" = incoming."phone", "updatedAt" = NOW()
             FROM (
               VALUES ${Prisma.join(
-                phonesToFill.map(([contactId, phone]) =>
-                  Prisma.sql`(${contactId}, ${phone})`,
+                phonesToFill.map(
+                  ([contactId, phone]) => Prisma.sql`(${contactId}, ${phone})`,
                 ),
               )}
             ) AS incoming("id", "phone")
@@ -305,12 +305,17 @@ export class TelegramCrmDialogBatchWriter {
         const peerByTelegramId = new Map(
           peers.map((peer) => [peer.telegramUserId, peer]),
         );
+        const settings = await tx.telegramAdCrmWorkspaceSettings.findUnique({
+          where: { workspaceId: context.workspaceId },
+          select: { importTagIds: true },
+        });
         await this.systemTags.syncTelegramFolderTags(
           {
             workspaceId: context.workspaceId,
             accountId: context.accountId,
             folders: context.folders,
             dialogs: context.dialogs,
+            selectedTagIds: settings?.importTagIds ?? [],
             contactIdByTelegramUserId: new Map(
               peers.map((peer) => [peer.telegramUserId, peer.contactId]),
             ),

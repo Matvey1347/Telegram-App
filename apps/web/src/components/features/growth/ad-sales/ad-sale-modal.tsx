@@ -7,6 +7,7 @@ import {
   CustomSelect,
   FormField,
   Modal,
+  ToggleRow,
 } from "@/components/ui/primitives";
 import { MemberSelect } from "@/components/features/workspace/member-select";
 import { ModalDraftPicker } from "@/components/ui/modal-draft-picker";
@@ -54,6 +55,8 @@ export function AdSaleModal(props: AdSaleModalProps) {
     setAssignedMemberId,
     saleOrigin,
     setSaleOrigin,
+    financeSkipped,
+    setFinanceSkipped,
     accountId,
     setAccountId,
     accountManuallySelectedRef,
@@ -130,33 +133,44 @@ export function AdSaleModal(props: AdSaleModalProps) {
                     }}
                   />
 
-                  <FormField label="Financial account" required>
-                    <div className="[&>div>button]:h-[42px] [&>div>button]:min-h-0">
-                      <CustomSelect
-                        value={accountId}
-                        onChange={(nextAccountId) => {
-                          accountManuallySelectedRef.current = true;
-                          setAccountId(nextAccountId);
-                        }}
-                        placeholder="Select account"
-                        options={accounts
-                          .filter((account) => account.isActive)
-                          .map((account) => ({
-                            value: account.id,
-                            label: `${accountDisplayName(account)} (${account.currency})`,
-                            iconUrl:
-                              account.iconPresentation?.type === "image"
-                                ? account.iconPresentation.url
-                                : undefined,
-                            iconEmoji:
-                              account.iconPresentation?.type === "unicode"
-                                ? account.iconPresentation.value
-                                : undefined,
-                            iconFallback: account.name,
-                          }))}
-                      />
-                    </div>
-                  </FormField>
+                  <div className="space-y-2">
+                    <ToggleRow
+                      checked={financeSkipped}
+                      onChange={setFinanceSkipped}
+                      label="Without financial transaction"
+                      description="Create a free deal without a payment."
+                      activeTone="blue"
+                    />
+                    {!financeSkipped ? (
+                      <FormField label="Financial account" required>
+                        <div className="[&>div>button]:h-[42px] [&>div>button]:min-h-0">
+                          <CustomSelect
+                            value={accountId}
+                            onChange={(nextAccountId) => {
+                              accountManuallySelectedRef.current = true;
+                              setAccountId(nextAccountId);
+                            }}
+                            placeholder="Select account"
+                            options={accounts
+                              .filter((account) => account.isActive)
+                              .map((account) => ({
+                                value: account.id,
+                                label: `${accountDisplayName(account)} (${account.currency})`,
+                                iconUrl:
+                                  account.iconPresentation?.type === "image"
+                                    ? account.iconPresentation.url
+                                    : undefined,
+                                iconEmoji:
+                                  account.iconPresentation?.type === "unicode"
+                                    ? account.iconPresentation.value
+                                    : undefined,
+                                iconFallback: account.name,
+                              }))}
+                          />
+                        </div>
+                      </FormField>
+                    ) : null}
+                  </div>
 
                   <FormField label="Sale origin">
                     <div className="[&>div>button]:h-[42px] [&>div>button]:min-h-0">
@@ -193,7 +207,7 @@ export function AdSaleModal(props: AdSaleModalProps) {
                 networks={networks}
                 channels={channels}
                 networkPricing={
-                  placements.length >= 1 ? (
+                  !financeSkipped && placements.length >= 1 ? (
                     <AdSaleNetworkPricing
                       mode={networkPricing.mode}
                       totalPrice={networkPricing.totalPrice}
@@ -285,7 +299,8 @@ export function AdSaleModal(props: AdSaleModalProps) {
                           channel={channel}
                           products={products}
                           currency={paymentCurrency}
-                          priceLocked={networkPricing.mode === "total"}
+                          priceLocked={!financeSkipped && networkPricing.mode === "total"}
+                          showPricing={!financeSkipped}
                           sharedPostActive={sharedPostActive}
                           publishedPosts={
                             publishedPostsByPlacement[postsKey] ?? []

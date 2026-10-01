@@ -10,13 +10,13 @@ import {
 export async function reconcileMutualPromotionFolder(
   queryClient: QueryClient,
   folder: MutualPromotionFolderDetail,
-  listParams: { page: number; pageSize: number },
+  _listParams: { page: number; pageSize: number; status?: string },
   financeChanged = false,
 ) {
   queryClient.setQueryData(mutualPromotionFolderKeys.detail(folder.id), folder);
   await Promise.all([
     queryClient.invalidateQueries({
-      queryKey: mutualPromotionFolderKeys.list(listParams),
+      queryKey: [...mutualPromotionFolderKeys.all, "list"],
     }),
     queryClient.invalidateQueries({ queryKey: telegramChannelKeys.lists() }),
     queryClient.invalidateQueries({

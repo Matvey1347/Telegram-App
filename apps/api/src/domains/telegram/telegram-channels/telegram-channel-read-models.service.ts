@@ -172,6 +172,7 @@ export class TelegramChannelReadModelsService {
           workspaceId,
           where,
           orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          compact: true,
         },
       );
     const hydratedLinks = await hydrateTelegramInviteCreatorProfiles(

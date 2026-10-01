@@ -60,7 +60,8 @@ export function useAdSaleModalController(options: AdSaleModalProps) {
     advertiserTelegram, setAdvertiserTelegram, advertiserContact, setAdvertiserContact,
     selectedAdvertiser, setSelectedAdvertiser, selectedAdvertiserId, setSelectedAdvertiserId,
     advertiserMatches, setAdvertiserMatches, assignedMemberId, setAssignedMemberId,
-    saleOrigin, setSaleOrigin, accountId, setAccountId, accountManuallySelectedRef,
+    saleOrigin, setSaleOrigin, financeSkipped, setFinanceSkipped,
+    accountId, setAccountId, accountManuallySelectedRef,
     channelSelectionMode, setChannelSelectionMode, selectedNetworkId, setSelectedNetworkId,
     selectedChannelIds, setSelectedChannelIds, placementDateRange, setPlacementDateRange,
     submissionError, setSubmissionError,
@@ -113,7 +114,7 @@ export function useAdSaleModalController(options: AdSaleModalProps) {
   );
   const paymentCurrency = useMemo(
     () =>
-      selectedAccount?.currency.toUpperCase() ??
+      (financeSkipped ? undefined : selectedAccount?.currency.toUpperCase()) ??
       resolveAdSaleCurrency({
         channelIds: effectiveChannelIds,
         channels,
@@ -128,6 +129,7 @@ export function useAdSaleModalController(options: AdSaleModalProps) {
       placements,
       productsByChannelId,
       selectedAccount,
+      financeSkipped,
     ],
   );
   const selectedPlacementDates = useMemo(
@@ -252,7 +254,7 @@ export function useAdSaleModalController(options: AdSaleModalProps) {
   const quotePreview = useAdSaleQuotePreview({
     open,
     currency: paymentCurrency,
-    quoteRequests,
+    quoteRequests: financeSkipped ? [] : quoteRequests,
     productsByChannelId,
     preserveAgreedPrice: networkPricing.mode === "total",
     requestPreview: onRequestQuotePreview,
@@ -260,9 +262,9 @@ export function useAdSaleModalController(options: AdSaleModalProps) {
   });
 
   const canSubmit =
-    !quotePreview.limitExceeded &&
-    !!accountId &&
-    paymentAmount > 0 &&
+    (financeSkipped || !quotePreview.limitExceeded) &&
+    (financeSkipped || !!accountId) &&
+    (financeSkipped || paymentAmount > 0) &&
     effectiveChannelIds.length > 0 &&
     placements.length > 0 &&
     placements.every((placement) =>
@@ -271,7 +273,8 @@ export function useAdSaleModalController(options: AdSaleModalProps) {
     (Boolean(selectedAdvertiserId) ||
       !advertiserContact.trim() ||
       isValidTelegramUsernameInput(advertiserContact)) &&
-    (!networkPricing.allocation ||
+    (financeSkipped ||
+      !networkPricing.allocation ||
       Math.round(paymentAmount * 100) ===
         Math.round(networkPricing.allocation.totalAmount * 100));
 
@@ -295,10 +298,11 @@ export function useAdSaleModalController(options: AdSaleModalProps) {
         advertiserContact: normalizedContact || undefined,
         origin: saleOrigin,
         assignedMemberId: assignedMemberId || null,
-        accountId,
-        paymentAmount,
+        financeSkipped,
+        accountId: financeSkipped ? undefined : accountId,
+        paymentAmount: financeSkipped ? undefined : paymentAmount,
         paymentCurrency,
-        priceAllocation: networkPricing.allocation,
+        priceAllocation: financeSkipped ? undefined : networkPricing.allocation,
         placements: placements.map((placement) => ({
           channelId: placement.channelId,
           productId: placement.productId || undefined,
@@ -310,9 +314,9 @@ export function useAdSaleModalController(options: AdSaleModalProps) {
             placement.timezone,
           ).toISOString(),
           timezone: placement.timezone,
-          agreedPrice: toNumber(placement.agreedPrice),
-          recommendedPrice: toNumber(placement.recommendedPrice),
-          minimumPrice: toNumber(placement.minimumPrice),
+          agreedPrice: financeSkipped ? 0 : toNumber(placement.agreedPrice),
+          recommendedPrice: financeSkipped ? 0 : toNumber(placement.recommendedPrice),
+          minimumPrice: financeSkipped ? 0 : toNumber(placement.minimumPrice),
           expectedViews: placement.expectedViews ?? 0,
           pricingMode: placement.pricingMode,
           manualPriceReason: placement.manualPriceReason.trim() || undefined,
@@ -368,7 +372,8 @@ export function useAdSaleModalController(options: AdSaleModalProps) {
     advertiserTelegram, setAdvertiserTelegram, advertiserContact, setAdvertiserContact,
     selectedAdvertiser, setSelectedAdvertiser, selectedAdvertiserId, setSelectedAdvertiserId,
     advertiserMatches, setAdvertiserMatches, assignedMemberId, setAssignedMemberId,
-    saleOrigin, setSaleOrigin, accountId, setAccountId, accountManuallySelectedRef,
+    saleOrigin, setSaleOrigin, financeSkipped, setFinanceSkipped,
+    accountId, setAccountId, accountManuallySelectedRef,
     channelSelectionMode, setChannelSelectionMode, selectedNetworkId, setSelectedNetworkId,
     selectedChannelIds, setSelectedChannelIds, placementDateRange, setPlacementDateRange,
     postMode, setPostMode, placements, setPlacements, submissionError, pendingDrafts,

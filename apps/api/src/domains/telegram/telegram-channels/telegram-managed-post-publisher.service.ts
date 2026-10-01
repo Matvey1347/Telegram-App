@@ -129,11 +129,8 @@ export class TelegramManagedPostPublisherService {
       : managedPostRequiresBotApi({
           hasInlineButtons: Boolean(buttonRows.length),
           requiresRichMessage,
-          isAdvertisingPost: (_count?.adSalePlacements ?? 0) > 0,
-          existingSourceType: post.sourceType,
-          hasExistingPublication: Boolean(post.publishedAt || post.telegramMessageIds.length),
         });
-    const preferredBotSourceId = (_count?.adSalePlacements ?? 0) > 0 ? TELEGRAM_PRODUCTION_SYSTEM_BOT_SOURCE_ID : undefined;
+    const preferredBotSourceId = undefined;
     let source = selectManagedPostPublishingSource(sources, {
       existingScheduledSourceId: scheduleAt && post.status === 'SCHEDULED' ? post.sourceId : null,
       requiresBotApi,

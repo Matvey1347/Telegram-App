@@ -196,7 +196,10 @@ export const telegramPublicationScheduleKeys = {
       channelId,
       range,
     ] as const,
-  occurrencesByChannels: (channelIds: string[], range: { from: string; to: string }) =>
+  occurrencesByChannels: (
+    channelIds: string[],
+    range: { from: string; to: string },
+  ) =>
     [
       ...telegramPublicationScheduleKeys.all(),
       "occurrences-by-channels",
@@ -254,7 +257,7 @@ export const mutualPromotionFolderKeys = {
   all: ["mutual-promotion-folders"] as const,
   inviteOptionsRoot: () =>
     ["mutual-promotion-folders", "invite-options"] as const,
-  list: (params?: { page?: number; pageSize?: number }) =>
+  list: (params?: { page?: number; pageSize?: number; status?: string }) =>
     ["mutual-promotion-folders", "list", params ?? {}] as const,
   detail: (folderId: string) =>
     ["mutual-promotion-folders", "detail", folderId] as const,

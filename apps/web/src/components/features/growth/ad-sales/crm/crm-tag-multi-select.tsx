@@ -18,6 +18,7 @@ export function CrmTagMultiSelect({
   createOptionLabel,
   onCreateOption,
   creatingOption,
+  compactSelectedAfter,
 }: {
   tags: CrmTagSummary[];
   value: string[];
@@ -29,6 +30,8 @@ export function CrmTagMultiSelect({
   createOptionLabel?: (name: string) => ReactNode;
   onCreateOption?: (name: string) => void | Promise<void>;
   creatingOption?: boolean;
+  /** Keep selected tag names readable instead of collapsing them into icons. */
+  compactSelectedAfter?: number | null;
 }) {
   return (
     <MultiSelect
@@ -55,6 +58,7 @@ export function CrmTagMultiSelect({
       createOptionLabel={createOptionLabel}
       onCreateOption={onCreateOption}
       creatingOption={creatingOption}
+      compactSelectedAfter={compactSelectedAfter}
       className={className}
     />
   );

@@ -11,6 +11,7 @@ import type {
   TelegramChannelAnalyticsResponse,
   TelegramChannelSyncNowPayload,
   TelegramInviteLink,
+  TelegramInviteLinkOption,
   TelegramInviteLinkHistory,
   TelegramPostAnalyticsItem,
 } from "../../api-types";
@@ -150,7 +151,7 @@ export function createTelegramChannelHelpers({
       },
     ) =>
       (
-        await api.get<TelegramInviteLink[]>(
+        await api.get<TelegramInviteLinkOption[]>(
           `/telegram-channels/${channelId}/invite-links/select`,
           { params },
         )
@@ -161,7 +162,7 @@ export function createTelegramChannelHelpers({
       selectedIds?: string[],
     ) =>
       (
-        await api.get<TelegramInviteLink[]>(
+        await api.get<TelegramInviteLinkOption[]>(
           `/telegram-channels/${channelId}/invite-links/select`,
           {
             params: {
@@ -181,7 +182,7 @@ export function createTelegramChannelHelpers({
       params?: { search?: string },
     ) =>
       (
-        await api.get<TelegramInviteLink[]>(
+        await api.get<TelegramInviteLinkOption[]>(
           `/telegram-channels/${channelId}/invite-links/select`,
           { params: { ...params, all: true } },
         )

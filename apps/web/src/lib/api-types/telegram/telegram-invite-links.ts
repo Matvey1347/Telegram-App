@@ -34,6 +34,26 @@ export type TelegramInviteLink = {
   adCampaign?: Pick<AdCampaign, "id" | "title">;
   history?: TelegramInviteLinkHistory | null;
 };
+
+/** The intentionally small read model used by every invite-link selector. */
+export type TelegramInviteLinkOption = Pick<
+  TelegramInviteLink,
+  | "id"
+  | "telegramChannelId"
+  | "name"
+  | "url"
+  | "creatorTelegramUserId"
+  | "creatorUsername"
+  | "creatorFirstName"
+  | "creatorLastName"
+  | "creatorPhotoUrl"
+  | "isDefaultForChannel"
+  | "isDefaultForBot"
+  | "isDefaultForBroadcast"
+  | "isDefaultForAudienceTransfer"
+  | "isDefaultForFolders"
+  | "isDefaultForMutualPromotion"
+>;
 export type InviteLinkHistoryPoint = {
   syncedAt: string;
   joinedCount: number;

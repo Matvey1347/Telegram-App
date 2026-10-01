@@ -658,6 +658,15 @@ export class CreateTelegramAdSaleCheckoutDto extends CreateTelegramAdSaleDto {
   @Type(() => TelegramAdSaleCheckoutPriceAllocationDto)
   priceAllocation?: TelegramAdSaleCheckoutPriceAllocationDto;
 
+  @IsOptional()
+  @IsBoolean()
+  financeSkipped?: boolean;
+
+  @IsOptional()
+  @IsString()
+  idempotencyKey?: string;
+
+  @ValidateIf((dto: CreateTelegramAdSaleCheckoutDto) => !dto.financeSkipped)
   @IsDefined()
   @ValidateNested()
   @Type(() => CreateTelegramAdSaleCheckoutPaymentDto)

@@ -133,6 +133,7 @@ export class TelegramCrmSystemTagsService {
       accountId: string;
       folders?: TelegramCrmMtprotoDialogFolder[];
       dialogs: TelegramCrmMtprotoDialog[];
+      selectedTagIds?: string[];
       contactIdByTelegramUserId: Map<string, string | null>;
     },
     db: DbClient = this.prisma,
@@ -219,7 +220,11 @@ export class TelegramCrmSystemTagsService {
       if (!contactId) continue;
       const tagIds = (dialog.folderIds ?? []).flatMap((folderId) => {
         const tagId = tagIdByFolderId.get(folderId);
-        return tagId ? [tagId] : [];
+        return tagId &&
+          (input.selectedTagIds === undefined ||
+            input.selectedTagIds.includes(tagId))
+          ? [tagId]
+          : [];
       });
       if (tagIds.length) desired.set(contactId, new Set(tagIds));
       else if (!desired.has(contactId)) desired.set(contactId, new Set());
@@ -318,10 +323,12 @@ export async function syncPurchasedCrmTags(
       network: { select: { id: true, name: true } },
     },
   });
-  const purchaseSetting = await db.telegramAdCrmWorkspaceSettings.findUnique({
-    where: { workspaceId },
-    select: { purchaseTagId: true },
-  });
+  const purchaseSetting = db.telegramAdCrmWorkspaceSettings
+    ? await db.telegramAdCrmWorkspaceSettings.findUnique({
+        where: { workspaceId },
+        select: { purchaseTagId: true },
+      })
+    : null;
 
   const definitions = new Map<
     string,
@@ -412,7 +419,9 @@ export async function syncPurchasedCrmTags(
       advertiserId,
       tagId: tag.id,
     })),
-    ...(configuredTag ? [{ workspaceId, advertiserId, tagId: configuredTag.id }] : []),
+    ...(configuredTag
+      ? [{ workspaceId, advertiserId, tagId: configuredTag.id }]
+      : []),
   ];
   if (!assignments.length) return;
   await db.telegramAdvertiserTagAssignment.createMany({

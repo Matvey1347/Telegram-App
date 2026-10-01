@@ -17,7 +17,11 @@ import {
   Button,
   Modal,
 } from "@/components/ui/primitives";
-import { currenciesApi, telegramAdSalesApi, type TelegramChannel } from "@/lib/api";
+import {
+  currenciesApi,
+  telegramAdSalesApi,
+  type TelegramChannel,
+} from "@/lib/api";
 import { nativeAdSalePayment } from "./ad-sale-native-payment";
 import { AdSalePostMetrics } from "./ad-sale-post-metrics";
 import { AdSalePlacementLifecyclePreview } from "./ad-sale-placement-lifecycle-preview";
@@ -44,6 +48,13 @@ function adSaleClientTelegramUsername(sale: TelegramAdSaleListItem) {
     sale.advertiserTelegramSnapshot ||
     sale.advertiserTelegram;
   return username?.trim().replace(/^@+/, "") || null;
+}
+
+export function advertiserAvatarUrl(sale: TelegramAdSaleListItem) {
+  const photoUrl = sale.advertiserSummary?.photoUrl;
+  if (photoUrl) return photoUrl;
+  const username = adSaleClientTelegramUsername(sale);
+  return username ? `https://t.me/i/userpic/320/${username}.jpg` : null;
 }
 
 function paymentLabel(sale: TelegramAdSaleListItem) {
@@ -84,7 +95,8 @@ export function SalesTab(props: {
     null,
   );
   const [now, setNow] = useState(() => Date.now());
-  const [botConfirmationSale, setBotConfirmationSale] = useState<TelegramAdSaleListItem | null>(null);
+  const [botConfirmationSale, setBotConfirmationSale] =
+    useState<TelegramAdSaleListItem | null>(null);
   const [botText, setBotText] = useState<string | null>(null);
   const [botError, setBotError] = useState(false);
   const [sendingBotConfirmation, setSendingBotConfirmation] = useState(false);
@@ -109,10 +121,17 @@ export function SalesTab(props: {
     let active = true;
     setBotText(null);
     setBotError(false);
-    telegramAdSalesApi.previewBotNotification(botConfirmationSale.id)
-      .then((result) => { if (active) setBotText(result.text); })
-      .catch(() => { if (active) setBotError(true); });
-    return () => { active = false; };
+    telegramAdSalesApi
+      .previewBotNotification(botConfirmationSale.id)
+      .then((result) => {
+        if (active) setBotText(result.text);
+      })
+      .catch(() => {
+        if (active) setBotError(true);
+      });
+    return () => {
+      active = false;
+    };
   }, [botConfirmationSale]);
   useEffect(() => {
     const hasCountdown = props.sales.some((sale) =>
@@ -199,16 +218,20 @@ export function SalesTab(props: {
                     >
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2.5">
-                          <TelegramEntityAvatar
-                            imageUrl={
-                              clientTelegramUsername
-                                ? `https://t.me/i/userpic/320/${clientTelegramUsername}.jpg`
-                                : null
-                            }
-                            kind="person"
-                            alt={adSaleClientLabel(sale)}
-                            size="sm"
-                          />
+                          {sale.advertiserSummary?.avatarPresentation ? (
+                            <IconAvatar
+                              icon={sale.advertiserSummary.avatarPresentation}
+                              label={adSaleClientLabel(sale)}
+                              size="sm"
+                            />
+                          ) : (
+                            <TelegramEntityAvatar
+                              imageUrl={advertiserAvatarUrl(sale)}
+                              kind="person"
+                              alt={adSaleClientLabel(sale)}
+                              size="sm"
+                            />
+                          )}
                           <div className="min-w-0">
                             <p className="truncate font-medium text-white">
                               {adSaleClientLabel(sale)}
@@ -349,21 +372,47 @@ export function SalesTab(props: {
 
       <Modal
         open={Boolean(botConfirmationSale)}
-        onClose={() => { if (!sendingBotConfirmation) setBotConfirmationSale(null); }}
+        onClose={() => {
+          if (!sendingBotConfirmation) setBotConfirmationSale(null);
+        }}
         title="Preview bot confirmation"
       >
         <div className="space-y-4">
           {!botText && !botError ? <TableLoadingState /> : null}
-          {botError ? <ErrorState text="Could not prepare the bot confirmation." /> : null}
-          {botText ? <div className="max-h-[55dvh] overflow-y-auto whitespace-pre-wrap rounded-xl border border-neutral-800 bg-neutral-950/55 p-4 text-sm text-neutral-200 [&_a]:text-blue-300 [&_a]:underline" dangerouslySetInnerHTML={{ __html: botText }} /> : null}
+          {botError ? (
+            <ErrorState text="Could not prepare the bot confirmation." />
+          ) : null}
+          {botText ? (
+            <div
+              className="max-h-[55dvh] overflow-y-auto whitespace-pre-wrap rounded-xl border border-neutral-800 bg-neutral-950/55 p-4 text-sm text-neutral-200 [&_a]:text-blue-300 [&_a]:underline"
+              dangerouslySetInnerHTML={{ __html: botText }}
+            />
+          ) : null}
           <div className="flex justify-end gap-2">
-            <Button type="button" variant="secondary" disabled={sendingBotConfirmation} onClick={() => setBotConfirmationSale(null)}>Cancel</Button>
-            <Button type="button" disabled={!botText || sendingBotConfirmation} onClick={async () => {
-              if (!botConfirmationSale) return;
-              setSendingBotConfirmation(true);
-              try { await telegramAdSalesApi.sendToBot(botConfirmationSale.id); setBotConfirmationSale(null); }
-              finally { setSendingBotConfirmation(false); }
-            }}>{sendingBotConfirmation ? "Sending…" : "Send to bot"}</Button>
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={sendingBotConfirmation}
+              onClick={() => setBotConfirmationSale(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              disabled={!botText || sendingBotConfirmation}
+              onClick={async () => {
+                if (!botConfirmationSale) return;
+                setSendingBotConfirmation(true);
+                try {
+                  await telegramAdSalesApi.sendToBot(botConfirmationSale.id);
+                  setBotConfirmationSale(null);
+                } finally {
+                  setSendingBotConfirmation(false);
+                }
+              }}
+            >
+              {sendingBotConfirmation ? "Sending…" : "Send to bot"}
+            </Button>
           </div>
         </div>
       </Modal>

@@ -567,7 +567,7 @@ export function MultiSelect({
   disabled?: boolean;
   className?: string;
   allSelectedLabel?: string;
-  compactSelectedAfter?: number;
+  compactSelectedAfter?: number | null;
   canCreateOption?: (search: string) => boolean;
   createOptionLabel?: (search: string) => React.ReactNode;
   onCreateOption?: (search: string) => void | Promise<void>;
@@ -612,17 +612,20 @@ export function MultiSelect({
       const rect = trigger.getBoundingClientRect();
       const gap = 4;
       const padding = 8;
-      const spaceBelow = window.innerHeight - rect.bottom - gap - padding;
+      const visualViewport = window.visualViewport;
+      const viewportWidth = visualViewport?.width ?? window.innerWidth;
+      const viewportHeight = visualViewport?.height ?? window.innerHeight;
+      const spaceBelow = viewportHeight - rect.bottom - gap - padding;
       const spaceAbove = rect.top - gap - padding;
       const openUp = spaceBelow < 240 && spaceAbove > spaceBelow;
       const maxHeight = Math.max(
         120,
         Math.min(360, openUp ? spaceAbove : spaceBelow),
       );
-      const width = Math.min(rect.width, window.innerWidth - padding * 2);
+      const width = Math.min(rect.width, viewportWidth - padding * 2);
       const left = Math.min(
         Math.max(rect.left, padding),
-        window.innerWidth - width - padding,
+        viewportWidth - width - padding,
       );
       setMenuStyle({
         position: "fixed",
@@ -630,16 +633,20 @@ export function MultiSelect({
         width,
         maxHeight,
         ...(openUp
-          ? { bottom: window.innerHeight - rect.top + gap }
+          ? { bottom: viewportHeight - rect.top + gap }
           : { top: rect.bottom + gap }),
       });
     };
     update();
     window.addEventListener("resize", update);
     window.addEventListener("scroll", update, true);
+    window.visualViewport?.addEventListener("resize", update);
+    window.visualViewport?.addEventListener("scroll", update);
     return () => {
       window.removeEventListener("resize", update);
       window.removeEventListener("scroll", update, true);
+      window.visualViewport?.removeEventListener("resize", update);
+      window.visualViewport?.removeEventListener("scroll", update);
     };
   }, [open]);
 
@@ -754,7 +761,6 @@ export function MultiSelect({
             >
               <div className="border-b border-neutral-800 p-2">
                 <input
-                  autoFocus
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
                   onKeyDown={(event) => {
@@ -1011,15 +1017,21 @@ export function CustomSelect({
       const rect = trigger.getBoundingClientRect();
       const gap = 4;
       const viewportPadding = 8;
-      const maxWidth = window.innerWidth - viewportPadding * 2;
+      // On mobile Safari `innerHeight` remains the layout viewport while the
+      // keyboard is visible. Use the visual viewport so a search the user
+      // explicitly opens never leaves the option list behind the keyboard.
+      const visualViewport = window.visualViewport;
+      const viewportWidth = visualViewport?.width ?? window.innerWidth;
+      const viewportHeight = visualViewport?.height ?? window.innerHeight;
+      const maxWidth = viewportWidth - viewportPadding * 2;
       const width = Math.min(rect.width, maxWidth);
       const left = Math.min(
         Math.max(rect.left, viewportPadding),
-        window.innerWidth - width - viewportPadding,
+        viewportWidth - width - viewportPadding,
       );
 
       const availableBelow =
-        window.innerHeight - rect.bottom - gap - viewportPadding;
+        viewportHeight - rect.bottom - gap - viewportPadding;
       const availableAbove = rect.top - gap - viewportPadding;
       const openUp =
         dropdownDirection === "up" ||
@@ -1034,14 +1046,14 @@ export function CustomSelect({
           ? {
               position: "fixed",
               left,
-              bottom: Math.max(window.innerHeight - rect.top + gap, gap),
+              bottom: Math.max(viewportHeight - rect.top + gap, gap),
               width,
               maxHeight,
             }
           : {
               position: "fixed",
               left,
-              top: Math.min(rect.bottom + gap, window.innerHeight - gap),
+              top: Math.min(rect.bottom + gap, viewportHeight - gap),
               width,
               maxHeight,
             },
@@ -1051,9 +1063,13 @@ export function CustomSelect({
     updateDropdownStyle();
     window.addEventListener("resize", updateDropdownStyle);
     window.addEventListener("scroll", updateDropdownStyle, true);
+    window.visualViewport?.addEventListener("resize", updateDropdownStyle);
+    window.visualViewport?.addEventListener("scroll", updateDropdownStyle);
     return () => {
       window.removeEventListener("resize", updateDropdownStyle);
       window.removeEventListener("scroll", updateDropdownStyle, true);
+      window.visualViewport?.removeEventListener("resize", updateDropdownStyle);
+      window.visualViewport?.removeEventListener("scroll", updateDropdownStyle);
     };
   }, [dropdownDirection, open]);
 
@@ -1126,7 +1142,6 @@ export function CustomSelect({
               {showSearch ? (
                 <div className="border-b border-neutral-800 p-2">
                   <input
-                    autoFocus
                     value={search}
                     onChange={(event) => {
                       setSearch(event.target.value);

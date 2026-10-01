@@ -34,7 +34,7 @@ describe('TelegramAdSaleBotNotificationService', () => {
       },
     };
     const notifications = {
-      sendToWorkspaceUser: jest.fn().mockResolvedValue({}),
+      sendToWorkspaceUser: jest.fn().mockResolvedValue({ status: 'SENT' }),
     };
     const service = new TelegramAdSaleBotNotificationService(
       prisma as never,
@@ -87,7 +87,7 @@ describe('TelegramAdSaleBotNotificationService', () => {
       },
     };
     const notifications = {
-      sendToWorkspaceUser: jest.fn().mockResolvedValue({}),
+      sendToWorkspaceUser: jest.fn().mockResolvedValue({ status: 'SENT' }),
     };
     const service = new TelegramAdSaleBotNotificationService(
       prisma as never,
@@ -131,6 +131,24 @@ describe('TelegramAdSaleBotNotificationService', () => {
     await service.sendPublishedOnce('sale-1');
 
     expect(notifications.sendToWorkspaceUser).not.toHaveBeenCalled();
+    expect(prisma.telegramAdSale.update).not.toHaveBeenCalled();
+  });
+
+  it('does not consume a scheduled confirmation while the user has no System Bot connection', async () => {
+    const prisma = {
+      telegramAdSale: {
+        findFirst: jest.fn().mockResolvedValue(sale),
+        update: jest.fn(),
+      },
+    };
+    const service = new TelegramAdSaleBotNotificationService(
+      prisma as never,
+      { resolveWorkspaceIdForUser: jest.fn().mockResolvedValue('workspace-1') } as never,
+      { sendToWorkspaceUser: jest.fn().mockResolvedValue({ status: 'NOT_CONNECTED' }) } as never,
+    );
+
+    await service.sendScheduledOnce('user-1', 'sale-1');
+
     expect(prisma.telegramAdSale.update).not.toHaveBeenCalled();
   });
 });

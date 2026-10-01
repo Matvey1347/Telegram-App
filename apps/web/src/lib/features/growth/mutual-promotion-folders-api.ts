@@ -7,8 +7,9 @@ import type {
   MutualPromotionExpensePayload,
   MutualPromotionFolderDetail,
   MutualPromotionFolderListItem,
+  MutualPromotionFolderListResponse,
+  MutualPromotionFolderListStatus,
   MutualPromotionInviteLinkOption,
-  PaginatedResponse,
   UpdateMutualPromotionFolderPayload,
   UpdateMutualPromotionFolderTitlePayload,
   UpdateMutualPromotionInviteLinksPayload,
@@ -19,13 +20,13 @@ import { api, streamProgressAction } from "@/lib/api";
 const basePath = "/mutual-promotion-folders";
 
 export const mutualPromotionFoldersApi = {
-  list: async (params?: { page?: number; pageSize?: number }) =>
-    (
-      await api.get<PaginatedResponse<MutualPromotionFolderListItem>>(
-        basePath,
-        { params },
-      )
-    ).data,
+  list: async (params?: {
+    page?: number;
+    pageSize?: number;
+    status?: MutualPromotionFolderListStatus;
+  }) =>
+    (await api.get<MutualPromotionFolderListResponse>(basePath, { params }))
+      .data,
   get: async (id: string) =>
     (await api.get<MutualPromotionFolderDetail>(`${basePath}/${id}`)).data,
   create: async (payload: CreateMutualPromotionFolderPayload) =>

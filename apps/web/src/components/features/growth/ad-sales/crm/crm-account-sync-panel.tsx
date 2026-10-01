@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { RefreshCw, Save, Settings2 } from "lucide-react";
+import { RefreshCw, Settings2 } from "lucide-react";
 import type { TelegramUserAccount } from "@/lib/api";
 import { telegramUserAccountsApi } from "@/lib/api";
 import { Button, Modal, MultiSelect } from "@/components/ui/primitives";
@@ -43,6 +43,8 @@ export function CrmAccountSyncPanel({ canEdit }: { canEdit: boolean }) {
   const [purchaseTagDraft, setPurchaseTagDraft] = useState<string[] | null>(
     null,
   );
+  const [importTagDraft, setImportTagDraft] = useState<string[] | null>(null);
+  const importTagIds = importTagDraft ?? settings.data?.importTagIds ?? [];
   const purchaseTagId =
     purchaseTagDraft ??
     (settings.data?.purchaseTagId ? [settings.data.purchaseTagId] : []);
@@ -60,8 +62,11 @@ export function CrmAccountSyncPanel({ canEdit }: { canEdit: boolean }) {
       }
       if (purchaseTagDraft !== null) {
         await telegramCrmApi.updateSettings({
+          ...(importTagDraft === null ? {} : { importTagIds }),
           purchaseTagId: purchaseTagId[0] ?? null,
         });
+      } else if (importTagDraft !== null) {
+        await telegramCrmApi.updateSettings({ importTagIds });
       }
       return { changed };
     },
@@ -103,6 +108,9 @@ export function CrmAccountSyncPanel({ canEdit }: { canEdit: boolean }) {
   });
   const sync = useMutation({
     mutationFn: async () => {
+      if (hasUnsavedChanges) {
+        await save.mutateAsync();
+      }
       const results = [];
       const operation = startOperation({
         id: "telegram-crm-manual-sync",
@@ -161,7 +169,9 @@ export function CrmAccountSyncPanel({ canEdit }: { canEdit: boolean }) {
   const hasUnsavedChanges =
     connected.some(
       (account) => account.crmSyncEnabled !== selected.includes(account.id),
-    ) || purchaseTagDraft !== null;
+    ) ||
+    purchaseTagDraft !== null ||
+    importTagDraft !== null;
 
   return (
     <>
@@ -183,6 +193,7 @@ export function CrmAccountSyncPanel({ canEdit }: { canEdit: boolean }) {
           if (save.isPending || sync.isPending) return;
           setSelectedDraft(null);
           setPurchaseTagDraft(null);
+          setImportTagDraft(null);
           setOpen(false);
         }}
         title="Telegram CRM sources"
@@ -224,6 +235,37 @@ export function CrmAccountSyncPanel({ canEdit }: { canEdit: boolean }) {
         </div>
         <div className="mt-3">
           <label className="mb-1 block text-sm font-medium text-white">
+            Import tags
+          </label>
+          <p className="mb-2 text-xs text-neutral-500">
+            Only contacts in these Telegram folders are shown as CRM clients and
+            counted in analytics.
+          </p>
+          <CrmTagMultiSelect
+            value={importTagIds}
+            onChange={(value) => {
+              setImportTagDraft(value);
+              if (purchaseTagId[0] && !value.includes(purchaseTagId[0]))
+                setPurchaseTagDraft([]);
+            }}
+            disabled={
+              !canEdit ||
+              settings.isLoading ||
+              tags.isLoading ||
+              save.isPending ||
+              sync.isPending
+            }
+            tags={(tags.data ?? []).filter((tag) =>
+              tag.systemKey?.startsWith("TELEGRAM_FOLDER:"),
+            )}
+            placeholder={
+              tags.isLoading ? "Loading Telegram tags…" : "Select Telegram tags"
+            }
+            compactSelectedAfter={null}
+          />
+        </div>
+        <div className="mt-3">
+          <label className="mb-1 block text-sm font-medium text-white">
             Purchase tag
           </label>
           <p className="mb-2 text-xs text-neutral-500">
@@ -240,33 +282,20 @@ export function CrmAccountSyncPanel({ canEdit }: { canEdit: boolean }) {
               save.isPending ||
               sync.isPending
             }
-            tags={tags.data ?? []}
+            tags={(tags.data ?? []).filter((tag) =>
+              importTagIds.includes(tag.id),
+            )}
             placeholder={tags.isLoading ? "Loading tags…" : "Select tags"}
           />
         </div>
-        <div className="mt-4 flex justify-end gap-2">
-          <Button
-            variant="secondary"
-            disabled={
-              !canEdit ||
-              save.isPending ||
-              sync.isPending ||
-              accounts.isLoading ||
-              !hasUnsavedChanges
-            }
-            onClick={() => save.mutate()}
-          >
-            <Save size={16} />
-            {save.isPending ? "Saving…" : "Save"}
-          </Button>
+        <div className="mt-4 flex justify-end">
           <Button
             disabled={
               !canEdit ||
               save.isPending ||
               sync.isPending ||
               accounts.isLoading ||
-              !selected.length ||
-              hasUnsavedChanges
+              !selected.length
             }
             onClick={() => sync.mutate()}
           >
@@ -285,11 +314,6 @@ export function CrmAccountSyncPanel({ canEdit }: { canEdit: boolean }) {
         {save.error ? (
           <p className="mt-3 text-sm text-rose-300">
             CRM sources could not be saved.
-          </p>
-        ) : null}
-        {hasUnsavedChanges ? (
-          <p className="mt-3 text-xs text-amber-300">
-            Save the selected sources before syncing.
           </p>
         ) : null}
         {sync.error ? (

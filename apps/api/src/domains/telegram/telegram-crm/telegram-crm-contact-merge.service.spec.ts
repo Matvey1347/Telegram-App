@@ -75,6 +75,7 @@ describe('TelegramCrmContactMergeService', () => {
       telegramAdvertiserActivity: { updateMany: moved(), create: jest.fn() },
       telegramAdvertiserContact: { updateMany: moved() },
       telegramAdvertiserAutomationExecution: { updateMany: moved() },
+      crossPromotionPlan: { updateMany: moved() },
     };
     const prisma = {
       $transaction: jest.fn(
@@ -106,6 +107,7 @@ describe('TelegramCrmContactMergeService', () => {
         contactMethods: 1,
         tags: 2,
         internalAutomationExecutions: 1,
+        crossPromotionPlans: 1,
       },
     });
     expect(tx.telegramCrmPeer.updateMany).toHaveBeenCalledWith({
@@ -115,6 +117,10 @@ describe('TelegramCrmContactMergeService', () => {
     expect(tx.telegramCrmConversation.updateMany).toHaveBeenCalledWith({
       where: { workspaceId: 'workspace-1', contactId: 'source' },
       data: { contactId: 'target' },
+    });
+    expect(tx.crossPromotionPlan.updateMany).toHaveBeenCalledWith({
+      where: { workspaceId: 'workspace-1', advertiserId: 'source' },
+      data: { advertiserId: 'target' },
     });
     const internalAutomationCall = callArgument(
       tx.telegramAdvertiserAutomationExecution.updateMany,

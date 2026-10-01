@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { FinanceCategoriesModule } from '../../finance/finance-categories/finance-categories.module';
 import { TelegramChannelsModule } from '../../telegram/telegram-channels/telegram-channels.module';
 import { MutualPromotionCommandService } from './mutual-promotion-command.service';
@@ -13,12 +13,15 @@ import { MutualPromotionInviteLinkImportService } from './mutual-promotion-invit
 import { MutualPromotionReadService } from './mutual-promotion-read.service';
 import { MutualPromotionStatisticsService } from './mutual-promotion-statistics.service';
 import { MutualPromotionValidationService } from './mutual-promotion-validation.service';
+import { TelegramSystemBotModule } from '../../telegram/telegram-system-bot/telegram-system-bot.module';
+import { MutualPromotionBotNotificationService } from './mutual-promotion-bot-notification.service';
 
 @Module({
-  imports: [FinanceCategoriesModule, TelegramChannelsModule],
+  imports: [FinanceCategoriesModule, TelegramChannelsModule, forwardRef(() => TelegramSystemBotModule)],
   controllers: [MutualPromotionFoldersController],
   providers: [
     MutualPromotionActivationService,
+    MutualPromotionBotNotificationService,
     MutualPromotionAttributionHistoryService,
     MutualPromotionBoundaryService,
     MutualPromotionCommandService,
