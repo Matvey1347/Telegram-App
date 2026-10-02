@@ -542,9 +542,9 @@ function bestPhoto(messagePhotos: TelegramSystemBotIncomingMessage['photo']) {
   );
   const photo = [...photos].sort(
     (left, right) =>
-      (right.file_size ?? 0) - (left.file_size ?? 0) ||
       (right.width ?? 0) * (right.height ?? 0) -
-        (left.width ?? 0) * (left.height ?? 0),
+        (left.width ?? 0) * (left.height ?? 0) ||
+      (right.file_size ?? 0) - (left.file_size ?? 0),
   )[0];
   return photo
     ? {

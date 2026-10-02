@@ -47,6 +47,7 @@ export type AvailabilityPlacement = {
     advertiserName: string | null;
     advertiserNameSnapshot: string | null;
     status: unknown;
+    financeSkipped?: boolean;
     paymentStatus?: 'UNPAID' | 'PARTIALLY_PAID' | 'PAID' | 'OVERPAID' | null;
     saleAgreedAmount?: Prisma.Decimal;
     saleReceivedAmount?: Prisma.Decimal;
@@ -325,6 +326,7 @@ export function buildAdSalesAvailability(input: AvailabilityBuildInput) {
                   existing.sale?.advertiserName ??
                   null,
                 saleStatus: existing.sale?.status ?? null,
+                financeSkipped: existing.sale?.financeSkipped ?? false,
                 paymentStatus: existing.sale?.paymentStatus ?? null,
                 agreedPrice: decimalToString(existing.agreedPrice),
                 currency: existing.currency,

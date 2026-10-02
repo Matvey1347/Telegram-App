@@ -246,39 +246,6 @@ export class TelegramManagedPostHistoryService {
         'TELEGRAM_POST_ASSIGNED_MEMBER_REQUIRED',
         'Assigned member is required',
       );
-    if (
-      (post.status === TelegramManagedPostStatus.PUBLISHED ||
-        post.status === TelegramManagedPostStatus.SCHEDULED) &&
-      (dto.imageUrls !== undefined || dto.mediaItems !== undefined) &&
-      !this.telegramManagedPostPresentationService.sameMediaItems(
-        dto.mediaItems,
-        post.mediaItems,
-        dto.imageUrls,
-        post.imageUrls,
-      )
-    ) {
-      throw telegramPostsBadRequest(
-        'TELEGRAM_POST_IMAGES_NOT_EDITABLE',
-        'Images cannot be edited after the post is sent or scheduled. Update only the text.',
-      );
-    }
-    if (
-      post.origin === 'TELEGRAM' &&
-      (post.imageUrls.length > 0 ||
-        (Array.isArray(post.mediaItems) && post.mediaItems.length > 0)) &&
-      (dto.imageUrls !== undefined || dto.mediaItems !== undefined) &&
-      !this.telegramManagedPostPresentationService.sameMediaItems(
-        dto.mediaItems,
-        post.mediaItems,
-        dto.imageUrls,
-        post.imageUrls,
-      )
-    ) {
-      throw telegramPostsBadRequest(
-        'TELEGRAM_POST_MEDIA_NOT_REPLACEABLE',
-        'Imported Telegram media cannot be replaced from the editor.',
-      );
-    }
     let assignedMemberId: string | undefined;
     if (
       dto.assignedMemberId !== undefined &&
@@ -357,7 +324,9 @@ export class TelegramManagedPostHistoryService {
       (post.status === TelegramManagedPostStatus.SCHEDULED &&
         post.telegramScheduledMessageIds.length > 0);
     const channel =
-      (dto.text !== undefined || dto.buttonRows !== undefined) &&
+      (dto.text !== undefined ||
+        dto.buttonRows !== undefined ||
+        nextMedia !== undefined) &&
       canEditRemoteTelegramText
         ? await this.prisma.telegramChannel.findFirst({
             where: { id: channelId, workspaceId },
@@ -371,7 +340,9 @@ export class TelegramManagedPostHistoryService {
           })
         : null;
     const telegramEdit =
-      (dto.text !== undefined || dto.buttonRows !== undefined) &&
+      (dto.text !== undefined ||
+        dto.buttonRows !== undefined ||
+        nextMedia !== undefined) &&
       canEditRemoteTelegramText &&
       channel
         ? await this.telegramManagedPostEditTransportService.editManagedPostTextInTelegram(
@@ -384,6 +355,7 @@ export class TelegramManagedPostHistoryService {
               buttonRows:
                 dto.buttonRows === undefined ? post.buttonRows : dto.buttonRows,
               inPlaceOnly: dto.inPlaceOnly,
+              nextMediaItems: nextMedia?.mediaItems,
             },
           )
         : null;

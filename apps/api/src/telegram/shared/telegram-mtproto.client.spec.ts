@@ -24,9 +24,15 @@ describe('TelegramMtprotoClient import resolution', () => {
       getMessages: jest.fn().mockResolvedValue([]),
       getMe: jest.fn(),
     };
-    jest.spyOn(client as never, 'createClient' as never).mockResolvedValue(fakeClient as never);
-    jest.spyOn(client as never, 'closeClient' as never).mockResolvedValue(undefined as never);
-    jest.spyOn(client as never, 'profilePhotoDataUrl' as never).mockResolvedValue(null as never);
+    jest
+      .spyOn(client as never, 'createClient' as never)
+      .mockResolvedValue(fakeClient as never);
+    jest
+      .spyOn(client as never, 'closeClient' as never)
+      .mockResolvedValue(undefined as never);
+    jest
+      .spyOn(client as never, 'profilePhotoDataUrl' as never)
+      .mockResolvedValue(null as never);
   });
 
   it('downloads the current account avatar through the authorized session', async () => {
@@ -42,7 +48,9 @@ describe('TelegramMtprotoClient import resolution', () => {
       if (request instanceof Api.help.GetConfig) return {};
       throw new Error('Unexpected invoke');
     });
-    jest.spyOn(client as never, 'profilePhotoDataUrl' as never).mockResolvedValue('data:image/jpeg;base64,telegram-avatar' as never);
+    jest
+      .spyOn(client as never, 'profilePhotoDataUrl' as never)
+      .mockResolvedValue('data:image/jpeg;base64,telegram-avatar' as never);
 
     await expect(
       client.getAccountProfile({
@@ -76,8 +84,12 @@ describe('TelegramMtprotoClient import resolution', () => {
         entity: { creator: true, username: null },
       },
     ]);
-    jest.spyOn(client as never, 'getAccountProfileFromClient' as never).mockResolvedValue({ id: '42', photoUrl: null } as never);
-    const downloadPhoto = jest.spyOn(client as never, 'profilePhotoDataUrl' as never).mockResolvedValue('data:image/jpeg;base64,real-channel-avatar' as never);
+    jest
+      .spyOn(client as never, 'getAccountProfileFromClient' as never)
+      .mockResolvedValue({ id: '42', photoUrl: null } as never);
+    const downloadPhoto = jest
+      .spyOn(client as never, 'profilePhotoDataUrl' as never)
+      .mockResolvedValue('data:image/jpeg;base64,real-channel-avatar' as never);
 
     await expect(
       client.getAdminChannelsWithProfile({
@@ -107,12 +119,16 @@ describe('TelegramMtprotoClient import resolution', () => {
       firstName: '😇',
       username: 'legacy_owner',
     });
-    jest.spyOn(client as never, 'resolveStoredChannel' as never).mockResolvedValue({
-      peer,
-      entity: {},
-      channel: {},
-    } as never);
-    jest.spyOn(client as never, 'profilePhotoDataUrl' as never).mockResolvedValue('data:image/jpeg;base64,emoji-avatar' as never);
+    jest
+      .spyOn(client as never, 'resolveStoredChannel' as never)
+      .mockResolvedValue({
+        peer,
+        entity: {},
+        channel: {},
+      } as never);
+    jest
+      .spyOn(client as never, 'profilePhotoDataUrl' as never)
+      .mockResolvedValue('data:image/jpeg;base64,emoji-avatar' as never);
     fakeClient.invoke.mockImplementation((request: unknown) => {
       if (request instanceof Api.messages.GetExportedChatInvite) {
         return {
@@ -163,7 +179,9 @@ describe('TelegramMtprotoClient import resolution', () => {
       permanent: true,
       joinedWithinPeriod: 1,
     });
-    expect(fakeClient.invoke).toHaveBeenCalledWith(expect.objectContaining({ link: 'https://t.me/+legacy' }));
+    expect(fakeClient.invoke).toHaveBeenCalledWith(
+      expect.objectContaining({ link: 'https://t.me/+legacy' }),
+    );
   });
 
   it('resolves a public username to a real entity', async () => {
@@ -325,7 +343,9 @@ describe('TelegramMtprotoClient import resolution', () => {
       megagroup: false,
     } as unknown as any);
     const invite = new Api.ChatInviteAlready({ chat: entity });
-    fakeClient.getEntity.mockRejectedValue(new Error('Could not find the input entity for PeerChannel'));
+    fakeClient.getEntity.mockRejectedValue(
+      new Error('Could not find the input entity for PeerChannel'),
+    );
     fakeClient.invoke.mockImplementation((request: unknown) => {
       if (request instanceof Api.messages.CheckChatInvite) return invite;
       if (request instanceof Api.channels.GetFullChannel) {
@@ -349,35 +369,15 @@ describe('TelegramMtprotoClient import resolution', () => {
     });
   });
 
-  it('imports a private invite preview and uses the real joined entity', async () => {
-    const joined = new Api.Channel({
-      id: '777' as any,
-      title: 'Private Channel',
-      accessHash: '1' as any,
-      broadcast: true,
-      megagroup: false,
-    } as unknown as any);
+  it('previews a private invite without joining the channel', async () => {
     const invite = new Api.ChatInvite({
       title: 'Private Preview',
       broadcast: true,
       channel: true,
       participantsCount: 33,
     } as unknown as any);
-    const updates = new Api.Updates({
-      updates: [],
-      users: [],
-      chats: [joined],
-      date: 1,
-      seq: 1,
-    });
     fakeClient.invoke.mockImplementation((request: unknown) => {
       if (request instanceof Api.messages.CheckChatInvite) return invite;
-      if (request instanceof Api.messages.ImportChatInvite) return updates;
-      if (request instanceof Api.channels.GetFullChannel) {
-        return {
-          fullChat: { about: 'Joined after invite', participantsCount: 99 },
-        };
-      }
       throw new Error('Unexpected invoke');
     });
 
@@ -391,19 +391,24 @@ describe('TelegramMtprotoClient import resolution', () => {
 
     expect(result).toMatchObject({
       kind: 'channel',
-      telegramChatId: '777',
-      title: 'Private Channel',
+      telegramChatId: '',
+      title: 'Private Preview',
       inviteLink: 'https://t.me/+invite_hash',
-      joinedByInvite: true,
-      participantsCount: 99,
+      joinedByInvite: false,
+      participantsCount: 33,
+      requiresJoinRequest: true,
     });
+    expect(fakeClient.invoke).not.toHaveBeenCalledWith(
+      expect.any(Api.messages.ImportChatInvite),
+    );
   });
 
   it('maps invalid invite hash to a user-facing error', async () => {
     fakeClient.invoke.mockImplementation((request: unknown) => {
       if (request instanceof Api.messages.CheckChatInvite) {
         const error = new Error('INVITE_HASH_INVALID');
-        (error as Error & { errorMessage?: string }).errorMessage = 'INVITE_HASH_INVALID';
+        (error as Error & { errorMessage?: string }).errorMessage =
+          'INVITE_HASH_INVALID';
         throw error;
       }
       throw new Error('Unexpected invoke');
@@ -496,7 +501,10 @@ describe('TelegramMtprotoClient import resolution', () => {
       broadcast: true,
       megagroup: false,
     } as unknown as any);
-    fakeClient.getDialogs.mockResolvedValue([{ entity: first }, { entity: second }]);
+    fakeClient.getDialogs.mockResolvedValue([
+      { entity: first },
+      { entity: second },
+    ]);
     fakeClient.invoke.mockImplementation((request: unknown) => {
       if (request instanceof Api.contacts.Search) {
         return { chats: [], users: [] };
@@ -523,11 +531,14 @@ describe('TelegramMtprotoClient import resolution', () => {
       megagroup: false,
       username: undefined,
     } as unknown as any);
-    fakeClient.getDialogs.mockResolvedValue([{ id: '9901' as any, title: 'Private after rename', entity }]);
+    fakeClient.getDialogs.mockResolvedValue([
+      { id: '9901' as any, title: 'Private after rename', entity },
+    ]);
     fakeClient.getEntity.mockImplementation(async (ref: unknown) => {
       if (ref === '@old_public_name') {
         const error = new Error('USERNAME_NOT_OCCUPIED');
-        (error as Error & { errorMessage?: string }).errorMessage = 'USERNAME_NOT_OCCUPIED';
+        (error as Error & { errorMessage?: string }).errorMessage =
+          'USERNAME_NOT_OCCUPIED';
         throw error;
       }
       if (ref instanceof Api.InputPeerChannel) {
@@ -572,7 +583,7 @@ describe('TelegramMtprotoClient import resolution', () => {
     expect(result.channel?.resolvedBy).toBe('dialog-id');
   });
 
-  it('does not resolve USER_ALREADY_PARTICIPANT invite conflicts by title guessing', async () => {
+  it('does not submit an invite request when a private invite is unresolved', async () => {
     const invite = new Api.ChatInvite({
       title: 'Duplicate title',
       broadcast: true,
@@ -581,14 +592,8 @@ describe('TelegramMtprotoClient import resolution', () => {
     } as unknown as any);
     fakeClient.invoke.mockImplementation((request: unknown) => {
       if (request instanceof Api.messages.CheckChatInvite) return invite;
-      if (request instanceof Api.messages.ImportChatInvite) {
-        const error = new Error('USER_ALREADY_PARTICIPANT');
-        (error as Error & { errorMessage?: string }).errorMessage = 'USER_ALREADY_PARTICIPANT';
-        throw error;
-      }
       throw new Error('Unexpected invoke');
     });
-    fakeClient.getDialogs.mockResolvedValue([]);
 
     await expect(
       client.getPublicChannelInfo({
@@ -598,7 +603,13 @@ describe('TelegramMtprotoClient import resolution', () => {
         channelRef: 'https://t.me/+duplicate_hash',
         inviteHash: 'duplicate_hash',
       }),
-    ).rejects.toThrow(BadRequestException);
+    ).resolves.toMatchObject({
+      title: 'Duplicate title',
+      requiresJoinRequest: true,
+    });
+    expect(fakeClient.invoke).not.toHaveBeenCalledWith(
+      expect.any(Api.messages.ImportChatInvite),
+    );
   });
 
   it('returns suggestions for fuzzy title matches without auto-importing', async () => {
@@ -644,7 +655,9 @@ describe('TelegramMtprotoClient import resolution', () => {
         session: 'session',
         titleQuery: 'Смак Життя',
       }),
-    ).rejects.toThrow(/Private channels that are not accessible to the connected Telegram account require an invite link\./);
+    ).rejects.toThrow(
+      /Private channels that are not accessible to the connected Telegram account require an invite link\./,
+    );
   });
 
   it('loads invite links for self and another admin via GetAdminsWithInvites', async () => {
@@ -691,7 +704,10 @@ describe('TelegramMtprotoClient import resolution', () => {
         };
       }
       if (request instanceof Api.messages.GetExportedChatInvites) {
-        const adminId = request.adminId instanceof Api.InputUserSelf ? '100' : String((request.adminId as any).userId);
+        const adminId =
+          request.adminId instanceof Api.InputUserSelf
+            ? '100'
+            : String((request.adminId as any).userId);
         const offsetLink = String((request as any).offsetLink || '');
         if (adminId === '100') {
           return {
@@ -724,7 +740,9 @@ describe('TelegramMtprotoClient import resolution', () => {
           users: [otherAdmin],
         };
       }
-      throw new Error(`Unexpected invoke: ${String((request as any)?.className || request)}`);
+      throw new Error(
+        `Unexpected invoke: ${String((request as any)?.className || request)}`,
+      );
     });
 
     const result = await client.getAllChannelInviteLinks({
@@ -733,15 +751,23 @@ describe('TelegramMtprotoClient import resolution', () => {
       session: 'session',
       channelRef: '@invite_channel',
       onProgress: (item) => {
-        progress.push(`${item.phase}:${item.stageCurrent ?? 'x'}/${item.stageTotal ?? 'x'}`);
+        progress.push(
+          `${item.phase}:${item.stageCurrent ?? 'x'}/${item.stageTotal ?? 'x'}`,
+        );
       },
     });
 
     expect(result.scope).toBe('ALL_ADMINS');
     expect(result.expectedTotalLinks).toBe(24);
     expect(result.links).toHaveLength(24);
-    expect(fakeClient.invoke.mock.calls.filter(([request]) => request instanceof Api.messages.GetExportedChatInvites)).toHaveLength(4);
-    expect(result.links.find((link) => link.url.endsWith('sasha_1'))).toMatchObject({
+    expect(
+      fakeClient.invoke.mock.calls.filter(
+        ([request]) => request instanceof Api.messages.GetExportedChatInvites,
+      ),
+    ).toHaveLength(4);
+    expect(
+      result.links.find((link) => link.url.endsWith('sasha_1')),
+    ).toMatchObject({
       telegramCreatorUserId: '200',
       creatorUsername: 'sasha_admin',
       requested: 2,
@@ -823,7 +849,9 @@ describe('TelegramMtprotoClient import resolution', () => {
           users: [selfUser],
         };
       }
-      throw new Error(`Unexpected invoke: ${String((request as any)?.className || request)}`);
+      throw new Error(
+        `Unexpected invoke: ${String((request as any)?.className || request)}`,
+      );
     });
 
     const result = await client.getAllChannelInviteLinks({
@@ -877,9 +905,14 @@ describe('TelegramMtprotoClient import resolution', () => {
     fakeClient.getEntity.mockResolvedValue(channel);
     fakeClient.getMe.mockResolvedValue(selfUser);
     fakeClient.getInputEntity.mockImplementation(async (candidate: unknown) => {
-      if ((candidate instanceof Api.User && String(candidate.id) === '200') || candidate === '@sasha_admin' || candidate instanceof Api.PeerUser) {
+      if (
+        (candidate instanceof Api.User && String(candidate.id) === '200') ||
+        candidate === '@sasha_admin' ||
+        candidate instanceof Api.PeerUser
+      ) {
         const error = new Error('ADMIN_ID_INVALID');
-        (error as Error & { errorMessage?: string }).errorMessage = 'ADMIN_ID_INVALID';
+        (error as Error & { errorMessage?: string }).errorMessage =
+          'ADMIN_ID_INVALID';
         throw error;
       }
       return new Api.InputUser({
@@ -918,7 +951,10 @@ describe('TelegramMtprotoClient import resolution', () => {
         };
       }
       if (request instanceof Api.messages.GetExportedChatInvites) {
-        const adminId = request.adminId instanceof Api.InputUserSelf ? '100' : String((request.adminId as any).userId);
+        const adminId =
+          request.adminId instanceof Api.InputUserSelf
+            ? '100'
+            : String((request.adminId as any).userId);
         if (adminId === '100') {
           return {
             invites: [
@@ -960,7 +996,9 @@ describe('TelegramMtprotoClient import resolution', () => {
 
     expect(result.scope).toBe('ALL_ADMINS');
     expect(result.links).toHaveLength(2);
-    expect(result.links.find((link) => link.url.endsWith('sasha_full'))).toMatchObject({
+    expect(
+      result.links.find((link) => link.url.endsWith('sasha_full')),
+    ).toMatchObject({
       telegramCreatorUserId: '200',
       creatorUsername: 'sasha_admin',
       requested: 1,
@@ -1025,7 +1063,9 @@ describe('TelegramMtprotoClient import resolution', () => {
       }
       if (request instanceof Api.messages.GetAdminsWithInvites) {
         return {
-          admins: [{ adminId: '821695725', invitesCount: 1, revokedInvitesCount: 0 }],
+          admins: [
+            { adminId: '821695725', invitesCount: 1, revokedInvitesCount: 0 },
+          ],
           users: [adminFromInvites],
         };
       }
@@ -1044,7 +1084,9 @@ describe('TelegramMtprotoClient import resolution', () => {
       }
       if (request instanceof Api.messages.GetExportedChatInvites) {
         expect(request.adminId).toBeInstanceOf(Api.InputUser);
-        expect((request.adminId as Api.InputUser).accessHash?.constructor?.name).toBe('Integer');
+        expect(
+          (request.adminId as Api.InputUser).accessHash?.constructor?.name,
+        ).toBe('Integer');
         return {
           invites: [
             {
@@ -1104,9 +1146,14 @@ describe('TelegramMtprotoClient import resolution', () => {
     fakeClient.getEntity.mockResolvedValue(channel);
     fakeClient.getMe.mockResolvedValue(selfUser);
     fakeClient.getInputEntity.mockImplementation(async (candidate: unknown) => {
-      if ((candidate instanceof Api.User && String(candidate.id) === '200') || candidate === '@sasha_admin' || candidate instanceof Api.PeerUser) {
+      if (
+        (candidate instanceof Api.User && String(candidate.id) === '200') ||
+        candidate === '@sasha_admin' ||
+        candidate instanceof Api.PeerUser
+      ) {
         const error = new Error('ADMIN_ID_INVALID');
-        (error as Error & { errorMessage?: string }).errorMessage = 'ADMIN_ID_INVALID';
+        (error as Error & { errorMessage?: string }).errorMessage =
+          'ADMIN_ID_INVALID';
         throw error;
       }
       return new Api.InputUser({
@@ -1200,7 +1247,9 @@ describe('TelegramMtprotoClient import resolution', () => {
     expect(result.scope).toBe('ALL_ADMINS');
     expect(result.expectedTotalLinks).toBe(3);
     expect(result.links).toHaveLength(3);
-    expect(result.links.find((link) => link.url.endsWith('sasha_global'))).toMatchObject({
+    expect(
+      result.links.find((link) => link.url.endsWith('sasha_global')),
+    ).toMatchObject({
       telegramCreatorUserId: '200',
       creatorUsername: 'sasha_admin',
       requested: 1,
@@ -1212,14 +1261,25 @@ describe('TelegramMtprotoClient import resolution', () => {
 describe('TelegramMtprotoClient QR connection cancellation', () => {
   it('closes again if an aborted connect revives its transport', async () => {
     const abort = new AbortController();
-    const connect = jest.spyOn(TelegramClient.prototype, 'connect').mockImplementation(async () => {
-      abort.abort();
-      return true;
-    });
-    const destroy = jest.spyOn(TelegramClient.prototype, 'destroy').mockResolvedValue(undefined);
+    const connect = jest
+      .spyOn(TelegramClient.prototype, 'connect')
+      .mockImplementation(async () => {
+        abort.abort();
+        return true;
+      });
+    const destroy = jest
+      .spyOn(TelegramClient.prototype, 'destroy')
+      .mockResolvedValue(undefined);
 
     try {
-      await expect(new TelegramMtprotoClient().loginWithQr('1', 'hash', abort.signal, jest.fn())).rejects.toMatchObject({ name: 'AbortError' });
+      await expect(
+        new TelegramMtprotoClient().loginWithQr(
+          '1',
+          'hash',
+          abort.signal,
+          jest.fn(),
+        ),
+      ).rejects.toMatchObject({ name: 'AbortError' });
       expect(destroy).toHaveBeenCalledTimes(2);
     } finally {
       connect.mockRestore();
@@ -1234,19 +1294,24 @@ describe('TelegramMtprotoClient media batches', () => {
     const ids = Array.from({ length: 26 }, (_, index) => String(index + 1));
     const telegram = {
       getEntity: jest.fn().mockResolvedValue({ id: 'channel' }),
-      getMessages: jest.fn(async (_entity: unknown, params: { ids: number[] }) =>
-        params.ids.map((id) => ({
-          id,
-          media: { className: 'MessageMediaPhoto' },
-        })),
+      getMessages: jest.fn(
+        async (_entity: unknown, params: { ids: number[] }) =>
+          params.ids.map((id) => ({
+            id,
+            media: { className: 'MessageMediaPhoto' },
+          })),
       ),
       downloadMedia: jest.fn(async (message: { id: number }) => {
         if (message.id === 2) throw new Error('media unavailable');
         return Buffer.from(`image-${message.id}`);
       }),
     };
-    jest.spyOn(service as any, 'createClient').mockResolvedValue(telegram as never);
-    const close = jest.spyOn(service as any, 'closeClient').mockResolvedValue(undefined);
+    jest
+      .spyOn(service as any, 'createClient')
+      .mockResolvedValue(telegram as never);
+    const close = jest
+      .spyOn(service as any, 'closeClient')
+      .mockResolvedValue(undefined);
 
     const result = await service.downloadChannelMessagesMedia({
       apiId: '1',
@@ -1272,7 +1337,9 @@ describe('TelegramMtprotoClient media batches', () => {
         apiHash: 'hash',
         session: 'session',
         channelRef: '@channel',
-        messageIds: Array.from({ length: 101 }, (_, index) => String(index + 1)),
+        messageIds: Array.from({ length: 101 }, (_, index) =>
+          String(index + 1),
+        ),
       }),
     ).rejects.toThrow('Telegram media batch limit is 100 messages.');
   });

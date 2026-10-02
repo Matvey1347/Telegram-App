@@ -45,7 +45,7 @@ describe('TelegramSystemBotWorkflowStore', () => {
     let active = false;
     let queue = Promise.resolve<unknown>(undefined);
     const prisma = {
-      $queryRaw: jest.fn(),
+      $executeRaw: jest.fn(),
       telegramSystemBotFinanceDraft: {
         findFirst: jest.fn().mockResolvedValue(null),
       },
@@ -81,7 +81,7 @@ describe('TelegramSystemBotWorkflowStore', () => {
       'fulfilled',
       'rejected',
     ]);
-    expect(prisma.$queryRaw).toHaveBeenCalledTimes(2);
+    expect(prisma.$executeRaw).toHaveBeenCalledTimes(2);
     expect(prisma.telegramSystemBotWorkflow.create).toHaveBeenCalledTimes(1);
   });
 
@@ -102,6 +102,7 @@ describe('TelegramSystemBotWorkflowStore', () => {
           ...scope,
           kind: {
             in: [
+              TelegramSystemBotWorkflowKind.POST_IMPORT,
               TelegramSystemBotWorkflowKind.POST_BATCH_IMPORT,
               TelegramSystemBotWorkflowKind.WEBSITE_POST_IMPORT,
             ],

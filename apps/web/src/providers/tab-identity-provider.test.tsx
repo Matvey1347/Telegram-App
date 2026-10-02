@@ -66,6 +66,17 @@ describe("TabIdentityProvider", () => {
     expectEmojiFavicon("📊");
   });
 
+  it("sets a calendar favicon for the publication calendar route", async () => {
+    currentPathname = "/publication-calendar";
+
+    renderWithTabProvider();
+
+    await waitFor(() => {
+      expect(document.title).toBe("Publication calendar · Telegram System");
+    });
+    expectEmojiFavicon("🗓️");
+  });
+
   it("uses Catalog metadata for external telegram channel catalog", async () => {
     currentPathname = "/telegram-channels";
     currentSearch = "tab=channels&channelTab=external";

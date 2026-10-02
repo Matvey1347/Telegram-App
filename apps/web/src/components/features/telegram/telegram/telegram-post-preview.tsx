@@ -163,39 +163,48 @@ function previewHtml(
   );
   const customEmojiInlineStyle =
     "display:inline-block;width:1em;height:1em;max-width:1em;max-height:1em;vertical-align:-0.1em;object-fit:contain";
-  let value = renderRichBlocks(raw, token).replace(
-    /^!\[([^\]\n]*)\]\((https?:\/\/[^\s<>()]+)\)$/gim,
-    (_match, alt: string, href: string) => {
-      try {
-        const url = new URL(href);
-        if (!url.hostname.includes(".")) return _match;
-        return token(
-          `<img class="tg-inline-image" src="${escapeHtml(url.toString())}" alt="${escapeHtml(alt)}">`,
-          "block",
-        );
-      } catch {
-        return _match;
-      }
-    },
-  ).replace(
-    /!\[([^\]\n]*)\]\(tg:\/\/emoji\?id=([0-9]+)\)/g,
-    (_match, alt: string, documentId: string) => {
-      const emoji = customEmojiById.get(documentId);
-      const label = escapeHtml(alt);
-      const media = emoji?.assetUrl
-        ? emoji.kind === "VIDEO"
-          ? `<video src="${escapeHtml(emoji.assetUrl)}" style="${customEmojiInlineStyle}" autoplay loop muted playsinline aria-label="${label}"></video>`
-          : emoji.kind === "STATIC"
-            ? `<img src="${escapeHtml(emoji.assetUrl)}" style="${customEmojiInlineStyle}" alt="${label}">`
-            : emoji.renderAssetUrl
-              ? `<span class="tg-custom-emoji-lottie" style="${customEmojiInlineStyle}" data-lottie-url="${escapeHtml(emoji.renderAssetUrl)}" aria-label="${label}">${label}</span>`
-              : label
-        : label;
-      return token(
-        `<span class="tg-custom-emoji" data-telegram-custom-emoji-id="${escapeHtml(documentId)}" data-alt="${label}" contenteditable="false">${media}</span>`,
-      );
-    },
+  const normalizedRaw = raw.replace(
+    /\\`([\s\S]*?)\\`/g,
+    (_match, code: string) =>
+      /[\r\n]/.test(code)
+        ? `\`\`\`\n${code.replace(/\r\n?/g, "\n")}\`\`\``
+        : `\`${code}\``,
   );
+  let value = renderRichBlocks(normalizedRaw, token)
+    .replace(
+      /^!\[([^\]\n]*)\]\((https?:\/\/[^\s<>()]+)\)$/gim,
+      (_match, alt: string, href: string) => {
+        try {
+          const url = new URL(href);
+          if (!url.hostname.includes(".")) return _match;
+          return token(
+            `<img class="tg-inline-image" src="${escapeHtml(url.toString())}" alt="${escapeHtml(alt)}">`,
+            "block",
+          );
+        } catch {
+          return _match;
+        }
+      },
+    )
+    .replace(
+      /!\[([^\]\n]*)\]\(tg:\/\/emoji\?id=([0-9]+)\)/g,
+      (_match, alt: string, documentId: string) => {
+        const emoji = customEmojiById.get(documentId);
+        const label = escapeHtml(alt);
+        const media = emoji
+          ? emoji.kind === "VIDEO" && emoji.assetUrl
+            ? `<video src="${escapeHtml(emoji.assetUrl)}" style="${customEmojiInlineStyle}" autoplay loop muted playsinline aria-label="${label}"></video>`
+            : emoji.kind === "STATIC" && emoji.assetUrl
+              ? `<img src="${escapeHtml(emoji.assetUrl)}" style="${customEmojiInlineStyle}" alt="${label}">`
+              : emoji.kind === "ANIMATED" && emoji.renderAssetUrl
+                ? `<span class="tg-custom-emoji-lottie" style="${customEmojiInlineStyle}" data-lottie-url="${escapeHtml(emoji.renderAssetUrl)}" aria-label="${label}">${label}</span>`
+                : label
+          : label;
+        return token(
+          `<span class="tg-custom-emoji" data-telegram-custom-emoji-id="${escapeHtml(documentId)}" data-alt="${label}" contenteditable="false">${media}</span>`,
+        );
+      },
+    );
   value = value.replace(
     /```([^\n\r\u2028\u2029`]*)((?:\r\n|[\n\r\u2028\u2029])?)([\s\S]*?)```/g,
     (_match, info: string, lineBreak: string, code: string) => {
@@ -594,7 +603,8 @@ function TelegramMessageBubble({
               onUndo={onUndo}
               onRedo={onRedo}
             />
-          ) : formattedHtml ? (
+          ) : formattedHtml &&
+            !/tg-emoji|tg:\/\/emoji/i.test(`${formattedHtml}\n${text}`) ? (
             <div
               className="telegram-preview-text whitespace-pre-wrap break-words text-[14px] leading-[1.3] text-[#f5f5f5]"
               dangerouslySetInnerHTML={{

@@ -19,7 +19,7 @@ export type TelegramAdSalesTab =
   | "settings";
 
 const AD_SALES_CALENDAR_RANGE_STORAGE_PREFIX =
-  "telegram-ad-sales:calendar-range";
+  "telegram-ad-sales:calendar-range-v2";
 
 function adSalesCalendarRangeStorageKey(storage: Pick<Storage, "getItem">) {
   const workspaceId = storage.getItem("selected-workspace-id") || "default";

@@ -95,7 +95,7 @@ function LegacyAdSalesPage() {
   const { pushToast, startOperation } = useAppToast();
   const tab = routeTabFromPathname(pathname);
   const [calendarRangeMode, setCalendarRangeMode] =
-    useState<TelegramAdSalesCalendarRangeMode>("week");
+    useState<TelegramAdSalesCalendarRangeMode>("month");
   const [calendarCursor, setCalendarCursor] = useState(() => new Date());
   const [calendarRangeSelection, setCalendarRangeSelection] = useState<{
     from: string;
@@ -345,11 +345,10 @@ function LegacyAdSalesPage() {
     const nextIds = resolvedSelection.selectedChannelIds;
     const storedRangeMode = readAdSalesCalendarRangeMode(window.localStorage);
     const normalizedView =
-      storedRangeMode === "threeMonths"
-        ? "threeMonths"
-        : preferences.initialized && preferences.calendarView === "month"
-          ? "month"
-          : "week";
+      storedRangeMode ??
+      (preferences.initialized && preferences.calendarView === "week"
+        ? "week"
+        : "month");
     const nextCalendarRangeMode = normalizedView;
     writeAdSalesCalendarRangeMode(window.localStorage, nextCalendarRangeMode);
     const nextPreferencesSignature = JSON.stringify({
@@ -796,14 +795,14 @@ function LegacyAdSalesPage() {
       : null;
   return (
     <AppShell>
-      <PageTabHead title="Ad Sales" emoji="💼" color="#0f766e" />
+      <PageTabHead title="Selling" emoji="💼" color="#0f766e" />
       <PageHeader
-        title="Advertising sales"
-        subtitle="Sell ad placements across your own Telegram channels and networks."
+        title="Selling"
+        subtitle="See every available and booked advertising slot across your Telegram channels."
         action={
           <div className="flex flex-wrap items-center gap-2">
             <Button
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl px-5"
+              className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl px-5 whitespace-nowrap"
               onClick={() => {
                 setAdSaleSeedSlot(null);
                 setAdSaleModalOpen(true);

@@ -41,6 +41,98 @@ function setup() {
 }
 
 describe('TelegramCustomEmojiService workspace scope', () => {
+  it('resolves each unknown document at most once and reuses the imported pack', async () => {
+    const { service } = setup();
+    const pack = {
+      id: 'pack-1',
+      shortName: 'flowers',
+      title: 'Flowers',
+      telegramLink: 'https://t.me/addemoji/flowers',
+      emojis: [
+        {
+          id: 'emoji-1',
+          documentId: '101',
+          alt: '🌸',
+          mimeType: 'image/webp',
+          kind: 'STATIC' as const,
+          isFree: false,
+          needsRepainting: false,
+          position: 0,
+          assetUrl: 'https://cdn.example.test/flower.webp',
+          renderAssetUrl: null,
+        },
+        {
+          id: 'emoji-2',
+          documentId: '102',
+          alt: '🌺',
+          mimeType: 'image/webp',
+          kind: 'STATIC' as const,
+          isFree: false,
+          needsRepainting: false,
+          position: 1,
+          assetUrl: 'https://cdn.example.test/hibiscus.webp',
+          renderAssetUrl: null,
+        },
+      ],
+    };
+    jest
+      .spyOn(service, 'list')
+      .mockResolvedValueOnce({ packs: [] })
+      .mockResolvedValue({ packs: [pack] });
+    const importPack = jest
+      .spyOn(service, 'importPack')
+      .mockResolvedValue({ packs: [pack] });
+
+    await expect(
+      service.ensureDocuments('user-1', ['101', '102', '101']),
+    ).resolves.toEqual({ packs: [pack] });
+
+    expect(importPack).toHaveBeenCalledTimes(1);
+    expect(importPack).toHaveBeenCalledWith('user-1', { source: '101' });
+  });
+
+  it('resolves a raw Custom Emoji document ID through MTProto instead of validating it as a pack name', async () => {
+    const { mtproto, prisma, service, storage, tx } = setup();
+    prisma.telegramUserAccountIntegration.findFirst.mockResolvedValue({
+      apiId: 123,
+      apiHashEncrypted: 'hash',
+      apiHashIv: 'hash-iv',
+      apiHashAuthTag: 'hash-tag',
+      sessionEncrypted: 'session',
+      sessionIv: 'session-iv',
+      sessionAuthTag: 'session-tag',
+    });
+    prisma.telegramCustomEmojiPack.findUnique.mockResolvedValue(null);
+    mtproto.getCustomEmojiPack.mockResolvedValue({
+      shortName: 'resolved_pack',
+      title: 'Resolved pack',
+      telegramSetId: 'set-1',
+      documents: [
+        {
+          documentId: '5368324170671202286',
+          alt: '✨',
+          mimeType: 'image/webp',
+          kind: 'STATIC',
+          isFree: false,
+          needsRepainting: false,
+          originalAsset: Buffer.from('asset'),
+        },
+      ],
+    });
+    storage.uploadMany.mockResolvedValue(new Map());
+
+    await service.importPack('user-1', { source: '5368324170671202286' });
+
+    expect(mtproto.getCustomEmojiPack).toHaveBeenCalledWith(
+      expect.objectContaining({ source: '5368324170671202286' }),
+    );
+    expect(tx.telegramCustomEmojiPack.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({ shortName: 'resolved_pack' }),
+      }),
+    );
+  });
+
   it('lists all packs belonging to the current workspace without channel links', async () => {
     const { prisma, service } = setup();
     prisma.telegramCustomEmojiPack.findMany.mockResolvedValue([

@@ -21,7 +21,7 @@ describe("telegram-ad-sales helpers", () => {
 
     writeAdSalesCalendarRangeMode(storage, "month");
 
-    expect(values.get("telegram-ad-sales:calendar-range:workspace-1")).toBe("month");
+    expect(values.get("telegram-ad-sales:calendar-range-v2:workspace-1")).toBe("month");
     expect(readAdSalesCalendarRangeMode(storage)).toBe("month");
   });
 

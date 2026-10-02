@@ -3,6 +3,7 @@
 import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
 import {
+  CalendarDays,
   ChevronDown,
   ChevronRight,
   Megaphone,
@@ -71,6 +72,12 @@ const groups: readonly NavigationGroup[] = [
         label: "navigation.posts",
         href: "/telegram-posts",
         icon: workspaceFeatureIcons.posts,
+        featureId: "posts",
+      },
+      {
+        label: "navigation.publicationCalendar",
+        href: "/publication-calendar",
+        icon: CalendarDays,
         featureId: "posts",
       },
       {

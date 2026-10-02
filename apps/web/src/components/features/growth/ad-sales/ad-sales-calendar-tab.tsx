@@ -206,6 +206,7 @@ export function CalendarTab(props: {
         advertiserName={placement?.advertiserName}
         saleTitle={placement?.title}
         paymentStatus={placement?.paymentStatus || "UNPAID"}
+        financeSkipped={placement?.financeSkipped}
         agreedPrice={placement?.agreedPrice}
         agreedCurrency={placement?.currency}
         onClick={
@@ -241,6 +242,7 @@ export function CalendarTab(props: {
     for (const slot of slots) {
       const details = placementDetailsForSlot(slot);
       if (!details.placement) continue;
+      if (details.placement.financeSkipped) continue;
       const saleId = details.placement.saleId;
       if (countedSales.has(saleId)) continue;
       countedSales.add(saleId);
@@ -371,7 +373,8 @@ export function CalendarTab(props: {
                           const dealSaleDetails = saleDetails(
                             deal.entries.map(({ slot }) => slot),
                           );
-                          const dealRevenue = dealSaleDetails.currency
+                          const isFree = Boolean(details.placement?.financeSkipped);
+                          const dealRevenue = !isFree && dealSaleDetails.currency
                             ? [
                                 {
                                   currency: dealSaleDetails.currency,
@@ -393,7 +396,7 @@ export function CalendarTab(props: {
                               key={deal.saleId}
                               type="button"
                               onClick={() => props.onOpenSale(deal.saleId)}
-                              title={`${dealLabel} · ${deal.entries.length} placement${deal.entries.length === 1 ? "" : "s"} · ${dealRevenue.map((item) => item.label).join(" · ")}`}
+                              title={`${dealLabel} · ${deal.entries.length} placement${deal.entries.length === 1 ? "" : "s"}${isFree ? " · Free" : ` · ${dealRevenue.map((item) => item.label).join(" · ")}`}`}
                               className="flex w-full items-center gap-1.5 rounded-md border border-sky-800/70 bg-sky-950/20 px-1.5 py-1 text-left text-[10px] font-medium text-sky-100 transition hover:border-sky-500"
                             >
                               {details.placement
@@ -424,9 +427,11 @@ export function CalendarTab(props: {
                                   : ""}
                               </span>
                               <span className="ml-auto shrink-0 whitespace-nowrap text-[9px] opacity-80">
-                                {dealRevenue
-                                  .map((item) => item.label)
-                                  .join(" · ")}
+                                {isFree
+                                  ? "Free"
+                                  : dealRevenue
+                                      .map((item) => item.label)
+                                      .join(" · ")}
                               </span>
                             </button>
                           );

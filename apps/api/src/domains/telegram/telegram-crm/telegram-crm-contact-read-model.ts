@@ -9,6 +9,7 @@ import type {
   CrmContactDetail,
   CrmContactListItem,
 } from '@telegram-system/shared';
+import type { ResolvedEmoji } from '@telegram-system/shared';
 import {
   isUnassignedCrmContact,
   type CrmContactSalesSummary,
@@ -86,6 +87,7 @@ export const crmContactListSelect = {
       kind: true,
       status: true,
       scheduledAt: true,
+      publicationPost: true,
     },
   },
   _count: {
@@ -184,6 +186,7 @@ export function mapCrmContactListItem(
   dealTotals: Map<string, ActiveDealTotals>,
   salesSummaries: Map<string, CrmContactSalesSummary>,
   replySummaries: Map<string, CrmReplySummary>,
+  iconById: Map<string, ResolvedEmoji> = new Map(),
 ): CrmContactListItem {
   const deal = row.sales[0];
   const totals = deal ? dealTotals.get(deal.id) : null;
@@ -240,9 +243,18 @@ export function mapCrmContactListItem(
       kind: plan.kind,
       status: plan.status,
       scheduledAt: plan.scheduledAt.toISOString(),
+      iconPresentation: crossPromotionIconId(plan.publicationPost)
+        ? (iconById.get(crossPromotionIconId(plan.publicationPost)!) ?? null)
+        : null,
     })),
     salesSummary,
   };
+}
+
+function crossPromotionIconId(value: unknown) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const iconId = (value as { iconId?: unknown }).iconId;
+  return typeof iconId === 'string' && iconId.trim() ? iconId : null;
 }
 
 export function mapCrmContactDetail(

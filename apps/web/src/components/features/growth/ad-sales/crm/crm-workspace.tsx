@@ -128,7 +128,7 @@ export function CrmWorkspace({
               </Button>
             ) : null}
             <Link
-              className="inline-flex h-11 items-center gap-2 rounded-xl bg-blue-600 px-5 text-sm font-medium text-white hover:bg-blue-500"
+              className="inline-flex h-11 shrink-0 items-center gap-2 rounded-xl bg-blue-600 px-5 text-sm font-medium text-white hover:bg-blue-500 whitespace-nowrap"
               href="/ad-sales/calendar?open=sell"
             >
               <Plus size={18} /> Sell ad

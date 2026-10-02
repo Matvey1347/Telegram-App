@@ -10,6 +10,7 @@ import { FileUp, Link2, LoaderCircle, Plus, Upload, X } from "lucide-react";
 import {
   inferTelegramPostMediaKind,
   type TelegramPostMediaItem,
+  type TelegramPostMediaKind,
 } from "@telegram-system/shared";
 import { telegramChannelsApi } from "@/lib/api";
 import { useAppToast } from "@/providers/toast-provider";
@@ -21,6 +22,8 @@ export function TelegramPostMediaUpload({
   disabled,
   readOnly,
   compact,
+  allowedKinds,
+  maxItems,
   onUploadingChange,
 }: {
   value: TelegramPostMediaItem[];
@@ -28,6 +31,8 @@ export function TelegramPostMediaUpload({
   disabled?: boolean;
   readOnly?: boolean;
   compact?: boolean;
+  allowedKinds?: TelegramPostMediaKind[];
+  maxItems?: number;
   onUploadingChange?: (uploading: boolean) => void;
 }) {
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -36,9 +41,16 @@ export function TelegramPostMediaUpload({
   const [url, setUrl] = useState("");
   const { pushToast } = useAppToast();
   const locked = disabled || uploading;
+  const itemLimit = Math.min(maxItems ?? 10, 10);
+  const allowsKind = (kind: TelegramPostMediaKind) =>
+    !allowedKinds || allowedKinds.includes(kind);
 
   const append = (items: TelegramPostMediaItem[]) => {
-    const next = [...value, ...items].slice(0, 10);
+    if (items.some((item) => !allowsKind(item.kind))) {
+      pushToast("This post can only use the supported media types.", "error");
+      return;
+    }
+    const next = [...value, ...items].slice(0, itemLimit);
     if (next.some((item) => item.kind === "ANIMATION") && next.length > 1) {
       pushToast(
         "GIF/animation must be the only media item in a post.",
@@ -52,13 +64,15 @@ export function TelegramPostMediaUpload({
   const uploadFiles = async (files: File[]) => {
     if (!files.length) return;
     if (
-      files.some(
-        (file) =>
-          !file.type.startsWith("image/") && !file.type.startsWith("video/"),
-      )
+      files.some((file) => {
+        const kind = inferTelegramPostMediaKind(file.name, file.type);
+        return !kind || !allowsKind(kind);
+      })
     ) {
       pushToast(
-        "Only photos, GIFs, MP4 and WebM videos are supported.",
+        allowedKinds?.length === 1 && allowedKinds[0] === "PHOTO"
+          ? "Only photos can replace this post's media."
+          : "Only photos, GIFs, MP4 and WebM videos are supported.",
         "error",
       );
       return;
@@ -67,7 +81,7 @@ export function TelegramPostMediaUpload({
     onUploadingChange?.(true);
     try {
       const uploaded: TelegramPostMediaItem[] = [];
-      for (const file of files.slice(0, 10 - value.length)) {
+      for (const file of files.slice(0, itemLimit - value.length)) {
         uploaded.push(await telegramChannelsApi.uploadManagedPostMedia(file));
       }
       append(uploaded);
@@ -103,7 +117,7 @@ export function TelegramPostMediaUpload({
   };
 
   const pasteFiles = (event: ClipboardEvent<HTMLElement>) => {
-    if (locked || value.length >= 10) return;
+    if (locked || value.length >= itemLimit) return;
     const files = Array.from(event.clipboardData.files);
     if (!files.length) return;
     event.preventDefault();
@@ -113,7 +127,7 @@ export function TelegramPostMediaUpload({
   const dropFiles = (event: DragEvent<HTMLElement>) => {
     event.preventDefault();
     setDragging(false);
-    if (locked || value.length >= 10) return;
+    if (locked || value.length >= itemLimit) return;
     void uploadFiles(Array.from(event.dataTransfer.files));
   };
 
@@ -134,7 +148,7 @@ export function TelegramPostMediaUpload({
             onDragLeave={() => setDragging(false)}
             onDragOver={(event) => event.preventDefault()}
             onDrop={dropFiles}
-            tabIndex={locked || value.length >= 10 ? -1 : 0}
+            tabIndex={locked || value.length >= itemLimit ? -1 : 0}
           >
             <span className="inline-flex items-center gap-2 text-sm font-medium">
               {uploading ? <LoaderCircle className="animate-spin" size={18} /> : <FileUp size={18} />}
@@ -142,7 +156,7 @@ export function TelegramPostMediaUpload({
             </span>
             <button
               type="button"
-              disabled={locked || value.length >= 10}
+              disabled={locked || value.length >= itemLimit}
               onClick={() => inputRef.current?.click()}
               className="inline-flex h-9 items-center gap-2 rounded-lg border border-blue-500/70 bg-blue-600/15 px-4 text-sm font-medium text-blue-200 transition hover:bg-blue-600/30 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
             >
@@ -153,7 +167,11 @@ export function TelegramPostMediaUpload({
               ref={inputRef}
               type="file"
               className="sr-only"
-              accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm"
+              accept={
+                allowedKinds?.length === 1 && allowedKinds[0] === "PHOTO"
+                  ? "image/jpeg,image/png,image/webp"
+                  : "image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm"
+              }
               multiple
               onChange={(event) => {
                 const files = Array.from(event.target.files ?? []);
@@ -210,10 +228,10 @@ export function TelegramPostMediaUpload({
           ))}
         </div>
       ) : null}
-      {!readOnly && value.length < 10 ? (
+      {!readOnly && value.length < itemLimit ? (
         <p className="mt-1 text-xs text-neutral-500">
           <Plus size={11} className="mr-1 inline" />
-          Up to 10 photos/videos; GIF is sent separately.
+          Up to {itemLimit} photos/videos; GIF is sent separately.
         </p>
       ) : null}
     </FormField>

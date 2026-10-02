@@ -14,6 +14,7 @@ import { TokenEncryptionService } from '../../../common/security/token-encryptio
 import { WorkspaceService } from '../../../common/workspace.service';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { normalizeTelegramCustomEmojiPackSource } from '../../../telegram/shared/telegram-custom-emoji-pack';
+import { parseTelegramCustomEmojiDocumentId } from '../../../telegram/shared/telegram-custom-emoji-pack';
 import { TelegramMtprotoClient } from '../../../telegram/shared/telegram-mtproto.client';
 import { TelegramCustomEmojiStorageService } from './telegram-custom-emoji-storage.service';
 
@@ -77,6 +78,118 @@ export class TelegramCustomEmojiService {
     return { packs: packs.map((pack) => this.mapPack(pack)) };
   }
 
+  /**
+   * Imported posts only contain custom-emoji document IDs. Resolve unknown
+   * IDs lazily when such a post is opened, instead of showing their ordinary
+   * ALT characters in the editor preview. One resolved document imports its
+   * complete pack, so subsequent IDs from that pack cause no MTProto work.
+   */
+  async ensureDocuments(userId: string, input: string[]) {
+    const result = await this.resolveDocuments(userId, input);
+    return { packs: result.packs };
+  }
+
+  async resolveDocuments(
+    userId: string,
+    input: string[],
+    onProgress?: (
+      item: {
+        documentId: string;
+        status: 'loaded' | 'cached' | 'failed';
+        message: string;
+        pack?: TelegramCustomEmojiPackSummary;
+      },
+      current: number,
+      total: number,
+    ) => void,
+    signal?: AbortSignal,
+  ) {
+    const documentIds = [
+      ...new Set(
+        input
+          .map((value) => String(value).trim())
+          .filter((value) => /^\d{1,20}$/.test(value)),
+      ),
+    ].slice(0, 100);
+    let response = await this.list(userId);
+    const knownDocumentIds = new Set(
+      response.packs.flatMap((pack) =>
+        pack.emojis.map((emoji) => emoji.documentId),
+      ),
+    );
+    let loaded = 0;
+    let failed = 0;
+    for (const [index, documentId] of documentIds.entries()) {
+      if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+      const current = index + 1;
+      const existingPack = response.packs.find((pack) =>
+        pack.emojis.some((emoji) => emoji.documentId === documentId),
+      );
+      if (existingPack) {
+        loaded += 1;
+        onProgress?.(
+          {
+            documentId,
+            status: 'cached',
+            message: 'Premium emoji is already available.',
+            pack: {
+              ...existingPack,
+              emojis: existingPack.emojis.filter(
+                (emoji) => emoji.documentId === documentId,
+              ),
+            },
+          },
+          current,
+          documentIds.length,
+        );
+        continue;
+      }
+      try {
+        response = await this.importPack(userId, { source: documentId });
+        response.packs.forEach((pack) =>
+          pack.emojis.forEach((emoji) =>
+            knownDocumentIds.add(emoji.documentId),
+          ),
+        );
+        const pack = response.packs.find((candidate) =>
+          candidate.emojis.some((emoji) => emoji.documentId === documentId),
+        );
+        loaded += 1;
+        onProgress?.(
+          {
+            documentId,
+            status: 'loaded',
+            message: 'Premium emoji loaded.',
+            ...(pack
+              ? {
+                  pack: {
+                    ...pack,
+                    emojis: pack.emojis.filter(
+                      (emoji) => emoji.documentId === documentId,
+                    ),
+                  },
+                }
+              : {}),
+          },
+          current,
+          documentIds.length,
+        );
+      } catch {
+        failed += 1;
+        onProgress?.(
+          {
+            documentId,
+            status: 'failed',
+            message: 'Premium emoji could not be loaded.',
+          },
+          current,
+          documentIds.length,
+        );
+      }
+    }
+    return { ...response, loaded, failed, total: documentIds.length };
+  }
+
   private tgsJson(asset: Buffer) {
     try {
       return gunzipSync(asset);
@@ -90,19 +203,26 @@ export class TelegramCustomEmojiService {
   async importPack(userId: string, input: ImportTelegramCustomEmojiPackInput) {
     const workspaceId =
       await this.workspaceService.resolveWorkspaceIdForUser(userId);
-    const shortName = normalizeTelegramCustomEmojiPackSource(input.source);
-    const existing = await this.prisma.telegramCustomEmojiPack.findUnique({
-      where: { workspaceId_shortName: { workspaceId, shortName } },
-      select: { id: true, archivedAt: true },
-    });
-    if (existing) {
-      if (existing.archivedAt) {
-        await this.prisma.telegramCustomEmojiPack.update({
-          where: { id: existing.id },
-          data: { archivedAt: null },
-        });
+    const documentId = parseTelegramCustomEmojiDocumentId(input.source);
+    const requestedShortName = documentId
+      ? null
+      : normalizeTelegramCustomEmojiPackSource(input.source);
+    if (requestedShortName) {
+      const existing = await this.prisma.telegramCustomEmojiPack.findUnique({
+        where: {
+          workspaceId_shortName: { workspaceId, shortName: requestedShortName },
+        },
+        select: { id: true, archivedAt: true },
+      });
+      if (existing) {
+        if (existing.archivedAt) {
+          await this.prisma.telegramCustomEmojiPack.update({
+            where: { id: existing.id },
+            data: { archivedAt: null },
+          });
+        }
+        return this.list(userId);
       }
-      return this.list(userId);
     }
 
     const account = await this.prisma.telegramUserAccountIntegration.findFirst({
@@ -148,22 +268,21 @@ export class TelegramCustomEmojiService {
           : emoji.kind === 'ANIMATED'
             ? 'tgs'
             : 'webp';
-      return [
-        {
-          key: `${prefix}/original.${ext}`,
-          bytes: emoji.originalAsset,
-          mimeType: emoji.mimeType ?? 'application/octet-stream',
-        },
-        ...(emoji.kind === 'ANIMATED'
-          ? [
-              {
-                key: `${prefix}/render.json`,
-                bytes: this.tgsJson(emoji.originalAsset),
-                mimeType: 'application/json',
-              },
-            ]
-          : []),
-      ];
+      return emoji.kind === 'ANIMATED'
+        ? [
+            {
+              key: `${prefix}/render.json`,
+              bytes: this.tgsJson(emoji.originalAsset),
+              mimeType: 'application/json',
+            },
+          ]
+        : [
+            {
+              key: `${prefix}/original.${ext}`,
+              bytes: emoji.originalAsset,
+              mimeType: emoji.mimeType ?? 'application/octet-stream',
+            },
+          ];
     });
     const urls = await this.storage.uploadMany(assets);
     await this.prisma.$transaction(async (tx) => {
@@ -203,8 +322,12 @@ export class TelegramCustomEmojiService {
             isFree: emoji.isFree,
             needsRepainting: emoji.needsRepainting,
             position,
-            assetKey: `${prefix}/original.${ext}`,
-            assetUrl: urls.get(`${prefix}/original.${ext}`) ?? null,
+            assetKey:
+              emoji.kind === 'ANIMATED' ? null : `${prefix}/original.${ext}`,
+            assetUrl:
+              emoji.kind === 'ANIMATED'
+                ? null
+                : (urls.get(`${prefix}/original.${ext}`) ?? null),
             renderAssetKey:
               emoji.kind === 'ANIMATED' ? `${prefix}/render.json` : null,
             renderAssetUrl:

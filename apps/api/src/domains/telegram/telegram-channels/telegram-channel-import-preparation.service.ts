@@ -72,16 +72,10 @@ export class TelegramChannelImportPreparationService {
     info: ResolvedTelegramEntity,
     inputType: TelegramImportInput['type'],
   ) {
-    const isJoinRequestPreview =
-      inputType === 'invite' && info.requiresJoinRequest;
-    if (
-      info.kind === 'channel' &&
-      !String(info.telegramChatId || '').trim() &&
-      !isJoinRequestPreview
-    ) {
+    if (info.kind === 'channel' && !String(info.telegramChatId || '').trim()) {
       if (inputType === 'invite') {
         throw new BadRequestException(
-          'Could not resolve a real Telegram channel from the invite link.',
+          'Private invite links cannot be imported without joining the channel. Join it manually in Telegram first, then import it again.',
         );
       }
       throw new BadRequestException(

@@ -61,7 +61,7 @@ export type CreateCrossPromotionPlanPayload = {
 };
 
 export type CrossPromotionSchedulingProgress = {
-  phase: "VALIDATING" | "SCHEDULING" | "SAVING" | "ROLLING_BACK";
+  phase: "VALIDATING" | "DELETING" | "SCHEDULING" | "SAVING" | "ROLLING_BACK";
   message: string;
   telegramChannelId?: string;
   success?: boolean;

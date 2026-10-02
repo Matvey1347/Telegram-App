@@ -98,12 +98,16 @@ export function CrossPromotionPlanCard({
             <CardActionsMenu label={`Actions for ${plan.title}`}>
               {canEdit ? (
                 <CardMenuAction
-                  label="Edit promotion"
+                  label={
+                    plan.status === "DRAFT" && !plan.lastError
+                      ? "Continue draft"
+                      : "Edit promotion"
+                  }
                   icon={<Pencil size={16} />}
                   onClick={() => onEdit(plan)}
                 />
               ) : null}
-              {plan.status === "DRAFT" && onResume ? (
+              {plan.status === "DRAFT" && plan.lastError && onResume ? (
                 <CardMenuAction
                   label="Continue scheduling"
                   icon={<RefreshCw size={16} />}
@@ -142,10 +146,14 @@ export function CrossPromotionPlanCard({
       </div>
 
       {plan.status === "DRAFT" ? (
-        <div className="mx-4 mt-3 rounded-lg border border-rose-900/70 bg-rose-950/20 p-3 text-xs text-rose-200">
-          <p className="font-medium">This placement was not scheduled.</p>
-          <p className="mt-1 text-rose-300/80">
-            {plan.lastError || "Edit and retry, or delete this draft."}
+        <div
+          className={`mx-4 mt-3 rounded-lg border p-3 text-xs ${plan.lastError ? "border-rose-900/70 bg-rose-950/20 text-rose-200" : "border-blue-900/70 bg-blue-950/20 text-blue-100"}`}
+        >
+          <p className="font-medium">
+            {plan.lastError ? "This placement was not scheduled." : "Saved draft."}
+          </p>
+          <p className={plan.lastError ? "mt-1 text-rose-300/80" : "mt-1 text-blue-200/80"}>
+            {plan.lastError || "Continue it from any device, or delete the draft when it is no longer needed."}
           </p>
         </div>
       ) : null}

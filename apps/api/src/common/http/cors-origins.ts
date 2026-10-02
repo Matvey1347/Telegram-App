@@ -7,6 +7,7 @@ export const apiCorsAllowedHeaders = [
   'X-Correlation-Id',
   'X-Bypass-Response-Cache',
   'X-Manifest-Hash',
+  'X-Replace-Active-Import',
   'Cache-Control',
   'Pragma',
   'ngrok-skip-browser-warning',

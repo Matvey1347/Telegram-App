@@ -170,6 +170,13 @@ export function resolveRouteTabIdentity({
       ? { title: pageTitle("Catalog"), emoji: "🔎", color: "#7c2d12" }
       : { title: pageTitle("Channels"), emoji: "📣", color: "#0f766e" };
   }
+  if (pathname === "/publication-calendar") {
+    return {
+      title: pageTitle("Publication calendar"),
+      emoji: "🗓️",
+      color: "#2563eb",
+    };
+  }
   const telegramPostsView = telegramPostsRouteView(pathname, get);
   if (telegramPostsView) {
     const view = telegramPostsView;

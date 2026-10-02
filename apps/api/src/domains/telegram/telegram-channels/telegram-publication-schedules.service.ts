@@ -4,6 +4,8 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import type {
+  TelegramPublicationPlanCalendar,
+  TelegramPublicationPlanCalendarEvent,
   TelegramPublicationSlotOccurrence,
   TelegramPublicationSlotOccurrencesByChannel,
 } from '@telegram-system/shared';
@@ -13,6 +15,7 @@ import { iconToResolvedEmoji } from '../../../common/icons/resolved-emoji';
 import {
   TelegramPublicationOccurrenceQueryDto,
   TelegramPublicationBatchOccurrenceQueryDto,
+  TelegramPublicationPlanCalendarQueryDto,
   TelegramPublicationScheduleAssignmentInputDto,
   TelegramPublicationScheduleInputDto,
 } from './telegram-publication-schedules.dto';
@@ -20,6 +23,7 @@ import {
 const scheduleInclude = {
   icon: true,
   slots: { include: { icon: true }, orderBy: [{ position: 'asc' as const }] },
+  channelAssignments: { select: { channelId: true } },
   _count: { select: { channelAssignments: true } },
 };
 
@@ -41,6 +45,9 @@ export class TelegramPublicationSchedulesService {
       iconPresentation: iconToResolvedEmoji(row.icon),
       isDefault: row.isDefault,
       assignedChannelsCount: row._count?.channelAssignments ?? 0,
+      assignedChannelIds: row.channelAssignments.map(
+        (assignment: { channelId: string }) => assignment.channelId,
+      ),
       slots: row.slots.map((slot: any) => ({
         id: slot.id,
         scheduleId: slot.scheduleId,
@@ -367,6 +374,7 @@ export class TelegramPublicationSchedulesService {
   async occurrencesByChannels(
     userId: string,
     query: TelegramPublicationBatchOccurrenceQueryDto,
+    includeReservations = true,
   ): Promise<TelegramPublicationSlotOccurrencesByChannel> {
     const channelIds = [
       ...new Set(query.channelIds.split(',').map((id) => id.trim())),
@@ -445,27 +453,28 @@ export class TelegramPublicationSchedulesService {
         ),
       ),
     ];
-    const reservations = slotIds.length
-      ? await this.prisma.telegramManagedPost.findMany({
-          where: {
-            workspaceId,
-            telegramChannelId: { in: channelIds },
-            status: { in: ['SCHEDULED', 'PUBLISHING', 'PUBLISHED'] },
-            OR: [
-              { scheduledAt: { gte: from, lt: to } },
-              { publishedAt: { gte: from, lt: to } },
-            ],
-          },
-          select: {
-            id: true,
-            title: true,
-            telegramChannelId: true,
-            publicationSlotId: true,
-            scheduledAt: true,
-            publishedAt: true,
-          },
-        })
-      : [];
+    const reservations =
+      includeReservations && slotIds.length
+        ? await this.prisma.telegramManagedPost.findMany({
+            where: {
+              workspaceId,
+              telegramChannelId: { in: channelIds },
+              status: { in: ['SCHEDULED', 'PUBLISHING', 'PUBLISHED'] },
+              OR: [
+                { scheduledAt: { gte: from, lt: to } },
+                { publishedAt: { gte: from, lt: to } },
+              ],
+            },
+            select: {
+              id: true,
+              title: true,
+              telegramChannelId: true,
+              publicationSlotId: true,
+              scheduledAt: true,
+              publishedAt: true,
+            },
+          })
+        : [];
     const occupied = new Map(
       reservations.flatMap((post) => {
         const date = post.scheduledAt ?? post.publishedAt;
@@ -533,6 +542,227 @@ export class TelegramPublicationSchedulesService {
       );
     }
     return result;
+  }
+
+  async calendar(
+    userId: string,
+    query: TelegramPublicationPlanCalendarQueryDto,
+  ): Promise<TelegramPublicationPlanCalendar> {
+    const workspaceId = await this.workspaceId(userId);
+    const from = new Date(query.from);
+    const to = new Date(query.to);
+    if (!(from < to) || to.getTime() - from.getTime() > 62 * 86400000)
+      throw new BadRequestException(
+        'Calendar range must be positive and no longer than 62 days',
+      );
+    const assignments =
+      await this.prisma.telegramChannelPublicationScheduleAssignment.findMany({
+        where: { workspaceId, scheduleId: query.scheduleId },
+        select: { channelId: true },
+      });
+    const channelIds = assignments.map((assignment) => assignment.channelId);
+    const schedule = await this.prisma.telegramPublicationSchedule.findFirst({
+      where: { id: query.scheduleId, workspaceId },
+      select: { id: true },
+    });
+    if (!schedule)
+      throw new NotFoundException('Publication schedule not found');
+    if (!channelIds.length)
+      return { channelIds: [], occurrencesByChannel: {}, events: [] };
+    const [occurrencesByChannel, placements, crossPromotions] =
+      await Promise.all([
+        this.occurrencesByChannels(
+          userId,
+          {
+            from: query.from,
+            to: query.to,
+            channelIds: channelIds.join(','),
+          },
+          false,
+        ),
+        this.prisma.telegramAdSalePlacement.findMany({
+          where: {
+            workspaceId,
+            telegramChannelId: { in: channelIds },
+            status: { notIn: ['DRAFT', 'CANCELLED'] },
+            scheduledAt: { gte: from, lt: to },
+          },
+          select: {
+            id: true,
+            telegramAdSaleId: true,
+            telegramChannelId: true,
+            scheduledAt: true,
+            sale: {
+              select: {
+                title: true,
+                advertiserName: true,
+                advertiser: {
+                  select: {
+                    avatarIcon: {
+                      select: {
+                        id: true,
+                        type: true,
+                        name: true,
+                        emoji: true,
+                        imageUrl: true,
+                      },
+                    },
+                    crmPeers: {
+                      where: { photoUrl: { not: null } },
+                      take: 1,
+                      orderBy: { updatedAt: 'desc' },
+                      select: { photoUrl: true },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        }),
+        this.prisma.crossPromotionPlan.findMany({
+          where: {
+            workspaceId,
+            publisherChannelIds: { hasSome: channelIds },
+            status: { notIn: ['DRAFT', 'CANCELLED'] },
+          },
+          // Publication timestamps can be independently overridden per
+          // publisher. PostgreSQL cannot range-index that JSON field, so keep
+          // this plan-centric read bounded and filter its actual placements
+          // below.
+          orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+          take: 250,
+          select: {
+            id: true,
+            title: true,
+            scheduledAt: true,
+            publisherChannelIds: true,
+            publicationPost: true,
+          },
+        }),
+      ]);
+    const vpPlacements = crossPromotions.flatMap((plan) => {
+      const post = plan.publicationPost as {
+        iconId?: unknown;
+        publisherPlacements?: Array<{
+          telegramChannelId?: unknown;
+          scheduledAt?: unknown;
+        }>;
+        publisherPublications?: Array<{
+          post?: { iconId?: unknown };
+          placements?: Array<{
+            telegramChannelId?: unknown;
+            scheduledAt?: unknown;
+          }>;
+        }>;
+      } | null;
+      const placementGroups = post?.publisherPublications?.length
+        ? post.publisherPublications.map((publication) => ({
+            iconId: publication.post?.iconId ?? post?.iconId,
+            placements: publication.placements ?? [],
+          }))
+        : [
+            {
+              iconId: post?.iconId,
+              placements:
+                post?.publisherPlacements ??
+                plan.publisherChannelIds.map((telegramChannelId) => ({
+                  telegramChannelId,
+                  scheduledAt: plan.scheduledAt.toISOString(),
+                })),
+            },
+          ];
+      return placementGroups.flatMap(({ iconId, placements }) =>
+        placements.flatMap((placement) => {
+          const channelId =
+            typeof placement.telegramChannelId === 'string'
+              ? placement.telegramChannelId
+              : null;
+          const scheduledAt =
+            typeof placement.scheduledAt === 'string'
+              ? new Date(placement.scheduledAt)
+              : null;
+          if (
+            !channelId ||
+            !scheduledAt ||
+            !Number.isFinite(scheduledAt.getTime()) ||
+            !channelIds.includes(channelId) ||
+            scheduledAt < from ||
+            scheduledAt >= to
+          )
+            return [];
+          return [{ plan, channelId, scheduledAt, iconId }];
+        }),
+      );
+    });
+    const vpIconIds = vpPlacements.flatMap(({ iconId }) =>
+      typeof iconId === 'string' ? [iconId] : [],
+    );
+    const icons = vpIconIds.length
+      ? await this.prisma.icon.findMany({
+          where: {
+            id: { in: [...new Set(vpIconIds)] },
+            OR: [{ workspaceId }, { workspaceId: null }],
+          },
+        })
+      : [];
+    const iconsById = new Map(icons.map((icon) => [icon.id, icon]));
+    const rawEvents: TelegramPublicationPlanCalendarEvent[] = [
+      ...placements.map((placement) => ({
+        id: placement.id,
+        channelId: placement.telegramChannelId,
+        scheduledAt: placement.scheduledAt.toISOString(),
+        title:
+          placement.sale.advertiserName ??
+          placement.sale.title ??
+          'Advertising',
+        kind: 'AD' as const,
+        slotId: null,
+        adSaleId: placement.telegramAdSaleId,
+        avatarPresentation: iconToResolvedEmoji(
+          placement.sale.advertiser?.avatarIcon,
+        ),
+        avatarUrl: placement.sale.advertiser?.crmPeers[0]?.photoUrl ?? null,
+      })),
+      ...vpPlacements.map(({ plan, channelId, scheduledAt, iconId }) => ({
+        id: `${plan.id}:${channelId}:${scheduledAt.toISOString()}`,
+        channelId,
+        scheduledAt: scheduledAt.toISOString(),
+        title: plan.title,
+        kind: 'VP' as const,
+        slotId: null,
+        crossPromotionPlanId: plan.id,
+        avatarPresentation: iconToResolvedEmoji(
+          typeof iconId === 'string' ? iconsById.get(iconId) : null,
+        ),
+      })),
+    ];
+    // A VP can have both its plan record and a materialized managed post. It is
+    // one publication, not a collision, so collapse that representation here.
+    const events = [
+      ...new Map(
+        rawEvents.map((event) => [
+          `${event.channelId}:${event.scheduledAt}:${event.kind}:${event.title}`,
+          event,
+        ]),
+      ).values(),
+    ].sort((left, right) => left.scheduledAt.localeCompare(right.scheduledAt));
+    // The calendar is plan-centric, not channel-centric: one occurrence per
+    // slot/time is enough for the UI. Avoid returning the same 42-day grid for
+    // every assigned channel.
+    const calendarRows = [
+      ...new Map(
+        Object.values(occurrencesByChannel)
+          .flat()
+          .map((row) => [`${row.slotId}:${row.scheduledAt}`, row]),
+      ).values(),
+    ];
+    return {
+      channelIds,
+      occurrencesByChannel: channelIds[0]
+        ? { [channelIds[0]]: calendarRows }
+        : {},
+      events,
+    };
   }
   private localDateParts(date: Date, timezone: string) {
     const parts = new Intl.DateTimeFormat('en-CA', {

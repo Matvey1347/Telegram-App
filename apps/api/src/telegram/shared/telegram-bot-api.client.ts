@@ -277,6 +277,13 @@ export class TelegramBotApiClient {
     return this.call<unknown>(token, 'editMessageCaption', payload);
   }
 
+  async editMessageMedia(
+    token: string,
+    payload: { chat_id: string; message_id: number; media: unknown },
+  ) {
+    return this.call<unknown>(token, 'editMessageMedia', payload);
+  }
+
   async editMessageReplyMarkup(
     token: string,
     payload: { chat_id: string; message_id: number; reply_markup?: unknown },

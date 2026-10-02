@@ -1,7 +1,8 @@
 "use client";
 
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
 import type {
@@ -45,6 +46,9 @@ export function CrossPromotionPlansPage({
   sectionTabs: ReactNode;
   mutualModeTabs?: ReactNode;
 }) {
+  const searchParams = useSearchParams();
+  const requestedPlanId = searchParams.get("planId");
+  const openedPlanIdRef = useRef<string | null>(null);
   const qc = useQueryClient();
   const { startOperation } = useAppToast();
   const [open, setOpen] = useState(false);
@@ -59,6 +63,14 @@ export function CrossPromotionPlansPage({
     queryKey: crossPromotionPlanKeys.list(kind),
     queryFn: () => crossPromotionPlansApi.list(kind),
   });
+  useEffect(() => {
+    if (!requestedPlanId || openedPlanIdRef.current === requestedPlanId) return;
+    const plan = plansQuery.data?.find((item) => item.id === requestedPlanId);
+    if (!plan) return;
+    openedPlanIdRef.current = requestedPlanId;
+    setEditingPlan(plan);
+    setOpen(true);
+  }, [plansQuery.data, requestedPlanId]);
   const channelsQuery = useQuery({
     queryKey: telegramChannelKeys.select(),
     queryFn: () => telegramChannelsApi.select(),
@@ -137,6 +149,60 @@ export function CrossPromotionPlansPage({
     // instead of submitting the browser draft as a duplicate.
     onError: async () => {
       await qc.invalidateQueries({ queryKey: crossPromotionPlanKeys.list(kind) });
+    },
+  });
+  const saveDraftMutation = useMutation({
+    mutationFn: ({
+      draft,
+      id,
+    }: {
+      draft: Record<string, unknown>;
+      id?: string;
+    }) => crossPromotionPlansApi.saveDraft(kind, draft, id),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: crossPromotionPlanKeys.list(kind) });
+      setOpen(false);
+      setEditingPlan(null);
+    },
+  });
+  const replaceAndPublishNowMutation = useMutation({
+    mutationFn: async (payload: CreateCrossPromotionPlanPayload) => {
+      if (!editingPlan) throw new Error("Promotion is not available");
+      const operation = startOperation({
+        id: `cross-promotion-publish-now-${editingPlan.id}`,
+        title: "Replacing published mutual promotion",
+        message: "Removing old Telegram posts…",
+        current: 0,
+        total: payload.publisherChannelIds.length + 2,
+      });
+      try {
+        const plan = await crossPromotionPlansApi.replaceAndPublishNow(
+          editingPlan.id,
+          payload,
+          (progress, current, total) =>
+            operation.update({ message: progress.message, current, total }),
+        );
+        operation.succeed({
+          message: `${payload.publisherChannelIds.length} replacement post(s) published.`,
+        });
+        return plan;
+      } catch (error) {
+        operation.fail({
+          message:
+            error instanceof Error
+              ? error.message
+              : "Could not replace published posts.",
+        });
+        throw error;
+      }
+    },
+    onSuccess: async () => {
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: crossPromotionPlanKeys.list(kind) }),
+        qc.invalidateQueries({ queryKey: telegramChannelKeys.lists() }),
+      ]);
+      setOpen(false);
+      setEditingPlan(null);
     },
   });
   const deleteMutation = useMutation({
@@ -266,12 +332,18 @@ export function CrossPromotionPlansPage({
         channels={channelsQuery.data ?? []}
         networks={networksQuery.data ?? []}
         loading={channelsQuery.isLoading || networksQuery.isLoading}
-        saving={saveMutation.isPending}
+        saving={saveMutation.isPending || replaceAndPublishNowMutation.isPending}
         onClose={() => {
           setOpen(false);
           setEditingPlan(null);
         }}
         onSubmit={(payload) => saveMutation.mutateAsync(payload)}
+        onReplaceAndPublishNow={(payload) =>
+          replaceAndPublishNowMutation.mutateAsync(payload)
+        }
+        onSaveDraft={(draft, id) =>
+          saveDraftMutation.mutateAsync({ draft, id })
+        }
       />
       <PromoFormModal
         open={Boolean(previewPromoQuery.data)}

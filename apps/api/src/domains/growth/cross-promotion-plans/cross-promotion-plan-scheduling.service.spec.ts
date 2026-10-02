@@ -82,6 +82,7 @@ function setup() {
       .mockResolvedValueOnce({ id: 'post-1' })
       .mockResolvedValueOnce({ id: 'post-2' }),
     scheduleManagedPost: jest.fn().mockResolvedValue({}),
+    publishManagedPostNow: jest.fn().mockResolvedValue({}),
     deleteManagedPost: jest.fn().mockResolvedValue({}),
   };
   const systemPostGroups = {
@@ -339,6 +340,89 @@ describe('CrossPromotionPlanSchedulingService', () => {
       'channel-1',
       'post-1',
       { scheduledAt: '2026-09-20T08:00:00.000Z' },
+    );
+  });
+
+  it('deletes active remote posts and publishes their replacements immediately', async () => {
+    const { service, plans, telegram, remoteDeletion } = setup();
+    remoteDeletion.deletePublishedManagedPosts.mockResolvedValue({
+      failed: false,
+      results: [{ success: true }],
+    });
+
+    await service.replaceAndPublishNow(
+      'user-1',
+      'plan-1',
+      payload,
+      jest.fn(),
+      new AbortController().signal,
+    );
+
+    expect(remoteDeletion.deletePublishedManagedPosts).not.toHaveBeenCalled();
+    expect(telegram.deleteManagedPost).toHaveBeenCalledWith(
+      'user-1',
+      'old-channel',
+      'old-post',
+    );
+    expect(plans.placementsForReschedule).toHaveBeenCalledWith(
+      'user-1',
+      'plan-1',
+    );
+    expect(telegram.publishManagedPostNow).toHaveBeenCalledWith(
+      'user-1',
+      'channel-1',
+      'post-1',
+      {},
+    );
+    expect(plans.replaceScheduled).toHaveBeenCalledWith(
+      'user-1',
+      'plan-1',
+      expect.objectContaining({ scheduledAt: expect.any(String) }),
+      expect.any(Array),
+      'ACTIVE',
+    );
+  });
+
+  it('does not delete a Telegram post twice after remote deletion succeeds', async () => {
+    const { service, plans, telegram, remoteDeletion } = setup();
+    plans.removalContext.mockResolvedValue({
+      workspaceId: 'workspace-1',
+      remotePostIds: ['old-post'],
+    });
+    remoteDeletion.deletePublishedManagedPosts.mockResolvedValue({
+      failed: false,
+      deleted: 1,
+      skipped: 0,
+      results: [{ postId: 'old-post', success: true }],
+    });
+    const progress = jest.fn();
+
+    await service.replaceAndPublishNow(
+      'user-1',
+      'plan-1',
+      payload,
+      progress,
+      new AbortController().signal,
+    );
+
+    expect(remoteDeletion.deletePublishedManagedPosts).toHaveBeenCalledWith({
+      workspaceId: 'workspace-1',
+      managedPostIds: ['old-post'],
+    });
+    expect(telegram.deleteManagedPost).not.toHaveBeenCalledWith(
+      'user-1',
+      'old-channel',
+      'old-post',
+    );
+    expect(telegram.publishManagedPostNow).toHaveBeenCalledTimes(2);
+    expect(progress).toHaveBeenCalledWith(
+      expect.objectContaining({
+        phase: 'DELETING',
+        message: 'Deleted 1 of 1 existing posts',
+        success: true,
+      }),
+      2,
+      expect.any(Number),
     );
   });
 

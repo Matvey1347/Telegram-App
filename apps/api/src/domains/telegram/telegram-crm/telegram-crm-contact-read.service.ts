@@ -18,6 +18,7 @@ import type {
   CrmContactsListResult,
   CrmTagSummary,
   CrmUnreadSummary,
+  ResolvedEmoji,
 } from '@telegram-system/shared';
 import {
   createPaginatedResponse,
@@ -50,6 +51,10 @@ import {
   mapCrmTag,
   TelegramCrmSystemTagsService,
 } from './telegram-crm-system-tags.service';
+import {
+  iconToResolvedEmoji,
+  type ResolvedEmojiIconSource,
+} from '../../../common/icons/resolved-emoji';
 
 @Injectable()
 export class TelegramCrmContactReadService {
@@ -131,7 +136,21 @@ export class TelegramCrmContactReadService {
     for (const row of rows) {
       row.tags = row.tags.filter(({ tag }) => importTagIds.includes(tag.id));
     }
-    const [dealTotals, salesSummaries, replySummaries, availableTags] =
+    const crossPromotionIconIds = [
+      ...new Set(
+        rows.flatMap((row) =>
+          (row.crossPromotionPlans ?? []).flatMap((plan) => {
+            const post = plan.publicationPost;
+            const iconId =
+              post && typeof post === 'object' && !Array.isArray(post)
+                ? (post as { iconId?: unknown }).iconId
+                : null;
+            return typeof iconId === 'string' && iconId.trim() ? [iconId] : [];
+          }),
+        ),
+      ),
+    ];
+    const [dealTotals, salesSummaries, replySummaries, availableTags, icons] =
       await Promise.all([
         this.activeDealTotals(
           access.workspaceId,
@@ -157,7 +176,26 @@ export class TelegramCrmContactReadService {
         ),
         loadCrmReplySummaries(this.prisma, access.workspaceId, rows),
         this.listTagFacets(access.workspaceId, facetWhere),
+        crossPromotionIconIds.length
+          ? this.prisma.icon.findMany({
+              where: { id: { in: crossPromotionIconIds } },
+              select: {
+                id: true,
+                type: true,
+                name: true,
+                emoji: true,
+                imageUrl: true,
+              },
+            })
+          : Promise.resolve([]),
       ]);
+    const iconById = new Map<string, ResolvedEmoji>();
+    for (const icon of icons) {
+      const presentation = iconToResolvedEmoji(
+        icon as ResolvedEmojiIconSource,
+      );
+      if (presentation) iconById.set(icon.id, presentation);
+    }
     return {
       ...createPaginatedResponse(
         rows.map((row) =>
@@ -166,6 +204,7 @@ export class TelegramCrmContactReadService {
             dealTotals,
             salesSummaries,
             replySummaries,
+            iconById,
           ),
         ),
         totalItems,

@@ -139,7 +139,8 @@ export function MutualPromotionFolderDetailModal({
   ) => Promise<void>;
 }) {
   if (!folder) return null;
-  const editable = folder.status === "DRAFT";
+  const editable = folder.status === "DRAFT" || folder.status === "ACTIVE";
+  const removable = folder.status === "DRAFT";
   const canActivate =
     editable &&
     folder.participantCount > 0 &&
@@ -331,6 +332,7 @@ export function MutualPromotionFolderDetailModal({
                 post={post}
                 index={index}
                 editable={editable}
+                removable={removable}
                 timezone={timezone}
                 startsAt={folder.startsAt}
                 endsAt={folder.endsAt}

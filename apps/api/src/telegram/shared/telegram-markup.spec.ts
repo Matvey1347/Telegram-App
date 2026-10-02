@@ -11,6 +11,18 @@ import {
 } from './telegram-markup';
 
 describe('telegramMarkupToHtml', () => {
+  it('keeps multiline Telegram code as a fenced block instead of invalid inline backticks', () => {
+    expect(telegramHtmlToManagedMarkup('<code>first\nsecond</code>')).toBe(
+      '```\nfirst\nsecond\n```',
+    );
+  });
+
+  it('restores legacy escaped code delimiters instead of publishing literal backticks', () => {
+    expect(telegramMarkupToHtml('‼️\\`first\nsecond\\`')).toBe(
+      '‼️<pre><code>first\nsecond</code></pre>',
+    );
+  });
+
   it('does not expose duplicate or touching imported formatting delimiters', () => {
     expect(
       telegramMarkupToHtml(
@@ -89,7 +101,8 @@ describe('telegramMarkupToHtml', () => {
     expect(requiresNativeTelegramRichMessage('**ordinary bold**')).toBe(false);
   });
   it('keeps an uploaded image at its standalone position in a native rich message', () => {
-    const source = 'Before image\n\n![Image](https://cdn.example.test/image.png)\n\nAfter image';
+    const source =
+      'Before image\n\n![Image](https://cdn.example.test/image.png)\n\nAfter image';
     expect(requiresNativeTelegramRichMessage(source)).toBe(true);
     expect(telegramMarkupToRichHtml(source)).toBe(
       'Before image\n\n<img src="https://cdn.example.test/image.png"/>\n\nAfter image',

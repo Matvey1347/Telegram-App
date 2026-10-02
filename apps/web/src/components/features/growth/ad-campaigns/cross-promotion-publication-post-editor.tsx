@@ -1,6 +1,6 @@
 "use client";
 
-import { Bot, ChevronDown, Pencil, Send, UsersRound } from "lucide-react";
+import { Bot, ChevronDown, Pencil, Send, Trash2, UsersRound } from "lucide-react";
 import { useState } from "react";
 import type { TelegramSystemBotPostDraft } from "@telegram-system/shared";
 import type { TelegramChannel } from "@/lib/api";
@@ -17,10 +17,13 @@ export function CrossPromotionPublicationPostEditor({
   botConnected,
   importStatus,
   sendStatus,
+  dots = 1,
   onImport,
   onSend,
   onUseSelectedPromo,
   onChange,
+  onClear,
+  publishedMediaCount,
 }: {
   title?: string;
   directMutual: boolean;
@@ -29,10 +32,13 @@ export function CrossPromotionPublicationPostEditor({
   botConnected: boolean;
   importStatus: FlowStatus;
   sendStatus: FlowStatus;
+  dots?: number;
   onImport: () => void;
   onSend: () => void;
   onUseSelectedPromo: () => void;
   onChange: (post: TelegramSystemBotPostDraft) => void;
+  onClear?: () => void;
+  publishedMediaCount?: number;
 }) {
   const hasPost = Boolean(
     post.text.trim() || post.imageUrls.length || post.mediaItems?.length,
@@ -69,8 +75,13 @@ export function CrossPromotionPublicationPostEditor({
                   setOpened(true);
                 }}
               >
-                <Pencil size={15} /> {hasPost ? "✅ Write manually" : "Write manually"}
+                <Pencil size={15} /> {hasPost ? "Update post" : "Write manually"}
               </Button>
+              {onClear && hasPost ? (
+                <Button type="button" variant="danger" onClick={onClear}>
+                  <Trash2 size={15} /> Clear post
+                </Button>
+              ) : null}
               <Button
                 type="button"
                 variant="secondary"
@@ -87,9 +98,9 @@ export function CrossPromotionPublicationPostEditor({
               >
                 <Bot size={15} />{" "}
                 {importStatus === "working"
-                  ? "Loading…"
+                  ? `Loading${".".repeat(dots)}`
                   : importStatus === "waiting"
-                    ? "Waiting for bot…"
+                    ? `Waiting for bot${".".repeat(dots)}`
                     : importStatus === "done"
                       ? "✅ Imported from bot"
                       : "Import through bot"}
@@ -109,9 +120,9 @@ export function CrossPromotionPublicationPostEditor({
               >
                 <Bot size={15} />{" "}
                 {importStatus === "working"
-                  ? "Loading…"
+                  ? `Loading${".".repeat(dots)}`
                   : importStatus === "waiting"
-                    ? "Waiting for bot…"
+                    ? `Waiting for bot${".".repeat(dots)}`
                     : importStatus === "done"
                       ? "✅ Imported from bot"
                       : "Import through bot"}
@@ -158,6 +169,12 @@ export function CrossPromotionPublicationPostEditor({
           channelTitle={publishingChannel?.title ?? "Publishing channel"}
           channelPhotoUrl={publishingChannel?.photoUrl}
           channelId={publishingChannel?.id}
+          mediaMaxItems={publishedMediaCount}
+          mediaNotice={
+            publishedMediaCount === undefined
+              ? undefined
+              : "Replace existing photos only. Keep the same number of photos; video and GIF media cannot be changed after sending or scheduling."
+          }
           onChange={onChange}
         />
       ) : null}

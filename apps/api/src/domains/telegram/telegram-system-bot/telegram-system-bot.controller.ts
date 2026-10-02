@@ -93,6 +93,7 @@ export class TelegramSystemBotController {
   async preparePostImport(
     @CurrentUser() user: JwtUser,
     @Body() dto: PrepareTelegramSystemBotPostImportDto,
+    @Headers('x-replace-active-import') replaceActiveHeader?: string,
   ) {
     const workspaceId = await this.workspace.resolveWorkspaceIdForUser(
       user.sub,
@@ -107,7 +108,8 @@ export class TelegramSystemBotController {
       dto.mode,
       {
         context: dto.context,
-        replaceActive: dto.replaceActive,
+        replaceActive:
+          dto.replaceActive || replaceActiveHeader?.toLowerCase() === 'true',
       },
     );
   }

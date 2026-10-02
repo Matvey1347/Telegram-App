@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
 import { MutualPromotionPostComposer } from "./mutual-promotion-post-composer";
 
@@ -66,19 +67,25 @@ vi.mock(
 describe("MutualPromotionPostComposer", () => {
   it("shows the standard editor for imported text and keeps the preview compact", () => {
     const onChange = vi.fn();
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
     render(
-      <MutualPromotionPostComposer
-        channelTitle="Publisher"
-        draft={{
-          title: "Imported",
-          text: "**Bold** [link](https://example.test)",
-          plainText: "Bold link",
-          formattedHtml: '<b>Bold</b> <a href="https://example.test">link</a>',
-          imageUrls: [],
-          buttonRows: [],
-        }}
-        onChange={onChange}
-      />,
+      <QueryClientProvider client={queryClient}>
+        <MutualPromotionPostComposer
+          channelTitle="Publisher"
+          draft={{
+            title: "Imported",
+            text: "**Bold** [link](https://example.test)",
+            plainText: "Bold link",
+            formattedHtml:
+              '<b>Bold</b> <a href="https://example.test">link</a>',
+            imageUrls: [],
+            buttonRows: [],
+          }}
+          onChange={onChange}
+        />
+      </QueryClientProvider>,
     );
 
     expect(screen.getByTestId("telegram-preview")).toHaveTextContent(

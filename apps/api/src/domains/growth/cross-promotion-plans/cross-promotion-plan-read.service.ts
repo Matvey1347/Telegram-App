@@ -406,17 +406,19 @@ export class CrossPromotionPlanReadService {
         ...row,
         status: historicalDraft
           ? 'COMPLETED'
-          : row.status === 'COMPLETED' && hasLiveOwnPlacement
-            ? 'ACTIVE'
-          : row.kind === 'OWN_CHANNELS' &&
-              (row.status === 'SCHEDULED' || row.status === 'ACTIVE')
-            ? ownPlacementPublished
+          : row.status === 'ACTIVE' && !hasLiveOwnPlacement
+            ? 'DRAFT'
+            : row.status === 'COMPLETED' && hasLiveOwnPlacement
               ? 'ACTIVE'
-              : 'SCHEDULED'
-            : row.status === 'SCHEDULED' &&
-                new Date(row.scheduledAt).getTime() <= Date.now()
-              ? 'ACTIVE'
-              : row.status,
+              : row.kind === 'OWN_CHANNELS' &&
+                  (row.status === 'SCHEDULED' || row.status === 'ACTIVE')
+                ? ownPlacementPublished
+                  ? 'ACTIVE'
+                  : 'SCHEDULED'
+                : row.status === 'SCHEDULED' &&
+                    new Date(row.scheduledAt).getTime() <= Date.now()
+                  ? 'ACTIVE'
+                  : row.status,
         lastError: historicalDraft ? null : row.lastError,
         advertiser: row.advertiserId
           ? (advertiserById.get(row.advertiserId) ?? null)
@@ -478,14 +480,16 @@ export class CrossPromotionPlanReadService {
             (placement) => placement.telegramChannelId === channelId,
           );
           const managedPostsForChannel = managedPosts.filter((post) =>
-            channelPlacements.some((placement) => placement.managedPostId === post.id),
+            channelPlacements.some(
+              (placement) => placement.managedPostId === post.id,
+            ),
           );
           const scheduledTimes = (
             publicationPost.publisherPublications?.length
               ? publicationPost.publisherPublications.flatMap(
                   (publication) => publication.placements,
                 )
-              : publicationPost.publisherPlacements ?? []
+              : (publicationPost.publisherPlacements ?? [])
           )
             .filter((placement) => placement.telegramChannelId === channelId)
             .map((placement) => Date.parse(placement.scheduledAt))

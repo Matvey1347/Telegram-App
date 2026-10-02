@@ -188,12 +188,31 @@ function setup() {
       workspace as never,
       new CrossPromotionPlanReadService(prisma as never),
       { register: jest.fn() } as never,
+      { updateManagedPost: jest.fn() } as never,
     ),
     prisma,
   };
 }
 
 describe('CrossPromotionPlansService', () => {
+  it('allows a direct exchange without partner channels or promo targets', async () => {
+    const { service, prisma } = setup();
+    prisma.telegramChannel.findMany.mockImplementation(
+      ({ select }: { select?: Record<string, unknown> }) =>
+        select?.adminLinks
+          ? [{ id: 'publisher-1', adminLinks: [{ id: 'admin-1' }] }]
+          : [{ id: 'publisher-1', currentSubscribersCount: 1000 }],
+    );
+
+    await expect(
+      service.validateForScheduling('user-1', {
+        ...payload,
+        partnerChannelIds: [],
+        targets: [],
+      }),
+    ).resolves.toBeUndefined();
+  });
+
   it('refreshes the exact tracking link without applying the channel history cutoff', async () => {
     const registration = {
       register: jest.fn().mockResolvedValue({ id: 'link-1' }),
@@ -223,6 +242,7 @@ describe('CrossPromotionPlansService', () => {
       } as never,
       { shape: jest.fn().mockResolvedValue({ id: 'plan-1' }) } as never,
       registration as never,
+      { updateManagedPost: jest.fn() } as never,
     );
 
     await service.refreshInviteLinkData('user-1', 'plan-1');

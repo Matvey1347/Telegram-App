@@ -129,7 +129,7 @@ export function Modal({
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className={`relative flex max-h-[calc(100dvh-2rem)] w-full min-w-0 max-w-[calc(100vw-2rem)] flex-col rounded-lg border border-neutral-700 bg-neutral-900 shadow-2xl sm:max-h-[84vh] ${allowOverflow ? "overflow-visible" : "overflow-hidden"} ${size === "xs" ? "max-w-[400px]" : size === "sm" ? "max-w-[560px]" : size === "xl" ? "max-w-[1280px]" : "max-w-[660px]"}`}
+        className={`relative flex max-h-[calc(100dvh-2rem)] w-full min-w-0 max-w-[calc(100vw-2rem)] flex-col rounded-lg border border-neutral-700 bg-neutral-900 shadow-2xl sm:max-h-[84vh] ${allowOverflow ? "overflow-visible" : "overflow-hidden"} ${size === "xs" ? "!max-w-[400px]" : size === "sm" ? "!max-w-[560px]" : size === "xl" ? "!max-w-[1280px]" : "!max-w-[660px]"}`}
       >
         <div className="mb-1 flex items-start justify-between gap-3 p-4 pb-3 sm:items-center sm:p-5 sm:pb-3">
           <div className="flex min-w-0 flex-1 flex-wrap items-start gap-2 sm:items-center">

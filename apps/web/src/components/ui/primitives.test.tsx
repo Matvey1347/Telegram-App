@@ -109,6 +109,17 @@ describe("Modal", () => {
     expect(document.body).toContainElement(dialog);
   });
 
+  it("keeps an extra-small confirmation dialog compact", () => {
+    render(
+      <Modal open onClose={vi.fn()} title="Replace active bot import?" size="xs">
+        Confirm replacement
+      </Modal>,
+    );
+
+    expect(screen.getByRole("dialog", { name: "Replace active bot import?" }))
+      .toHaveClass("!max-w-[400px]");
+  });
+
   it("renders an action beside the dialog title", () => {
     render(
       <Modal
@@ -495,6 +506,64 @@ describe("MultiSelect", () => {
     const option = await screen.findByRole("button", { name: "Test channel" });
     expect(container).not.toContainElement(option);
     expect(option.parentElement?.parentElement?.style.position).toBe("fixed");
+  });
+
+  it("keeps its overlay inside the visual viewport when the mobile keyboard shifts it", async () => {
+    const user = userEvent.setup();
+    const originalVisualViewport = Object.getOwnPropertyDescriptor(
+      window,
+      "visualViewport",
+    );
+    Object.defineProperty(window, "visualViewport", {
+      configurable: true,
+      value: {
+        width: 390,
+        height: 300,
+        offsetLeft: 0,
+        offsetTop: 200,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      },
+    });
+    const rectSpy = vi
+      .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+      .mockReturnValue({
+        bottom: 180,
+        height: 40,
+        left: 16,
+        right: 374,
+        top: 140,
+        width: 358,
+        x: 16,
+        y: 140,
+        toJSON: () => ({}),
+      });
+
+    try {
+      render(
+        <MultiSelect
+          value={[]}
+          onChange={() => {}}
+          options={[{ value: "channel-1", label: "Test channel" }]}
+          placeholder="Choose channel"
+        />,
+      );
+      await user.click(screen.getByRole("button", { name: "Choose channel" }));
+
+      const option = await screen.findByRole("button", {
+        name: "Test channel",
+      });
+      expect(option.parentElement?.parentElement).toHaveStyle({
+        top: "208px",
+      });
+    } finally {
+      rectSpy.mockRestore();
+      if (originalVisualViewport) {
+        Object.defineProperty(window, "visualViewport", originalVisualViewport);
+      } else {
+        Reflect.deleteProperty(window, "visualViewport");
+      }
+    }
   });
 
   it("shows avatars without channel-name chips for a large selection", () => {

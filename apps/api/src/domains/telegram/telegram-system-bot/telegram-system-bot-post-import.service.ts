@@ -57,10 +57,7 @@ export class TelegramSystemBotPostImportService {
     mode: TelegramSystemBotPostImportMode,
     options: { context?: string; replaceActive?: boolean } = {},
   ): Promise<TelegramSystemBotPostImportStart> {
-    const existing = await this.workflows.active(
-      scope,
-      TelegramSystemBotWorkflowKind.WEBSITE_POST_IMPORT,
-    );
+    const existing = await this.workflows.activePostImport(scope);
     if (existing && !options.replaceActive)
       this.workflows.throwActiveImportConflict();
     if (existing) {

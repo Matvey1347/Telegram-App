@@ -9,6 +9,7 @@ import type {
   TelegramAdvertiser,
   TelegramSystemBotPostDraft,
 } from "@telegram-system/shared";
+import { normalizeTelegramPostMediaItems } from "@telegram-system/shared";
 import type {
   Promo,
   TelegramChannel,
@@ -22,6 +23,7 @@ import {
   Input,
   LoadingState,
   Modal,
+  Tooltip,
 } from "@/components/ui/primitives";
 import { IconPicker } from "@/components/icons/icon-picker";
 import { buildTelegramPostsUrl } from "@/lib/features/telegram/telegram-posts-url";
@@ -40,6 +42,7 @@ import {
   crossPromotionModalTitle,
   type CrossPromotionModalMode,
 } from "./cross-promotion-modal-title";
+import { emptyCrossPromotionPost } from "./cross-promotion-plan-draft";
 
 type DraftState = ReturnType<typeof useCrossPromotionDraftState>;
 type BotFlow = ReturnType<typeof useTelegramSystemBotPostFlow<"single">>;
@@ -51,8 +54,11 @@ export function CrossPromotionPlanView({
   mode,
   loading,
   saving,
+  savingDraft,
   onClose,
   onSubmit,
+  onReplaceAndPublishNow,
+  onSaveDraft,
   state,
   allChannels,
   ownChannels,
@@ -72,9 +78,10 @@ export function CrossPromotionPlanView({
   promoReady,
   searchAdvertisers,
   resolveOutboundPreview,
-  onImportPublisherPost,
   onSendPublisherPost,
   showValidationErrors,
+  sharedPublicationChanged,
+  requiresRepublish,
 }: {
   open: boolean;
   kind: CrossPromotionPlanKind;
@@ -82,8 +89,11 @@ export function CrossPromotionPlanView({
   mode: CrossPromotionModalMode;
   loading: boolean;
   saving: boolean;
+  savingDraft: boolean;
   onClose: () => void;
   onSubmit: () => void;
+  onReplaceAndPublishNow?: () => void;
+  onSaveDraft: () => void;
   state: DraftState;
   allChannels: TelegramChannel[];
   ownChannels: TelegramChannel[];
@@ -110,13 +120,17 @@ export function CrossPromotionPlanView({
   resolveOutboundPreview: (
     targetIndex?: number,
   ) => TelegramSystemBotPostDraft | undefined;
-  onImportPublisherPost: (id: string) => void;
   onSendPublisherPost: (id: string, post: TelegramSystemBotPostDraft) => void;
   showValidationErrors: boolean;
+  sharedPublicationChanged: boolean;
+  requiresRepublish: boolean;
 }) {
   const [mySideOpen, setMySideOpen] = useState(true);
   const [partnerSideOpen, setPartnerSideOpen] = useState(true);
   const [publisherPostOpen, setPublisherPostOpen] = useState<
+    Record<string, boolean>
+  >({});
+  const [clearedPublisherPosts, setClearedPublisherPosts] = useState<
     Record<string, boolean>
   >({});
   const {
@@ -161,14 +175,39 @@ export function CrossPromotionPlanView({
     error,
     drafts,
   } = state;
+  const publishedPrimaryMediaCount =
+    initial?.status === "ACTIVE"
+      ? normalizeTelegramPostMediaItems(
+          initial.publicationPost.publisherPublications?.[0]?.post.mediaItems ??
+            initial.publicationPost.mediaItems,
+          initial.publicationPost.publisherPublications?.[0]?.post.imageUrls ??
+            initial.publicationPost.imageUrls,
+        ).length
+      : undefined;
   const postStatus =
     botFlowTarget === "post"
       ? botFlow
-      : { importStatus: "idle" as const, sendStatus: "idle" as const };
+      : {
+          importStatus: "idle" as const,
+          sendStatus: "idle" as const,
+          dots: 1,
+        };
   const outboundStatus =
     botFlowTarget === "outbound"
       ? botFlow
-      : { importStatus: "idle" as const, sendStatus: "idle" as const };
+      : {
+          importStatus: "idle" as const,
+          sendStatus: "idle" as const,
+          dots: 1,
+        };
+  const publisherPostStatus = (id: string) =>
+    botFlowTarget === `publisher:${id}`
+      ? botFlow
+      : {
+          importStatus: "idle" as const,
+          sendStatus: "idle" as const,
+          dots: 1,
+        };
   const publisherManagedPostUrls =
     mode === "edit" && initial?.status !== "DRAFT"
       ? Object.fromEntries(
@@ -182,11 +221,24 @@ export function CrossPromotionPlanView({
           ]),
         )
       : {};
-  const importPost = (target: "post" | "outbound") => {
+  const importPost = async (target: string) => {
+    const previousTarget = botFlowTarget;
     setBotFlowTarget(target);
     if (botTargetStorageKey)
       window.localStorage.setItem(botTargetStorageKey, target);
-    void botFlow.startImport();
+    const started = await botFlow.startImport();
+    // A cancelled Replace dialog must leave the spinner on the actual active
+    // post, rather than moving it to the button the user just clicked.
+    if (!started) {
+      setBotFlowTarget(previousTarget);
+      if (botTargetStorageKey) {
+        if (previousTarget) {
+          window.localStorage.setItem(botTargetStorageKey, previousTarget);
+        } else {
+          window.localStorage.removeItem(botTargetStorageKey);
+        }
+      }
+    }
   };
   const sendPost = (target: "post" | "outbound", targetIndex?: number) => {
     setBotFlowTarget(target);
@@ -342,10 +394,23 @@ export function CrossPromotionPlanView({
                                 botConnected={botConnected}
                                 importStatus={postStatus.importStatus}
                                 sendStatus={postStatus.sendStatus}
+                                dots={postStatus.dots}
                                 onImport={() => importPost("post")}
                                 onSend={() => sendPost("post")}
                                 onUseSelectedPromo={() => undefined}
                                 onChange={setPost}
+                                publishedMediaCount={
+                                  clearedPublisherPosts.primary
+                                    ? undefined
+                                    : publishedPrimaryMediaCount
+                                }
+                                onClear={() => {
+                                  setPost(emptyCrossPromotionPost());
+                                  setClearedPublisherPosts((current) => ({
+                                    ...current,
+                                    primary: true,
+                                  }));
+                                }}
                               />
                             </>
                           ) : null}
@@ -412,7 +477,11 @@ export function CrossPromotionPlanView({
                                   channels={allChannels}
                                   productsByChannelId={productsByChannelId}
                                   value={publication.settings}
-                                  defaultDate={date}
+                                  defaultDate={
+                                    publication.settings.dates?.[
+                                      publisherIds[0] ?? ""
+                                    ] ?? date
+                                  }
                                   defaultTime={time}
                                   onDefaultDateChange={(nextDate) =>
                                     setAdditionalPublisherPosts((current) =>
@@ -455,10 +524,21 @@ export function CrossPromotionPlanView({
                                     (channel) => channel.id === publisherIds[0],
                                   )}
                                   botConnected={botConnected}
-                                  importStatus="idle"
-                                  sendStatus="idle"
+                                  importStatus={
+                                    publisherPostStatus(publication.id)
+                                      .importStatus
+                                  }
+                                  sendStatus={
+                                    publisherPostStatus(publication.id)
+                                      .sendStatus
+                                  }
+                                  dots={
+                                    publisherPostStatus(publication.id).dots
+                                  }
                                   onImport={() =>
-                                    onImportPublisherPost(publication.id)
+                                    void importPost(
+                                      `publisher:${publication.id}`,
+                                    )
                                   }
                                   onSend={() =>
                                     onSendPublisherPost(
@@ -475,6 +555,38 @@ export function CrossPromotionPlanView({
                                           : item,
                                       ),
                                     )
+                                  }
+                                  onClear={() => {
+                                    setAdditionalPublisherPosts((current) =>
+                                      current.map((item) =>
+                                        item.id === publication.id
+                                          ? {
+                                              ...item,
+                                              post: emptyCrossPromotionPost(),
+                                            }
+                                          : item,
+                                      ),
+                                    );
+                                    setClearedPublisherPosts((current) => ({
+                                      ...current,
+                                      [publication.id]: true,
+                                    }));
+                                  }}
+                                  publishedMediaCount={
+                                    clearedPublisherPosts[publication.id]
+                                      ? undefined
+                                      : initial?.status === "ACTIVE"
+                                        ? normalizeTelegramPostMediaItems(
+                                            initial.publicationPost
+                                              .publisherPublications?.[
+                                              index + 1
+                                            ]?.post.mediaItems ?? [],
+                                            initial.publicationPost
+                                              .publisherPublications?.[
+                                              index + 1
+                                            ]?.post.imageUrls ?? [],
+                                          ).length
+                                        : undefined
                                   }
                                 />
                               </>
@@ -516,8 +628,12 @@ export function CrossPromotionPlanView({
               partnerChannels={partnerChannels}
               ownChannels={ownChannels}
               partnerIds={partnerIds}
-              onPartnerIdsChange={setPartnerIds}
+              onPartnerIdsChange={(ids) => {
+                setPartnerIds(ids);
+                if (!ids.length) setTargets([]);
+              }}
               partnerAdvertiserId={partnerAdvertiserId}
+              partnerClient={initial?.advertiser ?? null}
               partnerContact={partnerContact}
               onPartnerContactChange={setPartnerContact}
               onPartnerTelegramChange={setPartnerTelegram}
@@ -592,24 +708,89 @@ export function CrossPromotionPlanView({
           {error || botFlow.error ? (
             <FormError message={error || botFlow.error} />
           ) : null}
+          {sharedPublicationChanged ? (
+            <div className="rounded-lg border border-amber-800/70 bg-amber-950/30 px-3 py-2 text-sm text-amber-100">
+              The shared partner post has changed. Updating this promotion will
+              update that post in every linked Telegram channel.
+            </div>
+          ) : null}
+          {requiresRepublish ? (
+            <div className="rounded-lg border border-amber-700 bg-amber-950/30 px-3 py-2 text-sm text-amber-100">
+              This published post did not have an inline button. Adding one
+              requires publishing a new Telegram message, so use Delete and
+              publish now instead of Update mutual promotion.
+            </div>
+          ) : null}
+          {mode === "edit" && initial?.status === "SCHEDULED" ? (
+            <div className="rounded-lg border border-amber-800/70 bg-amber-950/30 px-3 py-2 text-sm text-amber-100">
+              Replacing scheduled posts deletes the current scheduled Telegram
+              posts in every linked channel, then creates this version at the
+              selected dates and times.
+            </div>
+          ) : null}
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <Button type="button" variant="secondary" onClick={onClose}>
               Cancel
             </Button>
-            <Button
-              type="button"
-              className="w-full sm:w-auto"
-              disabled={saving}
-              onClick={onSubmit}
-            >
-              {saving
-                ? mode === "edit"
-                  ? "Updating…"
-                  : "Scheduling…"
-                : mode === "edit"
-                  ? "Update mutual promotion"
-                  : "Create and schedule"}
-            </Button>
+            {!initial || initial.status === "DRAFT" ? (
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={saving || savingDraft}
+                onClick={onSaveDraft}
+              >
+                {savingDraft
+                  ? initial?.status === "DRAFT"
+                    ? "Updating draft…"
+                    : "Saving draft…"
+                  : initial?.status === "DRAFT"
+                    ? "Update draft"
+                    : "Save draft"}
+              </Button>
+            ) : null}
+            {onReplaceAndPublishNow ? (
+              <Tooltip
+                content={
+                  initial?.status === "DRAFT"
+                    ? "No live publication was found. Publish this draft to every selected channel now."
+                    : "Need a completely new post? Delete the current publication in all linked channels and publish this version immediately."
+                }
+              >
+                <span>
+                  <Button
+                    type="button"
+                    variant={initial?.status === "DRAFT" ? "primary" : "danger"}
+                    className="w-full sm:w-auto"
+                    disabled={saving || savingDraft}
+                    onClick={onReplaceAndPublishNow}
+                  >
+                    {initial?.status === "DRAFT"
+                      ? "Publish now"
+                      : "Delete and publish now"}
+                  </Button>
+                </span>
+              </Tooltip>
+            ) : null}
+            {initial?.status !== "DRAFT" ? (
+              <Button
+                type="button"
+                className="w-full sm:w-auto"
+                disabled={saving || savingDraft || requiresRepublish}
+                onClick={onSubmit}
+              >
+                {saving
+                  ? mode === "edit"
+                    ? "Updating…"
+                    : "Scheduling…"
+                  : mode === "edit"
+                    ? initial?.status === "SCHEDULED"
+                      ? "Replace scheduled posts"
+                      : requiresRepublish
+                        ? "Republish required"
+                        : "Update mutual promotion"
+                    : "Create and schedule"}
+              </Button>
+            ) : null}
           </div>
         </div>
       )}

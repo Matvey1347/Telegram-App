@@ -22,7 +22,7 @@ vi.mock("./cross-promotion-placement-settings", () => ({
 }));
 
 describe("CrossPromotionPartnerSide", () => {
-  it("shows partner formats and own promo placement without partner channels", () => {
+  it("hides partner formats and promo placement until partner channels are selected", () => {
     const onDefaultDateChange = vi.fn();
     const onAddTarget = vi.fn();
 
@@ -70,20 +70,14 @@ describe("CrossPromotionPartnerSide", () => {
       />,
     );
 
-    fireEvent.click(
-      screen.getByRole("button", {
-        name: "Partner publication date 2026-09-15",
-      }),
-    );
-    expect(onDefaultDateChange).toHaveBeenCalledWith("2026-09-20");
     expect(screen.getByText("Client")).toBeVisible();
     expect(screen.getByText("Partner channels (optional)")).toBeVisible();
-    expect(screen.getByText("Formats in partner channels")).toBeVisible();
-
-    fireEvent.click(
-      screen.getByRole("button", { name: "Add promo placement" }),
-    );
-    expect(onAddTarget).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText("Formats in partner channels")).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Add promo placement" }),
+    ).toBeNull();
+    expect(onDefaultDateChange).not.toHaveBeenCalled();
+    expect(onAddTarget).not.toHaveBeenCalled();
   });
 
   it("can hide the partner side without clearing its fields", () => {

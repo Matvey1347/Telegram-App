@@ -17,6 +17,19 @@ export const crossPromotionPlanKeys = {
 export const crossPromotionPlansApi = {
   list: async (kind: CrossPromotionPlanKind) =>
     (await api.get<CrossPromotionPlan[]>(basePath, { params: { kind } })).data,
+  saveDraft: async (
+    kind: CrossPromotionPlanKind,
+    draft: Record<string, unknown>,
+    id?: string,
+  ) =>
+    (
+      await (id
+        ? api.patch<CrossPromotionPlan>(`${basePath}/${id}/draft`, {
+            kind,
+            draft,
+          })
+        : api.post<CrossPromotionPlan>(`${basePath}/drafts`, { kind, draft }))
+    ).data,
   createAndSchedule: (
     payload: CreateCrossPromotionPlanPayload,
     onProgress: (
@@ -41,6 +54,20 @@ export const crossPromotionPlansApi = {
   ) =>
     streamProgressAction<CrossPromotionPlan, CrossPromotionSchedulingProgress>(
       `${basePath}/${id}/schedule-stream`,
+      payload,
+      onProgress,
+    ),
+  replaceAndPublishNow: (
+    id: string,
+    payload: CreateCrossPromotionPlanPayload,
+    onProgress: (
+      item: CrossPromotionSchedulingProgress,
+      current: number,
+      total: number,
+    ) => void,
+  ) =>
+    streamProgressAction<CrossPromotionPlan, CrossPromotionSchedulingProgress>(
+      `${basePath}/${id}/publish-now-stream`,
       payload,
       onProgress,
     ),

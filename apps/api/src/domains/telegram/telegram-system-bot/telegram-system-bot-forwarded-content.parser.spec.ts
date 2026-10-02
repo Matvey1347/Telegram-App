@@ -111,6 +111,33 @@ describe('parseTelegramSystemBotForwardedContent', () => {
     });
   });
 
+  it('keeps monospace formatting next to a Premium emoji without leaking source escapes', () => {
+    const text = '‼️В останній раз';
+    const result = parseTelegramSystemBotForwardedContent({
+      text,
+      entities: [
+        {
+          type: 'custom_emoji',
+          offset: 0,
+          length: '‼️'.length,
+          custom_emoji_id: '5440660757194744323',
+        },
+        {
+          type: 'code',
+          offset: '‼️'.length,
+          length: 'В останній раз'.length,
+        },
+      ],
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      content: {
+        managedText: '![‼️](tg://emoji?id=5440660757194744323)`В останній раз`',
+      },
+    });
+  });
+
   it.each([
     [
       { type: 'bold', offset: 0, length: 16 },
@@ -288,6 +315,20 @@ describe('parseTelegramSystemBotForwardedContent', () => {
         mediaGroupId: 'album-1',
         photo: { fileId: 'large', fileUniqueId: 'stable' },
       },
+    });
+  });
+
+  it('prefers the largest resolution even when its compressed file is smaller', () => {
+    const result = parseTelegramSystemBotForwardedContent({
+      photo: [
+        { file_id: 'small', file_size: 900_000, width: 640, height: 640 },
+        { file_id: 'original', file_size: 700_000, width: 1600, height: 1200 },
+      ],
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      content: { photo: { fileId: 'original', width: 1600, height: 1200 } },
     });
   });
 

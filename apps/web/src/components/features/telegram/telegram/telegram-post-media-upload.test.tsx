@@ -15,6 +15,30 @@ vi.mock("@/providers/toast-provider", () => ({
 }));
 
 describe("TelegramPostMediaUpload", () => {
+  it("accepts only photos when replacing published media", () => {
+    const onChange = vi.fn();
+    render(
+      <TelegramPostMediaUpload
+        value={[]}
+        onChange={onChange}
+        allowedKinds={["PHOTO"]}
+        maxItems={1}
+      />,
+    );
+
+    const input = screen.getByPlaceholderText("Direct image, video or GIF URL");
+    fireEvent.change(input, {
+      target: { value: "https://cdn.test/video.mp4" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+
+    expect(onChange).not.toHaveBeenCalled();
+    expect(pushToast).toHaveBeenCalledWith(
+      "This post can only use the supported media types.",
+      "error",
+    );
+  });
+
   it("uploads video through the post-media endpoint and preserves the returned kind", async () => {
     uploadManagedPostMedia.mockResolvedValue({
       kind: "VIDEO",

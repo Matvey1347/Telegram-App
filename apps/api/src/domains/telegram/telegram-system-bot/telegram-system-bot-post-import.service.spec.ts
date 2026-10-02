@@ -79,6 +79,7 @@ function setup() {
   };
   const workflows = {
     active: jest.fn().mockResolvedValue(null),
+    activePostImport: jest.fn().mockResolvedValue(null),
     create: jest.fn(),
     get: jest.fn(),
     transition: jest.fn(),
@@ -135,7 +136,7 @@ describe('TelegramSystemBotPostImportService', () => {
 
   it('rejects a same-mode start while a website import is active', async () => {
     const test = setup();
-    test.workflows.active.mockResolvedValue(workflow());
+    test.workflows.activePostImport.mockResolvedValue(workflow());
 
     await expect(test.service.prepare(scope, 'single')).rejects.toThrow(
       'active import',
@@ -146,7 +147,7 @@ describe('TelegramSystemBotPostImportService', () => {
 
   it('replaces a confirmed active import and removes its Telegram controls', async () => {
     const test = setup();
-    test.workflows.active.mockResolvedValue(workflow());
+    test.workflows.activePostImport.mockResolvedValue(workflow());
     test.workflows.cancel.mockResolvedValue(
       workflow({ status: TelegramSystemBotWorkflowStatus.CANCELLED }),
     );
@@ -171,6 +172,40 @@ describe('TelegramSystemBotPostImportService', () => {
     expect(test.workflows.create).toHaveBeenCalledWith(
       expect.objectContaining({
         payload: { mode: 'single', context: 'Ad sale', contents: [] },
+      }),
+    );
+  });
+
+  it('replaces an active direct batch import before creating a website import', async () => {
+    const test = setup();
+    test.workflows.activePostImport.mockResolvedValue(
+      workflow({
+        id: 'batch-workflow',
+        kind: TelegramSystemBotWorkflowKind.POST_BATCH_IMPORT,
+        version: 6,
+        controlMessageId: 91,
+      }),
+    );
+    test.workflows.cancel.mockResolvedValue(
+      workflow({
+        id: 'batch-workflow',
+        kind: TelegramSystemBotWorkflowKind.POST_BATCH_IMPORT,
+        status: TelegramSystemBotWorkflowStatus.CANCELLED,
+      }),
+    );
+    test.workflows.create.mockResolvedValue(workflow({ id: 'workflow-2' }));
+
+    await expect(
+      test.service.prepare(scope, 'multiple', { replaceActive: true }),
+    ).resolves.toEqual({ workflowId: 'workflow-2', mode: 'multiple' });
+
+    expect(test.workflows.cancel).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'batch-workflow', expectedVersion: 6 }),
+    );
+    expect(test.workflows.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: TelegramSystemBotWorkflowKind.WEBSITE_POST_IMPORT,
+        postImportMode: 'MULTIPLE',
       }),
     );
   });
@@ -204,13 +239,13 @@ describe('TelegramSystemBotPostImportService', () => {
     await expect(test.service.prepare(scope, 'single')).rejects.toThrow(
       'active import',
     );
-    expect(test.workflows.active).toHaveBeenCalledTimes(1);
+    expect(test.workflows.activePostImport).toHaveBeenCalledTimes(1);
     expect(test.api.editMessageText).not.toHaveBeenCalled();
   });
 
   it('preserves the active-workflow conflict when the requested mode differs', async () => {
     const test = setup();
-    test.workflows.active.mockResolvedValue(workflow());
+    test.workflows.activePostImport.mockResolvedValue(workflow());
 
     await expect(test.service.prepare(scope, 'multiple')).rejects.toThrow(
       'active import',

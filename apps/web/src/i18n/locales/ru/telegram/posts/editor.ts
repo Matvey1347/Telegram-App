@@ -146,10 +146,13 @@ const messages = {
   "telegram.posts.editor.savedNamed": "«{title}» сохранена.",
   "telegram.posts.editor.saveError": "Не удалось сохранить «{title}».",
   "telegram.posts.editor.savingNamed": "Сохраняем «{title}»…",
+  "telegram.posts.editor.loadingPost": "Загружаем публикацию…",
   "telegram.posts.editor.publishedEditable":
     "После публикации текст в Telegram всё ещё можно обновить",
-  "telegram.posts.editor.imagesLocked":
-    "После отправки или планирования изображения нельзя изменить. Текст в Telegram всё ещё можно обновить.",
+  "telegram.posts.editor.photosReplaceable":
+    "Можно заменить только существующие фото, сохранив их количество. Видео и GIF нельзя изменить после отправки или планирования.",
+  "telegram.posts.editor.mediaNotReplaceable":
+    "После отправки или планирования медиа можно заменить только в публикации, состоящей исключительно из фото.",
   "telegram.posts.editor.longTextOnly":
     "После форматирования текстовые сообщения Telegram ограничены 4096 символами. Текущая длина: {length}. Публикация будет отправлена отдельными сообщениями: {count}.",
   "telegram.posts.editor.selectNamed": "Выбрать «{title}»",

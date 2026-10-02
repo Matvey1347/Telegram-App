@@ -64,6 +64,7 @@ export class TelegramManagedPostEditTransportService {
     };
     nextText: string;
     buttonRows: unknown;
+    nextMediaItems?: ReturnType<typeof normalizeTelegramPostMediaItems>;
     inPlaceOnly?: boolean;
   }) {
     const { workspaceId, channelId, post, channel, nextText } = params;
@@ -151,10 +152,26 @@ export class TelegramManagedPostEditTransportService {
           ? post.scheduledAt || undefined
           : undefined,
       );
-    const mediaItems = normalizeTelegramPostMediaItems(
+    const mediaItems = params.nextMediaItems ?? normalizeTelegramPostMediaItems(
       post.mediaItems,
       post.imageUrls,
     );
+    const currentMediaItems = normalizeTelegramPostMediaItems(
+      post.mediaItems,
+      post.imageUrls,
+    );
+    const mediaChanged = JSON.stringify(mediaItems) !== JSON.stringify(currentMediaItems);
+    if (
+      mediaChanged &&
+      (mediaItems.length !== currentMediaItems.length ||
+        mediaItems.some((item) => item.kind !== 'PHOTO') ||
+        currentMediaItems.some((item) => item.kind !== 'PHOTO'))
+    ) {
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_IMAGES_NOT_EDITABLE',
+        'Telegram can replace existing photos, but cannot safely change this post media structure. Republish the post instead.',
+      );
+    }
     const rendered =
       this.telegramManagedPostPresentationService.renderManagedPostText(
         resolvedText,
@@ -290,6 +307,18 @@ export class TelegramManagedPostEditTransportService {
         channelId,
         source.sourceId,
       );
+      if (mediaChanged) {
+        await this.mtprotoClient.editPostPhotos({
+          ...this.telegramChannelAccessService.accountCredentials(account),
+          channel: channelReference,
+          messageIds: effectiveMessageIds.slice(0, mediaItems.length),
+          imageUrls: mediaItems.map((item) => item.url),
+          scheduleAt:
+            post.status === TelegramManagedPostStatus.SCHEDULED
+              ? post.scheduledAt
+              : undefined,
+        });
+      }
       const editResult = await this.mtprotoClient.editPostText({
         ...this.telegramChannelAccessService.accountCredentials(account),
         channel: channelReference,
@@ -379,6 +408,23 @@ export class TelegramManagedPostEditTransportService {
       });
     } else if (mediaItems.length) {
       const caption = toBotFormattedText(rendered.captionHtml);
+      if (mediaChanged) {
+        for (let index = 0; index < mediaItems.length; index += 1) {
+          await call('editMessageMedia', {
+            message_id: Number(effectiveMessageIds[index]),
+            media: {
+              type: 'photo',
+              media: mediaItems[index].url,
+              ...(index === 0
+                ? {
+                    caption: caption.text,
+                    caption_entities: caption.entities,
+                  }
+                : {}),
+            },
+          });
+        }
+      }
       await call('editMessageCaption', {
         message_id: Number(effectiveMessageIds[0]),
         caption: caption.text,

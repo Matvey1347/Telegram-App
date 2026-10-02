@@ -54,6 +54,7 @@ export function AdSaleSharedPostEditor({
     }
   };
 
+
   return (
     <div className="space-y-4">
       <div className="rounded-xl border border-blue-900/60 bg-blue-950/20 p-4">

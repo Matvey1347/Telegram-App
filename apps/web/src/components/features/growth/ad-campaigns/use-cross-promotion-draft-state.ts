@@ -83,6 +83,36 @@ export function useCrossPromotionDraftState({
     staleTime: 60_000,
   });
   const timezone = meQuery.data?.workspace.timezone || "Europe/Warsaw";
+  const restoreDraft = useCallback(
+    (
+      draft: CrossPromotionModalDraft,
+      stored?: WorkspaceFormDraft<CrossPromotionModalDraft>,
+    ) => {
+      setIconId(draft.iconId ?? null);
+      setIconPresentation(stored?.preview?.icon ?? null);
+      setTitle(draft.title);
+      setPublisherMode(draft.publisherMode ?? "channels");
+      setPublisherNetworkId(draft.publisherNetworkId ?? "");
+      setPublisherIds(draft.publisherIds);
+      setPartnerIds(draft.partnerIds);
+      setPartnerAdvertiserId(draft.partnerAdvertiserId ?? null);
+      setPartnerContact(draft.partnerContact ?? "");
+      setPartnerTelegram(draft.partnerTelegram ?? "");
+      setTargets(draft.targets);
+      setPost(draft.post);
+      setAdditionalPublisherPosts(draft.additionalPublisherPosts ?? []);
+      setDate(draft.date);
+      setPartnerDate(draft.partnerDate ?? draft.date);
+      setTime(draft.time);
+      setPublisherSettings(draft.publisherSettings ?? emptySettings());
+      setPartnerSettings(draft.partnerSettings ?? emptySettings());
+      setOutboundMode(draft.outboundMode ?? "PROMO");
+      setOutboundPost(draft.outboundPost ?? emptyPost());
+      setImportedChannels(draft.importedChannels);
+      setError("");
+    },
+    [],
+  );
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
@@ -91,6 +121,14 @@ export function useCrossPromotionDraftState({
       const initialPost = initial?.publicationPost as
         | CrossPromotionPlacementPost
         | undefined;
+      const persistedDraft = (initialPost as
+        | (CrossPromotionPlacementPost & { formDraft?: unknown })
+        | undefined)?.formDraft;
+      const savedDraft = normalizeCrossPromotionModalDraft(persistedDraft);
+      if (savedDraft) {
+        restoreDraft(savedDraft);
+        return;
+      }
       const publisherPlacements = initialPost?.publisherPlacements ?? [];
       const partnerPlacements = initialPost?.partnerPlacements ?? [];
       const firstScheduledAt =
@@ -156,7 +194,7 @@ export function useCrossPromotionDraftState({
     return () => {
       cancelled = true;
     };
-  }, [initial, open, timezone]);
+  }, [initial, open, restoreDraft, timezone]);
 
   const draftValue = useMemo<CrossPromotionModalDraft>(
     () => ({
@@ -203,36 +241,6 @@ export function useCrossPromotionDraftState({
       title,
       additionalPublisherPosts,
     ],
-  );
-  const restoreDraft = useCallback(
-    (
-      draft: CrossPromotionModalDraft,
-      stored?: WorkspaceFormDraft<CrossPromotionModalDraft>,
-    ) => {
-      setIconId(draft.iconId ?? null);
-      setIconPresentation(stored?.preview?.icon ?? null);
-      setTitle(draft.title);
-      setPublisherMode(draft.publisherMode ?? "channels");
-      setPublisherNetworkId(draft.publisherNetworkId ?? "");
-      setPublisherIds(draft.publisherIds);
-      setPartnerIds(draft.partnerIds);
-      setPartnerAdvertiserId(draft.partnerAdvertiserId ?? null);
-      setPartnerContact(draft.partnerContact ?? "");
-      setPartnerTelegram(draft.partnerTelegram ?? "");
-      setTargets(draft.targets);
-      setPost(draft.post);
-      setAdditionalPublisherPosts(draft.additionalPublisherPosts ?? []);
-      setDate(draft.date);
-      setPartnerDate(draft.partnerDate ?? draft.date);
-      setTime(draft.time);
-      setPublisherSettings(draft.publisherSettings ?? emptySettings());
-      setPartnerSettings(draft.partnerSettings ?? emptySettings());
-      setOutboundMode(draft.outboundMode ?? "PROMO");
-      setOutboundPost(draft.outboundPost ?? emptyPost());
-      setImportedChannels(draft.importedChannels);
-      setError("");
-    },
-    [],
   );
   const emptyDraft = useCallback((): CrossPromotionModalDraft => {
     const instant = new Date(Date.now() + 86_400_000);
@@ -318,6 +326,7 @@ export function useCrossPromotionDraftState({
     error,
     setError,
     timezone,
+    draftValue,
     drafts,
   };
 }

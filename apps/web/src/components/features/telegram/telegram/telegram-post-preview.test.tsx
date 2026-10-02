@@ -166,12 +166,8 @@ describe("TelegramPostPreview", () => {
     );
 
     const preview = container.querySelector(".telegram-preview-text");
-    expect(preview?.querySelector("b")).toHaveTextContent(
-      "Зупинити дію",
-    );
-    expect(preview?.querySelector("i")).toHaveTextContent(
-      "Назвати стан",
-    );
+    expect(preview?.querySelector("b")).toHaveTextContent("Зупинити дію");
+    expect(preview?.querySelector("i")).toHaveTextContent("Назвати стан");
     expect(container.querySelectorAll(".tg-hashtag")).toHaveLength(2);
     expect(container.querySelector(".tg-hashtag")).toHaveTextContent("#емоції");
   });
@@ -257,6 +253,57 @@ describe("TelegramPostPreview", () => {
     expect(linkedLines.length).toBeGreaterThan(4_096);
     expect(container.querySelectorAll(".telegram-message-bubble")).toHaveLength(
       1,
+    );
+  });
+
+  it("renders imported inline monospace next to a Premium emoji", () => {
+    const { container } = render(
+      <TelegramPostPreview
+        channelTitle="Channel"
+        text="![‼️](tg://emoji?id=5440660757194744323)`В останній раз`"
+        imageUrls={[]}
+      />,
+    );
+
+    expect(container.querySelector(".tg-custom-emoji")).toHaveTextContent("‼️");
+    expect(container.querySelector("code")).toHaveTextContent("В останній раз");
+  });
+
+  it("uses downloaded Premium emoji assets even when imported formatted HTML is present", () => {
+    const { container } = render(
+      <TelegramPostPreview
+        channelTitle="Channel"
+        text="![spark](tg://emoji?id=123) text"
+        formattedHtml={'<tg-emoji emoji-id="123">spark</tg-emoji> text'}
+        imageUrls={[]}
+        customEmojiPacks={[
+          {
+            id: "pack_1",
+            shortName: "team",
+            title: "Team",
+            telegramLink: "https://t.me/addemoji/team",
+            emojis: [
+              {
+                id: "emoji_1",
+                documentId: "123",
+                alt: "spark",
+                kind: "STATIC",
+                mimeType: "image/webp",
+                isFree: true,
+                needsRepainting: false,
+                position: 0,
+                assetUrl: "https://cdn.test/spark.webp",
+                renderAssetUrl: null,
+              },
+            ],
+          },
+        ]}
+      />,
+    );
+
+    expect(container.querySelector(".tg-custom-emoji > img")).toHaveAttribute(
+      "src",
+      "https://cdn.test/spark.webp",
     );
   });
 

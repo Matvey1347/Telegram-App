@@ -79,8 +79,48 @@ describe("CrossPromotionPublicationPostEditor", () => {
     );
 
     expect(
-      screen.getByRole("button", { name: "✅ Write manually" }),
+      screen.getByRole("button", { name: "Update post" }),
     ).toBeVisible();
+  });
+
+  it("offers clearing an already published post before composing its replacement", () => {
+    const onClear = vi.fn();
+    render(
+      <CrossPromotionPublicationPostEditor
+        directMutual
+        post={{ ...emptyPost, text: "Published copy" }}
+        botConnected
+        importStatus="idle"
+        sendStatus="idle"
+        onImport={vi.fn()}
+        onSend={vi.fn()}
+        onUseSelectedPromo={vi.fn()}
+        onChange={vi.fn()}
+        onClear={onClear}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Clear post" }));
+    expect(onClear).toHaveBeenCalledOnce();
+  });
+
+  it("hides Clear post after the editor has no post content", () => {
+    render(
+      <CrossPromotionPublicationPostEditor
+        directMutual
+        post={emptyPost}
+        botConnected
+        importStatus="idle"
+        sendStatus="idle"
+        onImport={vi.fn()}
+        onSend={vi.fn()}
+        onUseSelectedPromo={vi.fn()}
+        onChange={vi.fn()}
+        onClear={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: "Clear post" })).toBeNull();
   });
 
   it("exposes bot import for an own-channels placement", () => {

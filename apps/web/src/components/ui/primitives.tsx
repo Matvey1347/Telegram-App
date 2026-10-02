@@ -231,6 +231,54 @@ function OptionIcon({
   );
 }
 
+function floatingMenuStyle(
+  rect: DOMRect,
+  {
+    direction = "auto",
+    maxMenuHeight,
+  }: { direction?: "auto" | "up"; maxMenuHeight: number },
+): React.CSSProperties {
+  const gap = 4;
+  const padding = 8;
+  const visualViewport = window.visualViewport;
+  // `getBoundingClientRect` is relative to the visible viewport, whereas a
+  // fixed portal is positioned in the layout viewport. On iOS those origins
+  // diverge while the keyboard is open, which used to make the menu jump.
+  const viewportLeft = visualViewport?.offsetLeft ?? 0;
+  const viewportTop = visualViewport?.offsetTop ?? 0;
+  const viewportWidth = visualViewport?.width ?? window.innerWidth;
+  const viewportHeight = visualViewport?.height ?? window.innerHeight;
+  const viewportRight = viewportLeft + viewportWidth;
+  const viewportBottom = viewportTop + viewportHeight;
+  const triggerLeft = rect.left + viewportLeft;
+  const triggerTop = rect.top + viewportTop;
+  const triggerBottom = rect.bottom + viewportTop;
+  const width = Math.min(rect.width, viewportWidth - padding * 2);
+  const left = Math.min(
+    Math.max(triggerLeft, viewportLeft + padding),
+    viewportRight - width - padding,
+  );
+  const availableBelow = viewportBottom - triggerBottom - gap - padding;
+  const availableAbove = triggerTop - viewportTop - gap - padding;
+  const openUp =
+    direction === "up" ||
+    (availableBelow < 240 && availableAbove > availableBelow);
+  const maxHeight = Math.max(
+    120,
+    Math.min(maxMenuHeight, openUp ? availableAbove : availableBelow),
+  );
+
+  return {
+    position: "fixed",
+    left,
+    top: openUp
+      ? Math.max(viewportTop + padding, triggerTop - gap - maxHeight)
+      : Math.min(triggerBottom + gap, viewportBottom - gap),
+    width,
+    maxHeight,
+  };
+}
+
 export function Select(
   props: React.SelectHTMLAttributes<HTMLSelectElement> & {
     uiLocale?: UiLocale;
@@ -338,27 +386,11 @@ export function Select(
     const update = () => {
       const trigger = triggerRef.current;
       if (!trigger) return;
-      const rect = trigger.getBoundingClientRect();
-      const gap = 4;
-      const padding = 8;
-      const below = window.innerHeight - rect.bottom - gap - padding;
-      const above = rect.top - gap - padding;
-      const openUp = below < 240 && above > below;
-      const maxHeight = Math.max(120, Math.min(320, openUp ? above : below));
-      const width = Math.min(rect.width, window.innerWidth - padding * 2);
-      const left = Math.min(
-        Math.max(rect.left, padding),
-        window.innerWidth - width - padding,
+      setMenuStyle(
+        floatingMenuStyle(trigger.getBoundingClientRect(), {
+          maxMenuHeight: 320,
+        }),
       );
-      setMenuStyle({
-        position: "fixed",
-        left,
-        width,
-        maxHeight,
-        ...(openUp
-          ? { bottom: window.innerHeight - rect.top + gap }
-          : { top: rect.bottom + gap }),
-      });
     };
     update();
     window.addEventListener("resize", update);
@@ -416,7 +448,7 @@ export function Select(
             <div
               ref={menuRef}
               style={menuStyle}
-              className="z-[120] flex flex-col overflow-hidden rounded-lg border border-neutral-700 bg-neutral-900 shadow-2xl"
+              className="z-[120] flex flex-col overflow-hidden overscroll-contain rounded-lg border border-neutral-700 bg-neutral-900 shadow-2xl"
             >
               {showSearch ? (
                 <div className="border-b border-neutral-800 p-2">
@@ -452,7 +484,7 @@ export function Select(
                   />
                 </div>
               ) : null}
-              <div className="min-h-0 flex-1 overflow-auto">
+              <div className="min-h-0 flex-1 overflow-auto overscroll-contain">
                 {filteredMenuOptions.map((opt) => (
                   <button
                     key={opt.key}
@@ -609,33 +641,11 @@ export function MultiSelect({
     const update = () => {
       const trigger = triggerRef.current;
       if (!trigger) return;
-      const rect = trigger.getBoundingClientRect();
-      const gap = 4;
-      const padding = 8;
-      const visualViewport = window.visualViewport;
-      const viewportWidth = visualViewport?.width ?? window.innerWidth;
-      const viewportHeight = visualViewport?.height ?? window.innerHeight;
-      const spaceBelow = viewportHeight - rect.bottom - gap - padding;
-      const spaceAbove = rect.top - gap - padding;
-      const openUp = spaceBelow < 240 && spaceAbove > spaceBelow;
-      const maxHeight = Math.max(
-        120,
-        Math.min(360, openUp ? spaceAbove : spaceBelow),
+      setMenuStyle(
+        floatingMenuStyle(trigger.getBoundingClientRect(), {
+          maxMenuHeight: 360,
+        }),
       );
-      const width = Math.min(rect.width, viewportWidth - padding * 2);
-      const left = Math.min(
-        Math.max(rect.left, padding),
-        viewportWidth - width - padding,
-      );
-      setMenuStyle({
-        position: "fixed",
-        left,
-        width,
-        maxHeight,
-        ...(openUp
-          ? { bottom: viewportHeight - rect.top + gap }
-          : { top: rect.bottom + gap }),
-      });
     };
     update();
     window.addEventListener("resize", update);
@@ -757,7 +767,7 @@ export function MultiSelect({
             <div
               ref={menuRef}
               style={menuStyle}
-              className="z-[120] flex flex-col overflow-hidden rounded-lg border border-neutral-700 bg-neutral-900 shadow-2xl"
+              className="z-[120] flex flex-col overflow-hidden overscroll-contain rounded-lg border border-neutral-700 bg-neutral-900 shadow-2xl"
             >
               <div className="border-b border-neutral-800 p-2">
                 <input
@@ -773,7 +783,7 @@ export function MultiSelect({
                   className="w-full rounded-md border border-neutral-700 bg-neutral-950 px-2.5 py-2 text-sm text-white outline-none placeholder:text-neutral-500 focus:border-blue-600"
                 />
               </div>
-              <div className="min-h-0 overflow-auto">
+              <div className="min-h-0 overflow-auto overscroll-contain">
                 {loading ? (
                   <div
                     role="status"
@@ -1014,49 +1024,11 @@ export function CustomSelect({
     const updateDropdownStyle = () => {
       const trigger = triggerRef.current;
       if (!trigger) return;
-      const rect = trigger.getBoundingClientRect();
-      const gap = 4;
-      const viewportPadding = 8;
-      // On mobile Safari `innerHeight` remains the layout viewport while the
-      // keyboard is visible. Use the visual viewport so a search the user
-      // explicitly opens never leaves the option list behind the keyboard.
-      const visualViewport = window.visualViewport;
-      const viewportWidth = visualViewport?.width ?? window.innerWidth;
-      const viewportHeight = visualViewport?.height ?? window.innerHeight;
-      const maxWidth = viewportWidth - viewportPadding * 2;
-      const width = Math.min(rect.width, maxWidth);
-      const left = Math.min(
-        Math.max(rect.left, viewportPadding),
-        viewportWidth - width - viewportPadding,
-      );
-
-      const availableBelow =
-        viewportHeight - rect.bottom - gap - viewportPadding;
-      const availableAbove = rect.top - gap - viewportPadding;
-      const openUp =
-        dropdownDirection === "up" ||
-        (availableBelow < 240 && availableAbove > availableBelow);
-      const maxHeight = Math.max(
-        120,
-        Math.min(320, openUp ? availableAbove : availableBelow),
-      );
-
       setDropdownStyle(
-        openUp
-          ? {
-              position: "fixed",
-              left,
-              bottom: Math.max(viewportHeight - rect.top + gap, gap),
-              width,
-              maxHeight,
-            }
-          : {
-              position: "fixed",
-              left,
-              top: Math.min(rect.bottom + gap, viewportHeight - gap),
-              width,
-              maxHeight,
-            },
+        floatingMenuStyle(trigger.getBoundingClientRect(), {
+          direction: dropdownDirection === "up" ? "up" : "auto",
+          maxMenuHeight: 320,
+        }),
       );
     };
 
@@ -1136,7 +1108,7 @@ export function CustomSelect({
         ? createPortal(
             <div
               ref={dropdownRef}
-              className={`z-[120] flex flex-col overflow-hidden rounded-lg border border-neutral-700 bg-neutral-900 shadow-2xl ${dropdownClassName}`.trim()}
+              className={`z-[120] flex flex-col overflow-hidden overscroll-contain rounded-lg border border-neutral-700 bg-neutral-900 shadow-2xl ${dropdownClassName}`.trim()}
               style={dropdownStyle}
             >
               {showSearch ? (
@@ -1163,7 +1135,7 @@ export function CustomSelect({
                   />
                 </div>
               ) : null}
-              <div className="z-[120] min-h-0 flex-1 overflow-auto">
+              <div className="z-[120] min-h-0 flex-1 overflow-auto overscroll-contain">
                 {loading ? (
                   <div
                     role="status"

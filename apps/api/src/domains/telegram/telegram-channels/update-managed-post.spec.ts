@@ -96,12 +96,13 @@ describe('TelegramChannelsService updateManagedPost', () => {
 
   it('passes the original schedule time when editing an MTProto scheduled message', async () => {
     const scheduleAt = new Date('2026-09-06T15:15:00Z');
+    const editPostPhotos = jest.fn().mockResolvedValue(undefined);
     const editPostText = jest.fn().mockResolvedValue({
       updatedCount: 1,
       unchangedCount: 0,
     });
     const service = new TelegramManagedPostEditTransportService(
-      { editPostText } as never,
+      { editPostText, editPostPhotos } as never,
       {
         sourcesForChannel: jest.fn().mockResolvedValue([
           {
@@ -131,10 +132,10 @@ describe('TelegramChannelsService updateManagedPost', () => {
           .mockResolvedValue('Updated text'),
         renderManagedPostText: jest.fn().mockReturnValue({
           richHtml: null,
-          publishMode: 'TEXT_ONLY',
-          captionHtml: '',
+          publishMode: 'IMAGE_WITH_CAPTION',
+          captionHtml: 'Updated text',
           followupHtmlParts: [],
-          textHtmlParts: ['Updated text'],
+          textHtmlParts: [],
         }),
       } as never,
     );
@@ -146,8 +147,8 @@ describe('TelegramChannelsService updateManagedPost', () => {
         id: 'post-scheduled',
         status: TelegramManagedPostStatus.SCHEDULED,
         text: 'Old text',
-        imageUrls: [],
-        publishMode: 'TEXT_ONLY',
+        imageUrls: ['https://cdn.test/old.jpg'],
+        publishMode: 'IMAGE_WITH_CAPTION',
         sourceId: 'account-1',
         sourceType: TelegramSourceType.MTPROTO,
         scheduledAt: scheduleAt,
@@ -164,7 +165,16 @@ describe('TelegramChannelsService updateManagedPost', () => {
       },
       nextText: 'Updated text',
       buttonRows: [],
+      nextMediaItems: [{ kind: 'PHOTO', url: 'https://cdn.test/new.jpg' }],
     });
+
+    expect(editPostPhotos).toHaveBeenCalledWith(
+      expect.objectContaining({
+        messageIds: ['153'],
+        imageUrls: ['https://cdn.test/new.jpg'],
+        scheduleAt,
+      }),
+    );
 
     expect(editPostText).toHaveBeenCalledWith(
       expect.objectContaining({

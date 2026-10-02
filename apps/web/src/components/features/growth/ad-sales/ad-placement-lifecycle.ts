@@ -32,7 +32,7 @@ export function placementTimer(
   if (placement.deletedAt) {
     return { phase: "complete", label: "Automatically deleted" };
   }
-  if (placement.managedPost?.telegramRemoteStatus === "MISSING") {
+  if (placement.managedPost?.telegramRemoteStatus === "AUTO_DELETED") {
     return { phase: "complete", label: "Automatically deleted" };
   }
   if (

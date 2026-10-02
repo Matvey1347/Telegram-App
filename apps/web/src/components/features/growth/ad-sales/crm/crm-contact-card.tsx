@@ -177,6 +177,12 @@ export function CrmContactCard({
               className="inline-flex min-w-0 items-center gap-1 rounded-full border border-violet-800/70 bg-violet-950/20 px-1.5 py-0.5 text-[10px] text-violet-200 hover:bg-violet-950/45"
               title={`${plan.kind} · ${plan.status}`}
             >
+              <IconAvatar
+                icon={plan.iconPresentation}
+                label={plan.title}
+                size="xs"
+                className="shrink-0 rounded-full"
+              />
               <span className="truncate">{plan.title}</span>
               <span className="text-violet-400">↗</span>
             </Link>

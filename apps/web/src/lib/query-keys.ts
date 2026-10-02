@@ -206,6 +206,13 @@ export const telegramPublicationScheduleKeys = {
       [...channelIds].sort(),
       range,
     ] as const,
+  calendar: (scheduleId: string, range: { from: string; to: string }) =>
+    [
+      ...telegramPublicationScheduleKeys.all(),
+      "calendar",
+      scheduleId,
+      range,
+    ] as const,
 };
 
 export const telegramContentHypothesisKeys = {

@@ -27,6 +27,7 @@ export function MutualPromotionSavedPostCard({
   post,
   index,
   editable,
+  removable = editable,
   timezone,
   startsAt,
   endsAt,
@@ -39,6 +40,7 @@ export function MutualPromotionSavedPostCard({
   post: MutualPromotionFolderPost;
   index: number;
   editable: boolean;
+  removable?: boolean;
   timezone: string;
   startsAt: string;
   endsAt: string;
@@ -123,16 +125,18 @@ export function MutualPromotionSavedPostCard({
             >
               <Pencil size={16} />
             </Button>
-            <Button
-              type="button"
-              variant="danger"
-              className="h-8 !px-2.5"
-              aria-label={`Remove publication ${index + 1}`}
-              onClick={() => void onRemove(post.id).catch(() => undefined)}
-              disabled={saving}
-            >
-              <Trash2 size={16} />
-            </Button>
+            {removable ? (
+              <Button
+                type="button"
+                variant="danger"
+                className="h-8 !px-2.5"
+                aria-label={`Remove publication ${index + 1}`}
+                onClick={() => void onRemove(post.id).catch(() => undefined)}
+                disabled={saving}
+              >
+                <Trash2 size={16} />
+              </Button>
+            ) : null}
           </div>
         ) : null}
       </div>
@@ -145,6 +149,7 @@ export function MutualPromotionSavedPostCard({
                 aria-label="Publication date"
                 value={date}
                 onChange={(event) => setDate(event.target.value)}
+                disabled={!removable}
               />
             </FormField>
             <FormField label="Time" required>
@@ -152,6 +157,7 @@ export function MutualPromotionSavedPostCard({
                 aria-label="Time"
                 value={time}
                 onChange={(event) => setTime(event.target.value)}
+                disabled={!removable}
               />
             </FormField>
           </div>

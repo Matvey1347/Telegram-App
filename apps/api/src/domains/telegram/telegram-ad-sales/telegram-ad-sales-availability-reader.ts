@@ -191,6 +191,7 @@ export class TelegramAdSalesAvailabilityReader {
               },
             },
             status: true,
+            financeSkipped: true,
             placements: { select: { agreedPrice: true } },
             payments: {
               where: { status: TelegramAdSalePaymentStatus.ACTIVE },
@@ -219,6 +220,7 @@ export class TelegramAdSalesAvailabilityReader {
             advertiserTelegram:
               sale.advertiserTelegramSnapshot ?? sale.advertiserTelegram,
             status: sale.status,
+            financeSkipped: sale.financeSkipped,
             paymentStatus: paymentStatus(totalPaid, totalAgreed),
             saleAgreedAmount: totalAgreed,
             saleReceivedAmount: totalPaid,

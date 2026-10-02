@@ -46,7 +46,7 @@ export function AdSaleOriginPreview({
     adSaleOriginOptions.find((item) => item.value === origin) ??
     adSaleOriginOptions[0];
   return (
-    <span className="inline-flex items-center gap-2 text-sm text-neutral-200">
+    <span className="inline-flex shrink-0 items-center gap-2 whitespace-nowrap text-sm text-neutral-200">
       {option.iconUrl ? (
         <Image
           src={option.iconUrl}

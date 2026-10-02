@@ -41,6 +41,15 @@ export class CreateCrossPromotionPlanDto {
   @IsOptional() @IsDateString() trackingEndsAt?: string | null;
 }
 
+/** A database-backed cross-promotion form draft may be intentionally partial. */
+export class SaveCrossPromotionPlanDraftDto {
+  @IsIn(['DIRECT_MUTUAL', 'OWN_CHANNELS'])
+  kind!: 'DIRECT_MUTUAL' | 'OWN_CHANNELS';
+
+  @IsObject()
+  draft!: Record<string, unknown>;
+}
+
 /**
  * Completed placements keep their published configuration and measured
  * boundaries immutable. Their display title remains safe to correct.

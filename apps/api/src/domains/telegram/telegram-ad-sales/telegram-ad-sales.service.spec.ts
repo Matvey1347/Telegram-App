@@ -823,6 +823,33 @@ describe('TelegramAdSalesService', () => {
     expect(result.id).toBe('advertiser-created');
   });
 
+  it('reuses the existing client when a Telegram username is submitted again', async () => {
+    const { service, prisma } = createService();
+    const existing = { id: 'advertiser-a20', telegramUsername: 'a20_admin' };
+    jest.spyOn(service as any, 'mapAdvertiser').mockImplementation(
+      (advertiser: unknown) => advertiser,
+    );
+    prisma.telegramAdvertiser.findFirst.mockResolvedValue(existing);
+
+    await expect(
+      service.createAdvertiser('user-1', {
+        displayName: 'A20 admin',
+        telegramUsername: '@A20_ADMIN',
+      }),
+    ).resolves.toEqual(existing);
+
+    expect(prisma.telegramAdvertiser.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          workspaceId: 'ws-1',
+          telegramUsername: { equals: 'a20_admin', mode: 'insensitive' },
+        }),
+      }),
+    );
+    expect(prisma.telegramAdvertiser.create).not.toHaveBeenCalled();
+    expect(prisma.telegramAdvertiserActivity.create).not.toHaveBeenCalled();
+  });
+
   it('rejects an unsupported sale origin', async () => {
     const dto = plainToInstance(CreateTelegramAdSaleDto, {
       advertiserName: 'Advertiser',

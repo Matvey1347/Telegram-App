@@ -219,6 +219,7 @@ export type CrmContactListItem = CrmContact & {
     kind: string;
     status: string;
     scheduledAt: string;
+    iconPresentation: ResolvedEmoji | null;
   }>;
   salesSummary: {
     totalSalesCount: number;

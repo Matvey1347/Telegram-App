@@ -71,7 +71,14 @@ export function createTelegramSystemBotApi(api: AxiosInstance) {
         await api.post<TelegramSystemBotPostImportStart>(
           "/telegram/system-bot/post-imports",
           payload,
-          silentFeedback,
+          payload.replaceActive
+            ? {
+                ...silentFeedback,
+                // Keep the user's explicit confirmation intact even if an
+                // intermediary strips an optional JSON boolean.
+                headers: { "X-Replace-Active-Import": "true" },
+              }
+            : silentFeedback,
         )
       ).data,
     readPostImport: async (workflowId: string) =>

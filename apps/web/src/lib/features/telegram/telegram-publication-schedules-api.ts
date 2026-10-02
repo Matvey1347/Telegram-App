@@ -3,6 +3,7 @@ import type {
   TelegramChannelPublicationScheduleAssignment,
   TelegramChannelPublicationScheduleAssignmentInput,
   TelegramPublicationSchedule,
+  TelegramPublicationPlanCalendar,
   TelegramPublicationScheduleInput,
   TelegramPublicationSlotOccurrence,
   TelegramPublicationSlotOccurrencesByChannel,
@@ -84,6 +85,16 @@ export function createTelegramPublicationSchedulesApi(
         await api.get<TelegramPublicationSlotOccurrencesByChannel>(
           "/telegram-publication-schedules/occurrences",
           { params: { ...params, channelIds: channelIds.join(",") } },
+        )
+      ).data,
+    calendar: async (
+      scheduleId: string,
+      params: { from: string; to: string },
+    ) =>
+      (
+        await api.get<TelegramPublicationPlanCalendar>(
+          "/telegram-publication-schedules/calendar",
+          { params: { ...params, scheduleId } },
         )
       ).data,
   };

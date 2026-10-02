@@ -213,6 +213,7 @@ import {
   Modal,
   MultiSelect,
   Select,
+  Skeleton,
   Textarea,
   TimeInput,
   ToggleRow,
@@ -975,6 +976,8 @@ function TelegramPostWorkspace({
     ...postsPage,
     data: postsData,
   };
+  const isDeepLinkedPostLoading =
+    Boolean(initialPostId) && deepLinkedPost.isLoading && !editing;
   const customEmojiPacks = useQuery({
     queryKey: workspaceKeys.telegramCustomEmojiPacks(),
     queryFn: () => telegramChannelsApi.customEmojiPacks(),
@@ -1124,8 +1127,20 @@ function TelegramPostWorkspace({
   useManagedPostDueRefresh({ channelId, post: editingMeta });
   const isReadOnlyTelegramPost = Boolean(editingMeta?.readOnlyTelegramPost);
   const isPublished = editingMeta?.status === "PUBLISHED";
-  const hasLockedTelegramMedia =
+  const isRemoteTelegramPost =
     editingMeta?.status === "PUBLISHED" || editingMeta?.status === "SCHEDULED";
+  const remotePostMediaItems = normalizeTelegramPostMediaItems(
+    editingMeta?.mediaItems,
+    editingMeta?.imageUrls,
+  );
+  const hasReplaceableTelegramPhotos =
+    isRemoteTelegramPost &&
+    remotePostMediaItems.length > 0 &&
+    remotePostMediaItems.every((item) => item.kind === "PHOTO");
+  const hasNonReplaceableTelegramMedia =
+    isRemoteTelegramPost &&
+    remotePostMediaItems.length > 0 &&
+    !hasReplaceableTelegramPhotos;
   const displayedError = error || editingMeta?.lastError || "";
   const canReturnScheduledPostToDraft = Boolean(
     editingMeta?.status === "SCHEDULED" && editingMeta.origin !== "TELEGRAM",
@@ -5151,7 +5166,33 @@ function TelegramPostWorkspace({
           </Card>
         </div>
       ) : (
-        <div className="grid items-start gap-4 xl:grid-cols-[minmax(270px,0.7fr)_minmax(420px,1.25fr)_minmax(280px,0.72fr)]">
+        <div className="relative grid items-start gap-4 xl:grid-cols-[minmax(270px,0.7fr)_minmax(420px,1.25fr)_minmax(280px,0.72fr)]">
+          {isDeepLinkedPostLoading ? (
+            <div className="absolute inset-0 z-50 grid gap-4 bg-neutral-950 xl:grid-cols-[minmax(270px,0.7fr)_minmax(420px,1.25fr)_minmax(280px,0.72fr)]">
+              <Card className="space-y-4">
+                <Skeleton className="h-8 w-36" />
+                <Skeleton className="h-[460px] w-full" />
+              </Card>
+              <Card className="space-y-4">
+                <p className="text-sm text-neutral-400">
+                  {t("telegram.posts.editor.loadingPost")}
+                </p>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <Skeleton className="h-10 w-full" />
+                  <Skeleton className="h-10 w-full" />
+                </div>
+                <Skeleton className="h-5 w-32" />
+                <Skeleton className="h-72 w-full" />
+                <Skeleton className="h-36 w-full" />
+              </Card>
+              <Card className="space-y-4">
+                <Skeleton className="h-7 w-24" />
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+              </Card>
+            </div>
+          ) : null}
           <TelegramPostPreview
             channelTitle={channelTitle}
             channelPhotoUrl={channelPhotoUrl}
@@ -5376,18 +5417,28 @@ function TelegramPostWorkspace({
               onHighlightTarget={highlightInternalLinkTarget}
               onOpenPostInNewTab={openPostInNewTab}
             />
-            {!isPublished || mediaItems.length ? (
+            {!isRemoteTelegramPost || remotePostMediaItems.length ? (
               <div className="space-y-2">
                 <TelegramPostMediaUpload
                   value={mediaItems}
                   onChange={setMediaItems}
-                  disabled={busy || hasLockedTelegramMedia}
-                  readOnly={hasLockedTelegramMedia}
+                  disabled={busy || hasNonReplaceableTelegramMedia}
+                  readOnly={hasNonReplaceableTelegramMedia}
+                  allowedKinds={hasReplaceableTelegramPhotos ? ["PHOTO"] : undefined}
+                  maxItems={
+                    hasReplaceableTelegramPhotos
+                      ? remotePostMediaItems.length
+                      : undefined
+                  }
                   onUploadingChange={setUploadingImages}
                 />
-                {hasLockedTelegramMedia ? (
+                {hasReplaceableTelegramPhotos ? (
                   <p className="text-xs text-amber-300">
-                    {t("telegram.posts.editor.imagesLocked")}
+                    {t("telegram.posts.editor.photosReplaceable")}
+                  </p>
+                ) : hasNonReplaceableTelegramMedia ? (
+                  <p className="text-xs text-amber-300">
+                    {t("telegram.posts.editor.mediaNotReplaceable")}
                   </p>
                 ) : null}
               </div>
@@ -5496,36 +5547,42 @@ function TelegramPostWorkspace({
                 })}
               </div>
             ) : null}
-            <div className="flex justify-end gap-2">
-              {editing && canReturnScheduledPostToDraft ? (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  disabled={
-                    editorIsSaving || returnManagedPostToDraft.isPending
-                  }
-                  onClick={() => void returnManagedPostToDraft.mutateAsync()}
-                >
-                  <RotateCcw size={15} />
-                  {returnManagedPostToDraft.isPending
-                    ? t("telegram.posts.editor.returning")
-                    : t("telegram.posts.editor.returnDraft")}
-                </Button>
-              ) : null}
-              {editing ? (
-                <button
-                  type="button"
-                  title={t("telegram.posts.editor.history")}
-                  aria-label={t("telegram.posts.editor.openHistory")}
-                  onClick={() => setHistoryOpen(true)}
-                  className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-neutral-700 bg-neutral-900 text-neutral-300 transition hover:border-blue-600 hover:bg-blue-950/30 hover:text-white"
-                >
-                  <History size={17} />
-                </button>
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
+              {editing || canReturnScheduledPostToDraft ? (
+                <div className="flex min-w-0 gap-2">
+                  {editing && canReturnScheduledPostToDraft ? (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="min-w-0 flex-1 sm:flex-none"
+                      disabled={
+                        editorIsSaving || returnManagedPostToDraft.isPending
+                      }
+                      onClick={() => void returnManagedPostToDraft.mutateAsync()}
+                    >
+                      <RotateCcw size={15} />
+                      {returnManagedPostToDraft.isPending
+                        ? t("telegram.posts.editor.returning")
+                        : t("telegram.posts.editor.returnDraft")}
+                    </Button>
+                  ) : null}
+                  {editing ? (
+                    <button
+                      type="button"
+                      title={t("telegram.posts.editor.history")}
+                      aria-label={t("telegram.posts.editor.openHistory")}
+                      onClick={() => setHistoryOpen(true)}
+                      className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-neutral-700 bg-neutral-900 text-neutral-300 transition hover:border-blue-600 hover:bg-blue-950/30 hover:text-white"
+                    >
+                      <History size={17} />
+                    </button>
+                  ) : null}
+                </div>
               ) : null}
               <Button
                 onClick={run}
                 disabled={!!publishDisabledReason || dependencyPublishBlocked}
+                className="w-full sm:w-auto"
               >
                 {publishedPostNeedsRepublish
                   ? t("telegram.posts.editor.publish")

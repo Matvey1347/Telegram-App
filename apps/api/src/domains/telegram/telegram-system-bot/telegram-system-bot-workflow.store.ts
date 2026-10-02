@@ -97,6 +97,25 @@ export class TelegramSystemBotWorkflowStore {
     });
   }
 
+  activePostImport(scope: TelegramSystemBotWorkflowScope) {
+    return this.prisma.telegramSystemBotWorkflow.findFirst({
+      where: {
+        connectionId: scope.connectionId,
+        workspaceId: scope.workspaceId,
+        status: TelegramSystemBotWorkflowStatus.ACTIVE,
+        expiresAt: { gt: new Date() },
+        kind: {
+          in: [
+            TelegramSystemBotWorkflowKind.POST_IMPORT,
+            TelegramSystemBotWorkflowKind.POST_BATCH_IMPORT,
+            TelegramSystemBotWorkflowKind.WEBSITE_POST_IMPORT,
+          ],
+        },
+      },
+      orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+    });
+  }
+
   async requireNoActivePostImport(scope: TelegramSystemBotWorkflowScope) {
     const active = await this.prisma.telegramSystemBotWorkflow.findFirst({
       where: {
@@ -106,6 +125,7 @@ export class TelegramSystemBotWorkflowStore {
         expiresAt: { gt: new Date() },
         kind: {
           in: [
+            TelegramSystemBotWorkflowKind.POST_IMPORT,
             TelegramSystemBotWorkflowKind.POST_BATCH_IMPORT,
             TelegramSystemBotWorkflowKind.WEBSITE_POST_IMPORT,
           ],

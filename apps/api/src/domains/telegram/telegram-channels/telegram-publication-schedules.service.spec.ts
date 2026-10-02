@@ -8,6 +8,9 @@ describe('TelegramPublicationSchedulesService', () => {
     telegramChannelPublicationScheduleAssignment: { findMany: jest.fn() },
     telegramPublicationSchedule: { findFirst: jest.fn() },
     telegramManagedPost: { findMany: jest.fn().mockResolvedValue([]) },
+    telegramAdSalePlacement: { findMany: jest.fn().mockResolvedValue([]) },
+    crossPromotionPlan: { findMany: jest.fn().mockResolvedValue([]) },
+    icon: { findMany: jest.fn().mockResolvedValue([]) },
   };
   const workspace: any = {
     resolveWorkspaceIdForUser: jest.fn().mockResolvedValue('workspace-1'),
@@ -49,6 +52,7 @@ describe('TelegramPublicationSchedulesService', () => {
         iconPresentation: null,
         isDefault: true,
         assignedChannelsCount: 1,
+        assignedChannelIds: ['channel-1'],
         createdAt: '',
         updatedAt: '',
         slots: [
@@ -220,6 +224,106 @@ describe('TelegramPublicationSchedulesService', () => {
         }),
       }),
     );
+  });
+
+  it('includes booked ads with their advertiser avatar, even when they have a managed post', async () => {
+    const occurrencesSpy = jest
+      .spyOn(service, 'occurrencesByChannels')
+      .mockResolvedValue({
+        'channel-1': [],
+      });
+    prisma.telegramChannelPublicationScheduleAssignment.findMany.mockResolvedValue(
+      [{ channelId: 'channel-1' }],
+    );
+    prisma.telegramPublicationSchedule.findFirst.mockResolvedValue({
+      id: 'schedule-1',
+    });
+    prisma.telegramManagedPost.findMany.mockResolvedValue([]);
+    prisma.telegramAdSalePlacement.findMany.mockResolvedValue([
+      {
+        id: 'placement-1',
+        telegramAdSaleId: 'sale-1',
+        telegramChannelId: 'channel-1',
+        scheduledAt: new Date('2026-10-24T07:10:00.000Z'),
+        sale: {
+          title: 'Autumn launch',
+          advertiserName: 'Advertiser',
+          advertiser: {
+            avatarIcon: null,
+            crmPeers: [{ photoUrl: 'https://example.com/avatar.jpg' }],
+          },
+        },
+      },
+    ]);
+
+    const calendar = await service.calendar('user-1', {
+      scheduleId: 'schedule-1',
+      from: '2026-10-24T00:00:00.000Z',
+      to: '2026-10-25T00:00:00.000Z',
+    });
+    occurrencesSpy.mockRestore();
+
+    expect(calendar.events).toEqual([
+      expect.objectContaining({
+        kind: 'AD',
+        adSaleId: 'sale-1',
+        avatarUrl: 'https://example.com/avatar.jpg',
+      }),
+    ]);
+    expect(prisma.telegramAdSalePlacement.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.not.objectContaining({ managedPostId: null }),
+      }),
+    );
+  });
+
+  it('uses the future per-publisher VP placement instead of the plan anchor date', async () => {
+    const occurrencesSpy = jest
+      .spyOn(service, 'occurrencesByChannels')
+      .mockResolvedValue({ 'channel-1': [] });
+    prisma.telegramChannelPublicationScheduleAssignment.findMany.mockResolvedValue(
+      [{ channelId: 'channel-1' }],
+    );
+    prisma.telegramPublicationSchedule.findFirst.mockResolvedValue({
+      id: 'schedule-1',
+    });
+    prisma.telegramAdSalePlacement.findMany.mockResolvedValue([]);
+    prisma.crossPromotionPlan.findMany.mockResolvedValue([
+      {
+        id: 'vp-1',
+        title: 'OVP: October partner post',
+        scheduledAt: new Date('2026-10-02T10:00:00.000Z'),
+        publisherChannelIds: ['channel-1'],
+        publicationPost: {
+          publisherPublications: [
+            {
+              placements: [
+                {
+                  telegramChannelId: 'channel-1',
+                  scheduledAt: '2026-10-04T15:10:00.000Z',
+                },
+              ],
+            },
+          ],
+        },
+      },
+    ]);
+    prisma.icon.findMany.mockResolvedValue([]);
+
+    const calendar = await service.calendar('user-1', {
+      scheduleId: 'schedule-1',
+      from: '2026-10-03T00:00:00.000Z',
+      to: '2026-10-05T00:00:00.000Z',
+    });
+    occurrencesSpy.mockRestore();
+
+    expect(calendar.events).toEqual([
+      expect.objectContaining({
+        kind: 'VP',
+        title: 'OVP: October partner post',
+        scheduledAt: '2026-10-04T15:10:00.000Z',
+      }),
+    ]);
   });
 
   it('rejects inaccessible channels before loading schedule data', async () => {

@@ -23,6 +23,7 @@ import { financeAuthorizationTestFallback } from '../../finance/finance-authoriz
 import { MutualPromotionValidationService } from './mutual-promotion-validation.service';
 import { TelegramManagedPostRemoteDeletionService } from '../../telegram/telegram-channels/telegram-managed-post-remote-deletion.service';
 import { TelegramInviteLinkRegistrationService } from '../../telegram/telegram-channels/telegram-invite-link-registration.service';
+import { TelegramChannelsService } from '../../telegram/telegram-channels/telegram-channels.service';
 import {
   mutualPromotionFolderTitle,
   mutualPromotionImportedPostCount,
@@ -45,6 +46,7 @@ export class MutualPromotionCommandService {
       workspaceService,
     ),
     private readonly inviteLinkRegistration?: TelegramInviteLinkRegistrationService,
+    private readonly telegramChannels?: TelegramChannelsService,
   ) {}
 
   async refreshInviteLinkData(userId: string, folderId: string) {
@@ -313,7 +315,7 @@ export class MutualPromotionCommandService {
     const workspaceId =
       await this.workspaceService.resolveWorkspaceIdForUser(userId);
     const title = mutualPromotionFolderTitle(dto.title);
-    await this.prisma.$transaction(async (tx) => {
+    const activeDeliveries = await this.prisma.$transaction(async (tx) => {
       await this.validation.lockFolder(tx, folderId);
       await this.validation.requireFolder(workspaceId, folderId, tx);
       await tx.mutualPromotionFolder.update({
@@ -434,27 +436,71 @@ export class MutualPromotionCommandService {
   ) {
     const workspaceId =
       await this.workspaceService.resolveWorkspaceIdForUser(userId);
-    await this.prisma.$transaction(async (tx) => {
+    const activeDeliveries = await this.prisma.$transaction(async (tx) => {
       await this.validation.lockFolder(tx, folderId);
       const folder = await this.validation.requireFolder(
         workspaceId,
         folderId,
         tx,
       );
-      this.validation.requireDraft(folder.status);
       const scheduledAt = validateMutualPromotionPostTime(
         dto.scheduledAt,
         folder.startsAt,
         folder.endsAt,
       );
       const content = mutualPromotionPostContent(dto, 'Imported publication');
+      if (folder.status === 'ACTIVE') {
+        const post = await tx.mutualPromotionFolderPost.findFirst({
+          where: { id: postId, folderId, workspaceId },
+          select: {
+            scheduledAt: true,
+            deliveries: {
+              where: { managedPostId: { not: null } },
+              select: { telegramChannelId: true, managedPostId: true },
+            },
+          },
+        });
+        if (!post)
+          throw new NotFoundException('Mutual-promotion post not found');
+        if (post.scheduledAt.getTime() !== scheduledAt.getTime()) {
+          throw new BadRequestException(
+            'An active mutual-promotion publication cannot be rescheduled from this editor',
+          );
+        }
+        return { content, deliveries: post.deliveries };
+      }
+      this.validation.requireDraft(folder.status);
       const result = await tx.mutualPromotionFolderPost.updateMany({
         where: { id: postId, folderId, workspaceId },
         data: { scheduledAt, ...content },
       });
       if (!result.count)
         throw new NotFoundException('Mutual-promotion post not found');
+      return null;
     });
+    if (activeDeliveries) {
+      if (!this.telegramChannels) {
+        throw new BadRequestException('Telegram publication editing is unavailable');
+      }
+      for (const delivery of activeDeliveries.deliveries) {
+        await this.telegramChannels.updateManagedPost(
+          userId,
+          delivery.telegramChannelId,
+          delivery.managedPostId!,
+          {
+            title: dto.title,
+            text: dto.text,
+            imageUrls: dto.imageUrls,
+            mediaItems: dto.mediaItems,
+            buttonRows: dto.buttonRows as never,
+          },
+        );
+      }
+      await this.prisma.mutualPromotionFolderPost.updateMany({
+        where: { id: postId, folderId, workspaceId },
+        data: activeDeliveries.content,
+      });
+    }
     return this.read.detailForWorkspace(workspaceId, folderId);
   }
 

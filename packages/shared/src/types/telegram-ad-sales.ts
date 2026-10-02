@@ -348,6 +348,7 @@ export type TelegramAdAvailabilitySlot = {
     title?: string | null;
     advertiserName?: string | null;
     saleStatus?: TelegramAdSaleStatus | null;
+    financeSkipped?: boolean;
     paymentStatus?: TelegramAdSaleComputedPaymentStatus | null;
     agreedPrice?: string;
     currency?: string;

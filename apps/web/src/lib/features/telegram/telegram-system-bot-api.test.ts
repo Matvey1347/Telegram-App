@@ -111,7 +111,10 @@ describe("telegramSystemBotApi subscriptions", () => {
         context: "Mass publication",
         replaceActive: true,
       },
-      { feedback: { mode: "silent" } },
+      {
+        feedback: { mode: "silent" },
+        headers: { "X-Replace-Active-Import": "true" },
+      },
     );
   });
 

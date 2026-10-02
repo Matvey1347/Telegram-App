@@ -1,7 +1,8 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type { TelegramSystemBotPostDraft } from "@telegram-system/shared";
+import type { TelegramCustomEmojiPackSummary } from "@telegram-system/shared";
 import {
   normalizeTelegramPostMediaItems,
   telegramPostPhotoUrls,
@@ -10,6 +11,7 @@ import { FormField, Input } from "@/components/ui/primitives";
 import { TelegramPostMediaUpload } from "./telegram-post-media-upload";
 import { TelegramPostPreview } from "./telegram-post-preview";
 import { TelegramTextEditor } from "./telegram-text-editor";
+import { telegramChannelsApi } from "@/lib/api";
 
 export function TelegramPostDraftEditorLayout({
   preview,
@@ -55,6 +57,9 @@ export function TelegramPostDraftEditor({
   channelId,
   disabled,
   buttonEditing = "enabled",
+  mediaAllowedKinds,
+  mediaMaxItems,
+  mediaNotice,
   titleField = "visible",
   textPlaceholder = "Write or edit the Telegram post…",
   previewDraft,
@@ -67,6 +72,9 @@ export function TelegramPostDraftEditor({
   channelId?: string;
   disabled?: boolean;
   buttonEditing?: "enabled" | "disabled";
+  mediaAllowedKinds?: import("@telegram-system/shared").TelegramPostMediaKind[];
+  mediaMaxItems?: number;
+  mediaNotice?: string;
   titleField?: "visible" | "hidden";
   textPlaceholder?: string;
   previewDraft?: TelegramSystemBotPostDraft;
@@ -79,6 +87,78 @@ export function TelegramPostDraftEditor({
   );
   const update = (patch: Partial<TelegramSystemBotPostDraft>) =>
     onChange({ ...draft, ...patch });
+  const customEmojiDocumentIds = useMemo(
+    () => [
+      ...new Set(
+        [...draft.text.matchAll(/tg:\/\/emoji\?id=(\d{1,20})/g)].map(
+          (match) => match[1],
+        ),
+      ),
+    ],
+    [draft.text],
+  );
+  const [customEmojiPacks, setCustomEmojiPacks] = useState<
+    TelegramCustomEmojiPackSummary[]
+  >([]);
+  const [emojiProgress, setEmojiProgress] = useState<{
+    current: number;
+    total: number;
+    loaded: number;
+    failed: number;
+  } | null>(null);
+  const customEmojiDocumentIdsKey = customEmojiDocumentIds.join(",");
+  useEffect(() => {
+    if (!customEmojiDocumentIds.length) {
+      setCustomEmojiPacks([]);
+      setEmojiProgress(null);
+      return;
+    }
+    const controller = new AbortController();
+    setCustomEmojiPacks([]);
+    setEmojiProgress({
+      current: 0,
+      total: customEmojiDocumentIds.length,
+      loaded: 0,
+      failed: 0,
+    });
+    void telegramChannelsApi
+      .resolveCustomEmojiDocuments(
+        customEmojiDocumentIds,
+        (item, current, total) => {
+          setEmojiProgress((previous) => ({
+            current,
+            total,
+            loaded:
+              (previous?.loaded ?? 0) + (item.status === "failed" ? 0 : 1),
+            failed:
+              (previous?.failed ?? 0) + (item.status === "failed" ? 1 : 0),
+          }));
+          if (!item.pack) return;
+          setCustomEmojiPacks((previous) => {
+            const index = previous.findIndex(
+              (pack) => pack.id === item.pack!.id,
+            );
+            if (index < 0) return [...previous, item.pack!];
+            const next = [...previous];
+            const existing = next[index]!;
+            next[index] = {
+              ...existing,
+              emojis: [
+                ...existing.emojis.filter(
+                  (emoji) => emoji.documentId !== item.documentId,
+                ),
+                ...item.pack!.emojis,
+              ],
+            };
+            return next;
+          });
+        },
+        controller.signal,
+      )
+      .then((result) => setCustomEmojiPacks(result.packs))
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, [customEmojiDocumentIdsKey]);
 
   return (
     <TelegramPostDraftEditorLayout
@@ -92,6 +172,7 @@ export function TelegramPostDraftEditor({
           imageUrls={previewDraft?.imageUrls ?? draft.imageUrls}
           mediaItems={previewDraft?.mediaItems ?? mediaItems}
           buttonRows={previewDraft?.buttonRows ?? draft.buttonRows}
+          customEmojiPacks={customEmojiPacks}
           onTextChange={onPreviewTextChange}
           captionLengthMax={4_096}
           messageLengthMax={4_096}
@@ -119,6 +200,7 @@ export function TelegramPostDraftEditor({
               rows={12}
               channelId={channelId}
               enableCustomEmoji
+              customEmojiPacks={customEmojiPacks}
               buttonRows={draft.buttonRows}
               onButtonRowsChange={
                 buttonEditing === "enabled"
@@ -138,7 +220,21 @@ export function TelegramPostDraftEditor({
               })
             }
             compact
+            allowedKinds={mediaAllowedKinds}
+            maxItems={mediaMaxItems}
           />
+          {emojiProgress ? (
+            <p className="-mt-2 text-xs text-muted-foreground" role="status">
+              Premium emoji: {emojiProgress.loaded}/{emojiProgress.total} loaded
+              {emojiProgress.failed
+                ? `, ${emojiProgress.failed} unavailable`
+                : ""}
+              .
+            </p>
+          ) : null}
+          {mediaNotice ? (
+            <p className="-mt-2 text-xs text-amber-300">{mediaNotice}</p>
+          ) : null}
         </>
       }
     />

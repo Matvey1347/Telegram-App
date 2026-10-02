@@ -2716,15 +2716,34 @@ export class TelegramAdSalesService {
 
   async createAdvertiser(userId: string, dto: CreateTelegramAdvertiserDto) {
     const workspaceId = await this.workspace(userId);
+    let createdNew = false;
     const advertiser = await this.prisma.$transaction(async (tx) => {
+      const telegramUsername = this.normalizeTelegramUsername(
+        dto.telegramUsername,
+      );
+      // A Telegram handle is an identity, not merely a display attribute.
+      // Legacy data may contain duplicates, so use the oldest matching row
+      // rather than creating another card when a handle is submitted again.
+      if (telegramUsername) {
+        const existing = await tx.telegramAdvertiser.findFirst({
+          where: {
+            workspaceId,
+            telegramUsername: {
+              equals: telegramUsername,
+              mode: 'insensitive',
+            },
+          },
+          include: this.advertiserInclude(),
+          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        });
+        if (existing) return existing;
+      }
       const created = await tx.telegramAdvertiser.create({
         data: {
           workspaceId,
           displayName: dto.displayName.trim(),
           companyName: dto.companyName?.trim() || null,
-          telegramUsername: this.normalizeTelegramUsername(
-            dto.telegramUsername,
-          ),
+          telegramUsername,
           phone: this.normalizePhone(dto.phone),
           email: this.normalizeEmail(dto.email),
           website: this.normalizeWebsite(dto.website),
@@ -2751,16 +2770,19 @@ export class TelegramAdSalesService {
         username: dto.telegramUsername,
         usernameSpecified: dto.telegramUsername !== undefined,
       });
+      createdNew = true;
       return tx.telegramAdvertiser.findUniqueOrThrow({
         where: { id: created.id },
         include: this.advertiserInclude(),
       });
     });
-    await this.createAdvertiserActivity(workspaceId, advertiser.id, {
-      type: TelegramAdvertiserActivityType.ADVERTISER_CREATED,
-      title: 'Advertiser created',
-      actorUserId: userId,
-    });
+    if (createdNew) {
+      await this.createAdvertiserActivity(workspaceId, advertiser.id, {
+        type: TelegramAdvertiserActivityType.ADVERTISER_CREATED,
+        title: 'Advertiser created',
+        actorUserId: userId,
+      });
+    }
     return this.mapAdvertiser(advertiser);
   }
 

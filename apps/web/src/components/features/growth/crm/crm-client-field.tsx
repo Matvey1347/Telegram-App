@@ -28,7 +28,9 @@ export function dedupeAdvertisersByTelegramIdentity(
       ?.trim()
       .replace(/^@+/, "")
       .toLowerCase();
-    const key = username ? `telegram:${username}` : `advertiser:${advertiser.id}`;
+    const key = username
+      ? `telegram:${username}`
+      : `advertiser:${advertiser.id}`;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
@@ -48,6 +50,12 @@ function advertiserContact(advertiser: TelegramAdvertiser) {
 export function CrmClientField(props: {
   contact: string;
   selectedAdvertiserId: string | null;
+  selectedClient?: {
+    id: string;
+    displayName: string;
+    telegramUsername?: string | null;
+    photoUrl?: string | null;
+  } | null;
   onContactChange: (value: string) => void;
   onTelegramChange: (value: string) => void;
   onSelect: (advertiser: TelegramAdvertiser | null) => void;
@@ -74,10 +82,6 @@ export function CrmClientField(props: {
     // Do not wake the CRM endpoint merely by opening the selector. A broad
     // list is both slower and capped; client lookup is a search interaction.
     if (mode !== "existing" || query.length < 2) {
-      setAdvertisers((current) =>
-        current.filter((item) => item.id === props.selectedAdvertiserId),
-      );
-      setLoading(false);
       return;
     }
     let active = true;
@@ -116,6 +120,38 @@ export function CrmClientField(props: {
     mode === "new" &&
     Boolean(props.contact.trim()) &&
     !isValidTelegramUsernameInput(props.contact);
+  const isSearchingClients =
+    loading && mode === "existing" && search.trim().length >= 2;
+  const selectedClient =
+    props.selectedClient &&
+    props.selectedClient.id === props.selectedAdvertiserId
+      ? props.selectedClient
+      : null;
+  const clientOptions = [
+    ...(selectedClient
+      ? [
+          {
+            value: selectedClient.id,
+            label: selectedClient.displayName,
+            meta: selectedClient.telegramUsername ?? "Existing client",
+            iconUrl: selectedClient.photoUrl ?? undefined,
+            iconFallback: selectedClient.displayName,
+          },
+        ]
+      : []),
+    ...advertisers
+      .filter((advertiser) => advertiser.id !== selectedClient?.id)
+      .map((advertiser) => ({
+        value: advertiser.id,
+        label: advertiser.displayName,
+        meta:
+          advertiser.telegramUsername ||
+          advertiser.email ||
+          advertiser.phone ||
+          `${advertiser.totalSalesCount} sales`,
+        iconFallback: advertiser.displayName,
+      })),
+  ];
 
   return (
     <div className="min-w-0 space-y-1 text-sm">
@@ -154,32 +190,26 @@ export function CrmClientField(props: {
           <CustomSelect
             value={props.selectedAdvertiserId ?? ""}
             placeholder={
-              loading
+              isSearchingClients
                 ? "Loading clients..."
                 : search.trim().length < 2
                   ? "Type at least 2 characters"
                   : "Select client"
             }
-            options={advertisers.map((advertiser) => {
-              return {
-                value: advertiser.id,
-                label: advertiser.displayName,
-                meta:
-                  advertiser.telegramUsername ||
-                  advertiser.email ||
-                  advertiser.phone ||
-                  `${advertiser.totalSalesCount} sales`,
-                // Telegram does not provide a stable public userpic endpoint.
-                // Using t.me/i/userpic here produces 404s for private or changed
-                // handles, so fall back to the deterministic client initial.
-                iconFallback: advertiser.displayName,
-              };
-            })}
-            loading={loading}
+            options={clientOptions}
+            loading={isSearchingClients}
             loadingLabel="Searching clients…"
             onSearchChange={setSearch}
             searchPlaceholder="Search all clients"
             onChange={(id) => {
+              if (id === selectedClient?.id) {
+                props.onSelect({
+                  id: selectedClient.id,
+                  displayName: selectedClient.displayName,
+                  telegramUsername: selectedClient.telegramUsername ?? null,
+                } as TelegramAdvertiser);
+                return;
+              }
               const advertiser = advertisers.find((item) => item.id === id);
               if (!advertiser) return;
               const contact = advertiserContact(advertiser);

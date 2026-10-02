@@ -55,7 +55,7 @@ describe("placementTimer", () => {
     ).toBeNull();
   });
 
-  it("does not show deletion pending after Telegram confirms the post is missing", () => {
+  it("shows deletion complete only after the post is confirmed auto-deleted", () => {
     expect(
       placementTimer(
         {
@@ -63,11 +63,27 @@ describe("placementTimer", () => {
           publishedAt: "2026-08-25T17:00:00.000Z",
           plannedDeleteAt: "2026-08-27T18:00:00.000Z",
           deletedAt: null,
-          managedPost: { telegramRemoteStatus: "MISSING" },
+          managedPost: { telegramRemoteStatus: "AUTO_DELETED" },
         } as never,
         new Date("2026-08-27T18:05:00.000Z").getTime(),
       ),
     ).toEqual({ phase: "complete", label: "Automatically deleted" });
+  });
+
+  it("keeps a future publication pending when a remote reference is missing", () => {
+    expect(
+      placementTimer(
+        {
+          managedPostId: "post-1",
+          scheduledAt: "2026-08-26T17:00:00.000Z",
+          publishedAt: null,
+          plannedDeleteAt: "2026-08-28T18:00:00.000Z",
+          deletedAt: null,
+          managedPost: { telegramRemoteStatus: "MISSING" },
+        } as never,
+        new Date("2026-08-25T17:00:00.000Z").getTime(),
+      ),
+    ).toEqual({ phase: "publication", label: "Publishes in 1d 00:00:00" });
   });
 
   it("shows a retryable publication error instead of pending", () => {

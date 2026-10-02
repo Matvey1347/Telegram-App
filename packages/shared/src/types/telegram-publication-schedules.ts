@@ -23,6 +23,7 @@ export type TelegramPublicationSchedule = {
   isDefault: boolean;
   slots: TelegramPublicationScheduleSlot[];
   assignedChannelsCount: number;
+  assignedChannelIds: string[];
   createdAt: string;
   updatedAt: string;
 };
@@ -70,4 +71,27 @@ export type TelegramPublicationSlotOccurrence = {
   postTitle?: string | null;
 };
 
-export type TelegramPublicationSlotOccurrencesByChannel = Record<string, TelegramPublicationSlotOccurrence[]>;
+export type TelegramPublicationSlotOccurrencesByChannel = Record<
+  string,
+  TelegramPublicationSlotOccurrence[]
+>;
+
+/** A scheduled publication, including one that does not land on a plan slot. */
+export type TelegramPublicationPlanCalendarEvent = {
+  id: string;
+  channelId: string;
+  scheduledAt: string;
+  title: string;
+  kind: "CONTENT" | "AD" | "VP";
+  slotId: string | null;
+  adSaleId?: string | null;
+  crossPromotionPlanId?: string | null;
+  avatarPresentation?: ResolvedEmoji | null;
+  avatarUrl?: string | null;
+};
+
+export type TelegramPublicationPlanCalendar = {
+  channelIds: string[];
+  occurrencesByChannel: TelegramPublicationSlotOccurrencesByChannel;
+  events: TelegramPublicationPlanCalendarEvent[];
+};

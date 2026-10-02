@@ -7,6 +7,7 @@ import type {
   CrossPromotionPlan,
   CrossPromotionPlanKind,
   TelegramAdProduct,
+  TelegramSystemBotPostDraft,
 } from "@telegram-system/shared";
 import {
   telegramAdSalesApi,
@@ -26,10 +27,24 @@ import { ensureCrossPromotionPartnerClient } from "./cross-promotion-partner-cli
 import type { CrossPromotionModalMode } from "./cross-promotion-modal-title";
 import { useCrossPromotionDraftState } from "./use-cross-promotion-draft-state";
 import { CrossPromotionPlanView } from "./cross-promotion-plan-view";
+import { Button, Modal } from "@/components/ui/primitives";
 
 const isOwn = (channel: TelegramChannel) => Boolean(channel.adminLinks?.length);
 const searchAdvertisers = (query: string) =>
   telegramAdSalesApi.searchAdvertisers({ q: query, limit: 20 });
+
+const postFingerprint = (post: TelegramSystemBotPostDraft | undefined) =>
+  JSON.stringify({
+    text: post?.text ?? "",
+    plainText: post?.plainText ?? "",
+    formattedHtml: post?.formattedHtml ?? "",
+    imageUrls: post?.imageUrls ?? [],
+    mediaItems: post?.mediaItems ?? [],
+    buttonRows: post?.buttonRows ?? [],
+  });
+
+const hasInlineButtons = (post: TelegramSystemBotPostDraft | undefined) =>
+  Boolean(post?.buttonRows?.some((row) => row.length));
 
 export function CrossPromotionPlanModal({
   open,
@@ -42,6 +57,8 @@ export function CrossPromotionPlanModal({
   saving,
   onClose,
   onSubmit,
+  onReplaceAndPublishNow,
+  onSaveDraft,
 }: {
   open: boolean;
   kind: CrossPromotionPlanKind;
@@ -53,6 +70,13 @@ export function CrossPromotionPlanModal({
   saving: boolean;
   onClose: () => void;
   onSubmit: (payload: CreateCrossPromotionPlanPayload) => Promise<unknown>;
+  onReplaceAndPublishNow?: (
+    payload: CreateCrossPromotionPlanPayload,
+  ) => Promise<unknown>;
+  onSaveDraft: (
+    draft: Record<string, unknown>,
+    id?: string,
+  ) => Promise<unknown>;
 }) {
   const state = useCrossPromotionDraftState({
     open,
@@ -86,10 +110,13 @@ export function CrossPromotionPlanModal({
     setImportedChannels,
     setError,
     timezone,
+    draftValue,
     drafts,
   } = state;
   const [botFlowTarget, setBotFlowTarget] = useState("post");
   const [showValidationErrors, setShowValidationErrors] = useState(false);
+  const [savingDraft, setSavingDraft] = useState(false);
+  const [confirmPublishNow, setConfirmPublishNow] = useState(false);
   const resolvedTargets = useRef(
     new Map<string, { promo?: Promo; inviteLink?: TelegramInviteLinkOption }>(),
   );
@@ -151,7 +178,11 @@ export function CrossPromotionPlanModal({
     queueMicrotask(() => {
       if (cancelled) return;
       const storedTarget = window.localStorage.getItem(botTargetStorageKey);
-      if (storedTarget === "post" || storedTarget === "outbound")
+      if (
+        storedTarget === "post" ||
+        storedTarget === "outbound" ||
+        storedTarget?.startsWith("publisher:")
+      )
         setBotFlowTarget(storedTarget);
     });
     return () => {
@@ -228,6 +259,30 @@ export function CrossPromotionPlanModal({
     outboundPost.imageUrls.length ||
     outboundPost.mediaItems?.length,
   );
+  const initialSharedPost =
+    initial?.publicationPost.publisherPublications?.[0]?.post ??
+    initial?.publicationPost;
+  const sharedPublicationChanged = Boolean(
+    kind === "DIRECT_MUTUAL" &&
+    initial &&
+    ["SCHEDULED", "ACTIVE"].includes(initial.status) &&
+    postFingerprint(initialSharedPost) !== postFingerprint(post),
+  );
+  const publishedPosts = initial?.publicationPost.publisherPublications?.map(
+    (publication) => publication.post,
+  ) ?? [initial?.publicationPost];
+  const editedPublisherPosts = [
+    post,
+    ...additionalPublisherPosts.map((item) => item.post),
+  ];
+  const requiresRepublish = Boolean(
+    initial?.status === "ACTIVE" &&
+    editedPublisherPosts.some(
+      (editedPost, index) =>
+        !hasInlineButtons(publishedPosts[index]) &&
+        hasInlineButtons(editedPost),
+    ),
+  );
   const promoReady =
     targets.length > 0 &&
     targets.every(
@@ -264,7 +319,7 @@ export function CrossPromotionPlanModal({
       expectedViews: product?.estimatedViews ?? null,
     };
   };
-  const submit = async () => {
+  const submit = async (replaceAndPublishNow = false) => {
     const hasPostContent = Boolean(
       post.text.trim() || post.imageUrls.length || post.mediaItems?.length,
     );
@@ -304,7 +359,9 @@ export function CrossPromotionPlanModal({
             ),
         );
         return missing.length
-          ? [`Partner post ${index + 2}: choose a format for ${channelNames(missing)}.`]
+          ? [
+              `Partner post ${index + 2}: choose a format for ${channelNames(missing)}.`,
+            ]
           : [];
       },
     );
@@ -327,8 +384,10 @@ export function CrossPromotionPlanModal({
           : [`Partner post ${index + 2}: add text or media before scheduling.`],
       ),
       ...missingAdditionalFormats,
-      !targets.length ? "Add at least one promo placement on Partner side." : null,
-      ...targets.flatMap((target, index) => [
+      partnerIds.length && !targets.length
+        ? "Add at least one promo placement on Partner side."
+        : null,
+      ...(partnerIds.length ? targets : []).flatMap((target, index) => [
         !target.telegramChannelId
           ? `Promo placement ${index + 1}: choose the promoted channel.`
           : null,
@@ -339,10 +398,10 @@ export function CrossPromotionPlanModal({
           ? `Promo placement ${index + 1}: choose a tracking invite link.`
           : null,
       ]),
-      missingPartnerFormats.length
+      partnerIds.length && missingPartnerFormats.length
         ? `Partner side: choose a format for ${channelNames(missingPartnerFormats)}.`
         : null,
-      outboundMode === "CUSTOM" && !hasOutboundPost
+      partnerIds.length && outboundMode === "CUSTOM" && !hasOutboundPost
         ? "My custom promo: add text or media before scheduling."
         : null,
       !publicationPost ? "Choose or compose the post to publish." : null,
@@ -414,7 +473,7 @@ export function CrossPromotionPlanModal({
       ].flatMap((item) => {
         return item.deleteAt ? [new Date(item.deleteAt)] : [];
       });
-      await onSubmit({
+      const payload = {
         kind,
         advertiserId: kind === "DIRECT_MUTUAL" ? advertiserId : null,
         title: title.trim(),
@@ -463,63 +522,138 @@ export function CrossPromotionPlanModal({
               Math.max(...trackingBoundaries.map((item) => item.getTime())),
             ).toISOString()
           : null,
-      });
+      } satisfies CreateCrossPromotionPlanPayload;
+      if (replaceAndPublishNow && onReplaceAndPublishNow) {
+        await onReplaceAndPublishNow(payload);
+      } else {
+        await onSubmit(payload);
+      }
       drafts.clearCurrentDraft();
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "Could not create and schedule this placement.",
+      );
+    }
+  };
+  const saveDraft = async () => {
+    setSavingDraft(true);
+    setError("");
+    try {
+      // A saved plan can only be overwritten when it is already a database
+      // draft. Saving an active/scheduled plan creates a separate editable
+      // draft instead of attempting an invalid draft update.
+      await onSaveDraft(
+        draftValue as unknown as Record<string, unknown>,
+        initial?.status === "DRAFT" ? initial.id : undefined,
+      );
+      drafts.clearCurrentDraft();
+      onClose();
     } catch {
-      setError("Could not create and schedule this placement.");
+      setError("Could not save this draft.");
+    } finally {
+      setSavingDraft(false);
     }
   };
   return (
-    <CrossPromotionPlanView
-      open={open}
-      kind={kind}
-      initial={initial}
-      mode={mode}
-      loading={loading}
-      saving={saving}
-      onClose={onClose}
-      onSubmit={() => void submit()}
-      state={state}
-      allChannels={allChannels}
-      ownChannels={ownChannels}
-      partnerChannels={partnerChannels}
-      ownNetworks={ownNetworks}
-      productsByChannelId={productsByChannelId}
-      targetIds={targetIds}
-      updateTargetIds={updateTargetIds}
-      botConnected={Boolean(botQuery.data?.connected)}
-      botFlow={botFlow}
-      botFlowTarget={botFlowTarget}
-      setBotFlowTarget={setBotFlowTarget}
-      botTargetStorageKey={botTargetStorageKey}
-      partnerImport={partnerChannelImport}
-      resolvedTargets={resolvedTargets}
-      basicsReady={basicsReady}
-      promoReady={promoReady}
-      showValidationErrors={showValidationErrors}
-      searchAdvertisers={searchAdvertisers}
-      resolveOutboundPreview={(targetIndex = 0) => {
-        if (outboundMode === "CUSTOM") return outboundPost;
-        const target = targets[targetIndex];
-        const resolved = target ? resolvedTarget(target, targetIndex) : undefined;
-        return resolved?.promo && resolved.inviteLink
-          ? renderSelectedPromoDraft(resolved.promo, resolved.inviteLink.url)
-          : undefined;
-      }}
-      onImportPublisherPost={(id) => {
-        const target = `publisher:${id}`;
-        setBotFlowTarget(target);
-        if (botTargetStorageKey)
-          window.localStorage.setItem(botTargetStorageKey, target);
-        void botFlow.startImport();
-      }}
-      onSendPublisherPost={(id, publisherPost) => {
-        const target = `publisher:${id}`;
-        setBotFlowTarget(target);
-        if (botTargetStorageKey)
-          window.localStorage.setItem(botTargetStorageKey, target);
-        void botFlow.send(publisherPost);
-      }}
-    />
+    <>
+      <CrossPromotionPlanView
+        open={open}
+        kind={kind}
+        initial={initial}
+        mode={mode}
+        loading={loading}
+        saving={saving}
+        savingDraft={savingDraft}
+        onClose={onClose}
+        onSubmit={() => void submit()}
+        onReplaceAndPublishNow={
+          (initial?.status === "ACTIVE" || initial?.status === "DRAFT") &&
+          onReplaceAndPublishNow
+            ? () => setConfirmPublishNow(true)
+            : undefined
+        }
+        onSaveDraft={() => void saveDraft()}
+        state={state}
+        allChannels={allChannels}
+        ownChannels={ownChannels}
+        partnerChannels={partnerChannels}
+        ownNetworks={ownNetworks}
+        productsByChannelId={productsByChannelId}
+        targetIds={targetIds}
+        updateTargetIds={updateTargetIds}
+        botConnected={Boolean(botQuery.data?.connected)}
+        botFlow={botFlow}
+        botFlowTarget={botFlowTarget}
+        setBotFlowTarget={setBotFlowTarget}
+        botTargetStorageKey={botTargetStorageKey}
+        partnerImport={partnerChannelImport}
+        resolvedTargets={resolvedTargets}
+        basicsReady={basicsReady}
+        promoReady={promoReady}
+        showValidationErrors={showValidationErrors}
+        sharedPublicationChanged={sharedPublicationChanged}
+        requiresRepublish={requiresRepublish}
+        searchAdvertisers={searchAdvertisers}
+        resolveOutboundPreview={(targetIndex = 0) => {
+          if (outboundMode === "CUSTOM") return outboundPost;
+          const target = targets[targetIndex];
+          const resolved = target
+            ? resolvedTarget(target, targetIndex)
+            : undefined;
+          return resolved?.promo && resolved.inviteLink
+            ? renderSelectedPromoDraft(resolved.promo, resolved.inviteLink.url)
+            : undefined;
+        }}
+        onSendPublisherPost={(id, publisherPost) => {
+          const target = `publisher:${id}`;
+          setBotFlowTarget(target);
+          if (botTargetStorageKey)
+            window.localStorage.setItem(botTargetStorageKey, target);
+          void botFlow.send(publisherPost);
+        }}
+      />
+      <Modal
+        open={confirmPublishNow}
+        onClose={() => setConfirmPublishNow(false)}
+        title={
+          initial?.status === "DRAFT"
+            ? "Publish draft now?"
+            : "Replace published posts now?"
+        }
+        size="sm"
+      >
+        <p className="text-sm text-neutral-300">
+          {initial?.status === "DRAFT"
+            ? "No live publication was found. Publish this draft to every selected channel now?"
+            : "This deletes the current Telegram post in every linked channel and immediately publishes the new version. This cannot be undone."}
+        </p>
+        <div className="mt-5 flex justify-end gap-2">
+          <Button
+            variant="secondary"
+            onClick={() => setConfirmPublishNow(false)}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="danger"
+            disabled={saving}
+            onClick={() => {
+              setConfirmPublishNow(false);
+              void submit(true);
+            }}
+          >
+            {saving
+              ? initial?.status === "DRAFT"
+                ? "Publishing…"
+                : "Replacing…"
+              : initial?.status === "DRAFT"
+                ? "Publish now"
+                : "Delete and publish now"}
+          </Button>
+        </div>
+      </Modal>
+    </>
   );
 }

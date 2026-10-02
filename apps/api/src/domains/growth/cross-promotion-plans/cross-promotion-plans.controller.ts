@@ -21,10 +21,12 @@ import {
   CreateCrossPromotionPlanDto,
   MergeCrossPromotionPlanDto,
   RenameCrossPromotionPlanDto,
+  SaveCrossPromotionPlanDraftDto,
 } from './dto';
 import { StreamResponseService } from '../../../common/stream/stream-response.service';
 import { CrossPromotionPlanSchedulingService } from './cross-promotion-plan-scheduling.service';
 import { CrossPromotionPlanBotNotificationService } from './cross-promotion-plan-bot-notification.service';
+import { CrossPromotionPlanDraftService } from './cross-promotion-plan-draft.service';
 
 @UseGuards(JwtAuthGuard)
 @Controller('cross-promotion-plans')
@@ -34,6 +36,7 @@ export class CrossPromotionPlansController {
     private readonly scheduling: CrossPromotionPlanSchedulingService,
     private readonly streamResponse: StreamResponseService,
     private readonly botNotification: CrossPromotionPlanBotNotificationService,
+    private readonly drafts: CrossPromotionPlanDraftService,
   ) {}
 
   @Get()
@@ -53,6 +56,23 @@ export class CrossPromotionPlansController {
       action: (onProgress, signal) =>
         this.scheduling.createAndSchedule(user.sub, dto, onProgress, signal),
     });
+  }
+
+  @Post('drafts')
+  saveDraft(
+    @CurrentUser() user: JwtUser,
+    @Body() dto: SaveCrossPromotionPlanDraftDto,
+  ) {
+    return this.drafts.save(user.sub, dto);
+  }
+
+  @Patch(':id/draft')
+  updateDraft(
+    @CurrentUser() user: JwtUser,
+    @Param('id') id: string,
+    @Body() dto: SaveCrossPromotionPlanDraftDto,
+  ) {
+    return this.drafts.save(user.sub, dto, id);
   }
 
   @Delete(':id')
@@ -110,6 +130,21 @@ export class CrossPromotionPlansController {
           onProgress,
           signal,
         ),
+    });
+  }
+
+  @Post(':id/publish-now-stream')
+  replaceAndPublishNow(
+    @CurrentUser() user: JwtUser,
+    @Param('id') id: string,
+    @Body() dto: CreateCrossPromotionPlanDto,
+    @Res() res: Response,
+  ) {
+    return this.streamResponse.stream(res, {
+      eventPrefix: 'cross_promotion_plan.publish_now_stream',
+      persistLifecycleLogs: false,
+      action: (onProgress, signal) =>
+        this.scheduling.replaceAndPublishNow(user.sub, id, dto, onProgress, signal),
     });
   }
 

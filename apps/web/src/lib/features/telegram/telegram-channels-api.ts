@@ -220,6 +220,30 @@ export function createTelegramChannelsApi({
           "/telegram-custom-emoji-packs",
         )
       ).data,
+    resolveCustomEmojiDocuments: (
+      documentIds: string[],
+      onProgress: StreamProgressHandler<{
+        documentId: string;
+        status: "loaded" | "cached" | "failed";
+        message: string;
+        pack?: TelegramWorkspaceCustomEmojiPacksResponse["packs"][number];
+      }>,
+      signal?: AbortSignal,
+    ) =>
+      streamProgressAction<
+        TelegramWorkspaceCustomEmojiPacksResponse,
+        {
+          documentId: string;
+          status: "loaded" | "cached" | "failed";
+          message: string;
+          pack?: TelegramWorkspaceCustomEmojiPacksResponse["packs"][number];
+        }
+      >(
+        "/telegram-custom-emoji-packs/resolve",
+        { documentIds },
+        onProgress,
+        signal ? { signal } : undefined,
+      ),
     importCustomEmojiPack: async (
       payload: ImportTelegramCustomEmojiPackInput,
     ) =>

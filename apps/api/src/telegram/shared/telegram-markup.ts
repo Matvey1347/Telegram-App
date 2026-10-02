@@ -160,7 +160,16 @@ export function telegramMarkupToHtml(raw: string, rich = false) {
     return `\uE000${index}\uE001`;
   };
   const render = (source: string): string => {
-    const normalizedRaw = source.replace(/\r\n?/g, '\n');
+    // A legacy importer escaped the delimiters of Telegram <code> entities.
+    // That made the local preview look formatted while the Bot API received
+    // literal backticks. Restore the intended managed-code syntax first.
+    const normalizedRaw = source
+      .replace(/\\`([\s\S]*?)\\`/g, (_match, code: string) =>
+        /[\r\n]/.test(code)
+          ? `\`\`\`\n${code.replace(/\r\n?/g, '\n')}\`\`\``
+          : `\`${code}\``,
+      )
+      .replace(/\r\n?/g, '\n');
 
     // Imported Telegram text is escaped before managed-markup delimiters are
     // added. Resolve those escapes first so literal **, [], ||, and backticks
@@ -212,7 +221,7 @@ export function telegramMarkupToHtml(raw: string, rich = false) {
           rich
             ? `<h${_marks.length}>${render(text)}</h${_marks.length}>`
             : `<b>${escapeHtml(text)}</b>`,
-      ),
+        ),
     );
     // Telegram rich messages accept media as standalone blocks. Keep the
     // editor's uploaded-image marker in place instead of treating it as an
@@ -361,7 +370,11 @@ export function telegramHtmlToManagedMarkup(html: string) {
       (_match, language: string, code: string) =>
         `\`\`\`${language || ''}\n${code}\`\`\``,
     )
-    .replace(/<code>([\s\S]*?)<\/code>/gi, '`$1`')
+    .replace(/<code>([\s\S]*?)<\/code>/gi, (_match, content: string) =>
+      /[\r\n]/.test(content)
+        ? `\`\`\`\n${content.replace(/\r\n?/g, '\n')}\n\`\`\``
+        : `\`${content}\``,
+    )
     .replace(/<(?:strong|b)>([\s\S]*?)<\/(?:strong|b)>/gi, '**$1**')
     .replace(/<(?:em|i)>([\s\S]*?)<\/(?:em|i)>/gi, '__$1__')
     .replace(/<u>([\s\S]*?)<\/u>/gi, '++$1++')

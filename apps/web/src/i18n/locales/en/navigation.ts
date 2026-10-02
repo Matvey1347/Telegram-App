@@ -7,6 +7,8 @@ const navigation = {
   "navigation.telegram": "Telegram",
   "navigation.resources": "Resources",
   "navigation.posts": "Posts",
+  "navigation.publicationCalendar": "Calendar",
+  "navigation.selling": "Selling",
   "navigation.bots": "Bots",
   "navigation.growth": "Growth",
   "navigation.adSales": "Ad sales",

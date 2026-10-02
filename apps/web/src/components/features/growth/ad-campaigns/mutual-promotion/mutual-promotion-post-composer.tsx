@@ -9,7 +9,14 @@ export function MutualPromotionPostComposer(props: {
   channelTitle: string;
   channelPhotoUrl?: string | null;
   channelId?: string;
+  mediaMaxItems?: number;
+  mediaNotice?: string;
   onChange: (draft: TelegramSystemBotPostDraft) => void;
 }) {
-  return <TelegramPostDraftEditor {...props} />;
+  return (
+    <TelegramPostDraftEditor
+      {...props}
+      mediaAllowedKinds={props.mediaMaxItems === undefined ? undefined : ["PHOTO"]}
+    />
+  );
 }

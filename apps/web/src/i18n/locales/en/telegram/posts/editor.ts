@@ -142,10 +142,13 @@ const messages = {
   "telegram.posts.editor.savedNamed": '"{title}" saved.',
   "telegram.posts.editor.saveError": 'Could not save "{title}".',
   "telegram.posts.editor.savingNamed": "Saving “{title}”…",
+  "telegram.posts.editor.loadingPost": "Loading post…",
   "telegram.posts.editor.publishedEditable":
     "Telegram text can still be updated after publishing",
-  "telegram.posts.editor.imagesLocked":
-    "Images cannot be changed after a post is sent or scheduled. You can still update the Telegram text.",
+  "telegram.posts.editor.photosReplaceable":
+    "Replace existing photos only. Keep the same number of photos; video and GIF media cannot be changed after sending or scheduling.",
+  "telegram.posts.editor.mediaNotReplaceable":
+    "Only posts made entirely of photos can have their media replaced after sending or scheduling.",
   "telegram.posts.editor.longTextOnly":
     "Telegram text messages are limited to 4096 characters after formatting. Current length: {length}. This post will be published as {count} separate messages.",
   "telegram.posts.editor.selectNamed": "Select {title}",

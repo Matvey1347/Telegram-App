@@ -38,6 +38,7 @@ export function CalendarSlotCard({
   advertiserName,
   saleTitle,
   paymentStatus,
+  financeSkipped = false,
   agreedPrice,
   agreedCurrency,
   onClick,
@@ -46,6 +47,7 @@ export function CalendarSlotCard({
   advertiserName?: string | null;
   saleTitle?: string | null;
   paymentStatus?: TelegramAdSaleComputedPaymentStatus | "UNPAID" | null;
+  financeSkipped?: boolean;
   agreedPrice?: string | null;
   agreedCurrency?: string | null;
   onClick?: () => void;
@@ -73,13 +75,17 @@ export function CalendarSlotCard({
             <span className="rounded-full border border-current/20 px-2 py-1">
               {slot.existingPlacement.status.replaceAll("_", " ")}
             </span>
-            {paymentStatus ? (
+            {financeSkipped ? (
+              <span className="rounded-full border border-emerald-400/40 bg-emerald-950/50 px-2 py-1 text-emerald-200">
+                Free
+              </span>
+            ) : paymentStatus ? (
               <span className="rounded-full border border-current/20 px-2 py-1">
                 {paymentToneLabel[paymentStatus]}
               </span>
             ) : null}
           </div>
-          {agreedPrice ? (
+          {agreedPrice && !financeSkipped ? (
             <p className="pt-1 text-xs opacity-90">
               Agreed {agreedPrice} {agreedCurrency || slot.currency}
             </p>

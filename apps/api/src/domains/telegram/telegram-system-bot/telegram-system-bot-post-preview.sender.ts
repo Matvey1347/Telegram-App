@@ -6,6 +6,7 @@ import {
   toTelegramBotInlineKeyboard,
 } from '../../../telegram/shared/telegram-inline-keyboard';
 import { telegramMarkupToHtml } from '../../../telegram/shared/telegram-markup';
+import { parseTelegramHtml } from '../../../telegram/shared/telegram-html-parser';
 import type {
   TelegramSystemBotPostFlowScope,
   TelegramSystemBotPostPreviewDraft,
@@ -20,6 +21,11 @@ export async function sendTelegramSystemBotPostPreview(input: {
   const { api, token, scope, draft } = input;
   const text = String(draft.text ?? '');
   const formattedText = telegramMarkupToHtml(text);
+  // The editable source stores Custom Emoji as a descriptive Markdown token.
+  // Its URL is not part of the eventual Telegram caption, so using
+  // `text.length` split media and its caption even when the actual message
+  // comfortably fitted into Telegram's 1,024-character Bot API limit.
+  const [visibleCaptionText] = parseTelegramHtml(formattedText);
   const mediaItems = normalizeTelegramPostMediaItems(
     draft.mediaItems,
     draft.imageUrls,
@@ -46,7 +52,7 @@ export async function sendTelegramSystemBotPostPreview(input: {
     ),
   ) ?? { inline_keyboard: [] };
   const messageIds: number[] = [];
-  if (mediaItems.length === 1 && text.length <= 1024) {
+  if (mediaItems.length === 1 && visibleCaptionText.length <= 1024) {
     const media = mediaItems[0];
     const method =
       media.kind === 'VIDEO'

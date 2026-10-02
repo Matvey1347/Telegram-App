@@ -58,6 +58,7 @@ export function advertiserAvatarUrl(sale: TelegramAdSaleListItem) {
 }
 
 function paymentLabel(sale: TelegramAdSaleListItem) {
+  if (sale.financeSkipped) return "Free";
   const received = Number(sale.totalPaidAmount || 0);
   const outstanding = Number(sale.outstandingAmount || 0);
   if (received <= 0) return "Not paid";
@@ -276,21 +277,29 @@ export function SalesTab(props: {
                         )}
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <NativeMoney
-                          amount={receivedPayment.amount}
-                          currency={receivedPayment.currency}
-                          displayMode="code"
-                          className="whitespace-nowrap font-semibold text-white"
-                        />
-                        <p
-                          className={`mt-1 text-xs ${
-                            Number(sale.totalPaidAmount || 0) > 0
-                              ? "text-emerald-400"
-                              : "text-amber-400"
-                          }`}
-                        >
-                          {paymentLabel(sale)}
-                        </p>
+                        {sale.financeSkipped ? (
+                          <span className="text-sm font-semibold text-emerald-300">
+                            Free
+                          </span>
+                        ) : (
+                          <NativeMoney
+                            amount={receivedPayment.amount}
+                            currency={receivedPayment.currency}
+                            displayMode="code"
+                            className="whitespace-nowrap font-semibold text-white"
+                          />
+                        )}
+                        {!sale.financeSkipped ? (
+                          <p
+                            className={`mt-1 text-xs ${
+                              Number(sale.totalPaidAmount || 0) > 0
+                                ? "text-emerald-400"
+                                : "text-amber-400"
+                            }`}
+                          >
+                            {paymentLabel(sale)}
+                          </p>
+                        ) : null}
                         <AdSalePostMetrics
                           sale={sale}
                           className="mt-2 justify-end"

@@ -7,6 +7,8 @@ const navigation = {
   "navigation.telegram": "Telegram",
   "navigation.resources": "Ресурсы",
   "navigation.posts": "Публикации",
+  "navigation.publicationCalendar": "Календарь",
+  "navigation.selling": "Продажи",
   "navigation.bots": "Боты",
   "navigation.growth": "Продвижение",
   "navigation.adSales": "Продажа рекламы",

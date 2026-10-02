@@ -45,7 +45,6 @@ export function buildPwaNavigation(
         pathname === "/finance" || pathname.startsWith("/finance/"),
     });
   }
-
   const telegramDestinations = [
     { feature: "channels", href: "/telegram-channels" },
     { feature: "posts", href: "/telegram-posts" },
@@ -73,6 +72,7 @@ export function buildPwaNavigation(
       active: (pathname) => pathname.startsWith("/ad-sales"),
     });
   }
+
   if (hasAny(featureIds, ["advertising"])) {
     items.push({
       key: "ads",
