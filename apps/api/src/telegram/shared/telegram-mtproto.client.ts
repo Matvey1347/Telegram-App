@@ -1856,6 +1856,45 @@ export class TelegramMtprotoClient {
     }
   }
 
+  /**
+   * Joins a private invite only when an import explicitly needs access to its
+   * channel. A join-request invite remains pending until Telegram approves it
+   * and is deliberately not represented as a channel without a real chat ID.
+   */
+  async joinPrivateChannelByInvite(params: {
+    apiId: string;
+    apiHash: string;
+    session: string;
+    channelRef: string;
+    inviteHash: string;
+  }) {
+    const client = await this.createClient(params);
+    const inviteLink = canonicalTelegramInviteLink(params.inviteHash);
+    try {
+      let updates: unknown;
+      try {
+        updates = await this.withTimeout(
+          client.invoke(
+            new Api.messages.ImportChatInvite({ hash: params.inviteHash }),
+          ),
+          this.telegramResolveTimeoutMs,
+          'Telegram private channel join',
+        );
+      } catch (error) {
+        this.mapInviteError(error);
+      }
+      return this.importEntityFromInviteUpdates(
+        client,
+        updates,
+        params.channelRef,
+        inviteLink,
+        true,
+      );
+    } finally {
+      await this.closeClient(client);
+    }
+  }
+
   async findAccessibleChannelInfoByTitle(params: {
     apiId: string;
     apiHash: string;

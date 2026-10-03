@@ -638,6 +638,7 @@ function LegacyAdSalesPage() {
         dashboard: true,
         managedPosts: true,
         channelSummaries: true,
+        crmContacts: true,
         channelIds: reserved.placements.map(
           (placement) => placement.telegramChannelId,
         ),

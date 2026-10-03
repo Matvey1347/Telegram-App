@@ -266,6 +266,66 @@ describe('TelegramMtprotoClient import resolution', () => {
     });
   });
 
+  it('joins a private invite and resolves the channel returned by Telegram', async () => {
+    const entity = new Api.Channel({
+      id: '7654' as any,
+      title: 'Private channel',
+      accessHash: '111' as any,
+      broadcast: true,
+      megagroup: false,
+    } as unknown as any);
+    fakeClient.invoke.mockImplementation((request: unknown) => {
+      if (request instanceof Api.messages.ImportChatInvite) {
+        return { chats: [entity], users: [] };
+      }
+      if (request instanceof Api.channels.GetFullChannel) {
+        return { fullChat: { about: 'Private about', participantsCount: 12 } };
+      }
+      if (request instanceof Api.messages.GetChatInviteImporters) {
+        return { count: 0, importers: [], users: [] };
+      }
+      throw new Error('Unexpected invoke');
+    });
+
+    await expect(
+      client.joinPrivateChannelByInvite({
+        apiId: '1',
+        apiHash: 'hash',
+        session: 'session',
+        channelRef: 'https://t.me/+privateHash',
+        inviteHash: 'privateHash',
+      }),
+    ).resolves.toMatchObject({
+      telegramChatId: '7654',
+      title: 'Private channel',
+      joinedByInvite: true,
+    });
+    expect(fakeClient.invoke).toHaveBeenCalledWith(
+      expect.any(Api.messages.ImportChatInvite),
+    );
+  });
+
+  it('reports a pending join request without fabricating a channel', async () => {
+    fakeClient.invoke.mockImplementation((request: unknown) => {
+      if (request instanceof Api.messages.ImportChatInvite) {
+        const error = new Error('INVITE_REQUEST_SENT');
+        Object.assign(error, { errorMessage: 'INVITE_REQUEST_SENT' });
+        throw error;
+      }
+      throw new Error('Unexpected invoke');
+    });
+
+    await expect(
+      client.joinPrivateChannelByInvite({
+        apiId: '1',
+        apiHash: 'hash',
+        session: 'session',
+        channelRef: 'https://t.me/+approvalOnly',
+        inviteHash: 'approvalOnly',
+      }),
+    ).rejects.toThrow('Join request was sent. Wait for approval');
+  });
+
   it('falls back to ChannelFull pending count when live queue lookup fails', async () => {
     const entity = new Api.Channel({
       id: '123456' as any,

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
-import { Megaphone, MessageCircle } from "lucide-react";
+import { CalendarDays, Megaphone, MessageCircle } from "lucide-react";
 import type { TranslationKey } from "@/i18n/catalog";
 import navigationEn from "@/i18n/locales/en/navigation";
 import { workspaceFeatureIcons } from "@/lib/features/workspace/workspace-feature-icons";
@@ -26,13 +26,13 @@ export function buildPwaNavigation(
   featureIds: readonly string[] | undefined,
 ): PwaNavigationItem[] {
   const items: PwaNavigationItem[] = [];
-  if (hasAny(featureIds, ["dashboard"])) {
+  if (hasAny(featureIds, ["posts"])) {
     items.push({
-      key: "overview",
-      label: "navigation.overview",
-      href: "/",
-      Icon: workspaceFeatureIcons.dashboard,
-      active: (pathname) => pathname === "/",
+      key: "calendar",
+      label: "navigation.publicationCalendar",
+      href: "/publication-calendar",
+      Icon: CalendarDays,
+      active: (pathname) => pathname === "/publication-calendar",
     });
   }
   if (hasAny(featureIds, ["finance"])) {

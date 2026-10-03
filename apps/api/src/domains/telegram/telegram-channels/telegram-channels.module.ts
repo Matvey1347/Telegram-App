@@ -68,6 +68,7 @@ import { TelegramManagedPostMoveService } from './telegram-managed-post-move.ser
 import { TelegramManagedPostPresentationService } from './telegram-managed-post-presentation.service';
 import { TelegramManagedPostPublicationService } from './telegram-managed-post-publication.service';
 import { TelegramManagedPostPublisherService } from './telegram-managed-post-publisher.service';
+import { TelegramManagedPostPremiumEmojiRepairService } from './telegram-managed-post-premium-emoji-repair.service';
 import { TelegramManagedPostQueryService } from './telegram-managed-post-query.service';
 import { TelegramManagedPostSyntheticReadService } from './telegram-managed-post-synthetic-read.service';
 import { TelegramManagedPostReconciliationService } from './telegram-managed-post-reconciliation.service';
@@ -176,6 +177,7 @@ import { TelegramChannelTrafficAttributionService } from './telegram-channel-tra
     TelegramManagedPostScheduledResetService,
     TelegramManagedPostPublicationService,
     TelegramManagedPostPublisherService,
+    TelegramManagedPostPremiumEmojiRepairService,
     TelegramManagedPostBulkService,
     TelegramManagedPostMoveService,
     TelegramChannelInsightsService,

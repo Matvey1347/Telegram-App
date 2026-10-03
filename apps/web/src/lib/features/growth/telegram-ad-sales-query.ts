@@ -12,6 +12,7 @@ import {
   telegramChannelKeys,
   telegramPostKeys,
 } from "../../query-keys";
+import { telegramCrmKeys } from "./telegram-crm-query";
 
 type AdSalesListParams = {
   page?: number;
@@ -205,6 +206,7 @@ export type TelegramAdSalesDerivedEffects = {
   dashboard?: boolean;
   managedPosts?: boolean;
   channelSummaries?: boolean;
+  crmContacts?: boolean;
   channelIds?: string[];
 };
 
@@ -258,6 +260,7 @@ export async function invalidateTelegramAdSalesDerivedQueries(
           telegramChannelKeys.analytics(channelId),
         ])
       : []),
+    ...(effects.crmContacts ? [telegramCrmKeys.contactLists()] : []),
   ];
   await Promise.all(
     invalidations.map((queryKey) => queryClient.invalidateQueries({ queryKey })),

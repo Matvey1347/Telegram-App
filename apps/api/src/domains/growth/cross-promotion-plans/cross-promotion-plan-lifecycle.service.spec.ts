@@ -184,6 +184,47 @@ describe('CrossPromotionPlanLifecycleService', () => {
     });
   });
 
+  it('keeps a native scheduled plan due until Telegram identity confirmation', async () => {
+    const now = new Date('2026-09-15T10:01:00.000Z');
+    const plan = {
+      ...duePlan,
+      nextDueAt: new Date('2026-09-15T10:00:00.000Z'),
+    };
+    const prisma = {
+      crossPromotionPlan: {
+        findMany: jest.fn().mockResolvedValue([plan]),
+        update: jest.fn().mockResolvedValue({}),
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+      },
+      telegramManagedPost: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'post-1',
+            status: 'SCHEDULED',
+            telegramRemoteStatus: 'SCHEDULED',
+            telegramIdLastCheckedAt: new Date('2026-09-15T10:00:30.000Z'),
+          },
+        ]),
+      },
+    };
+    const service = new CrossPromotionPlanLifecycleService(
+      prisma as never,
+      { deletePublishedManagedPosts: jest.fn() } as never,
+      { sendPublicationConfirmation: jest.fn() } as never,
+    );
+
+    await service.processDueActions(now);
+
+    expect(prisma.crossPromotionPlan.update).toHaveBeenCalledWith({
+      where: { id: 'plan-1' },
+      data: {
+        status: 'SCHEDULED',
+        nextDueAt: new Date('2026-09-15T10:01:15.000Z'),
+        lastError: null,
+      },
+    });
+  });
+
   it('marks a plan active when a partner placement reaches its scheduled time', async () => {
     const plan = {
       ...duePlan,

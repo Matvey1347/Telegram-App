@@ -58,6 +58,8 @@ export function CrossPromotionPlanView({
   onClose,
   onSubmit,
   onReplaceAndPublishNow,
+  onUpdatePublicationInTelegram,
+  onReplacePublicationAndPublishNow,
   onSaveDraft,
   state,
   allChannels,
@@ -93,6 +95,8 @@ export function CrossPromotionPlanView({
   onClose: () => void;
   onSubmit: () => void;
   onReplaceAndPublishNow?: () => void;
+  onUpdatePublicationInTelegram?: (publicationId: string) => void;
+  onReplacePublicationAndPublishNow?: (publicationId: string) => void;
   onSaveDraft: () => void;
   state: DraftState;
   allChannels: TelegramChannel[];
@@ -221,6 +225,7 @@ export function CrossPromotionPlanView({
           ]),
         )
       : {};
+  const hasMultiplePublisherPosts = 1 + additionalPublisherPosts.length > 1;
   const importPost = async (target: string) => {
     const previousTarget = botFlowTarget;
     setBotFlowTarget(target);
@@ -350,6 +355,13 @@ export function CrossPromotionPlanView({
                                 through the bot or compose it manually.
                               </p>
                             </div>
+                            <div className="flex items-center gap-1">
+                              {initial?.status === "ACTIVE" ? (
+                                <>
+                                  <Button type="button" disabled={saving || savingDraft} onClick={() => onUpdatePublicationInTelegram?.("publisher-1")}>Update in Telegram</Button>
+                                  <Button type="button" variant="danger" disabled={saving || savingDraft} onClick={() => onReplacePublicationAndPublishNow?.("publisher-1")}>Delete and publish now</Button>
+                                </>
+                              ) : null}
                             <button
                               type="button"
                               className="rounded-md p-1 text-neutral-400 transition-colors hover:bg-neutral-800 hover:text-white"
@@ -367,6 +379,7 @@ export function CrossPromotionPlanView({
                                 className={`transition-transform ${(publisherPostOpen.primary ?? true) ? "rotate-180" : ""}`}
                               />
                             </button>
+                            </div>
                           </div>
                           {(publisherPostOpen.primary ?? true) ? (
                             <>
@@ -445,6 +458,12 @@ export function CrossPromotionPlanView({
                                 >
                                   <Trash2 size={16} />
                                 </Button>
+                                {initial?.status === "ACTIVE" ? (
+                                  <>
+                                    <Button type="button" disabled={saving || savingDraft} onClick={() => onUpdatePublicationInTelegram?.(publication.id)}>Update in Telegram</Button>
+                                    <Button type="button" variant="danger" disabled={saving || savingDraft} onClick={() => onReplacePublicationAndPublishNow?.(publication.id)}>Delete and publish now</Button>
+                                  </>
+                                ) : null}
                                 <button
                                   type="button"
                                   className="rounded-md p-1 text-neutral-400 transition-colors hover:bg-neutral-800 hover:text-white"
@@ -556,7 +575,7 @@ export function CrossPromotionPlanView({
                                       ),
                                     )
                                   }
-                                  onClear={() => {
+                                onClear={() => {
                                     setAdditionalPublisherPosts((current) =>
                                       current.map((item) =>
                                         item.id === publication.id
@@ -571,7 +590,7 @@ export function CrossPromotionPlanView({
                                       ...current,
                                       [publication.id]: true,
                                     }));
-                                  }}
+                                }}
                                   publishedMediaCount={
                                     clearedPublisherPosts[publication.id]
                                       ? undefined
@@ -748,7 +767,7 @@ export function CrossPromotionPlanView({
                     : "Save draft"}
               </Button>
             ) : null}
-            {onReplaceAndPublishNow ? (
+            {onReplaceAndPublishNow && !hasMultiplePublisherPosts ? (
               <Tooltip
                 content={
                   initial?.status === "DRAFT"

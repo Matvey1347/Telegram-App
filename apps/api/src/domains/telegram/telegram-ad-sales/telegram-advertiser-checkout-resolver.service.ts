@@ -4,6 +4,7 @@ import {
   TelegramAdvertiserContactType,
   TelegramCrmContactStage,
 } from '@prisma/client';
+import { findCanonicalAdvertiser } from '../telegram-crm/telegram-advertiser-identity-resolver';
 
 type AdvertiserInput = {
   advertiserId?: string | null;
@@ -86,6 +87,31 @@ export class TelegramAdvertiserCheckoutResolverService {
         },
       });
       if (legacy) return legacy;
+    }
+
+    const canonical = await findCanonicalAdvertiser(tx.telegramAdvertiser, {
+      workspaceId: context.workspaceId,
+      username,
+      phone:
+        contact?.type === TelegramAdvertiserContactType.PHONE
+          ? contact.normalizedValue
+          : null,
+      email:
+        contact?.type === TelegramAdvertiserContactType.EMAIL
+          ? contact.normalizedValue
+          : null,
+      displayName: input.advertiserName,
+    });
+    if (canonical) {
+      return tx.telegramAdvertiser.findUniqueOrThrow({
+        where: { id: canonical.id },
+        select: {
+          id: true,
+          displayName: true,
+          telegramUsername: true,
+          companyName: true,
+        },
+      });
     }
 
     const created = await tx.telegramAdvertiser.create({

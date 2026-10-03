@@ -169,6 +169,7 @@ import { hydrateManagedTelegramPosts } from './telegram-ad-sales-managed-post-me
 import { TelegramCrmInternalNotificationProjector } from '../telegram-crm/telegram-crm-internal-notification-projector.service';
 import { syncPurchasedCrmTags } from '../telegram-crm/telegram-crm-system-tags.service';
 import { TelegramAdSaleBotNotificationService } from './telegram-ad-sale-bot-notification.service';
+import { findCanonicalAdvertiser } from '../telegram-crm/telegram-advertiser-identity-resolver';
 @Injectable()
 export class TelegramAdSalesService {
   private readonly pricingReader: TelegramAdSalesPricingReader;
@@ -948,6 +949,8 @@ export class TelegramAdSalesService {
     const shouldCreate =
       'createAdvertiser' in dto ? dto.createAdvertiser : false;
     if (!shouldCreate) return null;
+    const existing = await findCanonicalAdvertiser(this.prisma.telegramAdvertiser, { workspaceId, username: this.normalizeTelegramUsername(dto.advertiserTelegram), phone: this.normalizePhone(dto.advertiserContact), email: this.normalizeEmail(dto.advertiserContact), displayName: dto.advertiserName });
+    if (existing) return this.getAdvertiser(workspaceId, existing.id);
     const created = await this.prisma.telegramAdvertiser.create({
       data: {
         workspaceId,
@@ -2721,22 +2724,18 @@ export class TelegramAdSalesService {
       const telegramUsername = this.normalizeTelegramUsername(
         dto.telegramUsername,
       );
-      // A Telegram handle is an identity, not merely a display attribute.
-      // Legacy data may contain duplicates, so use the oldest matching row
-      // rather than creating another card when a handle is submitted again.
-      if (telegramUsername) {
-        const existing = await tx.telegramAdvertiser.findFirst({
-          where: {
-            workspaceId,
-            telegramUsername: {
-              equals: telegramUsername,
-              mode: 'insensitive',
-            },
-          },
+      const existing = await findCanonicalAdvertiser(tx.telegramAdvertiser, {
+        workspaceId,
+        username: telegramUsername,
+        phone: this.normalizePhone(dto.phone),
+        email: this.normalizeEmail(dto.email),
+        displayName: dto.displayName,
+      });
+      if (existing) {
+        return tx.telegramAdvertiser.findUniqueOrThrow({
+          where: { id: existing.id },
           include: this.advertiserInclude(),
-          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
         });
-        if (existing) return existing;
       }
       const created = await tx.telegramAdvertiser.create({
         data: {

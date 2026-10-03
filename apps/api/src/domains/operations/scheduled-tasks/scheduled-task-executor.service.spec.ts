@@ -71,6 +71,9 @@ describe('scheduled task registry executors', () => {
         failed: 0,
         nextDueAt: null,
       }),
+      reconcilePublishedDeliveries: jest.fn().mockResolvedValue({
+        reconciled: 2,
+      }),
     };
     const directPromotion = {
       processDueActions: jest.fn().mockResolvedValue({
@@ -147,15 +150,35 @@ describe('scheduled task registry executors', () => {
   });
 
   it('reconciles only the bounded due managed-post queue', async () => {
-    const { executor, managedPosts, placementLifecycle } = setup();
+    const { executor, managedPosts, placementLifecycle, mutualPromotion, directPromotion } = setup();
     const result =
       await executor.executors['telegram.managed_posts.reconcile_due']();
     expect(managedPosts.reconcileAllDueManagedPosts).toHaveBeenCalledTimes(1);
     expect(placementLifecycle.reconcilePublishedPlacements).toHaveBeenCalledTimes(1);
+    expect(mutualPromotion.reconcilePublishedDeliveries).toHaveBeenCalledTimes(1);
+    expect(directPromotion.processDueActions).toHaveBeenCalledTimes(1);
     expect(result.summary).toContain('verified 2');
     expect(result.summary).toContain('Published 1 locally scheduled');
     expect(result.summary).toContain('1 failed');
     expect(result.summary).toContain('Reconciled 1 ad placements');
+    expect(result.summary).toContain('2 mutual-promotion deliveries');
+    expect(result.summary).toContain('2 direct-promotion plans');
+  });
+
+  it('does not query promotion lifecycles when reconciliation observed no publication', async () => {
+    const { executor, managedPosts, mutualPromotion, directPromotion } = setup();
+    managedPosts.reconcileAllDueManagedPosts.mockResolvedValue({
+      checked: 1,
+      verified: 0,
+      missing: 1,
+      localDelivery: { considered: 0, published: 0, failed: 0 },
+      autoDeletion: { deleted: 0 },
+    });
+
+    await executor.executors['telegram.managed_posts.reconcile_due']();
+
+    expect(mutualPromotion.reconcilePublishedDeliveries).not.toHaveBeenCalled();
+    expect(directPromotion.processDueActions).not.toHaveBeenCalled();
   });
 
   it('processes a bounded greeter expiry batch', async () => {

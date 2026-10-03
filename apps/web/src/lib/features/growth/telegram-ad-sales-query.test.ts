@@ -163,13 +163,14 @@ describe("telegram-ad-sales derived invalidation", () => {
     ]);
   });
 
-  it("adds finance, dashboard and channel effects only when requested", async () => {
+  it("adds finance, dashboard, channel and CRM effects only when requested", async () => {
     const invalidateQueries = vi.fn().mockResolvedValue(undefined);
     await invalidateTelegramAdSalesDerivedQueries({ invalidateQueries } as never, {
       finance: true,
       dashboard: true,
       managedPosts: true,
       channelSummaries: true,
+      crmContacts: true,
       channelIds: ["channel-1", "channel-1"],
     });
 
@@ -181,6 +182,7 @@ describe("telegram-ad-sales derived invalidation", () => {
       ["telegram-managed-posts", "channel-1", "list"],
       ["telegram-channel-financial-summary", "channel-1"],
       ["telegram-channel-analytics", "channel-1"],
+      ["telegram-crm", "contacts", "list"],
     ]);
   });
 });

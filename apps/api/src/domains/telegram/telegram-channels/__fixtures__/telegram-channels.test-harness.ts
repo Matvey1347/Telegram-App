@@ -63,9 +63,12 @@ import { TelegramManagedPostMoveService } from '../telegram-managed-post-move.se
 import { TelegramManagedPostPresentationService } from '../telegram-managed-post-presentation.service';
 import { TelegramManagedPostPublicationService } from '../telegram-managed-post-publication.service';
 import { TelegramManagedPostPublisherService } from '../telegram-managed-post-publisher.service';
+import { TelegramManagedPostPremiumEmojiRepairService } from '../telegram-managed-post-premium-emoji-repair.service';
 import { TelegramManagedPostQueryService } from '../telegram-managed-post-query.service';
 import { TelegramManagedPostSyntheticReadService } from '../telegram-managed-post-synthetic-read.service';
 import { TelegramManagedPostReconciliationService } from '../telegram-managed-post-reconciliation.service';
+import { TelegramManagedPostRemoteDeleteExecutor } from '../telegram-managed-post-remote-delete-executor.service';
+import { TelegramManagedPostRemoteDeletionService } from '../telegram-managed-post-remote-deletion.service';
 import { TelegramManagedPostRemoteSyncService } from '../telegram-managed-post-remote-sync.service';
 import { TelegramManagedPostRemoteLoaderService } from '../telegram-managed-post-remote-loader.service';
 import { TelegramManagedPostRevisionStore } from '../telegram-managed-post-revision.store';
@@ -103,7 +106,10 @@ const narrowProviders: ProviderType[] = [
   TelegramPostGroupsService,
   TelegramPostGroupStore,
   TelegramManagedPostPublicationService,
+  TelegramManagedPostPremiumEmojiRepairService,
   TelegramManagedPostPublisherService,
+  TelegramManagedPostRemoteDeleteExecutor,
+  TelegramManagedPostRemoteDeletionService,
   TelegramManagedPostReconciliationService,
   TelegramRemoteScheduledPostImportService,
   TelegramManagedPostRemoteSyncService,

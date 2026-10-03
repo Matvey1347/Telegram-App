@@ -17,6 +17,7 @@ describe('TelegramAdvertiserCheckoutResolverService', () => {
       },
       telegramAdvertiser: {
         findFirst: jest.fn(),
+        findUniqueOrThrow: jest.fn(),
         create: jest.fn().mockResolvedValue(advertiser),
       },
     };
@@ -112,6 +113,50 @@ describe('TelegramAdvertiserCheckoutResolverService', () => {
           type: 'PHONE',
           normalizedValue: '+380661234567',
         }),
+      }),
+    );
+    expect(tx.telegramAdvertiser.create).not.toHaveBeenCalled();
+  });
+
+  it('reuses the largest existing card when only the display-name casing differs', async () => {
+    const { service, tx } = setup();
+    const established = { ...advertiser, id: 'advertiser-established' };
+    tx.telegramAdvertiser.findFirst.mockResolvedValue(established);
+    tx.telegramAdvertiser.findUniqueOrThrow.mockResolvedValue(established);
+
+    await expect(
+      service.resolve(
+        tx as never,
+        {
+          advertiserName: 'OnTheWay | Agency Owner',
+          createAdvertiser: true,
+        },
+        {
+          workspaceId: 'workspace-1',
+          userId: 'user-1',
+          ownerMemberId: null,
+          selected: null,
+        },
+      ),
+    ).resolves.toEqual(established);
+
+    expect(tx.telegramAdvertiser.findFirst).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          OR: expect.arrayContaining([
+            {
+              displayName: {
+                equals: 'OnTheWay | Agency Owner',
+                mode: 'insensitive',
+              },
+            },
+          ]),
+        }),
+        orderBy: [
+          { totalSalesCount: 'desc' },
+          { createdAt: 'asc' },
+          { id: 'asc' },
+        ],
       }),
     );
     expect(tx.telegramAdvertiser.create).not.toHaveBeenCalled();

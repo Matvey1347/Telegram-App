@@ -55,7 +55,10 @@ describe('TelegramCrmInboxCommandService', () => {
         }),
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
-      telegramAdvertiser: { create: jest.fn().mockResolvedValue(contact) },
+      telegramAdvertiser: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockResolvedValue(contact),
+      },
       telegramCrmConversation: {
         aggregate: jest.fn().mockResolvedValue({
           _max: { lastMessageAt, lastInboundAt, lastOutboundAt },
@@ -83,7 +86,7 @@ describe('TelegramCrmInboxCommandService', () => {
       linkedConversationCount: 2,
       contact: {
         id: 'contact-1',
-        stage: 'LEAD',
+        stage: 'QUALIFIED',
       },
     });
     const createContactCall = callArgument(tx.telegramAdvertiser.create);
@@ -134,7 +137,10 @@ describe('TelegramCrmInboxCommandService', () => {
         }),
         updateMany: jest.fn().mockResolvedValue({ count: 0 }),
       },
-      telegramAdvertiser: { create: jest.fn().mockResolvedValue(contact) },
+      telegramAdvertiser: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockResolvedValue(contact),
+      },
       telegramCrmConversation: {
         aggregate: jest.fn().mockResolvedValue({
           _max: {

@@ -19,6 +19,8 @@ export function useTelegramInviteLinkOptions({
   availableForCampaignId,
   seedLinks = [],
   loadAllInitially = false,
+  search = "",
+  searchMinimumLength = 0,
 }: {
   channelId?: string | null;
   selectedId?: string | null;
@@ -28,11 +30,18 @@ export function useTelegramInviteLinkOptions({
   availableForCampaignId?: string;
   seedLinks?: TelegramInviteLinkOption[];
   loadAllInitially?: boolean;
+  search?: string;
+  searchMinimumLength?: number;
 }) {
   const normalizedChannelId = channelId || "";
+  const normalizedSearch = search.trim();
+  const searchRequested =
+    searchMinimumLength > 0 &&
+    normalizedSearch.length >= searchMinimumLength;
   const [expandedChannelId, setExpandedChannelId] = useState("");
   const allRequested =
     loadAllInitially || expandedChannelId === normalizedChannelId;
+  const shouldLoadOptions = allRequested || searchRequested;
   const hasSeededInitialLink = seedLinks.some(
     (link) =>
       link.telegramChannelId === normalizedChannelId &&
@@ -63,14 +72,18 @@ export function useTelegramInviteLinkOptions({
     queryKey: telegramChannelKeys.inviteLinkOptions(normalizedChannelId, {
       availableForCampaignId,
       all: includeUnavailable,
+      search: normalizedSearch || undefined,
     }),
     queryFn: () =>
       includeUnavailable
-        ? getAllTelegramChannelInviteLinks(normalizedChannelId)
+        ? getAllTelegramChannelInviteLinks(normalizedChannelId, {
+            ...(normalizedSearch ? { search: normalizedSearch } : {}),
+          })
         : getTelegramChannelInviteLinksForSelect(normalizedChannelId, {
             availableForCampaignId,
+            ...(normalizedSearch ? { search: normalizedSearch } : {}),
           }),
-    enabled: enabled && Boolean(normalizedChannelId) && allRequested,
+    enabled: enabled && Boolean(normalizedChannelId) && shouldLoadOptions,
     staleTime: 30_000,
   });
   const links = useMemo(() => {
@@ -104,7 +117,8 @@ export function useTelegramInviteLinkOptions({
   return {
     links,
     initialLink,
-    loading: initialQuery.isLoading || (allRequested && allQuery.isFetching),
+    loading:
+      initialQuery.isLoading || (shouldLoadOptions && allQuery.isFetching),
     initialLoading: initialQuery.isLoading,
     allRequested,
     requestAll,

@@ -36,6 +36,11 @@ import { CrossPromotionPlanCard } from "./cross-promotion-plan-card";
 import { PromoFormModal } from "./promo-form-modal";
 import { adsSectionHeader } from "./ads-section-header";
 import { useAppToast } from "@/providers/toast-provider";
+import {
+  CrossPromotionPlanStatusTabs,
+  plansForCrossPromotionTab,
+  type CrossPromotionPlanTab,
+} from "./cross-promotion-plan-status-tabs";
 
 export function CrossPromotionPlansPage({
   kind,
@@ -59,6 +64,7 @@ export function CrossPromotionPlansPage({
   const [previewPromoId, setPreviewPromoId] = useState<string | null>(null);
   const [botNotificationPlan, setBotNotificationPlan] =
     useState<CrossPromotionPlan | null>(null);
+  const [planTab, setPlanTab] = useState<CrossPromotionPlanTab>("ACTIVE");
   const plansQuery = useQuery({
     queryKey: crossPromotionPlanKeys.list(kind),
     queryFn: () => crossPromotionPlansApi.list(kind),
@@ -205,6 +211,32 @@ export function CrossPromotionPlansPage({
       setEditingPlan(null);
     },
   });
+  const updatePublicationMutation = useMutation({
+    mutationFn: ({ publicationId, payload }: { publicationId: string; payload: CreateCrossPromotionPlanPayload }) => {
+      if (!editingPlan) throw new Error("Promotion is not available");
+      return crossPromotionPlansApi.updatePublicationInTelegram(editingPlan.id, publicationId, payload);
+    },
+    onSuccess: async () => {
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: crossPromotionPlanKeys.list(kind) }),
+        qc.invalidateQueries({ queryKey: telegramChannelKeys.lists() }),
+      ]);
+    },
+  });
+  const replacePublicationMutation = useMutation({
+    mutationFn: async ({ publicationId, payload }: { publicationId: string; payload: CreateCrossPromotionPlanPayload }) => {
+      if (!editingPlan) throw new Error("Promotion is not available");
+      return crossPromotionPlansApi.replacePublicationAndPublishNow(
+        editingPlan.id, publicationId, payload, () => undefined,
+      );
+    },
+    onSuccess: async () => {
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: crossPromotionPlanKeys.list(kind) }),
+        qc.invalidateQueries({ queryKey: telegramChannelKeys.lists() }),
+      ]);
+    },
+  });
   const deleteMutation = useMutation({
     mutationFn: (id: string) => crossPromotionPlansApi.remove(id),
     onSuccess: ({ id }) => {
@@ -273,6 +305,8 @@ export function CrossPromotionPlansPage({
   // records that happen to share an advertiser or partner channels: doing so
   // hides real placements behind an "Integrations" list.
   const plans = plansQuery.data ?? [];
+  const visiblePlans =
+    kind === "DIRECT_MUTUAL" ? plansForCrossPromotionTab(plans, planTab) : plans;
   return (
     <AppShell>
       <PageHeader
@@ -291,16 +325,29 @@ export function CrossPromotionPlansPage({
       />
       {sectionTabs}
       {mutualModeTabs}
+      {kind === "DIRECT_MUTUAL" ? (
+        <CrossPromotionPlanStatusTabs
+          plans={plans}
+          value={planTab}
+          onChange={setPlanTab}
+        />
+      ) : null}
       <div>
         {plansQuery.isLoading ? (
           <LoadingState />
         ) : plansQuery.isError ? (
           <ErrorState text="Could not load promotion placements." />
-        ) : !plans.length ? (
-          <EmptyState text="No placements yet." />
+        ) : !visiblePlans.length ? (
+          <EmptyState
+            text={
+              kind === "DIRECT_MUTUAL"
+                ? `No ${planTab.toLowerCase()} direct exchanges.`
+                : "No placements yet."
+            }
+          />
         ) : (
           <MasonryGrid className="xl:grid-cols-2">
-            {plans.map((plan) => (
+            {visiblePlans.map((plan) => (
               <CrossPromotionPlanCard
                 key={plan.id}
                 plan={plan}
@@ -332,7 +379,7 @@ export function CrossPromotionPlansPage({
         channels={channelsQuery.data ?? []}
         networks={networksQuery.data ?? []}
         loading={channelsQuery.isLoading || networksQuery.isLoading}
-        saving={saveMutation.isPending || replaceAndPublishNowMutation.isPending}
+        saving={saveMutation.isPending || replaceAndPublishNowMutation.isPending || updatePublicationMutation.isPending || replacePublicationMutation.isPending}
         onClose={() => {
           setOpen(false);
           setEditingPlan(null);
@@ -340,6 +387,12 @@ export function CrossPromotionPlansPage({
         onSubmit={(payload) => saveMutation.mutateAsync(payload)}
         onReplaceAndPublishNow={(payload) =>
           replaceAndPublishNowMutation.mutateAsync(payload)
+        }
+        onUpdatePublicationInTelegram={(publicationId, payload) =>
+          updatePublicationMutation.mutateAsync({ publicationId, payload })
+        }
+        onReplacePublicationAndPublishNow={(publicationId, payload) =>
+          replacePublicationMutation.mutateAsync({ publicationId, payload })
         }
         onSaveDraft={(draft, id) =>
           saveDraftMutation.mutateAsync({ draft, id })

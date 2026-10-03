@@ -149,7 +149,7 @@ describe('TelegramAdSalesBulkService', () => {
     expect(result.createdPlacementCount).toBe(1);
   });
 
-  it('reuses an existing advertiser with the same display name instead of failing on unique constraint', async () => {
+  it('reuses an existing advertiser with the same Telegram username instead of creating a duplicate', async () => {
     const { service, tx } = createService();
     tx.telegramAdvertiser.findFirst.mockResolvedValueOnce({
       id: 'advertiser-existing',
@@ -158,7 +158,8 @@ describe('TelegramAdSalesBulkService', () => {
     await service.create('user-1', {
       target: { type: 'CHANNEL', channelId: 'channel-1' },
       defaults: {
-        advertiserName: 'Company A',
+        advertiserName: 'A20_admin',
+        advertiserTelegram: '@a20_admin',
         agreedPrice: 500,
         time: '12:00',
         timezone: 'Europe/Warsaw',
@@ -172,7 +173,21 @@ describe('TelegramAdSalesBulkService', () => {
       expect.objectContaining({
         data: expect.objectContaining({
           advertiserId: 'advertiser-existing',
-          advertiserName: 'Company A',
+          advertiserName: 'A20_admin',
+        }),
+      }),
+    );
+    expect(tx.telegramAdvertiser.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          OR: expect.arrayContaining([
+            {
+              telegramUsername: {
+                equals: 'a20_admin',
+                mode: 'insensitive',
+              },
+            },
+          ]),
         }),
       }),
     );

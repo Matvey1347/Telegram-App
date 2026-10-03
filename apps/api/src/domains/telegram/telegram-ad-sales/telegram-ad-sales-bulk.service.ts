@@ -26,6 +26,7 @@ import { utcDateKey, zonedDateTimeToUtc } from './domain/timezone';
 import { TelegramAdSalesBulkCreateDto } from './dto';
 import { telegramAdSalesAdvisoryLockKey } from './telegram-ad-sales-reservation';
 import { TelegramAdSalesService } from './telegram-ad-sales.service';
+import { findCanonicalAdvertiser } from '../telegram-crm/telegram-advertiser-identity-resolver';
 import { resolveAdSaleCommissionSnapshot } from './telegram-ad-sales-commission';
 
 type ResolvedChannel = {
@@ -478,12 +479,17 @@ export class TelegramAdSalesBulkService {
       const normalizedEmail = this.normalizeEmail(advertiser.advertiserContact);
       const normalizedPhone = this.normalizePhone(advertiser.advertiserContact);
       const contactIsEmail = Boolean(normalizedEmail?.includes('@'));
-      const existingByName = await tx.telegramAdvertiser.findFirst({
-        where: { workspaceId, displayName: advertiser.advertiserName },
-        select: { id: true },
+      const existing = await findCanonicalAdvertiser(tx.telegramAdvertiser, {
+        workspaceId,
+        username: advertiser.advertiserTelegram
+          ?.replace(/^@+/, '')
+          .toLowerCase() ?? null,
+        phone: normalizedPhone,
+        email: normalizedEmail,
+        displayName: advertiser.advertiserName,
       });
-      if (existingByName) {
-        result.set(key, existingByName.id);
+      if (existing) {
+        result.set(key, existing.id);
         continue;
       }
       try {
@@ -516,10 +522,18 @@ export class TelegramAdSalesBulkService {
         ) {
           throw error;
         }
-        const existingAfterConflict = await tx.telegramAdvertiser.findFirst({
-          where: { workspaceId, displayName: advertiser.advertiserName },
-          select: { id: true },
-        });
+        const existingAfterConflict = await findCanonicalAdvertiser(
+          tx.telegramAdvertiser,
+          {
+            workspaceId,
+            username: advertiser.advertiserTelegram
+              ?.replace(/^@+/, '')
+              .toLowerCase() ?? null,
+            phone: normalizedPhone,
+            email: normalizedEmail,
+            displayName: advertiser.advertiserName,
+          },
+        );
         if (!existingAfterConflict) throw error;
         result.set(key, existingAfterConflict.id);
       }

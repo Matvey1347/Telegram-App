@@ -405,6 +405,90 @@ export class CrossPromotionPlanSchedulingService {
     }
   }
 
+  async updatePublicationInTelegram(
+    userId: string,
+    id: string,
+    publicationId: string,
+    dto: CreateCrossPromotionPlanDto,
+  ) {
+    const publication = publisherPublications(dto).find(
+      (item) => item.id === publicationId,
+    );
+    if (!publication) throw new BadRequestException('Partner post not found');
+    const placements = (await this.plans.placementsForReschedule(userId, id)).filter(
+      (item) => item.publicationId === publicationId,
+    );
+    if (!placements.length)
+      throw new BadRequestException('Partner post has no Telegram publications');
+    for (const placement of placements) {
+      await this.telegramChannels.updateManagedPost(
+        userId,
+        placement.telegramChannelId,
+        placement.managedPostId,
+        this.managedPostPayload(dto, publication.post),
+      );
+    }
+    return this.plans.replacePublicationPlacements(
+      userId,
+      id,
+      publicationId,
+      dto,
+      placements,
+      'ACTIVE',
+    );
+  }
+
+  async replacePublicationAndPublishNow(
+    userId: string,
+    id: string,
+    publicationId: string,
+    dto: CreateCrossPromotionPlanDto,
+    onProgress: Progress,
+    signal: AbortSignal,
+  ) {
+    const publication = publisherPublications(dto).find(
+      (item) => item.id === publicationId,
+    );
+    if (!publication) throw new BadRequestException('Partner post not found');
+    const previous = (await this.plans.placementsForReschedule(userId, id)).filter(
+      (item) => item.publicationId === publicationId,
+    );
+    if (!previous.length)
+      throw new BadRequestException('Partner post has no Telegram publications');
+    const context = await this.plans.removalContext(userId, id);
+    const previousIds = new Set(previous.map((item) => item.managedPostId));
+    const remotePostIds = context.remotePostIds.filter((item) => previousIds.has(item));
+    const immediate = this.withImmediatePublisherTimes(
+      {
+        ...dto,
+        publicationPost: { ...dto.publicationPost, publisherPublications: [publication] },
+      },
+      new Date().toISOString(),
+    );
+    const createdPosts: ScheduledPost[] = [];
+    const total = publication.placements.length + 2;
+    try {
+      if (remotePostIds.length) {
+        onProgress({ phase: 'DELETING', message: 'Deleting this partner post' }, 1, total);
+        const deletion = await this.remoteDeletion.deletePublishedManagedPosts({
+          workspaceId: context.workspaceId,
+          managedPostIds: remotePostIds,
+        });
+        if (deletion.failed) throw new Error('Existing Telegram posts could not be deleted');
+      }
+      for (const placement of previous) {
+        if (!remotePostIds.includes(placement.managedPostId)) {
+          await this.telegramChannels.deleteManagedPost(userId, placement.telegramChannelId, placement.managedPostId);
+        }
+      }
+      await this.publishPostsNow(userId, immediate, createdPosts, onProgress, total, signal);
+      return this.plans.replacePublicationPlacements(userId, id, publicationId, dto, createdPosts, 'ACTIVE');
+    } catch (error) {
+      await this.rollback(userId, createdPosts, onProgress, total);
+      throw error;
+    }
+  }
+
   private async schedulePosts(
     userId: string,
     dto: CreateCrossPromotionPlanDto,

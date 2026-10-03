@@ -30,6 +30,7 @@ import {
   TELEGRAM_FOLDER_TAG_PREFIX,
   TelegramCrmSystemTagsService,
 } from './telegram-crm-system-tags.service';
+import { findCanonicalAdvertiser } from './telegram-advertiser-identity-resolver';
 
 @Injectable()
 export class TelegramCrmContactCommandService {
@@ -219,6 +220,20 @@ export class TelegramCrmContactCommandService {
       dto.ownerMemberId,
     );
     const telegramUsername = this.username(dto.telegramUsername);
+    const existing = await findCanonicalAdvertiser(this.prisma.telegramAdvertiser, {
+      workspaceId: access.workspaceId,
+      username: telegramUsername,
+      phone: dto.phone?.trim() || null,
+      email: dto.email?.trim().toLowerCase() || null,
+      displayName: dto.displayName,
+    });
+    if (existing) {
+      const row = await this.prisma.telegramAdvertiser.findUniqueOrThrow({
+        where: { id: existing.id },
+        select: crmContactSelect,
+      });
+      return mapCrmContact(row);
+    }
     const row = await this.prisma.telegramAdvertiser.create({
       data: {
         workspaceId: access.workspaceId,

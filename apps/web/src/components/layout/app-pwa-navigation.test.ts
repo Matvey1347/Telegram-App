@@ -11,6 +11,7 @@ describe("installed Nexeloq navigation", () => {
     ]);
 
     expect(items.map(({ key, href }) => [key, href])).toEqual([
+      ["calendar", "/publication-calendar"],
       ["telegram", "/telegram-posts"],
       ["ads", "/ad-campaigns"],
     ]);
@@ -25,16 +26,16 @@ describe("installed Nexeloq navigation", () => {
     );
   });
 
-  it("uses Selling as the first destination when sales access is available", () => {
-    const selling = buildPwaNavigation(["adSales.crm"]).find(
-      ({ key }) => key === "selling",
+  it("uses CRM when sales access is available", () => {
+    const crm = buildPwaNavigation(["adSales.crm"]).find(
+      ({ key }) => key === "crm",
     );
-    expect(selling?.href).toBe("/ad-sales/calendar");
-    expect(selling?.label).toBe("navigation.selling");
-    expect(selling?.active("/ad-campaigns")).toBe(false);
+    expect(crm?.href).toBe("/ad-sales");
+    expect(crm?.label).toBe("navigation.crm");
+    expect(crm?.active("/ad-campaigns")).toBe(false);
   });
 
-  it("keeps Ads visible alongside Selling and omits Settings", () => {
+  it("keeps Ads visible alongside CRM and omits Settings", () => {
     const items = buildPwaNavigation([
       "dashboard",
       "finance",
@@ -45,9 +46,9 @@ describe("installed Nexeloq navigation", () => {
     ]);
 
     expect(items.map(({ key }) => key)).toEqual([
-      "selling",
       "finance",
       "telegram",
+      "crm",
       "ads",
     ]);
     expect(

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import type { TelegramAdvertiser } from "@telegram-system/shared";
 import { CustomSelect, Input } from "@/components/ui/primitives";
 import { SegmentedControl } from "@/components/ui/segmented-control";
+import { TelegramEntityAvatar } from "@/components/features/telegram/telegram/telegram-entity-avatar";
 
 export function canonicalTelegramUsername(value: string) {
   const username = value.trim().replace(/^@+/, "");
@@ -134,8 +135,14 @@ export function CrmClientField(props: {
             value: selectedClient.id,
             label: selectedClient.displayName,
             meta: selectedClient.telegramUsername ?? "Existing client",
-            iconUrl: selectedClient.photoUrl ?? undefined,
-            iconFallback: selectedClient.displayName,
+            icon: (
+              <TelegramEntityAvatar
+                imageUrl={selectedClient.photoUrl}
+                kind="person"
+                size="xs"
+                alt=""
+              />
+            ),
           },
         ]
       : []),
@@ -149,7 +156,9 @@ export function CrmClientField(props: {
           advertiser.email ||
           advertiser.phone ||
           `${advertiser.totalSalesCount} sales`,
-        iconFallback: advertiser.displayName,
+        // CRM search results deliberately do not carry Telegram photo URLs;
+        // render the shared person placeholder instead of a letter avatar.
+        icon: <TelegramEntityAvatar kind="person" size="xs" alt="" />,
       })),
   ];
 

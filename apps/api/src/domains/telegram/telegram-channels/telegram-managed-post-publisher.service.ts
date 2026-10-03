@@ -30,6 +30,7 @@ import { TelegramChannelAccessService } from './telegram-channel-access.service'
 import { BotMessageEntity, TELEGRAM_CAPTION_LIMIT, TELEGRAM_TEXT_MESSAGE_LIMIT } from './telegram-channels.internal';
 import { TelegramManagedPostPresentationService } from './telegram-managed-post-presentation.service';
 import { TelegramManagedPostMediaStorageService } from './telegram-managed-post-media-storage.service';
+import { TelegramManagedPostPremiumEmojiRepairService } from './telegram-managed-post-premium-emoji-repair.service';
 import { TelegramManagedPostRevisionStore } from './telegram-managed-post-revision.store';
 import { TelegramPostGroupsService } from './telegram-post-groups.service';
 import { deliverTelegramManagedPostViaBot, type TelegramBotDeliveryOperation } from './telegram-managed-post-bot-delivery';
@@ -47,6 +48,7 @@ export class TelegramManagedPostPublisherService {
     private readonly telegramManagedPostRevisionStore: TelegramManagedPostRevisionStore,
     private readonly telegramPostGroupsService: TelegramPostGroupsService,
     private readonly telegramManagedPostMediaStorageService: TelegramManagedPostMediaStorageService,
+    private readonly telegramManagedPostPremiumEmojiRepairService: TelegramManagedPostPremiumEmojiRepairService,
   ) {}
 
   private readonly iconSelect = {
@@ -422,6 +424,19 @@ export class TelegramManagedPostPublisherService {
                 },
               }
             : {}),
+        });
+        await this.telegramManagedPostPremiumEmojiRepairService.restoreCustomEmojiAfterBotDelivery({
+          text: post.text,
+          workspaceId,
+          channelId,
+          channel,
+          sources,
+          messageIds: ids,
+          imageCount: mediaItems.length,
+          publishMode,
+          captionHtml,
+          followupHtmlParts,
+          textHtmlParts,
         });
       }
       if (!ids.length) {

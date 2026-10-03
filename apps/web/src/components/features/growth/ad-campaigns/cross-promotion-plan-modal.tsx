@@ -58,6 +58,8 @@ export function CrossPromotionPlanModal({
   onClose,
   onSubmit,
   onReplaceAndPublishNow,
+  onUpdatePublicationInTelegram,
+  onReplacePublicationAndPublishNow,
   onSaveDraft,
 }: {
   open: boolean;
@@ -73,6 +75,8 @@ export function CrossPromotionPlanModal({
   onReplaceAndPublishNow?: (
     payload: CreateCrossPromotionPlanPayload,
   ) => Promise<unknown>;
+  onUpdatePublicationInTelegram?: (publicationId: string, payload: CreateCrossPromotionPlanPayload) => Promise<unknown>;
+  onReplacePublicationAndPublishNow?: (publicationId: string, payload: CreateCrossPromotionPlanPayload) => Promise<unknown>;
   onSaveDraft: (
     draft: Record<string, unknown>,
     id?: string,
@@ -116,7 +120,7 @@ export function CrossPromotionPlanModal({
   const [botFlowTarget, setBotFlowTarget] = useState("post");
   const [showValidationErrors, setShowValidationErrors] = useState(false);
   const [savingDraft, setSavingDraft] = useState(false);
-  const [confirmPublishNow, setConfirmPublishNow] = useState(false);
+  const [confirmPublishNow, setConfirmPublishNow] = useState<string | null>(null);
   const resolvedTargets = useRef(
     new Map<string, { promo?: Promo; inviteLink?: TelegramInviteLinkOption }>(),
   );
@@ -319,7 +323,7 @@ export function CrossPromotionPlanModal({
       expectedViews: product?.estimatedViews ?? null,
     };
   };
-  const submit = async (replaceAndPublishNow = false) => {
+  const submit = async (replaceAndPublishNow = false, publicationId?: string) => {
     const hasPostContent = Boolean(
       post.text.trim() || post.imageUrls.length || post.mediaItems?.length,
     );
@@ -523,7 +527,11 @@ export function CrossPromotionPlanModal({
             ).toISOString()
           : null,
       } satisfies CreateCrossPromotionPlanPayload;
-      if (replaceAndPublishNow && onReplaceAndPublishNow) {
+      if (publicationId && replaceAndPublishNow && onReplacePublicationAndPublishNow) {
+        await onReplacePublicationAndPublishNow(publicationId, payload);
+      } else if (publicationId && onUpdatePublicationInTelegram) {
+        await onUpdatePublicationInTelegram(publicationId, payload);
+      } else if (replaceAndPublishNow && onReplaceAndPublishNow) {
         await onReplaceAndPublishNow(payload);
       } else {
         await onSubmit(payload);
@@ -571,7 +579,17 @@ export function CrossPromotionPlanModal({
         onReplaceAndPublishNow={
           (initial?.status === "ACTIVE" || initial?.status === "DRAFT") &&
           onReplaceAndPublishNow
-            ? () => setConfirmPublishNow(true)
+            ? () => setConfirmPublishNow("all")
+            : undefined
+        }
+        onUpdatePublicationInTelegram={
+          initial?.status === "ACTIVE" && onUpdatePublicationInTelegram
+            ? (publicationId) => void submit(false, publicationId)
+            : undefined
+        }
+        onReplacePublicationAndPublishNow={
+          initial?.status === "ACTIVE" && onReplacePublicationAndPublishNow
+            ? (publicationId) => setConfirmPublishNow(publicationId)
             : undefined
         }
         onSaveDraft={() => void saveDraft()}
@@ -615,8 +633,8 @@ export function CrossPromotionPlanModal({
         }}
       />
       <Modal
-        open={confirmPublishNow}
-        onClose={() => setConfirmPublishNow(false)}
+        open={Boolean(confirmPublishNow)}
+        onClose={() => setConfirmPublishNow(null)}
         title={
           initial?.status === "DRAFT"
             ? "Publish draft now?"
@@ -632,7 +650,7 @@ export function CrossPromotionPlanModal({
         <div className="mt-5 flex justify-end gap-2">
           <Button
             variant="secondary"
-            onClick={() => setConfirmPublishNow(false)}
+            onClick={() => setConfirmPublishNow(null)}
           >
             Cancel
           </Button>
@@ -640,8 +658,8 @@ export function CrossPromotionPlanModal({
             variant="danger"
             disabled={saving}
             onClick={() => {
-              setConfirmPublishNow(false);
-              void submit(true);
+              setConfirmPublishNow(null);
+              void submit(true, confirmPublishNow === "all" ? undefined : confirmPublishNow ?? undefined);
             }}
           >
             {saving

@@ -107,7 +107,15 @@ export class TelegramChannelImportPreparationService {
       });
     }
     if (input.type === 'invite') {
-      return this.mtprotoClient.getPublicChannelInfo({
+      const preview = await this.mtprotoClient.getPublicChannelInfo({
+        ...credentials,
+        channelRef: input.inviteLink,
+        inviteHash: input.inviteHash,
+      });
+      if (preview.kind !== 'channel' || preview.telegramChatId) {
+        return preview;
+      }
+      return this.mtprotoClient.joinPrivateChannelByInvite({
         ...credentials,
         channelRef: input.inviteLink,
         inviteHash: input.inviteHash,

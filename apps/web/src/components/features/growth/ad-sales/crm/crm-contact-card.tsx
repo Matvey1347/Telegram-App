@@ -105,14 +105,14 @@ export function CrmContactCard({
             <div className="min-w-0 flex-1">
               <div className="flex min-w-0 items-center gap-1.5">
                 <h3
-                  className="max-w-[12rem] shrink truncate text-sm font-semibold text-white"
+                  className="min-w-0 flex-1 truncate text-sm font-semibold text-white"
                   title={displayName || telegramUsername || contact.displayName}
                 >
                   {displayName || telegramUsername || contact.displayName}
                 </h3>
                 {cardTags.length ? (
                   <div
-                    className="flex min-w-0 flex-1 items-center gap-1 pr-2"
+                    className="flex shrink-0 items-center gap-1"
                     aria-label="Contact tags"
                   >
                     {cardTags.slice(0, 2).map((tag) => (
@@ -269,8 +269,8 @@ function DealSummary({
   if (!hasDeals) return null;
   const purchasedChannels = contact.salesSummary.purchasedChannels ?? [];
   return (
-    <>
-      <div className="mt-2 grid grid-cols-2 gap-3 text-sm">
+    <div className="mt-2 grid grid-cols-[minmax(0,1fr)_auto] items-end gap-x-3 text-sm">
+      <div className="min-w-0">
         <Metric
           label="💰"
           value={
@@ -282,15 +282,22 @@ function DealSummary({
             </span>
           }
         />
-        <div className="min-w-0">
-          <p className="text-xs uppercase text-neutral-500">📣</p>
-          <div className="mt-2 flex min-h-5 items-center gap-2 text-[11px] text-neutral-400">
-            <PurchasedChannels contact={contact} />
-          </div>
+      </div>
+      <div className="flex min-w-0 flex-col items-end text-right">
+        <p className="text-[10px] uppercase text-neutral-500">📣</p>
+        <div className="mt-0.5 flex min-h-5 items-center justify-end gap-1.5 text-[11px] text-neutral-400">
+          {contact.salesSummary.dealMembers.length ? (
+            <>
+              <DealMembersPreview members={contact.salesSummary.dealMembers} />
+              {purchasedChannels.length ? (
+                <span aria-hidden="true" className="text-neutral-600">—</span>
+              ) : null}
+            </>
+          ) : null}
+          <PurchasedChannels contact={contact} />
         </div>
       </div>
-      {contact.salesSummary.dealMembers.length ? <div className="mt-2 flex min-h-5 items-center gap-2 text-[11px] text-neutral-400"><DealMembersPreview members={contact.salesSummary.dealMembers} /></div> : null}
-    </>
+    </div>
   );
 }
 

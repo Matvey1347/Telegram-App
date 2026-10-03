@@ -478,6 +478,37 @@ export class CrossPromotionPlansService {
     return json<ScheduledPlacement[]>(row.placementPostIds, []);
   }
 
+  async replacePublicationPlacements(
+    userId: string,
+    id: string,
+    publicationId: string,
+    dto: CreateCrossPromotionPlanDto,
+    replacements: ScheduledPlacement[],
+    status: 'SCHEDULED' | 'ACTIVE',
+  ) {
+    const workspaceId = await this.workspace(userId);
+    const row = await this.prisma.crossPromotionPlan.findFirst({
+      where: { id, workspaceId, status: { not: 'CANCELLED' } },
+      select: { placementPostIds: true },
+    });
+    if (!row) throw new NotFoundException('Cross-promotion plan not found');
+    const placements = json<ScheduledPlacement[]>(row.placementPostIds, []);
+    const updated = await this.prisma.crossPromotionPlan.update({
+      where: { id },
+      data: {
+        publicationPost: dto.publicationPost,
+        placementPostIds: [
+          ...placements.filter((item) => item.publicationId !== publicationId),
+          ...replacements,
+        ] as unknown as Prisma.InputJsonValue,
+        status,
+        lastError: null,
+      },
+    });
+    notifyScheduledTaskDueWorkChanged('mutual_promotion.lifecycle');
+    return this.readService.shape(workspaceId, updated);
+  }
+
   async resumeSchedulingContext(userId: string, id: string) {
     const workspaceId = await this.workspace(userId);
     const row = await this.prisma.crossPromotionPlan.findFirst({

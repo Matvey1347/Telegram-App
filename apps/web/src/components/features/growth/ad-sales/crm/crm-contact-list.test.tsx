@@ -211,6 +211,9 @@ describe("CrmContactCard", () => {
       "https://t.me/i/userpic/320/ada.jpg",
     );
     expect(screen.queryByText("Open conversations")).toBeNull();
+    expect(screen.getByText("📣")).toBeInTheDocument();
+    expect(screen.queryByText("Members")).toBeNull();
+    expect(screen.queryByText("📣 Channels")).toBeNull();
   });
 
   it("keeps folder tags in the header and gives long names an ellipsis boundary", () => {
@@ -237,7 +240,7 @@ describe("CrmContactCard", () => {
     );
 
     const name = screen.getByRole("heading", { name: longName });
-    expect(name).toHaveClass("max-w-[12rem]", "truncate");
+    expect(name).toHaveClass("min-w-0", "flex-1", "truncate");
     expect(name.parentElement).toContainElement(screen.getByText("Purchases"));
   });
 

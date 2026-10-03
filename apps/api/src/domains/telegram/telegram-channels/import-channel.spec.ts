@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, ConflictException } from '@nestjs/common';
 import {
   createTelegramChannelsTestHarness,
   type TelegramChannelsTestHarness,
@@ -25,6 +25,7 @@ describe('TelegramChannelsService importChannel', () => {
   };
   const mtprotoClient = {
     getPublicChannelInfo: jest.fn(),
+    joinPrivateChannelByInvite: jest.fn(),
     findAccessibleChannelInfoByTitle: jest.fn(),
   };
   const sourceAccessService = {
@@ -235,12 +236,83 @@ describe('TelegramChannelsService importChannel', () => {
       participantsCount: null,
       photoUrl: null,
     });
+    mtprotoClient.joinPrivateChannelByInvite.mockResolvedValue({
+      kind: 'channel',
+      telegramChatId: '',
+      title: 'Preview only',
+      username: null,
+      description: null,
+      photoUrl: null,
+    });
 
     await expect(
       service.importChannel('user-1', {
         input: 'https://t.me/+preview_only',
       }),
     ).rejects.toThrow(BadRequestException);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('joins an accessible private invite before importing its channel', async () => {
+    mtprotoClient.getPublicChannelInfo.mockResolvedValue({
+      kind: 'channel',
+      telegramChatId: '',
+      title: 'Private preview',
+      username: null,
+      description: null,
+      photoUrl: null,
+    });
+    mtprotoClient.joinPrivateChannelByInvite.mockResolvedValue(
+      buildResolvedTelegramEntity({
+        telegramChatId: '445566',
+        title: 'Private channel',
+        username: null,
+        joinedByInvite: true,
+      }),
+    );
+    const tx = {
+      telegramChannel: {
+        create: jest.fn().mockResolvedValue({ id: 'channel-1' }),
+      },
+    };
+    prisma.$transaction.mockImplementation(
+      async (callback: (tx: unknown) => Promise<unknown>) => callback(tx),
+    );
+
+    await service.importChannel('user-1', {
+      input: 'https://t.me/+privateInvite',
+    });
+
+    expect(mtprotoClient.joinPrivateChannelByInvite).toHaveBeenCalledWith(
+      expect.objectContaining({ inviteHash: 'privateInvite' }),
+    );
+    expect(tx.telegramChannel.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ telegramChatId: '445566' }),
+      }),
+    );
+  });
+
+  it('does not create a channel while Telegram awaits invite approval', async () => {
+    mtprotoClient.getPublicChannelInfo.mockResolvedValue({
+      kind: 'channel',
+      telegramChatId: '',
+      title: 'Approval-only channel',
+      username: null,
+      description: null,
+      photoUrl: null,
+    });
+    mtprotoClient.joinPrivateChannelByInvite.mockRejectedValue(
+      new ConflictException(
+        'Join request was sent. Wait for approval and retry the import.',
+      ),
+    );
+
+    await expect(
+      service.importChannel('user-1', {
+        input: 'https://t.me/+approvalOnly',
+      }),
+    ).rejects.toThrow('Join request was sent');
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 

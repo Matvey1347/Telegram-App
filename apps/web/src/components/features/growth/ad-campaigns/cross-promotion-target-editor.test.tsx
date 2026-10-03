@@ -45,7 +45,7 @@ describe("CrossPromotionTargetEditor", () => {
       screen.getByRole("button", { name: "Select invite link" }),
     );
     await user.type(
-      screen.getByPlaceholderText("Search…"),
+      screen.getByPlaceholderText("Search invite links"),
       "https://t.me/+trackingLink",
     );
     await user.click(

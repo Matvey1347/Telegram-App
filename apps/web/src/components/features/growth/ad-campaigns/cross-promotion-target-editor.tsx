@@ -40,6 +40,7 @@ export function CrossPromotionTargetEditor({
   const [registeredLinks, setRegisteredLinks] = useState<TelegramInviteLink[]>(
     [],
   );
+  const [inviteLinkSearch, setInviteLinkSearch] = useState("");
   const promosQuery = useQuery({
     queryKey: ["cross-promotion", "promos", channel.id],
     queryFn: () =>
@@ -55,6 +56,8 @@ export function CrossPromotionTargetEditor({
     channelId: channel.id,
     selectedId: value.inviteLinkId,
     seedLinks: registeredLinks,
+    search: inviteLinkSearch,
+    searchMinimumLength: 2,
   });
   const promoDetailQuery = useQuery({
     queryKey: ["cross-promotion", "promo-detail", value.promoId],
@@ -176,7 +179,7 @@ export function CrossPromotionTargetEditor({
                 }),
               );
             }}
-            onOpen={linkOptions.requestAll}
+            onSearchChange={setInviteLinkSearch}
             loading={linkOptions.loading}
             placeholder="Select invite link"
             links={links}

@@ -258,6 +258,7 @@ function createService() {
     },
     telegramAdvertiser: {
       findFirst: jest.fn(),
+      findUniqueOrThrow: jest.fn(),
       findMany: jest.fn().mockResolvedValue([]),
       count: jest.fn(),
       create: jest.fn(),
@@ -797,7 +798,9 @@ describe('TelegramAdSalesService', () => {
       telegramUsername: 'acme',
     };
     prisma.telegramAdvertiser.create.mockResolvedValue(advertiser);
-    prisma.telegramAdvertiser.findFirst.mockResolvedValue(advertiser);
+    prisma.telegramAdvertiser.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(advertiser);
     prisma.telegramAdvertiserContact.create.mockResolvedValue({});
     prisma.telegramAdvertiserActivity.create.mockResolvedValue({});
 
@@ -823,6 +826,54 @@ describe('TelegramAdSalesService', () => {
     expect(result.id).toBe('advertiser-created');
   });
 
+  it('reuses the largest client card for a case-insensitive name match when creating a deal', async () => {
+    const { service, prisma } = createService();
+    const established = { id: 'advertiser-established' };
+    const hydrated = {
+      ...established,
+      workspaceId: 'ws-1',
+      displayName: 'OnTheWay | Agency Owner',
+    };
+    prisma.telegramAdvertiser.findFirst
+      .mockResolvedValueOnce(established)
+      .mockResolvedValueOnce(hydrated);
+
+    await expect(
+      (service as any).resolveAdvertiserForSale(
+        'ws-1',
+        'user-1',
+        {
+          advertiserId: null,
+          advertiserName: 'ontheway | agency owner',
+          createAdvertiser: true,
+        },
+        'member-1',
+      ),
+    ).resolves.toEqual(hydrated);
+
+    expect(prisma.telegramAdvertiser.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          workspaceId: 'ws-1',
+          OR: expect.arrayContaining([
+            {
+              displayName: {
+                equals: 'ontheway | agency owner',
+                mode: 'insensitive',
+              },
+            },
+          ]),
+        }),
+        orderBy: [
+          { totalSalesCount: 'desc' },
+          { createdAt: 'asc' },
+          { id: 'asc' },
+        ],
+      }),
+    );
+    expect(prisma.telegramAdvertiser.create).not.toHaveBeenCalled();
+  });
+
   it('reuses the existing client when a Telegram username is submitted again', async () => {
     const { service, prisma } = createService();
     const existing = { id: 'advertiser-a20', telegramUsername: 'a20_admin' };
@@ -830,6 +881,7 @@ describe('TelegramAdSalesService', () => {
       (advertiser: unknown) => advertiser,
     );
     prisma.telegramAdvertiser.findFirst.mockResolvedValue(existing);
+    prisma.telegramAdvertiser.findUniqueOrThrow.mockResolvedValue(existing);
 
     await expect(
       service.createAdvertiser('user-1', {
@@ -842,7 +894,14 @@ describe('TelegramAdSalesService', () => {
       expect.objectContaining({
         where: expect.objectContaining({
           workspaceId: 'ws-1',
-          telegramUsername: { equals: 'a20_admin', mode: 'insensitive' },
+          OR: expect.arrayContaining([
+            {
+              telegramUsername: {
+                equals: 'a20_admin',
+                mode: 'insensitive',
+              },
+            },
+          ]),
         }),
       }),
     );

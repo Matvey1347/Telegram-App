@@ -148,6 +148,34 @@ export class CrossPromotionPlansController {
     });
   }
 
+  @Patch(':id/publications/:publicationId/telegram')
+  updatePublicationInTelegram(
+    @CurrentUser() user: JwtUser,
+    @Param('id') id: string,
+    @Param('publicationId') publicationId: string,
+    @Body() dto: CreateCrossPromotionPlanDto,
+  ) {
+    return this.scheduling.updatePublicationInTelegram(user.sub, id, publicationId, dto);
+  }
+
+  @Post(':id/publications/:publicationId/publish-now-stream')
+  replacePublicationAndPublishNow(
+    @CurrentUser() user: JwtUser,
+    @Param('id') id: string,
+    @Param('publicationId') publicationId: string,
+    @Body() dto: CreateCrossPromotionPlanDto,
+    @Res() res: Response,
+  ) {
+    return this.streamResponse.stream(res, {
+      eventPrefix: 'cross_promotion_plan.publication_publish_now_stream',
+      persistLifecycleLogs: false,
+      action: (onProgress, signal) =>
+        this.scheduling.replacePublicationAndPublishNow(
+          user.sub, id, publicationId, dto, onProgress, signal,
+        ),
+    });
+  }
+
   @Post(':id/resume-stream')
   resume(
     @CurrentUser() user: JwtUser,

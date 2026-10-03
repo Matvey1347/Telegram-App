@@ -89,6 +89,7 @@ describe("AdSaleClientField", () => {
     await waitFor(() => expect(search).toHaveBeenCalledWith("Bu"));
     const option = await screen.findByRole("button", { name: /Buyer/ });
     expect(option.querySelector("img")).toBeNull();
+    expect(option.querySelector("svg")).not.toBeNull();
     fireEvent.click(option);
     expect(select).toHaveBeenCalledWith(
       expect.objectContaining({ id: "client-1" }),

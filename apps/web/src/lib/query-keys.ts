@@ -106,7 +106,11 @@ export const telegramChannelKeys = {
     ] as const,
   inviteLinkOptions: (
     channelId: string,
-    params?: { availableForCampaignId?: string; all?: boolean },
+    params?: {
+      availableForCampaignId?: string;
+      all?: boolean;
+      search?: string;
+    },
   ) =>
     [
       "telegram-channel-invite-links",
@@ -114,6 +118,7 @@ export const telegramChannelKeys = {
       "options",
       params?.availableForCampaignId ?? null,
       params?.all ?? false,
+      params?.search ?? null,
     ] as const,
   inviteLinksPage: (
     channelId: string,

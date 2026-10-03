@@ -19,6 +19,7 @@ export function TelegramInviteLinkSelect({
   loading,
   loadingLabel = "Loading invite links…",
   onOpen,
+  onSearchChange,
   onChange,
   onCreate,
 }: {
@@ -29,6 +30,7 @@ export function TelegramInviteLinkSelect({
   loading?: boolean;
   loadingLabel?: string;
   onOpen?: () => void;
+  onSearchChange?: (search: string) => void;
   onChange: (value: string) => void;
   onCreate?: (url: string) => void | Promise<void>;
 }) {
@@ -41,6 +43,7 @@ export function TelegramInviteLinkSelect({
       loading={loading}
       loadingLabel={loadingLabel}
       placeholder={placeholder}
+      onSearchChange={onSearchChange}
       searchPlaceholder="Search invite links"
       options={links.map((link) => ({
         value: link.id,

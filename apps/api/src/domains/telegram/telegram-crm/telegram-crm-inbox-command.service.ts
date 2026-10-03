@@ -15,6 +15,7 @@ import {
 } from './telegram-crm-inbox.dto';
 import { crmContactSelect, mapCrmContact } from './telegram-crm-contact.mapper';
 import { TelegramCrmEventHub } from './telegram-crm-event-hub.service';
+import { findCanonicalAdvertiser } from './telegram-advertiser-identity-resolver';
 
 const latestDate = (...values: Array<Date | null>) => {
   const timestamps = values.flatMap((value) =>
@@ -71,25 +72,37 @@ export class TelegramCrmInboxCommandService {
         (peer.username
           ? `@${peer.username}`
           : `Telegram ${peer.telegramUserId}`);
-      const contact = await tx.telegramAdvertiser.create({
-        data: {
-          workspaceId: access.workspaceId,
-          displayName,
-          telegramUsername: peer.username,
-          stage: dto.stage,
-          ownerMemberId: access.memberId,
-          createdByUserId: userId,
-          source: 'TELEGRAM_INBOX',
-          lastContactAt: latestDate(
-            signals._max.lastMessageAt,
-            signals._max.lastInboundAt,
-            signals._max.lastOutboundAt,
-          ),
-          lastInboundAt: signals._max.lastInboundAt,
-          lastOutboundAt: signals._max.lastOutboundAt,
-        },
-        select: crmContactSelect,
+      const existing = await findCanonicalAdvertiser(tx.telegramAdvertiser, {
+        workspaceId: access.workspaceId,
+        username: peer.username?.replace(/^@+/, '').toLowerCase() ?? null,
+        phone: null,
+        email: null,
+        displayName,
       });
+      const contact = existing
+        ? await tx.telegramAdvertiser.findUniqueOrThrow({
+            where: { id: existing.id },
+            select: crmContactSelect,
+          })
+        : await tx.telegramAdvertiser.create({
+            data: {
+              workspaceId: access.workspaceId,
+              displayName,
+              telegramUsername: peer.username,
+              stage: dto.stage,
+              ownerMemberId: access.memberId,
+              createdByUserId: userId,
+              source: 'TELEGRAM_INBOX',
+              lastContactAt: latestDate(
+                signals._max.lastMessageAt,
+                signals._max.lastInboundAt,
+                signals._max.lastOutboundAt,
+              ),
+              lastInboundAt: signals._max.lastInboundAt,
+              lastOutboundAt: signals._max.lastOutboundAt,
+            },
+            select: crmContactSelect,
+          });
       const claimed = await tx.telegramCrmPeer.updateMany({
         where: {
           id: peer.id,

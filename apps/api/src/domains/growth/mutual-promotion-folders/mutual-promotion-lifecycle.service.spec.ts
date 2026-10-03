@@ -2,6 +2,63 @@
 import { MutualPromotionLifecycleService } from './mutual-promotion-lifecycle.service';
 
 describe('MutualPromotionLifecycleService', () => {
+  it('confirms a native publication as soon as reconciliation observes every delivery', async () => {
+    const confirmation = { sendPublishedOnce: jest.fn().mockResolvedValue(undefined) };
+    const now = new Date('2026-09-07T12:00:05.000Z');
+    const prisma = {
+      mutualPromotionPostDelivery: {
+        findMany: jest.fn().mockResolvedValue([
+          { id: 'delivery-1', folderPostId: 'folder-post-1' },
+          { id: 'delivery-2', folderPostId: 'folder-post-1' },
+        ]),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+    };
+    const service = new MutualPromotionLifecycleService(
+      prisma as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      confirmation as never,
+    );
+
+    await expect(service.reconcilePublishedDeliveries(now)).resolves.toEqual({
+      reconciled: 2,
+    });
+    expect(prisma.mutualPromotionPostDelivery.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 'delivery-1',
+        status: { in: ['PENDING', 'PUBLISHING', 'FAILED'] },
+      },
+      data: { status: 'PUBLISHED', publishedAt: now, lastError: null },
+    });
+    expect(confirmation.sendPublishedOnce).toHaveBeenCalledTimes(1);
+    expect(confirmation.sendPublishedOnce).toHaveBeenCalledWith('folder-post-1');
+  });
+
+  it('does not send a duplicate confirmation when another worker claimed the delivery', async () => {
+    const confirmation = { sendPublishedOnce: jest.fn() };
+    const prisma = {
+      mutualPromotionPostDelivery: {
+        findMany: jest.fn().mockResolvedValue([
+          { id: 'delivery-1', folderPostId: 'folder-post-1' },
+        ]),
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+      },
+    };
+    const service = new MutualPromotionLifecycleService(
+      prisma as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      confirmation as never,
+    );
+
+    await service.reconcilePublishedDeliveries();
+
+    expect(confirmation.sendPublishedOnce).not.toHaveBeenCalled();
+  });
+
   it('captures the final boundary before remote deletion and preserves it on retries', async () => {
     const calls: string[] = [];
     const tx = {

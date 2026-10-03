@@ -173,7 +173,12 @@ export function CrossPromotionPartnerSide({
               />
             </FormField>
           </div>
-          {partnerIds.length ? (
+          {!partnerIds.length && !targets.length ? (
+            <Button type="button" onClick={onAddTarget}>
+              <Plus size={15} /> Add promo placement
+            </Button>
+          ) : null}
+          {partnerIds.length || targets.length ? (
             <>
               <CrossPromotionPlacementSettings
                 title="Formats in partner channels"

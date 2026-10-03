@@ -137,6 +137,39 @@ export class MutualPromotionLifecycleService {
     return { ...result, nextDueAt: await this.nextDueAt() };
   }
 
+  /**
+   * Telegram-native schedules become PUBLISHED in the managed-post identity
+   * reconciler, outside this folder's original due work item. Reconcile only
+   * those changed deliveries immediately afterwards so bot confirmation is
+   * tied to the observed publication, not to a later retry or folder end.
+   */
+  async reconcilePublishedDeliveries(now = new Date(), limit = 100) {
+    const deliveries = await this.prisma.mutualPromotionPostDelivery.findMany({
+      where: {
+        status: { in: ['PENDING', 'PUBLISHING', 'FAILED'] },
+        managedPost: { status: 'PUBLISHED' },
+      },
+      orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
+      take: Math.max(1, Math.min(limit, 100)),
+      select: { id: true, folderPostId: true },
+    });
+    const confirmedPostIds = new Set<string>();
+    for (const delivery of deliveries) {
+      const updated = await this.prisma.mutualPromotionPostDelivery.updateMany({
+        where: {
+          id: delivery.id,
+          status: { in: ['PENDING', 'PUBLISHING', 'FAILED'] },
+        },
+        data: { status: 'PUBLISHED', publishedAt: now, lastError: null },
+      });
+      if (updated.count) confirmedPostIds.add(delivery.folderPostId);
+    }
+    for (const folderPostId of confirmedPostIds) {
+      await this.botConfirmation?.sendPublishedOnce(folderPostId);
+    }
+    return { reconciled: deliveries.length };
+  }
+
   private async runOne(
     work: MutualPromotionWorkItem,
     now: Date,

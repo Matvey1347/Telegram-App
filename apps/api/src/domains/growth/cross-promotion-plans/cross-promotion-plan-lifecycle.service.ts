@@ -5,6 +5,7 @@ import type {
 } from '@telegram-system/shared';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { notifyScheduledTaskDueWorkChanged } from '../../../common/scheduled-task-wake-notifier';
+import { MANAGED_POST_IDENTITY_RETRY_MS } from '../../operations/scheduled-tasks/due-work-predicates';
 import { TelegramManagedPostRemoteDeletionService } from '../../telegram/telegram-channels/telegram-managed-post-remote-deletion.service';
 import { CrossPromotionPlanBotNotificationService } from './cross-promotion-plan-bot-notification.service';
 
@@ -83,6 +84,7 @@ export class CrossPromotionPlanLifecycleService {
               telegramRemoteStatus: true,
               telegramChannelId: true,
               telegramMessageUrls: true,
+              telegramIdLastCheckedAt: true,
             },
           })
         : [];
@@ -176,17 +178,26 @@ export class CrossPromotionPlanLifecycleService {
             (timestamp) =>
               Number.isFinite(timestamp) && timestamp > now.getTime(),
           );
+        const pendingPublicationConfirmationAt =
+          !allPublished && !plan.botPublicationConfirmedAt
+            ? nextPublicationConfirmationAt(managedPosts, now)
+            : null;
+        const lifecycleDueAt = isActive
+          ? futureDeletion.length
+            ? new Date(Math.min(...futureDeletion))
+            : null
+          : new Date(Math.min(...futurePublication, now.getTime() + 60_000));
         await this.prisma.crossPromotionPlan.update({
           where: { id: plan.id },
           data: {
             status: isActive ? 'ACTIVE' : 'SCHEDULED',
-            nextDueAt: isActive
-              ? futureDeletion.length
-                ? new Date(Math.min(...futureDeletion))
-                : null
-              : new Date(
-                  Math.min(...futurePublication, now.getTime() + 60_000),
-                ),
+            // Keep an unconfirmed native publication on the due-driven path
+            // until Telegram identity reconciliation has observed it. Without
+            // this, the next lifecycle wake can be its deletion hours later.
+            nextDueAt: earliestDate(
+              lifecycleDueAt,
+              pendingPublicationConfirmationAt,
+            ),
             lastError: null,
           },
         });
@@ -243,4 +254,32 @@ export class CrossPromotionPlanLifecycleService {
       retried,
     };
   }
+}
+
+function nextPublicationConfirmationAt(
+  managedPosts: Array<{
+    status: string;
+    telegramIdLastCheckedAt: Date | null;
+  }>,
+  now: Date,
+) {
+  const scheduled = managedPosts.filter((post) => post.status === 'SCHEDULED');
+  if (!scheduled.length) return null;
+  return new Date(
+    Math.min(
+      ...scheduled.map((post) =>
+        post.telegramIdLastCheckedAt
+          ? post.telegramIdLastCheckedAt.getTime() +
+            MANAGED_POST_IDENTITY_RETRY_MS
+          : now.getTime(),
+      ),
+    ),
+  );
+}
+
+function earliestDate(...dates: Array<Date | null>) {
+  const values = dates.filter((value): value is Date => value instanceof Date);
+  return values.length
+    ? new Date(Math.min(...values.map((value) => value.getTime())))
+    : null;
 }

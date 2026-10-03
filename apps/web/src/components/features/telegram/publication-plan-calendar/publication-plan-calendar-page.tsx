@@ -10,7 +10,6 @@ import {
 } from "lucide-react";
 import type { TelegramPublicationPlanCalendarEvent } from "@telegram-system/shared";
 import { useQuery } from "@tanstack/react-query";
-import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
 import { PageTabHead } from "@/components/layout/page-tab-head";
 import { IconAvatar } from "@/components/icons/icon-avatar";
@@ -26,6 +25,7 @@ import {
 } from "@/components/ui/primitives";
 import { telegramPublicationSchedulesApi } from "@/lib/api";
 import { telegramPublicationScheduleKeys } from "@/lib/query-keys";
+import { PublicationCalendarEventDetailsModal } from "./publication-calendar-event-details-modal";
 
 type CalendarView = "week" | "month" | "threeWeeks";
 type SlotRow = {
@@ -134,13 +134,14 @@ function EventMarker({
 }
 
 export function PublicationPlanCalendarPage() {
-  const router = useRouter();
   const [view, setView] = useState<CalendarView>("month");
   const [cursor, setCursor] = useState(() => new Date());
   const [scheduleId, setScheduleId] = useState("");
   const [conflictEvents, setConflictEvents] = useState<
     TelegramPublicationPlanCalendarEvent[]
   >([]);
+  const [selectedEvent, setSelectedEvent] =
+    useState<TelegramPublicationPlanCalendarEvent | null>(null);
   const schedulesQuery = useQuery({
     queryKey: telegramPublicationScheduleKeys.lists(),
     queryFn: telegramPublicationSchedulesApi.list,
@@ -221,16 +222,8 @@ export function PublicationPlanCalendarPage() {
       ...(eventsByMoment.get(`time:${minuteKey(slot.scheduledAt)}`) ?? []),
     ]);
   const openEvent = (event: TelegramPublicationPlanCalendarEvent) => {
-    if (event.adSaleId) {
-      router.push(`/ad-sales?saleId=${event.adSaleId}`);
-      return;
-    }
-    if (event.crossPromotionPlanId) {
-      router.push(
-        `/ad-campaigns?section=mutual&mode=direct&planId=${event.crossPromotionPlanId}`,
-      );
-      return;
-    }
+    setConflictEvents([]);
+    setSelectedEvent(event);
   };
   const shift = (direction: -1 | 1) =>
     setCursor((current) =>
@@ -479,6 +472,10 @@ export function PublicationPlanCalendarPage() {
           ))}
         </div>
       </Modal>
+      <PublicationCalendarEventDetailsModal
+        event={selectedEvent}
+        onClose={() => setSelectedEvent(null)}
+      />
     </AppShell>
   );
 }

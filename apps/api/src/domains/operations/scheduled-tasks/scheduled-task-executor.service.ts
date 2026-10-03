@@ -39,8 +39,29 @@ export class ScheduledTaskExecutorService {
         { strict: false },
       );
       const lifecycleResult = await lifecycle.reconcilePublishedPlacements();
+      const publicationChanged =
+        result.localDelivery.published > 0 || result.verified > 0;
+      let mutualResult = { reconciled: 0 };
+      let directResult = { processed: 0 };
+      if (publicationChanged) {
+        // Re-run only after an observed managed-post publication. This keeps
+        // confirmations immediate for fan-out plans without introducing an
+        // idle polling query for every workspace or channel.
+        [mutualResult, directResult] = await Promise.all([
+          this.mutualPromotionLifecycleService().then((service) =>
+            service.reconcilePublishedDeliveries(),
+          ),
+          this.moduleRef
+            .resolve<CrossPromotionPlanLifecycleService>(
+              CrossPromotionPlanLifecycleService,
+              undefined,
+              { strict: false },
+            )
+            .then((service) => service.processDueActions()),
+        ]);
+      }
       return {
-        summary: `Published ${result.localDelivery.published} locally scheduled managed posts; ${result.localDelivery.failed} failed. Checked ${result.checked} identities; verified ${result.verified}, missing ${result.missing}. Reconciled ${lifecycleResult.reconciled} ad placements. Deleted ${result.autoDeletion.deleted} posts whose lifetime elapsed.`,
+        summary: `Published ${result.localDelivery.published} locally scheduled managed posts; ${result.localDelivery.failed} failed. Checked ${result.checked} identities; verified ${result.verified}, missing ${result.missing}. Reconciled ${lifecycleResult.reconciled} ad placements, ${mutualResult.reconciled} mutual-promotion deliveries, and ${directResult.processed} direct-promotion plans. Deleted ${result.autoDeletion.deleted} posts whose lifetime elapsed.`,
       };
     },
     'telegram.channels.full_sync': (context: ScheduledTaskExecutionContext) =>
