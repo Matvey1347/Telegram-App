@@ -89,14 +89,24 @@ export class CrossPromotionPlanBotNotificationService {
       workspaceId: input.workspaceId,
       userId: input.userId,
       parseMode: 'HTML',
-      text: publishedMessage(publications, input.posts, byId),
+      text: publishedMessage(
+        publications,
+        input.posts,
+        byId,
+        await this.workspaceTimezone(input.workspaceId),
+      ),
     });
   }
 
   private async renderScheduledMessage(workspaceId: string, id: string) {
     const plan = await this.prisma.crossPromotionPlan.findFirst({
       where: { id, workspaceId },
-      select: { title: true, publicationPost: true, placementPostIds: true },
+      select: {
+        title: true,
+        publicationPost: true,
+        placementPostIds: true,
+        workspace: { select: { timezone: true } },
+      },
     });
     if (!plan) throw new NotFoundException('Cross-promotion plan not found');
     const post = json<CrossPromotionPlacementPost>(plan.publicationPost, {
@@ -106,7 +116,9 @@ export class CrossPromotionPlanBotNotificationService {
       buttonRows: [],
     });
     const publications = publisherPublications(post, plan.title);
-    const placements = publications.flatMap((publication) => publication.placements);
+    const placements = publications.flatMap(
+      (publication) => publication.placements,
+    );
     if (!placements.length) {
       throw new BadRequestException('This promotion has no scheduled channels');
     }
@@ -117,7 +129,7 @@ export class CrossPromotionPlanBotNotificationService {
     const byId = new Map(channels.map((channel) => [channel.id, channel]));
     const stored = json<StoredPlacement[]>(plan.placementPostIds, []);
     const managedPosts = stored.length
-        ? await this.prisma.telegramManagedPost.findMany({
+      ? await this.prisma.telegramManagedPost.findMany({
           where: {
             workspaceId,
             id: { in: stored.map((placement) => placement.managedPostId) },
@@ -140,12 +152,26 @@ export class CrossPromotionPlanBotNotificationService {
         stored,
         managedPosts,
       );
-      return { text: publishedMessage(publications, publishedPosts, byId) };
+      return {
+        text: publishedMessage(
+          publications,
+          publishedPosts,
+          byId,
+          plan.workspace.timezone,
+        ),
+      };
     }
-    return { text: renderPublicationConfirmation({
-      state: 'scheduled', channels,
-      groups: publications.map((publication) => ({ title: publication.title, placements: publication.placements })),
-    }) };
+    return {
+      text: renderPublicationConfirmation({
+        state: 'scheduled',
+        channels,
+        timezone: plan.workspace.timezone,
+        groups: publications.map((publication) => ({
+          title: publication.title,
+          placements: publication.placements,
+        })),
+      }),
+    };
   }
 
   private channelsFor(workspaceId: string, channelIds: string[]) {
@@ -159,6 +185,15 @@ export class CrossPromotionPlanBotNotificationService {
         presentationIcon: { select: { emoji: true } },
       },
     }) as Promise<Channel[]>;
+  }
+
+  private async workspaceTimezone(workspaceId: string) {
+    const workspace = await this.prisma.workspace.findUnique({
+      where: { id: workspaceId },
+      select: { timezone: true },
+    });
+    if (!workspace) throw new NotFoundException('Workspace not found');
+    return workspace.timezone;
   }
 }
 
@@ -215,13 +250,15 @@ function publishedPostsForStoredPlacements(
         : Math.min(storedIndex, Math.max(0, configured.length - 1));
     const matched = configured[fallbackIndex];
     if (matched) consumed.add(fallbackIndex);
-    return [{
-      telegramChannelId: managedPost.telegramChannelId,
-      telegramMessageUrls: managedPost.telegramMessageUrls,
-      publicationId: storedPlacement.publicationId ?? matched?.publicationId,
-      scheduledAt: matched?.placement.scheduledAt,
-      deleteAt: matched?.placement.deleteAt,
-    }];
+    return [
+      {
+        telegramChannelId: managedPost.telegramChannelId,
+        telegramMessageUrls: managedPost.telegramMessageUrls,
+        publicationId: storedPlacement.publicationId ?? matched?.publicationId,
+        scheduledAt: matched?.placement.scheduledAt,
+        deleteAt: matched?.placement.deleteAt,
+      },
+    ];
   });
 }
 
@@ -229,17 +266,25 @@ function publishedMessage(
   publications: Publication[],
   posts: PublishedPost[],
   channels: Map<string, Channel>,
+  timezone: string,
 ) {
   const groups = publications.map((publication) => ({
     title: publication.title,
-    placements: posts.filter((post) =>
-      (publication.id == null && !post.publicationId) || post.publicationId === publication.id,
+    placements: posts.filter(
+      (post) =>
+        (publication.id == null && !post.publicationId) ||
+        post.publicationId === publication.id,
     ),
   }));
   if (!groups.some((group) => group.placements.length) && posts.length) {
     groups.push({ title: 'Опубліковані пости', placements: posts });
   }
-  return renderPublicationConfirmation({ state: 'published', groups, channels: [...channels.values()] });
+  return renderPublicationConfirmation({
+    state: 'published',
+    groups,
+    channels: [...channels.values()],
+    timezone,
+  });
 }
 
 function postTitle(value: unknown, fallback: string) {

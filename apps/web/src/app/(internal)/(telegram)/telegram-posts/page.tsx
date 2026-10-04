@@ -64,6 +64,7 @@ import { AutoCalendarPlannerPreview } from "@/components/features/telegram/teleg
 import { CalendarPlanImport } from "@/components/features/telegram/telegram/calendar-plan-import";
 import { serializeCalendarPlanImport } from "@/components/features/telegram/telegram/calendar-plan-import-model";
 import { useManagedPostDeepLink } from "@/components/features/telegram/telegram/use-managed-post-deep-link";
+import { useWorkspaceTimezone } from "@/hooks/use-workspace-timezone";
 import { useManagedPostPageItems } from "@/components/features/telegram/telegram/managed-post-page";
 import {
   LongImageTextModePanel,
@@ -475,6 +476,7 @@ export function TelegramPostsPageClient({
   routePostView,
 }: TelegramPostsPageProps = {}) {
   const { t, ensureNamespaces, hasNamespaces } = useI18n();
+  const workspaceTimezone = useWorkspaceTimezone();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [newPostToken, setNewPostToken] = useState(0);
@@ -670,6 +672,7 @@ export function TelegramPostsPageClient({
             channelTelegramChatId={channel.telegramChatId}
             channelTimePosts={channel.timePosts || []}
             channelPublishingCapabilities={channel.publishingCapabilities}
+            workspaceTimezone={workspaceTimezone}
             newPostToken={newPostToken}
             newGroupRequested={newGroupRequested}
             onNewGroupRequestHandled={() => setNewGroupRequested(false)}
@@ -726,6 +729,7 @@ function TelegramPostWorkspace({
   channelTelegramChatId,
   channelTimePosts,
   channelPublishingCapabilities,
+  workspaceTimezone,
   newPostToken,
   newGroupRequested,
   onNewGroupRequestHandled,
@@ -752,6 +756,7 @@ function TelegramPostWorkspace({
     messageLengthMax: number;
     canPublishInlineButtons: boolean;
   } | null;
+  workspaceTimezone: string;
   newPostToken: number;
   newGroupRequested: boolean;
   onNewGroupRequestHandled: () => void;
@@ -3627,9 +3632,7 @@ function TelegramPostWorkspace({
                   ...post,
                   groupId: effectivePostGroupId(post),
                 }))}
-                timezone={
-                  Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"
-                }
+                timezone={workspaceTimezone}
                 disabled={autoPlannerBusy}
                 content={calendarPlanImportContent}
                 onContentChange={setCalendarPlanImportContent}
@@ -4603,7 +4606,7 @@ function TelegramPostWorkspace({
                   {selectedCalendarDateLabel}
                 </h3>
                 <p className="mt-1 text-sm text-neutral-400">
-                  {Intl.DateTimeFormat().resolvedOptions().timeZone}
+                  {workspaceTimezone}
                 </p>
               </div>
             </div>
@@ -5424,7 +5427,9 @@ function TelegramPostWorkspace({
                   onChange={setMediaItems}
                   disabled={busy || hasNonReplaceableTelegramMedia}
                   readOnly={hasNonReplaceableTelegramMedia}
-                  allowedKinds={hasReplaceableTelegramPhotos ? ["PHOTO"] : undefined}
+                  allowedKinds={
+                    hasReplaceableTelegramPhotos ? ["PHOTO"] : undefined
+                  }
                   maxItems={
                     hasReplaceableTelegramPhotos
                       ? remotePostMediaItems.length
@@ -5558,7 +5563,9 @@ function TelegramPostWorkspace({
                       disabled={
                         editorIsSaving || returnManagedPostToDraft.isPending
                       }
-                      onClick={() => void returnManagedPostToDraft.mutateAsync()}
+                      onClick={() =>
+                        void returnManagedPostToDraft.mutateAsync()
+                      }
                     >
                       <RotateCcw size={15} />
                       {returnManagedPostToDraft.isPending

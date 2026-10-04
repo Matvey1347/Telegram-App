@@ -1,6 +1,21 @@
 import { WorkspacesService } from './workspaces.service';
 
 describe('WorkspacesService premium emoji presentation', () => {
+  it('rejects an invalid timezone before changing the workspace', async () => {
+    const prisma = {
+      workspaceMember: {
+        findFirst: jest.fn().mockResolvedValue({ role: 'owner' }),
+      },
+      workspace: { update: jest.fn() },
+    };
+    const service = new WorkspacesService(prisma as never, {} as never);
+
+    await expect(
+      service.update('user-1', 'workspace-1', { timezone: 'Not/A_Timezone' }),
+    ).rejects.toThrow('Unknown timezone');
+    expect(prisma.workspace.update).not.toHaveBeenCalled();
+  });
+
   it('reuses an immutable Telegram asset stored by another workspace', async () => {
     const prisma = {
       workspaceMember: {
@@ -38,10 +53,7 @@ describe('WorkspacesService premium emoji presentation', () => {
         ]),
       },
     };
-    const service = new WorkspacesService(
-      prisma as never,
-      {} as never,
-    );
+    const service = new WorkspacesService(prisma as never, {} as never);
 
     const [workspace] = await service.findAll('user-1');
 
@@ -49,8 +61,7 @@ describe('WorkspacesService premium emoji presentation', () => {
       type: 'unicode',
       value: '👽',
       telegramCustomEmojiKind: 'ANIMATED',
-      telegramCustomEmojiRenderAssetUrl:
-        'https://cdn.example.com/alien.json',
+      telegramCustomEmojiRenderAssetUrl: 'https://cdn.example.com/alien.json',
     });
   });
 });

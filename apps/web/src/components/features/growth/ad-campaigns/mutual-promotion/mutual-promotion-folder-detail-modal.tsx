@@ -163,8 +163,9 @@ export function MutualPromotionFolderDetailModal({
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-neutral-800 bg-neutral-950/40 p-4">
           <div className="space-y-1 text-sm text-neutral-300">
             <p className="inline-flex items-center gap-2">
-              <CalendarClock size={16} /> {formatDateTime(folder.startsAt)} —{" "}
-              {formatDateTime(folder.endsAt)}
+              <CalendarClock size={16} />{" "}
+              {formatDateTime(folder.startsAt, undefined, timezone)} —{" "}
+              {formatDateTime(folder.endsAt, undefined, timezone)}
             </p>
             <p className="inline-flex items-center gap-2">
               <Users size={16} /> {folder.publisherCount} publisher(s),{" "}

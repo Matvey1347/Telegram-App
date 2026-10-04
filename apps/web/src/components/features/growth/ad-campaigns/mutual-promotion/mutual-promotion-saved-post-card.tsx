@@ -56,8 +56,8 @@ export function MutualPromotionSavedPostCard({
   const [editing, setEditing] = useState(false);
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
-  const [draft, setDraft] = useState<TelegramSystemBotPostDraft>(
-    () => postDraft(post),
+  const [draft, setDraft] = useState<TelegramSystemBotPostDraft>(() =>
+    postDraft(post),
   );
   const [error, setError] = useState<string | null>(null);
 
@@ -110,7 +110,7 @@ export function MutualPromotionSavedPostCard({
             {index + 1}. {post.title || "Imported publication"}
           </p>
           <p className="mt-1 text-sm text-neutral-400">
-            {formatDateTime(post.scheduledAt)}
+            {formatDateTime(post.scheduledAt, undefined, timezone)}
           </p>
         </div>
         {editable ? (

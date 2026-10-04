@@ -25,6 +25,8 @@ import {
 } from "@/components/ui/primitives";
 import { telegramPublicationSchedulesApi } from "@/lib/api";
 import { telegramPublicationScheduleKeys } from "@/lib/query-keys";
+import { zonedDateTimeToUtc } from "@/lib/features/growth/telegram-ad-sales";
+import { useWorkspaceTimezone } from "@/hooks/use-workspace-timezone";
 import { PublicationCalendarEventDetailsModal } from "./publication-calendar-event-details-modal";
 
 type CalendarView = "week" | "month" | "threeWeeks";
@@ -73,15 +75,20 @@ function monthGridDays(cursor: Date) {
     ),
   );
 }
-function dateKey(value: Date | string) {
+function calendarDayKey(value: Date) {
+  return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
+}
+function dateKey(value: string, timezone: string) {
   return new Intl.DateTimeFormat("en-CA", {
+    timeZone: timezone,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
-  }).format(typeof value === "string" ? new Date(value) : value);
+  }).format(new Date(value));
 }
-function displayTime(value: string) {
+function displayTime(value: string, timezone: string) {
   return new Intl.DateTimeFormat("en-GB", {
+    timeZone: timezone,
     hour: "2-digit",
     minute: "2-digit",
     hourCycle: "h23",
@@ -134,6 +141,7 @@ function EventMarker({
 }
 
 export function PublicationPlanCalendarPage() {
+  const timezone = useWorkspaceTimezone();
   const [view, setView] = useState<CalendarView>("month");
   const [cursor, setCursor] = useState(() => new Date());
   const [scheduleId, setScheduleId] = useState("");
@@ -162,10 +170,18 @@ export function PublicationPlanCalendarPage() {
     const from = visibleDays?.[0] ?? range.from;
     const to = visibleDays?.at(-1) ?? range.to;
     return {
-      from: from.toISOString(),
-      to: new Date(to.getTime() + 86_400_000).toISOString(),
+      from: zonedDateTimeToUtc(
+        calendarDayKey(from),
+        "00:00",
+        timezone,
+      ).toISOString(),
+      to: zonedDateTimeToUtc(
+        calendarDayKey(addDays(to, 1)),
+        "00:00",
+        timezone,
+      ).toISOString(),
     };
-  }, [cursor, range, view]);
+  }, [cursor, range, timezone, view]);
   const calendarQuery = useQuery({
     queryKey: telegramPublicationScheduleKeys.calendar(
       selectedScheduleId,
@@ -232,7 +248,7 @@ export function PublicationPlanCalendarPage() {
         direction * (view === "month" ? 30 : view === "threeWeeks" ? 21 : 7),
       ),
     );
-  const today = dateKey(new Date());
+  const today = dateKey(new Date().toISOString(), timezone);
 
   return (
     <AppShell>
@@ -295,8 +311,8 @@ export function PublicationPlanCalendarPage() {
               </button>
             </div>
             <DateRangeInput
-              from={dateKey(range.from)}
-              to={dateKey(range.to)}
+              from={calendarDayKey(range.from)}
+              to={calendarDayKey(range.to)}
               onChange={({ from }) => {
                 if (from) setCursor(new Date(`${from}T12:00:00`));
               }}
@@ -335,11 +351,13 @@ export function PublicationPlanCalendarPage() {
               </div>
               <div className="grid grid-cols-7">
                 {days.map((day) => {
-                  const dayKey = dateKey(day);
+                  const dayKey = calendarDayKey(day);
                   const outsideMonth =
                     view === "month" && day.getMonth() !== cursor.getMonth();
                   const rows = slotRows
-                    .filter((slot) => dateKey(slot.scheduledAt) === dayKey)
+                    .filter(
+                      (slot) => dateKey(slot.scheduledAt, timezone) === dayKey,
+                    )
                     .sort((left, right) =>
                       left.scheduledAt.localeCompare(right.scheduledAt),
                     );
@@ -349,7 +367,7 @@ export function PublicationPlanCalendarPage() {
                   const outside = relevantEvents(
                     (calendarQuery.data?.events ?? []).filter(
                       (event) =>
-                        dateKey(event.scheduledAt) === dayKey &&
+                        dateKey(event.scheduledAt, timezone) === dayKey &&
                         !plannedTimes.has(minuteKey(event.scheduledAt)),
                     ),
                   );
@@ -395,7 +413,7 @@ export function PublicationPlanCalendarPage() {
                                   className={`flex w-full items-center gap-1.5 rounded-md border border-dashed px-1.5 py-1 text-left text-[10px] font-medium ${eventTone(event)}`}
                                 >
                                   <span className="shrink-0">
-                                    {displayTime(event.scheduledAt)}
+                                    {displayTime(event.scheduledAt, timezone)}
                                   </span>
                                   <span className="min-w-0 flex-1 truncate">
                                     {event.title}
@@ -466,7 +484,7 @@ export function PublicationPlanCalendarPage() {
                 <span className="truncate">{event.title}</span>
               </span>
               <span className="shrink-0 text-xs text-neutral-400">
-                {displayTime(event.scheduledAt)}
+                {displayTime(event.scheduledAt, timezone)}
               </span>
             </Button>
           ))}

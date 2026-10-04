@@ -50,7 +50,14 @@ export class MutualPromotionBotNotificationService {
           select: {
             status: true,
             telegramChannelId: true,
-            managedPost: { select: { title: true, scheduledAt: true, deleteAt: true, telegramMessageUrls: true } },
+            managedPost: {
+              select: {
+                title: true,
+                scheduledAt: true,
+                deleteAt: true,
+                telegramMessageUrls: true,
+              },
+            },
           },
         },
       },
@@ -87,34 +94,77 @@ export class MutualPromotionBotNotificationService {
 
   private folderForPosts(postIds?: string[], folderId?: string) {
     return this.prisma.mutualPromotionFolder.findFirstOrThrow({
-      where: { ...(folderId ? { id: folderId } : {}), ...(postIds ? { posts: { some: { id: { in: postIds } } } } : {}) },
+      where: {
+        ...(folderId ? { id: folderId } : {}),
+        ...(postIds ? { posts: { some: { id: { in: postIds } } } } : {}),
+      },
       select: {
         id: true,
         workspaceId: true,
         createdByUserId: true,
         scheduledBotConfirmationSentAt: true,
-        participants: { select: { telegramChannel: { select: { id: true, title: true, publicInviteLink: { select: { url: true } }, defaultInviteLink: { select: { url: true } }, presentationIcon: { select: { emoji: true } } } } } },
+        workspace: { select: { timezone: true } },
+        participants: {
+          select: {
+            telegramChannel: {
+              select: {
+                id: true,
+                title: true,
+                publicInviteLink: { select: { url: true } },
+                defaultInviteLink: { select: { url: true } },
+                presentationIcon: { select: { emoji: true } },
+              },
+            },
+          },
+        },
         posts: {
           where: postIds ? { id: { in: postIds } } : undefined,
           orderBy: { position: 'asc' },
           select: {
             title: true,
-            deliveries: { select: { telegramChannelId: true, managedPost: { select: { status: true, scheduledAt: true, deleteAt: true, telegramMessageUrls: true } } } },
+            deliveries: {
+              select: {
+                telegramChannelId: true,
+                managedPost: {
+                  select: {
+                    status: true,
+                    scheduledAt: true,
+                    deleteAt: true,
+                    telegramMessageUrls: true,
+                  },
+                },
+              },
+            },
           },
         },
       },
     });
   }
 
-  private render(folder: Awaited<ReturnType<MutualPromotionBotNotificationService['folder']>>, state: 'scheduled' | 'published') {
+  private render(
+    folder: Awaited<
+      ReturnType<MutualPromotionBotNotificationService['folder']>
+    >,
+    state: 'scheduled' | 'published',
+  ) {
     return renderPublicationConfirmation({
       state,
-      channels: folder.participants.map((participant) => participant.telegramChannel),
+      timezone: folder.workspace.timezone,
+      channels: folder.participants.map(
+        (participant) => participant.telegramChannel,
+      ),
       groups: folder.posts.map((post) => ({
         title: post.title,
         placements: post.deliveries.flatMap((delivery) =>
           delivery.managedPost
-            ? [{ telegramChannelId: delivery.telegramChannelId, scheduledAt: delivery.managedPost.scheduledAt ?? undefined, deleteAt: delivery.managedPost.deleteAt, telegramMessageUrls: delivery.managedPost.telegramMessageUrls }]
+            ? [
+                {
+                  telegramChannelId: delivery.telegramChannelId,
+                  scheduledAt: delivery.managedPost.scheduledAt ?? undefined,
+                  deleteAt: delivery.managedPost.deleteAt,
+                  telegramMessageUrls: delivery.managedPost.telegramMessageUrls,
+                },
+              ]
             : [],
         ),
       })),

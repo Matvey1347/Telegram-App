@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -331,6 +332,9 @@ export class WorkspacesService {
       });
       if (!icon) throw new NotFoundException('Icon not found');
     }
+    if (dto.timezone !== undefined && !isValidTimeZone(dto.timezone.trim())) {
+      throw new BadRequestException('Unknown timezone');
+    }
     await this.prisma.workspace.update({
       where: { id },
       data: {
@@ -359,5 +363,14 @@ export class WorkspacesService {
     const membership =
       await this.workspaceService.resolveWorkspaceMembershipForUser(userId);
     return this.shapeMembership(membership);
+  }
+}
+
+function isValidTimeZone(timezone: string) {
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: timezone }).format();
+    return true;
+  } catch {
+    return false;
   }
 }

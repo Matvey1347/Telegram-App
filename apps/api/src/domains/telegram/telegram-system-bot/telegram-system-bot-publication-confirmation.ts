@@ -23,8 +23,12 @@ export function renderPublicationConfirmation(input: {
   state: 'scheduled' | 'published';
   groups: PublicationConfirmationGroup[];
   channels: PublicationConfirmationChannel[];
+  /** IANA timezone of the workspace receiving this confirmation. */
+  timezone: string;
 }) {
-  const channels = new Map(input.channels.map((channel) => [channel.id, channel]));
+  const channels = new Map(
+    input.channels.map((channel) => [channel.id, channel]),
+  );
   const sections = input.groups
     .map((group) => {
       const placements = group.placements.filter((placement) =>
@@ -33,12 +37,20 @@ export function renderPublicationConfirmation(input: {
           : true,
       );
       if (!placements.length) return null;
-      const heading = input.state === 'published'
-        ? `<b>Пост «${escapeHtml(group.title)}» опубліковано в каналах:</b>`
-        : `<b>Пост «${escapeHtml(group.title)}» буде опубліковано в каналах:</b>`;
+      const heading =
+        input.state === 'published'
+          ? `<b>Пост «${escapeHtml(group.title)}» опубліковано в каналах:</b>`
+          : `<b>Пост «${escapeHtml(group.title)}» буде опубліковано в каналах:</b>`;
       return [
         heading,
-        ...placements.map((placement) => line(placement, channels.get(placement.telegramChannelId), input.state)),
+        ...placements.map((placement) =>
+          line(
+            placement,
+            channels.get(placement.telegramChannelId),
+            input.state,
+            input.timezone,
+          ),
+        ),
       ].join('\n');
     })
     .filter((section): section is string => Boolean(section));
@@ -46,6 +58,7 @@ export function renderPublicationConfirmation(input: {
     input.state === 'published'
       ? '✅ <b>Пости опубліковано</b>'
       : '✅ <b>Пост заплановано</b>',
+    `🕓 Часовий пояс: <b>${escapeHtml(input.timezone)}</b>`,
     ...sections,
   ].join('\n\n');
 }
@@ -54,47 +67,79 @@ function line(
   placement: PublicationConfirmationPlacement,
   channel: PublicationConfirmationChannel | undefined,
   state: 'scheduled' | 'published',
+  timezone: string,
 ) {
-  const scheduled = placement.scheduledAt ? new Date(placement.scheduledAt) : null;
-  const postLinks = state === 'published'
-    ? (placement.telegramMessageUrls ?? []).map((url, index, urls) =>
-        `<a href="${escapeHtml(url)}">${urls.length === 1 ? 'Опублікований пост' : `Опублікований пост ${index + 1}`}</a>`,
-      )
-    : [];
+  const scheduled = placement.scheduledAt
+    ? new Date(placement.scheduledAt)
+    : null;
+  const postLinks =
+    state === 'published'
+      ? (placement.telegramMessageUrls ?? []).map(
+          (url, index, urls) =>
+            `<a href="${escapeHtml(url)}">${urls.length === 1 ? 'Опублікований пост' : `Опублікований пост ${index + 1}`}</a>`,
+        )
+      : [];
   return [
-    `${channelPresentation(channel)}${scheduled ? ` — <b>${formatDate(scheduled)}</b>` : ''}`,
+    `${channelPresentation(channel)}${scheduled ? ` — <b>${formatDate(scheduled, timezone)}</b>` : ''}`,
     ...postLinks.map((link) => `   ${link}`),
     scheduled ? deletionLine(placement.deleteAt, scheduled) : '',
-  ].filter(Boolean).join('\n');
+  ]
+    .filter(Boolean)
+    .join('\n');
 }
 
-function channelPresentation(channel: PublicationConfirmationChannel | undefined) {
+function channelPresentation(
+  channel: PublicationConfirmationChannel | undefined,
+) {
   const icon = escapeHtml(channel?.presentationIcon?.emoji || '📢');
   const title = `<b>${escapeHtml(stripTitleEmoji(channel?.title ?? 'Недоступний канал'))}</b>`;
   const url = channel?.publicInviteLink?.url ?? channel?.defaultInviteLink?.url;
-  return url ? `<a href="${escapeHtml(url)}">${icon} ${title}</a>` : `${icon} ${title}`;
+  return url
+    ? `<a href="${escapeHtml(url)}">${icon} ${title}</a>`
+    : `${icon} ${title}`;
 }
 
-function formatDate(value: Date) {
+function formatDate(value: Date, timezone: string) {
   return new Intl.DateTimeFormat('uk-UA', {
-    timeZone: 'Europe/Warsaw', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', hour12: false,
-  }).format(value).replace(',', '');
+    timeZone: timezone,
+    hour: '2-digit',
+    minute: '2-digit',
+    day: '2-digit',
+    month: '2-digit',
+    hour12: false,
+  })
+    .format(value)
+    .replace(',', '');
 }
 
-function deletionLine(value: string | Date | null | undefined, scheduled: Date) {
+function deletionLine(
+  value: string | Date | null | undefined,
+  scheduled: Date,
+) {
   const deletedAt = value ? new Date(value) : null;
   if (!deletedAt || deletedAt.getTime() <= scheduled.getTime()) return '';
-  const minutes = Math.round((deletedAt.getTime() - scheduled.getTime()) / 60_000);
+  const minutes = Math.round(
+    (deletedAt.getTime() - scheduled.getTime()) / 60_000,
+  );
   const hours = Math.floor(minutes / 60);
   const remaining = minutes % 60;
-  const duration = [hours ? `${hours} год` : '', remaining ? `${remaining} хв` : ''].filter(Boolean).join(' ') || 'менше хвилини';
+  const duration =
+    [hours ? `${hours} год` : '', remaining ? `${remaining} хв` : '']
+      .filter(Boolean)
+      .join(' ') || 'менше хвилини';
   return `   Автовидалення: <b>через ${duration}</b>`;
 }
 
 function stripTitleEmoji(value: string) {
-  return value.replace(/[\p{Extended_Pictographic}\uFE0F\u200D]/gu, '').replace(/\s{2,}/g, ' ').trim();
+  return value
+    .replace(/[\p{Extended_Pictographic}\uFE0F\u200D]/gu, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
 }
 
 function escapeHtml(value: string) {
-  return value.replace(/[&<>]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[character]!);
+  return value.replace(
+    /[&<>]/g,
+    (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[character]!,
+  );
 }
