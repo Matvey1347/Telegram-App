@@ -34,7 +34,7 @@ describe('TelegramPublicationSchedulesService', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
-  it('creates daily occurrences in the workspace timezone across a DST boundary', async () => {
+  it('keeps UTC publication slots at the same instant across a DST boundary', async () => {
     prisma.workspace.findUnique.mockResolvedValue({
       timezone: 'Europe/Warsaw',
     });
@@ -50,6 +50,7 @@ describe('TelegramPublicationSchedulesService', () => {
         name: 'Main',
         iconId: null,
         iconPresentation: null,
+        timezone: 'Europe/Warsaw',
         isDefault: true,
         assignedChannelsCount: 1,
         assignedChannelIds: ['channel-1'],
@@ -92,11 +93,11 @@ describe('TelegramPublicationSchedulesService', () => {
       }),
       expect.objectContaining({
         slotId: 'morning',
-        scheduledAt: '2026-10-25T08:00:00.000Z',
+        scheduledAt: '2026-10-25T07:00:00.000Z',
       }),
       expect.objectContaining({
         slotId: 'morning',
-        scheduledAt: '2026-10-26T08:00:00.000Z',
+        scheduledAt: '2026-10-26T07:00:00.000Z',
       }),
     ]);
   });
@@ -114,7 +115,7 @@ describe('TelegramPublicationSchedulesService', () => {
       id: 'ad-1',
       title: 'Ads',
       kind: 'AD',
-      time: '09:00',
+      time: '07:00',
       isActive: true,
     };
     prisma.telegramChannelPublicationScheduleAssignment.findMany.mockResolvedValue(
@@ -155,7 +156,7 @@ describe('TelegramPublicationSchedulesService', () => {
         state: 'OCCUPIED',
         postId: 'post-1',
       }),
-      expect.objectContaining({ scheduledAt: '2026-10-25T08:00:00.000Z' }),
+      expect.objectContaining({ scheduledAt: '2026-10-25T07:00:00.000Z' }),
     ]);
     expect(rows['channel-2']).toHaveLength(2);
     expect(rows['channel-2']?.[0]?.postId).toBeNull();
@@ -180,7 +181,7 @@ describe('TelegramPublicationSchedulesService', () => {
       id: 'ad-1',
       title: 'Ads',
       kind: 'AD',
-      time: '09:10',
+      time: '07:10',
       isActive: true,
     };
     prisma.telegramChannelPublicationScheduleAssignment.findMany.mockResolvedValue(
@@ -292,6 +293,10 @@ describe('TelegramPublicationSchedulesService', () => {
       {
         id: 'vp-1',
         title: 'OVP: October partner post',
+        advertiser: {
+          avatarIcon: null,
+          crmPeers: [{ photoUrl: 'https://example.com/partner.jpg' }],
+        },
         scheduledAt: new Date('2026-10-02T10:00:00.000Z'),
         publisherChannelIds: ['channel-1'],
         publicationPost: {
@@ -322,6 +327,7 @@ describe('TelegramPublicationSchedulesService', () => {
         kind: 'VP',
         title: 'OVP: October partner post',
         scheduledAt: '2026-10-04T15:10:00.000Z',
+        avatarUrl: 'https://example.com/partner.jpg',
       }),
     ]);
   });

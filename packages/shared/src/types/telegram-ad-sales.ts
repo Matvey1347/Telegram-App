@@ -354,6 +354,7 @@ export type TelegramAdAvailabilitySlot = {
     currency?: string;
     saleAgreedAmount?: string;
     saleReceivedAmount?: string;
+    saleReceivedCurrency?: string;
     settlementCurrency?: string;
     advertiserPhotoUrl?: string | null;
     advertiserTelegram?: string | null;

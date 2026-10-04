@@ -258,7 +258,6 @@ export class TelegramManagedPostPublicationService {
         !this.matchesPublicationSlot(
           scheduledAt,
           assignedSlot.time,
-          assignedSlot.schedule.workspace.timezone,
         )
       ) {
         throw telegramPostsBadRequest(
@@ -302,17 +301,12 @@ export class TelegramManagedPostPublicationService {
   private matchesPublicationSlot(
     scheduledAt: Date,
     time: string,
-    timezone: string,
   ) {
-    const parts = new Intl.DateTimeFormat('en-US', {
-      timeZone: timezone,
-      hour: '2-digit',
-      minute: '2-digit',
-      hourCycle: 'h23',
-    }).formatToParts(scheduledAt);
-    const value = (type: string) =>
-      parts.find((part) => part.type === type)?.value ?? '';
-    return `${value('hour')}:${value('minute')}` === time;
+    return (
+      `${String(scheduledAt.getUTCHours()).padStart(2, '0')}:${String(
+        scheduledAt.getUTCMinutes(),
+      ).padStart(2, '0')}` === time
+    );
   }
 
   public async cancelScheduledManagedPost(

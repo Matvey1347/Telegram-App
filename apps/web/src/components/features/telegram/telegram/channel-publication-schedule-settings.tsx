@@ -10,6 +10,7 @@ import { telegramPublicationSchedulesApi } from "@/lib/api";
 import { telegramPublicationScheduleKeys } from "@/lib/query-keys";
 import { CustomSelect, FormField } from "@/components/ui/primitives";
 import { IconAvatar } from "@/components/icons/icon-avatar";
+import { useWorkspaceTimezone } from "@/hooks/use-workspace-timezone";
 
 export type ChannelPublicationScheduleDraft = {
   scheduleId: string;
@@ -25,8 +26,9 @@ export function ChannelPublicationScheduleSettings({
   value?: ChannelPublicationScheduleDraft | null;
   onChange?: (value: ChannelPublicationScheduleDraft) => void;
 }) {
+  const timezone = useWorkspaceTimezone();
   const schedules = useQuery({
-    queryKey: telegramPublicationScheduleKeys.lists(),
+    queryKey: telegramPublicationScheduleKeys.lists(timezone),
     queryFn: telegramPublicationSchedulesApi.list,
   });
   const assignment = useQuery({

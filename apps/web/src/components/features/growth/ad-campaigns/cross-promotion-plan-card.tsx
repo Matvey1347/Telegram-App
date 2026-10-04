@@ -10,6 +10,7 @@ import {
   CardMenuAction,
 } from "@/components/ui/card-actions-menu";
 import { formatDateTime } from "@/lib/date-format";
+import { useWorkspaceTimezone } from "@/hooks/use-workspace-timezone";
 import { MutualPromotionFolderStatusBadge } from "./mutual-promotion/mutual-promotion-folder-status-badge";
 
 export function CrossPromotionPlanCard({
@@ -31,6 +32,7 @@ export function CrossPromotionPlanCard({
   onRefreshInviteLinks?: (plan: CrossPromotionPlan) => void;
   refreshingInviteLinks?: boolean;
 }) {
+  const workspaceTimezone = useWorkspaceTimezone();
   const publishingChannels = plan.publisherResults.map((channel) => ({
     id: channel.telegramChannelId,
     title: channel.title,
@@ -77,7 +79,8 @@ export function CrossPromotionPlanCard({
               </h2>
             </div>
             <p className="mt-1.5 flex items-center gap-1.5 text-[11px] text-neutral-400">
-              <CalendarClock size={14} /> {formatDateTime(cardScheduledAt)}
+              <CalendarClock size={14} />{" "}
+              {formatDateTime(cardScheduledAt, undefined, workspaceTimezone)}
             </p>
             {plan.advertiser ? (
               <div className="mt-2 flex items-center gap-2">

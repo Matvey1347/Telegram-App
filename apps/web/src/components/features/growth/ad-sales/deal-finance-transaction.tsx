@@ -32,6 +32,9 @@ export function DealFinanceTransaction({
   onCreatePayment?: (payload: RegisterPaymentPayload) => Promise<void>;
   onDeletePayment?: (id: string) => void;
 }) {
+  const linkedPaymentLabel = payments.length
+    ? `${payments.map((payment) => `${payment.amount} ${payment.currency}`).join(" · ")} linked`
+    : "No finance transaction linked";
   return (
     <section className="rounded-xl border border-neutral-800 bg-neutral-950/45 p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -39,11 +42,7 @@ export function DealFinanceTransaction({
           <CreditCard size={20} className="text-neutral-400" />
           <div>
             <h4 className="font-medium text-white">Finance transaction</h4>
-            <p className="text-sm text-neutral-500">
-              {payments.length
-                ? `${sale.totalPaidAmount} ${sale.settlementCurrency} linked`
-                : "No finance transaction linked"}
-            </p>
+            <p className="text-sm text-neutral-500">{linkedPaymentLabel}</p>
           </div>
         </div>
         <IconButton

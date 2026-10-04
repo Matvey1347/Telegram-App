@@ -20,6 +20,8 @@ export type TelegramPublicationSchedule = {
   name: string;
   iconId: string | null;
   iconPresentation: ResolvedEmoji | null;
+  /** The timezone used to present `slots[].time`. Slot times are stored in UTC. */
+  timezone: string;
   isDefault: boolean;
   slots: TelegramPublicationScheduleSlot[];
   assignedChannelsCount: number;

@@ -2,6 +2,7 @@ import type {
   TelegramAdPriceQuote,
   TelegramAdPricingMode,
   TelegramAdSale,
+  TelegramAdSalePayment,
   TelegramAdSalePlacement,
 } from "./telegram-ad-sales";
 import type { PaginatedResponse } from "../pagination";
@@ -40,6 +41,8 @@ export type TelegramAdSaleListItem = Omit<
   TelegramAdSale,
   "payments" | "advertiser" | "placements"
 > & {
+  /** Latest active payment, kept compact so list rows show its real currency. */
+  paymentSummary?: Pick<TelegramAdSalePayment, "amount" | "currency"> | null;
   advertiserSummary?: {
     displayName: string;
     telegramUsername: string | null;

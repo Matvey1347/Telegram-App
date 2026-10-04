@@ -19,6 +19,8 @@ import {
 } from "@/components/ui/primitives";
 import { useWorkspaceModalDrafts } from "@/hooks/use-workspace-modal-drafts";
 import { selectedWorkspaceDraftScope } from "@/lib/workspace-modal-drafts";
+import { timezonePresentations } from "@/lib/timezones";
+import { useWorkspaceTimezone } from "@/hooks/use-workspace-timezone";
 import { telegramPublicationSchedulesApi } from "@/lib/api";
 import { telegramPublicationScheduleKeys } from "@/lib/query-keys";
 import { useAppToast } from "@/providers/toast-provider";
@@ -39,6 +41,7 @@ export function PublicationSchedulesModal({
   onClose: () => void;
 }) {
   const queryClient = useQueryClient();
+  const timezone = useWorkspaceTimezone();
   const { pushToast } = useAppToast();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
@@ -48,7 +51,7 @@ export function PublicationSchedulesModal({
   const [deleteTarget, setDeleteTarget] =
     useState<TelegramPublicationSchedule | null>(null);
   const schedules = useQuery({
-    queryKey: telegramPublicationScheduleKeys.lists(),
+    queryKey: telegramPublicationScheduleKeys.lists(timezone),
     queryFn: telegramPublicationSchedulesApi.list,
   });
   const restoreDraft = useCallback(
@@ -123,7 +126,7 @@ export function PublicationSchedulesModal({
     },
     onSuccess: (saved) => {
       queryClient.setQueryData<TelegramPublicationSchedule[]>(
-        telegramPublicationScheduleKeys.lists(),
+        telegramPublicationScheduleKeys.lists(timezone),
         (current = []) =>
           current.some((item) => item.id === saved.id)
             ? current.map((item) => (item.id === saved.id ? saved : item))
@@ -143,7 +146,7 @@ export function PublicationSchedulesModal({
     mutationFn: telegramPublicationSchedulesApi.remove,
     onSuccess: (_, removedId) => {
       queryClient.setQueryData<TelegramPublicationSchedule[]>(
-        telegramPublicationScheduleKeys.lists(),
+        telegramPublicationScheduleKeys.lists(timezone),
         (current = []) => current.filter((item) => item.id !== removedId),
       );
       void queryClient.invalidateQueries({
@@ -356,7 +359,10 @@ function ScheduleOverview({
                   key={slot.id}
                   className="rounded-md border border-neutral-800 bg-neutral-950/60 px-2 py-1 text-xs text-neutral-300"
                 >
-                  {slot.time} ·{" "}
+                  {timezonePresentations(schedule.timezone).find(
+                    (timezone) => timezone.value === schedule.timezone,
+                  )?.flag ?? "🌐"}{" "}
+                  {schedule.timezone} · {slot.time} ·{" "}
                   {PUBLICATION_SLOT_KINDS.find((kind) => kind.value === slot.kind)?.label}
                 </span>
               ))}

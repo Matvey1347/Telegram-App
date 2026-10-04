@@ -51,6 +51,7 @@ export type AvailabilityPlacement = {
     paymentStatus?: 'UNPAID' | 'PARTIALLY_PAID' | 'PAID' | 'OVERPAID' | null;
     saleAgreedAmount?: Prisma.Decimal;
     saleReceivedAmount?: Prisma.Decimal;
+    saleReceivedCurrency?: string;
     settlementCurrency?: string;
     advertiserPhotoUrl?: string | null;
     advertiserTelegram?: string | null;
@@ -337,6 +338,7 @@ export function buildAdSalesAvailability(input: AvailabilityBuildInput) {
                   existing.sale?.saleReceivedAmount != null
                     ? decimalToString(existing.sale.saleReceivedAmount)
                     : undefined,
+                saleReceivedCurrency: existing.sale?.saleReceivedCurrency,
                 settlementCurrency: existing.sale?.settlementCurrency,
                 advertiserPhotoUrl: existing.sale?.advertiserPhotoUrl ?? null,
                 advertiserTelegram: existing.sale?.advertiserTelegram ?? null,

@@ -27,7 +27,7 @@ import { telegramPublicationSchedulesApi } from "@/lib/api";
 import { telegramPublicationScheduleKeys } from "@/lib/query-keys";
 import { zonedDateTimeToUtc } from "@/lib/features/growth/telegram-ad-sales";
 import { useWorkspaceTimezone } from "@/hooks/use-workspace-timezone";
-import { PublicationCalendarEventDetailsModal } from "./publication-calendar-event-details-modal";
+import { PublicationCalendarEventEditor } from "./publication-calendar-event-editor";
 
 type CalendarView = "week" | "month" | "threeWeeks";
 type SlotRow = {
@@ -125,7 +125,7 @@ function EventMarker({
   const label = event.kind === "AD" ? "Advertising" : "VP";
   return (
     <span className="inline-flex shrink-0 items-center gap-1 text-[10px] font-semibold text-neutral-200">
-      {event.kind === "AD" && event.avatarUrl ? (
+      {event.avatarUrl ? (
         <TelegramEntityAvatar
           imageUrl={event.avatarUrl}
           kind="person"
@@ -148,10 +148,10 @@ export function PublicationPlanCalendarPage() {
   const [conflictEvents, setConflictEvents] = useState<
     TelegramPublicationPlanCalendarEvent[]
   >([]);
-  const [selectedEvent, setSelectedEvent] =
+  const [editorEvent, setEditorEvent] =
     useState<TelegramPublicationPlanCalendarEvent | null>(null);
   const schedulesQuery = useQuery({
-    queryKey: telegramPublicationScheduleKeys.lists(),
+    queryKey: telegramPublicationScheduleKeys.lists(timezone),
     queryFn: telegramPublicationSchedulesApi.list,
     staleTime: 5 * 60 * 1000,
   });
@@ -239,7 +239,7 @@ export function PublicationPlanCalendarPage() {
     ]);
   const openEvent = (event: TelegramPublicationPlanCalendarEvent) => {
     setConflictEvents([]);
-    setSelectedEvent(event);
+    setEditorEvent(event);
   };
   const shift = (direction: -1 | 1) =>
     setCursor((current) =>
@@ -490,9 +490,9 @@ export function PublicationPlanCalendarPage() {
           ))}
         </div>
       </Modal>
-      <PublicationCalendarEventDetailsModal
-        event={selectedEvent}
-        onClose={() => setSelectedEvent(null)}
+      <PublicationCalendarEventEditor
+        event={editorEvent}
+        onClose={() => setEditorEvent(null)}
       />
     </AppShell>
   );

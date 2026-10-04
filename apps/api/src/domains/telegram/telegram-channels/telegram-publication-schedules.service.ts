@@ -19,14 +19,19 @@ import {
   TelegramPublicationScheduleAssignmentInputDto,
   TelegramPublicationScheduleInputDto,
 } from './telegram-publication-schedules.dto';
+import {
+  publicationScheduleOccurrenceAt,
+  publicationScheduleTimeInTimezone,
+  publicationScheduleTimeToUtc,
+} from './telegram-publication-schedule-times';
 
 const scheduleInclude = {
   icon: true,
+  workspace: { select: { timezone: true } },
   slots: { include: { icon: true }, orderBy: [{ position: 'asc' as const }] },
   channelAssignments: { select: { channelId: true } },
   _count: { select: { channelAssignments: true } },
 };
-
 @Injectable()
 export class TelegramPublicationSchedulesService {
   constructor(
@@ -38,11 +43,13 @@ export class TelegramPublicationSchedulesService {
     return this.workspace.resolveWorkspaceIdForUser(userId);
   }
   private map(row: any) {
+    const timezone = row.workspace?.timezone || 'UTC';
     return {
       id: row.id,
       name: row.name,
       iconId: row.iconId,
       iconPresentation: iconToResolvedEmoji(row.icon),
+      timezone,
       isDefault: row.isDefault,
       assignedChannelsCount: row._count?.channelAssignments ?? 0,
       assignedChannelIds: row.channelAssignments.map(
@@ -53,7 +60,7 @@ export class TelegramPublicationSchedulesService {
         scheduleId: slot.scheduleId,
         title: slot.title,
         kind: slot.kind,
-        time: slot.time,
+        time: publicationScheduleTimeInTimezone(slot.time, timezone),
         position: slot.position,
         isActive: slot.isActive,
         iconPresentation: iconToResolvedEmoji(slot.icon),
@@ -82,6 +89,25 @@ export class TelegramPublicationSchedulesService {
         'One or more icons are unavailable in this workspace',
       );
   }
+  private async workspaceTimezone(workspaceId: string) {
+    const workspace = await this.prisma.workspace.findUnique({
+      where: { id: workspaceId },
+      select: { timezone: true },
+    });
+    return workspace?.timezone || 'UTC';
+  }
+  private slotsForPersistence(
+    slots: TelegramPublicationScheduleInputDto['slots'],
+    timezone: string,
+  ) {
+    return slots.map((slot, index) => ({
+      ...slot,
+      time: publicationScheduleTimeToUtc(slot.time, timezone),
+      position: slot.position ?? index,
+      isActive: slot.isActive ?? true,
+      iconId: slot.iconId ?? null,
+    }));
+  }
   async list(userId: string) {
     const workspaceId = await this.workspaceId(userId);
     return (
@@ -95,6 +121,10 @@ export class TelegramPublicationSchedulesService {
   async create(userId: string, dto: TelegramPublicationScheduleInputDto) {
     const workspaceId = await this.workspaceId(userId);
     await this.validateIcons(workspaceId, dto);
+    const slots = this.slotsForPersistence(
+      dto.slots,
+      await this.workspaceTimezone(workspaceId),
+    );
     const row = await this.prisma.$transaction(async (tx) => {
       if (dto.isDefault)
         await tx.telegramPublicationSchedule.updateMany({
@@ -108,13 +138,13 @@ export class TelegramPublicationSchedulesService {
           iconId: dto.iconId ?? null,
           isDefault: dto.isDefault ?? false,
           slots: {
-            create: dto.slots.map((s, i) => ({
+            create: slots.map((s) => ({
               title: s.title.trim(),
               kind: s.kind,
               time: s.time,
-              position: s.position ?? i,
-              isActive: s.isActive ?? true,
-              iconId: s.iconId ?? null,
+              position: s.position,
+              isActive: s.isActive,
+              iconId: s.iconId,
             })),
           },
         },
@@ -140,6 +170,10 @@ export class TelegramPublicationSchedulesService {
     if (dto.slots.some((s) => s.id && !existingIds.has(s.id)))
       throw new BadRequestException('Slot does not belong to this schedule');
     const retained = dto.slots.map((s) => s.id).filter(Boolean) as string[];
+    const slots = this.slotsForPersistence(
+      dto.slots,
+      await this.workspaceTimezone(workspaceId),
+    );
     const row = await this.prisma.$transaction(async (tx) => {
       if (dto.isDefault)
         await tx.telegramPublicationSchedule.updateMany({
@@ -157,14 +191,14 @@ export class TelegramPublicationSchedulesService {
       await tx.telegramPublicationScheduleSlot.deleteMany({
         where: { scheduleId: id, id: { notIn: retained } },
       });
-      for (const [i, slot] of dto.slots.entries()) {
+      for (const slot of slots) {
         const data = {
           title: slot.title.trim(),
           kind: slot.kind,
           time: slot.time,
-          position: slot.position ?? i,
-          isActive: slot.isActive ?? true,
-          iconId: slot.iconId ?? null,
+          position: slot.position,
+          isActive: slot.isActive,
+          iconId: slot.iconId,
         };
         if (slot.id)
           await tx.telegramPublicationScheduleSlot.update({
@@ -319,9 +353,7 @@ export class TelegramPublicationSchedulesService {
           },
         })
       : [];
-    // A legacy/custom publication at the exact slot time still consumes that
-    // publishing moment.  Do not rely only on publicationSlotId here: older
-    // scheduling paths did not persist it.
+    // Legacy/custom posts at an exact slot time still consume it; older paths did not persist publicationSlotId.
     const reservationByScheduledAt = new Map(
       reservations.flatMap((post) => {
         const date = post.scheduledAt ?? post.publishedAt;
@@ -338,14 +370,9 @@ export class TelegramPublicationSchedulesService {
     ) {
       for (const slot of slots) {
         const localDate = this.localDateParts(cursor, timezone);
-        const [hour, minute] = slot.time.split(':').map(Number);
-        const scheduledAt = this.zonedDate(
-          localDate.year,
-          localDate.month,
-          localDate.day,
-          hour,
-          minute,
-          timezone,
+        const scheduledAt = publicationScheduleOccurrenceAt(
+          localDate,
+          publicationScheduleTimeToUtc(slot.time, timezone),
         );
         if (scheduledAt >= from && scheduledAt < to) {
           const reservation = reservationByScheduledAt.get(
@@ -500,15 +527,7 @@ export class TelegramPublicationSchedulesService {
     ) {
       const localDate = this.localDateParts(cursor, timezone);
       for (const slot of uniqueSlots.values()) {
-        const [hour, minute] = slot.time.split(':').map(Number);
-        const scheduledAt = this.zonedDate(
-          localDate.year,
-          localDate.month,
-          localDate.day,
-          hour,
-          minute,
-          timezone,
-        );
+        const scheduledAt = publicationScheduleOccurrenceAt(localDate, slot.time);
         if (scheduledAt < from || scheduledAt >= to) continue;
         const times = timesBySlot.get(slot.id) ?? [];
         times.push(scheduledAt.toISOString());
@@ -525,7 +544,7 @@ export class TelegramPublicationSchedulesService {
             scheduledAt,
             title: slot.title,
             kind: slot.kind,
-            time: slot.time,
+            time: publicationScheduleTimeInTimezone(slot.time, timezone),
             timezone,
             state: reservation
               ? 'OCCUPIED'
@@ -625,10 +644,7 @@ export class TelegramPublicationSchedulesService {
             publisherChannelIds: { hasSome: channelIds },
             status: { notIn: ['DRAFT', 'CANCELLED'] },
           },
-          // Publication timestamps can be independently overridden per
-          // publisher. PostgreSQL cannot range-index that JSON field, so keep
-          // this plan-centric read bounded and filter its actual placements
-          // below.
+          // Publisher-specific JSON timestamps cannot be range-indexed; keep this plan read bounded and filter placements below.
           orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
           take: 250,
           select: {
@@ -637,6 +653,12 @@ export class TelegramPublicationSchedulesService {
             scheduledAt: true,
             publisherChannelIds: true,
             publicationPost: true,
+            advertiser: {
+              select: {
+                avatarIcon: { select: { id: true, type: true, name: true, emoji: true, imageUrl: true } },
+                crmPeers: { where: { photoUrl: { not: null } }, take: 1, orderBy: { updatedAt: 'desc' }, select: { photoUrl: true } },
+              },
+            },
           },
         }),
       ]);
@@ -732,12 +754,13 @@ export class TelegramPublicationSchedulesService {
         slotId: null,
         crossPromotionPlanId: plan.id,
         avatarPresentation: iconToResolvedEmoji(
-          typeof iconId === 'string' ? iconsById.get(iconId) : null,
+          plan.advertiser?.avatarIcon ??
+            (typeof iconId === 'string' ? iconsById.get(iconId) : null),
         ),
+        avatarUrl: plan.advertiser?.crmPeers[0]?.photoUrl ?? null,
       })),
     ];
-    // A VP can have both its plan record and a materialized managed post. It is
-    // one publication, not a collision, so collapse that representation here.
+    // A VP can have both its plan record and a materialized managed post: collapse that representation.
     const events = [
       ...new Map(
         rawEvents.map((event) => [
@@ -746,9 +769,7 @@ export class TelegramPublicationSchedulesService {
         ]),
       ).values(),
     ].sort((left, right) => left.scheduledAt.localeCompare(right.scheduledAt));
-    // The calendar is plan-centric, not channel-centric: one occurrence per
-    // slot/time is enough for the UI. Avoid returning the same 42-day grid for
-    // every assigned channel.
+    // Plan-centric UI needs one occurrence per slot/time, not a 42-day grid per channel.
     const calendarRows = [
       ...new Map(
         Object.values(occurrencesByChannel)
@@ -774,37 +795,5 @@ export class TelegramPublicationSchedulesService {
     const get = (type: string) =>
       Number(parts.find((p) => p.type === type)?.value);
     return { year: get('year'), month: get('month'), day: get('day') };
-  }
-  private zonedDate(
-    year: number,
-    month: number,
-    day: number,
-    hour: number,
-    minute: number,
-    timezone: string,
-  ) {
-    let value = Date.UTC(year, month - 1, day, hour, minute);
-    for (let i = 0; i < 3; i++) {
-      const parts = new Intl.DateTimeFormat('en-GB', {
-        timeZone: timezone,
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        hourCycle: 'h23',
-      }).formatToParts(new Date(value));
-      const get = (type: string) =>
-        Number(parts.find((p) => p.type === type)?.value);
-      const represented = Date.UTC(
-        get('year'),
-        get('month') - 1,
-        get('day'),
-        get('hour'),
-        get('minute'),
-      );
-      value += Date.UTC(year, month - 1, day, hour, minute) - represented;
-    }
-    return new Date(value);
   }
 }

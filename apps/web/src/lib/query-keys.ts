@@ -187,7 +187,8 @@ export const telegramPostKeys = {
 
 export const telegramPublicationScheduleKeys = {
   all: () => ["telegram-publication-schedules"] as const,
-  lists: () => [...telegramPublicationScheduleKeys.all(), "list"] as const,
+  lists: (timezone: string) =>
+    [...telegramPublicationScheduleKeys.all(), "list", timezone] as const,
   assignment: (channelId: string) =>
     [
       ...telegramPublicationScheduleKeys.all(),

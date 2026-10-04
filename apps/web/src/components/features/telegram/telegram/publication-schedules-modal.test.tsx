@@ -65,6 +65,7 @@ describe("PublicationSchedulesModal", () => {
         name: "Main plan",
         iconId: null,
         iconPresentation: { type: "unicode", value: "🍃" },
+        timezone: "Europe/Kyiv",
         isDefault: false,
         assignedChannelsCount: 0,
         slots: [
@@ -89,6 +90,7 @@ describe("PublicationSchedulesModal", () => {
     const removeButton = await screen.findByRole("button", {
       name: "Delete Main plan",
     });
+    expect(screen.getByText(/🇺🇦 Europe\/Kyiv · 09:00/)).toBeInTheDocument();
     expect(removeButton).toHaveClass("bg-red-600");
     await user.click(removeButton);
     expect(mocks.remove).not.toHaveBeenCalled();

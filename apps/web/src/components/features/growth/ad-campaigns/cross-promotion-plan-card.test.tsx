@@ -4,6 +4,10 @@ import { describe, expect, it, vi } from "vitest";
 import { CrossPromotionPlanCard } from "./cross-promotion-plan-card";
 import { formatDateTime } from "@/lib/date-format";
 
+vi.mock("@/hooks/use-workspace-timezone", () => ({
+  useWorkspaceTimezone: () => "Europe/Kyiv",
+}));
+
 const plan: CrossPromotionPlan = {
   id: "plan-1",
   iconPresentation: { type: "unicode", value: "🤝" },
@@ -279,7 +283,35 @@ describe("CrossPromotionPlanCard", () => {
         onDelete={vi.fn()}
       />,
     );
-    expect(screen.getByText(formatDateTime(actualTime))).toBeInTheDocument();
-    expect(screen.queryByText(formatDateTime("2026-09-21T06:10:00.000Z"))).not.toBeInTheDocument();
+    expect(
+      screen.getByText(formatDateTime(actualTime, undefined, "Europe/Kyiv")),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        formatDateTime("2026-09-21T06:10:00.000Z", undefined, "Europe/Kyiv"),
+      ),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows direct-exchange times in the workspace timezone", () => {
+    render(
+      <CrossPromotionPlanCard
+        plan={{
+          ...plan,
+          scheduledAt: "2026-10-02T15:10:00.000Z",
+        }}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByText(
+        formatDateTime("2026-10-02T15:10:00.000Z", undefined, "Europe/Kyiv"),
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(formatDateTime("2026-10-02T15:10:00.000Z")),
+    ).not.toBeInTheDocument();
   });
 });

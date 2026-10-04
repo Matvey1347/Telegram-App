@@ -170,6 +170,24 @@ import { TelegramCrmInternalNotificationProjector } from '../telegram-crm/telegr
 import { syncPurchasedCrmTags } from '../telegram-crm/telegram-crm-system-tags.service';
 import { TelegramAdSaleBotNotificationService } from './telegram-ad-sale-bot-notification.service';
 import { findCanonicalAdvertiser } from '../telegram-crm/telegram-advertiser-identity-resolver';
+function allocateLegacyFreePayment(
+  amount: number,
+  placements: Array<{ id: string }>,
+) {
+  if (!placements.length) return [];
+  const minorUnits = Math.round(amount * 100);
+  const base = Math.floor(minorUnits / placements.length);
+  return placements.map((placement, index) => ({
+    placementId: placement.id,
+    amount:
+      (base +
+        (index === placements.length - 1
+          ? minorUnits - base * placements.length
+          : 0)) /
+      100,
+  }));
+}
+
 @Injectable()
 export class TelegramAdSalesService {
   private readonly pricingReader: TelegramAdSalesPricingReader;
@@ -388,6 +406,7 @@ export class TelegramAdSalesService {
     const detailed = this.buildSaleSummary(sale);
     return {
       ...sale,
+      financeSkipped: sale.financeSkipped && detailed.payments.length === 0,
       assignedMember: sale.assignedMember
         ? {
             id: sale.assignedMember.id,
@@ -4080,18 +4099,26 @@ export class TelegramAdSalesService {
       workspaceId,
       'channel_advertising_revenue',
     );
-    const allocationPlacementIds = dto.allocations.map(
-      (item) => item.placementId,
-    );
+    const isLegacyFreeSale =
+      sale.financeSkipped &&
+      sale.placements.length > 0 &&
+      sale.placements.every(
+        (placement: any) => Number(placement.agreedPrice) <= 0,
+      );
+    const allocations =
+      dto.allocations.length || !isLegacyFreeSale
+        ? dto.allocations
+        : allocateLegacyFreePayment(dto.amount, sale.placements);
+    const allocationPlacementIds = allocations.map((item) => item.placementId);
     const placements = sale.placements.filter((placement: any) =>
       allocationPlacementIds.includes(placement.id),
     );
-    if (placements.length !== dto.allocations.length) {
+    if (placements.length !== allocations.length) {
       throw new BadRequestException(
         'One or more allocations refer to invalid placements',
       );
     }
-    const allocationTotal = dto.allocations.reduce(
+    const allocationTotal = allocations.reduce(
       (sum, item) => sum + item.amount,
       0,
     );
@@ -4101,7 +4128,7 @@ export class TelegramAdSalesService {
       );
     }
     for (const placement of placements) {
-      const requestedAllocation = dto.allocations.find(
+      const requestedAllocation = allocations.find(
         (item) => item.placementId === placement.id,
       )!;
       const paidAlready = (placement.paymentAllocations ?? [])
@@ -4114,10 +4141,11 @@ export class TelegramAdSalesService {
           0,
         );
       if (
+        !isLegacyFreeSale &&
         paidAlready +
           requestedAllocation.amount -
           Number(placement.agreedPrice) >
-        0.000001
+          0.000001
       ) {
         throw new BadRequestException(
           'Allocation exceeds placement agreedPrice',
@@ -4174,7 +4202,7 @@ export class TelegramAdSalesService {
           idempotencyKey: dto.idempotencyKey?.trim() || null,
           createdByUserId: userId,
           allocations: {
-            create: dto.allocations.map((allocation) => ({
+            create: allocations.map((allocation) => ({
               workspaceId,
               telegramAdSalePlacementId: allocation.placementId,
               amount: decimal(allocation.amount),
@@ -4245,12 +4273,22 @@ export class TelegramAdSalesService {
     const amount = dto.amount ?? Number(payment.amount);
     const currency = dto.currency ?? payment.currency;
     const paidAt = dto.paidAt ? new Date(dto.paidAt) : payment.paidAt;
-    const allocations =
+    const existingAllocations =
       dto.allocations ??
       payment.allocations.map((allocation: any) => ({
         placementId: allocation.telegramAdSalePlacementId,
         amount: Number(allocation.amount),
       }));
+    const isLegacyFreeSale =
+      sale.financeSkipped &&
+      sale.placements.length > 0 &&
+      sale.placements.every(
+        (placement: any) => Number(placement.agreedPrice) <= 0,
+      );
+    const allocations =
+      existingAllocations.length || !isLegacyFreeSale
+        ? existingAllocations
+        : allocateLegacyFreePayment(amount, sale.placements);
     const allocationPlacementIds = allocations.map((item) => item.placementId);
     const placements = sale.placements.filter((placement: any) =>
       allocationPlacementIds.includes(placement.id),
@@ -4284,10 +4322,11 @@ export class TelegramAdSalesService {
           0,
         );
       if (
+        !isLegacyFreeSale &&
         paidAlready +
           requestedAllocation.amount -
           Number(placement.agreedPrice) >
-        0.000001
+          0.000001
       ) {
         throw new BadRequestException(
           'Allocation exceeds placement agreedPrice',

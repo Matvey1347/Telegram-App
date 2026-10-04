@@ -38,6 +38,7 @@ import { AdSaleSharedPostEditor } from "./ad-sale-shared-post-editor";
 import type { RegisterPaymentPayload } from "./register-payment-form";
 import { DealFinanceTransaction } from "./deal-finance-transaction";
 import { DealFinanceTransactionDeleteModal } from "./deal-finance-transaction-delete-modal";
+import { nativeAdSalePayment } from "./ad-sale-native-payment";
 import type { PlacementManagedPostDraft } from "./placement-post/placement-post-composer";
 import {
   PlacementDeletionCountdown,
@@ -501,6 +502,7 @@ function DealOverview(props: {
   saving: boolean;
   error: string;
 }) {
+  const dealValue = nativeAdSalePayment(props.sale);
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const hasCountdown = props.sale.placements.some(
@@ -565,7 +567,8 @@ function DealOverview(props: {
               Deal value
             </span>
             <span className="mt-0.5 block text-sm font-medium text-neutral-300">
-              {props.sale.totalAgreedAmount} {props.sale.settlementCurrency}
+              {dealValue?.amount ?? 0}{" "}
+              {dealValue?.currency ?? props.sale.settlementCurrency}
             </span>
             <AdSalePostMetrics className="mt-1 justify-end" sale={props.sale} />
           </div>
@@ -678,9 +681,7 @@ function DealOverview(props: {
                     />
                   ) : null}
                 </div>
-                <span className="shrink-0 font-semibold text-white">
-                  {p.agreedPrice} {p.currency}
-                </span>
+                <PlacementValue sale={props.sale} placement={p} />
               </div>
             </div>
           ))}
@@ -706,6 +707,22 @@ function DealOverview(props: {
 }
 
 function allocatePayment(amount: number, placements: PlacementDraft[]) {
+  if (
+    placements.length &&
+    placements.every((placement) => toNumber(placement.agreedPrice) <= 0)
+  ) {
+    const minorUnitAmount = Math.round(amount * 100);
+    const base = Math.floor(minorUnitAmount / placements.length);
+    return placements.map((placement, index) => ({
+      placementId: placement.id,
+      amount:
+        (base +
+          (index === placements.length - 1
+            ? minorUnitAmount - base * placements.length
+            : 0)) /
+        100,
+    }));
+  }
   let remaining = amount;
   return placements.flatMap((p) => {
     const allocation = Math.max(
@@ -715,6 +732,64 @@ function allocatePayment(amount: number, placements: PlacementDraft[]) {
     remaining -= allocation;
     return allocation > 0 ? [{ placementId: p.id, amount: allocation }] : [];
   });
+}
+
+function PlacementValue({
+  sale,
+  placement,
+}: {
+  sale: TelegramAdSale;
+  placement: TelegramAdSale["placements"][number];
+}) {
+  const allocations = (sale.payments ?? []).flatMap((payment) =>
+    payment.status === "VOIDED"
+      ? []
+      : (payment.allocations ?? [])
+          .filter(
+            (allocation) =>
+              allocation.telegramAdSalePlacementId === placement.id,
+          )
+          .map((allocation) => ({
+            amount: Number(allocation.amount),
+            currency: allocation.currency,
+          })),
+  );
+  if (allocations.length) {
+    const currency = allocations[0].currency;
+    const amount = allocations
+      .filter((allocation) => allocation.currency === currency)
+      .reduce((sum, allocation) => sum + allocation.amount, 0);
+    return (
+      <span className="shrink-0 font-semibold text-white">
+        {amount} {currency}
+      </span>
+    );
+  }
+  const paid = nativeAdSalePayment(sale);
+  const freePlacements = sale.placements.every(
+    (item) => Number(item.agreedPrice) <= 0,
+  );
+  if (freePlacements && paid.amount > 0) {
+    const index = sale.placements.findIndex((item) => item.id === placement.id);
+    const minorUnitAmount = Math.round(paid.amount * 100);
+    const base = Math.floor(minorUnitAmount / sale.placements.length);
+    const amount =
+      (base +
+        (index === sale.placements.length - 1
+          ? minorUnitAmount - base * sale.placements.length
+          : 0)) /
+      100;
+    return (
+      <span className="shrink-0 font-semibold text-white">
+        {amount} {paid.currency}
+      </span>
+    );
+  }
+  return (
+    <span className="shrink-0 font-semibold text-white">
+      {placement.agreedPrice} {placement.currency}
+    </span>
+  );
 }
 function clientName(sale: TelegramAdSale) {
   return (

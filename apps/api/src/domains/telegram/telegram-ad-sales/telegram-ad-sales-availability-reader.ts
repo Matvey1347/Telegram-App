@@ -195,7 +195,7 @@ export class TelegramAdSalesAvailabilityReader {
             placements: { select: { agreedPrice: true } },
             payments: {
               where: { status: TelegramAdSalePaymentStatus.ACTIVE },
-              select: { amount: true },
+              select: { amount: true, currency: true, paidAt: true },
             },
           },
         })
@@ -210,6 +210,9 @@ export class TelegramAdSalesAvailabilityReader {
           (sum, payment) => sum.add(payment.amount),
           new Prisma.Decimal(0),
         );
+        const latestPayment = [...sale.payments].sort(
+          (left, right) => right.paidAt.getTime() - left.paidAt.getTime(),
+        )[0];
         return [
           sale.id,
           {
@@ -220,10 +223,11 @@ export class TelegramAdSalesAvailabilityReader {
             advertiserTelegram:
               sale.advertiserTelegramSnapshot ?? sale.advertiserTelegram,
             status: sale.status,
-            financeSkipped: sale.financeSkipped,
+            financeSkipped: sale.financeSkipped && sale.payments.length === 0,
             paymentStatus: paymentStatus(totalPaid, totalAgreed),
             saleAgreedAmount: totalAgreed,
             saleReceivedAmount: totalPaid,
+            saleReceivedCurrency: latestPayment?.currency,
             settlementCurrency: sale.settlementCurrency,
             advertiserPhotoUrl: sale.advertiser?.crmPeers[0]?.photoUrl ?? null,
             advertiserAvatarPresentation: iconToResolvedEmoji(

@@ -165,6 +165,8 @@ type PaymentRow = {
   telegramAdSaleId: string;
   amount: Prisma.Decimal;
   amountInPrimaryCurrency: Prisma.Decimal;
+  currency: string;
+  paidAt: Date;
   status: TelegramAdSalePaymentStatus;
 };
 
@@ -226,6 +228,8 @@ export class TelegramAdSalesSaleReadService {
             telegramAdSaleId: true,
             amount: true,
             amountInPrimaryCurrency: true,
+            currency: true,
+            paidAt: true,
             status: true,
           },
         })
@@ -304,6 +308,9 @@ export class TelegramAdSalesSaleReadService {
       (sum, payment) => sum.add(payment.amountInPrimaryCurrency),
       decimal(0),
     );
+    const latestPayment = [...activePayments].sort(
+      (left, right) => right.paidAt.getTime() - left.paidAt.getTime(),
+    )[0];
     const outstanding = totalPaid.gte(totalAgreed)
       ? decimal(0)
       : totalAgreed.sub(totalPaid);
@@ -338,7 +345,7 @@ export class TelegramAdSalesSaleReadService {
       nextActionAt: sale.nextActionAt?.toISOString() ?? null,
       settlementCurrency: sale.settlementCurrency,
       reservedUntil: sale.reservedUntil?.toISOString() ?? null,
-      financeSkipped: sale.financeSkipped,
+      financeSkipped: sale.financeSkipped && activePayments.length === 0,
       sourceTaskId: sale.sourceTaskId,
       sourceAdvertiserActivityId: sale.sourceAdvertiserActivityId,
       createdByUserId: sale.createdByUserId,
@@ -369,6 +376,12 @@ export class TelegramAdSalesSaleReadService {
       overpaidAmount: decimalToString(overpaid),
       paymentStatus: paymentStatus(totalPaid, totalAgreed),
       totalAmountInPrimaryCurrency: decimalToString(totalPrimary),
+      paymentSummary: latestPayment
+        ? {
+            amount: decimalToString(latestPayment.amount) ?? '0',
+            currency: latestPayment.currency,
+          }
+        : null,
       channelBreakdown: placements.map((placement) => ({
         placementId: placement.id,
         channelId: placement.telegramChannelId,

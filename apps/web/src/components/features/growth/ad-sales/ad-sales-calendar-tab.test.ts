@@ -107,18 +107,19 @@ describe("calendarAdvertiserAvatarUrl", () => {
 });
 
 describe("calendarDealAmount", () => {
-  it("uses the same deal total and settlement currency as Deals", () => {
+  it("uses the linked payment currency instead of the legacy settlement currency", () => {
     expect(
       calendarDealAmount(
         {
           agreedPrice: "189.70",
           currency: "USD",
-          saleAgreedAmount: "310.00",
-          settlementCurrency: "UAH",
+          saleReceivedAmount: "650.00",
+          saleReceivedCurrency: "UAH",
+          settlementCurrency: "USD",
         },
         "USD",
       ),
-    ).toEqual({ amount: 310, currency: "UAH" });
+    ).toEqual({ amount: 650, currency: "UAH" });
   });
 });
 

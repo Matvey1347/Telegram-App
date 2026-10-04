@@ -90,6 +90,7 @@ describe("SaleDetailsModal", () => {
     expect(
       screen.getByRole("button", { name: "Edit transaction" }),
     ).toBeTruthy();
+    expect(screen.getByText("102 UAH linked")).toBeTruthy();
     expect(screen.queryByLabelText("Price (UAH)")).toBeNull();
     expect(
       screen.getByRole("link", { name: /Open in system/ }),
@@ -238,6 +239,58 @@ describe("SaleDetailsModal", () => {
         }),
       ),
     );
+  });
+
+  it("splits a paid legacy free deal across its zero-priced placements", () => {
+    const source = sale as unknown as {
+      placements: Array<Record<string, unknown>>;
+      payments: Array<Record<string, unknown>>;
+    };
+    const freeSale = {
+      ...source,
+      settlementCurrency: "USD",
+      totalAgreedAmount: "0",
+      totalPaidAmount: "650",
+      placements: [
+        {
+          ...source.placements[0],
+          id: "placement-1",
+          agreedPrice: "0",
+          currency: "USD",
+        },
+        {
+          ...source.placements[0],
+          id: "placement-2",
+          agreedPrice: "0",
+          currency: "USD",
+        },
+      ],
+      payments: [
+        {
+          ...source.payments[0],
+          amount: "650",
+          currency: "UAH",
+          allocations: [],
+        },
+      ],
+    } as never;
+
+    render(
+      <SaleDetailsModal
+        open
+        onClose={vi.fn()}
+        sale={freeSale}
+        accounts={[]}
+        channels={[{ id: "channel-1", title: "Psychology" } as never]}
+        productsByChannelId={{}}
+        settings={undefined}
+        rates={undefined}
+        onSave={vi.fn()}
+        onAction={vi.fn()}
+      />,
+    );
+
+    expect(screen.getAllByText("325 UAH")).toHaveLength(2);
   });
 
   it("saves an edited buyer with the rest of the deal", async () => {

@@ -46,6 +46,7 @@ export function calendarDealAmount(
         agreedPrice?: string | null;
         currency?: string | null;
         saleReceivedAmount?: string | null;
+        saleReceivedCurrency?: string | null;
         saleAgreedAmount?: string | null;
         settlementCurrency?: string | null;
       }
@@ -60,7 +61,10 @@ export function calendarDealAmount(
         placement?.agreedPrice,
     ),
     currency:
-      placement?.settlementCurrency ?? placement?.currency ?? fallbackCurrency,
+      placement?.saleReceivedCurrency ??
+      placement?.settlementCurrency ??
+      placement?.currency ??
+      fallbackCurrency,
   };
 }
 
@@ -75,7 +79,10 @@ export function calendarSaleAmounts(
     const placement = slot.existingPlacement;
     if (!placement) continue;
     const currency =
-      placement.settlementCurrency ?? placement.currency ?? slot.currency;
+      placement.saleReceivedCurrency ??
+      placement.settlementCurrency ??
+      placement.currency ??
+      slot.currency;
     if (placement.saleReceivedAmount != null) {
       totals.set(placement.saleId, {
         amount: toNumber(placement.saleReceivedAmount),
@@ -373,20 +380,23 @@ export function CalendarTab(props: {
                           const dealSaleDetails = saleDetails(
                             deal.entries.map(({ slot }) => slot),
                           );
-                          const isFree = Boolean(details.placement?.financeSkipped);
-                          const dealRevenue = !isFree && dealSaleDetails.currency
-                            ? [
-                                {
-                                  currency: dealSaleDetails.currency,
-                                  amount: dealSaleDetails.amount,
-                                  label: formatCalendarTransactionMoney(
-                                    dealSaleDetails.amount,
-                                    dealSaleDetails.currency,
-                                    props.settings,
-                                  ),
-                                },
-                              ]
-                            : [];
+                          const isFree = Boolean(
+                            details.placement?.financeSkipped,
+                          );
+                          const dealRevenue =
+                            !isFree && dealSaleDetails.currency
+                              ? [
+                                  {
+                                    currency: dealSaleDetails.currency,
+                                    amount: dealSaleDetails.amount,
+                                    label: formatCalendarTransactionMoney(
+                                      dealSaleDetails.amount,
+                                      dealSaleDetails.currency,
+                                      props.settings,
+                                    ),
+                                  },
+                                ]
+                              : [];
                           const dealLabel =
                             details.placement?.advertiserName ||
                             details.placement?.title ||
