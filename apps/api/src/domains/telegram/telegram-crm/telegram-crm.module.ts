@@ -38,6 +38,7 @@ import { TelegramCrmNotificationRecipientService } from './telegram-crm-notifica
 import { TelegramCrmInternalNotificationProjector } from './telegram-crm-internal-notification-projector.service';
 import { TelegramCrmConversationAttachService } from './telegram-crm-conversation-attach.service';
 import { TelegramCrmSystemTagsService } from './telegram-crm-system-tags.service';
+import { TelegramCrmPurchaseFolderSyncService } from './telegram-crm-purchase-folder-sync.service';
 
 @Module({
   imports: [OperationsNotificationsModule],
@@ -56,6 +57,7 @@ import { TelegramCrmSystemTagsService } from './telegram-crm-system-tags.service
     TelegramCrmConversationService,
     TelegramCrmConversationAttachService,
     TelegramCrmSystemTagsService,
+    TelegramCrmPurchaseFolderSyncService,
     TelegramCrmManualMessagePolicyService,
     TelegramCrmManualMessageEligibilityService,
     TelegramCrmMessageReadService,
@@ -89,6 +91,7 @@ import { TelegramCrmSystemTagsService } from './telegram-crm-system-tags.service
     TelegramCrmMessageStoreService,
     TelegramCrmLegacyAuthorizationService,
     TelegramCrmInternalNotificationProjector,
+    TelegramCrmPurchaseFolderSyncService,
   ],
 })
 export class TelegramCrmModule {}

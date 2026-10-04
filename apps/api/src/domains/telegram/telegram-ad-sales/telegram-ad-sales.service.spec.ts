@@ -283,6 +283,14 @@ function createService() {
       create: jest.fn(),
       update: jest.fn(),
     },
+    telegramCrmPeer: {
+      findFirst: jest.fn().mockResolvedValue(null),
+      findUnique: jest.fn(),
+      update: jest.fn(),
+      updateMany: jest.fn(),
+      create: jest.fn(),
+    },
+    telegramCrmConversation: { updateMany: jest.fn() },
     telegramAdPriceSnapshot: {
       create: jest.fn(),
       findFirst: jest.fn(),
@@ -824,6 +832,58 @@ describe('TelegramAdSalesService', () => {
       }),
     });
     expect(result.id).toBe('advertiser-created');
+  });
+
+  it('links a newly created advertiser to their existing Telegram conversation', async () => {
+    const { service, prisma } = createService();
+    const advertiser = {
+      id: 'advertiser-created',
+      workspaceId: 'ws-1',
+      displayName: 'Acme',
+      companyName: null,
+      telegramUsername: 'acme',
+    };
+    prisma.telegramAdvertiser.create.mockResolvedValue(advertiser);
+    prisma.telegramAdvertiser.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(advertiser);
+    prisma.telegramCrmPeer.findFirst.mockResolvedValue({
+      telegramUserId: 'telegram-user-1',
+    });
+    prisma.telegramCrmPeer.findUnique.mockResolvedValue({
+      id: 'peer-1',
+      contactId: null,
+      username: 'acme',
+    });
+    prisma.telegramCrmPeer.update.mockResolvedValue({ id: 'peer-1' });
+    prisma.telegramAdvertiserContact.create.mockResolvedValue({});
+    prisma.telegramAdvertiserActivity.create.mockResolvedValue({});
+
+    await (service as any).resolveAdvertiserForSale(
+      'ws-1',
+      'user-1',
+      {
+        advertiserId: null,
+        advertiserName: 'Acme',
+        advertiserTelegram: '@acme',
+        createAdvertiser: true,
+      },
+      'member-1',
+    );
+
+    expect(prisma.telegramCrmPeer.update).toHaveBeenCalledWith({
+      where: { id: 'peer-1' },
+      data: { contactId: 'advertiser-created', username: 'acme' },
+      select: { id: true, contactId: true, username: true },
+    });
+    expect(prisma.telegramCrmConversation.updateMany).toHaveBeenCalledWith({
+      where: {
+        workspaceId: 'ws-1',
+        telegramCrmPeerId: 'peer-1',
+        NOT: { contactId: 'advertiser-created' },
+      },
+      data: { contactId: 'advertiser-created' },
+    });
   });
 
   it('reuses the largest client card for a case-insensitive name match when creating a deal', async () => {

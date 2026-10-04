@@ -228,16 +228,14 @@ describe('TelegramPublicationSchedulesService', () => {
   });
 
   it('includes booked ads with their advertiser avatar, even when they have a managed post', async () => {
-    const occurrencesSpy = jest
-      .spyOn(service, 'occurrencesByChannels')
-      .mockResolvedValue({
-        'channel-1': [],
-      });
+    const occurrencesSpy = jest.spyOn(service, 'occurrencesByChannels');
     prisma.telegramChannelPublicationScheduleAssignment.findMany.mockResolvedValue(
-      [{ channelId: 'channel-1' }],
+      [{ channelId: 'channel-1', selectionMode: 'FULL', selectedSlots: [] }],
     );
     prisma.telegramPublicationSchedule.findFirst.mockResolvedValue({
       id: 'schedule-1',
+      workspace: { timezone: 'UTC' },
+      slots: [],
     });
     prisma.telegramManagedPost.findMany.mockResolvedValue([]);
     prisma.telegramAdSalePlacement.findMany.mockResolvedValue([
@@ -262,8 +260,6 @@ describe('TelegramPublicationSchedulesService', () => {
       from: '2026-10-24T00:00:00.000Z',
       to: '2026-10-25T00:00:00.000Z',
     });
-    occurrencesSpy.mockRestore();
-
     expect(calendar.events).toEqual([
       expect.objectContaining({
         kind: 'AD',
@@ -276,17 +272,18 @@ describe('TelegramPublicationSchedulesService', () => {
         where: expect.not.objectContaining({ managedPostId: null }),
       }),
     );
+    expect(occurrencesSpy).not.toHaveBeenCalled();
+    occurrencesSpy.mockRestore();
   });
 
   it('uses the future per-publisher VP placement instead of the plan anchor date', async () => {
-    const occurrencesSpy = jest
-      .spyOn(service, 'occurrencesByChannels')
-      .mockResolvedValue({ 'channel-1': [] });
     prisma.telegramChannelPublicationScheduleAssignment.findMany.mockResolvedValue(
-      [{ channelId: 'channel-1' }],
+      [{ channelId: 'channel-1', selectionMode: 'FULL', selectedSlots: [] }],
     );
     prisma.telegramPublicationSchedule.findFirst.mockResolvedValue({
       id: 'schedule-1',
+      workspace: { timezone: 'UTC' },
+      slots: [],
     });
     prisma.telegramAdSalePlacement.findMany.mockResolvedValue([]);
     prisma.crossPromotionPlan.findMany.mockResolvedValue([
@@ -320,14 +317,67 @@ describe('TelegramPublicationSchedulesService', () => {
       from: '2026-10-03T00:00:00.000Z',
       to: '2026-10-05T00:00:00.000Z',
     });
-    occurrencesSpy.mockRestore();
-
     expect(calendar.events).toEqual([
       expect.objectContaining({
         kind: 'VP',
         title: 'OVP: October partner post',
         scheduledAt: '2026-10-04T15:10:00.000Z',
         avatarUrl: 'https://example.com/partner.jpg',
+      }),
+    ]);
+  });
+
+  it('shows a VP publication once at its earliest channel delivery', async () => {
+    prisma.telegramChannelPublicationScheduleAssignment.findMany.mockResolvedValue(
+      [
+        { channelId: 'channel-1', selectionMode: 'FULL', selectedSlots: [] },
+        { channelId: 'channel-2', selectionMode: 'FULL', selectedSlots: [] },
+      ],
+    );
+    prisma.telegramPublicationSchedule.findFirst.mockResolvedValue({
+      id: 'schedule-1',
+      workspace: { timezone: 'UTC' },
+      slots: [],
+    });
+    prisma.telegramAdSalePlacement.findMany.mockResolvedValue([]);
+    prisma.crossPromotionPlan.findMany.mockResolvedValue([
+      {
+        id: 'vp-1',
+        title: 'Admin Hub',
+        advertiser: { avatarIcon: null, crmPeers: [] },
+        scheduledAt: new Date('2026-10-29T18:10:00.000Z'),
+        publisherChannelIds: ['channel-1', 'channel-2'],
+        publicationPost: {
+          publisherPublications: [
+            {
+              id: 'publisher-post-1',
+              placements: [
+                {
+                  telegramChannelId: 'channel-1',
+                  scheduledAt: '2026-10-29T18:10:00.000Z',
+                },
+                {
+                  telegramChannelId: 'channel-2',
+                  scheduledAt: '2026-10-29T20:00:00.000Z',
+                },
+              ],
+            },
+          ],
+        },
+      },
+    ]);
+    prisma.icon.findMany.mockResolvedValue([]);
+
+    const calendar = await service.calendar('user-1', {
+      scheduleId: 'schedule-1',
+      from: '2026-10-29T00:00:00.000Z',
+      to: '2026-10-30T00:00:00.000Z',
+    });
+    expect(calendar.events).toEqual([
+      expect.objectContaining({
+        kind: 'VP',
+        title: 'Admin Hub',
+        scheduledAt: '2026-10-29T18:10:00.000Z',
       }),
     ]);
   });

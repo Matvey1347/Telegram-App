@@ -167,6 +167,7 @@ import {
 } from './telegram-ad-sales-lifecycle-records';
 import { hydrateManagedTelegramPosts } from './telegram-ad-sales-managed-post-metrics';
 import { TelegramCrmInternalNotificationProjector } from '../telegram-crm/telegram-crm-internal-notification-projector.service';
+import { TelegramCrmPurchaseFolderSyncService } from '../telegram-crm/telegram-crm-purchase-folder-sync.service';
 import { syncPurchasedCrmTags } from '../telegram-crm/telegram-crm-system-tags.service';
 import { TelegramAdSaleBotNotificationService } from './telegram-ad-sale-bot-notification.service';
 import { findCanonicalAdvertiser } from '../telegram-crm/telegram-advertiser-identity-resolver';
@@ -214,6 +215,8 @@ export class TelegramAdSalesService {
     private readonly botConfirmation: TelegramAdSaleBotNotificationService,
     @Optional()
     private readonly notificationProjector?: TelegramCrmInternalNotificationProjector,
+    @Optional()
+    private readonly purchaseFolderSync?: TelegramCrmPurchaseFolderSyncService,
   ) {
     this.pricingReader = new TelegramAdSalesPricingReader(prisma);
     this.inventoryReader = new TelegramAdSalesInventoryReader(
@@ -954,6 +957,9 @@ export class TelegramAdSalesService {
       },
     });
     await syncPurchasedCrmTags(tx, workspaceId, advertiserId);
+    if (tx === this.prisma) {
+      await this.purchaseFolderSync?.sync(workspaceId, advertiserId);
+    }
   }
 
   private async resolveAdvertiserForSale(
@@ -969,7 +975,14 @@ export class TelegramAdSalesService {
       'createAdvertiser' in dto ? dto.createAdvertiser : false;
     if (!shouldCreate) return null;
     const existing = await findCanonicalAdvertiser(this.prisma.telegramAdvertiser, { workspaceId, username: this.normalizeTelegramUsername(dto.advertiserTelegram), phone: this.normalizePhone(dto.advertiserContact), email: this.normalizeEmail(dto.advertiserContact), displayName: dto.advertiserName });
-    if (existing) return this.getAdvertiser(workspaceId, existing.id);
+    if (existing) {
+      await this.linkAdvertiserToMatchingCrmPeer(
+        workspaceId,
+        existing.id,
+        this.normalizeTelegramUsername(dto.advertiserTelegram),
+      );
+      return this.getAdvertiser(workspaceId, existing.id);
+    }
     const created = await this.prisma.telegramAdvertiser.create({
       data: {
         workspaceId,
@@ -985,6 +998,11 @@ export class TelegramAdSalesService {
         stage: TelegramCrmContactStage.NEW,
       },
     });
+    await this.linkAdvertiserToMatchingCrmPeer(
+      workspaceId,
+      created.id,
+      created.telegramUsername,
+    );
     if (dto.advertiserTelegram?.trim()) {
       await this.prisma.telegramAdvertiserContact.create({
         data: {
@@ -1025,6 +1043,29 @@ export class TelegramAdSalesService {
       actorUserId: userId,
     });
     return this.getAdvertiser(workspaceId, created.id);
+  }
+
+  private async linkAdvertiserToMatchingCrmPeer(
+    workspaceId: string,
+    advertiserId: string,
+    username: string | null | undefined,
+  ) {
+    if (!username) return;
+    const peer = await this.prisma.telegramCrmPeer.findFirst({
+      where: { workspaceId, username, contactId: null },
+      select: { telegramUserId: true },
+    });
+    if (!peer) return;
+    await this.prisma.$transaction((tx) =>
+      syncLegacyCrmPeer(tx, {
+        workspaceId,
+        contactId: advertiserId,
+        telegramUserId: peer.telegramUserId,
+        telegramUserIdSpecified: true,
+        username,
+        usernameSpecified: true,
+      }),
+    );
   }
 
   private appendPlacementFinancials(placement: any) {

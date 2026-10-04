@@ -311,8 +311,8 @@ export function PublicationPlanCalendarPage() {
               </button>
             </div>
             <DateRangeInput
-              from={calendarDayKey(range.from)}
-              to={calendarDayKey(range.to)}
+              from={calendarDayKey(days[0] ?? range.from)}
+              to={calendarDayKey(days.at(-1) ?? range.to)}
               onChange={({ from }) => {
                 if (from) setCursor(new Date(`${from}T12:00:00`));
               }}
