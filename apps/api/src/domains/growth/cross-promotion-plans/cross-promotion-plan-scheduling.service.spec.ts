@@ -59,6 +59,17 @@ function setup() {
         telegramChannelId: 'old-channel',
         managedPostId: 'old-post',
         postGroupId: 'old-group',
+        publicationId: 'legacy-publisher-publication',
+      },
+    ]),
+    publicationScheduleForUpdate: jest.fn().mockResolvedValue([
+      {
+        telegramChannelId: 'channel-1',
+        scheduledAt: '2026-09-15T08:00:00.000Z',
+      },
+      {
+        telegramChannelId: 'channel-2',
+        scheduledAt: '2026-09-15T09:00:00.000Z',
       },
     ]),
     markRescheduling: jest.fn().mockResolvedValue(undefined),
@@ -84,6 +95,7 @@ function setup() {
     scheduleManagedPost: jest.fn().mockResolvedValue({}),
     publishManagedPostNow: jest.fn().mockResolvedValue({}),
     deleteManagedPost: jest.fn().mockResolvedValue({}),
+    updateManagedPost: jest.fn().mockResolvedValue({}),
   };
   const systemPostGroups = {
     ensureMutualPromotionGroup: jest
@@ -253,6 +265,38 @@ describe('CrossPromotionPlanSchedulingService', () => {
       'post-2',
       { scheduledAt: '2026-09-15T12:00:00.000Z' },
     );
+  });
+
+  it('does not persist a new time while updating an existing Telegram publication', async () => {
+    const { service, plans, telegram } = setup();
+    const changedTime = {
+      ...payload,
+      publicationPost: {
+        ...payload.publicationPost,
+        publisherPlacements: payload.publicationPost.publisherPlacements.map(
+          (placement) => ({
+            ...placement,
+            scheduledAt: '2026-09-15T12:00:00.000Z',
+          }),
+        ),
+      },
+    };
+
+    await expect(
+      service.updatePublicationInTelegram(
+        'user-1',
+        'plan-1',
+        'legacy-publisher-publication',
+        changedTime,
+      ),
+    ).rejects.toThrow('time cannot be changed in place');
+
+    expect(plans.publicationScheduleForUpdate).toHaveBeenCalledWith(
+      'user-1',
+      'plan-1',
+      'legacy-publisher-publication',
+    );
+    expect(telegram.updateManagedPost).not.toHaveBeenCalled();
   });
 
   it('keeps a resumable plan when Telegram scheduling fails', async () => {

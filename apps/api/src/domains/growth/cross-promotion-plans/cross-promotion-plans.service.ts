@@ -478,6 +478,34 @@ export class CrossPromotionPlansService {
     return json<ScheduledPlacement[]>(row.placementPostIds, []);
   }
 
+  async publicationScheduleForUpdate(
+    userId: string,
+    id: string,
+    publicationId: string,
+  ) {
+    const workspaceId = await this.workspace(userId);
+    const row = await this.prisma.crossPromotionPlan.findFirst({
+      where: { id, workspaceId, status: { not: 'CANCELLED' } },
+      select: { publicationPost: true },
+    });
+    if (!row) throw new NotFoundException('Cross-promotion plan not found');
+    const post = json<CrossPromotionPlacementPost>(row.publicationPost, {
+      title: '',
+      text: '',
+      imageUrls: [],
+      buttonRows: [],
+    });
+    const publication = post.publisherPublications?.find(
+      (item) => item.id === publicationId,
+    );
+    if (!publication)
+      throw new NotFoundException('Partner post publication not found');
+    return publication.placements.map((placement) => ({
+      telegramChannelId: placement.telegramChannelId,
+      scheduledAt: placement.scheduledAt,
+    }));
+  }
+
   async replacePublicationPlacements(
     userId: string,
     id: string,

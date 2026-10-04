@@ -420,6 +420,33 @@ export class CrossPromotionPlanSchedulingService {
     );
     if (!placements.length)
       throw new BadRequestException('Partner post has no Telegram publications');
+    // This action edits an already-created Telegram message in place. It
+    // cannot move its local/native delivery clock. Do not persist a changed
+    // timestamp unless the replacement flow has recreated the delivery.
+    const existingSchedule = await this.plans.publicationScheduleForUpdate(
+      userId,
+      id,
+      publicationId,
+    );
+    const expectedTimes = new Map(
+      existingSchedule.map((item) => [
+        item.telegramChannelId,
+        Date.parse(item.scheduledAt),
+      ]),
+    );
+    if (
+      publication.placements.length !== existingSchedule.length ||
+      publication.placements.some(
+        (item) =>
+          !Number.isFinite(Date.parse(item.scheduledAt)) ||
+          expectedTimes.get(item.telegramChannelId) !==
+            Date.parse(item.scheduledAt),
+      )
+    ) {
+      throw new BadRequestException(
+        'A partner-post time cannot be changed in place. Replace the publication to create a new Telegram schedule.',
+      );
+    }
     for (const placement of placements) {
       await this.telegramChannels.updateManagedPost(
         userId,
