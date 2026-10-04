@@ -34,8 +34,9 @@ export class ScheduledTaskExecutorService {
       // Native Telegram scheduling changes the managed-post identity first.
       // Reconcile the dependent ad-sale placement in the same due wake so its
       // publication confirmation is not deferred until an unrelated action.
-      const lifecycle = this.moduleRef.get(
+      const lifecycle = await this.moduleRef.resolve(
         TelegramAdPlacementLifecycleService,
+        undefined,
         { strict: false },
       );
       const lifecycleResult = await lifecycle.reconcilePublishedPlacements();
@@ -92,8 +93,9 @@ export class ScheduledTaskExecutorService {
         return { summary: `Updated ${updated} system exchange rates.` };
       }),
     'telegram_ad_sales.due_deletions': async () => {
-      const lifecycle = this.moduleRef.get(
+      const lifecycle = await this.moduleRef.resolve(
         TelegramAdPlacementLifecycleService,
+        undefined,
         { strict: false },
       );
       const lifecycleResult = await lifecycle.reconcilePublishedPlacements();
