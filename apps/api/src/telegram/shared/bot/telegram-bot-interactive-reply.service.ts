@@ -1,9 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { TelegramBotApiClient } from './telegram-bot-api.client';
+import { TelegramBotApiClient } from '@api/telegram/shared/bot/telegram-bot-api.client';
 import {
   telegramBotMessagePayload,
   type TelegramBotMessage,
-} from './telegram-bot-message';
+} from '@api/telegram/shared/bot/telegram-bot-message';
 
 /**
  * Immediate replies to a live update. This deliberately has no persistence,

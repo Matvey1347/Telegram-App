@@ -1,5 +1,5 @@
-import { normalizeFinanceImportDocument } from './finance-import-normalizer';
-import { validateFinanceImportDocument } from './finance-import-validator';
+import { normalizeFinanceImportDocument } from '@finance-pro/api/portability/finance-import-normalizer';
+import { validateFinanceImportDocument } from '@finance-pro/api/portability/finance-import-validator';
 
 function document() {
   return {

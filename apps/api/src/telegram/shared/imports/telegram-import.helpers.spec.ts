@@ -4,7 +4,7 @@ import {
   normalizeTelegramTitle,
   parseTelegramImportInput,
   resolveTelegramTitleCandidates,
-} from './telegram-import.helpers';
+} from '@api/telegram/shared/imports/telegram-import.helpers';
 
 describe('telegram import helpers', () => {
   it.each([

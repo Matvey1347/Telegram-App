@@ -1,11 +1,11 @@
-import type { FinanceVisualContext } from "./finance-visual-context";
+import type { FinanceVisualContext } from "@finance-pro/web/components/ui/finance-visual-context";
 import {
   AccountsScene,
   CategoriesScene,
   OverviewScene,
   TransactionsScene,
   TransfersScene,
-} from "./finance-context-scenes-ledger";
+} from "@finance-pro/web/components/ui/finance-context-scenes-ledger";
 import {
   AnalyticsScene,
   BudgetScene,
@@ -16,7 +16,7 @@ import {
   RemindersScene,
   SavingsScene,
   SettingsScene,
-} from "./finance-context-scenes-planning";
+} from "@finance-pro/web/components/ui/finance-context-scenes-planning";
 
 export type FinanceStateGraphicKind = "ledger" | "flow" | "growth" | "planning";
 

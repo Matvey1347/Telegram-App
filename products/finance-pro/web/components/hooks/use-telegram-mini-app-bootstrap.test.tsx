@@ -4,7 +4,7 @@ import {
   TELEGRAM_WEB_APP_SDK_FAILED_EVENT,
   TELEGRAM_WEB_APP_SDK_READY_EVENT,
 } from "@/components/telegram/telegram-web-app-sdk";
-import { useTelegramMiniAppBootstrap } from "./use-telegram-mini-app-bootstrap";
+import { useTelegramMiniAppBootstrap } from "@finance-pro/web/components/hooks/use-telegram-mini-app-bootstrap";
 
 afterEach(() => {
   delete window.Telegram;

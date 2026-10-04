@@ -1,5 +1,5 @@
 import { NotFoundException } from '@nestjs/common';
-import { GreeterTestModeService } from './greeter-test-mode.service';
+import { GreeterTestModeService } from '@greeter/api/test-mode/greeter-test-mode.service';
 
 describe('GreeterTestModeService', () => {
   const bot = { id: 'bot-1', workspaceId: 'workspace-1' };

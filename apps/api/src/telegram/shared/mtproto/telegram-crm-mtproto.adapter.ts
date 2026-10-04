@@ -4,7 +4,7 @@ import { returnBigInt } from 'telegram/Helpers';
 import {
   closeTelegramMtprotoSession,
   createTelegramMtprotoSession,
-} from './telegram-mtproto-session.factory';
+} from '@api/telegram/shared/mtproto/telegram-mtproto-session.factory';
 import type {
   TelegramCrmMtprotoCheckpoint,
   TelegramCrmMtprotoCredentials,
@@ -15,7 +15,7 @@ import type {
   TelegramCrmMtprotoMessage,
   TelegramCrmMtprotoPeer,
   TelegramCrmMtprotoUpdate,
-} from './telegram-crm-mtproto.types';
+} from '@api/telegram/shared/mtproto/telegram-crm-mtproto.types';
 import {
   decodeTelegramCrmDialogCursor,
   encodeTelegramCrmDialogCursor,
@@ -26,9 +26,9 @@ import {
   parseTelegramCrmPeer,
   telegramCrmCheckpoint,
   telegramLongString,
-} from './telegram-crm-mtproto.normalizer';
-import { telegramMarkupToHtml } from './telegram-markup';
-import { parseTelegramHtml } from './telegram-html-parser';
+} from '@api/telegram/shared/mtproto/telegram-crm-mtproto.normalizer';
+import { telegramMarkupToHtml } from '@api/telegram/shared/markup/telegram-markup';
+import { parseTelegramHtml } from '@api/telegram/shared/markup/telegram-html-parser';
 
 type CrmDialogFolderFilter = {
   folder: TelegramCrmMtprotoDialogFolder;

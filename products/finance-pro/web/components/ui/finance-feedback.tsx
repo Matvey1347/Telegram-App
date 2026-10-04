@@ -11,7 +11,7 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
-import financeStyles from "./finance-ui.module.css";
+import financeStyles from "@finance-pro/web/components/ui/finance-ui.module.css";
 
 type FinanceToastTone = "success" | "error" | "info";
 type FinanceToast = {

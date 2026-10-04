@@ -1,4 +1,4 @@
-import { telegramHtmlToManagedMarkup } from '../../../telegram/shared/telegram-markup';
+import { telegramHtmlToManagedMarkup } from '@api/telegram/shared/markup/telegram-markup';
 
 export type TelegramSystemBotIncomingButton = {
   text?: string;

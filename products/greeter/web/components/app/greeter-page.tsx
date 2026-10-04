@@ -10,16 +10,16 @@ import { greeterKeys } from "@/lib/query-keys";
 import {
   GreeterOverviewSection,
   GreeterChannelsSection,
-} from "./greeter-setup-sections";
-import { GreeterCaptchaSection } from "./greeter-captcha-section";
+} from "@greeter/web/components/setup/greeter-setup-sections";
+import { GreeterCaptchaSection } from "@greeter/web/components/setup/greeter-captcha-section";
 import {
   GreeterUsersSection,
   GreeterAnalyticsSection,
-} from "./greeter-audience-sections";
-import { GreeterAutomationsSection } from "./greeter-automations-section";
-import { GreeterBroadcastsSection } from "./greeter-broadcasts-section";
-import { GreeterTestModeSection } from "./greeter-test-mode-section";
-import { BotBillingMetricsSection } from "../billing/bot-billing-metrics-section";
+} from "@greeter/web/components/audience/greeter-audience-sections";
+import { GreeterAutomationsSection } from "@greeter/web/components/automation/greeter-automations-section";
+import { GreeterBroadcastsSection } from "@greeter/web/components/broadcast/greeter-broadcasts-section";
+import { GreeterTestModeSection } from "@greeter/web/components/test-mode/greeter-test-mode-section";
+import { BotBillingMetricsSection } from "@/components/features/telegram/telegram-bots/billing/bot-billing-metrics-section";
 
 const tabs = [
   "Overview",

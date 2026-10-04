@@ -1,6 +1,6 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { GreeterConfig, Prisma } from '@prisma/client';
-import { PrismaService } from '../../../../prisma/prisma.service';
+import { PrismaService } from '@api/prisma/prisma.service';
 
 const snapshotFields = [
   'captchaEnabled',

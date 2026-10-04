@@ -11,7 +11,7 @@ import type {
   TelegramCrmMtprotoDialogFolder,
   TelegramCrmMtprotoMessage,
   TelegramCrmMtprotoUpdate,
-} from '../../../telegram/shared/telegram-crm-mtproto.types';
+} from '@api/telegram/shared/mtproto/telegram-crm-mtproto.types';
 import { TelegramCrmDialogBatchWriter } from './telegram-crm-dialog-batch-writer.service';
 import { TelegramCrmMessageBatchWriter } from './telegram-crm-message-batch-writer.service';
 

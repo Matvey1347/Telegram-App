@@ -1,4 +1,4 @@
-import { FinanceBotIconInputService } from './finance-bot-icon-input.service';
+import { FinanceBotIconInputService } from '@finance-pro/bot/finance-bot-icon-input.service';
 
 describe('FinanceBotIconInputService', () => {
   const flows = {

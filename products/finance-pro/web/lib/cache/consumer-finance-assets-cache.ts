@@ -9,7 +9,7 @@ import type {
   ConsumerFinanceSavingsMutation,
 } from "@telegram-system/shared";
 import type { InfiniteData, QueryClient } from "@tanstack/react-query";
-import { consumerFinanceKeys } from "./consumer-finance-query-keys";
+import { consumerFinanceKeys } from "@finance-pro/web/lib/query/consumer-finance-query-keys";
 
 function replaceById<T extends { id: string }>(items: T[], entity: T) {
   return items.some((item) => item.id === entity.id)

@@ -3,7 +3,7 @@ import {
   consumerFinanceHttp,
   consumerFinanceRoot,
   consumerRequest,
-} from "./consumer-finance-http";
+} from "@finance-pro/web/lib/api/consumer-finance-http";
 
 /** Small profile capability used by the eager shell and onboarding. */
 export const consumerFinanceProfileApi = {

@@ -3,11 +3,11 @@
 import { CreditCard, LogOut, UserRound } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { ConsumerFinanceProfile } from "@telegram-system/shared";
-import type { FinanceCoreCopy } from "./i18n/core";
-import type { ConsumerFinanceScreen } from "./consumer-finance-navigation";
-import { FinanceProfileAvatar } from "./finance-profile-avatar";
-import { FinanceTierBadge } from "./finance-plan-promotion";
-import { useFinanceEntitlements } from "./use-finance-entitlements";
+import type { FinanceCoreCopy } from "@finance-pro/web/components/i18n/core";
+import type { ConsumerFinanceScreen } from "@finance-pro/web/components/app/consumer-finance-navigation";
+import { FinanceProfileAvatar } from "@finance-pro/web/components/profile/finance-profile-avatar";
+import { FinanceTierBadge } from "@finance-pro/web/components/planning/finance-plan-promotion";
+import { useFinanceEntitlements } from "@finance-pro/web/components/hooks/use-finance-entitlements";
 
 export function FinanceAccountMenu({
   botId,

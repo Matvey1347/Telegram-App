@@ -8,7 +8,7 @@ import { randomUUID } from 'crypto';
 import { iconToResolvedEmoji } from '../../../common/icons/resolved-emoji';
 import { WorkspaceService } from '../../../common/workspace.service';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { maskTelegramInviteUrl } from '../../../telegram/shared/telegram-invite-log';
+import { maskTelegramInviteUrl } from '@api/telegram/shared/invites/telegram-invite-log';
 import { TelegramManagedPostGroupPresentationService } from './telegram-managed-post-group-presentation.service';
 
 @Injectable()

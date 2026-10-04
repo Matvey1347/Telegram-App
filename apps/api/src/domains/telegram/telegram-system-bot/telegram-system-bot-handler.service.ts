@@ -1,5 +1,5 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
-import { TelegramBotApiClient } from '../../../telegram/shared/telegram-bot-api.client';
+import { TelegramBotApiClient } from '@api/telegram/shared/bot/telegram-bot-api.client';
 import { TelegramSystemBotConfigService } from './telegram-system-bot-config.service';
 import { TelegramSystemBotConnectionsService } from './telegram-system-bot-connections.service';
 import { TelegramSystemBotDomainGatewayService } from './telegram-system-bot-domain-gateway.service';

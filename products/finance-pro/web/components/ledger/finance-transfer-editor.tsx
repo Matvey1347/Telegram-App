@@ -8,15 +8,15 @@ import type {
   ConsumerFinanceTransfer,
   ConsumerFinanceTransferInput,
 } from "@telegram-system/shared";
-import { Button, DateInput, FormField, Input, Modal, Select } from "./ui";
-import { consumerFinanceApi } from "@/lib/features/finance/consumer-finance-api";
+import { Button, DateInput, FormField, Input, Modal, Select } from "@finance-pro/web/components/ui";
+import { consumerFinanceApi } from "@finance-pro/web/lib/api/consumer-finance-api";
 import {
   financeCalendarDate,
   financeOccurredAtForDate,
   financeToday,
-} from "@/lib/features/finance/consumer-finance-date";
-import { type FinanceLocale } from "./i18n/core";
-import { financeTransfersCopy } from "./i18n/transfers";
+} from "@finance-pro/web/lib/formatters/consumer-finance-date";
+import { type FinanceLocale } from "@finance-pro/web/components/i18n/core";
+import { financeTransfersCopy } from "@finance-pro/web/components/i18n/transfers";
 
 export function FinanceTransferEditor({
   botId,

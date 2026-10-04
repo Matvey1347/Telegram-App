@@ -1,7 +1,7 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { financeRequestFingerprint } from '../assets/finance-asset-idempotency';
-import { FinanceInvestmentCashFlowService } from './finance-investment-cash-flow.service';
+import { financeRequestFingerprint } from '@finance-pro/api/assets/finance-asset-idempotency';
+import { FinanceInvestmentCashFlowService } from '@finance-pro/api/investments/finance-investment-cash-flow.service';
 
 const now = new Date('2026-09-08T00:00:00.000Z');
 

@@ -21,16 +21,16 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { IsIn, IsString, Matches } from 'class-validator';
 import { randomBytes, timingSafeEqual } from 'crypto';
 import type { CookieOptions, Request, Response } from 'express';
-import { TelegramBotDeliveryService } from '../../telegram-bots/core/telegram-bot-delivery.service';
+import { TelegramBotDeliveryService } from '@api/domains/telegram/telegram-bots/core/telegram-bot-delivery.service';
 import {
   FinanceConsumerSession,
   FinanceConsumerSessionService,
-} from '../identity/finance-consumer-session.service';
-import { FinanceConsumerTransferService } from '../identity/finance-consumer-transfer.service';
-import { FinanceContextService } from '../identity/finance-context.service';
-import { FinanceCoreService } from '../catalog/finance-core.service';
-import { FinanceLedgerService } from '../ledger/finance-ledger.service';
-import { FinanceTransferService } from '../transfers/finance-transfer.service';
+} from '@finance-pro/api/identity/finance-consumer-session.service';
+import { FinanceConsumerTransferService } from '@finance-pro/api/identity/finance-consumer-transfer.service';
+import { FinanceContextService } from '@finance-pro/api/identity/finance-context.service';
+import { FinanceCoreService } from '@finance-pro/api/catalog/finance-core.service';
+import { FinanceLedgerService } from '@finance-pro/api/ledger/finance-ledger.service';
+import { FinanceTransferService } from '@finance-pro/api/transfers/finance-transfer.service';
 import {
   CreateFinanceAccountDto,
   CreateFinanceCategoryDto,
@@ -45,19 +45,19 @@ import {
   UpdateFinanceTransactionDto,
   UpdateFinanceTransferDto,
   UpsertFinanceLimitDto,
-} from './finance.dto';
-import { forecastMonthlyLimit } from '../planning/finance-smart-limits';
-import { FinanceEntitlementService } from '../billing/finance-entitlement.service';
-import { financeAnalyticsDateRange } from '../ledger/finance-history-date-range';
-import { financeChatLocale, t } from '../i18n/finance-chat-i18n';
-import { financeMainMenu } from '../telegram-presentation/finance-telegram-menu';
+} from '@finance-pro/api/http/finance.dto';
+import { forecastMonthlyLimit } from '@finance-pro/api/planning/finance-smart-limits';
+import { FinanceEntitlementService } from '@finance-pro/api/billing/finance-entitlement.service';
+import { financeAnalyticsDateRange } from '@finance-pro/api/ledger/finance-history-date-range';
+import { financeChatLocale, t } from '@finance-pro/api/i18n/finance-chat-i18n';
+import { financeMainMenu } from '@finance-pro/api/telegram-presentation/finance-telegram-menu';
 import {
   isProductionEnvironment,
   publicApiOrigin,
   publicWebOrigin,
-} from '../../../../config/deployment-config';
-import { FinanceConsumerRequestService } from './finance-consumer-request.service';
-import { FinanceAnalyticsService } from '../analytics/finance-analytics.service';
+} from '@api/config/deployment-config';
+import { FinanceConsumerRequestService } from '@finance-pro/api/http/finance-consumer-request.service';
+import { FinanceAnalyticsService } from '@finance-pro/api/analytics/finance-analytics.service';
 
 class DeleteFinanceDataDto {
   @IsIn(['DELETE MY FINANCE DATA']) confirmation!: 'DELETE MY FINANCE DATA';

@@ -9,10 +9,10 @@ import {
   WorkspaceRole,
 } from '@prisma/client';
 import sharp from 'sharp';
-import { WorkspaceService } from '../../../../common/workspace.service';
-import { PrismaService } from '../../../../prisma/prisma.service';
-import { TelegramBotProfileService } from '../../telegram-bots/core/telegram-bot-profile.service';
-import { FinanceConsumerRuntimeEnvironmentService } from '../identity/finance-consumer-runtime-environment.service';
+import { WorkspaceService } from '@api/common/workspace.service';
+import { PrismaService } from '@api/prisma/prisma.service';
+import { TelegramBotProfileService } from '@api/domains/telegram/telegram-bots/core/telegram-bot-profile.service';
+import { FinanceConsumerRuntimeEnvironmentService } from '@finance-pro/api/identity/finance-consumer-runtime-environment.service';
 
 @Injectable()
 export class FinanceBotBrandingService {

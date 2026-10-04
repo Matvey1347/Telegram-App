@@ -1,7 +1,7 @@
 import { ConflictException, HttpException, HttpStatus } from '@nestjs/common';
 import { TelegramUserAccountStatus } from '@prisma/client';
 import { TelegramUserAccountsService } from './telegram-user-accounts.service';
-import { REVOKED_TELEGRAM_SESSION_MESSAGE } from '../../../telegram/shared/telegram-session-errors';
+import { REVOKED_TELEGRAM_SESSION_MESSAGE } from '@api/telegram/shared/mtproto/telegram-session-errors';
 
 describe('TelegramUserAccountsService account checks', () => {
   it('confirms QR 2FA from a valid temporary session without a phone-code hash', async () => {

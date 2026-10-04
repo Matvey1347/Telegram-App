@@ -13,9 +13,9 @@ import { gunzipSync } from 'node:zlib';
 import { TokenEncryptionService } from '../../../common/security/token-encryption.service';
 import { WorkspaceService } from '../../../common/workspace.service';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { normalizeTelegramCustomEmojiPackSource } from '../../../telegram/shared/telegram-custom-emoji-pack';
-import { parseTelegramCustomEmojiDocumentId } from '../../../telegram/shared/telegram-custom-emoji-pack';
-import { TelegramMtprotoClient } from '../../../telegram/shared/telegram-mtproto.client';
+import { normalizeTelegramCustomEmojiPackSource } from '@api/telegram/shared/markup/telegram-custom-emoji-pack';
+import { parseTelegramCustomEmojiDocumentId } from '@api/telegram/shared/markup/telegram-custom-emoji-pack';
+import { TelegramMtprotoClient } from '@api/telegram/shared/mtproto/telegram-mtproto.client';
 import { TelegramCustomEmojiStorageService } from './telegram-custom-emoji-storage.service';
 
 const packSelect = {

@@ -8,7 +8,7 @@ import { TelegramCrmEventHub } from './telegram-crm-event-hub.service';
 import type {
   TelegramCrmMtprotoDialog,
   TelegramCrmMtprotoHandle,
-} from '../../../telegram/shared/telegram-crm-mtproto.types';
+} from '@api/telegram/shared/mtproto/telegram-crm-mtproto.types';
 
 const DIALOG_PAGE_SIZE = 100;
 const MAX_SCANNED_DIALOGS = 2_000;

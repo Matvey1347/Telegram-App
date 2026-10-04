@@ -10,7 +10,7 @@ import {
   TelegramBotRuntimeEnvironment,
   TelegramBotRuntimeStatus,
 } from '@prisma/client';
-import { TelegramBotApiError } from '../../../../telegram/shared/telegram-bot-api.client';
+import { TelegramBotApiError } from '@api/telegram/shared/bot/telegram-bot-api.client';
 import { TelegramBotDeliveryService } from './telegram-bot-delivery.service';
 
 const delivery = {

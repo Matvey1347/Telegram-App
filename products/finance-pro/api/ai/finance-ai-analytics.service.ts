@@ -5,23 +5,23 @@ import {
 } from '@nestjs/common';
 import { FinanceAiProvider } from '@prisma/client';
 import type { ConsumerFinanceAssistantScreen } from '@telegram-system/shared';
-import { PrismaService } from '../../../../prisma/prisma.service';
+import { PrismaService } from '@api/prisma/prisma.service';
 import {
   AI_MODEL_POLICY,
   priceAiUsage,
-} from '../../telegram-bots/core/ai-usage-cost';
-import { FinanceAiCredentialService } from './finance-ai-credential.service';
+} from '@api/domains/telegram/telegram-bots/core/ai-usage-cost';
+import { FinanceAiCredentialService } from '@finance-pro/api/ai/finance-ai-credential.service';
 import {
   requestFinanceStructuredResponse,
   type FinanceAiResponseUsage,
-} from './finance-ai-responses.client';
+} from '@finance-pro/api/ai/finance-ai-responses.client';
 import {
   assertFinanceAiOperation,
   financeAiOperationItemSchema,
   normalizeFinanceAiOperation,
   type AiFinanceOperationOutput,
-} from './finance-ai.provider';
-import { partialJsonStringField } from './finance-ai-json-stream';
+} from '@finance-pro/api/ai/finance-ai.provider';
+import { partialJsonStringField } from '@finance-pro/api/ai/finance-ai-json-stream';
 
 const analyticsInsightSchema = {
   type: 'object',

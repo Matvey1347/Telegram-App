@@ -21,20 +21,20 @@ import {
   ErrorState,
   LoadingState,
   Select,
-} from "./ui";
-import type { FinanceLocale } from "./i18n/core";
-import { financeInvestmentsCopy } from "./i18n/investments";
-import { consumerFinanceInvestmentsApi } from "@/lib/features/finance/consumer-finance-investments-api";
-import { consumerFinanceKeys } from "@/lib/features/finance/consumer-finance-query-keys";
+} from "@finance-pro/web/components/ui";
+import type { FinanceLocale } from "@finance-pro/web/components/i18n/core";
+import { financeInvestmentsCopy } from "@finance-pro/web/components/i18n/investments";
+import { consumerFinanceInvestmentsApi } from "@finance-pro/web/lib/api/consumer-finance-investments-api";
+import { consumerFinanceKeys } from "@finance-pro/web/lib/query/consumer-finance-query-keys";
 import {
   invalidateConsumerAssetDerivations,
   patchInvestment,
-} from "@/lib/features/finance/consumer-finance-assets-cache";
-import { formatMoney } from "@/lib/features/finance/consumer-finance-money";
-import { FinanceInvestmentCard } from "./finance-investment-card";
-import { FinanceInvestmentEditor } from "./finance-investment-editor";
-import { FinanceInvestmentCreateModal } from "./finance-investment-create-modal";
-import { FinanceSortControl } from "./ui/finance-sort-control";
+} from "@finance-pro/web/lib/cache/consumer-finance-assets-cache";
+import { formatMoney } from "@finance-pro/web/lib/formatters/consumer-finance-money";
+import { FinanceInvestmentCard } from "@finance-pro/web/components/investments/finance-investment-card";
+import { FinanceInvestmentEditor } from "@finance-pro/web/components/investments/finance-investment-editor";
+import { FinanceInvestmentCreateModal } from "@finance-pro/web/components/investments/finance-investment-create-modal";
+import { FinanceSortControl } from "@finance-pro/web/components/ui/finance-sort-control";
 
 type StatusFilter = ConsumerFinanceInvestmentStatus | "ALL";
 

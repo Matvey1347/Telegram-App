@@ -1,6 +1,6 @@
 import { ConflictException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { FinanceSavingsGoalService } from './finance-savings-goal.service';
+import { FinanceSavingsGoalService } from '@finance-pro/api/savings/finance-savings-goal.service';
 
 describe('FinanceSavingsGoalService', () => {
   it('creates and edits an owned goal while preserving server projections', async () => {

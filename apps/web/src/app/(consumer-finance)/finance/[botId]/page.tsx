@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { ConsumerFinanceApp } from '@/components/features/finance/consumer-finance/consumer-finance-app';
+import { ConsumerFinanceApp } from '@finance-pro/web/components/app/consumer-finance-app';
 
 export async function generateMetadata({
   params,

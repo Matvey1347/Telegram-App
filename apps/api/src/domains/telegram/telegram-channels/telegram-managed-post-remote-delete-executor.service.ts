@@ -1,8 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { TelegramSourceType } from '@prisma/client';
-import { TelegramBotApiClient } from '../../../telegram/shared/telegram-bot-api.client';
-import { isTelegramMessageAlreadyAbsent } from '../../../telegram/shared/telegram-deletion-policy';
-import { TelegramMtprotoClient } from '../../../telegram/shared/telegram-mtproto.client';
+import { TelegramBotApiClient } from '@api/telegram/shared/bot/telegram-bot-api.client';
+import { isTelegramMessageAlreadyAbsent } from '@api/telegram/shared/core/telegram-deletion-policy';
+import { TelegramMtprotoClient } from '@api/telegram/shared/mtproto/telegram-mtproto.client';
 import { TelegramChannelAccessService } from './telegram-channel-access.service';
 
 const BOT_DELETE_BATCH_SIZE = 100;

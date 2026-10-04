@@ -1,4 +1,4 @@
-import { GreeterAutomationTestService } from './greeter-automation-test.service';
+import { GreeterAutomationTestService } from '@greeter/api/automation/greeter-automation-test.service';
 
 describe('GreeterAutomationTestService', () => {
   function setup(overrides: Record<string, unknown> = {}) {

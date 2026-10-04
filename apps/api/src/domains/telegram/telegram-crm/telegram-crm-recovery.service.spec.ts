@@ -1,4 +1,4 @@
-import type { TelegramCrmMtprotoUpdate } from '../../../telegram/shared/telegram-crm-mtproto.types';
+import type { TelegramCrmMtprotoUpdate } from '@api/telegram/shared/mtproto/telegram-crm-mtproto.types';
 import { TelegramCrmRecoveryService } from './telegram-crm-recovery.service';
 
 const callArgument = (

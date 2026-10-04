@@ -1,7 +1,7 @@
 import userEvent from "@testing-library/user-event";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { Select } from "./finance-controls";
+import { Select } from "@finance-pro/web/components/ui/finance-controls";
 
 const choices = ["Cash", "Card", "Savings", "Brokerage", "Travel", "Business"];
 

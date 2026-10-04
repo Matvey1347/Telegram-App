@@ -11,7 +11,7 @@ import { normalizeTelegramPostMediaItems } from '@telegram-system/shared';
 import {
   buildStableTelegramPostUrl,
   parseTelegramPostUrl,
-} from '../../../telegram/shared/telegram-post-url';
+} from '@api/telegram/shared/imports/telegram-post-url';
 import { ManagedPostLinkTargetsQueryDto } from './dto';
 import { TelegramChannelAccessService } from './telegram-channel-access.service';
 import { TelegramChannelCatalogService } from './telegram-channel-catalog.service';

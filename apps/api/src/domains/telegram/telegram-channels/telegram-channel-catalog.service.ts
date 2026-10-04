@@ -11,7 +11,7 @@ import { iconToResolvedEmoji } from '../../../common/icons/resolved-emoji';
 import {
   TELEGRAM_PRODUCTION_SYSTEM_BOT_SOURCE_ID,
   TelegramSourceAccessService,
-} from '../../../telegram/shared/telegram-source-access.service';
+} from '@api/telegram/shared/imports/telegram-source-access.service';
 import {
   TelegramChannelListQueryDto,
   TelegramChannelSelectQueryDto,

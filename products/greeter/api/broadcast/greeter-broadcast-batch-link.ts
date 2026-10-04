@@ -4,15 +4,15 @@ import {
   TelegramBotDeliveryStatus,
 } from '@prisma/client';
 import type { GreeterButtonRows } from '@telegram-system/shared';
-import { sanitizeOperationalError } from '../../../../common/security/operational-error';
-import type { PrismaService } from '../../../../prisma/prisma.service';
-import { telegramMarkupToHtml } from '../../../../telegram/shared/telegram-markup';
-import { GREETER_BROADCAST_RETRY_MS } from '../../../operations/scheduled-tasks/due-work-predicates';
+import { sanitizeOperationalError } from '@api/common/security/operational-error';
+import type { PrismaService } from '@api/prisma/prisma.service';
+import { telegramMarkupToHtml } from '@api/telegram/shared/markup/telegram-markup';
+import { GREETER_BROADCAST_RETRY_MS } from '@api/domains/operations/scheduled-tasks/due-work-predicates';
 import {
   TELEGRAM_BOT_DELIVERY_ENQUEUE_BATCH_SIZE,
   type TelegramBotSendMessageInput,
-} from '../core/telegram-bot-delivery-batch-enqueue';
-import { renderGreeterTemplate } from './greeter-template.renderer';
+} from '@api/domains/telegram/telegram-bots/core/telegram-bot-delivery-batch-enqueue';
+import { renderGreeterTemplate } from '@greeter/api/templates/greeter-template.renderer';
 
 const MAX_BROADCAST_LINK_BATCH_SIZE = 250;
 

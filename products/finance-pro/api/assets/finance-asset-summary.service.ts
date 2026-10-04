@@ -1,11 +1,11 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import type { ConsumerFinanceBalanceSummary } from '@telegram-system/shared';
-import { CurrencyConversionService } from '../../../../common/currency-conversion.service';
-import { PrismaService } from '../../../../prisma/prisma.service';
-import { financeBalanceSummary } from '../ledger/finance-balance-summary';
-import { prepareFinanceAccountRates } from '../ledger/finance-transaction-valuation';
-import { FinanceSavingsReadService } from '../savings/finance-savings-read.service';
+import { CurrencyConversionService } from '@api/common/currency-conversion.service';
+import { PrismaService } from '@api/prisma/prisma.service';
+import { financeBalanceSummary } from '@finance-pro/api/ledger/finance-balance-summary';
+import { prepareFinanceAccountRates } from '@finance-pro/api/ledger/finance-transaction-valuation';
+import { FinanceSavingsReadService } from '@finance-pro/api/savings/finance-savings-read.service';
 
 @Injectable()
 export class FinanceAssetSummaryService {

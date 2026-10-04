@@ -6,10 +6,10 @@ import type {
   ConsumerFinanceRegularPayment,
   ConsumerFinanceRegularPaymentConfirmation,
 } from "@telegram-system/shared";
-import { Button, ErrorState, FormField, Input, Modal } from "./ui";
-import { consumerFinanceObligationsApi } from "@/lib/features/finance/consumer-finance-obligations-api";
-import type { FinanceLocale } from "./i18n/core";
-import { financeRegularPaymentsCopy } from "./i18n/regular-payments";
+import { Button, ErrorState, FormField, Input, Modal } from "@finance-pro/web/components/ui";
+import { consumerFinanceObligationsApi } from "@finance-pro/web/lib/api/consumer-finance-obligations-api";
+import type { FinanceLocale } from "@finance-pro/web/components/i18n/core";
+import { financeRegularPaymentsCopy } from "@finance-pro/web/components/i18n/regular-payments";
 
 export function FinanceRegularPaymentConfirm({
   botId,

@@ -3,7 +3,7 @@ import { TelegramBotRuntimeEnvironment } from '@prisma/client';
 import sharp from 'sharp';
 import { TokenEncryptionService } from '../../../../common/security/token-encryption.service';
 import { PrismaService } from '../../../../prisma/prisma.service';
-import { TelegramBotApiClient } from '../../../../telegram/shared/telegram-bot-api.client';
+import { TelegramBotApiClient } from '@api/telegram/shared/bot/telegram-bot-api.client';
 
 const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
 

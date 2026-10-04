@@ -8,17 +8,17 @@ import type {
 import type {
   TelegramBotDeliveryWriterPort,
   TransactionalTelegramDeliveryInput,
-} from '../../telegram-bots/core/telegram-bot-delivery-writer';
-import { t } from '../i18n/finance-chat-i18n';
+} from '@api/domains/telegram/telegram-bots/core/telegram-bot-delivery-writer';
+import { t } from '@finance-pro/api/i18n/finance-chat-i18n';
 import {
   financeObligationDeliveryTarget,
   financeObligationProfile,
-} from '../obligations/finance-obligation-context';
-import type { FinanceObligationPresentationPort } from '../obligations/finance-obligation-presentation.port';
+} from '@finance-pro/api/obligations/finance-obligation-context';
+import type { FinanceObligationPresentationPort } from '@finance-pro/api/obligations/finance-obligation-presentation.port';
 import {
   financeLocalCalendarDate,
   financeRecurrenceAnchor,
-} from '../obligations/finance-obligation-date';
+} from '@finance-pro/api/obligations/finance-obligation-date';
 
 type Progress = (
   item: ConsumerFinanceImportProgress,

@@ -14,6 +14,12 @@
     "sourceMap": true,
     "outDir": "./dist",
     "baseUrl": "./",
+    "paths": {
+      "@api/*": ["./src/*"],
+      "@finance-pro/api/*": ["../../products/finance-pro/api/*"],
+      "@finance-pro/bot/*": ["../../products/finance-pro/bot/*"],
+      "@greeter/api/*": ["../../products/greeter/api/*"]
+    },
     "incremental": true,
     "skipLibCheck": true,
     "strictNullChecks": true,

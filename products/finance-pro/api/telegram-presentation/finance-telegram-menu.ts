@@ -1,6 +1,6 @@
-import type { TelegramChatMenuButton } from '../../../../telegram/shared/telegram-bot-api.client';
-import { publicWebOrigin } from '../../../../config/deployment-config';
-import { t, type FinanceChatLocale } from '../i18n/finance-chat-i18n';
+import type { TelegramChatMenuButton } from '@api/telegram/shared/bot/telegram-bot-api.client';
+import { publicWebOrigin } from '@api/config/deployment-config';
+import { t, type FinanceChatLocale } from '@finance-pro/api/i18n/finance-chat-i18n';
 import type { ConsumerFinanceAssistantScreen } from '@telegram-system/shared';
 
 export function financeMiniAppUrl(

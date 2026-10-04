@@ -11,7 +11,7 @@ import type {
   ConsumerFinanceRegularPayment,
   ConsumerFinanceRegularPaymentConfirmation,
 } from "@telegram-system/shared";
-import { FinanceRegularPayments } from "./finance-regular-payments";
+import { FinanceRegularPayments } from "@finance-pro/web/components/obligations/finance-regular-payments";
 
 const api = vi.hoisted(() => ({
   regularPayments: vi.fn(),
@@ -26,10 +26,10 @@ const api = vi.hoisted(() => ({
   accounts: vi.fn(),
   categories: vi.fn(),
 }));
-vi.mock("@/lib/features/finance/consumer-finance-obligations-api", () => ({
+vi.mock("@finance-pro/web/lib/api/consumer-finance-obligations-api", () => ({
   consumerFinanceObligationsApi: api,
 }));
-vi.mock("@/lib/features/finance/consumer-finance-ledger-api", () => ({
+vi.mock("@finance-pro/web/lib/api/consumer-finance-ledger-api", () => ({
   consumerFinanceLedgerApi: {
     accounts: api.accounts,
     categories: api.categories,

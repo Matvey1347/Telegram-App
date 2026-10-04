@@ -22,9 +22,9 @@ import {
   GreeterDelayInput,
   preferredDelayUnit,
   type DelayUnit,
-} from "./greeter-delay-input";
-import { GreeterMessageEditor } from "./greeter-message-editor";
-import { CreateGreeterAutomationModal } from "./greeter-create-automation-modal";
+} from "@greeter/web/components/shared/greeter-delay-input";
+import { GreeterMessageEditor } from "@greeter/web/components/shared/greeter-message-editor";
+import { CreateGreeterAutomationModal } from "@greeter/web/components/automation/greeter-create-automation-modal";
 
 export function GreeterAutomationsSection({
   botId,

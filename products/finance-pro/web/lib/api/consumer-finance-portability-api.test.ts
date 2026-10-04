@@ -3,8 +3,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   consumerFinancePortabilityApi,
   importConsumerFinanceData,
-} from "./consumer-finance-portability-api";
-import { consumerFinanceHttp } from "./consumer-finance-http";
+} from "@finance-pro/web/lib/api/consumer-finance-portability-api";
+import { consumerFinanceHttp } from "@finance-pro/web/lib/api/consumer-finance-http";
 
 const originalAdapter = consumerFinanceHttp.defaults.adapter;
 

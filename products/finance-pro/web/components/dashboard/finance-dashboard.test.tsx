@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import type { ConsumerFinanceDashboard } from "@telegram-system/shared";
-import { FinanceDashboard } from "./finance-dashboard";
+import { FinanceDashboard } from "@finance-pro/web/components/dashboard/finance-dashboard";
 
 const dashboard: ConsumerFinanceDashboard = {
   profile: {

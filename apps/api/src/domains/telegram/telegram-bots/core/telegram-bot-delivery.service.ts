@@ -17,11 +17,11 @@ import { PrismaService } from '../../../../prisma/prisma.service';
 import {
   TelegramBotApiClient,
   TelegramBotApiError,
-} from '../../../../telegram/shared/telegram-bot-api.client';
+} from '@api/telegram/shared/bot/telegram-bot-api.client';
 import {
   telegramBotMessagePayload,
   type TelegramBotMessage,
-} from '../../../../telegram/shared/telegram-bot-message';
+} from '@api/telegram/shared/bot/telegram-bot-message';
 import { sanitizeOperationalError } from '../../../../common/security/operational-error';
 import { TelegramBotDeliveryScheduler } from './telegram-bot-delivery-scheduler';
 import { TelegramBotRuntimeEnvironmentService } from './telegram-bot-runtime-environment.service';

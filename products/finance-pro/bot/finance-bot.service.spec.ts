@@ -1,15 +1,15 @@
-import { FinanceBotService } from './finance-bot.service';
+import { FinanceBotService } from '@finance-pro/bot/finance-bot.service';
 import {
   parseFinanceBrowserLoginToken,
   parseFinanceChatCommand,
   parseFinanceMenuText,
   parseFinanceQuickInput,
-} from './finance-chat-input-parser';
-import { FinanceBotChatResponderService } from './finance-bot-chat-responder.service';
+} from '@finance-pro/bot/finance-chat-input-parser';
+import { FinanceBotChatResponderService } from '@finance-pro/bot/finance-bot-chat-responder.service';
 import {
   financeMainMenu,
   financeMiniAppUrl,
-} from '../../consumer-finance/telegram-presentation/finance-telegram-menu';
+} from '@finance-pro/api/telegram-presentation/finance-telegram-menu';
 
 describe('parseFinanceQuickInput', () => {
   it.each([

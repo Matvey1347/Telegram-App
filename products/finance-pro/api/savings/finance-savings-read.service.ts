@@ -1,18 +1,18 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { CurrencyConversionService } from '../../../../common/currency-conversion.service';
-import { PrismaService } from '../../../../prisma/prisma.service';
-import { prepareFinanceAccountRates } from '../ledger/finance-transaction-valuation';
+import { CurrencyConversionService } from '@api/common/currency-conversion.service';
+import { PrismaService } from '@api/prisma/prisma.service';
+import { prepareFinanceAccountRates } from '@finance-pro/api/ledger/finance-transaction-valuation';
 import type {
   FinanceSavingsGoalQueryDto,
   FinanceSavingsMovementQueryDto,
-} from './finance-savings.dto';
+} from '@finance-pro/api/savings/finance-savings.dto';
 import {
   financeSavingsGoalSelect,
   financeSavingsGoalView,
   financeSavingsMovementSelect,
   financeSavingsMovementView,
-} from './finance-savings-view';
+} from '@finance-pro/api/savings/finance-savings-view';
 
 type BackingRow = { goalId: string; backedAmount: Prisma.Decimal | null };
 

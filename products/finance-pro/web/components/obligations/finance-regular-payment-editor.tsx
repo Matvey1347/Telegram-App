@@ -18,15 +18,15 @@ import {
   Modal,
   Select,
   Textarea,
-} from "./ui";
-import { consumerFinanceLedgerApi } from "@/lib/features/finance/consumer-finance-ledger-api";
-import { consumerFinanceObligationsApi } from "@/lib/features/finance/consumer-finance-obligations-api";
-import { consumerFinanceKeys } from "@/lib/features/finance/consumer-finance-query-keys";
-import { financeCalendarDate } from "@/lib/features/finance/consumer-finance-date";
-import { localizeFinanceCategory } from "./finance-category-i18n";
-import type { FinanceLocale } from "./i18n/core";
-import { financeRegularPaymentsCopy } from "./i18n/regular-payments";
-import { IconPicker } from "./ui/finance-icon-picker";
+} from "@finance-pro/web/components/ui";
+import { consumerFinanceLedgerApi } from "@finance-pro/web/lib/api/consumer-finance-ledger-api";
+import { consumerFinanceObligationsApi } from "@finance-pro/web/lib/api/consumer-finance-obligations-api";
+import { consumerFinanceKeys } from "@finance-pro/web/lib/query/consumer-finance-query-keys";
+import { financeCalendarDate } from "@finance-pro/web/lib/formatters/consumer-finance-date";
+import { localizeFinanceCategory } from "@finance-pro/web/components/catalog/finance-category-i18n";
+import type { FinanceLocale } from "@finance-pro/web/components/i18n/core";
+import { financeRegularPaymentsCopy } from "@finance-pro/web/components/i18n/regular-payments";
+import { IconPicker } from "@finance-pro/web/components/ui/finance-icon-picker";
 
 export function FinanceRegularPaymentEditor({
   botId,

@@ -4,22 +4,22 @@ import {
   Injectable,
 } from '@nestjs/common';
 import { FinanceAiProvider } from '@prisma/client';
-import { PrismaService } from '../../../../prisma/prisma.service';
-import { TelegramBotApiClient } from '../../../../telegram/shared/telegram-bot-api.client';
-import { FinanceEntitlementService } from '../billing/finance-entitlement.service';
+import { PrismaService } from '@api/prisma/prisma.service';
+import { TelegramBotApiClient } from '@api/telegram/shared/bot/telegram-bot-api.client';
+import { FinanceEntitlementService } from '@finance-pro/api/billing/finance-entitlement.service';
 import {
   AI_MODEL_POLICY,
   priceAiUsage,
-} from '../../telegram-bots/core/ai-usage-cost';
+} from '@api/domains/telegram/telegram-bots/core/ai-usage-cost';
 import {
   requestFinanceStructuredResponse,
   type FinanceAiResponseUsage,
-} from './finance-ai-responses.client';
-import { FinanceAiCredentialService } from './finance-ai-credential.service';
+} from '@finance-pro/api/ai/finance-ai-responses.client';
+import { FinanceAiCredentialService } from '@finance-pro/api/ai/finance-ai-credential.service';
 import {
   financeVoiceFileName,
   isSupportedFinanceVoiceMime,
-} from './finance-ai-media';
+} from '@finance-pro/api/ai/finance-ai-media';
 
 export type AiFinanceOperation = {
   type: 'INCOME' | 'EXPENSE';

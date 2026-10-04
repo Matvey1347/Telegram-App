@@ -3,7 +3,7 @@ import { Prisma } from '@prisma/client';
 import { normalizeTelegramPostMediaItems, type TelegramPostMediaItem } from '@telegram-system/shared';
 import { WorkspaceService } from '../../../common/workspace.service';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { normalizeTelegramPostButtonRows } from '../../../telegram/shared/telegram-inline-keyboard';
+import { normalizeTelegramPostButtonRows } from '@api/telegram/shared/markup/telegram-inline-keyboard';
 import { CreateTelegramManagedPostDto, ReorderManagedPostSidebarDto } from './dto';
 import { TelegramChannelCatalogService } from './telegram-channel-catalog.service';
 import { TelegramChannelsSupportService } from './telegram-channels-support.service';

@@ -3,11 +3,11 @@ import type {
   ConsumerFinanceCategory,
   ConsumerFinanceTransactionType,
 } from "@telegram-system/shared";
-import { Card, EmptyState } from "./ui";
-import { type FinanceLocale } from "./i18n/core";
-import { financeCategoriesCopy } from "./i18n/categories";
-import { localizeFinanceCategory } from "./finance-category-i18n";
-import { IconAvatar } from "./ui/finance-icon-avatar";
+import { Card, EmptyState } from "@finance-pro/web/components/ui";
+import { type FinanceLocale } from "@finance-pro/web/components/i18n/core";
+import { financeCategoriesCopy } from "@finance-pro/web/components/i18n/categories";
+import { localizeFinanceCategory } from "@finance-pro/web/components/catalog/finance-category-i18n";
+import { IconAvatar } from "@finance-pro/web/components/ui/finance-icon-avatar";
 
 type LegacyReason =
   | "missing-parent"

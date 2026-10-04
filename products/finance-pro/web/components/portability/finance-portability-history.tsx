@@ -4,12 +4,12 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ConsumerFinancePortabilityHistoryItem } from "@telegram-system/shared";
 import { Download, History, RotateCcw, Upload } from "lucide-react";
-import { consumerFinanceApi } from "@/lib/features/finance/consumer-finance-api";
-import { consumerFinanceKeys } from "@/lib/features/finance/consumer-finance-query-keys";
-import { Button } from "./ui";
-import { FinanceConfirmModal } from "./finance-confirm-modal";
-import { financeIntlLocale, type FinanceLocale } from "./i18n/core";
-import { financeSettingsCopy } from "./i18n/settings";
+import { consumerFinanceApi } from "@finance-pro/web/lib/api/consumer-finance-api";
+import { consumerFinanceKeys } from "@finance-pro/web/lib/query/consumer-finance-query-keys";
+import { Button } from "@finance-pro/web/components/ui";
+import { FinanceConfirmModal } from "@finance-pro/web/components/shared/finance-confirm-modal";
+import { financeIntlLocale, type FinanceLocale } from "@finance-pro/web/components/i18n/core";
+import { financeSettingsCopy } from "@finance-pro/web/components/i18n/settings";
 
 function OperationIcon({
   operation,

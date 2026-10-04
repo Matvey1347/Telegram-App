@@ -1,4 +1,4 @@
-import { forecastMonthlyLimit } from './finance-smart-limits';
+import { forecastMonthlyLimit } from '@finance-pro/api/planning/finance-smart-limits';
 
 describe('forecastMonthlyLimit', () => {
   it('projects an overrun from the current deterministic daily pace', () => {

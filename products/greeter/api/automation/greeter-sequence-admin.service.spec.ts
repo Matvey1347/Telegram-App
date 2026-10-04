@@ -1,5 +1,5 @@
 import { ConflictException } from '@nestjs/common';
-import { GreeterSequenceAdminService } from './greeter-sequence-admin.service';
+import { GreeterSequenceAdminService } from '@greeter/api/automation/greeter-sequence-admin.service';
 
 describe('GreeterSequenceAdminService', () => {
   it.each(['javascript:alert(1)', 'data:text/plain,no', 'file:///tmp/no'])(

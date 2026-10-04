@@ -1,17 +1,17 @@
 import { HttpException } from '@nestjs/common';
-import type { TelegramBotApplicationContext } from '../core/telegram-bot-update.types';
-import type { TelegramBotApiClient } from '../../../../telegram/shared/telegram-bot-api.client';
-import type { TelegramBotInteractiveReplyService } from '../../../../telegram/shared/telegram-bot-interactive-reply.service';
-import type { FinanceUltimateService } from '../../consumer-finance/ultimate/finance-ultimate.service';
-import type { FinanceAssistantEntryService } from '../../consumer-finance/ultimate/finance-assistant-entry.service';
-import type { FinanceBotChatResponderService } from './finance-bot-chat-responder.service';
-import { sendFinanceTyping } from './finance-bot-telegram-interactions';
-import { financeMiniAppUrl } from '../../consumer-finance/telegram-presentation/finance-telegram-menu';
+import type { TelegramBotApplicationContext } from '@api/domains/telegram/telegram-bots/core/telegram-bot-update.types';
+import type { TelegramBotApiClient } from '@api/telegram/shared/bot/telegram-bot-api.client';
+import type { TelegramBotInteractiveReplyService } from '@api/telegram/shared/bot/telegram-bot-interactive-reply.service';
+import type { FinanceUltimateService } from '@finance-pro/api/ultimate/finance-ultimate.service';
+import type { FinanceAssistantEntryService } from '@finance-pro/api/ultimate/finance-assistant-entry.service';
+import type { FinanceBotChatResponderService } from '@finance-pro/bot/finance-bot-chat-responder.service';
+import { sendFinanceTyping } from '@finance-pro/bot/finance-bot-telegram-interactions';
+import { financeMiniAppUrl } from '@finance-pro/api/telegram-presentation/finance-telegram-menu';
 import {
   t,
   type FinanceChatLocale,
-} from '../../consumer-finance/i18n/finance-chat-i18n';
-import { financeBotProButtons } from './finance-bot-pro-buttons';
+} from '@finance-pro/api/i18n/finance-chat-i18n';
+import { financeBotProButtons } from '@finance-pro/bot/finance-bot-pro-buttons';
 
 export async function sendFinanceAssistantReply(input: {
   context: TelegramBotApplicationContext;

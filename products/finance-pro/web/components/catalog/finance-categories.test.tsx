@@ -8,7 +8,7 @@ import {
 } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConsumerFinanceCategory } from "@telegram-system/shared";
-import { FinanceCategories } from "./finance-categories";
+import { FinanceCategories } from "@finance-pro/web/components/catalog/finance-categories";
 
 const apiMocks = vi.hoisted(() => ({
   categories: vi.fn(),
@@ -17,7 +17,7 @@ const apiMocks = vi.hoisted(() => ({
   archiveCategory: vi.fn(),
 }));
 
-vi.mock("@/lib/features/finance/consumer-finance-api", () => ({
+vi.mock("@finance-pro/web/lib/api/consumer-finance-api", () => ({
   consumerFinanceApi: apiMocks,
 }));
 

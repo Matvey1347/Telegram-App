@@ -1,7 +1,7 @@
 import type {
   ResolvedTelegramEntity,
   TelegramTitleCandidate,
-} from "../telegram/shared/telegram-import.helpers";
+} from "@api/telegram/shared/imports/telegram-import.helpers";
 
 let sequence = 0;
 

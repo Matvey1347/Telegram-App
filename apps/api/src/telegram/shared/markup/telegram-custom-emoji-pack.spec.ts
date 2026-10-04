@@ -2,7 +2,7 @@ import { BadRequestException } from '@nestjs/common';
 import {
   normalizeTelegramCustomEmojiPackSource,
   parseTelegramCustomEmojiDocumentId,
-} from './telegram-custom-emoji-pack';
+} from '@api/telegram/shared/markup/telegram-custom-emoji-pack';
 
 describe('Telegram Custom Emoji pack input', () => {
   it.each([

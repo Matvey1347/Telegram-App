@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { ConsumerFinanceAnalytics } from "@telegram-system/shared";
-import { AnalyticsPresentation } from "./finance-analytics-presentation";
+import { AnalyticsPresentation } from "@finance-pro/web/components/analytics/finance-analytics-presentation";
 
 const analytics: ConsumerFinanceAnalytics = {
   currency: "USD",

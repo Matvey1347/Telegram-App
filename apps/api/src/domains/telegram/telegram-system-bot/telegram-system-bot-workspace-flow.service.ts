@@ -10,14 +10,14 @@ import {
 } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { TelegramBotApiClient } from '../../../telegram/shared/telegram-bot-api.client';
-import { TelegramBotIconCaptureService } from '../../../telegram/shared/telegram-bot-icon-capture.service';
-import { storedTelegramIconPresentation } from '../../../telegram/shared/telegram-bot-icon-source';
+import { TelegramBotApiClient } from '@api/telegram/shared/bot/telegram-bot-api.client';
+import { TelegramBotIconCaptureService } from '@api/telegram/shared/bot/telegram-bot-icon-capture.service';
+import { storedTelegramIconPresentation } from '@api/telegram/shared/bot/telegram-bot-icon-source';
 import {
   telegramBotApiActionRow,
   telegramBotEditButtonText,
-} from '../../../telegram/shared/telegram-bot-action-buttons';
-import { telegramMarkupToHtml } from '../../../telegram/shared/telegram-markup';
+} from '@api/telegram/shared/bot/telegram-bot-action-buttons';
+import { telegramMarkupToHtml } from '@api/telegram/shared/markup/telegram-markup';
 import type { TelegramSystemBotIncomingMessage } from './telegram-system-bot-forwarded-content.parser';
 import { TelegramSystemBotConfigService } from './telegram-system-bot-config.service';
 import type { TelegramSystemBotPostFlowScope } from './telegram-system-bot-post-flow.types';

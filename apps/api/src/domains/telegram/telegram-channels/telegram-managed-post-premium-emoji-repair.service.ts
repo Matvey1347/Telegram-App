@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { TelegramSourceType } from '@prisma/client';
-import { parseTelegramCustomEmojiTokens } from '../../../telegram/shared/telegram-custom-emoji-markup';
-import { TelegramMtprotoClient } from '../../../telegram/shared/telegram-mtproto.client';
+import { parseTelegramCustomEmojiTokens } from '@api/telegram/shared/markup/telegram-custom-emoji-markup';
+import { TelegramMtprotoClient } from '@api/telegram/shared/mtproto/telegram-mtproto.client';
 import { TelegramChannelAccessService } from './telegram-channel-access.service';
 
 @Injectable()

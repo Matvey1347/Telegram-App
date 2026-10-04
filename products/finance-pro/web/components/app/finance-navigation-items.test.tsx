@@ -4,7 +4,7 @@ import {
   FINANCE_NAVIGATION_GROUPS,
   FinanceNavigationButton,
   FinanceNavigationGroupHeader,
-} from "./finance-navigation-items";
+} from "@finance-pro/web/components/app/finance-navigation-items";
 
 describe("Consumer Finance navigation presentation", () => {
   it("keeps every destination in one logical group", () => {

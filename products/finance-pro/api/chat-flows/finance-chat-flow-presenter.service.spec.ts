@@ -1,4 +1,4 @@
-import { FinanceChatFlowPresenterService } from './finance-chat-flow-presenter.service';
+import { FinanceChatFlowPresenterService } from '@finance-pro/api/chat-flows/finance-chat-flow-presenter.service';
 
 describe('FinanceChatFlowPresenterService', () => {
   const flows = {

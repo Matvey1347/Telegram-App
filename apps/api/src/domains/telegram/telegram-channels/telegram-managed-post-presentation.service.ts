@@ -1,10 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import { parseTelegramHtml } from '../../../telegram/shared/telegram-html-parser';
+import { parseTelegramHtml } from '@api/telegram/shared/markup/telegram-html-parser';
 import {
   requiresNativeTelegramRichMessage,
   telegramMarkupToHtml,
   telegramMarkupToRichHtml,
-} from '../../../telegram/shared/telegram-markup';
+} from '@api/telegram/shared/markup/telegram-markup';
 import {
   BotMessageEntity,
   ManagedPostPublishRender,

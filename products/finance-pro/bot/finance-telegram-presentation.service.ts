@@ -1,17 +1,17 @@
 import { Injectable } from '@nestjs/common';
 import { TelegramBotApplicationType } from '@prisma/client';
-import type { TelegramBotApplicationPresentation } from '../core/telegram-bot-application.ports';
-import type { TelegramBotCommand } from '../../../../telegram/shared/telegram-bot-api.client';
+import type { TelegramBotApplicationPresentation } from '@api/domains/telegram/telegram-bots/core/telegram-bot-application.ports';
+import type { TelegramBotCommand } from '@api/telegram/shared/bot/telegram-bot-api.client';
 import {
   financeChatMenuButton,
   financeMainMenu,
   financeMiniAppUrl,
-} from '../../consumer-finance/telegram-presentation/finance-telegram-menu';
+} from '@finance-pro/api/telegram-presentation/finance-telegram-menu';
 import {
   financeChatLocale,
   type FinanceChatLocale,
-} from '../../consumer-finance/i18n/finance-chat-i18n';
-import { publicWebOrigin } from '../../../../config/deployment-config';
+} from '@finance-pro/api/i18n/finance-chat-i18n';
+import { publicWebOrigin } from '@api/config/deployment-config';
 
 const COMMAND_DESCRIPTIONS: Record<FinanceChatLocale, string[]> = {
   en: [

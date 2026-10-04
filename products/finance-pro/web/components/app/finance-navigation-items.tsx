@@ -26,11 +26,11 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useState } from "react";
-import type { FinanceCoreCopy } from "./i18n/core";
-import type { ConsumerFinanceScreen } from "./consumer-finance-navigation";
-import styles from "./finance-navigation-items.module.css";
-import groupStyles from "./finance-navigation-groups.module.css";
-import specialStyles from "./finance-navigation-special-motion.module.css";
+import type { FinanceCoreCopy } from "@finance-pro/web/components/i18n/core";
+import type { ConsumerFinanceScreen } from "@finance-pro/web/components/app/consumer-finance-navigation";
+import styles from "@finance-pro/web/components/app/finance-navigation-items.module.css";
+import groupStyles from "@finance-pro/web/components/app/finance-navigation-groups.module.css";
+import specialStyles from "@finance-pro/web/components/app/finance-navigation-special-motion.module.css";
 
 export type FinanceNavigationItem = {
   id: ConsumerFinanceScreen;

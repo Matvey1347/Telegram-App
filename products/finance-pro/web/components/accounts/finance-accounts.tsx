@@ -4,15 +4,15 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import type { ConsumerFinanceAccount } from "@telegram-system/shared";
-import { Button, Card, EmptyState, ErrorState, LoadingState } from "./ui";
-import { consumerFinanceLedgerApi } from "@/lib/features/finance/consumer-finance-ledger-api";
-import { formatMoney } from "@/lib/features/finance/consumer-finance-money";
-import { patchConsumerFinanceAccountCache } from "@/lib/features/finance/consumer-finance-cache";
-import { consumerFinanceKeys } from "@/lib/features/finance/consumer-finance-query-keys";
-import { type FinanceLocale } from "./i18n/core";
-import { financeAccountsCopy } from "./i18n/accounts";
-import { FinanceConfirmModal } from "./finance-confirm-modal";
-import { IconAvatar } from "./ui/finance-icon-avatar";
+import { Button, Card, EmptyState, ErrorState, LoadingState } from "@finance-pro/web/components/ui";
+import { consumerFinanceLedgerApi } from "@finance-pro/web/lib/api/consumer-finance-ledger-api";
+import { formatMoney } from "@finance-pro/web/lib/formatters/consumer-finance-money";
+import { patchConsumerFinanceAccountCache } from "@finance-pro/web/lib/cache/consumer-finance-cache";
+import { consumerFinanceKeys } from "@finance-pro/web/lib/query/consumer-finance-query-keys";
+import { type FinanceLocale } from "@finance-pro/web/components/i18n/core";
+import { financeAccountsCopy } from "@finance-pro/web/components/i18n/accounts";
+import { FinanceConfirmModal } from "@finance-pro/web/components/shared/finance-confirm-modal";
+import { IconAvatar } from "@finance-pro/web/components/ui/finance-icon-avatar";
 
 export function FinanceAccountsScreen({
   botId,

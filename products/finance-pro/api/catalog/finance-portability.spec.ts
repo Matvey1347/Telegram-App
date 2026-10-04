@@ -1,6 +1,6 @@
 import { Prisma } from '@prisma/client';
-import { validateFinanceImportDocument } from '../portability/finance-import-validator';
-import { exportFinanceData } from './finance-portability';
+import { validateFinanceImportDocument } from '@finance-pro/api/portability/finance-import-validator';
+import { exportFinanceData } from '@finance-pro/api/catalog/finance-portability';
 
 const empty = () => ({ findMany: jest.fn().mockResolvedValue([]) });
 

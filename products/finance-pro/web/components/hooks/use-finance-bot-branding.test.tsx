@@ -2,13 +2,13 @@ import { act, render, waitFor } from "@testing-library/react";
 import { hydrateRoot, type Root } from "react-dom/client";
 import { renderToString } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { useFinanceBotBranding } from "./use-finance-bot-branding";
+import { useFinanceBotBranding } from "@finance-pro/web/components/hooks/use-finance-bot-branding";
 
 const mocks = vi.hoisted(() => ({
   apiBase: "/api",
 }));
 
-vi.mock("@/lib/features/finance/consumer-finance-http", () => ({
+vi.mock("@finance-pro/web/lib/api/consumer-finance-http", () => ({
   resolveConsumerFinanceApiBase: () => mocks.apiBase,
 }));
 

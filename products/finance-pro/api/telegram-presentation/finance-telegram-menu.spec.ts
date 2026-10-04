@@ -3,7 +3,7 @@ import {
   financeCheckoutReturnUrl,
   financeMainMenu,
   financeMiniAppUrl,
-} from './finance-telegram-menu';
+} from '@finance-pro/api/telegram-presentation/finance-telegram-menu';
 
 describe('Finance Telegram application URLs', () => {
   const previousFrontendUrl = process.env.FRONTEND_URL;

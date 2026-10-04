@@ -1,4 +1,4 @@
-import { FinanceEntitlementService } from './finance-entitlement.service';
+import { FinanceEntitlementService } from '@finance-pro/api/billing/finance-entitlement.service';
 
 describe('FinanceEntitlementService AI reservation dimensions', () => {
   it('persists workspace and runtime dimensions for operator cost analytics', async () => {

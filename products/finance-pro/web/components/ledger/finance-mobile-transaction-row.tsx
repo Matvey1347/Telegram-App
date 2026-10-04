@@ -1,10 +1,10 @@
 import { Pencil, Trash2 } from "lucide-react";
 import type { ConsumerFinanceTransaction } from "@telegram-system/shared";
-import { formatMoney } from "@/lib/features/finance/consumer-finance-money";
-import { financeIntlLocale, type FinanceLocale } from "./i18n/core";
-import { financeTransactionsCopy } from "./i18n/transactions";
-import { localizeFinanceCategory } from "./finance-category-i18n";
-import { IconAvatar } from "./ui/finance-icon-avatar";
+import { formatMoney } from "@finance-pro/web/lib/formatters/consumer-finance-money";
+import { financeIntlLocale, type FinanceLocale } from "@finance-pro/web/components/i18n/core";
+import { financeTransactionsCopy } from "@finance-pro/web/components/i18n/transactions";
+import { localizeFinanceCategory } from "@finance-pro/web/components/catalog/finance-category-i18n";
+import { IconAvatar } from "@finance-pro/web/components/ui/finance-icon-avatar";
 
 export function FinanceMobileTransactionRow({
   item,

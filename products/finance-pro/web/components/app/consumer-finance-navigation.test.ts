@@ -9,7 +9,7 @@ import {
   readConsumerFinanceInvestmentId,
   readConsumerFinanceRegularPaymentTarget,
   readConsumerFinanceScreen,
-} from "./consumer-finance-navigation";
+} from "@finance-pro/web/components/app/consumer-finance-navigation";
 
 function location(url: string) {
   return new URL(url) as unknown as Location;

@@ -19,26 +19,26 @@ import {
   ErrorState,
   LoadingState,
   Select,
-} from "./ui";
-import type { FinanceLocale } from "./i18n/core";
-import { financeSavingsCopy } from "./i18n/savings";
-import { consumerFinanceSavingsGoalsApi } from "@/lib/features/finance/consumer-finance-savings-goals-api";
-import { consumerFinanceLedgerApi } from "@/lib/features/finance/consumer-finance-ledger-api";
-import { consumerFinanceKeys } from "@/lib/features/finance/consumer-finance-query-keys";
-import { consumerFinanceRequestId } from "@/lib/features/finance/consumer-finance-assets";
+} from "@finance-pro/web/components/ui";
+import type { FinanceLocale } from "@finance-pro/web/components/i18n/core";
+import { financeSavingsCopy } from "@finance-pro/web/components/i18n/savings";
+import { consumerFinanceSavingsGoalsApi } from "@finance-pro/web/lib/api/consumer-finance-savings-goals-api";
+import { consumerFinanceLedgerApi } from "@finance-pro/web/lib/api/consumer-finance-ledger-api";
+import { consumerFinanceKeys } from "@finance-pro/web/lib/query/consumer-finance-query-keys";
+import { consumerFinanceRequestId } from "@finance-pro/web/lib/assets/consumer-finance-assets";
 import {
   invalidateConsumerAssetDerivations,
   patchSavingsGoal,
   patchSavingsMutation,
-} from "@/lib/features/finance/consumer-finance-assets-cache";
-import { FinanceSavingsGoalEditor } from "./finance-savings-goal-editor";
-import { FinanceSavingsGoalCard } from "./finance-savings-goal-card";
+} from "@finance-pro/web/lib/cache/consumer-finance-assets-cache";
+import { FinanceSavingsGoalEditor } from "@finance-pro/web/components/savings/finance-savings-goal-editor";
+import { FinanceSavingsGoalCard } from "@finance-pro/web/components/savings/finance-savings-goal-card";
 import {
   FinanceSavingsActionModal,
   type SavingsAction,
   type SavingsActionValues,
-} from "./finance-savings-action-modal";
-import { FinanceSavingsHistory } from "./finance-savings-history";
+} from "@finance-pro/web/components/savings/finance-savings-action-modal";
+import { FinanceSavingsHistory } from "@finance-pro/web/components/savings/finance-savings-history";
 
 type StatusFilter = ConsumerFinanceSavingsGoalStatus | "ALL";
 

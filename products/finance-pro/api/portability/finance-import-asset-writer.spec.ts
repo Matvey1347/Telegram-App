@@ -1,6 +1,6 @@
 import { Prisma } from '@prisma/client';
 import type { ConsumerFinanceImportDocumentV1 } from '@telegram-system/shared';
-import { writeFinanceAssetImport } from './finance-import-asset-writer';
+import { writeFinanceAssetImport } from '@finance-pro/api/portability/finance-import-asset-writer';
 
 describe('writeFinanceAssetImport', () => {
   it('uses only terminal valuations and preserves their deterministic order', async () => {

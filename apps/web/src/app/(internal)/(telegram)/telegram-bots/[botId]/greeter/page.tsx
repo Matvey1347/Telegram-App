@@ -1,4 +1,4 @@
-import { GreeterPage } from "@/components/features/telegram/telegram-bots/greeter/greeter-page";
+import { GreeterPage } from "@greeter/web/components/app/greeter-page";
 
 export default async function Page({
   params,

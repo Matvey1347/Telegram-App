@@ -1,4 +1,4 @@
-import { FINANCE_PRODUCT_DEFINITIONS, FinanceEntitlementService } from './finance-entitlement.service';
+import { FINANCE_PRODUCT_DEFINITIONS, FinanceEntitlementService } from '@finance-pro/api/billing/finance-entitlement.service';
 
 describe('FinanceEntitlementService', () => {
   it('maps an active canonical plan to Finance capabilities', async () => {

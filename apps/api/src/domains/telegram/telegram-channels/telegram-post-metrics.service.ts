@@ -15,8 +15,8 @@ import {
   B2ObjectStorageService,
   isSupportedImmutableMediaMimeType,
 } from '../../../common/object-storage/b2-object-storage.service';
-import { TelegramMtprotoClient } from '../../../telegram/shared/telegram-mtproto.client';
-import { TelegramSourceAccessService } from '../../../telegram/shared/telegram-source-access.service';
+import { TelegramMtprotoClient } from '@api/telegram/shared/mtproto/telegram-mtproto.client';
+import { TelegramSourceAccessService } from '@api/telegram/shared/imports/telegram-source-access.service';
 import { ApplicationLoggerService } from '../../operations/application-logs/application-logger.service';
 import { TelegramChannelAccessService } from './telegram-channel-access.service';
 import {

@@ -9,13 +9,13 @@ import { TelegramAccountRuntimeNotifier } from '../../../common/telegram-account
 import { TokenEncryptionService } from '../../../common/security/token-encryption.service';
 import { WorkspaceService } from '../../../common/workspace.service';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { TelegramMtprotoClient } from '../../../telegram/shared/telegram-mtproto.client';
-import { decryptTelegramMtprotoCredentials } from '../../../telegram/shared/telegram-mtproto-credentials';
+import { TelegramMtprotoClient } from '@api/telegram/shared/mtproto/telegram-mtproto.client';
+import { decryptTelegramMtprotoCredentials } from '@api/telegram/shared/mtproto/telegram-mtproto-credentials';
 import {
   isRevokedTelegramSessionError,
   REVOKED_TELEGRAM_SESSION_MESSAGE,
   withTelegramTimeout,
-} from '../../../telegram/shared/telegram-session-errors';
+} from '@api/telegram/shared/mtproto/telegram-session-errors';
 import { ApplicationLoggerService } from '../../operations/application-logs/application-logger.service';
 import { OperationsNotificationPublisherService } from '../../operations/notifications/operations-notification-publisher.service';
 import { OperationsNotificationStoreService } from '../../operations/notifications/operations-notification-store.service';

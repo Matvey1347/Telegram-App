@@ -3,7 +3,7 @@ import {
   financeAccountEmoji,
   financeCategoryEmoji,
   financeIconPresentation,
-} from '../catalog/finance-entity-emoji';
+} from '@finance-pro/api/catalog/finance-entity-emoji';
 
 export const financeTransactionSelect = {
   id: true,

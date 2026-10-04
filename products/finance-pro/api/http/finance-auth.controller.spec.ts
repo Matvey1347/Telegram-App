@@ -1,8 +1,8 @@
 /* eslint-disable @typescript-eslint/unbound-method -- Jest assertions inspect mock methods without invoking them. */
 import type { Request, Response } from 'express';
-import { FinanceConsumerSessionService } from '../identity/finance-consumer-session.service';
-import { FinanceConsumerRequestService } from './finance-consumer-request.service';
-import { FinanceController } from './finance.controller';
+import { FinanceConsumerSessionService } from '@finance-pro/api/identity/finance-consumer-session.service';
+import { FinanceConsumerRequestService } from '@finance-pro/api/http/finance-consumer-request.service';
+import { FinanceController } from '@finance-pro/api/http/finance.controller';
 
 describe('FinanceController consumer auth', () => {
   const previousFrontend = process.env.FRONTEND_URL;

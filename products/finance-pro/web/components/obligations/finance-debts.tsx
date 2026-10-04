@@ -19,21 +19,21 @@ import {
   FinanceCardActionsMenu,
   LoadingState,
   Select,
-} from "./ui";
-import { IconAvatar } from "./ui/finance-icon-avatar";
-import { FinanceDebtCreateModal } from "./finance-debt-create-modal";
-import { FinanceDebtEditor } from "./finance-debt-editor";
-import { FinanceDebtSettlementModal } from "./finance-debt-settlement-modal";
-import { consumerFinanceObligationsApi } from "@/lib/features/finance/consumer-finance-obligations-api";
-import { consumerFinanceKeys } from "@/lib/features/finance/consumer-finance-query-keys";
+} from "@finance-pro/web/components/ui";
+import { IconAvatar } from "@finance-pro/web/components/ui/finance-icon-avatar";
+import { FinanceDebtCreateModal } from "@finance-pro/web/components/obligations/finance-debt-create-modal";
+import { FinanceDebtEditor } from "@finance-pro/web/components/obligations/finance-debt-editor";
+import { FinanceDebtSettlementModal } from "@finance-pro/web/components/obligations/finance-debt-settlement-modal";
+import { consumerFinanceObligationsApi } from "@finance-pro/web/lib/api/consumer-finance-obligations-api";
+import { consumerFinanceKeys } from "@finance-pro/web/lib/query/consumer-finance-query-keys";
 import {
   invalidateConsumerFinanceLedgerReads,
   reconcileConsumerDebtPages,
-} from "@/lib/features/finance/consumer-finance-obligations-cache";
-import { reconcileConsumerTransactionCaches } from "@/lib/features/finance/consumer-finance-cache";
-import { formatMoney } from "@/lib/features/finance/consumer-finance-money";
-import { financeIntlLocale, type FinanceLocale } from "./i18n/core";
-import { financeDebtsCopy } from "./i18n/debts";
+} from "@finance-pro/web/lib/cache/consumer-finance-obligations-cache";
+import { reconcileConsumerTransactionCaches } from "@finance-pro/web/lib/cache/consumer-finance-cache";
+import { formatMoney } from "@finance-pro/web/lib/formatters/consumer-finance-money";
+import { financeIntlLocale, type FinanceLocale } from "@finance-pro/web/components/i18n/core";
+import { financeDebtsCopy } from "@finance-pro/web/components/i18n/debts";
 
 export function FinanceDebts({
   botId,

@@ -2,7 +2,7 @@ import { ConflictException } from '@nestjs/common';
 import {
   assertFinanceIdempotency,
   financeRequestFingerprint,
-} from './finance-asset-idempotency';
+} from '@finance-pro/api/assets/finance-asset-idempotency';
 
 describe('finance asset idempotency', () => {
   it('uses a stable key-order-independent request fingerprint', () => {

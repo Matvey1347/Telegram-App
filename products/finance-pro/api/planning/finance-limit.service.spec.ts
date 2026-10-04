@@ -1,4 +1,4 @@
-import { FinanceLimitService } from './finance-limit.service';
+import { FinanceLimitService } from '@finance-pro/api/planning/finance-limit.service';
 
 describe('FinanceLimitService', () => {
   it('explicitly excludes investment contributions from spending limits', async () => {

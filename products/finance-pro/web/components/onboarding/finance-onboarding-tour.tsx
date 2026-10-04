@@ -1,10 +1,10 @@
 "use client";
 
-import { Button, Card } from "./ui";
+import { Button, Card } from "@finance-pro/web/components/ui";
 import { useState } from "react";
-import type { FinanceLocale } from "./i18n/core";
-import { financeAuthCopy } from "./i18n/auth";
-import type { ConsumerFinanceScreen } from "./consumer-finance-navigation";
+import type { FinanceLocale } from "@finance-pro/web/components/i18n/core";
+import { financeAuthCopy } from "@finance-pro/web/components/i18n/auth";
+import type { ConsumerFinanceScreen } from "@finance-pro/web/components/app/consumer-finance-navigation";
 
 type TourStep =
   | "overview"

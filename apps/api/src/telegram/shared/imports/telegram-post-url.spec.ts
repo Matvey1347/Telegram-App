@@ -2,7 +2,7 @@ import {
   buildStableTelegramPostUrl,
   normalizeTelegramChannelId,
   parseTelegramPostUrl,
-} from './telegram-post-url';
+} from '@api/telegram/shared/imports/telegram-post-url';
 
 describe('telegram-post-url helpers', () => {
   it('normalizes Telegram channel ids safely', () => {

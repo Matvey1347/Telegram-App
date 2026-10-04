@@ -1,4 +1,4 @@
-import { renderGreeterTemplate } from './greeter-template.renderer';
+import { renderGreeterTemplate } from '@greeter/api/templates/greeter-template.renderer';
 
 describe('renderGreeterTemplate', () => {
   it('renders allowlisted channel and user fields', () => {

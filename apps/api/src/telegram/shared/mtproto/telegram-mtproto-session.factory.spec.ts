@@ -1,4 +1,4 @@
-import { closeTelegramMtprotoSession } from './telegram-mtproto-session.factory';
+import { closeTelegramMtprotoSession } from '@api/telegram/shared/mtproto/telegram-mtproto-session.factory';
 
 describe('closeTelegramMtprotoSession', () => {
   it('destroys the transport without a redundant disconnect', async () => {

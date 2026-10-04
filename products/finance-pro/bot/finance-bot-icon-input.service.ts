@@ -1,12 +1,12 @@
 import { Injectable } from '@nestjs/common';
-import { TelegramBotApiClient } from '../../../../telegram/shared/telegram-bot-api.client';
-import { TelegramBotIconCaptureService } from '../../../../telegram/shared/telegram-bot-icon-capture.service';
+import { TelegramBotApiClient } from '@api/telegram/shared/bot/telegram-bot-api.client';
+import { TelegramBotIconCaptureService } from '@api/telegram/shared/bot/telegram-bot-icon-capture.service';
 import {
   FinanceChatFlowService,
   type FinanceFlowInput,
   type FinanceFlowResult,
-} from '../../consumer-finance/chat-flows/finance-chat-flow.service';
-import type { TelegramBotWebhookUpdate } from '../core/telegram-bot-update.types';
+} from '@finance-pro/api/chat-flows/finance-chat-flow.service';
+import type { TelegramBotWebhookUpdate } from '@api/domains/telegram/telegram-bots/core/telegram-bot-update.types';
 
 export type FinanceBotIconInputResult =
   | { handled: false }

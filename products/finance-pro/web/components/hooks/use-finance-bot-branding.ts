@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useSyncExternalStore } from "react";
-import { resolveConsumerFinanceApiBase } from "@/lib/features/finance/consumer-finance-http";
+import { resolveConsumerFinanceApiBase } from "@finance-pro/web/lib/api/consumer-finance-http";
 
 const DEFAULT_FAVICON = "/brand/favicon-finance.png";
 const subscribeToStaticApiTopology = () => () => undefined;

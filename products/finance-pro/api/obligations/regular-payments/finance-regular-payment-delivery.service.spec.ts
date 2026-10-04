@@ -1,5 +1,5 @@
 import { Prisma } from '@prisma/client';
-import { FinanceRegularPaymentDeliveryService } from './finance-regular-payment-delivery.service';
+import { FinanceRegularPaymentDeliveryService } from '@finance-pro/api/obligations/regular-payments/finance-regular-payment-delivery.service';
 
 describe('FinanceRegularPaymentDeliveryService', () => {
   it('arms a committed replacement before recomputing the shared earliest wake', async () => {

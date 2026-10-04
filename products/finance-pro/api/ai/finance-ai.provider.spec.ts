@@ -1,5 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
-import { FinanceAiProviderService } from './finance-ai.provider';
+import { FinanceAiProviderService } from '@finance-pro/api/ai/finance-ai.provider';
 
 describe('FinanceAiProviderService', () => {
   const originalFetch = global.fetch;

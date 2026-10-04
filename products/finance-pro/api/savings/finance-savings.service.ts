@@ -5,30 +5,30 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { CurrencyConversionService } from '../../../../common/currency-conversion.service';
-import { PrismaService } from '../../../../prisma/prisma.service';
+import { CurrencyConversionService } from '@api/common/currency-conversion.service';
+import { PrismaService } from '@api/prisma/prisma.service';
 import {
   assertFinanceIdempotency,
   financeRequestFingerprint,
-} from '../assets/finance-asset-idempotency';
-import { FinanceLedgerService } from '../ledger/finance-ledger.service';
-import { financeValuationSnapshot } from '../ledger/finance-transaction-valuation';
+} from '@finance-pro/api/assets/finance-asset-idempotency';
+import { FinanceLedgerService } from '@finance-pro/api/ledger/finance-ledger.service';
+import { financeValuationSnapshot } from '@finance-pro/api/ledger/finance-transaction-valuation';
 import type {
   FinanceSavingsAllocationDto,
   FinanceSavingsGoalInputDto,
   FinanceSavingsReallocationDto,
-} from './finance-savings.dto';
-import { FinanceSavingsReadService } from './finance-savings-read.service';
+} from '@finance-pro/api/savings/finance-savings.dto';
+import { FinanceSavingsReadService } from '@finance-pro/api/savings/finance-savings-read.service';
 import {
   financeSavingsMovementSelect,
   financeSavingsMovementView,
-} from './finance-savings-view';
-import { FinanceSavingsAllocationService } from './finance-savings-allocation.service';
+} from '@finance-pro/api/savings/finance-savings-view';
+import { FinanceSavingsAllocationService } from '@finance-pro/api/savings/finance-savings-allocation.service';
 import {
   assertFinanceSavingsMovementStatus,
   assertFinanceSavingsReallocationStatus,
-} from './finance-savings-rules';
-import { FinanceSavingsGoalService } from './finance-savings-goal.service';
+} from '@finance-pro/api/savings/finance-savings-rules';
+import { FinanceSavingsGoalService } from '@finance-pro/api/savings/finance-savings-goal.service';
 
 @Injectable()
 export class FinanceSavingsService {

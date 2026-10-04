@@ -1,7 +1,7 @@
 import 'reflect-metadata';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
-import { UpdateFinanceSettingsDto } from './finance.dto';
+import { UpdateFinanceSettingsDto } from '@finance-pro/api/http/finance.dto';
 
 describe('Finance consumer DTO validation', () => {
   it.each(['uk', 'ru', 'en'])('accepts supported locale %s', async (locale) => {

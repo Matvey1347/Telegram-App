@@ -1,4 +1,4 @@
-import { hydrateTelegramInviteCreatorProfiles } from './telegram-invite-creator-profile';
+import { hydrateTelegramInviteCreatorProfiles } from '@api/telegram/shared/invites/telegram-invite-creator-profile';
 
 describe('hydrateTelegramInviteCreatorProfiles', () => {
   it('uses the stored MTProto avatar for an invite creator matched by username', async () => {

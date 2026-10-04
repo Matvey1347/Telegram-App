@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
-import type { FinanceObligationPresentationPort } from '../../consumer-finance/obligations/finance-obligation-presentation.port';
-import { financeMiniAppUrl } from '../../consumer-finance/telegram-presentation/finance-telegram-menu';
-import { financeObligationCopy } from './finance-obligation-chat-copy';
+import type { FinanceObligationPresentationPort } from '@finance-pro/api/obligations/finance-obligation-presentation.port';
+import { financeMiniAppUrl } from '@finance-pro/api/telegram-presentation/finance-telegram-menu';
+import { financeObligationCopy } from '@finance-pro/bot/finance-obligation-chat-copy';
 
 export function financeRegularPaymentConfirmCallback(
   regularPaymentId: string,

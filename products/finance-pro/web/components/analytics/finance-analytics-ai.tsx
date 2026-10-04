@@ -3,8 +3,8 @@
 import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import type { ConsumerFinanceAnalyticsQuery } from "@telegram-system/shared";
-import { consumerFinanceApi } from "@/lib/features/finance/consumer-finance-api";
-import { consumerFinanceKeys } from "@/lib/features/finance/consumer-finance-query-keys";
+import { consumerFinanceApi } from "@finance-pro/web/lib/api/consumer-finance-api";
+import { consumerFinanceKeys } from "@finance-pro/web/lib/query/consumer-finance-query-keys";
 import {
   Button,
   Card,
@@ -12,11 +12,11 @@ import {
   LoadingState,
   SyncingState,
   Textarea,
-} from "./ui";
-import type { FinanceLocale } from "./i18n/core";
-import { financeAnalyticsCopy } from "./i18n/analytics";
-import { formatMoney } from "@/lib/features/finance/consumer-finance-money";
-import { FinancePlanPromotion } from "./finance-plan-promotion";
+} from "@finance-pro/web/components/ui";
+import type { FinanceLocale } from "@finance-pro/web/components/i18n/core";
+import { financeAnalyticsCopy } from "@finance-pro/web/components/i18n/analytics";
+import { formatMoney } from "@finance-pro/web/lib/formatters/consumer-finance-money";
+import { FinancePlanPromotion } from "@finance-pro/web/components/planning/finance-plan-promotion";
 
 export function FinanceAnalyticsAi({
   botId,

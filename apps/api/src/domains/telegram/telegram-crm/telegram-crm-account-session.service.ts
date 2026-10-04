@@ -6,7 +6,7 @@ import {
 import { Prisma, TelegramUserAccountStatus } from '@prisma/client';
 import { TokenEncryptionService } from '../../../common/security/token-encryption.service';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { decryptTelegramMtprotoCredentials } from '../../../telegram/shared/telegram-mtproto-credentials';
+import { decryptTelegramMtprotoCredentials } from '@api/telegram/shared/mtproto/telegram-mtproto-credentials';
 
 export const crmRuntimeAccountSelect = {
   id: true,

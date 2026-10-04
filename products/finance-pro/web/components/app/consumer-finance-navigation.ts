@@ -1,4 +1,4 @@
-import type { FinanceCoreCopy } from "./i18n/core";
+import type { FinanceCoreCopy } from "@finance-pro/web/components/i18n/core";
 
 export type ConsumerFinanceSurface = "browser" | "telegram";
 export type ConsumerFinanceAction =

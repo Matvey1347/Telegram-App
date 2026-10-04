@@ -1,12 +1,12 @@
 import { ConflictException } from '@nestjs/common';
 import { normalizeTelegramPostMediaItems } from '@telegram-system/shared';
-import { TelegramBotApiClient } from '../../../telegram/shared/telegram-bot-api.client';
+import { TelegramBotApiClient } from '@api/telegram/shared/bot/telegram-bot-api.client';
 import {
   normalizeTelegramPostButtonRows,
   toTelegramBotInlineKeyboard,
-} from '../../../telegram/shared/telegram-inline-keyboard';
-import { telegramMarkupToHtml } from '../../../telegram/shared/telegram-markup';
-import { parseTelegramHtml } from '../../../telegram/shared/telegram-html-parser';
+} from '@api/telegram/shared/markup/telegram-inline-keyboard';
+import { telegramMarkupToHtml } from '@api/telegram/shared/markup/telegram-markup';
+import { parseTelegramHtml } from '@api/telegram/shared/markup/telegram-html-parser';
 import type {
   TelegramSystemBotPostFlowScope,
   TelegramSystemBotPostPreviewDraft,

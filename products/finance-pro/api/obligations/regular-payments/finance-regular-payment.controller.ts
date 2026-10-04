@@ -15,10 +15,10 @@ import {
   FinanceRegularPaymentInputDto,
   FinanceRegularPaymentQueryDto,
   FinanceRegularPaymentRevisionQueryDto,
-} from '../finance-obligation.dto';
-import { FinanceConsumerRequestService } from '../../http/finance-consumer-request.service';
-import { FinanceRegularPaymentConfirmationService } from './finance-regular-payment-confirmation.service';
-import { FinanceRegularPaymentService } from './finance-regular-payment.service';
+} from '@finance-pro/api/obligations/finance-obligation.dto';
+import { FinanceConsumerRequestService } from '@finance-pro/api/http/finance-consumer-request.service';
+import { FinanceRegularPaymentConfirmationService } from '@finance-pro/api/obligations/regular-payments/finance-regular-payment-confirmation.service';
+import { FinanceRegularPaymentService } from '@finance-pro/api/obligations/regular-payments/finance-regular-payment.service';
 
 @Controller('finance-bots/:botId/regular-payments')
 export class FinanceRegularPaymentController {

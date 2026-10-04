@@ -11,8 +11,8 @@ import { hydrateRoot, type Root } from "react-dom/client";
 import { renderToString } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConsumerFinanceProfile } from "@telegram-system/shared";
-import { consumerFinanceKeys } from "@/lib/features/finance/consumer-finance-query-keys";
-import { ConsumerFinanceApp } from "./consumer-finance-app";
+import { consumerFinanceKeys } from "@finance-pro/web/lib/query/consumer-finance-query-keys";
+import { ConsumerFinanceApp } from "@finance-pro/web/components/app/consumer-finance-app";
 
 const mocks = vi.hoisted(() => ({
   bootstrap: { status: "browser" } as
@@ -26,10 +26,10 @@ const mocks = vi.hoisted(() => ({
   updateSettings: vi.fn(),
 }));
 
-vi.mock("./use-telegram-mini-app-bootstrap", () => ({
+vi.mock("@finance-pro/web/components/hooks/use-telegram-mini-app-bootstrap", () => ({
   useTelegramMiniAppBootstrap: () => mocks.bootstrap,
 }));
-vi.mock("@/lib/features/finance/consumer-finance-auth-api", () => ({
+vi.mock("@finance-pro/web/lib/api/consumer-finance-auth-api", () => ({
   consumerFinanceAuthApi: {
     auth: mocks.auth,
     session: mocks.session,
@@ -38,12 +38,12 @@ vi.mock("@/lib/features/finance/consumer-finance-auth-api", () => ({
     logout: mocks.logout,
   },
 }));
-vi.mock("@/lib/features/finance/consumer-finance-profile-api", () => ({
+vi.mock("@finance-pro/web/lib/api/consumer-finance-profile-api", () => ({
   consumerFinanceProfileApi: {
     updateSettings: mocks.updateSettings,
   },
 }));
-vi.mock("./consumer-finance-screens", () => ({
+vi.mock("@finance-pro/web/components/app/consumer-finance-screens", () => ({
   ConsumerFinanceScreens: ({
     profile,
     screen: activeScreen,
@@ -95,7 +95,7 @@ vi.mock("./consumer-finance-screens", () => ({
     </div>
   ),
 }));
-vi.mock("./consumer-finance-login", () => ({
+vi.mock("@finance-pro/web/components/app/consumer-finance-login", () => ({
   ConsumerFinanceLogin: () => <div>Browser login</div>,
   ConsumerFinanceBootstrapError: ({
     onRetry,

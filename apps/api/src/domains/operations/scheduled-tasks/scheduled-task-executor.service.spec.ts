@@ -1,9 +1,9 @@
 import { ApplicationLogsService } from '../application-logs/application-logs.service';
 import { CurrenciesService } from '../../finance/currencies/currencies.service';
 import { TelegramAdSalesService } from '../../telegram/telegram-ad-sales/telegram-ad-sales.service';
-import { GreeterExpiryService } from '../../telegram/telegram-bots/greeter/greeter-expiry.service';
-import { GreeterBroadcastService } from '../../telegram/telegram-bots/greeter/greeter-broadcast.service';
-import { GreeterAutomationService } from '../../telegram/telegram-bots/greeter/greeter-automation.service';
+import { GreeterExpiryService } from '@greeter/api/enrollment/greeter-expiry.service';
+import { GreeterBroadcastService } from '@greeter/api/broadcast/greeter-broadcast.service';
+import { GreeterAutomationService } from '@greeter/api/automation/greeter-automation.service';
 import { OperationalHistoryRetentionService } from '../../telegram/telegram-bots/core/operational-history-retention.service';
 import { TelegramWorkspaceFullSyncService } from '../../telegram/telegram-sync/telegram-workspace-full-sync.service';
 import { ScheduledTaskExecutorService } from './scheduled-task-executor.service';

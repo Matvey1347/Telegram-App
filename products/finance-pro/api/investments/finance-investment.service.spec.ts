@@ -1,6 +1,6 @@
 import { Prisma } from '@prisma/client';
-import { financeRequestFingerprint } from '../assets/finance-asset-idempotency';
-import { FinanceInvestmentService } from './finance-investment.service';
+import { financeRequestFingerprint } from '@finance-pro/api/assets/finance-asset-idempotency';
+import { FinanceInvestmentService } from '@finance-pro/api/investments/finance-investment.service';
 
 describe('FinanceInvestmentService', () => {
   it('stores a personal investment type with its name and emoji', async () => {

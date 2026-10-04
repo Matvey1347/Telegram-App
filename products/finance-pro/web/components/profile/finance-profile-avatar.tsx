@@ -1,6 +1,6 @@
 import type { ConsumerFinanceProfile } from "@telegram-system/shared";
 import Image from "next/image";
-import { resolveConsumerFinanceApiBase } from "@/lib/features/finance/consumer-finance-http";
+import { resolveConsumerFinanceApiBase } from "@finance-pro/web/lib/api/consumer-finance-http";
 
 export function FinanceProfileAvatar({
   profile,

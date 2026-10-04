@@ -1,5 +1,5 @@
-import type { FinanceVisualContext } from "./finance-visual-context";
-import styles from "./finance-money-loader.module.css";
+import type { FinanceVisualContext } from "@finance-pro/web/components/ui/finance-visual-context";
+import styles from "@finance-pro/web/components/ui/finance-money-loader.module.css";
 
 const amounts = ["₴ 24 860,00", "$ 3 240.50", "€ 8 120,00", "₴ 24 860,00"];
 

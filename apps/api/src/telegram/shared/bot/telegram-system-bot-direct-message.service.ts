@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { PrismaService } from '../../prisma/prisma.service';
-import { TelegramBotApiClient } from './telegram-bot-api.client';
+import { PrismaService } from '@api/prisma/prisma.service';
+import { TelegramBotApiClient } from '@api/telegram/shared/bot/telegram-bot-api.client';
 
 @Injectable()
 export class TelegramSystemBotDirectMessageService {

@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { FinanceConfirmModal } from "./finance-confirm-modal";
+import { FinanceConfirmModal } from "@finance-pro/web/components/shared/finance-confirm-modal";
 
 describe("FinanceConfirmModal", () => {
   it("prevents duplicate submission and keeps a localized mutation error in the modal", async () => {

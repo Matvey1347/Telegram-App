@@ -18,4 +18,4 @@ export function systemBotReviewActionRow(prefix: string) {
     confirm: `${prefix}confirm`,
   });
 }
-import { telegramBotApiActionRow } from '../../../telegram/shared/telegram-bot-action-buttons';
+import { telegramBotApiActionRow } from '@api/telegram/shared/bot/telegram-bot-action-buttons';

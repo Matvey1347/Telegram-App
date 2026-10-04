@@ -1,4 +1,4 @@
-import { isRevokedTelegramSessionError } from './telegram-session-errors';
+import { isRevokedTelegramSessionError } from '@api/telegram/shared/mtproto/telegram-session-errors';
 
 describe('Telegram session errors', () => {
   it('treats a duplicated authorization key as an invalid session', () => {

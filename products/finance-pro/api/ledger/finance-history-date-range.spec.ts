@@ -1,5 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
-import { financeAnalyticsDateRange } from './finance-history-date-range';
+import { financeAnalyticsDateRange } from '@finance-pro/api/ledger/finance-history-date-range';
 
 describe('financeAnalyticsDateRange', () => {
   it('uses the profile calendar month at the UTC+14 boundary', () => {

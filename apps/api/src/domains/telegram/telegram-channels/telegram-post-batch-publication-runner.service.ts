@@ -5,9 +5,9 @@ import {
   TelegramSourceType,
 } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { TelegramSourceAccessService } from '../../../telegram/shared/telegram-source-access.service';
-import { normalizeTelegramPostButtonRows } from '../../../telegram/shared/telegram-inline-keyboard';
-import { requiresNativeTelegramRichMessage } from '../../../telegram/shared/telegram-markup';
+import { TelegramSourceAccessService } from '@api/telegram/shared/imports/telegram-source-access.service';
+import { normalizeTelegramPostButtonRows } from '@api/telegram/shared/markup/telegram-inline-keyboard';
+import { requiresNativeTelegramRichMessage } from '@api/telegram/shared/markup/telegram-markup';
 import {
   managedPostRequiresBotApi,
   selectManagedPostPublishingSource,

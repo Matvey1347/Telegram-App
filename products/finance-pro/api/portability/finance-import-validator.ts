@@ -18,8 +18,8 @@ import {
   timezone,
   validateBase,
   validateReferenceGraph,
-} from './finance-import-validation';
-import { validateFinanceImportLedger } from './finance-import-ledger-validator';
+} from '@finance-pro/api/portability/finance-import-validation';
+import { validateFinanceImportLedger } from '@finance-pro/api/portability/finance-import-ledger-validator';
 
 const FORMAT = 'telegram-system.consumer-finance';
 const MAX_TOTAL_ROWS = 5_000;
@@ -508,4 +508,4 @@ export function validateFinanceImportDocument(
   return input as ConsumerFinanceImportDocumentV1;
 }
 
-export { financeImportSections } from './finance-import-validation';
+export { financeImportSections } from '@finance-pro/api/portability/finance-import-validation';

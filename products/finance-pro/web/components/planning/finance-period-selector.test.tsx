@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   FinancePeriodSelector,
   financePeriodDateRange,
-} from "./finance-period-selector";
+} from "@finance-pro/web/components/planning/finance-period-selector";
 
 describe("FinancePeriodSelector", () => {
   it("emits a reusable finance period and shows recognizable icons", () => {

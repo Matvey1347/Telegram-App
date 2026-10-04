@@ -6,18 +6,18 @@ import type {
   ConsumerFinanceTransfer,
 } from "@telegram-system/shared";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { consumerFinanceKeys } from "@/lib/features/finance/consumer-finance-query-keys";
-import { FinanceTransfers } from "./finance-transfers";
+import { consumerFinanceKeys } from "@finance-pro/web/lib/query/consumer-finance-query-keys";
+import { FinanceTransfers } from "@finance-pro/web/components/ledger/finance-transfers";
 
 const api = vi.hoisted(() => ({
   accounts: vi.fn(),
   transfers: vi.fn(),
 }));
 
-vi.mock("@/lib/features/finance/consumer-finance-ledger-api", () => ({
+vi.mock("@finance-pro/web/lib/api/consumer-finance-ledger-api", () => ({
   consumerFinanceLedgerApi: { accounts: api.accounts },
 }));
-vi.mock("@/lib/features/finance/consumer-finance-api", () => ({
+vi.mock("@finance-pro/web/lib/api/consumer-finance-api", () => ({
   consumerFinanceApi: {
     transfers: api.transfers,
     createTransfer: vi.fn(),

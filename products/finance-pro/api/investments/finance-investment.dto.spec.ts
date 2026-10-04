@@ -1,7 +1,7 @@
 import 'reflect-metadata';
 import { plainToInstance } from 'class-transformer';
 import { validateSync } from 'class-validator';
-import { FinanceInvestmentQueryDto } from './finance-investment.dto';
+import { FinanceInvestmentQueryDto } from '@finance-pro/api/investments/finance-investment.dto';
 
 describe('FinanceInvestmentQueryDto', () => {
   it('accepts supported investment sorts and transforms the page limit', () => {

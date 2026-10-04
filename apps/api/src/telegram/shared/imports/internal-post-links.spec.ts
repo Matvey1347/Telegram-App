@@ -3,7 +3,7 @@ import {
   extractSynchronizedTelegramPostLinkIds,
   replaceInternalPostLinks,
   replaceSynchronizedTelegramPostLinks,
-} from './internal-post-links';
+} from '@api/telegram/shared/imports/internal-post-links';
 
 describe('internal post links', () => {
   it('extracts unique managed post ids', () => {

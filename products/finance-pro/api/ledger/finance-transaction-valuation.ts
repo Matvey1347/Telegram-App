@@ -1,6 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import type { CurrencyConversionService } from '../../../../common/currency-conversion.service';
+import type { CurrencyConversionService } from '@api/common/currency-conversion.service';
 
 export type FinanceProfileContext = {
   id: string;

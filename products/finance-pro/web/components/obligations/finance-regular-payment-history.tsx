@@ -2,17 +2,17 @@
 
 import { useInfiniteQuery } from "@tanstack/react-query";
 import type { ConsumerFinanceRegularPayment } from "@telegram-system/shared";
-import { Button, EmptyState, ErrorState, LoadingState, Modal } from "./ui";
-import { consumerFinanceObligationsApi } from "@/lib/features/finance/consumer-finance-obligations-api";
-import { consumerFinanceKeys } from "@/lib/features/finance/consumer-finance-query-keys";
-import { formatMoney } from "@/lib/features/finance/consumer-finance-money";
-import { financeIntlLocale, type FinanceLocale } from "./i18n/core";
+import { Button, EmptyState, ErrorState, LoadingState, Modal } from "@finance-pro/web/components/ui";
+import { consumerFinanceObligationsApi } from "@finance-pro/web/lib/api/consumer-finance-obligations-api";
+import { consumerFinanceKeys } from "@finance-pro/web/lib/query/consumer-finance-query-keys";
+import { formatMoney } from "@finance-pro/web/lib/formatters/consumer-finance-money";
+import { financeIntlLocale, type FinanceLocale } from "@finance-pro/web/components/i18n/core";
 import {
   financeRegularPaymentRecurrenceLabel,
   financeRegularPaymentsCopy,
-} from "./i18n/regular-payments";
-import { localizeFinanceCategory } from "./finance-category-i18n";
-import { IconAvatar } from "./ui/finance-icon-avatar";
+} from "@finance-pro/web/components/i18n/regular-payments";
+import { localizeFinanceCategory } from "@finance-pro/web/components/catalog/finance-category-i18n";
+import { IconAvatar } from "@finance-pro/web/components/ui/finance-icon-avatar";
 
 export function FinanceRegularPaymentHistory({
   botId,

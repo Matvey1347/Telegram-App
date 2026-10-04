@@ -14,14 +14,14 @@ import {
   Modal,
   Select,
   Textarea,
-} from "./ui";
-import { FinanceCurrencySelect } from "./ui/finance-currency-select";
-import type { FinanceLocale } from "./i18n/core";
-import { financeInvestmentsCopy } from "./i18n/investments";
+} from "@finance-pro/web/components/ui";
+import { FinanceCurrencySelect } from "@finance-pro/web/components/ui/finance-currency-select";
+import type { FinanceLocale } from "@finance-pro/web/components/i18n/core";
+import { financeInvestmentsCopy } from "@finance-pro/web/components/i18n/investments";
 import {
   dateInputToIso,
   todayInputValue,
-} from "@/lib/features/finance/consumer-finance-assets";
+} from "@finance-pro/web/lib/assets/consumer-finance-assets";
 
 const TYPES: ConsumerFinanceInvestmentType[] = [
   "BUSINESS",

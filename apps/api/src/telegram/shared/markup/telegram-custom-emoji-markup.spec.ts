@@ -1,7 +1,7 @@
 import {
   telegramCustomEmojiToWireText,
   telegramWireTextToCustomEmojiMarkup,
-} from './telegram-custom-emoji-markup';
+} from '@api/telegram/shared/markup/telegram-custom-emoji-markup';
 
 describe('Telegram custom emoji markup', () => {
   it('converts canonical tokens to wire text and UTF-16 MTProto entities', () => {

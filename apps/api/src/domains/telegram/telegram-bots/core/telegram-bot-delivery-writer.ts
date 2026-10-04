@@ -4,7 +4,7 @@ import {
   TelegramBotDeliveryStatus,
   TelegramBotDeliveryType,
 } from '@prisma/client';
-import type { TelegramBotMessage } from '../../../../telegram/shared/telegram-bot-message';
+import type { TelegramBotMessage } from '@api/telegram/shared/bot/telegram-bot-message';
 import { TelegramBotDeliveryService } from './telegram-bot-delivery.service';
 
 export const TELEGRAM_BOT_DELIVERY_WRITER = Symbol(

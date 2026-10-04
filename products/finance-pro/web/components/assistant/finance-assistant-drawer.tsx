@@ -9,22 +9,22 @@ import type {
   ConsumerFinanceAssistantProposal,
   ConsumerFinanceAssistantScreen,
 } from "@telegram-system/shared";
-import { consumerFinanceAssistantApi, FinanceAssistantRequestError } from "@/lib/features/finance/consumer-finance-assistant-api";
-import { consumerFinanceKeys } from "@/lib/features/finance/consumer-finance-query-keys";
-import { Button } from "./ui";
-import type { FinanceLocale } from "./i18n/core";
-import { financeAssistantCopy } from "./i18n/assistant";
-import { useFinanceAssistantMedia } from "./use-finance-assistant-media";
+import { consumerFinanceAssistantApi, FinanceAssistantRequestError } from "@finance-pro/web/lib/api/consumer-finance-assistant-api";
+import { consumerFinanceKeys } from "@finance-pro/web/lib/query/consumer-finance-query-keys";
+import { Button } from "@finance-pro/web/components/ui";
+import type { FinanceLocale } from "@finance-pro/web/components/i18n/core";
+import { financeAssistantCopy } from "@finance-pro/web/components/i18n/assistant";
+import { useFinanceAssistantMedia } from "@finance-pro/web/components/hooks/use-finance-assistant-media";
 import {
   AssistantBubble,
   AssistantProposalCard,
-} from "./finance-assistant-message-content";
-import { FinanceAssistantComposer } from "./finance-assistant-composer";
+} from "@finance-pro/web/components/assistant/finance-assistant-message-content";
+import { FinanceAssistantComposer } from "@finance-pro/web/components/assistant/finance-assistant-composer";
 import {
   FinancePlanPromotion,
   FinanceTierBadge,
-} from "./finance-plan-promotion";
-import { useFinanceEntitlements } from "./use-finance-entitlements";
+} from "@finance-pro/web/components/planning/finance-plan-promotion";
+import { useFinanceEntitlements } from "@finance-pro/web/components/hooks/use-finance-entitlements";
 
 type LastRequest =
   | {

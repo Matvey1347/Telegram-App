@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, type PropsWithChildren } from "react";
-import type { ConsumerFinanceScreen } from "../consumer-finance-navigation";
+import type { ConsumerFinanceScreen } from "@finance-pro/web/components/app/consumer-finance-navigation";
 
 export type FinanceVisualContext =
   | "overview"

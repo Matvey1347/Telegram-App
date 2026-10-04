@@ -1,6 +1,6 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { TelegramBotApiClient } from '../../../telegram/shared/telegram-bot-api.client';
+import { TelegramBotApiClient } from '@api/telegram/shared/bot/telegram-bot-api.client';
 import { TelegramSystemBotConfigService } from './telegram-system-bot-config.service';
 import {
   TelegramSystemBotHandlerService,

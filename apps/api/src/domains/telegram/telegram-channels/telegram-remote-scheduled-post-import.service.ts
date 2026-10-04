@@ -11,11 +11,11 @@ import {
   B2ObjectStorageService,
   isSupportedImmutableImageMimeType,
 } from '../../../common/object-storage/b2-object-storage.service';
-import { telegramHtmlToManagedMarkup } from '../../../telegram/shared/telegram-markup';
+import { telegramHtmlToManagedMarkup } from '@api/telegram/shared/markup/telegram-markup';
 import {
   TelegramMtprotoClient,
   type TelegramScheduledMessage,
-} from '../../../telegram/shared/telegram-mtproto.client';
+} from '@api/telegram/shared/mtproto/telegram-mtproto.client';
 import { ApplicationLoggerService } from '../../operations/application-logs/application-logger.service';
 import { TelegramChannelAccessService } from './telegram-channel-access.service';
 import { TelegramChannelSchemaCompatibilityService } from './telegram-channel-schema-compatibility.service';

@@ -1,4 +1,4 @@
-import { preflightTelegramDeletionCapability } from '../../../telegram/shared/telegram-deletion-policy';
+import { preflightTelegramDeletionCapability } from '@api/telegram/shared/core/telegram-deletion-policy';
 
 type PostBatchSource = {
   sourceType: string;

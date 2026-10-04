@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ConsumerBillingCatalog } from "@telegram-system/shared";
-import { consumerFinanceOffersForPlan } from "./finance-consumer-billing-format";
+import { consumerFinanceOffersForPlan } from "@finance-pro/web/components/shared/finance-consumer-billing-format";
 
 describe("consumerFinanceOffersForPlan", () => {
   it("keeps Stripe month and year while respecting the Stars month capability", () => {

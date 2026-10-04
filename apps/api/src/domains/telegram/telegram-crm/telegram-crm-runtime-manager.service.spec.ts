@@ -2,7 +2,7 @@ import { TelegramAccountRuntimeNotifier } from '../../../common/telegram-account
 import type {
   TelegramCrmMtprotoHandle,
   TelegramCrmMtprotoUpdate,
-} from '../../../telegram/shared/telegram-crm-mtproto.types';
+} from '@api/telegram/shared/mtproto/telegram-crm-mtproto.types';
 import type { CrmRuntimeAccount } from './telegram-crm-account-session.service';
 import { TelegramCrmRuntimeManager } from './telegram-crm-runtime-manager.service';
 

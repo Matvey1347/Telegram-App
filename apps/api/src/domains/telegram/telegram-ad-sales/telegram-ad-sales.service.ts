@@ -56,13 +56,13 @@ import { TelegramManagedPostPublicationService } from '../telegram-channels/tele
 import { TelegramManagedPostRemoteSyncService } from '../telegram-channels/telegram-managed-post-remote-sync.service';
 import { TelegramPostGroupsService } from '../telegram-channels/telegram-post-groups.service';
 import { TelegramChannelAccessService } from '../telegram-channels/telegram-channel-access.service';
-import { TelegramMtprotoClient } from '../../../telegram/shared/telegram-mtproto.client';
-import { TelegramBotApiClient } from '../../../telegram/shared/telegram-bot-api.client';
-import { TelegramSourceAccessService } from '../../../telegram/shared/telegram-source-access.service';
+import { TelegramMtprotoClient } from '@api/telegram/shared/mtproto/telegram-mtproto.client';
+import { TelegramBotApiClient } from '@api/telegram/shared/bot/telegram-bot-api.client';
+import { TelegramSourceAccessService } from '@api/telegram/shared/imports/telegram-source-access.service';
 import {
   buildStableTelegramPostUrl,
   parseTelegramPostUrl,
-} from '../../../telegram/shared/telegram-post-url';
+} from '@api/telegram/shared/imports/telegram-post-url';
 import {
   AttachPlacementManagedPostDto,
   TelegramAdAlertsQueryDto,

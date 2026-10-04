@@ -1,12 +1,12 @@
 import { randomUUID } from 'node:crypto';
-import { PrismaService } from '../../../../prisma/prisma.service';
-import { FinanceCoreService } from '../catalog/finance-core.service';
-import { FinanceLedgerService } from '../ledger/finance-ledger.service';
-import { FinanceTransferService } from '../transfers/finance-transfer.service';
+import { PrismaService } from '@api/prisma/prisma.service';
+import { FinanceCoreService } from '@finance-pro/api/catalog/finance-core.service';
+import { FinanceLedgerService } from '@finance-pro/api/ledger/finance-ledger.service';
+import { FinanceTransferService } from '@finance-pro/api/transfers/finance-transfer.service';
 import type {
   FinanceFlowKind,
   FinanceFlowPayload,
-} from './finance-chat-flow.types';
+} from '@finance-pro/api/chat-flows/finance-chat-flow.types';
 
 export class FinanceChatFlowWriter {
   constructor(

@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return */
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { FinanceTransferService } from './finance-transfer.service';
+import { FinanceTransferService } from '@finance-pro/api/transfers/finance-transfer.service';
 
 const date = new Date('2026-08-01T10:00:00.000Z');
 const account = (

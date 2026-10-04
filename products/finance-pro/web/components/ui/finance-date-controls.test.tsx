@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
-import { DateInput } from "./finance-date-controls";
+import { DateInput } from "@finance-pro/web/components/ui/finance-date-controls";
 
 describe("consumer Finance DateInput", () => {
   it("renders above an overflow-clipped finance modal", async () => {

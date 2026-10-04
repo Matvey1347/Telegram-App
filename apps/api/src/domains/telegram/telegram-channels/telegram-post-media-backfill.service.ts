@@ -6,7 +6,7 @@ import {
   isSupportedImmutableMediaMimeType,
 } from '../../../common/object-storage/b2-object-storage.service';
 import { TokenEncryptionService } from '../../../common/security/token-encryption.service';
-import { TelegramMtprotoClient } from '../../../telegram/shared/telegram-mtproto.client';
+import { TelegramMtprotoClient } from '@api/telegram/shared/mtproto/telegram-mtproto.client';
 
 export type TelegramPostMediaBackfillSummary = {
   considered: number;

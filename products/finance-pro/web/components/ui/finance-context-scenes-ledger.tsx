@@ -1,5 +1,5 @@
-import styles from "./finance-context-scenes.module.css";
-import transferStyles from "./finance-transfer-scene.module.css";
+import styles from "@finance-pro/web/components/ui/finance-context-scenes.module.css";
+import transferStyles from "@finance-pro/web/components/ui/finance-transfer-scene.module.css";
 
 export function OverviewScene() {
   return (

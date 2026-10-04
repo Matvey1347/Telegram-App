@@ -4,15 +4,15 @@ import Image from "next/image";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { ConsumerFinanceAssistantProposal, ConsumerFinanceTransaction, ConsumerFinanceTransactionInput } from "@telegram-system/shared";
-import { consumerFinanceLedgerApi } from "@/lib/features/finance/consumer-finance-ledger-api";
-import { consumerFinanceKeys } from "@/lib/features/finance/consumer-finance-query-keys";
-import { Button } from "./ui";
-import type { FinanceLocale } from "./i18n/core";
-import { financeAssistantCopy } from "./i18n/assistant";
-import { financeTransactionsCopy } from "./i18n/transactions";
-import { DesktopTransactionTable } from "./finance-desktop-transaction-table";
-import { FinanceMobileTransactionRow } from "./finance-mobile-transaction-row";
-import { FinanceTransactionEditor } from "./finance-transaction-editor";
+import { consumerFinanceLedgerApi } from "@finance-pro/web/lib/api/consumer-finance-ledger-api";
+import { consumerFinanceKeys } from "@finance-pro/web/lib/query/consumer-finance-query-keys";
+import { Button } from "@finance-pro/web/components/ui";
+import type { FinanceLocale } from "@finance-pro/web/components/i18n/core";
+import { financeAssistantCopy } from "@finance-pro/web/components/i18n/assistant";
+import { financeTransactionsCopy } from "@finance-pro/web/components/i18n/transactions";
+import { DesktopTransactionTable } from "@finance-pro/web/components/ledger/finance-desktop-transaction-table";
+import { FinanceMobileTransactionRow } from "@finance-pro/web/components/ledger/finance-mobile-transaction-row";
+import { FinanceTransactionEditor } from "@finance-pro/web/components/ledger/finance-transaction-editor";
 
 export function AssistantBubble({ children }: { children: React.ReactNode }) {
   return (

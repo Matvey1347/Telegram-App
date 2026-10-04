@@ -17,8 +17,8 @@ import { PrismaService } from '../../../../prisma/prisma.service';
 import {
   TelegramBotApiClient,
   TelegramBotApiError,
-} from '../../../../telegram/shared/telegram-bot-api.client';
-import { TelegramSourceAccessService } from '../../../../telegram/shared/telegram-source-access.service';
+} from '@api/telegram/shared/bot/telegram-bot-api.client';
+import { TelegramSourceAccessService } from '@api/telegram/shared/imports/telegram-source-access.service';
 import {
   CreateTelegramBotDto,
   SwitchTelegramBotApplicationDto,

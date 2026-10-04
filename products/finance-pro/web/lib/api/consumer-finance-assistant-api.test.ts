@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { consumerFinanceAssistantApi, FinanceAssistantRequestError } from "./consumer-finance-assistant-api";
-import { consumerFinanceHttp } from "./consumer-finance-http";
+import { consumerFinanceAssistantApi, FinanceAssistantRequestError } from "@finance-pro/web/lib/api/consumer-finance-assistant-api";
+import { consumerFinanceHttp } from "@finance-pro/web/lib/api/consumer-finance-http";
 
 const originalFetch = global.fetch;
 

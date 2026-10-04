@@ -3,7 +3,7 @@ import {
   GreeterJoinRequestStatus,
 } from '@prisma/client';
 import { createHmac } from 'crypto';
-import { GreeterService } from './greeter.service';
+import { GreeterService } from '@greeter/api/core/greeter.service';
 
 describe('GreeterService callback fencing', () => {
   const bot = {

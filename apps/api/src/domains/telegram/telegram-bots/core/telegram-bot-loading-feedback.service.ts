@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { TelegramBotApiClient } from '../../../../telegram/shared/telegram-bot-api.client';
+import { TelegramBotApiClient } from '@api/telegram/shared/bot/telegram-bot-api.client';
 import type { TelegramBotApplicationContext } from './telegram-bot-update.types';
 
 /** Best-effort native Telegram feedback shared by every runtime bot application. */

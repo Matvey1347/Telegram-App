@@ -1,26 +1,26 @@
 import { describe, expect, it } from "vitest";
-import { financeAccountsCopy } from "./accounts";
-import { financeAccountCenterCopy } from "./account-center";
-import { financeAnalyticsCopy } from "./analytics";
-import { financeAuthCopy } from "./auth";
-import { financeBudgetCopy } from "./budget";
-import { financeCategoriesCopy } from "./categories";
-import { financeConfirmCopy } from "./confirm";
+import { financeAccountsCopy } from "@finance-pro/web/components/i18n/accounts";
+import { financeAccountCenterCopy } from "@finance-pro/web/components/i18n/account-center";
+import { financeAnalyticsCopy } from "@finance-pro/web/components/i18n/analytics";
+import { financeAuthCopy } from "@finance-pro/web/components/i18n/auth";
+import { financeBudgetCopy } from "@finance-pro/web/components/i18n/budget";
+import { financeCategoriesCopy } from "@finance-pro/web/components/i18n/categories";
+import { financeConfirmCopy } from "@finance-pro/web/components/i18n/confirm";
 import {
   financeCoreCopy,
   normalizeFinanceLocale,
   supportedFinanceLocales,
-} from "./core";
-import { financeDashboardCopy } from "./dashboard";
-import { financeDebtsCopy } from "./debts";
-import { financePlansCopy } from "./plans";
-import { financeRemindersCopy } from "./reminders";
-import { financeRegularPaymentsCopy } from "./regular-payments";
-import { financeTransactionsCopy } from "./transactions";
-import { financeTransfersCopy } from "./transfers";
-import { financeSettingsCopy } from "./settings";
-import { financeSavingsCopy } from "./savings";
-import { financeInvestmentsCopy } from "./investments";
+} from "@finance-pro/web/components/i18n/core";
+import { financeDashboardCopy } from "@finance-pro/web/components/i18n/dashboard";
+import { financeDebtsCopy } from "@finance-pro/web/components/i18n/debts";
+import { financePlansCopy } from "@finance-pro/web/components/i18n/plans";
+import { financeRemindersCopy } from "@finance-pro/web/components/i18n/reminders";
+import { financeRegularPaymentsCopy } from "@finance-pro/web/components/i18n/regular-payments";
+import { financeTransactionsCopy } from "@finance-pro/web/components/i18n/transactions";
+import { financeTransfersCopy } from "@finance-pro/web/components/i18n/transfers";
+import { financeSettingsCopy } from "@finance-pro/web/components/i18n/settings";
+import { financeSavingsCopy } from "@finance-pro/web/components/i18n/savings";
+import { financeInvestmentsCopy } from "@finance-pro/web/components/i18n/investments";
 
 const namespaces = {
   core: financeCoreCopy,

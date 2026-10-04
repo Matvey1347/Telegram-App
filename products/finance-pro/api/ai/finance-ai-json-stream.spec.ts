@@ -1,4 +1,4 @@
-import { partialJsonStringField } from './finance-ai-json-stream';
+import { partialJsonStringField } from '@finance-pro/api/ai/finance-ai-json-stream';
 
 describe('partialJsonStringField', () => {
   it('returns decoded text while a structured response is still incomplete', () => {

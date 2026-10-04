@@ -1,4 +1,4 @@
-import { FinanceBotBrowserLogin } from './finance-bot-browser-login';
+import { FinanceBotBrowserLogin } from '@finance-pro/bot/finance-bot-browser-login';
 
 describe('FinanceBotBrowserLogin', () => {
   function setup(approved = true) {

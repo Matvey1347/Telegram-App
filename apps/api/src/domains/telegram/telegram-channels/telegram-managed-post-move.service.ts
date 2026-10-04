@@ -2,7 +2,7 @@ import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { TelegramManagedPostStatus, TelegramSourceType } from '@prisma/client';
 import type { BulkActionResultItem } from '@telegram-system/shared';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { TelegramMtprotoClient } from '../../../telegram/shared/telegram-mtproto.client';
+import { TelegramMtprotoClient } from '@api/telegram/shared/mtproto/telegram-mtproto.client';
 import { MovePostChannelDto } from './dto';
 import {
   bulkActionCounts,

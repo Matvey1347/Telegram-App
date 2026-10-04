@@ -1,7 +1,7 @@
 import { BadRequestException, ConflictException } from '@nestjs/common';
 import { Api, TelegramClient } from 'telegram';
 import { returnBigInt } from 'telegram/Helpers';
-import { TelegramMtprotoClient } from './telegram-mtproto.client';
+import { TelegramMtprotoClient } from '@api/telegram/shared/mtproto/telegram-mtproto.client';
 
 describe('TelegramMtprotoClient import resolution', () => {
   let client: TelegramMtprotoClient;

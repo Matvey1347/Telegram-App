@@ -13,13 +13,13 @@ import {
   Modal,
   Select,
   Textarea,
-} from "./ui";
-import type { FinanceLocale } from "./i18n/core";
-import { financeSavingsCopy } from "./i18n/savings";
+} from "@finance-pro/web/components/ui";
+import type { FinanceLocale } from "@finance-pro/web/components/i18n/core";
+import { financeSavingsCopy } from "@finance-pro/web/components/i18n/savings";
 import {
   dateInputToIso,
   todayInputValue,
-} from "@/lib/features/finance/consumer-finance-assets";
+} from "@finance-pro/web/lib/assets/consumer-finance-assets";
 
 export type SavingsAction = "ALLOCATE" | "RELEASE" | "REALLOCATE";
 export type SavingsActionValues = {

@@ -5,18 +5,18 @@ import {
   currencyCodeFromSelection,
   currencySelectLabel,
 } from '@telegram-system/shared';
-import { PrismaService } from '../../../../prisma/prisma.service';
-import { FinanceCoreService } from '../catalog/finance-core.service';
-import { FinanceLedgerService } from '../ledger/finance-ledger.service';
-import { FinanceTransferService } from '../transfers/finance-transfer.service';
+import { PrismaService } from '@api/prisma/prisma.service';
+import { FinanceCoreService } from '@finance-pro/api/catalog/finance-core.service';
+import { FinanceLedgerService } from '@finance-pro/api/ledger/finance-ledger.service';
+import { FinanceTransferService } from '@finance-pro/api/transfers/finance-transfer.service';
 import {
   FINANCE_EMOJI_CHOICES,
   financeAccountEmoji,
   financeIconPresentation,
   financeStoredIconSource,
-} from '../catalog/finance-entity-emoji';
-import { FinanceChatFlowReadModel } from './finance-chat-flow-read-model';
-import { FinanceChatFlowWriter } from './finance-chat-flow-writer';
+} from '@finance-pro/api/catalog/finance-entity-emoji';
+import { FinanceChatFlowReadModel } from '@finance-pro/api/chat-flows/finance-chat-flow-read-model';
+import { FinanceChatFlowWriter } from '@finance-pro/api/chat-flows/finance-chat-flow-writer';
 import type {
   AccountFlowResult,
   FinanceFlowCallback,
@@ -25,7 +25,7 @@ import type {
   FinanceFlowKind,
   FinanceFlowPayload,
   FinanceFlowResult,
-} from './finance-chat-flow.types';
+} from '@finance-pro/api/chat-flows/finance-chat-flow.types';
 
 export type {
   AccountFlowResult,
@@ -34,7 +34,7 @@ export type {
   FinanceFlowKind,
   FinanceFlowPayload,
   FinanceFlowResult,
-} from './finance-chat-flow.types';
+} from '@finance-pro/api/chat-flows/finance-chat-flow.types';
 
 const FLOW_TTL_MS = 15 * 60 * 1000;
 

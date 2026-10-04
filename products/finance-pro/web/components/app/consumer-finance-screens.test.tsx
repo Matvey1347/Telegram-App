@@ -6,7 +6,7 @@ import type {
   ConsumerFinanceDashboard,
   ConsumerFinanceProfile,
 } from "@telegram-system/shared";
-import { ConsumerFinanceScreens } from "./consumer-finance-screens";
+import { ConsumerFinanceScreens } from "@finance-pro/web/components/app/consumer-finance-screens";
 
 const mocks = vi.hoisted(() => ({
   dashboard: vi.fn(),
@@ -16,16 +16,16 @@ const mocks = vi.hoisted(() => ({
   transferMounts: 0,
 }));
 
-vi.mock("@/lib/features/finance/consumer-finance-insights-api", () => ({
+vi.mock("@finance-pro/web/lib/api/consumer-finance-insights-api", () => ({
   consumerFinanceInsightsApi: { dashboard: mocks.dashboard },
 }));
-vi.mock("@/lib/features/finance/consumer-finance-ledger-api", () => ({
+vi.mock("@finance-pro/web/lib/api/consumer-finance-ledger-api", () => ({
   consumerFinanceLedgerApi: {
     accounts: mocks.accounts,
     categories: mocks.categories,
   },
 }));
-vi.mock("./finance-dashboard", () => ({
+vi.mock("@finance-pro/web/components/dashboard/finance-dashboard", () => ({
   FinanceDashboard: ({
     period,
     onPeriodChange,
@@ -43,29 +43,29 @@ vi.mock("./finance-dashboard", () => ({
     </div>
   ),
 }));
-vi.mock("./finance-budget", () => ({
+vi.mock("@finance-pro/web/components/planning/finance-budget", () => ({
   FinanceBudget: () => <div>Budget screen</div>,
 }));
-vi.mock("./finance-analytics", () => ({
+vi.mock("@finance-pro/web/components/analytics/finance-analytics", () => ({
   FinanceAnalytics: ({ onUpgrade }: { onUpgrade: () => void }) => (
     <button onClick={onUpgrade}>Upgrade from Analytics</button>
   ),
 }));
-vi.mock("./finance-accounts", () => ({
+vi.mock("@finance-pro/web/components/accounts/finance-accounts", () => ({
   FinanceAccountsScreen: () => <div>Accounts screen</div>,
 }));
-vi.mock("./finance-account-editor", () => ({
+vi.mock("@finance-pro/web/components/accounts/finance-account-editor", () => ({
   FinanceAccountEditorScreen: ({ accountId }: { accountId: string }) => (
     <div>Account editor {accountId}</div>
   ),
 }));
-vi.mock("./finance-account-center", () => ({
+vi.mock("@finance-pro/web/components/accounts/finance-account-center", () => ({
   FinanceAccountCenter: () => <div>Profile account screen</div>,
 }));
-vi.mock("./finance-onboarding", () => ({
+vi.mock("@finance-pro/web/components/onboarding/finance-onboarding", () => ({
   FinanceOnboardingScreen: () => <div>Onboarding screen</div>,
 }));
-vi.mock("./finance-transactions", () => ({
+vi.mock("@finance-pro/web/components/ledger/finance-transactions", () => ({
   FinanceTransactions: ({
     initiallyOpenType,
   }: {
@@ -79,7 +79,7 @@ vi.mock("./finance-transactions", () => ({
     );
   },
 }));
-vi.mock("./finance-transfers", () => ({
+vi.mock("@finance-pro/web/components/ledger/finance-transfers", () => ({
   FinanceTransfers: ({
     initiallyOpen,
     onCreateAccount,
@@ -96,19 +96,19 @@ vi.mock("./finance-transfers", () => ({
     );
   },
 }));
-vi.mock("./finance-debts", () => ({
+vi.mock("@finance-pro/web/components/obligations/finance-debts", () => ({
   FinanceDebts: () => <div>Debts screen</div>,
 }));
-vi.mock("./finance-regular-payments", () => ({
+vi.mock("@finance-pro/web/components/obligations/finance-regular-payments", () => ({
   FinanceRegularPayments: () => <div>Regular payments screen</div>,
 }));
-vi.mock("./finance-savings", () => ({
+vi.mock("@finance-pro/web/components/savings/finance-savings", () => ({
   FinanceSavings: () => <div>Savings screen</div>,
 }));
-vi.mock("./finance-investments", () => ({
+vi.mock("@finance-pro/web/components/investments/finance-investments", () => ({
   FinanceInvestments: () => <div>Investments screen</div>,
 }));
-vi.mock("./finance-investment-detail", () => ({
+vi.mock("@finance-pro/web/components/investments/finance-investment-detail", () => ({
   FinanceInvestmentDetailScreen: ({
     investmentId,
   }: {

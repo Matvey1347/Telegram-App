@@ -8,8 +8,8 @@ import type {
   ConsumerFinanceTransferPage,
   ConsumerFinanceTransferQuery,
 } from "@telegram-system/shared";
-import { financeHistoryDateMatches } from "./consumer-finance-date";
-import { consumerFinanceKeys } from "./consumer-finance-query-keys";
+import { financeHistoryDateMatches } from "@finance-pro/web/lib/formatters/consumer-finance-date";
+import { consumerFinanceKeys } from "@finance-pro/web/lib/query/consumer-finance-query-keys";
 
 export function patchConsumerFinanceAccountCache(
   client: QueryClient,

@@ -1,6 +1,6 @@
 import { GreeterBroadcastRecipientStatus, Prisma } from '@prisma/client';
 import type { GreeterButtonRows } from '@telegram-system/shared';
-import { PrismaService } from '../../../../prisma/prisma.service';
+import { PrismaService } from '@api/prisma/prisma.service';
 
 type BroadcastReadRow = Prisma.GreeterBroadcastGetPayload<{
   include: {

@@ -13,17 +13,17 @@ import {
   TelegramBotDeliveryStatus,
 } from '@prisma/client';
 import type { GreeterBroadcastInput } from '@telegram-system/shared';
-import { PrismaService } from '../../../../prisma/prisma.service';
-import { GreeterAdminService } from './greeter-admin.service';
-import { GreeterAutomationService } from './greeter-automation.service';
-import { GreeterBroadcastAudienceService } from './greeter-broadcast-audience.service';
-import { buildGreeterBroadcastView } from './greeter-broadcast-view';
-import { assertValidGreeterTemplate } from './greeter-template.renderer';
-import { TelegramBotDeliveryService } from '../core/telegram-bot-delivery.service';
-import { TELEGRAM_BOT_DELIVERY_ENQUEUE_BATCH_SIZE } from '../core/telegram-bot-delivery-batch-enqueue';
-import { notifyScheduledTaskDueWorkChanged } from '../../../../common/scheduled-task-wake-notifier';
-import { greeterBroadcastDispatchableWhere } from '../../../operations/scheduled-tasks/due-work-predicates';
-import { queueGreeterBroadcastRecipientPage } from './greeter-broadcast-batch-link';
+import { PrismaService } from '@api/prisma/prisma.service';
+import { GreeterAdminService } from '@greeter/api/configuration/greeter-admin.service';
+import { GreeterAutomationService } from '@greeter/api/automation/greeter-automation.service';
+import { GreeterBroadcastAudienceService } from '@greeter/api/broadcast/greeter-broadcast-audience.service';
+import { buildGreeterBroadcastView } from '@greeter/api/broadcast/greeter-broadcast-view';
+import { assertValidGreeterTemplate } from '@greeter/api/templates/greeter-template.renderer';
+import { TelegramBotDeliveryService } from '@api/domains/telegram/telegram-bots/core/telegram-bot-delivery.service';
+import { TELEGRAM_BOT_DELIVERY_ENQUEUE_BATCH_SIZE } from '@api/domains/telegram/telegram-bots/core/telegram-bot-delivery-batch-enqueue';
+import { notifyScheduledTaskDueWorkChanged } from '@api/common/scheduled-task-wake-notifier';
+import { greeterBroadcastDispatchableWhere } from '@api/domains/operations/scheduled-tasks/due-work-predicates';
+import { queueGreeterBroadcastRecipientPage } from '@greeter/api/broadcast/greeter-broadcast-batch-link';
 
 @Injectable()
 export class GreeterBroadcastService {

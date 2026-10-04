@@ -8,8 +8,8 @@ import type {
   GreeterUserState,
 } from '@telegram-system/shared';
 import { GreeterAutomationEnvironment, Prisma } from '@prisma/client';
-import { PrismaService } from '../../../../prisma/prisma.service';
-import { GreeterAdminService } from './greeter-admin.service';
+import { PrismaService } from '@api/prisma/prisma.service';
+import { GreeterAdminService } from '@greeter/api/configuration/greeter-admin.service';
 
 @Injectable()
 export class GreeterAnalyticsService {

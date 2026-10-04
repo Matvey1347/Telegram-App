@@ -1,12 +1,12 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { GreeterAutomationEnvironment } from '@prisma/client';
-import { PrismaService } from '../../../../prisma/prisma.service';
-import { GreeterEnrollmentService } from './greeter-enrollment.service';
-import { GreeterSequenceAdminService } from './greeter-sequence-admin.service';
+import { PrismaService } from '@api/prisma/prisma.service';
+import { GreeterEnrollmentService } from '@greeter/api/enrollment/greeter-enrollment.service';
+import { GreeterSequenceAdminService } from '@greeter/api/automation/greeter-sequence-admin.service';
 import {
   mapGreeterTestSession,
   mapGreeterTester,
-} from './greeter-sequence-support';
+} from '@greeter/api/automation/greeter-sequence-support';
 
 export class GreeterAutomationTestService {
   constructor(

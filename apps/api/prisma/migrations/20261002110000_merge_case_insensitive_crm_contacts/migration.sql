@@ -1,13 +1,13 @@
 -- Consolidate legacy CRM cards that share a case-insensitive display name or
 -- Telegram username. The recursive component also catches a name-only card
 -- connected to a username card, so all of one customer's data has one owner.
-CREATE TEMP TABLE "CrmDuplicateContactMerge" ON COMMIT DROP AS
+CREATE TEMP TABLE "CrmDuplicateContactMerge" AS
 WITH RECURSIVE identityValues AS (
   SELECT
     advertiser."id",
     advertiser."workspaceId",
     'name:' || lower(btrim(advertiser."displayName")) AS "identity"
-  FROM "TelegramAdvertiser"
+  FROM "TelegramAdvertiser" advertiser
   WHERE btrim(advertiser."displayName") <> ''
 
   UNION
@@ -79,11 +79,11 @@ WHERE source.position > 1;
 -- Contacts are unique per workspace/type/normalized value. Keep the most
 -- useful copy before reparenting source contacts, otherwise two cards that
 -- already share a Telegram handle would make the merge fail mid-migration.
-CREATE TEMP TABLE "CrmDuplicateContactRemoval" ON COMMIT DROP AS
+CREATE TEMP TABLE "CrmDuplicateContactRemoval" AS
 WITH candidates AS (
   SELECT
     contact."id",
-    merge."targetId",
+    target."targetId",
     true AS "alreadyOnTarget",
     contact."isVerified",
     contact."isPrimary",

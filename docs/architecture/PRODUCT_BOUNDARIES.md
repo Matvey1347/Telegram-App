@@ -15,8 +15,8 @@ are nearby or have similar names.
 | Boundary                   | Backend ownership                                                        | Frontend ownership                                                                           |
 | -------------------------- | ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------- |
 | Internal Finance           | `apps/api/src/domains/finance/*`                                         | internal Finance routes and non-consumer Finance feature modules                             |
-| Consumer Finance           | `domains/telegram/consumer-finance/*`; `telegram-bots/finance/*` adapter | `(consumer-finance)`, `consumer-finance/*`, its provider, API client, state and localization |
-| Greeter                    | `apps/api/src/domains/telegram/telegram-bots/greeter/*`                  | Greeter management UI; future consumer surfaces remain Greeter-owned                         |
+| Finance Pro (Consumer Finance) | `products/finance-pro/api/*`; `products/finance-pro/bot/*` adapter | `products/finance-pro/web/*`; `(consumer-finance)` routes remain Next entrypoints |
+| Greeter                    | `products/greeter/api/*`                                               | `products/greeter/web/*`; internal routes remain Next entrypoints                            |
 | Telegram bot platform      | `telegram-bots/core/*` and the bot composition root                      | shared management shell and low-level integration presentation only                          |
 | Telegram protocol adapters | `apps/api/src/telegram/shared/*`                                         | hydrated contracts such as `ResolvedEmoji`, never protocol clients                           |
 | Stable cross-app contracts | `packages/shared`                                                        | serializable contracts and pure dependency-free helpers only                                 |
@@ -38,15 +38,14 @@ contracts, and low-level adapters. The platform may dispatch an application or
 deliver its payload, but it must not import the application's presenters,
 localization, menu construction, services, hooks, cache behavior, or UI.
 
-Consumer Finance business and HTTP code lives under
-`apps/api/src/domains/telegram/consumer-finance`. Its
-`telegram-bots/finance` directory is a thin Telegram update/presentation
+Finance Pro business and HTTP code lives under `products/finance-pro/api`.
+Its `products/finance-pro/bot` directory is a thin Telegram update/presentation
 adapter, not a home for ledger, identity, billing, analytics, AI, or HTTP
 business logic. The adapter depends inward on the Finance product and outward
 on stable bot-platform ports; bot core never imports either Finance layer.
 
-`telegram-bots.module.ts` is the composition root and may wire platform and
-product providers. Composition permission does not make product internals
+`apps/api/src/domains/telegram/telegram-bots/telegram-bots.module.ts` is the
+composition root and may wire platform and product providers. Composition permission does not make product internals
 platform APIs. Do not create a generic application framework until Finance and
 Greeter demonstrate the same concrete platform behavior; extract only that
 behavior and keep product policy in the product.

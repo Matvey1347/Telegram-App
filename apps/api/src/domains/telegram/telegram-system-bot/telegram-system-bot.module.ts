@@ -1,7 +1,7 @@
 import { forwardRef, Module } from '@nestjs/common';
 import { DashboardModule } from '../../operations/dashboard/dashboard.module';
 import { ScheduledTasksModule } from '../../operations/scheduled-tasks/scheduled-tasks.module';
-import { TelegramBotApiClient } from '../../../telegram/shared/telegram-bot-api.client';
+import { TelegramBotApiClient } from '@api/telegram/shared/bot/telegram-bot-api.client';
 import { TelegramSyncModule } from '../telegram-sync/telegram-sync.module';
 import { TransactionsModule } from '../../finance/transactions/transactions.module';
 import { AccountsModule } from '../../finance/accounts/accounts.module';
@@ -24,7 +24,7 @@ import { TelegramSystemBotChannelAccessService } from './telegram-system-bot-cha
 import { TelegramSystemBotPostsService } from './telegram-system-bot-posts.service';
 import { TelegramSystemBotPostContentService } from './telegram-system-bot-post-content.service';
 import { TelegramSystemBotPostFlowOptions } from './telegram-system-bot-post-flow.options';
-import { TelegramBotIconCaptureService } from '../../../telegram/shared/telegram-bot-icon-capture.service';
+import { TelegramBotIconCaptureService } from '@api/telegram/shared/bot/telegram-bot-icon-capture.service';
 import { TelegramSystemBotWorkspaceFlowService } from './telegram-system-bot-workspace-flow.service';
 import { TelegramSystemBotPostImportService } from './telegram-system-bot-post-import.service';
 

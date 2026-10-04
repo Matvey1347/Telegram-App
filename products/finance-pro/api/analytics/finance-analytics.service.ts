@@ -1,12 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { CurrencyConversionService } from '../../../../common/currency-conversion.service';
-import { PrismaService } from '../../../../prisma/prisma.service';
-import { financeAnalyticsDateRange } from '../ledger/finance-history-date-range';
+import { CurrencyConversionService } from '@api/common/currency-conversion.service';
+import { PrismaService } from '@api/prisma/prisma.service';
+import { financeAnalyticsDateRange } from '@finance-pro/api/ledger/finance-history-date-range';
 import {
   currentFinancePresentationRate,
   type FinanceProfileContext,
-} from '../ledger/finance-transaction-valuation';
+} from '@finance-pro/api/ledger/finance-transaction-valuation';
 import {
   financeAnalyticsView,
   type FinanceAnalyticsAccountRow,
@@ -18,8 +18,8 @@ import {
   type FinanceAnalyticsSummaryRow,
   type FinanceAnalyticsTimelineRow,
   type FinanceSavingsAnalyticsRow,
-} from './finance-analytics-view';
-import { FinanceAssetSummaryService } from '../assets/finance-asset-summary.service';
+} from '@finance-pro/api/analytics/finance-analytics-view';
+import { FinanceAssetSummaryService } from '@finance-pro/api/assets/finance-asset-summary.service';
 
 const MAX_BREAKDOWN_ROWS = 400;
 const MAX_LEGACY_CURRENCIES = 100;

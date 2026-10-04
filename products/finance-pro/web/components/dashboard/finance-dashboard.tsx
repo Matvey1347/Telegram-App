@@ -2,14 +2,14 @@ import type {
   ConsumerFinanceAnalyticsQuery,
   ConsumerFinanceDashboard,
 } from "@telegram-system/shared";
-import { Card, EmptyState } from "./ui";
-import { formatMoney } from "@/lib/features/finance/consumer-finance-money";
-import type { ConsumerFinanceSurface } from "./consumer-finance-navigation";
-import { IconAvatar } from "./ui/finance-icon-avatar";
-import { type FinanceLocale } from "./i18n/core";
-import { financeDashboardCopy } from "./i18n/dashboard";
-import { FinancePeriodSelector } from "./finance-period-selector";
-import { FinanceDashboardSkeleton } from "./finance-dashboard-skeleton";
+import { Card, EmptyState } from "@finance-pro/web/components/ui";
+import { formatMoney } from "@finance-pro/web/lib/formatters/consumer-finance-money";
+import type { ConsumerFinanceSurface } from "@finance-pro/web/components/app/consumer-finance-navigation";
+import { IconAvatar } from "@finance-pro/web/components/ui/finance-icon-avatar";
+import { type FinanceLocale } from "@finance-pro/web/components/i18n/core";
+import { financeDashboardCopy } from "@finance-pro/web/components/i18n/dashboard";
+import { FinancePeriodSelector } from "@finance-pro/web/components/planning/finance-period-selector";
+import { FinanceDashboardSkeleton } from "@finance-pro/web/components/dashboard/finance-dashboard-skeleton";
 
 export function FinanceDashboard({
   data,

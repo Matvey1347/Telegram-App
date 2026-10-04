@@ -7,7 +7,7 @@ import type {
   ConsumerFinanceRegularPaymentPage,
   ConsumerFinanceRegularPaymentQuery,
 } from "@telegram-system/shared";
-import { consumerFinanceKeys } from "./consumer-finance-query-keys";
+import { consumerFinanceKeys } from "@finance-pro/web/lib/query/consumer-finance-query-keys";
 
 export function reconcileConsumerDebtPages(
   client: QueryClient,

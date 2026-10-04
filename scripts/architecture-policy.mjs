@@ -2,14 +2,17 @@ import path from "node:path";
 
 const API_BOTS_ROOT = "apps/api/src/domains/telegram/telegram-bots";
 const BOT_CORE_ROOT = `${API_BOTS_ROOT}/core`;
-const BOT_FINANCE_ROOT = `${API_BOTS_ROOT}/finance`;
-const BOT_GREETER_ROOT = `${API_BOTS_ROOT}/greeter`;
+const BOT_FINANCE_ROOT = "products/finance-pro/bot";
+const BOT_GREETER_ROOT = "products/greeter/api";
 const CONSUMER_FINANCE_API_ROOT =
-  "apps/api/src/domains/telegram/consumer-finance";
+  "products/finance-pro/api";
 const INTERNAL_FINANCE_API_ROOT = "apps/api/src/domains/finance";
 const CONSUMER_FINANCE_APP_ROOT = "apps/web/src/app/(consumer-finance)";
 const CONSUMER_FINANCE_UI_ROOT =
-  "apps/web/src/components/features/finance/consumer-finance";
+  "products/finance-pro/web/components";
+const CONSUMER_FINANCE_WEB_LIB_ROOT = "products/finance-pro/web/lib";
+const CONSUMER_FINANCE_WEB_ROOT = "products/finance-pro/web";
+const GREETER_WEB_ROOT = "products/greeter/web";
 const INTERNAL_FINANCE_WEB_LIB_ROOT = "apps/web/src/lib/features/finance";
 
 function normalize(value) {
@@ -34,6 +37,22 @@ export function staticImports(source) {
 }
 
 export function resolveImport(sourceFile, specifier) {
+  const aliases = [
+    ["@api/", "apps/api/src"],
+    ["@finance-pro/api/", CONSUMER_FINANCE_API_ROOT],
+    ["@finance-pro/bot/", BOT_FINANCE_ROOT],
+    ["@greeter/api/", BOT_GREETER_ROOT],
+    ["@finance-pro/web/components/", CONSUMER_FINANCE_UI_ROOT],
+    ["@finance-pro/web/lib/", CONSUMER_FINANCE_WEB_LIB_ROOT],
+    ["@finance-pro/web/provider/", "products/finance-pro/web/provider"],
+    ["@greeter/web/components/", `${GREETER_WEB_ROOT}/components`],
+    ["@greeter/web/lib/", `${GREETER_WEB_ROOT}/lib`],
+  ];
+  for (const [prefix, root] of aliases) {
+    if (specifier.startsWith(prefix)) {
+      return normalize(path.join(root, specifier.slice(prefix.length)));
+    }
+  }
   if (specifier.startsWith("@/")) {
     return normalize(path.join("apps/web/src", specifier.slice(2)));
   }
@@ -55,9 +74,9 @@ function allowImport(source, target, reason, removalSlice) {
 const scheduledGreeterSource =
   "apps/api/src/domains/operations/scheduled-tasks/scheduled-task-executor.service.ts";
 for (const service of [
-  "greeter-expiry.service",
-  "greeter-broadcast.service",
-  "greeter-automation.service",
+  "enrollment/greeter-expiry.service",
+  "broadcast/greeter-broadcast.service",
+  "automation/greeter-automation.service",
 ]) {
   allowImport(
     scheduledGreeterSource,
@@ -89,14 +108,14 @@ allowPattern(
 
 allowPattern(
   "frontend-polling",
-  `${consumerUiRoot}/consumer-finance-login.tsx`,
+  `${consumerUiRoot}/app/consumer-finance-login.tsx`,
   1,
   "User-triggered five-minute browser-login challenge polls only while approval is pending.",
   "Keep bounded and user-triggered; replace only if an event-driven browser channel is introduced.",
 );
 allowPattern(
   "frontend-polling",
-  "apps/web/src/components/features/telegram/telegram-bots/greeter/greeter-broadcasts-section.tsx",
+  "products/greeter/web/components/broadcast/greeter-broadcasts-section.tsx",
   1,
   "Legacy UI polls every five seconds while any broadcast is SCHEDULED or PROCESSING; a far-future schedule can keep it active.",
   "Greeter network-cost refactor: use due-aware activation or event reconciliation and remove this exception.",
@@ -169,8 +188,8 @@ function patternViolation(file, rule, count, message) {
 function isConsumerFinanceWeb(file) {
   return (
     within(file, CONSUMER_FINANCE_APP_ROOT) ||
-    within(file, CONSUMER_FINANCE_UI_ROOT) ||
-    file.startsWith("apps/web/src/lib/features/finance/consumer-finance-") ||
+    within(file, CONSUMER_FINANCE_WEB_ROOT) ||
+    within(file, CONSUMER_FINANCE_WEB_LIB_ROOT) ||
     file.startsWith("apps/web/src/providers/consumer-finance-")
   );
 }
@@ -456,7 +475,7 @@ export function inspectArchitectureExceptionInventory(existingFiles) {
     const separator = key.indexOf("::");
     const source = key.slice(separator + 2);
     const file =
-      key.startsWith("apps/") || key.startsWith("packages/")
+      key.startsWith("apps/") || key.startsWith("packages/") || key.startsWith("products/")
         ? key.slice(0, separator)
         : source;
     if (!files.has(file)) {

@@ -2,7 +2,7 @@ import { ForbiddenException, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHmac, timingSafeEqual } from 'crypto';
 import type { Request } from 'express';
-import { PrismaService } from '../../../../prisma/prisma.service';
+import { PrismaService } from '@api/prisma/prisma.service';
 
 export type FinanceConsumerSession = {
   profileId: string;

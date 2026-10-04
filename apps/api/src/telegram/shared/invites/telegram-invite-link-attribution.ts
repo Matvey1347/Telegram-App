@@ -1,5 +1,5 @@
 import { TelegramInviteLinkCreatorMatchSource } from '@prisma/client';
-import { normalizeTelegramUsername } from './telegram-import.helpers';
+import { normalizeTelegramUsername } from '@api/telegram/shared/imports/telegram-import.helpers';
 
 export type InviteLinkCreatorSnapshot = {
   creatorTelegramUserId?: string | null;

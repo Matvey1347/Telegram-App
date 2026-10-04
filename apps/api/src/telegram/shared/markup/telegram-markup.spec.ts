@@ -1,6 +1,6 @@
 import { Api } from 'telegram';
 import { HTMLParser } from 'telegram/extensions/html';
-import { parseTelegramSpoilers } from './telegram-spoilers';
+import { parseTelegramSpoilers } from '@api/telegram/shared/markup/telegram-spoilers';
 import {
   telegramHtmlToGramJsAlbumHtml,
   telegramHtmlToManagedMarkup,
@@ -8,7 +8,7 @@ import {
   telegramMarkupToHtml,
   telegramMarkupToRichHtml,
   requiresNativeTelegramRichMessage,
-} from './telegram-markup';
+} from '@api/telegram/shared/markup/telegram-markup';
 
 describe('telegramMarkupToHtml', () => {
   it('keeps multiline Telegram code as a fenced block instead of invalid inline backticks', () => {

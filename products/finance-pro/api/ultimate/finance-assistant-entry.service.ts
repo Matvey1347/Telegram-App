@@ -3,10 +3,10 @@ import {
   ForbiddenException,
   Injectable,
 } from '@nestjs/common';
-import { PrismaService } from '../../../../prisma/prisma.service';
-import { FinanceAiProviderService } from '../ai/finance-ai.provider';
-import { FinanceEntitlementService } from '../billing/finance-entitlement.service';
-import { FinanceProposalService } from '../chat-flows/finance-proposal.service';
+import { PrismaService } from '@api/prisma/prisma.service';
+import { FinanceAiProviderService } from '@finance-pro/api/ai/finance-ai.provider';
+import { FinanceEntitlementService } from '@finance-pro/api/billing/finance-entitlement.service';
+import { FinanceProposalService } from '@finance-pro/api/chat-flows/finance-proposal.service';
 
 type AssistantIdentity = {
   profileId: string;

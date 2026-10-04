@@ -1,5 +1,5 @@
 import { ForbiddenException } from '@nestjs/common';
-import { FinanceConsumerRequestService } from './finance-consumer-request.service';
+import { FinanceConsumerRequestService } from '@finance-pro/api/http/finance-consumer-request.service';
 
 describe('FinanceConsumerRequestService', () => {
   it('keeps unsafe routes behind the consumer header and bot-scoped session', () => {

@@ -1,15 +1,15 @@
 import { Injectable } from '@nestjs/common';
-import { B2ObjectStorageService } from '../../common/object-storage/b2-object-storage.service';
-import { TelegramBotApiClient } from './telegram-bot-api.client';
+import { B2ObjectStorageService } from '@api/common/object-storage/b2-object-storage.service';
+import { TelegramBotApiClient } from '@api/telegram/shared/bot/telegram-bot-api.client';
 import {
   TELEGRAM_BOT_IMAGE_ICON_PREFIX,
   telegramIconSourceFromText,
-} from './telegram-bot-icon-source';
+} from '@api/telegram/shared/bot/telegram-bot-icon-source';
 
 export {
   storedTelegramIconPresentation,
   telegramIconSourceFromText,
-} from './telegram-bot-icon-source';
+} from '@api/telegram/shared/bot/telegram-bot-icon-source';
 
 const MAX_ICON_BYTES = 5 * 1024 * 1024;
 

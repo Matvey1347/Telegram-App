@@ -4,7 +4,7 @@ import {
   archiveFinanceAccount,
   assertFinanceAccountArchivable,
   assertFinanceCategoryArchivable,
-} from './finance-obligation-archive-guards';
+} from '@finance-pro/api/catalog/finance-obligation-archive-guards';
 
 describe('Finance obligation archive guards', () => {
   it('blocks accounts used by open debt or non-canceled regular payments', async () => {

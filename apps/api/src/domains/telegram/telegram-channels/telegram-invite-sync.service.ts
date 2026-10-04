@@ -6,12 +6,12 @@ import {
   TelegramSourceType,
 } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { attributeInviteLinkCreator } from '../../../telegram/shared/telegram-invite-link-attribution';
+import { attributeInviteLinkCreator } from '@api/telegram/shared/invites/telegram-invite-link-attribution';
 import {
   TelegramMtprotoClient,
   type TelegramInviteLinksResult,
-} from '../../../telegram/shared/telegram-mtproto.client';
-import { TelegramSourceAccessService } from '../../../telegram/shared/telegram-source-access.service';
+} from '@api/telegram/shared/mtproto/telegram-mtproto.client';
+import { TelegramSourceAccessService } from '@api/telegram/shared/imports/telegram-source-access.service';
 import { TelegramChannelAccessService } from './telegram-channel-access.service';
 import { TelegramChannelsSupportService } from './telegram-channels-support.service';
 import { BulkProgressCallback } from './telegram-channels.internal';

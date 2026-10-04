@@ -1,4 +1,4 @@
-import { FinanceReminderDeliveryService } from './finance-reminder-delivery.service';
+import { FinanceReminderDeliveryService } from '@finance-pro/api/planning/finance-reminder-delivery.service';
 
 describe('FinanceReminderDeliveryService', () => {
   it('advances a month-end reminder durably and returns the next due delivery', async () => {

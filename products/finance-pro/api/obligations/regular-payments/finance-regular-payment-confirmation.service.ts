@@ -5,26 +5,26 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { FinanceTransactionSource, Prisma } from '@prisma/client';
-import { PrismaService } from '../../../../../prisma/prisma.service';
-import { FinanceLedgerService } from '../../ledger/finance-ledger.service';
+import { PrismaService } from '@api/prisma/prisma.service';
+import { FinanceLedgerService } from '@finance-pro/api/ledger/finance-ledger.service';
 import {
   financeTransactionSelect,
   financeTransactionView,
-} from '../../ledger/finance-transaction-view';
+} from '@finance-pro/api/ledger/finance-transaction-view';
 import type {
   FinanceApplyOccurrenceAmountDto,
   FinanceRegularPaymentConfirmDto,
-} from '../finance-obligation.dto';
-import { financeObligationProfile } from '../finance-obligation-context';
-import { nextFinanceOccurrence } from '../finance-obligation-date';
+} from '@finance-pro/api/obligations/finance-obligation.dto';
+import { financeObligationProfile } from '@finance-pro/api/obligations/finance-obligation-context';
+import { nextFinanceOccurrence } from '@finance-pro/api/obligations/finance-obligation-date';
 import {
   financeRegularPaymentOccurrenceSelect,
   financeRegularPaymentOccurrenceView,
   financeRegularPaymentSelect,
   financeRegularPaymentView,
-} from '../finance-obligation-view';
-import { FinanceRegularPaymentDeliveryService } from './finance-regular-payment-delivery.service';
-import { financeRegularPaymentRevisionData } from './finance-regular-payment-write';
+} from '@finance-pro/api/obligations/finance-obligation-view';
+import { FinanceRegularPaymentDeliveryService } from '@finance-pro/api/obligations/regular-payments/finance-regular-payment-delivery.service';
+import { financeRegularPaymentRevisionData } from '@finance-pro/api/obligations/regular-payments/finance-regular-payment-write';
 
 @Injectable()
 export class FinanceRegularPaymentConfirmationService {

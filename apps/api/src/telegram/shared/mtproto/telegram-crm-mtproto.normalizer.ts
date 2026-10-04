@@ -5,7 +5,7 @@ import type {
   TelegramCrmMtprotoMessage,
   TelegramCrmMtprotoPeer,
   TelegramCrmMtprotoUpdate,
-} from './telegram-crm-mtproto.types';
+} from '@api/telegram/shared/mtproto/telegram-crm-mtproto.types';
 
 const TELEGRAM_SERVICE_USER_ID = '777000';
 

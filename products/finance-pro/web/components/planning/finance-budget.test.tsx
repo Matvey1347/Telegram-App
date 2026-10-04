@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { ConsumerFinanceDashboard } from "@telegram-system/shared";
-import { FinanceBudget } from "./finance-budget";
+import { FinanceBudget } from "@finance-pro/web/components/planning/finance-budget";
 
 const api = vi.hoisted(() => ({
   dashboard: vi.fn(),
@@ -11,13 +11,13 @@ const api = vi.hoisted(() => ({
   smartLimits: vi.fn(),
 }));
 
-vi.mock("@/lib/features/finance/consumer-finance-insights-api", () => ({
+vi.mock("@finance-pro/web/lib/api/consumer-finance-insights-api", () => ({
   consumerFinanceInsightsApi: { dashboard: api.dashboard },
 }));
-vi.mock("@/lib/features/finance/consumer-finance-ledger-api", () => ({
+vi.mock("@finance-pro/web/lib/api/consumer-finance-ledger-api", () => ({
   consumerFinanceLedgerApi: { categories: api.categories },
 }));
-vi.mock("@/lib/features/finance/consumer-finance-planning-api", () => ({
+vi.mock("@finance-pro/web/lib/api/consumer-finance-planning-api", () => ({
   consumerFinancePlanningApi: {
     limits: api.limits,
     smartLimits: api.smartLimits,

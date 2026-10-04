@@ -15,14 +15,14 @@ import {
   Input,
   LoadingState,
   Select,
-} from "./ui";
-import { consumerFinanceLedgerApi } from "@/lib/features/finance/consumer-finance-ledger-api";
-import { consumerFinanceKeys } from "@/lib/features/finance/consumer-finance-query-keys";
-import { patchConsumerFinanceAccountCache } from "@/lib/features/finance/consumer-finance-cache";
-import { type FinanceLocale } from "./i18n/core";
-import { financeAccountsCopy } from "./i18n/accounts";
-import { IconPicker } from "./ui/finance-icon-picker";
-import { FinanceCurrencySelect } from "./ui/finance-currency-select";
+} from "@finance-pro/web/components/ui";
+import { consumerFinanceLedgerApi } from "@finance-pro/web/lib/api/consumer-finance-ledger-api";
+import { consumerFinanceKeys } from "@finance-pro/web/lib/query/consumer-finance-query-keys";
+import { patchConsumerFinanceAccountCache } from "@finance-pro/web/lib/cache/consumer-finance-cache";
+import { type FinanceLocale } from "@finance-pro/web/components/i18n/core";
+import { financeAccountsCopy } from "@finance-pro/web/components/i18n/accounts";
+import { IconPicker } from "@finance-pro/web/components/ui/finance-icon-picker";
+import { FinanceCurrencySelect } from "@finance-pro/web/components/ui/finance-currency-select";
 
 const TYPES: ConsumerFinanceAccountType[] = [
   "CASH",

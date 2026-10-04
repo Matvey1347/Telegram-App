@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { financeCoreCopy } from "../i18n/core";
-import { FinanceLanguageSelect } from "./finance-language-select";
+import { financeCoreCopy } from "@finance-pro/web/components/i18n/core";
+import { FinanceLanguageSelect } from "@finance-pro/web/components/ui/finance-language-select";
 
 describe("FinanceLanguageSelect", () => {
   it("shows flags only while preserving listbox names and keyboard navigation", () => {

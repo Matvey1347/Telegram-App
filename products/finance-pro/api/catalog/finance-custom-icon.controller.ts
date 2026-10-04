@@ -14,9 +14,9 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import {
   FinanceConsumerAuthGuard,
   type FinanceImportRequest,
-} from '../portability/finance-consumer-auth.guard';
-import { CreateFinanceCustomIconDto } from './finance-custom-icon.dto';
-import { FinanceCustomIconService } from './finance-custom-icon.service';
+} from '@finance-pro/api/portability/finance-consumer-auth.guard';
+import { CreateFinanceCustomIconDto } from '@finance-pro/api/catalog/finance-custom-icon.dto';
+import { FinanceCustomIconService } from '@finance-pro/api/catalog/finance-custom-icon.service';
 
 @Controller('finance-bots/:botId/custom-icons')
 @UseGuards(FinanceConsumerAuthGuard)

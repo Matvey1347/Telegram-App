@@ -4,8 +4,8 @@ import {
   Injectable,
 } from '@nestjs/common';
 import { FinanceAiConnectionStatus, FinanceAiProvider } from '@prisma/client';
-import { TokenEncryptionService } from '../../../../common/security/token-encryption.service';
-import { PrismaService } from '../../../../prisma/prisma.service';
+import { TokenEncryptionService } from '@api/common/security/token-encryption.service';
+import { PrismaService } from '@api/prisma/prisma.service';
 
 /** Resolves the existing workspace/bot OpenAI configuration for runtime calls. */
 @Injectable()

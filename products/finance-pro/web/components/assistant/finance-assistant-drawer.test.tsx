@@ -8,10 +8,10 @@ import {
 } from "@testing-library/react";
 import type { ConsumerFinanceAssistantMessageResult } from "@telegram-system/shared";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { consumerFinanceAssistantApi, FinanceAssistantRequestError } from "@/lib/features/finance/consumer-finance-assistant-api";
-import { FinanceAssistantDrawer } from "./finance-assistant-drawer";
+import { consumerFinanceAssistantApi, FinanceAssistantRequestError } from "@finance-pro/web/lib/api/consumer-finance-assistant-api";
+import { FinanceAssistantDrawer } from "@finance-pro/web/components/assistant/finance-assistant-drawer";
 
-vi.mock("@/lib/features/finance/consumer-finance-assistant-api", () => ({
+vi.mock("@finance-pro/web/lib/api/consumer-finance-assistant-api", () => ({
   FinanceAssistantRequestError: class FinanceAssistantRequestError extends Error {
     constructor(message: string, readonly code?: string) { super(message); }
   },
@@ -27,7 +27,7 @@ vi.mock("@/lib/features/finance/consumer-finance-assistant-api", () => ({
   },
 }));
 
-vi.mock("@/lib/features/finance/consumer-finance-ledger-api", () => ({
+vi.mock("@finance-pro/web/lib/api/consumer-finance-ledger-api", () => ({
   consumerFinanceLedgerApi: {
     accounts: vi.fn().mockResolvedValue([{
       id: "account-1", name: "Card", currency: "PLN",
@@ -40,7 +40,7 @@ vi.mock("@/lib/features/finance/consumer-finance-ledger-api", () => ({
   },
 }));
 
-vi.mock("@/lib/features/finance/consumer-finance-planning-api", () => ({
+vi.mock("@finance-pro/web/lib/api/consumer-finance-planning-api", () => ({
   consumerFinancePlanningApi: {
     entitlements: vi.fn().mockResolvedValue({
       tier: "FREE",

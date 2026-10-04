@@ -3,16 +3,16 @@
 import { useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { ConsumerFinanceProfile } from "@telegram-system/shared";
-import { consumerFinanceProfileApi } from "@/lib/features/finance/consumer-finance-profile-api";
-import { consumerFinanceKeys } from "@/lib/features/finance/consumer-finance-query-keys";
-import { Button, Card, FormField, Input, SavingState } from "./ui";
-import type { FinanceLocale } from "./i18n/core";
-import { financeAccountCenterCopy } from "./i18n/account-center";
-import { FinanceProfileAvatar } from "./finance-profile-avatar";
-import { FinanceSettings } from "./finance-settings";
-import { FinancePlans } from "./finance-plans";
-import { FinanceTierBadge } from "./finance-plan-promotion";
-import { useFinanceEntitlements } from "./use-finance-entitlements";
+import { consumerFinanceProfileApi } from "@finance-pro/web/lib/api/consumer-finance-profile-api";
+import { consumerFinanceKeys } from "@finance-pro/web/lib/query/consumer-finance-query-keys";
+import { Button, Card, FormField, Input, SavingState } from "@finance-pro/web/components/ui";
+import type { FinanceLocale } from "@finance-pro/web/components/i18n/core";
+import { financeAccountCenterCopy } from "@finance-pro/web/components/i18n/account-center";
+import { FinanceProfileAvatar } from "@finance-pro/web/components/profile/finance-profile-avatar";
+import { FinanceSettings } from "@finance-pro/web/components/profile/finance-settings";
+import { FinancePlans } from "@finance-pro/web/components/planning/finance-plans";
+import { FinanceTierBadge } from "@finance-pro/web/components/planning/finance-plan-promotion";
+import { useFinanceEntitlements } from "@finance-pro/web/components/hooks/use-finance-entitlements";
 
 export function FinanceAccountCenter({
   botId,

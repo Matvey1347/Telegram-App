@@ -1,6 +1,6 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { FinanceSavingsService } from './finance-savings.service';
+import { FinanceSavingsService } from '@finance-pro/api/savings/finance-savings.service';
 
 const occurredAt = new Date('2026-09-08T00:00:00.000Z');
 

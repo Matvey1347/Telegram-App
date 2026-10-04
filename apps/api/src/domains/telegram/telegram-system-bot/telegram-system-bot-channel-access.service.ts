@@ -2,13 +2,13 @@ import { Injectable, Logger } from '@nestjs/common';
 import { TelegramChannelSourceRole, TelegramSourceType } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { sanitizeOperationalError } from '../../../common/security/operational-error';
-import { TelegramBotApiClient } from '../../../telegram/shared/telegram-bot-api.client';
+import { TelegramBotApiClient } from '@api/telegram/shared/bot/telegram-bot-api.client';
 import {
   TELEGRAM_PRODUCTION_SYSTEM_BOT_SOURCE_ID,
   TELEGRAM_SYSTEM_BOT_SOURCE_ID,
   TelegramSourceAccessService,
   type TelegramSourcePermissions,
-} from '../../../telegram/shared/telegram-source-access.service';
+} from '@api/telegram/shared/imports/telegram-source-access.service';
 import { TelegramSystemBotConfigService } from './telegram-system-bot-config.service';
 import { compactSystemBotInlineKeyboard } from './telegram-system-bot-inline-keyboard';
 import { formatSystemBotDate } from './telegram-system-bot-menu';

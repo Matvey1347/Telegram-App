@@ -9,7 +9,7 @@ import {
   GreeterJoinRequestStatus,
   GreeterUserState,
 } from '@prisma/client';
-import { PrismaService } from '../../../../prisma/prisma.service';
+import { PrismaService } from '@api/prisma/prisma.service';
 
 export type GreeterAudienceInput = {
   audience: GreeterBroadcastAudience;

@@ -7,8 +7,8 @@ import {
   within,
 } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { FinanceInvestmentDetailScreen } from "./finance-investment-detail";
-import { consumerFinanceKeys } from "@/lib/features/finance/consumer-finance-query-keys";
+import { FinanceInvestmentDetailScreen } from "@finance-pro/web/components/investments/finance-investment-detail";
+import { consumerFinanceKeys } from "@finance-pro/web/lib/query/consumer-finance-query-keys";
 
 const api = vi.hoisted(() => ({
   get: vi.fn(),
@@ -18,7 +18,7 @@ const api = vi.hoisted(() => ({
   archive: vi.fn(),
   accounts: vi.fn(),
 }));
-vi.mock("@/lib/features/finance/consumer-finance-investments-api", () => ({
+vi.mock("@finance-pro/web/lib/api/consumer-finance-investments-api", () => ({
   consumerFinanceInvestmentsApi: {
     get: api.get,
     cashFlows: api.cashFlows,
@@ -27,7 +27,7 @@ vi.mock("@/lib/features/finance/consumer-finance-investments-api", () => ({
     archive: api.archive,
   },
 }));
-vi.mock("@/lib/features/finance/consumer-finance-ledger-api", () => ({
+vi.mock("@finance-pro/web/lib/api/consumer-finance-ledger-api", () => ({
   consumerFinanceLedgerApi: { accounts: api.accounts },
 }));
 

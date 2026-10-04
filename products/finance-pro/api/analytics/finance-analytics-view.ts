@@ -3,7 +3,7 @@ import type { ConsumerFinanceAnalyticsQuery } from '@telegram-system/shared';
 import {
   financeAccountEmoji,
   financeIconPresentation,
-} from '../catalog/finance-entity-emoji';
+} from '@finance-pro/api/catalog/finance-entity-emoji';
 
 export type FinanceAnalyticsMoneyRow = {
   nativeAmount: Prisma.Decimal | null;

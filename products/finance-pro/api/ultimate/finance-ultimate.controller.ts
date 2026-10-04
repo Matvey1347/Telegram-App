@@ -11,15 +11,15 @@ import {
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import type { Request, Response } from 'express';
 import type { ConsumerFinanceAssistantStreamEvent } from '@telegram-system/shared';
-import { FinanceConsumerRequestService } from '../http/finance-consumer-request.service';
+import { FinanceConsumerRequestService } from '@finance-pro/api/http/finance-consumer-request.service';
 import {
   FinanceAssistantEntryDto,
   FinanceAssistantMessageDto,
   UpdateFinanceAssistantProposalDto,
   FinanceUltimateQuestionDto,
-} from '../http/finance.dto';
-import { FinanceUltimateService } from './finance-ultimate.service';
-import { FinanceAssistantEntryService } from './finance-assistant-entry.service';
+} from '@finance-pro/api/http/finance.dto';
+import { FinanceUltimateService } from '@finance-pro/api/ultimate/finance-ultimate.service';
+import { FinanceAssistantEntryService } from '@finance-pro/api/ultimate/finance-assistant-entry.service';
 
 /** Compatibility route for the AI subsection of the consolidated Analytics experience. */
 @Controller('finance-bots/:botId/ultimate')

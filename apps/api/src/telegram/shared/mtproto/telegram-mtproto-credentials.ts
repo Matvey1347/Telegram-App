@@ -1,5 +1,5 @@
-import type { TokenEncryptionService } from '../../common/security/token-encryption.service';
-import type { TelegramCrmMtprotoCredentials } from './telegram-crm-mtproto.types';
+import type { TokenEncryptionService } from '@api/common/security/token-encryption.service';
+import type { TelegramCrmMtprotoCredentials } from '@api/telegram/shared/mtproto/telegram-crm-mtproto.types';
 
 export type EncryptedTelegramMtprotoCredentials = {
   apiId: string;

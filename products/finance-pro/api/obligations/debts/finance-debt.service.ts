@@ -6,31 +6,31 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { PrismaService } from '../../../../../prisma/prisma.service';
+import { PrismaService } from '@api/prisma/prisma.service';
 import {
   TELEGRAM_BOT_DELIVERY_WRITER,
   type TelegramBotDeliveryWriterPort,
-} from '../../../telegram-bots/core/telegram-bot-delivery-writer';
-import { FinanceLedgerService } from '../../ledger/finance-ledger.service';
+} from '@api/domains/telegram/telegram-bots/core/telegram-bot-delivery-writer';
+import { FinanceLedgerService } from '@finance-pro/api/ledger/finance-ledger.service';
 import {
   financeTransactionSelect,
   financeTransactionView,
-} from '../../ledger/finance-transaction-view';
+} from '@finance-pro/api/ledger/finance-transaction-view';
 import {
   FINANCE_OBLIGATION_PRESENTATION,
   type FinanceObligationPresentationPort,
-} from '../finance-obligation-presentation.port';
+} from '@finance-pro/api/obligations/finance-obligation-presentation.port';
 import type {
   FinanceDebtInputDto,
   FinanceDebtQueryDto,
   FinanceSharedExpenseInputDto,
-} from '../finance-obligation.dto';
+} from '@finance-pro/api/obligations/finance-obligation.dto';
 import {
   financeObligationDeliveryTarget,
   financeObligationProfile,
-} from '../finance-obligation-context';
-import { financeObligationDate } from '../finance-obligation-date';
-import { financeDebtSelect, financeDebtView } from '../finance-obligation-view';
+} from '@finance-pro/api/obligations/finance-obligation-context';
+import { financeObligationDate } from '@finance-pro/api/obligations/finance-obligation-date';
+import { financeDebtSelect, financeDebtView } from '@finance-pro/api/obligations/finance-obligation-view';
 
 @Injectable()
 export class FinanceDebtService {

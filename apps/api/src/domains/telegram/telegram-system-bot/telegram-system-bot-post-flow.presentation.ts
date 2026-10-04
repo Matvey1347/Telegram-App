@@ -6,7 +6,7 @@ import {
 import {
   TELEGRAM_BOT_ACTION_TEXT,
   telegramBotApiActionRow,
-} from '../../../telegram/shared/telegram-bot-action-buttons';
+} from '@api/telegram/shared/bot/telegram-bot-action-buttons';
 import {
   telegramSystemBotPostPayload,
   type TelegramSystemBotPostFlowScope,

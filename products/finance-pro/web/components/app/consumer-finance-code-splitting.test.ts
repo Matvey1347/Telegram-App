@@ -10,27 +10,28 @@ describe("Consumer Finance initial module graph", () => {
   it("keeps heavy screens behind module-scope lazy imports", () => {
     const host = source("consumer-finance-screens.tsx");
     const heavy = [
-      "finance-accounts",
-      "finance-account-editor",
-      "finance-account-center",
-      "finance-analytics",
-      "finance-budget",
-      "finance-categories",
-      "finance-onboarding",
-      "finance-plans",
-      "finance-reminders",
-      "finance-settings",
-      "finance-transactions",
-      "finance-transfers",
-      "finance-debts",
-      "finance-regular-payments",
-      "finance-savings",
-      "finance-investments",
-      "finance-investment-detail",
+      "accounts/finance-accounts",
+      "accounts/finance-account-editor",
+      "accounts/finance-account-center",
+      "analytics/finance-analytics",
+      "planning/finance-budget",
+      "catalog/finance-categories",
+      "onboarding/finance-onboarding",
+      "planning/finance-plans",
+      "planning/finance-reminders",
+      "profile/finance-settings",
+      "ledger/finance-transactions",
+      "ledger/finance-transfers",
+      "obligations/finance-debts",
+      "obligations/finance-regular-payments",
+      "savings/finance-savings",
+      "investments/finance-investments",
+      "investments/finance-investment-detail",
     ];
-    for (const moduleName of heavy) {
-      expect(host).toContain(`import("./${moduleName}")`);
-      expect(host).not.toMatch(new RegExp(`from ["']\\./${moduleName}["']`));
+    for (const modulePath of heavy) {
+      const moduleName = `@finance-pro/web/components/${modulePath}`;
+      expect(host).toContain(`import("${moduleName}")`);
+      expect(host).not.toMatch(new RegExp(`from ["']${moduleName}["']`));
     }
     expect(host).not.toContain("consumer-finance-api");
     expect(host).not.toContain("consumer-finance-ledger-api");
@@ -45,9 +46,9 @@ describe("Consumer Finance initial module graph", () => {
   });
 
   it("keeps hidden-screen copy out of Home and synchronous core", () => {
-    const initialCopy = `${source("finance-dashboard.tsx")}\n${source(
-      "i18n/dashboard.ts",
-    )}\n${source("i18n/core.ts")}`;
+    const initialCopy = `${source("../dashboard/finance-dashboard.tsx")}\n${source(
+      "../i18n/dashboard.ts",
+    )}\n${source("../i18n/core.ts")}`;
     expect(initialCopy).not.toContain("Current plan");
     expect(initialCopy).not.toContain("Reminder name");
     expect(initialCopy).not.toContain("Category name");
@@ -57,8 +58,8 @@ describe("Consumer Finance initial module graph", () => {
   });
 
   it("keeps the account editor chunk independent from the list screen", () => {
-    expect(source("finance-account-editor.tsx")).not.toContain(
-      'from "./finance-accounts"',
+    expect(source("../accounts/finance-account-editor.tsx")).not.toContain(
+      'from "@finance-pro/web/components/accounts/finance-accounts"',
     );
   });
 

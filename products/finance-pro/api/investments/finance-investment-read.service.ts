@@ -1,9 +1,9 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { PrismaService } from '../../../../prisma/prisma.service';
+import { PrismaService } from '@api/prisma/prisma.service';
 import type {
   FinanceInvestmentHistoryQueryDto,
   FinanceInvestmentQueryDto,
-} from './finance-investment.dto';
+} from '@finance-pro/api/investments/finance-investment.dto';
 import {
   financeInvestmentCashFlowSelect,
   financeInvestmentCashFlowView,
@@ -11,7 +11,7 @@ import {
   financeInvestmentValuationSelect,
   financeInvestmentValuationView,
   financeInvestmentView,
-} from './finance-investment-view';
+} from '@finance-pro/api/investments/finance-investment-view';
 
 @Injectable()
 export class FinanceInvestmentReadService {

@@ -28,31 +28,31 @@ test("extracts and resolves static imports without a TypeScript compiler", () =>
 test("rejects platform imports of product implementation", () => {
   const failures = inspectArchitectureSource(
     "apps/api/src/domains/telegram/telegram-bots/core/new-dispatcher.ts",
-    `import { FinanceCoreService } from "../../consumer-finance/catalog/finance-core.service";`,
+    `import { FinanceCoreService } from "@finance-pro/api/catalog/finance-core.service";`,
   );
   assert.match(failures.join("\n"), /core\/platform cannot import finance/);
 });
 
 test("rejects imports between independent bot products", () => {
   const failures = inspectArchitectureSource(
-    "apps/api/src/domains/telegram/telegram-bots/greeter/new-rule.ts",
-    `import { FinanceCoreService } from "../../consumer-finance/catalog/finance-core.service";`,
+    "products/greeter/api/new-rule.ts",
+    `import { FinanceCoreService } from "@finance-pro/api/catalog/finance-core.service";`,
   );
   assert.match(failures.join("\n"), /products cannot import each other/);
 });
 
 test("keeps internal Finance separate from consumer Finance", () => {
   const failures = inspectArchitectureSource(
-    "apps/api/src/domains/telegram/consumer-finance/catalog/new-use-case.ts",
-    `import { AccountsService } from "../../../finance/accounts/accounts.service";`,
+    "products/finance-pro/api/catalog/new-use-case.ts",
+    `import { AccountsService } from "@api/domains/finance/accounts/accounts.service";`,
   );
   assert.match(failures.join("\n"), /separate products/);
 });
 
 test("consumer Finance business does not depend on its Telegram adapter", () => {
   const failures = inspectArchitectureSource(
-    "apps/api/src/domains/telegram/consumer-finance/ledger/new-use-case.ts",
-    `import { FinanceBotService } from "../../telegram-bots/finance/finance-bot.service";`,
+    "products/finance-pro/api/ledger/new-use-case.ts",
+    `import { FinanceBotService } from "@finance-pro/bot/finance-bot.service";`,
   );
   assert.match(
     failures.join("\n"),
@@ -62,7 +62,7 @@ test("consumer Finance business does not depend on its Telegram adapter", () => 
 
 test("rejects consumer imports of internal Finance helpers and product UI", () => {
   const file =
-    "apps/web/src/components/features/finance/consumer-finance/new-screen.tsx";
+    "products/finance-pro/web/components/new-screen.tsx";
   const failures = inspectArchitectureSource(
     file,
     `
@@ -76,7 +76,7 @@ test("rejects consumer imports of internal Finance helpers and product UI", () =
 
 test("consumer Finance owns visual components, providers, and query keys", () => {
   const failures = inspectArchitectureSource(
-    "apps/web/src/components/features/finance/consumer-finance/new-screen.tsx",
+    "products/finance-pro/web/components/new-screen.tsx",
     `
       import { Button } from "@/components/ui/primitives";
       import { IconAvatar } from "@/components/icons/icon-avatar";
@@ -91,7 +91,7 @@ test("consumer Finance owns visual components, providers, and query keys", () =>
 
 test("consumer Finance does not rely on global table presentation classes", () => {
   const failures = inspectArchitectureSource(
-    "apps/web/src/components/features/finance/consumer-finance/new-table.tsx",
+    "products/finance-pro/web/components/new-table.tsx",
     `export const table = <div className="table-scroll" />;`,
   );
   assert.match(failures.join("\n"), /Finance-owned table styles/);
@@ -99,14 +99,14 @@ test("consumer Finance does not rely on global table presentation classes", () =
 
 test("consumer Finance cannot bypass or leak its API and state boundary", () => {
   const consumerFailures = inspectArchitectureSource(
-    "apps/web/src/components/features/finance/consumer-finance/new-screen.tsx",
+    "products/finance-pro/web/components/new-screen.tsx",
     `import { accountsApi } from "@/lib/api";`,
   );
   const internalFailures = inspectArchitectureSource(
     "apps/web/src/components/features/finance/accounts/new-screen.tsx",
     `
-      import { consumerFinanceApi } from "@/lib/features/finance/consumer-finance-api";
-      import { ConsumerFinanceProvider } from "@/providers/consumer-finance-provider";
+      import { consumerFinanceApi } from "@finance-pro/web/lib/consumer-finance-api";
+      import { ConsumerFinanceProvider } from "@finance-pro/web/provider/consumer-finance-provider";
     `,
   );
   assert.match(consumerFailures.join("\n"), /consumer-owned API boundary/);
@@ -210,7 +210,7 @@ test("allows product code to depend on platform adapters and shared contracts", 
     "apps/api/src/domains/telegram/consumer-finance/catalog/new-use-case.ts",
     `
       import { TelegramBotDeliveryService } from "../../telegram-bots/core/telegram-bot-delivery.service";
-      import { telegramBotMessagePayload } from "../../../../telegram/shared/telegram-bot-message";
+      import { telegramBotMessagePayload } from "../../../../telegram/shared/bot/telegram-bot-message";
       import type { ConsumerFinanceSession } from "@telegram-system/shared";
     `,
   );

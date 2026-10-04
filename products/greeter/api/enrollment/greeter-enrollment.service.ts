@@ -4,17 +4,17 @@ import {
   GreeterSequenceVersionStatus,
   Prisma,
 } from '@prisma/client';
-import { sanitizeOperationalError } from '../../../../common/security/operational-error';
-import { PrismaService } from '../../../../prisma/prisma.service';
-import { telegramMarkupToHtml } from '../../../../telegram/shared/telegram-markup';
-import type { GreeterButtonRows } from './greeter-automation.service';
-import { renderGreeterTemplate } from './greeter-template.renderer';
-import { TelegramBotDeliveryService } from '../core/telegram-bot-delivery.service';
-import { notifyScheduledTaskDueWorkChanged } from '../../../../common/scheduled-task-wake-notifier';
+import { sanitizeOperationalError } from '@api/common/security/operational-error';
+import { PrismaService } from '@api/prisma/prisma.service';
+import { telegramMarkupToHtml } from '@api/telegram/shared/markup/telegram-markup';
+import type { GreeterButtonRows } from '@greeter/api/automation/greeter-automation.service';
+import { renderGreeterTemplate } from '@greeter/api/templates/greeter-template.renderer';
+import { TelegramBotDeliveryService } from '@api/domains/telegram/telegram-bots/core/telegram-bot-delivery.service';
+import { notifyScheduledTaskDueWorkChanged } from '@api/common/scheduled-task-wake-notifier';
 import {
   GREETER_AUTOMATION_RETRY_MS,
   greeterAutomationDueWhere,
-} from '../../../operations/scheduled-tasks/due-work-predicates';
+} from '@api/domains/operations/scheduled-tasks/due-work-predicates';
 
 export type RuntimeEnrollmentInput = {
   workspaceId: string;

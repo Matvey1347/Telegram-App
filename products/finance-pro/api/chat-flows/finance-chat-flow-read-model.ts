@@ -1,9 +1,9 @@
-import { PrismaService } from '../../../../prisma/prisma.service';
+import { PrismaService } from '@api/prisma/prisma.service';
 import {
   financeAccountEmoji,
   financeCategoryEmoji,
   financeIconPresentation,
-} from '../catalog/finance-entity-emoji';
+} from '@finance-pro/api/catalog/finance-entity-emoji';
 
 type Payload = Record<string, string | null | undefined>;
 type Result = { step: string; payload: Payload };

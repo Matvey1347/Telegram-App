@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { ConsumerFinanceSavingsGoal } from "@telegram-system/shared";
-import { FinanceSavingsGoalCard } from "./finance-savings-goal-card";
+import { FinanceSavingsGoalCard } from "@finance-pro/web/components/savings/finance-savings-goal-card";
 
 const completed: ConsumerFinanceSavingsGoal = {
   id: "goal",

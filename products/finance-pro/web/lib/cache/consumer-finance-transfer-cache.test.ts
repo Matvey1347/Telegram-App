@@ -1,8 +1,8 @@
 import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
 import type { ConsumerFinanceTransfer } from "@telegram-system/shared";
-import { consumerFinanceKeys } from "./consumer-finance-query-keys";
-import { reconcileConsumerTransferCaches } from "./consumer-finance-cache";
+import { consumerFinanceKeys } from "@finance-pro/web/lib/query/consumer-finance-query-keys";
+import { reconcileConsumerTransferCaches } from "@finance-pro/web/lib/cache/consumer-finance-cache";
 
 const transfer: ConsumerFinanceTransfer = {
   id: "t",

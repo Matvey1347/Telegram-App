@@ -3,7 +3,7 @@
 import {
   financeCoreCopy,
   normalizeFinanceLocale,
-} from "@/components/features/finance/consumer-finance/i18n/core";
+} from "@finance-pro/web/components/i18n/core";
 
 export default function FinanceMiniAppError({ reset }: { reset: () => void }) {
   const t = financeCoreCopy(

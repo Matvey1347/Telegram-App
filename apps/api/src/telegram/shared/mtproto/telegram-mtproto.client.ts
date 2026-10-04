@@ -8,11 +8,11 @@ import {
 import { Api, TelegramClient } from 'telegram';
 import { returnBigInt } from 'telegram/Helpers';
 import { HTMLParser } from 'telegram/extensions/html';
-import { normalizeTelegramChannelId } from './telegram-post-url';
+import { normalizeTelegramChannelId } from '@api/telegram/shared/imports/telegram-post-url';
 import {
   telegramHtmlToGramJsAlbumHtml,
   telegramHtmlToMtprotoHtml,
-} from './telegram-markup';
+} from '@api/telegram/shared/markup/telegram-markup';
 import {
   MatchScore,
   canonicalTelegramInviteLink,
@@ -21,7 +21,7 @@ import {
   resolveTelegramTitleCandidates,
   type ResolvedTelegramEntity,
   type TelegramTitleCandidate,
-} from './telegram-import.helpers';
+} from '@api/telegram/shared/imports/telegram-import.helpers';
 import type {
   TelegramChannelSyncProgressItem,
   TelegramPostMediaItem,
@@ -31,34 +31,34 @@ import type { TelegramAccountCapabilities } from '@telegram-system/shared';
 import {
   normalizeTelegramCustomEmojiPackSource,
   parseTelegramCustomEmojiDocumentId,
-} from './telegram-custom-emoji-pack';
+} from '@api/telegram/shared/markup/telegram-custom-emoji-pack';
 import {
   maskTelegramInviteHash,
   maskTelegramReferenceForLog,
-} from './telegram-invite-log';
-import { getTelegramFloodWaitSeconds } from './telegram-session-errors';
-import { loginWithTelegramQr } from './telegram-qr-login.adapter';
+} from '@api/telegram/shared/invites/telegram-invite-log';
+import { getTelegramFloodWaitSeconds } from '@api/telegram/shared/mtproto/telegram-session-errors';
+import { loginWithTelegramQr } from '@api/telegram/shared/mtproto/telegram-qr-login.adapter';
 import type { TelegramQrLoginProgress } from '@telegram-system/shared';
 import {
   signInTelegramWithCode,
   signInTelegramWithPassword,
   startTelegramPhoneLogin,
-} from './telegram-phone-login.adapter';
+} from '@api/telegram/shared/mtproto/telegram-phone-login.adapter';
 import {
   convertTelegramPublishImageWithSips,
   downloadTelegramPublishImage,
   downloadTelegramPublishMotion,
-} from './telegram-mtproto-publish-image';
-import type { TelegramAccountProfile } from './telegram-mtproto-account-profile';
+} from '@api/telegram/shared/mtproto/telegram-mtproto-publish-image';
+import type { TelegramAccountProfile } from '@api/telegram/shared/mtproto/telegram-mtproto-account-profile';
 import {
   closeTelegramMtprotoSession,
   createTelegramMtprotoSession,
-} from './telegram-mtproto-session.factory';
-import { livePending } from './telegram-pending-join-requests';
-import type { BroadcastStatsGraphField } from './telegram-broadcast-stats.types';
-import { runBounded } from '../../common/run-bounded';
+} from '@api/telegram/shared/mtproto/telegram-mtproto-session.factory';
+import { livePending } from '@api/telegram/shared/mtproto/telegram-pending-join-requests';
+import type { BroadcastStatsGraphField } from '@api/telegram/shared/core/telegram-broadcast-stats.types';
+import { runBounded } from '@api/common/run-bounded';
 
-export type { TelegramAccountProfile } from './telegram-mtproto-account-profile';
+export type { TelegramAccountProfile } from '@api/telegram/shared/mtproto/telegram-mtproto-account-profile';
 
 type ApiCredentials = { apiId: string; apiHash: string };
 type SessionParams = ApiCredentials & { session?: string };

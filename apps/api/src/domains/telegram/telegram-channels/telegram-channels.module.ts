@@ -10,13 +10,13 @@ import { TelegramContentHypothesesService } from './telegram-content-hypotheses.
 import { TelegramUnifiedImportController } from './telegram-unified-import.controller';
 import { TelegramUnifiedImportService } from './telegram-unified-import.service';
 import { TelegramChannelsService } from './telegram-channels.service';
-import { TelegramMtprotoClient } from '../../../telegram/shared/telegram-mtproto.client';
-import { TelegramSourceAccessService } from '../../../telegram/shared/telegram-source-access.service';
+import { TelegramMtprotoClient } from '@api/telegram/shared/mtproto/telegram-mtproto.client';
+import { TelegramSourceAccessService } from '@api/telegram/shared/imports/telegram-source-access.service';
 import { TelegramChannelAnalyticsService } from './telegram-channel-analytics.service';
 import { TelegramPostCalendarPlannerService } from './telegram-post-calendar-planner.service';
 import { AdCampaignsModule } from '../../growth/ad-campaigns/ad-campaigns.module';
 import { TelegramManagedPostIdentityService } from './telegram-managed-post-identity.service';
-import { TelegramBotApiClient } from '../../../telegram/shared/telegram-bot-api.client';
+import { TelegramBotApiClient } from '@api/telegram/shared/bot/telegram-bot-api.client';
 import { TelegramChannelGptContextExporter } from './telegram-channel-gpt-context-exporter.service';
 import { TelegramChannelAiPlanningContextService } from './telegram-channel-ai-planning-context.service';
 import { TelegramSystemBotConfigService } from '../telegram-system-bot/telegram-system-bot-config.service';

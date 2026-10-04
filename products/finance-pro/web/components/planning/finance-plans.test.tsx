@@ -8,7 +8,7 @@ import {
 } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConsumerBillingCatalog } from "@telegram-system/shared";
-import { FinancePlans } from "./finance-plans";
+import { FinancePlans } from "@finance-pro/web/components/planning/finance-plans";
 
 const api = vi.hoisted(() => ({
   billing: vi.fn(),
@@ -17,7 +17,7 @@ const api = vi.hoisted(() => ({
   resumeAutoRenew: vi.fn(),
   paymentPortal: vi.fn(),
 }));
-vi.mock("@/lib/features/finance/consumer-finance-planning-api", () => ({
+vi.mock("@finance-pro/web/lib/api/consumer-finance-planning-api", () => ({
   consumerFinancePlanningApi: api,
 }));
 

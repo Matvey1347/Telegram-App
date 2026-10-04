@@ -11,12 +11,12 @@ import {
   FormField,
   Input,
   LoadingState,
-} from "./ui";
-import { consumerFinanceApi } from "@/lib/features/finance/consumer-finance-api";
-import { formatMoney } from "@/lib/features/finance/consumer-finance-money";
-import { consumerFinanceKeys } from "@/lib/features/finance/consumer-finance-query-keys";
-import { financeIntlLocale, type FinanceLocale } from "./i18n/core";
-import { financeRemindersCopy } from "./i18n/reminders";
+} from "@finance-pro/web/components/ui";
+import { consumerFinanceApi } from "@finance-pro/web/lib/api/consumer-finance-api";
+import { formatMoney } from "@finance-pro/web/lib/formatters/consumer-finance-money";
+import { consumerFinanceKeys } from "@finance-pro/web/lib/query/consumer-finance-query-keys";
+import { financeIntlLocale, type FinanceLocale } from "@finance-pro/web/components/i18n/core";
+import { financeRemindersCopy } from "@finance-pro/web/components/i18n/reminders";
 
 export function FinanceReminders({
   botId,

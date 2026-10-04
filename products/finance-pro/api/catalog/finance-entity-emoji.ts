@@ -1,6 +1,6 @@
 import type { ResolvedEmoji } from '@telegram-system/shared';
-import { storedTelegramIconPresentation } from '../../../../telegram/shared/telegram-bot-icon-source';
-import { renderTelegramCustomEmojiToken } from '../../../../telegram/shared/telegram-custom-emoji-markup';
+import { storedTelegramIconPresentation } from '@api/telegram/shared/bot/telegram-bot-icon-source';
+import { renderTelegramCustomEmojiToken } from '@api/telegram/shared/markup/telegram-custom-emoji-markup';
 
 export const FINANCE_EMOJI_CHOICES = [
   '💵',

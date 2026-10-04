@@ -1,5 +1,5 @@
 import { Prisma } from '@prisma/client';
-import { financeInvestmentView } from './finance-investment-view';
+import { financeInvestmentView } from '@finance-pro/api/investments/finance-investment-view';
 
 function row(invested: string, returned: string, value: string) {
   const now = new Date('2026-09-08T00:00:00.000Z');

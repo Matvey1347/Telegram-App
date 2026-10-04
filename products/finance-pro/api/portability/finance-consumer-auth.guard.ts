@@ -1,7 +1,7 @@
 import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
 import type { Request } from 'express';
-import type { FinanceConsumerSession } from '../identity/finance-consumer-session.service';
-import { FinanceConsumerRequestService } from '../http/finance-consumer-request.service';
+import type { FinanceConsumerSession } from '@finance-pro/api/identity/finance-consumer-session.service';
+import { FinanceConsumerRequestService } from '@finance-pro/api/http/finance-consumer-request.service';
 
 export type FinanceImportRequest = Request & {
   financeConsumerSession: FinanceConsumerSession;

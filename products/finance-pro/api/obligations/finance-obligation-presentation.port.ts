@@ -1,5 +1,5 @@
-import type { TelegramBotMessage } from '../../../../telegram/shared/telegram-bot-message';
-import type { FinanceChatLocale } from '../i18n/finance-chat-i18n';
+import type { TelegramBotMessage } from '@api/telegram/shared/bot/telegram-bot-message';
+import type { FinanceChatLocale } from '@finance-pro/api/i18n/finance-chat-i18n';
 
 export const FINANCE_OBLIGATION_PRESENTATION = Symbol(
   'FINANCE_OBLIGATION_PRESENTATION',

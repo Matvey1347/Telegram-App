@@ -4,7 +4,7 @@ import {
   GreeterJoinRequestStatus,
   GreeterUserState,
 } from '@prisma/client';
-import { GreeterBroadcastAudienceService } from './greeter-broadcast-audience.service';
+import { GreeterBroadcastAudienceService } from '@greeter/api/broadcast/greeter-broadcast-audience.service';
 
 describe('GreeterBroadcastAudienceService', () => {
   it('uses the same exact deliverable acquisition predicate for estimate/materialization', async () => {

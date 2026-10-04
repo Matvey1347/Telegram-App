@@ -3,7 +3,7 @@ import {
   managedPostRequiresBotApi,
   selectManagedPostPublishingSource,
 } from './managed-post-publishing-source';
-import { isRevokedTelegramSessionError } from '../../../telegram/shared/telegram-session-errors';
+import { isRevokedTelegramSessionError } from '@api/telegram/shared/mtproto/telegram-session-errors';
 
 const source = (sourceId: string, sourceType: TelegramSourceType) => ({
   sourceId,

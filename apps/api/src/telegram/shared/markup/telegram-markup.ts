@@ -1,5 +1,5 @@
-import { parseTelegramSpoilers } from './telegram-spoilers';
-import { parseTelegramCustomEmojiTokens } from './telegram-custom-emoji-markup';
+import { parseTelegramSpoilers } from '@api/telegram/shared/markup/telegram-spoilers';
+import { parseTelegramCustomEmojiTokens } from '@api/telegram/shared/markup/telegram-custom-emoji-markup';
 import { parseTelegramTableCellMarkup } from '@telegram-system/shared/telegram-table-markup';
 import { normalizeTelegramManagedFormattingRuns } from '@telegram-system/shared';
 

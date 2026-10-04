@@ -1,6 +1,6 @@
 import { CURRENCIES, currencyPresentation } from "@telegram-system/shared";
-import { Select } from "./finance-controls";
-import type { FinanceLocale } from "../i18n/core";
+import { Select } from "@finance-pro/web/components/ui/finance-controls";
+import type { FinanceLocale } from "@finance-pro/web/components/i18n/core";
 
 export function FinanceCurrencySelect({
   value,

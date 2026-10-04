@@ -2,7 +2,7 @@ import type { TelegramBotApplicationType } from '@prisma/client';
 import type {
   TelegramBotCommand,
   TelegramChatMenuButton,
-} from '../../../../telegram/shared/telegram-bot-api.client';
+} from '@api/telegram/shared/bot/telegram-bot-api.client';
 import type { TelegramBotApplicationContext } from './telegram-bot-update.types';
 
 export const TELEGRAM_BOT_GREETER_HANDLER = Symbol(

@@ -5,30 +5,30 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { CurrencyConversionService } from '../../../../common/currency-conversion.service';
-import { PrismaService } from '../../../../prisma/prisma.service';
+import { CurrencyConversionService } from '@api/common/currency-conversion.service';
+import { PrismaService } from '@api/prisma/prisma.service';
 import {
   assertFinanceIdempotency,
   financeRequestFingerprint,
-} from '../assets/finance-asset-idempotency';
-import { FinanceLedgerService } from '../ledger/finance-ledger.service';
-import { financeValuationSnapshot } from '../ledger/finance-transaction-valuation';
+} from '@finance-pro/api/assets/finance-asset-idempotency';
+import { FinanceLedgerService } from '@finance-pro/api/ledger/finance-ledger.service';
+import { financeValuationSnapshot } from '@finance-pro/api/ledger/finance-transaction-valuation';
 import type {
   FinanceInvestmentCashFlowDto,
   FinanceInvestmentCloseDto,
   FinanceInvestmentInputDto,
   FinanceInvestmentUpdateDto,
   FinanceInvestmentValuationDto,
-} from './finance-investment.dto';
-import { FinanceInvestmentReadService } from './finance-investment-read.service';
+} from '@finance-pro/api/investments/finance-investment.dto';
+import { FinanceInvestmentReadService } from '@finance-pro/api/investments/finance-investment-read.service';
 import {
   financeInvestmentCashFlowSelect,
   financeInvestmentCashFlowView,
   financeInvestmentValuationSelect,
   financeInvestmentValuationView,
-} from './finance-investment-view';
-import { FinanceInvestmentValuationService } from './finance-investment-valuation.service';
-import { FinanceInvestmentCashFlowService } from './finance-investment-cash-flow.service';
+} from '@finance-pro/api/investments/finance-investment-view';
+import { FinanceInvestmentValuationService } from '@finance-pro/api/investments/finance-investment-valuation.service';
+import { FinanceInvestmentCashFlowService } from '@finance-pro/api/investments/finance-investment-cash-flow.service';
 
 type InvestmentWriteRow = {
   currency: string;

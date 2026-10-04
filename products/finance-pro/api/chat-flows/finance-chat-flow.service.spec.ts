@@ -1,4 +1,4 @@
-import { FinanceChatFlowService } from './finance-chat-flow.service';
+import { FinanceChatFlowService } from '@finance-pro/api/chat-flows/finance-chat-flow.service';
 
 describe('FinanceChatFlowService', () => {
   const future = new Date(Date.now() + 60_000);

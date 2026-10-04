@@ -4,8 +4,8 @@ import { PrismaService } from '../../../prisma/prisma.service';
 import {
   type ResolvedTelegramEntity,
   type TelegramImportInput,
-} from '../../../telegram/shared/telegram-import.helpers';
-import { TelegramMtprotoClient } from '../../../telegram/shared/telegram-mtproto.client';
+} from '@api/telegram/shared/imports/telegram-import.helpers';
+import { TelegramMtprotoClient } from '@api/telegram/shared/mtproto/telegram-mtproto.client';
 import { TelegramBroadcastStatsService } from './telegram-broadcast-stats.service';
 import { TelegramChannelAccessService } from './telegram-channel-access.service';
 import { TelegramChannelCatalogService } from './telegram-channel-catalog.service';
@@ -16,7 +16,7 @@ import { TelegramPostMetricsService } from './telegram-post-metrics.service';
 import {
   isRevokedTelegramSessionError,
   REVOKED_TELEGRAM_SESSION_MESSAGE,
-} from '../../../telegram/shared/telegram-session-errors';
+} from '@api/telegram/shared/mtproto/telegram-session-errors';
 
 @Injectable()
 export class TelegramChannelImportPreparationService {

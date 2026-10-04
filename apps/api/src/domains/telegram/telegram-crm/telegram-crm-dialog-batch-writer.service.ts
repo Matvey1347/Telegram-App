@@ -6,7 +6,7 @@ import type {
   TelegramCrmMtprotoCheckpoint,
   TelegramCrmMtprotoDialog,
   TelegramCrmMtprotoDialogFolder,
-} from '../../../telegram/shared/telegram-crm-mtproto.types';
+} from '@api/telegram/shared/mtproto/telegram-crm-mtproto.types';
 import { TelegramCrmMessageBatchWriter } from './telegram-crm-message-batch-writer.service';
 import { TelegramCrmSystemTagsService } from './telegram-crm-system-tags.service';
 

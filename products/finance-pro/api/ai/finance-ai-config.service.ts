@@ -1,8 +1,8 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { FinanceAiConnectionStatus, FinanceAiProvider, WorkspaceRole, type AiProviderConfig } from '@prisma/client';
-import { TokenEncryptionService } from '../../../../common/security/token-encryption.service';
-import { WorkspaceService } from '../../../../common/workspace.service';
-import { PrismaService } from '../../../../prisma/prisma.service';
+import { TokenEncryptionService } from '@api/common/security/token-encryption.service';
+import { WorkspaceService } from '@api/common/workspace.service';
+import { PrismaService } from '@api/prisma/prisma.service';
 
 const VALIDATION_MODEL = 'gpt-5-mini';
 

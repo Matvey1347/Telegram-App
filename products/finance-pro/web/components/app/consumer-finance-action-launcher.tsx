@@ -8,8 +8,8 @@ import {
   Plus,
   X,
 } from "lucide-react";
-import type { FinanceCoreCopy } from "./i18n/core";
-import type { ConsumerFinanceAction } from "./consumer-finance-navigation";
+import type { FinanceCoreCopy } from "@finance-pro/web/components/i18n/core";
+import type { ConsumerFinanceAction } from "@finance-pro/web/components/app/consumer-finance-navigation";
 
 export function ConsumerFinanceActionLauncher({
   copy,

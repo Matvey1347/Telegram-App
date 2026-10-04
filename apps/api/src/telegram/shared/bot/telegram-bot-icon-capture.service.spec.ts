@@ -2,7 +2,7 @@ import {
   storedTelegramIconPresentation,
   TelegramBotIconCaptureService,
   telegramIconSourceFromText,
-} from './telegram-bot-icon-capture.service';
+} from '@api/telegram/shared/bot/telegram-bot-icon-capture.service';
 
 describe('Telegram bot icon capture', () => {
   it('captures one unicode emoji and rejects ordinary text', () => {

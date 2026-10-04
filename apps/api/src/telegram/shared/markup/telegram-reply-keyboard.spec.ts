@@ -1,4 +1,4 @@
-import { createCollapsibleReplyKeyboard } from './telegram-reply-keyboard';
+import { createCollapsibleReplyKeyboard } from '@api/telegram/shared/markup/telegram-reply-keyboard';
 
 describe('createCollapsibleReplyKeyboard', () => {
   it('keeps a resizable keyboard available without making it persistent', () => {

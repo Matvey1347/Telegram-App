@@ -1,7 +1,7 @@
 "use client";
 
 import type { ConsumerFinanceExpenseNecessity } from "@telegram-system/shared";
-import type { FinanceLocale } from "../i18n/core";
+import type { FinanceLocale } from "@finance-pro/web/components/i18n/core";
 
 const copy = {
   en: {

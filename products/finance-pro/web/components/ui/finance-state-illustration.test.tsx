@@ -7,8 +7,8 @@ import {
   SavingState,
   SyncingState,
   WaitingState,
-} from "./finance-surfaces";
-import { FinanceVisualContextProvider } from "./finance-visual-context";
+} from "@finance-pro/web/components/ui/finance-surfaces";
+import { FinanceVisualContextProvider } from "@finance-pro/web/components/ui/finance-visual-context";
 
 describe("Finance state illustration system", () => {
   const contexts = [

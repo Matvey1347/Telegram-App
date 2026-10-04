@@ -5,12 +5,12 @@ import {
 } from '@nestjs/common';
 import { FinanceProposalStatus, Prisma } from '@prisma/client';
 import { createHash, randomBytes } from 'crypto';
-import { PrismaService } from '../../../../prisma/prisma.service';
+import { PrismaService } from '@api/prisma/prisma.service';
 import {
   DEFAULT_FINANCE_CATEGORIES,
   FINANCE_PROPOSAL_TTL_MS,
-} from '../catalog/finance-defaults';
-import { FinanceLedgerService } from '../ledger/finance-ledger.service';
+} from '@finance-pro/api/catalog/finance-defaults';
+import { FinanceLedgerService } from '@finance-pro/api/ledger/finance-ledger.service';
 
 type ProposalPayload = {
   type: 'INCOME' | 'EXPENSE';

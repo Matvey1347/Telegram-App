@@ -1,8 +1,8 @@
 import type { InternalAxiosRequestConfig } from "axios";
 import { afterEach, describe, expect, it } from "vitest";
-import { consumerFinanceHttp } from "./consumer-finance-http";
-import { consumerFinanceSavingsGoalsApi } from "./consumer-finance-savings-goals-api";
-import { consumerFinanceInvestmentsApi } from "./consumer-finance-investments-api";
+import { consumerFinanceHttp } from "@finance-pro/web/lib/api/consumer-finance-http";
+import { consumerFinanceSavingsGoalsApi } from "@finance-pro/web/lib/api/consumer-finance-savings-goals-api";
+import { consumerFinanceInvestmentsApi } from "@finance-pro/web/lib/api/consumer-finance-investments-api";
 
 const originalAdapter = consumerFinanceHttp.defaults.adapter;
 afterEach(() => {

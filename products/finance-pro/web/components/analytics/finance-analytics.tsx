@@ -2,15 +2,15 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ConsumerFinanceAnalyticsQuery } from "@telegram-system/shared";
-import { Button, Card, ErrorState, LoadingState } from "./ui";
-import { consumerFinanceApi } from "@/lib/features/finance/consumer-finance-api";
-import { consumerFinanceKeys } from "@/lib/features/finance/consumer-finance-query-keys";
-import { type FinanceLocale } from "./i18n/core";
-import { financeAnalyticsCopy } from "./i18n/analytics";
-import { FinanceAnalyticsAi } from "./finance-analytics-ai";
-import { AnalyticsPresentation } from "./finance-analytics-presentation";
-import { FinancePeriodSelector } from "./finance-period-selector";
-import { FinanceAnalyticsSkeleton } from "./finance-analytics-skeleton";
+import { Button, Card, ErrorState, LoadingState } from "@finance-pro/web/components/ui";
+import { consumerFinanceApi } from "@finance-pro/web/lib/api/consumer-finance-api";
+import { consumerFinanceKeys } from "@finance-pro/web/lib/query/consumer-finance-query-keys";
+import { type FinanceLocale } from "@finance-pro/web/components/i18n/core";
+import { financeAnalyticsCopy } from "@finance-pro/web/components/i18n/analytics";
+import { FinanceAnalyticsAi } from "@finance-pro/web/components/analytics/finance-analytics-ai";
+import { AnalyticsPresentation } from "@finance-pro/web/components/analytics/finance-analytics-presentation";
+import { FinancePeriodSelector } from "@finance-pro/web/components/planning/finance-period-selector";
+import { FinanceAnalyticsSkeleton } from "@finance-pro/web/components/analytics/finance-analytics-skeleton";
 
 export function FinanceAnalytics({
   botId,

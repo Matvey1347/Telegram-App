@@ -2,17 +2,17 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { ConsumerFinanceProfile } from "@telegram-system/shared";
-import { FinanceSettings } from "./finance-settings";
+import { FinanceSettings } from "@finance-pro/web/components/profile/finance-settings";
 
 const planning = vi.hoisted(() => ({ updateSettings: vi.fn() }));
 const auth = vi.hoisted(() => ({ logout: vi.fn() }));
-vi.mock("@/lib/features/finance/consumer-finance-profile-api", () => ({
+vi.mock("@finance-pro/web/lib/api/consumer-finance-profile-api", () => ({
   consumerFinanceProfileApi: planning,
 }));
-vi.mock("@/lib/features/finance/consumer-finance-auth-api", () => ({
+vi.mock("@finance-pro/web/lib/api/consumer-finance-auth-api", () => ({
   consumerFinanceAuthApi: auth,
 }));
-vi.mock("./finance-privacy", () => ({
+vi.mock("@finance-pro/web/components/profile/finance-privacy", () => ({
   FinancePrivacy: () => <div>Privacy controls</div>,
 }));
 

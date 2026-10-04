@@ -18,18 +18,18 @@ import {
   Input,
   Modal,
   Select,
-} from "./ui";
-import { consumerFinanceApi } from "@/lib/features/finance/consumer-finance-api";
-import { consumerFinanceObligationsApi } from "@/lib/features/finance/consumer-finance-obligations-api";
-import { consumerFinanceKeys } from "@/lib/features/finance/consumer-finance-query-keys";
+} from "@finance-pro/web/components/ui";
+import { consumerFinanceApi } from "@finance-pro/web/lib/api/consumer-finance-api";
+import { consumerFinanceObligationsApi } from "@finance-pro/web/lib/api/consumer-finance-obligations-api";
+import { consumerFinanceKeys } from "@finance-pro/web/lib/query/consumer-finance-query-keys";
 import {
   financeCalendarDate,
   financeOccurredAtForDate,
   financeToday,
-} from "@/lib/features/finance/consumer-finance-date";
-import { type FinanceLocale } from "./i18n/core";
-import { financeTransactionsCopy } from "./i18n/transactions";
-import { localizeFinanceCategory } from "./finance-category-i18n";
+} from "@finance-pro/web/lib/formatters/consumer-finance-date";
+import { type FinanceLocale } from "@finance-pro/web/components/i18n/core";
+import { financeTransactionsCopy } from "@finance-pro/web/components/i18n/transactions";
+import { localizeFinanceCategory } from "@finance-pro/web/components/catalog/finance-category-i18n";
 
 type TransactionMeaning = ConsumerFinanceTransactionPurpose | "SHARED_EXPENSE";
 

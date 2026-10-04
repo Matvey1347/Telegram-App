@@ -4,16 +4,16 @@ import {
   TelegramManagedPostStatus,
   TelegramSourceType,
 } from '@prisma/client';
-import { TelegramBotApiClient } from '../../../telegram/shared/telegram-bot-api.client';
-import { parseTelegramHtml } from '../../../telegram/shared/telegram-html-parser';
+import { TelegramBotApiClient } from '@api/telegram/shared/bot/telegram-bot-api.client';
+import { parseTelegramHtml } from '@api/telegram/shared/markup/telegram-html-parser';
 import {
   normalizeTelegramPostButtonRows,
   toTelegramBotInlineKeyboard,
-} from '../../../telegram/shared/telegram-inline-keyboard';
-import { telegramHtmlToMtprotoHtml } from '../../../telegram/shared/telegram-markup';
-import { TelegramMtprotoClient } from '../../../telegram/shared/telegram-mtproto.client';
-import { parseTelegramPostUrl } from '../../../telegram/shared/telegram-post-url';
-import { TelegramSourceAccessService } from '../../../telegram/shared/telegram-source-access.service';
+} from '@api/telegram/shared/markup/telegram-inline-keyboard';
+import { telegramHtmlToMtprotoHtml } from '@api/telegram/shared/markup/telegram-markup';
+import { TelegramMtprotoClient } from '@api/telegram/shared/mtproto/telegram-mtproto.client';
+import { parseTelegramPostUrl } from '@api/telegram/shared/imports/telegram-post-url';
+import { TelegramSourceAccessService } from '@api/telegram/shared/imports/telegram-source-access.service';
 import { TelegramChannelAccessService } from './telegram-channel-access.service';
 import { TelegramChannelsSupportService } from './telegram-channels-support.service';
 import { telegramPostsBadRequest } from './telegram-posts.errors';

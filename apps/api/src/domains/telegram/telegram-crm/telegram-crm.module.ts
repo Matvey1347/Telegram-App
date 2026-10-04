@@ -14,7 +14,7 @@ import { TelegramCrmPeerService } from './telegram-crm-peer.service';
 import { TelegramCrmSettingsService } from './telegram-crm-settings.service';
 import { TelegramCrmSyncStateService } from './telegram-crm-sync-state.service';
 import { TelegramCrmLegacyAuthorizationService } from './telegram-crm-legacy-authorization.service';
-import { TelegramCrmMtprotoAdapter } from '../../../telegram/shared/telegram-crm-mtproto.adapter';
+import { TelegramCrmMtprotoAdapter } from '@api/telegram/shared/mtproto/telegram-crm-mtproto.adapter';
 import { TelegramCrmAccountSessionService } from './telegram-crm-account-session.service';
 import { TelegramCrmBatchStoreService } from './telegram-crm-batch-store.service';
 import { TelegramCrmDialogBatchWriter } from './telegram-crm-dialog-batch-writer.service';

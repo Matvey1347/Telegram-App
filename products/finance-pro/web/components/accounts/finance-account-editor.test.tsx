@@ -2,18 +2,18 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConsumerFinanceAccount } from "@telegram-system/shared";
-import { consumerFinanceKeys } from "@/lib/features/finance/consumer-finance-query-keys";
+import { consumerFinanceKeys } from "@finance-pro/web/lib/query/consumer-finance-query-keys";
 import {
   FinanceAccountEditor,
   FinanceAccountEditorScreen,
-} from "./finance-account-editor";
+} from "@finance-pro/web/components/accounts/finance-account-editor";
 
 const api = vi.hoisted(() => ({
   accounts: vi.fn(),
   createAccount: vi.fn(),
   updateAccount: vi.fn(),
 }));
-vi.mock("@/lib/features/finance/consumer-finance-ledger-api", () => ({
+vi.mock("@finance-pro/web/lib/api/consumer-finance-ledger-api", () => ({
   consumerFinanceLedgerApi: api,
 }));
 

@@ -4,7 +4,7 @@ import {
   TelegramCrmMessageOrigin,
   TelegramCrmReadState,
 } from '@prisma/client';
-import type { TelegramCrmMtprotoMessage } from '../../../telegram/shared/telegram-crm-mtproto.types';
+import type { TelegramCrmMtprotoMessage } from '@api/telegram/shared/mtproto/telegram-crm-mtproto.types';
 import { OperationsNotificationPublisherService } from '../../operations/notifications/operations-notification-publisher.service';
 import { ResponseCacheService } from '../../../common/response-cache.service';
 import { TelegramCrmEventHub } from './telegram-crm-event-hub.service';

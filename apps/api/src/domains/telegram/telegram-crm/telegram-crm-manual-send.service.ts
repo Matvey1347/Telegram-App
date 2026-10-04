@@ -24,8 +24,8 @@ import {
 } from './telegram-crm-read-model.mapper';
 import { TelegramCrmRuntimeManager } from './telegram-crm-runtime-manager.service';
 import { isPrismaUniqueConflict } from './telegram-crm-prisma-errors';
-import { telegramMarkupToHtml } from '../../../telegram/shared/telegram-markup';
-import { parseTelegramHtml } from '../../../telegram/shared/telegram-html-parser';
+import { telegramMarkupToHtml } from '@api/telegram/shared/markup/telegram-markup';
+import { parseTelegramHtml } from '@api/telegram/shared/markup/telegram-html-parser';
 import { ResponseCacheService } from '../../../common/response-cache.service';
 
 const crmManualMessageSelect = {

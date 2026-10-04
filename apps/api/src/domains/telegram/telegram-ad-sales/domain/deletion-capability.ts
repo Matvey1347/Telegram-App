@@ -1,7 +1,7 @@
 import {
   preflightTelegramDeletionCapability,
   TELEGRAM_BOT_DELETE_LIMIT_HOURS,
-} from '../../../../telegram/shared/telegram-deletion-policy';
+} from '@api/telegram/shared/core/telegram-deletion-policy';
 
 export { TELEGRAM_BOT_DELETE_LIMIT_HOURS };
 

@@ -1,6 +1,6 @@
 import { render } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { FinancePlanVisual } from "./finance-plan-visual";
+import { FinancePlanVisual } from "@finance-pro/web/components/planning/finance-plan-visual";
 
 describe("FinancePlanVisual", () => {
   it.each([

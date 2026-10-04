@@ -7,9 +7,9 @@ import {
 import { randomUUID } from 'node:crypto';
 import { notifyScheduledTaskDueWorkChanged } from '../../../common/scheduled-task-wake-notifier';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { TelegramSourceAccessService } from '../../../telegram/shared/telegram-source-access.service';
-import { requiresNativeTelegramRichMessage } from '../../../telegram/shared/telegram-markup';
-import { normalizeTelegramPostButtonRows } from '../../../telegram/shared/telegram-inline-keyboard';
+import { TelegramSourceAccessService } from '@api/telegram/shared/imports/telegram-source-access.service';
+import { requiresNativeTelegramRichMessage } from '@api/telegram/shared/markup/telegram-markup';
+import { normalizeTelegramPostButtonRows } from '@api/telegram/shared/markup/telegram-inline-keyboard';
 import { managedPostRequiresBotApi } from './managed-post-publishing-source';
 import { SYSTEM_BOT_POSTS_GROUP_KEY } from './telegram-channels.internal';
 import {

@@ -1,4 +1,4 @@
-import type { AnyRow, ImportSection } from './finance-import-validation';
+import type { AnyRow, ImportSection } from '@finance-pro/api/portability/finance-import-validation';
 import { Prisma } from '@prisma/client';
 import {
   currency,
@@ -13,7 +13,7 @@ import {
   signedDecimal,
   text,
   validateReferenceGraph,
-} from './finance-import-validation';
+} from '@finance-pro/api/portability/finance-import-validation';
 
 type ImportData = Record<ImportSection, AnyRow[]>;
 

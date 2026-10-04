@@ -4,7 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { GreeterAutomationEnvironment } from '@prisma/client';
-import { GreeterConfigurationService } from './greeter-configuration.service';
+import { GreeterConfigurationService } from '@greeter/api/configuration/greeter-configuration.service';
 
 describe('GreeterConfigurationService', () => {
   const global = {

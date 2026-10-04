@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { GreeterChannelView } from "@telegram-system/shared";
 import { describe, expect, it, vi } from "vitest";
-import { CreateGreeterAutomationModal } from "./greeter-create-automation-modal";
+import { CreateGreeterAutomationModal } from "@greeter/web/components/automation/greeter-create-automation-modal";
 
 describe("CreateGreeterAutomationModal", () => {
   it("creates a channel-scoped automation only after a channel is selected", async () => {

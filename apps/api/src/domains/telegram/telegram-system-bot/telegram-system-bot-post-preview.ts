@@ -1,5 +1,5 @@
-import { toTelegramBotInlineKeyboard } from '../../../telegram/shared/telegram-inline-keyboard';
-import { telegramMarkupToHtml } from '../../../telegram/shared/telegram-markup';
+import { toTelegramBotInlineKeyboard } from '@api/telegram/shared/markup/telegram-inline-keyboard';
+import { telegramMarkupToHtml } from '@api/telegram/shared/markup/telegram-markup';
 import type { TelegramSystemBotCapturedPostContent } from './telegram-system-bot-post-flow.types';
 import { normalizeTelegramPostMediaItems } from '@telegram-system/shared';
 

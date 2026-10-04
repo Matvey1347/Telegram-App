@@ -5,8 +5,8 @@ import {
 } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { normalizeTelegramPostMediaItems } from '@telegram-system/shared';
-import { requiresNativeTelegramRichMessage } from '../../../telegram/shared/telegram-markup';
-import { TelegramSourceAccessService } from '../../../telegram/shared/telegram-source-access.service';
+import { requiresNativeTelegramRichMessage } from '@api/telegram/shared/markup/telegram-markup';
+import { TelegramSourceAccessService } from '@api/telegram/shared/imports/telegram-source-access.service';
 import { preflightTelegramAdDeletionCapability } from './domain/deletion-capability';
 
 type DeletionFormat = {

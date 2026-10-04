@@ -1,18 +1,18 @@
-import { TelegramBotInteractiveReplyService } from '../../../../telegram/shared/telegram-bot-interactive-reply.service';
-import { telegramMarkupToHtml } from '../../../../telegram/shared/telegram-markup';
-import type { TelegramBotApplicationContext } from '../core/telegram-bot-update.types';
-import { FinanceBotChatResponderService } from './finance-bot-chat-responder.service';
-import { FinanceChatFlowPresenterService } from '../../consumer-finance/chat-flows/finance-chat-flow-presenter.service';
-import { FinanceBotIconInputService } from './finance-bot-icon-input.service';
+import { TelegramBotInteractiveReplyService } from '@api/telegram/shared/bot/telegram-bot-interactive-reply.service';
+import { telegramMarkupToHtml } from '@api/telegram/shared/markup/telegram-markup';
+import type { TelegramBotApplicationContext } from '@api/domains/telegram/telegram-bots/core/telegram-bot-update.types';
+import { FinanceBotChatResponderService } from '@finance-pro/bot/finance-bot-chat-responder.service';
+import { FinanceChatFlowPresenterService } from '@finance-pro/api/chat-flows/finance-chat-flow-presenter.service';
+import { FinanceBotIconInputService } from '@finance-pro/bot/finance-bot-icon-input.service';
 import {
   FinanceChatFlowService,
   type AccountFlowResult,
   type FinanceFlowResult,
-} from '../../consumer-finance/chat-flows/finance-chat-flow.service';
+} from '@finance-pro/api/chat-flows/finance-chat-flow.service';
 import {
   financeChatLocale,
   t,
-} from '../../consumer-finance/i18n/finance-chat-i18n';
+} from '@finance-pro/api/i18n/finance-chat-i18n';
 
 export class FinanceBotFlowMessenger {
   constructor(

@@ -3,9 +3,9 @@ import type { ConsumerFinanceImportDocumentV1 } from '@telegram-system/shared';
 import type {
   CurrencyConversionService,
   PreparedCurrencyRateSource,
-} from '../../../../common/currency-conversion.service';
-import { financeRateDateForWrite } from '../ledger/finance-transaction-valuation';
-import type { HistoricalExchangeRateService } from '../../../../common/historical-exchange-rate.service';
+} from '@api/common/currency-conversion.service';
+import { financeRateDateForWrite } from '@finance-pro/api/ledger/finance-transaction-valuation';
+import type { HistoricalExchangeRateService } from '@api/common/historical-exchange-rate.service';
 
 type RateValue = { rate: string; rateAt: Date };
 

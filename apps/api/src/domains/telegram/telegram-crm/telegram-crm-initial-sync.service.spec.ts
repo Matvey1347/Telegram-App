@@ -1,7 +1,7 @@
 import type {
   TelegramCrmMtprotoDialog,
   TelegramCrmMtprotoHandle,
-} from '../../../telegram/shared/telegram-crm-mtproto.types';
+} from '@api/telegram/shared/mtproto/telegram-crm-mtproto.types';
 import { TelegramCrmInitialSyncService } from './telegram-crm-initial-sync.service';
 
 type ListPrivateDialogs = TelegramCrmMtprotoHandle['listPrivateDialogs'];

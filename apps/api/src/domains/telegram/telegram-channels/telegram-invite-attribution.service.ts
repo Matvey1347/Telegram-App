@@ -3,7 +3,7 @@ import { PrismaService } from '../../../prisma/prisma.service';
 import {
   attributeInviteLinkCreator,
   buildInviteLinkAttributionMaps,
-} from '../../../telegram/shared/telegram-invite-link-attribution';
+} from '@api/telegram/shared/invites/telegram-invite-link-attribution';
 
 @Injectable()
 export class TelegramInviteAttributionService {

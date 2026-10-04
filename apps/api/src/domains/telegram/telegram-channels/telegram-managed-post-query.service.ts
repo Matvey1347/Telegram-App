@@ -5,7 +5,7 @@ import {
   normalizePagination,
 } from '../../../common/pagination/pagination.utils';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { parseTelegramPostUrl } from '../../../telegram/shared/telegram-post-url';
+import { parseTelegramPostUrl } from '@api/telegram/shared/imports/telegram-post-url';
 import { TelegramManagedPostsQueryDto } from './dto';
 import { TelegramChannelCatalogService } from './telegram-channel-catalog.service';
 import { TelegramChannelsSupportService } from './telegram-channels-support.service';

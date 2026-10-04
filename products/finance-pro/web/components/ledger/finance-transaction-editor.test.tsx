@@ -5,17 +5,17 @@ import type {
   ConsumerFinanceAccount,
   ConsumerFinanceTransaction,
 } from "@telegram-system/shared";
-import { consumerFinanceApi } from "@/lib/features/finance/consumer-finance-api";
-import { FinanceTransactionEditor } from "./finance-transaction-editor";
-import { consumerFinanceObligationsApi } from "@/lib/features/finance/consumer-finance-obligations-api";
+import { consumerFinanceApi } from "@finance-pro/web/lib/api/consumer-finance-api";
+import { FinanceTransactionEditor } from "@finance-pro/web/components/ledger/finance-transaction-editor";
+import { consumerFinanceObligationsApi } from "@finance-pro/web/lib/api/consumer-finance-obligations-api";
 
-vi.mock("@/lib/features/finance/consumer-finance-api", () => ({
+vi.mock("@finance-pro/web/lib/api/consumer-finance-api", () => ({
   consumerFinanceApi: {
     createTransaction: vi.fn(),
     updateTransaction: vi.fn(),
   },
 }));
-vi.mock("@/lib/features/finance/consumer-finance-obligations-api", () => ({
+vi.mock("@finance-pro/web/lib/api/consumer-finance-obligations-api", () => ({
   consumerFinanceObligationsApi: { createSharedExpense: vi.fn() },
 }));
 

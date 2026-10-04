@@ -3,16 +3,16 @@ import type { Prisma } from '@prisma/client';
 import {
   TELEGRAM_BOT_DELIVERY_WRITER,
   type TelegramBotDeliveryWriterPort,
-} from '../../../telegram-bots/core/telegram-bot-delivery-writer';
+} from '@api/domains/telegram/telegram-bots/core/telegram-bot-delivery-writer';
 import {
   FINANCE_OBLIGATION_PRESENTATION,
   type FinanceObligationPresentationPort,
-} from '../finance-obligation-presentation.port';
+} from '@finance-pro/api/obligations/finance-obligation-presentation.port';
 import {
   financeObligationDeliveryTarget,
   type FinanceObligationProfile,
-} from '../finance-obligation-context';
-import type { FinanceRegularPaymentRow } from './finance-regular-payment-write';
+} from '@finance-pro/api/obligations/finance-obligation-context';
+import type { FinanceRegularPaymentRow } from '@finance-pro/api/obligations/regular-payments/finance-regular-payment-write';
 
 @Injectable()
 export class FinanceRegularPaymentDeliveryService {

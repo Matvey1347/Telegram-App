@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { GreeterDelayInput, preferredDelayUnit } from "./greeter-delay-input";
+import { GreeterDelayInput, preferredDelayUnit } from "@greeter/web/components/shared/greeter-delay-input";
 
 describe("GreeterDelayInput", () => {
   it("chooses readable units and persists a normalized integer duration", async () => {

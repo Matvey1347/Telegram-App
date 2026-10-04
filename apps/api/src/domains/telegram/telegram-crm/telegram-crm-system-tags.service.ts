@@ -9,7 +9,7 @@ import { PrismaService } from '../../../prisma/prisma.service';
 import type {
   TelegramCrmMtprotoDialog,
   TelegramCrmMtprotoDialogFolder,
-} from '../../../telegram/shared/telegram-crm-mtproto.types';
+} from '@api/telegram/shared/mtproto/telegram-crm-mtproto.types';
 
 type DbClient = PrismaService | Prisma.TransactionClient;
 

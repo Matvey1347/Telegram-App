@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { IconPicker } from "./finance-icon-picker";
+import { IconPicker } from "@finance-pro/web/components/ui/finance-icon-picker";
 
 const api = vi.hoisted(() => ({
   customIcons: vi.fn(),
@@ -9,7 +9,7 @@ const api = vi.hoisted(() => ({
   saveCustomIcon: vi.fn(),
 }));
 
-vi.mock("@/lib/features/finance/consumer-finance-ledger-api", () => ({
+vi.mock("@finance-pro/web/lib/api/consumer-finance-ledger-api", () => ({
   consumerFinanceLedgerApi: api,
 }));
 

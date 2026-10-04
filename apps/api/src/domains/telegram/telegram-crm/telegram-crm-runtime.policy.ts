@@ -2,7 +2,7 @@ import type {
   TelegramCrmMtprotoCheckpoint,
   TelegramCrmMtprotoHandle,
   TelegramCrmMtprotoUpdate,
-} from '../../../telegram/shared/telegram-crm-mtproto.types';
+} from '@api/telegram/shared/mtproto/telegram-crm-mtproto.types';
 import type { CrmRuntimeAccount } from './telegram-crm-account-session.service';
 
 export const CRM_RUNTIME_POLICY = {

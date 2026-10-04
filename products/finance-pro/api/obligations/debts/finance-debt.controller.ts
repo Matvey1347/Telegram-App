@@ -14,9 +14,9 @@ import {
   FinanceDebtQueryDto,
   FinanceDebtSettlementDto,
   FinanceSharedExpenseInputDto,
-} from '../finance-obligation.dto';
-import { FinanceConsumerRequestService } from '../../http/finance-consumer-request.service';
-import { FinanceDebtService } from './finance-debt.service';
+} from '@finance-pro/api/obligations/finance-obligation.dto';
+import { FinanceConsumerRequestService } from '@finance-pro/api/http/finance-consumer-request.service';
+import { FinanceDebtService } from '@finance-pro/api/obligations/debts/finance-debt.service';
 
 @Controller('finance-bots/:botId/debts')
 export class FinanceDebtController {

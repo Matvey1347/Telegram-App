@@ -3,7 +3,7 @@ import {
   consumerFinanceImportExampleV1,
   type ConsumerFinanceImportDocumentV1,
 } from '@telegram-system/shared';
-import { validateFinanceImportDocument } from './finance-import-validator';
+import { validateFinanceImportDocument } from '@finance-pro/api/portability/finance-import-validator';
 
 function completeDocument(): ConsumerFinanceImportDocumentV1 {
   return {

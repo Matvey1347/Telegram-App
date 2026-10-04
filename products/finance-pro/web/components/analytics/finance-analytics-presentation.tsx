@@ -3,13 +3,13 @@
 import { useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import type { ConsumerFinanceAnalytics } from "@telegram-system/shared";
-import { EmptyState } from "./ui";
-import { formatMoney } from "@/lib/features/finance/consumer-finance-money";
-import type { FinanceLocale } from "./i18n/core";
-import { financeAnalyticsCopy } from "./i18n/analytics";
-import { localizeFinanceCategory } from "./finance-category-i18n";
-import { IconAvatar } from "./ui/finance-icon-avatar";
-import { CashflowChart } from "./finance-cashflow-chart";
+import { EmptyState } from "@finance-pro/web/components/ui";
+import { formatMoney } from "@finance-pro/web/lib/formatters/consumer-finance-money";
+import type { FinanceLocale } from "@finance-pro/web/components/i18n/core";
+import { financeAnalyticsCopy } from "@finance-pro/web/components/i18n/analytics";
+import { localizeFinanceCategory } from "@finance-pro/web/components/catalog/finance-category-i18n";
+import { IconAvatar } from "@finance-pro/web/components/ui/finance-icon-avatar";
+import { CashflowChart } from "@finance-pro/web/components/analytics/finance-cashflow-chart";
 
 export function AnalyticsPresentation({
   data,

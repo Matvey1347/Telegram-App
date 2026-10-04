@@ -2,7 +2,7 @@ import {
   maskTelegramInviteHash,
   maskTelegramInviteUrl,
   maskTelegramReferenceForLog,
-} from './telegram-invite-log';
+} from '@api/telegram/shared/invites/telegram-invite-log';
 
 describe('Telegram invite log redaction', () => {
   it('masks invite hashes without retaining the complete bearer value', () => {

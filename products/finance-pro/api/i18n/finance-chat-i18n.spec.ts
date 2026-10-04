@@ -1,4 +1,4 @@
-import { financeChatLocale, financeChatTranslations, normalizeFinanceLocale } from './finance-chat-i18n';
+import { financeChatLocale, financeChatTranslations, normalizeFinanceLocale } from '@finance-pro/api/i18n/finance-chat-i18n';
 
 describe('Finance chat locale', () => {
   it.each([['uk-UA', 'uk'], ['ru_RU', 'ru'], ['en-US', 'en'], ['de-DE', 'en']])(

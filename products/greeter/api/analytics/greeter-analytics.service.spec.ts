@@ -1,4 +1,4 @@
-import { GreeterAnalyticsService } from './greeter-analytics.service';
+import { GreeterAnalyticsService } from '@greeter/api/analytics/greeter-analytics.service';
 
 describe('GreeterAnalyticsService', () => {
   it('scopes channel/state user predicates to the admin workspace and bot', async () => {

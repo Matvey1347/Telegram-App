@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { FinanceTierBadge } from "./finance-plan-promotion";
+import { FinanceTierBadge } from "@finance-pro/web/components/planning/finance-plan-promotion";
 
 describe("FinanceTierBadge", () => {
   it.each([

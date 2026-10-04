@@ -2,7 +2,7 @@ import { Prisma } from '@prisma/client';
 import {
   financeAccountEmoji,
   financeIconPresentation,
-} from '../catalog/finance-entity-emoji';
+} from '@finance-pro/api/catalog/finance-entity-emoji';
 
 export const financeSavingsGoalSelect = {
   id: true,

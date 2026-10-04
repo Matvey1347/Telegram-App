@@ -19,7 +19,7 @@ import { PrismaService } from '../../../prisma/prisma.service';
 import { WorkspaceService } from '../../../common/workspace.service';
 import { iconToResolvedEmoji } from '../../../common/icons/resolved-emoji';
 import { UpdateMeDto, UpdatePasswordDto, UpdateWorkspaceDto } from './dto';
-import { normalizeTelegramUsername } from '../../../telegram/shared/telegram-import.helpers';
+import { normalizeTelegramUsername } from '@api/telegram/shared/imports/telegram-import.helpers';
 import { TelegramInviteAttributionService } from '../../telegram/telegram-channels/telegram-invite-attribution.service';
 import { StructuredHttpException } from '../../../common/http/structured-http-error';
 import {

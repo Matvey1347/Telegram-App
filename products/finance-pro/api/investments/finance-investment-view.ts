@@ -2,11 +2,11 @@ import { Prisma } from '@prisma/client';
 import {
   financeAccountEmoji,
   financeIconPresentation,
-} from '../catalog/finance-entity-emoji';
+} from '@finance-pro/api/catalog/finance-entity-emoji';
 import {
   financeTransactionSelect,
   financeTransactionView,
-} from '../ledger/finance-transaction-view';
+} from '@finance-pro/api/ledger/finance-transaction-view';
 
 export const financeInvestmentSelect = {
   id: true,

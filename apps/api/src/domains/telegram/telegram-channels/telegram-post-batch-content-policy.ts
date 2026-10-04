@@ -3,7 +3,7 @@ import {
   normalizeTelegramPostMediaItems,
   type TelegramSystemBotPostDraft,
 } from '@telegram-system/shared';
-import { normalizeTelegramPostButtonRows } from '../../../telegram/shared/telegram-inline-keyboard';
+import { normalizeTelegramPostButtonRows } from '@api/telegram/shared/markup/telegram-inline-keyboard';
 import {
   postBatchInvalid,
   postBatchLimitExceeded,

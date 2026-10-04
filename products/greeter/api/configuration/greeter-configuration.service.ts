@@ -14,7 +14,7 @@ import {
 import {
   isProductionEnvironment,
   telegramBotRuntimeEnvironmentName,
-} from '../../../../config/deployment-config';
+} from '@api/config/deployment-config';
 import type {
   GreeterButtonRows,
   GreeterChannelOverrideInput,
@@ -24,15 +24,15 @@ import type {
   GreeterTemplateContextInput,
   GreeterTemplatePreview,
 } from '@telegram-system/shared';
-import { TokenEncryptionService } from '../../../../common/security/token-encryption.service';
-import { sanitizeOperationalError } from '../../../../common/security/operational-error';
-import { PrismaService } from '../../../../prisma/prisma.service';
-import { TelegramBotApiClient } from '../../../../telegram/shared/telegram-bot-api.client';
-import { TelegramSourceAccessService } from '../../../../telegram/shared/telegram-source-access.service';
-import { GreeterAdminService } from './greeter-admin.service';
-import { GreeterConfigVersionService } from './greeter-config-version.service';
-import { GreeterTemplatePreviewService } from './greeter-template-preview.service';
-import { assertValidGreeterTemplate } from './greeter-template.renderer';
+import { TokenEncryptionService } from '@api/common/security/token-encryption.service';
+import { sanitizeOperationalError } from '@api/common/security/operational-error';
+import { PrismaService } from '@api/prisma/prisma.service';
+import { TelegramBotApiClient } from '@api/telegram/shared/bot/telegram-bot-api.client';
+import { TelegramSourceAccessService } from '@api/telegram/shared/imports/telegram-source-access.service';
+import { GreeterAdminService } from '@greeter/api/configuration/greeter-admin.service';
+import { GreeterConfigVersionService } from '@greeter/api/configuration/greeter-config-version.service';
+import { GreeterTemplatePreviewService } from '@greeter/api/templates/greeter-template-preview.service';
+import { assertValidGreeterTemplate } from '@greeter/api/templates/greeter-template.renderer';
 
 const configFields = [
   'captchaEnabled',

@@ -11,7 +11,7 @@ import {
 import { iconToResolvedEmoji } from '../../../common/icons/resolved-emoji';
 import { WorkspaceService } from '../../../common/workspace.service';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { buildStableTelegramPostUrl } from '../../../telegram/shared/telegram-post-url';
+import { buildStableTelegramPostUrl } from '@api/telegram/shared/imports/telegram-post-url';
 import { decimal, decimalToString } from './domain/decimal';
 import { calculateAdPlacementDeleteAt } from './domain/sales-text';
 import { TelegramAdSalesQueryDto } from './dto';

@@ -20,8 +20,8 @@ import { findWorkspaceMemberInvestmentTransactions } from './workspace-member-in
 import {
   attributeInviteLinkCreator,
   buildInviteLinkAttributionMaps,
-} from '../../../telegram/shared/telegram-invite-link-attribution';
-import { normalizeTelegramUsername } from '../../../telegram/shared/telegram-import.helpers';
+} from '@api/telegram/shared/invites/telegram-invite-link-attribution';
+import { normalizeTelegramUsername } from '@api/telegram/shared/imports/telegram-import.helpers';
 
 @Injectable()
 export class WorkspaceMembersService {

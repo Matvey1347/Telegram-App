@@ -10,7 +10,7 @@ import {
   consumerFinanceRoot,
   consumerRequest,
   resolveConsumerFinanceApiBase,
-} from "./consumer-finance-http";
+} from "@finance-pro/web/lib/api/consumer-finance-http";
 
 export const consumerFinancePortabilityApi = {
   portabilityHistory: async (botId: string) =>

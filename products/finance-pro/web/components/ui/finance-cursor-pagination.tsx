@@ -1,8 +1,8 @@
 "use client";
 
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { Button } from "./finance-controls";
-import type { FinanceLocale } from "../i18n/core";
+import { Button } from "@finance-pro/web/components/ui/finance-controls";
+import type { FinanceLocale } from "@finance-pro/web/components/i18n/core";
 
 const labels = {
   en: { previous: "Previous", next: "Next", page: "Page" },

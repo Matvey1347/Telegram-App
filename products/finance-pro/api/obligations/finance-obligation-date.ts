@@ -1,6 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import type { FinanceRecurringPaymentRecurrence } from '@prisma/client';
-import { zonedStartOfDay } from '../ledger/finance-history-date-range';
+import { zonedStartOfDay } from '@finance-pro/api/ledger/finance-history-date-range';
 
 const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/u;
 

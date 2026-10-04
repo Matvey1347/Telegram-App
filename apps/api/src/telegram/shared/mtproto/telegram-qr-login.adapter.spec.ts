@@ -1,5 +1,5 @@
 import { Api, TelegramClient } from 'telegram';
-import { loginWithTelegramQr } from './telegram-qr-login.adapter';
+import { loginWithTelegramQr } from '@api/telegram/shared/mtproto/telegram-qr-login.adapter';
 
 function loginToken(token = Buffer.from('qr-token'), expires?: number) {
   return new Api.auth.LoginToken({

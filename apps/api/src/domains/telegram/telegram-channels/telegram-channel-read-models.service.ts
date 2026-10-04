@@ -13,7 +13,7 @@ import { TelegramChannelsSupportService } from './telegram-channels-support.serv
 import { TelegramInviteHistoryService } from './telegram-invite-history.service';
 import { TelegramInvitePersistenceService } from './telegram-invite-persistence.service';
 import { TelegramInviteSnapshotStore } from './telegram-invite-snapshot.store';
-import { hydrateTelegramInviteCreatorProfiles } from '../../../telegram/shared/telegram-invite-creator-profile';
+import { hydrateTelegramInviteCreatorProfiles } from '@api/telegram/shared/invites/telegram-invite-creator-profile';
 
 @Injectable()
 export class TelegramChannelReadModelsService {

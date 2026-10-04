@@ -1,6 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { FinanceDebtService } from './finance-debt.service';
+import { FinanceDebtService } from '@finance-pro/api/obligations/debts/finance-debt.service';
 
 const account = {
   id: 'account-1',

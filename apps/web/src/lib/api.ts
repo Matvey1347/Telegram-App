@@ -26,7 +26,7 @@ import { createTelegramAdSalesApi } from "./features/growth/telegram-ad-sales-ap
 import { createScheduledTasksApi } from "./features/operations/scheduled-tasks-api";
 import { createWorkspaceApi } from "./features/workspace/workspace-api";
 import { createTelegramSystemBotApi } from "./features/telegram/telegram-system-bot-api";
-import { createGreeterApi } from "./features/telegram/greeter-api";
+import { createGreeterApi } from "@greeter/web/lib/greeter-api";
 import {
   clearAccessToken,
   getAccessToken,

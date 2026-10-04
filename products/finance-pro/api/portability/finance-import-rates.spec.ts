@@ -1,4 +1,4 @@
-import { prepareFinanceImportRates } from './finance-import-rates';
+import { prepareFinanceImportRates } from '@finance-pro/api/portability/finance-import-rates';
 
 describe('prepareFinanceImportRates', () => {
   it('batches distinct historical cutoffs instead of issuing one query per row', async () => {

@@ -1,5 +1,5 @@
 import type { ResolvedEmoji } from '@telegram-system/shared';
-import { storedTelegramIconPresentation } from '../../telegram/shared/telegram-bot-icon-source';
+import { storedTelegramIconPresentation } from '@api/telegram/shared/bot/telegram-bot-icon-source';
 
 export type ResolvedEmojiIconSource = {
   id: string;

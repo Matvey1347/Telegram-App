@@ -1,7 +1,7 @@
 import type { InternalAxiosRequestConfig } from "axios";
 import { afterEach, describe, expect, it } from "vitest";
-import { consumerFinanceHttp } from "./consumer-finance-http";
-import { consumerFinanceObligationsApi } from "./consumer-finance-obligations-api";
+import { consumerFinanceHttp } from "@finance-pro/web/lib/api/consumer-finance-http";
+import { consumerFinanceObligationsApi } from "@finance-pro/web/lib/api/consumer-finance-obligations-api";
 
 const originalAdapter = consumerFinanceHttp.defaults.adapter;
 

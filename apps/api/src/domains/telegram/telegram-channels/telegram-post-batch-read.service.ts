@@ -8,7 +8,7 @@ import type {
 import { normalizeTelegramPostMediaItems } from '@telegram-system/shared';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { iconToResolvedEmoji } from '../../../common/icons/resolved-emoji';
-import { normalizeTelegramPostButtonRows } from '../../../telegram/shared/telegram-inline-keyboard';
+import { normalizeTelegramPostButtonRows } from '@api/telegram/shared/markup/telegram-inline-keyboard';
 import { postBatchNotFound } from './telegram-post-batch.errors';
 import { TelegramPostBatchSummaryService } from './telegram-post-batch-summary.service';
 

@@ -1,7 +1,7 @@
 import {
   isTelegramMessageAlreadyAbsent,
   selectTelegramDeletionSource,
-} from '../../../../telegram/shared/telegram-deletion-policy';
+} from '@api/telegram/shared/core/telegram-deletion-policy';
 
 type DeletionSource = {
   sourceType: string;

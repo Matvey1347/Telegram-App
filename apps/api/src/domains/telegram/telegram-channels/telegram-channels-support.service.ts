@@ -5,8 +5,8 @@ import type {
 } from '@telegram-system/shared';
 import { ResponseCacheService } from '../../../common/response-cache.service';
 import { WorkspaceService } from '../../../common/workspace.service';
-import { normalizeTelegramUsername } from '../../../telegram/shared/telegram-import.helpers';
-import { normalizeTelegramChannelId } from '../../../telegram/shared/telegram-post-url';
+import { normalizeTelegramUsername } from '@api/telegram/shared/imports/telegram-import.helpers';
+import { normalizeTelegramChannelId } from '@api/telegram/shared/imports/telegram-post-url';
 import { SyncNowDto } from './dto';
 import { TelegramChannelAnalyticsService } from './telegram-channel-analytics.service';
 import {

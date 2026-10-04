@@ -19,27 +19,27 @@ import {
   FinanceCardActionsMenu,
   LoadingState,
   Select,
-} from "./ui";
-import { FinanceConfirmModal } from "./finance-confirm-modal";
-import { FinanceRegularPaymentConfirm } from "./finance-regular-payment-confirm";
-import { FinanceRegularPaymentEditor } from "./finance-regular-payment-editor";
-import { FinanceRegularPaymentHistory } from "./finance-regular-payment-history";
-import { IconAvatar } from "./ui/finance-icon-avatar";
-import { consumerFinanceObligationsApi } from "@/lib/features/finance/consumer-finance-obligations-api";
-import { consumerFinanceKeys } from "@/lib/features/finance/consumer-finance-query-keys";
+} from "@finance-pro/web/components/ui";
+import { FinanceConfirmModal } from "@finance-pro/web/components/shared/finance-confirm-modal";
+import { FinanceRegularPaymentConfirm } from "@finance-pro/web/components/obligations/finance-regular-payment-confirm";
+import { FinanceRegularPaymentEditor } from "@finance-pro/web/components/obligations/finance-regular-payment-editor";
+import { FinanceRegularPaymentHistory } from "@finance-pro/web/components/obligations/finance-regular-payment-history";
+import { IconAvatar } from "@finance-pro/web/components/ui/finance-icon-avatar";
+import { consumerFinanceObligationsApi } from "@finance-pro/web/lib/api/consumer-finance-obligations-api";
+import { consumerFinanceKeys } from "@finance-pro/web/lib/query/consumer-finance-query-keys";
 import {
   invalidateConsumerFinanceLedgerReads,
   reconcileConsumerRegularPaymentPages,
-} from "@/lib/features/finance/consumer-finance-obligations-cache";
-import { reconcileConsumerTransactionCaches } from "@/lib/features/finance/consumer-finance-cache";
-import { formatMoney } from "@/lib/features/finance/consumer-finance-money";
-import type { ConsumerFinanceRegularPaymentTarget } from "./consumer-finance-navigation";
-import { localizeFinanceCategory } from "./finance-category-i18n";
-import { financeIntlLocale, type FinanceLocale } from "./i18n/core";
+} from "@finance-pro/web/lib/cache/consumer-finance-obligations-cache";
+import { reconcileConsumerTransactionCaches } from "@finance-pro/web/lib/cache/consumer-finance-cache";
+import { formatMoney } from "@finance-pro/web/lib/formatters/consumer-finance-money";
+import type { ConsumerFinanceRegularPaymentTarget } from "@finance-pro/web/components/app/consumer-finance-navigation";
+import { localizeFinanceCategory } from "@finance-pro/web/components/catalog/finance-category-i18n";
+import { financeIntlLocale, type FinanceLocale } from "@finance-pro/web/components/i18n/core";
 import {
   financeRegularPaymentRecurrenceLabel,
   financeRegularPaymentsCopy,
-} from "./i18n/regular-payments";
+} from "@finance-pro/web/components/i18n/regular-payments";
 
 type Payment = ConsumerFinanceRegularPayment;
 type ConfirmationRequest = {

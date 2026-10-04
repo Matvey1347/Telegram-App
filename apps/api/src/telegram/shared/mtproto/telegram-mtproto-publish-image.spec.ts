@@ -1,5 +1,5 @@
 import sharp from 'sharp';
-import { downloadTelegramPublishImage } from './telegram-mtproto-publish-image';
+import { downloadTelegramPublishImage } from '@api/telegram/shared/mtproto/telegram-mtproto-publish-image';
 
 describe('downloadTelegramPublishImage', () => {
   afterEach(() => {

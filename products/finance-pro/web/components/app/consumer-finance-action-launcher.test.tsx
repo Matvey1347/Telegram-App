@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { financeCoreCopy } from "./i18n/core";
-import { ConsumerFinanceActionLauncher } from "./consumer-finance-action-launcher";
+import { financeCoreCopy } from "@finance-pro/web/components/i18n/core";
+import { ConsumerFinanceActionLauncher } from "@finance-pro/web/components/app/consumer-finance-action-launcher";
 
 describe("ConsumerFinanceActionLauncher", () => {
   it("shows only neutral expense, income and transfer actions in the header", () => {

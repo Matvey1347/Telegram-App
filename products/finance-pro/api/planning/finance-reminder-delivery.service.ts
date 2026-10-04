@@ -1,10 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../../../../prisma/prisma.service';
+import { PrismaService } from '@api/prisma/prisma.service';
 import type {
   FinanceReminderDelivery,
   FinanceReminderDeliveryPort,
-} from '../../telegram-bots/core/telegram-bot-delivery.ports';
-import { financeChatLocale, t } from '../i18n/finance-chat-i18n';
+} from '@api/domains/telegram/telegram-bots/core/telegram-bot-delivery.ports';
+import { financeChatLocale, t } from '@finance-pro/api/i18n/finance-chat-i18n';
 
 @Injectable()
 export class FinanceReminderDeliveryService implements FinanceReminderDeliveryPort {

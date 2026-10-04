@@ -1,4 +1,4 @@
-import { parseTelegramCustomEmojiTokens } from './telegram-custom-emoji-markup';
+import { parseTelegramCustomEmojiTokens } from '@api/telegram/shared/markup/telegram-custom-emoji-markup';
 
 export type TelegramRichBlock =
   | { type: 'heading'; level: number; text: string }

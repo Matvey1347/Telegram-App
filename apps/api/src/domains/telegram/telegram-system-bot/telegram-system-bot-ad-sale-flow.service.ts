@@ -6,7 +6,7 @@ import {
   TelegramSystemBotWorkflowStatus,
 } from '@prisma/client';
 import { sanitizeOperationalError } from '../../../common/security/operational-error';
-import { TelegramBotApiClient } from '../../../telegram/shared/telegram-bot-api.client';
+import { TelegramBotApiClient } from '@api/telegram/shared/bot/telegram-bot-api.client';
 import type { TelegramAdSalesBotDeliveryAction } from '../telegram-ad-sales/telegram-ad-sales-bot-command.types';
 import {
   parseTelegramSystemBotAdSaleAmount,

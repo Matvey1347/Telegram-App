@@ -1,4 +1,4 @@
-import { FinanceConsumerRuntimeEnvironmentService } from './finance-consumer-runtime-environment.service';
+import { FinanceConsumerRuntimeEnvironmentService } from '@finance-pro/api/identity/finance-consumer-runtime-environment.service';
 
 describe('FinanceConsumerRuntimeEnvironmentService', () => {
   const previousBot = process.env.TELEGRAM_BOT_RUNTIME_ENVIRONMENT;

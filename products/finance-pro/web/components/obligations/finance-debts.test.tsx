@@ -8,7 +8,7 @@ import {
 } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConsumerFinanceDebt } from "@telegram-system/shared";
-import { FinanceDebts } from "./finance-debts";
+import { FinanceDebts } from "@finance-pro/web/components/obligations/finance-debts";
 
 const api = vi.hoisted(() => ({
   debts: vi.fn(),
@@ -17,10 +17,10 @@ const api = vi.hoisted(() => ({
   settleDebt: vi.fn(),
   accounts: vi.fn(),
 }));
-vi.mock("@/lib/features/finance/consumer-finance-obligations-api", () => ({
+vi.mock("@finance-pro/web/lib/api/consumer-finance-obligations-api", () => ({
   consumerFinanceObligationsApi: api,
 }));
-vi.mock("@/lib/features/finance/consumer-finance-ledger-api", () => ({
+vi.mock("@finance-pro/web/lib/api/consumer-finance-ledger-api", () => ({
   consumerFinanceLedgerApi: { accounts: api.accounts },
 }));
 

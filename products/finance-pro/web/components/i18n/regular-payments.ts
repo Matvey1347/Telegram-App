@@ -1,4 +1,4 @@
-import { financeCoreCopy, financeIntlLocale, type FinanceLocale } from "./core";
+import { financeCoreCopy, financeIntlLocale, type FinanceLocale } from "@finance-pro/web/components/i18n/core";
 
 const en = {
   active: "Active",

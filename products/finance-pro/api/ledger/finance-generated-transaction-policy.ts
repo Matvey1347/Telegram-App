@@ -1,5 +1,5 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
-import type { PrismaService } from '../../../../prisma/prisma.service';
+import type { PrismaService } from '@api/prisma/prisma.service';
 
 type GeneratedTransactionLinks = {
   debtSettlement: { id: string } | null;

@@ -1,5 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
-import { FinanceBillingService } from './finance-billing.service';
+import { FinanceBillingService } from '@finance-pro/api/billing/finance-billing.service';
 
 describe('FinanceBillingService', () => {
   function setup() {

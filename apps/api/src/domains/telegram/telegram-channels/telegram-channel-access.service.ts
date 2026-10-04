@@ -19,15 +19,15 @@ import { PrismaService } from '../../../prisma/prisma.service';
 import {
   TelegramBotApiClient,
   TelegramBotApiError,
-} from '../../../telegram/shared/telegram-bot-api.client';
-import { type ResolvedTelegramEntity } from '../../../telegram/shared/telegram-import.helpers';
-import { TelegramMtprotoClient } from '../../../telegram/shared/telegram-mtproto.client';
-import { buildStableTelegramPostUrl } from '../../../telegram/shared/telegram-post-url';
+} from '@api/telegram/shared/bot/telegram-bot-api.client';
+import { type ResolvedTelegramEntity } from '@api/telegram/shared/imports/telegram-import.helpers';
+import { TelegramMtprotoClient } from '@api/telegram/shared/mtproto/telegram-mtproto.client';
+import { buildStableTelegramPostUrl } from '@api/telegram/shared/imports/telegram-post-url';
 import {
   TELEGRAM_PRODUCTION_SYSTEM_BOT_SOURCE_ID,
   TELEGRAM_SYSTEM_BOT_SOURCE_ID,
   TelegramSourceAccessService,
-} from '../../../telegram/shared/telegram-source-access.service';
+} from '@api/telegram/shared/imports/telegram-source-access.service';
 import { TelegramSystemBotConfigService } from '../telegram-system-bot/telegram-system-bot-config.service';
 import { TELEGRAM_ACCOUNT_CAPABILITY_CONFIG } from '../telegram-user-accounts/telegram-capability.config';
 import { TelegramChannelsSupportService } from './telegram-channels-support.service';

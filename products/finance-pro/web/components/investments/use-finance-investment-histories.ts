@@ -2,8 +2,8 @@
 
 import { useRef } from "react";
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
-import { consumerFinanceInvestmentsApi } from "@/lib/features/finance/consumer-finance-investments-api";
-import { consumerFinanceKeys } from "@/lib/features/finance/consumer-finance-query-keys";
+import { consumerFinanceInvestmentsApi } from "@finance-pro/web/lib/api/consumer-finance-investments-api";
+import { consumerFinanceKeys } from "@finance-pro/web/lib/query/consumer-finance-query-keys";
 
 export function useFinanceInvestmentHistories(
   botId: string,

@@ -1,4 +1,4 @@
-import { createCollapsibleReplyKeyboard } from './telegram-reply-keyboard';
+import { createCollapsibleReplyKeyboard } from '@api/telegram/shared/markup/telegram-reply-keyboard';
 
 export type TelegramBotMessage = {
   text: string;

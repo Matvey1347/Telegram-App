@@ -5,8 +5,8 @@ import type {
   ConsumerFinanceImportProgress,
   ConsumerFinanceImportResult,
 } from '@telegram-system/shared';
-import { financeRequestFingerprint } from '../assets/finance-asset-idempotency';
-import type { FinanceImportRates } from './finance-import-rates';
+import { financeRequestFingerprint } from '@finance-pro/api/assets/finance-asset-idempotency';
+import type { FinanceImportRates } from '@finance-pro/api/portability/finance-import-rates';
 
 type Progress = (
   item: ConsumerFinanceImportProgress,

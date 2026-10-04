@@ -13,13 +13,13 @@ import {
   extractSynchronizedTelegramPostLinkIds,
   replaceInternalPostLinks,
   replaceSynchronizedTelegramPostLinks,
-} from '../../../telegram/shared/internal-post-links';
-import { parseTelegramHtml } from '../../../telegram/shared/telegram-html-parser';
+} from '@api/telegram/shared/imports/internal-post-links';
+import { parseTelegramHtml } from '@api/telegram/shared/markup/telegram-html-parser';
 import {
   telegramHtmlToManagedMarkup,
   telegramMarkupToHtml,
-} from '../../../telegram/shared/telegram-markup';
-import { buildStableTelegramPostUrl } from '../../../telegram/shared/telegram-post-url';
+} from '@api/telegram/shared/markup/telegram-markup';
+import { buildStableTelegramPostUrl } from '@api/telegram/shared/imports/telegram-post-url';
 import {
   MANAGED_POST_DEPENDENT_REPAIR_PENDING_NOTE,
   MANAGED_POST_IDENTITY_RETRY_MS,

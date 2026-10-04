@@ -1,6 +1,6 @@
 import { ArrowRight, Sparkles, X } from "lucide-react";
 import type { ConsumerFinanceTier } from "@telegram-system/shared";
-import { Button } from "./ui";
+import { Button } from "@finance-pro/web/components/ui";
 
 const tierTone = {
   FREE: {

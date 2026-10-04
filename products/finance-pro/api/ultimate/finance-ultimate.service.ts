@@ -3,17 +3,17 @@ import type {
   ConsumerFinanceAnalytics,
   ConsumerFinanceAssistantMessageResult,
 } from '@telegram-system/shared';
-import { PrismaService } from '../../../../prisma/prisma.service';
-import { FinanceAiAnalyticsService } from '../ai/finance-ai-analytics.service';
-import { FinanceAnalyticsService } from '../analytics/finance-analytics.service';
-import { financeChatLocale, t } from '../i18n/finance-chat-i18n';
-import type { FinanceUltimateQuestionDto } from '../http/finance.dto';
-import type { FinanceAssistantMessageDto } from '../http/finance.dto';
-import { FinanceEntitlementService } from '../billing/finance-entitlement.service';
-import { AI_MODEL_POLICY } from '../../telegram-bots/core/ai-usage-cost';
-import { FinanceLedgerService } from '../ledger/finance-ledger.service';
-import { FinanceProposalService } from '../chat-flows/finance-proposal.service';
-import { FinanceAssistantEntryService, explicitCategoryHint, stripExplicitCategoryLabel } from './finance-assistant-entry.service';
+import { PrismaService } from '@api/prisma/prisma.service';
+import { FinanceAiAnalyticsService } from '@finance-pro/api/ai/finance-ai-analytics.service';
+import { FinanceAnalyticsService } from '@finance-pro/api/analytics/finance-analytics.service';
+import { financeChatLocale, t } from '@finance-pro/api/i18n/finance-chat-i18n';
+import type { FinanceUltimateQuestionDto } from '@finance-pro/api/http/finance.dto';
+import type { FinanceAssistantMessageDto } from '@finance-pro/api/http/finance.dto';
+import { FinanceEntitlementService } from '@finance-pro/api/billing/finance-entitlement.service';
+import { AI_MODEL_POLICY } from '@api/domains/telegram/telegram-bots/core/ai-usage-cost';
+import { FinanceLedgerService } from '@finance-pro/api/ledger/finance-ledger.service';
+import { FinanceProposalService } from '@finance-pro/api/chat-flows/finance-proposal.service';
+import { FinanceAssistantEntryService, explicitCategoryHint, stripExplicitCategoryLabel } from '@finance-pro/api/ultimate/finance-assistant-entry.service';
 
 /** On-demand AI interpretation over the canonical bounded Analytics read model. */
 @Injectable()

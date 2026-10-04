@@ -1,4 +1,4 @@
-import { FinanceBotFlowMessenger } from './finance-bot-flow-messenger';
+import { FinanceBotFlowMessenger } from '@finance-pro/bot/finance-bot-flow-messenger';
 
 describe('FinanceBotFlowMessenger language completion', () => {
   it('replaces the completed step and publishes a fresh localized reply keyboard', async () => {

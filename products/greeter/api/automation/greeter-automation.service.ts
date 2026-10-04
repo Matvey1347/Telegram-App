@@ -4,15 +4,15 @@ import type {
   GreeterSequenceStepInput,
   GreeterTemplateContextInput,
 } from '@telegram-system/shared';
-import { PrismaService } from '../../../../prisma/prisma.service';
-import { GreeterAdminService } from './greeter-admin.service';
+import { PrismaService } from '@api/prisma/prisma.service';
+import { GreeterAdminService } from '@greeter/api/configuration/greeter-admin.service';
 import {
   GreeterEnrollmentService,
   type RuntimeEnrollmentInput,
-} from './greeter-enrollment.service';
-import { GreeterSequenceAdminService } from './greeter-sequence-admin.service';
-import { GreeterAutomationTestService } from './greeter-automation-test.service';
-import { TelegramBotDeliveryService } from '../core/telegram-bot-delivery.service';
+} from '@greeter/api/enrollment/greeter-enrollment.service';
+import { GreeterSequenceAdminService } from '@greeter/api/automation/greeter-sequence-admin.service';
+import { GreeterAutomationTestService } from '@greeter/api/automation/greeter-automation-test.service';
+import { TelegramBotDeliveryService } from '@api/domains/telegram/telegram-bots/core/telegram-bot-delivery.service';
 
 export type GreeterButtonRows = Array<
   Array<{ text: string; url?: string; callbackData?: string }>

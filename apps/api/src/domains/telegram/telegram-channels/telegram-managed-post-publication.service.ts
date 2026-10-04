@@ -7,9 +7,9 @@ import {
   TelegramSourceType,
 } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { TelegramBotApiClient } from '../../../telegram/shared/telegram-bot-api.client';
-import { TelegramMtprotoClient } from '../../../telegram/shared/telegram-mtproto.client';
-import { TelegramSourceAccessService } from '../../../telegram/shared/telegram-source-access.service';
+import { TelegramBotApiClient } from '@api/telegram/shared/bot/telegram-bot-api.client';
+import { TelegramMtprotoClient } from '@api/telegram/shared/mtproto/telegram-mtproto.client';
+import { TelegramSourceAccessService } from '@api/telegram/shared/imports/telegram-source-access.service';
 import {
   PublishTelegramManagedPostDto,
   ScheduleTelegramManagedPostDto,

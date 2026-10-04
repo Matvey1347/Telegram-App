@@ -3,7 +3,7 @@ import {
   inferTelegramPostMediaKind,
   type TelegramPostEngagementMetrics,
 } from '@telegram-system/shared';
-import { buildStableTelegramPostUrl } from '../../../telegram/shared/telegram-post-url';
+import { buildStableTelegramPostUrl } from '@api/telegram/shared/imports/telegram-post-url';
 
 export const telegramPostEngagementSelect = {
   id: true,

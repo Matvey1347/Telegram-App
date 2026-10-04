@@ -3,7 +3,7 @@ import {
   TELEGRAM_PRODUCTION_SYSTEM_BOT_SOURCE_ID,
   TELEGRAM_SYSTEM_BOT_SOURCE_ID,
   TelegramSourceAccessService,
-} from './telegram-source-access.service';
+} from '@api/telegram/shared/imports/telegram-source-access.service';
 
 describe('TelegramSourceAccessService publishing capabilities', () => {
   it('keeps the built-in production bot available for advertising posts with inline buttons', async () => {

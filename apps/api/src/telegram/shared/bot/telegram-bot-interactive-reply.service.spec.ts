@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
-import { TelegramBotInteractiveReplyService } from './telegram-bot-interactive-reply.service';
+import { TelegramBotInteractiveReplyService } from '@api/telegram/shared/bot/telegram-bot-interactive-reply.service';
 
 describe('TelegramBotInteractiveReplyService', () => {
   it('sends immediately with the shared inline keyboard formatting and no persistence', async () => {

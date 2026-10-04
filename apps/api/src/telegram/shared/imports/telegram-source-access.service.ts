@@ -7,7 +7,7 @@ import {
   TelegramSourceType,
   TelegramUserAccountStatus,
 } from '@prisma/client';
-import { PrismaService } from '../../prisma/prisma.service';
+import { PrismaService } from '@api/prisma/prisma.service';
 import type { TelegramPublishingCapabilities } from '@telegram-system/shared';
 
 export type TelegramSourcePermissions = {

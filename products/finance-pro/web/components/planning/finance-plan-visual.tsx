@@ -1,5 +1,5 @@
 import type { ConsumerFinanceTier } from "@telegram-system/shared";
-import styles from "./finance-plan-visual.module.css";
+import styles from "@finance-pro/web/components/planning/finance-plan-visual.module.css";
 
 const tierStyle: Record<ConsumerFinanceTier, string> = {
   FREE: styles.free,

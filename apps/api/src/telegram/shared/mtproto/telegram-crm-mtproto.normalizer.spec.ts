@@ -5,7 +5,7 @@ import {
   encodeTelegramCrmDialogCursor,
   normalizeTelegramCrmRaw,
   parseTelegramCrmPeer,
-} from './telegram-crm-mtproto.normalizer';
+} from '@api/telegram/shared/mtproto/telegram-crm-mtproto.normalizer';
 
 describe('Telegram CRM MTProto normalizer', () => {
   it('keeps Telegram long identifiers as lossless strings', () => {

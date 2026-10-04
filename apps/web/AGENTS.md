@@ -15,7 +15,7 @@
 ## Product UI boundaries
 
 - Read `docs/architecture/PRODUCT_BOUNDARIES.md` for consumer applications and cross-product work.
-- `(consumer-finance)`, `components/features/finance/consumer-finance`, its provider and `consumer-finance-api` form the consumer Finance frontend boundary. Internal `(finance)` routes and non-consumer Finance feature implementation are a different product.
+- `(consumer-finance)` is a URL-preserving entrypoint for the Finance Pro frontend in `products/finance-pro/web/*`. Internal `(finance)` routes and non-consumer Finance feature implementation are a different product.
 - Consumer Finance owns its Web App/Mini App UI, state/query layer and localization. Internal/admin products must not reuse consumer components, and consumer code must not import Telegram System primitives/providers or internal Finance UI/helpers.
 - Share neutral technical foundations and stable serializable contracts, not concrete product UI, hooks, presenters, API clients, query keys, cache rules, or business helpers. Extract a neutral pure helper only when two real products require identical semantics.
 

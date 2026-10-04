@@ -13,12 +13,12 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
-import { StreamResponseService } from '../../../../common/stream/stream-response.service';
+import { StreamResponseService } from '@api/common/stream/stream-response.service';
 import {
   FinanceConsumerAuthGuard,
   type FinanceImportRequest,
-} from './finance-consumer-auth.guard';
-import { FinanceImportService } from './finance-import.service';
+} from '@finance-pro/api/portability/finance-consumer-auth.guard';
+import { FinanceImportService } from '@finance-pro/api/portability/finance-import.service';
 
 const MAX_IMPORT_BYTES = 10 * 1024 * 1024;
 

@@ -1,5 +1,5 @@
 import { NotFoundException } from '@nestjs/common';
-import { FinanceInvestmentReadService } from './finance-investment-read.service';
+import { FinanceInvestmentReadService } from '@finance-pro/api/investments/finance-investment-read.service';
 
 describe('FinanceInvestmentReadService', () => {
   it.each([

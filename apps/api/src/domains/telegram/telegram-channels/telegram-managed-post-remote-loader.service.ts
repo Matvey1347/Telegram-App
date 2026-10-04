@@ -5,8 +5,8 @@ import {
   TelegramManagedPostStatus,
 } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { TelegramMtprotoClient } from '../../../telegram/shared/telegram-mtproto.client';
-import { parseTelegramPostUrl } from '../../../telegram/shared/telegram-post-url';
+import { TelegramMtprotoClient } from '@api/telegram/shared/mtproto/telegram-mtproto.client';
+import { parseTelegramPostUrl } from '@api/telegram/shared/imports/telegram-post-url';
 import { TelegramChannelAccessService } from './telegram-channel-access.service';
 import { TelegramChannelCatalogService } from './telegram-channel-catalog.service';
 import { TelegramChannelsSupportService } from './telegram-channels-support.service';

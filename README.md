@@ -2,6 +2,36 @@
 
 Internal system for managing Telegram channels, ad campaigns, finance, currencies and analytics.
 
+## Project layout
+
+The repository is organized around deployable applications, independently
+owned products, and deliberately small shared foundations:
+
+- `apps/api` is the Nest composition host, Prisma owner, and Telegram platform.
+- `apps/web` is the Next composition host. Its App Router entries preserve the
+  public URLs and render product-owned feature containers.
+- `products/finance-pro` owns the consumer Finance Pro implementation: API use
+  cases, its thin Telegram bot adapter, and Mini App/Web UI.
+- `products/greeter` owns Greeter's API behavior and management UI.
+- `packages/shared` contains stable, serializable cross-app contracts and pure
+  technical helpers only.
+
+Within a product, folders are grouped by a concrete capability rather than by
+one large technical catch-all. For example, Finance Pro API has `ledger`,
+`planning`, `savings`, and `obligations`; frontend product code separates
+feature components, local UI primitives, localization, and API/cache helpers.
+The Nest and Next applications remain the only runtime entry points, so this
+layout does not add deployments, database connections, background work, or
+environment variables.
+
+### One global agent policy
+
+Repository guidance lives in the root [AGENTS.md](AGENTS.md). Product folders
+must not add their own `AGENTS.md` files or private agent-routing rules:
+Finance Pro, Greeter, and future products use the same global workflow and the
+product-boundary document. App-level notes only cover their technical host;
+they do not create product-specific agents.
+
 ## Local development
 
 1. `pnpm install`

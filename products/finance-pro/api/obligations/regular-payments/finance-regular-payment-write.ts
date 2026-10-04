@@ -1,6 +1,6 @@
 import { Prisma } from '@prisma/client';
 import type { FinanceRecurringPaymentRevisionKind } from '@prisma/client';
-import type { financeRegularPaymentSelect } from '../finance-obligation-view';
+import type { financeRegularPaymentSelect } from '@finance-pro/api/obligations/finance-obligation-view';
 
 export type FinanceRegularPaymentRow =
   Prisma.FinanceRecurringPaymentGetPayload<{

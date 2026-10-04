@@ -1,8 +1,8 @@
 import { Check } from "lucide-react";
 import type { ConsumerFinanceTier } from "@telegram-system/shared";
-import { Button } from "./ui";
-import { financePlansCopy } from "./i18n/plans";
-import type { FinanceLocale } from "./i18n/core";
+import { Button } from "@finance-pro/web/components/ui";
+import { financePlansCopy } from "@finance-pro/web/components/i18n/plans";
+import type { FinanceLocale } from "@finance-pro/web/components/i18n/core";
 import {
   consumerFinanceFeatureLabel,
   consumerFinanceOffersForPlan,
@@ -11,9 +11,9 @@ import {
   type ConsumerFinanceCatalogPlan,
   type ConsumerFinanceCatalogProvider,
   type ConsumerFinanceCheckoutOffer,
-} from "./finance-consumer-billing-format";
-import { FinancePlanVisual } from "./finance-plan-visual";
-import styles from "./finance-plans.module.css";
+} from "@finance-pro/web/components/shared/finance-consumer-billing-format";
+import { FinancePlanVisual } from "@finance-pro/web/components/planning/finance-plan-visual";
+import styles from "@finance-pro/web/components/planning/finance-plans.module.css";
 
 type PlansCopy = ReturnType<typeof financePlansCopy>;
 

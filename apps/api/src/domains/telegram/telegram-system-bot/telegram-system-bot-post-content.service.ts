@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { sanitizeOperationalError } from '../../../common/security/operational-error';
-import { TelegramBotApiClient } from '../../../telegram/shared/telegram-bot-api.client';
+import { TelegramBotApiClient } from '@api/telegram/shared/bot/telegram-bot-api.client';
 import { TelegramManagedPostMediaStorageService } from '../telegram-channels/telegram-managed-post-media-storage.service';
 import { TelegramSystemBotConfigService } from './telegram-system-bot-config.service';
 import {

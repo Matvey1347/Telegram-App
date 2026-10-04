@@ -1,5 +1,5 @@
 import type { Request } from 'express';
-import { FinanceConsumerBillingController } from './finance-consumer-billing.controller';
+import { FinanceConsumerBillingController } from '@finance-pro/api/billing/finance-consumer-billing.controller';
 
 describe('FinanceConsumerBillingController', () => {
   const previousFrontend = process.env.FRONTEND_URL;

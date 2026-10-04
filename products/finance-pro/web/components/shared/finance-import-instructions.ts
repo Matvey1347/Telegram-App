@@ -1,5 +1,5 @@
 import { consumerFinanceImportExampleV1 } from "@telegram-system/shared";
-import type { FinanceLocale } from "./i18n/core";
+import type { FinanceLocale } from "@finance-pro/web/components/i18n/core";
 
 export const financeImportTemplate = JSON.stringify(
   consumerFinanceImportExampleV1,

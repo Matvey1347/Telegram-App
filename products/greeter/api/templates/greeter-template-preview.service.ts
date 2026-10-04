@@ -4,13 +4,13 @@ import type {
   GreeterTemplateContextInput,
   GreeterTemplatePreview,
 } from '@telegram-system/shared';
-import { PrismaService } from '../../../../prisma/prisma.service';
-import { GreeterAdminService } from './greeter-admin.service';
+import { PrismaService } from '@api/prisma/prisma.service';
+import { GreeterAdminService } from '@greeter/api/configuration/greeter-admin.service';
 import {
   assertValidGreeterTemplate,
   GREETER_TEMPLATE_VARIABLES,
   renderGreeterTemplate,
-} from './greeter-template.renderer';
+} from '@greeter/api/templates/greeter-template.renderer';
 
 export class GreeterTemplatePreviewService {
   constructor(

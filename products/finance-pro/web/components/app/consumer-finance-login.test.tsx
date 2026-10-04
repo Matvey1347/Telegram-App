@@ -1,14 +1,14 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { ConsumerFinanceLogin } from "./consumer-finance-login";
+import { ConsumerFinanceLogin } from "@finance-pro/web/components/app/consumer-finance-login";
 
 const mocks = vi.hoisted(() => ({
   create: vi.fn(),
   consume: vi.fn(),
 }));
 
-vi.mock("@/lib/features/finance/consumer-finance-auth-api", () => ({
+vi.mock("@finance-pro/web/lib/api/consumer-finance-auth-api", () => ({
   consumerFinanceAuthApi: {
     createBrowserLoginChallenge: mocks.create,
     consumeBrowserLoginChallenge: mocks.consume,

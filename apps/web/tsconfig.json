@@ -20,7 +20,12 @@
       }
     ],
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@finance-pro/web/components/*": ["../../products/finance-pro/web/components/*"],
+      "@finance-pro/web/lib/*": ["../../products/finance-pro/web/lib/*"],
+      "@finance-pro/web/provider/*": ["../../products/finance-pro/web/provider/*"],
+      "@greeter/web/components/*": ["../../products/greeter/web/components/*"],
+      "@greeter/web/lib/*": ["../../products/greeter/web/lib/*"]
     }
   },
   "include": [

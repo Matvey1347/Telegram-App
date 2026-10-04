@@ -3,7 +3,7 @@ import {
   ConflictException,
   NotFoundException,
 } from '@nestjs/common';
-import { FinanceCoreService } from './finance-core.service';
+import { FinanceCoreService } from '@finance-pro/api/catalog/finance-core.service';
 import { Prisma } from '@prisma/client';
 
 describe('FinanceCoreService consumer read models', () => {

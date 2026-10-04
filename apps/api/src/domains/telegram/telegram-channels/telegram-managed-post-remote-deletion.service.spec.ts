@@ -4,7 +4,7 @@ import {
   TelegramManagedPostStatus,
   TelegramSourceType,
 } from '@prisma/client';
-import { TelegramBotApiError } from '../../../telegram/shared/telegram-bot-api.client';
+import { TelegramBotApiError } from '@api/telegram/shared/bot/telegram-bot-api.client';
 import { TelegramManagedPostRemoteDeleteExecutor } from './telegram-managed-post-remote-delete-executor.service';
 import { TelegramManagedPostRemoteDeletionService } from './telegram-managed-post-remote-deletion.service';
 

@@ -1,5 +1,5 @@
 import type { ResolvedEmoji } from '@telegram-system/shared';
-import { createCollapsibleReplyKeyboard } from '../../../telegram/shared/telegram-reply-keyboard';
+import { createCollapsibleReplyKeyboard } from '@api/telegram/shared/markup/telegram-reply-keyboard';
 import { systemBotEmoji } from './telegram-system-bot-presentation';
 
 const SYSTEM_BOT_ACTIONS: Readonly<Record<string, string>> = {

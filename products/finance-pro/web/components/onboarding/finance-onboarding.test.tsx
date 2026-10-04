@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { FinanceOnboarding } from "./finance-onboarding";
+import { FinanceOnboarding } from "@finance-pro/web/components/onboarding/finance-onboarding";
 
 describe("FinanceOnboarding", () => {
   it("shows a recoverable error when profile persistence fails", async () => {

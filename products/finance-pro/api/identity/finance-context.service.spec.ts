@@ -1,8 +1,8 @@
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { createHash, createHmac } from 'crypto';
-import { FinanceContextService } from './finance-context.service';
-import { DEFAULT_FINANCE_CATEGORIES } from '../catalog/finance-defaults';
+import { FinanceContextService } from '@finance-pro/api/identity/finance-context.service';
+import { DEFAULT_FINANCE_CATEGORIES } from '@finance-pro/api/catalog/finance-defaults';
 
 function signed(token: string, authDate = Math.floor(Date.now() / 1000)) {
   const values = new URLSearchParams({

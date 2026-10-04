@@ -14,9 +14,9 @@ import {
 } from '@telegram-system/shared';
 import { WorkspaceService } from '../../../common/workspace.service';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { TELEGRAM_RICH_FORMATTING_GUIDE } from '../../../telegram/shared/telegram-rich-markup';
-import { extractInternalPostLinkIds } from '../../../telegram/shared/internal-post-links';
-import { parseTelegramPostUrl } from '../../../telegram/shared/telegram-post-url';
+import { TELEGRAM_RICH_FORMATTING_GUIDE } from '@api/telegram/shared/markup/telegram-rich-markup';
+import { extractInternalPostLinkIds } from '@api/telegram/shared/imports/internal-post-links';
+import { parseTelegramPostUrl } from '@api/telegram/shared/imports/telegram-post-url';
 import {
   telegramPostEngagementMetrics,
   telegramPostEngagementSelect,

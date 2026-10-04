@@ -1,6 +1,6 @@
 import type { AxiosInstance } from "axios";
 import { describe, expect, it, vi } from "vitest";
-import { createGreeterApi } from "./greeter-api";
+import { createGreeterApi } from "@greeter/web/lib/greeter-api";
 
 function client() {
   const axios = {

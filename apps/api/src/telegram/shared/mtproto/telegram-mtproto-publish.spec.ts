@@ -18,7 +18,7 @@ jest.mock('sharp', () => ({
   })),
 }));
 
-import { TelegramMtprotoClient } from './telegram-mtproto.client';
+import { TelegramMtprotoClient } from '@api/telegram/shared/mtproto/telegram-mtproto.client';
 
 describe('TelegramMtprotoClient publishPost', () => {
   beforeEach(() => {

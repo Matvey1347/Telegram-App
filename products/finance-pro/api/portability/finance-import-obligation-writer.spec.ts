@@ -1,6 +1,6 @@
 import type { ConsumerFinanceImportDocumentV1 } from '@telegram-system/shared';
 import { Prisma } from '@prisma/client';
-import { writeFinanceObligationImport } from './finance-import-obligation-writer';
+import { writeFinanceObligationImport } from '@finance-pro/api/portability/finance-import-obligation-writer';
 
 function document(statuses?: {
   reminder?: boolean;

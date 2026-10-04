@@ -4,17 +4,17 @@ import { ExternalLink } from "lucide-react";
 import { useState } from "react";
 import Image from "next/image";
 import type { ConsumerFinanceProfile } from "@telegram-system/shared";
-import type { FinanceCoreCopy, FinanceLocale } from "./i18n/core";
+import type { FinanceCoreCopy, FinanceLocale } from "@finance-pro/web/components/i18n/core";
 import {
   financeScreenLabel,
   type ConsumerFinanceAction,
   type ConsumerFinanceScreen,
-} from "./consumer-finance-navigation";
-import { ConsumerFinanceActionLauncher } from "./consumer-finance-action-launcher";
-import { FinanceLanguageSelect } from "./ui/finance-language-select";
-import { FinanceMobileNavigation } from "./finance-mobile-navigation";
-import { FinanceAccountMenu } from "./finance-account-menu";
-import financeStyles from "./ui/finance-ui.module.css";
+} from "@finance-pro/web/components/app/consumer-finance-navigation";
+import { ConsumerFinanceActionLauncher } from "@finance-pro/web/components/app/consumer-finance-action-launcher";
+import { FinanceLanguageSelect } from "@finance-pro/web/components/ui/finance-language-select";
+import { FinanceMobileNavigation } from "@finance-pro/web/components/app/finance-mobile-navigation";
+import { FinanceAccountMenu } from "@finance-pro/web/components/accounts/finance-account-menu";
+import financeStyles from "@finance-pro/web/components/ui/finance-ui.module.css";
 
 export function FinanceMiniAppShell({
   botId,

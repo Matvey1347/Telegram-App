@@ -1,8 +1,8 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
-import type { PrismaService } from '../../../../prisma/prisma.service';
-import type { FinanceAnalyticsService } from '../analytics/finance-analytics.service';
-import type { FinanceAssetSummaryService } from '../assets/finance-asset-summary.service';
-import { financeBalanceSummary } from './finance-balance-summary';
+import type { PrismaService } from '@api/prisma/prisma.service';
+import type { FinanceAnalyticsService } from '@finance-pro/api/analytics/finance-analytics.service';
+import type { FinanceAssetSummaryService } from '@finance-pro/api/assets/finance-asset-summary.service';
+import { financeBalanceSummary } from '@finance-pro/api/ledger/finance-balance-summary';
 
 type FinanceStatsAccount = {
   id: string;

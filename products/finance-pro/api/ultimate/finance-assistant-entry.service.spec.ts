@@ -1,5 +1,5 @@
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
-import { FinanceAssistantEntryService, stripExplicitCategoryLabel } from './finance-assistant-entry.service';
+import { FinanceAssistantEntryService, stripExplicitCategoryLabel } from '@finance-pro/api/ultimate/finance-assistant-entry.service';
 
 const identity = {
   profileId: 'profile-1',

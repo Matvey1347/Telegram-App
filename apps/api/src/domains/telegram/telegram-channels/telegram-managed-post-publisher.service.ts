@@ -9,20 +9,20 @@ import {
 } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { normalizeTelegramPostMediaItems } from '@telegram-system/shared';
-import { TelegramBotApiClient } from '../../../telegram/shared/telegram-bot-api.client';
-import { parseTelegramHtml } from '../../../telegram/shared/telegram-html-parser';
-import { normalizeTelegramPostButtonRows, toTelegramBotInlineKeyboard } from '../../../telegram/shared/telegram-inline-keyboard';
+import { TelegramBotApiClient } from '@api/telegram/shared/bot/telegram-bot-api.client';
+import { parseTelegramHtml } from '@api/telegram/shared/markup/telegram-html-parser';
+import { normalizeTelegramPostButtonRows, toTelegramBotInlineKeyboard } from '@api/telegram/shared/markup/telegram-inline-keyboard';
 import {
   requiresNativeTelegramRichMessage,
   telegramHtmlToMtprotoHtml,
   telegramMarkupToHtml,
-} from '../../../telegram/shared/telegram-markup';
-import { TelegramMtprotoClient } from '../../../telegram/shared/telegram-mtproto.client';
+} from '@api/telegram/shared/markup/telegram-markup';
+import { TelegramMtprotoClient } from '@api/telegram/shared/mtproto/telegram-mtproto.client';
 import {
   TELEGRAM_PRODUCTION_SYSTEM_BOT_SOURCE_ID,
   TelegramSourceAccessService,
-} from '../../../telegram/shared/telegram-source-access.service';
-import { isRevokedTelegramSessionError, REVOKED_TELEGRAM_SESSION_MESSAGE } from '../../../telegram/shared/telegram-session-errors';
+} from '@api/telegram/shared/imports/telegram-source-access.service';
+import { isRevokedTelegramSessionError, REVOKED_TELEGRAM_SESSION_MESSAGE } from '@api/telegram/shared/mtproto/telegram-session-errors';
 import { notifyScheduledTaskDueWorkChanged } from '../../../common/scheduled-task-wake-notifier';
 import { telegramPostsBadRequest, telegramPostsNotFound } from './telegram-posts.errors';
 import { managedPostRequiresBotApi, selectManagedPostPublishingSource } from './managed-post-publishing-source';

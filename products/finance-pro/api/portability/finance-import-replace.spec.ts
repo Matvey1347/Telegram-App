@@ -1,4 +1,4 @@
-import { clearFinanceDataForReplacement } from './finance-import-replace';
+import { clearFinanceDataForReplacement } from '@finance-pro/api/portability/finance-import-replace';
 
 function model() {
   return { updateMany: jest.fn(), deleteMany: jest.fn() };

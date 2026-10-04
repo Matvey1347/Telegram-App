@@ -19,7 +19,7 @@ import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { sanitizeOperationalError } from '../../../../common/security/operational-error';
 import { TokenEncryptionService } from '../../../../common/security/token-encryption.service';
 import { PrismaService } from '../../../../prisma/prisma.service';
-import { TelegramBotApiClient } from '../../../../telegram/shared/telegram-bot-api.client';
+import { TelegramBotApiClient } from '@api/telegram/shared/bot/telegram-bot-api.client';
 import { TelegramBotApplicationDispatcherService } from './telegram-bot-application-dispatcher.service';
 import { TelegramBotRuntimeEnvironmentService } from './telegram-bot-runtime-environment.service';
 import { TelegramBotRuntimeExecutionContext } from './telegram-bot-runtime-execution-context';

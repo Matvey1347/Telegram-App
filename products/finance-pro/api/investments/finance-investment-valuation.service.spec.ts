@@ -1,5 +1,5 @@
 import { Prisma } from '@prisma/client';
-import { FinanceInvestmentValuationService } from './finance-investment-valuation.service';
+import { FinanceInvestmentValuationService } from '@finance-pro/api/investments/finance-investment-valuation.service';
 
 const currentDate = new Date('2026-09-08T00:00:00.000Z');
 const backdated = new Date('2026-08-01T00:00:00.000Z');

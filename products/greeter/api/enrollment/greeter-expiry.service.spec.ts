@@ -2,7 +2,7 @@ import {
   GreeterFailureBehavior,
   GreeterJoinRequestStatus,
 } from '@prisma/client';
-import { GreeterExpiryService } from './greeter-expiry.service';
+import { GreeterExpiryService } from '@greeter/api/enrollment/greeter-expiry.service';
 
 const bot = {
   runtimeInstances: [

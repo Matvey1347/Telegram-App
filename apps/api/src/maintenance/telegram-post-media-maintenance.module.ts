@@ -4,7 +4,7 @@ import { B2ObjectStorageService } from '../common/object-storage/b2-object-stora
 import { TokenEncryptionService } from '../common/security/token-encryption.service';
 import { TelegramPostMediaBackfillService } from '../domains/telegram/telegram-channels/telegram-post-media-backfill.service';
 import { PrismaModule } from '../prisma/prisma.module';
-import { TelegramMtprotoClient } from '../telegram/shared/telegram-mtproto.client';
+import { TelegramMtprotoClient } from '@api/telegram/shared/mtproto/telegram-mtproto.client';
 
 @Module({
   imports: [

@@ -1,10 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { FinanceTransactionSource } from '@prisma/client';
-import { TelegramBotInteractiveReplyService } from '../../../../telegram/shared/telegram-bot-interactive-reply.service';
-import { FinanceRegularPaymentConfirmationService } from '../../consumer-finance/obligations/regular-payments/finance-regular-payment-confirmation.service';
-import type { FinanceChatLocale } from '../../consumer-finance/i18n/finance-chat-i18n';
-import type { TelegramBotApplicationContext } from '../core/telegram-bot-update.types';
-import { financeObligationCopy } from './finance-obligation-chat-copy';
+import { TelegramBotInteractiveReplyService } from '@api/telegram/shared/bot/telegram-bot-interactive-reply.service';
+import { FinanceRegularPaymentConfirmationService } from '@finance-pro/api/obligations/regular-payments/finance-regular-payment-confirmation.service';
+import type { FinanceChatLocale } from '@finance-pro/api/i18n/finance-chat-i18n';
+import type { TelegramBotApplicationContext } from '@api/domains/telegram/telegram-bots/core/telegram-bot-update.types';
+import { financeObligationCopy } from '@finance-pro/bot/finance-obligation-chat-copy';
 
 type ParsedCallback = {
   regularPaymentId: string;

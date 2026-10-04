@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { financeIconPickerCopy } from "./finance-icon-picker-i18n";
+import { financeIconPickerCopy } from "@finance-pro/web/components/ui/finance-icon-picker-i18n";
 
 describe("financeIconPickerCopy", () => {
   it("owns the exact English picker labels", () => {

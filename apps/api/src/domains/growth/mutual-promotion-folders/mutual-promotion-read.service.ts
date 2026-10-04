@@ -11,8 +11,8 @@ import { normalizeTelegramPostMediaItems } from '@telegram-system/shared';
 import { WorkspaceService } from '../../../common/workspace.service';
 import { iconToResolvedEmoji } from '../../../common/icons/resolved-emoji';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { normalizeTelegramPostButtonRows } from '../../../telegram/shared/telegram-inline-keyboard';
-import { hydrateTelegramInviteCreatorProfiles } from '../../../telegram/shared/telegram-invite-creator-profile';
+import { normalizeTelegramPostButtonRows } from '@api/telegram/shared/markup/telegram-inline-keyboard';
+import { hydrateTelegramInviteCreatorProfiles } from '@api/telegram/shared/invites/telegram-invite-creator-profile';
 import type {
   MutualPromotionFolderQueryDto,
   MutualPromotionInviteOptionsQueryDto,

@@ -2,7 +2,7 @@ import type {
   BulkActionResultItem,
   TelegramChannelSyncProgressItem,
 } from '@telegram-system/shared';
-import type { TelegramSourceAccessService } from '../../../telegram/shared/telegram-source-access.service';
+import type { TelegramSourceAccessService } from '@api/telegram/shared/imports/telegram-source-access.service';
 
 export type TelegramUserAccountProgressCallback = (
   item: TelegramChannelSyncProgressItem,

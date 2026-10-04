@@ -5,7 +5,7 @@ import {
   financeDocumentCounts,
   financeDocumentRecordCount,
   pruneFinanceRollbackSnapshots,
-} from './finance-portability-history';
+} from '@finance-pro/api/portability/finance-portability-history';
 
 const document: ConsumerFinanceImportDocumentV1 = {
   format: 'telegram-system.consumer-finance',

@@ -6,7 +6,7 @@ import {
 } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { normalizeTelegramPostButtonRows } from '../../../telegram/shared/telegram-inline-keyboard';
+import { normalizeTelegramPostButtonRows } from '@api/telegram/shared/markup/telegram-inline-keyboard';
 import { stripLegacyGroupedPostTitlePrefix } from './post-groups.helpers';
 import {
   ManagedPostRevisionRecord,

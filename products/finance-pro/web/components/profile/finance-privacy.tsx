@@ -3,14 +3,14 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Download, Trash2, Upload } from "lucide-react";
-import { Button, Card } from "./ui";
-import { consumerFinanceApi } from "@/lib/features/finance/consumer-finance-api";
-import { consumerFinanceKeys } from "@/lib/features/finance/consumer-finance-query-keys";
-import { FinanceConfirmModal } from "./finance-confirm-modal";
-import { type FinanceLocale } from "./i18n/core";
-import { financeSettingsCopy } from "./i18n/settings";
-import { FinanceImportModal } from "./finance-import-modal";
-import { FinancePortabilityHistory } from "./finance-portability-history";
+import { Button, Card } from "@finance-pro/web/components/ui";
+import { consumerFinanceApi } from "@finance-pro/web/lib/api/consumer-finance-api";
+import { consumerFinanceKeys } from "@finance-pro/web/lib/query/consumer-finance-query-keys";
+import { FinanceConfirmModal } from "@finance-pro/web/components/shared/finance-confirm-modal";
+import { type FinanceLocale } from "@finance-pro/web/components/i18n/core";
+import { financeSettingsCopy } from "@finance-pro/web/components/i18n/settings";
+import { FinanceImportModal } from "@finance-pro/web/components/shared/finance-import-modal";
+import { FinancePortabilityHistory } from "@finance-pro/web/components/portability/finance-portability-history";
 
 export function FinancePrivacy({
   botId,

@@ -3,7 +3,7 @@ import {
   resolveAdPlacementDeletionMessageIds,
   selectAdPlacementDeletionSource,
 } from './deletion-source';
-import { selectTelegramDeletionSource } from '../../../../telegram/shared/telegram-deletion-policy';
+import { selectTelegramDeletionSource } from '@api/telegram/shared/core/telegram-deletion-policy';
 
 const bot = {
   sourceType: 'BOT',

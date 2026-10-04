@@ -12,27 +12,27 @@ import type {
   ConsumerFinancePortabilityHistoryItem,
   ConsumerFinanceRollbackResult,
 } from '@telegram-system/shared';
-import { CurrencyConversionService } from '../../../../common/currency-conversion.service';
-import { HistoricalExchangeRateService } from '../../../../common/historical-exchange-rate.service';
-import { PrismaService } from '../../../../prisma/prisma.service';
-import { financeRequestFingerprint } from '../assets/finance-asset-idempotency';
-import { financeDataSnapshot } from '../catalog/finance-portability';
+import { CurrencyConversionService } from '@api/common/currency-conversion.service';
+import { HistoricalExchangeRateService } from '@api/common/historical-exchange-rate.service';
+import { PrismaService } from '@api/prisma/prisma.service';
+import { financeRequestFingerprint } from '@finance-pro/api/assets/finance-asset-idempotency';
+import { financeDataSnapshot } from '@finance-pro/api/catalog/finance-portability';
 import {
   TELEGRAM_BOT_DELIVERY_WRITER,
   type TelegramBotDeliveryWriterPort,
-} from '../../telegram-bots/core/telegram-bot-delivery-writer';
+} from '@api/domains/telegram/telegram-bots/core/telegram-bot-delivery-writer';
 import {
   FINANCE_OBLIGATION_PRESENTATION,
   type FinanceObligationPresentationPort,
-} from '../obligations/finance-obligation-presentation.port';
-import { prepareFinanceImportRates } from './finance-import-rates';
-import { normalizeFinanceImportDocument } from './finance-import-normalizer';
+} from '@finance-pro/api/obligations/finance-obligation-presentation.port';
+import { prepareFinanceImportRates } from '@finance-pro/api/portability/finance-import-rates';
+import { normalizeFinanceImportDocument } from '@finance-pro/api/portability/finance-import-normalizer';
 import {
   decodeFinanceRollbackSnapshot,
   encodeFinanceRollbackSnapshot,
-} from './finance-portability-history';
-import { validateFinanceImportDocument } from './finance-import-validator';
-import { writeFinanceImport } from './finance-import-writer';
+} from '@finance-pro/api/portability/finance-portability-history';
+import { validateFinanceImportDocument } from '@finance-pro/api/portability/finance-import-validator';
+import { writeFinanceImport } from '@finance-pro/api/portability/finance-import-writer';
 
 type Progress = (
   item: ConsumerFinanceImportProgress,

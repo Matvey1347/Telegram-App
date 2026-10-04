@@ -8,7 +8,7 @@ import {
 import { randomUUID } from 'node:crypto';
 import { notifyScheduledTaskDueWorkChanged } from '../../../common/scheduled-task-wake-notifier';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { TelegramSourceAccessService } from '../../../telegram/shared/telegram-source-access.service';
+import { TelegramSourceAccessService } from '@api/telegram/shared/imports/telegram-source-access.service';
 import { TelegramManagedPostRemoteDeletionService } from './telegram-managed-post-remote-deletion.service';
 import {
   groupPostBatchRows,

@@ -1,4 +1,4 @@
-import { TelegramBotApiClient } from '../../../../telegram/shared/telegram-bot-api.client';
+import { TelegramBotApiClient } from '@api/telegram/shared/bot/telegram-bot-api.client';
 
 /** Interaction feedback is best effort and must never interrupt financial work. */
 export async function acknowledgeFinanceCallback(

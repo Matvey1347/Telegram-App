@@ -10,7 +10,7 @@ import {
   TelegramSystemBotWorkflowStatus,
 } from '@prisma/client';
 import { sanitizeOperationalError } from '../../../common/security/operational-error';
-import { TelegramBotApiClient } from '../../../telegram/shared/telegram-bot-api.client';
+import { TelegramBotApiClient } from '@api/telegram/shared/bot/telegram-bot-api.client';
 import { TelegramManagedPostCommandService } from '../telegram-channels/telegram-managed-post-command.service';
 import { TelegramManagedPostPublicationService } from '../telegram-channels/telegram-managed-post-publication.service';
 import { TelegramPostBatchCommandService } from '../telegram-channels/telegram-post-batch-command.service';

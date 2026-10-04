@@ -9,8 +9,8 @@ import {
 } from '@prisma/client';
 import { WorkspaceService } from '../../../common/workspace.service';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { normalizeTelegramPostButtonRows } from '../../../telegram/shared/telegram-inline-keyboard';
-import { TelegramSourceAccessService } from '../../../telegram/shared/telegram-source-access.service';
+import { normalizeTelegramPostButtonRows } from '@api/telegram/shared/markup/telegram-inline-keyboard';
+import { TelegramSourceAccessService } from '@api/telegram/shared/imports/telegram-source-access.service';
 import { UpdateTelegramManagedPostDto } from './dto';
 import { stripLegacyGroupedPostTitlePrefix } from './post-groups.helpers';
 import { TelegramChannelCatalogService } from './telegram-channel-catalog.service';

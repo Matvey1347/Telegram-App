@@ -16,13 +16,13 @@ import {
   Modal,
   Select,
   Textarea,
-} from "./ui";
-import { consumerFinanceLedgerApi } from "@/lib/features/finance/consumer-finance-ledger-api";
-import { consumerFinanceObligationsApi } from "@/lib/features/finance/consumer-finance-obligations-api";
-import { consumerFinanceKeys } from "@/lib/features/finance/consumer-finance-query-keys";
-import { financeCalendarDate } from "@/lib/features/finance/consumer-finance-date";
-import type { FinanceLocale } from "./i18n/core";
-import { financeDebtsCopy } from "./i18n/debts";
+} from "@finance-pro/web/components/ui";
+import { consumerFinanceLedgerApi } from "@finance-pro/web/lib/api/consumer-finance-ledger-api";
+import { consumerFinanceObligationsApi } from "@finance-pro/web/lib/api/consumer-finance-obligations-api";
+import { consumerFinanceKeys } from "@finance-pro/web/lib/query/consumer-finance-query-keys";
+import { financeCalendarDate } from "@finance-pro/web/lib/formatters/consumer-finance-date";
+import type { FinanceLocale } from "@finance-pro/web/components/i18n/core";
+import { financeDebtsCopy } from "@finance-pro/web/components/i18n/debts";
 
 export function FinanceDebtEditor({
   botId,

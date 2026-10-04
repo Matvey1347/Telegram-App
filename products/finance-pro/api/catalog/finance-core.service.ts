@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { PrismaService } from '../../../../prisma/prisma.service';
+import { PrismaService } from '@api/prisma/prisma.service';
 import type {
   CreateFinanceAccountDto,
   CreateFinanceCategoryDto,
@@ -14,20 +14,20 @@ import type {
   UpdateFinanceAccountDto,
   UpdateFinanceSettingsDto,
   UpsertFinanceLimitDto,
-} from '../http/finance.dto';
-import { financeChatLocale } from '../i18n/finance-chat-i18n';
-import { CurrencyConversionService } from '../../../../common/currency-conversion.service';
-import { FinanceLimitService } from '../planning/finance-limit.service';
+} from '@finance-pro/api/http/finance.dto';
+import { financeChatLocale } from '@finance-pro/api/i18n/finance-chat-i18n';
+import { CurrencyConversionService } from '@api/common/currency-conversion.service';
+import { FinanceLimitService } from '@finance-pro/api/planning/finance-limit.service';
 import {
   financeAccountEmoji,
   financeCategoryEmoji,
   financeIconPresentation,
-} from './finance-entity-emoji';
-import { exportFinanceData } from './finance-portability';
+} from '@finance-pro/api/catalog/finance-entity-emoji';
+import { exportFinanceData } from '@finance-pro/api/catalog/finance-portability';
 import {
   archiveFinanceAccount,
   assertFinanceCategoryArchivable,
-} from './finance-obligation-archive-guards';
+} from '@finance-pro/api/catalog/finance-obligation-archive-guards';
 
 function categoryView<
   T extends { emoji: string | null; name: string; key: string | null },

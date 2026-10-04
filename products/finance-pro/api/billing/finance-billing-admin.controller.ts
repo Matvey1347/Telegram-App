@@ -1,8 +1,8 @@
 import { Controller, Param, Post, UseGuards } from '@nestjs/common';
-import { CurrentUser } from '../../../../common/current-user.decorator';
-import type { JwtUser } from '../../../../common/current-user.decorator';
-import { JwtAuthGuard } from '../../../../common/jwt-auth.guard';
-import { FinanceBillingService } from './finance-billing.service';
+import { CurrentUser } from '@api/common/current-user.decorator';
+import type { JwtUser } from '@api/common/current-user.decorator';
+import { JwtAuthGuard } from '@api/common/jwt-auth.guard';
+import { FinanceBillingService } from '@finance-pro/api/billing/finance-billing.service';
 
 @UseGuards(JwtAuthGuard)
 @Controller('telegram-bots/:botId/finance-billing')

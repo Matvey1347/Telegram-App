@@ -1,27 +1,27 @@
 import { Injectable } from '@nestjs/common';
-import { TelegramBotInteractiveReplyService } from '../../../../telegram/shared/telegram-bot-interactive-reply.service';
-import type { TelegramBotApplicationContext } from '../core/telegram-bot-update.types';
-import { FinanceHistoryQueryDto } from '../../consumer-finance/http/finance.dto';
-import { FinanceLedgerService } from '../../consumer-finance/ledger/finance-ledger.service';
-import { FinanceCoreService } from '../../consumer-finance/catalog/finance-core.service';
+import { TelegramBotInteractiveReplyService } from '@api/telegram/shared/bot/telegram-bot-interactive-reply.service';
+import type { TelegramBotApplicationContext } from '@api/domains/telegram/telegram-bots/core/telegram-bot-update.types';
+import { FinanceHistoryQueryDto } from '@finance-pro/api/http/finance.dto';
+import { FinanceLedgerService } from '@finance-pro/api/ledger/finance-ledger.service';
+import { FinanceCoreService } from '@finance-pro/api/catalog/finance-core.service';
 import {
   financeCategoryLabel,
   t,
   type FinanceChatLocale,
-} from '../../consumer-finance/i18n/finance-chat-i18n';
-import { financeCategoryEmoji } from '../../consumer-finance/catalog/finance-entity-emoji';
+} from '@finance-pro/api/i18n/finance-chat-i18n';
+import { financeCategoryEmoji } from '@finance-pro/api/catalog/finance-entity-emoji';
 import {
   financeChatMenuButton,
   financeMainMenu,
   financeMiniAppUrl,
-} from '../../consumer-finance/telegram-presentation/finance-telegram-menu';
-import { TelegramBotApiClient } from '../../../../telegram/shared/telegram-bot-api.client';
+} from '@finance-pro/api/telegram-presentation/finance-telegram-menu';
+import { TelegramBotApiClient } from '@api/telegram/shared/bot/telegram-bot-api.client';
 import {
   TELEGRAM_BOT_ACTION_TEXT,
   telegramBotActionRow,
   telegramBotEditButtonText,
-} from '../../../../telegram/shared/telegram-bot-action-buttons';
-export { financeCategoryEmoji } from '../../consumer-finance/catalog/finance-entity-emoji';
+} from '@api/telegram/shared/bot/telegram-bot-action-buttons';
+export { financeCategoryEmoji } from '@finance-pro/api/catalog/finance-entity-emoji';
 
 function rowsOfTwo<T>(items: T[]) {
   const rows: T[][] = [];

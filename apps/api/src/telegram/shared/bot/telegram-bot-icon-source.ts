@@ -2,7 +2,7 @@ import type { ResolvedEmoji } from '@telegram-system/shared';
 import {
   parseTelegramCustomEmojiTokens,
   renderTelegramCustomEmojiToken,
-} from './telegram-custom-emoji-markup';
+} from '@api/telegram/shared/markup/telegram-custom-emoji-markup';
 
 export const TELEGRAM_BOT_IMAGE_ICON_PREFIX = 'image:';
 

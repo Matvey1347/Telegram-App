@@ -1,5 +1,5 @@
 import { Prisma } from '@prisma/client';
-import { FinanceAnalyticsService } from './finance-analytics.service';
+import { FinanceAnalyticsService } from '@finance-pro/api/analytics/finance-analytics.service';
 
 const decimal = (value: Prisma.Decimal.Value) => new Prisma.Decimal(value);
 

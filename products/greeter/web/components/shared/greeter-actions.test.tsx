@@ -2,14 +2,14 @@ import { screen } from "@testing-library/react";
 import { renderWithI18n as render } from "@/test/render-with-i18n";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { GreeterAutomationsSection } from "./greeter-automations-section";
+import { GreeterAutomationsSection } from "@greeter/web/components/automation/greeter-automations-section";
 import {
   GreeterAnalyticsSection,
   GreeterUsersSection,
-} from "./greeter-audience-sections";
-import { GreeterBroadcastsSection } from "./greeter-broadcasts-section";
-import { GreeterCaptchaSection } from "./greeter-captcha-section";
-import { GreeterTestModeSection } from "./greeter-test-mode-section";
+} from "@greeter/web/components/audience/greeter-audience-sections";
+import { GreeterBroadcastsSection } from "@greeter/web/components/broadcast/greeter-broadcasts-section";
+import { GreeterCaptchaSection } from "@greeter/web/components/setup/greeter-captcha-section";
+import { GreeterTestModeSection } from "@greeter/web/components/test-mode/greeter-test-mode-section";
 
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),

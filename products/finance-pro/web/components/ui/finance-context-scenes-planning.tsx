@@ -1,4 +1,4 @@
-import styles from "./finance-context-scenes.module.css";
+import styles from "@finance-pro/web/components/ui/finance-context-scenes.module.css";
 
 export function AnalyticsScene() {
   const points = [

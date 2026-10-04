@@ -8,12 +8,12 @@ import {
   Req,
 } from '@nestjs/common';
 import type { Request } from 'express';
-import { CreateStripeCheckoutDto } from '../../bot-billing/dto';
-import { publicWebOrigin } from '../../../../config/deployment-config';
-import { financeCheckoutReturnUrl } from '../telegram-presentation/finance-telegram-menu';
-import { FinanceConsumerRequestService } from '../http/finance-consumer-request.service';
-import { FinanceBillingService } from './finance-billing.service';
-import { FinanceEntitlementService } from './finance-entitlement.service';
+import { CreateStripeCheckoutDto } from '@api/domains/telegram/bot-billing/dto';
+import { publicWebOrigin } from '@api/config/deployment-config';
+import { financeCheckoutReturnUrl } from '@finance-pro/api/telegram-presentation/finance-telegram-menu';
+import { FinanceConsumerRequestService } from '@finance-pro/api/http/finance-consumer-request.service';
+import { FinanceBillingService } from '@finance-pro/api/billing/finance-billing.service';
+import { FinanceEntitlementService } from '@finance-pro/api/billing/finance-entitlement.service';
 
 @Controller('finance-bots/:botId')
 export class FinanceConsumerBillingController {

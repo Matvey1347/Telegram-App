@@ -1,24 +1,24 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { consumerFinanceKeys } from "@/lib/features/finance/consumer-finance-query-keys";
-import { FinanceAccountCenter } from "./finance-account-center";
+import { consumerFinanceKeys } from "@finance-pro/web/lib/query/consumer-finance-query-keys";
+import { FinanceAccountCenter } from "@finance-pro/web/components/accounts/finance-account-center";
 
 const api = vi.hoisted(() => ({
   updateSettings: vi.fn(),
   uploadAvatar: vi.fn(),
   clearAvatar: vi.fn(),
 }));
-vi.mock("@/lib/features/finance/consumer-finance-profile-api", () => ({
+vi.mock("@finance-pro/web/lib/api/consumer-finance-profile-api", () => ({
   consumerFinanceProfileApi: api,
 }));
-vi.mock("./finance-settings", () => ({
+vi.mock("@finance-pro/web/components/profile/finance-settings", () => ({
   FinanceSettings: () => <div>Finance preferences</div>,
 }));
-vi.mock("./finance-plans", () => ({
+vi.mock("@finance-pro/web/components/planning/finance-plans", () => ({
   FinancePlans: () => <div>Billing and payments</div>,
 }));
-vi.mock("./use-finance-entitlements", () => ({
+vi.mock("@finance-pro/web/components/hooks/use-finance-entitlements", () => ({
   useFinanceEntitlements: () => ({
     data: { tier: "FREE" },
     isLoading: false,

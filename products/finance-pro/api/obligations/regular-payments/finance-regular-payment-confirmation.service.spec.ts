@@ -1,6 +1,6 @@
 import { ConflictException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { FinanceRegularPaymentConfirmationService } from './finance-regular-payment-confirmation.service';
+import { FinanceRegularPaymentConfirmationService } from '@finance-pro/api/obligations/regular-payments/finance-regular-payment-confirmation.service';
 
 const account = {
   id: 'account-1',

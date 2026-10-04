@@ -2,7 +2,7 @@ import { Prisma } from '@prisma/client';
 import {
   financeCategoryEmoji,
   financeIconPresentation,
-} from '../catalog/finance-entity-emoji';
+} from '@finance-pro/api/catalog/finance-entity-emoji';
 
 type FinanceLimitRow = {
   id: string;

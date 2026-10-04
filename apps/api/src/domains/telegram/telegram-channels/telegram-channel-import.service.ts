@@ -9,10 +9,10 @@ import {
   canonicalTelegramInviteLink,
   parseTelegramImportInput,
   type ResolvedTelegramEntity,
-} from '../../../telegram/shared/telegram-import.helpers';
-import { TelegramMtprotoClient } from '../../../telegram/shared/telegram-mtproto.client';
-import { maskTelegramInviteHash } from '../../../telegram/shared/telegram-invite-log';
-import { TelegramSourceAccessService } from '../../../telegram/shared/telegram-source-access.service';
+} from '@api/telegram/shared/imports/telegram-import.helpers';
+import { TelegramMtprotoClient } from '@api/telegram/shared/mtproto/telegram-mtproto.client';
+import { maskTelegramInviteHash } from '@api/telegram/shared/invites/telegram-invite-log';
+import { TelegramSourceAccessService } from '@api/telegram/shared/imports/telegram-source-access.service';
 import { ImportTelegramChannelDto } from './dto';
 import { TelegramBroadcastStatsService } from './telegram-broadcast-stats.service';
 import { TelegramChannelAccessService } from './telegram-channel-access.service';
@@ -24,7 +24,7 @@ import { TelegramChannelsSupportService } from './telegram-channels-support.serv
 import { BulkProgressCallback } from './telegram-channels.internal';
 import { TelegramPostMetricsService } from './telegram-post-metrics.service';
 import { TelegramPostGroupStore } from './telegram-post-group.store';
-import { REVOKED_TELEGRAM_SESSION_MESSAGE } from '../../../telegram/shared/telegram-session-errors';
+import { REVOKED_TELEGRAM_SESSION_MESSAGE } from '@api/telegram/shared/mtproto/telegram-session-errors';
 
 type TelegramChannelBatchImportProgress = {
   input: string;

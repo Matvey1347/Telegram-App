@@ -4,25 +4,25 @@ import { useState } from "react";
 import { Bot } from "lucide-react";
 import type { ConsumerFinanceProfile } from "@telegram-system/shared";
 import Image from "next/image";
-import type { FinanceCoreCopy } from "./i18n/core";
-import type { FinanceLocale } from "./i18n/core";
+import type { FinanceCoreCopy } from "@finance-pro/web/components/i18n/core";
+import type { FinanceLocale } from "@finance-pro/web/components/i18n/core";
 import type {
   ConsumerFinanceAction,
   ConsumerFinanceScreen,
-} from "./consumer-finance-navigation";
-import { financeScreenLabel } from "./consumer-finance-navigation";
-import { ConsumerFinanceActionLauncher } from "./consumer-finance-action-launcher";
-import { FinanceLanguageSelect } from "./ui/finance-language-select";
+} from "@finance-pro/web/components/app/consumer-finance-navigation";
+import { financeScreenLabel } from "@finance-pro/web/components/app/consumer-finance-navigation";
+import { ConsumerFinanceActionLauncher } from "@finance-pro/web/components/app/consumer-finance-action-launcher";
+import { FinanceLanguageSelect } from "@finance-pro/web/components/ui/finance-language-select";
 import {
   FINANCE_NAVIGATION_GROUPS,
   FinanceNavigationButton,
   FinanceNavigationGroupHeader,
   FinanceScreenIcon,
   isFinanceNavigationActive,
-} from "./finance-navigation-items";
-import { FinanceAccountMenu } from "./finance-account-menu";
-import { FinanceMobileNavigation } from "./finance-mobile-navigation";
-import styles from "./finance-navigation-groups.module.css";
+} from "@finance-pro/web/components/app/finance-navigation-items";
+import { FinanceAccountMenu } from "@finance-pro/web/components/accounts/finance-account-menu";
+import { FinanceMobileNavigation } from "@finance-pro/web/components/app/finance-mobile-navigation";
+import styles from "@finance-pro/web/components/app/finance-navigation-groups.module.css";
 
 export function FinanceWebAppShell({
   botId,

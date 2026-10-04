@@ -1,4 +1,4 @@
-jest.mock('./greeter-automation.service', () => ({
+jest.mock('@greeter/api/automation/greeter-automation.service', () => ({
   GreeterAutomationService: class GreeterAutomationService {},
 }));
 
@@ -8,7 +8,7 @@ import {
   GreeterBroadcastRecipientStatus,
   GreeterBroadcastStatus,
 } from '@prisma/client';
-import { GreeterBroadcastService } from './greeter-broadcast.service';
+import { GreeterBroadcastService } from '@greeter/api/broadcast/greeter-broadcast.service';
 
 const now = new Date('2026-08-09T10:00:00.000Z');
 const row = (

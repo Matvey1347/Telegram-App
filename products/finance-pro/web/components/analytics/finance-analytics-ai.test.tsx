@@ -1,13 +1,13 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { FinanceAnalyticsAi } from "./finance-analytics-ai";
+import { FinanceAnalyticsAi } from "@finance-pro/web/components/analytics/finance-analytics-ai";
 
 const api = vi.hoisted(() => ({
   entitlements: vi.fn(),
   askFinance: vi.fn(),
 }));
-vi.mock("@/lib/features/finance/consumer-finance-api", () => ({
+vi.mock("@finance-pro/web/lib/api/consumer-finance-api", () => ({
   consumerFinanceApi: api,
 }));
 

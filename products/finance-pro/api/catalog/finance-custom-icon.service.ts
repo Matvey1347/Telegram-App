@@ -1,10 +1,10 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { PrismaService } from '../../../../prisma/prisma.service';
+import { PrismaService } from '@api/prisma/prisma.service';
 import {
   B2ObjectStorageService,
   isSupportedImmutableImageMimeType,
-} from '../../../../common/object-storage/b2-object-storage.service';
-import { CreateFinanceCustomIconDto } from './finance-custom-icon.dto';
+} from '@api/common/object-storage/b2-object-storage.service';
+import { CreateFinanceCustomIconDto } from '@finance-pro/api/catalog/finance-custom-icon.dto';
 
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 

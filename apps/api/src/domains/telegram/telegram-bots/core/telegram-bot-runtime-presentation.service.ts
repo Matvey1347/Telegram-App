@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { TelegramBotApplicationType } from '@prisma/client';
-import { TelegramBotApiClient } from '../../../../telegram/shared/telegram-bot-api.client';
+import { TelegramBotApiClient } from '@api/telegram/shared/bot/telegram-bot-api.client';
 import {
   TELEGRAM_BOT_FINANCE_PRESENTATION,
   TELEGRAM_BOT_GREETER_PRESENTATION,

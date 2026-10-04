@@ -2,13 +2,13 @@
 
 import { useInfiniteQuery } from "@tanstack/react-query";
 import type { ConsumerFinanceSavingsGoal } from "@telegram-system/shared";
-import { Button, EmptyState, ErrorState, LoadingState, Modal } from "./ui";
-import type { FinanceLocale } from "./i18n/core";
-import { financeSavingsCopy } from "./i18n/savings";
-import { financeIntlLocale } from "./i18n/core";
-import { formatMoney } from "@/lib/features/finance/consumer-finance-money";
-import { consumerFinanceSavingsGoalsApi } from "@/lib/features/finance/consumer-finance-savings-goals-api";
-import { consumerFinanceKeys } from "@/lib/features/finance/consumer-finance-query-keys";
+import { Button, EmptyState, ErrorState, LoadingState, Modal } from "@finance-pro/web/components/ui";
+import type { FinanceLocale } from "@finance-pro/web/components/i18n/core";
+import { financeSavingsCopy } from "@finance-pro/web/components/i18n/savings";
+import { financeIntlLocale } from "@finance-pro/web/components/i18n/core";
+import { formatMoney } from "@finance-pro/web/lib/formatters/consumer-finance-money";
+import { consumerFinanceSavingsGoalsApi } from "@finance-pro/web/lib/api/consumer-finance-savings-goals-api";
+import { consumerFinanceKeys } from "@finance-pro/web/lib/query/consumer-finance-query-keys";
 
 export function FinanceSavingsHistory({
   botId,

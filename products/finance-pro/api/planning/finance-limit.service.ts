@@ -4,10 +4,10 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { CurrencyConversionService } from '../../../../common/currency-conversion.service';
-import { PrismaService } from '../../../../prisma/prisma.service';
-import { financeAnalyticsDateRange } from '../ledger/finance-history-date-range';
-import { financeLimitView } from './finance-limit-view';
+import { CurrencyConversionService } from '@api/common/currency-conversion.service';
+import { PrismaService } from '@api/prisma/prisma.service';
+import { financeAnalyticsDateRange } from '@finance-pro/api/ledger/finance-history-date-range';
+import { financeLimitView } from '@finance-pro/api/planning/finance-limit-view';
 
 type LimitSpendRow = {
   categoryId: string;

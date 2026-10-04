@@ -1,12 +1,12 @@
 import { Injectable } from '@nestjs/common';
-import type { TelegramBotApplicationContext } from '../core/telegram-bot-update.types';
-import { TelegramBotInteractiveReplyService } from '../../../../telegram/shared/telegram-bot-interactive-reply.service';
-import { FinanceConsumerTransferService } from '../../consumer-finance/identity/finance-consumer-transfer.service';
-import { parseFinanceBrowserLoginToken } from './finance-chat-input-parser';
+import type { TelegramBotApplicationContext } from '@api/domains/telegram/telegram-bots/core/telegram-bot-update.types';
+import { TelegramBotInteractiveReplyService } from '@api/telegram/shared/bot/telegram-bot-interactive-reply.service';
+import { FinanceConsumerTransferService } from '@finance-pro/api/identity/finance-consumer-transfer.service';
+import { parseFinanceBrowserLoginToken } from '@finance-pro/bot/finance-chat-input-parser';
 import {
   type FinanceChatLocale,
   t,
-} from '../../consumer-finance/i18n/finance-chat-i18n';
+} from '@finance-pro/api/i18n/finance-chat-i18n';
 
 @Injectable()
 export class FinanceBotBrowserLogin {

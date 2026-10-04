@@ -8,12 +8,12 @@ import { TelegramUserAccountStatus } from '@prisma/client';
 import type { Subscription } from 'rxjs';
 import { TelegramAccountRuntimeNotifier } from '../../../common/telegram-account-runtime-notifier.service';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { TelegramCrmMtprotoAdapter } from '../../../telegram/shared/telegram-crm-mtproto.adapter';
+import { TelegramCrmMtprotoAdapter } from '@api/telegram/shared/mtproto/telegram-crm-mtproto.adapter';
 import type {
   TelegramCrmMtprotoHandle,
   TelegramCrmMtprotoUpdate,
-} from '../../../telegram/shared/telegram-crm-mtproto.types';
-import { isRevokedTelegramSessionError } from '../../../telegram/shared/telegram-session-errors';
+} from '@api/telegram/shared/mtproto/telegram-crm-mtproto.types';
+import { isRevokedTelegramSessionError } from '@api/telegram/shared/mtproto/telegram-session-errors';
 import {
   type CrmRuntimeAccount,
   TelegramCrmAccountSessionService,

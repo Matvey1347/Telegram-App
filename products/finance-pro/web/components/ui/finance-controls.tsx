@@ -12,8 +12,8 @@ import {
   useState,
 } from "react";
 import { Check, ChevronDown, Eye, EyeOff } from "lucide-react";
-import type { FinanceLocale } from "../i18n/core";
-import { financeUiTokens } from "./finance-ui-tokens";
+import type { FinanceLocale } from "@finance-pro/web/components/i18n/core";
+import { financeUiTokens } from "@finance-pro/web/components/ui/finance-ui-tokens";
 
 const selectCopy = {
   en: { select: "Select", search: "Search…", empty: "No options found" },

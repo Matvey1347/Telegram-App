@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TelegramChannelsModule } from '../telegram-channels/telegram-channels.module';
-import { TelegramMtprotoClient } from '../../../telegram/shared/telegram-mtproto.client';
-import { TelegramSourceAccessService } from '../../../telegram/shared/telegram-source-access.service';
+import { TelegramMtprotoClient } from '@api/telegram/shared/mtproto/telegram-mtproto.client';
+import { TelegramSourceAccessService } from '@api/telegram/shared/imports/telegram-source-access.service';
 import { TelegramUserAccountsController } from './telegram-user-accounts.controller';
 import { TelegramUserAccountsService } from './telegram-user-accounts.service';
 import { TelegramUserAccountLoginFinalizer } from './telegram-user-account-login-finalizer';

@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { TelegramBotApplicationType } from '@prisma/client';
 import { sanitizeOperationalError } from '../../../../common/security/operational-error';
 import { PrismaService } from '../../../../prisma/prisma.service';
-import { TelegramBotApiClient } from '../../../../telegram/shared/telegram-bot-api.client';
+import { TelegramBotApiClient } from '@api/telegram/shared/bot/telegram-bot-api.client';
 import { TelegramBotRuntimePresentationService } from './telegram-bot-runtime-presentation.service';
 
 /**

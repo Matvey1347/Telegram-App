@@ -1,10 +1,10 @@
 import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
-import { consumerFinanceKeys } from "./consumer-finance-query-keys";
+import { consumerFinanceKeys } from "@finance-pro/web/lib/query/consumer-finance-query-keys";
 import {
   removeConsumerTransactionFromCaches,
   reconcileConsumerTransactionCaches,
-} from "./consumer-finance-cache";
+} from "@finance-pro/web/lib/cache/consumer-finance-cache";
 
 describe("consumer Finance transaction cache", () => {
   it("reconciles only transaction lists whose filters still match", () => {

@@ -21,7 +21,7 @@ import { QueryContentState } from "@/components/ui/query-content-state";
 import { greeterApi } from "@/lib/api";
 import { greeterKeys } from "@/lib/query-keys";
 import { useAppToast } from "@/providers/toast-provider";
-import { GreeterMessageEditor } from "./greeter-message-editor";
+import { GreeterMessageEditor } from "@greeter/web/components/shared/greeter-message-editor";
 
 const emptyBroadcast: GreeterBroadcastInput = {
   name: "",

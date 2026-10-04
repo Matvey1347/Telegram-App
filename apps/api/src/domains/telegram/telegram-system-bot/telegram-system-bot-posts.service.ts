@@ -2,7 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import { TelegramManagedPostStatus } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { TelegramBotApiClient } from '../../../telegram/shared/telegram-bot-api.client';
+import { TelegramBotApiClient } from '@api/telegram/shared/bot/telegram-bot-api.client';
 import { TelegramSystemBotConfigService } from './telegram-system-bot-config.service';
 import { formatSystemBotDate } from './telegram-system-bot-menu';
 import type { TelegramSystemBotPostFlowScope } from './telegram-system-bot-post-flow.types';

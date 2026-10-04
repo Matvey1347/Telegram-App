@@ -1,5 +1,5 @@
 import { ForbiddenException } from '@nestjs/common';
-import { FinanceConsumerSessionService } from './finance-consumer-session.service';
+import { FinanceConsumerSessionService } from '@finance-pro/api/identity/finance-consumer-session.service';
 
 describe('FinanceConsumerSessionService', () => {
   const ttlSeconds = 60 * 60 * 24 * 30;

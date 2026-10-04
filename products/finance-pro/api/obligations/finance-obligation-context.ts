@@ -1,6 +1,6 @@
 import { NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { financeChatLocale } from '../i18n/finance-chat-i18n';
+import { financeChatLocale } from '@finance-pro/api/i18n/finance-chat-i18n';
 
 export const financeObligationProfileSelect = {
   id: true,

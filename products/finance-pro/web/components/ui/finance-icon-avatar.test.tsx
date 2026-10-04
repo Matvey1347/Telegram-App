@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { FinanceIconAvatar } from "./finance-icon-avatar";
+import { FinanceIconAvatar } from "@finance-pro/web/components/ui/finance-icon-avatar";
 
 describe("FinanceIconAvatar", () => {
   it("renders image avatars without the fallback background or border", () => {

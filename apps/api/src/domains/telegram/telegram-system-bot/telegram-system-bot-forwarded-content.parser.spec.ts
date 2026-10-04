@@ -3,7 +3,7 @@ import { HTMLParser } from 'telegram/extensions/html';
 import {
   telegramHtmlToMtprotoHtml,
   telegramMarkupToHtml,
-} from '../../../telegram/shared/telegram-markup';
+} from '@api/telegram/shared/markup/telegram-markup';
 import { parseTelegramSystemBotForwardedContent } from './telegram-system-bot-forwarded-content.parser';
 
 describe('parseTelegramSystemBotForwardedContent', () => {

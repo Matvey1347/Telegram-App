@@ -92,9 +92,21 @@
       "ts"
     ],
     "rootDir": "src",
+    "roots": [
+      "<rootDir>",
+      "<rootDir>/../../../products/finance-pro/api",
+      "<rootDir>/../../../products/finance-pro/bot",
+      "<rootDir>/../../../products/greeter/api"
+    ],
     "testRegex": ".*\\.spec\\.ts$",
     "transform": {
       "^.+\\.(t|j)s$": "ts-jest"
+    },
+    "moduleNameMapper": {
+      "^@api/(.*)$": "<rootDir>/$1",
+      "^@finance-pro/api/(.*)$": "<rootDir>/../../../products/finance-pro/api/$1",
+      "^@finance-pro/bot/(.*)$": "<rootDir>/../../../products/finance-pro/bot/$1",
+      "^@greeter/api/(.*)$": "<rootDir>/../../../products/greeter/api/$1"
     },
     "collectCoverageFrom": [
       "**/*.(t|j)s"

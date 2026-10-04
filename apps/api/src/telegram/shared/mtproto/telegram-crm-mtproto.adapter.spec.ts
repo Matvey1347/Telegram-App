@@ -2,10 +2,10 @@ import { Api } from 'telegram';
 import {
   closeTelegramMtprotoSession,
   createTelegramMtprotoSession,
-} from './telegram-mtproto-session.factory';
-import { TelegramCrmMtprotoAdapter } from './telegram-crm-mtproto.adapter';
+} from '@api/telegram/shared/mtproto/telegram-mtproto-session.factory';
+import { TelegramCrmMtprotoAdapter } from '@api/telegram/shared/mtproto/telegram-crm-mtproto.adapter';
 
-jest.mock('./telegram-mtproto-session.factory', () => ({
+jest.mock('@api/telegram/shared/mtproto/telegram-mtproto-session.factory', () => ({
   createTelegramMtprotoSession: jest.fn(),
   closeTelegramMtprotoSession: jest.fn(),
 }));

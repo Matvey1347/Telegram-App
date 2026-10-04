@@ -1,7 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 import type { GreeterSequenceStepInput } from '@telegram-system/shared';
-import type { GreeterButtonRows } from './greeter-automation.service';
-import { assertValidGreeterTemplate } from './greeter-template.renderer';
+import type { GreeterButtonRows } from '@greeter/api/automation/greeter-automation.service';
+import { assertValidGreeterTemplate } from '@greeter/api/templates/greeter-template.renderer';
 
 export function validateGreeterButtons(buttons?: GreeterButtonRows) {
   if (buttons !== undefined && !Array.isArray(buttons))

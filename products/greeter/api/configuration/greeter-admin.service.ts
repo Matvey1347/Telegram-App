@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { TelegramBotApplicationType, WorkspaceRole } from '@prisma/client';
-import { WorkspaceService } from '../../../../common/workspace.service';
-import { PrismaService } from '../../../../prisma/prisma.service';
+import { WorkspaceService } from '@api/common/workspace.service';
+import { PrismaService } from '@api/prisma/prisma.service';
 
 @Injectable()
 export class GreeterAdminService {

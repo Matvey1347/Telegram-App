@@ -2,27 +2,27 @@
 
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ConsumerFinanceScreens } from "./consumer-finance-screens";
-import { useTelegramMiniAppBootstrap } from "./use-telegram-mini-app-bootstrap";
-import { consumerFinanceAuthApi } from "@/lib/features/finance/consumer-finance-auth-api";
-import { consumerFinanceProfileApi } from "@/lib/features/finance/consumer-finance-profile-api";
-import { consumerFinanceKeys } from "@/lib/features/finance/consumer-finance-query-keys";
+import { ConsumerFinanceScreens } from "@finance-pro/web/components/app/consumer-finance-screens";
+import { useTelegramMiniAppBootstrap } from "@finance-pro/web/components/hooks/use-telegram-mini-app-bootstrap";
+import { consumerFinanceAuthApi } from "@finance-pro/web/lib/api/consumer-finance-auth-api";
+import { consumerFinanceProfileApi } from "@finance-pro/web/lib/api/consumer-finance-profile-api";
+import { consumerFinanceKeys } from "@finance-pro/web/lib/query/consumer-finance-query-keys";
 import {
   ConsumerFinanceBootstrapError,
   ConsumerFinanceLogin,
-} from "./consumer-finance-login";
+} from "@finance-pro/web/components/app/consumer-finance-login";
 import type {
   ConsumerFinanceProfile,
   ConsumerFinanceSessionState,
 } from "@telegram-system/shared";
-import { financeCoreCopy, normalizeFinanceLocale } from "./i18n/core";
-import { FinanceMiniAppShell } from "./finance-mini-app-shell";
-import { FinanceWebAppShell } from "./finance-web-app-shell";
-import { LoadingState } from "./ui";
+import { financeCoreCopy, normalizeFinanceLocale } from "@finance-pro/web/components/i18n/core";
+import { FinanceMiniAppShell } from "@finance-pro/web/components/app/finance-mini-app-shell";
+import { FinanceWebAppShell } from "@finance-pro/web/components/app/finance-web-app-shell";
+import { LoadingState } from "@finance-pro/web/components/ui";
 import {
   FinanceVisualContextProvider,
   financeVisualContextForScreen,
-} from "./ui/finance-visual-context";
+} from "@finance-pro/web/components/ui/finance-visual-context";
 import {
   consumerFinanceAccountUrl,
   consumerFinanceInvestmentUrl,
@@ -35,10 +35,10 @@ import {
   readConsumerFinanceScreen,
   type ConsumerFinanceAction,
   type ConsumerFinanceScreen,
-} from "./consumer-finance-navigation";
-import { useFinanceBotBranding } from "./use-finance-bot-branding";
-import { FinanceAssistantDrawer } from "./finance-assistant-drawer";
-import { FinanceOnboardingTour } from "./finance-onboarding-tour";
+} from "@finance-pro/web/components/app/consumer-finance-navigation";
+import { useFinanceBotBranding } from "@finance-pro/web/components/hooks/use-finance-bot-branding";
+import { FinanceAssistantDrawer } from "@finance-pro/web/components/assistant/finance-assistant-drawer";
+import { FinanceOnboardingTour } from "@finance-pro/web/components/onboarding/finance-onboarding-tour";
 
 const subscribeToStaticBrowserState = () => () => undefined;
 

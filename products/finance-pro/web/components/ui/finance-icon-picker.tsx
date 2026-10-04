@@ -9,12 +9,12 @@ import type {
   ConsumerFinanceCustomIcon,
   ResolvedEmoji,
 } from "@telegram-system/shared";
-import { consumerFinanceLedgerApi } from "@/lib/features/finance/consumer-finance-ledger-api";
-import { consumerFinanceKeys } from "@/lib/features/finance/consumer-finance-query-keys";
-import type { FinanceLocale } from "../i18n/core";
-import { Button, Input } from "./finance-controls";
-import { FinanceIconAvatar } from "./finance-icon-avatar";
-import { financeIconPickerCopy } from "./finance-icon-picker-i18n";
+import { consumerFinanceLedgerApi } from "@finance-pro/web/lib/api/consumer-finance-ledger-api";
+import { consumerFinanceKeys } from "@finance-pro/web/lib/query/consumer-finance-query-keys";
+import type { FinanceLocale } from "@finance-pro/web/components/i18n/core";
+import { Button, Input } from "@finance-pro/web/components/ui/finance-controls";
+import { FinanceIconAvatar } from "@finance-pro/web/components/ui/finance-icon-avatar";
+import { financeIconPickerCopy } from "@finance-pro/web/components/ui/finance-icon-picker-i18n";
 
 type FinanceIconPickerProps = {
   botId: string;

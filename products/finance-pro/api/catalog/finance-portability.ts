@@ -1,11 +1,11 @@
 import { Prisma } from '@prisma/client';
 import type { ConsumerFinanceImportDocumentV1 } from '@telegram-system/shared';
-import type { PrismaService } from '../../../../prisma/prisma.service';
+import type { PrismaService } from '@api/prisma/prisma.service';
 import {
   financeDocumentCounts,
   financeDocumentRecordCount,
   pruneFinanceExportHistory,
-} from '../portability/finance-portability-history';
+} from '@finance-pro/api/portability/finance-portability-history';
 
 const iso = (value: Date | null) => value?.toISOString() ?? null;
 const decimal = (value: Prisma.Decimal) => value.toString();

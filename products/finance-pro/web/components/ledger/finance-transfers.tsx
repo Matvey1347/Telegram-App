@@ -23,23 +23,23 @@ import {
   Input,
   LoadingState,
   Select,
-} from "./ui";
-import { consumerFinanceApi } from "@/lib/features/finance/consumer-finance-api";
-import { consumerFinanceLedgerApi } from "@/lib/features/finance/consumer-finance-ledger-api";
-import { formatMoney } from "@/lib/features/finance/consumer-finance-money";
+} from "@finance-pro/web/components/ui";
+import { consumerFinanceApi } from "@finance-pro/web/lib/api/consumer-finance-api";
+import { consumerFinanceLedgerApi } from "@finance-pro/web/lib/api/consumer-finance-ledger-api";
+import { formatMoney } from "@finance-pro/web/lib/formatters/consumer-finance-money";
 import {
   reconcileConsumerTransferCaches,
   removeConsumerTransferFromCaches,
-} from "@/lib/features/finance/consumer-finance-cache";
-import { consumerFinanceKeys } from "@/lib/features/finance/consumer-finance-query-keys";
-import { FinanceConfirmModal } from "./finance-confirm-modal";
-import { FinanceTransferEditor } from "./finance-transfer-editor";
-import { useDebouncedValue } from "./use-debounced-value";
-import { financeIntlLocale, type FinanceLocale } from "./i18n/core";
-import { financeTransfersCopy } from "./i18n/transfers";
-import { financePeriodDateRange } from "./finance-period-selector";
-import { IconAvatar } from "./ui/finance-icon-avatar";
-import { FinanceCursorPagination } from "./ui/finance-cursor-pagination";
+} from "@finance-pro/web/lib/cache/consumer-finance-cache";
+import { consumerFinanceKeys } from "@finance-pro/web/lib/query/consumer-finance-query-keys";
+import { FinanceConfirmModal } from "@finance-pro/web/components/shared/finance-confirm-modal";
+import { FinanceTransferEditor } from "@finance-pro/web/components/ledger/finance-transfer-editor";
+import { useDebouncedValue } from "@finance-pro/web/components/hooks/use-debounced-value";
+import { financeIntlLocale, type FinanceLocale } from "@finance-pro/web/components/i18n/core";
+import { financeTransfersCopy } from "@finance-pro/web/components/i18n/transfers";
+import { financePeriodDateRange } from "@finance-pro/web/components/planning/finance-period-selector";
+import { IconAvatar } from "@finance-pro/web/components/ui/finance-icon-avatar";
+import { FinanceCursorPagination } from "@finance-pro/web/components/ui/finance-cursor-pagination";
 
 export function FinanceTransfers({
   botId,

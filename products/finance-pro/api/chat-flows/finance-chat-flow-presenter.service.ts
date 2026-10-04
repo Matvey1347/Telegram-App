@@ -3,18 +3,18 @@ import {
   financeCategoryLabel,
   t,
   type FinanceChatLocale,
-} from '../i18n/finance-chat-i18n';
+} from '@finance-pro/api/i18n/finance-chat-i18n';
 import {
   FinanceChatFlowService,
   type FinanceFlowResult,
-} from './finance-chat-flow.service';
+} from '@finance-pro/api/chat-flows/finance-chat-flow.service';
 import {
   financeAccountEmoji,
   financeCategoryEmoji,
   financeIconPresentation,
   financeStoredIconSource,
-} from '../catalog/finance-entity-emoji';
-import { telegramBotActionRow } from '../../../../telegram/shared/telegram-bot-action-buttons';
+} from '@finance-pro/api/catalog/finance-entity-emoji';
+import { telegramBotActionRow } from '@api/telegram/shared/bot/telegram-bot-action-buttons';
 
 type Button = {
   text: string;

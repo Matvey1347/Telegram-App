@@ -3,7 +3,7 @@ import {
   telegramBotActionRow,
   telegramBotApiActionRow,
   telegramBotEditButtonText,
-} from './telegram-bot-action-buttons';
+} from '@api/telegram/shared/bot/telegram-bot-action-buttons';
 
 describe('Telegram bot action buttons', () => {
   it('keeps Back, Cancel and Confirm in one shared order', () => {

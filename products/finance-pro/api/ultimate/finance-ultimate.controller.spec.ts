@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events';
-import { FinanceUltimateController } from './finance-ultimate.controller';
+import { FinanceUltimateController } from '@finance-pro/api/ultimate/finance-ultimate.controller';
 
 describe('FinanceUltimateController message stream', () => {
   it('flushes start and text deltas before the final result', async () => {

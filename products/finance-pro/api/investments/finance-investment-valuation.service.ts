@@ -5,20 +5,20 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { CurrencyConversionService } from '../../../../common/currency-conversion.service';
-import { PrismaService } from '../../../../prisma/prisma.service';
+import { CurrencyConversionService } from '@api/common/currency-conversion.service';
+import { PrismaService } from '@api/prisma/prisma.service';
 import {
   assertFinanceIdempotency,
   financeRequestFingerprint,
-} from '../assets/finance-asset-idempotency';
-import { FinanceLedgerService } from '../ledger/finance-ledger.service';
-import { financeValuationSnapshot } from '../ledger/finance-transaction-valuation';
-import type { FinanceInvestmentValuationDto } from './finance-investment.dto';
-import { FinanceInvestmentReadService } from './finance-investment-read.service';
+} from '@finance-pro/api/assets/finance-asset-idempotency';
+import { FinanceLedgerService } from '@finance-pro/api/ledger/finance-ledger.service';
+import { financeValuationSnapshot } from '@finance-pro/api/ledger/finance-transaction-valuation';
+import type { FinanceInvestmentValuationDto } from '@finance-pro/api/investments/finance-investment.dto';
+import { FinanceInvestmentReadService } from '@finance-pro/api/investments/finance-investment-read.service';
 import {
   financeInvestmentValuationSelect,
   financeInvestmentValuationView,
-} from './finance-investment-view';
+} from '@finance-pro/api/investments/finance-investment-view';
 
 @Injectable()
 export class FinanceInvestmentValuationService {

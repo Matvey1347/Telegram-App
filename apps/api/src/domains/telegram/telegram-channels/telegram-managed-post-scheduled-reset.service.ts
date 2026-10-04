@@ -7,7 +7,7 @@ import {
 } from '@prisma/client';
 import type { ResetChannelScheduledPostsResult } from '@telegram-system/shared';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { TelegramMtprotoClient } from '../../../telegram/shared/telegram-mtproto.client';
+import { TelegramMtprotoClient } from '@api/telegram/shared/mtproto/telegram-mtproto.client';
 import { TelegramChannelAccessService } from './telegram-channel-access.service';
 import { TelegramChannelsSupportService } from './telegram-channels-support.service';
 import { TelegramManagedPostRevisionStore } from './telegram-managed-post-revision.store';

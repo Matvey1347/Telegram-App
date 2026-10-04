@@ -13,7 +13,7 @@ import type {
 import { WorkspaceService } from '../../../common/workspace.service';
 import { TokenEncryptionService } from '../../../common/security/token-encryption.service';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { TelegramMtprotoClient } from '../../../telegram/shared/telegram-mtproto.client';
+import { TelegramMtprotoClient } from '@api/telegram/shared/mtproto/telegram-mtproto.client';
 import { TelegramUserAccountLoginFinalizer } from './telegram-user-account-login-finalizer';
 import { TelegramAccountRuntimeNotifier } from '../../../common/telegram-account-runtime-notifier.service';
 

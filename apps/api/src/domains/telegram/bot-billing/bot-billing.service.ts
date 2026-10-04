@@ -9,7 +9,7 @@ import { BILLING_PROVIDER_CAPABILITIES } from './bot-billing.providers';
 import { BillingSubscribersQueryDto, BillingUsersQueryDto, CreateBillingGrantDto, CreateBillingPlanDto, CreateBillingPlanPriceDto, SetBillingPriceVisibilityDto, UpdateFinanceSupportProfileDto, UpsertBillingProviderConfigDto } from './dto';
 import type { CreateBillingCouponDto } from './dto';
 import { StripeBillingProvider } from './stripe-billing.provider';
-import { TelegramBotApiClient } from '../../../telegram/shared/telegram-bot-api.client';
+import { TelegramBotApiClient } from '@api/telegram/shared/bot/telegram-bot-api.client';
 import { BotBillingAnalyticsService } from './bot-billing-analytics.service';
 import {
   isProductionEnvironment,

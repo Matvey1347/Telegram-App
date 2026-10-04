@@ -6,18 +6,18 @@ import {
   TelegramBotRuntimeStatus,
 } from '@prisma/client';
 import { randomUUID } from 'crypto';
-import { sanitizeOperationalError } from '../../../../common/security/operational-error';
-import { TokenEncryptionService } from '../../../../common/security/token-encryption.service';
-import { PrismaService } from '../../../../prisma/prisma.service';
-import { TelegramBotApiClient } from '../../../../telegram/shared/telegram-bot-api.client';
-import { GreeterConfigurationService } from './greeter-configuration.service';
-import { TelegramBotDeliveryService } from '../core/telegram-bot-delivery.service';
-import { renderGreeterTemplate } from './greeter-template.renderer';
-import { telegramMarkupToHtml } from '../../../../telegram/shared/telegram-markup';
+import { sanitizeOperationalError } from '@api/common/security/operational-error';
+import { TokenEncryptionService } from '@api/common/security/token-encryption.service';
+import { PrismaService } from '@api/prisma/prisma.service';
+import { TelegramBotApiClient } from '@api/telegram/shared/bot/telegram-bot-api.client';
+import { GreeterConfigurationService } from '@greeter/api/configuration/greeter-configuration.service';
+import { TelegramBotDeliveryService } from '@api/domains/telegram/telegram-bots/core/telegram-bot-delivery.service';
+import { renderGreeterTemplate } from '@greeter/api/templates/greeter-template.renderer';
+import { telegramMarkupToHtml } from '@api/telegram/shared/markup/telegram-markup';
 import {
   GREETER_EXPIRY_RETRY_MS,
   greeterExpiryClaimableWhere,
-} from '../../../operations/scheduled-tasks/due-work-predicates';
+} from '@api/domains/operations/scheduled-tasks/due-work-predicates';
 
 @Injectable()
 export class GreeterExpiryService {

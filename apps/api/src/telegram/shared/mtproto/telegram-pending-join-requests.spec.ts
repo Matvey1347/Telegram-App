@@ -1,5 +1,5 @@
 import { Api } from 'telegram';
-import { livePending } from './telegram-pending-join-requests';
+import { livePending } from '@api/telegram/shared/mtproto/telegram-pending-join-requests';
 
 describe('fetchPendingJoinRequestsCount', () => {
   it('reads the live requested-importers count, including zero after approval', async () => {

@@ -1,6 +1,6 @@
 import { ConflictException, Injectable } from '@nestjs/common';
 import { Prisma, TelegramUserAccountStatus } from '@prisma/client';
-import type { TelegramAccountProfile } from '../../../telegram/shared/telegram-mtproto-account-profile';
+import type { TelegramAccountProfile } from '@api/telegram/shared/mtproto/telegram-mtproto-account-profile';
 import { TokenEncryptionService } from '../../../common/security/token-encryption.service';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { WorkspaceService } from '../../../common/workspace.service';

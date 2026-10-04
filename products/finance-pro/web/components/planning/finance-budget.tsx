@@ -12,19 +12,19 @@ import {
   LoadingState,
   Select,
   Modal,
-} from "./ui";
-import { consumerFinanceInsightsApi } from "@/lib/features/finance/consumer-finance-insights-api";
-import { consumerFinanceLedgerApi } from "@/lib/features/finance/consumer-finance-ledger-api";
-import { consumerFinancePlanningApi } from "@/lib/features/finance/consumer-finance-planning-api";
-import { formatMoney } from "@/lib/features/finance/consumer-finance-money";
-import { consumerFinanceKeys } from "@/lib/features/finance/consumer-finance-query-keys";
-import { type FinanceLocale } from "./i18n/core";
-import { financeBudgetCopy } from "./i18n/budget";
-import { localizeFinanceCategory } from "./finance-category-i18n";
-import { FinancePlanPromotion } from "./finance-plan-promotion";
-import { IconAvatar } from "./ui/finance-icon-avatar";
+} from "@finance-pro/web/components/ui";
+import { consumerFinanceInsightsApi } from "@finance-pro/web/lib/api/consumer-finance-insights-api";
+import { consumerFinanceLedgerApi } from "@finance-pro/web/lib/api/consumer-finance-ledger-api";
+import { consumerFinancePlanningApi } from "@finance-pro/web/lib/api/consumer-finance-planning-api";
+import { formatMoney } from "@finance-pro/web/lib/formatters/consumer-finance-money";
+import { consumerFinanceKeys } from "@finance-pro/web/lib/query/consumer-finance-query-keys";
+import { type FinanceLocale } from "@finance-pro/web/components/i18n/core";
+import { financeBudgetCopy } from "@finance-pro/web/components/i18n/budget";
+import { localizeFinanceCategory } from "@finance-pro/web/components/catalog/finance-category-i18n";
+import { FinancePlanPromotion } from "@finance-pro/web/components/planning/finance-plan-promotion";
+import { IconAvatar } from "@finance-pro/web/components/ui/finance-icon-avatar";
 import { Pencil, Trash2 } from "lucide-react";
-import { FinanceConfirmModal } from "./finance-confirm-modal";
+import { FinanceConfirmModal } from "@finance-pro/web/components/shared/finance-confirm-modal";
 export function FinanceBudget({
   botId,
   locale,

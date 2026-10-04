@@ -1,4 +1,4 @@
-import type { FinanceChatLocale } from '../../consumer-finance/i18n/finance-chat-i18n';
+import type { FinanceChatLocale } from '@finance-pro/api/i18n/finance-chat-i18n';
 
 const COPY = {
   en: {

@@ -9,7 +9,7 @@ import {
   Req,
 } from '@nestjs/common';
 import type { Request } from 'express';
-import { FinanceConsumerRequestService } from '../http/finance-consumer-request.service';
+import { FinanceConsumerRequestService } from '@finance-pro/api/http/finance-consumer-request.service';
 import {
   FinanceInvestmentCashFlowDto,
   FinanceInvestmentCloseDto,
@@ -18,9 +18,9 @@ import {
   FinanceInvestmentQueryDto,
   FinanceInvestmentUpdateDto,
   FinanceInvestmentValuationDto,
-} from './finance-investment.dto';
-import { FinanceInvestmentService } from './finance-investment.service';
-import { FinanceAssetSummaryService } from '../assets/finance-asset-summary.service';
+} from '@finance-pro/api/investments/finance-investment.dto';
+import { FinanceInvestmentService } from '@finance-pro/api/investments/finance-investment.service';
+import { FinanceAssetSummaryService } from '@finance-pro/api/assets/finance-asset-summary.service';
 
 @Controller('finance-bots/:botId/investments')
 export class FinanceInvestmentController {

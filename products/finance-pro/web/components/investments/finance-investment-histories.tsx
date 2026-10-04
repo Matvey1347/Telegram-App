@@ -2,10 +2,10 @@ import type {
   ConsumerFinanceInvestmentCashFlow,
   ConsumerFinanceInvestmentValuation,
 } from "@telegram-system/shared";
-import { Button, Card, EmptyState, ErrorState, LoadingState } from "./ui";
-import { financeIntlLocale, type FinanceLocale } from "./i18n/core";
-import { financeInvestmentsCopy } from "./i18n/investments";
-import { formatMoney } from "@/lib/features/finance/consumer-finance-money";
+import { Button, Card, EmptyState, ErrorState, LoadingState } from "@finance-pro/web/components/ui";
+import { financeIntlLocale, type FinanceLocale } from "@finance-pro/web/components/i18n/core";
+import { financeInvestmentsCopy } from "@finance-pro/web/components/i18n/investments";
+import { formatMoney } from "@finance-pro/web/lib/formatters/consumer-finance-money";
 
 export function FinanceInvestmentHistories({
   cashFlows,

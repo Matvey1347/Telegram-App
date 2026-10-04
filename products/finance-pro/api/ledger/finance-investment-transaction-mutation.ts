@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import type { PrismaService } from '../../../../prisma/prisma.service';
+import type { PrismaService } from '@api/prisma/prisma.service';
 
 type InvestmentLink = {
   id: string;

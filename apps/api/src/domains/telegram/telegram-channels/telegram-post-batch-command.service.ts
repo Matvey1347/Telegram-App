@@ -11,7 +11,7 @@ import {
 } from '@telegram-system/shared';
 import { WorkspaceService } from '../../../common/workspace.service';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { normalizeTelegramPostButtonRows } from '../../../telegram/shared/telegram-inline-keyboard';
+import { normalizeTelegramPostButtonRows } from '@api/telegram/shared/markup/telegram-inline-keyboard';
 import type {
   CreateAndDispatchTelegramPostBatchDto,
   CreateTelegramPostBatchDto,

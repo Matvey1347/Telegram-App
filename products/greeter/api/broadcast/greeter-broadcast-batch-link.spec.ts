@@ -8,7 +8,7 @@ import {
 import {
   linkGreeterBroadcastDeliveryBatch,
   queueGreeterBroadcastRecipientPage,
-} from './greeter-broadcast-batch-link';
+} from '@greeter/api/broadcast/greeter-broadcast-batch-link';
 
 function recipients(count: number, offset = 0) {
   return Array.from({ length: count }, (_, index) => {

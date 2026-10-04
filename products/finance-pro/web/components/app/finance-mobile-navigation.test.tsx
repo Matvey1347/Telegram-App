@@ -6,8 +6,8 @@ import {
   within,
 } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { financeCoreCopy } from "./i18n/core";
-import { FinanceMobileNavigation } from "./finance-mobile-navigation";
+import { financeCoreCopy } from "@finance-pro/web/components/i18n/core";
+import { FinanceMobileNavigation } from "@finance-pro/web/components/app/finance-mobile-navigation";
 
 describe("Finance mobile navigation", () => {
   it("keeps primary screens in the app bar and secondary screens under More", () => {

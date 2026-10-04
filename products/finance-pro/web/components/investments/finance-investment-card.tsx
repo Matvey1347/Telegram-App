@@ -7,11 +7,11 @@ import {
   TrendingUp,
 } from "lucide-react";
 import type { ConsumerFinanceInvestment } from "@telegram-system/shared";
-import { Button, Card } from "./ui";
-import type { FinanceLocale } from "./i18n/core";
-import { financeInvestmentsCopy } from "./i18n/investments";
-import { investmentTypeLabel } from "./finance-investment-editor";
-import { formatMoney } from "@/lib/features/finance/consumer-finance-money";
+import { Button, Card } from "@finance-pro/web/components/ui";
+import type { FinanceLocale } from "@finance-pro/web/components/i18n/core";
+import { financeInvestmentsCopy } from "@finance-pro/web/components/i18n/investments";
+import { investmentTypeLabel } from "@finance-pro/web/components/investments/finance-investment-editor";
+import { formatMoney } from "@finance-pro/web/lib/formatters/consumer-finance-money";
 
 export function FinanceInvestmentCard({
   investment,

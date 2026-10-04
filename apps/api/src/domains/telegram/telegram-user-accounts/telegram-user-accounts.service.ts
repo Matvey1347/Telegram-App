@@ -15,13 +15,13 @@ import {
 import { WorkspaceService } from '../../../common/workspace.service';
 import { TokenEncryptionService } from '../../../common/security/token-encryption.service';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { TelegramMtprotoClient } from '../../../telegram/shared/telegram-mtproto.client';
-import { TelegramSourceAccessService } from '../../../telegram/shared/telegram-source-access.service';
-import { normalizeTelegramChannelId } from '../../../telegram/shared/telegram-post-url';
+import { TelegramMtprotoClient } from '@api/telegram/shared/mtproto/telegram-mtproto.client';
+import { TelegramSourceAccessService } from '@api/telegram/shared/imports/telegram-source-access.service';
+import { normalizeTelegramChannelId } from '@api/telegram/shared/imports/telegram-post-url';
 import {
   getTelegramFloodWaitSeconds,
   isTelegramSendCodeUnavailableError,
-} from '../../../telegram/shared/telegram-session-errors';
+} from '@api/telegram/shared/mtproto/telegram-session-errors';
 import {
   Confirm2faPasswordDto,
   ConfirmLoginCodeDto,
@@ -50,7 +50,7 @@ import {
 } from './telegram-user-account-login-state';
 import { TelegramUserAccountCapabilityRefreshService } from './telegram-user-account-capability-refresh.service';
 import { TelegramAccountRuntimeNotifier } from '../../../common/telegram-account-runtime-notifier.service';
-import { decryptTelegramMtprotoCredentials } from '../../../telegram/shared/telegram-mtproto-credentials';
+import { decryptTelegramMtprotoCredentials } from '@api/telegram/shared/mtproto/telegram-mtproto-credentials';
 import {
   channelImportProgress,
   type ImportedTelegramUserAccountChannel,

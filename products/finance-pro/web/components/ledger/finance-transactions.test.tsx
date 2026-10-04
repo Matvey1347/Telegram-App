@@ -1,16 +1,16 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { FinanceFeedbackProvider } from "./ui/finance-feedback";
-import { consumerFinanceApi } from "@/lib/features/finance/consumer-finance-api";
-import { FinanceTransactions } from "./finance-transactions";
+import { FinanceFeedbackProvider } from "@finance-pro/web/components/ui/finance-feedback";
+import { consumerFinanceApi } from "@finance-pro/web/lib/api/consumer-finance-api";
+import { FinanceTransactions } from "@finance-pro/web/components/ledger/finance-transactions";
 
 const ledger = vi.hoisted(() => ({
   accounts: vi.fn(),
   categories: vi.fn(),
 }));
 
-vi.mock("@/lib/features/finance/consumer-finance-api", () => ({
+vi.mock("@finance-pro/web/lib/api/consumer-finance-api", () => ({
   consumerFinanceApi: {
     transactions: vi.fn(),
     transaction: vi.fn(),
@@ -20,7 +20,7 @@ vi.mock("@/lib/features/finance/consumer-finance-api", () => ({
     undoTransaction: vi.fn(),
   },
 }));
-vi.mock("@/lib/features/finance/consumer-finance-ledger-api", () => ({
+vi.mock("@finance-pro/web/lib/api/consumer-finance-ledger-api", () => ({
   consumerFinanceLedgerApi: ledger,
 }));
 

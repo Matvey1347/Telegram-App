@@ -5,8 +5,8 @@ import { AUTH_TOKEN_KEY } from "@/lib/features/identity/auth";
 import {
   CONSUMER_FINANCE_REQUEST_TIMEOUT_MS,
   consumerFinanceApi,
-} from "./consumer-finance-api";
-import { consumerFinanceHttp } from "./consumer-finance-http";
+} from "@finance-pro/web/lib/api/consumer-finance-api";
+import { consumerFinanceHttp } from "@finance-pro/web/lib/api/consumer-finance-http";
 
 const originalAdapter = consumerFinanceHttp.defaults.adapter;
 

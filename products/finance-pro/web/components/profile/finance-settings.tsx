@@ -3,14 +3,14 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { ConsumerFinanceProfile } from "@telegram-system/shared";
-import { Button, Card, FormField, SavingState } from "./ui";
-import { consumerFinanceProfileApi } from "@/lib/features/finance/consumer-finance-profile-api";
-import { consumerFinanceKeys } from "@/lib/features/finance/consumer-finance-query-keys";
-import { type FinanceLocale } from "./i18n/core";
-import { financeSettingsCopy } from "./i18n/settings";
-import { FinancePrivacy } from "./finance-privacy";
-import { FinanceCurrencySelect } from "./ui/finance-currency-select";
-import { FinanceTimezoneSelect } from "./ui/finance-timezone-select";
+import { Button, Card, FormField, SavingState } from "@finance-pro/web/components/ui";
+import { consumerFinanceProfileApi } from "@finance-pro/web/lib/api/consumer-finance-profile-api";
+import { consumerFinanceKeys } from "@finance-pro/web/lib/query/consumer-finance-query-keys";
+import { type FinanceLocale } from "@finance-pro/web/components/i18n/core";
+import { financeSettingsCopy } from "@finance-pro/web/components/i18n/settings";
+import { FinancePrivacy } from "@finance-pro/web/components/profile/finance-privacy";
+import { FinanceCurrencySelect } from "@finance-pro/web/components/ui/finance-currency-select";
+import { FinanceTimezoneSelect } from "@finance-pro/web/components/ui/finance-timezone-select";
 
 /** Finance preferences and privacy controls used by the account center. */
 export function FinanceSettings({

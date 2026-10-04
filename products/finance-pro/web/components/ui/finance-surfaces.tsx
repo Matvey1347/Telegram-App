@@ -1,16 +1,16 @@
 "use client";
 
 import type { PropsWithChildren } from "react";
-import { financeUiTokens } from "./finance-ui-tokens";
+import { financeUiTokens } from "@finance-pro/web/components/ui/finance-ui-tokens";
 import {
   FinanceStateIllustration,
   type FinanceVisualState,
-} from "./finance-state-illustration";
+} from "@finance-pro/web/components/ui/finance-state-illustration";
 import {
   useFinanceVisualContext,
   type FinanceVisualContext,
-} from "./finance-visual-context";
-import { FinanceMoneyLoader } from "./finance-money-loader";
+} from "@finance-pro/web/components/ui/finance-visual-context";
+import { FinanceMoneyLoader } from "@finance-pro/web/components/ui/finance-money-loader";
 
 export function Card({
   children,

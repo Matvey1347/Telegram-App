@@ -4,9 +4,9 @@ import { ResponseCacheService } from '../../../../common/response-cache.service'
 import { TokenEncryptionService } from '../../../../common/security/token-encryption.service';
 import { WorkspaceService } from '../../../../common/workspace.service';
 import { PrismaService } from '../../../../prisma/prisma.service';
-import { TelegramBotApiClient } from '../../../../telegram/shared/telegram-bot-api.client';
-import { TelegramMtprotoClient } from '../../../../telegram/shared/telegram-mtproto.client';
-import { TelegramSourceAccessService } from '../../../../telegram/shared/telegram-source-access.service';
+import { TelegramBotApiClient } from '@api/telegram/shared/bot/telegram-bot-api.client';
+import { TelegramMtprotoClient } from '@api/telegram/shared/mtproto/telegram-mtproto.client';
+import { TelegramSourceAccessService } from '@api/telegram/shared/imports/telegram-source-access.service';
 import { AdCampaignAdmissionAnalyticsService } from '../../../growth/ad-campaigns/ad-campaign-admission-analytics.service';
 import { AdCampaignAdmissionBackfillService } from '../../../growth/ad-campaigns/ad-campaign-admission-backfill.service';
 import { ApplicationLoggerService } from '../../../operations/application-logs/application-logger.service';

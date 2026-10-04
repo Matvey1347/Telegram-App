@@ -9,31 +9,31 @@ import {
   FinanceRecurringPaymentStatus,
   Prisma,
 } from '@prisma/client';
-import { PrismaService } from '../../../../../prisma/prisma.service';
+import { PrismaService } from '@api/prisma/prisma.service';
 import type {
   FinanceRegularPaymentInputDto,
   FinanceRegularPaymentQueryDto,
   FinanceRegularPaymentRevisionQueryDto,
-} from '../finance-obligation.dto';
+} from '@finance-pro/api/obligations/finance-obligation.dto';
 import {
   financeObligationProfile,
   type FinanceObligationProfile,
-} from '../finance-obligation-context';
+} from '@finance-pro/api/obligations/finance-obligation-context';
 import {
   financeObligationDate,
   financeRecurrenceAnchor,
-} from '../finance-obligation-date';
+} from '@finance-pro/api/obligations/finance-obligation-date';
 import {
   financeRegularPaymentRevisionSelect,
   financeRegularPaymentRevisionView,
   financeRegularPaymentSelect,
   financeRegularPaymentView,
-} from '../finance-obligation-view';
-import { FinanceRegularPaymentDeliveryService } from './finance-regular-payment-delivery.service';
+} from '@finance-pro/api/obligations/finance-obligation-view';
+import { FinanceRegularPaymentDeliveryService } from '@finance-pro/api/obligations/regular-payments/finance-regular-payment-delivery.service';
 import {
   financeRegularPaymentRevisionData,
   type FinanceRegularPaymentRow,
-} from './finance-regular-payment-write';
+} from '@finance-pro/api/obligations/regular-payments/finance-regular-payment-write';
 
 type RegularValues = {
   name: string;

@@ -5,19 +5,19 @@ import {
   TelegramSourceType,
 } from '@prisma/client';
 import { createHash, createHmac, randomBytes, randomUUID } from 'crypto';
-import { TokenEncryptionService } from '../../../../common/security/token-encryption.service';
-import { PrismaService } from '../../../../prisma/prisma.service';
-import { TelegramBotApiClient } from '../../../../telegram/shared/telegram-bot-api.client';
-import type { TelegramBotApplicationContext } from '../core/telegram-bot-update.types';
-import { TelegramBotUsersService } from '../core/telegram-bot-users.service';
-import { renderGreeterTemplate } from './greeter-template.renderer';
-import type { UpdateGreeterConfigDto } from '../core/dto';
-import { GreeterAutomationService } from './greeter-automation.service';
-import { GreeterConfigurationService } from './greeter-configuration.service';
-import { TelegramBotDeliveryService } from '../core/telegram-bot-delivery.service';
-import { notifyScheduledTaskDueWorkChanged } from '../../../../common/scheduled-task-wake-notifier';
-import { telegramMarkupToHtml } from '../../../../telegram/shared/telegram-markup';
-import { GreeterTestModeService } from './greeter-test-mode.service';
+import { TokenEncryptionService } from '@api/common/security/token-encryption.service';
+import { PrismaService } from '@api/prisma/prisma.service';
+import { TelegramBotApiClient } from '@api/telegram/shared/bot/telegram-bot-api.client';
+import type { TelegramBotApplicationContext } from '@api/domains/telegram/telegram-bots/core/telegram-bot-update.types';
+import { TelegramBotUsersService } from '@api/domains/telegram/telegram-bots/core/telegram-bot-users.service';
+import { renderGreeterTemplate } from '@greeter/api/templates/greeter-template.renderer';
+import type { UpdateGreeterConfigDto } from '@api/domains/telegram/telegram-bots/core/dto';
+import { GreeterAutomationService } from '@greeter/api/automation/greeter-automation.service';
+import { GreeterConfigurationService } from '@greeter/api/configuration/greeter-configuration.service';
+import { TelegramBotDeliveryService } from '@api/domains/telegram/telegram-bots/core/telegram-bot-delivery.service';
+import { notifyScheduledTaskDueWorkChanged } from '@api/common/scheduled-task-wake-notifier';
+import { telegramMarkupToHtml } from '@api/telegram/shared/markup/telegram-markup';
+import { GreeterTestModeService } from '@greeter/api/test-mode/greeter-test-mode.service';
 
 @Injectable()
 export class GreeterService {

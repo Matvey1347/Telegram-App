@@ -11,7 +11,7 @@ import type {
 } from '@telegram-system/shared';
 import { normalizeTelegramPostMediaItems } from '@telegram-system/shared';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { parseTelegramPostUrl } from '../../../telegram/shared/telegram-post-url';
+import { parseTelegramPostUrl } from '@api/telegram/shared/imports/telegram-post-url';
 import { ApplicationLoggerService } from '../../operations/application-logs/application-logger.service';
 import { TelegramChannelAccessService } from './telegram-channel-access.service';
 import { TelegramChannelsSupportService } from './telegram-channels-support.service';

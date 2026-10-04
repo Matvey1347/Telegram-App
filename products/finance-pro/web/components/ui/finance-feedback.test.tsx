@@ -3,8 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   FinanceFeedbackProvider,
   useFinanceFeedback,
-} from "./finance-feedback";
-import financeStyles from "./finance-ui.module.css";
+} from "@finance-pro/web/components/ui/finance-feedback";
+import financeStyles from "@finance-pro/web/components/ui/finance-ui.module.css";
 
 function FeedbackProbe() {
   const { pushToast } = useFinanceFeedback();

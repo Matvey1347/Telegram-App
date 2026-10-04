@@ -13,13 +13,13 @@ import {
 import {
   CurrentUser,
   type JwtUser,
-} from '../../../../common/current-user.decorator';
-import { JwtAuthGuard } from '../../../../common/jwt-auth.guard';
-import { GreeterAnalyticsService } from './greeter-analytics.service';
-import { GreeterAutomationService } from './greeter-automation.service';
-import { GreeterBroadcastService } from './greeter-broadcast.service';
-import { GreeterConfigurationService } from './greeter-configuration.service';
-import { GreeterTestModeService } from './greeter-test-mode.service';
+} from '@api/common/current-user.decorator';
+import { JwtAuthGuard } from '@api/common/jwt-auth.guard';
+import { GreeterAnalyticsService } from '@greeter/api/analytics/greeter-analytics.service';
+import { GreeterAutomationService } from '@greeter/api/automation/greeter-automation.service';
+import { GreeterBroadcastService } from '@greeter/api/broadcast/greeter-broadcast.service';
+import { GreeterConfigurationService } from '@greeter/api/configuration/greeter-configuration.service';
+import { GreeterTestModeService } from '@greeter/api/test-mode/greeter-test-mode.service';
 import {
   EnableGreeterTestModeDto,
   GreeterAnalyticsQueryDto,
@@ -38,7 +38,7 @@ import {
   ScheduleGreeterBroadcastDto,
   SelectGreeterTesterDto,
   UpdateGreeterSequenceDto,
-} from './greeter.dto';
+} from '@greeter/api/core/greeter.dto';
 
 @UseGuards(JwtAuthGuard)
 @Controller('telegram-bots/:botId/greeter')

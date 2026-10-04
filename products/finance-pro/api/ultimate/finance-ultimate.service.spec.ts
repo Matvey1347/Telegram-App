@@ -1,6 +1,6 @@
 import { BadGatewayException, ForbiddenException } from '@nestjs/common';
 import type { ConsumerFinanceAnalytics } from '@telegram-system/shared';
-import { FinanceUltimateService } from './finance-ultimate.service';
+import { FinanceUltimateService } from '@finance-pro/api/ultimate/finance-ultimate.service';
 
 const context = {
   profileId: 'profile-1',

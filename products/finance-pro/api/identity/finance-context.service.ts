@@ -10,13 +10,13 @@ import {
   type FinanceProfile,
 } from '@prisma/client';
 import { createHash, createHmac, timingSafeEqual } from 'crypto';
-import { TokenEncryptionService } from '../../../../common/security/token-encryption.service';
-import { PrismaService } from '../../../../prisma/prisma.service';
+import { TokenEncryptionService } from '@api/common/security/token-encryption.service';
+import { PrismaService } from '@api/prisma/prisma.service';
 import {
   DEFAULT_FINANCE_CATEGORIES,
   FINANCE_INIT_DATA_MAX_AGE_SECONDS,
-} from '../catalog/finance-defaults';
-import { FinanceConsumerRuntimeEnvironmentService } from './finance-consumer-runtime-environment.service';
+} from '@finance-pro/api/catalog/finance-defaults';
+import { FinanceConsumerRuntimeEnvironmentService } from '@finance-pro/api/identity/finance-consumer-runtime-environment.service';
 
 type TelegramWebAppUser = {
   id: number | string;

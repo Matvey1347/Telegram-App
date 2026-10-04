@@ -12,16 +12,16 @@ import type {
   GreeterSequenceStepInput,
   GreeterTemplateContextInput,
 } from '@telegram-system/shared';
-import { PrismaService } from '../../../../prisma/prisma.service';
-import type { GreeterButtonRows } from './greeter-automation.service';
-import { GreeterAdminService } from './greeter-admin.service';
-import { renderGreeterTemplate } from './greeter-template.renderer';
+import { PrismaService } from '@api/prisma/prisma.service';
+import type { GreeterButtonRows } from '@greeter/api/automation/greeter-automation.service';
+import { GreeterAdminService } from '@greeter/api/configuration/greeter-admin.service';
+import { renderGreeterTemplate } from '@greeter/api/templates/greeter-template.renderer';
 import {
   mapGreeterStep,
   mapGreeterTestSession,
   validateGreeterButtons,
   validateGreeterSteps,
-} from './greeter-sequence-support';
+} from '@greeter/api/automation/greeter-sequence-support';
 
 export class GreeterSequenceAdminService {
   constructor(

@@ -20,7 +20,7 @@ import { TelegramAdSalesBotDeletionPreflightService } from './telegram-ad-sales-
 import { TelegramAdSalesBotExistingPlacementService } from './telegram-ad-sales-bot-existing-placement.service';
 import { TelegramAdSalesBotReservationService } from './telegram-ad-sales-bot-reservation.service';
 import { TelegramAdSalesBotTargetsService } from './telegram-ad-sales-bot-targets.service';
-import { TelegramBotApiClient } from '../../../telegram/shared/telegram-bot-api.client';
+import { TelegramBotApiClient } from '@api/telegram/shared/bot/telegram-bot-api.client';
 import { TelegramAdSalesPlacementOptionsService } from './telegram-ad-sales-placement-options.service';
 import { TelegramAdvertiserCheckoutResolverService } from './telegram-advertiser-checkout-resolver.service';
 import { TelegramCrmModule } from '../telegram-crm/telegram-crm.module';

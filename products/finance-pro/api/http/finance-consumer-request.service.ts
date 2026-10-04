@@ -1,6 +1,6 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
 import type { Request } from 'express';
-import { FinanceConsumerSessionService } from '../identity/finance-consumer-session.service';
+import { FinanceConsumerSessionService } from '@finance-pro/api/identity/finance-consumer-session.service';
 
 @Injectable()
 export class FinanceConsumerRequestService {

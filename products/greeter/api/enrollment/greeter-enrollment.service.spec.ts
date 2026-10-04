@@ -1,5 +1,5 @@
 import { GreeterAutomationEnvironment, Prisma } from '@prisma/client';
-import { GreeterEnrollmentService } from './greeter-enrollment.service';
+import { GreeterEnrollmentService } from '@greeter/api/enrollment/greeter-enrollment.service';
 
 describe('GreeterEnrollmentService', () => {
   function setup() {

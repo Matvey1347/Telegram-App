@@ -1,11 +1,11 @@
-import { consumerFinanceAuthApi } from "./consumer-finance-auth-api";
-import { consumerFinanceInsightsApi } from "./consumer-finance-insights-api";
-import { consumerFinanceLedgerApi } from "./consumer-finance-ledger-api";
-import { consumerFinanceInvestmentsApi } from "./consumer-finance-investments-api";
-import { consumerFinancePlanningApi } from "./consumer-finance-planning-api";
-import { consumerFinancePortabilityApi } from "./consumer-finance-portability-api";
-import { consumerFinanceProfileApi } from "./consumer-finance-profile-api";
-import { consumerFinanceSavingsGoalsApi } from "./consumer-finance-savings-goals-api";
+import { consumerFinanceAuthApi } from "@finance-pro/web/lib/api/consumer-finance-auth-api";
+import { consumerFinanceInsightsApi } from "@finance-pro/web/lib/api/consumer-finance-insights-api";
+import { consumerFinanceLedgerApi } from "@finance-pro/web/lib/api/consumer-finance-ledger-api";
+import { consumerFinanceInvestmentsApi } from "@finance-pro/web/lib/api/consumer-finance-investments-api";
+import { consumerFinancePlanningApi } from "@finance-pro/web/lib/api/consumer-finance-planning-api";
+import { consumerFinancePortabilityApi } from "@finance-pro/web/lib/api/consumer-finance-portability-api";
+import { consumerFinanceProfileApi } from "@finance-pro/web/lib/api/consumer-finance-profile-api";
+import { consumerFinanceSavingsGoalsApi } from "@finance-pro/web/lib/api/consumer-finance-savings-goals-api";
 
 /** Stable Consumer Finance facade; implementations are grouped by product capability. */
 export const consumerFinanceApi = {
@@ -22,8 +22,8 @@ export const consumerFinanceApi = {
 export type {
   ConsumerFinanceBrowserLoginChallenge,
   ConsumerFinanceBrowserLoginStatus,
-} from "./consumer-finance-auth-api";
+} from "@finance-pro/web/lib/api/consumer-finance-auth-api";
 export {
   CONSUMER_FINANCE_REQUEST_TIMEOUT_MS,
   resolveConsumerFinanceApiBase,
-} from "./consumer-finance-http";
+} from "@finance-pro/web/lib/api/consumer-finance-http";

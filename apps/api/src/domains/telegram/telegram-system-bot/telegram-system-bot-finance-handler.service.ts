@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
-import { TELEGRAM_BOT_ACTION_TEXT } from '../../../telegram/shared/telegram-bot-action-buttons';
+import { TELEGRAM_BOT_ACTION_TEXT } from '@api/telegram/shared/bot/telegram-bot-action-buttons';
 import { TransactionType } from '@prisma/client';
-import { TelegramBotApiClient } from '../../../telegram/shared/telegram-bot-api.client';
+import { TelegramBotApiClient } from '@api/telegram/shared/bot/telegram-bot-api.client';
 import { TelegramSystemBotConfigService } from './telegram-system-bot-config.service';
 import { TelegramSystemBotFinanceService } from './telegram-system-bot-finance.service';
 import type { TelegramSystemBotFinanceResult } from './telegram-system-bot-finance-flow';

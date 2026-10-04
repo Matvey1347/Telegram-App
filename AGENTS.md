@@ -2,14 +2,26 @@
 
 ## Project map
 
-- `apps/api`: NestJS API. Business modules live under `src/domains/{finance,growth,identity,operations,telegram,workspace}`; cross-domain infrastructure remains in `src/common`, `src/prisma`, and `src/telegram/shared`. Internal Finance under `src/domains/finance` is not the consumer Finance application under `src/domains/telegram/consumer-finance`; `telegram-bots/finance` contains only its Telegram runtime adapter.
-- `apps/web`: Next.js app router frontend. URL-preserving route groups live under `src/app/(domain)`; domain UI and clients live under `src/components/features` and `src/lib/features`; shared providers, UI primitives, and app-wide utilities remain at their top-level locations.
+- `apps/api`: NestJS API composition host. Internal business modules live under `src/domains/{finance,growth,identity,operations,telegram,workspace}`; cross-domain infrastructure remains in `src/common`, `src/prisma`, and `src/telegram/shared`.
+- `apps/web`: Next.js App Router composition host. URL-preserving route groups live under `src/app/(domain)`; internal domain UI and clients live under `src/components/features` and `src/lib/features`; shared providers, UI primitives, and app-wide utilities remain at their top-level locations.
+- `products/finance-pro`: the independent consumer Finance product. Its API use cases live in `api/*`, its thin Telegram runtime adapter in `bot/*`, and its product-owned UI, state, localization, and clients in `web/*`.
+- `products/greeter`: the independent Greeter product. Its API implementation lives in `api/*` and its management UI and clients in `web/*`.
 - `packages/shared`: shared TypeScript contracts used across API and web. Put stable cross-app response types here when both sides consume them.
 - `apps/api/prisma/schema.prisma` and `apps/api/prisma/migrations`: database contract and migrations. Schema/API changes are incomplete until both are updated.
 - Telegram adapters: `apps/api/src/telegram/shared/*` is the single integration layer for MTProto/Bot API details, parsing, entity resolution, and Telegram-specific helpers.
 - Domain services: feature modules in `apps/api/src/domains/*/*` own business rules and Prisma orchestration. Reuse helpers before adding parallel logic paths.
-- Telegram bots: `apps/api/src/domains/telegram/telegram-bots/{core,greeter,finance}` separates runtime infrastructure from product behavior while one Nest module owns their wiring.
+- Telegram bots: `apps/api/src/domains/telegram/telegram-bots/core` is platform runtime infrastructure; `telegram-bots.module.ts` is the single Nest composition root that wires product adapters without making their implementation platform code.
 - Frontend providers/components/lib: providers own app-wide state and feedback; `components/features/*` own domain UI; `lib/features/*` own domain clients and helpers; shared client behavior stays directly under `lib`.
+
+## Global agent policy
+
+- This root file is the single source of repository-wide agent guidance.
+- Do not create `AGENTS.md` files inside `products/*` or product subfolders,
+  and do not create product-specific agent routing. Finance Pro, Greeter, and
+  future products all use this workflow plus the product-boundary document.
+- Existing `apps/api/AGENTS.md`, `apps/web/AGENTS.md`, and
+  `packages/shared/AGENTS.md` describe their technical hosts only; they do not
+  define product agents or override this global policy.
 
 ## Architecture workflow
 

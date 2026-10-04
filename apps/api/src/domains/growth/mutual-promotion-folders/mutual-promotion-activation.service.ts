@@ -14,7 +14,7 @@ import type {
 import { notifyScheduledTaskDueWorkChanged } from '../../../common/scheduled-task-wake-notifier';
 import { WorkspaceService } from '../../../common/workspace.service';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { normalizeTelegramPostButtonRows } from '../../../telegram/shared/telegram-inline-keyboard';
+import { normalizeTelegramPostButtonRows } from '@api/telegram/shared/markup/telegram-inline-keyboard';
 import { TelegramManagedPostPublicationService } from '../../telegram/telegram-channels/telegram-managed-post-publication.service';
 import { MutualPromotionReadService } from './mutual-promotion-read.service';
 import { runMutualPromotionBounded } from './mutual-promotion-lifecycle.utils';

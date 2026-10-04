@@ -4,8 +4,8 @@ import type {
   ConsumerFinancePlanFeature,
   ConsumerFinanceUsage,
 } from "@telegram-system/shared";
-import { financeIntlLocale, type FinanceLocale } from "./i18n/core";
-import { financePlansCopy } from "./i18n/plans";
+import { financeIntlLocale, type FinanceLocale } from "@finance-pro/web/components/i18n/core";
+import { financePlansCopy } from "@finance-pro/web/components/i18n/plans";
 
 type Copy = ReturnType<typeof financePlansCopy>;
 export type ConsumerFinanceCatalogPlan =

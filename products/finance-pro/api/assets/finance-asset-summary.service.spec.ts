@@ -1,5 +1,5 @@
 import { Prisma } from '@prisma/client';
-import { FinanceAssetSummaryService } from './finance-asset-summary.service';
+import { FinanceAssetSummaryService } from '@finance-pro/api/assets/finance-asset-summary.service';
 
 describe('FinanceAssetSummaryService', () => {
   it('does not add savings allocations to net worth', async () => {

@@ -1,5 +1,5 @@
 import { TelegramChannelAccessService } from './telegram-channel-access.service';
-import { TelegramBotApiError } from '../../../telegram/shared/telegram-bot-api.client';
+import { TelegramBotApiError } from '@api/telegram/shared/bot/telegram-bot-api.client';
 
 describe('TelegramChannelAccessService production bot access', () => {
   function setup() {

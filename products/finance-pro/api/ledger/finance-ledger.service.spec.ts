@@ -4,8 +4,8 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { CurrencyConversionService } from '../../../../common/currency-conversion.service';
-import { FinanceLedgerService } from './finance-ledger.service';
+import { CurrencyConversionService } from '@api/common/currency-conversion.service';
+import { FinanceLedgerService } from '@finance-pro/api/ledger/finance-ledger.service';
 
 describe('FinanceLedgerService tenant and money rules', () => {
   const restoredTransaction = {

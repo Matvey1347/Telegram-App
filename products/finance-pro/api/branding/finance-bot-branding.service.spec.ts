@@ -3,7 +3,7 @@ import {
   TelegramBotApplicationType,
   TelegramBotRuntimeEnvironment,
 } from '@prisma/client';
-import { FinanceBotBrandingService } from './finance-bot-branding.service';
+import { FinanceBotBrandingService } from '@finance-pro/api/branding/finance-bot-branding.service';
 
 describe('FinanceBotBrandingService', () => {
   const prisma = {

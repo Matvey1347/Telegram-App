@@ -5,22 +5,22 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { CurrencyConversionService } from '../../../../common/currency-conversion.service';
-import { PrismaService } from '../../../../prisma/prisma.service';
+import { CurrencyConversionService } from '@api/common/currency-conversion.service';
+import { PrismaService } from '@api/prisma/prisma.service';
 import type {
   CreateFinanceTransferDto,
   FinanceTransferQueryDto,
   UpdateFinanceTransferDto,
-} from '../http/finance.dto';
-import { financeTransferSavingsLinkLockKey } from '../assets/finance-asset-locks';
+} from '@finance-pro/api/http/finance.dto';
+import { financeTransferSavingsLinkLockKey } from '@finance-pro/api/assets/finance-asset-locks';
 import {
   financeAccountEmoji,
   financeIconPresentation,
-} from '../catalog/finance-entity-emoji';
+} from '@finance-pro/api/catalog/finance-entity-emoji';
 import {
   financeHistoryDateRange,
   financeOccurredAtFilter,
-} from '../ledger/finance-history-date-range';
+} from '@finance-pro/api/ledger/finance-history-date-range';
 
 const transferSelect = {
   id: true,

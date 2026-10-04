@@ -16,7 +16,7 @@ import {
   type TelegramSystemBotPostImportStart,
   type TelegramSystemBotPostImportStatus,
 } from '@telegram-system/shared';
-import { TelegramBotApiClient } from '../../../telegram/shared/telegram-bot-api.client';
+import { TelegramBotApiClient } from '@api/telegram/shared/bot/telegram-bot-api.client';
 import { TelegramSystemBotConfigService } from './telegram-system-bot-config.service';
 import type { TelegramSystemBotIncomingMessage } from './telegram-system-bot-forwarded-content.parser';
 import {

@@ -16,7 +16,7 @@ import {
 import { greeterApi, telegramBotsApi } from "@/lib/api";
 import { greeterKeys, telegramAccountKeys } from "@/lib/query-keys";
 import { useAppToast } from "@/providers/toast-provider";
-import { GreeterChannelOverrideControl } from "./greeter-channel-override-modal";
+import { GreeterChannelOverrideControl } from "@greeter/web/components/setup/greeter-channel-override-modal";
 
 export function GreeterOverviewSection({
   overview,

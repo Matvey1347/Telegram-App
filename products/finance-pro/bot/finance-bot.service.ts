@@ -1,51 +1,51 @@
 import { Injectable } from '@nestjs/common';
-import { TelegramBotUsersService } from '../core/telegram-bot-users.service';
-import { TelegramBotDeliveryService } from '../core/telegram-bot-delivery.service';
-import { TelegramBotInteractiveReplyService } from '../../../../telegram/shared/telegram-bot-interactive-reply.service';
-import { FinanceContextService } from '../../consumer-finance/identity/finance-context.service';
-import { FinanceProposalService } from '../../consumer-finance/chat-flows/finance-proposal.service';
-import { FinanceAiProviderService } from '../../consumer-finance/ai/finance-ai.provider';
-import { FinanceEntitlementService } from '../../consumer-finance/billing/finance-entitlement.service';
-import { TelegramBotApiClient } from '../../../../telegram/shared/telegram-bot-api.client';
-import { BotBillingService } from '../../bot-billing/bot-billing.service';
-import type { TelegramBotApplicationContext } from '../core/telegram-bot-update.types';
+import { TelegramBotUsersService } from '@api/domains/telegram/telegram-bots/core/telegram-bot-users.service';
+import { TelegramBotDeliveryService } from '@api/domains/telegram/telegram-bots/core/telegram-bot-delivery.service';
+import { TelegramBotInteractiveReplyService } from '@api/telegram/shared/bot/telegram-bot-interactive-reply.service';
+import { FinanceContextService } from '@finance-pro/api/identity/finance-context.service';
+import { FinanceProposalService } from '@finance-pro/api/chat-flows/finance-proposal.service';
+import { FinanceAiProviderService } from '@finance-pro/api/ai/finance-ai.provider';
+import { FinanceEntitlementService } from '@finance-pro/api/billing/finance-entitlement.service';
+import { TelegramBotApiClient } from '@api/telegram/shared/bot/telegram-bot-api.client';
+import { BotBillingService } from '@api/domains/telegram/bot-billing/bot-billing.service';
+import type { TelegramBotApplicationContext } from '@api/domains/telegram/telegram-bots/core/telegram-bot-update.types';
 import {
   financeCategoryEmoji,
   FinanceBotChatResponderService,
-} from './finance-bot-chat-responder.service';
+} from '@finance-pro/bot/finance-bot-chat-responder.service';
 import {
   acknowledgeFinanceCallback,
   sendFinanceTyping,
-} from './finance-bot-telegram-interactions';
+} from '@finance-pro/bot/finance-bot-telegram-interactions';
 import {
   financeChatLocale,
   t,
-} from '../../consumer-finance/i18n/finance-chat-i18n';
+} from '@finance-pro/api/i18n/finance-chat-i18n';
 import {
   FinanceChatFlowService,
   type FinanceFlowCallback,
   type FinanceFlowResult,
-} from '../../consumer-finance/chat-flows/finance-chat-flow.service';
-import { FinanceChatFlowPresenterService } from '../../consumer-finance/chat-flows/finance-chat-flow-presenter.service';
-import { FinanceBotFlowMessenger } from './finance-bot-flow-messenger';
+} from '@finance-pro/api/chat-flows/finance-chat-flow.service';
+import { FinanceChatFlowPresenterService } from '@finance-pro/api/chat-flows/finance-chat-flow-presenter.service';
+import { FinanceBotFlowMessenger } from '@finance-pro/bot/finance-bot-flow-messenger';
 import {
   parseFinanceChatCommand,
   parseFinanceMenuText,
   parseFinanceQuickInput,
-} from './finance-chat-input-parser';
-import { financeBotProButtons } from './finance-bot-pro-buttons';
-import { warnSlowFinanceContext } from './finance-bot-observability';
-import { FinanceBotBrowserLogin } from './finance-bot-browser-login';
+} from '@finance-pro/bot/finance-chat-input-parser';
+import { financeBotProButtons } from '@finance-pro/bot/finance-bot-pro-buttons';
+import { warnSlowFinanceContext } from '@finance-pro/bot/finance-bot-observability';
+import { FinanceBotBrowserLogin } from '@finance-pro/bot/finance-bot-browser-login';
 import {
   financeBotFlowInput,
   financeBotIncomingFile,
   FinanceBotIconInputService,
-} from './finance-bot-icon-input.service';
-import { FinanceRegularPaymentCallbackHandler } from './finance-regular-payment-callback.handler';
-import { parseFinanceFlowCallback } from './finance-bot-flow-callback';
-import { FinanceUltimateService } from '../../consumer-finance/ultimate/finance-ultimate.service';
-import { FinanceAssistantEntryService } from '../../consumer-finance/ultimate/finance-assistant-entry.service';
-import { sendFinanceAssistantReply } from './finance-bot-assistant-reply';
+} from '@finance-pro/bot/finance-bot-icon-input.service';
+import { FinanceRegularPaymentCallbackHandler } from '@finance-pro/bot/finance-regular-payment-callback.handler';
+import { parseFinanceFlowCallback } from '@finance-pro/bot/finance-bot-flow-callback';
+import { FinanceUltimateService } from '@finance-pro/api/ultimate/finance-ultimate.service';
+import { FinanceAssistantEntryService } from '@finance-pro/api/ultimate/finance-assistant-entry.service';
+import { sendFinanceAssistantReply } from '@finance-pro/bot/finance-bot-assistant-reply';
 @Injectable()
 export class FinanceBotService {
   private readonly flowMessages: FinanceBotFlowMessenger;

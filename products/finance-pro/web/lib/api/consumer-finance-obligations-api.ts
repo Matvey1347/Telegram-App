@@ -20,7 +20,7 @@ import {
   consumerFinanceHttp,
   consumerFinanceRoot,
   consumerRequest,
-} from "./consumer-finance-http";
+} from "@finance-pro/web/lib/api/consumer-finance-http";
 
 export const consumerFinanceObligationsApi = {
   debts: async (botId: string, query: ConsumerFinanceDebtQuery) =>

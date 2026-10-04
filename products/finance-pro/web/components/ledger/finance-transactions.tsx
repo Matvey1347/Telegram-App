@@ -13,28 +13,28 @@ import type {
   ConsumerFinanceHistoryQuery,
   ConsumerFinanceTransaction,
 } from "@telegram-system/shared";
-import { Button, Card, EmptyState, ErrorState, LoadingState } from "./ui";
-import { useFinanceFeedback } from "./ui/finance-feedback";
-import { consumerFinanceApi } from "@/lib/features/finance/consumer-finance-api";
-import { consumerFinanceLedgerApi } from "@/lib/features/finance/consumer-finance-ledger-api";
+import { Button, Card, EmptyState, ErrorState, LoadingState } from "@finance-pro/web/components/ui";
+import { useFinanceFeedback } from "@finance-pro/web/components/ui/finance-feedback";
+import { consumerFinanceApi } from "@finance-pro/web/lib/api/consumer-finance-api";
+import { consumerFinanceLedgerApi } from "@finance-pro/web/lib/api/consumer-finance-ledger-api";
 import {
   prependConsumerTransactionToCaches,
   reconcileConsumerTransactionCaches,
   removeConsumerTransactionFromCaches,
-} from "@/lib/features/finance/consumer-finance-cache";
-import { consumerFinanceKeys } from "@/lib/features/finance/consumer-finance-query-keys";
-import { type FinanceLocale } from "./i18n/core";
-import { financeTransactionsCopy } from "./i18n/transactions";
-import type { ConsumerFinanceSurface } from "./consumer-finance-navigation";
-import { FinanceTransactionEditor } from "./finance-transaction-editor";
-import { FinanceTransactionFilters } from "./finance-transaction-filters";
-import { useDebouncedValue } from "./use-debounced-value";
-import { FinanceConfirmModal } from "./finance-confirm-modal";
-import { FinanceTransactionDetailModal } from "./finance-transaction-detail-modal";
-import { FinanceMobileTransactionRow } from "./finance-mobile-transaction-row";
-import { DesktopTransactionTable } from "./finance-desktop-transaction-table";
-import { financePeriodDateRange } from "./finance-period-selector";
-import { FinanceCursorPagination } from "./ui/finance-cursor-pagination";
+} from "@finance-pro/web/lib/cache/consumer-finance-cache";
+import { consumerFinanceKeys } from "@finance-pro/web/lib/query/consumer-finance-query-keys";
+import { type FinanceLocale } from "@finance-pro/web/components/i18n/core";
+import { financeTransactionsCopy } from "@finance-pro/web/components/i18n/transactions";
+import type { ConsumerFinanceSurface } from "@finance-pro/web/components/app/consumer-finance-navigation";
+import { FinanceTransactionEditor } from "@finance-pro/web/components/ledger/finance-transaction-editor";
+import { FinanceTransactionFilters } from "@finance-pro/web/components/ledger/finance-transaction-filters";
+import { useDebouncedValue } from "@finance-pro/web/components/hooks/use-debounced-value";
+import { FinanceConfirmModal } from "@finance-pro/web/components/shared/finance-confirm-modal";
+import { FinanceTransactionDetailModal } from "@finance-pro/web/components/ledger/finance-transaction-detail-modal";
+import { FinanceMobileTransactionRow } from "@finance-pro/web/components/ledger/finance-mobile-transaction-row";
+import { DesktopTransactionTable } from "@finance-pro/web/components/ledger/finance-desktop-transaction-table";
+import { financePeriodDateRange } from "@finance-pro/web/components/planning/finance-period-selector";
+import { FinanceCursorPagination } from "@finance-pro/web/components/ui/finance-cursor-pagination";
 
 export function FinanceTransactions({
   botId,
