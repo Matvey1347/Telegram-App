@@ -35,6 +35,7 @@ const searchAdvertisers = (query: string) =>
 
 const postFingerprint = (post: TelegramSystemBotPostDraft | undefined) =>
   JSON.stringify({
+    title: post?.title ?? "",
     text: post?.text ?? "",
     plainText: post?.plainText ?? "",
     formattedHtml: post?.formattedHtml ?? "",
@@ -279,6 +280,20 @@ export function CrossPromotionPlanModal({
     post,
     ...additionalPublisherPosts.map((item) => item.post),
   ];
+  const publicationChanges = Object.fromEntries(
+    editedPublisherPosts.map((editedPost, index) => [
+      initial?.publicationPost.publisherPublications?.[index]?.id ??
+        (index === 0 ? "publisher-1" : additionalPublisherPosts[index - 1]?.id),
+      postFingerprint(publishedPosts[index]) !== postFingerprint(editedPost),
+    ]),
+  ) as Record<string, boolean>;
+  const publicationHasTelegramMessage = Object.fromEntries(
+    (initial?.placementPostIds ?? []).reduce<string[]>((ids, placement) => {
+      if (placement.isPublishedInTelegram && placement.publicationId)
+        ids.push(placement.publicationId);
+      return ids;
+    }, []).map((publicationId) => [publicationId, true]),
+  ) as Record<string, boolean>;
   const requiresRepublish = Boolean(
     initial?.status === "ACTIVE" &&
     editedPublisherPosts.some(
@@ -583,12 +598,12 @@ export function CrossPromotionPlanModal({
             : undefined
         }
         onUpdatePublicationInTelegram={
-          initial?.status === "ACTIVE" && onUpdatePublicationInTelegram
+          initial?.status !== "DRAFT" && onUpdatePublicationInTelegram
             ? (publicationId) => void submit(false, publicationId)
             : undefined
         }
         onReplacePublicationAndPublishNow={
-          initial?.status === "ACTIVE" && onReplacePublicationAndPublishNow
+          initial?.status !== "DRAFT" && onReplacePublicationAndPublishNow
             ? (publicationId) => setConfirmPublishNow(publicationId)
             : undefined
         }
@@ -613,6 +628,8 @@ export function CrossPromotionPlanModal({
         showValidationErrors={showValidationErrors}
         sharedPublicationChanged={sharedPublicationChanged}
         requiresRepublish={requiresRepublish}
+        publicationChanges={publicationChanges}
+        publicationHasTelegramMessage={publicationHasTelegramMessage}
         searchAdvertisers={searchAdvertisers}
         resolveOutboundPreview={(targetIndex = 0) => {
           if (outboundMode === "CUSTOM") return outboundPost;

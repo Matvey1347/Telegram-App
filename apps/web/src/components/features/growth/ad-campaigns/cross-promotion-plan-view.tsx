@@ -84,6 +84,8 @@ export function CrossPromotionPlanView({
   showValidationErrors,
   sharedPublicationChanged,
   requiresRepublish,
+  publicationChanges,
+  publicationHasTelegramMessage,
 }: {
   open: boolean;
   kind: CrossPromotionPlanKind;
@@ -128,6 +130,8 @@ export function CrossPromotionPlanView({
   showValidationErrors: boolean;
   sharedPublicationChanged: boolean;
   requiresRepublish: boolean;
+  publicationChanges: Record<string, boolean>;
+  publicationHasTelegramMessage: Record<string, boolean>;
 }) {
   const [mySideOpen, setMySideOpen] = useState(true);
   const [partnerSideOpen, setPartnerSideOpen] = useState(true);
@@ -226,6 +230,23 @@ export function CrossPromotionPlanView({
         )
       : {};
   const hasMultiplePublisherPosts = 1 + additionalPublisherPosts.length > 1;
+  const publicationActions = (publicationId: string) => {
+    const changed = publicationChanges[publicationId] ?? false;
+    const published = publicationHasTelegramMessage[publicationId] ?? false;
+    if (!initial || initial.status === "DRAFT") return null;
+    return (
+      <>
+        {changed ? (
+          <Button type="button" disabled={saving || savingDraft} onClick={() => onUpdatePublicationInTelegram?.(publicationId)}>
+            {published ? "Update in Telegram" : "Update"}
+          </Button>
+        ) : null}
+        <Button type="button" variant="danger" disabled={saving || savingDraft} onClick={() => onReplacePublicationAndPublishNow?.(publicationId)}>
+          {published ? "Delete and publish now" : "Publish now"}
+        </Button>
+      </>
+    );
+  };
   const importPost = async (target: string) => {
     const previousTarget = botFlowTarget;
     setBotFlowTarget(target);
@@ -356,12 +377,7 @@ export function CrossPromotionPlanView({
                               </p>
                             </div>
                             <div className="flex items-center gap-1">
-                              {initial?.status === "ACTIVE" ? (
-                                <>
-                                  <Button type="button" disabled={saving || savingDraft} onClick={() => onUpdatePublicationInTelegram?.("publisher-1")}>Update in Telegram</Button>
-                                  <Button type="button" variant="danger" disabled={saving || savingDraft} onClick={() => onReplacePublicationAndPublishNow?.("publisher-1")}>Delete and publish now</Button>
-                                </>
-                              ) : null}
+                              {publicationActions("publisher-1")}
                             <button
                               type="button"
                               className="rounded-md p-1 text-neutral-400 transition-colors hover:bg-neutral-800 hover:text-white"
@@ -458,12 +474,7 @@ export function CrossPromotionPlanView({
                                 >
                                   <Trash2 size={16} />
                                 </Button>
-                                {initial?.status === "ACTIVE" ? (
-                                  <>
-                                    <Button type="button" disabled={saving || savingDraft} onClick={() => onUpdatePublicationInTelegram?.(publication.id)}>Update in Telegram</Button>
-                                    <Button type="button" variant="danger" disabled={saving || savingDraft} onClick={() => onReplacePublicationAndPublishNow?.(publication.id)}>Delete and publish now</Button>
-                                  </>
-                                ) : null}
+                                {publicationActions(publication.id)}
                                 <button
                                   type="button"
                                   className="rounded-md p-1 text-neutral-400 transition-colors hover:bg-neutral-800 hover:text-white"

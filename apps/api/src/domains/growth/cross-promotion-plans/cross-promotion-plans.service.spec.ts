@@ -188,7 +188,6 @@ function setup() {
       workspace as never,
       new CrossPromotionPlanReadService(prisma as never),
       { register: jest.fn() } as never,
-      { updateManagedPost: jest.fn() } as never,
     ),
     prisma,
   };
@@ -242,7 +241,6 @@ describe('CrossPromotionPlansService', () => {
       } as never,
       { shape: jest.fn().mockResolvedValue({ id: 'plan-1' }) } as never,
       registration as never,
-      { updateManagedPost: jest.fn() } as never,
     );
 
     await service.refreshInviteLinkData('user-1', 'plan-1');

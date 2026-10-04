@@ -17,7 +17,6 @@ import {
 } from './dto';
 import { CrossPromotionPlanReadService } from './cross-promotion-plan-read.service';
 import { TelegramInviteLinkRegistrationService } from '../../telegram/telegram-channels/telegram-invite-link-registration.service';
-import { TelegramChannelsService } from '../../telegram/telegram-channels/telegram-channels.service';
 
 type CounterBaseline = {
   inviteLinkId: string;
@@ -123,7 +122,6 @@ export class CrossPromotionPlansService {
     private readonly workspaceService: WorkspaceService,
     private readonly readService: CrossPromotionPlanReadService,
     private readonly inviteLinkRegistration: TelegramInviteLinkRegistrationService,
-    private readonly telegramChannels: TelegramChannelsService,
   ) {}
 
   async refreshInviteLinkData(userId: string, id: string) {
@@ -506,6 +504,33 @@ export class CrossPromotionPlansService {
     }));
   }
 
+  async managedPostsForPublicationUpdate(
+    userId: string,
+    id: string,
+    publicationId: string,
+  ) {
+    const workspaceId = await this.workspace(userId);
+    const row = await this.prisma.crossPromotionPlan.findFirst({
+      where: { id, workspaceId, status: { not: 'CANCELLED' } },
+      select: { placementPostIds: true },
+    });
+    if (!row) throw new NotFoundException('Cross-promotion plan not found');
+    const ids = json<ScheduledPlacement[]>(row.placementPostIds, [])
+      .filter((placement) => placement.publicationId === publicationId)
+      .map((placement) => placement.managedPostId);
+    return this.prisma.telegramManagedPost.findMany({
+      where: { workspaceId, id: { in: ids } },
+      select: {
+        id: true,
+        title: true,
+        text: true,
+        imageUrls: true,
+        mediaItems: true,
+        buttonRows: true,
+      },
+    });
+  }
+
   async replacePublicationPlacements(
     userId: string,
     id: string,
@@ -609,44 +634,10 @@ export class CrossPromotionPlansService {
       );
     }
     const normalized = await this.validateInput(workspaceId, dto);
-    const updatedPublisherPublications =
-      dto.publicationPost.publisherPublications?.length
-        ? dto.publicationPost.publisherPublications
-        : [
-            {
-              id: 'legacy-publisher-publication',
-              post: dto.publicationPost,
-              placements: dto.publicationPost.publisherPlacements ?? [],
-            },
-          ];
     const storedPlacements = json<ScheduledPlacement[]>(
       existing.placementPostIds,
       [],
     );
-    // Active direct exchanges already have real Telegram messages. Update
-    // every linked message in place instead of treating the edit as metadata.
-    // Completed history has no live publication to alter.
-    if (existing.status === 'ACTIVE') {
-      for (const placement of storedPlacements) {
-        const publication =
-          updatedPublisherPublications.find(
-            (item) => item.id === placement.publicationId,
-          ) ?? updatedPublisherPublications[0];
-        if (!publication) continue;
-        await this.telegramChannels.updateManagedPost(
-          userId,
-          placement.telegramChannelId,
-          placement.managedPostId,
-          {
-            title: publication.post.title?.trim() || dto.title.trim(),
-            text: publication.post.text ?? '',
-            imageUrls: publication.post.imageUrls ?? [],
-            mediaItems: publication.post.mediaItems ?? [],
-            buttonRows: publication.post.buttonRows as never,
-          },
-        );
-      }
-    }
     const nextDeletionAt = nextPublisherDeletionAt(dto.publicationPost);
     const managedPosts = storedPlacements.length
       ? await this.prisma.telegramManagedPost.findMany({

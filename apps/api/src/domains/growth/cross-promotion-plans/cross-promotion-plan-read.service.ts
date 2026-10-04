@@ -428,7 +428,12 @@ export class CrossPromotionPlanReadService {
         ),
         publicationPost,
         targets,
-        placementPostIds: placements,
+        placementPostIds: placements.map((placement) => ({
+          ...placement,
+          isPublishedInTelegram: publishedManagedPostIds.has(
+            placement.managedPostId,
+          ),
+        })),
         baselineTargetCounters: baselines,
         baselinePublisherSubscribers: publisherBaselines,
         targetResults: targets.map((target) => {

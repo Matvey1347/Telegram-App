@@ -83,6 +83,9 @@ export type CrossPromotionPlan = CreateCrossPromotionPlanPayload & {
     telegramChannelId: string;
     managedPostId: string;
     postGroupId?: string | null;
+    publicationId?: string | null;
+    /** True only after Telegram confirmed a message for this delivery. */
+    isPublishedInTelegram?: boolean;
   }>;
   baselineTargetCounters: Array<{
     inviteLinkId: string;

@@ -72,6 +72,18 @@ function setup() {
         scheduledAt: '2026-09-15T09:00:00.000Z',
       },
     ]),
+    managedPostsForPublicationUpdate: jest.fn().mockResolvedValue([
+      {
+        id: 'old-post',
+        title: 'Partner post',
+        text: 'Text',
+        imageUrls: [],
+        mediaItems: [],
+        buttonRows: [
+          [{ text: 'Join', url: 'https://t.me/example', style: 'default' }],
+        ],
+      },
+    ]),
     markRescheduling: jest.fn().mockResolvedValue(undefined),
     resumeSchedulingContext: jest.fn().mockResolvedValue({
       dto: payload,
@@ -86,6 +98,9 @@ function setup() {
     replaceScheduled: jest
       .fn()
       .mockResolvedValue({ ...plan, status: 'SCHEDULED' }),
+    replacePublicationPlacements: jest
+      .fn()
+      .mockResolvedValue({ ...plan, status: 'ACTIVE' }),
   };
   const telegram = {
     createManagedPost: jest
@@ -296,6 +311,19 @@ describe('CrossPromotionPlanSchedulingService', () => {
       'plan-1',
       'legacy-publisher-publication',
     );
+    expect(telegram.updateManagedPost).not.toHaveBeenCalled();
+  });
+
+  it('does not update Telegram when this publication has no content changes', async () => {
+    const { service, telegram } = setup();
+
+    await service.updatePublicationInTelegram(
+      'user-1',
+      'plan-1',
+      'legacy-publisher-publication',
+      payload,
+    );
+
     expect(telegram.updateManagedPost).not.toHaveBeenCalled();
   });
 

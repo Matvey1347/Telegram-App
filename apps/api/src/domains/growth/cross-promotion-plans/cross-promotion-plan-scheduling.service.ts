@@ -25,6 +25,18 @@ type ScheduledPost = {
 
 type PublisherPublication = CrossPromotionPublicationItem;
 
+const stableJson = (value: unknown): string => {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
+  if (value && typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    return `{${Object.keys(record)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${stableJson(record[key])}`)
+      .join(',')}}`;
+  }
+  return JSON.stringify(value ?? null);
+};
+
 function publisherPublications(
   dto: CreateCrossPromotionPlanDto,
 ): PublisherPublication[] {
@@ -447,12 +459,31 @@ export class CrossPromotionPlanSchedulingService {
         'A partner-post time cannot be changed in place. Replace the publication to create a new Telegram schedule.',
       );
     }
+    const nextPost = this.managedPostPayload(dto, publication.post);
+    const existingPosts = new Map(
+      (
+        await this.plans.managedPostsForPublicationUpdate(
+          userId,
+          id,
+          publicationId,
+        )
+      ).map((post) => [post.id, post]),
+    );
     for (const placement of placements) {
+      const current = existingPosts.get(placement.managedPostId);
+      const changed =
+        !current ||
+        current.title !== nextPost.title ||
+        (current.text ?? '') !== nextPost.text ||
+        stableJson(current.imageUrls) !== stableJson(nextPost.imageUrls) ||
+        stableJson(current.mediaItems) !== stableJson(nextPost.mediaItems) ||
+        stableJson(current.buttonRows ?? []) !== stableJson(nextPost.buttonRows);
+      if (!changed) continue;
       await this.telegramChannels.updateManagedPost(
         userId,
         placement.telegramChannelId,
         placement.managedPostId,
-        this.managedPostPayload(dto, publication.post),
+        nextPost,
       );
     }
     return this.plans.replacePublicationPlacements(
