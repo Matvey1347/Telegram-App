@@ -85,6 +85,13 @@ export class TelegramChannelMessageTemplatesService {
       overrideInviteLinks: row.overrideInviteLinks,
       inviteLinkOverrides: overrides,
       excludedProductNames: row.excludedProductNames,
+      showProductViews: row.showProductViews,
+      viewProductNames: row.viewProductNames,
+      showTotalViews: row.showTotalViews,
+      viewsEmoji: row.viewsEmoji,
+      totalViewsLabel: row.totalViewsLabel,
+      viewsRounding:
+        row.viewsRounding as TelegramChannelMessageTemplate['viewsRounding'],
       priceRounding: row.priceRounding,
       priceCurrency: row.priceCurrency,
       targetTotal: row.targetTotal?.toString() ?? null,
@@ -184,6 +191,13 @@ export class TelegramChannelMessageTemplatesService {
       overrideInviteLinks: dto.overrideInviteLinks,
       inviteLinkOverrides: Object.fromEntries(links),
       excludedProductNames: uniqueIds(dto.excludedProductNames || []),
+      showProductViews: dto.showProductViews ?? false,
+      viewProductNames: uniqueIds(dto.viewProductNames || []),
+      showTotalViews: dto.showTotalViews ?? false,
+      viewsEmoji: dto.viewsEmoji?.trim().slice(0, 512) || '👁',
+      totalViewsLabel:
+        dto.totalViewsLabel?.trim().slice(0, 80) || 'Total views',
+      viewsRounding: dto.viewsRounding || 'NONE',
       priceRounding: dto.priceRounding || 'NONE',
       priceCurrency: dto.priceCurrency || 'UAH',
       targetTotal:

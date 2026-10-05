@@ -190,6 +190,42 @@ describe('TelegramCrmRuntimeManager', () => {
     await manager.onApplicationShutdown();
   });
 
+  it('does not delay HTTP bootstrap when an MTProto connection stalls', async () => {
+    jest.useFakeTimers();
+    const sessions = {
+      startupAccounts: jest.fn().mockResolvedValue([account]),
+      credentials: jest.fn().mockReturnValue({
+        apiId: '1',
+        apiHash: 'hash',
+        session: 'session',
+      }),
+    };
+    let signal: AbortSignal | undefined;
+    const adapter = {
+      open: jest.fn((_credentials, receivedSignal: AbortSignal) => {
+        signal = receivedSignal;
+        return new Promise<TelegramCrmMtprotoHandle>(() => undefined);
+      }),
+    };
+    const manager = new TelegramCrmRuntimeManager(
+      { telegramUserAccountIntegration: { updateMany: jest.fn() } } as never,
+      sessions as never,
+      adapter as never,
+      {} as never,
+      new TelegramAccountRuntimeNotifier(),
+      {} as never,
+    );
+
+    const bootstrap = manager.onApplicationBootstrap();
+    await Promise.resolve();
+    await jest.advanceTimersByTimeAsync(3_000);
+    await bootstrap;
+
+    expect(adapter.open).toHaveBeenCalledTimes(1);
+    await manager.onApplicationShutdown();
+    expect(signal?.aborted).toBe(true);
+  });
+
   it('serializes a gap through the bounded queue and requests recovery after the batch', async () => {
     jest.useFakeTimers();
     let onUpdate: ((update: TelegramCrmMtprotoUpdate) => void) | undefined;

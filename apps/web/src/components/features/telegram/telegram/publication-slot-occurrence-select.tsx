@@ -37,12 +37,11 @@ type PublicationSlotOccurrenceSelectProps = {
 export function PublicationSlotOccurrenceSelect(
   props: PublicationSlotOccurrenceSelectProps,
 ) {
-  return (
-    <PublicationSlotOccurrenceSelectState
-      key={`${props.channelId}:${props.scheduledAt ?? ""}`}
-      {...props}
-    />
-  );
+  // A slot occurrence is already an exact instant. Remounting after its
+  // `scheduledAt` reaches the parent made the child rebuild the clock value in
+  // the browser timezone, which shifted channels whose schedule timezone is
+  // different. Keep the slot's supplied display time in state instead.
+  return <PublicationSlotOccurrenceSelectState {...props} />;
 }
 
 function PublicationSlotOccurrenceSelectState({
@@ -188,8 +187,7 @@ export function PublicationSlotOptions({
         const key = `${item.slotId}:${item.scheduledAt}`;
         const isSelected = key === selectedValue;
         const isAvailable = item.state === "AVAILABLE";
-        const optionDisabled =
-          disabled || (!isAvailable && !isSelected);
+        const optionDisabled = disabled || (!isAvailable && !isSelected);
         const kindLabel =
           item.kind === "AD"
             ? "📣 Advertising / mutual promotion"

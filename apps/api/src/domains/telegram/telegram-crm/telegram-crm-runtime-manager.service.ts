@@ -58,17 +58,12 @@ export class TelegramCrmRuntimeManager
         `CRM runtime account safety limit exceeded (${CRM_RUNTIME_POLICY.startupAccountLimit})`,
       );
     }
-    for (
-      let index = 0;
-      index < accounts.length;
-      index += CRM_RUNTIME_POLICY.connectConcurrency
-    ) {
-      await Promise.all(
-        accounts
-          .slice(index, index + CRM_RUNTIME_POLICY.connectConcurrency)
-          .map((account) => this.start(account)),
-      );
-    }
+    const startupConnections = this.connectStartupAccounts(accounts);
+    // A reachable HTTP API is more important than eagerly restoring every
+    // optional live MTProto transport. Keep the bounded connection work in the
+    // background once the short readiness budget is exhausted; failures still
+    // use the normal retry path below.
+    await this.waitForStartupBudget(startupConnections);
   }
 
   async onApplicationShutdown() {
@@ -153,11 +148,35 @@ export class TelegramCrmRuntimeManager
 
   private async connect(managed: ManagedAccount) {
     const generation = managed.generation;
+    const connectionAbort = new AbortController();
+    const abortConnection = () => connectionAbort.abort();
+    managed.abort.signal.addEventListener('abort', abortConnection, {
+      once: true,
+    });
+    let connectionTimedOut = false;
+    let timeout: NodeJS.Timeout | undefined;
     try {
-      const handle = await this.adapter.open(
+      const opening = this.adapter.open(
         this.sessions.credentials(managed.account),
-        managed.abort.signal,
+        connectionAbort.signal,
       );
+      // If an adapter ignores AbortSignal, close a late handle rather than
+      // leaking it after this attempt has already moved to retry backoff.
+      void opening.then(
+        (handle) => {
+          if (connectionTimedOut) void handle.close();
+        },
+        () => undefined,
+      );
+      const timedOut = new Promise<never>((_, reject) => {
+        timeout = setTimeout(() => {
+          connectionTimedOut = true;
+          connectionAbort.abort();
+          reject(new Error('Telegram MTProto connection timed out'));
+        }, CRM_RUNTIME_POLICY.connectTimeoutMs);
+        timeout.unref?.();
+      });
+      const handle = await Promise.race([opening, timedOut]);
       if (
         this.shuttingDown ||
         managed.generation !== generation ||
@@ -175,6 +194,39 @@ export class TelegramCrmRuntimeManager
     } catch (error) {
       if (managed.abort.signal.aborted || this.shuttingDown) return;
       await this.connectionFailed(managed, error);
+    } finally {
+      if (timeout) clearTimeout(timeout);
+      managed.abort.signal.removeEventListener('abort', abortConnection);
+    }
+  }
+
+  private async connectStartupAccounts(accounts: CrmRuntimeAccount[]) {
+    for (
+      let index = 0;
+      index < accounts.length;
+      index += CRM_RUNTIME_POLICY.connectConcurrency
+    ) {
+      await Promise.all(
+        accounts
+          .slice(index, index + CRM_RUNTIME_POLICY.connectConcurrency)
+          .map((account) => this.start(account)),
+      );
+    }
+  }
+
+  private async waitForStartupBudget(startupConnections: Promise<void>) {
+    let budgetTimer: NodeJS.Timeout | undefined;
+    const budgetExpired = new Promise<void>((resolve) => {
+      budgetTimer = setTimeout(
+        resolve,
+        CRM_RUNTIME_POLICY.startupHttpReadyBudgetMs,
+      );
+      budgetTimer.unref?.();
+    });
+    try {
+      await Promise.race([startupConnections, budgetExpired]);
+    } finally {
+      if (budgetTimer) clearTimeout(budgetTimer);
     }
   }
 

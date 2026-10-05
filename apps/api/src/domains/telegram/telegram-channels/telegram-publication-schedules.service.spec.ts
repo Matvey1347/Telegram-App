@@ -34,7 +34,7 @@ describe('TelegramPublicationSchedulesService', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
-  it('keeps UTC publication slots at the same instant across a DST boundary', async () => {
+  it('keeps canonical UTC publication slots at the same instant across a DST boundary', async () => {
     prisma.workspace.findUnique.mockResolvedValue({
       timezone: 'Europe/Warsaw',
     });
@@ -62,7 +62,7 @@ describe('TelegramPublicationSchedulesService', () => {
             scheduleId: 'schedule-1',
             title: 'Morning',
             kind: 'CONTENT',
-            time: '09:00',
+            time: '07:00',
             position: 0,
             isActive: true,
             iconPresentation: null,

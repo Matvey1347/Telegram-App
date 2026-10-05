@@ -17,6 +17,12 @@ describe('due-work predicate parity', () => {
     );
   });
 
+  it('uses the slower secondary-repair cadence after publication is confirmed', () => {
+    const serialized = JSON.stringify(managedPostIdentityReadyWhere(now));
+
+    expect(serialized).toContain('2026-08-18T07:55:00.000Z');
+  });
+
   it('leaves batch-scheduled managed posts to the dedicated batch worker', () => {
     const serialized = JSON.stringify(managedPostIdentityReadyWhere(now));
 

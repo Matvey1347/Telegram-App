@@ -1,6 +1,7 @@
 import type {
   TelegramMessageTemplateChannelSource,
   TelegramMessageTemplatePriceRounding,
+  TelegramMessageTemplateViewsRounding,
   TelegramMessageTemplateGroupMode,
 } from "@telegram-system/shared";
 
@@ -19,21 +20,21 @@ const INTERNAL_PRICE_TOKEN = "{{product_internal_price}}";
 
 export type TelegramChannelMessageTemplateLayout = {
   showEmoji: boolean;
-  showTitle: boolean;
-  linkTitle: boolean;
-  showViews: boolean;
+  titleLinkMode: "EMBEDDED" | "SEPARATE";
+  showProductViews: boolean;
   showTgStat: boolean;
   showDescription: boolean;
+  separateChannels: boolean;
 };
 
 export const DEFAULT_CHANNEL_MESSAGE_TEMPLATE_LAYOUT: TelegramChannelMessageTemplateLayout =
   {
     showEmoji: true,
-    showTitle: true,
-    linkTitle: true,
-    showViews: false,
+    titleLinkMode: "EMBEDDED",
+    showProductViews: false,
     showTgStat: true,
     showDescription: false,
+    separateChannels: true,
   };
 
 export function readTelegramChannelMessageTemplateLayout(
@@ -41,24 +42,27 @@ export function readTelegramChannelMessageTemplateLayout(
 ): TelegramChannelMessageTemplateLayout {
   return {
     showEmoji: template.includes("{{emoji}}"),
-    showTitle: template.includes("{{title}}"),
-    linkTitle: template.includes("[{{title}}]({{invite_link}})"),
-    showViews:
+    titleLinkMode: template.includes("[{{title}}]({{invite_link}})")
+      ? "EMBEDDED"
+      : "SEPARATE",
+    showProductViews:
       template.includes("{{product_expected_views}}") ||
       template.includes("{{views}}"),
     showTgStat: template.includes("{{tgstat_url}}"),
     showDescription: template.includes("{{description}}"),
+    separateChannels: /\{\{\/products\}\}\r?\n\s*\r?\n\{\{\/channels\}\}/.test(
+      template,
+    ),
   };
 }
 
 export function buildTelegramChannelMessageTemplate(
   layout: TelegramChannelMessageTemplateLayout,
 ) {
-  const title = layout.showTitle
-    ? layout.linkTitle
+  const title =
+    layout.titleLinkMode === "EMBEDDED"
       ? "[{{title}}]({{invite_link}})"
-      : "{{title}}"
-    : "";
+      : "{{title}} — {{invite_link}}";
   const heading = [
     `${layout.showEmoji ? "{{emoji}}" : ""}${layout.showEmoji && title ? " " : ""}${title}`,
     layout.showTgStat ? "{{#tgstat}}- [TgStat]({{tgstat_url}}){{/tgstat}}" : "",
@@ -68,16 +72,15 @@ export function buildTelegramChannelMessageTemplate(
   const description = layout.showDescription
     ? "\n{{#description}}{{description}}{{/description}}"
     : "";
-  const productViews = layout.showViews
-    ? "{{#views}} · 👁 {{product_expected_views}}{{/views}}"
+  const productViews = layout.showProductViews
+    ? "{{#views}} · {{views_emoji}} {{product_expected_views}}{{/views}}"
     : "";
+  const channelGap = layout.separateChannels ? "\n\n" : "\n";
   return `{{#channels}}
 ${heading}${description}
 {{#products}}
 {{product_name}} - **{{product_price}} {{product_currency}}**${productViews}
-{{/products}}
-
-{{/channels}}`;
+{{/products}}${channelGap}{{/channels}}`;
 }
 
 export function readTelegramChannelMessageTemplatePriceMode(
@@ -113,6 +116,12 @@ type TemplateRenderOptions = {
   overrideInviteLinks?: boolean;
   inviteLinkOverrides?: Record<string, string>;
   excludedProductNames?: string[];
+  showProductViews?: boolean;
+  viewProductNames?: string[];
+  showTotalViews?: boolean;
+  viewsEmoji?: string;
+  totalViewsLabel?: string;
+  viewsRounding?: TelegramMessageTemplateViewsRounding;
   priceRounding?: TelegramMessageTemplatePriceRounding;
   productNameOverrides?: Record<string, string>;
   bundleOfferEnabled?: boolean;
@@ -124,7 +133,10 @@ type TemplateRenderOptions = {
 };
 
 const stripTitleEmoji = (value: string) =>
-  value.replace(/[\p{Extended_Pictographic}\uFE0F\u200D]/gu, "").replace(/\s{2,}/g, " ").trim();
+  value
+    .replace(/[\p{Extended_Pictographic}\uFE0F\u200D]/gu, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
 
 function replaceToken(source: string, name: string, value: string) {
   return source.split(`{{${name}}}`).join(value);
@@ -140,6 +152,10 @@ function renderProducts(
     hideProductName: boolean;
     priceCurrency?: string;
     targetPrices?: Map<string, string>;
+    showProductViews?: boolean;
+    viewProductNames: ReadonlySet<string>;
+    viewsEmoji: string;
+    viewsRounding: TelegramMessageTemplateViewsRounding;
   },
 ) {
   return source.replace(
@@ -156,12 +172,32 @@ function renderProducts(
       const rows = channel.products
         .filter(
           (product) =>
-            (Boolean(product.price) ||
-              rowTemplate.includes(INTERNAL_PRICE_TOKEN)) &&
-            !options.excludedProductNames.has(product.name.toLocaleLowerCase()),
+            (!options.excludedProductNames.has(
+              product.name.toLocaleLowerCase(),
+            ) &&
+              (Boolean(product.price) ||
+                rowTemplate.includes(INTERNAL_PRICE_TOKEN))) ||
+            (options.showProductViews &&
+              options.viewProductNames.has(product.name) &&
+              channel.viewsPerPost != null),
         )
         .map((product) => {
           let rendered = rowTemplate;
+          const showPrice = !options.excludedProductNames.has(
+            product.name.toLocaleLowerCase(),
+          );
+          const showViews =
+            Boolean(options.showProductViews) &&
+            options.viewProductNames.has(product.name);
+          if (!showPrice) {
+            rendered = rendered.replace(
+              /\s*(?:—|-)\s*\*\*{{product_(?:internal_)?price}}\s*{{product_currency}}\*\*(?:\s*·\s*)?/g,
+              "",
+            );
+          }
+          if (!showViews) {
+            rendered = rendered.replace(/{{#views}}[\s\S]*?{{\/views}}/g, "");
+          }
           if (options.hideProductName) {
             rendered = rendered.replace(
               /{{product_name}}(?:\s*(?:—|-|:)\s*)?/,
@@ -180,20 +216,34 @@ function renderProducts(
           rendered = replaceToken(
             rendered,
             "product_price",
-            roundPrice(options.targetPrices?.get(`${channel.id}\u0000${product.name}`) || product.price || "—", options.priceRounding),
+            roundPrice(
+              options.targetPrices?.get(`${channel.id}\u0000${product.name}`) ||
+                product.price ||
+                "—",
+              options.priceRounding,
+            ),
           );
           rendered = replaceToken(
             rendered,
             "product_internal_price",
-            roundPrice(options.targetPrices?.get(`${channel.id}\u0000${product.name}`) || product.internalPrice || "—", options.priceRounding),
+            roundPrice(
+              options.targetPrices?.get(`${channel.id}\u0000${product.name}`) ||
+                product.internalPrice ||
+                "—",
+              options.priceRounding,
+            ),
           );
           rendered = replaceToken(
             rendered,
             "product_expected_views",
             product.expectedViews == null
               ? "—"
-              : product.expectedViews.toLocaleString(),
+              : roundViews(
+                  product.expectedViews,
+                  options.viewsRounding,
+                ).toLocaleString(),
           );
+          rendered = replaceToken(rendered, "views_emoji", options.viewsEmoji);
           rendered = replaceToken(
             rendered,
             "product_public_cpm",
@@ -204,7 +254,11 @@ function renderProducts(
             "product_internal_cpm",
             product.internalCpm || "—",
           );
-          return replaceToken(rendered, "product_currency", options.priceCurrency || product.currency);
+          return replaceToken(
+            rendered,
+            "product_currency",
+            options.priceCurrency || product.currency,
+          );
         })
         .join("\n");
       return rows ? `${beforeRows}${rows}${afterRows}` : "";
@@ -220,6 +274,12 @@ function roundPrice(value: string, mode: TelegramMessageTemplatePriceRounding) {
   return String(Math.round(numeric / step) * step);
 }
 
+function roundViews(value: number, mode: TelegramMessageTemplateViewsRounding) {
+  if (mode === "NONE") return value;
+  const step = mode === "NEAREST_10" ? 10 : mode === "NEAREST_100" ? 100 : 1000;
+  return Math.round(value / step) * step;
+}
+
 function renderChannel(
   source: string,
   channel: TelegramMessageTemplateChannelSource,
@@ -231,6 +291,10 @@ function renderChannel(
   hideProductName: boolean,
   priceCurrency?: string,
   targetPrices?: Map<string, string>,
+  showProductViews?: boolean,
+  viewProductNames: ReadonlySet<string> = new Set(),
+  viewsEmoji = "👁",
+  viewsRounding: TelegramMessageTemplateViewsRounding = "NONE",
 ) {
   const viewsPerPost = channel.viewsPerPost ?? null;
   const overrideId = overrideInviteLinks
@@ -251,6 +315,10 @@ function renderChannel(
     hideProductName,
     priceCurrency,
     targetPrices,
+    showProductViews,
+    viewProductNames,
+    viewsEmoji,
+    viewsRounding,
   });
   const conditional = (name: string, value: string | null) => {
     rendered = rendered.replace(
@@ -281,9 +349,15 @@ export function renderTelegramChannelMessageTemplate(
   options?: TemplateRenderOptions,
 ) {
   // Keep saved legacy templates consistent with the current editor defaults.
-  template = template.replace(/\{\{product_name\}\}\s+—\s+\*\*/g, "{{product_name}} - **");
+  template = template.replace(
+    /\{\{product_name\}\}\s+—\s+\*\*/g,
+    "{{product_name}} - **",
+  );
   if (options?.priceCurrency) {
-    template = template.replace(/\{\{product_price\}\}\s+\{\{product_currency\}\}/g, "{{product_price}}{{product_currency}}");
+    template = template.replace(
+      /\{\{product_price\}\}\s+\{\{product_currency\}\}/g,
+      "{{product_price}}{{product_currency}}",
+    );
   }
   const priority = new Map(
     (options?.channelOrder || []).map((id, index) => [id, index]),
@@ -337,10 +411,22 @@ export function renderTelegramChannelMessageTemplate(
   );
   const priceRows = displayedChannels.flatMap((channel) =>
     channel.products
-      .filter((product) => !excludedProductNames.has(product.name.toLocaleLowerCase()))
-      .map((product) => ({ channel, product, amount: Number(priceMode === "INTERNAL_CPM" ? product.internalPrice : product.price) })),
+      .filter(
+        (product) =>
+          !excludedProductNames.has(product.name.toLocaleLowerCase()),
+      )
+      .map((product) => ({
+        channel,
+        product,
+        amount: Number(
+          priceMode === "INTERNAL_CPM" ? product.internalPrice : product.price,
+        ),
+      })),
   );
-  const sourceTotal = priceRows.reduce((total, row) => total + (Number.isFinite(row.amount) ? row.amount : 0), 0);
+  const sourceTotal = priceRows.reduce(
+    (total, row) => total + (Number.isFinite(row.amount) ? row.amount : 0),
+    0,
+  );
   const targetPrices = new Map<string, string>();
   // The entered package total is what the client pays after the package
   // discount. The individual prices must therefore add up to its
@@ -355,28 +441,50 @@ export function renderTelegramChannelMessageTemplate(
   ) {
     let remaining = targetPriceBeforeDiscount;
     priceRows.forEach((row, index) => {
-      const value = index === priceRows.length - 1
-        ? remaining
-        : Math.round((targetPriceBeforeDiscount * row.amount / sourceTotal) * 100) / 100;
+      const value =
+        index === priceRows.length - 1
+          ? remaining
+          : Math.round(
+              ((targetPriceBeforeDiscount * row.amount) / sourceTotal) * 100,
+            ) / 100;
       remaining = Math.round((remaining - value) * 100) / 100;
-      targetPrices.set(`${row.channel.id}\u0000${row.product.name}`, String(value));
+      targetPrices.set(
+        `${row.channel.id}\u0000${row.product.name}`,
+        String(value),
+      );
     });
   }
   const overrides = options?.inviteLinkOverrides || {};
   const priceRounding = options?.priceRounding || "NONE";
   const productNameOverrides = options?.productNameOverrides || {};
+  const showProductViews =
+    options?.showProductViews ??
+    (template.includes("{{product_expected_views}}") ||
+      template.includes("{{views}}"));
+  const viewProductNames = new Set(
+    options?.viewProductNames ??
+      displayedChannels.flatMap((channel) =>
+        channel.products.map((product) => product.name),
+      ),
+  );
   const visibleProductNames = new Set(
     displayedChannels.flatMap((channel) =>
       channel.products
         .filter(
           (product) =>
-            !excludedProductNames.has(product.name.toLocaleLowerCase()) &&
-            (Boolean(product.price) || priceMode === "INTERNAL_CPM"),
+            (!excludedProductNames.has(product.name.toLocaleLowerCase()) &&
+              (Boolean(product.price) || priceMode === "INTERNAL_CPM")) ||
+            (showProductViews &&
+              viewProductNames.has(product.name) &&
+              channel.viewsPerPost != null),
         )
         .map((product) => product.name),
     ),
   );
-  const hideProductName = visibleProductNames.size === 1;
+  // A price-only single format has historically been rendered beside the
+  // channel title. Views need their format label so independently selected
+  // rows remain understandable.
+  const hideProductName = visibleProductNames.size === 1 && !showProductViews;
   const renderedChannels = template.replace(
     /{{#channels}}([\s\S]*?){{\/channels}}/g,
     (_match, rawBody: string) => {
@@ -404,6 +512,10 @@ export function renderTelegramChannelMessageTemplate(
               hideProductName,
               options?.priceCurrency,
               targetPrices,
+              showProductViews,
+              viewProductNames,
+              options?.viewsEmoji || "👁",
+              options?.viewsRounding || "NONE",
             );
           if (index === displayedChannels.length - 1) return rendered.trimEnd();
           return hideProductName
@@ -414,15 +526,31 @@ export function renderTelegramChannelMessageTemplate(
     },
   );
   const showViews =
-    template.includes("{{product_expected_views}}") ||
-    template.includes("{{views}}");
-  const totalViews = displayedChannels.reduce(
-    (total, channel) => total + (channel.viewsPerPost ?? 0),
-    0,
+    options?.showTotalViews ??
+    (template.includes("{{product_expected_views}}") ||
+      template.includes("{{views}}"));
+  const totalViewsByFormat = new Map<string, number>();
+  for (const channel of displayedChannels) {
+    if (channel.viewsPerPost == null) continue;
+    for (const product of channel.products) {
+      if (!viewProductNames.has(product.name) || product.expectedViews == null)
+        continue;
+      totalViewsByFormat.set(
+        product.name,
+        (totalViewsByFormat.get(product.name) || 0) + product.expectedViews,
+      );
+    }
+  }
+  const totalViewsRows = [...totalViewsByFormat].map(
+    ([name, total]) =>
+      `${productNameOverrides[name] || name} — ${roundViews(
+        total,
+        options?.viewsRounding || "NONE",
+      ).toLocaleString()}`,
   );
   const renderedMessage =
-    showViews && totalViews > 0
-      ? `${renderedChannels.trimEnd()}\n\n👁 Total views: ${totalViews.toLocaleString()}`
+    showViews && totalViewsRows.length
+      ? `${renderedChannels.trimEnd()}\n\n${options?.viewsEmoji || "👁"} ${options?.totalViewsLabel?.trim() || "Total views"}:\n${totalViewsRows.join("\n")}`
       : renderedChannels;
   const rawTotalSubscribers = channels.reduce(
     (total, channel) => total + (channel.subscribersCount || 0),
@@ -482,9 +610,11 @@ export function renderTelegramChannelMessageTemplate(
     .filter((row) => row.channelIds.size === channels.length)
     .map((row) => {
       const override = Number(options.bundleBasePriceOverrides?.[row.name]);
-      const base = Math.round(
-        (Number.isFinite(override) && override > 0 ? override : row.total) * 100,
-      ) / 100;
+      const base =
+        Math.round(
+          (Number.isFinite(override) && override > 0 ? override : row.total) *
+            100,
+        ) / 100;
       const original = roundPrice(String(base), priceRounding);
       const discounted = roundPrice(
         String(Math.round(base * (1 - discount / 100) * 100) / 100),

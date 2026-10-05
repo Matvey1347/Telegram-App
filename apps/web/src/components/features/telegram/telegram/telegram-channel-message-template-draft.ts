@@ -1,8 +1,19 @@
-import type { TelegramChannelMessageTemplatePayload } from "@telegram-system/shared";
+import type {
+  ResolvedEmoji,
+  TelegramChannelMessageTemplatePayload,
+} from "@telegram-system/shared";
 import { DEFAULT_CHANNEL_MESSAGE_TEMPLATE } from "./telegram-channel-message-template-format";
 
 export const TELEGRAM_MESSAGE_TEMPLATE_DRAFT_NAMESPACE =
   "telegram-channel-message-template:draft";
+
+// Templates created before icon selection was required do not have an iconId.
+// Keep their card and editor presentation consistent instead of rendering an
+// empty picker while the list uses the standard announcement fallback.
+export const DEFAULT_TELEGRAM_MESSAGE_TEMPLATE_ICON: ResolvedEmoji = {
+  type: "unicode",
+  value: "📣",
+};
 
 export const emptyTelegramMessageTemplatePayload =
   (): TelegramChannelMessageTemplatePayload => ({
@@ -22,6 +33,12 @@ export const emptyTelegramMessageTemplatePayload =
     overrideInviteLinks: false,
     inviteLinkOverrides: {},
     excludedProductNames: [],
+    showProductViews: false,
+    viewProductNames: [],
+    showTotalViews: false,
+    viewsEmoji: "👁",
+    totalViewsLabel: "Total views",
+    viewsRounding: "NONE",
     priceRounding: "NONE",
     priceCurrency: "UAH",
     targetTotal: null,

@@ -6,6 +6,11 @@ export type TelegramMessageTemplatePriceRounding =
   | "NONE"
   | "NEAREST_5"
   | "NEAREST_10";
+export type TelegramMessageTemplateViewsRounding =
+  | "NONE"
+  | "NEAREST_10"
+  | "NEAREST_100"
+  | "NEAREST_1000";
 
 export type TelegramChannelMessageTemplatePayload = {
   title?: string | null;
@@ -24,6 +29,12 @@ export type TelegramChannelMessageTemplatePayload = {
   overrideInviteLinks: boolean;
   inviteLinkOverrides: Record<string, string>;
   excludedProductNames?: string[];
+  showProductViews?: boolean;
+  viewProductNames?: string[];
+  showTotalViews?: boolean;
+  viewsEmoji?: string;
+  totalViewsLabel?: string;
+  viewsRounding?: TelegramMessageTemplateViewsRounding;
   priceRounding?: TelegramMessageTemplatePriceRounding;
   priceCurrency?: string;
   targetTotal?: string | null;

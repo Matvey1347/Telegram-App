@@ -370,9 +370,12 @@ export class TelegramPublicationSchedulesService {
     ) {
       for (const slot of slots) {
         const localDate = this.localDateParts(cursor, timezone);
+        // Slot time is persisted as its canonical UTC time-of-day. Converting
+        // it from the workspace timezone again shifts its instant at DST
+        // boundaries and makes the returned occurrence fail SLOT validation.
         const scheduledAt = publicationScheduleOccurrenceAt(
           localDate,
-          publicationScheduleTimeToUtc(slot.time, timezone),
+          slot.time,
         );
         if (scheduledAt >= from && scheduledAt < to) {
           const reservation = reservationByScheduledAt.get(

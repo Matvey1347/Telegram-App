@@ -1,7 +1,6 @@
 "use client";
 
-import { Check } from "lucide-react";
-import { Select } from "@/components/ui/primitives";
+import { Check, Link2, TextCursorInput } from "lucide-react";
 import type { TelegramChannelMessageTemplateLayout } from "./telegram-channel-message-template-format";
 
 const options: Array<{
@@ -14,16 +13,6 @@ const options: Array<{
     id: "showEmoji",
     label: "Emoji",
     description: "Show the channel emoji before its name.",
-  },
-  {
-    id: "showTitle",
-    label: "Channel title",
-    description: "Include the channel name.",
-  },
-  {
-    id: "showViews",
-    label: "Views per post",
-    description: "Show the channel's configured views per post when available.",
   },
   {
     id: "showTgStat",
@@ -83,22 +72,80 @@ export function TelegramChannelMessageTemplateLayoutOptions({
           </button>
         );
       })}
-      <label className="rounded-lg border border-neutral-800 bg-neutral-950/50 p-3 sm:col-span-2">
-        <span className="block text-sm font-medium text-white">Channel title link</span>
-        <span className="mt-0.5 block text-xs text-neutral-400">Choose whether a channel title is hidden, plain text, or a link.</span>
-        <Select
-          className="mt-2"
-          value={!value.showTitle ? "HIDDEN" : value.linkTitle ? "LINK" : "PLAIN"}
-          onChange={(event) => {
-            const mode = event.target.value;
-            onChange({ ...value, showTitle: mode !== "HIDDEN", linkTitle: mode === "LINK" });
-          }}
+      <section
+        className="rounded-lg border border-neutral-800 bg-neutral-950/50 p-3 sm:col-span-2"
+        aria-labelledby="channel-title-link-label"
+      >
+        <h4
+          id="channel-title-link-label"
+          className="text-sm font-medium text-white"
         >
-          <option value="HIDDEN">Do not show</option>
-          <option value="PLAIN">Show plain title</option>
-          <option value="LINK">Show title as link</option>
-        </Select>
-      </label>
+          Channel title link
+        </h4>
+        <p className="mt-0.5 text-xs text-neutral-400">
+          Embed the link in the title or show the title and URL separately.
+        </p>
+        <div
+          className="mt-3 grid gap-2 sm:grid-cols-2"
+          role="radiogroup"
+          aria-label="Channel title link style"
+        >
+          {[
+            {
+              mode: "EMBEDDED" as const,
+              label: "Title as link",
+              description: "📣 Title is the clickable link",
+              Icon: Link2,
+            },
+            {
+              mode: "SEPARATE" as const,
+              label: "Title — link",
+              description: "📣 Title — 🔗 link",
+              Icon: TextCursorInput,
+            },
+          ].map(({ mode, label, description, Icon }) => {
+            const selected = value.titleLinkMode === mode;
+            return (
+              <button
+                key={mode}
+                type="button"
+                role="radio"
+                aria-label={label}
+                aria-checked={selected}
+                onClick={() => onChange({ ...value, titleLinkMode: mode })}
+                className={`flex min-h-16 items-center gap-3 rounded-lg border p-3 text-left transition ${
+                  selected
+                    ? "border-blue-500/70 bg-blue-500/10 text-white"
+                    : "border-neutral-800 bg-neutral-900 text-neutral-300 hover:border-neutral-700"
+                }`}
+              >
+                <span
+                  className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md ${
+                    selected
+                      ? "bg-blue-500/20 text-blue-300"
+                      : "bg-neutral-800 text-neutral-400"
+                  }`}
+                >
+                  <Icon size={17} aria-hidden="true" />
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-sm font-medium">{label}</span>
+                  <span className="mt-0.5 block truncate text-xs text-neutral-400">
+                    {description}
+                  </span>
+                </span>
+                {selected ? (
+                  <Check
+                    className="ml-auto shrink-0 text-blue-300"
+                    size={16}
+                    aria-hidden="true"
+                  />
+                ) : null}
+              </button>
+            );
+          })}
+        </div>
+      </section>
     </div>
   );
 }

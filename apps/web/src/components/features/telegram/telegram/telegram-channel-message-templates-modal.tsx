@@ -13,7 +13,6 @@ import {
   Trash2,
 } from "lucide-react";
 import type {
-  ResolvedEmoji,
   TelegramChannelMessageTemplate,
   TelegramMessageTemplateScopeMode,
 } from "@telegram-system/shared";
@@ -34,6 +33,7 @@ import {
 import {
   normalizeTelegramChannelMessageTemplateDraft,
   emptyTelegramMessageTemplatePayload,
+  DEFAULT_TELEGRAM_MESSAGE_TEMPLATE_ICON,
   TELEGRAM_MESSAGE_TEMPLATE_DRAFT_NAMESPACE,
   type TelegramChannelMessageTemplateDraftForm,
 } from "./telegram-channel-message-template-draft";
@@ -64,11 +64,6 @@ type TemplateScope = {
   scopeMode: TelegramMessageTemplateScopeMode;
   networkId?: string | null;
   channelIds: string[];
-};
-
-const fallbackTemplateIcon: ResolvedEmoji = {
-  type: "unicode",
-  value: "📣",
 };
 
 export function TelegramChannelMessageTemplatesModal({
@@ -171,6 +166,12 @@ export function TelegramChannelMessageTemplatesModal({
           overrideInviteLinks: template.overrideInviteLinks,
           inviteLinkOverrides: template.inviteLinkOverrides,
           excludedProductNames: template.excludedProductNames,
+          showProductViews: template.showProductViews,
+          viewProductNames: template.viewProductNames,
+          showTotalViews: template.showTotalViews,
+          viewsEmoji: template.viewsEmoji,
+          totalViewsLabel: template.totalViewsLabel,
+          viewsRounding: template.viewsRounding,
           priceRounding: template.priceRounding,
           productNameOverrides: template.productNameOverrides,
           bundleOfferEnabled: template.bundleOfferEnabled,
@@ -197,7 +198,9 @@ export function TelegramChannelMessageTemplatesModal({
     const duplicatedTitle = template.title
       ? `${template.title} copy`
       : "Template copy";
-    const form: TelegramChannelMessageTemplateDraftForm = {
+    const form: TelegramChannelMessageTemplateDraftForm & {
+      iconPresentation?: TelegramChannelMessageTemplate["iconPresentation"];
+    } = {
       payload: {
         title: duplicatedTitle,
         iconId: template.iconId,
@@ -215,6 +218,12 @@ export function TelegramChannelMessageTemplatesModal({
         overrideInviteLinks: template.overrideInviteLinks,
         inviteLinkOverrides: template.inviteLinkOverrides,
         excludedProductNames: template.excludedProductNames,
+        showProductViews: template.showProductViews,
+        viewProductNames: template.viewProductNames,
+        showTotalViews: template.showTotalViews,
+        viewsEmoji: template.viewsEmoji,
+        totalViewsLabel: template.totalViewsLabel,
+        viewsRounding: template.viewsRounding,
         priceRounding: template.priceRounding,
         productNameOverrides: template.productNameOverrides,
         bundleOfferEnabled: template.bundleOfferEnabled,
@@ -223,6 +232,10 @@ export function TelegramChannelMessageTemplatesModal({
         bundleOfferTemplate: template.bundleOfferTemplate,
       },
       savedTemplateId: null,
+      // Keep the resolved representation for the editor's first paint. The
+      // picker can still refetch by iconId, but that must not leave an edited
+      // duplicate looking as though it has no emoji.
+      iconPresentation: template.iconPresentation ?? null,
     };
     setLocalDraft(form);
     setDraftPreview({
@@ -301,7 +314,10 @@ export function TelegramChannelMessageTemplatesModal({
                     className="flex items-center gap-3 p-3"
                   >
                     <IconAvatar
-                      icon={template.iconPresentation || fallbackTemplateIcon}
+                      icon={
+                        template.iconPresentation ||
+                        DEFAULT_TELEGRAM_MESSAGE_TEMPLATE_ICON
+                      }
                       label={template.title || "Untitled template"}
                       size="sm"
                       decorative

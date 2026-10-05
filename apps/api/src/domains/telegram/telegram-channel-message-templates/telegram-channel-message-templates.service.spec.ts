@@ -88,6 +88,10 @@ describe('TelegramChannelMessageTemplatesService', () => {
       overrideInviteLinks: false,
       inviteLinkOverrides: {},
       excludedProductNames: ['3/72'],
+      showProductViews: true,
+      viewProductNames: ['1/24'],
+      showTotalViews: true,
+      viewsEmoji: '👀',
       priceRounding: 'NEAREST_10',
       productNameOverrides: { 'No auto-delete': 'Без видалення' },
       bundleOfferEnabled: true,
@@ -99,6 +103,10 @@ describe('TelegramChannelMessageTemplatesService', () => {
     expect(createdData).toEqual(
       expect.objectContaining({
         excludedProductNames: ['3/72'],
+        showProductViews: true,
+        viewProductNames: ['1/24'],
+        showTotalViews: true,
+        viewsEmoji: '👀',
         channelIds: ['channel-2', 'channel-1'],
         groupChannels: true,
         groupMode: 'NETWORK',
@@ -119,6 +127,10 @@ describe('TelegramChannelMessageTemplatesService', () => {
     expect(result).toEqual(
       expect.objectContaining({
         excludedProductNames: ['3/72'],
+        showProductViews: true,
+        viewProductNames: ['1/24'],
+        showTotalViews: true,
+        viewsEmoji: '👀',
         channelIds: ['channel-2', 'channel-1'],
         groupChannels: true,
         groupMode: 'NETWORK',

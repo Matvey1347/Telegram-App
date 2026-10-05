@@ -11,6 +11,9 @@ const publicOrigin = publicDeployment?.publicOrigin;
 const children = new Set();
 let stopping = false;
 
+const API_READY_TIMEOUT_MS = 60_000;
+const API_READY_RETRY_MS = 500;
+
 function start(name, command, args, env) {
   const child = spawn(command, args, {
     cwd: process.cwd(),
@@ -55,6 +58,30 @@ async function stop(exitCode = 0) {
   process.exit(exitCode);
 }
 
+const delay = (milliseconds) =>
+  new Promise((resolve) => setTimeout(resolve, milliseconds));
+
+async function waitForInternalApi() {
+  const deadline = Date.now() + API_READY_TIMEOUT_MS;
+  let lastError = 'no response';
+  while (Date.now() < deadline) {
+    try {
+      const response = await fetch(
+        `http://127.0.0.1:${internalApiPort}/api/health`,
+        { signal: AbortSignal.timeout(2_000) },
+      );
+      if (response.ok) return;
+      lastError = `HTTP ${response.status}`;
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : String(error);
+    }
+    await delay(API_READY_RETRY_MS);
+  }
+  throw new Error(
+    `Internal API did not become ready within ${API_READY_TIMEOUT_MS}ms (${lastError})`,
+  );
+}
+
 for (const signal of ["SIGINT", "SIGTERM"]) {
   process.on(signal, () => void stop());
 }
@@ -69,6 +96,15 @@ start("API", "node", ["apps/api/dist/main.js"], {
   TELEGRAM_BOT_RUNTIME_ENVIRONMENT: "PRODUCTION",
   ...productionUrls,
 });
+
+try {
+  await waitForInternalApi();
+} catch (error) {
+  process.stderr.write(
+    `[railway] ${error instanceof Error ? error.message : String(error)}\n`,
+  );
+  await stop(1);
+}
 
 start("Web", "pnpm", ["--filter", "web", "start"], {
   PORT: publicPort,

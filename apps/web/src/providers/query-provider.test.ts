@@ -11,10 +11,13 @@ describe("workspace query isolation", () => {
     "telegram-user-accounts",
     "telegram-channel-custom-emoji-packs",
     "telegram-managed-posts-calendar",
+    "telegram-publication-schedules",
     "telegram-managed-post-history",
     "telegram-post-batches",
     "telegram-ad-baseline",
     "telegram-crm",
+    "mutual-promotion-folders",
+    "cross-promotion-plans",
     "icons",
     "trash",
     "operations-notifications",
@@ -33,5 +36,13 @@ describe("workspace query isolation", () => {
     expect(isPersistedQuery(["operations-notifications", "workspace-1"])).toBe(
       false,
     );
+  });
+
+  it.each([
+    "telegram-publication-schedules",
+    "mutual-promotion-folders",
+    "cross-promotion-plans",
+  ])("persists %s within its selected workspace cache", (root) => {
+    expect(isPersistedQuery([root, "list"])).toBe(true);
   });
 });

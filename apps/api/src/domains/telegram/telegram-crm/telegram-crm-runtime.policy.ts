@@ -8,6 +8,10 @@ import type { CrmRuntimeAccount } from './telegram-crm-account-session.service';
 export const CRM_RUNTIME_POLICY = {
   startupAccountLimit: 100,
   connectConcurrency: 5,
+  // HTTP availability must not depend on an external MTProto transport. A
+  // connection can continue/retry after this short startup budget expires.
+  startupHttpReadyBudgetMs: 3_000,
+  connectTimeoutMs: 15_000,
   updateQueueLimit: 256,
   globalQueueLimit: 4_096,
   updateBatchLimit: 100,

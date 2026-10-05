@@ -6,6 +6,7 @@ export type TelegramChannelMessageTemplateEditorSection =
   | "text"
   | "details"
   | "channel"
+  | "views"
   | "prices";
 
 const sections: Array<{
@@ -15,6 +16,7 @@ const sections: Array<{
   { id: "text", label: "Text" },
   { id: "details", label: "Channels" },
   { id: "channel", label: "Channel info" },
+  { id: "views", label: "Views" },
   { id: "prices", label: "Prices" },
 ];
 

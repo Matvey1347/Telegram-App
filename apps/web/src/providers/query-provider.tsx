@@ -39,6 +39,9 @@ const PERSISTED_QUERY_KEYS = [
   "telegram-ad-products",
   "telegram-ad-policy",
   "telegram-ad-price-history",
+  "telegram-publication-schedules",
+  "mutual-promotion-folders",
+  "cross-promotion-plans",
   "scheduled-tasks",
 ] as const;
 
@@ -89,6 +92,7 @@ const workspaceScopedQueryKeys = new Set<string>([
   "telegram-channel-ad-analyses",
   "telegram-channel-custom-emoji-packs",
   "telegram-managed-posts-calendar",
+  "telegram-publication-schedules",
   "telegram-managed-post-history",
   "telegram-post-batches",
   "telegram-ad-sales",
@@ -99,6 +103,8 @@ const workspaceScopedQueryKeys = new Set<string>([
   "telegram-ad-baseline",
   "telegram-ad-price-history",
   "telegram-ad-analytics",
+  "mutual-promotion-folders",
+  "cross-promotion-plans",
   "telegram-crm",
   "dashboard-summary",
   "application-logs",

@@ -2857,6 +2857,12 @@ model TelegramChannelMessageTemplate {
   overrideInviteLinks      Boolean                              @default(false)
   inviteLinkOverrides      Json                                 @default("{}")
   excludedProductNames     String[]                             @default([])
+  showProductViews         Boolean                              @default(false)
+  viewProductNames         String[]                             @default([])
+  showTotalViews           Boolean                              @default(false)
+  viewsEmoji               String                               @default("👁") @db.VarChar(512)
+  totalViewsLabel          String                               @default("Total views") @db.VarChar(80)
+  viewsRounding            String                               @default("NONE") @db.VarChar(20)
   priceRounding            TelegramMessageTemplatePriceRounding @default(NONE)
   priceCurrency            String                               @default("UAH") @db.VarChar(3)
   targetTotal              Decimal?

@@ -9,6 +9,11 @@ import {
 } from '@prisma/client';
 
 export const MANAGED_POST_IDENTITY_RETRY_MS = 45_000;
+// A published post whose Telegram identity is already confirmed only needs a
+// secondary local-link repair. Keep the fast identity retry for publication
+// confirmation, but do not repeatedly wake the worker/Telegram for this
+// independent recovery path.
+export const MANAGED_POST_DEPENDENT_REPAIR_RETRY_MS = 5 * 60_000;
 export const MANAGED_POST_MISSING_IDENTITY_RETRY_MS = 30 * 60_000;
 export const MANAGED_POST_LOCAL_PUBLISHING_STALE_MS = 10 * 60_000;
 export const GREETER_BROADCAST_RETRY_MS = 5 * 60_000;
@@ -24,28 +29,8 @@ export function managedPostIdentityCandidateWhere(
 ): Prisma.TelegramManagedPostWhereInput {
   return {
     OR: [
-      {
-        telegramIdVerificationStatus:
-          TelegramManagedPostIdVerificationStatus.UNVERIFIED,
-        OR: [
-          {
-            status: TelegramManagedPostStatus.SCHEDULED,
-            scheduledAt: { lte: now },
-            AND: [
-              {
-                OR: [
-                  { scheduleMode: null },
-                  { scheduleMode: { not: 'BATCH' } },
-                ],
-              },
-            ],
-          },
-          {
-            status: TelegramManagedPostStatus.PUBLISHED,
-            lastTelegramSyncNote: MANAGED_POST_DEPENDENT_REPAIR_PENDING_NOTE,
-          },
-        ],
-      },
+      managedPostUnverifiedIdentityCandidateWhere(now),
+      managedPostDependentRepairCandidateWhere(),
       {
         telegramIdVerificationStatus:
           TelegramManagedPostIdVerificationStatus.MISSING,
@@ -61,39 +46,78 @@ export function managedPostIdentityCandidateWhere(
   };
 }
 
+function managedPostUnverifiedIdentityCandidateWhere(
+  now: Date,
+): Prisma.TelegramManagedPostWhereInput {
+  return {
+    telegramIdVerificationStatus:
+      TelegramManagedPostIdVerificationStatus.UNVERIFIED,
+    status: TelegramManagedPostStatus.SCHEDULED,
+    scheduledAt: { lte: now },
+    AND: [
+      {
+        OR: [{ scheduleMode: null }, { scheduleMode: { not: 'BATCH' } }],
+      },
+    ],
+  };
+}
+
+function managedPostDependentRepairCandidateWhere(): Prisma.TelegramManagedPostWhereInput {
+  return {
+    telegramIdVerificationStatus:
+      TelegramManagedPostIdVerificationStatus.UNVERIFIED,
+    status: TelegramManagedPostStatus.PUBLISHED,
+    lastTelegramSyncNote: MANAGED_POST_DEPENDENT_REPAIR_PENDING_NOTE,
+  };
+}
+
 export function managedPostIdentityReadyWhere(
   now: Date,
 ): Prisma.TelegramManagedPostWhereInput {
   return {
-    ...managedPostIdentityCandidateWhere(now),
-    AND: [
+    OR: [
       {
+        ...managedPostUnverifiedIdentityCandidateWhere(now),
         OR: [
+          { telegramIdLastCheckedAt: null },
           {
-            telegramIdVerificationStatus:
-              TelegramManagedPostIdVerificationStatus.UNVERIFIED,
-            OR: [
-              { telegramIdLastCheckedAt: null },
-              {
-                telegramIdLastCheckedAt: {
-                  lte: new Date(now.getTime() - MANAGED_POST_IDENTITY_RETRY_MS),
-                },
-              },
-            ],
+            telegramIdLastCheckedAt: {
+              lte: new Date(now.getTime() - MANAGED_POST_IDENTITY_RETRY_MS),
+            },
           },
+        ],
+      },
+      {
+        ...managedPostDependentRepairCandidateWhere(),
+        OR: [
+          { telegramIdLastCheckedAt: null },
           {
-            telegramIdVerificationStatus:
-              TelegramManagedPostIdVerificationStatus.MISSING,
-            OR: [
-              { telegramIdLastCheckedAt: null },
-              {
-                telegramIdLastCheckedAt: {
-                  lte: new Date(
-                    now.getTime() - MANAGED_POST_MISSING_IDENTITY_RETRY_MS,
-                  ),
-                },
-              },
-            ],
+            telegramIdLastCheckedAt: {
+              lte: new Date(
+                now.getTime() - MANAGED_POST_DEPENDENT_REPAIR_RETRY_MS,
+              ),
+            },
+          },
+        ],
+      },
+      {
+        telegramIdVerificationStatus:
+          TelegramManagedPostIdVerificationStatus.MISSING,
+        status: TelegramManagedPostStatus.SCHEDULED,
+        scheduledAt: { lte: now },
+        AND: [
+          {
+            OR: [{ scheduleMode: null }, { scheduleMode: { not: 'BATCH' } }],
+          },
+        ],
+        OR: [
+          { telegramIdLastCheckedAt: null },
+          {
+            telegramIdLastCheckedAt: {
+              lte: new Date(
+                now.getTime() - MANAGED_POST_MISSING_IDENTITY_RETRY_MS,
+              ),
+            },
           },
         ],
       },

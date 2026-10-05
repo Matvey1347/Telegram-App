@@ -226,7 +226,7 @@ describe("renderTelegramChannelMessageTemplate", () => {
     source.viewsPerPost = 1_250;
     const template = buildTelegramChannelMessageTemplate({
       ...DEFAULT_CHANNEL_MESSAGE_TEMPLATE_LAYOUT,
-      showViews: true,
+      showProductViews: true,
       showDescription: true,
       showTgStat: false,
     });
@@ -234,7 +234,7 @@ describe("renderTelegramChannelMessageTemplate", () => {
     const rendered = renderTelegramChannelMessageTemplate(template, [source]);
 
     expect(rendered).toContain("**75 UAH** · 👁 1,000");
-    expect(rendered).toContain("👁 Total views: 1,250");
+    expect(rendered).toContain("👁 Total views:\n1/24 — 1,000");
     expect(rendered).toContain("A concise channel description");
     expect(rendered).not.toContain("TgStat");
 
@@ -247,6 +247,117 @@ describe("renderTelegramChannelMessageTemplate", () => {
     expect(withoutOptionalValues).not.toContain("{{description}}");
     expect(withoutOptionalValues).not.toContain("👁");
     expect(withoutOptionalValues).not.toContain("Total views:");
+  });
+
+  it("renders the title and invite URL separately when that layout is selected", () => {
+    const template = buildTelegramChannelMessageTemplate({
+      ...DEFAULT_CHANNEL_MESSAGE_TEMPLATE_LAYOUT,
+      titleLinkMode: "SEPARATE",
+      showTgStat: false,
+    });
+
+    expect(
+      renderTelegramChannelMessageTemplate(template, [channel("one", "One")]),
+    ).toContain("💼 One — https://t.me/+one");
+  });
+
+  it("renders selected format views without showing a price", () => {
+    const source = channel("one", "One");
+    source.viewsPerPost = 1_250;
+    source.products[0].expectedViews = 1_524;
+    const template = buildTelegramChannelMessageTemplate({
+      ...DEFAULT_CHANNEL_MESSAGE_TEMPLATE_LAYOUT,
+      showProductViews: true,
+      showTgStat: false,
+    });
+
+    const rendered = renderTelegramChannelMessageTemplate(template, [source], {
+      excludedProductNames: ["1/24"],
+      showProductViews: true,
+      viewProductNames: ["1/24"],
+      showTotalViews: true,
+      viewsEmoji: "👀",
+      totalViewsLabel: "Перегляди всього",
+      viewsRounding: "NEAREST_100",
+    });
+
+    expect(rendered).toContain("1/24 · 👀 1,500");
+    expect(rendered).not.toContain("75 UAH");
+    expect(rendered).toContain("👀 Перегляди всього:\n1/24 — 1,500");
+  });
+
+  it("keeps prices out of view-only rows and totals every selected format", () => {
+    const first = channel("one", "One");
+    const second = channel("two", "Two");
+    first.viewsPerPost = 1_346;
+    second.viewsPerPost = 3_139;
+    first.products = [
+      {
+        ...first.products[0],
+        name: "1/24",
+        price: "192.6",
+        expectedViews: 642,
+      },
+      {
+        ...first.products[0],
+        id: "one-48",
+        name: "2/48",
+        price: "211.2",
+        expectedViews: 704,
+      },
+    ];
+    second.products = [
+      {
+        ...second.products[0],
+        name: "1/24",
+        price: "352.44",
+        expectedViews: 1_602,
+      },
+      {
+        ...second.products[0],
+        id: "two-48",
+        name: "2/48",
+        price: "338.14",
+        expectedViews: 1_537,
+      },
+    ];
+    const template = buildTelegramChannelMessageTemplate({
+      ...DEFAULT_CHANNEL_MESSAGE_TEMPLATE_LAYOUT,
+      showProductViews: true,
+      showTgStat: false,
+    });
+
+    const rendered = renderTelegramChannelMessageTemplate(
+      template,
+      [first, second],
+      {
+        excludedProductNames: ["1/24", "2/48"],
+        showProductViews: true,
+        viewProductNames: ["1/24", "2/48"],
+        showTotalViews: true,
+        viewsEmoji: "👁",
+        priceCurrency: "UAH",
+        productNameOverrides: { "2/48": "Дві доби" },
+      },
+    );
+
+    expect(rendered).toContain("1/24 · 👁 642");
+    expect(rendered).toContain("Дві доби · 👁 1,537");
+    expect(rendered).not.toContain("192.6UAH");
+    expect(rendered).not.toContain("338.14UAH");
+    expect(rendered).toContain(
+      "👁 Total views:\n1/24 — 2,244\nДві доби — 2,241",
+    );
+  });
+
+  it("can remove the blank line between channel entries", () => {
+    const template = buildTelegramChannelMessageTemplate({
+      ...DEFAULT_CHANNEL_MESSAGE_TEMPLATE_LAYOUT,
+      separateChannels: false,
+    });
+
+    expect(template).toContain("{{/products}}\n{{/channels}}");
+    expect(template).not.toContain("{{/products}}\n\n{{/channels}}");
   });
 
   it("renders internal CPM calculations and keeps missing internal prices explicit", () => {

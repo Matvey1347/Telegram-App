@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
+import { useState } from "react";
 import { TestI18nProvider } from "@/test/render-with-i18n";
 import { PublicationSlotOccurrenceSelect } from "./publication-slot-occurrence-select";
 
@@ -105,5 +106,52 @@ describe("PublicationSlotOccurrenceSelect", () => {
       slotId: null,
       scheduledAt: new Date(`${day}T23:45:00`).toISOString(),
     });
+  });
+
+  it("keeps the clicked slot time when its channel timezone differs from the browser", async () => {
+    const today = new Date();
+    const date = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+    occurrences.mockResolvedValue([
+      {
+        slotId: "morning",
+        scheduledAt: `${date}T07:10:00.000Z`,
+        title: "Morning",
+        kind: "CONTENT",
+        time: "10:10",
+        timezone: "Europe/Kyiv",
+        state: "AVAILABLE",
+      },
+    ]);
+
+    function ControlledSlotPicker() {
+      const [schedule, setSchedule] = useState<string | null>(null);
+      const [slotId, setSlotId] = useState<string | null>(null);
+      return (
+        <PublicationSlotOccurrenceSelect
+          channelId="channel-1"
+          value={slotId && schedule ? `${slotId}:${schedule}` : null}
+          scheduledAt={schedule}
+          onChange={({ slotId: nextSlotId, scheduledAt }) => {
+            setSlotId(nextSlotId);
+            setSchedule(scheduledAt);
+          }}
+        />
+      );
+    }
+
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <TestI18nProvider>
+          <ControlledSlotPicker />
+        </TestI18nProvider>
+      </QueryClientProvider>,
+    );
+
+    const slot = await screen.findByRole("button", {
+      name: /10:10.*Regular publication/i,
+    });
+    fireEvent.click(slot);
+
+    expect(screen.getByDisplayValue("10:10")).toBeInTheDocument();
   });
 });

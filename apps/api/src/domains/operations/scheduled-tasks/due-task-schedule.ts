@@ -1,6 +1,8 @@
 import { PrismaService } from '../../../prisma/prisma.service';
 import {
   AD_DELETION_RETRY_MS,
+  MANAGED_POST_DEPENDENT_REPAIR_PENDING_NOTE,
+  MANAGED_POST_DEPENDENT_REPAIR_RETRY_MS,
   MANAGED_POST_IDENTITY_RETRY_MS,
   MANAGED_POST_LOCAL_PUBLISHING_STALE_MS,
   MANAGED_POST_MISSING_IDENTITY_RETRY_MS,
@@ -160,6 +162,7 @@ export class DueTaskSchedule {
           scheduledAt: true,
           telegramIdLastCheckedAt: true,
           telegramIdVerificationStatus: true,
+          lastTelegramSyncNote: true,
           updatedAt: true,
         },
       }),
@@ -199,6 +202,7 @@ export class DueTaskSchedule {
           scheduledAt: true,
           telegramIdLastCheckedAt: true,
           telegramIdVerificationStatus: true,
+          lastTelegramSyncNote: true,
         },
       }),
       this.prisma.telegramManagedPost.findFirst({
@@ -223,9 +227,7 @@ export class DueTaskSchedule {
       ? ready.telegramIdLastCheckedAt
         ? new Date(
             ready.telegramIdLastCheckedAt.getTime() +
-              (ready.telegramIdVerificationStatus === 'MISSING'
-                ? MANAGED_POST_MISSING_IDENTITY_RETRY_MS
-                : MANAGED_POST_IDENTITY_RETRY_MS),
+              this.managedPostIdentityRetryMs(ready),
           )
         : (ready.scheduledAt ?? ready.updatedAt)
       : null;
@@ -234,7 +236,7 @@ export class DueTaskSchedule {
           Math.max(
             unverifiedBackoff.scheduledAt?.getTime() ?? 0,
             unverifiedBackoff.telegramIdLastCheckedAt.getTime() +
-              MANAGED_POST_IDENTITY_RETRY_MS,
+              this.managedPostIdentityRetryMs(unverifiedBackoff),
           ),
         )
       : null;
@@ -259,6 +261,19 @@ export class DueTaskSchedule {
       missingBackoffAt,
       autoDelete?.deleteAt ?? null,
     ]);
+  }
+
+  private managedPostIdentityRetryMs(post: {
+    telegramIdVerificationStatus: string;
+    lastTelegramSyncNote?: string | null;
+  }) {
+    if (post.telegramIdVerificationStatus === 'MISSING') {
+      return MANAGED_POST_MISSING_IDENTITY_RETRY_MS;
+    }
+    return post.lastTelegramSyncNote ===
+      MANAGED_POST_DEPENDENT_REPAIR_PENDING_NOTE
+      ? MANAGED_POST_DEPENDENT_REPAIR_RETRY_MS
+      : MANAGED_POST_IDENTITY_RETRY_MS;
   }
 
   private async nextOperationsNotificationDueAt() {

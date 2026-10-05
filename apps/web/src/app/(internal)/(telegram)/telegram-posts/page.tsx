@@ -1132,6 +1132,7 @@ function TelegramPostWorkspace({
   useManagedPostDueRefresh({ channelId, post: editingMeta });
   const isReadOnlyTelegramPost = Boolean(editingMeta?.readOnlyTelegramPost);
   const isPublished = editingMeta?.status === "PUBLISHED";
+  const isScheduled = editingMeta?.status === "SCHEDULED";
   const isRemoteTelegramPost =
     editingMeta?.status === "PUBLISHED" || editingMeta?.status === "SCHEDULED";
   const remotePostMediaItems = normalizeTelegramPostMediaItems(
@@ -1148,7 +1149,7 @@ function TelegramPostWorkspace({
     !hasReplaceableTelegramPhotos;
   const displayedError = error || editingMeta?.lastError || "";
   const canReturnScheduledPostToDraft = Boolean(
-    editingMeta?.status === "SCHEDULED" && editingMeta.origin !== "TELEGRAM",
+    isScheduled && editingMeta?.origin !== "TELEGRAM",
   );
   const canManageTelegramLink = Boolean(
     editingMeta &&
@@ -1168,7 +1169,9 @@ function TelegramPostWorkspace({
   );
   const effectivePublishingMode: PublishingMode = publishedPostNeedsRepublish
     ? "publish"
-    : mode;
+    : isScheduled
+      ? "schedule"
+      : mode;
   const outgoingInternalLinks = useMemo(
     () => buildManagedPostInternalLinks(text, posts.data),
     [posts.data, text],
@@ -5472,7 +5475,7 @@ function TelegramPostWorkspace({
                 </p>
               </div>
             ) : null}
-            {!isPublished ? (
+            {!isPublished && !isScheduled ? (
               <FormField label={t("telegram.posts.editor.publishingMode")}>
                 <CustomSelect
                   value={mode}
@@ -5502,7 +5505,7 @@ function TelegramPostWorkspace({
                 />
               </FormField>
             ) : null}
-            {!isPublished && mode === "schedule" ? (
+            {!isPublished && effectivePublishingMode === "schedule" ? (
               <div className="space-y-3">
                 <PublicationSlotOccurrenceSelect
                   channelId={channelId}
@@ -5595,11 +5598,11 @@ function TelegramPostWorkspace({
                   ? t("telegram.posts.editor.publish")
                   : isPublished
                     ? t("telegram.posts.editor.updateText")
-                    : mode === "draft"
+                    : effectivePublishingMode === "draft"
                       ? t("telegram.posts.editor.saveDraftAction")
-                      : mode === "publish"
+                      : effectivePublishingMode === "publish"
                         ? t("telegram.posts.editor.publishNow")
-                        : editing?.status === "SCHEDULED"
+                        : isScheduled
                           ? t("telegram.posts.editor.updateScheduled")
                           : t("telegram.posts.editor.schedulePost")}
               </Button>

@@ -7,6 +7,7 @@ import type {
   TelegramChannelMessageTemplate,
   TelegramChannelMessageTemplatePayload,
   TelegramMessageTemplatePriceRounding,
+  TelegramMessageTemplateViewsRounding,
   TelegramMessageTemplateGroupMode,
   ResolvedEmoji,
 } from "@telegram-system/shared";
@@ -32,6 +33,7 @@ import {
 } from "./telegram-channel-message-template-editor-tabs";
 import {
   emptyTelegramMessageTemplatePayload,
+  DEFAULT_TELEGRAM_MESSAGE_TEMPLATE_ICON,
   type TelegramChannelMessageTemplateDraftForm,
 } from "./telegram-channel-message-template-draft";
 import type {
@@ -47,6 +49,10 @@ import { TelegramChannelMessageTemplateSettings } from "./telegram-channel-messa
 import { TelegramChannelMessageTemplatePreviewSkeleton } from "./telegram-channel-message-template-preview-skeleton";
 import { useTelegramChannelMessageTemplatePriceMode } from "./use-telegram-channel-message-template-price-mode";
 
+type TemplateEditorLocalDraft = TelegramChannelMessageTemplateDraftForm & {
+  iconPresentation?: ResolvedEmoji | null;
+};
+
 export function TelegramChannelMessageTemplateEditor({
   channels,
   networks,
@@ -61,7 +67,7 @@ export function TelegramChannelMessageTemplateEditor({
   initial?:
     | TelegramChannelMessageTemplate
     | WorkspaceFormDraft<TelegramChannelMessageTemplateDraftForm>
-    | TelegramChannelMessageTemplateDraftForm;
+    | TemplateEditorLocalDraft;
   onDraftChange: (
     value: TelegramChannelMessageTemplateDraftForm,
     preview: WorkspaceDraftPreview,
@@ -92,9 +98,9 @@ export function TelegramChannelMessageTemplateEditor({
         ? "form" in initial
           ? (initial.preview?.icon ?? null)
           : "payload" in initial
-            ? null
+            ? (initial.iconPresentation ?? null)
             : (initial.iconPresentation ?? null)
-        : null,
+        : DEFAULT_TELEGRAM_MESSAGE_TEMPLATE_ICON,
     );
   const [mode, setMode] = useState<"network" | "channels">(
     sourceForm.scopeMode === "NETWORK" ? "network" : "channels",
@@ -129,9 +135,24 @@ export function TelegramChannelMessageTemplateEditor({
   const [outroText, setOutroText] = useState(sourceForm.outroText ?? "");
   const [activeSection, setActiveSection] =
     useState<TelegramChannelMessageTemplateEditorSection>("text");
-  const [layout, setLayout] = useState(() =>
-    readTelegramChannelMessageTemplateLayout(sourceForm.bodyTemplate),
+  const [layout, setLayout] = useState(() => ({
+    ...readTelegramChannelMessageTemplateLayout(sourceForm.bodyTemplate),
+    showProductViews: sourceForm.showProductViews ?? false,
+  }));
+  const [viewProductNames, setViewProductNames] = useState(
+    sourceForm.viewProductNames ?? [],
   );
+  const [showTotalViews, setShowTotalViews] = useState(
+    sourceForm.showTotalViews ?? false,
+  );
+  const [viewsEmoji, setViewsEmoji] = useState(sourceForm.viewsEmoji ?? "👁");
+  const [totalViewsLabel, setTotalViewsLabel] = useState(
+    sourceForm.totalViewsLabel ?? "Total views",
+  );
+  const [viewsRounding, setViewsRounding] =
+    useState<TelegramMessageTemplateViewsRounding>(
+      sourceForm.viewsRounding ?? "NONE",
+    );
   const { bodyTemplate, priceMode, setPriceMode } =
     useTelegramChannelMessageTemplatePriceMode(sourceForm.bodyTemplate, layout);
   const [overrideInviteLinks, setOverrideInviteLinks] = useState(
@@ -147,7 +168,9 @@ export function TelegramChannelMessageTemplateEditor({
     useState<TelegramMessageTemplatePriceRounding>(
       sourceForm.priceRounding ?? "NONE",
     );
-  const [priceCurrency, setPriceCurrency] = useState(sourceForm.priceCurrency?.trim() || "UAH");
+  const [priceCurrency, setPriceCurrency] = useState(
+    sourceForm.priceCurrency?.trim() || "UAH",
+  );
   const [targetTotal, setTargetTotal] = useState(sourceForm.targetTotal ?? "");
   const [productNameOverrides, setProductNameOverrides] = useState(
     sourceForm.productNameOverrides ?? {},
@@ -218,6 +241,12 @@ export function TelegramChannelMessageTemplateEditor({
       overrideInviteLinks,
       inviteLinkOverrides,
       excludedProductNames,
+      showProductViews: layout.showProductViews,
+      viewProductNames,
+      showTotalViews,
+      viewsEmoji: viewsEmoji.trim() || "👁",
+      totalViewsLabel: totalViewsLabel.trim() || "Total views",
+      viewsRounding,
       priceRounding,
       priceCurrency: priceCurrency || "UAH",
       targetTotal: targetTotal.trim() || null,
@@ -225,7 +254,9 @@ export function TelegramChannelMessageTemplateEditor({
       bundleOfferEnabled,
       bundleDiscountPercent,
       bundleBasePriceOverrides,
-      bundleOfferTemplate: bundleOfferTemplate.trim() ? bundleOfferTemplate : null,
+      bundleOfferTemplate: bundleOfferTemplate.trim()
+        ? bundleOfferTemplate
+        : null,
     }),
     [
       bodyTemplate,
@@ -234,6 +265,12 @@ export function TelegramChannelMessageTemplateEditor({
       bundleDiscountPercent,
       bundleOfferEnabled,
       excludedProductNames,
+      layout.showProductViews,
+      viewProductNames,
+      showTotalViews,
+      viewsEmoji,
+      totalViewsLabel,
+      viewsRounding,
       groupChannels,
       groupMode,
       channelGroupLabels,
@@ -303,6 +340,12 @@ export function TelegramChannelMessageTemplateEditor({
           overrideInviteLinks,
           inviteLinkOverrides,
           excludedProductNames,
+          showProductViews: layout.showProductViews,
+          viewProductNames,
+          showTotalViews,
+          viewsEmoji: viewsEmoji.trim() || "👁",
+          totalViewsLabel: totalViewsLabel.trim() || "Total views",
+          viewsRounding,
           priceRounding,
           priceCurrency,
           targetTotal: targetTotal.trim() || null,
@@ -320,6 +363,12 @@ export function TelegramChannelMessageTemplateEditor({
       bundleOfferEnabled,
       bundleOfferTemplate,
       excludedProductNames,
+      layout.showProductViews,
+      viewProductNames,
+      showTotalViews,
+      viewsEmoji,
+      totalViewsLabel,
+      viewsRounding,
       groupChannels,
       groupMode,
       channelGroupLabels,
@@ -393,7 +442,9 @@ export function TelegramChannelMessageTemplateEditor({
               <IconPicker
                 compact
                 iconId={iconId || null}
-                icon={iconPresentation}
+                icon={
+                  iconPresentation ?? DEFAULT_TELEGRAM_MESSAGE_TEMPLATE_ICON
+                }
                 onChange={(value, presentation) => {
                   setIconId(value || "");
                   setIconPresentation(presentation ?? null);
@@ -433,6 +484,11 @@ export function TelegramChannelMessageTemplateEditor({
             inviteLinkOverrides={inviteLinkOverrides}
             sourceChannels={orderedSourceChannels}
             availableProductNames={availableProductNames}
+            viewProductNames={viewProductNames}
+            showTotalViews={showTotalViews}
+            viewsEmoji={viewsEmoji}
+            totalViewsLabel={totalViewsLabel}
+            viewsRounding={viewsRounding}
             excludedProductNames={excludedProductNames}
             priceRounding={priceRounding}
             priceMode={priceMode}
@@ -456,6 +512,17 @@ export function TelegramChannelMessageTemplateEditor({
             onOverrideInviteLinksChange={setOverrideInviteLinks}
             onInviteLinkOverridesChange={setInviteLinkOverrides}
             onExcludedProductNamesChange={setExcludedProductNames}
+            onViewProductNamesChange={(names) => {
+              setViewProductNames(names);
+              setLayout((current) => ({
+                ...current,
+                showProductViews: names.length > 0,
+              }));
+            }}
+            onShowTotalViewsChange={setShowTotalViews}
+            onViewsEmojiChange={setViewsEmoji}
+            onTotalViewsLabelChange={setTotalViewsLabel}
+            onViewsRoundingChange={setViewsRounding}
             onPriceRoundingChange={setPriceRounding}
             onPriceModeChange={setPriceMode}
             onProductNameOverridesChange={setProductNameOverrides}
@@ -467,11 +534,33 @@ export function TelegramChannelMessageTemplateEditor({
           {activeSection === "prices" ? (
             <div className="grid gap-3 rounded-xl border border-neutral-800 bg-neutral-950/50 p-3 sm:grid-cols-2">
               <FormField label="Display currency">
-                <Input value={priceCurrency} maxLength={8} onChange={(event) => setPriceCurrency(event.target.value.trimStart())} placeholder="грн" />
+                <Input
+                  value={priceCurrency}
+                  maxLength={8}
+                  onChange={(event) =>
+                    setPriceCurrency(event.target.value.trimStart())
+                  }
+                  placeholder="грн"
+                />
               </FormField>
               <FormField label="Target total (optional)">
-                <Input inputMode="decimal" value={targetTotal} onChange={(event) => setTargetTotal(event.target.value.replace(/[^\d.,]/g, "").replace(",", "."))} placeholder="1150" />
-                <p className="mt-1 text-xs text-neutral-400">Prices are proportionally adjusted in the preview; actual total: {targetTotal || "channel prices"} {priceCurrency || "UAH"}.</p>
+                <Input
+                  inputMode="decimal"
+                  value={targetTotal}
+                  onChange={(event) =>
+                    setTargetTotal(
+                      event.target.value
+                        .replace(/[^\d.,]/g, "")
+                        .replace(",", "."),
+                    )
+                  }
+                  placeholder="1150"
+                />
+                <p className="mt-1 text-xs text-neutral-400">
+                  Prices are proportionally adjusted in the preview; actual
+                  total: {targetTotal || "channel prices"}{" "}
+                  {priceCurrency || "UAH"}.
+                </p>
               </FormField>
             </div>
           ) : null}

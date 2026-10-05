@@ -42,6 +42,19 @@ export class TelegramChannelMessageTemplatePayloadDto {
   @IsString({ each: true })
   @MaxLength(120, { each: true })
   excludedProductNames?: string[];
+  @IsOptional() @IsBoolean() showProductViews?: boolean;
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(30)
+  @IsString({ each: true })
+  @MaxLength(120, { each: true })
+  viewProductNames?: string[];
+  @IsOptional() @IsBoolean() showTotalViews?: boolean;
+  @IsOptional() @IsString() @MaxLength(512) viewsEmoji?: string;
+  @IsOptional() @IsString() @MaxLength(80) totalViewsLabel?: string;
+  @IsOptional()
+  @IsIn(['NONE', 'NEAREST_10', 'NEAREST_100', 'NEAREST_1000'])
+  viewsRounding?: 'NONE' | 'NEAREST_10' | 'NEAREST_100' | 'NEAREST_1000';
   @IsOptional()
   @IsIn(['NONE', 'NEAREST_5', 'NEAREST_10'])
   priceRounding?: 'NONE' | 'NEAREST_5' | 'NEAREST_10';
@@ -56,7 +69,9 @@ export class TelegramChannelMessageTemplatePayloadDto {
   @Max(100)
   bundleDiscountPercent?: number;
   @IsOptional() @IsObject() bundleBasePriceOverrides?: Record<string, string>;
-  @IsOptional() @IsString() @MaxLength(2_000) bundleOfferTemplate?: string | null;
+  @IsOptional() @IsString() @MaxLength(2_000) bundleOfferTemplate?:
+    | string
+    | null;
 }
 
 export class TelegramMessageTemplateSourceDto {
