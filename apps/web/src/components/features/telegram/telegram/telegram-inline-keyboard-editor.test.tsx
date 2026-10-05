@@ -34,4 +34,31 @@ describe("TelegramInlineKeyboardEditor", () => {
     expect(screen.queryByLabelText("Text")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /add row/i })).not.toBeInTheDocument();
   });
+
+  it("stores a Premium emoji as the native button icon rather than label markup", () => {
+    const onChange = vi.fn();
+    render(
+      <TelegramInlineKeyboardEditor
+        open
+        onOpenChange={vi.fn()}
+        buttonRows={[[{ text: "Subscribe", url: "https://example.com", style: "primary" }]]}
+        onChange={onChange}
+        customEmojiPacks={[{
+          id: "pack-1", shortName: "team", title: "Team", telegramLink: "https://t.me/addemoji/team",
+          emojis: [{ id: "emoji-1", documentId: "5330237710655306682", alt: "horn", kind: "STATIC", mimeType: "image/webp", isFree: true, needsRepainting: false, position: 0, assetUrl: "https://cdn.test/horn.webp", renderAssetUrl: null }],
+        }]}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Emoji" }));
+    fireEvent.click(screen.getByRole("button", { name: "Premium" }));
+    fireEvent.click(screen.getByRole("button", { name: "Insert horn" }));
+
+    expect(onChange).toHaveBeenCalledWith([[
+      expect.objectContaining({
+        text: "Subscribe",
+        iconCustomEmojiId: "5330237710655306682",
+      }),
+    ]]);
+  });
 });

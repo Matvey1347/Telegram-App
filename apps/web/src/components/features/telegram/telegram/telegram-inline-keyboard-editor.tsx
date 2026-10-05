@@ -1,11 +1,12 @@
 "use client";
 
 
-import { GripVertical, Link2, Plus, Trash2 } from "lucide-react";
+import { GripVertical, Link2, Plus, SmilePlus, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
-import type { TelegramPostButtonRows, TelegramPostButtonStyle } from "@telegram-system/shared";
+import type { TelegramCustomEmoji, TelegramCustomEmojiPackSummary, TelegramPostButtonRows, TelegramPostButtonStyle } from "@telegram-system/shared";
 import { Button, Input, Modal } from "@/components/ui/primitives";
 import { useI18n } from "@/providers/i18n-provider";
+import { TelegramCustomEmojiPickerModal } from "./telegram-custom-emoji-picker-modal";
 
 const styles: Array<{ value: TelegramPostButtonStyle; tone: string }> = [
   { value: "default", tone: "border-[#36546b] bg-[#203345] text-[#63b5ec]" },
@@ -16,7 +17,7 @@ const styles: Array<{ value: TelegramPostButtonStyle; tone: string }> = [
 const blankButton = () => ({ text: "", url: "", style: "default" as const });
 const compactRows = (rows: TelegramPostButtonRows) => rows.map((row) => row.filter((button) => button.text.trim() && button.url.trim())).filter((row) => row.length > 0);
 
-export function TelegramInlineKeyboardEditor({ buttonRows, onChange, disabled, open, onOpenChange, canPublishInlineButtons = true, onCheckPublishingAccess, allowedUrlTokens = ["{{invite_link}}"] }: {
+export function TelegramInlineKeyboardEditor({ buttonRows, onChange, disabled, open, onOpenChange, canPublishInlineButtons = true, onCheckPublishingAccess, allowedUrlTokens = ["{{invite_link}}"], customEmojiPacks = [], onPremiumEmojiPickerOpen, premiumEmojiLoading, premiumEmojiError, onRetryPremiumEmoji }: {
   buttonRows: TelegramPostButtonRows;
   onChange: (rows: TelegramPostButtonRows) => void;
   disabled?: boolean;
@@ -25,11 +26,17 @@ export function TelegramInlineKeyboardEditor({ buttonRows, onChange, disabled, o
   canPublishInlineButtons?: boolean;
   onCheckPublishingAccess?: () => Promise<boolean>;
   allowedUrlTokens?: string[];
+  customEmojiPacks?: TelegramCustomEmojiPackSummary[];
+  onPremiumEmojiPickerOpen?: () => void;
+  premiumEmojiLoading?: boolean;
+  premiumEmojiError?: boolean;
+  onRetryPremiumEmoji?: () => void;
 }) {
   const { t } = useI18n();
   const [draggedRow, setDraggedRow] = useState<number | null>(null);
   const [checkingAccess, setCheckingAccess] = useState(false);
   const [draggedButton, setDraggedButton] = useState<{ row: number; button: number } | null>(null);
+  const [emojiTarget, setEmojiTarget] = useState<{ row: number; button: number } | null>(null);
   const errors = useMemo(() => buttonRows.map((row) => row.map((button) => {
     if (!button.text.trim() && !button.url.trim()) return { text: "", link: "" };
     const textError = button.text.trim() ? "" : t("telegram.posts.editorComponents.inlineButtons.errors.textRequired");
@@ -61,7 +68,7 @@ export function TelegramInlineKeyboardEditor({ buttonRows, onChange, disabled, o
         <div className="mb-2 flex items-center justify-between"><span className="flex items-center gap-1 text-xs font-medium text-neutral-300">{buttonRows.length > 1 ? <span draggable={!disabled} onDragStart={(event) => { event.dataTransfer.effectAllowed = "move"; setDraggedRow(rowIndex); }} onDragEnd={() => setDraggedRow(null)} className="cursor-grab text-neutral-500 active:cursor-grabbing"><GripVertical size={15} /></span> : null}{t("telegram.posts.editorComponents.inlineButtons.row", { number: rowIndex + 1 })}</span><IconButton label={t("telegram.posts.editorComponents.inlineButtons.deleteRow")} icon={Trash2} disabled={disabled} onClick={() => onChange(buttonRows.filter((_, index) => index !== rowIndex))} /></div>
         <div className="space-y-2">{row.map((button, buttonIndex) => <div className={`grid gap-2 ${row.length > 1 ? "sm:grid-cols-[18px_minmax(0,.9fr)_minmax(0,1.2fr)_112px_auto]" : "sm:grid-cols-[minmax(0,.9fr)_minmax(0,1.2fr)_112px_auto]"} ${draggedButton?.row === rowIndex && draggedButton.button === buttonIndex ? "opacity-60" : ""}`} key={`button-${buttonIndex}`} onDragOver={(event) => { if (!draggedButton || draggedButton.row !== rowIndex) return; event.preventDefault(); }} onDrop={() => { if (draggedButton) moveButton(draggedButton, { row: rowIndex, button: buttonIndex }); setDraggedButton(null); }}>
           {row.length > 1 ? <span draggable={!disabled} onDragStart={(event) => { event.dataTransfer.effectAllowed = "move"; setDraggedButton({ row: rowIndex, button: buttonIndex }); }} onDragEnd={() => setDraggedButton(null)} className="mt-7 cursor-grab text-neutral-500 active:cursor-grabbing"><GripVertical size={15} /></span> : null}
-          <Field label={t("telegram.posts.editorComponents.inlineButtons.text")} error={errors[rowIndex]?.[buttonIndex]?.text ?? ""}><Input value={button.text} disabled={disabled} onChange={(event) => updateButton(rowIndex, buttonIndex, { text: event.target.value })} /></Field>
+          <Field label={t("telegram.posts.editorComponents.inlineButtons.text")} error={errors[rowIndex]?.[buttonIndex]?.text ?? ""}><div className="flex gap-1"><Input value={button.text} disabled={disabled} onChange={(event) => updateButton(rowIndex, buttonIndex, { text: event.target.value })} /><button type="button" disabled={disabled} aria-label={t("telegram.posts.editorComponents.format.emoji")} title={t("telegram.posts.editorComponents.format.emoji")} onClick={() => setEmojiTarget({ row: rowIndex, button: buttonIndex })} className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-neutral-700 text-neutral-300 hover:bg-neutral-800 disabled:opacity-40"><SmilePlus size={16} /></button></div></Field>
           <Field label={t("telegram.posts.editorComponents.inlineButtons.link")} error={errors[rowIndex]?.[buttonIndex]?.link ?? ""}><Input value={button.url} disabled={disabled} onChange={(event) => updateButton(rowIndex, buttonIndex, { url: event.target.value })} placeholder="https://example.com" /></Field>
           <StylePicker value={button.style} disabled={disabled} onChange={(style) => updateButton(rowIndex, buttonIndex, { style })} />
           <div className="flex items-end"><IconButton label={t("telegram.posts.editorComponents.inlineButtons.deleteButton")} icon={Trash2} disabled={disabled} onClick={() => onChange(buttonRows.map((currentRow, index) => index === rowIndex ? currentRow.filter((_, currentButton) => currentButton !== buttonIndex) : currentRow))} /></div>
@@ -70,6 +77,27 @@ export function TelegramInlineKeyboardEditor({ buttonRows, onChange, disabled, o
       </div>)}
       <div className="flex items-center justify-between"><button type="button" disabled={disabled} onClick={() => onChange([...buttonRows, [blankButton()]])} className="inline-flex items-center gap-1 text-sm text-sky-400 hover:text-sky-300 disabled:opacity-50"><Plus size={15} /> {t("telegram.posts.editorComponents.inlineButtons.addRow")}</button><Button type="button" disabled={disabled} onClick={() => { if (errors.flat().some((error) => error.text || error.link)) return; onChange(compactRows(buttonRows)); onOpenChange(false); }}>{t("telegram.posts.editorComponents.inlineButtons.done")}</Button></div></> : null}
     </div>
+    <TelegramCustomEmojiPickerModal
+      open={emojiTarget !== null}
+      onClose={() => setEmojiTarget(null)}
+      packs={customEmojiPacks}
+      onSelect={(emoji: TelegramCustomEmoji) => {
+        if (!emojiTarget) return;
+        updateButton(emojiTarget.row, emojiTarget.button, { iconCustomEmojiId: emoji.documentId });
+        setEmojiTarget(null);
+      }}
+      onSelectStandard={(emoji) => {
+        if (!emojiTarget) return;
+        const button = buttonRows[emojiTarget.row]?.[emojiTarget.button];
+        if (!button) return;
+        updateButton(emojiTarget.row, emojiTarget.button, { text: `${button.text}${emoji}` });
+        setEmojiTarget(null);
+      }}
+      onPremiumTabOpen={onPremiumEmojiPickerOpen}
+      premiumLoading={premiumEmojiLoading}
+      premiumError={premiumEmojiError}
+      onRetryPremium={onRetryPremiumEmoji}
+    />
   </Modal>;
 }
 

@@ -1,80 +1,51 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
-import type { TelegramAdSale } from "@telegram-system/shared";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { telegramSystemBotApi } from "@/lib/api";
 import { AdSaleSharedPostEditor } from "./ad-sale-shared-post-editor";
 
+vi.mock("@/lib/api", () => ({
+  telegramSystemBotApi: {
+    sendPostPreview: vi.fn(),
+  },
+}));
+
 vi.mock("./placement-post/placement-post-composer", () => ({
-  PlacementPostComposer: () => <div>Post composer</div>,
+  PlacementPostComposer: () => <div>Post editor</div>,
 }));
 
 describe("AdSaleSharedPostEditor", () => {
-  const renderEditor = (node: React.ReactNode) =>
-    render(
-      <QueryClientProvider
-        client={
-          new QueryClient({ defaultOptions: { queries: { retry: false } } })
-        }
-      >
-        {node}
-      </QueryClientProvider>,
-    );
-
-  it("offers Bot API recreation only for an MTProto post", async () => {
-    const recreate = vi.fn().mockResolvedValue(undefined);
-    const sale = {
-      placements: [
-        {
-          managedPost: {
-            id: "post-1",
-            title: "Advertising post",
-            text: "Text",
-            imageUrls: [],
-            buttonRows: [],
-            sourceType: "MTPROTO",
-          },
-        },
-      ],
-    } as unknown as TelegramAdSale;
-
-    renderEditor(
-      <AdSaleSharedPostEditor
-        sale={sale}
-        channelTitle="Advertising post"
-        onSave={vi.fn()}
-        onRecreateViaBot={recreate}
-      />,
-    );
-
-    fireEvent.click(screen.getByRole("button", { name: "Recreate via bot" }));
-    await waitFor(() => expect(recreate).toHaveBeenCalledTimes(1));
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(telegramSystemBotApi.sendPostPreview).mockResolvedValue({
+      status: "SENT",
+    });
   });
 
-  it("does not offer recreation for Bot API posts", () => {
+  it("sends the current unsaved shared-post draft to the System Bot", async () => {
+    const draft = {
+      title: "Shared campaign",
+      text: "Current post copy",
+      imageUrls: ["https://cdn.test/post.jpg"],
+      buttonRows: [[{ text: "Open", url: "https://example.com", style: "primary" }]],
+    };
     const sale = {
-      placements: [
-        {
-          managedPost: {
-            id: "post-1",
-            title: "Advertising post",
-            text: "Text",
-            imageUrls: [],
-            buttonRows: [],
-            sourceType: "BOT",
-          },
-        },
-      ],
-    } as unknown as TelegramAdSale;
-    renderEditor(
+      id: "sale-1",
+      placements: [{ managedPost: draft }],
+    } as never;
+
+    render(
       <AdSaleSharedPostEditor
         sale={sale}
         channelTitle="Advertising post"
         onSave={vi.fn()}
-        onRecreateViaBot={vi.fn()}
       />,
     );
-    expect(
-      screen.queryByRole("button", { name: "Recreate via bot" }),
-    ).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Send post to bot" }));
+
+    expect(await screen.findByText("✅ Sent to bot")).toBeInTheDocument();
+    expect(telegramSystemBotApi.sendPostPreview).toHaveBeenCalledWith(
+      expect.objectContaining(draft),
+    );
   });
 });

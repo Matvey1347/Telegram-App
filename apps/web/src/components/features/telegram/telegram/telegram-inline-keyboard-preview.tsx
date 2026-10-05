@@ -1,7 +1,8 @@
 "use client";
 
 
-import type { TelegramPostButtonRows } from "@telegram-system/shared";
+import type { TelegramCustomEmojiPackSummary, TelegramPostButtonRows } from "@telegram-system/shared";
+import { TelegramCustomEmojiRenderer } from "./telegram-custom-emoji";
 
 const styles = {
   default: "bg-[#1f3244] text-[#f5f7fa]",
@@ -12,13 +13,20 @@ const styles = {
 
 export function TelegramInlineKeyboardPreview({
   buttonRows,
+  customEmojiPacks = [],
 }: {
   buttonRows: TelegramPostButtonRows;
+  customEmojiPacks?: TelegramCustomEmojiPackSummary[];
 }) {
   const rows = buttonRows
     .map((row) => row.filter((button) => button.text.trim() && button.url.trim()))
     .filter((row) => row.length);
   if (!rows.length) return null;
+  const customEmojiById = new Map(
+    customEmojiPacks.flatMap((pack) =>
+      pack.emojis.map((emoji) => [emoji.documentId, emoji] as const),
+    ),
+  );
   return (
     <div className="space-y-1.5 rounded-[14px] bg-[#1f3042] p-1.5 shadow-md" data-testid="telegram-inline-keyboard-preview">
       {rows.map((row, rowIndex) => (
@@ -31,7 +39,15 @@ export function TelegramInlineKeyboardPreview({
               className={`min-w-0 flex-1 rounded-[9px] px-2 py-2.5 text-center text-[15px] font-medium leading-tight shadow-[inset_0_0_0_1px_rgba(255,255,255,0.04)] ${styles[button.style]}`}
               title={button.text}
             >
-              <span className="block break-words">{button.text}</span>
+              <span className="flex items-center justify-center gap-1 break-words">
+                {button.iconCustomEmojiId && customEmojiById.get(button.iconCustomEmojiId) ? (
+                  <TelegramCustomEmojiRenderer
+                    emoji={customEmojiById.get(button.iconCustomEmojiId)!}
+                    className="h-5 w-5 shrink-0"
+                  />
+                ) : null}
+                <span>{button.text.replace(/!\[([^\]\r\n]*)\]\(tg:\/\/emoji\?id=[0-9]+\)/g, "$1")}</span>
+              </span>
             </button>
           ))}
         </div>

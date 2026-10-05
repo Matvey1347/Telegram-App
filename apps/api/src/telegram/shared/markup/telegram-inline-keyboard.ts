@@ -2,10 +2,16 @@ import type {
   TelegramPostButtonRows,
   TelegramPostButtonStyle,
 } from '@telegram-system/shared';
+import { parseTelegramCustomEmojiTokens } from './telegram-custom-emoji-markup';
 
 export type TelegramBotInlineKeyboard = {
   inline_keyboard: Array<
-    Array<{ text: string; url: string; style?: Exclude<TelegramPostButtonStyle, 'default'> }>
+    Array<{
+      text: string;
+      url: string;
+      style?: Exclude<TelegramPostButtonStyle, 'default'>;
+      icon_custom_emoji_id?: string;
+    }>
   >;
 };
 
@@ -33,7 +39,19 @@ export function normalizeTelegramPostButtonRows(value: unknown): TelegramPostBut
         typeof candidate.url !== 'string' ||
         !styles.includes(candidate.style as TelegramPostButtonStyle)
       ) return [];
-      return [{ text: candidate.text, url: candidate.url, style: candidate.style as TelegramPostButtonStyle }];
+      const iconCustomEmojiId =
+        typeof candidate.iconCustomEmojiId === 'string' &&
+        /^\d+$/.test(candidate.iconCustomEmojiId)
+          ? candidate.iconCustomEmojiId
+          : undefined;
+      return [
+        {
+          text: candidate.text,
+          url: candidate.url,
+          style: candidate.style as TelegramPostButtonStyle,
+          ...(iconCustomEmojiId ? { iconCustomEmojiId } : {}),
+        },
+      ];
     });
     return buttons.length ? [buttons] : [];
   });
@@ -44,11 +62,24 @@ export function toTelegramBotInlineKeyboard(rows: TelegramPostButtonRows): Teleg
   if (!rows.length) return undefined;
   return {
     inline_keyboard: rows.map((row) =>
-      row.map(({ text, url, style }) => ({
-        text,
-        url,
-        ...(style === 'default' ? {} : { style }),
-      })),
+      row.map(({ text, url, style, iconCustomEmojiId }) => {
+        const tokens = parseTelegramCustomEmojiTokens(text);
+        const legacyIconId = tokens[0]?.documentId;
+        return {
+          // Inline keyboard labels do not support message entities. Preserve
+          // readable ALT text and pass a Premium icon through Bot API's native
+          // button field instead of leaking the markdown token to Telegram.
+          text: text.replace(
+            /!\[([^\]\r\n]*)\]\(tg:\/\/emoji\?id=[0-9]+\)/g,
+            '$1',
+          ),
+          url,
+          ...(style === 'default' ? {} : { style }),
+          ...(iconCustomEmojiId || legacyIconId
+            ? { icon_custom_emoji_id: iconCustomEmojiId || legacyIconId }
+            : {}),
+        };
+      }),
     ),
   };
 }

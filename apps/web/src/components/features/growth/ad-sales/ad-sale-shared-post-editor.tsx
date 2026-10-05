@@ -3,10 +3,12 @@
 import { useState } from "react";
 import type { TelegramAdSale } from "@telegram-system/shared";
 import { Button } from "@/components/ui/primitives";
+import { useTelegramSystemBotPostFlow } from "@/hooks/use-telegram-system-bot-post-flow";
 import {
   PlacementPostComposer,
   type PlacementManagedPostDraft,
 } from "./placement-post/placement-post-composer";
+import { hasPlacementPostContent } from "./placement-post/placement-post-content";
 
 export function AdSaleSharedPostEditor({
   sale,
@@ -37,6 +39,15 @@ export function AdSaleSharedPostEditor({
   const [saving, setSaving] = useState(false);
   const [recreating, setRecreating] = useState(false);
   const [error, setError] = useState("");
+  const botFlow = useTelegramSystemBotPostFlow({
+    mode: "single",
+    recoveryKey: `ad-sale-shared-post-${sale.id}`,
+    importContext: "Shared ad sale post",
+    previewDraft: draft,
+    errorCopy: {
+      preview: "Could not send the shared post to the System Bot.",
+    },
+  });
 
   const save = async () => {
     setSaving(true);
@@ -109,8 +120,20 @@ export function AdSaleSharedPostEditor({
           </Button>
         </div>
       ) : null}
-      {error ? <p className="text-sm text-rose-300">{error}</p> : null}
-      <div className="flex justify-end border-t border-neutral-800 pt-4">
+      {error || botFlow.error ? <p className="text-sm text-rose-300">{error || botFlow.error}</p> : null}
+      <div className="flex flex-wrap justify-end gap-2 border-t border-neutral-800 pt-4">
+        <Button
+          type="button"
+          variant="secondary"
+          disabled={saving || botFlow.sendStatus === "working" || !hasPlacementPostContent(draft)}
+          onClick={() => void botFlow.send(draft)}
+        >
+          {botFlow.sendStatus === "working"
+            ? "Sending…"
+            : botFlow.sendStatus === "done"
+              ? "✅ Sent to bot"
+              : "Send post to bot"}
+        </Button>
         <Button
           onClick={() => void save()}
           disabled={saving || !draft.title.trim()}

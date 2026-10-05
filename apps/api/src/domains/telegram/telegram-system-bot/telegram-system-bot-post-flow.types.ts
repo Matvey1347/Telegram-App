@@ -1,5 +1,8 @@
 import type { Prisma } from '@prisma/client';
-import type { TelegramPostMediaItem } from '@telegram-system/shared';
+import type {
+  TelegramPostButtonRows,
+  TelegramPostMediaItem,
+} from '@telegram-system/shared';
 import type { TelegramSystemBotWorkflowStore } from './telegram-system-bot-workflow.store';
 
 export type TelegramSystemBotPostAction =
@@ -12,13 +15,7 @@ export type TelegramSystemBotPostPreviewDraft = {
   text?: string;
   imageUrls?: string[];
   mediaItems?: TelegramPostMediaItem[];
-  buttonRows?: Array<
-    Array<{
-      text?: string;
-      url?: string;
-      style?: 'default' | 'primary' | 'success' | 'danger';
-    }>
-  >;
+  buttonRows?: TelegramPostButtonRows;
 };
 
 export type TelegramSystemBotCapturedPostContent = {

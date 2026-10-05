@@ -545,7 +545,10 @@ export function TelegramPostPreview({
                   customEmojiPacks={resolvedCustomEmojiPacks}
                 />
               ))}
-              <TelegramInlineKeyboardPreview buttonRows={buttonRows} />
+              <TelegramInlineKeyboardPreview
+                buttonRows={buttonRows}
+                customEmojiPacks={resolvedCustomEmojiPacks}
+              />
               {engagement &&
               (Array.isArray(engagement) ? engagement.length : true) ? (
                 <TelegramPostEngagement engagement={engagement} />

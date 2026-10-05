@@ -47,6 +47,12 @@ export async function sendTelegramSystemBotPostPreview(input: {
           text: String(button.text ?? '').trim(),
           url: String(button.url ?? '').trim(),
           style: button.style ?? 'default',
+          // Preserve the native Bot API button icon. Without this mapping the
+          // System Bot preview silently dropped the ID and sent the stored
+          // markdown token as visible button text.
+          ...(typeof button.iconCustomEmojiId === 'string'
+            ? { iconCustomEmojiId: button.iconCustomEmojiId }
+            : {}),
         })),
       ),
     ),

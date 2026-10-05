@@ -95,7 +95,7 @@ export const TelegramTextEditor = forwardRef<TelegramTextEditorHandle, TelegramT
   const customEmojiPacksQuery = useQuery({
     queryKey: workspaceKeys.telegramCustomEmojiPacks(),
     queryFn: () => telegramChannelsApi.customEmojiPacks(),
-    enabled: customEmojiEnabled && customEmojiPickerOpen && premiumEmojiRequested && !customEmojiPacks,
+    enabled: customEmojiEnabled && (customEmojiPickerOpen || buttonsEditorOpen) && premiumEmojiRequested && !customEmojiPacks,
   });
   const effectiveCustomEmojiPacks = customEmojiPacks ?? customEmojiPacksQuery.data?.packs ?? [];
   const localLinkTargets = useCallback((): TelegramManagedPostLinkTarget[] => {
@@ -521,7 +521,7 @@ export const TelegramTextEditor = forwardRef<TelegramTextEditorHandle, TelegramT
         className="sr-only"
         onChange={handleInlineImageSelect}
       />
-      {onButtonRowsChange ? <TelegramInlineKeyboardEditor buttonRows={buttonRows} onChange={onButtonRowsChange} disabled={disabled} open={buttonsEditorOpen} onOpenChange={setButtonsEditorOpen} canPublishInlineButtons={canPublishInlineButtons} onCheckPublishingAccess={onCheckInlineButtonPublishingAccess} /> : null}
+      {onButtonRowsChange ? <TelegramInlineKeyboardEditor buttonRows={buttonRows} onChange={onButtonRowsChange} disabled={disabled} open={buttonsEditorOpen} onOpenChange={setButtonsEditorOpen} canPublishInlineButtons={canPublishInlineButtons} onCheckPublishingAccess={onCheckInlineButtonPublishingAccess} customEmojiPacks={effectiveCustomEmojiPacks} onPremiumEmojiPickerOpen={() => setPremiumEmojiRequested(true)} premiumEmojiLoading={customEmojiPacksQuery.isLoading} premiumEmojiError={customEmojiPacksQuery.isError} onRetryPremiumEmoji={() => void customEmojiPacksQuery.refetch()} /> : null}
       <TelegramCustomEmojiPickerModal
         open={customEmojiPickerOpen}
         onClose={() => setCustomEmojiPickerOpen(false)}
