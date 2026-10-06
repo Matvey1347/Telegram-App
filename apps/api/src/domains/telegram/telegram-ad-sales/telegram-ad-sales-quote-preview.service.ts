@@ -8,6 +8,10 @@ import type {
 import { TELEGRAM_AD_QUOTE_PREVIEW_MAX_HISTORICAL_CUTOFFS } from '@telegram-system/shared';
 import { TelegramAdPricingMode } from '@prisma/client';
 import { runBounded } from '../../../common/run-bounded';
+import {
+  CurrencyConversionService,
+  type PreparedCurrencyRateSource,
+} from '../../../common/currency-conversion.service';
 import { WorkspaceService } from '../../../common/workspace.service';
 import { PrismaService } from '../../../prisma/prisma.service';
 import {
@@ -20,6 +24,7 @@ import {
   TelegramAdQuotePreviewBatchRequestDto,
   TelegramAdQuotePreviewRequestDto,
 } from './telegram-ad-sales-quote-preview.dto';
+import { decimal, decimalToString } from './domain/decimal';
 
 type PreviewContext = {
   index: number;
@@ -45,6 +50,7 @@ export class TelegramAdSalesQuotePreviewService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly workspaceService: WorkspaceService,
+    private readonly currencyConversionService: CurrencyConversionService,
   ) {
     this.pricingReader = new TelegramAdSalesPricingReader(prisma);
   }
@@ -87,6 +93,7 @@ export class TelegramAdSalesQuotePreviewService {
             defaultPricingMode: true,
             defaultCpm: true,
             defaultFixedPrice: true,
+            currency: true,
           },
         }) as unknown as Promise<PreviewProduct[]>)
       : Promise.resolve([] as PreviewProduct[]);
@@ -186,18 +193,60 @@ export class TelegramAdSalesQuotePreviewService {
       );
     });
 
-    const results = new Map<number, TelegramAdQuotePreviewResult>();
-    for (const context of contexts) {
-      if (errors.has(context.index)) continue;
+    const previews = contexts.flatMap((context) => {
+      if (errors.has(context.index)) return [];
       const key =
         context.scheduledAt && context.scheduledAt <= now
           ? historicalSourceKey(context.scheduledAt)
           : CURRENT_SOURCE_KEY;
       const source = groupedSources.get(key)!.get(context.channel.id)!;
-      const preview = this.preview(context, source);
+      return [{ context, key, preview: this.preview(context, source) }];
+    });
+    const requiresConversion = ({
+      context,
+      preview,
+    }: Pick<(typeof previews)[number], 'context' | 'preview'>) =>
+      preview.currency.toUpperCase() !==
+      (context.request.currency ?? preview.currency).toUpperCase();
+    const historicalDates = previews
+      .filter(
+        ({ key, ...item }) =>
+          key !== CURRENT_SOURCE_KEY && requiresConversion(item),
+      )
+      .map(({ context }) => context.scheduledAt!);
+    const [currentRateSource, historicalRateSources] = await Promise.all([
+      previews.some(
+        ({ key, ...item }) =>
+          key === CURRENT_SOURCE_KEY && requiresConversion(item),
+      )
+        ? this.currencyConversionService.prepareRateSource(workspaceId)
+        : Promise.resolve<PreparedCurrencyRateSource | null>(null),
+      this.currencyConversionService.prepareHistoricalRateSources(
+        workspaceId,
+        historicalDates,
+      ),
+    ]);
+
+    const results = new Map<number, TelegramAdQuotePreviewResult>();
+    for (const { context, key, preview } of previews) {
+      const rateSource =
+        key === CURRENT_SOURCE_KEY
+          ? currentRateSource
+          : historicalRateSources.get(context.scheduledAt!.toISOString());
+      const quote = await this.toQuote(context.request, preview, rateSource);
+      if (!quote) {
+        errors.set(context.index, {
+          requestId: context.request.requestId,
+          error: {
+            code: 'RATE_UNAVAILABLE',
+            message: `No exchange rate from ${preview.currency} to ${context.request.currency}`,
+          },
+        });
+        continue;
+      }
       results.set(context.index, {
         requestId: context.request.requestId,
-        quote: this.toQuote(context.request, preview),
+        quote,
       });
     }
     return {
@@ -234,17 +283,27 @@ export class TelegramAdSalesQuotePreviewService {
     });
   }
 
-  private toQuote(
+  private async toQuote(
     request: TelegramAdQuotePreviewRequestDto,
     preview: ReturnType<TelegramAdSalesPricingReader['previewFromSource']>,
-  ): TelegramAdPriceQuote {
+    rateSource: PreparedCurrencyRateSource | null | undefined,
+  ): Promise<TelegramAdPriceQuote | null> {
+    const sourceCurrency = preview.currency.toUpperCase();
+    const targetCurrency = (request.currency ?? sourceCurrency).toUpperCase();
+    const rate =
+      sourceCurrency === targetCurrency
+        ? 1
+        : await rateSource?.getRate(sourceCurrency, targetCurrency);
+    if (rate == null) return null;
     return {
       snapshotId: null,
       expectedViews: preview.expectedViews,
-      targetCpm: preview.targetCpm,
-      recommendedPrice: preview.recommendedPrice,
-      minimumPrice: preview.minimumPrice,
-      currency: request.currency ?? preview.currency,
+      targetCpm: decimalToString(decimal(preview.targetCpm).mul(rate))!,
+      recommendedPrice: decimalToString(
+        decimal(preview.recommendedPrice).mul(rate),
+      )!,
+      minimumPrice: decimalToString(decimal(preview.minimumPrice).mul(rate))!,
+      currency: targetCurrency,
       dataQuality: preview.dataQuality,
       warnings: preview.warnings.map((code) => ({
         code: code as TelegramAdWarningCode,

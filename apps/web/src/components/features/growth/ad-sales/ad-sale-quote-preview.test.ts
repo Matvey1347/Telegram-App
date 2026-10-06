@@ -96,7 +96,11 @@ describe("ad sale quote preview", () => {
       }),
     );
 
-    expect(result.current).toEqual({ limitExceeded: true, requestCount: 10_001 });
+    expect(result.current).toEqual({
+      limitExceeded: true,
+      requestCount: 10_001,
+      errors: [],
+    });
     expect(requestPreview).not.toHaveBeenCalled();
   });
 

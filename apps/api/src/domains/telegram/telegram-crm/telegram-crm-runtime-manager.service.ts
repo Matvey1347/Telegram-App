@@ -3,8 +3,14 @@ import {
   Logger,
   OnApplicationBootstrap,
   OnApplicationShutdown,
+  Optional,
 } from '@nestjs/common';
-import { TelegramUserAccountStatus } from '@prisma/client';
+import {
+  OperationsNotificationPriority,
+  OperationsNotificationType,
+  TelegramUserAccountStatus,
+  WorkspaceRole,
+} from '@prisma/client';
 import type { Subscription } from 'rxjs';
 import { TelegramAccountRuntimeNotifier } from '../../../common/telegram-account-runtime-notifier.service';
 import { PrismaService } from '../../../prisma/prisma.service';
@@ -15,6 +21,7 @@ import type {
 } from '@api/telegram/shared/mtproto/telegram-crm-mtproto.types';
 import { isRevokedTelegramSessionError } from '@api/telegram/shared/mtproto/telegram-session-errors';
 import {
+  crmRuntimeAccountSelect,
   type CrmRuntimeAccount,
   TelegramCrmAccountSessionService,
 } from './telegram-crm-account-session.service';
@@ -26,6 +33,8 @@ import {
   sameCrmRuntimeSession,
   type TelegramCrmManagedAccount as ManagedAccount,
 } from './telegram-crm-runtime.policy';
+import { OperationsNotificationStoreService } from '../../operations/notifications/operations-notification-store.service';
+import { OperationsNotificationPublisherService } from '../../operations/notifications/operations-notification-publisher.service';
 
 @Injectable()
 export class TelegramCrmRuntimeManager
@@ -44,6 +53,10 @@ export class TelegramCrmRuntimeManager
     private readonly batchStore: TelegramCrmBatchStoreService,
     private readonly notifier: TelegramAccountRuntimeNotifier,
     private readonly recoveryService: TelegramCrmRecoveryService,
+    @Optional()
+    private readonly notifications?: OperationsNotificationStoreService,
+    @Optional()
+    private readonly notificationPublisher?: OperationsNotificationPublisherService,
   ) {}
 
   async onApplicationBootstrap() {
@@ -59,6 +72,7 @@ export class TelegramCrmRuntimeManager
       );
     }
     const startupConnections = this.connectStartupAccounts(accounts);
+    await this.reconcileRevokedAccountNotifications();
     // A reachable HTTP API is more important than eagerly restoring every
     // optional live MTProto transport. Keep the bounded connection work in the
     // background once the short readiness budget is exhausted; failures still
@@ -369,7 +383,7 @@ export class TelegramCrmRuntimeManager
 
   private async connectionFailed(managed: ManagedAccount, error: unknown) {
     if (isRevokedTelegramSessionError(error)) {
-      await this.prisma.telegramUserAccountIntegration.updateMany({
+      const transition = await this.prisma.telegramUserAccountIntegration.updateMany({
         where: {
           id: managed.account.id,
           workspaceId: managed.account.workspaceId,
@@ -380,6 +394,9 @@ export class TelegramCrmRuntimeManager
           lastErrorMessage: 'Telegram session was revoked',
         },
       });
+      if (transition.count) {
+        await this.notifyReauthenticationRequired(managed.account);
+      }
       await this.stop(managed.account.id);
       await this.recoveryService.writeFailure(
         managed.account,
@@ -404,6 +421,73 @@ export class TelegramCrmRuntimeManager
       return;
     }
     this.scheduleRetry(managed);
+  }
+
+  private async notifyReauthenticationRequired(account: CrmRuntimeAccount) {
+    if (!this.notifications || !this.notificationPublisher) return;
+    const creator = account.createdByUserId
+      ? await this.prisma.workspaceMember.findFirst({
+          where: {
+            workspaceId: account.workspaceId,
+            userId: account.createdByUserId,
+          },
+          select: { id: true },
+        })
+      : null;
+    const owner =
+      account.assignedMemberId || creator
+        ? null
+        : await this.prisma.workspaceMember.findFirst({
+            where: { workspaceId: account.workspaceId, role: WorkspaceRole.owner },
+            orderBy: { createdAt: 'asc' },
+            select: { id: true },
+          });
+    const recipientMemberId = account.assignedMemberId ?? creator?.id ?? owner?.id;
+    if (!recipientMemberId) return;
+
+    try {
+      const notificationIds = await this.prisma.$transaction((tx) =>
+        this.notifications!.upsertMany(tx, [
+          {
+            workspaceId: account.workspaceId,
+            recipientMemberId,
+            type: OperationsNotificationType.TELEGRAM_ACCOUNT_REAUTH_REQUIRED,
+            priority: OperationsNotificationPriority.HIGH,
+            sourceKey: `telegram-account:${account.id}:reauth-required`,
+            copyKey: 'telegram.notification.accountReauthRequired',
+            title: 'Telegram account disconnected',
+            body: `${account.label} needs to be reconnected via QR.`,
+            metadata: { accountId: account.id, action: 'qr-login' },
+            targetUrl: '/telegram-channels?tab=accounts&accountTab=mtproto',
+          },
+        ]),
+      );
+      await this.notificationPublisher.publish(notificationIds.map(({ id }) => id));
+    } catch {
+      // The account transition is already durable; a notification failure must
+      // not restart the revoked MTProto session or cause a retry loop.
+    }
+  }
+
+  /**
+   * One bounded startup repair for sessions revoked before notification
+   * projection existed. It is not a timer or recurring database scan; the
+   * notification source key makes a restart idempotent.
+   */
+  private async reconcileRevokedAccountNotifications() {
+    if (!this.notifications || !this.notificationPublisher) return;
+    const accounts = await this.prisma.telegramUserAccountIntegration.findMany({
+      where: {
+        status: TelegramUserAccountStatus.error,
+        lastErrorMessage: { contains: 'session was revoked', mode: 'insensitive' },
+      },
+      select: crmRuntimeAccountSelect,
+      take: 100,
+      orderBy: { updatedAt: 'desc' },
+    });
+    for (const account of accounts) {
+      await this.notifyReauthenticationRequired(account);
+    }
   }
 
   private scheduleRetry(managed: ManagedAccount) {

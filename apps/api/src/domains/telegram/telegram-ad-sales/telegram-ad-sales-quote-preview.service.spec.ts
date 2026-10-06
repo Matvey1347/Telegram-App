@@ -20,9 +20,17 @@ describe('TelegramAdSalesQuotePreviewService', () => {
     const workspaceService = {
       resolveWorkspaceIdForUser: jest.fn().mockResolvedValue('ws-1'),
     };
+    const rateSource = {
+      getRate: jest.fn().mockResolvedValue(1),
+    };
+    const currencyConversionService = {
+      prepareRateSource: jest.fn().mockResolvedValue(rateSource),
+      prepareHistoricalRateSources: jest.fn().mockResolvedValue(new Map()),
+    };
     const service = new TelegramAdSalesQuotePreviewService(
       prisma as never,
       workspaceService as never,
+      currencyConversionService as never,
     );
     const pricingReader = (
       service as unknown as { pricingReader: TelegramAdSalesPricingReader }
@@ -63,6 +71,8 @@ describe('TelegramAdSalesQuotePreviewService', () => {
     return {
       prisma,
       workspaceService,
+      currencyConversionService,
+      rateSource,
       service,
       sourcesForChannels,
       previewFromSource,
@@ -147,6 +157,113 @@ describe('TelegramAdSalesQuotePreviewService', () => {
     });
 
     await expect(validate(dto)).resolves.toEqual([]);
+  });
+
+  it('converts preview amounts to the requested settlement currency', async () => {
+    const { prisma, service, rateSource, previewFromSource } = setup();
+    prisma.telegramChannel.findMany.mockResolvedValue([
+      {
+        id: 'channel-1',
+        currentSubscribersCount: 1_000,
+        ownViewsPerPost: 500,
+        adBaseCpm: 100,
+        adBaseCurrency: 'UAH',
+        updatedAt: new Date(),
+      },
+    ]);
+    previewFromSource.mockReturnValue({
+      expectedViews: 1_000,
+      averageViews: 1_000,
+      medianViews: 1_000,
+      adjustedViews: 1_000,
+      postsSampleCount: 10,
+      dataQuality: 'READY',
+      warnings: [],
+      fallbackSource: 'POSTS',
+      methodVersion: 'v1',
+      sample: [],
+      pricingWindowHours: 24,
+      pricingWindowLabel: '24 hours',
+      currency: 'UAH',
+      recommendedPrice: '12',
+      minimumPrice: '10',
+      targetCpm: '12',
+    });
+    rateSource.getRate.mockResolvedValue(0.025);
+
+    const result = await service.previewBatch('user-1', {
+      requests: [
+        {
+          requestId: 'convert-uah-to-usd',
+          telegramChannelId: 'channel-1',
+          currency: 'USD',
+        },
+      ],
+    });
+
+    expect(rateSource.getRate).toHaveBeenCalledWith('UAH', 'USD');
+    expect(result.items[0]).toMatchObject({
+      requestId: 'convert-uah-to-usd',
+      quote: {
+        targetCpm: '0.3',
+        recommendedPrice: '0.3',
+        minimumPrice: '0.25',
+        currency: 'USD',
+      },
+    });
+  });
+
+  it('returns a per-placement error when the requested conversion rate is unavailable', async () => {
+    const { prisma, service, rateSource, previewFromSource } = setup();
+    prisma.telegramChannel.findMany.mockResolvedValue([
+      {
+        id: 'channel-1',
+        currentSubscribersCount: 1_000,
+        ownViewsPerPost: 500,
+        adBaseCpm: 100,
+        adBaseCurrency: 'UAH',
+        updatedAt: new Date(),
+      },
+    ]);
+    previewFromSource.mockReturnValue({
+      expectedViews: 1_000,
+      averageViews: 1_000,
+      medianViews: 1_000,
+      adjustedViews: 1_000,
+      postsSampleCount: 10,
+      dataQuality: 'READY',
+      warnings: [],
+      fallbackSource: 'POSTS',
+      methodVersion: 'v1',
+      sample: [],
+      pricingWindowHours: 24,
+      pricingWindowLabel: '24 hours',
+      currency: 'UAH',
+      recommendedPrice: '12',
+      minimumPrice: '10',
+      targetCpm: '12',
+    });
+    rateSource.getRate.mockResolvedValue(null);
+
+    const result = await service.previewBatch('user-1', {
+      requests: [
+        {
+          requestId: 'missing-rate',
+          telegramChannelId: 'channel-1',
+          currency: 'USD',
+        },
+      ],
+    });
+
+    expect(result.items).toEqual([
+      {
+        requestId: 'missing-rate',
+        error: {
+          code: 'RATE_UNAVAILABLE',
+          message: 'No exchange rate from UAH to USD',
+        },
+      },
+    ]);
   });
 
   it('rejects requests above the frozen quote batch maximum', async () => {

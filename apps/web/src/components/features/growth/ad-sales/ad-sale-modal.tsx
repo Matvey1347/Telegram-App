@@ -340,6 +340,11 @@ export function AdSaleModal(props: AdSaleModalProps) {
                 Reduce the channels or dates to 10,000 placements or fewer.
               </p>
             ) : null}
+            {quotePreview.errors.length ? (
+              <p className="mt-4 rounded-lg border border-rose-700 bg-rose-950/30 px-3 py-2 text-sm text-rose-200">
+                {quotePreview.errors[0]}
+              </p>
+            ) : null}
 
             <div className="mt-5 flex justify-end gap-2">
               <div className="flex gap-2">

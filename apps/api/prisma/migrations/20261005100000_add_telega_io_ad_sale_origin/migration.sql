@@ -1,0 +1,1 @@
+ALTER TYPE "TelegramAdSaleOrigin" ADD VALUE 'TELEGA_IO';

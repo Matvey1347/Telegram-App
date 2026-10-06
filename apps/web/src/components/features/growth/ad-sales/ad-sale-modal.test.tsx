@@ -335,6 +335,10 @@ describe("AdSaleModal", () => {
     expect(adsellOption.querySelector("img")?.getAttribute("src")).toBe(
       "https://adsell.io/assets/img/favicon.png",
     );
+    const telegaOption = screen.getByRole("button", { name: /telega\.io/ });
+    expect(telegaOption.querySelector("img")?.getAttribute("src")).toBe(
+      "https://telega.io/favicon.ico",
+    );
     fireEvent.click(externalNewSaleOption);
     await screen.findByText(/1\/24 · 125 UAH/);
     await waitFor(() =>
@@ -359,6 +363,27 @@ describe("AdSaleModal", () => {
         window.localStorage.getItem("telegram-ad-sales:draft:default"),
       ).toBeNull(),
     );
+  });
+
+  it("blocks checkout when a placement price cannot be converted", async () => {
+    renderModal({
+      onRequestQuotePreview: vi.fn().mockImplementation((requests) =>
+        Promise.resolve({
+          items: requests.map((request: { requestId: string }) => ({
+            requestId: request.requestId,
+            error: {
+              code: "RATE_UNAVAILABLE",
+              message: "No exchange rate from UAH to USD",
+            },
+          })),
+        }),
+      ),
+    });
+
+    expect(
+      await screen.findByText("No exchange rate from UAH to USD"),
+    ).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Create sale" })).toBeDisabled();
   });
 
   it("groups optional contact details and shows the network emoji", async () => {
@@ -523,6 +548,38 @@ describe("AdSaleModal", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Format for all" }));
     expect(screen.getAllByRole("button", { name: "2/48" })).toHaveLength(1);
+  });
+
+  it("uses one converted quote for both totals of a single placement", async () => {
+    renderModal({
+      accounts: [
+        {
+          id: "usd-account",
+          name: "USD account",
+          currency: "USD",
+          isActive: true,
+        },
+      ] as never,
+      onRequestQuotePreview: vi.fn().mockImplementation((requests) =>
+        Promise.resolve({
+          items: requests.map((request: { requestId: string }) => ({
+            requestId: request.requestId,
+            quote: {
+              expectedViews: 2_655,
+              targetCpm: "2.68",
+              recommendedPrice: "7.12",
+              minimumPrice: "3.56",
+              currency: "USD",
+              warnings: [],
+            },
+          })),
+        }),
+      ),
+    });
+
+    await waitFor(() =>
+      expect(screen.getAllByText("7.12 USD")).toHaveLength(2),
+    );
   });
 
   it("creates placement rows for every selected date without a separate bulk mode", async () => {

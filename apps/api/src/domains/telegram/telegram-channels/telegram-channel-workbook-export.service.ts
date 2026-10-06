@@ -6,6 +6,10 @@ import {
   TelegramChannelWorkbookDataService,
 } from './telegram-channel-workbook-data.service';
 import { TelegramChannelWorkbookWriter } from './telegram-channel-workbook.writer';
+import {
+  TELEGRAM_CHANNEL_EXPORT_SECTIONS,
+  type TelegramChannelExportSection,
+} from '@telegram-system/shared';
 
 @Injectable()
 export class TelegramChannelWorkbookExportService {
@@ -15,13 +19,24 @@ export class TelegramChannelWorkbookExportService {
     private readonly data: TelegramChannelWorkbookDataService,
     private readonly writer: TelegramChannelWorkbookWriter,
   ) {}
-  async exportChannelWorkbook(userId: string, channelId: string) {
+  async exportChannelWorkbook(
+    userId: string,
+    channelId: string,
+    sections?: string[],
+  ) {
     const workspaceId = await this.support.workspace(userId);
     const channel = await this.prisma.telegramChannel.findFirst({
       where: { id: channelId, workspaceId, isActive: true },
       include: telegramChannelWorkbookInclude,
     });
     if (!channel) throw new NotFoundException('Telegram channel not found');
-    return this.writer.build(await this.data.load(workspaceId, channel));
+    const selectedSections = sections?.filter(
+      (section): section is TelegramChannelExportSection =>
+        TELEGRAM_CHANNEL_EXPORT_SECTIONS.some((allowed) => allowed === section),
+    );
+    return this.writer.build(
+      await this.data.load(workspaceId, channel),
+      selectedSections?.length ? selectedSections : undefined,
+    );
   }
 }

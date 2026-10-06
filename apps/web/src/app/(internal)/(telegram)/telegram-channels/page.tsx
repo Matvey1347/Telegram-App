@@ -21,6 +21,10 @@ import { TelegramTextEditor } from "@/components/features/telegram/telegram/tele
 import { TelegramChannelMessageTemplatesModal } from "@/components/features/telegram/telegram/telegram-channel-message-templates-modal";
 import { TelegramChannelsHeaderActions } from "@/components/features/telegram/telegram/telegram-channels-header-actions";
 import {
+  TelegramChannelExportModal,
+  type TelegramChannelExportSelection,
+} from "@/components/features/telegram/telegram/telegram-channel-export-modal";
+import {
   TelegramNetworkCards,
   TelegramPeopleCards,
 } from "@/components/features/telegram/telegram/telegram-overview-cards";
@@ -107,19 +111,16 @@ function requestErrorMessage(error: unknown, fallback: string) {
   const responseError = error as { response?: { data?: { message?: string } } };
   return responseError?.response?.data?.message || fallback;
 }
-
 function toNumber(value: unknown) {
   const parsed = Number(value ?? 0);
   return Number.isFinite(parsed) ? parsed : 0;
 }
-
 function formatNumber(value: unknown, decimals = 0) {
   return toNumber(value).toLocaleString(undefined, {
     maximumFractionDigits: decimals,
     minimumFractionDigits: decimals,
   });
 }
-
 function formatDataType(value: string) {
   return value
     .toLowerCase()
@@ -127,7 +128,6 @@ function formatDataType(value: string) {
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
 }
-
 function formatPercent(value: unknown, decimals = 1) {
   if (value == null || !Number.isFinite(Number(value))) return "-";
   return `${formatNumber(value, decimals)}%`;
@@ -1180,7 +1180,7 @@ export default function TelegramChannelsPage() {
   } = useQuery({
     queryKey: networkKeys.list(),
     queryFn: telegramChannelNetworksApi.list,
-    enabled: tab === "networks" || messageTemplatesOpen,
+    enabled: tab === "networks" || messageTemplatesOpen || exportOpen,
   });
   const { data: currencySettings } = useQuery({
     queryKey: ["currency-settings"],
@@ -1545,7 +1545,8 @@ export default function TelegramChannelsPage() {
   const peopleInitialError = Boolean(peopleError) && !hasLoadedPeople;
   const emptyText =
     channelFilter === "own" ? "No own channels" : "No external channels";
-  const handleExport = async (channelIds: string[]) => {
+  const handleExport = async (selection: TelegramChannelExportSelection) => {
+    const { channelIds, sections } = selection;
     const selectedChannels = (channels || []).filter((channel) =>
       channelIds.includes(channel.id),
     );
@@ -1556,7 +1557,7 @@ export default function TelegramChannelsPage() {
     setExporting(true);
     try {
       for (const channel of selectedChannels) {
-        const blob = await telegramChannelsApi.export(channel.id);
+        const blob = await telegramChannelsApi.export(channel.id, sections);
         const baseName = safeTelegramChannelExportName(
           channel.username || channel.title,
         );
@@ -1748,9 +1749,10 @@ export default function TelegramChannelsPage() {
         onSubmit={(input) => importMutation.mutate({ input, mode: "import" })}
         isSubmitting={importMutation.isPending}
       />
-      <ExportChannelsModal
+      <TelegramChannelExportModal
         open={exportOpen}
         channels={channels || []}
+        networks={networks}
         defaultChannelIds={filteredChannels.map((channel) => channel.id)}
         isSubmitting={exporting}
         onClose={() => setExportOpen(false)}
@@ -2428,92 +2430,6 @@ function ImportChannelModal({
           </Button>
         </div>
       </form>
-    </Modal>
-  );
-}
-
-function ExportChannelsModal({
-  open,
-  channels,
-  defaultChannelIds,
-  isSubmitting,
-  onClose,
-  onSubmit,
-}: {
-  open: boolean;
-  channels: TelegramChannel[];
-  defaultChannelIds: string[];
-  isSubmitting: boolean;
-  onClose: () => void;
-  onSubmit: (channelIds: string[]) => void;
-}) {
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
-
-  useEffect(() => {
-    if (!open) return;
-    setSelectedIds(
-      defaultChannelIds.length
-        ? defaultChannelIds
-        : channels.map((channel) => channel.id),
-    );
-  }, [channels, defaultChannelIds, open]);
-
-  const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
-  const allSelected =
-    channels.length > 0 && selectedIds.length === channels.length;
-  const toggleChannel = (id: string) => {
-    setSelectedIds((prev) =>
-      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id],
-    );
-  };
-  const toggleAll = () => {
-    setSelectedIds(allSelected ? [] : channels.map((channel) => channel.id));
-  };
-
-  return (
-    <Modal open={open} onClose={onClose} title="Export channels">
-      <div className="space-y-4">
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-sm text-slate-400">
-            One Excel file will be downloaded for each selected channel.
-          </p>
-          <Button type="button" variant="secondary" onClick={toggleAll}>
-            {allSelected ? "Clear all" : "Select all"}
-          </Button>
-        </div>
-        <div className="max-h-96 space-y-2 overflow-auto rounded-lg border border-slate-800 p-2">
-          {channels.map((channel) => (
-            <ChannelSelectRow
-              key={channel.id}
-              channel={channel}
-              checked={selectedSet.has(channel.id)}
-              onToggle={() => toggleChannel(channel.id)}
-            />
-          ))}
-          {!channels.length ? (
-            <p className="p-2 text-sm text-slate-400">
-              No channels available for export.
-            </p>
-          ) : null}
-        </div>
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-sm text-slate-400">
-            Selected: {formatNumber(selectedIds.length)}
-          </p>
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="secondary" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              disabled={isSubmitting || !selectedIds.length}
-              onClick={() => onSubmit(selectedIds)}
-            >
-              {isSubmitting ? "Exporting..." : "Export"}
-            </Button>
-          </div>
-        </div>
-      </div>
     </Modal>
   );
 }

@@ -587,11 +587,13 @@ export class TelegramChannelsController {
   @Get(':id/export') async exportChannel(
     @CurrentUser() user: JwtUser,
     @Param('id') id: string,
+    @Query('sections') sections: string | undefined,
     @Res() response: Response,
   ) {
     const { buffer, filename } = await this.service.exportChannelWorkbook(
       user.sub,
       id,
+      sections?.split(',').filter(Boolean),
     );
     response.setHeader(
       'Content-Type',

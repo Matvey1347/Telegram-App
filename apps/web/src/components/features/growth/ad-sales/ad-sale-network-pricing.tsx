@@ -56,7 +56,10 @@ export function useAdSaleNetworkPricing({
 
   useEffect(() => {
     const total = toNumber(totalPrice);
-    if (mode !== "total" || total <= 0 || !placements.length) return;
+    // A single placement has no allocation to calculate. Updating it here
+    // would mark the seed price as manually edited and prevent the async,
+    // currency-converted quote from replacing it.
+    if (mode !== "total" || total <= 0 || placements.length < 2) return;
     try {
       const shares = new Map(
         allocateTelegramAdSalesTotalPrice(

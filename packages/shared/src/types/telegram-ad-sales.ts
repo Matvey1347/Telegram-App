@@ -26,7 +26,8 @@ export type TelegramAdSaleOrigin =
   | "DIRECT_EXTERNAL"
   | "REPEAT"
   | "ADSELL_IO"
-  | "COLLABORATOR_PRO";
+  | "COLLABORATOR_PRO"
+  | "TELEGA_IO";
 
 export type TelegramAdSalePaymentStatus = "ACTIVE" | "VOIDED";
 

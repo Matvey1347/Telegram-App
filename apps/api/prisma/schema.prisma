@@ -216,6 +216,7 @@ enum TelegramAdSaleOrigin {
   REPEAT
   ADSELL_IO
   COLLABORATOR_PRO
+  TELEGA_IO
 }
 
 enum TelegramAdPlacementStatus {

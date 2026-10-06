@@ -13,7 +13,7 @@ describe("AdSaleOriginPreview", () => {
     expect(screen.getByText(kind)).toBeTruthy();
   });
 
-  it.each(["REPEAT", "ADSELL_IO", "COLLABORATOR_PRO"] as const)(
+  it.each(["REPEAT", "ADSELL_IO", "COLLABORATOR_PRO", "TELEGA_IO"] as const)(
     "does not add a kind badge to %s",
     (origin) => {
       const { container } = render(<AdSaleOriginPreview origin={origin} />);

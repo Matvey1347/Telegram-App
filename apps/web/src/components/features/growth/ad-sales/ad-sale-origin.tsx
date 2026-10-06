@@ -35,6 +35,11 @@ export const adSaleOriginOptions: Array<{
     label: "Collaborator.pro",
     iconUrl: "https://collaborator.pro/favicon-collaborator.ico",
   },
+  {
+    value: "TELEGA_IO",
+    label: "telega.io",
+    iconUrl: "https://telega.io/favicon.ico",
+  },
 ];
 
 export function AdSaleOriginPreview({

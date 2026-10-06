@@ -81,7 +81,11 @@ export type TelegramAdQuotePreviewResult =
       requestId: string;
       quote?: never;
       error: {
-        code: "CHANNEL_NOT_FOUND" | "PRODUCT_NOT_FOUND" | "INVALID_REQUEST";
+        code:
+          | "CHANNEL_NOT_FOUND"
+          | "PRODUCT_NOT_FOUND"
+          | "INVALID_REQUEST"
+          | "RATE_UNAVAILABLE";
         message: string;
       };
     };

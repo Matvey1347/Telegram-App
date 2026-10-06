@@ -2,6 +2,10 @@ import { Injectable } from '@nestjs/common';
 import ExcelJS from 'exceljs';
 import { TelegramChannelWorkbookDataService } from './telegram-channel-workbook-data.service';
 import { TelegramChannelWorkbookSheetWriter } from './telegram-channel-workbook-sheet.writer';
+import {
+  TELEGRAM_CHANNEL_EXPORT_SECTIONS,
+  type TelegramChannelExportSection,
+} from '@telegram-system/shared';
 
 type WorkbookData = Awaited<
   ReturnType<TelegramChannelWorkbookDataService['load']>
@@ -11,7 +15,15 @@ type WorkbookData = Awaited<
 export class TelegramChannelWorkbookWriter {
   constructor(private readonly sheets: TelegramChannelWorkbookSheetWriter) {}
 
-  async build(data: WorkbookData) {
+  async build(
+    data: WorkbookData,
+    requestedSections?: TelegramChannelExportSection[],
+  ) {
+    const selectedSections = new Set(
+      (requestedSections || TELEGRAM_CHANNEL_EXPORT_SECTIONS).filter((section) =>
+        TELEGRAM_CHANNEL_EXPORT_SECTIONS.includes(section),
+      ),
+    );
     const {
       audience,
       financialSummary,
@@ -30,8 +42,12 @@ export class TelegramChannelWorkbookWriter {
       statsSnapshots,
       audienceSnapshots,
       inviteLinks,
+      inviteLinkSnapshots,
       promos,
       campaigns,
+      mutualPromotionParticipants,
+      adSales,
+      transactions,
       channel,
     } = data;
     const telegramDates = [
@@ -265,6 +281,25 @@ export class TelegramChannelWorkbookWriter {
         campaignTitle: link.adCampaign?.title,
       })),
     );
+    this.sheets.addTableSheet(
+      workbook,
+      'Invite Link History',
+      [
+        { header: 'Synced at', key: 'syncedAt', width: 22 },
+        { header: 'Invite link', key: 'inviteLinkName', width: 28 },
+        { header: 'URL', key: 'inviteLinkUrl', width: 60 },
+        { header: 'Source group', key: 'sourceGroup', width: 30 },
+        { header: 'Joined', key: 'joinedCount' },
+        { header: 'Requested', key: 'requestedCount' },
+        { header: 'Peak attributed', key: 'peakAttributedCount' },
+      ],
+      inviteLinkSnapshots.map((snapshot: any) => ({
+        ...snapshot,
+        inviteLinkName: snapshot.inviteLink?.name,
+        inviteLinkUrl: snapshot.inviteLink?.url,
+        sourceGroup: snapshot.inviteLink?.adCampaign?.title || 'Unattributed',
+      })),
+    );
     const promosSheet = this.sheets.addTableSheet(
       workbook,
       'Creatives',
@@ -354,6 +389,29 @@ export class TelegramChannelWorkbookWriter {
     );
     this.sheets.addTableSheet(
       workbook,
+      'Mutual Promotions',
+      [
+        { header: 'Folder', key: 'folderTitle', width: 32 },
+        { header: 'Folder status', key: 'folderStatus' },
+        { header: 'Role', key: 'role' },
+        { header: 'Invite link', key: 'inviteLinkUrl', width: 60 },
+        { header: 'Subscribers at start', key: 'subscribersAtStart' },
+        { header: 'Subscribers at end', key: 'subscribersAtEnd' },
+        { header: 'Invite joined at start', key: 'inviteJoinedAtStart' },
+        { header: 'Invite joined at end', key: 'inviteJoinedAtEnd' },
+        { header: 'Expense transaction ID', key: 'expenseTransactionId', width: 30 },
+        { header: 'Created at', key: 'createdAt', width: 22 },
+      ],
+      mutualPromotionParticipants.map((participant: any) => ({
+        ...participant,
+        folderTitle: participant.folder?.title,
+        folderStatus: participant.folder?.status,
+        inviteLinkUrl: participant.inviteLink?.url,
+        expenseTransactionId: participant.expense?.id,
+      })),
+    );
+    this.sheets.addTableSheet(
+      workbook,
       'Finance Transactions',
       [
         { header: 'Date', key: 'date', width: 18 },
@@ -371,17 +429,115 @@ export class TelegramChannelWorkbookWriter {
         { header: 'Member', key: 'memberName' },
         { header: 'Description', key: 'description', width: 60 },
       ],
-      campaigns
-        .filter((campaign: any) => campaign.expenseTransaction)
-        .map((campaign: any) => ({
-          ...campaign.expenseTransaction,
-          campaignTitle: campaign.title,
-          accountName: campaign.expenseTransaction.account?.name,
-          categoryName:
-            campaign.expenseTransaction.categoryRef?.name ||
-            campaign.expenseTransaction.category,
-          memberName: campaign.expenseTransaction.member?.name,
-        })),
+      transactions.map((transaction: any) => ({
+        ...transaction,
+        campaignTitle: transaction.adCampaign?.title,
+        accountName: transaction.account?.name,
+        categoryName: transaction.categoryRef?.name || transaction.category,
+        memberName: transaction.member?.name,
+      })),
+    );
+    const advertisers = new Map<string, any>();
+    for (const sale of adSales) {
+      if (sale.advertiser) advertisers.set(sale.advertiser.id, sale.advertiser);
+    }
+    this.sheets.addTableSheet(
+      workbook,
+      'CRM Clients',
+      [
+        { header: 'Name', key: 'displayName', width: 28 },
+        { header: 'Company', key: 'companyName', width: 28 },
+        { header: 'Telegram', key: 'telegramUsername' },
+        { header: 'Phone', key: 'phone' },
+        { header: 'Email', key: 'email', width: 30 },
+        { header: 'Stage', key: 'stage' },
+        { header: 'Tags', key: 'tags', width: 36 },
+        { header: 'Total sales', key: 'totalSalesCount' },
+        { header: 'Completed sales', key: 'completedSalesCount' },
+        { header: 'Total revenue (primary)', key: 'totalRevenueInPrimaryCurrency' },
+        { header: 'Created at', key: 'createdAt', width: 22 },
+      ],
+      [...advertisers.values()].map((advertiser) => ({
+        ...advertiser,
+        tags: advertiser.tags.map((assignment: any) => assignment.tag.name).join(', '),
+      })),
+    );
+    this.sheets.addTableSheet(
+      workbook,
+      'CRM Deals',
+      [
+        { header: 'Deal', key: 'title', width: 32 },
+        { header: 'Client', key: 'advertiserName', width: 28 },
+        { header: 'Status', key: 'status' },
+        { header: 'CRM stage', key: 'crmDealStage' },
+        { header: 'Origin', key: 'origin' },
+        { header: 'Currency', key: 'settlementCurrency' },
+        { header: 'Channel amount', key: 'channelAmount' },
+        { header: 'Expected close', key: 'expectedCloseAt', width: 22 },
+        { header: 'Next action', key: 'nextActionAt', width: 22 },
+        { header: 'Notes', key: 'notes', width: 60 },
+        { header: 'Created at', key: 'createdAt', width: 22 },
+      ],
+      adSales.map((sale: any) => ({
+        ...sale,
+        title: sale.title || sale.advertiserName,
+        advertiserName: sale.advertiser?.displayName || sale.advertiserName,
+        channelAmount: sale.placements.reduce(
+          (total: number, placement: any) => total + Number(placement.agreedPrice || 0),
+          0,
+        ),
+      })),
+    );
+    this.sheets.addTableSheet(
+      workbook,
+      'CRM Placement Posts',
+      [
+        { header: 'Deal', key: 'dealTitle', width: 32 },
+        { header: 'Client', key: 'clientName', width: 28 },
+        { header: 'Scheduled at', key: 'scheduledAt', width: 22 },
+        { header: 'Status', key: 'status' },
+        { header: 'Agreed price', key: 'agreedPrice' },
+        { header: 'Currency', key: 'currency' },
+        { header: 'Telegram message ID', key: 'telegramMessageId' },
+        { header: 'Published at', key: 'publishedAt', width: 22 },
+        { header: 'Views final', key: 'actualViewsFinal' },
+        { header: 'Reactions final', key: 'actualReactionsFinal' },
+        { header: 'Managed post status', key: 'managedPostStatus' },
+      ],
+      adSales.flatMap((sale: any) => sale.placements.map((placement: any) => ({
+        ...placement,
+        dealTitle: sale.title || sale.advertiserName,
+        clientName: sale.advertiser?.displayName || sale.advertiserName,
+        telegramMessageId: placement.telegramPost?.telegramMessageId,
+        managedPostStatus: placement.managedPost?.status,
+      }))),
+    );
+    this.sheets.addTableSheet(
+      workbook,
+      'CRM Payments',
+      [
+        { header: 'Deal', key: 'dealTitle', width: 32 },
+        { header: 'Client', key: 'clientName', width: 28 },
+        { header: 'Paid at', key: 'paidAt', width: 22 },
+        { header: 'Status', key: 'status' },
+        { header: 'Amount', key: 'amount' },
+        { header: 'Currency', key: 'currency' },
+        { header: 'Allocated to channel', key: 'channelAllocation' },
+        { header: 'Account', key: 'accountName' },
+        { header: 'Transaction ID', key: 'transactionId', width: 30 },
+        { header: 'Notes', key: 'notes', width: 60 },
+      ],
+      adSales.flatMap((sale: any) => sale.payments.map((payment: any) => ({
+        ...payment,
+        dealTitle: sale.title || sale.advertiserName,
+        clientName: sale.advertiser?.displayName || sale.advertiserName,
+        channelAllocation: payment.allocations.reduce(
+          (total: number, allocation: any) => total + Number(allocation.amount || 0),
+          0,
+        ),
+        accountName: payment.account?.name,
+        transactionId: payment.transaction?.id,
+      }))),
     );
     this.sheets.addTableSheet(
       workbook,
@@ -429,6 +585,22 @@ export class TelegramChannelWorkbookWriter {
         firstName: link.telegramUserAccountIntegration?.firstName,
       })),
     );
+    const sheetsBySection: Record<TelegramChannelExportSection, string[]> = {
+      channel_profile: ['Overview', 'Channel Settings', 'Data Sources', 'Source Access', 'Admin Links'],
+      ads: ['Creatives', 'Campaigns', 'Mutual Promotions'],
+      crm: ['CRM Clients', 'CRM Deals', 'CRM Placement Posts', 'CRM Payments'],
+      finance: ['Finance Transactions'],
+      channel_stats: ['Calculated Metrics', 'Posts', 'Post Metric Snapshots'],
+      channel_dynamics: ['Daily Stats', 'Stats Points', 'Stats Snapshots', 'Audience Snapshots'],
+      traffic_attribution: ['Invite Links', 'Invite Link History'],
+    };
+    for (const section of TELEGRAM_CHANNEL_EXPORT_SECTIONS) {
+      if (selectedSections.has(section)) continue;
+      for (const name of sheetsBySection[section]) {
+        const worksheet = workbook.getWorksheet(name);
+        if (worksheet) workbook.removeWorksheet(worksheet.id);
+      }
+    }
     const rawBuffer = await workbook.xlsx.writeBuffer();
     const buffer = Buffer.isBuffer(rawBuffer)
       ? rawBuffer

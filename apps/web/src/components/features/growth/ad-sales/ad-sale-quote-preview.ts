@@ -4,6 +4,7 @@ import {
   useEffect,
   useMemo,
   useRef,
+  useState,
   type Dispatch,
   type SetStateAction,
 } from "react";
@@ -126,6 +127,7 @@ export function useAdSaleQuotePreview({
   ) => Promise<TelegramAdQuotePreviewBatchResponse>;
   setPlacements: Dispatch<SetStateAction<SalePlacementDraft[]>>;
 }) {
+  const [errors, setErrors] = useState<string[]>([]);
   const requestKey = useMemo(
     () =>
       open && quoteRequests.length
@@ -144,10 +146,14 @@ export function useAdSaleQuotePreview({
   useEffect(() => {
     if (!requestKey) {
       loadedKeyRef.current = "";
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setErrors((current) => (current.length ? [] : current));
       return;
     }
     if (loadedKeyRef.current === requestKey || limitExceeded) return;
     loadedKeyRef.current = requestKey;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setErrors((current) => (current.length ? [] : current));
     let current = true;
     const controller = new AbortController();
     const requests = buildQuotePreviewRequests(quoteRequests, currency);
@@ -158,6 +164,11 @@ export function useAdSaleQuotePreview({
         try {
           const response = await requestPreview(requests, controller.signal);
           if (!current) return;
+          setErrors(
+            response.items.flatMap((item) =>
+              item.error ? [item.error.message] : [],
+            ),
+          );
           setPlacements((placements) =>
             applyQuotePreviewResults(
               placements,
@@ -188,5 +199,5 @@ export function useAdSaleQuotePreview({
     setPlacements,
   ]);
 
-  return { limitExceeded, requestCount };
+  return { limitExceeded, requestCount, errors };
 }

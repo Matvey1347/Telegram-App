@@ -310,9 +310,10 @@ export function createTelegramChannelsApi({
           error?: string;
         }
       >("/telegram-channels/import-batch-stream", { inputs }, onProgress),
-    export: async (id: string) =>
+    export: async (id: string, sections: string[]) =>
       (
         await api.get<Blob>(`/telegram-channels/${id}/export`, {
+          params: { sections: sections.join(",") },
           responseType: "blob",
         })
       ).data,

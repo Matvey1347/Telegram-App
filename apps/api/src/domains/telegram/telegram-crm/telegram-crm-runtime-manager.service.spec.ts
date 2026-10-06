@@ -20,6 +20,9 @@ const account = {
   sessionIv: 'session-iv',
   sessionAuthTag: 'session-tag',
   status: 'connected',
+  label: '@account',
+  assignedMemberId: 'member-1',
+  createdByUserId: null,
   isActive: true,
   crmSyncEnabled: true,
   crmSendEnabled: true,
@@ -306,7 +309,9 @@ describe('TelegramCrmRuntimeManager', () => {
     const prisma = {
       telegramUserAccountIntegration: {
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        findMany: jest.fn().mockResolvedValue([]),
       },
+      $transaction: jest.fn((operation) => operation({})),
     };
     const recovery = {
       recover: jest.fn().mockResolvedValue({
@@ -315,6 +320,10 @@ describe('TelegramCrmRuntimeManager', () => {
       }),
       writeFailure: jest.fn().mockResolvedValue(undefined),
     };
+    const notifications = {
+      upsertMany: jest.fn().mockResolvedValue([{ id: 'notification-1' }]),
+    };
+    const publisher = { publish: jest.fn().mockResolvedValue(undefined) };
     const manager = new TelegramCrmRuntimeManager(
       prisma as never,
       sessions as never,
@@ -322,6 +331,8 @@ describe('TelegramCrmRuntimeManager', () => {
       {} as never,
       new TelegramAccountRuntimeNotifier(),
       recovery as never,
+      notifications as never,
+      publisher as never,
     );
 
     await manager.onApplicationBootstrap();
@@ -348,6 +359,17 @@ describe('TelegramCrmRuntimeManager', () => {
       'SESSION_REVOKED',
       expect.any(Error),
     );
+    expect(notifications.upsertMany).toHaveBeenCalledWith(
+      expect.anything(),
+      [
+        expect.objectContaining({
+          recipientMemberId: 'member-1',
+          type: 'TELEGRAM_ACCOUNT_REAUTH_REQUIRED',
+          sourceKey: 'telegram-account:account-1:reauth-required',
+        }),
+      ],
+    );
+    expect(publisher.publish).toHaveBeenCalledWith(['notification-1']);
     await manager.onApplicationShutdown();
   });
 

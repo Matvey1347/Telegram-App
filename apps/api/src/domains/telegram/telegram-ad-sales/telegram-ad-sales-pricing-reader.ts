@@ -28,6 +28,7 @@ export type AdSalesPricingChannel = {
 
 export type AdSalesPricingProduct = {
   id?: string | null;
+  currency?: string | null;
   deleteAfterHours?: number | null;
   isPermanent?: boolean;
   defaultPricingMode?: TelegramAdPricingMode;
@@ -357,6 +358,11 @@ export class TelegramAdSalesPricingReader {
     },
   ): AdSalesPricingPreview {
     const { hours, ...window } = this.resolveWindow(product);
+    // A selected format owns the currency of its fixed price/CPM. Falling
+    // back to the channel keeps legacy channels without product currency
+    // compatible, but must never relabel a UAH format as the account currency.
+    const currency =
+      product?.currency || source.channel.adBaseCurrency || 'USD';
     const expectedViews = this.expectedViews(source, hours);
     const targetCpm =
       overrides?.targetCpm ??
@@ -367,7 +373,7 @@ export class TelegramAdSalesPricingReader {
       return {
         ...expectedViews,
         ...window,
-        currency: source.channel.adBaseCurrency || 'USD',
+        currency,
         recommendedPrice: '0.00',
         minimumPrice: '0.00',
         targetCpm: decimalToString(decimal(targetCpm)) || '0.00',
@@ -386,7 +392,7 @@ export class TelegramAdSalesPricingReader {
     return {
       ...expectedViews,
       ...window,
-      currency: source.channel.adBaseCurrency || 'USD',
+      currency,
       recommendedPrice: decimalToString(pricing.recommendedPrice) ?? '0.00',
       minimumPrice: decimalToString(pricing.minimumPrice) ?? '0.00',
       targetCpm: decimalToString(pricing.targetCpm) ?? '0.00',
