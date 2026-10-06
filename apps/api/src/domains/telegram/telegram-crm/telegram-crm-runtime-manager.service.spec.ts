@@ -27,6 +27,7 @@ const account = {
   crmSyncEnabled: true,
   crmSendEnabled: true,
   telegramUserId: '42',
+  photoUrl: 'https://cdn.example/mtproto.jpg',
   lastErrorMessage: null,
 } as const satisfies CrmRuntimeAccount;
 
@@ -350,13 +351,13 @@ describe('TelegramCrmRuntimeManager', () => {
       },
       data: {
         status: 'error',
-        lastErrorMessage: 'Telegram session was revoked',
+        lastErrorMessage: 'Telegram session was revoked (AUTH_KEY_UNREGISTERED)',
       },
     });
     expect(handle.close).toHaveBeenCalledTimes(1);
     expect(recovery.writeFailure).toHaveBeenCalledWith(
       account,
-      'SESSION_REVOKED',
+      'AUTH_KEY_UNREGISTERED',
       expect.any(Error),
     );
     expect(notifications.upsertMany).toHaveBeenCalledWith(

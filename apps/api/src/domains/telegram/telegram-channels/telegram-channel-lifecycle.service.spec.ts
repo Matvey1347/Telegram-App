@@ -2,6 +2,63 @@ import { BadRequestException } from '@nestjs/common';
 import { TelegramChannelLifecycleService } from './telegram-channel-lifecycle.service';
 
 describe('TelegramChannelLifecycleService system groups', () => {
+  it('keeps CPM product currencies aligned with a changed channel base currency', async () => {
+    const update = jest.fn().mockResolvedValue({ id: 'channel-1' });
+    const updateMany = jest.fn().mockResolvedValue({ count: 3 });
+    const prisma = {
+      icon: { findFirst: jest.fn() },
+      telegramInviteLink: {
+        findFirst: jest.fn(),
+        count: jest.fn().mockResolvedValue(0),
+      },
+      $transaction: jest.fn(async (work) =>
+        work({
+          telegramChannel: { update },
+          telegramAdProduct: { updateMany },
+        }),
+      ),
+    };
+    const catalog = {
+      findOne: jest
+        .fn()
+        .mockResolvedValue({
+          id: 'channel-1',
+          targetCpa: null,
+          stopCpaFrom: null,
+        }),
+    };
+    const service = new TelegramChannelLifecycleService(
+      prisma as never,
+      {} as never,
+      {
+        workspace: jest.fn().mockResolvedValue('workspace-1'),
+        normalizeUsername: jest.fn(),
+      } as never,
+      {
+        resolveImportPolicy: jest.fn().mockResolvedValue({
+          acquisitionType: 'CREATED',
+          postsSyncFrom: null,
+          inviteLinksSyncFrom: null,
+          purchaseTransactionId: null,
+        }),
+      } as never,
+      {} as never,
+      catalog as never,
+      {} as never,
+    );
+
+    await service.update('user-1', 'channel-1', { adBaseCurrency: 'uah' });
+
+    expect(updateMany).toHaveBeenCalledWith({
+      where: {
+        workspaceId: 'workspace-1',
+        telegramChannelId: 'channel-1',
+        defaultPricingMode: 'CPM',
+      },
+      data: { currency: 'UAH' },
+    });
+  });
+
   it('allows a CPM-only update when the channel keeps an unavailable legacy emoji', async () => {
     const update = jest.fn().mockResolvedValue({ id: 'channel-1' });
     const prisma = {

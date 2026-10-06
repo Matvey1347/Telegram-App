@@ -19,7 +19,10 @@ import type {
   TelegramCrmMtprotoHandle,
   TelegramCrmMtprotoUpdate,
 } from '@api/telegram/shared/mtproto/telegram-crm-mtproto.types';
-import { isRevokedTelegramSessionError } from '@api/telegram/shared/mtproto/telegram-session-errors';
+import {
+  isRevokedTelegramSessionError,
+  telegramRevokedSessionErrorCode,
+} from '@api/telegram/shared/mtproto/telegram-session-errors';
 import {
   crmRuntimeAccountSelect,
   type CrmRuntimeAccount,
@@ -383,6 +386,11 @@ export class TelegramCrmRuntimeManager
 
   private async connectionFailed(managed: ManagedAccount, error: unknown) {
     if (isRevokedTelegramSessionError(error)) {
+      const telegramErrorCode =
+        telegramRevokedSessionErrorCode(error) ?? 'SESSION_REVOKED';
+      this.logger.warn(
+        `Telegram MTProto session revoked for account=${managed.account.id}: ${telegramErrorCode}`,
+      );
       const transition = await this.prisma.telegramUserAccountIntegration.updateMany({
         where: {
           id: managed.account.id,
@@ -391,7 +399,7 @@ export class TelegramCrmRuntimeManager
         },
         data: {
           status: TelegramUserAccountStatus.error,
-          lastErrorMessage: 'Telegram session was revoked',
+          lastErrorMessage: `Telegram session was revoked (${telegramErrorCode})`,
         },
       });
       if (transition.count) {
@@ -400,7 +408,7 @@ export class TelegramCrmRuntimeManager
       await this.stop(managed.account.id);
       await this.recoveryService.writeFailure(
         managed.account,
-        'SESSION_REVOKED',
+        telegramErrorCode,
         error,
       );
       this.notifier.wake({
@@ -457,7 +465,13 @@ export class TelegramCrmRuntimeManager
             copyKey: 'telegram.notification.accountReauthRequired',
             title: 'Telegram account disconnected',
             body: `${account.label} needs to be reconnected via QR.`,
-            metadata: { accountId: account.id, action: 'qr-login' },
+            metadata: {
+              presentationKind: 'telegram-account',
+              accountId: account.id,
+              accountLabel: account.label,
+              avatarUrl: account.photoUrl ?? null,
+              action: 'qr-login',
+            },
             targetUrl: '/telegram-channels?tab=accounts&accountTab=mtproto',
           },
         ]),

@@ -48,11 +48,16 @@ export function useAdSaleNetworkPricing({
   }, [open]);
 
   useEffect(() => {
-    if (mode !== "total" || totalEdited || recommendedTotal <= 0) return;
+    if (
+      mode !== "total" ||
+      recommendedTotal <= 0 ||
+      (totalEdited && placements.length > 1)
+    )
+      return;
     // Keep the untouched total synchronized with asynchronously loaded quotes.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setTotalPrice(String(Number(recommendedTotal.toFixed(2))));
-  }, [mode, recommendedTotal, totalEdited]);
+  }, [mode, placements.length, recommendedTotal, totalEdited]);
 
   useEffect(() => {
     const total = toNumber(totalPrice);
@@ -112,6 +117,22 @@ export function useAdSaleNetworkPricing({
     setTotalPrice: (value: string) => {
       setTotalEdited(true);
       setTotalPrice(value);
+      // For one channel, the total is the placement price. Previously this
+      // field changed only the allocation target, leaving the actual placement
+      // at its old quote; the mismatch correctly disabled Create sale but gave
+      // the user no useful way to resolve it.
+      if (mode !== "total" || placements.length !== 1) return;
+      setPlacements((current) => {
+        const placement = current[0];
+        if (!placement || placement.agreedPrice === value) return current;
+        return [
+          {
+            ...placement,
+            agreedPrice: value,
+            agreedPriceManuallyEdited: true,
+          },
+        ];
+      });
     },
     setMode,
   };

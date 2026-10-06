@@ -38,7 +38,8 @@ export const adSaleOriginOptions: Array<{
   {
     value: "TELEGA_IO",
     label: "telega.io",
-    iconUrl: "https://telega.io/favicon.ico",
+    iconUrl:
+      "https://telega.io/assets/favicon/apple-icon-57x57-2aeb5d6e58112140bbd8d713400c43578f9d07ecf36346b9d488279db78a4108.png",
   },
 ];
 

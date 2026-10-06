@@ -212,18 +212,19 @@ export function PlacementPostComposer({
               ))}
             </Select>
           ) : (
-            <div className="flex gap-2">
+            <div className="flex min-w-0 gap-2">
               <Input
                 value={postUrl}
                 onChange={(event) => setPostUrl(event.target.value)}
                 placeholder="https://t.me/channel/123"
                 aria-label="Telegram post link"
+                className="min-w-0 flex-1"
               />
               <button
                 type="button"
                 disabled={postsLoading || linkLoading || !postUrl.trim()}
                 onClick={() => void linkPost(postUrl.trim())}
-                className="rounded-md bg-blue-600 px-3 text-sm font-medium text-white disabled:opacity-50"
+                className="shrink-0 whitespace-nowrap rounded-md bg-blue-600 px-3 text-sm font-medium text-white disabled:opacity-50"
               >
                 {linkLoading ? "Loading..." : "Use link"}
               </button>

@@ -150,7 +150,15 @@ export class TelegramCrmContactReadService {
         ),
       ),
     ];
-    const [dealTotals, salesSummaries, replySummaries, availableTags, icons] =
+    const [
+      dealTotals,
+      salesSummaries,
+      replySummaries,
+      availableTags,
+      icons,
+      tagged,
+      untagged,
+    ] =
       await Promise.all([
         this.activeDealTotals(
           access.workspaceId,
@@ -188,6 +196,12 @@ export class TelegramCrmContactReadService {
               },
             })
           : Promise.resolve([]),
+        this.prisma.telegramAdvertiser.count({
+          where: { ...facetWhere, tags: { some: {} } },
+        }),
+        this.prisma.telegramAdvertiser.count({
+          where: { ...facetWhere, tags: { none: {} } },
+        }),
       ]);
     const iconById = new Map<string, ResolvedEmoji>();
     for (const icon of icons) {
@@ -211,6 +225,7 @@ export class TelegramCrmContactReadService {
         pagination,
       ),
       availableTags,
+      counts: { tagged, untagged },
     };
   }
 
@@ -255,9 +270,11 @@ export class TelegramCrmContactReadService {
       select: {
         id: true,
         createdAt: true,
+        tags: { select: { tagId: true }, take: 1 },
       },
     });
-    const contactIds = contacts.map((contact) => contact.id);
+    const taggedContacts = contacts.filter((contact) => contact.tags.length);
+    const contactIds = taggedContacts.map((contact) => contact.id);
     // Payments are the source of truth here. Advertiser revenue aggregates are
     // maintained for CRM lists, but can lag behind payment corrections.
     const payments = contactIds.length
@@ -304,8 +321,11 @@ export class TelegramCrmContactReadService {
       `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}`;
     const points = months.map((month) => {
       const end = new Date(month.getFullYear(), month.getMonth() + 1, 1);
-      const clients = contacts.filter(
+      const clients = taggedContacts.filter(
         (contact) => contact.createdAt < end,
+      ).length;
+      const untaggedClients = contacts.filter(
+        (contact) => !contact.tags.length && contact.createdAt < end,
       ).length;
       const buyers = [...firstPaymentByContact.values()].filter(
         (firstPayment) => firstPayment < end,
@@ -313,6 +333,7 @@ export class TelegramCrmContactReadService {
       return {
         date: monthKey(month),
         clients,
+        untaggedClients,
         buyers,
         conversionRate: clients
           ? Math.round((buyers / clients) * 1000) / 10
@@ -321,10 +342,11 @@ export class TelegramCrmContactReadService {
     });
     const buyers = firstPaymentByContact.size;
     return {
-      clients: contacts.length,
+      clients: taggedContacts.length,
+      untaggedClients: contacts.length - taggedContacts.length,
       buyers,
-      conversionRate: contacts.length
-        ? Math.round((buyers / contacts.length) * 1000) / 10
+      conversionRate: taggedContacts.length
+        ? Math.round((buyers / taggedContacts.length) * 1000) / 10
         : 0,
       averagePaidOrderValue: paidSaleIds.size
         ? revenue.div(paidSaleIds.size).toFixed(2)
@@ -490,16 +512,12 @@ export class TelegramCrmContactReadService {
   }
 
   private crmClientScope(
-    importTagIds: string[],
+    _importTagIds: string[],
   ): Prisma.TelegramAdvertiserWhereInput {
-    return {
-      OR: [
-        { source: { not: 'TELEGRAM_MTPROTO_IMPORT' } },
-        importTagIds.length
-          ? { tags: { some: { tagId: { in: importTagIds } } } }
-          : { id: { in: [] } },
-      ],
-    };
+    // Imported contacts without a folder tag remain operationally useful and
+    // must be visible as "without tags". They are excluded from tagged CRM
+    // analytics above, rather than being silently hidden from the list.
+    return {};
   }
 
   private async importTagIds(workspaceId: string) {

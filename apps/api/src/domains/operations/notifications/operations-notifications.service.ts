@@ -22,7 +22,9 @@ import { OperationsNotificationPermissionService } from './operations-notificati
 import { OPERATIONS_PUSH_MAX_ACTIVE_DEVICES } from './operations-notification-policy';
 import {
   groupCrmNotificationRows,
+  hydrateTelegramAccountNotifications,
   notificationConversationIds,
+  notificationTelegramAccountIds,
 } from './operations-notification-list-presentation';
 
 type Cursor = { createdAt: Date; id: string };
@@ -93,8 +95,18 @@ export class OperationsNotificationsService {
           },
         })
       : [];
+    const accountIds = notificationTelegramAccountIds(items);
+    const accounts = accountIds.length
+      ? await this.prisma.telegramUserAccountIntegration.findMany({
+          where: { workspaceId: access.workspaceId, id: { in: accountIds } },
+          select: { id: true, label: true, photoUrl: true },
+        })
+      : [];
     return {
-      items: groupCrmNotificationRows(items, conversations).map(
+      items: hydrateTelegramAccountNotifications(
+        groupCrmNotificationRows(items, conversations),
+        accounts,
+      ).map(
         mapOperationsNotification,
       ),
       nextCursor:

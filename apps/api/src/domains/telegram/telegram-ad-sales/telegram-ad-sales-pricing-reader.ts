@@ -358,11 +358,18 @@ export class TelegramAdSalesPricingReader {
     },
   ): AdSalesPricingPreview {
     const { hours, ...window } = this.resolveWindow(product);
-    // A selected format owns the currency of its fixed price/CPM. Falling
-    // back to the channel keeps legacy channels without product currency
-    // compatible, but must never relabel a UAH format as the account currency.
+    const pricingMode =
+      overrides?.pricingMode ??
+      product?.defaultPricingMode ??
+      TelegramAdPricingMode.CPM;
+    // A FIXED product owns both its amount and currency. CPM is different:
+    // when a channel has an explicit base CPM, that numeric CPM is in the
+    // channel base currency. Relabelling that amount with a stale product
+    // currency converts the wrong base (e.g. 263 UAH as if it were USD).
     const currency =
-      product?.currency || source.channel.adBaseCurrency || 'USD';
+      pricingMode === TelegramAdPricingMode.FIXED && product?.currency
+        ? product.currency
+        : source.channel.adBaseCurrency || product?.currency || 'USD';
     const expectedViews = this.expectedViews(source, hours);
     const targetCpm =
       overrides?.targetCpm ??
@@ -382,9 +389,7 @@ export class TelegramAdSalesPricingReader {
     const pricing = calculatePricing({
       expectedViews: expectedViews.expectedViews,
       pricingMode:
-        overrides?.pricingMode ??
-        product?.defaultPricingMode ??
-        TelegramAdPricingMode.CPM,
+        pricingMode,
       targetCpm,
       minimumCpm: overrides?.minimumCpm ?? targetCpm,
       fixedPrice: overrides?.fixedPrice ?? product?.defaultFixedPrice ?? 0,

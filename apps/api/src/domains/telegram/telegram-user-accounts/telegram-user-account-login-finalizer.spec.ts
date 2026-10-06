@@ -99,4 +99,29 @@ describe('TelegramUserAccountLoginFinalizer', () => {
     ).rejects.toBeInstanceOf(ConflictException);
     expect(findFirstOrThrow).not.toHaveBeenCalled();
   });
+
+  it('keeps the reauthentication alert until login succeeds, then removes it', async () => {
+    const dismissBySourceKey = jest.fn().mockResolvedValue(['member-1']);
+    const invalidate = jest.fn();
+    const finalizer = new TelegramUserAccountLoginFinalizer(
+      {
+        telegramUserAccountIntegration: {
+          updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+          findFirstOrThrow: jest.fn().mockResolvedValue(account),
+        },
+        $transaction: jest.fn((operation) => operation({})),
+      } as never,
+      { encrypt: jest.fn().mockReturnValue({ encrypted: 'session', iv: 'iv', authTag: 'tag' }) } as never,
+      { dismissBySourceKey } as never,
+      { invalidate } as never,
+    );
+
+    await finalizer.finalize(account, { session: 'plain-session', profile });
+
+    expect(dismissBySourceKey).toHaveBeenCalledWith(expect.anything(), {
+      workspaceId: 'workspace-1',
+      sourceKey: 'telegram-account:account-1:reauth-required',
+    });
+    expect(invalidate).toHaveBeenCalledWith('workspace-1', ['member-1']);
+  });
 });

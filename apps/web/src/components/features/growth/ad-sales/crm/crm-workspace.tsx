@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { Plus } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/layout/app-shell";
@@ -21,6 +20,7 @@ import { telegramCrmApi } from "@/lib/features/growth/telegram-crm-api";
 import { CrmContactChannelMark, type CrmContactChannelName } from "./crm-contact-channel-mark";
 import { MemberSelect } from "@/components/features/workspace/member-select";
 import { CrmAnalytics } from "./crm-analytics";
+import { CrmAdSaleLauncher } from "./crm-ad-sale-launcher";
 
 export function CrmWorkspace({
   surface,
@@ -30,6 +30,7 @@ export function CrmWorkspace({
   const router = useRouter();
   const queryClient = useQueryClient();
   const [addingClient, setAddingClient] = useState(false);
+  const [addingSale, setAddingSale] = useState(false);
   const [clientForm, setClientForm] = useState({
     displayName: "",
     telegramUsername: "",
@@ -127,12 +128,9 @@ export function CrmWorkspace({
                 <Plus size={18} /> Add client
               </Button>
             ) : null}
-            <Link
-              className="inline-flex h-11 shrink-0 items-center gap-2 rounded-xl bg-blue-600 px-5 text-sm font-medium text-white hover:bg-blue-500 whitespace-nowrap"
-              href="/ad-sales/calendar?open=sell"
-            >
+            <Button className="h-11" onClick={() => setAddingSale(true)}>
               <Plus size={18} /> Sell ad
-            </Link>
+            </Button>
           </div>
         }
       />
@@ -162,6 +160,10 @@ export function CrmWorkspace({
         )
       ) : null}
       {surface.kind === "analytics" ? <CrmAnalytics /> : null}
+      <CrmAdSaleLauncher
+        open={addingSale}
+        onClose={() => setAddingSale(false)}
+      />
       <Modal open={addingClient} onClose={() => setAddingClient(false)} title="Add client" size="md">
         <form
           className="space-y-3"

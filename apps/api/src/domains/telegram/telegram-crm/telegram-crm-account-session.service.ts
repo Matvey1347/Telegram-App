@@ -26,6 +26,7 @@ export const crmRuntimeAccountSelect = {
   crmSyncEnabled: true,
   crmSendEnabled: true,
   telegramUserId: true,
+  photoUrl: true,
   lastErrorMessage: true,
 } satisfies Prisma.TelegramUserAccountIntegrationSelect;
 

@@ -256,7 +256,9 @@ export function CrmContactList({
       <div className="mb-4 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium text-neutral-300">
-            {query.data ? `${query.data.pagination.totalItems} unique client${query.data.pagination.totalItems === 1 ? "" : "s"}` : "Unique clients"}
+            {query.data
+              ? `${(query.data.counts?.tagged ?? query.data.pagination.totalItems)} tagged client${(query.data.counts?.tagged ?? query.data.pagination.totalItems) === 1 ? "" : "s"} · ${query.data.counts?.untagged ?? 0} without tags`
+              : "Clients by tags"}
           </p>
         </div>
         <div className="flex w-full shrink-0 flex-col gap-2 sm:flex-row lg:max-w-2xl">

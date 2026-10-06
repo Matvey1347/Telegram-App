@@ -56,6 +56,7 @@ import {
   type ImportedTelegramUserAccountChannel,
   type TelegramUserAccountProgressCallback,
 } from './telegram-user-account-import-progress';
+import { syncDialogsThenWakeTelegramRuntime } from './telegram-user-account-login-runtime';
 
 type ProgressCallback = TelegramUserAccountProgressCallback;
 
@@ -480,7 +481,7 @@ export class TelegramUserAccountsService {
       session: result.session,
       profile: result.me,
     });
-    const channelSync = await this.syncDialogsAfterConnect(userId, account.id);
+    const channelSync = await syncDialogsThenWakeTelegramRuntime(workspaceId, account.id, () => this.syncDialogsAfterConnect(userId, account.id), this.runtimeNotifier);
     const safeRow = safeTelegramUserAccount(
       row as unknown as Record<string, unknown>,
     );
@@ -534,7 +535,7 @@ export class TelegramUserAccountsService {
       session: result.session,
       profile: result.me,
     });
-    const channelSync = await this.syncDialogsAfterConnect(userId, account.id);
+    const channelSync = await syncDialogsThenWakeTelegramRuntime(workspaceId, account.id, () => this.syncDialogsAfterConnect(userId, account.id), this.runtimeNotifier);
     const safeRow = safeTelegramUserAccount(
       row as unknown as Record<string, unknown>,
     );
@@ -547,9 +548,7 @@ export class TelegramUserAccountsService {
     onProgress: (progress: TelegramQrLoginProgress) => void | Promise<void>,
     signal: AbortSignal,
   ) {
-    return this.qrLoginService.login(userId, id, onProgress, signal, () =>
-      this.syncDialogsAfterConnect(userId, id),
-    );
+    return this.qrLoginService.login(userId, id, onProgress, signal, async () => syncDialogsThenWakeTelegramRuntime(await this.getWorkspaceId(userId), id, () => this.syncDialogsAfterConnect(userId, id), this.runtimeNotifier));
   }
 
   async check(userId: string, id: string) {

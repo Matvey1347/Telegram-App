@@ -59,9 +59,14 @@ export function CrmAnalytics() {
     <div className="space-y-5">
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <Metric
-          label="Unique clients"
+          label="Unique clients with tags"
           value={data.clients}
-          hint="Active CRM client cards"
+          hint="Tagged CRM client cards"
+        />
+        <Metric
+          label="Clients without tags"
+          value={data.untaggedClients}
+          hint="Kept out of unique-client analytics"
         />
         <Metric
           label="Buyer conversion"
@@ -109,6 +114,13 @@ export function CrmAnalytics() {
                   name="Clients"
                   stroke="#60a5fa"
                   fill="#2563eb33"
+                />
+                <Area
+                  type="monotone"
+                  dataKey="untaggedClients"
+                  name="Without tags"
+                  stroke="#a78bfa"
+                  fill="#8b5cf622"
                 />
                 <Area
                   type="monotone"

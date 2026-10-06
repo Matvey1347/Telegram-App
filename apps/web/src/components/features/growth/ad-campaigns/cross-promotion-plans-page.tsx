@@ -305,8 +305,7 @@ export function CrossPromotionPlansPage({
   // records that happen to share an advertiser or partner channels: doing so
   // hides real placements behind an "Integrations" list.
   const plans = plansQuery.data ?? [];
-  const visiblePlans =
-    kind === "DIRECT_MUTUAL" ? plansForCrossPromotionTab(plans, planTab) : plans;
+  const visiblePlans = plansForCrossPromotionTab(plans, planTab);
   return (
     <AppShell>
       <PageHeader
@@ -325,13 +324,16 @@ export function CrossPromotionPlansPage({
       />
       {sectionTabs}
       {mutualModeTabs}
-      {kind === "DIRECT_MUTUAL" ? (
-        <CrossPromotionPlanStatusTabs
-          plans={plans}
-          value={planTab}
-          onChange={setPlanTab}
-        />
-      ) : null}
+      <CrossPromotionPlanStatusTabs
+        plans={plans}
+        value={planTab}
+        onChange={setPlanTab}
+        ariaLabel={
+          kind === "DIRECT_MUTUAL"
+            ? "Direct exchange status"
+            : "Own-channel promotion status"
+        }
+      />
       <div>
         {plansQuery.isLoading ? (
           <LoadingState />
@@ -342,7 +344,7 @@ export function CrossPromotionPlansPage({
             text={
               kind === "DIRECT_MUTUAL"
                 ? `No ${planTab.toLowerCase()} direct exchanges.`
-                : "No placements yet."
+                : `No ${planTab.toLowerCase()} own-channel placements.`
             }
           />
         ) : (

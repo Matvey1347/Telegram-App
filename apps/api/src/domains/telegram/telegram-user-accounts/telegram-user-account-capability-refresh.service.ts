@@ -28,6 +28,7 @@ export type TelegramCapabilityRefreshAccount = {
   label: string;
   assignedMemberId?: string | null;
   createdByUserId?: string | null;
+  photoUrl?: string | null;
   isActive?: boolean;
   status: TelegramUserAccountStatus;
   isPremium: boolean;
@@ -191,6 +192,7 @@ export class TelegramUserAccountCapabilityRefreshService {
     label: string;
     assignedMemberId: string | null;
     createdByUserId: string | null;
+    photoUrl?: string | null;
   }) {
     if (!this.notifications || !this.notificationPublisher) return;
     const creator = account.createdByUserId
@@ -228,7 +230,13 @@ export class TelegramUserAccountCapabilityRefreshService {
           copyKey: 'telegram.notification.accountReauthRequired',
           title: 'Telegram account disconnected',
           body: `${account.label} needs to be reconnected via QR.`,
-          metadata: { accountId: account.id, action: 'qr-login' },
+          metadata: {
+            presentationKind: 'telegram-account',
+            accountId: account.id,
+            accountLabel: account.label,
+            avatarUrl: account.photoUrl ?? null,
+            action: 'qr-login',
+          },
           targetUrl: '/telegram-channels?tab=accounts&accountTab=mtproto',
         },
       ]),

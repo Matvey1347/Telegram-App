@@ -30,6 +30,7 @@ function setup() {
     {
       items: [contact],
       availableTags: [],
+      counts: { tagged: 1, untagged: 0 },
       pagination: {
         page: 1,
         pageSize: 12,
@@ -88,6 +89,7 @@ describe("CRM contact cache updates", () => {
     const page = (totalItems: number): CrmContactsListResult => ({
       items: [listedContact],
       availableTags: [],
+      counts: { tagged: totalItems, untagged: 0 },
       pagination: {
         page: 1,
         pageSize: 12,

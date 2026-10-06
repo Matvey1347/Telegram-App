@@ -78,8 +78,14 @@ export function applyQuotePreviewResults(
       toNumber(quote.minimumPrice) > 0
         ? quote.minimumPrice
         : (product?.minimumPrice ?? recommendedPrice);
+    // A saved draft can contain an amount from a different financial-account
+    // currency. A manual amount is preserved only while its quote currency is
+    // still the requested currency; changing USD → PLN (or restoring legacy
+    // drafts without quote metadata) must refresh it from the channel quote.
+    const quoteCurrency = quote.currency?.toUpperCase() ?? item.quotedCurrency ?? "";
     const agreedPrice =
-      preserveAgreedPrice || item.agreedPriceManuallyEdited
+      preserveAgreedPrice ||
+      (item.agreedPriceManuallyEdited && item.quotedCurrency === quoteCurrency)
         ? item.agreedPrice
         : recommendedPrice;
     const warnings = quote.warnings.map((warning) => warning.message);
@@ -89,6 +95,7 @@ export function applyQuotePreviewResults(
       item.recommendedPrice === recommendedPrice &&
       item.minimumPrice === minimumPrice &&
       item.agreedPrice === agreedPrice &&
+      item.quotedCurrency === quoteCurrency &&
       item.warnings.join("|") === warnings.join("|")
     ) {
       return item;
@@ -101,6 +108,7 @@ export function applyQuotePreviewResults(
       recommendedPrice,
       minimumPrice,
       agreedPrice,
+      quotedCurrency: quoteCurrency,
       warnings,
     };
   });

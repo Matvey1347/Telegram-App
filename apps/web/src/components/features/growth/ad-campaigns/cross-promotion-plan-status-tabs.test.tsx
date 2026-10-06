@@ -9,11 +9,12 @@ import {
 const plan = (status: CrossPromotionPlan["status"]) => ({ status }) as CrossPromotionPlan;
 
 describe("CrossPromotionPlanStatusTabs", () => {
-  it("groups direct exchanges into the three operational tabs", () => {
+  it("keeps drafts in their own operational tab", () => {
     const plans = [plan("ACTIVE"), plan("SCHEDULED"), plan("DRAFT"), plan("COMPLETED"), plan("CANCELLED")];
 
     expect(plansForCrossPromotionTab(plans, "ACTIVE")).toHaveLength(1);
-    expect(plansForCrossPromotionTab(plans, "SCHEDULED")).toHaveLength(2);
+    expect(plansForCrossPromotionTab(plans, "DRAFT")).toHaveLength(1);
+    expect(plansForCrossPromotionTab(plans, "SCHEDULED")).toHaveLength(1);
     expect(plansForCrossPromotionTab(plans, "COMPLETED")).toHaveLength(2);
   });
 

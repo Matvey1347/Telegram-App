@@ -42,8 +42,16 @@ export type OperationsCrmMessageGroupPresentation = {
   notificationIds: string[];
 };
 
+export type OperationsTelegramAccountPresentation = {
+  kind: "telegram-account";
+  accountId: string;
+  label: string;
+  avatarUrl: string | null;
+};
+
 export type OperationsNotificationPresentation =
-  OperationsCrmMessageGroupPresentation;
+  | OperationsCrmMessageGroupPresentation
+  | OperationsTelegramAccountPresentation;
 
 export type OperationsNotificationItem = {
   id: string;

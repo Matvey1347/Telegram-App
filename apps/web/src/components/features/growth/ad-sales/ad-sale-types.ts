@@ -17,6 +17,8 @@ export type SalePlacementDraft = {
   warnings: string[];
   conflict: string | null;
   agreedPriceManuallyEdited: boolean;
+  /** Currency of the quote that last populated the monetary fields. */
+  quotedCurrency?: string;
   inventoryOpportunityKey?: string | null;
   telegramPostId?: string | null;
   managedPostDraft?: PlacementManagedPostDraft | null;

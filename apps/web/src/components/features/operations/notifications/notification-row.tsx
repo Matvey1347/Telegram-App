@@ -27,6 +27,10 @@ export function NotificationRow({
     notification.presentation?.kind === "crm-message"
       ? notification.presentation
       : null;
+  const telegramAccount =
+    notification.presentation?.kind === "telegram-account"
+      ? notification.presentation
+      : null;
   return (
     <Link
       href={notification.targetUrl}
@@ -46,6 +50,13 @@ export function NotificationRow({
             imageUrl={crmMessage.avatarUrl}
             alt={crmMessage.senderName}
             kind="person"
+            size="sm"
+          />
+        ) : telegramAccount ? (
+          <TelegramEntityAvatar
+            imageUrl={telegramAccount.avatarUrl}
+            alt={telegramAccount.label}
+            kind="mtproto"
             size="sm"
           />
         ) : (
@@ -92,7 +103,7 @@ export function NotificationRow({
             <span className="min-w-0 flex-1">
               <span className="flex items-center gap-2 text-sm font-semibold text-neutral-100">
                 <span className="truncate">
-                  {crmMessage?.senderName ?? notification.title}
+                  {crmMessage?.senderName ?? telegramAccount?.label ?? notification.title}
                 </span>
                 {crmMessage && crmMessage.messageCount > 1 ? (
                   <span className="shrink-0 rounded-full border border-blue-800 bg-blue-950/40 px-1.5 py-0.5 text-[10px] text-blue-200">

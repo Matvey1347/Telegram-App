@@ -660,20 +660,35 @@ export class TelegramAdSalesService {
   ) {
     const workspaceId = await this.workspace(userId);
     await this.findWorkspaceChannel(workspaceId, channelId);
-    const channel = await this.prisma.telegramChannel.update({
-      where: { id: channelId },
-      data: {
-        ...(dto.baseCpm === undefined
-          ? {}
-          : { adBaseCpm: decimalOrNull(dto.baseCpm) }),
-        ...(dto.currency === undefined ? {} : { adBaseCurrency: dto.currency }),
-      },
-      select: {
-        id: true,
-        adBaseCpm: true,
-        adBaseCurrency: true,
-        updatedAt: true,
-      },
+    const channel = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.telegramChannel.update({
+        where: { id: channelId },
+        data: {
+          ...(dto.baseCpm === undefined
+            ? {}
+            : { adBaseCpm: decimalOrNull(dto.baseCpm) }),
+          ...(dto.currency === undefined
+            ? {}
+            : { adBaseCurrency: dto.currency.toUpperCase() }),
+        },
+        select: {
+          id: true,
+          adBaseCpm: true,
+          adBaseCurrency: true,
+          updatedAt: true,
+        },
+      });
+      if (dto.currency !== undefined) {
+        await tx.telegramAdProduct.updateMany({
+          where: {
+            workspaceId,
+            telegramChannelId: channelId,
+            defaultPricingMode: TelegramAdPricingMode.CPM,
+          },
+          data: { currency: dto.currency.toUpperCase() },
+        });
+      }
+      return updated;
     });
     this.invalidateAvailabilityCache(workspaceId);
     return pricingSettingsForChannel(channel);

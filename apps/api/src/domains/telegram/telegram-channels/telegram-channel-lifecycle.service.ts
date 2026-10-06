@@ -3,7 +3,7 @@ import {
   Injectable,
   InternalServerErrorException,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, TelegramAdPricingMode } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { WorkspaceService } from '../../../common/workspace.service';
 import { PrismaService } from '../../../prisma/prisma.service';
@@ -251,6 +251,19 @@ export class TelegramChannelLifecycleService {
           assignedMemberId,
         },
       });
+      // A CPM amount is expressed in the channel's base currency. Keep the
+      // format metadata aligned when that base changes; otherwise a legacy
+      // USD label can make the quote endpoint treat a UAH CPM as dollars.
+      if (dto.adBaseCurrency !== undefined) {
+        await tx.telegramAdProduct.updateMany({
+          where: {
+            workspaceId,
+            telegramChannelId: id,
+            defaultPricingMode: TelegramAdPricingMode.CPM,
+          },
+          data: { currency: dto.adBaseCurrency },
+        });
+      }
       if (normalizedTimePosts !== undefined) {
         try {
           await tx.$executeRaw(

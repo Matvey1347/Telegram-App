@@ -107,14 +107,17 @@ describe('TelegramCrmContactReadService', () => {
             {
               id: 'contact-1',
               createdAt: new Date('2026-01-10T00:00:00.000Z'),
+              tags: [{ tagId: 'tag-1' }],
             },
             {
               id: 'contact-2',
               createdAt: new Date('2026-03-10T00:00:00.000Z'),
+              tags: [{ tagId: 'tag-1' }],
             },
             {
               id: 'contact-3',
               createdAt: new Date('2026-04-10T00:00:00.000Z'),
+              tags: [],
             },
           ]),
         },
@@ -150,9 +153,10 @@ describe('TelegramCrmContactReadService', () => {
     const result = await service.analytics('user-1');
 
     expect(result).toMatchObject({
-      clients: 3,
+      clients: 2,
+      untaggedClients: 1,
       buyers: 2,
-      conversionRate: 66.7,
+      conversionRate: 100,
       averagePaidOrderValue: '400.00',
       currency: 'UAH',
     });
@@ -170,6 +174,7 @@ describe('TelegramCrmContactReadService', () => {
         telegramAdvertiser: {
           fields: { lastInboundAt: 'lastInboundAt-field-reference' },
           findMany: jest.fn(),
+          count: jest.fn().mockResolvedValue(0),
         },
       } as never,
       {
@@ -251,7 +256,6 @@ describe('TelegramCrmContactReadService', () => {
       prisma.telegramAdvertiser.findMany.mock.calls[0][0].where,
     ).toMatchObject({
       workspaceId: 'workspace-1',
-      OR: expect.any(Array),
     });
   });
 

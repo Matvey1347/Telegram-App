@@ -43,6 +43,15 @@ const CURRENT_SOURCE_KEY = 'CURRENT';
 
 const historicalSourceKey = (scheduledAt: Date) => scheduledAt.toISOString();
 
+function isHistoricalQuoteDate(scheduledAt: Date, now: Date) {
+  // A draft scheduled earlier today has not acquired historical placement
+  // metrics. Use the same current view snapshot that powers the channel card,
+  // rather than falling back to the full subscriber count.
+  const todayStart = new Date(now);
+  todayStart.setHours(0, 0, 0, 0);
+  return scheduledAt < todayStart;
+}
+
 @Injectable()
 export class TelegramAdSalesQuotePreviewService {
   private readonly pricingReader: TelegramAdSalesPricingReader;
@@ -153,7 +162,8 @@ export class TelegramAdSalesQuotePreviewService {
     const historicalCutoffs = new Set<string>();
     const groups = new Map<string, PreviewContext[]>();
     for (const context of contexts) {
-      const isHistorical = context.scheduledAt && context.scheduledAt <= now;
+      const isHistorical =
+        context.scheduledAt && isHistoricalQuoteDate(context.scheduledAt, now);
       const key = isHistorical
         ? historicalSourceKey(context.scheduledAt!)
         : CURRENT_SOURCE_KEY;
@@ -196,7 +206,7 @@ export class TelegramAdSalesQuotePreviewService {
     const previews = contexts.flatMap((context) => {
       if (errors.has(context.index)) return [];
       const key =
-        context.scheduledAt && context.scheduledAt <= now
+        context.scheduledAt && isHistoricalQuoteDate(context.scheduledAt, now)
           ? historicalSourceKey(context.scheduledAt)
           : CURRENT_SOURCE_KEY;
       const source = groupedSources.get(key)!.get(context.channel.id)!;

@@ -1,10 +1,11 @@
-import { ConflictException, Injectable } from '@nestjs/common';
+import { ConflictException, Injectable, Optional } from '@nestjs/common';
 import { Prisma, TelegramUserAccountStatus } from '@prisma/client';
 import type { TelegramAccountProfile } from '@api/telegram/shared/mtproto/telegram-mtproto-account-profile';
 import { TokenEncryptionService } from '../../../common/security/token-encryption.service';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { WorkspaceService } from '../../../common/workspace.service';
-import { TelegramAccountRuntimeNotifier } from '../../../common/telegram-account-runtime-notifier.service';
+import { OperationsNotificationPublisherService } from '../../operations/notifications/operations-notification-publisher.service';
+import { OperationsNotificationStoreService } from '../../operations/notifications/operations-notification-store.service';
 
 type LoginAccountSnapshot = {
   id: string;
@@ -34,7 +35,10 @@ export class TelegramUserAccountLoginFinalizer {
   constructor(
     private readonly prisma: PrismaService,
     private readonly encryptionService: TokenEncryptionService,
-    private readonly runtimeNotifier: TelegramAccountRuntimeNotifier = new TelegramAccountRuntimeNotifier(),
+    @Optional()
+    private readonly notifications?: OperationsNotificationStoreService,
+    @Optional()
+    private readonly notificationPublisher?: OperationsNotificationPublisherService,
   ) {}
 
   async finalize(
@@ -82,11 +86,15 @@ export class TelegramUserAccountLoginFinalizer {
         'A newer Telegram login attempt replaced this authorization.',
       );
     }
-    this.runtimeNotifier.wake({
-      workspaceId: account.workspaceId,
-      accountId: account.id,
-      reason: 'login',
-    });
+    if (this.notifications && this.notificationPublisher) {
+      const recipientMemberIds = await this.prisma.$transaction((tx) =>
+        this.notifications!.dismissBySourceKey(tx, {
+          workspaceId: account.workspaceId,
+          sourceKey: `telegram-account:${account.id}:reauth-required`,
+        }),
+      );
+      this.notificationPublisher.invalidate(account.workspaceId, recipientMemberIds);
+    }
     return this.prisma.telegramUserAccountIntegration.findFirstOrThrow({
       where: { id: account.id, workspaceId: account.workspaceId },
       include: {

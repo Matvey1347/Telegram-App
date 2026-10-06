@@ -2,6 +2,8 @@ const REVOKED_TELEGRAM_SESSION_PATTERN =
   /(?:AUTH_KEY_UNREGISTERED|AUTH_KEY_INVALID|AUTH_KEY_DUPLICATED|SESSION_REVOKED|SESSION_EXPIRED|USER_DEACTIVATED)/i;
 const SEND_CODE_UNAVAILABLE_PATTERN = /SEND_CODE_UNAVAILABLE/i;
 const FLOOD_WAIT_PATTERN = /(?:FLOOD_WAIT_|wait of\s+)(\d+)/i;
+const REVOKED_TELEGRAM_SESSION_CODE_PATTERN =
+  /\b(AUTH_KEY_UNREGISTERED|AUTH_KEY_INVALID|AUTH_KEY_DUPLICATED|SESSION_REVOKED|SESSION_EXPIRED|USER_DEACTIVATED)\b/i;
 
 export const REVOKED_TELEGRAM_SESSION_MESSAGE =
   'The connected Telegram account session is no longer valid. Reconnect the account and retry.';
@@ -45,6 +47,25 @@ export function isRevokedTelegramSessionError(error: unknown) {
       typeof record[field] === 'string' &&
       REVOKED_TELEGRAM_SESSION_PATTERN.test(record[field]),
   );
+}
+
+/** Returns Telegram's stable session failure code for persisted diagnostics. */
+export function telegramRevokedSessionErrorCode(error: unknown) {
+  const values =
+    typeof error === 'string'
+      ? [error]
+      : error instanceof Error
+        ? [error.message]
+        : error && typeof error === 'object'
+          ? ['errorMessage', 'code', 'message']
+              .map((field) => (error as Record<string, unknown>)[field])
+              .filter((value): value is string => typeof value === 'string')
+          : [];
+  for (const value of values) {
+    const code = value.match(REVOKED_TELEGRAM_SESSION_CODE_PATTERN)?.[1];
+    if (code) return code.toUpperCase();
+  }
+  return null;
 }
 
 export function isTelegramSendCodeUnavailableError(error: unknown) {

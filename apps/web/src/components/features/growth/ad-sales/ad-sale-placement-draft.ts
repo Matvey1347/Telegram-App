@@ -20,6 +20,7 @@ export function applyProductToPlacement(
     minimumPrice: product?.minimumPrice ?? price,
     agreedPrice: price,
     agreedPriceManuallyEdited: false,
+    quotedCurrency: product?.currency?.toUpperCase(),
   } satisfies SalePlacementDraft;
 }
 
@@ -116,6 +117,7 @@ export function createPlacementDraft(params: {
     warnings: [],
     conflict: null,
     agreedPriceManuallyEdited: false,
+    quotedCurrency: params.product?.currency?.toUpperCase(),
     inventoryOpportunityKey: params.inventoryOpportunityKey ?? null,
     telegramPostId: null,
   };

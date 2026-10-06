@@ -265,17 +265,23 @@ export type CrmChatContactContext = Pick<
 
 export type CrmContactsListResult = PaginatedResponse<CrmContactListItem> & {
   availableTags: CrmTagOption[];
+  counts: {
+    tagged: number;
+    untagged: number;
+  };
 };
 
 export type CrmAnalyticsPoint = {
   date: string;
   clients: number;
+  untaggedClients: number;
   buyers: number;
   conversionRate: number;
 };
 
 export type CrmAnalyticsSummary = {
   clients: number;
+  untaggedClients: number;
   buyers: number;
   conversionRate: number;
   averagePaidOrderValue: string;

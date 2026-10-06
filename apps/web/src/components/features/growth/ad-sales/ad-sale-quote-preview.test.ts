@@ -220,6 +220,27 @@ describe("ad sale quote preview", () => {
       warnings: ["Product is no longer available"],
     });
   });
+
+  it("replaces a restored price when the quote currency changes", () => {
+    const restored = {
+      ...placement("one", "channel-1"),
+      agreedPrice: "263.80",
+      agreedPriceManuallyEdited: true,
+      quotedCurrency: "UAH",
+    };
+    const result = applyQuotePreviewResults(
+      [restored],
+      { items: [{ requestId: "one", quote: { ...quote(500), recommendedPrice: "6.35", currency: "USD" } }] },
+      {},
+      false,
+    );
+
+    expect(result[0]).toMatchObject({
+      agreedPrice: "6.35",
+      recommendedPrice: "6.35",
+      quotedCurrency: "USD",
+    });
+  });
 });
 
 function quote(expectedViews: number) {

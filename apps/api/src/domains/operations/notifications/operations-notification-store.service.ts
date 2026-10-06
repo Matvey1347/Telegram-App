@@ -119,6 +119,20 @@ export class OperationsNotificationStoreService {
     });
   }
 
+  async dismissBySourceKey(
+    tx: Prisma.TransactionClient,
+    input: { workspaceId: string; sourceKey: string },
+  ) {
+    const rows = await tx.operationsNotification.findMany({
+      where: { workspaceId: input.workspaceId, sourceKey: input.sourceKey },
+      select: { recipientMemberId: true },
+    });
+    await tx.operationsNotification.deleteMany({
+      where: { workspaceId: input.workspaceId, sourceKey: input.sourceKey },
+    });
+    return rows.map((row) => row.recipientMemberId);
+  }
+
   async reassignVisibility(
     tx: Prisma.TransactionClient,
     input: {

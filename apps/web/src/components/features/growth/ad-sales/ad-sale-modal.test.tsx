@@ -337,7 +337,7 @@ describe("AdSaleModal", () => {
     );
     const telegaOption = screen.getByRole("button", { name: /telega\.io/ });
     expect(telegaOption.querySelector("img")?.getAttribute("src")).toBe(
-      "https://telega.io/favicon.ico",
+      "https://telega.io/assets/favicon/apple-icon-57x57-2aeb5d6e58112140bbd8d713400c43578f9d07ecf36346b9d488279db78a4108.png",
     );
     fireEvent.click(externalNewSaleOption);
     await screen.findByText(/1\/24 · 125 UAH/);

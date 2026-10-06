@@ -116,3 +116,39 @@ export function notificationConversationIds(rows: OperationsNotification[]) {
     ),
   ];
 }
+
+export function notificationTelegramAccountIds(rows: OperationsNotification[]) {
+  return [
+    ...new Set(
+      rows.flatMap((row) => {
+        if (row.type !== 'TELEGRAM_ACCOUNT_REAUTH_REQUIRED') return [];
+        const accountId = string(record(row.metadata).accountId);
+        return accountId ? [accountId] : [];
+      }),
+    ),
+  ];
+}
+
+export function hydrateTelegramAccountNotifications(
+  rows: OperationsNotification[],
+  accounts: Array<{ id: string; label: string; photoUrl: string | null }>,
+) {
+  const accountById = new Map(accounts.map((account) => [account.id, account]));
+  return rows.map((row) => {
+    if (row.type !== 'TELEGRAM_ACCOUNT_REAUTH_REQUIRED') return row;
+    const metadata = record(row.metadata);
+    const accountId = string(metadata.accountId);
+    const account = accountId ? accountById.get(accountId) : undefined;
+    if (!account) return row;
+    return {
+      ...row,
+      metadata: {
+        ...metadata,
+        presentationKind: 'telegram-account',
+        accountId: account.id,
+        accountLabel: account.label,
+        avatarUrl: account.photoUrl,
+      },
+    };
+  });
+}

@@ -23,7 +23,7 @@ export function mapOperationsNotification(
   row: OperationsNotification,
 ): OperationsNotificationItem {
   const normalizedMetadata = metadata(row.metadata);
-  const presentation = crmMessagePresentation(row, normalizedMetadata);
+  const presentation = notificationPresentation(row, normalizedMetadata);
   return {
     id: row.id,
     workspaceId: row.workspaceId,
@@ -42,10 +42,24 @@ export function mapOperationsNotification(
   };
 }
 
-function crmMessagePresentation(
+function notificationPresentation(
   row: OperationsNotification,
   value: OperationsNotificationMetadata,
 ): OperationsNotificationItem['presentation'] {
+  if (
+    row.type === 'TELEGRAM_ACCOUNT_REAUTH_REQUIRED' &&
+    value.presentationKind === 'telegram-account' &&
+    typeof value.accountId === 'string' &&
+    typeof value.accountLabel === 'string'
+  ) {
+    return {
+      kind: 'telegram-account',
+      accountId: value.accountId,
+      label: value.accountLabel,
+      avatarUrl:
+        typeof value.avatarUrl === 'string' ? value.avatarUrl : null,
+    };
+  }
   if (
     row.type !== 'CRM_MESSAGE_RECEIVED' ||
     value.presentationKind !== 'crm-message' ||
