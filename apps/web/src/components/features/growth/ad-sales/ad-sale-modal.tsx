@@ -215,6 +215,7 @@ export function AdSaleModal(props: AdSaleModalProps) {
                       allocatedTotal={networkPricing.allocatedTotal}
                       currency={paymentCurrency}
                       placementCount={placements.length}
+                      quotesReady={quotePreview.hasResolvedQuote}
                       onModeChange={networkPricing.setMode}
                       onTotalPriceChange={networkPricing.setTotalPrice}
                     />

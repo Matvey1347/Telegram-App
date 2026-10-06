@@ -50,7 +50,6 @@ export function applyQuotePreviewResults(
   placements: SalePlacementDraft[],
   response: TelegramAdQuotePreviewBatchResponse,
   productsByChannelId: Record<string, TelegramAdProduct[]>,
-  preserveAgreedPrice: boolean,
 ) {
   const resultByPlacementKey = new Map(
     response.items.map((result) => [result.requestId, result]),
@@ -84,7 +83,10 @@ export function applyQuotePreviewResults(
     // drafts without quote metadata) must refresh it from the channel quote.
     const quoteCurrency = quote.currency?.toUpperCase() ?? item.quotedCurrency ?? "";
     const agreedPrice =
-      preserveAgreedPrice ||
+      // A network-total allocation marks each split as manually edited. It is
+      // still only valid in the currency in which that allocation was made.
+      // Do not preserve an amount such as 354.60 UAH and relabel it as USD
+      // while the quote is refreshed for a different financial account.
       (item.agreedPriceManuallyEdited && item.quotedCurrency === quoteCurrency)
         ? item.agreedPrice
         : recommendedPrice;
@@ -120,7 +122,6 @@ export function useAdSaleQuotePreview({
   currency,
   quoteRequests,
   productsByChannelId,
-  preserveAgreedPrice,
   requestPreview,
   setPlacements,
 }: {
@@ -128,7 +129,6 @@ export function useAdSaleQuotePreview({
   currency: string;
   quoteRequests: QuoteRequestDraft[];
   productsByChannelId: Record<string, TelegramAdProduct[]>;
-  preserveAgreedPrice: boolean;
   requestPreview: (
     requests: TelegramAdQuotePreviewRequest[],
     signal?: AbortSignal,
@@ -136,6 +136,13 @@ export function useAdSaleQuotePreview({
   setPlacements: Dispatch<SetStateAction<SalePlacementDraft[]>>;
 }) {
   const [errors, setErrors] = useState<string[]>([]);
+  const [completedRequestKey, setCompletedRequestKey] = useState("");
+  const quoteRequestsRef = useRef(quoteRequests);
+  const productsByChannelIdRef = useRef(productsByChannelId);
+  const requestPreviewRef = useRef(requestPreview);
+  quoteRequestsRef.current = quoteRequests;
+  productsByChannelIdRef.current = productsByChannelId;
+  requestPreviewRef.current = requestPreview;
   const requestKey = useMemo(
     () =>
       open && quoteRequests.length
@@ -156,21 +163,29 @@ export function useAdSaleQuotePreview({
       loadedKeyRef.current = "";
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setErrors((current) => (current.length ? [] : current));
+      setCompletedRequestKey("");
       return;
     }
     if (loadedKeyRef.current === requestKey || limitExceeded) return;
     loadedKeyRef.current = requestKey;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setErrors((current) => (current.length ? [] : current));
+    setCompletedRequestKey("");
     let current = true;
     const controller = new AbortController();
-    const requests = buildQuotePreviewRequests(quoteRequests, currency);
+    const requests = buildQuotePreviewRequests(
+      quoteRequestsRef.current,
+      currency,
+    );
     if (!requests.length) return;
 
     void (async () => {
       for (let attempt = 0; attempt < 2; attempt += 1) {
         try {
-          const response = await requestPreview(requests, controller.signal);
+          const response = await requestPreviewRef.current(
+            requests,
+            controller.signal,
+          );
           if (!current) return;
           setErrors(
             response.items.flatMap((item) =>
@@ -181,14 +196,17 @@ export function useAdSaleQuotePreview({
             applyQuotePreviewResults(
               placements,
               response,
-              productsByChannelId,
-              preserveAgreedPrice,
+              productsByChannelIdRef.current,
             ),
           );
+          setCompletedRequestKey(requestKey);
           return;
         } catch {
           if (!current || controller.signal.aborted) return;
         }
+      }
+      if (current) {
+        setErrors(["Could not refresh channel prices. Please try again."]);
       }
     })();
 
@@ -199,13 +217,17 @@ export function useAdSaleQuotePreview({
   }, [
     currency,
     limitExceeded,
-    preserveAgreedPrice,
-    productsByChannelId,
-    quoteRequests,
     requestKey,
-    requestPreview,
     setPlacements,
   ]);
 
-  return { limitExceeded, requestCount, errors };
+  return {
+    limitExceeded,
+    requestCount,
+    errors,
+    // Seed product prices are expressed in their channel currency. They must
+    // never be presented as the financial account's currency before this
+    // quote request has completed.
+    hasResolvedQuote: completedRequestKey === requestKey && !!requestKey,
+  };
 }

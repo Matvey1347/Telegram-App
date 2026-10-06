@@ -69,7 +69,6 @@ describe("ad sale quote preview", () => {
         currency: "USD",
         quoteRequests: placements,
         productsByChannelId: {},
-        preserveAgreedPrice: false,
         requestPreview,
         setPlacements: vi.fn(),
       }),
@@ -90,7 +89,6 @@ describe("ad sale quote preview", () => {
         currency: "USD",
         quoteRequests: placements,
         productsByChannelId: {},
-        preserveAgreedPrice: false,
         requestPreview,
         setPlacements: vi.fn(),
       }),
@@ -100,6 +98,7 @@ describe("ad sale quote preview", () => {
       limitExceeded: true,
       requestCount: 10_001,
       errors: [],
+      hasResolvedQuote: false,
     });
     expect(requestPreview).not.toHaveBeenCalled();
   });
@@ -116,7 +115,6 @@ describe("ad sale quote preview", () => {
         currency: "USD",
         quoteRequests: [placement("one", "channel-1")],
         productsByChannelId: {},
-        preserveAgreedPrice: false,
         requestPreview,
         setPlacements: vi.fn(),
       }),
@@ -150,7 +148,6 @@ describe("ad sale quote preview", () => {
           currency,
           quoteRequests,
           productsByChannelId: {},
-          preserveAgreedPrice: false,
           requestPreview,
           setPlacements,
         }),
@@ -168,6 +165,47 @@ describe("ad sale quote preview", () => {
     resolutions[0]({ items: [{ requestId: "one", quote: quote(111) }] });
     await Promise.resolve();
     expect(current[0].expectedViews).toBe(222);
+  });
+
+  it("keeps an in-flight quote when parent callback and product data rerender", async () => {
+    let resolvePreview!: (value: TelegramAdQuotePreviewBatchResponse) => void;
+    const firstPreview = vi.fn(
+      (_requests: TelegramAdQuotePreviewRequest[], _signal?: AbortSignal) =>
+        new Promise<TelegramAdQuotePreviewBatchResponse>((resolve) => {
+          resolvePreview = resolve;
+        }),
+    );
+    const secondPreview = vi.fn();
+    const requests = [placement("one", "channel-1")];
+    let current = requests;
+    const setPlacements = vi.fn((update) => {
+      current = typeof update === "function" ? update(current) : update;
+    });
+    const { rerender } = renderHook(
+      ({ requestPreview, productsByChannelId }) =>
+        useAdSaleQuotePreview({
+          open: true,
+          currency: "USD",
+          quoteRequests: requests,
+          productsByChannelId,
+          requestPreview,
+          setPlacements,
+        }),
+      {
+        initialProps: {
+          requestPreview: firstPreview,
+          productsByChannelId: {},
+        },
+      },
+    );
+
+    await waitFor(() => expect(firstPreview).toHaveBeenCalledTimes(1));
+    const signal = firstPreview.mock.calls[0][1]!;
+    rerender({ requestPreview: secondPreview, productsByChannelId: {} });
+    expect(signal.aborted).toBe(false);
+    resolvePreview({ items: [{ requestId: "one", quote: quote(321) }] });
+    await waitFor(() => expect(current[0].expectedViews).toBe(321));
+    expect(secondPreview).not.toHaveBeenCalled();
   });
 
   it("applies successful items while retaining stale values for item errors", () => {
@@ -205,7 +243,6 @@ describe("ad sale quote preview", () => {
         ],
       },
       products,
-      false,
     );
 
     expect(result[0]).toMatchObject({
@@ -232,12 +269,32 @@ describe("ad sale quote preview", () => {
       [restored],
       { items: [{ requestId: "one", quote: { ...quote(500), recommendedPrice: "6.35", currency: "USD" } }] },
       {},
-      false,
     );
 
     expect(result[0]).toMatchObject({
       agreedPrice: "6.35",
       recommendedPrice: "6.35",
+      quotedCurrency: "USD",
+    });
+  });
+
+  it("replaces a network allocation when its quote changes currency", () => {
+    const allocatedInUah = {
+      ...placement("one", "channel-1"),
+      agreedPrice: "354.60",
+      agreedPriceManuallyEdited: true,
+      quotedCurrency: "UAH",
+    };
+
+    const result = applyQuotePreviewResults(
+      [allocatedInUah],
+      { items: [{ requestId: "one", quote: { ...quote(500), recommendedPrice: "7.91", currency: "USD" } }] },
+      {},
+    );
+
+    expect(result[0]).toMatchObject({
+      agreedPrice: "7.91",
+      recommendedPrice: "7.91",
       quotedCurrency: "USD",
     });
   });

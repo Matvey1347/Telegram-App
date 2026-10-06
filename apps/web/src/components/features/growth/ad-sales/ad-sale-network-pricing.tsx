@@ -145,6 +145,7 @@ export function AdSaleNetworkPricing({
   allocatedTotal,
   currency,
   placementCount,
+  quotesReady,
   onModeChange,
   onTotalPriceChange,
 }: {
@@ -154,6 +155,7 @@ export function AdSaleNetworkPricing({
   allocatedTotal: number;
   currency: string;
   placementCount: number;
+  quotesReady: boolean;
   onModeChange: (mode: "total" | "per-placement") => void;
   onTotalPriceChange: (value: string) => void;
 }) {
@@ -205,17 +207,26 @@ export function AdSaleNetworkPricing({
             <Input
               value={totalPrice}
               inputMode="decimal"
+              disabled={!quotesReady}
               onChange={(event) => onTotalPriceChange(event.target.value)}
             />
           </FormField>
           <Summary
-            label="Calculated total"
-            value={`${recommendedTotal.toFixed(2)} ${currency}`}
+            label={quotesReady ? "Calculated total" : "Channel price quote"}
+            value={
+              quotesReady
+                ? `${recommendedTotal.toFixed(2)} ${currency}`
+                : `Refreshing prices in ${currency}…`
+            }
           />
           <Summary
-            label={`Allocated to ${placementCount} placements`}
-            value={`${allocatedTotal.toFixed(2)} ${currency}`}
-            tone={exact ? "ok" : "error"}
+            label={quotesReady ? `Allocated to ${placementCount} placements` : "Allocation"}
+            value={
+              quotesReady
+                ? `${allocatedTotal.toFixed(2)} ${currency}`
+                : "Waiting for converted quotes…"
+            }
+            tone={quotesReady ? (exact ? "ok" : "error") : undefined}
           />
         </div>
       ) : null}

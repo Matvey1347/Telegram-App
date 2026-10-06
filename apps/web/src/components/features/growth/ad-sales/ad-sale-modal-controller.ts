@@ -256,11 +256,6 @@ export function useAdSaleModalController(options: AdSaleModalProps) {
     currency: paymentCurrency,
     quoteRequests: financeSkipped ? [] : quoteRequests,
     productsByChannelId,
-    // With one placement there is no allocation to preserve: its agreed price
-    // must immediately become the converted quote, otherwise the two totals
-    // briefly (and sometimes persistently) show different currencies/amounts.
-    preserveAgreedPrice:
-      networkPricing.mode === "total" && placements.length > 1,
     requestPreview: onRequestQuotePreview,
     setPlacements,
   });
@@ -268,6 +263,7 @@ export function useAdSaleModalController(options: AdSaleModalProps) {
   const canSubmit =
     (financeSkipped || !quotePreview.limitExceeded) &&
     (financeSkipped || quotePreview.errors.length === 0) &&
+    (financeSkipped || quotePreview.hasResolvedQuote) &&
     (financeSkipped || !!accountId) &&
     (financeSkipped || paymentAmount > 0) &&
     effectiveChannelIds.length > 0 &&
