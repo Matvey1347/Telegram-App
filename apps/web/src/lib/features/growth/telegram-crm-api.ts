@@ -106,10 +106,12 @@ export const telegramCrmApi = {
         signal,
       })
     ).data,
-  exportContacts: async (segment: CrmContactSegment) =>
+  exportContacts: async (segment: CrmContactSegment = "ALL") =>
     (
       await api.get<CrmContactExport[]>("/telegram-crm/contact-export", {
-        params: { segment },
+        // `ALL` is the endpoint default. Omitting it avoids serializing a
+        // meaningless filter and keeps this request compatible with the DTO.
+        params: segment === "ALL" ? undefined : { segment },
       })
     ).data,
   listTags: async (signal?: AbortSignal) =>

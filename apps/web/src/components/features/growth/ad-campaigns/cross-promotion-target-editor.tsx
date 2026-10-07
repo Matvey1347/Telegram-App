@@ -127,68 +127,72 @@ export function CrossPromotionTargetEditor({
         className={`grid gap-3 ${
           showPromo
             ? trailing
-              ? "md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]"
-              : "md:grid-cols-2"
+              ? "lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]"
+              : "lg:grid-cols-2"
             : ""
         }`}
       >
         {showPromo ? (
-          <FormField label="Promo" required>
-            <CustomSelect
-              value={value.promoId ?? ""}
-              onChange={(promoId) => {
-                const selectedPromo = promos.find(
-                  (promo) => promo.id === promoId,
-                );
-                const next = {
-                  ...value,
-                  promoId,
-                  inviteLinkId:
-                    selectedPromo?.defaultInviteLinkId ?? value.inviteLinkId,
-                };
+          <div className="min-w-0">
+            <FormField label="Promo" required>
+              <CustomSelect
+                value={value.promoId ?? ""}
+                onChange={(promoId) => {
+                  const selectedPromo = promos.find(
+                    (promo) => promo.id === promoId,
+                  );
+                  const next = {
+                    ...value,
+                    promoId,
+                    inviteLinkId:
+                      selectedPromo?.defaultInviteLinkId ?? value.inviteLinkId,
+                  };
+                  onChange(next);
+                  queueMicrotask(() =>
+                    onResolved?.({
+                      promo: selectedPromo,
+                      inviteLink: resolvedInvite,
+                    }),
+                  );
+                }}
+                placeholder={
+                  promosQuery.isLoading ? "Loading promos…" : "Select promo"
+                }
+                options={promos.map((promo) => ({
+                  value: promo.id,
+                  label: promo.title,
+                  iconPresentation: promo.iconPresentation ?? undefined,
+                  iconFallback: promo.title,
+                }))}
+              />
+            </FormField>
+          </div>
+        ) : null}
+        <div className="min-w-0">
+          <FormField label="Tracking invite link" required>
+            <TelegramInviteLinkSelect
+              value={value.inviteLinkId}
+              onChange={(inviteLinkId) => {
+                const next = { ...value, inviteLinkId };
                 onChange(next);
                 queueMicrotask(() =>
                   onResolved?.({
-                    promo: selectedPromo,
-                    inviteLink: resolvedInvite,
+                    promo: resolvedPromo,
+                    inviteLink: links.find((link) => link.id === inviteLinkId),
                   }),
                 );
               }}
-              placeholder={
-                promosQuery.isLoading ? "Loading promos…" : "Select promo"
-              }
-              options={promos.map((promo) => ({
-                value: promo.id,
-                label: promo.title,
-                iconPresentation: promo.iconPresentation ?? undefined,
-                iconFallback: promo.title,
-              }))}
+              onSearchChange={setInviteLinkSearch}
+              loading={linkOptions.loading}
+              placeholder="Select invite link"
+              links={links}
+              onCreate={async (url) => {
+                await registerLink.mutateAsync(url);
+              }}
             />
           </FormField>
-        ) : null}
-        <FormField label="Tracking invite link" required>
-          <TelegramInviteLinkSelect
-            value={value.inviteLinkId}
-            onChange={(inviteLinkId) => {
-              const next = { ...value, inviteLinkId };
-              onChange(next);
-              queueMicrotask(() =>
-                onResolved?.({
-                  promo: resolvedPromo,
-                  inviteLink: links.find((link) => link.id === inviteLinkId),
-                }),
-              );
-            }}
-            onSearchChange={setInviteLinkSearch}
-            loading={linkOptions.loading}
-            placeholder="Select invite link"
-            links={links}
-            onCreate={async (url) => {
-              await registerLink.mutateAsync(url);
-            }}
-          />
-        </FormField>
-        {trailing ? <div className="flex items-end">{trailing}</div> : null}
+        </div>
+        {trailing ? <div className="flex min-w-0 items-end">{trailing}</div> : null}
       </div>
       {registerLink.isError ? (
         <p className="mt-2 text-xs text-rose-300">

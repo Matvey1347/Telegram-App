@@ -280,10 +280,30 @@ export type CrmContactExport = {
   displayName: string;
   telegramUsername: string | null;
   tags: string[];
+  /** Backward-compatible compact representation of deals. */
   purchases: Array<{
     title: string | null;
     status: string;
     currency: string;
+    createdAt: string;
+  }>;
+  deals: Array<{
+    id: string;
+    title: string | null;
+    status: string;
+    stage: string;
+    origin: string;
+    currency: string;
+    expectedCloseAt: string | null;
+    createdAt: string;
+  }>;
+  crossPromotions: Array<{
+    id: string;
+    title: string;
+    kind: string;
+    status: string;
+    scheduledAt: string;
+    trackingEndsAt: string | null;
     createdAt: string;
   }>;
 };

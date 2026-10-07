@@ -366,7 +366,7 @@ describe('parseTelegramSystemBotForwardedContent', () => {
     ]);
   });
 
-  it.each(['document', 'sticker'] as const)(
+  it.each(['sticker'] as const)(
     'rejects unsupported %s media explicitly',
     (media) => {
       expect(
@@ -383,6 +383,71 @@ describe('parseTelegramSystemBotForwardedContent', () => {
       });
     },
   );
+
+  it('captures a GIF forwarded by Telegram as a document', () => {
+    const result = parseTelegramSystemBotForwardedContent({
+      caption: 'GIF caption',
+      forward_date: 1_700_000_000,
+      document: {
+        file_id: 'gif-document-file',
+        file_unique_id: 'gif-document-unique',
+        file_size: 1024,
+        mime_type: 'image/gif',
+        file_name: 'cake.gif',
+      },
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      content: {
+        text: 'GIF caption',
+        media: {
+          kind: 'ANIMATION',
+          fileId: 'gif-document-file',
+          mimeType: 'image/gif',
+        },
+      },
+    });
+  });
+
+  it('captures an MP4 GIF Telegram forwards as a document', () => {
+    const result = parseTelegramSystemBotForwardedContent({
+      caption: 'Motion caption',
+      forward_date: 1_700_000_000,
+      document: {
+        file_id: 'motion-document-file',
+        file_size: 1024,
+        mime_type: 'video/mp4',
+        file_name: 'animation.mp4',
+      },
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      content: {
+        media: {
+          kind: 'VIDEO',
+          fileId: 'motion-document-file',
+          mimeType: 'video/mp4',
+        },
+      },
+    });
+  });
+
+  it('continues to reject non-GIF documents', () => {
+    expect(
+      parseTelegramSystemBotForwardedContent({
+        text: 'Caption',
+        forward_date: 1_700_000_000,
+        document: { file_id: 'unsupported', mime_type: 'application/pdf' },
+      }),
+    ).toEqual({
+      ok: false,
+      reason: 'UNSUPPORTED_MEDIA',
+      unsupportedMedia: ['document'],
+      warnings: [],
+    });
+  });
 
   it.each([
     ['VIDEO', 'video', 'video/mp4'],

@@ -16,7 +16,6 @@ import {
 } from 'class-validator';
 import {
   CRM_CONTACT_STAGES,
-  CRM_CONTACT_SEGMENTS,
   CRM_FOLLOW_UP_VIEWS,
   CRM_MESSAGE_DIRECTIONS,
   CRM_MESSAGE_ORIGINS,
@@ -27,6 +26,10 @@ import {
   type CrmMessageOrigin,
 } from '@telegram-system/shared';
 import { PaginationQueryDto } from '../../../common/pagination/pagination-query.dto';
+
+// Keep request validation independent of a shared-package runtime export.
+// `CrmContactSegment` remains the cross-stack type contract.
+const CRM_CONTACT_SEGMENT_VALUES = ['ALL', 'TAGGED', 'UNTAGGED'] as const;
 
 const trimNullable = ({ value }: { value: unknown }) =>
   typeof value === 'string' ? value.trim() || null : value;
@@ -60,7 +63,9 @@ export class CrmContactsQueryDto extends PaginationQueryDto {
   @ArrayMaxSize(200)
   @IsString({ each: true })
   tagIds?: string[];
-  @IsOptional() @IsIn(CRM_CONTACT_SEGMENTS) segment?: CrmContactSegment;
+  @IsOptional()
+  @IsIn(CRM_CONTACT_SEGMENT_VALUES)
+  segment?: CrmContactSegment;
 }
 
 export class SetCrmContactTagsDto {

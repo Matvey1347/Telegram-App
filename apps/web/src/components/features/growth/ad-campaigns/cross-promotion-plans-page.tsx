@@ -27,7 +27,6 @@ import {
   ErrorState,
   ConfirmDeleteModal,
   LoadingState,
-  MasonryGrid,
   PageHeader,
   Modal,
 } from "@/components/ui/primitives";
@@ -348,7 +347,7 @@ export function CrossPromotionPlansPage({
             }
           />
         ) : (
-          <MasonryGrid className="xl:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
             {visiblePlans.map((plan) => (
               <CrossPromotionPlanCard
                 key={plan.id}
@@ -370,7 +369,7 @@ export function CrossPromotionPlansPage({
                 }
               />
             ))}
-          </MasonryGrid>
+          </div>
         )}
       </div>
       <CrossPromotionPlanModal

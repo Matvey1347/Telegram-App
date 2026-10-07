@@ -348,6 +348,7 @@ export function CrmContactList({
             variant="secondary"
             onClick={() => void downloadExport()}
             disabled={exporting}
+            aria-busy={exporting}
             aria-label="Export clients"
           >
             <Download size={15} />

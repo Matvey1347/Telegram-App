@@ -143,7 +143,7 @@ export function CrossPromotionPlanCard({
         </div>
       </div>
 
-      <div className={`mx-4 mt-3 grid rounded-lg border border-white/5 bg-black/25 py-2 ${plan.kind === "OWN_CHANNELS" ? "grid-cols-1" : "grid-cols-2 divide-x divide-white/10"}`}>
+      <div className={`mx-4 mt-3 grid rounded-lg border border-white/5 bg-black/25 py-2 ${plan.kind === "OWN_CHANNELS" ? "grid-cols-1" : "grid-cols-1 divide-y divide-white/10 sm:grid-cols-2 sm:divide-x sm:divide-y-0"}`}>
         {plan.kind !== "OWN_CHANNELS" ? <ChannelMetric channels={partnerChannels} label="Partner channels" publicationCount={partnerPublicationCount} /> : null}
         <ChannelMetric channels={publishingChannels} label="My channels" publicationCount={publisherPublicationCount} />
       </div>
@@ -173,7 +173,7 @@ export function CrossPromotionPlanCard({
               badge="✨ Promoted"
               badgeClassName="bg-emerald-950 text-emerald-300"
             />
-            <div className="mt-1.5 grid grid-cols-[auto_auto_auto_minmax(0,1fr)] items-end gap-x-3 pl-7 text-[10px]">
+            <div className="mt-1.5 grid grid-cols-3 gap-x-3 gap-y-2 pl-7 text-[10px] sm:grid-cols-[auto_auto_auto_minmax(0,1fr)] sm:items-end sm:gap-y-0">
               <Stat
                 label="During placement"
                 icon={UserPlus}
@@ -199,12 +199,14 @@ export function CrossPromotionPlanCard({
                   publisherViews == null ? "—" : publisherViews.toLocaleString()
                 }
               />
-              <PromoLink
-                promoId={target.promoId}
-                icon={target.promoIconPresentation}
-                title={target.promoTitle}
-                onOpenPromo={onOpenPromo}
-              />
+              <div className="col-span-3 min-w-0 sm:col-span-1">
+                <PromoLink
+                  promoId={target.promoId}
+                  icon={target.promoIconPresentation}
+                  title={target.promoTitle}
+                  onOpenPromo={onOpenPromo}
+                />
+              </div>
             </div>
           </div>
         ))}

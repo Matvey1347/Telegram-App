@@ -28,4 +28,14 @@ describe("telegramCrmApi", () => {
       params: { segment: "TAGGED" },
     });
   });
+
+  it("omits the all-clients segment because it is the API default", async () => {
+    get.mockResolvedValue({ data: [] });
+
+    await telegramCrmApi.exportContacts("ALL");
+
+    expect(get).toHaveBeenCalledWith("/telegram-crm/contact-export", {
+      params: undefined,
+    });
+  });
 });

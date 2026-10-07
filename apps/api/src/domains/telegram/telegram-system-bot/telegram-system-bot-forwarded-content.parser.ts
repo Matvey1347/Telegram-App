@@ -77,7 +77,11 @@ export type TelegramSystemBotIncomingMessage = {
   audio?: unknown;
   document?: {
     file_id?: string;
+    file_unique_id?: string;
     file_size?: number;
+    width?: number;
+    height?: number;
+    duration?: number;
     mime_type?: string;
     file_name?: string;
   };
@@ -187,9 +191,13 @@ export function parseTelegramSystemBotForwardedContent(
   const forward = normalizeForward(message);
   if (!forward) warnings.add('NOT_FORWARDED');
 
-  const unsupportedMedia = unsupportedMediaKeys.filter(
-    (key) => message[key] !== undefined && message[key] !== null,
-  );
+  const unsupportedMedia = unsupportedMediaKeys.filter((key) => {
+    if (message[key] === undefined || message[key] === null) return false;
+    // Telegram sends GIFs and videos as `document` when the source posted the
+    // file as a document. Accept only media types the publishing path can
+    // validate and deliver; arbitrary documents remain unsupported.
+    return key !== 'document' || !documentMotionKind(message.document);
+  });
   if (unsupportedMedia.length) {
     return {
       ok: false,
@@ -261,6 +269,10 @@ function normalizeMedia(
   if (message.video?.file_id) {
     return telegramFileMedia('VIDEO', message.video);
   }
+  const documentKind = documentMotionKind(message.document);
+  if (message.document && documentKind) {
+    return telegramFileMedia(documentKind, message.document);
+  }
   return photo
     ? {
         kind: 'PHOTO',
@@ -278,7 +290,9 @@ function normalizeMedia(
 
 function telegramFileMedia(
   kind: 'VIDEO' | 'ANIMATION',
-  file: NonNullable<TelegramSystemBotIncomingMessage['video']>,
+  file: NonNullable<
+    TelegramSystemBotIncomingMessage['video' | 'animation' | 'document']
+  >,
 ): NonNullable<TelegramSystemBotForwardedContent['media']> {
   return {
     kind,
@@ -291,6 +305,17 @@ function telegramFileMedia(
     mimeType: file.mime_type ?? null,
     fileName: file.file_name ?? null,
   };
+}
+
+function documentMotionKind(
+  document: TelegramSystemBotIncomingMessage['document'],
+): 'VIDEO' | 'ANIMATION' | null {
+  if (!document?.file_id) return null;
+  const mimeType = document.mime_type?.toLowerCase();
+  const filename = document.file_name?.trim().toLowerCase() ?? '';
+  if (mimeType === 'image/gif' || filename.endsWith('.gif')) return 'ANIMATION';
+  if (mimeType === 'video/mp4' || mimeType === 'video/webm') return 'VIDEO';
+  return null;
 }
 
 type BotEntity = {

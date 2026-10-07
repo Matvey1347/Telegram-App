@@ -786,7 +786,7 @@ export function CrossPromotionPlanView({
                     : "Need a completely new post? Delete the current publication in all linked channels and publish this version immediately."
                 }
               >
-                <span>
+                <span className="w-full sm:w-auto">
                   <Button
                     type="button"
                     variant={initial?.status === "DRAFT" ? "primary" : "danger"}
@@ -801,7 +801,16 @@ export function CrossPromotionPlanView({
                 </span>
               </Tooltip>
             ) : null}
-            {initial?.status !== "DRAFT" ? (
+            {initial?.status === "DRAFT" ? (
+              <Button
+                type="button"
+                className="w-full sm:w-auto"
+                disabled={saving || savingDraft || requiresRepublish}
+                onClick={onSubmit}
+              >
+                {saving ? "Activating…" : "Activate and schedule"}
+              </Button>
+            ) : (
               <Button
                 type="button"
                 className="w-full sm:w-auto"
@@ -820,7 +829,7 @@ export function CrossPromotionPlanView({
                         : "Update mutual promotion"
                     : "Create and schedule"}
               </Button>
-            ) : null}
+            )}
           </div>
         </div>
       )}
