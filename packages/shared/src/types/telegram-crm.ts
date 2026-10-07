@@ -271,16 +271,35 @@ export type CrmContactsListResult = PaginatedResponse<CrmContactListItem> & {
   };
 };
 
+export const CRM_CONTACT_SEGMENTS = ["ALL", "TAGGED", "UNTAGGED"] as const;
+export type CrmContactSegment = (typeof CRM_CONTACT_SEGMENTS)[number];
+
+/** A compact, portable record intended for deduplication and CRM research. */
+export type CrmContactExport = {
+  id: string;
+  displayName: string;
+  telegramUsername: string | null;
+  tags: string[];
+  purchases: Array<{
+    title: string | null;
+    status: string;
+    currency: string;
+    createdAt: string;
+  }>;
+};
+
 export type CrmAnalyticsPoint = {
   date: string;
-  clients: number;
+  allClients: number;
+  taggedClients: number;
   untaggedClients: number;
   buyers: number;
   conversionRate: number;
 };
 
 export type CrmAnalyticsSummary = {
-  clients: number;
+  allClients: number;
+  taggedClients: number;
   untaggedClients: number;
   buyers: number;
   conversionRate: number;

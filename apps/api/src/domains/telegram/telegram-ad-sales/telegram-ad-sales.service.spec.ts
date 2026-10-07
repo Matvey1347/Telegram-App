@@ -1616,6 +1616,49 @@ describe('TelegramAdSalesService', () => {
     ).resolves.toBeDefined();
   });
 
+  it('reschedules the linked managed post when its schedule differs from the placement', async () => {
+    const { service, prisma, telegramChannelsService } = createService();
+    const next = new Date('2099-08-25T12:00:00.000Z');
+    const current = makePlacement({
+      // Older sales can have a reserved placement even though its managed post
+      // was scheduled. The managed post remains the source of truth here.
+      status: TelegramAdPlacementStatus.RESERVED,
+      managedPostId: 'managed-post-1',
+      managedPost: {
+        status: TelegramManagedPostStatus.SCHEDULED,
+        scheduledAt: new Date('2099-08-25T10:00:00.000Z'),
+      },
+      scheduledAt: next,
+    });
+    prisma.telegramAdSalePlacement.findFirst.mockResolvedValue(current);
+    prisma.telegramAdSalePlacement.update.mockResolvedValue(
+      makePlacement({
+        ...current,
+        scheduledAt: next,
+        scheduledManagedAt: next,
+      }),
+    );
+
+    await service.updatePlacement('user-1', 'sale-1', 'placement-1', {
+      scheduledAt: next.toISOString(),
+    });
+
+    expect(telegramChannelsService.scheduleManagedPost).toHaveBeenCalledWith(
+      'user-1',
+      'channel-1',
+      'managed-post-1',
+      { scheduledAt: next.toISOString() },
+    );
+    expect(prisma.telegramAdSalePlacement.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          scheduledAt: next,
+          scheduledManagedAt: next,
+        }),
+      }),
+    );
+  });
+
   it('projects exactly one notification for a fresh persisted MISSED transition', async () => {
     const { service, prisma, notificationProjector } = createService();
     const scheduled = makePlacement({

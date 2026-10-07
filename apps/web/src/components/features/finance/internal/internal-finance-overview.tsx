@@ -216,13 +216,20 @@ export function InternalFinanceOverview() {
         const ownershipChanged =
           previous && previous.assignedMemberId !== updated.assignedMemberId;
         const currencyChanged = previous && previous.currency !== updated.currency;
-        if (previous && !ownershipChanged && !currencyChanged) {
+        const openingInvestmentAdded =
+          Number((variables.value as AccountFormValues).initialBalance) > 0;
+        if (
+          previous &&
+          !ownershipChanged &&
+          !currencyChanged &&
+          !openingInvestmentAdded
+        ) {
           patchFinanceAccountCache(qc, updated);
           return;
         }
         await Promise.all([
           qc.invalidateQueries({ queryKey: accountKeys.accounts() }),
-          ...(Number((variables.value as AccountFormValues).initialBalance) > 0
+          ...(openingInvestmentAdded
             ? [qc.invalidateQueries({ queryKey: accountKeys.transactions() })]
             : []),
         ]);

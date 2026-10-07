@@ -154,4 +154,30 @@ describe("PublicationSlotOccurrenceSelect", () => {
 
     expect(screen.getByDisplayValue("10:10")).toBeInTheDocument();
   });
+
+  it("shows and saves a manual time in the supplied channel timezone", () => {
+    const onChange = vi.fn();
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <TestI18nProvider>
+          <PublicationSlotOccurrenceSelect
+            channelId="channel-1"
+            value={null}
+            scheduledAt="2026-10-07T16:00:00.000Z"
+            timezone="Europe/Kyiv"
+            onChange={onChange}
+          />
+        </TestI18nProvider>
+      </QueryClientProvider>,
+    );
+
+    expect(screen.getByDisplayValue("19:00")).toBeInTheDocument();
+    fireEvent.change(screen.getByDisplayValue("19:00"), {
+      target: { value: "20:00" },
+    });
+    expect(onChange).toHaveBeenLastCalledWith({
+      slotId: null,
+      scheduledAt: "2026-10-07T17:00:00.000Z",
+    });
+  });
 });

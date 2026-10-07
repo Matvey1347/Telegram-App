@@ -2,6 +2,7 @@
 
 import { useDeferredValue, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { Download } from "lucide-react";
 import {
   keepPreviousData,
   useMutation,
@@ -10,6 +11,7 @@ import {
 } from "@tanstack/react-query";
 import type {
   CrmContactListItem,
+  CrmContactSegment,
   CrmContactsListResult,
 } from "@telegram-system/shared";
 import {
@@ -18,6 +20,7 @@ import {
   Input,
   MasonryGrid,
   MultiSelect,
+  Select,
 } from "@/components/ui/primitives";
 import {
   Pagination,
@@ -69,6 +72,9 @@ export function CrmContactList({
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(12);
   const [tagIds, setTagIds] = useState<string[]>([]);
+  const [segment, setSegment] = useState<CrmContactSegment>("ALL");
+  const [exportError, setExportError] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
   const [localSelectedAction, setLocalSelectedAction] = useState<{
     contact: CrmContactListItem;
     action: CrmContactAction;
@@ -175,8 +181,9 @@ export function CrmContactList({
       search: deferredSearch || undefined,
       archived: false,
       tagIds: tagIds.length ? tagIds : undefined,
+      ...(segment === "ALL" ? {} : { segment }),
     }),
-    [deferredSearch, page, pageSize, tagIds],
+    [deferredSearch, page, pageSize, segment, tagIds],
   );
   const query = useQuery({
     queryKey: telegramCrmKeys.contactList(params),
@@ -203,7 +210,31 @@ export function CrmContactList({
   // Keep previous data for pagination, but make a tag-filter transition
   // explicit: old cards must not look like they match the newly chosen tag.
   const showContactsSkeleton =
-    query.isLoading || (tagIds.length > 0 && query.isFetching);
+    query.isLoading ||
+    ((tagIds.length > 0 || segment !== "ALL") && query.isFetching);
+  const downloadExport = async () => {
+    if (exporting) return;
+    setExporting(true);
+    setExportError(null);
+    try {
+      const contacts = await telegramCrmApi.exportContacts(segment);
+      const blob = new Blob([JSON.stringify(contacts, null, 2)], {
+        type: "application/json;charset=utf-8",
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `crm-clients-${segment.toLowerCase()}-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      setExportError("Could not export clients. Please try again.");
+    } finally {
+      setExporting(false);
+    }
+  };
   const replyMute = useMutation({
     mutationFn: ({ contactId, muted }: { contactId: string; muted: boolean }) =>
       telegramCrmApi.setReplyAlertMuted(contactId, { muted }),
@@ -257,11 +288,24 @@ export function CrmContactList({
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium text-neutral-300">
             {query.data
-              ? `${(query.data.counts?.tagged ?? query.data.pagination.totalItems)} tagged client${(query.data.counts?.tagged ?? query.data.pagination.totalItems) === 1 ? "" : "s"} · ${query.data.counts?.untagged ?? 0} without tags`
-              : "Clients by tags"}
+              ? `${(query.data.counts?.tagged ?? 0) + (query.data.counts?.untagged ?? 0)} all clients · ${query.data.counts?.tagged ?? 0} with tags · ${query.data.counts?.untagged ?? 0} without tags`
+              : "All clients, clients with tags, and clients without tags"}
           </p>
         </div>
         <div className="flex w-full shrink-0 flex-col gap-2 sm:flex-row lg:max-w-2xl">
+          <Select
+            value={segment}
+            onChange={(event) => {
+              setSegment(event.target.value as CrmContactSegment);
+              setPage(1);
+            }}
+            aria-label="Client segment"
+            className="min-w-44"
+          >
+            <option value="ALL">All clients</option>
+            <option value="TAGGED">With tags</option>
+            <option value="UNTAGGED">Without tags</option>
+          </Select>
           <MultiSelect
             value={tagIds}
             onChange={(value) => {
@@ -299,8 +343,19 @@ export function CrmContactList({
             aria-label="Search contacts"
             className="min-w-0 flex-1"
           />
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => void downloadExport()}
+            disabled={exporting}
+            aria-label="Export clients"
+          >
+            <Download size={15} />
+            {exporting ? "Exporting…" : "Export"}
+          </Button>
         </div>
       </div>
+      {exportError ? <p className="mb-3 text-sm text-rose-300">{exportError}</p> : null}
       {showContactsSkeleton ? <CrmContactsSkeleton count={pageSize} /> : null}
       {query.error ? (
         <div className="py-6 text-center">

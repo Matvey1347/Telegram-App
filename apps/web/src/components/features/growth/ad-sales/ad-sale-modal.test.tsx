@@ -593,7 +593,7 @@ describe("AdSaleModal", () => {
 
     fireEvent.click(screen.getAllByRole("button", { name: "10.08.2099" })[0]);
     fireEvent.click(screen.getAllByRole("button", { name: "11" })[0]);
-    fireEvent.click(screen.getAllByRole("button", { name: "12" })[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Add date" }));
 
     await waitFor(() =>
       expect(
@@ -604,6 +604,36 @@ describe("AdSaleModal", () => {
     expect(screen.getAllByText(/· 18:30 · 2\/48/)).toHaveLength(2);
     expect(screen.getByText(/expected value \(views × CPM\)/i)).toBeTruthy();
     expect(screen.queryByRole("button", { name: /Bulk sales/ })).toBeNull();
+  });
+
+  it("applies an existing shared post to a placement added later", async () => {
+    const onSubmit = vi.fn().mockResolvedValue({});
+    renderModal({
+      initialScheduledAt: "2099-08-10T12:00:00.000Z",
+      onSubmit,
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Create shared post" }));
+    fireEvent.change(screen.getByPlaceholderText(/Write your Telegram post/), {
+      target: { value: "One post for every placement" },
+    });
+    fireEvent.click(screen.getAllByRole("button", { name: "10.08.2099" })[0]);
+    fireEvent.click(screen.getAllByRole("button", { name: "11" })[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Add date" }));
+
+    await waitFor(() =>
+      expect(
+        screen.getAllByRole("button", { name: /Actions for Example channel/ }),
+      ).toHaveLength(2),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Create sale" }));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(
+      onSubmit.mock.calls[0][0].placements.map(
+        (placement: { managedPostDraft?: { text: string } }) =>
+          placement.managedPostDraft?.text,
+      ),
+    ).toEqual(["One post for every placement", "One post for every placement"]);
   });
 
   it("loads published posts on open and uses the selected post time", async () => {

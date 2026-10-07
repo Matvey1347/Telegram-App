@@ -33,6 +33,7 @@ import type {
   TelegramAdSaleCheckoutRequest,
   TelegramAdSaleCheckoutResponse,
   TelegramAdSaleCheckoutWorkflowResponse,
+  TelegramAdSaleDraft,
   TelegramAdCrmAdvertiserSortBy,
   TelegramAdCrmSortDirection,
   TelegramAdQuotePreviewBatchRequest,
@@ -278,6 +279,15 @@ export function createTelegramAdSalesApi({
       ).data,
     getSale: async (id: string) =>
       (await api.get<TelegramAdSale>(`/telegram-ad-sales/${id}`)).data,
+    listDrafts: async () =>
+      (await api.get<TelegramAdSaleDraft[]>("/telegram-ad-sales/drafts")).data,
+    createDraft: async (payload: { title?: string | null; payload: Record<string, unknown> }) =>
+      (await api.post<TelegramAdSaleDraft>("/telegram-ad-sales/drafts", payload)).data,
+    updateDraft: async (id: string, payload: { title?: string | null; payload: Record<string, unknown> }) =>
+      (await api.patch<TelegramAdSaleDraft>(`/telegram-ad-sales/drafts/${id}`, payload)).data,
+    deleteDraft: async (id: string) => {
+      await api.delete(`/telegram-ad-sales/drafts/${id}`);
+    },
     previewBotNotification: async (id: string) =>
       (await api.get<{ text: string }>(`/telegram-ad-sales/${id}/bot-notification-preview`)).data,
     sendToBot: async (id: string) =>

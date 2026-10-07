@@ -1,8 +1,34 @@
 import { render, screen, within } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
-import { TransferModal } from "./finance-overview-modals";
+import { AccountModal, TransferModal } from "./finance-overview-modals";
 
 describe("Finance overview modal layout", () => {
+  it("allows an opening investment to be added while editing an account", () => {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <AccountModal
+          open
+          initial={{
+            id: "account-1",
+            name: "Main account",
+            currency: "USD",
+            initialBalance: 0,
+            isActive: true,
+          }}
+          currencies={["USD"]}
+          onClose={vi.fn()}
+          onSubmit={vi.fn()}
+        />
+      </QueryClientProvider>,
+    );
+
+    expect(screen.getByText("Add opening investment")).toBeInTheDocument();
+    expect(
+      screen.getByText("Adds an auditable income transaction to this account."),
+    ).toBeInTheDocument();
+  });
+
   it("keeps each transfer account beside its amount in the compact modal", () => {
     render(
       <TransferModal
@@ -21,7 +47,7 @@ describe("Finance overview modal layout", () => {
       />,
     );
 
-    expect(screen.getByRole("dialog")).toHaveClass("max-w-[400px]");
+    expect(screen.getByRole("dialog")).toHaveClass("!max-w-[400px]");
     const fromRow = screen.getByTestId("transfer-from-row");
     const toRow = screen.getByTestId("transfer-to-row");
     expect(fromRow).toHaveClass("sm:grid-cols-[minmax(0,1fr)_160px]");

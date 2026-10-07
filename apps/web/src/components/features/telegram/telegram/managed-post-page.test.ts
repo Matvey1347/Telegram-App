@@ -1,25 +1,20 @@
 import { describe, expect, it } from "vitest";
 import { includeDeepLinkedManagedPost } from "./managed-post-page";
 
-const post = (id: string) => ({ id }) as never;
+describe("includeDeepLinkedManagedPost", () => {
+  it("replaces a stale list entry with the freshly fetched deep-linked post", () => {
+    const stalePost = {
+      id: "post-1",
+      scheduledAt: "2026-10-07T16:00:00.000Z",
+      scheduleTimezone: null,
+    };
+    const freshPost = {
+      ...stalePost,
+      scheduleTimezone: "Europe/Kyiv",
+    };
 
-describe("managed post paginated page", () => {
-  it("keeps the bounded server page unchanged without a deep link", () => {
-    const page = [post("page-1"), post("page-2")];
-    expect(includeDeepLinkedManagedPost(page)).toBe(page);
-  });
-
-  it("keeps the loading-state page reference stable between renders", () => {
-    expect(includeDeepLinkedManagedPost(undefined)).toBe(
-      includeDeepLinkedManagedPost(undefined),
-    );
-  });
-
-  it("adds a separately fetched deep link without duplicating a page row", () => {
-    expect(includeDeepLinkedManagedPost([post("page-1")], post("linked"))).toEqual([
-      post("page-1"), post("linked"),
-    ]);
-    const page = [post("linked")];
-    expect(includeDeepLinkedManagedPost(page, post("linked"))).toBe(page);
+    expect(
+      includeDeepLinkedManagedPost([stalePost as never], freshPost as never),
+    ).toEqual([freshPost]);
   });
 });

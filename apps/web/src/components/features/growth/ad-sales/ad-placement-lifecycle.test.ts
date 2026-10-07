@@ -129,6 +129,18 @@ describe("placementTimer", () => {
       } as never),
     ).toContain("22/08/2026");
   });
+
+  it("formats the completed placement window in the channel timezone", () => {
+    expect(
+      placementRunWindow({
+        scheduledAt: "2026-10-07T17:00:00.000Z",
+        publishedAt: "2026-10-07T17:00:00.000Z",
+        plannedDeleteAt: "2026-10-08T17:00:00.000Z",
+        deletedAt: null,
+        timezone: "Europe/Warsaw",
+      } as never),
+    ).toContain("07/10/2026, 19:00");
+  });
 });
 
 describe("placementFormatLabel", () => {

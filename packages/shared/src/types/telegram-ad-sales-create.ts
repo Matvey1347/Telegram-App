@@ -67,6 +67,16 @@ export type TelegramAdSaleCheckoutRequest = {
 
 export type TelegramAdSaleCheckoutResponse = TelegramAdSale;
 
+export type TelegramAdSaleDraft = {
+  id: string;
+  workspaceId: string;
+  createdByUserId: string;
+  title: string | null;
+  payload: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type TelegramAdSaleCheckoutWorkflowFailure = {
   placementId: string;
   channelId: string;

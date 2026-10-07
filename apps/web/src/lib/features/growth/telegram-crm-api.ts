@@ -7,6 +7,8 @@ import type {
   CrmContactDetail,
   CrmContactMergeResult,
   CrmContactsListResult,
+  CrmContactExport,
+  CrmContactSegment,
   CrmContactStage,
   CrmTagSummary,
   CrmConversationListItem,
@@ -41,6 +43,7 @@ export type CrmContactsParams = {
   dueTo?: string;
   archived?: boolean;
   tagIds?: string[];
+  segment?: CrmContactSegment;
 };
 
 export type CrmInboxParams = {
@@ -101,6 +104,12 @@ export const telegramCrmApi = {
         // `tagIds[]=value`, which validation correctly rejects as unknown.
         paramsSerializer: { indexes: null },
         signal,
+      })
+    ).data,
+  exportContacts: async (segment: CrmContactSegment) =>
+    (
+      await api.get<CrmContactExport[]>("/telegram-crm/contact-export", {
+        params: { segment },
       })
     ).data,
   listTags: async (signal?: AbortSignal) =>

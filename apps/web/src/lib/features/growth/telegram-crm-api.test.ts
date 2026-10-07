@@ -18,4 +18,14 @@ describe("telegramCrmApi", () => {
       signal: undefined,
     });
   });
+
+  it("uses a non-ambiguous endpoint for the full client export", async () => {
+    get.mockResolvedValue({ data: [] });
+
+    await telegramCrmApi.exportContacts("TAGGED");
+
+    expect(get).toHaveBeenCalledWith("/telegram-crm/contact-export", {
+      params: { segment: "TAGGED" },
+    });
+  });
 });

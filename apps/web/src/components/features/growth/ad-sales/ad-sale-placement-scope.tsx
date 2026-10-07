@@ -1,8 +1,9 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { Plus } from "lucide-react";
 import type { TelegramChannel, TelegramChannelNetwork } from "@/lib/api";
-import { DateRangeInput, Select, TimeInput } from "@/components/ui/primitives";
+import { DateInput, Select, TimeInput } from "@/components/ui/primitives";
 import {
   TelegramChannelScopeModeToggle,
   TelegramChannelScopeSelector,
@@ -32,7 +33,8 @@ export function AdSalePlacementScope({
   mode,
   selectedNetworkId,
   selectedChannelIds,
-  dateRange,
+  dateToAdd,
+  placementDates,
   commonTime,
   commonFormatName,
   commonFormats,
@@ -43,14 +45,17 @@ export function AdSalePlacementScope({
   onModeChange,
   onNetworkChange,
   onChannelsChange,
-  onDateRangeChange,
+  onDateToAddChange,
+  onAddDate,
+  onRemoveDate,
   onCommonTimeChange,
   onCommonFormatChange,
 }: {
   mode: AdSaleScopeMode;
   selectedNetworkId: string;
   selectedChannelIds: string[];
-  dateRange: { from: string; to: string };
+  dateToAdd: string;
+  placementDates: string[];
   commonTime: string;
   commonFormatName: string;
   commonFormats: Array<{ id: string; name: string }>;
@@ -61,13 +66,15 @@ export function AdSalePlacementScope({
   onModeChange: (mode: AdSaleScopeMode) => void;
   onNetworkChange: (networkId: string) => void;
   onChannelsChange: (channelIds: string[]) => void;
-  onDateRangeChange: (range: { from: string; to: string }) => void;
+  onDateToAddChange: (date: string) => void;
+  onAddDate: () => void;
+  onRemoveDate: (date: string) => void;
   onCommonTimeChange: (time: string) => void;
   onCommonFormatChange: (formatName: string) => void;
 }) {
   return (
     <section className="space-y-3">
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(260px,1.4fr)_minmax(220px,1fr)_160px_minmax(190px,0.8fr)] xl:items-start">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(260px,1fr)_minmax(360px,1.6fr)_160px_minmax(190px,0.8fr)] xl:items-start">
         <TelegramChannelScopeSelector
           mode={mode}
           selectedNetworkId={selectedNetworkId}
@@ -80,15 +87,44 @@ export function AdSalePlacementScope({
           label="Placement source"
         />
         <div className="space-y-1">
-          <div className="flex h-7 items-center text-sm text-neutral-300">
+          <label className="flex h-7 items-center text-sm text-neutral-300" htmlFor="ad-sale-date-to-add">
             Placement dates
+          </label>
+          <div className="flex gap-2">
+            <div className="min-w-0 flex-1">
+              <DateInput
+                id="ad-sale-date-to-add"
+                value={dateToAdd}
+                onChange={(event) => onDateToAddChange(event.target.value)}
+                className="h-[42px] min-h-0 w-full"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={onAddDate}
+              disabled={!dateToAdd || placementDates.includes(dateToAdd)}
+              aria-label="Add date"
+              title="Add date"
+              className="inline-flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-lg border border-neutral-700 bg-neutral-900 text-neutral-100 hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Plus size={17} />
+            </button>
           </div>
-          <DateRangeInput
-            from={dateRange.from}
-            to={dateRange.to}
-            onChange={onDateRangeChange}
-            className="w-full [&>button]:h-[42px]"
-          />
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {placementDates.map((date) => (
+              <span key={date} className="inline-flex items-center gap-1 rounded-md border border-blue-800/70 bg-blue-950/30 px-2 py-1 text-xs text-blue-100">
+                {date}
+                <button
+                  type="button"
+                  aria-label={`Remove ${date}`}
+                  onClick={() => onRemoveDate(date)}
+                  className="text-blue-300 hover:text-white"
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
         </div>
         <div className="min-w-0 space-y-2">
           <label className="block space-y-1">
@@ -103,14 +139,14 @@ export function AdSalePlacementScope({
           </label>
           <CommonAdSlotOptions
             channelIds={effectiveChannelIds}
-            date={dateRange.from}
+            date={placementDates[0] ?? ""}
             selectedTime={commonTime}
             onSelect={onCommonTimeChange}
           />
-          {dateRange.from && dateRange.to && dateRange.from !== dateRange.to ? (
+          {placementDates.length > 1 ? (
             <p className="text-xs text-neutral-500">
-              Status reflects the first date. The selected time applies to every
-              placement date.
+              Status reflects the first selected date. You can change each
+              placement after adding the dates.
             </p>
           ) : null}
         </div>

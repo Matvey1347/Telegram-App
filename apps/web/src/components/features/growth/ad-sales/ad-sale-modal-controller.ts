@@ -8,7 +8,6 @@ import {
   zonedDateTimeToUtc,
   isValidZonedDateTimeInput,
 } from "@/lib/features/growth/telegram-ad-sales";
-import { expandAdSaleDateRange } from "@/lib/features/growth/ad-sales-bulk-date-builder";
 import { hasPlacementPostContent } from "./placement-post/placement-post-content";
 // prettier-ignore
 import type { QuoteRequestDraft, SalePlacementDraft } from "./ad-sale-types";
@@ -26,6 +25,8 @@ import {
 import { useAdSaleNetworkPricing } from "./ad-sale-network-pricing";
 import { isValidTelegramUsernameInput } from "./ad-sale-client-field";
 import { useAdSalePlacementLoaders } from "./use-ad-sale-placement-loaders";
+import { renderAdSaleInviteLink } from "./ad-sale-invite-template";
+import { promoContainsInviteToken } from "../ad-campaigns/promo-invite-template";
 function channelKey(channelId: string, date: string) {
   return `placement:${channelId}:${date}`;
 }
@@ -64,10 +65,13 @@ export function useAdSaleModalController(options: AdSaleModalProps) {
     accountId, setAccountId, accountManuallySelectedRef,
     channelSelectionMode, setChannelSelectionMode, selectedNetworkId, setSelectedNetworkId,
     selectedChannelIds, setSelectedChannelIds, placementDateRange, setPlacementDateRange,
+    placementDates, setPlacementDates,
     submissionError, setSubmissionError,
     pendingDrafts, publishedPostsByPlacement,
     setPublishedPostsByPlacement, postsLoadingByPlacement, setPostsLoadingByPlacement,
     clearCurrentDraft,
+    currentDraft,
+    restoreDraft,
     continueDraft, deleteDraft, createNewDraft,
   } = useAdSaleModalSession(options, {
     postMode,
@@ -133,8 +137,8 @@ export function useAdSaleModalController(options: AdSaleModalProps) {
     ],
   );
   const selectedPlacementDates = useMemo(
-    () => expandAdSaleDateRange(placementDateRange),
-    [placementDateRange],
+    () => [...new Set(placementDates.filter(Boolean))].sort(),
+    [placementDates],
   );
   const commonTime =
     placements.length &&
@@ -187,6 +191,16 @@ export function useAdSaleModalController(options: AdSaleModalProps) {
         current.length && current.every((item) => item.time === current[0].time)
           ? current[0].time
           : "12:00";
+      const sharedDraft =
+        postMode === "shared"
+          ? current.find((placement) => placement.managedPostDraft)
+              ?.managedPostDraft
+          : null;
+      const sharedInviteLink =
+        postMode === "shared"
+          ? (current.find((placement) => placement.inviteLinkUrl?.trim())
+              ?.inviteLinkUrl ?? "")
+          : "";
       return effectiveChannelIds.flatMap((channelId) =>
         selectedPlacementDates.map((date) => {
           const key = channelKey(channelId, date);
@@ -218,6 +232,12 @@ export function useAdSaleModalController(options: AdSaleModalProps) {
             date,
             time: inheritedTime,
             timezone: workspaceTimezone,
+            ...(sharedDraft
+              ? {
+                  managedPostDraft: sharedDraft,
+                  inviteLinkUrl: sharedInviteLink,
+                }
+              : {}),
           });
         }),
       );
@@ -227,6 +247,7 @@ export function useAdSaleModalController(options: AdSaleModalProps) {
     productsByChannelId,
     selectedPlacementDates,
     setPlacements,
+    postMode,
     workspaceTimezone,
   ]);
 
@@ -270,6 +291,12 @@ export function useAdSaleModalController(options: AdSaleModalProps) {
     placements.length > 0 &&
     placements.every((placement) =>
       isValidZonedDateTimeInput(placement.date, placement.time),
+    ) &&
+    placements.every(
+      (placement) =>
+        !placement.managedPostDraft ||
+        !promoContainsInviteToken(placement.managedPostDraft) ||
+        Boolean(placement.inviteLinkUrl?.trim()),
     ) &&
     (Boolean(selectedAdvertiserId) ||
       !advertiserContact.trim() ||
@@ -323,8 +350,12 @@ export function useAdSaleModalController(options: AdSaleModalProps) {
           manualPriceReason: placement.manualPriceReason.trim() || undefined,
           telegramPostId: placement.telegramPostId ?? null,
           managedPostDraft: hasPlacementPostContent(placement.managedPostDraft)
-            ? placement.managedPostDraft
+            ? renderAdSaleInviteLink(
+                placement.managedPostDraft!,
+                placement.inviteLinkUrl ?? "",
+              )
             : null,
+          inviteLinkUrl: placement.inviteLinkUrl?.trim() || undefined,
         })),
       });
       if (result.conflicts?.length) {
@@ -351,14 +382,16 @@ export function useAdSaleModalController(options: AdSaleModalProps) {
         setSubmissionError(
           "Some placements conflict with existing reservations.",
         );
-        return;
+        return false;
       }
       clearCurrentDraft();
       onClose();
+      return true;
     } catch (error) {
       setSubmissionError(
         error instanceof Error ? error.message : "Could not create sale",
       );
+      return false;
     }
   }
 
@@ -377,12 +410,13 @@ export function useAdSaleModalController(options: AdSaleModalProps) {
     accountId, setAccountId, accountManuallySelectedRef,
     channelSelectionMode, setChannelSelectionMode, selectedNetworkId, setSelectedNetworkId,
     selectedChannelIds, setSelectedChannelIds, placementDateRange, setPlacementDateRange,
+    placementDates, setPlacementDates,
     postMode, setPostMode, placements, setPlacements, submissionError, pendingDrafts,
     publishedPostsByPlacement, postsLoadingByPlacement, paymentAmount, networkPricing,
     quotePreview,
     effectiveChannelIds, paymentCurrency, commonTime, commonFormats, commonFormatName,
     productsByChannelId,
     loadPublishedPosts, canSubmit, submit, sharedPostActive, continueDraft, deleteDraft,
-    createNewDraft,
+    createNewDraft, currentDraft, restoreDraft,
   };
 }

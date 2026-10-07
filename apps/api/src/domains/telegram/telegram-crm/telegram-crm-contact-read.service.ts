@@ -130,6 +130,7 @@ export class TelegramCrmContactReadService {
         ...query,
         search: undefined,
         tagIds: undefined,
+        segment: undefined,
       },
       importTagIds,
     );
@@ -321,7 +322,10 @@ export class TelegramCrmContactReadService {
       `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}`;
     const points = months.map((month) => {
       const end = new Date(month.getFullYear(), month.getMonth() + 1, 1);
-      const clients = taggedContacts.filter(
+      const taggedClients = taggedContacts.filter(
+        (contact) => contact.createdAt < end,
+      ).length;
+      const allClients = contacts.filter(
         (contact) => contact.createdAt < end,
       ).length;
       const untaggedClients = contacts.filter(
@@ -332,21 +336,23 @@ export class TelegramCrmContactReadService {
       ).length;
       return {
         date: monthKey(month),
-        clients,
+        allClients,
+        taggedClients,
         untaggedClients,
         buyers,
-        conversionRate: clients
-          ? Math.round((buyers / clients) * 1000) / 10
+        conversionRate: allClients
+          ? Math.round((buyers / allClients) * 1000) / 10
           : 0,
       };
     });
     const buyers = firstPaymentByContact.size;
     return {
-      clients: taggedContacts.length,
+      allClients: contacts.length,
+      taggedClients: taggedContacts.length,
       untaggedClients: contacts.length - taggedContacts.length,
       buyers,
-      conversionRate: taggedContacts.length
-        ? Math.round((buyers / taggedContacts.length) * 1000) / 10
+      conversionRate: contacts.length
+        ? Math.round((buyers / contacts.length) * 1000) / 10
         : 0,
       averagePaidOrderValue: paidSaleIds.size
         ? revenue.div(paidSaleIds.size).toFixed(2)
@@ -508,6 +514,8 @@ export class TelegramCrmContactReadService {
       ...(query.tagIds?.length
         ? { tags: { some: { tagId: { in: query.tagIds } } } }
         : {}),
+      ...(query.segment === 'TAGGED' ? { tags: { some: {} } } : {}),
+      ...(query.segment === 'UNTAGGED' ? { tags: { none: {} } } : {}),
     };
   }
 

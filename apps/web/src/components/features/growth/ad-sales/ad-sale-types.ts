@@ -22,6 +22,7 @@ export type SalePlacementDraft = {
   inventoryOpportunityKey?: string | null;
   telegramPostId?: string | null;
   managedPostDraft?: PlacementManagedPostDraft | null;
+  inviteLinkUrl?: string;
 };
 
 export type PublishedPostOption = {

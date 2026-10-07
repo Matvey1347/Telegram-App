@@ -22,5 +22,9 @@ export function useManagedPostDeepLink({
       return post;
     },
     enabled: Boolean(postId),
+    // The editor must never reopen a cached schedule: an ad-sale placement can
+    // reschedule this post from a different screen immediately before navigation.
+    staleTime: 0,
+    refetchOnMount: "always",
   });
 }

@@ -39,6 +39,7 @@ import type { RegisterPaymentPayload } from "./register-payment-form";
 import { DealFinanceTransaction } from "./deal-finance-transaction";
 import { DealFinanceTransactionDeleteModal } from "./deal-finance-transaction-delete-modal";
 import { nativeAdSalePayment } from "./ad-sale-native-payment";
+import { formatCompactMoney } from "@/lib/features/finance/money";
 import type { PlacementManagedPostDraft } from "./placement-post/placement-post-composer";
 import {
   PlacementDeletionCountdown,
@@ -211,16 +212,20 @@ export function SaleDetailsModal(props: {
       items.map((p) => (p.id === id ? { ...p, ...patch } : p)),
     );
 
-  const save = async () => {
+  const save = async (placementId?: string) => {
+    const placementsToSave = placementId
+      ? placements.filter((placement) => placement.id === placementId)
+      : [];
+    const paymentsToSave =
+      placementId && !(priceChanged && syncPayment) ? [] : payments;
     setSaving(true);
     setError("");
-    props.onClose();
     try {
       await props.onSave(sale, {
         origin,
         assignedMemberId: memberId || null,
         buyerContact: buyerContact.trim(),
-        placements: placements.map((p) => ({
+        placements: placementsToSave.map((p) => ({
           id: p.id,
           scheduledAt: zonedDateTimeToUtc(
             p.date,
@@ -236,7 +241,7 @@ export function SaleDetailsModal(props: {
           telegramAdProductId: p.telegramAdProductId || null,
           managedPostId: p.managedPostId || null,
         })),
-        payments: payments.map((p, index) => {
+        payments: paymentsToSave.map((p, index) => {
           const amount =
             priceChanged && syncPayment && index === 0
               ? total
@@ -256,6 +261,7 @@ export function SaleDetailsModal(props: {
           };
         }),
       });
+      props.onClose();
     } catch (cause) {
       setError(
         cause instanceof Error ? cause.message : "Could not save changes.",
@@ -331,7 +337,6 @@ export function SaleDetailsModal(props: {
           syncPayment={syncPayment}
           onSync={setSyncPayment}
           onChange={changePlacement}
-          onAction={(action) => props.onAction(sale, action, placement)}
           onAttachPost={(post) =>
             props.onAttachPost
               ? props.onAttachPost(sale, placement, post)
@@ -340,7 +345,7 @@ export function SaleDetailsModal(props: {
           onLoadPosts={() =>
             props.onLoadPlacementPosts?.(placement) ?? Promise.resolve([])
           }
-          onSave={save}
+          onSave={() => save(placement.id)}
           saving={saving}
           error={error}
         />
@@ -567,8 +572,10 @@ function DealOverview(props: {
               Deal value
             </span>
             <span className="mt-0.5 block text-sm font-medium text-neutral-300">
-              {dealValue?.amount ?? 0}{" "}
-              {dealValue?.currency ?? props.sale.settlementCurrency}
+              {formatCompactMoney(
+                dealValue?.amount ?? 0,
+                dealValue?.currency ?? props.sale.settlementCurrency,
+              )}
             </span>
             <AdSalePostMetrics className="mt-1 justify-end" sale={props.sale} />
           </div>
@@ -601,7 +608,7 @@ function DealOverview(props: {
                   <p className="mt-1 flex items-center gap-1.5 text-xs text-neutral-500">
                     <CalendarDays size={13} />
                     {placementRunWindow(p) ??
-                      `Scheduled ${formatDateTime(p.scheduledAt)}`}
+                      `Scheduled ${formatDateTime(p.scheduledAt, undefined, p.timezone)}`}
                   </p>
                   <PlacementDeletionCountdown placement={p} now={now} />
                   {placementFormatLabel(p) ? (
@@ -761,7 +768,7 @@ function PlacementValue({
       .reduce((sum, allocation) => sum + allocation.amount, 0);
     return (
       <span className="shrink-0 font-semibold text-white">
-        {amount} {currency}
+        {formatCompactMoney(amount, currency)}
       </span>
     );
   }
@@ -781,13 +788,13 @@ function PlacementValue({
       100;
     return (
       <span className="shrink-0 font-semibold text-white">
-        {amount} {paid.currency}
+        {formatCompactMoney(amount, paid.currency)}
       </span>
     );
   }
   return (
     <span className="shrink-0 font-semibold text-white">
-      {placement.agreedPrice} {placement.currency}
+      {formatCompactMoney(placement.agreedPrice, placement.currency)}
     </span>
   );
 }

@@ -484,6 +484,11 @@ export class CreateTelegramAdSaleDto {
   @IsOptional() @IsString() sourceAdvertiserActivityId?: string | null;
 }
 
+export class SaveTelegramAdSaleDraftDto {
+  @IsOptional() @IsString() @MaxLength(160) title?: string | null;
+  @IsObject() payload!: Record<string, unknown>;
+}
+
 export class UpdateTelegramAdSaleDto {
   @IsOptional() @IsString() advertiserId?: string | null;
   @IsOptional() @IsString() advertiserName?: string;

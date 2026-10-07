@@ -1,5 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import { TelegramManagedPostStatus, type Prisma } from '@prisma/client';
+import {
+  TelegramAdPlacementStatus,
+  TelegramManagedPostStatus,
+  type Prisma,
+} from '@prisma/client';
 import {
   createPaginatedResponse,
   normalizePagination,
@@ -93,6 +97,11 @@ export class TelegramManagedPostQueryService {
         sidebarPosition: true,
       },
     },
+    adSalePlacements: {
+      where: { status: TelegramAdPlacementStatus.SCHEDULED },
+      select: { timezone: true },
+      take: 1,
+    },
   } as const;
 
   private statuses(query: TelegramManagedPostsQueryDto) {
@@ -161,9 +170,13 @@ export class TelegramManagedPostQueryService {
       telegramPosts.map((post) => [post.telegramMessageId, post]),
     );
     return posts.map((post) => {
+      const { adSalePlacements, ...managedPost } = post as ManagedPostReadRow & {
+        adSalePlacements?: Array<{ timezone: string }>;
+      };
       const linkedMessageIds = this.linkedMessageIds(post);
       return {
-        ...post,
+        ...managedPost,
+        scheduleTimezone: adSalePlacements?.[0]?.timezone ?? null,
         readOnlyTelegramPost: false,
         primaryTelegramMessageUrl:
           post.telegramMessageUrls[0] ??

@@ -705,6 +705,9 @@ export class TelegramAdSalesService {
         workspaceId,
         telegramAdSaleId: saleId,
       },
+      include: {
+        managedPost: { select: { status: true, scheduledAt: true } },
+      },
     });
     if (!placement)
       throw new NotFoundException('Telegram ad sale placement not found');
@@ -4032,11 +4035,34 @@ export class TelegramAdSalesService {
           'manualPriceReason is required when agreedPrice is below minimumPrice',
       });
     }
+    const managedPostScheduleIsOutOfSync =
+      placement.managedPost?.status === TelegramManagedPostStatus.SCHEDULED &&
+      placement.managedPost.scheduledAt?.getTime() !== nextScheduledAt.getTime();
+    const reschedulesManagedPost =
+      dto.scheduledAt !== undefined &&
+      (nextScheduledAt.getTime() !== placement.scheduledAt.getTime() ||
+        managedPostScheduleIsOutOfSync) &&
+      (placement.status === TelegramAdPlacementStatus.SCHEDULED ||
+        placement.managedPost?.status === TelegramManagedPostStatus.SCHEDULED) &&
+      Boolean(placement.managedPostId);
+    if (reschedulesManagedPost) {
+      await this.telegramManagedPostPublicationService.scheduleManagedPost(
+        userId,
+        placement.telegramChannelId,
+        placement.managedPostId!,
+        { scheduledAt: nextScheduledAt.toISOString() },
+      );
+    }
     const data: Prisma.TelegramAdSalePlacementUpdateInput = {
       ...(freshMissed ? { status: TelegramAdPlacementStatus.MISSED } : {}),
       ...(dto.scheduledAt === undefined
         ? {}
-        : { scheduledAt: new Date(dto.scheduledAt) }),
+        : {
+            scheduledAt: new Date(dto.scheduledAt),
+            ...(reschedulesManagedPost
+              ? { scheduledManagedAt: nextScheduledAt }
+              : {}),
+          }),
       ...(dto.telegramAdProductId === undefined
         ? {}
         : {

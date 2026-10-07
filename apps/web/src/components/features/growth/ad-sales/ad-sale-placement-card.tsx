@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type Dispatch, type SetStateAction } from "react";
-import { FilePenLine, MoreHorizontal, Settings2 } from "lucide-react";
+import { FilePenLine, Link2, MoreHorizontal, Settings2 } from "lucide-react";
 import type { TelegramAdProduct } from "@telegram-system/shared";
 import type { TelegramChannel } from "@/lib/api";
 import {
@@ -22,6 +22,12 @@ import {
 import { applyProductToPlacement } from "./ad-sale-placement-draft";
 import type { PublishedPostOption, SalePlacementDraft } from "./ad-sale-types";
 import { PlacementPostComposer } from "./placement-post/placement-post-composer";
+import {
+  promoContainsInviteToken,
+  replacePromoTelegramLinksWithToken,
+} from "../ad-campaigns/promo-invite-template";
+import type { PlacementManagedPostDraft } from "./placement-post/placement-post-composer";
+import { renderAdSaleInviteLink } from "./ad-sale-invite-template";
 
 export function AdSalePlacementCard({
   placement,
@@ -68,6 +74,17 @@ export function AdSalePlacementCard({
       placement.timezone,
     ).getTime() < renderedAt;
   const showPostComposer = isPastPlacement || postOpen;
+  // The shared editor keeps a placeholder so one source post can serve every
+  // channel. A placement preview must instead show the link it will publish.
+  const placementPostPreview =
+    placement.managedPostDraft &&
+    promoContainsInviteToken(placement.managedPostDraft) &&
+    placement.inviteLinkUrl?.trim()
+      ? renderAdSaleInviteLink(
+          placement.managedPostDraft,
+          placement.inviteLinkUrl,
+        )
+      : placement.managedPostDraft;
   const update = (next: (item: SalePlacementDraft) => SalePlacementDraft) =>
     setPlacements((current) =>
       current.map((item) => (item.key === placement.key ? next(item) : item)),
@@ -207,7 +224,7 @@ export function AdSalePlacementCard({
           <PlacementPostComposer
             channelTitle={channel?.title ?? "Channel"}
             channelPhotoUrl={channel?.photoUrl}
-            draft={placement.managedPostDraft}
+            draft={placementPostPreview}
             existingPostId={placement.telegramPostId}
             publishedPosts={publishedPosts.map((post) => ({
               ...post,
@@ -221,7 +238,15 @@ export function AdSalePlacementCard({
             onChange={({ draft, telegramPostId, publishedAt }) =>
               update((item) => ({
                 ...item,
-                managedPostDraft: draft ?? null,
+                // Keep the shared template reusable after editing a rendered
+                // preview; the per-channel link remains a placement setting.
+                managedPostDraft:
+                  draft && sharedPostActive
+                    ? ({
+                        ...draft,
+                        ...replacePromoTelegramLinksWithToken(draft),
+                      } as PlacementManagedPostDraft)
+                    : (draft ?? null),
                 telegramPostId: telegramPostId ?? null,
                 time: publishedAt
                   ? channelLocalTime(publishedAt, item.timezone)
@@ -229,6 +254,37 @@ export function AdSalePlacementCard({
               }))
             }
           />
+          {placement.managedPostDraft &&
+          promoContainsInviteToken(placement.managedPostDraft) ? (
+            <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+              <FormField label="Invite link for this channel">
+                <Input
+                  value={placement.inviteLinkUrl ?? ""}
+                  onChange={(event) =>
+                    update((item) => ({
+                      ...item,
+                      inviteLinkUrl: event.target.value,
+                    }))
+                  }
+                  placeholder="https://t.me/+unique-invite"
+                />
+              </FormField>
+              <button
+                type="button"
+                onClick={() =>
+                  update((item) => ({
+                    ...item,
+                    managedPostDraft: item.managedPostDraft
+                      ? ({ ...item.managedPostDraft, ...replacePromoTelegramLinksWithToken(item.managedPostDraft) } as PlacementManagedPostDraft)
+                      : item.managedPostDraft,
+                  }))
+                }
+                className="inline-flex h-10 items-center justify-center gap-1 rounded-lg border border-neutral-700 bg-neutral-900 px-3 text-xs font-medium text-neutral-100 hover:bg-neutral-800"
+              >
+                <Link2 size={14} /> Replace links
+              </button>
+            </div>
+          ) : null}
         </div>
       ) : null}
 

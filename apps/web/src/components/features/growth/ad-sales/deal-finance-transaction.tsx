@@ -4,6 +4,7 @@ import type { TelegramAdSale } from "@telegram-system/shared";
 import { CreditCard, Trash2 } from "lucide-react";
 import { Button, IconButton } from "@/components/ui/primitives";
 import type { Account } from "@/lib/api";
+import { formatCompactMoney } from "@/lib/features/finance/money";
 import {
   PaymentEditor,
   type PaymentDraft,
@@ -33,7 +34,7 @@ export function DealFinanceTransaction({
   onDeletePayment?: (id: string) => void;
 }) {
   const linkedPaymentLabel = payments.length
-    ? `${payments.map((payment) => `${payment.amount} ${payment.currency}`).join(" · ")} linked`
+    ? `${payments.map((payment) => formatCompactMoney(payment.amount, payment.currency)).join(" · ")} linked`
     : "No finance transaction linked";
   return (
     <section className="rounded-xl border border-neutral-800 bg-neutral-950/45 p-4">

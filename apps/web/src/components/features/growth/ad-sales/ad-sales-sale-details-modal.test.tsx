@@ -87,6 +87,7 @@ describe("SaleDetailsModal", () => {
     expect(
       screen.getByText("Format 2/48 · Auto-delete after 48h"),
     ).toBeTruthy();
+    expect(screen.getByText("Scheduled 25/08/2026, 18:00")).toBeTruthy();
     expect(
       screen.getByRole("button", { name: "Edit transaction" }),
     ).toBeTruthy();
@@ -122,6 +123,91 @@ describe("SaleDetailsModal", () => {
     expect(
       screen.getByRole("link", { name: /Open in Telegram/ }),
     ).toHaveAttribute("href", "https://t.me/example/42");
+  });
+
+  it("keeps placement publication actions out of the editor", async () => {
+    const user = userEvent.setup();
+    const scheduledSale = JSON.parse(JSON.stringify(sale)) as {
+      status: string;
+      placements: Array<{ status: string }>;
+    };
+    scheduledSale.status = "SCHEDULED";
+    scheduledSale.placements.forEach((placement) => {
+      placement.status = "SCHEDULED";
+    });
+
+    render(
+      <SaleDetailsModal
+        open
+        onClose={vi.fn()}
+        sale={scheduledSale as never}
+        accounts={[]}
+        channels={[{ id: "channel-1", title: "Psychology" } as never]}
+        productsByChannelId={{}}
+        settings={undefined}
+        rates={undefined}
+        onSave={vi.fn()}
+        onAction={vi.fn()}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "Edit placement Psychology" }),
+    );
+
+    expect(screen.queryByRole("button", { name: "Publish" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Reschedule" })).toBeNull();
+  });
+
+  it("saves only the placement being edited", async () => {
+    const user = userEvent.setup();
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    const sourceSale = sale as unknown as Record<string, unknown> & {
+      placements: Array<Record<string, unknown>>;
+    };
+    const saleWithTwoPlacements = {
+      ...sourceSale,
+      placements: [
+        sourceSale.placements[0],
+        {
+          ...sourceSale.placements[0],
+          id: "placement-2",
+          telegramChannelId: "channel-2",
+        },
+      ],
+    } as never;
+
+    render(
+      <SaleDetailsModal
+        open
+        onClose={vi.fn()}
+        sale={saleWithTwoPlacements}
+        accounts={[]}
+        channels={[
+          { id: "channel-1", title: "Psychology" } as never,
+          { id: "channel-2", title: "Psychology 2" } as never,
+        ]}
+        productsByChannelId={{}}
+        settings={undefined}
+        rates={undefined}
+        onSave={onSave}
+        onAction={vi.fn()}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "Edit placement Psychology" }),
+    );
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() =>
+      expect(onSave).toHaveBeenCalledWith(
+        saleWithTwoPlacements,
+        expect.objectContaining({
+          placements: [expect.objectContaining({ id: "placement-1" })],
+        }),
+      ),
+    );
   });
 
   it("confirms removal of a linked finance transaction so it can be registered later", async () => {

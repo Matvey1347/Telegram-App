@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { CurrencyConversionService } from '../../../common/currency-conversion.service';
 import {
@@ -375,27 +375,113 @@ export class AccountsService {
     }
 
     const { initialBalance: _initialBalance, ...accountChanges } = dto;
-    const updated = await this.prisma.account.update({
-      where: { id },
-      data: {
-        ...accountChanges,
-        currency: dto.currency?.toUpperCase(),
-        iconId: dto.iconId === undefined ? undefined : dto.iconId,
-        assignedMemberId,
-      },
-      include: {
-        icon: {
-          select: {
-            id: true,
-            type: true,
-            name: true,
-            emoji: true,
-            imageUrl: true,
-          },
+    const initialBalance = dto.initialBalance ?? 0;
+    const finalCurrency = dto.currency?.toUpperCase() ?? account.currency;
+    const finalAssignedMemberId =
+      assignedMemberId === undefined ? account.assignedMemberId : assignedMemberId;
+    if (initialBalance > 0 && !finalAssignedMemberId) {
+      throw new BadRequestException(
+        'Assign a member before adding an opening investment',
+      );
+    }
+    const [workspace, investmentCategory] = initialBalance > 0
+      ? await Promise.all([
+          this.prisma.workspace.findUniqueOrThrow({
+            where: { id: workspaceId },
+            select: { primaryCurrency: true },
+          }),
+          this.financeCategoriesService
+            .ensureSystemCategories(workspaceId)
+            .then(() =>
+              this.prisma.transactionCategory.findUniqueOrThrow({
+                where: {
+                  workspaceId_type_key: {
+                    workspaceId,
+                    type: 'income',
+                    key: 'investment',
+                  },
+                },
+                select: { id: true, name: true },
+              }),
+            ),
+        ])
+      : [null, null];
+    const exchangeRateToPrimary =
+      initialBalance <= 0 || finalCurrency === workspace?.primaryCurrency
+        ? 1
+        : await this.conversionService.getRate(
+            finalCurrency,
+            workspace!.primaryCurrency,
+            workspaceId,
+          );
+    if (initialBalance > 0 && exchangeRateToPrimary == null) {
+      throw new NotFoundException(
+        `No exchange rate from ${finalCurrency} to ${workspace!.primaryCurrency}`,
+      );
+    }
+    const resolvedExchangeRateToPrimary = exchangeRateToPrimary ?? 1;
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const next = await tx.account.update({
+        where: { id },
+        data: {
+          ...accountChanges,
+          currency: dto.currency?.toUpperCase(),
+          iconId: dto.iconId === undefined ? undefined : dto.iconId,
+          assignedMemberId,
         },
-        assignedMember: WorkspaceService.assignedMemberInclude,
-        createdByUser: WorkspaceService.createdByUserInclude,
-      },
+        include: {
+          icon: {
+            select: {
+              id: true,
+              type: true,
+              name: true,
+              emoji: true,
+              imageUrl: true,
+            },
+          },
+          assignedMember: WorkspaceService.assignedMemberInclude,
+          createdByUser: WorkspaceService.createdByUserInclude,
+        },
+      });
+      if (initialBalance > 0 && investmentCategory && finalAssignedMemberId) {
+        const transaction = await tx.transaction.create({
+          data: {
+            workspaceId,
+            accountId: id,
+            type: 'income',
+            amount: initialBalance,
+            currency: finalCurrency,
+            amountInPrimaryCurrency:
+              initialBalance * resolvedExchangeRateToPrimary,
+            exchangeRateToPrimary: resolvedExchangeRateToPrimary,
+            category: investmentCategory.name,
+            categoryId: investmentCategory.id,
+            memberId: finalAssignedMemberId,
+            description: 'Opening investment',
+            date: new Date(),
+            createdByUserId: userId,
+            assignedMemberId: finalAssignedMemberId,
+          },
+        });
+        await tx.investment.create({
+          data: {
+            workspaceId,
+            workspaceMemberId: finalAssignedMemberId,
+            accountId: id,
+            transactionId: transaction.id,
+            amount: initialBalance,
+            currency: finalCurrency,
+            amountInPrimaryCurrency:
+              initialBalance * resolvedExchangeRateToPrimary,
+            exchangeRateToPrimary: resolvedExchangeRateToPrimary,
+            date: transaction.date,
+            notes: 'Opening investment',
+            createdByUserId: userId,
+            assignedMemberId: finalAssignedMemberId,
+          },
+        });
+      }
+      return next;
     });
     if (dto.currency && dto.currency.toUpperCase() !== account.currency) {
     }

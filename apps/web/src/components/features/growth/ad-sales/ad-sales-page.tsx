@@ -778,6 +778,7 @@ function LegacyAdSalesPage() {
     saleId: string,
     channelIds: string[],
   ) {
+    const uniqueChannelIds = [...new Set(channelIds)];
     await invalidateTelegramAdSaleReads(queryClient, {
       saleId,
       lists: true,
@@ -786,7 +787,7 @@ function LegacyAdSalesPage() {
       availability: true,
       analytics: true,
       channelSummaries: true,
-      channelIds,
+      channelIds: uniqueChannelIds,
     });
   }
 

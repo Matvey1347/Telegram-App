@@ -80,6 +80,8 @@ export type TelegramManagedPost = {
   buttonRows?: TelegramPostButtonRows;
   status: TelegramManagedPostStatus;
   scheduledAt?: string | null;
+  /** Timezone of the linked advertising placement, when this is an ad post. */
+  scheduleTimezone?: string | null;
   publicationSlotId?: string | null;
   scheduleMode?: TelegramManagedPostScheduleMode | null;
   publishedAt?: string | null;

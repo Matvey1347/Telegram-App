@@ -177,10 +177,15 @@ export function AdSalesSaleDetailsDialog({
             silentAfterFirstMutation(),
           );
         }
-        await refreshSaleAfterMutation(
-          sale.id,
-          sale.placements.map((item) => item.telegramChannelId),
-        );
+        const changedChannelIds = draft.placements
+          .map(
+            (draftPlacement) =>
+              sale.placements.find(
+                (placement) => placement.id === draftPlacement.id,
+              )?.telegramChannelId,
+          )
+          .filter((channelId): channelId is string => Boolean(channelId));
+        await refreshSaleAfterMutation(sale.id, changedChannelIds);
         await invalidateTelegramAdSalesDerivedQueries(queryClient, {
           finance: true,
           dashboard: true,

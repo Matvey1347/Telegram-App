@@ -11,11 +11,12 @@ describe('AccountsService', () => {
     workspace: { findUniqueOrThrow: jest.fn() },
     transaction: { groupBy: jest.fn() },
     transfer: { groupBy: jest.fn() },
+    transactionCategory: { findUniqueOrThrow: jest.fn() },
     $transaction: jest.fn(),
   };
   const workspaceService = { resolveWorkspaceIdForUser: jest.fn() };
-  const conversion = { convertCurrency: jest.fn() };
-  const categories = {};
+  const conversion = { convertCurrency: jest.fn(), getRate: jest.fn() };
+  const categories = { ensureSystemCategories: jest.fn() };
   const authorization = { require: jest.fn(), can: jest.fn(), requireOwnOrAny: jest.fn() };
   let service: AccountsService;
 
@@ -44,6 +45,8 @@ describe('AccountsService', () => {
     });
     prisma.transaction.groupBy.mockResolvedValue([]);
     prisma.transfer.groupBy.mockResolvedValue([]);
+    conversion.getRate.mockResolvedValue(40);
+    categories.ensureSystemCategories.mockResolvedValue(undefined);
   });
 
   it('loads only the current member’s active accounts for the My accounts tab', async () => {
@@ -85,5 +88,52 @@ describe('AccountsService', () => {
       where: { id: 'account-1' },
       data: { isActive: false, deletedAt: null },
     });
+  });
+
+  it('adds an auditable opening investment when an existing account is funded', async () => {
+    workspaceService.resolveWorkspaceIdForUser.mockResolvedValue('workspace-1');
+    prisma.account.findFirst.mockResolvedValue({
+      id: 'account-1',
+      workspaceId: 'workspace-1',
+      currency: 'USD',
+      assignedMemberId: 'member-1',
+    });
+    authorization.requireOwnOrAny.mockResolvedValue(undefined);
+    prisma.transactionCategory.findUniqueOrThrow.mockResolvedValue({
+      id: 'investment-category',
+      name: 'Investment',
+    });
+    const tx = {
+      account: { update: jest.fn().mockResolvedValue({ id: 'account-1' }) },
+      transaction: {
+        create: jest.fn().mockResolvedValue({
+          id: 'transaction-1',
+          date: new Date('2026-10-07T00:00:00.000Z'),
+        }),
+      },
+      investment: { create: jest.fn().mockResolvedValue({}) },
+    };
+    prisma.$transaction.mockImplementation((callback: (client: typeof tx) => unknown) =>
+      callback(tx),
+    );
+
+    await service.update('user-1', 'account-1', { initialBalance: 250 });
+
+    expect(tx.transaction.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          accountId: 'account-1',
+          amount: 250,
+          currency: 'USD',
+          memberId: 'member-1',
+          description: 'Opening investment',
+        }),
+      }),
+    );
+    expect(tx.investment.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ transactionId: 'transaction-1' }),
+      }),
+    );
   });
 });

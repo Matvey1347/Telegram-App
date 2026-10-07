@@ -20,6 +20,11 @@ export function expandAdSaleDateRange(range: { from: string; to: string }) {
   return expandBulkDateSelections([selection]).dates;
 }
 
+/** Adds a one-off sale date without converting the selection into a range. */
+export function addAdSalePlacementDate(dates: string[], date: string) {
+  return [...new Set([...dates, date].filter((value) => parseDateKey(value)))].sort();
+}
+
 const DATE_KEY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 function parseDateKey(dateKey: string) {

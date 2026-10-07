@@ -81,7 +81,7 @@ export function placementRunWindow(placement: LifecyclePlacement) {
   if (!placement.publishedAt || !placement.plannedDeleteAt) return null;
   const lifecycleStartedAt = placement.publishedAt;
   const lifecycleEndedAt = placement.deletedAt ?? placement.plannedDeleteAt;
-  return `${formatDateTime(lifecycleStartedAt)} → ${formatDateTime(lifecycleEndedAt)}`;
+  return `${formatDateTime(lifecycleStartedAt, undefined, placement.timezone)} → ${formatDateTime(lifecycleEndedAt, undefined, placement.timezone)}`;
 }
 
 export function placementFormatLabel(placement: LifecyclePlacement) {

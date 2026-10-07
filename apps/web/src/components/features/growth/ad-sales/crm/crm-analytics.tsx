@@ -47,7 +47,7 @@ export function CrmAnalytics() {
   if (query.isLoading)
     return (
       <div className="grid gap-3 md:grid-cols-4">
-        {Array.from({ length: 4 }, (_, index) => (
+        {Array.from({ length: 5 }, (_, index) => (
           <Skeleton key={index} className="h-28" />
         ))}
       </div>
@@ -59,14 +59,19 @@ export function CrmAnalytics() {
     <div className="space-y-5">
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <Metric
-          label="Unique clients with tags"
-          value={data.clients}
-          hint="Tagged CRM client cards"
+          label="All clients"
+          value={data.allClients}
+          hint="Every active CRM contact"
+        />
+        <Metric
+          label="Clients with tags"
+          value={data.taggedClients}
+          hint="Contacts assigned at least one tag"
         />
         <Metric
           label="Clients without tags"
           value={data.untaggedClients}
-          hint="Kept out of unique-client analytics"
+          hint="Contacts assigned no tags"
         />
         <Metric
           label="Buyer conversion"
@@ -88,7 +93,7 @@ export function CrmAnalytics() {
         <div className="mb-4">
           <h2 className="font-semibold text-white">Client growth</h2>
           <p className="text-sm text-neutral-500">
-            Cumulative unique clients and buyers over the last 12 months.
+            Cumulative active contacts by segment over the last 12 months.
           </p>
         </div>
         {data.points.length ? (
@@ -110,10 +115,17 @@ export function CrmAnalytics() {
                 />
                 <Area
                   type="monotone"
-                  dataKey="clients"
-                  name="Clients"
+                  dataKey="allClients"
+                  name="All clients"
                   stroke="#60a5fa"
                   fill="#2563eb33"
+                />
+                <Area
+                  type="monotone"
+                  dataKey="taggedClients"
+                  name="With tags"
+                  stroke="#fbbf24"
+                  fill="#f59e0b22"
                 />
                 <Area
                   type="monotone"

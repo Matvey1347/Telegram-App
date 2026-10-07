@@ -222,8 +222,12 @@ import {
   canonicalizeTimeInputValue,
   isValidTimeInputValue,
   localDateTimeInputToDate,
-  localDateTimeInputToIso,
 } from "@/components/ui/primitives";
+import {
+  channelLocalDateKey,
+  channelLocalTime,
+  zonedDateTimeToUtc,
+} from "@/lib/features/growth/telegram-ad-sales";
 import { useAppToast } from "@/providers/toast-provider";
 import { useI18n, type TranslationFunction } from "@/providers/i18n-provider";
 import type { I18nNamespace } from "@/i18n/catalog";
@@ -377,11 +381,11 @@ const postGroupPreferenceKey = (channelId: string) =>
   `telegram-posts-new-post-group:${channelId}`;
 const workspaceViewPreferenceKey = (channelId: string) =>
   `telegram-posts-workspace-view:${channelId}`;
-function localNowParts() {
+function localNowParts(timezone: string) {
   const now = new Date();
-  return localDateTimeParts(now);
+  return localDateTimeParts(now, timezone);
 }
-function localDateTimeParts(value: string | Date) {
+function localDateTimeParts(value: string | Date, timezone: string) {
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) {
     return {
@@ -389,14 +393,9 @@ function localDateTimeParts(value: string | Date) {
       time: "",
     };
   }
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  const hours = String(date.getHours()).padStart(2, "0");
-  const minutes = String(date.getMinutes()).padStart(2, "0");
   return {
-    date: `${year}-${month}-${day}`,
-    time: `${hours}:${minutes}`,
+    date: channelLocalDateKey(date, timezone),
+    time: channelLocalTime(date, timezone),
   };
 }
 function wantsNewTab(event: Pick<MouseEvent, "metaKey" | "ctrlKey">) {
@@ -460,7 +459,7 @@ function formatManagedPostRevisionReason(
   }
 }
 
-function scheduleDateForPreset(time: string) {
+function scheduleDateForPreset(time: string, timezone: string) {
   const now = new Date();
   const [hours, minutes] = time.split(":").map((value) => Number(value));
   const candidate = new Date(now);
@@ -468,7 +467,7 @@ function scheduleDateForPreset(time: string) {
   if (candidate.getTime() < now.getTime()) {
     candidate.setDate(candidate.getDate() + 1);
   }
-  return localDateTimeParts(candidate).date;
+  return localDateTimeParts(candidate, timezone).date;
 }
 
 export function TelegramPostsPageClient({
@@ -915,8 +914,12 @@ function TelegramPostWorkspace({
     [],
   );
   const [mode, setMode] = useState<PublishingMode>("draft");
-  const [scheduleDate, setScheduleDate] = useState(() => localNowParts().date);
-  const [scheduleTime, setScheduleTime] = useState(() => localNowParts().time);
+  const [scheduleDate, setScheduleDate] = useState(
+    () => localNowParts(workspaceTimezone).date,
+  );
+  const [scheduleTime, setScheduleTime] = useState(
+    () => localNowParts(workspaceTimezone).time,
+  );
   const [publicationSlotId, setPublicationSlotId] = useState<string | null>(
     null,
   );
@@ -981,6 +984,14 @@ function TelegramPostWorkspace({
     ...postsPage,
     data: postsData,
   };
+  // A list request can be older than the deep-link detail request. Keep the
+  // editor's timezone tied to the newest known representation of its post.
+  const authoritativeEditingPost =
+    editing?.id && deepLinkedPost.data?.id === editing.id
+      ? deepLinkedPost.data
+      : posts.data?.find((post) => post.id === editing?.id) ?? editing;
+  const scheduleTimezone =
+    authoritativeEditingPost?.scheduleTimezone ?? workspaceTimezone;
   const isDeepLinkedPostLoading =
     Boolean(initialPostId) && deepLinkedPost.isLoading && !editing;
   const customEmojiPacks = useQuery({
@@ -1212,7 +1223,7 @@ function TelegramPostWorkspace({
     effectivePublishingMode === "schedule" &&
     scheduleDate &&
     hasValidScheduleTime
-      ? (localDateTimeInputToIso(scheduleDate, scheduleTime) ?? undefined)
+      ? zonedDateTimeToUtc(scheduleDate, scheduleTime, scheduleTimezone).toISOString()
       : undefined;
   const editingIsSaving = Boolean(
     editing && savingPostIds.includes(editing.id),
@@ -1606,9 +1617,10 @@ function TelegramPostWorkspace({
           invalidPostIds.push(postId);
           continue;
         }
-        const candidate = localDateTimeInputToDate(
+        const candidate = zonedDateTimeToUtc(
           selectedCalendarDate,
           customTime,
+          workspaceTimezone,
         );
         if (!candidate || candidate.getTime() <= Date.now()) {
           invalidPostIds.push(postId);
@@ -1631,10 +1643,11 @@ function TelegramPostWorkspace({
       usedTimes.set(resolvedTime, postId);
       assignments.push({
         postId,
-        scheduledAt: localDateTimeInputToIso(
+        scheduledAt: zonedDateTimeToUtc(
           selectedCalendarDate,
           resolvedTime,
-        )!,
+          workspaceTimezone,
+        ).toISOString(),
       });
     }
 
@@ -1653,6 +1666,7 @@ function TelegramPostWorkspace({
     calendarBatchTimeChoiceByPostId,
     calendarScheduleSlots,
     selectedCalendarDate,
+    workspaceTimezone,
   ]);
   const availableCalendarScheduleSlots = useMemo(
     () => calendarScheduleSlots.filter((slot) => slot.state === "available"),
@@ -2797,7 +2811,7 @@ function TelegramPostWorkspace({
   }, [rememberedPostGroupId, postGroups.data]);
 
   const reset = () => {
-    const now = localNowParts();
+    const now = localNowParts(workspaceTimezone);
     const nextGroupId = rememberedPostGroupId;
     changeWorkspaceView("posts");
     restoredPostIdRef.current = "";
@@ -2878,10 +2892,18 @@ function TelegramPostWorkspace({
     rememberPostGroup(nextGroupId);
     setMode(post.status === "SCHEDULED" ? "schedule" : "draft");
     const scheduledLocalParts = post.scheduledAt
-      ? localDateTimeParts(post.scheduledAt)
+      ? localDateTimeParts(
+          post.scheduledAt,
+          post.scheduleTimezone ?? workspaceTimezone,
+        )
       : null;
-    setScheduleDate(scheduledLocalParts?.date || localNowParts().date);
-    const postScheduleTime = scheduledLocalParts?.time || localNowParts().time;
+    setScheduleDate(
+      scheduledLocalParts?.date ||
+        localNowParts(post.scheduleTimezone ?? workspaceTimezone).date,
+    );
+    const postScheduleTime =
+      scheduledLocalParts?.time ||
+      localNowParts(post.scheduleTimezone ?? workspaceTimezone).time;
     setScheduleTime(postScheduleTime);
     setPublicationSlotId(post.publicationSlotId ?? null);
     setDeleteAfterHours(post.deleteAfterHours ?? null);
@@ -2896,6 +2918,29 @@ function TelegramPostWorkspace({
     }
     setError("");
   };
+
+  useEffect(() => {
+    if (
+      !editing ||
+      !authoritativeEditingPost?.scheduledAt ||
+      authoritativeEditingPost.status !== "SCHEDULED"
+    ) {
+      return;
+    }
+    const local = localDateTimeParts(
+      authoritativeEditingPost.scheduledAt,
+      scheduleTimezone,
+    );
+    setScheduleDate((current) => (current === local.date ? current : local.date));
+    setScheduleTime((current) => (current === local.time ? current : local.time));
+  }, [
+    authoritativeEditingPost?.id,
+    authoritativeEditingPost?.scheduledAt,
+    authoritativeEditingPost?.scheduleTimezone,
+    authoritativeEditingPost?.status,
+    editing,
+    scheduleTimezone,
+  ]);
 
   const restorePostRevision = useMutation({
     mutationFn: async (revision: TelegramManagedPostRevision) => {
@@ -3056,7 +3101,8 @@ function TelegramPostWorkspace({
 
   const applyChannelTimePost = (timePost: TelegramChannelTimePost) => {
     setScheduleDate(
-      (current) => current || scheduleDateForPreset(timePost.time),
+      (current) =>
+        current || scheduleDateForPreset(timePost.time, workspaceTimezone),
     );
     setScheduleTime(timePost.time);
   };
@@ -3192,8 +3238,23 @@ function TelegramPostWorkspace({
 
   useEffect(() => {
     if (!initialPostId || !posts.data?.length || postGroups.isLoading) return;
-    if (restoredPostIdRef.current === initialPostId) return;
-    const post = posts.data.find((item) => item.id === initialPostId);
+    // The detail request is authoritative for a URL-opened post. The list is
+    // allowed to be stale while its query is being refreshed, so it must never
+    // overwrite the schedule that came from the detail endpoint.
+    const post =
+      deepLinkedPost.data?.id === initialPostId
+        ? deepLinkedPost.data
+        : posts.data.find((item) => item.id === initialPostId);
+    const detailScheduleChanged =
+      deepLinkedPost.data?.id === initialPostId &&
+      (editing?.scheduledAt !== deepLinkedPost.data.scheduledAt ||
+        editing?.scheduleTimezone !== deepLinkedPost.data.scheduleTimezone);
+    if (
+      restoredPostIdRef.current === initialPostId &&
+      !detailScheduleChanged
+    ) {
+      return;
+    }
     // URL restoration intentionally hydrates the local editor state.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (post) {
@@ -3225,7 +3286,15 @@ function TelegramPostWorkspace({
     }
     // selectPost is intentionally excluded to avoid rehydrating on every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialPostId, postGroups.data, postGroups.isLoading, posts.data]);
+  }, [
+    deepLinkedPost.data,
+    editing?.scheduledAt,
+    editing?.scheduleTimezone,
+    initialPostId,
+    postGroups.data,
+    postGroups.isLoading,
+    posts.data,
+  ]);
 
   const run = () => {
     if (isReadOnlyTelegramPost) return;
@@ -3242,7 +3311,11 @@ function TelegramPostWorkspace({
     }
     const saveScheduledAt =
       saveMode === "schedule"
-        ? localDateTimeInputToIso(scheduleDate, scheduleTime)
+        ? zonedDateTimeToUtc(
+            scheduleDate,
+            scheduleTime,
+            scheduleTimezone,
+          ).toISOString()
         : null;
     const payload: {
       title: string;
@@ -5515,8 +5588,12 @@ function TelegramPostWorkspace({
                       : null
                   }
                   scheduledAt={internalLinkScheduledAt}
+                  timezone={scheduleTimezone}
                   onChange={({ slotId, scheduledAt }) => {
-                    const local = localDateTimeParts(scheduledAt);
+                    const local = localDateTimeParts(
+                      scheduledAt,
+                      scheduleTimezone,
+                    );
                     setPublicationSlotId(slotId);
                     setScheduleDate(local.date);
                     setScheduleTime(local.time);
@@ -5981,6 +6058,8 @@ function TelegramPostWorkspace({
                                             ? formatDateTime(
                                                 post.scheduledAt,
                                                 locale,
+                                                post.scheduleTimezone ??
+                                                  workspaceTimezone,
                                               )
                                             : post.status === "PUBLISHED" &&
                                                 post.publishedAt
@@ -6999,7 +7078,11 @@ function PostGroupsWorkspace({
                         </span>
                         <span className="block text-xs text-neutral-500">
                           {post.scheduledAt
-                            ? formatDateTime(post.scheduledAt, locale)
+                            ? formatDateTime(
+                                post.scheduledAt,
+                                locale,
+                                post.scheduleTimezone ?? undefined,
+                              )
                             : t(managedPostStatusKey(post.status))}
                         </span>
                       </button>

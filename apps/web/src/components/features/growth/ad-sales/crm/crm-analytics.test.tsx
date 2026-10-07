@@ -5,7 +5,9 @@ import { CrmAnalytics } from "./crm-analytics";
 
 const analytics = vi.hoisted(() => ({
   data: {
-    clients: 136,
+    allClients: 220,
+    taggedClients: 136,
+    untaggedClients: 84,
     buyers: 8,
     conversionRate: 5.9,
     averagePaidOrderValue: "449.45",
@@ -35,7 +37,8 @@ describe("CrmAnalytics", () => {
     render(<CrmAnalytics />);
 
     const labels = [
-      "Unique clients",
+      "All clients",
+      "Clients with tags",
       "Buyer conversion",
       "Buyers",
       "Average paid per order",

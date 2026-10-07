@@ -7,11 +7,13 @@ import type {
   TelegramAdSaleOrigin,
   TelegramAdvertiser,
   TelegramAdStructuredError,
+  TelegramAdSaleDraft,
 } from "@telegram-system/shared";
 import type { Account, TelegramChannel, TelegramChannelNetwork } from "@/lib/api";
 import type { PlacementManagedPostDraft } from "./placement-post/placement-post-composer";
 import type { PublishedPostOption } from "./ad-sale-types";
 import type { AdSalePriceAllocation } from "./ad-sale-network-pricing";
+import type { AdSaleModalDraft } from "./ad-sale-modal-draft";
 
 export type AdSaleModalProps = {
   open: boolean;
@@ -61,6 +63,7 @@ export type AdSaleModalProps = {
       manualPriceReason?: string;
       telegramPostId?: string | null;
       managedPostDraft?: PlacementManagedPostDraft | null;
+      inviteLinkUrl?: string;
     }>;
   }) => Promise<{
     sale: TelegramAdSale;
@@ -76,4 +79,7 @@ export type AdSaleModalProps = {
   systemBotConnected?: boolean;
   systemBotUsername?: string | null;
   systemBotWorkspaceId?: string | null;
+  savedDrafts?: TelegramAdSaleDraft[];
+  onSaveDraft?: (draft: AdSaleModalDraft, existingDraftId?: string) => Promise<string>;
+  onDeleteSavedDraft?: (draftId: string) => Promise<void>;
 };

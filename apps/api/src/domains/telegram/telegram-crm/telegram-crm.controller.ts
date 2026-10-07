@@ -32,6 +32,7 @@ import { TelegramCrmMessageReadService } from './telegram-crm-message-read.servi
 import { TelegramCrmPeerService } from './telegram-crm-peer.service';
 import { TelegramCrmSettingsService } from './telegram-crm-settings.service';
 import { TelegramCrmConversationAttachService } from './telegram-crm-conversation-attach.service';
+import { TelegramCrmContactExportService } from './telegram-crm-contact-export.service';
 
 @UseGuards(JwtAuthGuard)
 @Controller('telegram-crm')
@@ -44,6 +45,7 @@ export class TelegramCrmController {
     private readonly messages: TelegramCrmMessageReadService,
     private readonly settings: TelegramCrmSettingsService,
     private readonly conversationAttach: TelegramCrmConversationAttachService,
+    private readonly contactExport: TelegramCrmContactExportService,
   ) {}
 
   @Get('contacts')
@@ -57,6 +59,13 @@ export class TelegramCrmController {
   @Get('tags')
   listTags(@CurrentUser() user: JwtUser) {
     return this.contactRead.listTags(user.sub);
+  }
+
+  // Keep this outside `contacts/:id`: some running Nest/Express route tables
+  // resolve the dynamic contact path before a later-added static child path.
+  @Get('contact-export')
+  exportContacts(@CurrentUser() user: JwtUser, @Query() query: CrmContactsQueryDto) {
+    return this.contactExport.export(user.sub, query.segment);
   }
 
   @Get('analytics')

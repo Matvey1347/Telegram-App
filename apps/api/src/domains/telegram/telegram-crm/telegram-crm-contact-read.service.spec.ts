@@ -153,10 +153,11 @@ describe('TelegramCrmContactReadService', () => {
     const result = await service.analytics('user-1');
 
     expect(result).toMatchObject({
-      clients: 2,
+      allClients: 3,
+      taggedClients: 2,
       untaggedClients: 1,
       buyers: 2,
-      conversionRate: 100,
+      conversionRate: 66.7,
       averagePaidOrderValue: '400.00',
       currency: 'UAH',
     });
@@ -302,6 +303,35 @@ describe('TelegramCrmContactReadService', () => {
     expect(
       tagFindMany.mock.calls[0][0].where.advertisers.some.advertiser.tags,
     ).toBeUndefined();
+  });
+
+  it('filters the contact list by the explicit tagged and untagged segments', async () => {
+    const prisma = {
+      $transaction: jest.fn().mockResolvedValue([[], 0]),
+      telegramAdvertiser: {
+        findMany: jest.fn().mockReturnValue('rows'),
+        count: jest.fn().mockReturnValue('count'),
+      },
+    };
+    const service = new TelegramCrmContactReadService(
+      prisma as never,
+      {
+        require: jest.fn().mockResolvedValue({ workspaceId: 'workspace-1' }),
+        scope: jest.fn().mockResolvedValue({}),
+      } as never,
+    );
+
+    await service.list('user-1', {
+      page: 1,
+      pageSize: 25,
+      segment: 'UNTAGGED',
+    });
+
+    expect(prisma.telegramAdvertiser.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ tags: { none: {} } }),
+      }),
+    );
   });
 
   it('includes Telegram folder tags in CRM tag facets', async () => {

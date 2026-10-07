@@ -1,6 +1,7 @@
 "use client";
 
 import type { ComponentProps, Dispatch, SetStateAction } from "react";
+import { useQuery } from "@tanstack/react-query";
 import type {
   TelegramAdAvailabilitySlot,
   TelegramAdProduct,
@@ -16,7 +17,9 @@ import {
   syncTelegramChannelPostMetrics,
 } from "@/lib/api";
 import { zonedDateTimeToUtc } from "@/lib/features/growth/telegram-ad-sales";
+import { telegramAdSalesKeys } from "@/lib/features/growth/telegram-ad-sales-query";
 import { AdSaleModal } from "./ad-sale-modal";
+import type { AdSaleModalDraft } from "./ad-sale-modal-draft";
 
 export function telegramMessageIdFromUrl(value?: string) {
   if (!value) return undefined;
@@ -63,6 +66,12 @@ export function AdSalesCheckoutDialogs({
   submitAdSale: ComponentProps<typeof AdSaleModal>["onSubmit"];
   initialAdvertiser?: ComponentProps<typeof AdSaleModal>["initialAdvertiser"];
 }) {
+  const draftsQuery = useQuery({
+    queryKey: telegramAdSalesKeys.drafts(),
+    queryFn: telegramAdSalesApi.listDrafts,
+    enabled: adSaleModalOpen,
+    staleTime: 0,
+  });
   return (
     <>
       <AdSaleModal
@@ -83,6 +92,22 @@ export function AdSalesCheckoutDialogs({
         systemBotConnected={systemBotConnected}
         systemBotUsername={systemBotUsername}
         systemBotWorkspaceId={systemBotWorkspaceId}
+        savedDrafts={draftsQuery.data ?? []}
+        onSaveDraft={async (draft: AdSaleModalDraft, existingDraftId) => {
+          const title = draft.advertiserContact.trim() || "Unfinished ad sale";
+          const saved = existingDraftId
+            ? await telegramAdSalesApi.updateDraft(existingDraftId, {
+                title,
+                payload: draft,
+              })
+            : await telegramAdSalesApi.createDraft({ title, payload: draft });
+          await draftsQuery.refetch();
+          return saved.id;
+        }}
+        onDeleteSavedDraft={async (draftId) => {
+          await telegramAdSalesApi.deleteDraft(draftId);
+          await draftsQuery.refetch();
+        }}
         onSearchAdvertisers={(query) =>
           telegramAdSalesApi.searchAdvertisers({ q: query, limit: 20 })
         }

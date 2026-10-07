@@ -30,6 +30,8 @@ import { TelegramAdSalePaymentDeletionService } from './telegram-ad-sale-payment
 import { TelegramAdSalesWorkspaceSettingsService } from './telegram-ad-sales-workspace-settings.service';
 import { TelegramSystemBotModule } from '../telegram-system-bot/telegram-system-bot.module';
 import { TelegramAdSaleBotNotificationService } from './telegram-ad-sale-bot-notification.service';
+import { TelegramAdSalesDraftsService } from './telegram-ad-sales-drafts.service';
+import { TelegramAdSalesDraftsController } from './telegram-ad-sales-drafts.controller';
 
 @Module({
   imports: [
@@ -43,6 +45,7 @@ import { TelegramAdSaleBotNotificationService } from './telegram-ad-sale-bot-not
   controllers: [
     TelegramAdSalesReadController,
     TelegramAdSalesPaymentsController,
+    TelegramAdSalesDraftsController,
     TelegramAdSalesController,
   ],
   providers: [
@@ -68,6 +71,7 @@ import { TelegramAdSaleBotNotificationService } from './telegram-ad-sale-bot-not
     TelegramBotApiClient,
     TelegramAdSalesCrmTasksService,
     TelegramAdSaleBotNotificationService,
+    TelegramAdSalesDraftsService,
   ],
   exports: [
     TelegramAdSalesService,

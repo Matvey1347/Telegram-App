@@ -24,6 +24,7 @@ type AdSalesListParams = {
 };
 
 export const telegramAdSalesKeys = {
+  drafts: () => ["telegram-ad-sales", "drafts"] as const,
   listRoot: () => ["telegram-ad-sales", "sales"] as const,
   list: (params?: AdSalesListParams) =>
     [...telegramAdSalesKeys.listRoot(), params ?? {}] as const,

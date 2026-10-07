@@ -92,6 +92,7 @@ export function useAdSaleModalSession(
     from: "",
     to: "",
   });
+  const [placementDates, setPlacementDates] = useState<string[]>([]);
   const [submissionError, setSubmissionError] = useState("");
   const [publishedPostsByPlacement, setPublishedPostsByPlacement] = useState<
     Record<string, PublishedPostOption[]>
@@ -132,6 +133,7 @@ export function useAdSaleModalSession(
       selectedNetworkId: "",
       selectedChannelIds: initialChannelId ? [initialChannelId] : [],
       placementDateRange: { from: initialDate, to: initialDate },
+      placementDates: [initialDate],
       postMode: "shared",
       placements: initialPlacements,
       networkPricingMode: "total",
@@ -179,6 +181,7 @@ export function useAdSaleModalSession(
       setSelectedNetworkId(draft.selectedNetworkId);
       setSelectedChannelIds(draft.selectedChannelIds);
       setPlacementDateRange(draft.placementDateRange);
+      setPlacementDates(draft.placementDates?.length ? draft.placementDates : [draft.placementDateRange.from].filter(Boolean));
       setPostMode(draft.postMode);
       setPlacements(draft.placements);
       networkPricing.setMode(draft.networkPricingMode);
@@ -203,6 +206,7 @@ export function useAdSaleModalSession(
       selectedNetworkId,
       selectedChannelIds,
       placementDateRange,
+      placementDates,
       postMode,
       placements,
       networkPricingMode: networkPricing.mode,
@@ -217,6 +221,7 @@ export function useAdSaleModalSession(
       networkPricing.mode,
       networkPricing.totalPrice,
       placementDateRange,
+      placementDates,
       placements,
       postMode,
       saleOrigin,
@@ -294,6 +299,8 @@ export function useAdSaleModalSession(
     setSelectedChannelIds,
     placementDateRange,
     setPlacementDateRange,
+    placementDates,
+    setPlacementDates,
     submissionError,
     setSubmissionError,
     pendingDrafts: drafts.pendingDrafts,
@@ -302,6 +309,7 @@ export function useAdSaleModalSession(
     postsLoadingByPlacement,
     setPostsLoadingByPlacement,
     currentDraft,
+    restoreDraft,
     clearCurrentDraft: drafts.clearCurrentDraft,
     continueDraft: drafts.continueDraft,
     deleteDraft: drafts.deleteDraft,

@@ -16,10 +16,12 @@ import {
 } from 'class-validator';
 import {
   CRM_CONTACT_STAGES,
+  CRM_CONTACT_SEGMENTS,
   CRM_FOLLOW_UP_VIEWS,
   CRM_MESSAGE_DIRECTIONS,
   CRM_MESSAGE_ORIGINS,
   type CrmContactStage,
+  type CrmContactSegment,
   type CrmFollowUpView,
   type CrmMessageDirection,
   type CrmMessageOrigin,
@@ -58,6 +60,7 @@ export class CrmContactsQueryDto extends PaginationQueryDto {
   @ArrayMaxSize(200)
   @IsString({ each: true })
   tagIds?: string[];
+  @IsOptional() @IsIn(CRM_CONTACT_SEGMENTS) segment?: CrmContactSegment;
 }
 
 export class SetCrmContactTagsDto {

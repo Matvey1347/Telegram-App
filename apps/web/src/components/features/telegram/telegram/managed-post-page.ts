@@ -8,13 +8,17 @@ export function includeDeepLinkedManagedPost(
   deepLinkedPost?: TelegramManagedPost | null,
 ) {
   const resolvedPageItems = pageItems ?? EMPTY_MANAGED_POSTS;
-  if (
-    !deepLinkedPost ||
-    resolvedPageItems.some((post) => post.id === deepLinkedPost.id)
-  ) {
-    return resolvedPageItems;
-  }
-  return [...resolvedPageItems, deepLinkedPost];
+  if (!deepLinkedPost) return resolvedPageItems;
+  const alreadyListed = resolvedPageItems.some(
+    (post) => post.id === deepLinkedPost.id,
+  );
+  // A deep link refetches the edited post so a schedule changed from Selling
+  // replaces its stale list-cache copy instead of being discarded.
+  return alreadyListed
+    ? resolvedPageItems.map((post) =>
+        post.id === deepLinkedPost.id ? deepLinkedPost : post,
+      )
+    : [...resolvedPageItems, deepLinkedPost];
 }
 
 export function useManagedPostPageItems(

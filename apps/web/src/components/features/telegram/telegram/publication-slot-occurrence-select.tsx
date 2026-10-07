@@ -5,14 +5,12 @@ import { useQuery } from "@tanstack/react-query";
 import { telegramPublicationSchedulesApi } from "@/lib/api";
 import { telegramPublicationScheduleKeys } from "@/lib/query-keys";
 import { DateInput, FormField, TimeInput } from "@/components/ui/primitives";
+import {
+  channelLocalDateKey,
+  channelLocalTime,
+  zonedDateTimeToUtc,
+} from "@/lib/features/growth/telegram-ad-sales";
 import { useI18n } from "@/providers/i18n-provider";
-
-const dateKey = (value: Date) => {
-  const year = value.getFullYear();
-  const month = String(value.getMonth() + 1).padStart(2, "0");
-  const day = String(value.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-};
 
 const occurrenceDateKey = (scheduledAt: string, timezone: string) => {
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -30,6 +28,8 @@ type PublicationSlotOccurrenceSelectProps = {
   channelId: string;
   value: string | null;
   scheduledAt?: string | null;
+  /** The channel's scheduling timezone, not the browser's timezone. */
+  timezone?: string;
   disabled?: boolean;
   onChange: (value: { slotId: string | null; scheduledAt: string }) => void;
 };
@@ -48,24 +48,31 @@ function PublicationSlotOccurrenceSelectState({
   channelId,
   value,
   scheduledAt,
+  timezone,
   disabled = false,
   onChange,
 }: PublicationSlotOccurrenceSelectProps) {
   const { t } = useI18n();
+  const scheduleTimezone =
+    timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
   const initial = scheduledAt ? new Date(scheduledAt) : new Date();
-  const [selectedDate, setSelectedDate] = useState(() => dateKey(initial));
+  const [selectedDate, setSelectedDate] = useState(() =>
+    channelLocalDateKey(initial, scheduleTimezone),
+  );
   const [publicationTime, setPublicationTime] = useState(() =>
-    scheduledAt
-      ? `${String(initial.getHours()).padStart(2, "0")}:${String(initial.getMinutes()).padStart(2, "0")}`
-      : "",
+    scheduledAt ? channelLocalTime(initial, scheduleTimezone) : "",
   );
   const applyPublicationTime = (time: string) => {
     setPublicationTime(time);
     if (!time) return;
-    const candidate = new Date(`${selectedDate}T${time}:00`);
-    if (!Number.isNaN(candidate.getTime())) {
-      onChange({ slotId: null, scheduledAt: candidate.toISOString() });
-    }
+    onChange({
+      slotId: null,
+      scheduledAt: zonedDateTimeToUtc(
+        selectedDate,
+        time,
+        scheduleTimezone,
+      ).toISOString(),
+    });
   };
 
   return (
@@ -74,7 +81,7 @@ function PublicationSlotOccurrenceSelectState({
         <FormField label={t("telegram.posts.schedules.chooseSlot")} required>
           <DateInput
             value={selectedDate}
-            min={dateKey(new Date())}
+            min={channelLocalDateKey(new Date(), scheduleTimezone)}
             disabled={disabled}
             onChange={(event) => {
               setSelectedDate(event.target.value);

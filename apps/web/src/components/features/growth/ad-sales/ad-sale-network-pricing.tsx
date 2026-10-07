@@ -60,6 +60,33 @@ export function useAdSaleNetworkPricing({
   }, [mode, placements.length, recommendedTotal, totalEdited]);
 
   useEffect(() => {
+    // A previous multi-placement allocation marks its shares as manually
+    // edited. Once the user returns to one placement, that old share must not
+    // survive a fresh catalog quote and be shown as the current channel price.
+    if (
+      mode !== "total" ||
+      totalEdited ||
+      placements.length !== 1 ||
+      recommendedTotal <= 0
+    )
+      return;
+    const nextPrice = String(Number(recommendedTotal.toFixed(2)));
+    setPlacements((current) => {
+      const placement = current[0];
+      if (!placement || (placement.agreedPrice === nextPrice && !placement.agreedPriceManuallyEdited)) {
+        return current;
+      }
+      return [
+        {
+          ...placement,
+          agreedPrice: nextPrice,
+          agreedPriceManuallyEdited: false,
+        },
+      ];
+    });
+  }, [mode, placements.length, recommendedTotal, setPlacements, totalEdited]);
+
+  useEffect(() => {
     const total = toNumber(totalPrice);
     // A single placement has no allocation to calculate. Updating it here
     // would mark the seed price as manually edited and prevent the async,

@@ -32,7 +32,19 @@ export function AccountModal({ open, initial, currencies, onClose, onSubmit }: {
     <FormField label="Name" required error={errors.name ? "Required field" : undefined}><Input {...register("name", { required: true })} /></FormField>
     <FormField label="Member"><MemberSelect value={watch("assignedMemberId")} onChange={(value) => setValue("assignedMemberId", value || null)} defaultToCurrent={!initial} /></FormField>
     <FormField label="Currency"><CurrencySelect value={watch("currency")} currencies={currencies} onChange={(value) => setValue("currency", value)} /></FormField>
-    {!initial ? <FormField label="Opening investment"><Input type="number" step="0.01" {...register("initialBalance", { valueAsNumber: true })} /></FormField> : null}
+    <FormField label={initial ? "Add opening investment" : "Opening investment"}>
+      <Input
+        type="number"
+        min="0"
+        step="0.01"
+        {...register("initialBalance", { valueAsNumber: true })}
+      />
+    </FormField>
+    {initial ? (
+      <p className="-mt-2 text-xs text-neutral-500">
+        Adds an auditable income transaction to this account.
+      </p>
+    ) : null}
     <Actions onClose={onClose} />
   </form></Modal>;
 }

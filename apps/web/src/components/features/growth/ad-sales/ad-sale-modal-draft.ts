@@ -1,4 +1,5 @@
 import type { TelegramAdSaleOrigin } from "@telegram-system/shared";
+import { expandAdSaleDateRange } from "@/lib/features/growth/ad-sales-bulk-date-builder";
 import type { SalePlacementDraft } from "./ad-sale-types";
 export type AdSaleModalDraft = {
   advertiserTelegram: string;
@@ -12,6 +13,7 @@ export type AdSaleModalDraft = {
   selectedNetworkId: string;
   selectedChannelIds: string[];
   placementDateRange: { from: string; to: string };
+  placementDates?: string[];
   postMode: "shared" | "individual";
   placements: SalePlacementDraft[];
   networkPricingMode: "total" | "per-placement";
@@ -26,6 +28,7 @@ export function normalizeAdSaleModalDraft(
   const placements = draft.placements.map((placement) => ({
     ...placement,
     time: normalizeDraftTime(placement.time),
+    inviteLinkUrl: placement.inviteLinkUrl ?? "",
   }));
   return {
     ...(draft as AdSaleModalDraft),
@@ -41,6 +44,9 @@ export function normalizeAdSaleModalDraft(
     selectedChannelIds:
       draft.selectedChannelIds ?? placements.map((item) => item.channelId),
     placementDateRange: draft.placementDateRange ?? { from: "", to: "" },
+    placementDates: [...new Set(
+      draft.placementDates ?? expandAdSaleDateRange(draft.placementDateRange ?? { from: "", to: "" }),
+    )].sort(),
     postMode: draft.postMode ?? "shared",
     placements,
     networkPricingMode: draft.networkPricingMode ?? "per-placement",

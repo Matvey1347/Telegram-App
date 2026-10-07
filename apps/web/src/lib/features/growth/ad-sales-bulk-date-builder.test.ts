@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  addAdSalePlacementDate,
   expandAdSaleDateRange,
   expandBulkDateSelections,
 } from "./ad-sales-bulk-date-builder";
@@ -12,6 +13,12 @@ describe("ad-sales bulk date builder", () => {
     expect(expandAdSaleDateRange({ from: "2026-08-10", to: "" })).toEqual([
       "2026-08-10",
     ]);
+  });
+
+  it("adds individually selected dates without filling dates between them", () => {
+    expect(
+      addAdSalePlacementDate(["2026-10-07", "2026-10-12"], "2026-10-09"),
+    ).toEqual(["2026-10-07", "2026-10-09", "2026-10-12"]);
   });
 
   it("expands ranges and singles into sorted unique local date keys", () => {

@@ -22,7 +22,6 @@ import { accountDisplayName } from "@/lib/features/finance/account-display";
 import { toNumber } from "@/lib/features/growth/telegram-ad-sales";
 import { buildTelegramPostsUrl } from "@/lib/features/telegram/telegram-posts-url";
 import { placementTimer } from "./ad-placement-lifecycle";
-import { SaleStatusActions, type SaleActionKey } from "./sale-status-actions";
 
 export type PlacementDraft = {
   id: string;
@@ -96,7 +95,6 @@ export function PlacementEditor(props: {
   syncPayment: boolean;
   onSync: (v: boolean) => void;
   onChange: (p: Partial<PlacementDraft>) => void;
-  onAction: (a: SaleActionKey) => Promise<void>;
   onAttachPost: (post: {
     telegramPostUrl?: string;
     telegramPostId?: string;
@@ -196,12 +194,6 @@ export function PlacementEditor(props: {
               {props.channelName}
             </h4>
           </div>
-          <SaleStatusActions
-            sale={props.sale}
-            placement={props.placement}
-            onAction={props.onAction}
-            hideSchedule
-          />
         </div>
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
           <FormField label="Date">

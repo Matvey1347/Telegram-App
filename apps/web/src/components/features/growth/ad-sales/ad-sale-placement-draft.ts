@@ -98,6 +98,8 @@ export function createPlacementDraft(params: {
   time: string;
   timezone: string;
   inventoryOpportunityKey?: string | null;
+  managedPostDraft?: SalePlacementDraft["managedPostDraft"];
+  inviteLinkUrl?: string;
 }): SalePlacementDraft {
   const price = productPrice(params.product);
   return {
@@ -120,5 +122,7 @@ export function createPlacementDraft(params: {
     quotedCurrency: params.product?.currency?.toUpperCase(),
     inventoryOpportunityKey: params.inventoryOpportunityKey ?? null,
     telegramPostId: null,
+    managedPostDraft: params.managedPostDraft ?? null,
+    inviteLinkUrl: params.inviteLinkUrl ?? "",
   };
 }

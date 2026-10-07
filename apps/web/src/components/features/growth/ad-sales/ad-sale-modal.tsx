@@ -1,4 +1,5 @@
 "use client";
+import { useState } from "react";
 import type { TelegramAdSaleOrigin } from "@telegram-system/shared";
 import { accountDisplayName } from "@/lib/features/finance/account-display";
 import { expandNetworkChannelIds } from "@/lib/features/growth/telegram-ad-sales";
@@ -18,6 +19,8 @@ import { AdSaleSharedPost } from "./ad-sale-shared-post";
 import { AdSaleClientField } from "./ad-sale-client-field";
 import { applyProductToPlacement } from "./ad-sale-placement-draft";
 import { AdSalePlacementCard } from "./ad-sale-placement-card";
+import { normalizeAdSaleModalDraft } from "./ad-sale-modal-draft";
+import { addAdSalePlacementDate } from "@/lib/features/growth/ad-sales-bulk-date-builder";
 import {
   useAdSaleModalController,
   type AdSaleModalProps,
@@ -42,7 +45,12 @@ export function AdSaleModal(props: AdSaleModalProps) {
     systemBotConnected,
     systemBotUsername,
     systemBotWorkspaceId,
+    savedDrafts = [],
+    onSaveDraft,
+    onDeleteSavedDraft,
   } = props;
+  const [savedDraftId, setSavedDraftId] = useState<string | undefined>();
+  const [savingDraft, setSavingDraft] = useState(false);
   const {
     setAdvertiserTelegram,
     advertiserContact,
@@ -68,6 +76,8 @@ export function AdSaleModal(props: AdSaleModalProps) {
     setSelectedChannelIds,
     placementDateRange,
     setPlacementDateRange,
+    placementDates,
+    setPlacementDates,
     postMode,
     setPostMode,
     placements,
@@ -91,6 +101,8 @@ export function AdSaleModal(props: AdSaleModalProps) {
     continueDraft,
     deleteDraft,
     createNewDraft,
+    currentDraft,
+    restoreDraft,
   } = useAdSaleModalController({
     ...props,
     productsByChannelId: providedProductsByChannelId,
@@ -117,6 +129,39 @@ export function AdSaleModal(props: AdSaleModalProps) {
         ) : (
           <>
             <div className="space-y-4 pr-1">
+              {savedDrafts.length ? (
+                <section className="rounded-lg border border-neutral-800 bg-neutral-950/50 p-3">
+                  <p className="text-sm font-medium text-white">Saved drafts</p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {savedDrafts.map((draft) => (
+                      <div key={draft.id} className="inline-flex items-center gap-1 rounded-md border border-neutral-700 bg-neutral-900 px-2 py-1">
+                        <button
+                          type="button"
+                          className="text-xs text-sky-300 hover:text-sky-200"
+                          onClick={() => {
+                            const value = normalizeAdSaleModalDraft(draft.payload);
+                            if (!value) return;
+                            restoreDraft(value);
+                            setSavedDraftId(draft.id);
+                          }}
+                        >
+                          {draft.title || "Unfinished sale"}
+                        </button>
+                        {onDeleteSavedDraft ? (
+                          <button
+                            type="button"
+                            aria-label={`Delete draft ${draft.title || draft.id}`}
+                            className="text-xs text-neutral-500 hover:text-rose-300"
+                            onClick={() => void onDeleteSavedDraft(draft.id)}
+                          >
+                            ×
+                          </button>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
               <section className="space-y-3">
                 <div className="grid gap-3 [&>div>span:first-child]:flex [&>div>span:first-child]:h-7 [&>div>span:first-child]:items-center xl:grid-cols-4 xl:items-start">
                   <AdSaleClientField
@@ -199,7 +244,8 @@ export function AdSaleModal(props: AdSaleModalProps) {
                 mode={channelSelectionMode}
                 selectedNetworkId={selectedNetworkId}
                 selectedChannelIds={selectedChannelIds}
-                dateRange={placementDateRange}
+                dateToAdd={placementDateRange.from}
+                placementDates={placementDates}
                 commonTime={commonTime}
                 commonFormatName={commonFormatName}
                 commonFormats={commonFormats}
@@ -235,7 +281,20 @@ export function AdSaleModal(props: AdSaleModalProps) {
                 }}
                 onNetworkChange={setSelectedNetworkId}
                 onChannelsChange={setSelectedChannelIds}
-                onDateRangeChange={setPlacementDateRange}
+                onDateToAddChange={(date) =>
+                  setPlacementDateRange({ from: date, to: date })
+                }
+                onAddDate={() => {
+                  if (!placementDateRange.from) return;
+                  setPlacementDates((current) =>
+                    addAdSalePlacementDate(current, placementDateRange.from),
+                  );
+                }}
+                onRemoveDate={(date) =>
+                  setPlacementDates((current) =>
+                    current.filter((candidate) => candidate !== date),
+                  )
+                }
                 onCommonTimeChange={(time) =>
                   setPlacements((current) =>
                     current.map((placement) => ({ ...placement, time })),
@@ -352,8 +411,35 @@ export function AdSaleModal(props: AdSaleModalProps) {
                 <Button variant="secondary" onClick={onClose} disabled={busy}>
                   Cancel
                 </Button>
+                {onSaveDraft ? (
+                  <Button
+                    variant="secondary"
+                    disabled={busy || savingDraft}
+                    onClick={() =>
+                      void (async () => {
+                        setSavingDraft(true);
+                        try {
+                          const id = await onSaveDraft(currentDraft, savedDraftId);
+                          setSavedDraftId(id);
+                        } finally {
+                          setSavingDraft(false);
+                        }
+                      })()
+                    }
+                  >
+                    {savingDraft ? "Saving…" : "Save draft"}
+                  </Button>
+                ) : null}
                 <Button
-                  onClick={() => void submit()}
+                  onClick={() =>
+                    void (async () => {
+                      const published = await submit();
+                      if (published && savedDraftId && onDeleteSavedDraft) {
+                        await onDeleteSavedDraft(savedDraftId);
+                        setSavedDraftId(undefined);
+                      }
+                    })()
+                  }
                   disabled={busy || !canSubmit}
                 >
                   {submissionError ? "Retry failed operations" : "Create sale"}

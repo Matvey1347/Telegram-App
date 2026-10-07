@@ -2294,6 +2294,20 @@ model TelegramAdSale {
   @@index([sourceTaskId])
 }
 
+/// A user-owned, workspace-scoped snapshot of the new-sale form. Kept separate
+/// from a Sale in DRAFT status: it has no financial or inventory side effects.
+model TelegramAdSaleDraft {
+  id              String   @id @default(cuid())
+  workspaceId     String
+  createdByUserId String
+  title           String?
+  payload         Json
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([workspaceId, createdByUserId, updatedAt])
+}
+
 model TelegramAdSalePlacement {
   id                         String                    @id @default(cuid())
   workspaceId                String

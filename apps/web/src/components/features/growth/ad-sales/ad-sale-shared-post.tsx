@@ -2,12 +2,14 @@
 
 import { useState, type Dispatch, type SetStateAction } from "react";
 import type { TelegramChannel } from "@/lib/api";
-import { Button, Tooltip } from "@/components/ui/primitives";
+import { Button, FormField, Input, Tooltip } from "@/components/ui/primitives";
 import { channelLocalDateKey } from "@/lib/features/growth/telegram-ad-sales";
 import type { SalePlacementDraft } from "./ad-sale-types";
 import { PlacementPostComposer } from "./placement-post/placement-post-composer";
 import { hasPlacementPostContent } from "./placement-post/placement-post-content";
 import { useTelegramSystemBotPostFlow } from "@/hooks/use-telegram-system-bot-post-flow";
+import { replacePromoTelegramLinksWithToken } from "../ad-campaigns/promo-invite-template";
+import type { PlacementManagedPostDraft } from "./placement-post/placement-post-composer";
 
 export function AdSaleSharedPost({
   placements,
@@ -37,6 +39,13 @@ export function AdSaleSharedPost({
   const draftHasContent = placements.every((placement) =>
     hasPlacementPostContent(placement.managedPostDraft),
   );
+  const commonInviteLink =
+    placements.length &&
+    placements.every(
+      (placement) => placement.inviteLinkUrl === placements[0]?.inviteLinkUrl,
+    )
+      ? (placements[0]?.inviteLinkUrl ?? "")
+      : "";
   const allFuture = placements.every(
     (placement) =>
       placement.date >= channelLocalDateKey(new Date(), placement.timezone),
@@ -216,6 +225,39 @@ export function AdSaleSharedPost({
               )
             }
           />
+          {draft ? (
+            <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+              <FormField label="Invite link for all channels">
+                <Input
+                  value={commonInviteLink}
+                  onChange={(event) => {
+                    const inviteLinkUrl = event.target.value;
+                    setPlacements((current) =>
+                      current.map((placement) => ({ ...placement, inviteLinkUrl })),
+                    );
+                  }}
+                  placeholder="https://t.me/+invite"
+                />
+              </FormField>
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={!hasPlacementPostContent(draft)}
+                onClick={() =>
+                  setPlacements((current) =>
+                    current.map((placement) => ({
+                      ...placement,
+                      managedPostDraft: placement.managedPostDraft
+                        ? ({ ...placement.managedPostDraft, ...replacePromoTelegramLinksWithToken(placement.managedPostDraft) } as PlacementManagedPostDraft)
+                        : placement.managedPostDraft,
+                    })),
+                  )
+                }
+              >
+                Replace links with {"{{invite_link}}"}
+              </Button>
+            </div>
+          ) : null}
         </div>
       ) : null}
     </section>
