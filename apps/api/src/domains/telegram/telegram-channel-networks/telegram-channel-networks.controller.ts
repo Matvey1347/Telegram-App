@@ -10,6 +10,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { PaginationQueryDto } from '../../../common/pagination/pagination-query.dto';
+import { TelegramChannelPerformanceHistoryQueryDto } from '../telegram-channels/telegram-channel-bounded-read.dto';
 import { CurrentUser } from '../../../common/current-user.decorator';
 import type { JwtUser } from '../../../common/current-user.decorator';
 import { JwtAuthGuard } from '../../../common/jwt-auth.guard';
@@ -30,6 +31,20 @@ export class TelegramChannelNetworksController {
   @Get(':id/summary')
   summary(@CurrentUser() user: JwtUser, @Param('id') id: string) {
     return this.service.getNetworkSummary(user.sub, id);
+  }
+
+  @Get(':id/traffic-attribution')
+  trafficAttribution(@CurrentUser() user: JwtUser, @Param('id') id: string) {
+    return this.service.trafficAttribution(user.sub, id);
+  }
+
+  @Get(':id/performance-history')
+  performanceHistory(
+    @CurrentUser() user: JwtUser,
+    @Param('id') id: string,
+    @Query() query: TelegramChannelPerformanceHistoryQueryDto,
+  ) {
+    return this.service.performanceHistory(user.sub, id, query.range);
   }
 
   @Get(':id')

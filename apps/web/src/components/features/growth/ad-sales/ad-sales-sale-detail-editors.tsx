@@ -22,6 +22,7 @@ import { accountDisplayName } from "@/lib/features/finance/account-display";
 import { toNumber } from "@/lib/features/growth/telegram-ad-sales";
 import { buildTelegramPostsUrl } from "@/lib/features/telegram/telegram-posts-url";
 import { placementTimer } from "./ad-placement-lifecycle";
+import { CurrencyAmountInput } from "@/components/ui/currency-amount-input";
 
 export type PlacementDraft = {
   id: string;
@@ -424,11 +425,12 @@ export function PaymentEditor(props: {
           }
         />
       </FormField>
-      <FormField label={`Amount (${props.payment.currency})`}>
-        <Input
+      <FormField label="Amount">
+        <CurrencyAmountInput
           aria-label={`Amount (${props.payment.currency})`}
           value={props.payment.amount}
           inputMode="decimal"
+          currency={props.payment.currency}
           onChange={(e) => props.onChange({ amount: e.target.value })}
         />
       </FormField>

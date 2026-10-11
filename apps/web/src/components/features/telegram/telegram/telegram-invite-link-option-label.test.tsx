@@ -8,6 +8,7 @@ describe("TelegramInviteLinkOptionLabel", () => {
       <TelegramInviteLinkOptionLabel
         link={{
           name: "Campaign link",
+          isPublicForChannel: true,
           isDefaultForChannel: true,
           isDefaultForMutualPromotion: true,
           isDefaultForFolders: true,
@@ -19,6 +20,7 @@ describe("TelegramInviteLinkOptionLabel", () => {
     );
     for (const label of [
       "Default",
+      "Public",
       "VP",
       "Folders",
       "Bot",

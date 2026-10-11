@@ -8,11 +8,12 @@ describe("Telegram invite-link option presentation", () => {
   it("retains purpose names for option search and accessible text", () => {
     const link = {
       name: "Imported MTProto link",
+      isPublicForChannel: true,
       isDefaultForChannel: true,
       isDefaultForBot: true,
     };
     expect(telegramInviteLinkOptionLabel(link)).toBe(
-      "Imported MTProto link · Default · Bot",
+      "Imported MTProto link · Default · Public · Bot",
     );
     expect(isTelegramInviteLink("https://t.me/+Abc_12")).toBe(true);
     expect(isTelegramInviteLink("https://example.com/+Abc_12")).toBe(false);

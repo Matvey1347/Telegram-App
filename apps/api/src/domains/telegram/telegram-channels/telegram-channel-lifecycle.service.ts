@@ -27,6 +27,78 @@ export class TelegramChannelLifecycleService {
     private readonly telegramPostGroupStore: TelegramPostGroupStore,
   ) {}
 
+  /**
+   * Campaigns select a channel's system "bot" link, rather than an arbitrary
+   * invite link.  When that system link is replaced, keep those campaign
+   * trackers on the replacement too.  Otherwise a campaign keeps polling the
+   * retired URL forever and silently reports zero requests.
+   *
+   * The replacement link starts a new counter in Telegram, so its campaign
+   * baseline is zero.  This makes every request observed on the new link part
+   * of the still-running campaign instead of discarding it as pre-campaign
+   * traffic.
+   */
+  private async retargetBotCampaignTrackingLinks(
+    tx: any,
+    workspaceId: string,
+    previousInviteLinkId: string | null | undefined,
+    nextInviteLinkId: string | null | undefined,
+  ) {
+    if (!previousInviteLinkId || !nextInviteLinkId) return;
+    if (previousInviteLinkId === nextInviteLinkId) return;
+
+    const trackers = await tx.adCampaignBotInviteLink.findMany({
+      where: {
+        inviteLinkId: previousInviteLinkId,
+        kind: 'BOT',
+        adCampaign: { workspaceId },
+      },
+      select: { id: true, adCampaignId: true },
+    });
+    if (!trackers.length) return;
+
+    const campaignIds = [
+      ...new Set(trackers.map((tracker: any) => tracker.adCampaignId)),
+    ];
+    const alreadyTrackingReplacement =
+      await tx.adCampaignBotInviteLink.findMany({
+        where: {
+          inviteLinkId: nextInviteLinkId,
+          adCampaignId: { in: campaignIds },
+        },
+        select: { adCampaignId: true },
+      });
+    const campaignIdsWithReplacement = new Set(
+      alreadyTrackingReplacement.map((tracker: any) => tracker.adCampaignId),
+    );
+    const redundantTrackerIds = trackers
+      .filter((tracker: any) =>
+        campaignIdsWithReplacement.has(tracker.adCampaignId),
+      )
+      .map((tracker: any) => tracker.id);
+    if (redundantTrackerIds.length) {
+      await tx.adCampaignBotInviteLink.deleteMany({
+        where: { id: { in: redundantTrackerIds } },
+      });
+    }
+
+    const replacementTrackerIds = trackers
+      .filter(
+        (tracker: any) => !campaignIdsWithReplacement.has(tracker.adCampaignId),
+      )
+      .map((tracker: any) => tracker.id);
+    if (replacementTrackerIds.length) {
+      await tx.adCampaignBotInviteLink.updateMany({
+        where: { id: { in: replacementTrackerIds } },
+        data: {
+          inviteLinkId: nextInviteLinkId,
+          baselineJoinedCount: 0,
+          baselineRequestedCount: 0,
+        },
+      });
+    }
+  }
+
   async create(userId: string, dto: CreateTelegramChannelDto) {
     const { workspaceId, assignedMemberId, currentMembership } =
       await this.workspaceService.resolveAssignedMemberId(
@@ -251,6 +323,14 @@ export class TelegramChannelLifecycleService {
           assignedMemberId,
         },
       });
+      if (dto.botInviteLinkId !== undefined) {
+        await this.retargetBotCampaignTrackingLinks(
+          tx,
+          workspaceId,
+          existing.botInviteLinkId,
+          dto.botInviteLinkId,
+        );
+      }
       // A CPM amount is expressed in the channel's base currency. Keep the
       // format metadata aligned when that base changes; otherwise a legacy
       // USD label can make the quote endpoint treat a UAH CPM as dollars.
@@ -372,6 +452,28 @@ export class TelegramChannelLifecycleService {
     // Same conditional mutation makes restore idempotent without a no-op write.
     if (!result.count)
       return this.telegramChannelCatalogService.findOne(userId, id);
+    return this.telegramChannelCatalogService.findOne(userId, id);
+  }
+
+  async moveToTest(userId: string, id: string) {
+    const workspaceId =
+      await this.telegramChannelsSupportService.workspace(userId);
+    await this.telegramChannelCatalogService.findOne(userId, id);
+    await this.prisma.telegramChannel.updateMany({
+      where: { id, workspaceId, archivedAt: null, isTest: false },
+      data: { isTest: true },
+    });
+    return this.telegramChannelCatalogService.findOne(userId, id);
+  }
+
+  async moveToActive(userId: string, id: string) {
+    const workspaceId =
+      await this.telegramChannelsSupportService.workspace(userId);
+    await this.telegramChannelCatalogService.findOne(userId, id);
+    await this.prisma.telegramChannel.updateMany({
+      where: { id, workspaceId, archivedAt: null, isTest: true },
+      data: { isTest: false },
+    });
     return this.telegramChannelCatalogService.findOne(userId, id);
   }
 }

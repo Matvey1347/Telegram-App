@@ -78,11 +78,6 @@ describe('AdHypothesesService', () => {
     ).resolves.toEqual({
       items: [
         expect.objectContaining({
-          id: 'system:all-channels',
-          isSystem: true,
-          campaignsCount: 0,
-        }),
-        expect.objectContaining({
           id: 'hyp-1',
           name: 'Hypothesis 1',
           campaignsCount: 0,
@@ -91,7 +86,7 @@ describe('AdHypothesesService', () => {
       pagination: {
         page: 1,
         pageSize: 20,
-        totalItems: 2,
+        totalItems: 1,
         totalPages: 1,
         hasNextPage: false,
         hasPreviousPage: false,
@@ -115,7 +110,7 @@ describe('AdHypothesesService', () => {
       },
     });
     expect(listOperation.skip).toBe(0);
-    expect(listOperation.take).toBe(19);
+    expect(listOperation.take).toBe(20);
     expect(listOperation.select).not.toHaveProperty('createdByUser');
     expect(JSON.stringify(listOperation.select)).toContain('"adCampaign"');
     expect(JSON.stringify(listOperation.select)).not.toContain(
@@ -131,7 +126,7 @@ describe('AdHypothesesService', () => {
     });
   });
 
-  it('builds system hypotheses for active channels and their networks', async () => {
+  it('shows system hypotheses only for scopes that contain campaigns', async () => {
     findMany.mockResolvedValue([]);
     count.mockResolvedValue(0);
     const channel = {
@@ -164,7 +159,32 @@ describe('AdHypothesesService', () => {
         channels: [{ telegramChannelId: channel.id }],
       },
     ]);
-    campaignFindMany.mockResolvedValue([]);
+    campaignFindMany.mockResolvedValue([
+      {
+        id: 'campaign-1',
+        telegramChannelId: channel.id,
+        title: 'Campaign 1',
+        status: 'active',
+        currency: 'USD',
+        price: 10,
+        priceInPrimaryCurrency: 10,
+        joinedCount: 1,
+        newSubscribers: 1,
+        leftCount: 0,
+        sourcePostViews: null,
+        activeSubscribersFromAd: null,
+        activeCpa: null,
+        activeRate: null,
+        retention7d: null,
+        overallStatus: null,
+        analyticsLastCalculatedAt: null,
+        excludeFromAnalytics: false,
+        telegramChannel: channel,
+        inviteLinks: [],
+        advertisingTelegramChannels: [],
+        advertisingChannels: [],
+      },
+    ]);
 
     const result = await service.list('user-1', { page: 1, pageSize: 20 });
 

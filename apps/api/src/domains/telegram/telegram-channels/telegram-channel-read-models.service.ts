@@ -39,6 +39,7 @@ export class TelegramChannelReadModelsService {
       userId,
       channelId,
     )) as {
+      publicInviteLinkId?: string | null;
       defaultInviteLinkId?: string | null;
       botInviteLinkId?: string | null;
       broadcastInviteLinkId?: string | null;
@@ -74,6 +75,7 @@ export class TelegramChannelReadModelsService {
     return createPaginatedResponse(
       items.map((link) => ({
         ...link,
+        isPublicForChannel: link.id === channel.publicInviteLinkId,
         isDefaultForChannel: link.id === channel.defaultInviteLinkId,
         isDefaultForBot: link.id === channel.botInviteLinkId,
         isDefaultForBroadcast: link.id === channel.broadcastInviteLinkId,
@@ -109,6 +111,7 @@ export class TelegramChannelReadModelsService {
       userId,
       channelId,
     )) as {
+      publicInviteLinkId?: string | null;
       defaultInviteLinkId?: string | null;
       botInviteLinkId?: string | null;
       broadcastInviteLinkId?: string | null;
@@ -130,6 +133,7 @@ export class TelegramChannelReadModelsService {
           ...(query.selectedIds ?? []),
           ...(query['selectedIds[]'] ?? []),
           query.selectedId,
+          channel.publicInviteLinkId,
           channel.defaultInviteLinkId,
           channel.botInviteLinkId,
           channel.broadcastInviteLinkId,
@@ -185,6 +189,7 @@ export class TelegramChannelReadModelsService {
     // unnecessarily expensive for channels with many invite links.
     return hydratedLinks.map((link) => ({
       ...link,
+      isPublicForChannel: link.id === channel.publicInviteLinkId,
       isDefaultForChannel: link.id === channel.defaultInviteLinkId,
       isDefaultForBot: link.id === channel.botInviteLinkId,
       isDefaultForBroadcast: link.id === channel.broadcastInviteLinkId,

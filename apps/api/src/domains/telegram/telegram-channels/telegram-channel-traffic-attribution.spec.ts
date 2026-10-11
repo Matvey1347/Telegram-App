@@ -81,6 +81,69 @@ describe('telegram channel traffic attribution', () => {
     );
   });
 
+  it('keeps unattributed channel churn in the lost total', () => {
+    const summary = summarizeTrafficAttribution(
+      [
+        {
+          id: 'other-churn',
+          kind: 'OTHER',
+          title: 'Unattributed channel churn',
+          subtitle: null,
+          avatarUrl: null,
+          inviteLinkIds: [],
+          inviteLinks: [],
+          startsAt: '2026-09-10T00:00:00.000Z',
+          endsAt: '2026-10-10T00:00:00.000Z',
+          ...trafficAttributionMetrics({
+            acquired: 0,
+            retained: 0,
+            unsubscribed: 313,
+            currency: 'UAH',
+          }),
+        },
+      ],
+      'UAH',
+    );
+
+    expect(summary).toMatchObject({
+      acquired: 0,
+      retained: 0,
+      unsubscribed: 313,
+    });
+    expect(summary.sources).toEqual([
+      expect.objectContaining({ kind: 'OTHER', unsubscribed: 313 }),
+    ]);
+  });
+
+  it('exposes the actual attribution interval instead of a UI-only date', () => {
+    const summary = summarizeTrafficAttribution(
+      [
+        {
+          id: 'source-1',
+          kind: 'BOT',
+          title: 'Bot',
+          subtitle: null,
+          avatarUrl: null,
+          inviteLinkIds: ['link-1'],
+          inviteLinks: [],
+          startsAt: '2026-09-20T00:00:00.000Z',
+          endsAt: null,
+          ...trafficAttributionMetrics({
+            acquired: 10,
+            retained: 9,
+            currency: 'UAH',
+          }),
+        },
+      ],
+      'UAH',
+    );
+
+    expect(summary.attributionPeriod).toEqual({
+      startsAt: '2026-09-20T00:00:00.000Z',
+      endsAt: null,
+    });
+  });
+
   it('preserves the peak after an invite counter drops', () => {
     const points = buildTrafficAttributionHistoryPoints(
       [

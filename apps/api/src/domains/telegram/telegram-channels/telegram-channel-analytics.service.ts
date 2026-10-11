@@ -384,6 +384,7 @@ export class TelegramChannelAnalyticsService {
         workspaceId: channel.workspaceId,
         telegramChannelId: channel.id,
         subscribersCount: analytics.subscribersCount,
+        pendingJoinRequestsCount: channel.pendingJoinRequestsCount,
         activeSubscribersEstimate: analytics.activeSubscribersEstimate,
         viewRate: analytics.viewRate,
         avgViewsRaw: analytics.avgViewsRaw,

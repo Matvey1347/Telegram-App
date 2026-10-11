@@ -47,6 +47,11 @@ export class AdCampaignsController {
     return this.service.performanceSummary(user.sub, query);
   }
 
+  @Get('tracking/invite-links')
+  trackingInviteLinks(@CurrentUser() user: JwtUser) {
+    return this.service.trackingInviteLinks(user.sub);
+  }
+
   @Get(':id')
   findOne(@CurrentUser() user: JwtUser, @Param('id') id: string) {
     return this.service.findOne(user.sub, id);
@@ -67,6 +72,11 @@ export class AdCampaignsController {
     @Param('id') id: string,
   ) {
     return this.service.admissionViewAnalytics(user.sub, id);
+  }
+
+  @Post(':id/refresh-invite-links')
+  refreshInviteLinks(@CurrentUser() user: JwtUser, @Param('id') id: string) {
+    return this.service.refreshInviteLinkData(user.sub, id);
   }
 
   @Patch(':id/analytics-input')

@@ -204,6 +204,7 @@ export async function writeFinanceObligationImport(input: {
               financeDebtId: id,
               message: presentation.debtDue({
                 botIntegrationId: profile.botIntegrationId,
+                debtId: id,
                 debtName: row.name.trim(),
                 amount: row.amount,
                 currency: account.currency,

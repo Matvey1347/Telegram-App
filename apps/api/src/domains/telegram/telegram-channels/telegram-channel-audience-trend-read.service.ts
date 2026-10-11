@@ -12,6 +12,7 @@ type AudienceTrendRow = {
   telegramChannelId: string;
   currentAt: Date;
   currentSubscribers: number | null;
+  currentPendingJoinRequests: number | null;
   currentActiveSubscribers: number | null;
   currentViewRate: number | null;
   latestViews: number | null;
@@ -25,6 +26,7 @@ type AudienceTrendRow = {
   postsWindow: number;
   baselineAt: Date | null;
   baselineSubscribers: number | null;
+  baselinePendingJoinRequests: number | null;
 };
 
 export type TelegramChannelAudienceSnapshotPreview = {
@@ -59,7 +61,9 @@ export class TelegramChannelAudienceTrendReadService {
       return new Map<string, TelegramChannelAudienceTrendPreview>();
     }
 
-    const periodStart = startOfUtcDay(subtractUtcDays(now, periodDays - 1));
+    // Keep the same start instant as Traffic sources: for a 30-day window on
+    // Oct 10 we compare the latest point with the point from Sep 10.
+    const periodStart = startOfUtcDay(subtractUtcDays(now, periodDays));
     const requestedChannels = Prisma.join(
       channelIds.map((channelId) => Prisma.sql`(${channelId})`),
     );
@@ -71,6 +75,7 @@ export class TelegramChannelAudienceTrendReadService {
         requested."telegramChannelId",
         latest."collectedAt" AS "currentAt",
         latest."subscribersCount" AS "currentSubscribers",
+        channel."pendingJoinRequestsCount" AS "currentPendingJoinRequests",
         latest."activeSubscribersEstimate" AS "currentActiveSubscribers",
         latest."viewRate" AS "currentViewRate",
         latest."avgViewsAdjusted" AS "latestViews",
@@ -83,7 +88,8 @@ export class TelegramChannelAudienceTrendReadService {
         latest."hasSubscriberBasePollution",
         latest."postsWindow",
         baseline."collectedAt" AS "baselineAt",
-        baseline."subscribersCount" AS "baselineSubscribers"
+        baseline."subscribersCount" AS "baselineSubscribers",
+        baseline."pendingJoinRequestsCount" AS "baselinePendingJoinRequests"
       FROM requested
       JOIN "TelegramChannel" channel
         ON channel."id" = requested."telegramChannelId"
@@ -92,6 +98,8 @@ export class TelegramChannelAudienceTrendReadService {
         SELECT
           snapshot."collectedAt",
           snapshot."subscribersCount",
+          NULLIF(to_jsonb(snapshot)->>'pendingJoinRequestsCount', '')::INTEGER
+            AS "pendingJoinRequestsCount",
           snapshot."activeSubscribersEstimate",
           snapshot."viewRate",
           snapshot."avgViewsAdjusted",
@@ -113,11 +121,16 @@ export class TelegramChannelAudienceTrendReadService {
         SELECT
           snapshot."collectedAt",
           snapshot."subscribersCount",
+          NULLIF(to_jsonb(snapshot)->>'pendingJoinRequestsCount', '')::INTEGER
+            AS "pendingJoinRequestsCount",
           snapshot."avgViewsAdjusted",
           snapshot."avgReactionsAdjusted"
         FROM "TelegramChannelAudienceSnapshot" snapshot
         WHERE snapshot."workspaceId" = ${workspaceId}
           AND snapshot."telegramChannelId" = requested."telegramChannelId"
+          -- The reporting period is determined solely by when the channel was
+          -- observed. Missing historical requests are represented as unknown;
+          -- they must never move the whole period forward to today's snapshot.
           AND snapshot."collectedAt" >= ${periodStart}
           AND snapshot."collectedAt" <= ${now}
         ORDER BY snapshot."collectedAt", snapshot."id"
@@ -198,15 +211,27 @@ export class TelegramChannelAudienceTrendReadService {
       row.baselineAt && row.baselineAt.getTime() !== row.currentAt.getTime()
         ? metric(row.currentSubscribers, row.baselineSubscribers, 0)
         : null;
+    const pendingJoinRequests =
+      row.baselineAt && row.baselineAt.getTime() !== row.currentAt.getTime()
+        ? metric(
+            row.currentPendingJoinRequests,
+            // Pending-request counters were not stored in older audience
+            // snapshots. Treat that missing historical value as a zero
+            // baseline so current Total and Difference remain calculable.
+            row.baselinePendingJoinRequests ?? 0,
+            0,
+          )
+        : null;
     const reach = halfPeriodMetric(row.viewValues, 1);
     const reactions = halfPeriodMetric(row.reactionValues, 1);
-    if (!subscribers && !reach && !reactions) return null;
+    if (!subscribers && !pendingJoinRequests && !reach && !reactions)
+      return null;
 
     return {
       periodDays,
       currentAt: row.currentAt.toISOString(),
       baselineAt: (row.baselineAt ?? row.currentAt).toISOString(),
-      metrics: { subscribers, reach, reactions },
+      metrics: { subscribers, pendingJoinRequests, reach, reactions },
     };
   }
 }

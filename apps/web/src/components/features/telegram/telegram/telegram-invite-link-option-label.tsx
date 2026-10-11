@@ -4,16 +4,19 @@ import {
   ArrowRightLeft,
   Bot,
   Folder,
+  Globe,
   Handshake,
   Mail,
   Star,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import type { TelegramInviteLink } from "@/lib/api";
 
 type LinkPresentation = Pick<TelegramInviteLink, "name"> &
   Partial<
     Pick<
       TelegramInviteLink,
+      | "isPublicForChannel"
       | "isDefaultForChannel"
       | "isDefaultForBot"
       | "isDefaultForBroadcast"
@@ -24,6 +27,7 @@ type LinkPresentation = Pick<TelegramInviteLink, "name"> &
   >;
 
 const purposes = [
+  { key: "isPublicForChannel", label: "Public", Icon: Globe },
   { key: "isDefaultForChannel", label: "Default", Icon: Star },
   { key: "isDefaultForMutualPromotion", label: "VP", Icon: Handshake },
   { key: "isDefaultForFolders", label: "Folders", Icon: Folder },
@@ -36,6 +40,43 @@ const purposes = [
   { key: "isDefaultForBot", label: "Bot", Icon: Bot },
 ] as const;
 
+const purposeByTrackingKind = {
+  MAIN: purposes[1],
+  PUBLIC: purposes[0],
+  VP: purposes[2],
+  BOT: purposes[6],
+  TRANSFER: purposes[5],
+  NEWSLETTER: purposes[4],
+  FOLDERS: purposes[3],
+} as const;
+
+function InviteLinkPurposeBadge({
+  label,
+  Icon,
+}: {
+  label: string;
+  Icon: LucideIcon;
+}) {
+  return (
+    <span
+      title={label}
+      aria-label={label}
+      className="inline-flex shrink-0 items-center gap-1 rounded-full border border-sky-800/70 bg-sky-950/50 px-1.5 py-0.5 text-[11px] font-medium text-sky-300"
+    >
+      <Icon size={12} aria-hidden="true" />
+      <span className="hidden sm:inline">{label}</span>
+    </span>
+  );
+}
+
+/** The campaign form uses the same visual vocabulary as channel settings. */
+export function SystemLinkKindBadge({ kind }: { kind: string }) {
+  const purpose = purposeByTrackingKind[kind as keyof typeof purposeByTrackingKind];
+  if (!purpose) return <span>{kind}</span>;
+  const { key: _key, ...badge } = purpose;
+  return <InviteLinkPurposeBadge {...badge} />;
+}
+
 export function TelegramInviteLinkOptionLabel({
   link,
 }: {
@@ -46,16 +87,8 @@ export function TelegramInviteLinkOptionLabel({
       <span className="min-w-0 truncate">{link.name}</span>
       {purposes
         .filter(({ key }) => link[key])
-        .map(({ key, label, Icon }) => (
-          <span
-            key={key}
-            title={label}
-            aria-label={label}
-            className="inline-flex shrink-0 items-center gap-1 rounded-full border border-sky-800/70 bg-sky-950/50 px-1.5 py-0.5 text-[11px] font-medium text-sky-300"
-          >
-            <Icon size={12} aria-hidden="true" />
-            <span className="hidden sm:inline">{label}</span>
-          </span>
+        .map(({ key, ...purpose }) => (
+          <InviteLinkPurposeBadge key={key} {...purpose} />
         ))}
     </span>
   );

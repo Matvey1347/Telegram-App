@@ -20,10 +20,17 @@ export class FinanceObligationTelegramPresenter implements FinanceObligationPres
       undefined,
       'debts',
     );
+    const settlementUrl = webAppUrl
+      ? (() => {
+          const url = new URL(webAppUrl);
+          url.searchParams.set('debtId', input.debtId);
+          return url.toString();
+        })()
+      : null;
     return {
       text: copy.debtDue(input.debtName, input.amount, input.currency),
-      ...(webAppUrl
-        ? { inlineButtons: [[{ text: copy.openDebts, webAppUrl }]] }
+      ...(settlementUrl
+        ? { inlineButtons: [[{ text: copy.openDebts, webAppUrl: settlementUrl }]] }
         : {}),
     };
   }
@@ -39,7 +46,7 @@ export class FinanceObligationTelegramPresenter implements FinanceObligationPres
       undefined,
       'regular-payments',
     );
-    const changeAmountUrl = regularPaymentsUrl
+    const confirmationUrl = regularPaymentsUrl
       ? (() => {
           const url = new URL(regularPaymentsUrl);
           url.searchParams.set('regularPaymentId', input.regularPaymentId);
@@ -57,14 +64,16 @@ export class FinanceObligationTelegramPresenter implements FinanceObligationPres
         [
           {
             text: copy.confirm,
-            callbackData: financeRegularPaymentConfirmCallback(
-              input.regularPaymentId,
-              input.expectedOccurrenceAt,
-              input.configVersion,
-            ),
+            ...(confirmationUrl ? { webAppUrl: confirmationUrl } : {
+              callbackData: financeRegularPaymentConfirmCallback(
+                input.regularPaymentId,
+                input.expectedOccurrenceAt,
+                input.configVersion,
+              ),
+            }),
           },
-          ...(changeAmountUrl
-            ? [{ text: copy.changeAmount, webAppUrl: changeAmountUrl }]
+          ...(confirmationUrl
+            ? [{ text: copy.changeAmount, webAppUrl: confirmationUrl }]
             : []),
         ],
         ...(regularPaymentsUrl

@@ -77,10 +77,20 @@ export class CreateAdCampaignDto {
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
+  botInviteLinkIds?: string[];
+  @IsOptional() @IsString() trackingLinkKind?: string;
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  trackingChannelIds?: string[];
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
   advertisingChannelIds?: string[];
-  @Type(() => Number) @IsNumber() @Min(0.000001) price!: number;
-  @IsString() accountId!: string;
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(0.000001) price?: number;
+  @IsOptional() @IsString() accountId?: string;
   @IsOptional() @IsString() date?: string;
+  @IsOptional() @IsDateString() endedAt?: string | null;
   @IsOptional() @IsString() notes?: string;
   @IsOptional()
   @Type(() => Number)
@@ -146,10 +156,20 @@ export class UpdateAdCampaignDto {
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
+  botInviteLinkIds?: string[];
+  @IsOptional() @IsString() trackingLinkKind?: string;
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  trackingChannelIds?: string[];
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
   advertisingChannelIds?: string[];
   @IsOptional() @Type(() => Number) @IsNumber() @Min(0.000001) price?: number;
   @IsOptional() @IsString() accountId?: string;
   @IsOptional() @IsString() date?: string;
+  @IsOptional() @IsDateString() endedAt?: string | null;
   @IsOptional() @IsString() notes?: string;
   @IsOptional()
   @Type(() => Number)

@@ -29,9 +29,9 @@ describe('Finance obligation Telegram presentation', () => {
       locale: 'uk',
     });
     expect(message.text).toContain('Час регулярного платежу');
-    expect(message.inlineButtons?.[0]?.[0]).toMatchObject({
-      callbackData: callback,
-    });
+    expect(message.inlineButtons?.[0]?.[0]?.webAppUrl).toContain(
+      'screen=regular-payments',
+    );
     expect(message.inlineButtons?.[0]?.[1]?.webAppUrl).toContain(
       'screen=regular-payments',
     );
@@ -51,6 +51,7 @@ describe('Finance obligation Telegram presentation', () => {
     (locale) => {
       const message = new FinanceObligationTelegramPresenter().debtDue({
         botIntegrationId: 'bot-1',
+        debtId: 'debt-1',
         debtName: 'Alex',
         amount: '50',
         currency: 'EUR',
@@ -59,6 +60,9 @@ describe('Finance obligation Telegram presentation', () => {
       expect(message.text).toContain('Alex');
       expect(message.inlineButtons?.[0]?.[0]?.webAppUrl).toContain(
         'screen=debts',
+      );
+      expect(message.inlineButtons?.[0]?.[0]?.webAppUrl).toContain(
+        'debtId=debt-1',
       );
     },
   );

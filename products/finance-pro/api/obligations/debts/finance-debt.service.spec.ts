@@ -188,6 +188,9 @@ describe('FinanceDebtService', () => {
 
   it('creates a profile-scoped debt with server-derived currency and one atomic delivery', async () => {
     const row = debtRow();
+    const linked = debtRow({ originTransactionId: 'debt-transaction' });
+    const rates = { resolve: jest.fn() };
+    const writeContext = { accounts: new Map(), categories: new Map(), rates };
     const tx = {
       financeProfile: {
         findUnique: jest.fn().mockResolvedValue(obligationProfile()),
@@ -197,9 +200,30 @@ describe('FinanceDebtService', () => {
           .fn()
           .mockResolvedValue({ id: account.id, currency: 'EUR' }),
       },
-      financeDebt: { create: jest.fn().mockResolvedValue(row) },
+      financeDebt: {
+        create: jest.fn().mockResolvedValue(row),
+        update: jest.fn().mockResolvedValue(linked),
+      },
     };
-    const prisma = { $transaction: jest.fn((callback) => callback(tx)) };
+    const prisma = {
+      financeAccount: {
+        findFirst: jest.fn().mockResolvedValue({ id: account.id, currency: 'EUR' }),
+      },
+      $transaction: jest.fn((callback) => callback(tx)),
+    };
+    const ledger = {
+      profileContext: jest.fn().mockResolvedValue({
+        id: 'profile-1',
+        defaultCurrency: 'EUR',
+        timezone: 'UTC',
+        workspaceId: 'workspace-1',
+      }),
+      prepareTransactionRateSource: jest.fn().mockResolvedValue(rates),
+      prepareTransactionWriteContext: jest.fn().mockResolvedValue(writeContext),
+      createTransactionInTransaction: jest.fn().mockResolvedValue({
+        id: 'debt-transaction',
+      }),
+    };
     const delivery = {
       enqueueInTransaction: jest
         .fn()
@@ -212,7 +236,7 @@ describe('FinanceDebtService', () => {
     };
     const service = new FinanceDebtService(
       prisma as never,
-      {} as never,
+      ledger as never,
       delivery as never,
       presentation as never,
     );
@@ -241,6 +265,25 @@ describe('FinanceDebtService', () => {
         }),
       }),
     );
+    expect(ledger.createTransactionInTransaction).toHaveBeenCalledWith(
+      tx,
+      expect.anything(),
+      expect.objectContaining({
+        type: 'INCOME',
+        amount: '50',
+        economicAmount: '0',
+      }),
+      'MINI_APP',
+      undefined,
+      writeContext,
+      expect.objectContaining({ purpose: 'PASS_THROUGH' }),
+    );
+    expect(tx.financeDebt.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'debt-1' },
+        data: { originTransactionId: 'debt-transaction' },
+      }),
+    );
     expect(delivery.enqueueInTransaction).toHaveBeenCalledWith(
       tx,
       expect.objectContaining({ financeDebtId: 'debt-1' }),
@@ -265,7 +308,10 @@ describe('FinanceDebtService', () => {
           .mockResolvedValue({ id: account.id, currency: 'EUR' }),
       },
     };
-    const prisma = { $transaction: jest.fn((callback) => callback(tx)) };
+    const prisma = {
+      financeAccount: { findFirst: jest.fn().mockResolvedValue(null) },
+      $transaction: jest.fn((callback) => callback(tx)),
+    };
     const delivery = {
       enqueueInTransaction: jest.fn(),
       cancelPendingInTransaction: jest.fn(),
@@ -567,7 +613,10 @@ describe('FinanceDebtService', () => {
       },
       financeAccount: { findFirst: jest.fn().mockResolvedValue(null) },
     };
-    const prisma = { $transaction: jest.fn((callback) => callback(tx)) };
+    const prisma = {
+      financeAccount: { findFirst: jest.fn().mockResolvedValue(null) },
+      $transaction: jest.fn((callback) => callback(tx)),
+    };
     await expect(
       new FinanceDebtService(
         prisma as never,
@@ -576,7 +625,7 @@ describe('FinanceDebtService', () => {
         {} as never,
       ).create('profile-1', inputDebt()),
     ).rejects.toThrow('Finance account not found');
-    expect(tx.financeAccount.findFirst).toHaveBeenCalledWith(
+    expect(prisma.financeAccount.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({ profileId: 'profile-1' }),
       }),

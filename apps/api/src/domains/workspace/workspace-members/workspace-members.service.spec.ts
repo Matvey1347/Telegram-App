@@ -1,5 +1,6 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { WorkspaceRole } from '@prisma/client';
+import * as bcrypt from 'bcrypt';
 import { WorkspaceMembersService } from './workspace-members.service';
 
 describe('WorkspaceMembersService create identity', () => {
@@ -19,6 +20,9 @@ describe('WorkspaceMembersService create identity', () => {
     },
   ) => {
     const tx = {
+      user: {
+        update: jest.fn(),
+      },
       workspaceMember: {
         create: jest.fn().mockResolvedValue(member),
         findFirst: jest.fn().mockResolvedValue(null),
@@ -49,6 +53,7 @@ describe('WorkspaceMembersService create identity', () => {
         findFirst: jest.fn().mockResolvedValue(roleDefinition),
       },
       workspaceMember: {
+        count: jest.fn().mockResolvedValue(1),
         findUnique: jest.fn().mockResolvedValue(null),
         findMany: jest.fn().mockResolvedValue([]),
       },
@@ -102,6 +107,56 @@ describe('WorkspaceMembersService create identity', () => {
     expect(tx.workspaceMember.findUniqueOrThrow).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: 'member-1' } }),
     );
+  });
+
+  it('sets a supplied password for an existing account with no workspace memberships', async () => {
+    const { service, prisma, tx } = setup([]);
+    prisma.workspaceMember.count.mockResolvedValue(0);
+
+    await service.create('owner-user', {
+      email: 'new@example.com',
+      password: 'member-password',
+    });
+
+    const passwordHash = tx.user.update.mock.calls[0]?.[0]?.data.passwordHash;
+    expect(await bcrypt.compare('member-password', passwordHash)).toBe(true);
+    expect(tx.user.update).toHaveBeenCalledWith({
+      where: { id: 'new-user' },
+      data: {
+        passwordHash,
+        authVersion: { increment: 1 },
+      },
+    });
+  });
+
+  it('returns a generated password for an existing account with no workspace memberships', async () => {
+    const { service, prisma, tx } = setup([]);
+    prisma.workspaceMember.count.mockResolvedValue(0);
+
+    const result = await service.create('owner-user', {
+      email: 'new@example.com',
+    });
+
+    expect(result.temporaryPassword).toEqual(expect.any(String));
+    expect(result.temporaryPassword).toHaveLength(16);
+    const passwordHash = tx.user.update.mock.calls[0]?.[0]?.data.passwordHash;
+    expect(
+      await bcrypt.compare(result.temporaryPassword!, passwordHash),
+    ).toBe(true);
+  });
+
+  it('does not let a workspace invitation replace an existing account password', async () => {
+    const { service, tx } = setup([]);
+
+    await expect(
+      service.create('owner-user', {
+        email: 'new@example.com',
+        password: 'member-password',
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(tx.user.update).not.toHaveBeenCalled();
+    expect(tx.workspaceMember.create).not.toHaveBeenCalled();
   });
 
   it('does not rewrite unresolved invite links when their attribution is unchanged', async () => {

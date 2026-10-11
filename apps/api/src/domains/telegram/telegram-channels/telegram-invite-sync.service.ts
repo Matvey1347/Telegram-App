@@ -220,7 +220,7 @@ export class TelegramInviteSyncService {
         (sum, link) => sum + Math.max(0, Number(link.requested) || 0),
         0,
       );
-      await this.prisma.telegramChannel.updateMany({
+      const pendingRequestsUpdate = await this.prisma.telegramChannel.updateMany({
         where: {
           id: params.channelId,
           workspaceId: params.workspaceId,
@@ -228,6 +228,15 @@ export class TelegramInviteSyncService {
         },
         data: { pendingJoinRequestsCount },
       });
+      // Store a comparable audience point only when the pending-request value
+      // actually changed; this keeps the rolling request delta useful without
+      // creating idle snapshots on every invite-link sync.
+      if ((pendingRequestsUpdate?.count ?? 0) > 0) {
+        await this.telegramChannelsSupportService.createAudienceSnapshotSafely(
+          params.channelId,
+          'invite-links',
+        );
+      }
     }
     await this.sourceAccessService.recordDataSource({
       workspaceId: params.workspaceId,

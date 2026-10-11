@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   useInfiniteQuery,
   useMutation,
+  useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
 import { Pencil } from "lucide-react";
@@ -34,15 +35,20 @@ import { reconcileConsumerTransactionCaches } from "@finance-pro/web/lib/cache/c
 import { formatMoney } from "@finance-pro/web/lib/formatters/consumer-finance-money";
 import { financeIntlLocale, type FinanceLocale } from "@finance-pro/web/components/i18n/core";
 import { financeDebtsCopy } from "@finance-pro/web/components/i18n/debts";
+import type { ConsumerFinanceDebtTarget } from "@finance-pro/web/components/app/consumer-finance-navigation";
 
 export function FinanceDebts({
   botId,
   locale,
   timezone,
+  target = null,
+  targetMalformed = false,
 }: {
   botId: string;
   locale: FinanceLocale;
   timezone: string;
+  target?: ConsumerFinanceDebtTarget | null;
+  targetMalformed?: boolean;
 }) {
   const t = financeDebtsCopy(locale);
   const client = useQueryClient();
@@ -52,6 +58,18 @@ export function FinanceDebts({
   );
   const [creating, setCreating] = useState(false);
   const [settling, setSettling] = useState<ConsumerFinanceDebt | null>(null);
+  const [dismissedTargetId, setDismissedTargetId] = useState<string | null>(null);
+  const targetedDebt = useQuery({
+    queryKey: consumerFinanceKeys.debts(botId, { id: target?.debtId, limit: 1 }),
+    queryFn: () => consumerFinanceObligationsApi.debts(botId, { id: target?.debtId, limit: 1 }),
+    enabled: Boolean(target?.debtId),
+  });
+  useEffect(() => {
+    const debt = targetedDebt.data?.items[0];
+    if (debt?.status === "OPEN" && !settling && dismissedTargetId !== debt.id) {
+      setSettling(debt);
+    }
+  }, [dismissedTargetId, settling, targetedDebt.data]);
   const debts = useInfiniteQuery({
     queryKey: consumerFinanceKeys.debts(botId, { status, limit: 30 }),
     initialPageParam: undefined as string | undefined,
@@ -143,6 +161,9 @@ export function FinanceDebts({
           text={status === "OPEN" ? t.noOpenDebts : t.noSettledDebts}
         />
       )}
+      {targetMalformed || (target && targetedDebt.isSuccess && !targetedDebt.data.items[0]) ? (
+        <ErrorState text={t.debtLoadError} />
+      ) : null}
       {debts.hasNextPage ? (
         <Button
           className="w-full"
@@ -184,11 +205,14 @@ export function FinanceDebts({
           key={settling.id}
           debt={settling}
           locale={locale}
-          onClose={() => setSettling(null)}
+          onClose={() => {
+            if (target?.debtId === settling.id) setDismissedTargetId(settling.id);
+            setSettling(null);
+          }}
           botId={botId}
-          onCreate={(accountId, amount, settlementDate) =>
+          onCreate={(debt, accountId, amount, settlementDate) =>
             settle.mutateAsync({
-              debt: settling,
+              debt,
               accountId,
               amount,
               settlementDate,

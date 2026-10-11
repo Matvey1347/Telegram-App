@@ -8,6 +8,7 @@ import type {
 } from '@telegram-system/shared';
 import { CurrencyConversionService } from '../../../common/currency-conversion.service';
 import { TelegramChannelsSupportService } from './telegram-channels-support.service';
+import { TelegramChannelAudienceTrendReadService } from './telegram-channel-audience-trend-read.service';
 import {
   TelegramChannelTrafficAttributionReadService,
   type TrafficAttributionChannelSettings,
@@ -18,6 +19,10 @@ import {
   summarizeTrafficAttribution,
   trafficAttributionMetrics,
 } from './telegram-channel-traffic-attribution';
+import {
+  aggregateTrafficAttributionPreviews,
+  unattributedTrafficHistoryPoints,
+} from './telegram-channel-traffic-attribution-preview';
 
 type PreparedAttribution = {
   previews: Map<string, TelegramChannelTrafficAttributionPreview>;
@@ -25,6 +30,17 @@ type PreparedAttribution = {
   linksByChannel: Map<string, TrafficAttributionInviteLinkRow[]>;
   linkKinds: Map<string, TelegramChannelTrafficSourceKind>;
   currency: string;
+};
+
+type TrafficAttributionSummaryOptions = {
+  windowDays?: number;
+  now?: Date;
+  /**
+   * The card's audience read is the authority for total subscriber movement.
+   * Passing it here lets source attribution reconcile without another snapshot
+   * query for every catalog/network request.
+   */
+  channelDropByChannel?: Map<string, number | null | undefined>;
 };
 
 function unique(values: Array<string | null | undefined>) {
@@ -49,13 +65,24 @@ export class TelegramChannelTrafficAttributionService {
     private readonly reads: TelegramChannelTrafficAttributionReadService,
     private readonly support: TelegramChannelsSupportService,
     private readonly currencyConversion: CurrencyConversionService,
+    private readonly audienceTrendReads: TelegramChannelAudienceTrendReadService,
   ) {}
 
   async summariesForChannels(
     workspaceId: string,
     channelIds: string[],
+    options?: TrafficAttributionSummaryOptions,
   ): Promise<Map<string, TelegramChannelTrafficAttributionPreview>> {
-    return (await this.prepare(workspaceId, channelIds)).previews;
+    const prepared = await this.prepare(workspaceId, channelIds);
+    const windowDays = options?.windowDays;
+    if (!windowDays || windowDays <= 0) return prepared.previews;
+    return this.rollingWindowPreviews(
+      workspaceId,
+      prepared,
+      windowDays,
+      options?.now ?? new Date(),
+      undefined,
+    );
   }
 
   async detail(
@@ -71,22 +98,103 @@ export class TelegramChannelTrafficAttributionService {
       channelId,
     );
     const links = prepared.linksByChannel.get(channelId) ?? [];
-    const points = buildTrafficAttributionHistoryPoints(
-      rows,
-      links,
-      prepared.linkKinds,
-    );
-    const preview =
+    const items = [...(prepared.itemsByChannel.get(channelId) ?? [])];
+    const now = new Date();
+    let preview =
       prepared.previews.get(channelId) ??
       summarizeTrafficAttribution([], prepared.currency);
+    let subscriberMetric: { previous: number; current: number } | null = null;
+    {
+      const trend = await this.audienceTrendReads.summariesForChannels(
+        workspaceId,
+        [channelId],
+        30,
+        now,
+      );
+      const rolling = await this.rollingWindowPreviews(
+        workspaceId,
+        prepared,
+        30,
+        now,
+        undefined,
+      );
+      preview = rolling.get(channelId) ?? preview;
+      const metric = trend.get(channelId)?.trend?.metrics.subscribers;
+      subscriberMetric = metric
+        ? { previous: metric.previous, current: metric.current }
+        : null;
+    }
+    const points = [
+      ...buildTrafficAttributionHistoryPoints(
+        rows,
+        links,
+        prepared.linkKinds,
+        now,
+      ),
+      ...unattributedTrafficHistoryPoints(
+        channelId,
+        subscriberMetric?.previous ?? 0,
+        subscriberMetric?.current ?? 0,
+        now,
+      ),
+    ];
     return {
       channelId,
       ...preview,
-      items: prepared.itemsByChannel.get(channelId) ?? [],
+      items,
       points,
       historyTruncated,
       dataQualityNote:
-        'Folder totals use saved boundaries; completed mutual promotions stop at the latest counter stored before tracking ended. Generic-link drop from peak is an invite-counter estimate, not member-level churn. Reused links can make chart history predate the current source assignment.',
+        'Lost / drop is calculated only from tracked invite-link counters. Other audience shows the channel subscriber count at the start and end of the same 30-day period. Folder totals use saved boundaries; completed mutual promotions stop at the latest counter stored before tracking ended.',
+    };
+  }
+
+  async detailForChannels(
+    workspaceId: string,
+    channelIds: string[],
+    entityId: string,
+    options?: TrafficAttributionSummaryOptions,
+  ): Promise<TelegramChannelTrafficAttributionDetail> {
+    const ids = unique(channelIds);
+    const prepared = await this.prepare(workspaceId, ids);
+    const { rows, historyTruncated } =
+      await this.reads.detailSnapshotsForChannels(workspaceId, ids);
+    const items = ids.flatMap(
+      (channelId) => prepared.itemsByChannel.get(channelId) ?? [],
+    );
+    const links = ids.flatMap(
+      (channelId) => prepared.linksByChannel.get(channelId) ?? [],
+    );
+    const now = options?.now ?? new Date();
+    const windowDays = options?.windowDays ?? 30;
+    const previews = await this.rollingWindowPreviews(
+      workspaceId,
+      prepared,
+      windowDays,
+      now,
+      undefined,
+    );
+    let preview = aggregateTrafficAttributionPreviews(
+      [...previews.values()],
+      prepared.currency,
+      new Date(now.getTime() - windowDays * 24 * 60 * 60 * 1000),
+      now,
+    );
+    return {
+      channelId: entityId,
+      ...preview,
+      items,
+      points: [
+        ...buildTrafficAttributionHistoryPoints(
+          rows,
+          links,
+          prepared.linkKinds,
+          now,
+        ),
+      ],
+      historyTruncated,
+      dataQualityNote:
+        'Lost / drop is calculated only from tracked invite-link counters. Reused links can make invite-link chart history predate the current source assignment.',
     };
   }
 
@@ -421,6 +529,111 @@ export class TelegramChannelTrafficAttributionService {
     };
   }
 
+  private async rollingWindowPreviews(
+    workspaceId: string,
+    prepared: PreparedAttribution,
+    windowDays: number,
+    now: Date,
+    _channelDropByChannel?: Map<string, number | null | undefined>,
+  ) {
+    const from = new Date(now);
+    from.setUTCDate(from.getUTCDate() - windowDays);
+    const linksById = new Map(
+      [...prepared.linksByChannel.values()]
+        .flat()
+        .map((link) => [link.id, link]),
+    );
+    const snapshots = await this.reads.snapshotsForRollingWindow(
+      workspaceId,
+      [...linksById.keys()],
+      from,
+      now,
+    );
+    const snapshotsByLink = new Map<string, typeof snapshots>();
+    for (const snapshot of snapshots)
+      addToMap(snapshotsByLink, snapshot.inviteLinkId, snapshot);
+    const startsAt = from.toISOString();
+    const endsAt = now.toISOString();
+    return new Map(
+      [...prepared.previews.keys()].map((channelId) => {
+        const items = prepared.itemsByChannel.get(channelId) ?? [];
+        const windowItems: TelegramChannelTrafficAttributionItem[] =
+          items.flatMap((item) => {
+            const linkMetrics = item.inviteLinkIds
+              .map((inviteLinkId) => {
+                const rows = snapshotsByLink.get(inviteLinkId) ?? [];
+                const baseline = rows
+                  .filter((row) => row.syncedAt < from)
+                  .at(-1);
+                const currentLink = linksById.get(inviteLinkId);
+                const values = [
+                  ...rows
+                    .filter((row) => row.syncedAt >= from)
+                    .map((row) => row.joinedCount + row.requestedCount),
+                  ...(currentLink
+                    ? [currentLink.joinedCount + currentLink.requestedCount]
+                    : []),
+                ];
+                if (!values.length) return null;
+                const baselineValue = baseline
+                  ? baseline.joinedCount + baseline.requestedCount
+                  : 0;
+                const acquired = Math.max(
+                  0,
+                  Math.max(...values) - baselineValue,
+                );
+                const retained = Math.min(
+                  acquired,
+                  Math.max(0, values.at(-1)! - baselineValue),
+                );
+                return { acquired, retained };
+              })
+              .filter(
+                (value): value is { acquired: number; retained: number } =>
+                  value != null,
+              );
+            if (!linkMetrics.length) return [];
+            const startsWithinWindow =
+              item.startsAt != null && new Date(item.startsAt) >= from;
+            const acquired = linkMetrics.reduce(
+              (sum, metric) => sum + metric.acquired,
+              0,
+            );
+            const retained = linkMetrics.reduce(
+              (sum, metric) => sum + metric.retained,
+              0,
+            );
+            return [
+              {
+                ...item,
+                startsAt,
+                endsAt,
+                acquired,
+                retained,
+                unsubscribed: Math.max(0, acquired - retained),
+                spend: startsWithinWindow ? item.spend : null,
+              },
+            ];
+          });
+        const windowPreview = summarizeTrafficAttribution(
+          windowItems,
+          prepared.currency,
+        );
+        // Acquisition/drop are a rolling 30-day pulse. CPA must not move just
+        // because the reporting window moved, so retain its all-time paid base.
+        return [
+          channelId,
+          {
+            ...windowPreview,
+            allTimePaid:
+              prepared.previews.get(channelId)?.allTimePaid ??
+              windowPreview.allTimePaid,
+          },
+        ];
+      }),
+    );
+  }
+
   private linkItem(
     link: TrafficAttributionInviteLinkRow,
     kind: TelegramChannelTrafficSourceKind,
@@ -440,8 +653,32 @@ export class TelegramChannelTrafficAttributionService {
       retained,
       spend: null,
       currency,
-      startsAt: null,
+      startsAt: link.createdAt,
       endsAt: null,
+    });
+  }
+
+  private unattributedChurnItem(
+    channelId: string,
+    unsubscribed: number,
+    at: Date,
+    currency: string,
+  ) {
+    return this.item({
+      id: `unattributed:${channelId}:${at.toISOString()}`,
+      kind: 'UNATTRIBUTED',
+      title: 'Other',
+      subtitle: 'Unsubscribed without a tracked invite link',
+      linkIds: [],
+      inviteLinks: [],
+      avatarUrl: null,
+      acquired: 0,
+      retained: 0,
+      unsubscribed,
+      spend: null,
+      currency,
+      startsAt: at,
+      endsAt: at,
     });
   }
 
@@ -455,6 +692,7 @@ export class TelegramChannelTrafficAttributionService {
     avatarUrl: string | null;
     acquired: number;
     retained: number;
+    unsubscribed?: number;
     spend: number | null;
     currency: string;
     startsAt: Date | null;

@@ -172,12 +172,15 @@ export class AdSystemHypothesesService {
   ) {
     const pagination = normalizePagination(query);
     const where = buildAdHypothesisListWhere(workspaceId, query);
+    // System hypotheses are generated for scopes, not explicitly created by a
+    // user. A scope without campaigns has no hypothesis to evaluate and only
+    // obscures the real rows in the Ads view.
     const systemRows = buildSystemHypothesisRows(
       await this.load(workspaceId, query),
       query,
       summarizeCampaign,
       aggregateSummary,
-    );
+    ).filter((row) => row.summary.campaignsCount > 0);
     const visibleSystemRows = systemRows.slice(
       pagination.skip,
       pagination.skip + pagination.take,

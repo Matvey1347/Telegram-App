@@ -50,6 +50,8 @@ export class TelegramChannelsService {
   remove: TelegramChannelLifecycleService['remove'];
   archive: TelegramChannelLifecycleService['archive'];
   restore: TelegramChannelLifecycleService['restore'];
+  moveToTest: TelegramChannelLifecycleService['moveToTest'];
+  moveToActive: TelegramChannelLifecycleService['moveToActive'];
   postGroups: TelegramPostGroupsService['postGroups'];
   postGroup: TelegramPostGroupsService['postGroup'];
   createPostGroup: TelegramPostGroupsService['createPostGroup'];
@@ -173,6 +175,8 @@ export class TelegramChannelsService {
     this.remove = lifecycle.remove.bind(lifecycle);
     this.archive = lifecycle.archive.bind(lifecycle);
     this.restore = lifecycle.restore.bind(lifecycle);
+    this.moveToTest = lifecycle.moveToTest.bind(lifecycle);
+    this.moveToActive = lifecycle.moveToActive.bind(lifecycle);
     this.postGroups = groups.postGroups.bind(groups);
     this.postGroup = groups.postGroup.bind(groups);
     this.createPostGroup = groups.createPostGroup.bind(groups);

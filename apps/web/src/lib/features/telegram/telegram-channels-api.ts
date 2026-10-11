@@ -164,10 +164,19 @@ export function createTelegramChannelsApi({
       ).data,
     listPage: async (params?: PaginationParams) =>
       getPaginated<TelegramChannel>("/telegram-channels", params),
-    listWithCounts: async (archived = false, owned?: boolean) =>
+    listWithCounts: async (
+      lifecycle: "active" | "test" | "archive" = "active",
+      owned?: boolean,
+    ) =>
       (
         await api.get<TelegramChannelListResponse>("/telegram-channels", {
-          params: { archived, owned, page: 1, pageSize: 100 },
+          params: {
+            archived: lifecycle === "archive",
+            test: lifecycle === "test",
+            owned,
+            page: 1,
+            pageSize: 100,
+          },
         })
       ).data,
     list: async () =>
@@ -220,6 +229,10 @@ export function createTelegramChannelsApi({
           "/telegram-custom-emoji-packs",
         )
       ).data,
+    moveToTest: async (id: string) =>
+      (await api.post<TelegramChannel>(`/telegram-channels/${id}/for-test`)).data,
+    moveToActive: async (id: string) =>
+      (await api.post<TelegramChannel>(`/telegram-channels/${id}/activate`)).data,
     resolveCustomEmojiDocuments: (
       documentIds: string[],
       onProgress: StreamProgressHandler<{

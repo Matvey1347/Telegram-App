@@ -1,0 +1,2 @@
+ALTER TABLE "AdCampaignBotInviteLink"
+    ADD COLUMN "kind" TEXT NOT NULL DEFAULT 'BOT';

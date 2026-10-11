@@ -11,6 +11,8 @@ import {
 import { WorkspaceService } from '../../../common/workspace.service';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { TelegramChannelFinancialReadService } from '../telegram-channels/telegram-channel-financial-read.service';
+import { TelegramChannelAudienceTrendReadService } from '../telegram-channels/telegram-channel-audience-trend-read.service';
+import { TelegramChannelTrafficAttributionService } from '../telegram-channels/telegram-channel-traffic-attribution.service';
 import { CreateTelegramChannelNetworkDto } from './dto/create-telegram-channel-network.dto';
 import { UpdateTelegramChannelNetworkDto } from './dto/update-telegram-channel-network.dto';
 import { TELEGRAM_IMPORTED_SYSTEM_GROUP_ICON_IMAGE_URL } from '../telegram-channels/telegram-channels.internal';
@@ -21,6 +23,8 @@ import {
   hasMeaningfulChannelData,
   presentChannelNetwork,
 } from './telegram-channel-network-presentation';
+import { TelegramNetworkPerformanceHistoryService } from './telegram-network-performance-history.service';
+import type { TelegramChannelPerformanceHistoryRange } from '@telegram-system/shared';
 
 export const SYSTEM_ALL_NETWORK_ID = 'system-all';
 
@@ -31,12 +35,28 @@ const SYSTEM_ALL_NETWORK_ICON = {
   name: 'Telegram',
 };
 
+function channelDrops(
+  trends: Awaited<
+    ReturnType<TelegramChannelAudienceTrendReadService['summariesForChannels']>
+  >,
+) {
+  return new Map(
+    [...trends].map(([channelId, preview]) => [
+      channelId,
+      Math.max(0, -(preview.trend?.metrics.subscribers?.absoluteChange ?? 0)),
+    ]),
+  );
+}
+
 @Injectable()
 export class TelegramChannelNetworksService {
   constructor(
     private prisma: PrismaService,
     private workspaceService: WorkspaceService,
     private financialReadService: TelegramChannelFinancialReadService,
+    private audienceTrendReadService: TelegramChannelAudienceTrendReadService,
+    private trafficAttributionService: TelegramChannelTrafficAttributionService,
+    private networkPerformanceHistory: TelegramNetworkPerformanceHistoryService,
   ) {}
 
   private readonly audienceSnapshotInclude = {
@@ -140,12 +160,53 @@ export class TelegramChannelNetworksService {
         })),
         { targetCurrency: summaryCurrency },
       );
-    return presentChannelNetwork(network, audiences, financialSummaries);
+    const ids = channels.map((channel: any) => channel.id);
+    const trendNow = new Date();
+    const trends = await this.audienceTrendReadService.summariesForChannels(
+      network.workspaceId,
+      ids,
+      30,
+      trendNow,
+    );
+    const traffic = await this.trafficAttributionService.summariesForChannels(
+      network.workspaceId,
+      ids,
+      {
+        windowDays: 30,
+        now: trendNow,
+        channelDropByChannel: channelDrops(trends),
+      },
+    );
+    return presentChannelNetwork(
+      {
+        ...network,
+        channels: network.channels.map((member: any) => ({
+          ...member,
+          telegramChannel: {
+            ...member.telegramChannel,
+            audienceTrend: trends.get(member.telegramChannel.id)?.trend ?? null,
+            trafficAttribution: traffic.get(member.telegramChannel.id) ?? null,
+          },
+        })),
+      },
+      audiences,
+      financialSummaries,
+    );
   }
 
   private async enrichNetworkFromPreparation(
     network: any,
     preparation: PreparedTelegramChannelFinancialSummaries,
+    trends: Awaited<
+      ReturnType<
+        TelegramChannelAudienceTrendReadService['summariesForChannels']
+      >
+    >,
+    traffic: Awaited<
+      ReturnType<
+        TelegramChannelTrafficAttributionService['summariesForChannels']
+      >
+    >,
   ) {
     const channels = network.channels.map(
       (member: any) => member.telegramChannel,
@@ -162,7 +223,21 @@ export class TelegramChannelNetworksService {
       })),
       { targetCurrency },
     );
-    return presentChannelNetwork(network, audiences, financialSummaries);
+    return presentChannelNetwork(
+      {
+        ...network,
+        channels: network.channels.map((member: any) => ({
+          ...member,
+          telegramChannel: {
+            ...member.telegramChannel,
+            audienceTrend: trends.get(member.telegramChannel.id)?.trend ?? null,
+            trafficAttribution: traffic.get(member.telegramChannel.id) ?? null,
+          },
+        })),
+      },
+      audiences,
+      financialSummaries,
+    );
   }
 
   private async loadSystemNetworkInput(workspaceId: string) {
@@ -181,6 +256,7 @@ export class TelegramChannelNetworksService {
         id: { notIn: excludedTelegramChannelIds },
         isActive: true,
         archivedAt: null,
+        isTest: false,
         adminLinks: { some: {} },
       },
       include: { audienceSnapshots: this.audienceSnapshotInclude },
@@ -193,6 +269,16 @@ export class TelegramChannelNetworksService {
     workspaceId: string,
     input: Awaited<ReturnType<typeof this.loadSystemNetworkInput>>,
     preparation?: PreparedTelegramChannelFinancialSummaries,
+    trends?: Awaited<
+      ReturnType<
+        TelegramChannelAudienceTrendReadService['summariesForChannels']
+      >
+    >,
+    traffic?: Awaited<
+      ReturnType<
+        TelegramChannelTrafficAttributionService['summariesForChannels']
+      >
+    >,
   ) {
     const { workspace, excludedTelegramChannelIds, channels } = input;
     const audiences = channels.map(audienceFromChannel);
@@ -240,7 +326,11 @@ export class TelegramChannelNetworksService {
         createdByUserId: null,
         createdByUser: null,
         channels: eligible.map(({ channel: telegramChannel }) => ({
-          telegramChannel,
+          telegramChannel: {
+            ...telegramChannel,
+            audienceTrend: trends?.get(telegramChannel.id)?.trend ?? null,
+            trafficAttribution: traffic?.get(telegramChannel.id) ?? null,
+          },
         })),
       },
       eligible.map(({ audience }) => audience),
@@ -253,6 +343,52 @@ export class TelegramChannelNetworksService {
     return this.buildSystemNetwork(workspaceId, input);
   }
 
+  private async networkChannelIds(workspaceId: string, networkId: string) {
+    if (networkId === SYSTEM_ALL_NETWORK_ID) {
+      const input = await this.loadSystemNetworkInput(workspaceId);
+      return input.channels.map((channel) => channel.id);
+    }
+    const network = await this.prisma.telegramChannelNetwork.findFirst({
+      where: { id: networkId, workspaceId },
+      select: { channels: { select: { telegramChannelId: true } } },
+    });
+    if (!network)
+      throw new NotFoundException('Telegram channel network not found');
+    return network.channels.map((member) => member.telegramChannelId);
+  }
+
+  async trafficAttribution(userId: string, networkId: string) {
+    const workspaceId = await this.workspace(userId);
+    const channelIds = await this.networkChannelIds(workspaceId, networkId);
+    const now = new Date();
+    const trends = await this.audienceTrendReadService.summariesForChannels(
+      workspaceId,
+      channelIds,
+      30,
+      now,
+    );
+    return this.trafficAttributionService.detailForChannels(
+      workspaceId,
+      channelIds,
+      networkId,
+      { windowDays: 30, now, channelDropByChannel: channelDrops(trends) },
+    );
+  }
+
+  async performanceHistory(
+    userId: string,
+    networkId: string,
+    range?: TelegramChannelPerformanceHistoryRange,
+  ) {
+    const workspaceId = await this.workspace(userId);
+    const channelIds = await this.networkChannelIds(workspaceId, networkId);
+    return this.networkPerformanceHistory.history(
+      workspaceId,
+      channelIds,
+      range,
+    );
+  }
+
   async list(userId: string, query: { page?: number; pageSize?: number } = {}) {
     const workspaceId = await this.workspace(userId);
     const pagination = normalizePagination(query);
@@ -261,7 +397,9 @@ export class TelegramChannelNetworksService {
     const customTake = Math.max(0, pagination.take - (includeSystem ? 1 : 0));
     const [networks, totalItems, systemInput] = await Promise.all([
       this.prisma.telegramChannelNetwork.findMany({
-        where: { workspaceId },
+        // Empty system/imported network shells have no operational value and
+        // must not occupy a card in the Networks view.
+        where: { workspaceId, channels: { some: {} } },
         include: {
           icon: true,
           assignedMember: WorkspaceService.assignedMemberInclude,
@@ -281,7 +419,9 @@ export class TelegramChannelNetworksService {
         skip: customSkip,
         take: customTake,
       }),
-      this.prisma.telegramChannelNetwork.count({ where: { workspaceId } }),
+      this.prisma.telegramChannelNetwork.count({
+        where: { workspaceId, channels: { some: {} } },
+      }),
       includeSystem ? this.loadSystemNetworkInput(workspaceId) : null,
     ]);
     const channelsById = new Map<string, any>();
@@ -298,23 +438,49 @@ export class TelegramChannelNetworksService {
         workspaceId,
         [...channelsById.values()],
       );
+    const channelIds = [...channelsById.keys()];
+    const trendNow = new Date();
+    const trends = await this.audienceTrendReadService.summariesForChannels(
+      workspaceId,
+      channelIds,
+      30,
+      trendNow,
+    );
+    const traffic = await this.trafficAttributionService.summariesForChannels(
+      workspaceId,
+      channelIds,
+      {
+        windowDays: 30,
+        now: trendNow,
+        channelDropByChannel: channelDrops(trends),
+      },
+    );
     const [system, customItems] = await Promise.all([
       systemInput
         ? this.buildSystemNetwork(
             workspaceId,
             systemInput,
             financialPreparation,
+            trends,
+            traffic,
           )
         : null,
       Promise.all(
         networks.map((network) =>
-          this.enrichNetworkFromPreparation(network, financialPreparation),
+          this.enrichNetworkFromPreparation(
+            network,
+            financialPreparation,
+            trends,
+            traffic,
+          ),
         ),
       ),
     ]);
     return createPaginatedResponse(
-      system ? [system, ...customItems] : customItems,
-      totalItems + 1,
+      system && (systemInput?.channels.length ?? 0) > 0
+        ? [system, ...customItems]
+        : customItems,
+      totalItems + (system && (systemInput?.channels.length ?? 0) > 0 ? 1 : 0),
       pagination,
     );
   }
@@ -398,6 +564,7 @@ export class TelegramChannelNetworksService {
           workspaceId,
           id: { in: excludedIds },
           isActive: true,
+          isTest: false,
           archivedAt: null,
           adminLinks: { some: {} },
         },

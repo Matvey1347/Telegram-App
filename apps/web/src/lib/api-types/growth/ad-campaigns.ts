@@ -52,6 +52,16 @@ export type AdCampaignHypothesisLink = {
   hypothesis: { id: string; name: string; status: AdHypothesisStatus };
 };
 export type AdCampaignKpiStatus = "good" | "acceptable" | "bad" | "unknown";
+export type AdCampaignInviteLinkRefreshResult = {
+  campaignId: string;
+  totalLinks: number;
+  refreshedLinks: number;
+  failedLinks: Array<{
+    telegramChannelId: string;
+    url: string;
+    message: string;
+  }>;
+};
 export type AdCampaignAnalyticsInput = {
   subscribersBefore?: number | null;
   avgViewsBefore?: number | null;
@@ -185,12 +195,52 @@ export type AdCampaign = AdCampaignAnalyticsFields & {
   promoIds?: string[];
   telegramInviteLinkId?: string | null;
   inviteLinkIds?: string[];
+  botInviteLinkIds?: string[];
+  trackingLinkKind?: string;
+  trackingChannelIds?: string[];
   accountId?: string;
   telegramChannel?: TelegramChannel;
   promo?: Promo | null;
   promos?: Promo[];
   telegramInviteLink?: TelegramInviteLink | null;
   inviteLinks?: TelegramInviteLink[];
+  botInviteLinks?: Array<
+    TelegramInviteLink & {
+      telegramChannel?: Pick<TelegramChannel, "id" | "title" | "photoUrl">;
+    }
+  >;
+  botRequestPerformance?: {
+    total: number;
+    points: Array<{
+      syncedAt: string;
+      joinedCount: number;
+      requestedCount: number;
+      totalAttributed: number;
+      peakJoinedCount: number;
+      drawdownFromPeak: number;
+      drawdownPercent: number;
+    }>;
+    channels: Array<{
+      telegramChannelId: string;
+      title: string;
+      photoUrl?: string | null;
+      requests: number;
+      peak: number;
+      dropFromPeak: number;
+      dropPercent: number;
+      points: Array<{
+        syncedAt: string;
+        joinedCount: number;
+        requestedCount: number;
+        totalAttributed: number;
+        peakJoinedCount: number;
+        drawdownFromPeak: number;
+        drawdownPercent: number;
+      }>;
+    }>;
+    startsAt: string;
+    endsAt: string | null;
+  } | null;
   advertisingChannels: Array<TelegramChannel | AdvertisingChannel>;
   price: number;
   costAmount?: number;

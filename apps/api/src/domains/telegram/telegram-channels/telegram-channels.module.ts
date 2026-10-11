@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { TelegramChannelsController } from './telegram-channels.controller';
 import {
   TelegramPublicationSchedulesController,
@@ -108,7 +108,7 @@ import { TelegramChannelTrafficAttributionReadService } from './telegram-channel
 import { TelegramChannelTrafficAttributionService } from './telegram-channel-traffic-attribution.service';
 
 @Module({
-  imports: [AdCampaignsModule],
+  imports: [forwardRef(() => AdCampaignsModule)],
   controllers: [
     TelegramChannelsController,
     TelegramPublicationSchedulesController,
@@ -221,6 +221,8 @@ import { TelegramChannelTrafficAttributionService } from './telegram-channel-tra
     TelegramChannelsService,
     TelegramChannelAnalyticsService,
     TelegramChannelFinancialReadService,
+    TelegramChannelAudienceTrendReadService,
+    TelegramChannelTrafficAttributionService,
     TelegramPostCalendarPlannerService,
     TelegramManagedPostIdentityService,
     TelegramMtprotoClient,

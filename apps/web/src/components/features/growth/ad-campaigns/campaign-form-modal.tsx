@@ -8,7 +8,9 @@ import {
   accountsApi,
   advertisingChannelsApi,
   getTelegramChannelPromos,
+  workspaceMembersApi,
   type AdCampaign,
+  adCampaignsApi,
   type Promo,
 } from "@/lib/api";
 import { MemberSelect } from "@/components/features/workspace/member-select";
@@ -21,14 +23,21 @@ import {
   FormField,
   Input,
   Modal,
+  ToggleRow,
   Textarea,
 } from "@/components/ui/primitives";
 import { useWorkspaceModalDrafts } from "@/hooks/use-workspace-modal-drafts";
 import { selectedWorkspaceDraftScope } from "@/lib/workspace-modal-drafts";
+import { memberKeys } from "@/lib/query-keys";
 import {
   formatAdCampaignLocalDate as formatLocalDate,
   toAdCampaignInputDate as toInputDate,
 } from "./ad-campaign-route-state";
+import {
+  isMeaningfulCampaignDraft,
+  normalizeCampaignDraft,
+  type CampaignValues,
+} from "./campaign-form-draft";
 import {
   CampaignMultiValueSelect,
   type CampaignSelectOption,
@@ -36,37 +45,13 @@ import {
 import { CampaignInviteLinksSelect } from "./campaign-invite-links-select";
 import { accountAdCampaignSelectOption } from "./ad-campaign-view-options";
 import { AdFormSkeleton } from "./ad-form-skeleton";
+import { CurrencyAmountInput } from "@/components/ui/currency-amount-input";
+import { SystemLinkKindBadge } from "@/components/features/telegram/telegram/telegram-invite-link-option-label";
 
-export type CampaignValues = {
-  telegramChannelId: string;
-  assignedMemberId?: string | null;
-  promoIds: string[];
-  inviteLinkIds: string[];
-  advertisingChannelIds: string[];
-  price: number;
-  accountId: string;
-  date?: string;
-  customTitle?: string;
-  notes?: string;
-};
-
-export function isMeaningfulCampaignDraft(
-  draft: CampaignValues,
-  defaultDate = formatLocalDate(new Date()),
-) {
-  return Boolean(
-    draft.telegramChannelId ||
-    draft.promoIds?.length ||
-    draft.inviteLinkIds?.length ||
-    draft.advertisingChannelIds?.length ||
-    Number(draft.price) ||
-    draft.accountId ||
-    draft.customTitle?.trim() ||
-    draft.notes?.trim() ||
-    (draft.date && draft.date !== defaultDate),
-  );
-}
-type CampaignSubmission = Omit<CampaignValues, "customTitle"> & {
+type CampaignSubmission = Omit<
+  CampaignValues,
+  "customTitle" | "trackCrossChannelRequests"
+> & {
   customTitle: string | null;
 };
 type CampaignChannel = {
@@ -96,6 +81,9 @@ type CampaignInitial = Partial<AdCampaign> & {
   assignedMember?: { id?: string } | null;
   promoIds?: string[];
   inviteLinkIds?: string[];
+  botInviteLinkIds?: string[];
+  trackingLinkKind?: string;
+  trackingChannelIds?: string[];
   advertisingChannels?: CampaignSource[];
   advertisingSources?: CampaignSource[];
   advertisingChannelIds?: Array<string | CampaignSource>;
@@ -157,12 +145,23 @@ function initialValues(row?: CampaignInitial): CampaignValues {
           : row.telegramInviteLinkId
             ? [row.telegramInviteLinkId]
             : [],
+        botInviteLinkIds: Array.isArray(row.botInviteLinkIds)
+          ? row.botInviteLinkIds
+          : [],
+        trackingLinkKind: row.trackingLinkKind || "BOT",
+        trackingChannelIds: Array.isArray(row.trackingChannelIds)
+          ? row.trackingChannelIds
+          : [],
+        trackCrossChannelRequests: Boolean(
+          row.trackingChannelIds?.length || row.botInviteLinkIds?.length,
+        ),
         advertisingChannelIds: campaignSources(row)
           .map(selectionId)
           .filter(Boolean),
         price: Number(row.price ?? row.costAmount ?? 0),
         accountId: row.accountId ?? "",
         date: toInputDate(row.placementDate || row.startedAt),
+        endedAt: toInputDate(row.endedAt),
         customTitle: row.customTitleTemplate ?? "",
         notes: row.notes ?? "",
       }
@@ -171,8 +170,12 @@ function initialValues(row?: CampaignInitial): CampaignValues {
         assignedMemberId: null,
         promoIds: [],
         inviteLinkIds: [],
+        botInviteLinkIds: [],
+        trackingLinkKind: "BOT",
+        trackingChannelIds: [],
+        trackCrossChannelRequests: false,
         advertisingChannelIds: [],
-        price: 0,
+        price: undefined,
         accountId: "",
         date: formatLocalDate(new Date()),
         customTitle: "",
@@ -240,6 +243,9 @@ export function CampaignModal({
   const selectedChannelId = watch("telegramChannelId");
   const selectedPromoIds = watch("promoIds") || [];
   const selectedInviteLinkIds = watch("inviteLinkIds") || [];
+  const selectedTrackingChannelIds = watch("trackingChannelIds") || [];
+  const trackingLinkKind = watch("trackingLinkKind") || "BOT";
+  const trackCrossChannelRequests = watch("trackCrossChannelRequests") || false;
   const watchedAdChannels = watch("advertisingChannelIds");
   const selectedAdChannels = useMemo(
     () => watchedAdChannels || [],
@@ -247,6 +253,35 @@ export function CampaignModal({
   );
   const selectedDate = watch("date");
   const customTitleValue = watch("customTitle");
+  const { data: members } = useQuery({
+    queryKey: memberKeys.membersSelect(),
+    queryFn: workspaceMembersApi.select,
+    enabled: open && !loading,
+  });
+  const draftPreview = useCallback(
+    (draft: CampaignValues) => {
+      const channel = channels.find((item) => item.id === draft.telegramChannelId);
+      const member = members?.find((item) => item.id === draft.assignedMemberId);
+      const avatars = [
+        channel
+          ? { label: channel.title, imageUrl: channel.photoUrl }
+          : null,
+        member
+          ? {
+              label: member.user.name,
+              icon: member.avatarPresentation,
+            }
+          : null,
+      ].filter((avatar): avatar is NonNullable<typeof avatar> => Boolean(avatar));
+      const selected = [channel?.title, member?.user.name].filter(Boolean);
+      return {
+        title: draft.customTitle?.trim() || "Unfinished ad campaign",
+        subtitle: selected.length ? selected.join(" · ") : undefined,
+        avatars: avatars.length ? avatars : undefined,
+      };
+    },
+    [channels, members],
+  );
   const campaignDrafts = useWorkspaceModalDrafts<CampaignValues>({
     namespace: "ads:campaign:draft",
     workspaceId: selectedWorkspaceDraftScope(),
@@ -255,16 +290,17 @@ export function CampaignModal({
     enabled: !initial,
     value: watch(),
     createInitialValue: () => initialValues(),
+    normalize: normalizeCampaignDraft,
     onRestore: useCallback((draft: CampaignValues) => reset(draft), [reset]),
     isMeaningful: isMeaningfulCampaignDraft,
-    previewFor: (draft) => ({
-      title: draft.customTitle?.trim() || "Unfinished ad campaign",
-    }),
+    previewFor: draftPreview,
   });
   useEffect(() => {
     register("advertisingChannelIds");
     register("promoIds");
     register("inviteLinkIds");
+    register("botInviteLinkIds");
+    register("trackCrossChannelRequests");
   }, [register]);
   useEffect(() => {
     if (open) reset(initialValues(initial));
@@ -295,6 +331,15 @@ export function CampaignModal({
   const { data: people } = useQuery({
     queryKey: ["advertising-people"],
     queryFn: advertisingChannelsApi.list,
+    enabled: open && !loading,
+  });
+  const {
+    data: trackingInviteLinks,
+    isError: trackingInviteLinksError,
+  } = useQuery({
+    // New key deliberately avoids retaining the 404 cached by the obsolete endpoint.
+    queryKey: ["ad-campaign-tracking-invite-links-v2"],
+    queryFn: adCampaignsApi.trackingInviteLinks,
     enabled: open && !loading,
   });
   const ownChannels = useMemo(
@@ -354,7 +399,7 @@ export function CampaignModal({
     return mergeOptions(live, fallback);
   }, [channels, initial, people, selectedChannelId]);
   const setArray = (
-    name: "promoIds" | "inviteLinkIds" | "advertisingChannelIds",
+    name: "promoIds" | "inviteLinkIds" | "botInviteLinkIds" | "trackingChannelIds" | "advertisingChannelIds",
     value: string[],
   ) => setValue(name, value, { shouldValidate: true, shouldDirty: true });
 
@@ -382,14 +427,29 @@ export function CampaignModal({
           className="space-y-3"
           onSubmit={handleSubmit(async (value) => {
             try {
+              const {
+                price,
+                accountId,
+                customTitle,
+                // This only controls the form. The API receives the selected
+                // tracking links, never this presentation toggle.
+                trackCrossChannelRequests: _trackCrossChannelRequests,
+                ...campaign
+              } = value;
               await onSubmit({
-                ...value,
+                ...campaign,
                 assignedMemberId: value.assignedMemberId || null,
                 promoIds: value.promoIds || [],
                 inviteLinkIds: value.inviteLinkIds || [],
-                price: Number(value.price),
+                botInviteLinkIds: value.botInviteLinkIds || [],
+                trackingChannelIds: value.trackingChannelIds || [],
+                trackingLinkKind: value.trackingLinkKind || "BOT",
+                ...(Number.isFinite(Number(price)) && Number(price) > 0
+                  ? { price: Number(price) }
+                  : {}),
+                ...(accountId ? { accountId } : {}),
                 advertisingChannelIds: value.advertisingChannelIds || [],
-                customTitle: value.customTitle?.trim() || null,
+                customTitle: customTitle?.trim() || null,
               });
               campaignDrafts.clearCurrentDraft();
             } catch {
@@ -414,49 +474,65 @@ export function CampaignModal({
               </p>
             ) : null}
           </FormField>
-          <FormField
-            label="Own Telegram Channel"
-            required
-            error={errors.telegramChannelId ? "Required field" : undefined}
-          >
-            <CustomSelect
-              value={selectedChannelId}
-              onChange={(value) => {
-                setValue("telegramChannelId", value, {
-                  shouldValidate: true,
-                  shouldDirty: true,
-                });
-                setArray("promoIds", []);
-                setArray("inviteLinkIds", []);
-              }}
-              placeholder="Select"
-              options={ownChannels.map((channel) => ({
-                value: channel.id,
-                label: channel.title,
-                iconUrl: channel.photoUrl ?? undefined,
-                iconFallback: channel.title,
-              }))}
-            />
-          </FormField>
-          <FormField label="Member">
-            <MemberSelect
-              value={watch("assignedMemberId") ?? null}
-              onChange={(value) =>
-                setValue("assignedMemberId", value || null, {
-                  shouldDirty: true,
-                })
-              }
-              defaultToCurrent={!initial}
-            />
-          </FormField>
-          <FormField label="Promos">
-            <CampaignMultiValueSelect
-              value={selectedPromoIds}
-              onChange={(value) => setArray("promoIds", value)}
-              options={promoOptions}
-              placeholder="Select promos"
-            />
-          </FormField>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <FormField
+              label="Own Telegram Channel"
+              required
+              error={errors.telegramChannelId ? "Required field" : undefined}
+            >
+              <CustomSelect
+                value={selectedChannelId}
+                onChange={(value) => {
+                  setValue("telegramChannelId", value, {
+                    shouldValidate: true,
+                    shouldDirty: true,
+                  });
+                  setArray("promoIds", []);
+                  setArray("inviteLinkIds", []);
+                }}
+                placeholder="Select"
+                options={ownChannels.map((channel) => ({
+                  value: channel.id,
+                  label: channel.title,
+                  iconUrl: channel.photoUrl ?? undefined,
+                  iconFallback: channel.title,
+                }))}
+              />
+            </FormField>
+            <FormField label="Member">
+              <MemberSelect
+                value={watch("assignedMemberId") ?? null}
+                onChange={(value) =>
+                  setValue("assignedMemberId", value || null, {
+                    shouldDirty: true,
+                  })
+                }
+                defaultToCurrent={!initial}
+              />
+            </FormField>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <FormField label="Promos">
+              <CampaignMultiValueSelect
+                value={selectedPromoIds}
+                onChange={(value) => setArray("promoIds", value)}
+                options={promoOptions}
+                placeholder="Select promos"
+              />
+            </FormField>
+            <FormField label="Advertising Sources">
+              <CampaignMultiValueSelect
+                value={selectedAdChannels.filter(
+                  (id) =>
+                    id !== `channel:${selectedChannelId}` &&
+                    id !== selectedChannelId,
+                )}
+                onChange={(value) => setArray("advertisingChannelIds", value)}
+                options={advertisingSources}
+                placeholder="Select sources"
+              />
+            </FormField>
+          </div>
           <FormField label="Invite Links">
             <CampaignInviteLinksSelect
               channelId={selectedChannelId}
@@ -464,63 +540,110 @@ export function CampaignModal({
               value={selectedInviteLinkIds}
               initialLinks={
                 initial?.inviteLinks ||
-                (initial?.telegramInviteLink
-                  ? [initial.telegramInviteLink]
-                  : [])
+                (initial?.telegramInviteLink ? [initial.telegramInviteLink] : [])
               }
               enabled={open && !loading}
               onChange={(value) => setArray("inviteLinkIds", value)}
             />
           </FormField>
-          <FormField label="Advertising Sources">
-            <CampaignMultiValueSelect
-              value={selectedAdChannels.filter(
-                (id) =>
-                  id !== `channel:${selectedChannelId}` &&
-                  id !== selectedChannelId,
-              )}
-              onChange={(value) => setArray("advertisingChannelIds", value)}
-              options={advertisingSources}
-              placeholder="Select sources"
-            />
-          </FormField>
-          <FormField
-            label="Cost amount"
-            required
-            error={errors.price ? "Required field" : undefined}
-          >
-            <Input
-              type="number"
-              step="0.01"
-              {...register("price", { valueAsNumber: true, required: true })}
-            />
-          </FormField>
-          <FormField
-            label="Account"
-            required
-            error={errors.accountId ? "Required field" : undefined}
-          >
-            <CustomSelect
-              value={watch("accountId")}
-              onChange={(value) =>
-                setValue("accountId", value, {
-                  shouldValidate: true,
-                  shouldDirty: true,
-                })
+          <ToggleRow
+            checked={trackCrossChannelRequests}
+            onChange={(enabled) => {
+              setValue("trackCrossChannelRequests", enabled, { shouldDirty: true });
+              if (!enabled) {
+                setArray("botInviteLinkIds", []);
+                setArray("trackingChannelIds", []);
               }
-              placeholder="Select account"
-              options={(accounts || []).map(accountAdCampaignSelectOption)}
-            />
-          </FormField>
-          <FormField label="Date">
-            <DateInput
-              name="date"
-              value={selectedDate || ""}
-              onChange={(event) =>
-                setValue("date", event.target.value, { shouldDirty: true })
-              }
-            />
-          </FormField>
+            }}
+            label="Track cross-channel requests"
+            description="Measure requests to selected owned channels while this campaign is running."
+            activeTone="blue"
+          />
+          {trackCrossChannelRequests ? (
+            <div className="grid gap-3 sm:grid-cols-[180px_minmax(0,1fr)]">
+              <FormField label="System link">
+                <CustomSelect
+                  value={trackingLinkKind}
+                  onChange={(value) => {
+                    setValue("trackingLinkKind", value, { shouldDirty: true });
+                    setArray("trackingChannelIds", []);
+                  }}
+                  options={(trackingInviteLinks?.kinds || []).map((kind) => ({
+                    value: kind.kind,
+                    label: `${kind.label} · ${kind.tag}`,
+                    labelContent: <SystemLinkKindBadge kind={kind.kind} />,
+                  }))}
+                />
+              </FormField>
+              <FormField label="Destination channels">
+                <CampaignMultiValueSelect
+                  value={selectedTrackingChannelIds}
+                  onChange={(value) => setArray("trackingChannelIds", value)}
+                  placeholder="Select channels"
+                  options={(trackingInviteLinks?.kinds || [])
+                    .find((kind) => kind.kind === trackingLinkKind)
+                    ?.channels.filter((channel) => channel.id !== selectedChannelId)
+                    .map((channel) => ({
+                      value: channel.id,
+                      label: channel.title,
+                      description: "System link configured in Channel Settings",
+                      iconUrl: channel.photoUrl ?? undefined,
+                      iconFallback: channel.title,
+                      searchText: channel.title,
+                    })) || []}
+                />
+              </FormField>
+              {trackingInviteLinksError ? (
+                <p className="sm:col-span-2 text-sm text-rose-300">
+                  Could not load system links from Channel Settings. Please refresh and try again.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+          <div className="grid gap-3 sm:grid-cols-2">
+            <FormField label="Account">
+              <CustomSelect
+                value={watch("accountId")}
+                onChange={(value) =>
+                  setValue("accountId", value, {
+                    shouldValidate: true,
+                    shouldDirty: true,
+                  })
+                }
+                placeholder="Select account"
+                options={(accounts || []).map(accountAdCampaignSelectOption)}
+              />
+            </FormField>
+            <FormField label="Amount">
+              <CurrencyAmountInput
+                type="number"
+                step="0.01"
+                placeholder="Add later"
+                currency={accounts?.find((account) => account.id === watch("accountId"))?.currency}
+                {...register("price", { valueAsNumber: true })}
+              />
+            </FormField>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <FormField label="Date start">
+              <DateInput
+                name="date"
+                value={selectedDate || ""}
+                onChange={(event) =>
+                  setValue("date", event.target.value, { shouldDirty: true })
+                }
+              />
+            </FormField>
+            <FormField label="Date end">
+              <DateInput
+                name="endedAt"
+                value={watch("endedAt") || ""}
+                onChange={(event) =>
+                  setValue("endedAt", event.target.value || undefined, { shouldDirty: true })
+                }
+              />
+            </FormField>
+          </div>
           <FormField label="Notes">
             <Textarea {...register("notes")} />
           </FormField>
@@ -528,7 +651,7 @@ export function CampaignModal({
             type="hidden"
             {...register("telegramChannelId", { required: true })}
           />
-          <input type="hidden" {...register("accountId", { required: true })} />
+          <input type="hidden" {...register("accountId")} />
           <div className="flex justify-end gap-2">
             <Button variant="secondary" type="button" onClick={onClose}>
               Cancel

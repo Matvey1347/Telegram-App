@@ -7,7 +7,7 @@ import {
   type MouseEventHandler,
   type ReactNode,
 } from "react";
-import { Archive, Check, RotateCcw, Settings, Trash2 } from "lucide-react";
+import { Archive, Check, FlaskConical, RotateCcw, Settings, Trash2 } from "lucide-react";
 import type { CurrencySettings, TelegramChannel } from "@/lib/api";
 import {
   TelegramCardActionsMenu,
@@ -54,18 +54,24 @@ export function ChannelActionsMenu({
   channel,
   currencySettings,
   archived,
+  isTest,
   canArchive,
   onArchive,
   onRestore,
+  onMoveToTest,
+  onMoveToActive,
   onDelete,
   children,
 }: {
   channel: TelegramChannel;
   currencySettings?: CurrencySettings | null;
   archived: boolean;
+  isTest: boolean;
   canArchive: boolean;
   onArchive: () => void;
   onRestore: () => void;
+  onMoveToTest: () => void;
+  onMoveToActive: () => void;
   onDelete: () => void;
   children: ReactNode;
 }) {
@@ -130,11 +136,26 @@ export function ChannelActionsMenu({
               onClick={onRestore}
             />
           ) : canArchive ? (
-            <ChannelMenuAction
-              label="Archive channel"
-              icon={<Archive size={17} />}
-              onClick={onArchive}
-            />
+            <>
+              {isTest ? (
+                <ChannelMenuAction
+                  label="Move to Active"
+                  icon={<RotateCcw size={17} />}
+                  onClick={onMoveToActive}
+                />
+              ) : (
+                <ChannelMenuAction
+                  label="Move to For Test"
+                  icon={<FlaskConical size={17} />}
+                  onClick={onMoveToTest}
+                />
+              )}
+              <ChannelMenuAction
+                label="Archive channel"
+                icon={<Archive size={17} />}
+                onClick={onArchive}
+              />
+            </>
           ) : null}
           <ChannelMenuAction
             label="Delete channel"

@@ -10,6 +10,7 @@ export type TelegramInviteLink = {
   joinedCount: number;
   requestedCount: number;
   isRevoked: boolean;
+  isPublicForChannel?: boolean;
   isDefaultForChannel?: boolean;
   isDefaultForBot?: boolean;
   isDefaultForBroadcast?: boolean;
@@ -47,6 +48,7 @@ export type TelegramInviteLinkOption = Pick<
   | "creatorFirstName"
   | "creatorLastName"
   | "creatorPhotoUrl"
+  | "isPublicForChannel"
   | "isDefaultForChannel"
   | "isDefaultForBot"
   | "isDefaultForBroadcast"

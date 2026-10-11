@@ -83,51 +83,73 @@ export function moveTelegramChannelBetweenLifecycleCaches(
   queryClient: QueryClient,
   channel: TelegramChannel,
 ) {
-  const activeKey = telegramChannelKeys.list(false, true);
-  const archivedKey = telegramChannelKeys.list(true, true);
+  const activeKey = telegramChannelKeys.lifecycleList("active", true);
+  const testKey = telegramChannelKeys.lifecycleList("test", true);
+  const archivedKey = telegramChannelKeys.lifecycleList("archive", true);
   const active =
     queryClient.getQueryData<TelegramChannelListResponse>(activeKey);
+  const test = queryClient.getQueryData<TelegramChannelListResponse>(testKey);
   const archived =
     queryClient.getQueryData<TelegramChannelListResponse>(archivedKey);
-  const source = [...(active?.items ?? []), ...(archived?.items ?? [])].find(
-    (item) => item.id === channel.id,
-  );
+  const source = [
+    ...(active?.items ?? []),
+    ...(test?.items ?? []),
+    ...(archived?.items ?? []),
+  ].find((item) => item.id === channel.id);
   const moved = source ? mergeChannel(source, channel) : channel;
-  const isArchived = Boolean(channel.archivedAt);
+  const origin = active?.items.some((item) => item.id === channel.id)
+    ? "active"
+    : test?.items.some((item) => item.id === channel.id)
+      ? "test"
+      : archived?.items.some((item) => item.id === channel.id)
+        ? "archive"
+        : null;
+  const destination = channel.archivedAt
+    ? "archive"
+    : channel.isTest
+      ? "test"
+      : "active";
 
   const updateList = (
     current: TelegramChannelListResponse | undefined,
-    destination: boolean,
+    lifecycle: "active" | "test" | "archive",
   ) => {
     if (!current) return current;
-    const items = destination
+    const isDestination = lifecycle === destination;
+    const items = isDestination
       ? [moved, ...current.items.filter((item) => item.id !== channel.id)]
       : current.items.filter((item) => item.id !== channel.id);
-    const activeDelta = isArchived ? -1 : 1;
-    const archivedDelta = isArchived ? 1 : -1;
+    const hadChannel = current.items.some((item) => item.id === channel.id);
+    const delta = isDestination ? (hadChannel ? 0 : 1) : hadChannel ? -1 : 0;
+    const countDelta = (target: "active" | "test" | "archive") =>
+      (origin === target ? -1 : 0) + (destination === target ? 1 : 0);
     return {
       ...current,
       items,
       pagination: {
         ...current.pagination,
-        totalItems: Math.max(
-          0,
-          current.pagination.totalItems + (destination ? 1 : -1),
-        ),
+        totalItems: Math.max(0, current.pagination.totalItems + delta),
       },
       counts: {
-        active: Math.max(0, current.counts.active + activeDelta),
-        archived: Math.max(0, current.counts.archived + archivedDelta),
+        active:
+          Math.max(0, current.counts.active + countDelta("active")),
+        test:
+          Math.max(0, current.counts.test + countDelta("test")),
+        archived:
+          Math.max(0, current.counts.archived + countDelta("archive")),
       },
     };
   };
 
   queryClient.setQueryData<TelegramChannelListResponse>(activeKey, (current) =>
-    updateList(current, !isArchived),
+    updateList(current, "active"),
+  );
+  queryClient.setQueryData<TelegramChannelListResponse>(testKey, (current) =>
+    updateList(current, "test"),
   );
   queryClient.setQueryData<TelegramChannelListResponse>(
     archivedKey,
-    (current) => updateList(current, isArchived),
+    (current) => updateList(current, "archive"),
   );
   queryClient.setQueryData<TelegramChannel>(
     telegramChannelKeys.detail(channel.id),

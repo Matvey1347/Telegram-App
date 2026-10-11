@@ -8,6 +8,7 @@ import { Controller, useForm } from "react-hook-form";
 import { AppShell } from "@/components/layout/app-shell";
 import { sortChannelsByScale } from "@/components/features/telegram/telegram/channel-economics-summary";
 import { TelegramChannelCatalogCard } from "@/components/features/telegram/telegram/telegram-channel-catalog-card";
+import { useTelegramChannelLifecycleMutations } from "@/components/features/telegram/telegram/use-telegram-channel-lifecycle-mutations";
 import {
   ChannelSyncScopeModal,
   DEFAULT_CHANNEL_SYNC_SELECTION,
@@ -67,7 +68,6 @@ import {
   IconButton,
   Input,
   LoadingState,
-  MasonryGrid,
   Modal,
   MultiSelect,
   PageHeader,
@@ -85,7 +85,6 @@ import {
 } from "@/lib/query-keys";
 import {
   prependTelegramChannelToCaches,
-  moveTelegramChannelBetweenLifecycleCaches,
   removeTelegramChannelFromCaches,
 } from "@/lib/features/telegram/telegram-channel-cache";
 import { invalidateTelegramChannelQueries } from "@/lib/features/telegram/telegram-query-invalidation";
@@ -1150,15 +1149,12 @@ export default function TelegramChannelsPage() {
     isLoading: channelsLoading,
     error: channelsError,
   } = useQuery({
-    queryKey: telegramChannelKeys.list(
-      channelFilter === "own" && lifecycleTab === "archive",
+    queryKey: telegramChannelKeys.lifecycleList(
+      lifecycleTab,
       channelFilter === "own",
     ),
     queryFn: () =>
-      telegramChannelsApi.listWithCounts(
-        channelFilter === "own" && lifecycleTab === "archive",
-        channelFilter === "own",
-      ),
+      telegramChannelsApi.listWithCounts(lifecycleTab, channelFilter === "own"),
     enabled:
       tab === "channels" ||
       networkFormOpen ||
@@ -1181,6 +1177,11 @@ export default function TelegramChannelsPage() {
     queryKey: networkKeys.list(),
     queryFn: telegramChannelNetworksApi.list,
     enabled: tab === "networks" || messageTemplatesOpen || exportOpen,
+    // Audience/request counters are operational data. Do not rehydrate a
+    // four-minute-old persisted Network card after the user opens this tab.
+    // This is a single read on entry, not polling.
+    staleTime: 0,
+    refetchOnMount: "always",
   });
   const { data: currencySettings } = useQuery({
     queryKey: ["currency-settings"],
@@ -1354,38 +1355,12 @@ export default function TelegramChannelsPage() {
         "error",
       ),
   });
-  const archiveMutation = useMutation({
-    mutationFn: (id: string) => telegramChannelsApi.archive(id),
-    onSuccess: (channel) => {
-      moveTelegramChannelBetweenLifecycleCaches(queryClient, channel);
-      queryClient.invalidateQueries({
-        queryKey: telegramChannelKeys.selects(),
-      });
-      queryClient.invalidateQueries({ queryKey: dashboardKeys.summary() });
-      pushToast("Channel archived.", "success");
-    },
-    onError: (error: unknown) =>
-      pushToast(
-        requestErrorMessage(error, "Failed to archive channel."),
-        "error",
-      ),
-  });
-  const restoreMutation = useMutation({
-    mutationFn: (id: string) => telegramChannelsApi.restore(id),
-    onSuccess: (channel) => {
-      moveTelegramChannelBetweenLifecycleCaches(queryClient, channel);
-      queryClient.invalidateQueries({
-        queryKey: telegramChannelKeys.selects(),
-      });
-      queryClient.invalidateQueries({ queryKey: dashboardKeys.summary() });
-      pushToast("Channel restored.", "success");
-    },
-    onError: (error: unknown) =>
-      pushToast(
-        requestErrorMessage(error, "Failed to restore channel."),
-        "error",
-      ),
-  });
+  const {
+    archiveMutation,
+    restoreMutation,
+    moveToTestMutation,
+    moveToActiveMutation,
+  } = useTelegramChannelLifecycleMutations();
   const deletePersonMutation = useMutation({
     mutationFn: (id: string) => advertisingChannelsApi.remove(id),
     onSuccess: () => {
@@ -1632,27 +1607,31 @@ export default function TelegramChannelsPage() {
           </div>
           {channelFilter === "own" ? (
             <div className="mb-3 flex gap-1 border-b border-neutral-800">
-              {(["active", "archive"] as ChannelLifecycleTab[]).map((item) => (
-                <button
-                  key={item}
-                  type="button"
-                  className={`border-b-2 px-3 py-2 text-sm ${lifecycleTab === item ? "border-blue-500 text-white" : "border-transparent text-neutral-400 hover:text-white"}`}
-                  onClick={() =>
-                    updateTabs({ tab: "channels", lifecycle: item })
-                  }
-                >
-                  {item === "active"
-                    ? `Active (${channelCounts?.active ?? 0})`
-                    : `Archive (${channelCounts?.archived ?? 0})`}
-                </button>
-              ))}
+              {(["active", "test", "archive"] as ChannelLifecycleTab[]).map(
+                (item) => (
+                  <button
+                    key={item}
+                    type="button"
+                    className={`border-b-2 px-3 py-2 text-sm ${lifecycleTab === item ? "border-blue-500 text-white" : "border-transparent text-neutral-400 hover:text-white"}`}
+                    onClick={() =>
+                      updateTabs({ tab: "channels", lifecycle: item })
+                    }
+                  >
+                    {item === "active"
+                      ? `Active (${channelCounts?.active ?? 0})`
+                      : item === "test"
+                        ? `For Test (${channelCounts?.test ?? 0})`
+                        : `Archive (${channelCounts?.archived ?? 0})`}
+                  </button>
+                ),
+              )}
             </div>
           ) : null}
           {channelsInitialLoading ? <LoadingState /> : null}
           {channelsInitialError ? (
             <div className="text-red-300">Failed to load channels</div>
           ) : null}
-          <MasonryGrid>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {filteredChannels.map((channel: TelegramChannel) => (
               <TelegramChannelCatalogCard
                 key={channel.id}
@@ -1660,6 +1639,12 @@ export default function TelegramChannelsPage() {
                 currencySettings={currencySettings}
                 onRestore={(channelId) => restoreMutation.mutate(channelId)}
                 onArchive={(channelId) => archiveMutation.mutate(channelId)}
+                onMoveToTest={(channelId) =>
+                  moveToTestMutation.mutate(channelId)
+                }
+                onMoveToActive={(channelId) =>
+                  moveToActiveMutation.mutate(channelId)
+                }
                 onDelete={setDeleting}
                 onSync={(target) => {
                   setSyncTargetChannel(target);
@@ -1680,7 +1665,7 @@ export default function TelegramChannelsPage() {
                 }
               />
             ))}
-          </MasonryGrid>
+          </div>
           {!channelsInitialLoading &&
           !channelsInitialError &&
           !filteredChannels.length ? (

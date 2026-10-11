@@ -23,7 +23,7 @@ import { TelegramChannelFinancialReadService } from './telegram-channel-financia
 import { DEFAULT_TELEGRAM_CHANNEL_POST_SYNC_LIMIT } from './telegram-channel-sync-limits';
 import { TelegramSystemBotConfigService } from '../telegram-system-bot/telegram-system-bot-config.service';
 
-const CHANNEL_CARD_TREND_PERIOD_DAYS = 7;
+const CHANNEL_CARD_TREND_PERIOD_DAYS = 30;
 
 type TelegramChannelImportPolicyRow = {
   id: string;
@@ -119,6 +119,7 @@ export class TelegramChannelCatalogService {
       await this.telegramChannelsSupportService.workspace(userId);
     const pagination = normalizePagination(query);
     const archivedAt = query.archived ? { not: null } : null;
+    const isTest = query.archived ? false : query.test === true;
     const ownership =
       query.owned === true
         ? { some: {} }
@@ -129,18 +130,28 @@ export class TelegramChannelCatalogService {
       workspaceId,
       isActive: true,
       archivedAt,
+      isTest,
       adminLinks: ownership,
     };
     const activeWhere = {
       workspaceId,
       isActive: true,
       archivedAt: null,
+      isTest: false,
       adminLinks: ownership,
     };
     const archivedWhere = {
       workspaceId,
       isActive: true,
       archivedAt: { not: null },
+      isTest: false,
+      adminLinks: ownership,
+    };
+    const testWhere = {
+      workspaceId,
+      isActive: true,
+      archivedAt: null,
+      isTest: true,
       adminLinks: ownership,
     };
     const loadChannels = () =>
@@ -207,13 +218,18 @@ export class TelegramChannelCatalogService {
         this.prisma.telegramChannel.count({
           where: archivedWhere,
         }),
+        this.prisma.telegramChannel.count({
+          where: testWhere,
+        }),
       ]);
     let channels;
     let totalItems;
     let activeCount;
     let archivedCount;
+    let testCount;
     try {
-      [channels, totalItems, activeCount, archivedCount] = await loadChannels();
+      [channels, totalItems, activeCount, archivedCount, testCount] =
+        await loadChannels();
     } catch (error) {
       if (
         !this.telegramChannelSchemaCompatibilityService.isMissingTelegramChannelSyncScopeColumn(
@@ -223,23 +239,28 @@ export class TelegramChannelCatalogService {
         throw error;
       this.telegramChannelSyncScopeColumnsAvailable = false;
       await this.telegramChannelSchemaCompatibilityService.ensureTelegramChannelSyncScopeColumnsAvailable();
-      [channels, totalItems, activeCount, archivedCount] = await loadChannels();
+      [channels, totalItems, activeCount, archivedCount, testCount] =
+        await loadChannels();
     }
 
     if (!channels.length) {
       return {
         ...createPaginatedResponse([], totalItems, pagination),
-        counts: { active: activeCount, archived: archivedCount },
+        counts: {
+          active: activeCount,
+          test: testCount,
+          archived: archivedCount,
+        },
       };
     }
 
     const channelIds = channels.map((channel) => channel.id);
+    const trendNow = new Date();
     const [
       timePostsByChannel,
       financialSummaryByChannel,
       bookingSummaryByChannel,
       audienceTrendByChannel,
-      trafficAttributionByChannel,
     ] = await Promise.all([
       this.telegramChannelSchemaCompatibilityService.timePostsByChannelIds(
         channelIds,
@@ -263,12 +284,27 @@ export class TelegramChannelCatalogService {
         workspaceId,
         channelIds,
         CHANNEL_CARD_TREND_PERIOD_DAYS,
-      ),
-      this.telegramChannelTrafficAttributionService.summariesForChannels(
-        workspaceId,
-        channelIds,
+        trendNow,
       ),
     ]);
+    const trafficAttributionByChannel =
+      await this.telegramChannelTrafficAttributionService.summariesForChannels(
+        workspaceId,
+        channelIds,
+        {
+          windowDays: CHANNEL_CARD_TREND_PERIOD_DAYS,
+          now: trendNow,
+          channelDropByChannel: new Map(
+            [...audienceTrendByChannel].map(([channelId, preview]) => [
+              channelId,
+              Math.max(
+                0,
+                -(preview.trend?.metrics.subscribers?.absoluteChange ?? 0),
+              ),
+            ]),
+          ),
+        },
+      );
 
     const items = channels.map((channel) => {
       const {
@@ -332,7 +368,16 @@ export class TelegramChannelCatalogService {
         kpiLabel: '-',
       };
       const trafficAttribution = trafficAttributionByChannel.get(channel.id);
-      const channelTrafficAttribution = trafficAttribution ?? null;
+      const channelTrafficAttribution = trafficAttribution
+        ? {
+            ...trafficAttribution,
+            // The compact card and its source totals must describe the same
+            // rolling period. Do not substitute a lifetime first-observed
+            // comparison here: channels older than 30 days would otherwise
+            // show their entire history.
+            observedAudience: audienceTrendPreview?.trend ?? null,
+          }
+        : null;
 
       return {
         ...channelData,
@@ -390,7 +435,7 @@ export class TelegramChannelCatalogService {
     });
     return {
       ...createPaginatedResponse(items, totalItems, pagination),
-      counts: { active: activeCount, archived: archivedCount },
+      counts: { active: activeCount, test: testCount, archived: archivedCount },
     };
   }
 
@@ -405,6 +450,7 @@ export class TelegramChannelCatalogService {
         workspaceId,
         isActive: true,
         archivedAt: null,
+        isTest: false,
         adminLinks: query.owned === true ? { some: {} } : undefined,
       },
       select: {

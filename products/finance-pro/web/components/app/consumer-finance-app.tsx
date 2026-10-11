@@ -29,9 +29,11 @@ import {
   consumerFinanceScreenUrl,
   financeSurfaceForBootstrap,
   hasConsumerFinanceRegularPaymentTarget,
+  hasConsumerFinanceDebtTarget,
   readConsumerFinanceAccountId,
   readConsumerFinanceInvestmentId,
   readConsumerFinanceRegularPaymentTarget,
+  readConsumerFinanceDebtTarget,
   readConsumerFinanceScreen,
   type ConsumerFinanceAction,
   type ConsumerFinanceScreen,
@@ -136,6 +138,9 @@ export function ConsumerFinanceApp({ botId }: { botId: string }) {
     useState<ReturnType<typeof readConsumerFinanceRegularPaymentTarget>>(null);
   const [regularPaymentTargetMalformed, setRegularPaymentTargetMalformed] =
     useState(false);
+  const [debtTarget, setDebtTarget] =
+    useState<ReturnType<typeof readConsumerFinanceDebtTarget>>(null);
+  const [debtTargetMalformed, setDebtTargetMalformed] = useState(false);
   const profile: ConsumerFinanceProfile | undefined = session.data
     ?.authenticated
     ? session.data.profile
@@ -295,6 +300,11 @@ export function ConsumerFinanceApp({ botId }: { botId: string }) {
       setRegularPaymentTargetMalformed(
         hasConsumerFinanceRegularPaymentTarget(window.location) && !target,
       );
+      const nextDebtTarget = readConsumerFinanceDebtTarget(window.location);
+      setDebtTarget(nextDebtTarget);
+      setDebtTargetMalformed(
+        hasConsumerFinanceDebtTarget(window.location) && !nextDebtTarget,
+      );
     };
     syncLocation();
     if (surface !== "browser") return;
@@ -439,6 +449,8 @@ export function ConsumerFinanceApp({ botId }: { botId: string }) {
       }}
       regularPaymentTarget={regularPaymentTarget}
       regularPaymentTargetMalformed={regularPaymentTargetMalformed}
+      debtTarget={debtTarget}
+      debtTargetMalformed={debtTargetMalformed}
       accountId={accountId}
       onAccountEdit={openAccount}
       onAccountBack={closeAccount}

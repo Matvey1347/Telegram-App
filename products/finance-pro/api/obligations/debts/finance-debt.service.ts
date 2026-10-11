@@ -51,7 +51,11 @@ export class FinanceDebtService {
         select: { timezone: true },
       }),
       this.prisma.financeDebt.findMany({
-        where: { profileId, ...(query.status ? { status: query.status } : {}) },
+        where: {
+          profileId,
+          ...(query.id ? { id: query.id } : {}),
+          ...(query.status ? { status: query.status } : {}),
+        },
         select: financeDebtSelect,
         orderBy: [{ dueAt: 'asc' }, { id: 'asc' }],
         cursor: query.cursor ? { id: query.cursor } : undefined,
@@ -69,8 +73,19 @@ export class FinanceDebtService {
 
   async create(profileId: string, input: FinanceDebtInputDto) {
     const amount = this.amount(input.amount);
+    const name = this.name(input.name);
+    const occurredAt = new Date().toISOString();
+    const selectedAccount = await this.prisma.financeAccount.findFirst({
+      where: { id: input.accountId, profileId, archivedAt: null },
+      select: { id: true, currency: true },
+    });
+    if (!selectedAccount) throw new NotFoundException('Finance account not found');
+    const profile = await this.ledger.profileContext(profileId);
+    const rates = await this.ledger.prepareTransactionRateSource(profile, [
+      { currency: selectedAccount.currency, occurredAt },
+    ]);
     const result = await this.prisma.$transaction(async (tx) => {
-      const [profile, account] = await Promise.all([
+      const [obligationProfile, account] = await Promise.all([
         financeObligationProfile(tx, profileId),
         tx.financeAccount.findFirst({
           where: { id: input.accountId, profileId, archivedAt: null },
@@ -78,24 +93,63 @@ export class FinanceDebtService {
         }),
       ]);
       if (!account) throw new NotFoundException('Finance account not found');
-      const dueAt = financeObligationDate(input.dueDate, profile.timezone);
+      const dueAt = financeObligationDate(input.dueDate, obligationProfile.timezone);
       const debt = await tx.financeDebt.create({
         data: {
           profileId,
           accountId: account.id,
           direction: input.direction,
-          name: this.name(input.name),
+          name,
           amount,
           currency: account.currency,
           dueAt,
-          scheduleTimezone: profile.timezone,
+          scheduleTimezone: obligationProfile.timezone,
           note: this.note(input.note),
         },
         select: financeDebtSelect,
       });
-      const scheduledAt = await this.schedule(tx, profile, debt);
+      // Recording a debt is also a cash movement. It must not be represented
+      // only by the obligation, otherwise the selected account balance is
+      // wrong until settlement. These balance-only purposes keep it out of
+      // income and expense analytics while retaining the cash flow.
+      const transactionInput = {
+        accountId: account.id,
+        type:
+          input.direction === 'I_OWE'
+            ? ('INCOME' as const)
+            : ('EXPENSE' as const),
+        amount: amount.toString(),
+        economicAmount: '0',
+        description: name,
+        occurredAt,
+      };
+      const writeContext = await this.ledger.prepareTransactionWriteContext(
+        tx,
+        profileId,
+        [transactionInput],
+        rates,
+      );
+      const transaction = await this.ledger.createTransactionInTransaction(
+        tx,
+        profile,
+        transactionInput,
+        'MINI_APP',
+        undefined,
+        writeContext,
+        {
+          suppressMerchantMapping: true,
+          purpose:
+            input.direction === 'I_OWE' ? 'PASS_THROUGH' : 'DEBT_REPAYMENT',
+        },
+      );
+      const linkedDebt = await tx.financeDebt.update({
+        where: { id: debt.id },
+        data: { originTransactionId: transaction.id },
+        select: financeDebtSelect,
+      });
+      const scheduledAt = await this.schedule(tx, obligationProfile, linkedDebt);
       return {
-        value: financeDebtView(debt, profile.timezone),
+        value: financeDebtView(linkedDebt, obligationProfile.timezone),
         scheduledAt,
       };
     });
@@ -321,11 +375,16 @@ export class FinanceDebtService {
         : existing.amount;
       if (
         !settledAmount.isFinite() ||
-        !settledAmount.isPositive() ||
-        settledAmount.greaterThan(existing.amount)
+        !settledAmount.isPositive()
       )
         throw new BadRequestException('Settlement amount must not exceed debt');
-      const remainingAmount = existing.amount.minus(settledAmount);
+      // A real settlement can include a small overpayment (for example 510
+      // returned against a 500 debt). Keep the actual cash movement while
+      // never storing a negative debt balance.
+      const remainingAmount = Prisma.Decimal.max(
+        new Prisma.Decimal(0),
+        existing.amount.minus(settledAmount),
+      );
       const fullySettled = remainingAmount.isZero();
       const transactionInput = {
         accountId: settlementAccountId ?? existing.accountId,
@@ -411,6 +470,7 @@ export class FinanceDebtService {
     if (!target) return null;
     const message = this.presentation.debtDue({
       botIntegrationId: profile.botIntegrationId,
+      debtId: debt.id,
       debtName: debt.name,
       amount: debt.amount.toString(),
       currency: debt.currency,

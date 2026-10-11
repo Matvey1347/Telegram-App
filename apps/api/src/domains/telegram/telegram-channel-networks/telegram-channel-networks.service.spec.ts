@@ -39,17 +39,40 @@ function harness() {
       .fn()
       .mockResolvedValue({ build: preparedBuild }),
   };
+  const traffic = { summariesForChannels: jest.fn().mockResolvedValue(new Map()), detailForChannels: jest.fn() };
+  const networkPerformanceHistory = { history: jest.fn() };
   const service = new TelegramChannelNetworksService(
     prisma as never,
     {
       resolveWorkspaceIdForUser: jest.fn().mockResolvedValue('workspace-1'),
     } as never,
     financialRead as never,
+    { summariesForChannels: jest.fn().mockResolvedValue(new Map()) } as never,
+    traffic as never,
+    networkPerformanceHistory as never,
   );
-  return { service, prisma, tx, financialRead, preparedBuild };
+  return { service, prisma, tx, financialRead, preparedBuild, traffic, networkPerformanceHistory };
 }
 
 describe('TelegramChannelNetworksService icons', () => {
+  it('builds one aggregate traffic detail for a network instead of reading each member separately', async () => {
+    const test = harness();
+    test.prisma.telegramChannelNetwork.findFirst.mockResolvedValue({
+      channels: [{ telegramChannelId: 'channel-a' }, { telegramChannelId: 'channel-b' }],
+    });
+    test.traffic.detailForChannels.mockResolvedValue({ channelId: 'network-1' });
+
+    await expect(test.service.trafficAttribution('user-1', 'network-1')).resolves.toEqual({
+      channelId: 'network-1',
+    });
+
+    expect(test.traffic.detailForChannels).toHaveBeenCalledWith(
+      'workspace-1',
+      ['channel-a', 'channel-b'],
+      'network-1',
+    );
+  });
+
   it('stores a workspace-visible icon and returns its resolved presentation', async () => {
     const test = harness();
     test.prisma.telegramChannelNetwork.findFirst.mockResolvedValue({
@@ -319,6 +342,7 @@ describe('TelegramChannelNetworksService system All network', () => {
           id: { notIn: [] },
           isActive: true,
           archivedAt: null,
+          isTest: false,
           adminLinks: { some: {} },
         },
       }),

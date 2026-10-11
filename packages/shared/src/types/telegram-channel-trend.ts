@@ -11,6 +11,7 @@ export type TelegramChannelAudienceTrend = {
   baselineAt: string;
   metrics: {
     subscribers: TelegramChannelTrendMetric | null;
+    pendingJoinRequests?: TelegramChannelTrendMetric | null;
     reach: TelegramChannelTrendMetric | null;
     reactions: TelegramChannelTrendMetric | null;
   };

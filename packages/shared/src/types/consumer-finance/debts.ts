@@ -61,6 +61,7 @@ export type ConsumerFinanceDebtInput = {
 };
 
 export type ConsumerFinanceDebtQuery = {
+  id?: string;
   status?: ConsumerFinanceDebtStatus;
   cursor?: string;
   limit?: number;

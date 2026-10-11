@@ -6,6 +6,7 @@ import type {
   AdCampaignAnalyticsInput,
   AdCampaignAnalyticsSummary,
   AdCampaignInviteLinkHistory,
+  AdCampaignInviteLinkRefreshResult,
   AdCampaignPerformanceSummary,
   AdHypothesis,
   AdHypothesisDetail,
@@ -76,6 +77,21 @@ export function createMarketingApi({
     create: campaignCrud.create,
     update: campaignCrud.update,
     remove: campaignCrud.remove,
+    trackingInviteLinks: async () =>
+      (
+        await api.get<{
+          kinds: Array<{
+            kind: string;
+            label: string;
+            tag: string;
+            channels: Array<{
+              id: string;
+              title: string;
+              photoUrl?: string | null;
+            }>;
+          }>;
+        }>("/ad-campaigns/tracking/invite-links")
+      ).data,
     listPage: async (
       params?: PaginationParams & {
         telegramChannelId?: string;
@@ -105,6 +121,12 @@ export function createMarketingApi({
     recalculateAnalytics: async (id: string) =>
       (await api.post<AdCampaign>(`/ad-campaigns/${id}/recalculate-analytics`))
         .data,
+    refreshInviteLinkData: async (id: string) =>
+      (
+        await api.post<AdCampaignInviteLinkRefreshResult>(
+          `/ad-campaigns/${id}/refresh-invite-links`,
+        )
+      ).data,
     analyticsSummary: async (id: string) =>
       (
         await api.get<AdCampaignAnalyticsSummary>(

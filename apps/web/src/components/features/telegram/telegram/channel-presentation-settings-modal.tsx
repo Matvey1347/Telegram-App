@@ -12,7 +12,7 @@ import {
   Modal,
   Textarea,
 } from "@/components/ui/primitives";
-import { telegramChannelKeys } from "@/lib/query-keys";
+import { adCampaignKeys, telegramChannelKeys } from "@/lib/query-keys";
 import { useAppToast } from "@/providers/toast-provider";
 import type { ChannelSettingsDraft } from "./channel-settings-draft";
 import { useTelegramInviteLinkOptions } from "@/lib/features/telegram/use-telegram-invite-link-options";
@@ -129,6 +129,7 @@ export function ChannelPresentationSettingsModal({
     () =>
       linkOptions.links.map((link) => ({
         ...link,
+        isPublicForChannel: link.id === values.publicInviteLinkId,
         isDefaultForChannel: link.id === selectedInviteLinkId,
         isDefaultForBot: link.id === values.botInviteLinkId,
         isDefaultForBroadcast: link.id === values.broadcastInviteLinkId,
@@ -158,7 +159,14 @@ export function ChannelPresentationSettingsModal({
   });
   const registerAndSelect = async (
     url: string,
-    target: "default" | "public" | "folders" | "vp" | "bot" | "broadcast" | "transfer",
+    target:
+      | "default"
+      | "public"
+      | "folders"
+      | "vp"
+      | "bot"
+      | "broadcast"
+      | "transfer",
   ) => {
     const result = await registerLink.mutateAsync(url.trim());
     if (target === "default") update({ defaultInviteLinkId: result.id });
@@ -213,6 +221,9 @@ export function ChannelPresentationSettingsModal({
         queryClient.invalidateQueries({
           queryKey: telegramChannelKeys.trafficAttribution(channel.id),
         }),
+        // A campaign tracks the channel's selected system bot link.  Refetch
+        // open campaign cards immediately after that role changes.
+        queryClient.invalidateQueries({ queryKey: adCampaignKeys.list() }),
       ]);
       pushToast("Channel appearance saved", "success");
       onClose();

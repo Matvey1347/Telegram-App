@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   CartesianGrid,
@@ -30,6 +30,7 @@ const sourceColors: Record<TelegramChannelTrafficSourceKind, string> = {
   BOT: "#22d3ee",
   BROADCAST: "#f472b6",
   OTHER: "#a3a3a3",
+  UNATTRIBUTED: "#fb7185",
 };
 
 const sourceLabels: Record<TelegramChannelTrafficSourceKind, string> = {
@@ -40,6 +41,7 @@ const sourceLabels: Record<TelegramChannelTrafficSourceKind, string> = {
   BOT: "Bot",
   BROADCAST: "Broadcasts",
   OTHER: "Other links",
+  UNATTRIBUTED: "Other audience",
 };
 
 function number(value: unknown, digits = 0) {
@@ -62,15 +64,11 @@ function cpaTone(value: number | null, target: unknown) {
   return value <= targetCpa ? "text-emerald-300" : "text-rose-300";
 }
 
-function cpaHint(
-  value: number | null,
-  channel: TelegramChannel,
-  currency: string,
-) {
-  const targetCpa = Number(channel.targetCpa);
+function cpaHint(value: number | null, target: unknown, currency: string) {
+  const targetCpa = Number(target);
   if (value == null || !Number.isFinite(targetCpa) || targetCpa <= 0)
     return "Paid placement spend divided by retained new subscribers.";
-  return `Paid placement spend / retained new subscribers. KPI ≤ ${money(targetCpa, channel.kpiCurrency ?? currency)}.`;
+  return `Paid placement spend / retained new subscribers. KPI ≤ ${money(targetCpa, currency)}.`;
 }
 
 export function pivotTrafficAttributionPoints(
@@ -93,9 +91,10 @@ export function pivotTrafficAttributionPoints(
     latestByLink.set(point.inviteLinkId, point);
     const totals = new Map<TelegramChannelTrafficSourceKind, number>();
     for (const current of latestByLink.values()) {
+      const value = current.retained;
       totals.set(
         current.kind,
-        (totals.get(current.kind) ?? 0) + current.retained,
+        (totals.get(current.kind) ?? 0) + value,
       );
     }
     rows.set(date, { date, ...Object.fromEntries(totals) });
@@ -110,9 +109,45 @@ export function ChannelTrafficAttributionModal({
   channel: TelegramChannel;
   onClose: () => void;
 }) {
+  return (
+    <TrafficAttributionModal
+      title={`${channel.title} · traffic attribution`}
+      leadingHeaderAction={
+        <TelegramEntityAvatar
+          imageUrl={channel.photoUrl}
+          kind="channel"
+          alt={channel.title}
+          size="sm"
+        />
+      }
+      queryKey={telegramChannelKeys.trafficAttribution(channel.id)}
+      queryFn={() => telegramChannelsApi.trafficAttribution(channel.id)}
+      targetCpa={channel.targetCpa}
+      onClose={onClose}
+    />
+  );
+}
+
+export function TrafficAttributionModal({
+  title,
+  leadingHeaderAction,
+  queryKey,
+  queryFn,
+  targetCpa,
+  onClose,
+}: {
+  title: string;
+  leadingHeaderAction?: ReactNode;
+  queryKey: readonly unknown[];
+  queryFn: () => Promise<
+    import("@telegram-system/shared").TelegramChannelTrafficAttributionDetail
+  >;
+  targetCpa?: unknown;
+  onClose: () => void;
+}) {
   const query = useQuery({
-    queryKey: telegramChannelKeys.trafficAttribution(channel.id),
-    queryFn: () => telegramChannelsApi.trafficAttribution(channel.id),
+    queryKey,
+    queryFn,
     staleTime: 60_000,
   });
   const [activeKind, setActiveKind] =
@@ -135,7 +170,13 @@ export function ChannelTrafficAttributionModal({
     ? [selectedLinkKind]
     : activeKind
       ? [activeKind]
-      : (query.data?.sources.map((source) => source.kind) ?? []);
+      : [
+          ...new Set(
+            query.data?.points.map((point) => point.kind) ??
+              query.data?.sources.map((source) => source.kind) ??
+              [],
+          ),
+        ];
   const selectedLink = query.data?.items
     .flatMap((item) => item.inviteLinks ?? [])
     .find((link) => link.id === selectedInviteLinkId);
@@ -148,16 +189,9 @@ export function ChannelTrafficAttributionModal({
     <Modal
       open
       onClose={onClose}
-      title={`${channel.title} · traffic attribution`}
+      title={title}
       size="xl"
-      leadingHeaderAction={
-        <TelegramEntityAvatar
-          imageUrl={channel.photoUrl}
-          kind="channel"
-          alt={channel.title}
-          size="sm"
-        />
-      }
+      leadingHeaderAction={leadingHeaderAction}
     >
       {query.isLoading ? (
         <div className="space-y-3" aria-label="Loading traffic attribution">
@@ -183,7 +217,7 @@ export function ChannelTrafficAttributionModal({
             <Metric label="Retained" value={number(query.data.retained)} />
             <Metric
               label="Unsubscribed / drop"
-              value={`${number(query.data.unsubscribed)} · ${number(query.data.unsubscribePercent, 1)}%`}
+              value={number(query.data.unsubscribed)}
               tone="text-rose-300"
             />
             <Metric
@@ -192,13 +226,10 @@ export function ChannelTrafficAttributionModal({
                 query.data.retainedSubscriberCost,
                 query.data.currency,
               )}
-              tone={cpaTone(
-                query.data.retainedSubscriberCost,
-                channel.targetCpa,
-              )}
+              tone={cpaTone(query.data.retainedSubscriberCost, targetCpa)}
               hint={cpaHint(
                 query.data.retainedSubscriberCost,
-                channel,
+                targetCpa,
                 query.data.currency,
               )}
             />
@@ -212,8 +243,10 @@ export function ChannelTrafficAttributionModal({
                     {selectedLink
                       ? `Invite link: ${selectedLink.name}`
                       : activeKind
-                        ? `${selectedSource?.label ?? sourceLabels[activeKind]} invite counters`
-                      : "Attributed invite counters by source"}
+                        ? activeKind === "UNATTRIBUTED"
+                          ? "Unattributed channel drop"
+                          : `${selectedSource?.label ?? sourceLabels[activeKind]} invite counters`
+                        : "Attributed invite counters by source"}
                   </h3>
                   {selectedLink || activeKind ? (
                     <Button
@@ -232,7 +265,9 @@ export function ChannelTrafficAttributionModal({
                   {selectedLink
                     ? "Stored counters for this invite link."
                     : activeKind
-                      ? "Stored invite-link counters for this source."
+                      ? activeKind === "UNATTRIBUTED"
+                        ? "The part of the selected-period audience drop not explained by tracked invite links."
+                        : "Stored invite-link counters for this source."
                       : "Stored invite-link counters grouped by their current source."}
                 </p>
               </div>
@@ -254,10 +289,14 @@ export function ChannelTrafficAttributionModal({
                     />
                     <ChartTooltip
                       contentStyle={{
-                        background: "#0a0a0a",
-                        border: "1px solid #404040",
+                        background: "#080808",
+                        backgroundColor: "#080808",
+                        opacity: 1,
+                        border: "1px solid #525252",
                         borderRadius: 8,
+                        boxShadow: "0 12px 30px rgba(0, 0, 0, 0.75)",
                       }}
+                      wrapperStyle={{ zIndex: 30, pointerEvents: "none" }}
                       labelStyle={{ color: "#d4d4d4" }}
                     />
                     <Legend />
@@ -348,13 +387,12 @@ export function ChannelTrafficAttributionModal({
                       +{number(selectedSource.acquired)}
                     </span>
                     <span className="text-rose-300">
-                      −{number(selectedSource.unsubscribed)} (
-                      {number(selectedSource.unsubscribePercent, 1)}%)
+                      −{number(selectedSource.unsubscribed)}
                     </span>
                     <span
                       className={cpaTone(
                         selectedSource.retainedSubscriberCost,
-                        channel.targetCpa,
+                        targetCpa,
                       )}
                     >
                       CPA{" "}
@@ -432,8 +470,7 @@ export function ChannelTrafficAttributionModal({
                             {number(item.retained)}
                           </td>
                           <td className="px-3 py-2 text-right text-rose-300">
-                            {number(item.unsubscribed)} ·{" "}
-                            {number(item.unsubscribePercent, 1)}%
+                            {number(item.unsubscribed)}
                           </td>
                           <td className="px-3 py-2 text-right text-neutral-300">
                             {money(item.spend, item.currency)}
@@ -441,7 +478,7 @@ export function ChannelTrafficAttributionModal({
                           <td
                             className={`px-3 py-2 text-right ${cpaTone(
                               item.retainedSubscriberCost,
-                              channel.targetCpa,
+                              targetCpa,
                             )}`}
                           >
                             {money(item.retainedSubscriberCost, item.currency)}

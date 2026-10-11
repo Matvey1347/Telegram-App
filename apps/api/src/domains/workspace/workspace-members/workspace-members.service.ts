@@ -10,8 +10,6 @@ import {
   TelegramInviteLinkCreatorMatchSource,
   WorkspaceRole,
 } from '@prisma/client';
-import * as bcrypt from 'bcrypt';
-import { randomBytes } from 'crypto';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { WorkspaceService } from '../../../common/workspace.service';
 import { CreateWorkspaceMemberDto, UpdateWorkspaceMemberDto } from './dto';
@@ -22,6 +20,7 @@ import {
   buildInviteLinkAttributionMaps,
 } from '@api/telegram/shared/invites/telegram-invite-link-attribution';
 import { normalizeTelegramUsername } from '@api/telegram/shared/imports/telegram-import.helpers';
+import { provisionWorkspaceMemberAccount } from './workspace-member-account-provisioning';
 
 @Injectable()
 export class WorkspaceMembersService {
@@ -467,23 +466,13 @@ export class WorkspaceMembersService {
     if (role === WorkspaceRole.owner && current.role !== WorkspaceRole.owner) {
       throw new ForbiddenException('Only owner can add owner role');
     }
-    const existingUser = await this.prisma.user.findUnique({
-      where: { email },
-    });
-    let user = existingUser;
-    let temporaryPassword: string | undefined;
-
-    if (!user) {
-      temporaryPassword = dto.password || randomBytes(12).toString('base64url');
-      const passwordHash = await bcrypt.hash(temporaryPassword, 10);
-      user = await this.prisma.user.create({
-        data: {
-          email,
-          name: dto.name?.trim() || email.split('@')[0],
-          passwordHash,
-        },
+    const { user, temporaryPassword, passwordHashToSet } =
+      await provisionWorkspaceMemberAccount({
+        prisma: this.prisma,
+        email,
+        name: dto.name,
+        password: dto.password,
       });
-    }
     await this.assertAvatarIcon(current.workspaceId, user.id, dto.avatarIconId);
     const membershipAvatarIconId =
       dto.avatarIconId ?? user.profileAvatarIconId ?? null;
@@ -501,6 +490,15 @@ export class WorkspaceMembersService {
     if (already)
       throw new ConflictException('User is already a member of this workspace');
     const created = await this.prisma.$transaction(async (tx) => {
+      if (passwordHashToSet) {
+        await tx.user.update({
+          where: { id: user.id },
+          data: {
+            passwordHash: passwordHashToSet,
+            authVersion: { increment: 1 },
+          },
+        });
+      }
       await this.assertTelegramUsernameAvailable(
         tx,
         current.workspaceId,

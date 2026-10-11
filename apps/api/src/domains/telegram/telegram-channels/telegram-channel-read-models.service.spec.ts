@@ -38,6 +38,7 @@ describe('TelegramChannelReadModelsService', () => {
       } as never,
       {
         findOne: jest.fn().mockResolvedValue({
+          publicInviteLinkId: 'link-1',
           defaultInviteLinkId: 'link-1',
           botInviteLinkId: 'link-1',
           broadcastInviteLinkId: 'link-1',
@@ -60,6 +61,7 @@ describe('TelegramChannelReadModelsService', () => {
     expect(result.items[0]).toEqual(
       expect.objectContaining({
         creatorPhotoUrl: 'https://cdn.test/owner.jpg',
+        isPublicForChannel: true,
         isDefaultForChannel: true,
         isDefaultForBot: true,
         isDefaultForBroadcast: true,
@@ -103,7 +105,10 @@ describe('TelegramChannelReadModelsService', () => {
       {
         findOne: jest
           .fn()
-          .mockResolvedValue({ defaultInviteLinkId: 'default-link' }),
+          .mockResolvedValue({
+            publicInviteLinkId: 'default-link',
+            defaultInviteLinkId: 'default-link',
+          }),
       } as never,
     );
 
@@ -129,6 +134,7 @@ describe('TelegramChannelReadModelsService', () => {
       expect.objectContaining({
         id: 'default-link',
         creatorPhotoUrl: 'https://cdn.test/owner.jpg',
+        isPublicForChannel: true,
         isDefaultForChannel: true,
       }),
     ]);

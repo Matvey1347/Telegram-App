@@ -9,6 +9,9 @@ import type {
   TelegramChannelSyncProgressItem,
   TelegramQrLoginProgress,
   TelegramQrLoginResult,
+  TelegramChannelTrafficAttributionDetail,
+  TelegramChannelPerformanceHistory,
+  TelegramChannelPerformanceHistoryRange,
 } from "@telegram-system/shared";
 import type {
   PaginationParams,
@@ -99,6 +102,22 @@ export function createTelegramSourcesApi({
       (
         await api.get<TelegramChannelNetworkSummary>(
           `/telegram-channel-networks/${id}/summary`,
+        )
+      ).data,
+    trafficAttribution: async (id: string) =>
+      (
+        await api.get<TelegramChannelTrafficAttributionDetail>(
+          `/telegram-channel-networks/${id}/traffic-attribution`,
+        )
+      ).data,
+    performanceHistory: async (
+      id: string,
+      range: TelegramChannelPerformanceHistoryRange,
+    ) =>
+      (
+        await api.get<TelegramChannelPerformanceHistory>(
+          `/telegram-channel-networks/${id}/performance-history`,
+          { params: { range } },
         )
       ).data,
   };

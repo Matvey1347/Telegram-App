@@ -235,7 +235,7 @@ describe("ChannelPresentationSettingsModal", () => {
       screen.getByRole("button", { name: "Select bot link" }),
     );
     await waitFor(() =>
-      expect(mocks.getAllInviteLinks).toHaveBeenCalledWith("channel-1"),
+      expect(mocks.getAllInviteLinks).toHaveBeenCalledWith("channel-1", {}),
     );
   });
 

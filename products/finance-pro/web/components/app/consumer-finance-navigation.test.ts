@@ -4,8 +4,10 @@ import {
   consumerFinanceInvestmentUrl,
   consumerFinanceScreenUrl,
   financeSurfaceForBootstrap,
+  hasConsumerFinanceDebtTarget,
   hasConsumerFinanceRegularPaymentTarget,
   readConsumerFinanceAccountId,
+  readConsumerFinanceDebtTarget,
   readConsumerFinanceInvestmentId,
   readConsumerFinanceRegularPaymentTarget,
   readConsumerFinanceScreen,
@@ -105,6 +107,19 @@ describe("consumer Finance surface and browser navigation", () => {
       expectedVersion: 7,
     });
     expect(hasConsumerFinanceRegularPaymentTarget(target)).toBe(true);
+  });
+
+  it("opens a debt notification directly in its settlement target", () => {
+    const target = location(
+      "https://finance.example/finance/bot?screen=debts&debtId=debt-1",
+    );
+    expect(readConsumerFinanceDebtTarget(target)).toEqual({ debtId: "debt-1" });
+    expect(hasConsumerFinanceDebtTarget(target)).toBe(true);
+    expect(
+      readConsumerFinanceDebtTarget(
+        location("https://finance.example/finance/bot?screen=debts&debtId=%20"),
+      ),
+    ).toBeNull();
   });
 
   it("rejects incomplete or invalid regular-payment targets recoverably", () => {

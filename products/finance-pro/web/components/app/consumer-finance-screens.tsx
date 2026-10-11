@@ -13,6 +13,7 @@ import { FinanceDashboard } from "@finance-pro/web/components/dashboard/finance-
 import { financeCoreCopy, normalizeFinanceLocale } from "@finance-pro/web/components/i18n/core";
 import type {
   ConsumerFinanceAction,
+  ConsumerFinanceDebtTarget,
   ConsumerFinanceRegularPaymentTarget,
   ConsumerFinanceScreen,
   ConsumerFinanceSurface,
@@ -120,6 +121,8 @@ export function ConsumerFinanceScreens({
   onSpecialAction = () => undefined,
   regularPaymentTarget = null,
   regularPaymentTargetMalformed = false,
+  debtTarget = null,
+  debtTargetMalformed = false,
   accountId = null,
   onAccountEdit = () => undefined,
   onAccountBack = () => undefined,
@@ -143,6 +146,8 @@ export function ConsumerFinanceScreens({
   ) => void;
   regularPaymentTarget?: ConsumerFinanceRegularPaymentTarget | null;
   regularPaymentTargetMalformed?: boolean;
+  debtTarget?: ConsumerFinanceDebtTarget | null;
+  debtTargetMalformed?: boolean;
   accountId?: string | null;
   onAccountEdit?: (accountId: string) => void;
   onAccountBack?: () => void;
@@ -293,6 +298,8 @@ export function ConsumerFinanceScreens({
           botId={botId}
           locale={locale}
           timezone={financeProfile.timezone}
+          target={debtTarget}
+          targetMalformed={debtTargetMalformed}
         />
       )}
       {screen === "regular-payments" && (

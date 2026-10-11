@@ -21,9 +21,12 @@ describe("ChannelActionsMenu", () => {
       <ChannelActionsMenu
         channel={{ id: "channel-1", title: "Freudzone" } as never}
         archived={false}
+        isTest={false}
         canArchive
         onArchive={vi.fn()}
         onRestore={vi.fn()}
+        onMoveToTest={vi.fn()}
+        onMoveToActive={vi.fn()}
         onDelete={vi.fn()}
       >
         <ChannelMenuLink
@@ -65,6 +68,7 @@ describe("ChannelActionsMenu", () => {
     expect(screen.queryByText("Edit economics")).not.toBeInTheDocument();
     expect(screen.queryByText("Channel appearance")).not.toBeInTheDocument();
     expect(screen.queryByText("Bot connection")).not.toBeInTheDocument();
+    expect(screen.getByText("Move to For Test")).toBeInTheDocument();
     expect(screen.getByText("Archive channel")).toBeInTheDocument();
     expect(screen.getByText("Delete channel")).toBeInTheDocument();
     const menu = screen.getByRole("menu");
@@ -93,7 +97,10 @@ describe("ChannelActionsMenu", () => {
             shortDescription: "Short description",
             tgStatUrl: "https://tgstat.com/channel/1",
             defaultInviteLinkId: "invite-1",
+            publicInviteLinkId: "invite-public",
             botInviteLinkId: "invite-bot",
+            broadcastInviteLinkId: "invite-broadcast",
+            audienceTransferInviteLinkId: "invite-audience-transfer",
             folderDefaultInviteLinkIds: ["invite-folder"],
             mutualPromotionInviteLinkIds: ["invite-vp"],
             adBaseCpm: 100,
@@ -103,14 +110,17 @@ describe("ChannelActionsMenu", () => {
             preview: {
               hasPublicationSchedule: true,
               sourcesCount: 1,
-              systemBotConnection: { connected: true },
+              systemBotConnection: { connected: true, status: "CONNECTED" },
             },
           } as never
         }
         archived={false}
+        isTest={false}
         canArchive
         onArchive={vi.fn()}
         onRestore={vi.fn()}
+        onMoveToTest={vi.fn()}
+        onMoveToActive={vi.fn()}
         onDelete={vi.fn()}
       >
         {null}

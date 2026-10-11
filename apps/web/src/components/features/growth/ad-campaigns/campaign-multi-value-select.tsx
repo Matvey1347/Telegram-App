@@ -134,11 +134,16 @@ export function CampaignMultiValueSelect({
         ref={triggerRef}
         type="button"
         onClick={() => {
-          setOpen((current) => {
-            if (current) setSearch("");
-            else onOpen?.();
-            return !current;
-          });
+          // Calling onOpen from React's functional state updater lets the
+          // parent query update while this component is rendering. Keep all
+          // parent work in the click event itself instead.
+          if (open) {
+            setSearch("");
+            setOpen(false);
+            return;
+          }
+          onOpen?.();
+          setOpen(true);
         }}
         className="flex min-h-11 w-full flex-wrap items-center gap-2 rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-left text-sm text-white"
       >

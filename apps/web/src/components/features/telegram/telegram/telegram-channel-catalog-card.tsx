@@ -29,6 +29,8 @@ export function TelegramChannelCatalogCard({
   currencySettings,
   onRestore,
   onArchive,
+  onMoveToTest,
+  onMoveToActive,
   onDelete,
   onSync,
   onRefreshPublicData,
@@ -39,6 +41,8 @@ export function TelegramChannelCatalogCard({
   currencySettings?: CurrencySettings | null;
   onRestore: (channelId: string) => void;
   onArchive: (channelId: string) => void;
+  onMoveToTest: (channelId: string) => void;
+  onMoveToActive: (channelId: string) => void;
   onDelete: (channel: TelegramChannel) => void;
   onSync: (channel: TelegramChannel) => void;
   onRefreshPublicData: (username: string) => void;
@@ -55,7 +59,7 @@ export function TelegramChannelCatalogCard({
   const username = normalizeUsername(channel.username);
 
   return (
-    <div className="rounded-xl border border-neutral-800/80 bg-neutral-900/55 p-4 text-sm text-neutral-300">
+    <div className="rounded-xl border border-neutral-800/80 bg-neutral-900/55 p-3 text-sm text-neutral-300">
       <ChannelPreview
         channel={channel}
         status={
@@ -71,9 +75,12 @@ export function TelegramChannelCatalogCard({
             channel={channel}
             currencySettings={currencySettings}
             archived={Boolean(channel.archivedAt)}
+            isTest={Boolean(channel.isTest)}
             canArchive={isOwned}
             onRestore={() => onRestore(channel.id)}
             onArchive={() => onArchive(channel.id)}
+            onMoveToTest={() => onMoveToTest(channel.id)}
+            onMoveToActive={() => onMoveToActive(channel.id)}
             onDelete={() => onDelete(channel)}
           >
             {isOwned ? (
@@ -111,13 +118,15 @@ export function TelegramChannelCatalogCard({
             ) : null}
           </ChannelActionsMenu>
         }
+        compact
         className="!mb-0 !border-0 !bg-transparent !p-0"
       />
       <ChannelEconomicsSummary
         channel={channel}
         currencySettings={currencySettings}
+        compact
       />
-      <ChannelTrafficAttributionSummary channel={channel} />
+      <ChannelTrafficAttributionSummary channel={channel} compact />
       {!isOwned ? (
         <ExternalChannelAdAnalysis
           channel={channel}

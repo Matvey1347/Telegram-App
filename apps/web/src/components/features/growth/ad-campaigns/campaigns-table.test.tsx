@@ -35,6 +35,83 @@ function renderTable(campaigns: AdCampaign[], showActions = false) {
 }
 
 describe("AdCampaignsTable admission view analytics", () => {
+  it("opens the bot-request channel breakdown from the performance badge", async () => {
+    const user = userEvent.setup();
+    renderTable([
+      campaign({
+        botRequestPerformance: {
+          total: 12,
+          points: [
+            {
+              syncedAt: "2026-10-01T00:00:00.000Z",
+              joinedCount: 0,
+              requestedCount: 12,
+              totalAttributed: 12,
+              peakJoinedCount: 0,
+              drawdownFromPeak: 0,
+              drawdownPercent: 0,
+            },
+          ],
+          channels: [
+            {
+              telegramChannelId: "channel-a",
+              title: "Bot A",
+              requests: 8,
+              peak: 8,
+              dropFromPeak: 0,
+              dropPercent: 0,
+              points: [
+                {
+                  syncedAt: "2026-10-01T00:00:00.000Z",
+                  joinedCount: 0,
+                  requestedCount: 8,
+                  totalAttributed: 8,
+                  peakJoinedCount: 0,
+                  drawdownFromPeak: 0,
+                  drawdownPercent: 0,
+                },
+              ],
+            },
+            {
+              telegramChannelId: "channel-b",
+              title: "Bot B",
+              requests: 4,
+              peak: 4,
+              dropFromPeak: 0,
+              dropPercent: 0,
+              points: [
+                {
+                  syncedAt: "2026-10-01T00:00:00.000Z",
+                  joinedCount: 0,
+                  requestedCount: 4,
+                  totalAttributed: 4,
+                  peakJoinedCount: 0,
+                  drawdownFromPeak: 0,
+                  drawdownPercent: 0,
+                },
+              ],
+            },
+          ],
+          startsAt: "2026-10-01T00:00:00.000Z",
+          endsAt: null,
+        },
+      }),
+    ]);
+
+    await user.click(screen.getByRole("button", { name: /Bot requests \+12/ }));
+
+    expect(screen.getByText("Bot requests by channel")).toBeInTheDocument();
+    expect(screen.getByText("Campaign bot-request trend")).toBeInTheDocument();
+    expect(screen.getByText("Channel breakdown")).toBeInTheDocument();
+    expect(
+      screen.queryByText("Bot-link audience trend"),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("Bot A")).toBeInTheDocument();
+    expect(screen.getByText("+8")).toBeInTheDocument();
+    expect(screen.getByText("Bot B")).toBeInTheDocument();
+    expect(screen.getByText("+4")).toBeInTheDocument();
+  });
+
   it("compares CPA with KPI in the channel currency and renders only that currency", () => {
     renderTable([
       campaign({

@@ -5,7 +5,8 @@ export type TelegramChannelTrafficSourceKind =
   | "AUDIENCE_TRANSFER"
   | "BOT"
   | "BROADCAST"
-  | "OTHER";
+  | "OTHER"
+  | "UNATTRIBUTED";
 
 export type TelegramChannelTrafficAttributionMetrics = {
   acquired: number;
@@ -26,9 +27,29 @@ export type TelegramChannelTrafficSourceSummary =
     linkCount: number;
   };
 
+/**
+ * Paid-attribution totals deliberately stay separate from the selected
+ * reporting window. They let cards show a lifetime CPA while acquisition and
+ * churn remain scoped to a recent window.
+ */
+export type TelegramChannelTrafficAllTimePaidMetrics = Pick<
+  TelegramChannelTrafficAttributionMetrics,
+  "spend" | "averageSubscriberCost" | "retainedSubscriberCost"
+> & {
+  acquired: number;
+  retained: number;
+};
+
 export type TelegramChannelTrafficAttributionPreview =
   TelegramChannelTrafficAttributionMetrics & {
     sources: TelegramChannelTrafficSourceSummary[];
+    allTimePaid: TelegramChannelTrafficAllTimePaidMetrics;
+    attributionPeriod?: {
+      startsAt: string;
+      endsAt: string | null;
+    } | null;
+    /** First and latest actually persisted channel counters; never synthesized. */
+    observedAudience?: import("./telegram-channel-trend").TelegramChannelAudienceTrend | null;
   };
 
 export type TelegramChannelTrafficAttributionItem =

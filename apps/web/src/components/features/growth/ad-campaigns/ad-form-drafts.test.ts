@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   isMeaningfulCampaignDraft,
+  normalizeCampaignDraft,
   type CampaignValues,
-} from "./campaign-form-modal";
+} from "./campaign-form-draft";
 import {
   isMeaningfulHypothesisDraft,
   type HypothesisDraftValues,
@@ -13,6 +14,10 @@ const campaign = (overrides: Partial<CampaignValues> = {}): CampaignValues => ({
   assignedMemberId: null,
   promoIds: [],
   inviteLinkIds: [],
+  botInviteLinkIds: [],
+  trackingLinkKind: "BOT",
+  trackingChannelIds: [],
+  trackCrossChannelRequests: false,
   advertisingChannelIds: [],
   price: 0,
   accountId: "",
@@ -48,5 +53,34 @@ describe("ad form draft meaning", () => {
       ),
     ).toBe(true);
     expect(isMeaningfulHypothesisDraft(hypothesis({ name: "Idea" }))).toBe(true);
+  });
+
+  it("normalizes incomplete local campaign drafts before restoring them", () => {
+    expect(
+      normalizeCampaignDraft({
+        telegramChannelId: "channel-1",
+        promoIds: ["promo-1", 4],
+        inviteLinkIds: "not-an-array",
+        price: "125.5",
+        notes: 10,
+      }),
+    ).toEqual({
+      telegramChannelId: "channel-1",
+      assignedMemberId: null,
+      promoIds: ["promo-1"],
+      inviteLinkIds: [],
+      botInviteLinkIds: [],
+      trackingLinkKind: "BOT",
+      trackingChannelIds: [],
+      trackCrossChannelRequests: false,
+      advertisingChannelIds: [],
+      price: 125.5,
+      accountId: "",
+      date: undefined,
+      endedAt: undefined,
+      customTitle: "",
+      notes: "",
+    });
+    expect(normalizeCampaignDraft(null)).toBeNull();
   });
 });

@@ -21,6 +21,7 @@ import {
   Select,
 } from "@/components/ui/primitives";
 import { IconPicker } from "@/components/icons/icon-picker";
+import { CurrencyAmountInput } from "@/components/ui/currency-amount-input";
 
 export type InternalTransactionValues = {
   accountId: string;
@@ -407,9 +408,10 @@ export function InternalTransactionModal({
           </div>
           <div data-transaction-field="amount">
             <FormField label="Amount">
-              <Input
+              <CurrencyAmountInput
                 type="number"
                 step="0.01"
+                currency={accounts.find((account) => account.id === accountId)?.currency}
                 {...register("amount", { valueAsNumber: true })}
               />
             </FormField>

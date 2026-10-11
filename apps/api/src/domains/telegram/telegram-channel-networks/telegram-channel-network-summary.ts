@@ -1,3 +1,7 @@
+import type {
+  TelegramChannelAudienceTrend,
+  TelegramChannelTrafficAttributionPreview,
+} from '@telegram-system/shared';
 import { calculateChannelAssetEconomics } from '../../../common/analytics/channel-financial-summary';
 
 type KpiStatus = 'good' | 'acceptable' | 'bad' | 'unknown';
@@ -76,7 +80,208 @@ export type ChannelNetworkSummaryInput = {
   totalAttributedSubscribers?: number | null;
   kpiStatus: KpiStatus;
   assetEconomics?: AssetEconomics | null;
+  audienceTrend?: TelegramChannelAudienceTrend | null;
+  trafficAttribution?: TelegramChannelTrafficAttributionPreview | null;
 };
+
+function aggregateTrendMetric(
+  trends: TelegramChannelAudienceTrend[],
+  key: keyof TelegramChannelAudienceTrend['metrics'],
+) {
+  const metrics = trends.map((trend) => trend.metrics[key]).filter(Boolean);
+  if (!metrics.length) return null;
+  const previous = metrics.reduce((sum, metric) => sum + metric!.previous, 0);
+  const current = metrics.reduce((sum, metric) => sum + metric!.current, 0);
+  const absoluteChange = current - previous;
+  return {
+    current,
+    previous,
+    absoluteChange,
+    percentChange:
+      previous === 0 ? null : (absoluteChange / Math.abs(previous)) * 100,
+  };
+}
+
+function aggregatePendingJoinRequests(
+  channelSummaries: ChannelNetworkSummaryInput[],
+) {
+  const withKnownCounter = channelSummaries.filter(
+    (channel) =>
+      channel.pendingJoinRequestsCount != null ||
+      channel.audienceTrend?.metrics.pendingJoinRequests != null,
+  );
+  if (!withKnownCounter.length) return null;
+  const previous = withKnownCounter.reduce(
+    (sum, channel) =>
+      sum + (channel.audienceTrend?.metrics.pendingJoinRequests?.previous ?? 0),
+    0,
+  );
+  const current = withKnownCounter.reduce(
+    (sum, channel) =>
+      sum +
+      (channel.pendingJoinRequestsCount ??
+        channel.audienceTrend?.metrics.pendingJoinRequests?.current ??
+        0),
+    0,
+  );
+  const absoluteChange = current - previous;
+  return {
+    current,
+    previous,
+    absoluteChange,
+    percentChange:
+      previous === 0 ? null : (absoluteChange / Math.abs(previous)) * 100,
+  };
+}
+
+function aggregateAudienceTrend(
+  channelSummaries: ChannelNetworkSummaryInput[],
+) {
+  const trends = channelSummaries
+    .map((channel) => channel.audienceTrend)
+    .filter((trend): trend is TelegramChannelAudienceTrend => Boolean(trend));
+  if (!trends.length) return null;
+  const latest = trends.reduce((current, trend) =>
+    trend.currentAt > current.currentAt ? trend : current,
+  );
+  const earliest = trends.reduce((current, trend) =>
+    trend.baselineAt < current.baselineAt ? trend : current,
+  );
+  return {
+    periodDays: Math.max(...trends.map((trend) => trend.periodDays)),
+    currentAt: latest.currentAt,
+    baselineAt: earliest.baselineAt,
+    metrics: {
+      subscribers: aggregateTrendMetric(trends, 'subscribers'),
+      // Current requests must include every network member. Older snapshots
+      // without that counter contribute a zero baseline instead of silently
+      // disappearing from the Network Total.
+      pendingJoinRequests: aggregatePendingJoinRequests(channelSummaries),
+      reach: aggregateTrendMetric(trends, 'reach'),
+      reactions: aggregateTrendMetric(trends, 'reactions'),
+    },
+  } satisfies TelegramChannelAudienceTrend;
+}
+
+function aggregateTrafficAttribution(
+  channelSummaries: ChannelNetworkSummaryInput[],
+) {
+  const previews = channelSummaries
+    .map((channel) => channel.trafficAttribution)
+    .filter((preview): preview is TelegramChannelTrafficAttributionPreview =>
+      Boolean(preview),
+    );
+  if (!previews.length) return null;
+  const currency = previews[0].currency;
+  const sourcesByKind = new Map<
+    string,
+    TelegramChannelTrafficAttributionPreview['sources'][number]
+  >();
+  for (const preview of previews) {
+    for (const source of preview.sources) {
+      const current = sourcesByKind.get(source.kind);
+      sourcesByKind.set(
+        source.kind,
+        current
+          ? {
+              ...current,
+              acquired: current.acquired + source.acquired,
+              retained: current.retained + source.retained,
+              unsubscribed: current.unsubscribed + source.unsubscribed,
+              spend:
+                current.spend == null || source.spend == null
+                  ? null
+                  : current.spend + source.spend,
+              sourceCount: current.sourceCount + source.sourceCount,
+              linkCount: current.linkCount + source.linkCount,
+            }
+          : { ...source },
+      );
+    }
+  }
+  const sources = [...sourcesByKind.values()];
+  const acquired = sources.reduce((sum, source) => sum + source.acquired, 0);
+  const retained = sources.reduce((sum, source) => sum + source.retained, 0);
+  const unsubscribed = sources.reduce(
+    (sum, source) => sum + source.unsubscribed,
+    0,
+  );
+  const spendSources = sources.filter((source) => source.spend != null);
+  const spend = spendSources.length
+    ? spendSources.reduce((sum, source) => sum + Number(source.spend), 0)
+    : null;
+  const periodStarts = previews
+    .map((preview) => preview.attributionPeriod?.startsAt)
+    .filter((value): value is string => Boolean(value));
+  const hasOngoingPeriod = previews.some(
+    (preview) => preview.attributionPeriod?.endsAt == null,
+  );
+  const periodEnds = previews
+    .map((preview) => preview.attributionPeriod?.endsAt)
+    .filter((value): value is string => Boolean(value));
+  const allTimePaidRows = previews.map(
+    (preview) =>
+      preview.allTimePaid ?? {
+        acquired: preview.acquired,
+        retained: preview.retained,
+        spend: preview.spend,
+        averageSubscriberCost: preview.averageSubscriberCost,
+        retainedSubscriberCost: preview.retainedSubscriberCost,
+      },
+  );
+  const allTimePaidSpendRows = allTimePaidRows.filter(
+    (metrics) => metrics.spend != null,
+  );
+  const allTimePaidSpend = allTimePaidSpendRows.length
+    ? allTimePaidSpendRows.reduce(
+        (sum, metrics) => sum + Number(metrics.spend),
+        0,
+      )
+    : null;
+  const allTimePaidAcquired = allTimePaidSpendRows.reduce(
+    (sum, metrics) => sum + metrics.acquired,
+    0,
+  );
+  const allTimePaidRetained = allTimePaidSpendRows.reduce(
+    (sum, metrics) => sum + metrics.retained,
+    0,
+  );
+  return {
+    // The network card must use the exact same start/end audience snapshots
+    // as its member channels, rather than only showing disconnected deltas.
+    observedAudience: aggregateAudienceTrend(channelSummaries),
+    acquired,
+    retained,
+    unsubscribed,
+    unsubscribePercent: acquired > 0 ? (unsubscribed / acquired) * 100 : 0,
+    spend,
+    averageSubscriberCost:
+      spend != null && acquired > 0 ? spend / acquired : null,
+    retainedSubscriberCost:
+      spend != null && retained > 0 ? spend / retained : null,
+    currency,
+    allTimePaid: {
+      acquired: allTimePaidAcquired,
+      retained: allTimePaidRetained,
+      spend: allTimePaidSpend,
+      averageSubscriberCost:
+        allTimePaidSpend != null && allTimePaidAcquired > 0
+          ? allTimePaidSpend / allTimePaidAcquired
+          : null,
+      retainedSubscriberCost:
+        allTimePaidSpend != null && allTimePaidRetained > 0
+          ? allTimePaidSpend / allTimePaidRetained
+          : null,
+    },
+    attributionPeriod: periodStarts.length
+      ? {
+          startsAt: periodStarts.sort()[0],
+          endsAt: hasOngoingPeriod ? null : (periodEnds.sort().at(-1) ?? null),
+        }
+      : null,
+    sources,
+  } satisfies TelegramChannelTrafficAttributionPreview;
+}
 
 function kpiLabel(status: KpiStatus) {
   if (status === 'good') return 'Good';
@@ -285,5 +490,7 @@ export function aggregateChannelNetworkSummary(
     kpiStatus,
     kpiLabel: kpiLabel(kpiStatus),
     assetEconomics: aggregateAssetEconomics(channelSummaries),
+    audienceTrend: aggregateAudienceTrend(channelSummaries),
+    trafficAttribution: aggregateTrafficAttribution(channelSummaries),
   };
 }

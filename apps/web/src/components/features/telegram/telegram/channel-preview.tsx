@@ -24,6 +24,7 @@ type ChannelPreviewProps = {
   className?: string;
   status?: React.ReactNode;
   badges?: React.ReactNode;
+  compact?: boolean;
 };
 
 export function ChannelPreview({
@@ -34,6 +35,7 @@ export function ChannelPreview({
   className = "",
   status,
   badges,
+  compact = false,
 }: ChannelPreviewProps) {
   const title = String(channel?.title || "-");
   const subscribers =
@@ -65,28 +67,28 @@ export function ChannelPreview({
     pendingJoinRequests > 0;
   return (
     <div
-      className={`mb-4 flex items-start justify-between gap-3 rounded-lg border border-neutral-700 bg-slate-900/70 p-3 ${className}`}
+      className={`mb-4 flex items-start justify-between ${compact ? "gap-2 p-2" : "gap-3 p-3"} rounded-lg border border-neutral-700 bg-slate-900/70 ${className}`}
     >
-      <div className="flex min-w-0 flex-1 items-center gap-3">
+      <div className={`flex min-w-0 flex-1 items-start ${compact ? "gap-2" : "gap-3"}`}>
         <TelegramEntityAvatar
           imageUrl={channel?.photoUrl}
           kind={avatarKind}
           alt={title}
-          size="lg"
+          size={compact ? "sm" : "lg"}
         />
         <div className="min-w-0">
-          <p className="truncate text-lg font-semibold leading-none text-white">
+          <p className={`truncate font-semibold leading-none text-white ${compact ? "text-sm" : "text-lg"}`}>
             {title}
           </p>
           {subtitle || fallbackSubtitle ? (
-            <div className="mt-1 flex flex-wrap items-start gap-2 text-sm text-slate-300">
+            <div className={`mt-1 flex flex-wrap items-start ${compact ? "gap-1 text-xs" : "gap-2 text-sm"} text-slate-300`}>
               {!subtitle &&
               subscribers != null &&
               Number.isFinite(subscribers) ? (
                 <span className="inline-flex items-center gap-1.5">
                   <span>{fallbackSubtitle}</span>
                   <Users
-                    size={14}
+                    size={compact ? 12 : 14}
                     className="shrink-0 text-violet-300"
                     aria-label="Subscribers"
                   />
@@ -99,7 +101,7 @@ export function ChannelPreview({
                   <span className="text-neutral-600" aria-hidden="true">
                     /
                   </span>
-                  <Eye size={14} className="text-sky-300" aria-hidden="true" />
+                  <Eye size={compact ? 12 : 14} className="text-sky-300" aria-hidden="true" />
                   {viewRate.toLocaleString(undefined, {
                     maximumFractionDigits: 1,
                     minimumFractionDigits: 1,
@@ -113,7 +115,7 @@ export function ChannelPreview({
                     /
                   </span>
                   <Smile
-                    size={14}
+                    size={compact ? 12 : 14}
                     className="text-amber-300"
                     aria-label="Reaction rate"
                   />
@@ -127,7 +129,7 @@ export function ChannelPreview({
             </div>
           ) : null}
           {showPendingJoinRequests || status ? (
-            <div className="mt-1.5 flex min-h-5 flex-wrap items-center gap-2">
+            <div className={`mt-1 flex min-h-4 flex-wrap items-center ${compact ? "gap-1" : "gap-2"}`}>
               {showPendingJoinRequests ? (
                 <span className="inline-flex items-center gap-1.5">
                   <strong className="font-semibold text-white">
@@ -136,7 +138,7 @@ export function ChannelPreview({
                       .replace(/,/g, " ")}
                   </strong>
                   <UserPlus
-                    size={14}
+                  size={compact ? 12 : 14}
                     className="text-amber-300"
                     aria-label="Pending join requests"
                   />
@@ -146,7 +148,7 @@ export function ChannelPreview({
             </div>
           ) : null}
           {badges ? (
-            <div className="mt-2 flex flex-wrap items-center gap-2">
+            <div className={`flex flex-wrap items-center ${compact ? "mt-1 gap-1" : "mt-2 gap-2"}`}>
               {badges}
             </div>
           ) : null}

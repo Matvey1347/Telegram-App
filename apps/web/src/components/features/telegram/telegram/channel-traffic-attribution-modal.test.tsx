@@ -103,6 +103,32 @@ describe("ChannelTrafficAttributionModal", () => {
     expect(rows).toEqual([{ date: "2026-09-01", AD_CAMPAIGNS: 10 }]);
   });
 
+  it("plots unattributed channel drop as the Other series", () => {
+    const rows = pivotTrafficAttributionPoints([
+      {
+        at: "2026-09-01T00:00:00.000Z",
+        inviteLinkId: "unattributed:channel-1",
+        kind: "UNATTRIBUTED",
+        acquired: 0,
+        retained: 0,
+        unsubscribed: 0,
+      },
+      {
+        at: "2026-10-01T00:00:00.000Z",
+        inviteLinkId: "unattributed:channel-1",
+        kind: "UNATTRIBUTED",
+        acquired: 0,
+        retained: 42,
+        unsubscribed: 0,
+      },
+    ]);
+
+    expect(rows).toEqual([
+      { date: "2026-09-01", UNATTRIBUTED: 0 },
+      { date: "2026-10-01", UNATTRIBUTED: 42 },
+    ]);
+  });
+
   it("offers a retry after failure and explains an empty result", async () => {
     vi.spyOn(telegramChannelsApi, "trafficAttribution")
       .mockRejectedValueOnce(new Error("offline"))

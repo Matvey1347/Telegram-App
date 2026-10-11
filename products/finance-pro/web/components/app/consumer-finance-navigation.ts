@@ -107,6 +107,7 @@ export function consumerFinanceScreenUrl(
   url.searchParams.delete("regularPaymentId");
   url.searchParams.delete("occurrenceAt");
   url.searchParams.delete("configVersion");
+  url.searchParams.delete("debtId");
   url.searchParams.delete("accountId");
   url.searchParams.delete("investmentId");
   if (screen === "home") url.searchParams.delete("screen");
@@ -157,6 +158,20 @@ export type ConsumerFinanceRegularPaymentTarget = {
   occurrenceAt: string;
   expectedVersion: number;
 };
+
+export type ConsumerFinanceDebtTarget = { debtId: string };
+
+export function readConsumerFinanceDebtTarget(
+  location: Location,
+): ConsumerFinanceDebtTarget | null {
+  if (readConsumerFinanceScreen(location) !== "debts") return null;
+  const debtId = new URLSearchParams(location.search).get("debtId")?.trim();
+  return debtId ? { debtId } : null;
+}
+
+export function hasConsumerFinanceDebtTarget(location: Location) {
+  return new URLSearchParams(location.search).has("debtId");
+}
 
 function isValidOccurrenceAt(value: string) {
   const match =

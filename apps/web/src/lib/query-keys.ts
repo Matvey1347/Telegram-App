@@ -60,6 +60,11 @@ export const telegramChannelKeys = {
   lists: () => ["telegram-channels", "list"] as const,
   list: (archived?: boolean, owned?: boolean) =>
     ["telegram-channels", "list", archived ?? "all", owned ?? "all"] as const,
+  lifecycleList: (
+    lifecycle: "active" | "test" | "archive",
+    owned?: boolean,
+  ) =>
+    ["telegram-channels", "lifecycle-list", lifecycle, owned ?? "all"] as const,
   details: () => ["telegram-channels", "detail"] as const,
   select: (params?: { canPostMessagesOnly?: boolean; owned?: boolean }) =>
     [
@@ -145,6 +150,15 @@ export const telegramChannelKeys = {
     search: string,
   ) =>
     ["telegram-channel-campaigns", channelId, page, pageSize, search] as const,
+};
+
+export const telegramChannelNetworkKeys = {
+  trafficAttribution: (networkId: string) =>
+    ["telegram-channel-network-traffic-attribution", networkId] as const,
+  performanceHistory: (
+    networkId: string,
+    range: import("@telegram-system/shared").TelegramChannelPerformanceHistoryRange,
+  ) => ["telegram-channel-network-performance-history", networkId, range] as const,
 };
 
 export const telegramPostKeys = {

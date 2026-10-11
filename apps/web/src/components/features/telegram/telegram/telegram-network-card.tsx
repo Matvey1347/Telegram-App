@@ -26,6 +26,10 @@ import {
   TelegramCardActionsMenu,
   TelegramCardMenuAction,
 } from "./telegram-card-actions-menu";
+import {
+  NetworkDynamicsSummary,
+  NetworkTrafficAttributionSummary,
+} from "./telegram-network-insights";
 
 function number(value: unknown, decimals = 0) {
   const parsed = Number(value ?? 0);
@@ -65,19 +69,24 @@ function Metric({
   label,
   value,
   tone = "text-white",
+  compact = false,
 }: {
   icon?: React.ReactNode;
   label: string;
   value: React.ReactNode;
   tone?: string;
+  compact?: boolean;
 }) {
   return (
     <div className="min-w-0">
-      <p className="flex h-5 items-center gap-1.5 text-xs text-neutral-500">
+      <p className={`flex items-center gap-1 text-neutral-500 ${compact ? "h-4 text-[10px]" : "h-5 text-xs"}`}>
         {icon}
         <span className="truncate">{label}</span>
       </p>
-      <div className={`flex h-6 items-center truncate font-semibold ${tone}`}>
+      <div
+        title={typeof value === "string" ? value : undefined}
+        className={`flex min-w-0 items-center truncate font-semibold tabular-nums ${tone} ${compact ? "h-5 text-xs" : "h-6"}`}
+      >
         {value}
       </div>
     </div>
@@ -113,13 +122,13 @@ function FormatPrice({
   settings?: CurrencySettings | null;
 }) {
   return (
-    <div className="rounded-md border border-neutral-800/80 bg-neutral-950/55 px-2.5 py-2">
-      <p className="text-xs font-medium text-neutral-300">{label}</p>
-      <p className="mt-1 truncate text-xs font-semibold text-white">
+    <div className="min-w-0 rounded-md border border-neutral-800/80 bg-neutral-950/55 px-2 py-1.5">
+      <p className="text-[11px] font-medium text-neutral-300">{label}</p>
+      <p className="mt-0.5 truncate text-xs font-semibold tabular-nums text-white" title={money(pricing?.estimatedPrice, currency, settings)}>
         {money(pricing?.estimatedPrice, currency, settings)}
       </p>
-      <p className="mt-0.5 flex items-center gap-1 text-xs text-neutral-500">
-        <Eye size={13} className="text-sky-300" aria-hidden="true" />
+      <p className="mt-0.5 flex min-w-0 items-center gap-1 truncate text-[11px] text-neutral-500">
+        <Eye size={12} className="shrink-0 text-sky-300" aria-hidden="true" />
         {pricing?.expectedViews != null
           ? `${number(pricing.expectedViews)} views`
           : "Not enough data"}
@@ -161,13 +170,13 @@ export function TelegramNetworkCard({
     invested > 0 && activeSubscribers > 0 ? invested / activeSubscribers : null;
 
   return (
-    <article className="rounded-xl border border-neutral-800/80 bg-neutral-900/55 p-4 text-sm text-neutral-300">
-      <div className="flex items-start gap-3">
+    <article className="rounded-xl border border-neutral-800/80 bg-neutral-900/55 p-3 text-sm text-neutral-300">
+      <div className="flex items-start gap-2">
         {network.isSystem ? (
           <IconAvatar
             icon={network.iconPresentation}
             label={network.name}
-            size="lg"
+            size="sm"
             bordered={false}
             className="!rounded-full !bg-transparent"
           />
@@ -189,7 +198,7 @@ export function TelegramNetworkCard({
           <div className="flex min-w-0 items-center gap-2">
             <Link
               href={`/telegram-channel-networks/${network.id}`}
-              className="truncate text-lg font-semibold leading-tight text-white hover:text-blue-300"
+              className="truncate text-sm font-semibold leading-tight text-white hover:text-blue-300"
             >
               {network.name}
             </Link>
@@ -199,7 +208,7 @@ export function TelegramNetworkCard({
               </span>
             ) : null}
           </div>
-          <div className="mt-1 flex flex-wrap items-start gap-1.5 text-sm text-neutral-400">
+          <div className="mt-0.5 flex flex-wrap items-start gap-1 text-xs text-neutral-400">
             <span className="grid grid-cols-[max-content_14px] items-center gap-x-1.5 gap-y-1">
               <span>{number(summary.totalSubscribers)}</span>
               <Users
@@ -257,11 +266,12 @@ export function TelegramNetworkCard({
         ) : null}
       </div>
 
-      <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-4">
+      <div className="mt-3 grid grid-cols-4 gap-x-1.5">
         <Metric
           label="Spend"
           value={money(economics?.invested, economicsCurrency, moneySettings)}
           tone="text-rose-300"
+          compact
         />
         <Metric
           icon={
@@ -273,6 +283,7 @@ export function TelegramNetworkCard({
           }
           label="Sub"
           value={money(subscriberCost, economicsCurrency, moneySettings)}
+          compact
         />
         <Metric
           icon={
@@ -284,20 +295,22 @@ export function TelegramNetworkCard({
           }
           label="Active"
           value={money(activeCost, economicsCurrency, moneySettings)}
+          compact
         />
         <Metric
           label="Earned"
           value={money(economics?.revenue, economicsCurrency, moneySettings)}
           tone="text-emerald-300"
+          compact
         />
       </div>
 
       {pricing ? (
         <>
-          <p className="mt-3 text-xs text-neutral-500">
+          <p className="mt-1.5 text-xs text-neutral-500">
             CPM {money(pricing.cpm, pricing.currency, moneySettings)}
           </p>
-          <div className="mt-2 grid grid-cols-3 gap-1.5">
+          <div className="mt-1.5 grid grid-cols-3 gap-1.5">
             <FormatPrice
               label="1/24"
               pricing={pricing.h24}
@@ -320,7 +333,7 @@ export function TelegramNetworkCard({
         </>
       ) : null}
 
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 text-xs">
+      <div className="mt-1.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-xs">
         <span className="inline-flex items-center gap-2">
           <Percent size={14} className="text-teal-300" aria-hidden="true" />
           <span className="text-neutral-500">Payback</span>
@@ -343,7 +356,22 @@ export function TelegramNetworkCard({
         ) : null}
       </div>
 
-      <div className="mt-4 border-t border-neutral-800 pt-3">
+      <NetworkDynamicsSummary
+        networkId={network.id}
+        networkName={network.name}
+        trend={summary.audienceTrend}
+        fallbackPaybackPercent={economics?.paybackPercent}
+        fallbackAdsLeft={economics?.estimatedAdsRemaining}
+      />
+      <NetworkTrafficAttributionSummary
+        networkId={network.id}
+        networkName={network.name}
+        traffic={summary.trafficAttribution}
+        trend={summary.audienceTrend}
+        currencySettings={moneySettings}
+      />
+
+      <div className="mt-2 border-t border-neutral-800 pt-2">
         <NetworkChannels channels={network.channels} />
       </div>
     </article>

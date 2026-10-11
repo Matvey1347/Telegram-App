@@ -103,6 +103,26 @@ const CAMPAIGN_LIST_SELECT = {
       creatorPhotoUrl: true,
     },
   },
+  botInviteLinks: {
+    select: {
+      kind: true,
+      baselineJoinedCount: true,
+      baselineRequestedCount: true,
+      inviteLink: {
+        select: {
+          id: true,
+          telegramChannelId: true,
+          name: true,
+          url: true,
+          joinedCount: true,
+          requestedCount: true,
+          telegramChannel: {
+            select: { id: true, title: true, photoUrl: true },
+          },
+        },
+      },
+    },
+  },
   advertisingTelegramChannels: {
     select: {
       telegramChannel: {
@@ -145,6 +165,91 @@ type TelegramSource =
   CampaignListRow['advertisingTelegramChannels'][number]['telegramChannel'];
 type LegacySource =
   CampaignListRow['advertisingChannels'][number]['advertisingSource'];
+type BotRequestPerformance = {
+  total: number;
+  points: BotRequestTrendPoint[];
+  channels: Array<{
+    telegramChannelId: string;
+    title: string;
+    photoUrl: string | null;
+    requests: number;
+    peak: number;
+    dropFromPeak: number;
+    dropPercent: number;
+    points: Array<{
+      syncedAt: string;
+      joinedCount: number;
+      requestedCount: number;
+      totalAttributed: number;
+      peakJoinedCount: number;
+      drawdownFromPeak: number;
+      drawdownPercent: number;
+    }>;
+  }>;
+  startsAt: string;
+  endsAt: string | null;
+};
+
+type BotRequestTrendPoint = {
+  syncedAt: string;
+  joinedCount: number;
+  requestedCount: number;
+  totalAttributed: number;
+  peakJoinedCount: number;
+  drawdownFromPeak: number;
+  drawdownPercent: number;
+};
+
+function aggregateBotRequestPoints(
+  channels: Array<{
+    telegramChannelId: string;
+    points: BotRequestTrendPoint[];
+  }>,
+) {
+  const changes = new Map<
+    string,
+    Array<{ channelId: string; point: BotRequestTrendPoint }>
+  >();
+  for (const channel of channels) {
+    for (const point of channel.points) {
+      const at = changes.get(point.syncedAt) ?? [];
+      at.push({ channelId: channel.telegramChannelId, point });
+      changes.set(point.syncedAt, at);
+    }
+  }
+
+  const currentByChannel = new Map<string, BotRequestTrendPoint>();
+  let peak = 0;
+  let peakJoined = 0;
+  return [...changes.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([syncedAt, updates]) => {
+      for (const update of updates) {
+        currentByChannel.set(update.channelId, update.point);
+      }
+      const joinedCount = [...currentByChannel.values()].reduce(
+        (sum, point) => sum + point.joinedCount,
+        0,
+      );
+      const requestedCount = [...currentByChannel.values()].reduce(
+        (sum, point) => sum + point.requestedCount,
+        0,
+      );
+      const totalAttributed = joinedCount + requestedCount;
+      peak = Math.max(peak, totalAttributed);
+      peakJoined = Math.max(peakJoined, joinedCount);
+      const drawdownFromPeak = Math.max(0, peak - totalAttributed);
+      return {
+        syncedAt,
+        joinedCount,
+        requestedCount,
+        totalAttributed,
+        peakJoinedCount: peakJoined,
+        drawdownFromPeak,
+        drawdownPercent: peak > 0 ? (drawdownFromPeak / peak) * 100 : 0,
+      } satisfies BotRequestTrendPoint;
+    });
+}
 
 const normalizeUsername = (value?: string | null) =>
   value?.trim().replace(/^@/, '').toLowerCase() || null;
@@ -206,8 +311,19 @@ export class AdCampaignListReadService {
       this.resolveLegacyChannels(workspaceId, rows),
       loadCampaignListHistorySummaries(this.prisma, workspaceId, rows),
     ]);
+    const botRequestMetrics = await this.loadBotRequestMetrics(
+      workspaceId,
+      rows,
+    );
     return createPaginatedResponse(
-      rows.map((row) => this.mapRow(row, legacyChannels, historySummaries)),
+      rows.map((row) =>
+        this.mapRow(
+          row,
+          legacyChannels,
+          historySummaries,
+          botRequestMetrics.get(row.id) ?? null,
+        ),
+      ),
       totalItems,
       pagination,
     );
@@ -262,10 +378,170 @@ export class AdCampaignListReadService {
     return result;
   }
 
+  private async loadBotRequestMetrics(
+    workspaceId: string,
+    rows: CampaignListRow[],
+  ) {
+    const tracked = rows.flatMap((campaign) =>
+      campaign.botInviteLinks.map((link) => {
+        const inviteLink = link.inviteLink;
+        return {
+          campaignId: campaign.id,
+          inviteLinkId: inviteLink.id,
+          channelId: inviteLink.telegramChannelId,
+          channelTitle: inviteLink.telegramChannel.title,
+          channelPhotoUrl: inviteLink.telegramChannel.photoUrl,
+          startsAt:
+            campaign.placementDate ?? campaign.startedAt ?? campaign.createdAt,
+          endsAt: campaign.endedAt ?? new Date(),
+          baselineJoined: Number(link.baselineJoinedCount ?? 0),
+          baselineRequested: Number(link.baselineRequestedCount ?? 0),
+          currentJoined: Number(inviteLink.joinedCount ?? 0),
+          currentRequested: Number(inviteLink.requestedCount ?? 0),
+        };
+      }),
+    );
+    if (!tracked.length) return new Map<string, BotRequestPerformance>();
+    const latest = new Date(
+      Math.max(...tracked.map((entry) => entry.endsAt.getTime())),
+    );
+    const snapshots = await this.prisma.telegramInviteLinkSnapshot.findMany({
+      where: {
+        workspaceId,
+        inviteLinkId: {
+          in: [...new Set(tracked.map((entry) => entry.inviteLinkId))],
+        },
+        syncedAt: { lte: latest },
+      },
+      select: {
+        inviteLinkId: true,
+        syncedAt: true,
+        joinedCount: true,
+        requestedCount: true,
+      },
+      orderBy: [{ syncedAt: 'asc' }, { id: 'asc' }],
+    });
+    const snapshotsByLink = new Map<string, typeof snapshots>();
+    for (const snapshot of snapshots) {
+      const linkSnapshots = snapshotsByLink.get(snapshot.inviteLinkId) ?? [];
+      linkSnapshots.push(snapshot);
+      snapshotsByLink.set(snapshot.inviteLinkId, linkSnapshots);
+    }
+    const result = new Map<string, BotRequestPerformance>();
+    for (const campaign of rows) {
+      const entries = tracked.filter(
+        (entry) => entry.campaignId === campaign.id,
+      );
+      if (!entries.length) continue;
+      const channels = new Map<
+        string,
+        {
+          telegramChannelId: string;
+          title: string;
+          photoUrl: string | null;
+          points: Map<
+            string,
+            { syncedAt: string; joinedCount: number; requestedCount: number }
+          >;
+        }
+      >();
+      for (const entry of entries) {
+        const snapshotsForEntry = (
+          snapshotsByLink.get(entry.inviteLinkId) ?? []
+        ).filter((snapshot) => snapshot.syncedAt <= entry.endsAt);
+        const current = channels.get(entry.channelId) ?? {
+          telegramChannelId: entry.channelId,
+          title: entry.channelTitle,
+          photoUrl: entry.channelPhotoUrl,
+          points: new Map(),
+        };
+        const addPoint = (
+          at: Date,
+          joinedCount: number,
+          requestedCount: number,
+        ) => {
+          const key = at.toISOString();
+          const point = current.points.get(key) ?? {
+            syncedAt: key,
+            joinedCount: 0,
+            requestedCount: 0,
+          };
+          point.joinedCount += Math.max(0, joinedCount - entry.baselineJoined);
+          point.requestedCount += Math.max(
+            0,
+            requestedCount - entry.baselineRequested,
+          );
+          current.points.set(key, point);
+        };
+        addPoint(entry.startsAt, entry.baselineJoined, entry.baselineRequested);
+        for (const snapshot of snapshotsForEntry) {
+          if (snapshot.syncedAt > entry.startsAt) {
+            addPoint(
+              snapshot.syncedAt,
+              snapshot.joinedCount,
+              snapshot.requestedCount,
+            );
+          }
+        }
+        if (!campaign.endedAt) {
+          addPoint(entry.endsAt, entry.currentJoined, entry.currentRequested);
+        }
+        channels.set(entry.channelId, current);
+      }
+      const channelRows = [...channels.values()].map((channel) => {
+        const rawPoints = [...channel.points.values()]
+          .map((point) => ({
+            ...point,
+            totalAttributed: point.joinedCount + point.requestedCount,
+          }))
+          .sort((left, right) => left.syncedAt.localeCompare(right.syncedAt));
+        let peak = 0;
+        let peakJoined = 0;
+        const points = rawPoints.map((point) => {
+          peak = Math.max(peak, point.totalAttributed);
+          peakJoined = Math.max(peakJoined, point.joinedCount);
+          const drawdownFromPeak = Math.max(0, peak - point.totalAttributed);
+          return {
+            ...point,
+            peakJoinedCount: peakJoined,
+            drawdownFromPeak,
+            drawdownPercent: peak > 0 ? (drawdownFromPeak / peak) * 100 : 0,
+          };
+        });
+        const requests = points.at(-1)?.totalAttributed ?? 0;
+        const dropFromPeak = Math.max(0, peak - requests);
+        return {
+          telegramChannelId: channel.telegramChannelId,
+          title: channel.title,
+          photoUrl: channel.photoUrl,
+          requests,
+          peak: Math.max(0, ...points.map((point) => point.totalAttributed)),
+          dropFromPeak,
+          dropPercent: peak > 0 ? (dropFromPeak / peak) * 100 : 0,
+          points,
+        };
+      });
+      const points = aggregateBotRequestPoints(channelRows);
+      result.set(campaign.id, {
+        total: points.at(-1)?.totalAttributed ?? 0,
+        points,
+        channels: channelRows.sort((a, b) => b.requests - a.requests),
+        startsAt: (
+          campaign.placementDate ??
+          campaign.startedAt ??
+          campaign.createdAt
+        ).toISOString(),
+        endsAt: campaign.endedAt?.toISOString() ?? null,
+      });
+    }
+    return result;
+  }
+
   private mapRow(
     row: CampaignListRow,
     legacyChannels: Map<string, TelegramSource>,
     historySummaries: Map<string, CampaignListHistorySummary>,
+    botRequestPerformance: BotRequestPerformance | null,
   ) {
     const linkedPromos = new Map(
       [row.promo, ...row.promos.map((link) => link.promo)]
@@ -314,6 +590,15 @@ export class AdCampaignListReadService {
         row.inviteLinks[0] ??
         null,
       inviteLinkIds: row.inviteLinks.map((link) => link.id),
+      botInviteLinkIds: row.botInviteLinks.map((link) => link.inviteLink.id),
+      trackingLinkKind: row.botInviteLinks[0]?.kind ?? 'BOT',
+      trackingChannelIds: [
+        ...new Set(
+          row.botInviteLinks.map((link) => link.inviteLink.telegramChannelId),
+        ),
+      ],
+      botInviteLinks: row.botInviteLinks.map((link) => link.inviteLink),
+      botRequestPerformance,
       ownTelegramChannelId: row.telegramChannelId,
       costAmount,
       advertisingChannels: sources,

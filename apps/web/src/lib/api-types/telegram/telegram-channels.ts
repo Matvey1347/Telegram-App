@@ -152,6 +152,7 @@ export type TelegramChannel = EntityAssignment & {
   timePosts?: TelegramChannelTimePost[];
   isActive: boolean;
   archivedAt?: string | null;
+  isTest?: boolean;
   preview?: {
     audience: Pick<
       TelegramChannelAudience,
@@ -226,7 +227,7 @@ export type TelegramChannelListResponse = {
     hasNextPage: boolean;
     hasPreviousPage: boolean;
   };
-  counts: { active: number; archived: number };
+  counts: { active: number; test: number; archived: number };
 };
 
 export type TelegramSyncResult = SyncOperationResult & {

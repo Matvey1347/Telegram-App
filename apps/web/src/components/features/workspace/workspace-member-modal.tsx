@@ -166,7 +166,15 @@ export function WorkspaceMemberModal({
                 <Input {...register("name")} />
               </FormField>
               <FormField label="Password (optional)">
-                <Input type="password" {...register("password")} />
+                <Input
+                  type="password"
+                  autoComplete="new-password"
+                  {...register("password")}
+                />
+                <p className="mt-2 text-xs text-neutral-500">
+                  Leave blank to generate a password shown once after the member
+                  is added.
+                </p>
               </FormField>
             </>
           ) : null}

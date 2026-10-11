@@ -44,7 +44,7 @@ vi.mock("@/providers/toast-provider", () => ({
 }));
 
 const audienceTrend = {
-  periodDays: 7,
+  periodDays: 30,
   currentAt: "2026-09-07T12:00:00.000Z",
   baselineAt: "2026-08-31T12:00:00.000Z",
   metrics: {
@@ -191,9 +191,11 @@ describe("ChannelEconomicsSummary", () => {
     );
 
     const trendButton = screen.getByRole("button", {
-      name: "Open 7-day channel dynamics",
+      name: "Open 30-day channel dynamics",
     });
-    expect(trendButton).toHaveTextContent("Subs+10.0%·24h views-10.0%");
+    expect(trendButton).toHaveTextContent(
+      "Subs · 30d+100 (+10.0%)·24h views-10.0%",
+    );
     expect(trendButton.parentElement).toHaveClass("mt-2");
     expect(trendButton.parentElement).not.toContainElement(
       screen.getByLabelText("Drafts"),
@@ -210,7 +212,7 @@ describe("ChannelEconomicsSummary", () => {
     expect(await screen.findByText("Last 7 days")).toBeInTheDocument();
   });
 
-  it("never renders a cached monthly trend in the weekly channel-card slot", () => {
+  it("does not render a weekly trend in the monthly channel-card slot", () => {
     render(
       <ChannelEconomicsSummary
         channel={
@@ -218,7 +220,7 @@ describe("ChannelEconomicsSummary", () => {
             id: "channel-1",
             title: "Mentor",
             preview: {
-              audienceTrend: { ...audienceTrend, periodDays: 30 },
+              audienceTrend: { ...audienceTrend, periodDays: 7 },
               financialSummary: {},
             },
           } as never
@@ -376,7 +378,7 @@ describe("ChannelEconomicsSummary", () => {
       "whitespace-nowrap",
     );
     const trendButton = screen.getByRole("button", {
-      name: "Open 7-day channel dynamics",
+      name: "Open 30-day channel dynamics",
     });
     expect(trendButton.parentElement).toHaveClass("mt-2");
     expect(trendButton.parentElement).not.toContainElement(

@@ -27,6 +27,7 @@ export type TrafficAttributionInviteLinkRow = {
   joinedCount: number;
   requestedCount: number;
   peakAttributedCount: number;
+  createdAt: Date;
 };
 
 export type TrafficAttributionPlanBoundaryCounter = {
@@ -85,6 +86,67 @@ export class TelegramChannelTrafficAttributionReadService {
     };
   }
 
+  async detailSnapshotsForChannels(workspaceId: string, channelIds: string[]) {
+    const snapshots = await this.prisma.telegramInviteLinkSnapshot.findMany({
+      where: { workspaceId, telegramChannelId: { in: channelIds } },
+      orderBy: [{ syncedAt: 'desc' }, { id: 'desc' }],
+      take: MAX_DETAIL_SNAPSHOTS + 1,
+      select: {
+        inviteLinkId: true,
+        syncedAt: true,
+        joinedCount: true,
+        requestedCount: true,
+      },
+    });
+    return {
+      rows: snapshots.slice(0, MAX_DETAIL_SNAPSHOTS).reverse(),
+      historyTruncated: snapshots.length > MAX_DETAIL_SNAPSHOTS,
+    };
+  }
+
+  async snapshotsForRollingWindow(
+    workspaceId: string,
+    inviteLinkIds: string[],
+    from: Date,
+    now: Date,
+  ) {
+    if (!inviteLinkIds.length) return [];
+    const [baseline, inWindow] = await Promise.all([
+      this.prisma.$queryRaw<
+        Array<{
+          inviteLinkId: string;
+          syncedAt: Date;
+          joinedCount: number;
+          requestedCount: number;
+        }>
+      >(Prisma.sql`
+        SELECT DISTINCT ON (snapshot."inviteLinkId")
+          snapshot."inviteLinkId", snapshot."syncedAt",
+          snapshot."joinedCount", snapshot."requestedCount"
+        FROM "TelegramInviteLinkSnapshot" snapshot
+        WHERE snapshot."workspaceId" = ${workspaceId}
+          AND snapshot."inviteLinkId" IN (${Prisma.join(inviteLinkIds)})
+          AND snapshot."syncedAt" < ${from}
+        ORDER BY snapshot."inviteLinkId", snapshot."syncedAt" DESC, snapshot."id" DESC
+      `),
+      this.prisma.telegramInviteLinkSnapshot.findMany({
+        where: {
+          workspaceId,
+          inviteLinkId: { in: inviteLinkIds },
+          syncedAt: { gte: from, lte: now },
+        },
+        orderBy: [{ syncedAt: 'asc' }, { id: 'asc' }],
+        select: {
+          inviteLinkId: true,
+          syncedAt: true,
+          joinedCount: true,
+          requestedCount: true,
+        },
+      }),
+    ]);
+    return [...baseline, ...inWindow];
+  }
+
   async batch(workspaceId: string, channelIds: string[]) {
     const [channels, links, campaigns, participants, plans, workspace] =
       await Promise.all([
@@ -113,6 +175,7 @@ export class TelegramChannelTrafficAttributionReadService {
             joinedCount: true,
             requestedCount: true,
             peakAttributedCount: true,
+            createdAt: true,
           },
         }),
         this.prisma.adCampaign.findMany({

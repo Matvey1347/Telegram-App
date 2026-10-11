@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { ConsumerFinanceDebt } from "@telegram-system/shared";
 import {
@@ -15,10 +15,11 @@ import {
 import type { FinanceLocale } from "@finance-pro/web/components/i18n/core";
 import { financeDebtsCopy } from "@finance-pro/web/components/i18n/debts";
 import { consumerFinanceLedgerApi } from "@finance-pro/web/lib/api/consumer-finance-ledger-api";
+import { consumerFinanceObligationsApi } from "@finance-pro/web/lib/api/consumer-finance-obligations-api";
 import { consumerFinanceKeys } from "@finance-pro/web/lib/query/consumer-finance-query-keys";
 
 export function FinanceDebtSettlementModal({
-  debt,
+  debt: initialDebt,
   botId,
   locale,
   onClose,
@@ -29,6 +30,7 @@ export function FinanceDebtSettlementModal({
   locale: FinanceLocale;
   onClose: () => void;
   onCreate: (
+    debt: ConsumerFinanceDebt,
     accountId: string,
     amount: string,
     settlementDate: string,
@@ -41,6 +43,13 @@ export function FinanceDebtSettlementModal({
     queryKey: consumerFinanceKeys.accounts(botId),
     queryFn: () => consumerFinanceLedgerApi.accounts(botId),
   });
+  const debts = useQuery({
+    queryKey: consumerFinanceKeys.debts(botId, { status: "OPEN", limit: 100 }),
+    queryFn: () => consumerFinanceObligationsApi.debts(botId, { status: "OPEN", limit: 100 }),
+  });
+  const openDebts = debts.data?.items ?? [initialDebt];
+  const [debtId, setDebtId] = useState(initialDebt.id);
+  const debt = openDebts.find((candidate) => candidate.id === debtId) ?? initialDebt;
   const settlementAccounts = (accounts.data ?? []).filter(
     (account) => !account.archivedAt,
   );
@@ -55,11 +64,15 @@ export function FinanceDebtSettlementModal({
   const [settlementDate, setSettlementDate] = useState(() =>
     new Date().toISOString().slice(0, 10),
   );
+  useEffect(() => {
+    setAccountId(debt.accountId);
+    setAmount(debt.amount);
+  }, [debt.accountId, debt.amount, debt.id]);
   const submit = async () => {
     setPending(true);
     setFailed(false);
     try {
-      await onCreate(selectedAccountId, amount, settlementDate);
+      await onCreate(debt, selectedAccountId, amount, settlementDate);
       onClose();
     } catch {
       setFailed(true);
@@ -82,7 +95,17 @@ export function FinanceDebtSettlementModal({
           </Select>
         </FormField>
         <FormField label={t.selectedDebt}>
-          <Input value={debt.name} readOnly />
+          <Select
+            uiLocale={locale}
+            value={debt.id}
+            onChange={(event) => setDebtId(event.target.value)}
+          >
+            {openDebts.map((candidate) => (
+              <option key={candidate.id} value={candidate.id}>
+                {candidate.name} · {candidate.amount} {candidate.currency}
+              </option>
+            ))}
+          </Select>
         </FormField>
         <FormField label={t.account}>
           <Select
@@ -133,8 +156,7 @@ export function FinanceDebtSettlementModal({
               pending ||
               !selectedAccountId ||
               !settlementDate ||
-              !(Number(amount) > 0) ||
-              Number(amount) > Number(debt.amount)
+              !(Number(amount) > 0)
             }
             onClick={() => void submit()}
           >

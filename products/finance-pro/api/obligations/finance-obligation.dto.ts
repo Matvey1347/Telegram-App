@@ -29,6 +29,7 @@ export class FinanceDebtInputDto {
 }
 
 export class FinanceDebtQueryDto {
+  @IsOptional() @IsString() @Matches(/\S/u) id?: string;
   @IsOptional() @IsIn(['OPEN', 'SETTLED']) status?: 'OPEN' | 'SETTLED';
   @IsOptional() @IsString() cursor?: string;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(100) limit = 30;

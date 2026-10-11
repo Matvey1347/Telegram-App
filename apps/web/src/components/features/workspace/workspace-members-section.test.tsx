@@ -51,7 +51,9 @@ describe("WorkspaceMembersSection", () => {
         photoUrl: "https://example.com/avatar.jpg",
       },
     ] as never);
-    vi.spyOn(workspaceMembersApi, "create").mockResolvedValue({} as never);
+    vi.spyOn(workspaceMembersApi, "create").mockResolvedValue({
+      temporaryPassword: "generated-password",
+    } as never);
     vi.spyOn(workspaceMembersApi, "update").mockResolvedValue({} as never);
     vi.spyOn(memberFinanceApi, "summaries").mockResolvedValue([]);
     vi.spyOn(workspaceRolesApi, "list").mockResolvedValue([
@@ -122,6 +124,9 @@ describe("WorkspaceMembersSection", () => {
     expect(
       vi.mocked(workspaceMembersApi.create).mock.calls[0]?.[0],
     ).not.toHaveProperty("password");
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "generated-password",
+    );
   });
 
   it("edits a member using the real workspace roles", async () => {

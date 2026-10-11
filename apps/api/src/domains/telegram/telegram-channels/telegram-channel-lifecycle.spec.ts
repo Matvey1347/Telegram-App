@@ -75,4 +75,40 @@ describe('TelegramChannelsService channel lifecycle', () => {
 
     expect(prisma.telegramChannel.updateMany).toHaveBeenCalledTimes(1);
   });
+
+  it('moves a non-archived channel to the separate test lifecycle', async () => {
+    prisma.telegramChannel.updateMany.mockResolvedValue({ count: 1 });
+
+    await service.moveToTest('user-1', 'channel-1');
+
+    expect(prisma.telegramChannel.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          id: 'channel-1',
+          workspaceId: 'workspace-1',
+          archivedAt: null,
+          isTest: false,
+        },
+        data: { isTest: true },
+      }),
+    );
+  });
+
+  it('moves a test channel back to active without restoring an archive', async () => {
+    prisma.telegramChannel.updateMany.mockResolvedValue({ count: 1 });
+
+    await service.moveToActive('user-1', 'channel-1');
+
+    expect(prisma.telegramChannel.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          id: 'channel-1',
+          workspaceId: 'workspace-1',
+          archivedAt: null,
+          isTest: true,
+        },
+        data: { isTest: false },
+      }),
+    );
+  });
 });

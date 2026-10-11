@@ -330,6 +330,29 @@ function AdCampaignsPage({
         "error",
       ),
   });
+  const refreshCampaignInviteLinksMutation = useMutation({
+    mutationFn: (campaign: AdCampaign) =>
+      adCampaignsApi.refreshInviteLinkData(campaign.id),
+    onSuccess: async (result) => {
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: adCampaignKeys.list() }),
+        qc.invalidateQueries({ queryKey: adCampaignKeys.performance() }),
+        qc.invalidateQueries({ queryKey: telegramChannelKeys.lists() }),
+      ]);
+      const failed = result.failedLinks.length;
+      pushToast(
+        failed
+          ? `Updated ${result.refreshedLinks} of ${result.totalLinks} invite links. ${failed} failed: ${result.failedLinks[0]?.message ?? "check Telegram access"}`
+          : `Updated ${result.refreshedLinks} of ${result.totalLinks} invite links.`,
+        failed ? "info" : "success",
+      );
+    },
+    onError: (error) =>
+      pushToast(
+        getErrorMessage(error, "Failed to refresh invite-link data."),
+        "error",
+      ),
+  });
   const createHypothesisMutation = useMutation({
     mutationFn: adHypothesesApi.create,
     onSuccess: () => {
@@ -554,6 +577,14 @@ function AdCampaignsPage({
           onDelete={setDeleting}
           onToggleExclude={(campaign, excludeFromAnalytics) =>
             excludeMutation.mutate({ id: campaign.id, excludeFromAnalytics })
+          }
+          onRefreshInviteLinks={(campaign) =>
+            refreshCampaignInviteLinksMutation.mutate(campaign)
+          }
+          refreshingInviteLinkCampaignId={
+            refreshCampaignInviteLinksMutation.isPending
+              ? (refreshCampaignInviteLinksMutation.variables?.id ?? null)
+              : null
           }
           onOpenPromo={async (promo) => {
             try {
@@ -1150,8 +1181,8 @@ function CampaignsTable({
       <div className="table-scroll mb-5 w-full rounded-lg border border-neutral-800">
         <table className="w-full min-w-[960px] table-fixed text-left text-sm">
           <colgroup>
-            <col className="w-[420px]" />
-            <col className="w-[360px]" />
+            <col className="w-[500px]" />
+            <col className="w-[280px]" />
             <col className="w-[80px]" />
           </colgroup>
           <thead className="bg-slate-950 text-xs uppercase text-neutral-400">

@@ -129,7 +129,7 @@ const pageHookAllowances = [
   ["(growth)/ad-campaigns/page.tsx", 20],
   ["(telegram)/system-bot/connect/page.tsx", 3],
   ["(telegram)/telegram-channel-networks/[id]/page.tsx", 5],
-  ["(telegram)/telegram-channels/page.tsx", 17],
+  ["(telegram)/telegram-channels/page.tsx", 15],
   ["(telegram)/telegram-posts/page.tsx", 16],
   ["(telegram)/telegram/channels/[id]/page.tsx", 14],
   ["(workspace)/settings/page.tsx", 5],

@@ -82,9 +82,11 @@ export function hasMeaningfulChannelEconomics(channel: TelegramChannel) {
 export function ChannelEconomicsSummary({
   channel,
   currencySettings,
+  compact = false,
 }: {
   channel: TelegramChannel;
   currencySettings?: CurrencySettings | null;
+  compact?: boolean;
 }) {
   const economics = channel.preview?.financialSummary.assetEconomics;
   const hasEconomics = hasMeaningfulChannelEconomics(channel);
@@ -132,12 +134,12 @@ export function ChannelEconomicsSummary({
   );
 
   return (
-    <section className="mt-2">
+    <section className={compact ? "mt-1.5" : "mt-2"}>
       {!hasEconomics ? (
-        <div className="border-t border-neutral-800/80 pt-2 text-xs">
+          <div className={`border-t border-neutral-800/80 text-xs ${compact ? "pt-1.5" : "pt-2"}`}>
           <div className="flex justify-end">{operationalStatus}</div>
           {channel.preview?.audienceTrend ? (
-            <div className="mt-2 flex">
+            <div className={compact ? "mt-1 flex" : "mt-2 flex"}>
               <ChannelAudienceTrendButton
                 channelId={channel.id}
                 channelTitle={channel.title}
@@ -149,15 +151,15 @@ export function ChannelEconomicsSummary({
         </div>
       ) : economics?.conversionUnavailable ? (
         <>
-          <p className="mt-3 rounded-md border border-amber-900/70 bg-amber-950/20 px-2.5 py-2 text-xs text-amber-200">
+          <p className={`rounded-md border border-amber-900/70 bg-amber-950/20 text-xs text-amber-200 ${compact ? "mt-1.5 px-2 py-1.5" : "mt-3 px-2.5 py-2"}`}>
             Some revenue cannot be converted to {currency}; add the missing
             exchange rate.
           </p>
-          <div className="mt-2 flex justify-end text-xs">
+          <div className={`${compact ? "mt-1" : "mt-2"} flex justify-end text-xs`}>
             {operationalStatus}
           </div>
           {channel.preview?.audienceTrend ? (
-            <div className="mt-2 flex text-xs">
+            <div className={`${compact ? "mt-1" : "mt-2"} flex text-xs`}>
               <ChannelAudienceTrendButton
                 channelId={channel.id}
                 channelTitle={channel.title}
@@ -171,29 +173,33 @@ export function ChannelEconomicsSummary({
         </>
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-3 sm:flex sm:items-start sm:justify-between">
+          <div className={`grid min-w-0 ${compact ? "grid-cols-4 gap-x-1.5" : "grid-cols-2 gap-3 sm:flex sm:items-start sm:justify-between"}`}>
             <SpendMetric
               purchasePrice={economics?.purchasePrice}
               adSpend={economics?.adSpend}
               currency={currency}
+              compact={compact}
             />
             <SubscriberCost
               label="Sub"
               value={moneyOrDash(regularCpa, currency, 1)}
               icon={<UserRound size={14} className="text-violet-300" />}
+              compact={compact}
             />
             <SubscriberCost
               label="Active"
               value={moneyOrDash(activeCpa, currency, 1)}
               icon={<UserCheck size={14} className="text-emerald-300" />}
+              compact={compact}
             />
             <Metric
               label="Earned"
               value={moneyOrDash(economics?.revenue, currency)}
               tone="text-emerald-300"
+              compact={compact}
             />
           </div>
-          <div className="mt-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs">
+          <div className={`flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs ${compact ? "mt-1.5" : "mt-3"}`}>
             {channel.adBaseCpm != null ? (
               <span className="text-neutral-500">
                 CPM{" "}
@@ -208,7 +214,7 @@ export function ChannelEconomicsSummary({
             )}
             {operationalStatus}
           </div>
-          <div className="mt-2 grid grid-cols-3 gap-1.5">
+          <div className={`grid grid-cols-3 gap-1.5 ${compact ? "mt-1.5" : "mt-2"}`}>
             <FormatPrice
               label="1/24"
               pricing={formatPricing?.h24}
@@ -226,7 +232,7 @@ export function ChannelEconomicsSummary({
             />
           </div>
           {channel.preview?.audienceTrend ? (
-            <div className="mt-2 flex text-xs">
+            <div className={`${compact ? "mt-1" : "mt-2"} flex text-xs`}>
               <ChannelAudienceTrendButton
                 channelId={channel.id}
                 channelTitle={channel.title}
@@ -238,7 +244,7 @@ export function ChannelEconomicsSummary({
             </div>
           ) : null}
           <ChannelPaybackStatus
-            className="mt-2"
+            className={compact ? "mt-1" : "mt-2"}
             paybackPercent={economics?.paybackPercent}
             paybackMaximumFractionDigits={0}
             adsLeft={economics?.estimatedAdsRemaining}
@@ -254,18 +260,23 @@ function SubscriberCost({
   label,
   value,
   icon,
+  compact = false,
 }: {
   label: string;
   value: string;
   icon: ReactNode;
+  compact?: boolean;
 }) {
   return (
     <div className="min-w-0">
-      <span className="flex h-5 min-w-0 items-center gap-1.5 text-xs text-neutral-500">
+      <span className={`flex min-w-0 items-center text-neutral-500 ${compact ? "h-4 gap-1 text-[10px]" : "h-5 gap-1.5 text-xs"}`}>
         {icon}
         <span className="truncate">{label}</span>
       </span>
-      <p className="flex h-6 items-center truncate text-sm font-semibold leading-none text-neutral-200">
+      <p
+        title={value}
+        className={`flex min-w-0 items-center truncate font-semibold leading-none text-neutral-200 ${compact ? "h-5 text-xs tabular-nums" : "h-6 text-sm"}`}
+      >
         {value}
       </p>
     </div>
@@ -281,27 +292,29 @@ function SpendMetric({
   purchasePrice,
   adSpend,
   currency,
+  compact = false,
 }: {
   purchasePrice?: number | null;
   adSpend?: number | null;
   currency: string;
+  compact?: boolean;
 }) {
   const purchaseAmount = positiveAmount(purchasePrice);
   const adSpendAmount = positiveAmount(adSpend);
   const total = purchaseAmount + adSpendAmount;
 
   if (total === 0) {
-    return <Metric label={<ExpenseLabel />} value="—" tone="text-rose-300" />;
+    return <Metric label={<ExpenseLabel compact={compact} />} value="—" tone="text-rose-300" compact={compact} />;
   }
 
   return (
     <div className="min-w-0">
-      <ExpenseLabel />
-      <div className="flex h-6 items-center">
+      <ExpenseLabel compact={compact} />
+      <div className={`flex min-w-0 items-center ${compact ? "h-5" : "h-6"}`}>
         <Tooltip
           side="bottom"
           align="left"
-          className="h-full w-fit items-center"
+          className="h-full min-w-0 w-fit items-center"
           content={
             <span className="grid min-w-44 gap-1.5">
               {purchaseAmount > 0 ? (
@@ -325,8 +338,9 @@ function SpendMetric({
         >
           <button
             type="button"
-            className="flex h-full items-center text-left text-sm font-semibold leading-none text-rose-300"
+            className={`flex h-full min-w-0 items-center truncate text-left font-semibold leading-none text-rose-300 ${compact ? "text-xs tabular-nums" : "text-sm"}`}
             aria-label="Show spend breakdown"
+            title={money(total, currency)}
           >
             {money(total, currency)}
           </button>
@@ -336,9 +350,9 @@ function SpendMetric({
   );
 }
 
-function ExpenseLabel() {
+function ExpenseLabel({ compact = false }: { compact?: boolean }) {
   return (
-    <span className="flex h-5 items-center text-xs text-neutral-500">
+    <span className={`flex items-center text-neutral-500 ${compact ? "h-4 text-[10px]" : "h-5 text-xs"}`}>
       Spend
     </span>
   );
@@ -388,16 +402,19 @@ function Metric({
   label,
   value,
   tone = "text-white",
+  compact = false,
 }: {
   label: ReactNode;
   value: string;
   tone?: string;
+  compact?: boolean;
 }) {
   return (
     <div className="min-w-0">
-      <p className="flex h-5 items-center text-xs text-neutral-500">{label}</p>
+      <p className={`flex items-center text-neutral-500 ${compact ? "h-4 text-[10px]" : "h-5 text-xs"}`}>{label}</p>
       <p
-        className={`flex h-6 items-center truncate text-sm font-semibold leading-none ${tone}`}
+        title={value}
+        className={`flex min-w-0 items-center truncate font-semibold leading-none ${tone} ${compact ? "h-5 text-xs tabular-nums" : "h-6 text-sm"}`}
       >
         {value}
       </p>

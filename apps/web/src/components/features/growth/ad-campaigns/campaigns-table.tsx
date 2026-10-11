@@ -28,6 +28,7 @@ import type {
   TelegramInviteLink,
 } from "@/lib/api";
 import { AdCampaignRowActions } from "./ad-campaign-row-actions";
+import { CampaignBotRequestsModal } from "./campaign-bot-requests-modal";
 
 function InviteLinkCreatorAvatar({
   inviteLink,
@@ -423,7 +424,7 @@ function KpiStatusBadge({
 }) {
   return (
     <span
-      className={`inline-flex rounded border px-2 py-0.5 text-xs ${kpiStatusClass(status)} ${status && status !== "unknown" && onMouseEnter ? "cursor-help" : ""}`}
+      className={`inline-flex rounded border px-1.5 py-0.5 text-[11px] leading-tight ${kpiStatusClass(status)} ${status && status !== "unknown" && onMouseEnter ? "cursor-help" : ""}`}
       title={kpiStatusTitle(status)}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
@@ -451,6 +452,7 @@ function PerformanceCell({
   onHideKpiTooltip,
   onOpenHistory,
   onOpenAdmissionAnalytics,
+  onOpenBotRequests,
 }: {
   campaign: AdCampaign;
   cost: number;
@@ -472,6 +474,7 @@ function PerformanceCell({
   onHideKpiTooltip: () => void;
   onOpenHistory?: () => void;
   onOpenAdmissionAnalytics?: () => void;
+  onOpenBotRequests?: () => void;
 }) {
   const kpiTextClass = kpiMetricTextClass(kpiStatus);
   const cardClass = performanceCardClass(kpiStatus);
@@ -516,8 +519,61 @@ function PerformanceCell({
   const displayMode = moneySettings?.currencyDisplayMode ?? "code";
 
   return (
-    <div className={`rounded-xl border p-3 ${cardClass}`}>
-      <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+    <div className={`rounded-lg border p-2.5 ${cardClass}`}>
+      <div className="grid grid-cols-[minmax(90px,1fr)_minmax(70px,0.7fr)_minmax(80px,0.8fr)] gap-2.5">
+        <div>
+          <p className="mb-0.5 text-[10px] uppercase tracking-wide text-slate-500">
+            Spend
+          </p>
+          <p className="text-sm font-semibold leading-snug text-white">
+            {formatMoney(cost, currency, displayMode)}
+          </p>
+        </div>
+        <div>
+          <p className="mb-0.5 text-[10px] uppercase tracking-wide text-slate-500">
+            Attributed
+          </p>
+          <p className={`text-sm font-semibold leading-snug ${kpiTextClass}`}>
+            {formatMetric(attributed)}
+          </p>
+          <div className="mt-0.5 space-y-0.5 text-[11px] leading-snug text-slate-500">
+            <p>Joined {formatMetric(resolvedCurrentJoined)}</p>
+            {pending > 0 ? <p>Pending {formatMetric(pending)}</p> : null}
+          </div>
+        </div>
+        <div>
+          <p className="mb-0.5 text-[10px] uppercase tracking-wide text-slate-500">
+            CPA
+          </p>
+          {costPerJoined != null ? (
+            <p className={`text-sm font-semibold leading-snug ${kpiTextClass}`}>
+              {formatMoney(costPerJoined, currency, displayMode)}
+            </p>
+          ) : (
+            <p className="text-sm text-slate-500">-</p>
+          )}
+          {showPeakCost ? (
+            <div className="mt-0.5 space-y-0.5 text-[11px] leading-snug text-slate-500">
+              <p>
+                Peak {formatMoney(peakCostPerJoined, currency, displayMode)}
+              </p>
+            </div>
+          ) : null}
+        </div>
+      </div>
+      {metrics.length ? (
+        <div className="mt-2 flex flex-wrap gap-1">
+          {metrics.slice(0, 4).map((metric) => (
+            <span
+              key={metric.label}
+              className="rounded border border-slate-700/80 bg-black/20 px-1.5 py-0.5 text-[11px] text-slate-200"
+            >
+              {metric.label}: {metric.value}
+            </span>
+          ))}
+        </div>
+      ) : null}
+      <div className="mt-2 flex flex-wrap items-center gap-1 text-[11px]">
         <KpiStatusBadge
           status={kpiStatus}
           onMouseEnter={(event) => {
@@ -529,68 +585,13 @@ function PerformanceCell({
             onHideKpiTooltip();
           }}
         />
-      </div>
-      <div className="grid grid-cols-[minmax(90px,1fr)_minmax(70px,0.7fr)_minmax(80px,0.8fr)] gap-3">
-        <div>
-          <p className="mb-1 text-[10px] uppercase tracking-wide text-slate-500">
-            Spend
-          </p>
-          <p className="font-semibold leading-snug text-white">
-            {formatMoney(cost, currency, displayMode)}
-          </p>
-        </div>
-        <div>
-          <p className="mb-1 text-[10px] uppercase tracking-wide text-slate-500">
-            Attributed
-          </p>
-          <p className={`font-semibold leading-snug ${kpiTextClass}`}>
-            {formatMetric(attributed)}
-          </p>
-          <div className="mt-1 space-y-0.5 text-xs leading-snug text-slate-500">
-            <p>Joined {formatMetric(resolvedCurrentJoined)}</p>
-            {pending > 0 ? <p>Pending {formatMetric(pending)}</p> : null}
-          </div>
-        </div>
-        <div>
-          <p className="mb-1 text-[10px] uppercase tracking-wide text-slate-500">
-            CPA
-          </p>
-          {costPerJoined != null ? (
-            <p className={`font-semibold leading-snug ${kpiTextClass}`}>
-              {formatMoney(costPerJoined, currency, displayMode)}
-            </p>
-          ) : (
-            <p className="text-slate-500">-</p>
-          )}
-          {showPeakCost ? (
-            <div className="mt-1 space-y-0.5 text-xs leading-snug text-slate-500">
-              <p>
-                Peak {formatMoney(peakCostPerJoined, currency, displayMode)}
-              </p>
-            </div>
-          ) : null}
-        </div>
-      </div>
-      {metrics.length ? (
-        <div className="mt-3 flex flex-wrap gap-1.5">
-          {metrics.slice(0, 4).map((metric) => (
-            <span
-              key={metric.label}
-              className="rounded border border-slate-700/80 bg-black/20 px-2 py-0.5 text-xs text-slate-200"
-            >
-              {metric.label}: {metric.value}
-            </span>
-          ))}
-        </div>
-      ) : null}
-      {campaign.inviteLinks?.length ? (
-        <div className="mt-3">
-          <div className="mb-2 flex flex-wrap items-center gap-1.5 text-xs">
+        {campaign.inviteLinks?.length ? (
+          <>
             {showTrendDelta ? (
               <button
                 type="button"
                 onClick={onOpenHistory}
-                className="rounded border border-slate-700/80 bg-black/20 px-2 py-0.5 text-slate-200 transition-colors hover:border-slate-500 hover:text-white"
+                className="rounded border border-slate-700/80 bg-black/20 px-1.5 py-0.5 text-slate-200 transition-colors hover:border-slate-500 hover:text-white"
                 title="Open campaign trend"
               >
                 Peak {formatMetric(resolvedPeakAttributed)}
@@ -600,16 +601,32 @@ function PerformanceCell({
               <button
                 type="button"
                 onClick={onOpenHistory}
-                className="rounded border border-amber-700/80 bg-amber-950/20 px-2 py-0.5 text-amber-200 transition-colors hover:border-amber-500 hover:text-amber-100"
+                className="rounded border border-amber-700/80 bg-amber-950/20 px-1.5 py-0.5 text-amber-200 transition-colors hover:border-amber-500 hover:text-amber-100"
                 title="Open campaign trend"
               >
                 Drop from peak {formatMetric(resolvedDropAbsolute)} ·{" "}
                 {formatPercent(resolvedDropPercent)}
               </button>
             ) : null}
-          </div>
-        </div>
-      ) : null}
+          </>
+        ) : null}
+        {campaign.botRequestPerformance ? (
+          <button
+            type="button"
+            onClick={onOpenBotRequests}
+            className="rounded border border-cyan-800/80 bg-cyan-950/20 px-1.5 py-0.5 text-cyan-200"
+            title={
+              campaign.botRequestPerformance.channels.length
+                ? campaign.botRequestPerformance.channels
+                    .map((channel) => `${channel.title}: +${formatMetric(channel.requests)}`)
+                    .join("\n")
+                : "No new bot requests in the selected period"
+            }
+          >
+            Bot requests +{formatMetric(campaign.botRequestPerformance.total)}
+          </button>
+        ) : null}
+      </div>
       <AdmissionViewUpliftBlock
         campaign={campaign}
         onOpenDetails={onOpenAdmissionAnalytics}
@@ -1000,6 +1017,8 @@ export function AdCampaignsTable({
   onDelete,
   onToggleExclude,
   onOpenPromo,
+  onRefreshInviteLinks,
+  refreshingInviteLinkCampaignId,
   showActions = true,
   showHypotheses = true,
 }: {
@@ -1013,6 +1032,8 @@ export function AdCampaignsTable({
     excludeFromAnalytics: boolean,
   ) => void;
   onOpenPromo?: (promo: Promo) => void;
+  onRefreshInviteLinks?: (campaign: AdCampaign) => void;
+  refreshingInviteLinkCampaignId?: string | null;
   showActions?: boolean;
   showHypotheses?: boolean;
 }) {
@@ -1025,6 +1046,8 @@ export function AdCampaignsTable({
     null,
   );
   const [admissionAnalyticsCampaign, setAdmissionAnalyticsCampaign] =
+    useState<AdCampaign | null>(null);
+  const [botRequestsCampaign, setBotRequestsCampaign] =
     useState<AdCampaign | null>(null);
 
   const normalizedCampaigns = useMemo(
@@ -1114,8 +1137,8 @@ export function AdCampaignsTable({
       <div className="table-scroll mb-5 w-full rounded-lg border border-neutral-800">
         <table className="w-full min-w-[1120px] table-fixed text-left text-sm">
           <colgroup>
-            <col className="w-[420px]" />
-            <col className="w-[360px]" />
+            <col className="w-[350px]" />
+            <col className="w-[450px]" />
             {showHypotheses ? <col className="w-[180px]" /> : null}
             {showActions ? <col className="w-[140px]" /> : null}
           </colgroup>
@@ -1203,6 +1226,7 @@ export function AdCampaignsTable({
                     onOpenAdmissionAnalytics={() =>
                       setAdmissionAnalyticsCampaign(row.campaign)
                     }
+                    onOpenBotRequests={() => setBotRequestsCampaign(row.campaign)}
                   />
                 </td>
                 {showHypotheses ? (
@@ -1221,6 +1245,10 @@ export function AdCampaignsTable({
                         onDelete={onDelete}
                         onToggleExclude={onToggleExclude}
                         onOpenHistory={() => setHistoryCampaign(row.campaign)}
+                        onRefreshInviteLinks={onRefreshInviteLinks}
+                        refreshingInviteLinks={
+                          refreshingInviteLinkCampaignId === row.campaign.id
+                        }
                       />
                     </div>
                   </td>
@@ -1244,6 +1272,10 @@ export function AdCampaignsTable({
       <CampaignAdmissionViewAnalyticsModal
         campaign={admissionAnalyticsCampaign}
         onClose={() => setAdmissionAnalyticsCampaign(null)}
+      />
+      <CampaignBotRequestsModal
+        campaign={botRequestsCampaign}
+        onClose={() => setBotRequestsCampaign(null)}
       />
     </>
   );

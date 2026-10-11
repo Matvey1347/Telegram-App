@@ -1645,6 +1645,8 @@ model TelegramChannel {
   isActive                     Boolean                        @default(true)
   /// Lifecycle state for channels retained for historical reporting.
   archivedAt                   DateTime?
+  /// Keeps sandbox/test channels out of the production channel catalog without archiving them.
+  isTest                       Boolean                        @default(false)
   /// Controls automatic analytics/background synchronization only. Manual operations remain available.
   autoSyncEnabled              Boolean                        @default(true)
   assignedMemberId             String?
@@ -1731,6 +1733,7 @@ model TelegramChannel {
   @@index([audienceTransferInviteLinkId])
   @@index([workspaceId, isActive, autoSyncEnabled])
   @@index([workspaceId, archivedAt, createdAt, id])
+  @@index([workspaceId, isTest, archivedAt, createdAt, id])
 }
 
 model TelegramCustomEmojiPack {
@@ -2010,6 +2013,7 @@ model TelegramChannelAudienceSnapshot {
   telegramChannelId               String
   collectedAt                     DateTime @default(now())
   subscribersCount                Int?
+  pendingJoinRequestsCount        Int?
   activeSubscribersEstimate       Int?
   viewRate                        Float?
   avgViewsRaw                     Float?
@@ -3072,12 +3076,32 @@ model AdCampaign {
   inviteLinks         TelegramInviteLink[]
   inviteLinkSnapshots TelegramInviteLinkSnapshot[]
   admissionBatches    AdCampaignAdmissionBatch[]
+  botInviteLinks      AdCampaignBotInviteLink[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([workspaceId, assignedMemberId])
   @@index([workspaceId, telegramChannelId, excludeFromAnalytics], map: "AdCampaign_workspace_channel_analytics_idx")
+}
+
+// Links used only to measure requests generated in other owned-channel bots.
+// They deliberately do not use TelegramInviteLink.adCampaignId: that field
+// owns acquisition attribution for the campaign's destination channel.
+model AdCampaignBotInviteLink {
+  id             String   @id @default(cuid())
+  adCampaignId   String
+  inviteLinkId   String
+  kind           String   @default("BOT")
+  baselineJoinedCount    Int @default(0)
+  baselineRequestedCount Int @default(0)
+  createdAt      DateTime @default(now())
+
+  adCampaign AdCampaign        @relation(fields: [adCampaignId], references: [id], onDelete: Cascade)
+  inviteLink TelegramInviteLink @relation("AdCampaignBotRequestInviteLinks", fields: [inviteLinkId], references: [id], onDelete: Cascade)
+
+  @@unique([adCampaignId, inviteLinkId])
+  @@index([inviteLinkId])
 }
 
 model AdCampaignAdmissionBatch {
@@ -3407,6 +3431,7 @@ model TelegramInviteLink {
   defaultForChannelBots       TelegramChannel[]                  @relation("TelegramChannelBotInviteLink")
   defaultForChannelBroadcasts TelegramChannel[]                  @relation("TelegramChannelBroadcastInviteLink")
   defaultForAudienceTransfers TelegramChannel[]                  @relation("TelegramChannelAudienceTransferInviteLink")
+  botRequestTrackingCampaigns AdCampaignBotInviteLink[]          @relation("AdCampaignBotRequestInviteLinks")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

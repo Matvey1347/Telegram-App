@@ -7,9 +7,9 @@ import type {
   TelegramChannelAudienceTrend,
   TelegramChannelTrendMetric,
 } from "@telegram-system/shared";
-import { Modal } from "@/components/ui/primitives";
 import { TelegramEntityAvatar } from "./telegram-entity-avatar";
 import { ChannelDynamicsSkeleton } from "./channel-dynamics-skeleton";
+import { TelegramDynamicsModal } from "./telegram-dynamics-modal";
 
 const ChannelPerformanceHistoryPanel = dynamic(
   () =>
@@ -38,9 +38,7 @@ export function ChannelAudienceTrendButton({
   estimatedAdsRemaining?: number | null;
 }) {
   const [open, setOpen] = useState(false);
-  // Channel cards intentionally show only the short operational window. A
-  // cached/monthly payload must never be presented as the weekly pulse.
-  if (!trend || trend.periodDays !== 7) return null;
+  if (!trend || trend.periodDays !== 30) return null;
 
   return (
     <>
@@ -50,16 +48,19 @@ export function ChannelAudienceTrendButton({
         aria-label={`Open ${trend.periodDays}-day channel dynamics`}
         onClick={() => setOpen(true)}
       >
-        <CompactMetric label="Subs" metric={trend.metrics.subscribers} />
+        <CompactMetric
+          label="Subs · 30d"
+          metric={trend.metrics.subscribers}
+          showAbsoluteChange
+        />
         <span className="text-neutral-700">·</span>
         <CompactMetric label="24h views" metric={trend.metrics.reach} />
       </button>
 
-      <Modal
+      <TelegramDynamicsModal
         open={open}
         onClose={() => setOpen(false)}
         title={`${channelTitle} · channel dynamics`}
-        size="xl"
         leadingHeaderAction={
           <TelegramEntityAvatar
             imageUrl={channelPhotoUrl}
@@ -76,7 +77,7 @@ export function ChannelAudienceTrendButton({
             fallbackAdsLeft={estimatedAdsRemaining}
           />
         ) : null}
-      </Modal>
+      </TelegramDynamicsModal>
     </>
   );
 }
@@ -84,9 +85,11 @@ export function ChannelAudienceTrendButton({
 function CompactMetric({
   label,
   metric,
+  showAbsoluteChange = false,
 }: {
   label: string;
   metric: TelegramChannelTrendMetric | null;
+  showAbsoluteChange?: boolean;
 }) {
   const delta = metric?.percentChange;
   const presentation = deltaPresentation(delta);
@@ -95,7 +98,13 @@ function CompactMetric({
     <span className={`inline-flex items-center gap-0.5 ${presentation.tone}`}>
       <Icon size={11} aria-hidden="true" />
       <span className="text-neutral-400">{label}</span>
-      <strong>{delta == null ? "—" : signedPercent(delta)}</strong>
+      <strong>
+        {showAbsoluteChange
+          ? signedAbsoluteChange(metric)
+          : delta == null
+            ? "—"
+            : signedPercent(delta)}
+      </strong>
     </span>
   );
 }
@@ -111,4 +120,11 @@ function deltaPresentation(value?: number | null) {
 
 function signedPercent(value: number) {
   return `${value > 0 ? "+" : ""}${value.toFixed(1)}%`;
+}
+
+function signedAbsoluteChange(metric: TelegramChannelTrendMetric | null) {
+  if (!metric) return "—";
+  const absolute = metric.absoluteChange.toLocaleString();
+  const percent = signedPercent(metric.percentChange ?? 0);
+  return `${metric.absoluteChange > 0 ? "+" : ""}${absolute} (${percent})`;
 }

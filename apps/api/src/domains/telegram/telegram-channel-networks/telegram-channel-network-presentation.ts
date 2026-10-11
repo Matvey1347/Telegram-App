@@ -1,4 +1,8 @@
 import type { ResolvedEmoji } from '@telegram-system/shared';
+import type {
+  TelegramChannelAudienceTrend,
+  TelegramChannelTrafficAttributionPreview,
+} from '@telegram-system/shared';
 import {
   iconToResolvedEmoji,
   type ResolvedEmojiIconSource,
@@ -31,6 +35,8 @@ export type ChannelNetworkChannelInput = Omit<
   photoUrl?: string | null;
   pendingJoinRequestsCount?: number | null;
   audienceSnapshots?: ChannelAudienceSnapshotInput[];
+  audienceTrend?: TelegramChannelAudienceTrend | null;
+  trafficAttribution?: TelegramChannelTrafficAttributionPreview | null;
 };
 
 export type ChannelNetworkAudience = {
@@ -139,6 +145,8 @@ export function channelNetworkFinancialSummary(
     kpiStatus: finance.kpiStatus,
     kpiLabel: finance.kpiLabel,
     assetEconomics: finance.assetEconomics,
+    audienceTrend: channel.audienceTrend,
+    trafficAttribution: channel.trafficAttribution,
   };
 }
 

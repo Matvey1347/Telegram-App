@@ -17,17 +17,27 @@ export const TRAFFIC_SOURCE_LABELS: Record<
   BOT: 'Bot',
   BROADCAST: 'Broadcasts',
   OTHER: 'Other links',
+  UNATTRIBUTED: 'Other (unattributed)',
 };
 
 export function trafficAttributionMetrics(input: {
   acquired: number;
   retained: number;
+  /**
+   * Counter-based source retention cannot explain people who subscribed before
+   * a tracked link existed. Keep that channel-level churn explicit instead of
+   * pretending it belongs to an invite link.
+   */
+  unsubscribed?: number;
   spend?: number | null;
   currency: string;
 }): TelegramChannelTrafficAttributionMetrics {
   const acquired = Math.max(0, Math.round(input.acquired));
   const retained = Math.min(acquired, Math.max(0, Math.round(input.retained)));
-  const unsubscribed = Math.max(0, acquired - retained);
+  const unsubscribed = Math.max(
+    0,
+    Math.round(input.unsubscribed ?? acquired - retained),
+  );
   const spend = input.spend == null ? null : Math.max(0, input.spend);
   return {
     acquired,
@@ -57,6 +67,7 @@ export function summarizeTrafficAttribution(
     const metrics = trafficAttributionMetrics({
       acquired: matching.reduce((sum, item) => sum + item.acquired, 0),
       retained: matching.reduce((sum, item) => sum + item.retained, 0),
+      unsubscribed: matching.reduce((sum, item) => sum + item.unsubscribed, 0),
       spend: spendRows.length
         ? spendRows.reduce((sum, item) => sum + Number(item.spend ?? 0), 0)
         : null,
@@ -84,14 +95,9 @@ export function summarizeTrafficAttribution(
   const totalSpend = spendSources.length
     ? spendSources.reduce((sum, source) => sum + Number(source.spend ?? 0), 0)
     : null;
-  const totals = trafficAttributionMetrics({
-    acquired: sources.reduce((sum, source) => sum + source.acquired, 0),
-    retained: sources.reduce((sum, source) => sum + source.retained, 0),
-    spend: null,
-    currency,
-  });
-  return {
-    ...totals,
+  const allTimePaid = {
+    acquired: acquiredFromPaidSources,
+    retained: retainedFromPaidSources,
     spend: totalSpend,
     averageSubscriberCost:
       totalSpend != null && acquiredFromPaidSources > 0
@@ -101,6 +107,34 @@ export function summarizeTrafficAttribution(
       totalSpend != null && retainedFromPaidSources > 0
         ? totalSpend / retainedFromPaidSources
         : null,
+  };
+  const totals = trafficAttributionMetrics({
+    acquired: sources.reduce((sum, source) => sum + source.acquired, 0),
+    retained: sources.reduce((sum, source) => sum + source.retained, 0),
+    unsubscribed: sources.reduce((sum, source) => sum + source.unsubscribed, 0),
+    spend: null,
+    currency,
+  });
+  const startsAt =
+    items
+      .map((item) => item.startsAt)
+      .filter((value): value is string => Boolean(value))
+      .sort()[0] ?? null;
+  const hasOngoingSource = items.some((item) => item.endsAt == null);
+  const endsAt = hasOngoingSource
+    ? null
+    : (items
+        .map((item) => item.endsAt)
+        .filter((value): value is string => Boolean(value))
+        .sort()
+        .at(-1) ?? null);
+  return {
+    ...totals,
+    spend: totalSpend,
+    averageSubscriberCost: allTimePaid.averageSubscriberCost,
+    retainedSubscriberCost: allTimePaid.retainedSubscriberCost,
+    allTimePaid,
+    attributionPeriod: startsAt ? { startsAt, endsAt } : null,
     sources: sources.sort(
       (left, right) =>
         right.acquired - left.acquired || left.label.localeCompare(right.label),

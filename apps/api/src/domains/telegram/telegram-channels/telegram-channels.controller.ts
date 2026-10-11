@@ -553,6 +553,18 @@ export class TelegramChannelsController {
   ) {
     return this.service.restore(user.sub, id);
   }
+  @Post(':id/for-test') moveToTest(
+    @CurrentUser() user: JwtUser,
+    @Param('id') id: string,
+  ) {
+    return this.service.moveToTest(user.sub, id);
+  }
+  @Post(':id/activate') moveToActive(
+    @CurrentUser() user: JwtUser,
+    @Param('id') id: string,
+  ) {
+    return this.service.moveToActive(user.sub, id);
+  }
   @Get(':id/audience') audience(
     @CurrentUser() user: JwtUser,
     @Param('id') id: string,

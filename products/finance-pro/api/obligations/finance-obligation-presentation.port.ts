@@ -8,6 +8,7 @@ export const FINANCE_OBLIGATION_PRESENTATION = Symbol(
 export type FinanceObligationPresentationPort = {
   debtDue(input: {
     botIntegrationId: string;
+    debtId: string;
     debtName: string;
     amount: string;
     currency: string;

@@ -1,6 +1,10 @@
 import type { TelegramChannelAccessMode } from "../core";
 import type { ResolvedEmoji } from "../core";
 import type { TelegramChannelAdFormatPricing } from "./telegram-channel-analytics";
+import type {
+  TelegramChannelAudienceTrend,
+  TelegramChannelTrafficAttributionPreview,
+} from "@telegram-system/shared";
 
 export type TelegramChannelNetworkKpiStatus =
   | "good"
@@ -26,6 +30,8 @@ export type TelegramChannelNetworkSummary = {
   kpiStatus: TelegramChannelNetworkKpiStatus;
   kpiLabel: string;
   assetEconomics?: TelegramChannelNetworkAssetEconomics;
+  audienceTrend?: TelegramChannelAudienceTrend | null;
+  trafficAttribution?: TelegramChannelTrafficAttributionPreview | null;
 };
 export type TelegramChannelNetworkAssetEconomics = {
   currency: string | null;
@@ -85,6 +91,8 @@ export type TelegramChannelNetworkChannelSummary = {
   kpiStatus: TelegramChannelNetworkKpiStatus;
   kpiLabel?: string;
   assetEconomics?: TelegramChannelNetworkAssetEconomics;
+  audienceTrend?: TelegramChannelAudienceTrend | null;
+  trafficAttribution?: TelegramChannelTrafficAttributionPreview | null;
 };
 export type TelegramChannelNetwork = {
   id: string;

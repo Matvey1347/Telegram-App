@@ -234,9 +234,14 @@ export function WorkspaceMembersSection({
       )}
 
       {tempPassword ? (
-        <div className="mb-4 rounded border border-amber-500/40 bg-amber-500/10 p-3 text-amber-200">
-          Temporary password (show once):{" "}
-          <span className="font-mono">{tempPassword}</span>
+        <div
+          role="status"
+          className="mb-4 rounded border border-amber-500/40 bg-amber-500/10 p-3 text-amber-200"
+        >
+          <p className="font-medium">Save this generated password now.</p>
+          <p className="mt-1 text-sm">
+            It is shown only once: <span className="font-mono">{tempPassword}</span>
+          </p>
         </div>
       ) : null}
       <FormError message={error} />

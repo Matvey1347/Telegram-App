@@ -11,6 +11,7 @@ describe('TelegramChannelAudienceTrendReadService', () => {
           telegramChannelId: 'channel-1',
           currentAt,
           currentSubscribers: 1_100,
+          currentPendingJoinRequests: 100,
           currentActiveSubscribers: 600,
           currentViewRate: 60,
           latestViews: 525,
@@ -24,6 +25,7 @@ describe('TelegramChannelAudienceTrendReadService', () => {
           postsWindow: 30,
           baselineAt,
           baselineSubscribers: 1_000,
+          baselinePendingJoinRequests: 0,
         },
       ]),
     };
@@ -67,6 +69,12 @@ describe('TelegramChannelAudienceTrendReadService', () => {
             previous: 1_000,
             absoluteChange: 100,
             percentChange: 10,
+          },
+          pendingJoinRequests: {
+            current: 100,
+            previous: 0,
+            absoluteChange: 100,
+            percentChange: null,
           },
           reach: {
             current: 550,
@@ -118,6 +126,71 @@ describe('TelegramChannelAudienceTrendReadService', () => {
 
     expect(result.get('channel-new')?.latest.subscribersCount).toBe(50);
     expect(result.get('channel-new')?.trend).toBeNull();
+  });
+
+  it('uses a zero request baseline when older snapshots lack that counter', async () => {
+    const prisma = {
+      $queryRaw: jest.fn().mockResolvedValue([
+        {
+          telegramChannelId: 'channel-requests-without-history',
+          currentAt,
+          currentSubscribers: 1_100,
+          currentPendingJoinRequests: 100,
+          currentActiveSubscribers: null,
+          currentViewRate: null,
+          latestViews: null,
+          latestReactions: null,
+          viewValues: null,
+          reactionValues: null,
+          dataQuality: 'normal',
+          dataQualityReason: null,
+          hasExternalTrafficAnomaly: false,
+          hasSubscriberBasePollution: false,
+          postsWindow: 10,
+          baselineAt,
+          baselineSubscribers: 1_000,
+          baselinePendingJoinRequests: null,
+        },
+      ]),
+    };
+    const service = new TelegramChannelAudienceTrendReadService(
+      prisma as never,
+    );
+
+    const result = await service.summariesForChannels('workspace-1', [
+      'channel-requests-without-history',
+    ]);
+
+    expect(
+      result.get('channel-requests-without-history')?.trend?.metrics
+        .pendingJoinRequests,
+    ).toEqual({
+      current: 100,
+      previous: 0,
+      absoluteChange: 100,
+      percentChange: null,
+    });
+  });
+
+  it('keeps the audience period independent from request-counter coverage', async () => {
+    const prisma = {
+      $queryRaw: jest.fn().mockResolvedValue([]),
+    };
+    const service = new TelegramChannelAudienceTrendReadService(
+      prisma as never,
+    );
+
+    await service.summariesForChannels('workspace-1', ['channel-1']);
+
+    const rawQuery = prisma.$queryRaw as unknown as {
+      mock: { calls: Array<[{ strings: string[] }]> };
+    };
+    const trendSql = rawQuery.mock.calls[0][0].strings.join(' ');
+    expect(trendSql).toContain(
+      'baseline."pendingJoinRequestsCount" AS "baselinePendingJoinRequests"',
+    );
+    expect(trendSql).not.toContain('baseline_requests');
+    expect(trendSql).not.toContain('request_coverage');
   });
 
   it('matches the selected seven-day panel instead of comparing against the previous week', async () => {

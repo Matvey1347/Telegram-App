@@ -382,6 +382,16 @@ export class TelegramChannelListQueryDto extends PaginationQueryDto {
         : value,
   )
   @IsBoolean()
+  test?: boolean;
+  @IsOptional()
+  @Transform(({ value }) =>
+    value === true || value === 'true'
+      ? true
+      : value === false || value === 'false'
+        ? false
+        : value,
+  )
+  @IsBoolean()
   owned?: boolean;
 }
 

@@ -4,6 +4,7 @@ export function telegramInviteLinkOptionLabel(
   link: Pick<
     TelegramInviteLink,
     | "name"
+    | "isPublicForChannel"
     | "isDefaultForChannel"
     | "isDefaultForBot"
     | "isDefaultForBroadcast"
@@ -14,6 +15,7 @@ export function telegramInviteLinkOptionLabel(
 ) {
   const uses = [
     link.isDefaultForChannel ? "Default" : null,
+    link.isPublicForChannel ? "Public" : null,
     link.isDefaultForBot ? "Bot" : null,
     link.isDefaultForBroadcast ? "Broadcast" : null,
     link.isDefaultForAudienceTransfer ? "Audience transfer" : null,

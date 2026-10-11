@@ -1,6 +1,6 @@
 export type TelegramChannelsTab = "channels" | "networks" | "accounts";
 export type TelegramChannelOwnershipFilter = "own" | "external";
-export type TelegramChannelLifecycleFilter = "active" | "archive";
+export type TelegramChannelLifecycleFilter = "active" | "test" | "archive";
 export type TelegramAccountFilter = "mtproto" | "people";
 
 export const TELEGRAM_CHANNEL_TAB_OPTIONS = {
@@ -25,7 +25,8 @@ export const parseTelegramChannelOwnership = (
 
 export const parseTelegramChannelLifecycle = (
   value: string | null,
-): TelegramChannelLifecycleFilter => (value === "archive" ? value : "active");
+): TelegramChannelLifecycleFilter =>
+  value === "archive" || value === "test" ? value : "active";
 
 export const parseTelegramAccountFilter = (
   value: string | null,

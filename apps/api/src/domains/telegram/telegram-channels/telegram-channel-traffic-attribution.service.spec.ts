@@ -12,6 +12,7 @@ function createService(prisma: object, support: object = {}) {
         convertCurrency: jest.fn().mockResolvedValue(null),
       }),
     } as never,
+    { summariesForChannels: jest.fn() } as never,
   );
 }
 
@@ -26,6 +27,14 @@ describe('TelegramChannelTrafficAttributionService', () => {
             folderDefaultInviteLinkIds: [],
             audienceTransferInviteLinkId: null,
             botInviteLinkId: 'bot-link',
+            broadcastInviteLinkId: null,
+          },
+          {
+            id: 'channel-2',
+            mutualPromotionInviteLinkIds: [],
+            folderDefaultInviteLinkIds: [],
+            audienceTransferInviteLinkId: null,
+            botInviteLinkId: null,
             broadcastInviteLinkId: null,
           },
         ]),
@@ -78,6 +87,24 @@ describe('TelegramChannelTrafficAttributionService', () => {
       workspace: {
         findUnique: jest.fn().mockResolvedValue({ primaryCurrency: 'UAH' }),
       },
+      telegramInviteLinkSnapshot: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            inviteLinkId: 'bot-link',
+            syncedAt: new Date('2026-10-01T00:00:00.000Z'),
+            joinedCount: 10,
+            requestedCount: 2,
+          },
+        ]),
+      },
+      $queryRaw: jest.fn().mockResolvedValue([
+        {
+          inviteLinkId: 'bot-link',
+          syncedAt: new Date('2026-09-08T23:59:59.000Z'),
+          joinedCount: 5,
+          requestedCount: 0,
+        },
+      ]),
     };
     const service = createService(prisma);
 
@@ -119,6 +146,46 @@ describe('TelegramChannelTrafficAttributionService', () => {
         select: expect.objectContaining({ peakAttributedCount: true }),
       }),
     );
+
+    const rolling = await service.summariesForChannels(
+      'workspace-1',
+      ['channel-1', 'channel-2'],
+      {
+        windowDays: 30,
+        now: new Date('2026-10-09T00:00:00.000Z'),
+        // Link counters explain two departures. The channel's 10-person drop
+        // leaves eight untracked departures, while a channel without links
+        // must still expose its full 313-person drop.
+        channelDropByChannel: new Map([
+          ['channel-1', 10],
+          ['channel-2', 313],
+        ]),
+      },
+    );
+    expect(rolling.get('channel-1')?.sources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'BOT', acquired: 7, retained: 5 }),
+      ]),
+    );
+    expect(rolling.get('channel-1')).toMatchObject({
+      acquired: 27,
+      unsubscribed: 2,
+    });
+    expect(rolling.get('channel-1')?.attributionPeriod).toEqual({
+      startsAt: '2026-09-09T00:00:00.000Z',
+      endsAt: '2026-10-09T00:00:00.000Z',
+    });
+    expect(rolling.get('channel-1')?.allTimePaid).toMatchObject({
+      spend: 11_241,
+      acquired: 25,
+      retained: 20,
+      retainedSubscriberCost: 562.05,
+    });
+    expect(rolling.get('channel-2')).toMatchObject({
+      acquired: 0,
+      unsubscribed: 0,
+      sources: [],
+    });
   });
 
   it('claims a link once using campaign, folder, mutual priority', async () => {
@@ -386,6 +453,7 @@ describe('TelegramChannelTrafficAttributionService', () => {
           currency: 'USD',
         }),
       } as never,
+      { summariesForChannels: jest.fn() } as never,
       {} as never,
       {} as never,
     );
