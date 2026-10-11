@@ -116,4 +116,9 @@ test("local bot development survives Prisma schema and tunnel transport changes"
   assert.match(apiSupervisor, /--config", "nest-cli\.dev\.json/u);
   assert.match(apiSupervisor, /waitForHealthyBackend/u);
   assert.equal(developmentNestConfig.compilerOptions.deleteOutDir, false);
+  assert.equal(
+    developmentNestConfig.entryFile,
+    "../apps/api/src/main",
+    "the development watcher must run the entrypoint emitted under the workspace-wide TypeScript root",
+  );
 });
