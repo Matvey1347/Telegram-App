@@ -154,7 +154,7 @@ describe("FinanceCategories CRUD", () => {
     expect(apiMocks.categories).toHaveBeenCalledOnce();
   });
 
-  it("shows orphan and cyclic rows once in the legacy block", async () => {
+  it("shows categories with invalid parent links as ordinary root rows", async () => {
     apiMocks.categories.mockResolvedValue([
       { ...category, id: "orphan", name: "Orphan", parentId: "missing" },
       { ...category, id: "cycle-a", name: "Cycle A", parentId: "cycle-b" },
@@ -162,12 +162,12 @@ describe("FinanceCategories CRUD", () => {
     ]);
     const { container } = renderCategories();
 
-    const legacy = await screen.findByRole("region", {
-      name: "Legacy categories",
-    });
-    expect(within(legacy).getByText("Orphan")).toBeInTheDocument();
-    expect(within(legacy).getByText("Cycle A")).toBeInTheDocument();
-    expect(within(legacy).getByText("Cycle B")).toBeInTheDocument();
+    expect(await screen.findByText("Orphan")).toBeInTheDocument();
+    expect(screen.getByText("Cycle A")).toBeInTheDocument();
+    expect(screen.getByText("Cycle B")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("region", { name: "Legacy categories" }),
+    ).not.toBeInTheDocument();
     for (const id of ["orphan", "cycle-a", "cycle-b"]) {
       expect(
         container.querySelectorAll(`[data-category-id="${id}"]`),

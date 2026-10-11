@@ -141,6 +141,13 @@ export function ConsumerFinanceApp({ botId }: { botId: string }) {
   const [debtTarget, setDebtTarget] =
     useState<ReturnType<typeof readConsumerFinanceDebtTarget>>(null);
   const [debtTargetMalformed, setDebtTargetMalformed] = useState(false);
+  const browserUrl = (() => {
+    if (!browserTransfer.data?.url) return undefined;
+    const url = new URL(browserTransfer.data.url);
+    if (screen === "home") url.searchParams.delete("screen");
+    else url.searchParams.set("screen", screen);
+    return url.toString();
+  })();
   const profile: ConsumerFinanceProfile | undefined = session.data
     ?.authenticated
     ? session.data.profile
@@ -397,7 +404,7 @@ export function ConsumerFinanceApp({ botId }: { botId: string }) {
         browserOpenError={
           browserTransfer.isError ? t.browserOpenError : undefined
         }
-        browserUrl={browserTransfer.data?.url}
+        browserUrl={browserUrl}
         onOpenBrowser={openBrowser}
       >
         {contextualChildren}

@@ -579,6 +579,28 @@ describe("ConsumerFinanceApp bootstrap", () => {
     expect(openLink).not.toHaveBeenCalled();
   });
 
+  it("keeps the current Mini App screen when opening Finance in a browser", async () => {
+    mocks.bootstrap = { status: "ready", initData: "signed-init-data" };
+    mocks.auth.mockResolvedValue({ authenticated: true, profile });
+    mocks.createBrowserTransfer.mockResolvedValue({
+      token: "one-time-token",
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+      url: "https://nexeloq.com/finance/bot-1?browserTransfer=one-time-token",
+      diagnosticId: "transfer-1",
+    });
+    renderApp();
+    await screen.findByText(/screen home/);
+
+    fireEvent.click(screen.getByRole("button", { name: "More" }));
+    fireEvent.click(screen.getByRole("button", { name: "Categories" }));
+    expect(await screen.findByText(/screen categories/)).toBeInTheDocument();
+
+    expect(await screen.findByRole("link", { name: "Open in browser" })).toHaveAttribute(
+      "href",
+      "https://nexeloq.com/finance/bot-1?browserTransfer=one-time-token&screen=categories",
+    );
+  });
+
   it("keeps the full Finance shell visible while session data loads", () => {
     mocks.session.mockReturnValue(new Promise(() => undefined));
 

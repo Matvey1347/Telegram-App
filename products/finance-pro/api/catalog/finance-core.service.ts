@@ -462,8 +462,14 @@ export class FinanceCoreService {
     });
     if (!category) throw new NotFoundException('Finance category not found');
     await assertFinanceCategoryArchivable(this.prisma, profileId, category.id);
-    return this.prisma.financeCategory
-      .update({
+    const archived = await this.prisma.$transaction(async (tx) => {
+      // An archived category is no longer a valid parent. Its direct children
+      // remain usable as independent categories instead of retaining a broken link.
+      await tx.financeCategory.updateMany({
+        where: { profileId, parentId: category.id },
+        data: { parentId: null },
+      });
+      return tx.financeCategory.update({
         where: { id: category.id },
         data: { archivedAt: new Date() },
         select: {
@@ -476,8 +482,9 @@ export class FinanceCoreService {
           necessity: true,
           archivedAt: true,
         },
-      })
-      .then(categoryView);
+      });
+    });
+    return categoryView(archived);
   }
 
   async restoreCategory(profileId: string, id: string) {

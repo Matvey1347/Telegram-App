@@ -20,10 +20,6 @@ const copy = {
     active: "Active",
     archived: "Archived",
     restoreCategory: "Restore category",
-    legacyCategories: "Legacy categories",
-    legacyCategoriesHelp:
-      "These categories have an unavailable or invalid parent and are shown safely.",
-    legacyParent: "Parent relationship unavailable",
     categoryType: "Category type",
     archiveCategory: "Archive category",
     archiveCategoryDescription:
@@ -51,10 +47,6 @@ const copy = {
     active: "Активні",
     archived: "Архівні",
     restoreCategory: "Відновити категорію",
-    legacyCategories: "Застарілі категорії",
-    legacyCategoriesHelp:
-      "Ці категорії мають недоступну або некоректну батьківську категорію.",
-    legacyParent: "Батьківський зв’язок недоступний",
     categoryType: "Тип категорії",
     archiveCategory: "Архівувати категорію",
     archiveCategoryDescription: "Історичні операції збережуть цю категорію.",
@@ -80,10 +72,6 @@ const copy = {
     active: "Активные",
     archived: "Архивные",
     restoreCategory: "Восстановить категорию",
-    legacyCategories: "Устаревшие категории",
-    legacyCategoriesHelp:
-      "У этих категорий недоступная или некорректная родительская категория.",
-    legacyParent: "Родительская связь недоступна",
     categoryType: "Тип категории",
     archiveCategory: "Архивировать категорию",
     archiveCategoryDescription: "Исторические операции сохранят эту категорию.",

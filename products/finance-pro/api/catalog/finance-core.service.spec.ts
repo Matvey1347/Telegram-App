@@ -363,6 +363,46 @@ describe('FinanceCoreService consumer read models', () => {
     );
   });
 
+  it('promotes direct children to root categories when their parent is archived', async () => {
+    const archived = {
+      id: 'parent',
+      parentId: null,
+      name: 'Food',
+      emoji: '🍽️',
+      key: null,
+      type: 'EXPENSE',
+      necessity: 'UNSPECIFIED',
+      archivedAt: new Date('2026-10-11T00:00:00.000Z'),
+    };
+    const tx = {
+      financeCategory: {
+        updateMany: jest.fn().mockResolvedValue({ count: 2 }),
+        update: jest.fn().mockResolvedValue(archived),
+      },
+    };
+    const prisma: any = {
+      financeCategory: {
+        findFirst: jest.fn().mockResolvedValue({ id: 'parent' }),
+      },
+      financeRecurringPayment: { count: jest.fn().mockResolvedValue(0) },
+      $transaction: jest.fn((work) => work(tx)),
+    };
+
+    await expect(
+      new FinanceCoreService(prisma).archiveCategory('profile', 'parent'),
+    ).resolves.toMatchObject({ id: 'parent', archivedAt: archived.archivedAt });
+    expect(tx.financeCategory.updateMany).toHaveBeenCalledWith({
+      where: { profileId: 'profile', parentId: 'parent' },
+      data: { parentId: null },
+    });
+    expect(tx.financeCategory.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'parent' },
+        data: { archivedAt: expect.any(Date) },
+      }),
+    );
+  });
+
   it('restores an archived category within its own profile', async () => {
     const restored = {
       id: 'category',

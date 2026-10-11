@@ -22,13 +22,9 @@ export type CategoryTreeNode = {
 
 export type CategoryTreeGroup = {
   roots: CategoryTreeNode[];
-  legacy: Array<{
-    category: ConsumerFinanceCategory;
-    reason: LegacyReason;
-  }>;
 };
 
-/** Builds one type-specific forest in O(n), classifying every active row once. */
+/** Builds one type-specific forest in O(n), promoting invalid links to roots. */
 export function buildCategoryTree(
   categories: ConsumerFinanceCategory[],
   type: ConsumerFinanceTransactionType,
@@ -70,24 +66,17 @@ export function buildCategoryTree(
   for (const category of active) resolveReason(category);
 
   const nodes = new Map<string, CategoryTreeNode>(
-    active
-      .filter((category) => reasons.get(category.id) === null)
-      .map((category) => [category.id, { category, children: [] }]),
+    active.map((category) => [category.id, { category, children: [] }]),
   );
   const roots: CategoryTreeNode[] = [];
-  const legacy: CategoryTreeGroup["legacy"] = [];
   for (const category of active) {
     const reason = reasons.get(category.id);
-    if (reason) {
-      legacy.push({ category, reason });
-      continue;
-    }
     const node = nodes.get(category.id)!;
     const parent = category.parentId ? nodes.get(category.parentId) : undefined;
-    if (parent) parent.children.push(node);
+    if (!reason && parent) parent.children.push(node);
     else roots.push(node);
   }
-  return { roots, legacy };
+  return { roots };
 }
 
 export function categoryDescendantIds(
@@ -146,40 +135,9 @@ export function FinanceCategoryTree({
             />
           ))}
         </div>
-      ) : group.legacy.length ? null : (
+      ) : (
         <EmptyState text={t.noCategories} />
       )}
-      {group.legacy.length ? (
-        <section
-          aria-label={t.legacyCategories}
-          className="mt-4 border-t border-amber-800/60 pt-3"
-        >
-          <h3 className="text-sm font-medium text-amber-200">
-            {t.legacyCategories}
-          </h3>
-          <p className="mt-1 text-xs text-neutral-500">
-            {t.legacyCategoriesHelp}
-          </p>
-          <div className="mt-2 divide-y divide-neutral-800">
-            {group.legacy.map(({ category, reason }) => (
-              <div key={category.id} data-category-id={category.id}>
-                <CategoryRow
-                  category={category}
-                  locale={locale}
-                  onEdit={onEdit}
-                  onArchive={onArchive}
-                />
-                <span
-                  className="pb-2 text-[11px] text-amber-300"
-                  data-legacy-reason={reason}
-                >
-                  {t.legacyParent}
-                </span>
-              </div>
-            ))}
-          </div>
-        </section>
-      ) : null}
     </Card>
   );
 }
