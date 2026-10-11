@@ -164,10 +164,11 @@ export function FinanceBudget({
             </Select>
           </FormField>
           <FormField
-            label={`${t.monthlyBudget} (${dashboardData.profile.defaultCurrency})`}
+            label={t.monthlyBudget}
           >
             <Input
               inputMode="decimal"
+              suffix={dashboardData.profile.defaultCurrency}
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
             />

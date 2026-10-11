@@ -50,6 +50,13 @@ export const consumerFinanceObligationsApi = {
         consumerRequest(),
       )
     ).data,
+  deleteDebt: async (botId: string, id: string) =>
+    (
+      await consumerFinanceHttp.delete<{ deleted: true }>(
+        `${consumerFinanceRoot(botId)}/debts/${id}`,
+        consumerRequest(),
+      )
+    ).data,
   settleDebt: async (
     botId: string,
     id: string,

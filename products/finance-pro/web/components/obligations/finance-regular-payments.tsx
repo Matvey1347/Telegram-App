@@ -6,7 +6,7 @@ import {
   useMutation,
   useQueryClient,
 } from "@tanstack/react-query";
-import { History, Pause, Pencil, Play, Trash2 } from "lucide-react";
+import { CalendarCheck, History, Pause, Pencil, Play, SlidersHorizontal, Trash2 } from "lucide-react";
 import type {
   ConsumerFinanceRegularPayment,
   ConsumerFinanceRegularPaymentConfirmation,
@@ -165,8 +165,11 @@ export function FinanceRegularPayments({
   };
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-end justify-between gap-2">
-        <div className="w-full max-w-xs">
+      <div className="space-y-3">
+        <Button className="w-full" onClick={() => setEditing("create")}>
+          {t.addRegularPayment}
+        </Button>
+        <div className="w-full">
           <label className="mb-1 block text-sm text-neutral-300">{t.status}</label>
           <Select uiLocale={locale} value={status} onChange={(event) => setStatus(event.target.value as typeof status)}>
             <option value="ACTIVE">🟢 {t.active}</option>
@@ -174,9 +177,6 @@ export function FinanceRegularPayments({
             <option value="CANCELED">⛔ {t.canceled}</option>
           </Select>
         </div>
-        <Button onClick={() => setEditing("create")}>
-          {t.addRegularPayment}
-        </Button>
       </div>
       {targetMalformed ? (
         <p role="alert" className="text-sm text-amber-300">
@@ -263,6 +263,7 @@ export function FinanceRegularPayments({
           expectedVersion={activeConfirmation.expectedVersion}
           customAmount={activeConfirmation.customAmount}
           locale={locale}
+          timezone={timezone}
           onClose={closeConfirmation}
           onConfirmed={reconcileConfirmation}
           onApplied={reconcile}
@@ -319,8 +320,8 @@ function RegularPaymentCard({
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 gap-3">
           <IconAvatar
-            icon={payment.iconPresentation ?? payment.account.iconPresentation}
-            label={payment.name}
+            icon={payment.category?.iconPresentation ?? payment.iconPresentation ?? payment.account.iconPresentation}
+            label={payment.category?.name ?? payment.name}
             size="sm"
             bordered={false}
           />
@@ -349,6 +350,18 @@ function RegularPaymentCard({
                 : []),
               ...(payment.status === "ACTIVE"
                 ? [
+                    {
+                      label: t.payEarly,
+                      icon: <CalendarCheck size={16} />,
+                      onSelect: () => onConfirm(false),
+                      disabled: busy,
+                    },
+                    {
+                      label: t.changeAmount,
+                      icon: <SlidersHorizontal size={16} />,
+                      onSelect: () => onConfirm(true),
+                      disabled: busy,
+                    },
                     {
                       label: t.pause,
                       icon: <Pause size={16} />,
@@ -386,16 +399,7 @@ function RegularPaymentCard({
           />
         </div>
       </div>
-      <div className="mt-3 grid gap-2 text-sm text-neutral-400 sm:grid-cols-3">
-        <div className="flex items-center gap-1.5">
-          <IconAvatar
-            icon={payment.account.iconPresentation}
-            label={payment.account.name}
-            size="xs"
-            bordered={false}
-          />
-          <span className="truncate">{payment.account.name}</span>
-        </div>
+      <div className="mt-3 grid grid-cols-2 gap-3 text-sm text-neutral-400">
         <div>
           <p className="text-xs text-neutral-500">{t.nextPayment}</p>
           <p className={payment.isDue ? "font-medium text-amber-300" : ""}>
@@ -416,7 +420,8 @@ function RegularPaymentCard({
         </div>
       </div>
       {payment.category ? (
-        <p className="mt-1 text-xs text-neutral-500">
+        <p className="mt-1 flex items-center gap-1 text-xs text-neutral-500">
+          <IconAvatar icon={payment.category.iconPresentation} label={payment.category.name} size="xs" />
           {localizeFinanceCategory(
             payment.category.name,
             payment.category.key,
@@ -425,24 +430,15 @@ function RegularPaymentCard({
         </p>
       ) : null}
       {payment.note ? (
-        <p className="mt-2 text-sm text-neutral-400">{payment.note}</p>
+        <p className="mt-2 line-clamp-2 text-sm text-neutral-400">{payment.note}</p>
       ) : null}
-      <div className="mt-4 flex flex-wrap gap-2">
-        {payment.status === "ACTIVE" ? (
-          <>
-            <Button disabled={busy} onClick={() => onConfirm(false)}>
-              {t.confirmPayment}
-            </Button>
-            <Button
-              variant="secondary"
-              disabled={busy}
-              onClick={() => onConfirm(true)}
-            >
-              {t.changeAmount}
-            </Button>
-          </>
-        ) : null}
-      </div>
+      {payment.status === "ACTIVE" && payment.isDue ? (
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Button disabled={busy} onClick={() => onConfirm(false)}>
+            {t.confirmPayment}
+          </Button>
+        </div>
+      ) : null}
     </Card>
   );
 }

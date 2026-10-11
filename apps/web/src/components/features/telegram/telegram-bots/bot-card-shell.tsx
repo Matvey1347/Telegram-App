@@ -10,6 +10,7 @@ import {
   LoaderCircle,
   Pencil,
   RefreshCw,
+  Server,
   Settings,
   UserRoundPen,
   Trash2,
@@ -50,9 +51,13 @@ export function BotCardShell({
     | ReactNode
     | ((environment: TelegramBotRuntimeEnvironment) => ReactNode);
 }) {
-  const [environment, setEnvironment] =
-    useState<TelegramBotRuntimeEnvironment>("PRODUCTION");
+  const hasSingleRuntime = bot.runtimes.length === 1;
+  const [environment, setEnvironment] = useState<TelegramBotRuntimeEnvironment>(
+    () => bot.runtimes[0]?.environment ?? "PRODUCTION",
+  );
   const runtime = bot.runtimes.find((item) => item.environment === environment);
+  const additionalEnvironment =
+    environment === "LOCAL" ? "PRODUCTION" : "LOCAL";
   const appType = bot.applicationType;
   const currentApp = bot.applications.find((option) => option.type === appType);
   const configureHref =
@@ -60,6 +65,8 @@ export function BotCardShell({
       ? `/telegram-bots/${bot.id}/greeter`
       : appType === "FINANCE"
         ? `/telegram-bots/${bot.id}/finance`
+        : appType === "SIMPLE_FINANCE"
+          ? `/telegram-bots/${bot.id}/simple-finance`
         : null;
 
   return (
@@ -124,6 +131,13 @@ export function BotCardShell({
             icon={<Pencil size={17} />}
             onClick={() => onConfigureRuntime(environment)}
           />
+          {hasSingleRuntime ? (
+            <TelegramCardMenuAction
+              label={`Add ${additionalEnvironment === "LOCAL" ? "local" : "production"} version`}
+              icon={<Server size={17} />}
+              onClick={() => onConfigureRuntime(additionalEnvironment)}
+            />
+          ) : null}
           <TelegramCardMenuAction
             label="Edit bot"
             icon={<UserRoundPen size={17} />}
@@ -146,26 +160,33 @@ export function BotCardShell({
           />
         </TelegramCardActionsMenu>
       </div>
-      <div
-        className="mt-2 inline-flex rounded-lg border border-neutral-800 bg-neutral-900 p-0.5"
-        role="tablist"
-        aria-label="Bot runtime environment"
-      >
-        {(["PRODUCTION", "LOCAL"] as const).map((option) => (
-          <button
-            key={option}
-            type="button"
-            role="tab"
-            aria-selected={environment === option}
-            onClick={() => setEnvironment(option)}
-            className={`rounded-md px-2.5 py-1 text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${environment === option ? "bg-neutral-700 text-white" : "text-neutral-400 hover:text-neutral-200"}`}
-          >
-            {option === "PRODUCTION" ? "Production" : "Local"}
-          </button>
-        ))}
-      </div>
+      {!hasSingleRuntime ? (
+        <div
+          className="mt-2 inline-flex rounded-lg border border-neutral-800 bg-neutral-900 p-0.5"
+          role="tablist"
+          aria-label="Bot runtime environment"
+        >
+          {(["PRODUCTION", "LOCAL"] as const).map((option) => (
+            <button
+              key={option}
+              type="button"
+              role="tab"
+              aria-selected={environment === option}
+              onClick={() => setEnvironment(option)}
+              className={`rounded-md px-2.5 py-1 text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${environment === option ? "bg-neutral-700 text-white" : "text-neutral-400 hover:text-neutral-200"}`}
+            >
+              {option === "PRODUCTION" ? "Production" : "Local"}
+            </button>
+          ))}
+        </div>
+      ) : null}
       {runtime ? (
-        <RuntimeDetails runtime={runtime} appType={appType} botId={bot.id} />
+        <RuntimeDetails
+          runtime={runtime}
+          appType={appType}
+          botId={bot.id}
+          hideEnvironmentLabel={hasSingleRuntime}
+        />
       ) : (
         <RuntimeSetupState
           environment={environment}
@@ -211,10 +232,12 @@ function RuntimeDetails({
   runtime,
   appType,
   botId,
+  hideEnvironmentLabel,
 }: {
   runtime: TelegramBotRuntimeSummary;
   appType: TelegramBotApplicationType;
   botId: string;
+  hideEnvironmentLabel: boolean;
 }) {
   const statusLabel = runtimeStatusLabel(runtime);
   return (
@@ -247,8 +270,9 @@ function RuntimeDetails({
       </div>
       {!runtime.isProcessOwner ? (
         <p className="mt-2 rounded-lg border border-neutral-700 bg-neutral-900/60 p-2 text-xs text-neutral-300">
-          {runtime.environment === "LOCAL" ? "Local" : "Production"} runtime is
-          not running in this API process. Its saved webhook is not treated as
+          {hideEnvironmentLabel
+            ? "This bot is"
+            : `${runtime.environment === "LOCAL" ? "Local" : "Production"} runtime is`} not running in this API process. Its saved webhook is not treated as
           live.
         </p>
       ) : null}
@@ -256,7 +280,7 @@ function RuntimeDetails({
       runtime.environment === "PRODUCTION" &&
       runtime.runtimeStatus !== "ACTIVE" ? (
         <p className="mt-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-2 text-xs text-amber-100">
-          Production token is saved. Deploy the production API with its public
+          {hideEnvironmentLabel ? "Token" : "Production token"} is saved. Deploy the production API with its public
           webhook URL to activate this runtime.
         </p>
       ) : null}
@@ -264,7 +288,7 @@ function RuntimeDetails({
       runtime.environment === "LOCAL" &&
       runtime.runtimeStatus !== "ACTIVE" ? (
         <p className="mt-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-2 text-xs text-amber-100">
-          Local token is saved. Run{" "}
+          {hideEnvironmentLabel ? "Token" : "Local token"} is saved. Run{" "}
           <code className="rounded bg-amber-950/40 px-1">pnpm dev:bots</code> on
           this computer to start the local API, web app and ngrok; the reachable
           webhook is then registered automatically.
@@ -384,5 +408,7 @@ function applicationLabel(type: TelegramBotApplicationType) {
     ? "Greeter"
     : type === "FINANCE"
       ? "Finance"
+      : type === "SIMPLE_FINANCE"
+        ? "Finance Pro"
       : "Access";
 }

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus } from "lucide-react";
+import { Plus, RotateCcw } from "lucide-react";
 import type {
   ConsumerFinanceCategory,
   ConsumerFinanceExpenseNecessity,
@@ -19,6 +19,7 @@ import {
   Modal,
   Select,
 } from "@finance-pro/web/components/ui";
+import { IconAvatar } from "@finance-pro/web/components/ui/finance-icon-avatar";
 import { consumerFinanceApi } from "@finance-pro/web/lib/api/consumer-finance-api";
 import { consumerFinanceKeys } from "@finance-pro/web/lib/query/consumer-finance-query-keys";
 import { type FinanceLocale } from "@finance-pro/web/components/i18n/core";
@@ -44,6 +45,8 @@ export function FinanceCategories({
   const [archiving, setArchiving] = useState<ConsumerFinanceCategory | null>(
     null,
   );
+  const [type, setType] = useState<ConsumerFinanceTransactionType>("EXPENSE");
+  const [status, setStatus] = useState<"ACTIVE" | "ARCHIVED">("ACTIVE");
   const categories = useQuery({
     queryKey: consumerFinanceKeys.categories(botId),
     queryFn: () => consumerFinanceApi.categories(botId),
@@ -63,6 +66,18 @@ export function FinanceCategories({
     onSuccess: (item) => {
       reconcile(item);
       setArchiving(null);
+      void client.invalidateQueries({
+        queryKey: consumerFinanceKeys.dashboard(botId),
+      });
+      void client.invalidateQueries({
+        queryKey: consumerFinanceKeys.analyticsRoot(botId),
+      });
+    },
+  });
+  const restore = useMutation({
+    mutationFn: (id: string) => consumerFinanceApi.restoreCategory(botId, id),
+    onSuccess: (item) => {
+      reconcile(item);
       void client.invalidateQueries({
         queryKey: consumerFinanceKeys.dashboard(botId),
       });
@@ -105,40 +120,64 @@ export function FinanceCategories({
           });
         }}
       />
-      {(["EXPENSE", "INCOME"] as const).map((type) => (
+      <section className="grid grid-cols-2 gap-3" aria-label={t.categoryType}>
+        <div className="space-y-1">
+          <p className="text-sm text-neutral-300">{t.categoryType}</p>
+          <div className="grid grid-cols-2 gap-1 rounded-lg border border-neutral-800 bg-neutral-950/40 p-1">
+            <Button
+              variant={type === "EXPENSE" ? "primary" : "outline"}
+              className="px-2"
+              onClick={() => setType("EXPENSE")}
+            >
+              {t.expense}
+            </Button>
+            <Button
+              variant={type === "INCOME" ? "primary" : "outline"}
+              className="px-2"
+              onClick={() => setType("INCOME")}
+            >
+              {t.income}
+            </Button>
+          </div>
+        </div>
+        <div className="space-y-1">
+          <p className="text-sm text-neutral-300">{t.archivedCategories}</p>
+          <div className="grid grid-cols-2 gap-1 rounded-lg border border-neutral-800 bg-neutral-950/40 p-1">
+            <Button
+              variant={status === "ACTIVE" ? "primary" : "outline"}
+              className="px-2"
+              onClick={() => setStatus("ACTIVE")}
+            >
+              {t.active}
+            </Button>
+            <Button
+              variant={status === "ARCHIVED" ? "primary" : "outline"}
+              className="px-2"
+              onClick={() => setStatus("ARCHIVED")}
+            >
+              {t.archived}
+            </Button>
+          </div>
+        </div>
+      </section>
+      {status === "ACTIVE" ? (
         <FinanceCategoryTree
-          key={type}
           type={type}
           categories={rows}
           locale={locale}
           onEdit={setEditing}
           onArchive={setArchiving}
         />
-      ))}
-      {rows.some((item) => item.archivedAt) ? (
-        <Card>
-          <h2 className="font-medium">{t.archivedCategories}</h2>
-          <p className="mt-1 text-xs text-neutral-500">
-            {t.archivedCategoriesHelp}
-          </p>
-          <div className="mt-3 divide-y divide-neutral-800">
-            {rows
-              .filter((item) => item.archivedAt)
-              .map((item) => (
-                <div
-                  className="flex justify-between gap-3 py-2 text-sm text-neutral-400"
-                  key={item.id}
-                  data-archived-category-id={item.id}
-                >
-                  <span className="truncate">
-                    {localizeFinanceCategory(item.name, item.key, locale)}
-                  </span>
-                  <span>{item.type === "EXPENSE" ? t.expense : t.income}</span>
-                </div>
-              ))}
-          </div>
-        </Card>
-      ) : null}
+      ) : (
+        <ArchivedCategoryList
+          categories={rows.filter(
+            (item) => item.type === type && Boolean(item.archivedAt),
+          )}
+          locale={locale}
+          restoringId={restore.variables ?? null}
+          onRestore={(item) => restore.mutate(item.id)}
+        />
+      )}
       <FinanceConfirmModal
         open={!!archiving}
         locale={locale}
@@ -214,7 +253,7 @@ function CategoryEditor({
   return (
     <>
       <Button
-        className="min-h-10 self-start px-3"
+        className="w-full"
         onClick={() => setOpen(true)}
       >
         <Plus size={16} aria-hidden="true" />
@@ -314,5 +353,59 @@ function CategoryEditor({
         </div>
       </Modal>
     </>
+  );
+}
+
+function ArchivedCategoryList({
+  categories,
+  locale,
+  restoringId,
+  onRestore,
+}: {
+  categories: ConsumerFinanceCategory[];
+  locale: FinanceLocale;
+  restoringId: string | null;
+  onRestore: (category: ConsumerFinanceCategory) => void;
+}) {
+  const t = financeCategoriesCopy(locale);
+  return (
+    <Card>
+      <h2 className="font-medium">{t.archivedCategories}</h2>
+      <p className="mt-1 text-xs text-neutral-500">{t.archivedCategoriesHelp}</p>
+      {categories.length ? (
+        <div className="mt-3 divide-y divide-neutral-800">
+          {categories.map((category) => (
+            <div
+              className="flex items-center justify-between gap-3 py-2"
+              key={category.id}
+              data-archived-category-id={category.id}
+            >
+              <div className="flex min-w-0 items-center gap-2">
+                <IconAvatar
+                  icon={category.iconPresentation}
+                  label={category.name}
+                  size="sm"
+                  bordered={false}
+                />
+                <span className="truncate text-sm">
+                  {localizeFinanceCategory(category.name, category.key, locale)}
+                </span>
+              </div>
+              <Button
+                variant="outline"
+                className="shrink-0 px-3"
+                disabled={restoringId === category.id}
+                onClick={() => onRestore(category)}
+              >
+                <RotateCcw size={16} aria-hidden="true" />
+                {t.restoreCategory}
+              </Button>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-3 text-sm text-neutral-500">{t.noCategories}</p>
+      )}
+    </Card>
   );
 }

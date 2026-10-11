@@ -148,18 +148,24 @@ export class FinanceTransferService {
     const to = accounts.find((account) => account.id === dto.toAccountId);
     if (!from || !to)
       throw new NotFoundException('Finance transfer account not found');
-    const rateResult = await this.conversion.getRateMetadata(
-      from.currency,
-      to.currency,
-      profile.botIntegration.workspaceId,
-      this.rateDateForWrite(occurredAt),
-    );
-    if (!rateResult.available)
+    const destinationAmount = dto.toAmount
+      ? this.positive(dto.toAmount)
+      : null;
+    const rateResult = destinationAmount
+      ? null
+      : await this.conversion.getRateMetadata(
+          from.currency,
+          to.currency,
+          profile.botIntegration.workspaceId,
+          this.rateDateForWrite(occurredAt),
+        );
+    if (rateResult && !rateResult.available)
       throw new BadRequestException({
         code: rateResult.code,
         message: rateResult.message,
       });
-    const exchangeRate = new Prisma.Decimal(rateResult.rate);
+    const toAmount = destinationAmount ?? amount.mul(rateResult!.rate).toDecimalPlaces(2);
+    const exchangeRate = toAmount.div(amount);
     return {
       fromArchived: Boolean(from.archivedAt),
       toArchived: Boolean(to.archivedAt),
@@ -168,7 +174,7 @@ export class FinanceTransferService {
         toAccountId: to.id,
         fromAmount: amount,
         fromCurrency: from.currency,
-        toAmount: amount.mul(exchangeRate).toDecimalPlaces(2),
+        toAmount,
         toCurrency: to.currency,
         exchangeRate,
         occurredAt,

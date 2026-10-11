@@ -480,6 +480,30 @@ export class FinanceCoreService {
       .then(categoryView);
   }
 
+  async restoreCategory(profileId: string, id: string) {
+    const category = await this.prisma.financeCategory.findFirst({
+      where: { id, profileId, archivedAt: { not: null } },
+      select: { id: true },
+    });
+    if (!category) throw new NotFoundException('Finance category not found');
+    return this.prisma.financeCategory
+      .update({
+        where: { id: category.id },
+        data: { archivedAt: null },
+        select: {
+          id: true,
+          parentId: true,
+          name: true,
+          emoji: true,
+          key: true,
+          type: true,
+          necessity: true,
+          archivedAt: true,
+        },
+      })
+      .then(categoryView);
+  }
+
   async upsertLimit(profileId: string, dto: UpsertFinanceLimitDto) {
     const category = await this.prisma.financeCategory.findFirst({
       where: {

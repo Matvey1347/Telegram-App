@@ -51,8 +51,8 @@ export class UpdateTelegramBotRuntimeProfileDto {
 }
 
 export class SwitchTelegramBotApplicationDto {
-  @IsIn(['NONE', 'GREETER', 'FINANCE'])
-  applicationType!: 'NONE' | 'GREETER' | 'FINANCE';
+  @IsIn(['NONE', 'GREETER', 'FINANCE', 'SIMPLE_FINANCE'])
+  applicationType!: 'NONE' | 'GREETER' | 'FINANCE' | 'SIMPLE_FINANCE';
 }
 
 export class ImportTelegramChannelsDto {

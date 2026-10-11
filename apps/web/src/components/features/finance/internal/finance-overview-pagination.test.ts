@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resizeFinanceListPage } from "./finance-overview-pagination";
+import { financePageForItem, resizeFinanceListPage } from "./finance-overview-pagination";
 
 describe("resizeFinanceListPage", () => {
   it("loads five latest entries per page on mobile and resets to page one", () => {
@@ -14,5 +14,11 @@ describe("resizeFinanceListPage", () => {
       page: 1,
       pageSize: 10,
     });
+  });
+});
+
+describe("financePageForItem", () => {
+  it("opens the page containing a freshly saved category", () => {
+    expect(financePageForItem(["a", "b", "c"], "c", 2)).toBe(2);
   });
 });

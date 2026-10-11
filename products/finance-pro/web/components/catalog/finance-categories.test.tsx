@@ -15,6 +15,7 @@ const apiMocks = vi.hoisted(() => ({
   createCategory: vi.fn(),
   updateCategory: vi.fn(),
   archiveCategory: vi.fn(),
+  restoreCategory: vi.fn(),
 }));
 
 vi.mock("@finance-pro/web/lib/api/consumer-finance-api", () => ({
@@ -174,18 +175,23 @@ describe("FinanceCategories CRUD", () => {
     }
   });
 
-  it("keeps archived rows separate from the active hierarchy", async () => {
+  it("filters archived rows by type and restores a selected category", async () => {
+    const archived = {
+      ...category,
+      id: "archived",
+      name: "Old category",
+      archivedAt: "2026-08-01T00:00:00.000Z",
+    };
     apiMocks.categories.mockResolvedValue([
       category,
-      {
-        ...category,
-        id: "archived",
-        name: "Old category",
-        archivedAt: "2026-08-01T00:00:00.000Z",
-      },
+      archived,
     ]);
+    apiMocks.restoreCategory.mockResolvedValue({ ...archived, archivedAt: null });
     const { container } = renderCategories();
 
+    await screen.findByText("Coffee");
+    expect(screen.queryByText("Old category")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Archived" }));
     expect(await screen.findByText("Old category")).toBeInTheDocument();
     expect(
       container.querySelector('[data-archived-category-id="archived"]'),
@@ -193,6 +199,12 @@ describe("FinanceCategories CRUD", () => {
     expect(
       container.querySelector('[data-category-id="archived"]'),
     ).not.toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Restore category" }),
+    );
+    await waitFor(() =>
+      expect(apiMocks.restoreCategory).toHaveBeenCalledWith("bot", "archived"),
+    );
   });
 
   it("excludes self and descendants from the editable parent relationship", async () => {

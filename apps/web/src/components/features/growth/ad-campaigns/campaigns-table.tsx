@@ -22,6 +22,7 @@ import { inviteLinkCreatorFallback } from "@/lib/features/telegram/telegram-invi
 import { TelegramInviteLinkCreatorAvatar as SharedInviteLinkCreatorAvatar } from "@/components/features/telegram/telegram/telegram-invite-link-creator-avatar";
 import type {
   AdCampaign,
+  AdCampaignInviteLinkRefreshProgress,
   AdCampaignKpiStatus,
   Promo,
   TelegramChannel,
@@ -520,7 +521,7 @@ function PerformanceCell({
 
   return (
     <div className={`rounded-lg border p-2.5 ${cardClass}`}>
-      <div className="grid grid-cols-[minmax(90px,1fr)_minmax(70px,0.7fr)_minmax(80px,0.8fr)] gap-2.5">
+      <div className="inline-grid grid-cols-[minmax(90px,auto)_minmax(92px,auto)_minmax(90px,auto)] gap-x-6">
         <div>
           <p className="mb-0.5 text-[10px] uppercase tracking-wide text-slate-500">
             Spend
@@ -1019,6 +1020,7 @@ export function AdCampaignsTable({
   onOpenPromo,
   onRefreshInviteLinks,
   refreshingInviteLinkCampaignId,
+  inviteLinkRefreshProgress,
   showActions = true,
   showHypotheses = true,
 }: {
@@ -1034,6 +1036,12 @@ export function AdCampaignsTable({
   onOpenPromo?: (promo: Promo) => void;
   onRefreshInviteLinks?: (campaign: AdCampaign) => void;
   refreshingInviteLinkCampaignId?: string | null;
+  inviteLinkRefreshProgress?: {
+    campaignId: string;
+    current: number;
+    total: number;
+    item: AdCampaignInviteLinkRefreshProgress;
+  } | null;
   showActions?: boolean;
   showHypotheses?: boolean;
 }) {
@@ -1238,7 +1246,20 @@ export function AdCampaignsTable({
                 ) : null}
                 {showActions ? (
                   <td className="px-4 py-4">
-                    <div className="flex justify-end">
+                    <div className="flex flex-col items-end gap-1">
+                      {inviteLinkRefreshProgress?.campaignId ===
+                      row.campaign.id ? (
+                        <span
+                          aria-live="polite"
+                          className={`max-w-32 text-right text-[11px] ${inviteLinkRefreshProgress.item.status === "failed" ? "text-amber-300" : "text-sky-300"}`}
+                        >
+                          {inviteLinkRefreshProgress.current}/
+                          {inviteLinkRefreshProgress.total}: {" "}
+                          {inviteLinkRefreshProgress.item.status === "failed"
+                            ? "failed"
+                            : "updated"}
+                        </span>
+                      ) : null}
                       <AdCampaignRowActions
                         campaign={row.campaign}
                         onEdit={onEdit}
@@ -1248,6 +1269,12 @@ export function AdCampaignsTable({
                         onRefreshInviteLinks={onRefreshInviteLinks}
                         refreshingInviteLinks={
                           refreshingInviteLinkCampaignId === row.campaign.id
+                        }
+                        refreshInviteLinksProgress={
+                          inviteLinkRefreshProgress?.campaignId ===
+                          row.campaign.id
+                            ? inviteLinkRefreshProgress
+                            : null
                         }
                       />
                     </div>

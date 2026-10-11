@@ -4,6 +4,7 @@ import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { FinanceLocale } from "@finance-pro/web/components/i18n/core";
+import { financeUiTokens } from "@finance-pro/web/components/ui/finance-ui-tokens";
 
 const dateCopy = {
   en: {
@@ -205,7 +206,7 @@ export function DateInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
         type="button"
         disabled={props.disabled}
         onClick={() => setOpen((current) => !current)}
-        className={`flex w-full items-center justify-between rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-left text-sm outline-none ring-blue-500 focus:ring disabled:opacity-50 ${props.className ?? ""}`}
+        className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm disabled:opacity-50 ${financeUiTokens.control} ${props.className ?? ""}`}
       >
         <span className={value ? "text-white" : "text-neutral-400"}>
           {value
@@ -309,7 +310,7 @@ export function DateRangeInput({
         aria-label={ariaLabel}
         disabled={disabled}
         onClick={() => setOpen((current) => !current)}
-        className="flex w-full items-center justify-between rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-left text-sm outline-none ring-blue-500 focus:ring disabled:opacity-50"
+        className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm disabled:opacity-50 ${financeUiTokens.control}`}
       >
         <span className={start || end ? "text-white" : "text-neutral-400"}>
           {display}

@@ -7,7 +7,7 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { Pencil } from "lucide-react";
+import { Pencil, Trash2 } from "lucide-react";
 import type {
   ConsumerFinanceDebt,
   ConsumerFinanceDebtStatus,
@@ -25,10 +25,12 @@ import { IconAvatar } from "@finance-pro/web/components/ui/finance-icon-avatar";
 import { FinanceDebtCreateModal } from "@finance-pro/web/components/obligations/finance-debt-create-modal";
 import { FinanceDebtEditor } from "@finance-pro/web/components/obligations/finance-debt-editor";
 import { FinanceDebtSettlementModal } from "@finance-pro/web/components/obligations/finance-debt-settlement-modal";
+import { FinanceConfirmModal } from "@finance-pro/web/components/shared/finance-confirm-modal";
 import { consumerFinanceObligationsApi } from "@finance-pro/web/lib/api/consumer-finance-obligations-api";
 import { consumerFinanceKeys } from "@finance-pro/web/lib/query/consumer-finance-query-keys";
 import {
   invalidateConsumerFinanceLedgerReads,
+  removeConsumerDebtFromPages,
   reconcileConsumerDebtPages,
 } from "@finance-pro/web/lib/cache/consumer-finance-obligations-cache";
 import { reconcileConsumerTransactionCaches } from "@finance-pro/web/lib/cache/consumer-finance-cache";
@@ -58,6 +60,7 @@ export function FinanceDebts({
   );
   const [creating, setCreating] = useState(false);
   const [settling, setSettling] = useState<ConsumerFinanceDebt | null>(null);
+  const [deleting, setDeleting] = useState<ConsumerFinanceDebt | null>(null);
   const [dismissedTargetId, setDismissedTargetId] = useState<string | null>(null);
   const targetedDebt = useQuery({
     queryKey: consumerFinanceKeys.debts(botId, { id: target?.debtId, limit: 1 }),
@@ -110,6 +113,14 @@ export function FinanceDebts({
       void invalidateConsumerFinanceLedgerReads(client, botId);
     },
   });
+  const remove = useMutation({
+    mutationFn: (debt: ConsumerFinanceDebt) =>
+      consumerFinanceObligationsApi.deleteDebt(botId, debt.id),
+    onSuccess: (_, debt) => {
+      removeConsumerDebtFromPages(client, botId, debt.id);
+      void invalidateConsumerFinanceLedgerReads(client, botId);
+    },
+  });
   const items = debts.data?.pages.flatMap((page) => page.items) ?? [];
   const saveDebt = (debt: ConsumerFinanceDebt) => {
     reconcileConsumerDebtPages(client, botId, debt);
@@ -121,7 +132,7 @@ export function FinanceDebts({
         <Button className="w-full" onClick={() => setCreating(true)}>
           {t.addDebt}
         </Button>
-        <div className="max-w-xs">
+        <div className="w-full">
           <label className="mb-1 block text-sm text-neutral-300">
             {t.status}
           </label>
@@ -153,6 +164,7 @@ export function FinanceDebts({
               locale={locale}
               onEdit={() => setEditing(debt)}
               onSettle={() => setSettling(debt)}
+              onDelete={() => setDeleting(debt)}
             />
           ))}
         </div>
@@ -221,6 +233,17 @@ export function FinanceDebts({
         />
       ) : null}
       {settle.isError ? <ErrorState text={t.debtSettleError} /> : null}
+      <FinanceConfirmModal
+        key={deleting?.id ?? "delete-debt"}
+        open={Boolean(deleting)}
+        locale={locale}
+        entityName={deleting?.name ?? ""}
+        actionLabel={t.deleteDebt}
+        description={t.deleteDebtDescription}
+        onClose={() => setDeleting(null)}
+        onConfirm={() => (deleting ? remove.mutateAsync(deleting) : undefined)}
+      />
+      {remove.isError ? <ErrorState text={t.debtDeleteError} /> : null}
     </div>
   );
 }
@@ -230,17 +253,19 @@ function DebtCard({
   locale,
   onEdit,
   onSettle,
+  onDelete,
 }: {
   debt: ConsumerFinanceDebt;
   locale: FinanceLocale;
   onEdit: () => void;
   onSettle: () => void;
+  onDelete: () => void;
 }) {
   const t = financeDebtsCopy(locale);
   return (
     <Card className={debt.isOverdue ? "border-rose-700" : ""}>
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex min-w-0 gap-3">
+      <div className="relative flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex min-w-0 gap-3 pr-12 sm:pr-0">
           <IconAvatar
             icon={debt.account.iconPresentation}
             label={debt.account.name}
@@ -259,18 +284,28 @@ function DebtCard({
           <strong className="shrink-0 tabular-nums">
             {formatMoney(debt.amount, debt.currency, "symbol")}
           </strong>
-          {debt.status === "OPEN" ? (
+          <div className="absolute right-0 top-0 sm:static">
             <FinanceCardActionsMenu
               label={t.actions}
               actions={[
+                ...(debt.status === "OPEN"
+                  ? [
+                      {
+                        label: t.edit,
+                        icon: <Pencil size={16} />,
+                        onSelect: onEdit,
+                      },
+                    ]
+                  : []),
                 {
-                  label: t.edit,
-                  icon: <Pencil size={16} />,
-                  onSelect: onEdit,
+                  label: t.deleteDebt,
+                  icon: <Trash2 size={16} />,
+                  onSelect: onDelete,
+                  danger: true,
                 },
               ]}
             />
-          ) : null}
+          </div>
         </div>
       </div>
       <p

@@ -62,6 +62,12 @@ export type AdCampaignInviteLinkRefreshResult = {
     message: string;
   }>;
 };
+export type AdCampaignInviteLinkRefreshProgress = {
+  telegramChannelId: string;
+  url: string;
+  status: "refreshed" | "failed";
+  message: string;
+};
 export type AdCampaignAnalyticsInput = {
   subscribersBefore?: number | null;
   avgViewsBefore?: number | null;

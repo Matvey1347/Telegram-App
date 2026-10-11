@@ -142,7 +142,7 @@ export function ConsumerFinanceScreens({
   onActionClose?: () => void;
   openEntityAction?: "debt" | "investment" | null;
   onSpecialAction?: (
-    action: Extract<ConsumerFinanceAction, "transfer" | "debt" | "investment">,
+    action: ConsumerFinanceAction,
   ) => void;
   regularPaymentTarget?: ConsumerFinanceRegularPaymentTarget | null;
   regularPaymentTargetMalformed?: boolean;
@@ -258,6 +258,7 @@ export function ConsumerFinanceScreens({
           onCreateAccount={() => onAccountEdit("create")}
           period={period}
           onLauncherClose={onActionClose}
+          onSpecialAction={onSpecialAction}
         />
       )}
       {screen !== "transfers" && openTransfer ? (
@@ -271,6 +272,7 @@ export function ConsumerFinanceScreens({
           period={period}
           editorOnly
           onLauncherClose={onActionClose}
+          onSpecialAction={onSpecialAction}
         />
       ) : null}
       {openEntityAction === "debt" ? (

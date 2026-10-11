@@ -28,6 +28,7 @@ export type Account = EntityAssignment & {
   convertedCurrency?: Currency;
   transactionStats?: AccountTransactionStats;
   isActive: boolean;
+  isSystem: boolean;
   iconId?: string | null;
   icon?: Icon | null;
   iconPresentation?: ResolvedEmoji | null;

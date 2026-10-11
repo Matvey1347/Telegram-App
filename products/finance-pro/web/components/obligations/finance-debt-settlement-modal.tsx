@@ -60,6 +60,7 @@ export function FinanceDebtSettlementModal({
   const selectedAccountId = accountOptions.some((account) => account.id === accountId)
     ? accountId
     : (accountOptions[0]?.id ?? "");
+  const selectedAccount = accountOptions.find((account) => account.id === selectedAccountId);
   const [amount, setAmount] = useState(debt.amount);
   const [settlementDate, setSettlementDate] = useState(() =>
     new Date().toISOString().slice(0, 10),
@@ -134,6 +135,7 @@ export function FinanceDebtSettlementModal({
           <Input
             autoFocus
             inputMode="decimal"
+            suffix={selectedAccount?.currency}
             value={amount}
             onChange={(event) => setAmount(event.target.value)}
           />

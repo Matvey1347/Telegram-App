@@ -521,6 +521,18 @@ enum TelegramBotApplicationType {
   NONE
   GREETER
   FINANCE
+  SIMPLE_FINANCE
+}
+
+enum SimpleFinanceCategoryType {
+  INCOME
+  EXPENSE
+}
+
+enum SimpleFinanceEntryKind {
+  INCOME
+  EXPENSE
+  TRANSFER
 }
 
 enum TelegramBotRuntimeEnvironment {
@@ -1393,6 +1405,7 @@ model Account {
   name             String
   currency         String    @db.VarChar(3)
   initialBalance   Decimal   @default(0)
+  isSystem         Boolean   @default(false)
   isActive         Boolean   @default(true)
   iconId           String?
   assignedMemberId String?
@@ -1417,6 +1430,7 @@ model Account {
   @@index([workspaceId, assignedMemberId])
   @@index([workspaceId, deletedAt])
   @@index([workspaceId, isActive, assignedMemberId])
+  @@index([workspaceId, isSystem, isActive])
 }
 
 model Transaction {
@@ -3682,6 +3696,7 @@ model TelegramBotIntegration {
   greeterTestSessions           GreeterTestSession[]
   greeterUserEnvironmentStates  GreeterUserEnvironmentState[]
   financeProfiles               FinanceProfile[]
+  simpleFinanceProfiles         SimpleFinanceProfile[]
   financeBrowserLoginChallenges FinanceBrowserLoginChallenge[]
   financeAiProviderConfigs      AiProviderConfig[]
   billingProviderConfigs        BotBillingProviderConfig[]
@@ -3792,6 +3807,7 @@ model TelegramBotUser {
   greeterTestSessions          GreeterTestSession[]
   greeterUserEnvironmentStates GreeterUserEnvironmentState[]
   financeProfiles              FinanceProfile[]
+  simpleFinanceProfiles        SimpleFinanceProfile[]
   billingSubscriptions         BotSubscription[]
   billingCouponRedemptions     BotCouponRedemption[]
   providerCustomers            BotProviderCustomer[]
@@ -4273,6 +4289,81 @@ model FinanceProfile {
   customIcons            FinanceCustomIcon[]
 
   @@unique([botIntegrationId, telegramBotUserId])
+}
+
+// Finance is intentionally independent from the existing Finance Pro ledger.
+// Amounts are integer kopecks, stored as Decimal(18,0), so no calculation ever
+// depends on JavaScript floating point arithmetic.
+model SimpleFinanceProfile {
+  id               String                         @id @default(cuid())
+  botIntegrationId String
+  telegramBotUserId String
+  createdAt        DateTime                       @default(now())
+  updatedAt        DateTime                       @updatedAt
+  botIntegration   TelegramBotIntegration         @relation(fields: [botIntegrationId], references: [id], onDelete: Cascade)
+  telegramUser     TelegramBotUser                @relation(fields: [telegramBotUserId], references: [id], onDelete: Cascade)
+  accounts         SimpleFinanceAccount[]
+  categories       SimpleFinanceCategory[]
+  entries          SimpleFinanceEntry[]
+
+  @@unique([botIntegrationId, telegramBotUserId])
+  @@index([telegramBotUserId])
+}
+
+model SimpleFinanceAccount {
+  id                  String               @id @default(cuid())
+  profileId           String
+  name                String               @db.VarChar(80)
+  emoji               String               @default("💳") @db.VarChar(32)
+  initialBalanceMinor Decimal              @default(0) @db.Decimal(18, 0)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  profile             SimpleFinanceProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  entries             SimpleFinanceEntry[] @relation("SimpleFinanceEntryAccount")
+  outgoingTransfers   SimpleFinanceEntry[] @relation("SimpleFinanceTransferFrom")
+  incomingTransfers   SimpleFinanceEntry[] @relation("SimpleFinanceTransferTo")
+
+  @@index([profileId, createdAt])
+}
+
+model SimpleFinanceCategory {
+  id        String                    @id @default(cuid())
+  profileId String
+  name      String                    @db.VarChar(80)
+  emoji     String                    @default("🏷️") @db.VarChar(32)
+  type      SimpleFinanceCategoryType
+  createdAt DateTime                  @default(now())
+  updatedAt DateTime                  @updatedAt
+  profile   SimpleFinanceProfile      @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  entries   SimpleFinanceEntry[]
+
+  @@index([profileId, type, createdAt])
+}
+
+model SimpleFinanceEntry {
+  id            String                  @id @default(cuid())
+  profileId     String
+  kind          SimpleFinanceEntryKind
+  amountMinor   Decimal                 @db.Decimal(18, 0)
+  accountId     String?
+  categoryId    String?
+  fromAccountId String?
+  toAccountId   String?
+  name          String?                 @db.VarChar(120)
+  emoji         String?                 @db.VarChar(32)
+  comment       String?                 @db.VarChar(500)
+  occurredAt    DateTime
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
+  profile       SimpleFinanceProfile    @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  account       SimpleFinanceAccount?   @relation("SimpleFinanceEntryAccount", fields: [accountId], references: [id], onDelete: Restrict)
+  category      SimpleFinanceCategory?  @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  fromAccount   SimpleFinanceAccount?   @relation("SimpleFinanceTransferFrom", fields: [fromAccountId], references: [id], onDelete: Restrict)
+  toAccount     SimpleFinanceAccount?   @relation("SimpleFinanceTransferTo", fields: [toAccountId], references: [id], onDelete: Restrict)
+
+  @@index([profileId, occurredAt, id])
+  @@index([profileId, kind, occurredAt])
+  @@index([profileId, accountId, occurredAt])
 }
 
 // Explicit Mini App -> browser handoff only. Raw bearer values are never persisted.

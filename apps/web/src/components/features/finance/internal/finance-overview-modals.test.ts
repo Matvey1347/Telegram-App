@@ -3,7 +3,7 @@ import type { Account, Transfer } from "@/lib/api";
 import { financeOptionIcon, mergeTransferAccounts } from "./finance-overview-modals";
 
 const account = (id: string, name: string): Account => ({
-  id, name, currency: "UAH", initialBalance: 0, isActive: true,
+  id, name, currency: "UAH", initialBalance: 0, isSystem: false, isActive: true,
 });
 
 describe("mergeTransferAccounts", () => {

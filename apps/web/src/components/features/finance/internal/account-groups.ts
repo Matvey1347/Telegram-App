@@ -1,6 +1,6 @@
 import type { Account } from "@/lib/api";
 
-export type AccountScope = "mine" | "all" | "archived";
+export type AccountScope = "mine" | "system" | "all" | "archived";
 
 export type AccountOwnerGroup = {
   key: string;

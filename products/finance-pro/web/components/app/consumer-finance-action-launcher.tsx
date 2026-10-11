@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ArrowDown,
   ArrowLeftRight,
@@ -23,12 +23,29 @@ export function ConsumerFinanceActionLauncher({
   onAction: (action: ConsumerFinanceAction) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
   const actions = [
     { id: "expense", label: copy.expense, Icon: ArrowDown },
     { id: "income", label: copy.income, Icon: ArrowUp },
     { id: "transfer", label: copy.transfers, Icon: ArrowLeftRight },
   ] as const;
   const quickActions = actions;
+
+  useEffect(() => {
+    if (!open || !compact) return;
+    const closeOutside = (event: MouseEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const closeEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", closeOutside);
+    document.addEventListener("keydown", closeEscape);
+    return () => {
+      document.removeEventListener("mousedown", closeOutside);
+      document.removeEventListener("keydown", closeEscape);
+    };
+  }, [compact, open]);
 
   if (!compact) {
     return (
@@ -50,6 +67,7 @@ export function ConsumerFinanceActionLauncher({
 
   return (
     <div
+      ref={rootRef}
       className={`fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] right-[max(1rem,env(safe-area-inset-right))] z-40 ${showOnDesktop ? "" : "md:hidden"}`}
     >
       {open ? (

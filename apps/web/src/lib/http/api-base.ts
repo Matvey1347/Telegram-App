@@ -40,6 +40,10 @@ function isLoopbackApi(value: string) {
   }
 }
 
+function isLoopbackHost(hostname: string) {
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]";
+}
+
 /**
  * Resolves the browser API topology without product- or tunnel-specific rules.
  * A public HTTPS page never calls a loopback address embedded at build time;
@@ -51,7 +55,12 @@ export function resolveBrowserApiBase(
     typeof window === "undefined" ? undefined : window.location,
 ) {
   const configured = normalizeApiBase(configuredApiUrl);
-  if (location?.protocol === "https:" && isLoopbackApi(configured)) {
+  // A Telegram Mini App is served through an external HTTPS gateway. Some
+  // desktop WebViews do not reliably expose the expected protocol while they
+  // initialise, so protocol alone must not decide whether localhost is safe.
+  // Only an actual loopback page may keep a loopback API origin; every other
+  // page uses the gateway's same-origin /api route.
+  if (location && !isLoopbackHost(location.hostname) && isLoopbackApi(configured)) {
     return "/api";
   }
   return configured;

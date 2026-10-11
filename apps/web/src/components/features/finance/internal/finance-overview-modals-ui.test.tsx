@@ -14,6 +14,7 @@ describe("Finance overview modal layout", () => {
             name: "Main account",
             currency: "USD",
             initialBalance: 0,
+            isSystem: false,
             isActive: true,
           }}
           currencies={["USD"]}
@@ -39,6 +40,7 @@ describe("Finance overview modal layout", () => {
             name: "Main account",
             currency: "USD",
             initialBalance: 0,
+            isSystem: false,
             isActive: true,
           },
         ]}

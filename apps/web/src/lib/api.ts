@@ -450,6 +450,8 @@ export type {
   AdCampaignAnalyticsSummary,
   AdCampaignHypothesisLink,
   AdCampaignInviteLinkHistory,
+  AdCampaignInviteLinkRefreshProgress,
+  AdCampaignInviteLinkRefreshResult,
   AdCampaignKpiStatus,
   AdCampaignPerformanceSummary,
   AdHypothesis,
@@ -693,6 +695,7 @@ const marketingApi = createMarketingApi({
   quietCrud,
   getPaginated,
   quietMutationConfig,
+  streamProgressAction,
 });
 
 export const {

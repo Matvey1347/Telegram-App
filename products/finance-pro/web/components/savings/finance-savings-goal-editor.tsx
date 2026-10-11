@@ -63,6 +63,7 @@ export function FinanceSavingsGoalEditor({
         <FormField label={t.target} required>
           <Input
             inputMode="decimal"
+            suffix={currency}
             value={target}
             onChange={(e) => setTarget(e.target.value)}
           />

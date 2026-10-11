@@ -115,7 +115,20 @@ function renderPayments(
 beforeEach(() => {
   vi.clearAllMocks();
   api.regularPayments.mockResolvedValue({ items: [payment], nextCursor: null });
-  api.accounts.mockResolvedValue([]);
+  api.accounts.mockResolvedValue([
+    {
+      id: "cash",
+      name: "Cash wallet",
+      currency: "USD",
+      type: "CASH",
+      openingBalance: "0",
+      balance: "0",
+      defaultCurrency: "USD",
+      equivalentBalance: null,
+      archivedAt: null,
+      iconPresentation: { type: "unicode", value: "💵" },
+    },
+  ]);
   api.categories.mockResolvedValue([]);
   api.regularPaymentRevisions.mockResolvedValue({
     items: [],
@@ -128,7 +141,7 @@ describe("FinanceRegularPayments", () => {
     renderPayments();
 
     expect(await screen.findByText("Rent")).toBeInTheDocument();
-    expect(screen.getByText(/Cash wallet/)).toBeInTheDocument();
+    expect(screen.queryByText(/Cash wallet/)).not.toBeInTheDocument();
     expect(screen.getByText("Due · 9/8/2026")).toHaveClass("text-amber-300");
     expect(api.accounts).not.toHaveBeenCalled();
     expect(api.categories).not.toHaveBeenCalled();
@@ -141,6 +154,26 @@ describe("FinanceRegularPayments", () => {
       expect(api.accounts).toHaveBeenCalledOnce();
       expect(api.categories).toHaveBeenCalledOnce();
     });
+  });
+
+  it("uses the category emoji and keeps early payment in the menu for a future payment", async () => {
+    api.regularPayments.mockResolvedValue({
+      items: [{ ...payment, isDue: false }],
+      nextCursor: null,
+    });
+    renderPayments();
+
+    expect(await screen.findAllByText("🏠")).toHaveLength(2);
+    expect(
+      screen.queryByRole("button", { name: "Confirm payment" }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Payment actions" }));
+    fireEvent.click(screen.getByRole("button", { name: "Pay early" }));
+
+    expect(await screen.findByRole("dialog")).toHaveTextContent(
+      "Confirm payment",
+    );
   });
 
   it("loads revision history only after the selected-row action", async () => {
@@ -262,8 +295,9 @@ describe("FinanceRegularPayments", () => {
     api.confirmRegularPayment.mockResolvedValue(confirmation);
     renderPayments();
     fireEvent.click(
-      await screen.findByRole("button", { name: "Change amount" }),
+      await screen.findByRole("button", { name: "Payment actions" }),
     );
+    fireEvent.click(screen.getByRole("button", { name: "Change amount" }));
     fireEvent.change(screen.getByDisplayValue("100"), {
       target: { value: "125" },
     });
@@ -297,8 +331,9 @@ describe("FinanceRegularPayments", () => {
     });
     renderPayments();
     fireEvent.click(
-      await screen.findByRole("button", { name: "Change amount" }),
+      await screen.findByRole("button", { name: "Payment actions" }),
     );
+    fireEvent.click(screen.getByRole("button", { name: "Change amount" }));
     fireEvent.change(screen.getByDisplayValue("100"), {
       target: { value: "125" },
     });

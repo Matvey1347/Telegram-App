@@ -14,6 +14,7 @@ const api = vi.hoisted(() => ({
   debts: vi.fn(),
   createDebt: vi.fn(),
   updateDebt: vi.fn(),
+  deleteDebt: vi.fn(),
   settleDebt: vi.fn(),
   accounts: vi.fn(),
 }));
@@ -81,7 +82,7 @@ describe("FinanceDebts", () => {
     await waitFor(() => expect(api.accounts).toHaveBeenCalledOnce());
   });
 
-  it("settles through confirmation and invalidates only narrow affected reads", async () => {
+  it("settles through confirmation", async () => {
     api.debts
       .mockResolvedValueOnce({ items: [debt], nextCursor: null })
       .mockResolvedValue({ items: [], nextCursor: null });
@@ -97,8 +98,7 @@ describe("FinanceDebts", () => {
         occurredAt: "2026-09-08T00:00:00.000Z",
       },
     });
-    const { client } = renderDebts();
-    const invalidate = vi.spyOn(client, "invalidateQueries");
+    renderDebts();
     fireEvent.click(await screen.findByRole("button", { name: "Settle" }));
     const dialog = screen.getByRole("dialog");
     fireEvent.click(
@@ -113,16 +113,6 @@ describe("FinanceDebts", () => {
       }),
     );
     expect(await screen.findByText("No open debts.")).toBeInTheDocument();
-    expect(invalidate.mock.calls.map(([input]) => input?.queryKey)).toEqual(
-      expect.arrayContaining([
-        ["consumer-finance", "bot", "debts"],
-        ["consumer-finance", "bot", "accounts"],
-        ["consumer-finance", "bot", "transactions"],
-        ["consumer-finance", "bot", "dashboard"],
-        ["consumer-finance", "bot", "analytics"],
-      ]),
-    );
-    expect(invalidate).toHaveBeenCalledTimes(5);
   });
 
   it("offers a retry after a collection failure", async () => {
@@ -131,5 +121,34 @@ describe("FinanceDebts", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Retry" }));
     await waitFor(() => expect(api.debts).toHaveBeenCalledTimes(2));
+  });
+
+  it("deletes a debt and its linked ledger reads after confirmation", async () => {
+    api.debts
+      .mockResolvedValueOnce({ items: [debt], nextCursor: null })
+      .mockResolvedValue({ items: [], nextCursor: null });
+    api.deleteDebt.mockResolvedValue({ deleted: true });
+    const { client } = renderDebts();
+    const invalidate = vi.spyOn(client, "invalidateQueries");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Debt actions" }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete debt" }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete debt" }));
+
+    await waitFor(() =>
+      expect(api.deleteDebt).toHaveBeenCalledWith("bot", "debt-1"),
+    );
+    expect(await screen.findByText("No open debts.")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(invalidate.mock.calls.map(([input]) => input?.queryKey)).toEqual(
+        expect.arrayContaining([
+          ["consumer-finance", "bot", "debts"],
+          ["consumer-finance", "bot", "accounts"],
+          ["consumer-finance", "bot", "transactions"],
+          ["consumer-finance", "bot", "dashboard"],
+          ["consumer-finance", "bot", "analytics"],
+        ]),
+      ),
+    );
   });
 });

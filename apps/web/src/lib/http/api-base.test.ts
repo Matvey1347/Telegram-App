@@ -38,6 +38,16 @@ describe("resolveBrowserApiBase", () => {
     },
   );
 
+  it("keeps a public gateway same-origin when an embedded WebView reports HTTP", () => {
+    expect(
+      resolveBrowserApiBase("http://localhost:4000/api", {
+        hostname: "temporary-gateway.example",
+        origin: "http://temporary-gateway.example",
+        protocol: "http:",
+      }),
+    ).toBe("/api");
+  });
+
   it("supports a separately deployed remote HTTPS API", () => {
     expect(
       resolveBrowserApiBase(

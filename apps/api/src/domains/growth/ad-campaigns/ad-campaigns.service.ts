@@ -27,6 +27,14 @@ import { AdCampaignListReadService } from './ad-campaign-list-read.service';
 import { GrowthInviteLinkReservationService } from '../invite-link-reservation.service';
 import { adsChannelWhere } from '../ads-channel-scope';
 import { TelegramInviteLinkRegistrationService } from '../../telegram/telegram-channels/telegram-invite-link-registration.service';
+
+export type AdCampaignInviteLinkRefreshProgress = {
+  telegramChannelId: string;
+  url: string;
+  status: 'refreshed' | 'failed';
+  message: string;
+};
+
 @Injectable()
 export class AdCampaignsService {
   private campaignPromoStorageState: 'unknown' | 'available' | 'missing' =
@@ -81,7 +89,16 @@ export class AdCampaignsService {
     return message || 'Could not refresh this invite link';
   }
 
-  async refreshInviteLinkData(userId: string, id: string) {
+  async refreshInviteLinkData(
+    userId: string,
+    id: string,
+    onProgress?: (
+      item: AdCampaignInviteLinkRefreshProgress,
+      current: number,
+      total: number,
+    ) => void,
+    signal?: AbortSignal,
+  ) {
     const workspaceId = await this.workspace(userId);
     const campaign = await this.prisma.adCampaign.findFirst({
       where: { id, workspaceId },
@@ -123,7 +140,12 @@ export class AdCampaignsService {
       message: string;
     }> = [];
     let refreshedLinks = 0;
-    for (const link of uniqueLinks) {
+    for (const [index, link] of uniqueLinks.entries()) {
+      if (signal?.aborted) {
+        const abortError = new Error('Invite-link refresh was cancelled');
+        abortError.name = 'AbortError';
+        throw abortError;
+      }
       try {
         await this.inviteLinkRegistration.register(
           userId,
@@ -131,12 +153,27 @@ export class AdCampaignsService {
           link.url,
         );
         refreshedLinks += 1;
+        onProgress?.(
+          {
+            ...link,
+            status: 'refreshed',
+            message: 'Invite link refreshed',
+          },
+          index + 1,
+          uniqueLinks.length,
+        );
       } catch (error) {
-        failedLinks.push({
+        const failure = {
           telegramChannelId: link.telegramChannelId,
           url: link.url,
           message: this.inviteLinkRefreshFailureMessage(error),
-        });
+        };
+        failedLinks.push(failure);
+        onProgress?.(
+          { ...failure, status: 'failed' },
+          index + 1,
+          uniqueLinks.length,
+        );
       }
     }
     return {

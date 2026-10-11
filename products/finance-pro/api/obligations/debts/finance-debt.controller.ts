@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
@@ -64,6 +65,16 @@ export class FinanceDebtController {
   ) {
     const session = this.requests.authenticate(botId, request);
     return this.debts.update(session.profileId, id, input);
+  }
+
+  @Delete(':id')
+  remove(
+    @Param('botId') botId: string,
+    @Param('id') id: string,
+    @Req() request: Request,
+  ) {
+    const session = this.requests.authenticate(botId, request);
+    return this.debts.remove(session.profileId, id);
   }
 
   @Post(':id/settle')

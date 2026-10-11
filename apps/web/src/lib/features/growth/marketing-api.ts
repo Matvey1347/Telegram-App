@@ -6,6 +6,7 @@ import type {
   AdCampaignAnalyticsInput,
   AdCampaignAnalyticsSummary,
   AdCampaignInviteLinkHistory,
+  AdCampaignInviteLinkRefreshProgress,
   AdCampaignInviteLinkRefreshResult,
   AdCampaignPerformanceSummary,
   AdHypothesis,
@@ -31,6 +32,11 @@ type CrudFactory = <T>(path: string) => {
   update: (id: string, payload: Record<string, unknown>) => Promise<T>;
   remove: (id: string) => Promise<T>;
 };
+type StreamProgressAction = <TResult, TItem>(
+  path: string,
+  payload: unknown,
+  onProgress: (item: TItem, current: number, total: number) => void,
+) => Promise<TResult>;
 
 export function createMarketingApi({
   api,
@@ -38,12 +44,14 @@ export function createMarketingApi({
   quietCrud,
   getPaginated,
   quietMutationConfig,
+  streamProgressAction,
 }: {
   api: AxiosInstance;
   crud: CrudFactory;
   quietCrud: CrudFactory;
   getPaginated: PaginatedGetter;
   quietMutationConfig: AxiosRequestConfig;
+  streamProgressAction: StreamProgressAction;
 }) {
   const promoCrud = quietCrud<Promo>("/promos");
   const promosApi = {
@@ -121,12 +129,18 @@ export function createMarketingApi({
     recalculateAnalytics: async (id: string) =>
       (await api.post<AdCampaign>(`/ad-campaigns/${id}/recalculate-analytics`))
         .data,
-    refreshInviteLinkData: async (id: string) =>
-      (
-        await api.post<AdCampaignInviteLinkRefreshResult>(
-          `/ad-campaigns/${id}/refresh-invite-links`,
-        )
-      ).data,
+    refreshInviteLinkData: (
+      id: string,
+      onProgress: (
+        item: AdCampaignInviteLinkRefreshProgress,
+        current: number,
+        total: number,
+      ) => void,
+    ) =>
+      streamProgressAction<
+        AdCampaignInviteLinkRefreshResult,
+        AdCampaignInviteLinkRefreshProgress
+      >(`/ad-campaigns/${id}/refresh-invite-links`, {}, onProgress),
     analyticsSummary: async (id: string) =>
       (
         await api.get<AdCampaignAnalyticsSummary>(

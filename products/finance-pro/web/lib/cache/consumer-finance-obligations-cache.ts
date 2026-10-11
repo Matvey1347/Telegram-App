@@ -26,6 +26,35 @@ export function reconcileConsumerDebtPages(
   });
 }
 
+export function removeConsumerDebtFromPages(
+  client: QueryClient,
+  botId: string,
+  id: string,
+) {
+  for (const [queryKey, data] of client.getQueriesData<
+    InfiniteData<ConsumerFinanceDebtPage> | ConsumerFinanceDebtPage
+  >({ queryKey: consumerFinanceKeys.debtsRoot(botId) })) {
+    if (!data) continue;
+    if ("pages" in data) {
+      client.setQueryData<InfiniteData<ConsumerFinanceDebtPage>>(queryKey, {
+        ...data,
+        pages: data.pages.map((page) => ({
+          ...page,
+          items: page.items.filter((debt) => debt.id !== id),
+        })),
+      });
+      continue;
+    }
+    client.setQueryData<ConsumerFinanceDebtPage>(queryKey, {
+      ...data,
+      items: data.items.filter((debt) => debt.id !== id),
+    });
+  }
+  void client.invalidateQueries({
+    queryKey: consumerFinanceKeys.debtsRoot(botId),
+  });
+}
+
 export function reconcileConsumerRegularPaymentPages(
   client: QueryClient,
   botId: string,

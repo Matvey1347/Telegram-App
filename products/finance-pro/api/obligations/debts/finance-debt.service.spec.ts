@@ -186,6 +186,69 @@ describe('FinanceDebtService', () => {
     );
   });
 
+  it('removes a debt and its exclusive ledger transactions atomically', async () => {
+    const tx = {
+      financeDebt: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'debt-1',
+          originTransactionId: 'origin-transaction',
+          settlementTransactionId: 'settlement-transaction',
+        }),
+        count: jest.fn().mockResolvedValue(0),
+        delete: jest.fn().mockResolvedValue({ id: 'debt-1' }),
+      },
+      financeTransaction: { updateMany: jest.fn().mockResolvedValue({ count: 2 }) },
+    };
+    const prisma = { $transaction: jest.fn((callback) => callback(tx)) };
+    const delivery = { reschedule: jest.fn().mockResolvedValue(undefined) };
+    const service = new FinanceDebtService(
+      prisma as never,
+      {} as never,
+      delivery as never,
+      {} as never,
+    );
+
+    await expect(service.remove('profile-1', 'debt-1')).resolves.toEqual({
+      deleted: true,
+    });
+    expect(tx.financeDebt.delete).toHaveBeenCalledWith({ where: { id: 'debt-1' } });
+    expect(tx.financeTransaction.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: { in: ['settlement-transaction', 'origin-transaction'] },
+        profileId: 'profile-1',
+        deletedAt: null,
+      },
+      data: { deletedAt: expect.any(Date) },
+    });
+    expect(delivery.reschedule).toHaveBeenCalledWith();
+  });
+
+  it('keeps a shared-expense transaction when another debt still originates from it', async () => {
+    const tx = {
+      financeDebt: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'debt-1',
+          originTransactionId: 'shared-transaction',
+          settlementTransactionId: null,
+        }),
+        count: jest.fn().mockResolvedValue(1),
+        delete: jest.fn().mockResolvedValue({ id: 'debt-1' }),
+      },
+      financeTransaction: { updateMany: jest.fn() },
+    };
+    const prisma = { $transaction: jest.fn((callback) => callback(tx)) };
+    const service = new FinanceDebtService(
+      prisma as never,
+      {} as never,
+      { reschedule: jest.fn().mockResolvedValue(undefined) } as never,
+      {} as never,
+    );
+
+    await service.remove('profile-1', 'debt-1');
+
+    expect(tx.financeTransaction.updateMany).not.toHaveBeenCalled();
+  });
+
   it('creates a profile-scoped debt with server-derived currency and one atomic delivery', async () => {
     const row = debtRow();
     const linked = debtRow({ originTransactionId: 'debt-transaction' });

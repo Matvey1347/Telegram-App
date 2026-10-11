@@ -50,6 +50,7 @@ export function FinanceTransfers({
   period = { period: "CURRENT_MONTH" },
   editorOnly = false,
   onLauncherClose,
+  onSpecialAction,
 }: {
   botId: string;
   locale: FinanceLocale;
@@ -59,6 +60,7 @@ export function FinanceTransfers({
   period?: ConsumerFinanceAnalyticsQuery;
   editorOnly?: boolean;
   onLauncherClose?: () => void;
+  onSpecialAction?: (action: "expense" | "income") => void;
 }) {
   const client = useQueryClient();
   const t = financeTransfersCopy(locale);
@@ -177,6 +179,7 @@ export function FinanceTransfers({
         editing={null}
         initiallyOpen
         onClose={() => onLauncherClose?.()}
+        onCreateTransaction={() => onSpecialAction?.("expense")}
         onSaved={(item) => {
           reconcileConsumerTransferCaches(client, botId, item, timezone);
           onLauncherClose?.();
@@ -198,6 +201,7 @@ export function FinanceTransfers({
           setEditing(null);
           onLauncherClose?.();
         }}
+        onCreateTransaction={() => onSpecialAction?.("expense")}
         onSaved={(item) => {
           reconcileConsumerTransferCaches(client, botId, item, timezone);
           setEditing(null);

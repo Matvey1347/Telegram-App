@@ -33,6 +33,15 @@ import { localizeFinanceCategory } from "@finance-pro/web/components/catalog/fin
 
 type TransactionMeaning = ConsumerFinanceTransactionPurpose | "SHARED_EXPENSE";
 
+function normalizeMoneyInput(value: string) {
+  return value.replace(/,/g, ".");
+}
+
+function moneyValue(value: string) {
+  const parsed = Number(normalizeMoneyInput(value));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 export function FinanceTransactionEditor({
   botId,
   accounts,
@@ -68,11 +77,6 @@ export function FinanceTransactionEditor({
     editing?.type ?? initiallyOpenType ?? "EXPENSE",
   );
   const [amount, setAmount] = useState(editing?.amount ?? "");
-  const [economicAmount, setEconomicAmount] = useState(
-    editing?.economicAmount && editing.economicAmount !== editing.amount
-      ? editing.economicAmount
-      : "",
-  );
   const [meaning, setMeaning] = useState<TransactionMeaning>(
     editing?.purpose ?? "ORDINARY",
   );
@@ -109,28 +113,22 @@ export function FinanceTransactionEditor({
         item.id === categoryId),
   );
   const participantTotal = participants.reduce(
-    (sum, participant) => sum + Number(participant.amount || 0),
+    (sum, participant) => sum + moneyValue(participant.amount),
     0,
   );
   const sharedValid =
     meaning !== "SHARED_EXPENSE" ||
-    (!!economicAmount &&
-      participants.every(
+    (participants.every(
         (participant) =>
           !!participant.name.trim() &&
-          Number(participant.amount) > 0 &&
+          moneyValue(participant.amount) > 0 &&
           /^\d{4}-\d{2}-\d{2}$/.test(participant.dueDate),
       ) &&
-      Math.abs(Number(economicAmount) + participantTotal - Number(amount)) <
-        0.000001);
+      participantTotal <= moneyValue(amount));
   const valid =
     !!account &&
-    Number(amount) > 0 &&
+    moneyValue(amount) > 0 &&
     !!occurredAt &&
-    (purpose !== "ORDINARY" ||
-      !economicAmount ||
-      (Number(economicAmount) >= 0 &&
-        Number(economicAmount) <= Number(amount))) &&
     sharedValid;
   const mutation = useMutation({
     mutationFn: () => {
@@ -144,8 +142,6 @@ export function FinanceTransactionEditor({
               purpose: purpose as ConsumerFinanceTransactionInput["purpose"],
             }
           : {}),
-        economicAmount:
-          purpose === "ORDINARY" && economicAmount ? economicAmount : undefined,
         ...(type === "EXPENSE" &&
         purpose === "ORDINARY" &&
         necessity !== "UNSPECIFIED"
@@ -164,7 +160,7 @@ export function FinanceTransactionEditor({
             accountId: payload.accountId,
             categoryId: payload.categoryId,
             amount,
-            ownShare: economicAmount,
+            ownShare: (moneyValue(amount) - participantTotal).toString(),
             description: payload.description,
             occurredAt: payload.occurredAt,
             necessity: payload.necessity,
@@ -175,7 +171,7 @@ export function FinanceTransactionEditor({
       if (onSaveDraft && editing)
         return onSaveDraft({
           ...payload,
-          economicAmount: purpose === "ORDINARY" ? economicAmount || amount : undefined,
+          economicAmount: undefined,
         }).then(() => editing);
       return editing
         ? consumerFinanceApi.updateTransaction(botId, editing.id, payload)
@@ -191,7 +187,6 @@ export function FinanceTransactionEditor({
       setOpen(false);
       if (!editing) {
         setAmount("");
-        setEconomicAmount("");
         setMeaning("ORDINARY");
         setNecessity("UNSPECIFIED");
         setDescription("");
@@ -210,26 +205,16 @@ export function FinanceTransactionEditor({
       }}
       title={editing ? t.editTransaction : t.addTransaction}
     >
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-2 gap-3">
         <FormField label={t.transactionType}>
           <Select
             uiLocale={locale}
             value={type}
             disabled={linkedInvestment || Boolean(onSaveDraft)}
             onChange={(event) => {
-              if (
-                event.target.value === "TRANSFER" ||
-                event.target.value === "DEBT" ||
-                event.target.value === "INVESTMENT"
-              ) {
+              if (event.target.value === "TRANSFER") {
                 onClose();
-                onSpecialAction?.(
-                  event.target.value === "TRANSFER"
-                    ? "transfer"
-                    : event.target.value === "DEBT"
-                      ? "debt"
-                      : "investment",
-                );
+                onSpecialAction?.("transfer");
                 return;
               }
               setType(event.target.value as typeof type);
@@ -237,76 +222,9 @@ export function FinanceTransactionEditor({
               setMeaning("ORDINARY");
             }}
           >
-            <option value="EXPENSE">{t.expense}</option>
-            <option value="INCOME">{t.income}</option>
-            {!editing ? <option value="TRANSFER">{t.transfers}</option> : null}
-            {!editing ? <option value="DEBT">{t.debts}</option> : null}
-            {!editing ? (
-              <option value="INVESTMENT">{t.investments}</option>
-            ) : null}
-          </Select>
-        </FormField>
-        {!linkedInvestment ? <FormField label={t.transactionMeaning}>
-          <Select
-            uiLocale={locale}
-            value={meaning}
-            onChange={(event) => {
-              setMeaning(event.target.value as TransactionMeaning);
-              if (
-                event.target.value !== "ORDINARY" &&
-                event.target.value !== "SHARED_EXPENSE"
-              ) {
-                setCategoryId("");
-                setEconomicAmount("");
-              }
-            }}
-          >
-            <option value="ORDINARY">
-              {type === "INCOME" ? t.ordinaryIncome : t.ordinaryExpense}
-            </option>
-            {type === "INCOME" ? (
-              <option value="REIMBURSEMENT">{t.reimbursement}</option>
-            ) : null}
-            {type === "INCOME" ? (
-              <option value="PASS_THROUGH">{t.passThrough}</option>
-            ) : null}
-            {type === "EXPENSE" ? (
-              <option value="DEBT_REPAYMENT">{t.debtRepayment}</option>
-            ) : null}
-            {type === "EXPENSE" && !editing ? (
-              <option value="SHARED_EXPENSE">{t.sharedExpense}</option>
-            ) : null}
-          </Select>
-        </FormField> : null}
-        <FormField
-          label={`${t.amount}${account ? ` (${account.currency})` : ""}`}
-        >
-          <Input
-            inputMode="decimal"
-            value={amount}
-            onChange={(event) => setAmount(event.target.value)}
-          />
-        </FormField>
-        <FormField label={t.account}>
-          <Select
-            uiLocale={locale}
-            value={accountId || account?.id || ""}
-            onChange={(event) => setAccountId(event.target.value)}
-          >
-            {activeAccounts.map((item) => (
-              <option
-                key={item.id}
-                value={item.id}
-                data-icon-emoji={
-                  item.iconPresentation.type === "unicode"
-                    ? item.iconPresentation.value
-                    : undefined
-                }
-                data-option-meta={item.currency}
-              >
-                {item.name}
-              </option>
-            ))}
+            <option className="text-white" value="EXPENSE" data-icon-symbol="expense">{t.expense}</option>
+            <option className="text-white" value="INCOME" data-icon-symbol="income">{t.income}</option>
+            {!editing ? <option className="text-white" value="TRANSFER" data-icon-symbol="transfer">{t.transfers}</option> : null}
           </Select>
         </FormField>
         {purpose === "ORDINARY" ? (
@@ -339,13 +257,70 @@ export function FinanceTransactionEditor({
               ))}
             </Select>
           </FormField>
-        ) : null}
+        ) : (
+          <div />
+        )}
+        <FormField label={t.account}>
+          <Select
+            uiLocale={locale}
+            value={accountId || account?.id || ""}
+            onChange={(event) => setAccountId(event.target.value)}
+          >
+            {activeAccounts.map((item) => (
+              <option
+                key={item.id}
+                value={item.id}
+                data-icon-emoji={
+                  item.iconPresentation.type === "unicode"
+                    ? item.iconPresentation.value
+                    : undefined
+                }
+                data-option-meta={item.currency}
+              >
+                {item.name}
+              </option>
+            ))}
+          </Select>
+        </FormField>
+        <FormField label={t.amount}>
+          <Input
+            inputMode="decimal"
+            suffix={account?.currency}
+            value={amount}
+            onChange={(event) => setAmount(normalizeMoneyInput(event.target.value))}
+          />
+        </FormField>
+        {!linkedInvestment ? <FormField className="col-span-2" label={t.transactionMeaning}>
+          <Select
+            uiLocale={locale}
+            value={meaning}
+            onChange={(event) => {
+              setMeaning(event.target.value as TransactionMeaning);
+              if (event.target.value !== "ORDINARY") {
+                setCategoryId("");
+              }
+            }}
+          >
+            <option value="ORDINARY" data-icon-emoji={type === "INCOME" ? "💰" : "💸"}>
+              {type === "INCOME" ? t.ordinaryIncome : t.ordinaryExpense}
+            </option>
+            {type === "INCOME" ? (
+              <option value="REIMBURSEMENT" data-icon-emoji="↩️">{t.reimbursement}</option>
+            ) : null}
+            {type === "INCOME" ? (
+              <option value="PASS_THROUGH" data-icon-emoji="🤝">{t.passThrough}</option>
+            ) : null}
+            {type === "EXPENSE" && !editing ? (
+              <option value="SHARED_EXPENSE" data-icon-emoji="👥">{t.sharedExpense}</option>
+            ) : null}
+          </Select>
+        </FormField> : null}
         {meaning === "SHARED_EXPENSE" ? (
-          <div className="space-y-2 rounded-xl border border-sky-900/70 bg-sky-950/20 p-3 sm:col-span-2">
+          <div className="col-span-2 space-y-3 rounded-xl border border-sky-900/70 bg-sky-950/20 p-3">
             <p className="text-xs text-sky-200">{t.sharedExpenseHelp}</p>
             {participants.map((participant, index) => (
               <div
-                className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_7rem_9rem_auto]"
+                className="grid grid-cols-2 gap-2"
                 key={index}
               >
                 <Input
@@ -365,19 +340,24 @@ export function FinanceTransactionEditor({
                 <Input
                   aria-label={t.participantDebt}
                   inputMode="decimal"
+                  suffix={account?.currency}
                   placeholder={t.participantDebt}
                   value={participant.amount}
                   onChange={(event) =>
                     setParticipants((current) =>
                       current.map((item, itemIndex) =>
                         itemIndex === index
-                          ? { ...item, amount: event.target.value }
+                          ? {
+                              ...item,
+                              amount: normalizeMoneyInput(event.target.value),
+                            }
                           : item,
                       ),
                     )
                   }
                 />
                 <DateInput
+                  className="col-span-2"
                   aria-label={t.returnBy}
                   lang={locale}
                   value={participant.dueDate}
@@ -391,19 +371,23 @@ export function FinanceTransactionEditor({
                     )
                   }
                 />
-                <Button
-                  disabled={participants.length === 1}
-                  onClick={() =>
-                    setParticipants((current) =>
-                      current.filter((_, itemIndex) => itemIndex !== index),
-                    )
-                  }
-                >
-                  {t.removeParticipant}
-                </Button>
+                {participants.length > 1 && index > 0 ? (
+                  <Button
+                    className="col-span-2 w-full"
+                    variant="danger"
+                    onClick={() =>
+                      setParticipants((current) =>
+                        current.filter((_, itemIndex) => itemIndex !== index),
+                      )
+                    }
+                  >
+                    {t.removeParticipant}
+                  </Button>
+                ) : null}
               </div>
             ))}
             <Button
+              className="w-full"
               onClick={() =>
                 setParticipants((current) => [
                   ...current,
@@ -415,51 +399,40 @@ export function FinanceTransactionEditor({
             </Button>
             <p className="text-xs text-neutral-400">
               {t.allocated}:{" "}
-              {(Number(economicAmount || 0) + participantTotal).toFixed(2)} /{" "}
-              {Number(amount || 0).toFixed(2)} {account?.currency}
+              {participantTotal.toFixed(2)} / {moneyValue(amount).toFixed(2)} {account?.currency}
             </p>
           </div>
         ) : null}
-        {purpose === "ORDINARY" ? (
-          <FormField label={`${t.economicAmount} (${account?.currency ?? ""})`}>
-            <Input
-              inputMode="decimal"
-              placeholder={amount || "0"}
-              value={economicAmount}
-              onChange={(event) => setEconomicAmount(event.target.value)}
-            />
-          </FormField>
-        ) : null}
         {type === "EXPENSE" && purpose === "ORDINARY" ? (
           <FinanceNecessityToggle
+            className="col-span-2"
             value={necessity}
             locale={locale}
             onChange={setNecessity}
-            className="sm:col-span-2"
           />
         ) : null}
-        <FormField label={t.date} className="sm:col-span-2">
+        <FormField label={t.date}>
           <DateInput
             lang={locale}
             value={occurredAt}
             onChange={(event) => setOccurredAt(event.target.value)}
           />
         </FormField>
-        <FormField label={t.description} className="sm:col-span-2">
+        <FormField label={t.description}>
           <Input
             value={description}
             onChange={(event) => setDescription(event.target.value)}
           />
         </FormField>
         <Button
-          className="w-full sm:col-span-2"
+          className="w-full col-span-2"
           disabled={!valid || mutation.isPending}
           onClick={() => mutation.mutate()}
         >
           {mutation.isPending ? t.saving : t.saveTransaction}
         </Button>
         {mutation.isError ? (
-          <p className="text-sm text-rose-300 sm:col-span-2">
+          <p className="text-sm text-rose-300 col-span-2">
             {t.transactionSaveError}
           </p>
         ) : null}

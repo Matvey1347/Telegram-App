@@ -75,6 +75,7 @@ export class CreateFinanceTransferDto {
   @IsString() fromAccountId!: string;
   @IsString() toAccountId!: string;
   @IsNumberString() amount!: string;
+  @IsOptional() @IsNumberString() toAmount?: string;
   @IsDateString() occurredAt!: string;
   @IsOptional() @IsString() @MaxLength(240) description?: string;
 }

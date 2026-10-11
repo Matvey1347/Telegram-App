@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import {
   keepPreviousData,
@@ -67,13 +67,18 @@ import {
   FinanceTransferRow,
 } from "./finance-overview-list-rows";
 import {
-  resizeFinanceListPage,
+  financePageForItem,
   type FinancePageState,
 } from "./finance-overview-pagination";
 import {
   groupAccountsByOwner,
   type AccountScope,
 } from "./account-groups";
+import { FinanceTransactionFilterToolbar } from "./finance-transaction-filter-toolbar";
+import {
+  useFinanceTransactionFilters,
+  useResponsiveFinanceListPages,
+} from "./use-finance-transaction-filters";
 
 type Editor =
   | { kind: "account"; item?: Account }
@@ -101,27 +106,17 @@ export function InternalFinanceOverview() {
   });
   const [categoryPage, setCategoryPage] = useState<PageState>({
     page: 1,
-    pageSize: 10,
+    pageSize: 12,
   });
   const [transferPage, setTransferPage] = useState<PageState>({
     page: 1,
     pageSize: 10,
   });
-  useEffect(() => {
-    const media = window.matchMedia("(max-width: 639px)");
-    const applyResponsivePageSize = () => {
-      setTransactionPage((state) =>
-        resizeFinanceListPage(state, media.matches),
-      );
-      setTransferPage((state) => resizeFinanceListPage(state, media.matches));
-    };
-    applyResponsivePageSize();
-    media.addEventListener("change", applyResponsivePageSize);
-    return () => media.removeEventListener("change", applyResponsivePageSize);
-  }, []);
-  const dated = useMemo(
-    () => financeOverviewQuery(period, transactionPage),
-    [period, transactionPage],
+  useResponsiveFinanceListPages(setTransactionPage, setTransferPage);
+  const transactionFilters = useFinanceTransactionFilters(
+    period,
+    transactionPage,
+    setTransactionPage,
   );
   const transferQuery = useMemo(
     () => financeOverviewQuery(period, transferPage),
@@ -141,8 +136,8 @@ export function InternalFinanceOverview() {
     queryFn: currenciesApi.getSettings,
   });
   const transactions = useQuery({
-    queryKey: [...accountKeys.transactions(), "overview", dated],
-    queryFn: () => transactionsApi.listPage(dated),
+    queryKey: [...accountKeys.transactions(), "overview", transactionFilters.query],
+    queryFn: () => transactionsApi.listPage(transactionFilters.query),
     placeholderData: keepPreviousData,
   });
   const transfers = useQuery({
@@ -168,12 +163,9 @@ export function InternalFinanceOverview() {
       (categoryPage.page - 1) * categoryPage.pageSize,
       categoryPage.page * categoryPage.pageSize,
     ) ?? [];
-  const needsAllAccounts =
-    editor?.kind === "transaction" || editor?.kind === "transfer";
   const allAccounts = useQuery({
     queryKey: [...accountKeys.accounts(), "select"],
     queryFn: accountsApi.list,
-    enabled: needsAllAccounts,
   });
   const transactionMembers = useQuery({
     queryKey: ["workspace-members", "select"],
@@ -208,10 +200,10 @@ export function InternalFinanceOverview() {
         ? transfersApi.update(target.item.id, value as TransferFormValues)
         : transfersApi.create(value as TransferFormValues);
     },
-    onSuccess: async (_, variables) => {
+    onSuccess: async (saved, variables) => {
       setEditor(null);
       if (variables.target.kind === "account") {
-        const updated = _ as Account;
+        const updated = saved as Account;
         const previous = variables.target.item;
         const ownershipChanged =
           previous && previous.assignedMemberId !== updated.assignedMemberId;
@@ -272,6 +264,20 @@ export function InternalFinanceOverview() {
           qc.invalidateQueries({ queryKey: ["transaction-categories-admin"] }),
           qc.invalidateQueries({ queryKey: accountKeys.transactions() }),
         ]);
+        const category = saved as TransactionCategory;
+        const categoryKey = ["transaction-categories-admin", category.type];
+        const refreshed = qc.getQueryData<TransactionCategory[]>(categoryKey);
+        if (refreshed) {
+          setCategoryType(category.type);
+          setCategoryPage((current) => ({
+            ...current,
+            page: financePageForItem(
+              refreshed.map((item) => item.id),
+              category.id,
+              current.pageSize,
+            ),
+          }));
+        }
       }
     },
   });
@@ -332,6 +338,7 @@ export function InternalFinanceOverview() {
       title: "Saving",
       message: `Saving ${target.kind}...`,
     });
+    if (target.kind === "transaction") setEditor(null);
     try {
       await save.mutateAsync({ target, value });
       operation.succeed({
@@ -413,6 +420,7 @@ export function InternalFinanceOverview() {
               {(
                 [
                   ["mine", "My accounts"],
+                  ["system", "System"],
                   ["all", "All accounts"],
                   ["archived", "Archived"],
                 ] as Array<[AccountScope, string]>
@@ -518,6 +526,7 @@ export function InternalFinanceOverview() {
               />
             ) : null
           }
+          toolbar={<FinanceTransactionFilterToolbar accounts={allAccounts.data ?? accounts.data?.items ?? []} categories={categories ?? []} search={transactionFilters.search} accountId={transactionFilters.accountId} categoryId={transactionFilters.categoryId} onSearchChange={transactionFilters.setSearch} onAccountChange={transactionFilters.setAccountId} onCategoryChange={transactionFilters.setCategoryId} />}
         >
           <div className="overflow-hidden rounded-xl border border-neutral-800">
             {transactions.data?.items.map((t) => (

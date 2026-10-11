@@ -59,4 +59,19 @@ describe("Finance IconPicker", () => {
       ),
     );
   });
+
+  it("finds a standard emoji when the emoji itself is pasted into search", async () => {
+    api.customIcons.mockResolvedValue([]);
+    const onChange = renderPicker();
+
+    fireEvent.click(screen.getByRole("button", { name: "Change icon" }));
+    const [option] = await screen.findAllByRole("option");
+    const emoji = option.textContent ?? "";
+    fireEvent.change(screen.getByPlaceholderText("Search icon by name"), {
+      target: { value: emoji },
+    });
+    fireEvent.click((await screen.findAllByRole("option"))[0]);
+
+    expect(onChange).toHaveBeenCalledWith(emoji);
+  });
 });

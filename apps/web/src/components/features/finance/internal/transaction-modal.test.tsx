@@ -76,6 +76,7 @@ function renderModal(initial?: Transaction) {
             name: "Main",
             currency: "USD",
             initialBalance: 0,
+            isSystem: false,
             isActive: true,
             assignedMemberId: "member",
           },
@@ -116,7 +117,7 @@ describe("internal transaction modal category fields", () => {
     vi.spyOn(telegramChannelsApi, "select").mockResolvedValue([]);
     renderModal();
 
-    expect(transactionDialog()).toHaveClass("max-w-[400px]");
+    expect(transactionDialog()).toHaveClass("!max-w-[400px]");
     expect(transactionDialog()).not.toHaveClass("max-w-[1280px]");
   });
 

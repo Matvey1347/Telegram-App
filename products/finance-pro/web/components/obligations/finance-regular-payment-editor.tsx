@@ -89,6 +89,9 @@ export function FinanceRegularPaymentEditor({
     accountId && accountRows.some((account) => account.id === accountId)
       ? accountId
       : (accountRows[0]?.id ?? "");
+  const selectedAccount = accountRows.find(
+    (account) => account.id === selectedAccountId,
+  );
   const save = useMutation({
     mutationFn: () => {
       const input = {
@@ -143,8 +146,8 @@ export function FinanceRegularPaymentEditor({
       closeLabel={t.close}
       title={editing ? t.editRegularPayment : t.addRegularPayment}
     >
-      <div className="grid gap-3 sm:grid-cols-2">
-        <div className="sm:col-span-2">
+      <div className="grid grid-cols-2 gap-3">
+        <div className="col-span-2">
           <IconPicker
             botId={botId}
             uiLocale={locale}
@@ -163,6 +166,7 @@ export function FinanceRegularPaymentEditor({
         <FormField label={t.amount}>
           <Input
             inputMode="decimal"
+            suffix={selectedAccount?.currency}
             value={amount}
             onChange={(event) => setAmount(event.target.value)}
           />
@@ -215,7 +219,6 @@ export function FinanceRegularPaymentEditor({
           value={necessity}
           locale={locale}
           onChange={setNecessity}
-          className="sm:col-span-2"
         />
         <FormField label={t.intervalCount}>
           <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,2fr)] gap-2">
@@ -250,21 +253,21 @@ export function FinanceRegularPaymentEditor({
             onChange={(event) => setNextPaymentDate(event.target.value)}
           />
         </FormField>
-        <FormField label={t.note} className="sm:col-span-2">
+        <FormField label={t.note} className="col-span-2">
           <Textarea
             value={note}
             onChange={(event) => setNote(event.target.value)}
           />
         </FormField>
         <Button
-          className="w-full sm:col-span-2"
+          className="w-full col-span-2"
           disabled={!valid || save.isPending}
           onClick={() => save.mutate()}
         >
           {save.isPending ? t.saving : t.save}
         </Button>
         {save.isError ? (
-          <div className="sm:col-span-2">
+          <div className="col-span-2">
             <ErrorState text={t.paymentSaveError} />
           </div>
         ) : null}

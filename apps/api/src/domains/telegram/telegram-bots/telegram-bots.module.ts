@@ -6,6 +6,8 @@ import { TelegramBotApplicationDispatcherService } from './core/telegram-bot-app
 import {
   TELEGRAM_BOT_FINANCE_HANDLER,
   TELEGRAM_BOT_FINANCE_PRESENTATION,
+  TELEGRAM_BOT_SIMPLE_FINANCE_HANDLER,
+  TELEGRAM_BOT_SIMPLE_FINANCE_PRESENTATION,
   TELEGRAM_BOT_GREETER_HANDLER,
   TELEGRAM_BOT_GREETER_PRESENTATION,
 } from './core/telegram-bot-application.ports';
@@ -43,6 +45,9 @@ import { FinanceChatFlowService } from '@finance-pro/api/chat-flows/finance-chat
 import { FinanceChatFlowPresenterService } from '@finance-pro/api/chat-flows/finance-chat-flow-presenter.service';
 import { FinanceEntitlementService } from '@finance-pro/api/billing/finance-entitlement.service';
 import { BotBillingModule } from '../bot-billing/bot-billing.module';
+import { SimpleFinanceModule } from '@finance/api/finance.module';
+import { SimpleFinanceBotService } from '@finance/bot/finance-bot.service';
+import { SimpleFinancePresentationService } from '@finance/bot/finance-presentation.service';
 import { FinanceAiConfigService } from '@finance-pro/api/ai/finance-ai-config.service';
 import { FinanceAiConfigController } from '@finance-pro/api/ai/finance-ai-config.controller';
 import { FinanceController } from '@finance-pro/api/http/finance.controller';
@@ -111,7 +116,7 @@ import { FinanceCustomIconController } from '@finance-pro/api/catalog/finance-cu
 import { FinanceCustomIconService } from '@finance-pro/api/catalog/finance-custom-icon.service';
 
 @Module({
-  imports: [BotBillingModule],
+  imports: [BotBillingModule, SimpleFinanceModule],
   controllers: [
     TelegramBotsController,
     TelegramBotRuntimeController,
@@ -162,6 +167,8 @@ import { FinanceCustomIconService } from '@finance-pro/api/catalog/finance-custo
     GreeterBroadcastAudienceService,
     GreeterBroadcastService,
     FinanceBotService,
+    SimpleFinanceBotService,
+    SimpleFinancePresentationService,
     FinanceBotChatResponderService,
     FinanceChatFlowService,
     FinanceChatFlowPresenterService,
@@ -208,6 +215,7 @@ import { FinanceCustomIconService } from '@finance-pro/api/catalog/finance-custo
     FinanceTelegramPresentationService,
     { provide: TELEGRAM_BOT_GREETER_HANDLER, useExisting: GreeterService },
     { provide: TELEGRAM_BOT_FINANCE_HANDLER, useExisting: FinanceBotService },
+    { provide: TELEGRAM_BOT_SIMPLE_FINANCE_HANDLER, useExisting: SimpleFinanceBotService },
     {
       provide: TELEGRAM_BOT_GREETER_PRESENTATION,
       useExisting: GreeterTelegramPresentationService,
@@ -216,6 +224,7 @@ import { FinanceCustomIconService } from '@finance-pro/api/catalog/finance-custo
       provide: TELEGRAM_BOT_FINANCE_PRESENTATION,
       useExisting: FinanceTelegramPresentationService,
     },
+    { provide: TELEGRAM_BOT_SIMPLE_FINANCE_PRESENTATION, useExisting: SimpleFinancePresentationService },
     {
       provide: FINANCE_REMINDER_DELIVERY_PORT,
       useExisting: FinanceReminderDeliveryService,

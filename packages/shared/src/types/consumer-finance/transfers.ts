@@ -2,6 +2,8 @@ export type ConsumerFinanceTransferInput = {
   fromAccountId: string;
   toAccountId: string;
   amount: string;
+  /** Amount credited to the destination account; required when currencies differ. */
+  toAmount?: string;
   occurredAt: string;
   description?: string;
 };

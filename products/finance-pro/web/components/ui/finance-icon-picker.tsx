@@ -120,11 +120,12 @@ export function IconPicker({
     },
   });
   const options = useMemo(() => {
-    const query = search.trim().toLocaleLowerCase();
+    const query = search.trim().toLocaleLowerCase().replace(/\uFE0F/gu, "");
     return emojiIcons.filter((item) =>
       !query
         ? item.category === category
-        : [item.name, ...item.keywords].some((term) =>
+        : item.emoji.toLocaleLowerCase().replace(/\uFE0F/gu, "").includes(query) ||
+          [item.name, ...item.keywords].some((term) =>
             term.toLocaleLowerCase().includes(query),
           ),
     );
@@ -260,14 +261,14 @@ export function IconPicker({
                     />
                   </label>
                   {!search ? (
-                    <div className="mt-2 flex gap-1 overflow-x-auto pb-1">
+                    <div className="mt-2 grid grid-cols-4 gap-1">
                       {categories.map((value) => (
                         <button
                           key={value}
                           type="button"
                           aria-pressed={category === value}
                           onClick={() => setCategory(value)}
-                          className="shrink-0 rounded-md px-2 py-1 text-xs text-neutral-300 hover:bg-neutral-800 aria-pressed:bg-blue-900/60"
+                          className="rounded-md px-2 py-1 text-xs text-neutral-300 hover:bg-neutral-800 aria-pressed:bg-blue-900/60"
                         >
                           {labels[value]}
                         </button>

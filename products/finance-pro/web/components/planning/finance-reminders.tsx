@@ -75,9 +75,10 @@ export function FinanceReminders({
             onChange={(event) => setName(event.target.value)}
           />
         </FormField>
-        <FormField label={`${t.reminderAmount} (${currency})`}>
+        <FormField label={t.reminderAmount}>
           <Input
             inputMode="decimal"
+            suffix={currency}
             value={amount}
             onChange={(event) => setAmount(event.target.value)}
           />

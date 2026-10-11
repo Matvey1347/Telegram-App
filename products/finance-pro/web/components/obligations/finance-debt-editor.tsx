@@ -60,6 +60,7 @@ export function FinanceDebtEditor({
     accountId && rows.some((account) => account.id === accountId)
       ? accountId
       : (rows[0]?.id ?? "");
+  const selectedAccount = rows.find((account) => account.id === selectedAccountId);
   const save = useMutation({
     mutationFn: () => {
       const input = {
@@ -119,6 +120,7 @@ export function FinanceDebtEditor({
         <FormField label={t.amount}>
           <Input
             inputMode="decimal"
+            suffix={selectedAccount?.currency}
             value={amount}
             onChange={(event) => setAmount(event.target.value)}
           />

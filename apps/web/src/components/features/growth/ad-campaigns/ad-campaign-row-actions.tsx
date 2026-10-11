@@ -15,6 +15,7 @@ export function AdCampaignRowActions({
   onOpenHistory,
   onRefreshInviteLinks,
   refreshingInviteLinks = false,
+  refreshInviteLinksProgress,
 }: {
   campaign: AdCampaign;
   onEdit?: (campaign: AdCampaign) => void;
@@ -23,6 +24,7 @@ export function AdCampaignRowActions({
   onOpenHistory: () => void;
   onRefreshInviteLinks?: (campaign: AdCampaign) => void;
   refreshingInviteLinks?: boolean;
+  refreshInviteLinksProgress?: { current: number; total: number } | null;
 }) {
   return (
     <CardActionsMenu label={`Actions for ${campaign.title}`}>
@@ -45,7 +47,7 @@ export function AdCampaignRowActions({
         <CardMenuAction
           label={
             refreshingInviteLinks
-              ? "Refreshing invite-link data…"
+              ? `Refreshing invite links ${refreshInviteLinksProgress?.current ?? 0}/${refreshInviteLinksProgress?.total ?? "…"}`
               : "Refresh invite-link data"
           }
           icon={<RefreshCw size={16} />}

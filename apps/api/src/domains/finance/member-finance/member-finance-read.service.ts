@@ -173,20 +173,6 @@ export class MemberFinanceReadService {
         row.investorEarnings += value;
     }
     const visibleMemberIds = new Set(members.map((member) => member.id));
-    const capitalByMember = new Map<string, number>();
-    for (const investment of investments) {
-      if (
-        investment.origin === InvestmentOrigin.REINVESTMENT ||
-        !visibleMemberIds.has(investment.workspaceMemberId)
-      ) {
-        continue;
-      }
-      const change = this.signedInvestment(investment);
-      capitalByMember.set(
-        investment.workspaceMemberId,
-        (capitalByMember.get(investment.workspaceMemberId) ?? 0) + change,
-      );
-    }
     const commissionByPayment = new Map(
       payments.map((payment) => [
         payment.id,
@@ -243,34 +229,57 @@ export class MemberFinanceReadService {
           ]
         : [];
     });
-    const totalProfit = revenueTransactions.reduce(
-      (sum, transaction) => sum + transaction.amount,
-      0,
-    );
-    const capital = [...capitalByMember].map(([memberId, amount]) => ({
-      memberId,
-      amount,
-    }));
-    const allocations = allocateProfitByCapital(totalProfit, capital);
-    for (const allocation of allocations) {
-      get(allocation.memberId).investorEarnings += allocation.amount;
-    }
-    const totalCapital = capital.reduce((sum, row) => sum + row.amount, 0);
     const automaticReinvestmentsByMember = new Map<
       string,
       Array<{ id: string; date: Date; amount: number; title: string }>
     >();
-    for (const investor of capital) {
-      if (investor.amount <= 0 || totalCapital <= 0) continue;
-      automaticReinvestmentsByMember.set(
-        investor.memberId,
-        revenueTransactions.map((transaction) => ({
-          id: `reinvestment:${transaction.id}`,
-          date: transaction.date,
-          amount: transaction.amount * (investor.amount / totalCapital),
-          title: transaction.title,
+    // Profit is earned at a point in time. A new contribution may participate
+    // on its own calendar date, but must never acquire a share of revenue that
+    // predates the contribution.
+    const capitalEvents = investments
+      .filter(
+        (investment) =>
+          investment.origin !== InvestmentOrigin.REINVESTMENT &&
+          visibleMemberIds.has(investment.workspaceMemberId),
+      )
+      .sort(
+        (left, right) =>
+          left.date.getTime() - right.date.getTime() ||
+          left.id.localeCompare(right.id),
+      );
+    const capitalByMember = new Map<string, number>();
+    let nextCapitalEvent = 0;
+    for (const transaction of revenueTransactions) {
+      while (
+        nextCapitalEvent < capitalEvents.length &&
+        capitalEvents[nextCapitalEvent].date <= transaction.date
+      ) {
+        const investment = capitalEvents[nextCapitalEvent];
+        capitalByMember.set(
+          investment.workspaceMemberId,
+          (capitalByMember.get(investment.workspaceMemberId) ?? 0) +
+            this.signedInvestment(investment),
+        );
+        nextCapitalEvent += 1;
+      }
+      const allocations = allocateProfitByCapital(
+        transaction.amount,
+        [...capitalByMember].map(([memberId, amount]) => ({
+          memberId,
+          amount,
         })),
       );
+      for (const allocation of allocations) {
+        get(allocation.memberId).investorEarnings += allocation.amount;
+        const entries = automaticReinvestmentsByMember.get(allocation.memberId) ?? [];
+        entries.push({
+          id: `reinvestment:${transaction.id}`,
+          date: transaction.date,
+          amount: allocation.amount,
+          title: transaction.title,
+        });
+        automaticReinvestmentsByMember.set(allocation.memberId, entries);
+      }
     }
     return {
       byMember,

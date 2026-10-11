@@ -113,6 +113,34 @@ describe("TelegramBotCard", () => {
     expect(screen.queryByText("Last real update")).toBeNull();
   });
 
+  it("treats a single connected runtime as one bot until another version is added", async () => {
+    const user = userEvent.setup();
+    const localBot = bot("GREETER");
+    localBot.runtimes[0] = {
+      ...localBot.runtimes[0],
+      environment: "LOCAL",
+      username: "admissions_local",
+    };
+    render(
+      <TelegramBotCard
+        bot={localBot}
+        checkingEnvironment={null}
+        onCheck={vi.fn()}
+        onRequestDelete={vi.fn()}
+        onSwitch={vi.fn()}
+        onConfigureRuntime={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByRole("tablist")).not.toBeInTheDocument();
+    await user.click(
+      screen.getByRole("button", { name: "Actions for Admissions bot" }),
+    );
+    expect(
+      screen.getByRole("menuitem", { name: "Add production version" }),
+    ).toBeInTheDocument();
+  });
+
   it("renders the selected runtime avatar pulled from Telegram", () => {
     const financeBot = bot("FINANCE");
     financeBot.runtimes[0].avatarUrl =

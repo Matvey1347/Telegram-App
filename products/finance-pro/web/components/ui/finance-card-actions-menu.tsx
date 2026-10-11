@@ -19,6 +19,7 @@ export function FinanceCardActionsMenu({
   actions: FinanceCardAction[];
 }) {
   const [open, setOpen] = useState(false);
+  const [openDirection, setOpenDirection] = useState<"up" | "down">("down");
   const root = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -35,13 +36,28 @@ export function FinanceCardActionsMenu({
         type="button"
         aria-label={label}
         aria-expanded={open}
-        onClick={() => setOpen((value) => !value)}
+        onClick={() => {
+          if (!open) {
+            const rect = root.current?.getBoundingClientRect();
+            const menuHeight = actions.length * 40 + 12;
+            if (rect)
+              setOpenDirection(
+                window.innerHeight - rect.bottom >= menuHeight ||
+                  rect.top < menuHeight
+                  ? "down"
+                  : "up",
+              );
+          }
+          setOpen((value) => !value);
+        }}
         className="grid h-10 w-10 place-items-center rounded-lg border border-neutral-700 text-neutral-200 transition hover:border-sky-500 hover:bg-sky-950/40"
       >
         <EllipsisVertical size={18} aria-hidden="true" />
       </button>
       {open ? (
-        <div className="absolute bottom-11 right-0 z-20 min-w-52 rounded-xl border border-neutral-700 bg-neutral-950 p-1.5 shadow-2xl">
+        <div
+          className={`absolute right-0 z-20 min-w-52 rounded-xl border border-neutral-700 bg-neutral-950 p-1.5 shadow-2xl ${openDirection === "down" ? "top-11" : "bottom-11"}`}
+        >
           {actions.map((action) => (
             <button
               key={action.label}

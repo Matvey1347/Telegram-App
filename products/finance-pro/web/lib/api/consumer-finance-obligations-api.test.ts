@@ -10,7 +10,7 @@ afterEach(() => {
 });
 
 describe("consumerFinanceObligationsApi", () => {
-  it("uses the exact debt collection, update and settlement contracts", async () => {
+  it("uses the exact debt collection, update, deletion and settlement contracts", async () => {
     const requests: InternalAxiosRequestConfig[] = [];
     consumerFinanceHttp.defaults.adapter = async (config) => {
       requests.push(config);
@@ -28,6 +28,7 @@ describe("consumerFinanceObligationsApi", () => {
     await consumerFinanceObligationsApi.debts("bot", { status: "OPEN" });
     await consumerFinanceObligationsApi.createDebt("bot", input);
     await consumerFinanceObligationsApi.updateDebt("bot", "debt", input);
+    await consumerFinanceObligationsApi.deleteDebt("bot", "debt");
     await consumerFinanceObligationsApi.settleDebt("bot", "debt", {
       accountId: "cash",
       amount: "42",
@@ -38,10 +39,11 @@ describe("consumerFinanceObligationsApi", () => {
       ["get", "/finance-bots/bot/debts"],
       ["post", "/finance-bots/bot/debts"],
       ["patch", "/finance-bots/bot/debts/debt"],
+      ["delete", "/finance-bots/bot/debts/debt"],
       ["post", "/finance-bots/bot/debts/debt/settle"],
     ]);
     expect(requests[0]?.params).toEqual({ status: "OPEN" });
-    expect(JSON.parse(String(requests[3]?.data))).toEqual({
+    expect(JSON.parse(String(requests[4]?.data))).toEqual({
       accountId: "cash",
       amount: "42",
       settlementDate: "2026-09-21",

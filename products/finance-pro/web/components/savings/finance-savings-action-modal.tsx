@@ -108,9 +108,10 @@ export function FinanceSavingsActionModal({
               ))}
             </Select>
           </FormField>
-          <FormField label={`${t.amount} (${goal.currency})`} required>
+          <FormField label={t.amount} required>
             <Input
               inputMode="decimal"
+              suffix={goal.currency}
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
             />

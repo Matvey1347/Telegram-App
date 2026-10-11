@@ -537,6 +537,13 @@ export class FinanceController {
   ) {
     return this.core.archiveCategory(this.auth(b, r).profileId, id);
   }
+  @Post('categories/:id/restore') restoreCategory(
+    @Param('botId') b: string,
+    @Param('id') id: string,
+    @Req() r: Request,
+  ) {
+    return this.core.restoreCategory(this.auth(b, r).profileId, id);
+  }
   @Get('transactions') async history(
     @Param('botId') b: string,
     @Req() r: Request,

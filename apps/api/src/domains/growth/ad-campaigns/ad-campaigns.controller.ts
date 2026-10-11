@@ -7,13 +7,16 @@ import {
   Patch,
   Post,
   Query,
+  Res,
   UseGuards,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { CurrentUser } from '../../../common/current-user.decorator';
 import type { JwtUser } from '../../../common/current-user.decorator';
 import { JwtAuthGuard } from '../../../common/jwt-auth.guard';
 import { AdCampaignsService } from './ad-campaigns.service';
 import { AdCampaignListReadService } from './ad-campaign-list-read.service';
+import { StreamResponseService } from '../../../common/stream/stream-response.service';
 import {
   AdCampaignAnalyticsInputDto,
   CreateAdCampaignDto,
@@ -27,6 +30,7 @@ export class AdCampaignsController {
   constructor(
     private service: AdCampaignsService,
     private readonly listReadService: AdCampaignListReadService,
+    private readonly streamResponse: StreamResponseService,
   ) {}
 
   @Get()
@@ -75,8 +79,17 @@ export class AdCampaignsController {
   }
 
   @Post(':id/refresh-invite-links')
-  refreshInviteLinks(@CurrentUser() user: JwtUser, @Param('id') id: string) {
-    return this.service.refreshInviteLinkData(user.sub, id);
+  refreshInviteLinks(
+    @CurrentUser() user: JwtUser,
+    @Param('id') id: string,
+    @Res() response: Response,
+  ) {
+    return this.streamResponse.stream(response, {
+      eventPrefix: 'ad_campaign.refresh_invite_links',
+      persistLifecycleLogs: false,
+      action: (onProgress, signal) =>
+        this.service.refreshInviteLinkData(user.sub, id, onProgress, signal),
+    });
   }
 
   @Patch(':id/analytics-input')

@@ -11,7 +11,15 @@ import {
   useRef,
   useState,
 } from "react";
-import { Check, ChevronDown, Eye, EyeOff } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowLeftRight,
+  ArrowUp,
+  Check,
+  ChevronDown,
+  Eye,
+  EyeOff,
+} from "lucide-react";
 import type { FinanceLocale } from "@finance-pro/web/components/i18n/core";
 import { financeUiTokens } from "@finance-pro/web/components/ui/finance-ui-tokens";
 
@@ -56,8 +64,8 @@ export function Button({
 
 export const Input = forwardRef<
   HTMLInputElement,
-  React.InputHTMLAttributes<HTMLInputElement>
->(function Input({ className, type, ...props }, ref) {
+  React.InputHTMLAttributes<HTMLInputElement> & { suffix?: React.ReactNode }
+>(function Input({ className, type, suffix, ...props }, ref) {
   const [passwordVisible, setPasswordVisible] = useState(false);
   const isPassword = type === "password";
   const input = (
@@ -65,10 +73,20 @@ export const Input = forwardRef<
       {...props}
       ref={ref}
       type={isPassword && passwordVisible ? "text" : type}
-      className={`w-full px-3 py-2 text-sm ${financeUiTokens.control} ${isPassword ? "pr-11" : ""} ${className ?? ""}`}
+      className={`w-full px-3 py-2 text-sm ${financeUiTokens.control} ${isPassword || suffix ? "pr-16" : ""} ${className ?? ""}`}
     />
   );
-  if (!isPassword) return input;
+  if (!isPassword) {
+    if (!suffix) return input;
+    return (
+      <span className="relative block">
+        {input}
+        <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 rounded-md bg-neutral-800 px-2 py-1 text-xs font-medium text-neutral-300">
+          {suffix}
+        </span>
+      </span>
+    );
+  }
   return (
     <span className="relative block">
       {input}
@@ -102,12 +120,31 @@ export const Textarea = forwardRef<
 function OptionIcon({
   emoji,
   fallback,
+  symbol,
   large = false,
 }: {
   emoji?: string;
   fallback?: string;
+  symbol?: "expense" | "income" | "transfer";
   large?: boolean;
 }) {
+  const Symbol =
+    symbol === "expense"
+      ? ArrowDown
+      : symbol === "income"
+        ? ArrowUp
+        : symbol === "transfer"
+          ? ArrowLeftRight
+          : null;
+  if (Symbol) {
+    return (
+      <Symbol
+        size={large ? 22 : 18}
+        className="shrink-0 text-sky-300"
+        aria-hidden="true"
+      />
+    );
+  }
   if (emoji) {
     return (
       <span
@@ -144,6 +181,9 @@ export function Select(
         .filter((node) => typeof node === "string" || typeof node === "number")
         .join("");
       const value = String(optionProps.value ?? label);
+      const symbol = optionProps[
+        "data-icon-symbol" as keyof typeof optionProps
+      ] as "expense" | "income" | "transfer" | undefined;
       return {
         key: `${value}-${index}`,
         value,
@@ -156,11 +196,12 @@ export function Select(
         fallback: optionProps[
           "data-icon-fallback" as keyof typeof optionProps
         ] as string | undefined,
+        symbol,
         meta: optionProps["data-option-meta" as keyof typeof optionProps] as
           | string
           | undefined,
         className:
-          optionProps.className || optionToneByValue[value.toLowerCase()] || "",
+          symbol ? "text-white" : optionProps.className || optionToneByValue[value.toLowerCase()] || "",
       };
     });
   const [internalValue, setInternalValue] = useState(
@@ -290,6 +331,7 @@ export function Select(
           <OptionIcon
             emoji={selected?.emoji}
             fallback={selected?.fallback}
+            symbol={selected?.symbol}
             large={props.largeOptionIcons}
           />
           <span
@@ -390,6 +432,7 @@ export function Select(
                   <OptionIcon
                     emoji={option.emoji}
                     fallback={option.fallback}
+                    symbol={option.symbol}
                     large={props.largeOptionIcons}
                   />
                   <span

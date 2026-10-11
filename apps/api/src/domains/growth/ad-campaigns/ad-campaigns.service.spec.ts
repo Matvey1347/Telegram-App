@@ -4,6 +4,7 @@ import { AdCampaignListReadService } from './ad-campaign-list-read.service';
 describe('AdCampaignsService.refreshInviteLinkData', () => {
   it('refreshes each acquisition and bot-tracking link once before returning the campaign', async () => {
     const register = jest.fn().mockResolvedValue({});
+    const onProgress = jest.fn();
     const prisma = {
       adCampaign: {
         findFirst: jest.fn().mockResolvedValue({
@@ -39,7 +40,7 @@ describe('AdCampaignsService.refreshInviteLinkData', () => {
       { register } as never,
     );
     await expect(
-      service.refreshInviteLinkData('user-1', 'campaign-1'),
+      service.refreshInviteLinkData('user-1', 'campaign-1', onProgress),
     ).resolves.toEqual({
       campaignId: 'campaign-1',
       totalLinks: 2,
@@ -58,6 +59,28 @@ describe('AdCampaignsService.refreshInviteLinkData', () => {
       'user-1',
       'channel-2',
       'https://t.me/+two',
+    );
+    expect(onProgress).toHaveBeenNthCalledWith(
+      1,
+      {
+        telegramChannelId: 'channel-1',
+        url: 'https://t.me/+one',
+        status: 'refreshed',
+        message: 'Invite link refreshed',
+      },
+      1,
+      2,
+    );
+    expect(onProgress).toHaveBeenNthCalledWith(
+      2,
+      {
+        telegramChannelId: 'channel-2',
+        url: 'https://t.me/+two',
+        status: 'refreshed',
+        message: 'Invite link refreshed',
+      },
+      2,
+      2,
     );
   });
 
@@ -82,6 +105,7 @@ describe('AdCampaignsService.refreshInviteLinkData', () => {
         }),
       },
     };
+    const onProgress = jest.fn();
     const service = new AdCampaignsService(
       prisma as never,
       {
@@ -94,7 +118,7 @@ describe('AdCampaignsService.refreshInviteLinkData', () => {
     );
 
     await expect(
-      service.refreshInviteLinkData('user-1', 'campaign-1'),
+      service.refreshInviteLinkData('user-1', 'campaign-1', onProgress),
     ).resolves.toEqual({
       campaignId: 'campaign-1',
       totalLinks: 2,
@@ -108,6 +132,17 @@ describe('AdCampaignsService.refreshInviteLinkData', () => {
         },
       ],
     });
+    expect(onProgress).toHaveBeenLastCalledWith(
+      {
+        telegramChannelId: 'channel-2',
+        url: 'https://t.me/+two',
+        status: 'failed',
+        message:
+          'The connected Telegram account must be an administrator of this channel.',
+      },
+      2,
+      2,
+    );
   });
 });
 

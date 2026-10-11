@@ -317,6 +317,44 @@ export class FinanceDebtService {
     return result.value;
   }
 
+  async remove(profileId: string, id: string) {
+    const result = await this.prisma.$transaction(async (tx) => {
+      const debt = await tx.financeDebt.findFirst({
+        where: { id, profileId },
+        select: {
+          id: true,
+          originTransactionId: true,
+          settlementTransactionId: true,
+        },
+      });
+      if (!debt) throw new NotFoundException('Finance debt not found');
+
+      const otherOriginatedDebts = debt.originTransactionId
+        ? await tx.financeDebt.count({
+            where: {
+              originTransactionId: debt.originTransactionId,
+              id: { not: debt.id },
+            },
+          })
+        : 0;
+      await tx.financeDebt.delete({ where: { id: debt.id } });
+
+      const transactionIds = [
+        debt.settlementTransactionId,
+        otherOriginatedDebts === 0 ? debt.originTransactionId : null,
+      ].filter((transactionId): transactionId is string => Boolean(transactionId));
+      if (transactionIds.length) {
+        await tx.financeTransaction.updateMany({
+          where: { id: { in: transactionIds }, profileId, deletedAt: null },
+          data: { deletedAt: new Date() },
+        });
+      }
+      return { deleted: true as const };
+    });
+    await this.delivery.reschedule();
+    return result;
+  }
+
   async settle(
     profileId: string,
     id: string,

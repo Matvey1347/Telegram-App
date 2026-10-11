@@ -74,6 +74,22 @@ describe('AccountsService', () => {
     );
   });
 
+  it('loads unassigned system accounts in the System tab', async () => {
+    await service.findAll('user-1', { scope: 'system' });
+
+    expect(prisma.account.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          workspaceId: 'workspace-1',
+          isSystem: true,
+          assignedMemberId: null,
+          isActive: true,
+          deletedAt: null,
+        }),
+      }),
+    );
+  });
+
   it('archives instead of deleting an account so its financial history remains', async () => {
     workspaceService.resolveWorkspaceIdForUser.mockResolvedValue('workspace-1');
     prisma.account.findFirst.mockResolvedValue({

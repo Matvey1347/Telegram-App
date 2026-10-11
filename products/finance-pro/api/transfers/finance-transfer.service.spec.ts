@@ -87,6 +87,22 @@ describe('FinanceTransferService', () => {
     );
   });
 
+  it('records the entered destination amount without requesting a conversion rate', async () => {
+    const prisma: any = {
+      financeProfile: { findUnique: jest.fn().mockResolvedValue({ botIntegration: { workspaceId: 'workspace-1' } }) },
+      financeAccount: { findMany: jest.fn().mockResolvedValue([account('from', 'EUR'), account('to', 'USD')]) },
+      financeTransfer: { create: jest.fn().mockResolvedValue(row) },
+    };
+    const conversion = { getRateMetadata: jest.fn() };
+    await new FinanceTransferService(prisma, conversion as never).create('profile-1', {
+      fromAccountId: 'from', toAccountId: 'to', amount: '10', toAmount: '12.5', occurredAt: date.toISOString(),
+    });
+    expect(conversion.getRateMetadata).not.toHaveBeenCalled();
+    expect(prisma.financeTransfer.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ toAmount: new Prisma.Decimal('12.5'), exchangeRate: new Prisma.Decimal('1.25') }),
+    }));
+  });
+
   it('rejects self transfers before doing database work', async () => {
     const service = new FinanceTransferService({} as never, {} as never);
     await expect(

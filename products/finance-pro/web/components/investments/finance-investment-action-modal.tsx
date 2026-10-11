@@ -63,6 +63,7 @@ export function FinanceInvestmentActionModal({
   const t = financeInvestmentsCopy(locale);
   const eligible = accounts.filter((account) => !account.archivedAt);
   const [accountId, setAccountId] = useState(eligible[0]?.id ?? "");
+  const selectedAccount = eligible.find((account) => account.id === accountId);
   const [amount, setAmount] = useState("");
   const [value, setValue] = useState("");
   const [date, setDate] = useState(todayInputValue());
@@ -125,6 +126,7 @@ export function FinanceInvestmentActionModal({
             >
               <Input
                 inputMode="decimal"
+                suffix={selectedAccount?.currency}
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
                 placeholder={closing ? t.noFinalReturn : undefined}
@@ -132,12 +134,10 @@ export function FinanceInvestmentActionModal({
             </FormField>
           ) : null}
           {action === "VALUATION" ? (
-            <FormField
-              label={`${t.currentValue} (${investment.currency})`}
-              required
-            >
+            <FormField label={t.currentValue} required>
               <Input
                 inputMode="decimal"
+                suffix={investment.currency}
                 value={value}
                 onChange={(e) => setValue(e.target.value)}
               />

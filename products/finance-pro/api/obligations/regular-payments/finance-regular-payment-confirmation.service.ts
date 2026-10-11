@@ -50,19 +50,34 @@ export class FinanceRegularPaymentConfirmationService {
       select: {
         status: true,
         currency: true,
+        accountId: true,
         nextOccurrenceAt: true,
         version: true,
       },
     });
     if (!preflight)
       throw new NotFoundException('Finance regular payment not found');
-    const rates =
+    const canConfirm =
       preflight.status === 'ACTIVE' &&
       preflight.version === input.expectedVersion &&
-      preflight.nextOccurrenceAt.getTime() === expectedOccurrenceAt.getTime()
+      preflight.nextOccurrenceAt.getTime() === expectedOccurrenceAt.getTime();
+    const selectedAccount = canConfirm
+      ? await this.prisma.financeAccount.findFirst({
+          where: {
+            id: input.accountId ?? preflight.accountId,
+            profileId,
+            archivedAt: null,
+          },
+          select: { currency: true },
+        })
+      : null;
+    if (canConfirm && !selectedAccount)
+      throw new NotFoundException('Finance account not found');
+    const rates =
+      canConfirm && selectedAccount
         ? await this.ledger.prepareTransactionRateSource(profileContext, [
             {
-              currency: preflight.currency,
+              currency: selectedAccount.currency,
               occurredAt: now.toISOString(),
             },
           ])
@@ -105,13 +120,16 @@ export class FinanceRegularPaymentConfirmationService {
         if (!rates)
           throw new ConflictException('Regular payment occurrence has changed');
         const transactionInput = {
-          accountId: regularPayment.accountId,
-          categoryId: regularPayment.categoryId ?? undefined,
+          accountId: input.accountId ?? regularPayment.accountId,
+          categoryId:
+            input.categoryId === undefined
+              ? (regularPayment.categoryId ?? undefined)
+              : (input.categoryId ?? undefined),
           type: 'EXPENSE' as const,
           amount: paidAmount.toString(),
-          description: regularPayment.name,
-          necessity: regularPayment.necessity,
-          occurredAt: now.toISOString(),
+          description: input.description?.trim() || regularPayment.name,
+          necessity: input.necessity ?? regularPayment.necessity,
+          occurredAt: input.occurredAt ?? now.toISOString(),
         };
         const writeContext = await this.ledger.prepareTransactionWriteContext(
           tx,
@@ -157,7 +175,13 @@ export class FinanceRegularPaymentConfirmationService {
             version: regularPayment.version,
             nextOccurrenceAt: expectedOccurrenceAt,
           },
-          data: { nextOccurrenceAt, version: { increment: 1 } },
+          data: {
+            nextOccurrenceAt,
+            version: { increment: 1 },
+            ...(input.emoji === undefined
+              ? {}
+              : { emoji: input.emoji?.trim() || null }),
+          },
         });
         if (claimed.count !== 1)
           throw new ConflictException('Regular payment occurrence has changed');

@@ -8,7 +8,7 @@ export function BotRuntimeAvatar({
   type: TelegramBotApplicationType;
   avatarUrl?: string | null;
 }) {
-  const Icon = type === "GREETER" ? Handshake : type === "FINANCE" ? Wallet : Bot;
+  const Icon = type === "GREETER" ? Handshake : type === "FINANCE" || type === "SIMPLE_FINANCE" ? Wallet : Bot;
   const tone =
     type === "FINANCE"
       ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"

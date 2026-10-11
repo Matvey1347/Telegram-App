@@ -14,4 +14,20 @@ describe("ConsumerFinanceActionLauncher", () => {
     fireEvent.click(buttons[0]);
     expect(onAction).toHaveBeenCalledWith("expense");
   });
+
+  it("closes the compact action menu when the user clicks outside it", () => {
+    render(
+      <ConsumerFinanceActionLauncher
+        compact
+        copy={financeCoreCopy("ru")}
+        onAction={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Добавить операцию" }));
+    expect(screen.getByRole("button", { name: "Расход" })).toBeInTheDocument();
+
+    fireEvent.mouseDown(document.body);
+    expect(screen.queryByRole("button", { name: "Расход" })).not.toBeInTheDocument();
+  });
 });

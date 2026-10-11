@@ -128,6 +128,14 @@ export type ConsumerFinanceRegularPaymentConfirmInput = {
   /** Configuration/state guard captured when the occurrence was presented. */
   expectedVersion: number;
   amount?: string;
+  /** These changes apply only to this confirmed occurrence, not its schedule. */
+  accountId?: string;
+  categoryId?: string | null;
+  description?: string;
+  /** The payment icon belongs to the schedule and is updated with this confirmation. */
+  emoji?: string | null;
+  occurredAt?: string;
+  necessity?: ConsumerFinanceExpenseNecessity;
 };
 
 export type ConsumerFinanceRegularPaymentConfirmation = {

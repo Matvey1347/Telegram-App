@@ -168,6 +168,7 @@ export class AccountsService {
       deletedAt: null,
       isActive: scope !== 'archived',
       assignedMemberId,
+      ...(scope === 'system' ? { isSystem: true, assignedMemberId: null } : {}),
       OR: [{ assignedMemberId: null }, { assignedMember: { isHidden: false } }],
     };
     const pagination = normalizePagination(query);

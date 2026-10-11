@@ -27,6 +27,7 @@ describe('TelegramBotRuntimePresentationService', () => {
       botApi as never,
       greeter as never,
       finance as never,
+      {} as never,
     );
 
     await service.reconcile(
@@ -54,6 +55,7 @@ describe('TelegramBotRuntimePresentationService', () => {
     };
     const service = new TelegramBotRuntimePresentationService(
       botApi as never,
+      {} as never,
       {} as never,
       {} as never,
     );

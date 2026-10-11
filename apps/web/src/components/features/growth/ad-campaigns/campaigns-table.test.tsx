@@ -35,6 +35,31 @@ function renderTable(campaigns: AdCampaign[], showActions = false) {
 }
 
 describe("AdCampaignsTable admission view analytics", () => {
+  it("shows the latest streamed invite-link refresh progress beside the campaign action", () => {
+    renderWithProviders(
+      <AdCampaignsTable
+        campaigns={[campaign()]}
+        moneySettings={{ currencyDisplayMode: "code" }}
+        rates={[]}
+        showHypotheses={false}
+        refreshingInviteLinkCampaignId="campaign-1"
+        inviteLinkRefreshProgress={{
+          campaignId: "campaign-1",
+          current: 2,
+          total: 3,
+          item: {
+            telegramChannelId: "channel-1",
+            url: "https://t.me/+one",
+            status: "refreshed",
+            message: "Invite link refreshed",
+          },
+        }}
+      />,
+    );
+
+    expect(screen.getByText("2/3: updated")).toBeInTheDocument();
+  });
+
   it("opens the bot-request channel breakdown from the performance badge", async () => {
     const user = userEvent.setup();
     renderTable([

@@ -105,21 +105,21 @@ describe("FinanceTransferEditor", () => {
         <FinanceTransferEditor key={editing.id} {...props} editing={editing} />
       </QueryClientProvider>,
     );
-    expect(screen.getByDisplayValue("7")).toBeInTheDocument();
+    expect(screen.getAllByDisplayValue("7")).toHaveLength(2);
     expect(screen.getByDisplayValue("Move")).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "02.01.2026" }),
     ).toBeInTheDocument();
   });
 
-  it("excludes the source from destination choices and never asks for conversion inputs", () => {
+  it("excludes the source from destination choices and collects both transfer amounts", () => {
     renderEditor();
     fireEvent.click(screen.getByRole("button", { name: /add transfer/i }));
     fireEvent.click(screen.getByRole("button", { name: "Select account" }));
     expect(screen.getAllByRole("button", { name: /Cash.*USD/ })).toHaveLength(
       1,
     );
-    expect(screen.queryByText(/received amount/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/received amount/i)).toBeInTheDocument();
     expect(screen.queryByText(/^rate$/i)).not.toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: /save transfer/i }),

@@ -125,6 +125,14 @@ export const consumerFinanceLedgerApi = {
         consumerRequest(),
       )
     ).data,
+  restoreCategory: async (botId: string, id: string) =>
+    (
+      await consumerFinanceHttp.post<ConsumerFinanceCategory>(
+        `${consumerFinanceRoot(botId)}/categories/${id}/restore`,
+        undefined,
+        consumerRequest(),
+      )
+    ).data,
   transactions: async (botId: string, query: ConsumerFinanceHistoryQuery) =>
     (
       await consumerFinanceHttp.get<ConsumerFinanceHistoryPage>(

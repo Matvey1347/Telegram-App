@@ -27,6 +27,7 @@ export function FinanceTransferEditor({
   initiallyOpen,
   onClose,
   onSaved,
+  onCreateTransaction,
 }: {
   botId: string;
   accounts: ConsumerFinanceAccount[];
@@ -36,12 +37,14 @@ export function FinanceTransferEditor({
   initiallyOpen: boolean;
   onClose: () => void;
   onSaved: (item: ConsumerFinanceTransfer) => void;
+  onCreateTransaction?: () => void;
 }) {
   const t = financeTransfersCopy(locale);
   const [open, setOpen] = useState(initiallyOpen);
   const [fromAccountId, setFrom] = useState(editing?.fromAccountId ?? "");
   const [toAccountId, setTo] = useState(editing?.toAccountId ?? "");
   const [amount, setAmount] = useState(editing?.fromAmount ?? "");
+  const [toAmount, setToAmount] = useState(editing?.toAmount ?? "");
   const [description, setDescription] = useState(editing?.description ?? "");
   const [occurredAt, setOccurredAt] = useState(
     editing
@@ -68,6 +71,7 @@ export function FinanceTransferEditor({
         fromAccountId: fromAccountId || from?.id || "",
         toAccountId,
         amount,
+        ...(toAmount ? { toAmount } : {}),
         description: description.trim() || undefined,
         occurredAt: financeOccurredAtForDate(
           occurredAt,
@@ -95,6 +99,7 @@ export function FinanceTransferEditor({
           setFrom(accounts.find((item) => !item.archivedAt)?.id ?? "");
           setTo("");
           setAmount("");
+          setToAmount("");
           setDescription("");
           setOccurredAt(financeToday(timezone));
           setOpen(true);
@@ -114,7 +119,7 @@ export function FinanceTransferEditor({
         }}
         title={editing ? t.editTransfer : t.addTransfer}
       >
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-2 gap-3">
           <FormField label={t.fromAccount}>
             <Select
               uiLocale={locale}
@@ -141,7 +146,11 @@ export function FinanceTransferEditor({
             <Select
               uiLocale={locale}
               value={toAccountId}
-              onChange={(event) => setTo(event.target.value)}
+              onChange={(event) => {
+                setTo(event.target.value);
+                const destination = accounts.find((item) => item.id === event.target.value);
+                if (destination?.currency === from?.currency) setToAmount(amount);
+              }}
             >
               <option value="">{t.selectAccount}</option>
               {toOptions.map((item) => (
@@ -160,52 +169,65 @@ export function FinanceTransferEditor({
               ))}
             </Select>
           </FormField>
-          <FormField
-            label={`${t.sentAmount}${from ? ` (${from.currency})` : ""}`}
-          >
+          <FormField label={t.sentAmount} required>
             <Input
               inputMode="decimal"
+              suffix={from?.currency}
               value={amount}
-              onChange={(event) => setAmount(event.target.value)}
+              onChange={(event) => {
+                setAmount(event.target.value);
+                if (from && to && from.currency === to.currency)
+                  setToAmount(event.target.value);
+              }}
             />
           </FormField>
-          {from && to && from.currency !== to.currency ? (
-            <p className="text-xs text-neutral-400 sm:col-span-2">
-              {t.automaticConversion}
-            </p>
-          ) : null}
-          <FormField
-            label={t.date}
-            className={
-              from && to && from.currency !== to.currency
-                ? "sm:col-span-2"
-                : undefined
-            }
-          >
+          <FormField label={t.receivedAmount} required>
+            <Input
+              inputMode="decimal"
+              suffix={to?.currency}
+              disabled={!to}
+              value={toAmount}
+              onChange={(event) => setToAmount(event.target.value)}
+            />
+          </FormField>
+          <FormField label={t.date}>
             <DateInput
               lang={locale}
               value={occurredAt}
               onChange={(event) => setOccurredAt(event.target.value)}
             />
           </FormField>
-          <FormField label={t.description} className="sm:col-span-2">
+          <FormField label={t.description}>
             <Input
               value={description}
               onChange={(event) => setDescription(event.target.value)}
             />
           </FormField>
           {same ? (
-            <p className="text-sm text-rose-300 sm:col-span-2">
+            <p className="text-sm text-rose-300 col-span-2">
               {t.sameAccountError}
             </p>
           ) : null}
+          {onCreateTransaction ? (
+            <Button
+              variant="secondary"
+              className="col-span-2"
+              onClick={() => {
+                setOpen(false);
+                onCreateTransaction();
+              }}
+            >
+              {t.switchToTransaction}
+            </Button>
+          ) : null}
           <Button
-            className="w-full sm:col-span-2"
+            className="w-full col-span-2"
             disabled={
               !from ||
               !to ||
               same ||
               Number(amount) <= 0 ||
+              Number(toAmount) <= 0 ||
               !occurredAt ||
               mutation.isPending
             }
@@ -214,7 +236,7 @@ export function FinanceTransferEditor({
             {mutation.isPending ? t.saving : t.saveTransfer}
           </Button>
           {mutation.isError ? (
-            <p className="text-sm text-rose-300 sm:col-span-2">
+            <p className="text-sm text-rose-300 col-span-2">
               {t.transferSaveError}
             </p>
           ) : null}

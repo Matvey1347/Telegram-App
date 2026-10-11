@@ -45,7 +45,7 @@ export type TransactionQuery = {
 
 export type AccountQuery = {
   assignedMemberId?: string;
-  scope?: "mine" | "all" | "archived";
+  scope?: "mine" | "system" | "all" | "archived";
 };
 
 export type TransferQuery = {

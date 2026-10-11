@@ -363,6 +363,49 @@ describe('FinanceCoreService consumer read models', () => {
     );
   });
 
+  it('restores an archived category within its own profile', async () => {
+    const restored = {
+      id: 'category',
+      parentId: null,
+      name: 'Dining',
+      emoji: '🍽️',
+      key: null,
+      type: 'EXPENSE',
+      necessity: 'DISCRETIONARY',
+      archivedAt: null,
+    };
+    const prisma: any = {
+      financeCategory: {
+        findFirst: jest.fn().mockResolvedValue({ id: 'category' }),
+        update: jest.fn().mockResolvedValue(restored),
+      },
+    };
+
+    await expect(
+      new FinanceCoreService(prisma).restoreCategory('profile', 'category'),
+    ).resolves.toMatchObject({ id: 'category', archivedAt: null });
+    expect(prisma.financeCategory.findFirst).toHaveBeenCalledWith({
+      where: { id: 'category', profileId: 'profile', archivedAt: { not: null } },
+      select: { id: true },
+    });
+    expect(prisma.financeCategory.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'category' },
+        data: { archivedAt: null },
+      }),
+    );
+  });
+
+  it('does not restore an active or foreign category', async () => {
+    const prisma: any = {
+      financeCategory: { findFirst: jest.fn().mockResolvedValue(null) },
+    };
+
+    await expect(
+      new FinanceCoreService(prisma).restoreCategory('profile', 'category'),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
   it('applies an expense category necessity to its existing ordinary expenses', async () => {
     const tx = {
       financeCategory: {

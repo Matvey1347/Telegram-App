@@ -197,7 +197,7 @@ describe('MemberFinanceReadService', () => {
     );
   });
 
-  it('divides all earned revenue by the current visible investor shares', async () => {
+  it('divides each revenue entry by the investor capital available on that date', async () => {
     prisma.telegramAdSalePayment.findMany.mockResolvedValue([]);
     prisma.memberCompensationSettlement.findMany.mockResolvedValue([]);
     prisma.investment.findMany.mockResolvedValue([
@@ -253,8 +253,70 @@ describe('MemberFinanceReadService', () => {
 
     const rows = await service.summaryRows('workspace-1');
 
-    expect(rows.byMember.get('m1')?.investorEarnings).toBe(146.67);
-    expect(rows.byMember.get('m2')?.investorEarnings).toBe(73.33);
+    expect(rows.byMember.get('m1')?.investorEarnings).toBe(130);
+    expect(rows.byMember.get('m2')?.investorEarnings).toBe(90);
+  });
+
+  it('does not backdate automatic profit shares to an investor added today', async () => {
+    prisma.telegramAdSalePayment.findMany.mockResolvedValue([]);
+    prisma.memberCompensationSettlement.findMany.mockResolvedValue([]);
+    prisma.investment.findMany.mockResolvedValue([
+      {
+        id: 'existing-investor',
+        workspaceMemberId: 'existing',
+        origin: 'EXTERNAL',
+        movementType: 'CONTRIBUTION',
+        amountInPrimaryCurrency: 100,
+        date: new Date('2026-10-01T00:00:00.000Z'),
+      },
+      {
+        id: 'new-investor',
+        workspaceMemberId: 'new',
+        origin: 'EXTERNAL',
+        movementType: 'CONTRIBUTION',
+        amountInPrimaryCurrency: 100,
+        date: new Date('2026-10-11T00:00:00.000Z'),
+      },
+    ]);
+    prisma.transaction.findMany.mockResolvedValue([
+      {
+        id: 'income-october-8',
+        type: 'income',
+        date: new Date('2026-10-08T12:00:00.000Z'),
+        amountInPrimaryCurrency: 80,
+        category: 'Ad Sales',
+        categoryRef: { key: 'channel_advertising_revenue' },
+        telegramAdSalePayment: null,
+      },
+      {
+        id: 'income-october-11',
+        type: 'income',
+        date: new Date('2026-10-11T12:00:00.000Z'),
+        amountInPrimaryCurrency: 20,
+        category: 'Ad Sales',
+        categoryRef: { key: 'channel_advertising_revenue' },
+        telegramAdSalePayment: null,
+      },
+    ]);
+    prisma.workspaceMember.findMany.mockResolvedValue([
+      { id: 'existing' },
+      { id: 'new' },
+    ]);
+
+    const rows = await service.summaryRows('workspace-1');
+
+    expect(rows.byMember.get('new')?.investorEarnings).toBe(10);
+    expect(rows.automaticReinvestmentsByMember.get('new')).toEqual([
+      expect.objectContaining({
+        id: 'reinvestment:income-october-11',
+        amount: 10,
+      }),
+    ]);
+    expect(rows.automaticReinvestmentsByMember.get('new')).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'reinvestment:income-october-8' }),
+      ]),
+    );
   });
 
   it('does not distribute profit to members with hidden finance', async () => {
@@ -356,7 +418,7 @@ describe('MemberFinanceReadService', () => {
     expect(rows.automaticReinvestmentsByMember.get('m1')).toEqual([
       expect.objectContaining({
         id: 'reinvestment:channel-income',
-        amount: expect.closeTo(2424.51458, 5),
+        amount: 2424.51,
         title: 'Channel revenue',
       }),
     ]);

@@ -42,6 +42,7 @@ import { currenciesApi } from "@/lib/api";
 import { adCampaignKeys, telegramChannelKeys } from "@/lib/query-keys";
 import { MoneyStack } from "@/components/ui/money-stack";
 import { useAdCampaignMutations } from "@/components/features/growth/ad-campaigns/use-ad-campaign-mutations";
+import { useCampaignInviteLinkRefresh } from "@/components/features/growth/ad-campaigns/use-campaign-invite-link-refresh";
 import {
   Button,
   Card,
@@ -330,29 +331,7 @@ function AdCampaignsPage({
         "error",
       ),
   });
-  const refreshCampaignInviteLinksMutation = useMutation({
-    mutationFn: (campaign: AdCampaign) =>
-      adCampaignsApi.refreshInviteLinkData(campaign.id),
-    onSuccess: async (result) => {
-      await Promise.all([
-        qc.invalidateQueries({ queryKey: adCampaignKeys.list() }),
-        qc.invalidateQueries({ queryKey: adCampaignKeys.performance() }),
-        qc.invalidateQueries({ queryKey: telegramChannelKeys.lists() }),
-      ]);
-      const failed = result.failedLinks.length;
-      pushToast(
-        failed
-          ? `Updated ${result.refreshedLinks} of ${result.totalLinks} invite links. ${failed} failed: ${result.failedLinks[0]?.message ?? "check Telegram access"}`
-          : `Updated ${result.refreshedLinks} of ${result.totalLinks} invite links.`,
-        failed ? "info" : "success",
-      );
-    },
-    onError: (error) =>
-      pushToast(
-        getErrorMessage(error, "Failed to refresh invite-link data."),
-        "error",
-      ),
-  });
+  const campaignInviteLinkRefresh = useCampaignInviteLinkRefresh();
   const createHypothesisMutation = useMutation({
     mutationFn: adHypothesesApi.create,
     onSuccess: () => {
@@ -579,13 +558,12 @@ function AdCampaignsPage({
             excludeMutation.mutate({ id: campaign.id, excludeFromAnalytics })
           }
           onRefreshInviteLinks={(campaign) =>
-            refreshCampaignInviteLinksMutation.mutate(campaign)
+            campaignInviteLinkRefresh.refreshInviteLinks(campaign)
           }
           refreshingInviteLinkCampaignId={
-            refreshCampaignInviteLinksMutation.isPending
-              ? (refreshCampaignInviteLinksMutation.variables?.id ?? null)
-              : null
+            campaignInviteLinkRefresh.refreshingCampaignId ?? null
           }
+          inviteLinkRefreshProgress={campaignInviteLinkRefresh.progress}
           onOpenPromo={async (promo) => {
             try {
               setPreviewPromo(await promosApi.get(promo.id));

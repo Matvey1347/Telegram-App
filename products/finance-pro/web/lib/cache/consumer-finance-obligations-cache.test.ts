@@ -9,6 +9,7 @@ import type {
 } from "@telegram-system/shared";
 import {
   reconcileConsumerDebtPages,
+  removeConsumerDebtFromPages,
   reconcileConsumerRegularPaymentPages,
 } from "@finance-pro/web/lib/cache/consumer-finance-obligations-cache";
 import { consumerFinanceKeys } from "@finance-pro/web/lib/query/consumer-finance-query-keys";
@@ -82,6 +83,30 @@ describe("Consumer Finance obligation page caches", () => {
       client.getQueryData<InfiniteData<ConsumerFinanceDebtPage>>(settledKey)
         ?.pages[0]?.items[0]?.status,
     ).toBe("SETTLED");
+  });
+
+  it("removes a deleted debt from every cached debt list", () => {
+    const client = new QueryClient();
+    const openKey = consumerFinanceKeys.debts("bot", { status: "OPEN" });
+    const detailKey = consumerFinanceKeys.debts("bot", { id: debt.id, limit: 1 });
+    client.setQueryData<InfiniteData<ConsumerFinanceDebtPage>>(openKey, {
+      pages: [{ items: [debt], nextCursor: null }],
+      pageParams: [undefined],
+    });
+    client.setQueryData<ConsumerFinanceDebtPage>(detailKey, {
+      items: [debt],
+      nextCursor: null,
+    });
+
+    removeConsumerDebtFromPages(client, "bot", debt.id);
+
+    expect(
+      client.getQueryData<InfiniteData<ConsumerFinanceDebtPage>>(openKey)
+        ?.pages[0]?.items,
+    ).toEqual([]);
+    expect(
+      client.getQueryData<ConsumerFinanceDebtPage>(detailKey)?.items,
+    ).toEqual([]);
   });
 
   it("moves status tabs without touching a revision query", () => {

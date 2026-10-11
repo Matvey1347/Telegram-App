@@ -226,6 +226,7 @@ export function FinanceAccountEditor({
               <FormField label={t.openingBalance}>
                 <Input
                   inputMode="decimal"
+                  suffix={currency}
                   value={openingBalance}
                   onChange={(event) => setOpeningBalance(event.target.value)}
                 />

@@ -17,6 +17,9 @@ const copy = {
     archivedCategories: "Archived categories",
     archivedCategoriesHelp:
       "Archived categories remain attached to historical transactions.",
+    active: "Active",
+    archived: "Archived",
+    restoreCategory: "Restore category",
     legacyCategories: "Legacy categories",
     legacyCategoriesHelp:
       "These categories have an unavailable or invalid parent and are shown safely.",
@@ -45,6 +48,9 @@ const copy = {
     archivedCategories: "Архівні категорії",
     archivedCategoriesHelp:
       "Архівні категорії залишаються у вже створених операціях.",
+    active: "Активні",
+    archived: "Архівні",
+    restoreCategory: "Відновити категорію",
     legacyCategories: "Застарілі категорії",
     legacyCategoriesHelp:
       "Ці категорії мають недоступну або некоректну батьківську категорію.",
@@ -71,6 +77,9 @@ const copy = {
     archivedCategories: "Архивные категории",
     archivedCategoriesHelp:
       "Архивные категории остаются в уже созданных операциях.",
+    active: "Активные",
+    archived: "Архивные",
+    restoreCategory: "Восстановить категорию",
     legacyCategories: "Устаревшие категории",
     legacyCategoriesHelp:
       "У этих категорий недоступная или некорректная родительская категория.",

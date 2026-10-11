@@ -65,8 +65,9 @@ export class UpdateAccountDto {
 
 export class AccountQueryDto extends PaginationQueryDto {
   @IsOptional() @IsString() assignedMemberId?: string;
-  @IsOptional() @IsIn(['mine', 'all', 'archived']) scope?:
+  @IsOptional() @IsIn(['mine', 'system', 'all', 'archived']) scope?:
     | 'mine'
+    | 'system'
     | 'all'
     | 'archived';
 }

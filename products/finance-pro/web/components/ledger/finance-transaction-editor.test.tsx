@@ -24,7 +24,7 @@ beforeEach(() => vi.clearAllMocks());
 describe("FinanceTransactionEditor", () => {
   it("opens the transaction type requested by the global launcher", () => {
     const client = new QueryClient();
-    render(
+    const view = render(
       <QueryClientProvider client={client}>
         <FinanceTransactionEditor
           botId="bot"
@@ -51,16 +51,18 @@ describe("FinanceTransactionEditor", () => {
       </QueryClientProvider>,
     );
     expect(screen.getByDisplayValue("INCOME")).toBeInTheDocument();
+    expect(view.container.querySelector(".lucide-arrow-up")).toHaveClass(
+      "text-sky-300",
+    );
+    expect(
+      view.container.querySelector("[data-select-trigger-label]"),
+    ).toHaveClass("text-white");
     expect(
       screen.queryByRole("button", { name: "Add expense" }),
     ).not.toBeInTheDocument();
   });
 
-  it.each([
-    ["Transfers", "transfer"],
-    ["Debts", "debt"],
-    ["Investments", "investment"],
-  ] as const)(
+  it.each([["Transfers", "transfer"]] as const)(
     "routes the %s operation to its dedicated editor without creating a basic transaction",
     (label, action) => {
       const client = new QueryClient();
@@ -94,8 +96,8 @@ describe("FinanceTransactionEditor", () => {
         </QueryClientProvider>,
       );
 
-      fireEvent.click(screen.getByRole("button", { name: "Expense" }));
-      fireEvent.click(screen.getByRole("option", { name: label }));
+      fireEvent.click(screen.getByRole("button", { name: /Expense/ }));
+      fireEvent.click(screen.getByRole("option", { name: new RegExp(label, "i") }));
 
       expect(onClose).toHaveBeenCalledOnce();
       expect(onSpecialAction).toHaveBeenCalledWith(action);
@@ -222,7 +224,7 @@ describe("FinanceTransactionEditor", () => {
     expect(onSaved).toHaveBeenCalledWith(created);
   });
 
-  it("persists cash movement separately from the user's economic share", async () => {
+  it("records an ordinary expense without an opaque analytics-share field", async () => {
     const created: ConsumerFinanceTransaction = {
       id: "shared-bill",
       accountId: "a",
@@ -266,10 +268,13 @@ describe("FinanceTransactionEditor", () => {
       'input[inputmode="decimal"]',
     );
     fireEvent.change(moneyInputs[0]!, { target: { value: "100" } });
-    fireEvent.change(moneyInputs[1]!, { target: { value: "25" } });
     expect(
       screen.getByRole("switch", { name: "Required expense" }),
     ).toHaveAttribute("aria-checked", "false");
+    fireEvent.click(screen.getByRole("switch", { name: "Required expense" }));
+    expect(
+      screen.getByRole("switch", { name: "Required expense" }),
+    ).toHaveAttribute("aria-checked", "true");
     fireEvent.click(screen.getByRole("button", { name: "Save transaction" }));
 
     await waitFor(() =>
@@ -277,8 +282,7 @@ describe("FinanceTransactionEditor", () => {
         "bot",
         expect.objectContaining({
           amount: "100",
-          economicAmount: "25",
-          necessity: "DISCRETIONARY",
+          necessity: "REQUIRED",
         }),
       ),
     );
@@ -332,29 +336,39 @@ describe("FinanceTransactionEditor", () => {
         />
       </QueryClientProvider>,
     );
-    fireEvent.click(screen.getByRole("button", { name: "My expense" }));
+    fireEvent.click(screen.getByRole("button", { name: /My expense/ }));
     fireEvent.click(
-      screen.getByRole("option", { name: "Shared expense with repayments" }),
+      screen.getByRole("option", { name: /Shared expense with repayments/ }),
+    );
+    expect(screen.getByText(/^The full payment changes/).parentElement).toHaveClass(
+      "col-span-2",
     );
     const moneyInputs = view.container.querySelectorAll(
       'input[inputmode="decimal"]',
     );
     fireEvent.change(moneyInputs[0]!, { target: { value: "100" } });
-    fireEvent.change(
-      view.container.querySelector('input[placeholder="100"]')!,
-      {
-        target: { value: "25" },
-      },
-    );
     fireEvent.change(screen.getByLabelText("Person"), {
       target: { value: "Ana" },
     });
     fireEvent.change(screen.getByLabelText("Owes"), {
-      target: { value: "75" },
+      target: { value: "75,0" },
     });
+    expect(screen.getByLabelText("Owes")).toHaveValue("75.0");
     expect(screen.getByText(/^Allocated:/)).toHaveTextContent(
-      "100.00 / 100.00 PLN",
+      "75.00 / 100.00 PLN",
     );
+    expect(
+      screen.queryByRole("button", { name: "Remove" }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Add person" }));
+    expect(screen.getAllByRole("button", { name: "Remove" })).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "Remove" })).toHaveClass(
+      "bg-red-600",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Remove" }));
+    expect(
+      screen.queryByRole("button", { name: "Remove" }),
+    ).not.toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Save transaction" }),
     ).toBeEnabled();
@@ -369,7 +383,7 @@ describe("FinanceTransactionEditor", () => {
           amount: "100",
           ownShare: "25",
           participants: [
-            expect.objectContaining({ name: "Ana", amount: "75" }),
+            expect.objectContaining({ name: "Ana", amount: "75.0" }),
           ],
         }),
       ),

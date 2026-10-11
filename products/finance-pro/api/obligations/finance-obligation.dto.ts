@@ -107,6 +107,14 @@ export class FinanceRegularPaymentConfirmDto {
   @IsDateString() expectedOccurrenceAt!: string;
   @Type(() => Number) @IsInt() @Min(1) expectedVersion!: number;
   @IsOptional() @IsNumberString() amount?: string;
+  @IsOptional() @IsString() accountId?: string;
+  @IsOptional() @IsString() categoryId?: string | null;
+  @IsOptional() @IsString() @MaxLength(240) description?: string;
+  @IsOptional() @IsString() @MaxLength(2048) emoji?: string | null;
+  @IsOptional() @IsDateString() occurredAt?: string;
+  @IsOptional()
+  @IsIn(['UNSPECIFIED', 'REQUIRED', 'DISCRETIONARY'])
+  necessity?: 'UNSPECIFIED' | 'REQUIRED' | 'DISCRETIONARY';
 }
 
 export class FinanceApplyOccurrenceAmountDto {

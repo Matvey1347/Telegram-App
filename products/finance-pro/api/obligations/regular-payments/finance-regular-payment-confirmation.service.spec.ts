@@ -112,10 +112,12 @@ describe('FinanceRegularPaymentConfirmationService', () => {
           findFirst: jest.fn().mockResolvedValue({
             status: 'ACTIVE',
             currency: 'USD',
+            accountId: account.id,
             nextOccurrenceAt: expected,
             version: 3,
           }),
         },
+        financeAccount: { findFirst: jest.fn().mockResolvedValue(account) },
         $transaction: jest.fn((callback) => callback(tx)),
       };
       const rates = { resolve: jest.fn() };
@@ -203,6 +205,67 @@ describe('FinanceRegularPaymentConfirmationService', () => {
       );
     },
   );
+
+  it('uses occurrence-only transaction overrides without changing the regular payment', async () => {
+    const alternativeAccount = { ...account, id: 'account-2', currency: 'EUR' };
+    const current = regular();
+    const advanced = regular({ version: 4 });
+    const tx = {
+      financeRecurringPayment: {
+        findFirst: jest.fn().mockResolvedValue(current),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        findUniqueOrThrow: jest.fn().mockResolvedValue(advanced),
+      },
+      financeRecurringPaymentOccurrence: {
+        create: jest.fn().mockResolvedValue(occurrence({ paidAmount: new Prisma.Decimal(1250) })),
+      },
+      financeProfile: { findUnique: jest.fn().mockResolvedValue(obligationProfile) },
+    };
+    const prisma = {
+      financeRecurringPayment: {
+        findFirst: jest.fn().mockResolvedValue({
+          status: 'ACTIVE', currency: 'USD', accountId: account.id,
+          nextOccurrenceAt: expected, version: 3,
+        }),
+      },
+      financeAccount: { findFirst: jest.fn().mockResolvedValue(alternativeAccount) },
+      $transaction: jest.fn((callback) => callback(tx)),
+    };
+    const rates = { resolve: jest.fn() };
+    const writeContext = { accounts: new Map(), categories: new Map(), rates };
+    const ledger = {
+      profileContext: jest.fn().mockResolvedValue(profileContext),
+      prepareTransactionRateSource: jest.fn().mockResolvedValue(rates),
+      prepareTransactionWriteContext: jest.fn().mockResolvedValue(writeContext),
+      createTransactionInTransaction: jest.fn().mockResolvedValue({ id: 'transaction-1' }),
+    };
+    const service = new FinanceRegularPaymentConfirmationService(
+      prisma as never, ledger as never,
+      { replace: jest.fn().mockResolvedValue({ scheduledAt: null }), reschedule: jest.fn() } as never,
+    );
+
+    await service.confirm('profile-1', 'regular-1', {
+      expectedOccurrenceAt: expected.toISOString(), expectedVersion: 3,
+      amount: '1250', accountId: alternativeAccount.id, categoryId: null,
+      description: 'Paid from another account', occurredAt: '2026-08-31T10:00:00.000Z',
+    });
+
+    expect(ledger.prepareTransactionRateSource).toHaveBeenCalledWith(
+      profileContext,
+      [expect.objectContaining({ currency: 'EUR' })],
+    );
+    expect(ledger.createTransactionInTransaction).toHaveBeenCalledWith(
+      tx, profileContext,
+      expect.objectContaining({
+        accountId: alternativeAccount.id, categoryId: undefined, amount: '1250',
+        description: 'Paid from another account', occurredAt: '2026-08-31T10:00:00.000Z',
+      }),
+      'MINI_APP', undefined, writeContext, { suppressMerchantMapping: true },
+    );
+    expect(tx.financeRecurringPayment.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ version: { increment: 1 } }) }),
+    );
+  });
 
   it('returns the original confirmation on a repeated exact occurrence without advancing again', async () => {
     const advanced = regular({
