@@ -1,6 +1,55 @@
 import { TelegramManagedPostReconciliationService } from './telegram-managed-post-reconciliation.service';
 
 describe('TelegramManagedPostReconciliationService local delivery', () => {
+  it('does not let a stalled identity check block the next local delivery wake', async () => {
+    const identity = {
+      reconcilePendingWorkspaces: jest.fn(
+        () => new Promise(() => undefined),
+      ),
+    };
+    const prisma = {
+      telegramManagedPost: { findMany: jest.fn().mockResolvedValue([]) },
+    };
+    const access = {
+      isProductionDeliveryRuntime: jest.fn().mockReturnValue(true),
+    };
+    const publication = { publishManagedPost: jest.fn() };
+    const service = new TelegramManagedPostReconciliationService(
+      prisma as never,
+      {} as never,
+      identity as never,
+      {} as never,
+      access as never,
+      {} as never,
+      {} as never,
+      publication as never,
+      {} as never,
+    );
+    jest
+      .spyOn(
+        service as unknown as {
+          deleteDueManagedPosts: () => Promise<{
+            considered: number;
+            deleted: number;
+            failed: number;
+          }>;
+        },
+        'deleteDueManagedPosts',
+      )
+      .mockResolvedValue({ considered: 0, deleted: 0, failed: 0 });
+
+    await expect(
+      service.reconcileAllDueManagedPosts({ identityTimeoutMs: 0 }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        checked: 0,
+        verified: 0,
+        missing: 0,
+        localDelivery: { considered: 0, published: 0, failed: 0 },
+      }),
+    );
+  });
+
   it('continues after one due post fails and reports the observable result', async () => {
     const duePosts = [
       { id: 'broken', workspaceId: 'workspace', telegramChannelId: 'channel' },

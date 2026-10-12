@@ -12,6 +12,8 @@ import { TelegramManagedPostRemoteDeletionService } from './telegram-managed-pos
 import { MANAGED_POST_LOCAL_PUBLISHING_STALE_MS } from '../../operations/scheduled-tasks/due-work-predicates';
 import { managedPostNotFound } from './telegram-posts.errors';
 
+const IDENTITY_RECONCILIATION_TIMEOUT_MS = 45_000;
+
 @Injectable()
 export class TelegramManagedPostReconciliationService {
   constructor(
@@ -64,13 +66,45 @@ export class TelegramManagedPostReconciliationService {
     return this.reconcileManagedPostIdentities({ workspaceId, channelId });
   }
 
-  async reconcileAllDueManagedPosts() {
+  async reconcileAllDueManagedPosts(options?: {
+    identityTimeoutMs?: number;
+  }) {
     const localDelivery = await this.publishDueLocallyScheduledManagedPosts();
-    const identity = await this.identityService.reconcilePendingWorkspaces(
-      (workspaceId) => this.reconcileDueManagedPosts(workspaceId),
+    const identity = await this.reconcilePendingIdentitiesWithin(
+      options?.identityTimeoutMs ?? IDENTITY_RECONCILIATION_TIMEOUT_MS,
     );
     const autoDeletion = await this.deleteDueManagedPosts();
     return { ...identity, localDelivery, autoDeletion };
+  }
+
+  /**
+   * MTProto calls can occasionally stall at the transport layer. Identity
+   * reconciliation is recoverable on the next due wake, whereas holding this
+   * worker would also prevent locally scheduled Bot API posts from publishing.
+   * The outstanding reconciliation keeps its per-post claim, so a later wake
+   * does not duplicate that remote check.
+   */
+  private async reconcilePendingIdentitiesWithin(timeoutMs: number) {
+    const reconciliation = this.identityService.reconcilePendingWorkspaces(
+      (workspaceId) => this.reconcileDueManagedPosts(workspaceId),
+    );
+    let timeout: NodeJS.Timeout | undefined;
+    try {
+      return await Promise.race([
+        reconciliation,
+        new Promise<{ checked: number; verified: number; missing: number }>(
+          (resolve) => {
+            timeout = setTimeout(
+              () => resolve({ checked: 0, verified: 0, missing: 0 }),
+              Math.max(0, timeoutMs),
+            );
+            timeout.unref?.();
+          },
+        ),
+      ]);
+    } finally {
+      if (timeout) clearTimeout(timeout);
+    }
   }
 
   private async deleteDueManagedPosts() {
