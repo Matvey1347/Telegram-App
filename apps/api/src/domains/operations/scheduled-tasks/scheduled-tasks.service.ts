@@ -31,6 +31,7 @@ import { ScheduledTaskAutomaticEligibility } from './scheduled-task-automatic-el
 import { scheduledTaskWakeNotifier } from '../../../common/scheduled-task-wake-notifier';
 import { ScheduledTaskWakeTimer } from './scheduled-task-wake-timer';
 import { ScheduledTaskDomainDueResolverService } from './scheduled-task-domain-due-resolver.service';
+import { isLocalTelegramBotRuntime } from '../../../config/deployment-config';
 
 const SCHEDULER_RECOVERY_BACKOFF_MS = 30_000;
 
@@ -62,6 +63,16 @@ export class ScheduledTasksService
   }
 
   async onModuleInit() {
+    // `pnpm dev:local-bot` may intentionally use the shared development
+    // database to exercise local bot webhooks. Do not let that API process
+    // claim automatic jobs as well: they can use persisted MTProto sessions
+    // from a second host and cause Telegram to revoke their auth key.
+    if (isLocalTelegramBotRuntime()) {
+      this.logger.log(
+        'Automatic scheduled tasks are disabled in the LOCAL bot runtime',
+      );
+      return;
+    }
     await this.materializeSystemDefaults();
     await this.refreshDueDrivenTasks();
     await this.automaticEligibility.recover();
@@ -80,6 +91,7 @@ export class ScheduledTasksService
    * discover that nothing has changed.
    */
   async tick() {
+    if (isLocalTelegramBotRuntime()) return;
     const attemptedDueDriven = new Set<string>();
     let tickFailed = false;
     try {
@@ -327,9 +339,11 @@ export class ScheduledTasksService
     await this.dueSchedule.refresh(taskKey, attempted);
   }
   private async scheduleNextWake() {
+    if (isLocalTelegramBotRuntime()) return;
     await this.wakeTimer.scheduleNext();
   }
   private armRecoveryWake() {
+    if (isLocalTelegramBotRuntime()) return;
     this.wakeTimer.armRecovery(SCHEDULER_RECOVERY_BACKOFF_MS);
   }
 

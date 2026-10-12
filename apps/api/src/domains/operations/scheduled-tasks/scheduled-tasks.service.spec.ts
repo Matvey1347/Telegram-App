@@ -199,6 +199,44 @@ describe('ScheduledTasksService', () => {
     expect(prisma.scheduledTaskRun.findMany).not.toHaveBeenCalled();
   });
 
+  it('does not start automatic task processing in the LOCAL bot runtime', async () => {
+    const previousRuntime = process.env.TELEGRAM_BOT_RUNTIME_ENVIRONMENT;
+    process.env.TELEGRAM_BOT_RUNTIME_ENVIRONMENT = 'LOCAL';
+    try {
+      const { service, prisma } = setup();
+
+      await service.onModuleInit();
+
+      expect(prisma.scheduledTaskConfig.upsert).not.toHaveBeenCalled();
+      expect(prisma.scheduledTaskConfig.findFirst).not.toHaveBeenCalled();
+    } finally {
+      if (previousRuntime === undefined) {
+        delete process.env.TELEGRAM_BOT_RUNTIME_ENVIRONMENT;
+      } else {
+        process.env.TELEGRAM_BOT_RUNTIME_ENVIRONMENT = previousRuntime;
+      }
+    }
+  });
+
+  it('does not execute a due task when a LOCAL runtime is invoked directly', async () => {
+    const previousRuntime = process.env.TELEGRAM_BOT_RUNTIME_ENVIRONMENT;
+    process.env.TELEGRAM_BOT_RUNTIME_ENVIRONMENT = 'LOCAL';
+    try {
+      const { service, prisma, runner } = setup();
+
+      await service.tick();
+
+      expect(prisma.scheduledTaskConfig.findMany).not.toHaveBeenCalled();
+      expect(runner.executeScheduledOccurrence).not.toHaveBeenCalled();
+    } finally {
+      if (previousRuntime === undefined) {
+        delete process.env.TELEGRAM_BOT_RUNTIME_ENVIRONMENT;
+      } else {
+        process.env.TELEGRAM_BOT_RUNTIME_ENVIRONMENT = previousRuntime;
+      }
+    }
+  });
+
   it('rearms the next due timer after a configuration change', async () => {
     const { service, prisma } = setup({ enabled: false });
     await service.updateForMembership(

@@ -76,6 +76,18 @@ export function telegramBotRuntimeEnvironmentName(
   return nonBlank(environment.TELEGRAM_BOT_RUNTIME_ENVIRONMENT)?.toUpperCase();
 }
 
+/**
+ * A local Bot API runtime can share a development database, but must never
+ * become a second background worker for user-owned MTProto sessions stored in
+ * a production database. Those sessions are bound to a Telegram auth key and
+ * Telegram revokes the key when two hosts use it concurrently.
+ */
+export function isLocalTelegramBotRuntime(
+  environment: DeploymentEnvironment = process.env,
+) {
+  return telegramBotRuntimeEnvironmentName(environment) === 'LOCAL';
+}
+
 export function deploymentFlag(
   key:
     | 'APP_LOG_HTTP_ENABLED'
