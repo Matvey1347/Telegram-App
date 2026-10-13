@@ -1,5 +1,12 @@
 import { spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { railwayPublicEnvironment } from "./public-origin-environment.mjs";
+import {
+  RAILWAY_MEMORY_SAMPLE_INTERVAL_MS,
+  RAILWAY_MEMORY_SAMPLE_REQUEST,
+  RAILWAY_MEMORY_SAMPLE_RESPONSE,
+  takeRailwayMemorySnapshot,
+} from "./railway-memory-diagnostics.mjs";
 
 const publicPort = process.env.PORT || "3000";
 const internalApiPort = "4000";
@@ -8,19 +15,65 @@ const publicDeployment = railwayPublicEnvironment(
   process.env,
 );
 const publicOrigin = publicDeployment?.publicOrigin;
-const children = new Set();
+const children = new Map();
 let stopping = false;
+let memoryTimer;
 
 const API_READY_TIMEOUT_MS = 60_000;
 const API_READY_RETRY_MS = 500;
 
-function start(name, command, args, env) {
+function logMemory(sample) {
+  process.stdout.write(
+    `[railway-memory] ${JSON.stringify({ event: "process_memory_sample", ...sample })}\n`,
+  );
+}
+
+function requestChildMemory(child) {
+  if (!child.connected || child.exitCode !== null) return;
+  try {
+    child.send({
+      type: RAILWAY_MEMORY_SAMPLE_REQUEST,
+      requestId: randomUUID(),
+    }, () => {});
+  } catch {
+    // The child may exit between the connection check and IPC send.
+  }
+}
+
+function sampleMemory() {
+  logMemory(takeRailwayMemorySnapshot("supervisor"));
+  for (const child of children.keys()) requestChildMemory(child);
+}
+
+function startMemoryDiagnostics() {
+  sampleMemory();
+  memoryTimer = setInterval(sampleMemory, RAILWAY_MEMORY_SAMPLE_INTERVAL_MS);
+  memoryTimer.unref();
+}
+
+function stopMemoryDiagnostics() {
+  if (memoryTimer) clearInterval(memoryTimer);
+  memoryTimer = undefined;
+}
+
+function start(name, command, args, env, processType) {
   const child = spawn(command, args, {
     cwd: process.cwd(),
     env: { ...process.env, ...env },
-    stdio: "inherit",
+    stdio: ["inherit", "inherit", "inherit", "ipc"],
   });
-  children.add(child);
+  children.set(child, { name, processType });
+  child.on("message", (message) => {
+    const registered = children.get(child);
+    if (
+      !registered ||
+      message?.type !== RAILWAY_MEMORY_SAMPLE_RESPONSE ||
+      message?.sample?.processType !== registered.processType
+    ) {
+      return;
+    }
+    logMemory(message.sample);
+  });
   child.once("exit", (code, signal) => {
     children.delete(child);
     if (stopping) return;
@@ -43,15 +96,16 @@ function terminate(child) {
 async function stop(exitCode = 0) {
   if (stopping) return;
   stopping = true;
-  for (const child of children) terminate(child);
+  stopMemoryDiagnostics();
+  for (const child of children.keys()) terminate(child);
   const force = setTimeout(() => {
-    for (const child of children) {
+    for (const child of children.keys()) {
       if (!child.killed) child.kill("SIGKILL");
     }
   }, 10_000);
   force.unref();
   await Promise.allSettled(
-    [...children].map(
+    [...children.keys()].map(
       (child) => new Promise((resolve) => child.once("exit", resolve)),
     ),
   );
@@ -88,14 +142,25 @@ for (const signal of ["SIGINT", "SIGTERM"]) {
 
 const productionUrls = publicDeployment?.values ?? {};
 
-start("API", "node", ["apps/api/dist/main.js"], {
-  PORT: internalApiPort,
-  NODE_ENV: "production",
-  // This Railway service owns public webhooks. LOCAL is exclusively owned by
-  // pnpm dev:bots and must never be selected by a production deployment.
-  TELEGRAM_BOT_RUNTIME_ENVIRONMENT: "PRODUCTION",
-  ...productionUrls,
-});
+start(
+  "API",
+  process.execPath,
+  [
+    "--import",
+    "./scripts/railway-memory-reporter.mjs",
+    "apps/api/dist/main.js",
+  ],
+  {
+    PORT: internalApiPort,
+    NODE_ENV: "production",
+    // This Railway service owns public webhooks. LOCAL is exclusively owned by
+    // pnpm dev:bots and must never be selected by a production deployment.
+    TELEGRAM_BOT_RUNTIME_ENVIRONMENT: "PRODUCTION",
+    RAILWAY_PROCESS_TYPE: "api",
+    ...productionUrls,
+  },
+  "api",
+);
 
 try {
   await waitForInternalApi();
@@ -106,11 +171,26 @@ try {
   await stop(1);
 }
 
-start("Web", "pnpm", ["--filter", "web", "start"], {
-  PORT: publicPort,
-  HOSTNAME: "0.0.0.0",
-  NODE_ENV: "production",
-});
+start(
+  "Web",
+  process.execPath,
+  [
+    "--import",
+    "./scripts/railway-memory-reporter.mjs",
+    "apps/web/node_modules/next/dist/bin/next",
+    "start",
+    "apps/web",
+  ],
+  {
+    PORT: publicPort,
+    HOSTNAME: "0.0.0.0",
+    NODE_ENV: "production",
+    RAILWAY_PROCESS_TYPE: "next",
+  },
+  "next",
+);
+
+startMemoryDiagnostics();
 
 process.stdout.write(
   `[railway] Web gateway listening on :${publicPort}; API listening internally on :${internalApiPort}.\n`,

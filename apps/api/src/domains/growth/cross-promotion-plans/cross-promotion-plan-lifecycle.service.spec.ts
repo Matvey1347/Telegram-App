@@ -1,4 +1,5 @@
 import { CrossPromotionPlanLifecycleService } from './cross-promotion-plan-lifecycle.service';
+import * as scheduledTaskWakeNotifier from '../../../common/scheduled-task-wake-notifier';
 
 const duePlan = {
   id: 'plan-1',
@@ -24,6 +25,34 @@ const duePlan = {
 };
 
 describe('CrossPromotionPlanLifecycleService', () => {
+  afterEach(() => jest.restoreAllMocks());
+
+  it('signals the scheduler after lifecycle work so an external caller can rearm it', async () => {
+    const notify = jest.spyOn(
+      scheduledTaskWakeNotifier,
+      'notifyScheduledTaskDueWorkChanged',
+    );
+    const prisma = {
+      crossPromotionPlan: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+    };
+    const service = new CrossPromotionPlanLifecycleService(
+      prisma as never,
+      { deletePublishedManagedPosts: jest.fn() } as never,
+      { sendPublicationConfirmation: jest.fn() } as never,
+    );
+
+    await expect(service.processDueActions()).resolves.toEqual({
+      considered: 0,
+      processed: 0,
+      completed: 0,
+      retried: 0,
+    });
+
+    expect(notify).toHaveBeenCalledWith('mutual_promotion.lifecycle');
+  });
+
   it('never deletes a published own-channel post configured with no auto-delete', async () => {
     const plan = {
       ...duePlan,

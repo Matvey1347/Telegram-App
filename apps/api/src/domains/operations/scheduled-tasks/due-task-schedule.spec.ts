@@ -68,6 +68,51 @@ describe('DueTaskSchedule', () => {
     ).toEqual(new Date(now.getTime() + 5_000));
   });
 
+  it('does not resolve or restore stale due work while its occurrence is claimed', async () => {
+    const { prisma } = setup();
+    const staleDue = new Date(now.getTime() - 60_000);
+    const resolver = { nextDueAt: jest.fn().mockResolvedValue(staleDue) };
+    const schedule = new DueTaskSchedule(prisma as never, resolver);
+    prisma.scheduledTaskConfig.findMany.mockResolvedValue([
+      {
+        id: 'config',
+        updatedAt: new Date(now.getTime() - 60_000),
+        nextScheduledRunAt: staleDue,
+        scheduledClaimOwner: 'running-worker',
+        scheduledClaimExpiresAt: new Date(now.getTime() + 10 * 60_000),
+      },
+    ]);
+
+    await schedule.refresh('mutual_promotion.lifecycle');
+
+    expect(resolver.nextDueAt).not.toHaveBeenCalled();
+    expect(prisma.scheduledTaskConfig.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('persists the newly resolved nearest due time after an occurrence advances', async () => {
+    const { prisma } = setup();
+    const nextDueAt = new Date(now.getTime() + 60_000);
+    const resolver = { nextDueAt: jest.fn().mockResolvedValue(nextDueAt) };
+    const schedule = new DueTaskSchedule(prisma as never, resolver);
+    prisma.scheduledTaskConfig.findMany.mockResolvedValue([
+      {
+        id: 'config',
+        updatedAt: new Date(now.getTime() - 60_000),
+        nextScheduledRunAt: null,
+        scheduledClaimOwner: null,
+        scheduledClaimExpiresAt: null,
+      },
+    ]);
+
+    await schedule.refresh('mutual_promotion.lifecycle', true);
+
+    expect(prisma.scheduledTaskConfig.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ nextScheduledRunAt: nextDueAt }),
+      }),
+    );
+  });
+
   it('backs off the first attempted stale occurrence immediately', () => {
     const { schedule } = setup();
     const staleDue = new Date(now.getTime() - 60_000);

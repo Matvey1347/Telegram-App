@@ -32,8 +32,6 @@ export class DueTaskSchedule {
   ) {}
 
   async refresh(taskKey: string, attempted = false) {
-    const rawDueAt = await this.nextDueAt(taskKey);
-    const dueAt = this.guardNoProgress(taskKey, rawDueAt, attempted);
     const configs = await this.prisma.scheduledTaskConfig.findMany({
       where: { taskKey, workspaceId: null, enabled: true },
       select: {
@@ -44,9 +42,22 @@ export class DueTaskSchedule {
         scheduledClaimExpiresAt: true,
       },
     });
+    const now = new Date();
+    const hasUnclaimedConfig = configs.some(
+      (config) =>
+        config.scheduledClaimOwner === null ||
+        config.scheduledClaimExpiresAt === null ||
+        config.scheduledClaimExpiresAt <= now,
+    );
+    // Completion signals can arrive while the runner still owns the current
+    // occurrence. Snapshot that claim before resolving domain work: otherwise
+    // an async refresh can write the old due timestamp after advancement.
+    if (!hasUnclaimedConfig) return;
+
+    const rawDueAt = await this.nextDueAt(taskKey);
+    const dueAt = this.guardNoProgress(taskKey, rawDueAt, attempted);
     await Promise.all(
       configs.map(async (config) => {
-        const now = new Date();
         const liveClaim =
           config.scheduledClaimOwner !== null &&
           config.scheduledClaimExpiresAt !== null &&

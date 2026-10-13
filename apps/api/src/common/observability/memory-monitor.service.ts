@@ -35,12 +35,15 @@ export class MemoryMonitorService
   // Nest's production logger can persist ordinary logs to ApplicationLog.
   private readonly detailedTelemetry =
     deploymentFlag('MEMORY_MONITOR_DETAILED_TELEMETRY') === 'true';
+  // Railway's process supervisor collects a single IPC-coordinated sample for
+  // API, Next and itself. Keep the standalone monitor for other runtimes.
+  private readonly supervisedByRailway = typeof process.send === 'function';
   private timer?: NodeJS.Timeout;
   private warningActive = false;
   private lastWarningAt = 0;
 
   onApplicationBootstrap(): void {
-    if (!this.enabled) return;
+    if (!this.enabled || this.supervisedByRailway) return;
 
     if (this.detailedTelemetry) this.logMemory('application_started');
 
@@ -61,6 +64,9 @@ export class MemoryMonitorService
     const memory = process.memoryUsage();
 
     const payload = {
+      timestamp: new Date().toISOString(),
+      processType: 'api',
+      pid: process.pid,
       event,
       rssMb: this.toMb(memory.rss),
       heapUsedMb: this.toMb(memory.heapUsed),

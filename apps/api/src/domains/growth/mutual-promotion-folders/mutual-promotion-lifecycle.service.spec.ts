@@ -1,7 +1,37 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return -- focused lifecycle persistence mocks */
 import { MutualPromotionLifecycleService } from './mutual-promotion-lifecycle.service';
+import * as scheduledTaskWakeNotifier from '../../../common/scheduled-task-wake-notifier';
 
 describe('MutualPromotionLifecycleService', () => {
+  afterEach(() => jest.restoreAllMocks());
+
+  it('signals the scheduler after lifecycle work so an external caller can rearm it', async () => {
+    const notify = jest.spyOn(
+      scheduledTaskWakeNotifier,
+      'notifyScheduledTaskDueWorkChanged',
+    );
+    const prisma = {
+      mutualPromotionWorkItem: {
+        findMany: jest.fn().mockResolvedValue([]),
+        findFirst: jest.fn().mockResolvedValue(null),
+      },
+    };
+    const service = new MutualPromotionLifecycleService(
+      prisma as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+
+    await expect(service.processDueActions()).resolves.toMatchObject({
+      considered: 0,
+      processed: 0,
+      nextDueAt: null,
+    });
+
+    expect(notify).toHaveBeenCalledWith('mutual_promotion.lifecycle');
+  });
+
   it('confirms a native publication as soon as reconciliation observes every delivery', async () => {
     const confirmation = { sendPublishedOnce: jest.fn().mockResolvedValue(undefined) };
     const now = new Date('2026-09-07T12:00:05.000Z');

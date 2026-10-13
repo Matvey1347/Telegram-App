@@ -1,6 +1,7 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { CrossPromotionPlansService } from './cross-promotion-plans.service';
 import { CrossPromotionPlanReadService } from './cross-promotion-plan-read.service';
+import * as scheduledTaskWakeNotifier from '../../../common/scheduled-task-wake-notifier';
 
 const payload = {
   kind: 'DIRECT_MUTUAL' as const,
@@ -194,6 +195,8 @@ function setup() {
 }
 
 describe('CrossPromotionPlansService', () => {
+  afterEach(() => jest.restoreAllMocks());
+
   it('allows a direct exchange without partner channels or promo targets', async () => {
     const { service, prisma } = setup();
     prisma.telegramChannel.findMany.mockImplementation(
@@ -371,6 +374,10 @@ describe('CrossPromotionPlansService', () => {
 
   it('captures tracking baselines and returns observable joins and donor losses', async () => {
     const { service, prisma } = setup();
+    const notify = jest.spyOn(
+      scheduledTaskWakeNotifier,
+      'notifyScheduledTaskDueWorkChanged',
+    );
     const result = await service.create('user-1', payload);
     expect(prisma.crossPromotionPlan.create).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -402,6 +409,7 @@ describe('CrossPromotionPlansService', () => {
         photoUrl: null,
       },
     ]);
+    expect(notify).toHaveBeenCalledWith('mutual_promotion.lifecycle');
   });
 
   it('rejects channels outside the current workspace', async () => {

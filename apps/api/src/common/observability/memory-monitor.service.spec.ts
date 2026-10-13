@@ -59,6 +59,9 @@ describe('MemoryMonitorService', () => {
     expect(warnSpy).not.toHaveBeenCalled();
     expect(logSpy).toHaveBeenCalledTimes(1);
     expect(JSON.parse(logSpy.mock.calls[0][0] as string)).toEqual({
+      timestamp: expect.any(String),
+      processType: 'api',
+      pid: process.pid,
       event: 'manual_check',
       rssMb: 256,
       heapUsedMb: 64.1,
@@ -167,5 +170,24 @@ describe('MemoryMonitorService', () => {
 
     expect(logSpy).not.toHaveBeenCalled();
     expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  it('does not create a second interval when the Railway supervisor owns sampling', () => {
+    const sendDescriptor = Object.getOwnPropertyDescriptor(process, 'send');
+    const intervalSpy = jest.spyOn(global, 'setInterval');
+    Object.defineProperty(process, 'send', {
+      configurable: true,
+      value: jest.fn(),
+    });
+    try {
+      const monitor = new MemoryMonitorService();
+      monitor.onApplicationBootstrap();
+
+      expect(intervalSpy).not.toHaveBeenCalled();
+    } finally {
+      if (sendDescriptor) Object.defineProperty(process, 'send', sendDescriptor);
+      else delete (process as { send?: unknown }).send;
+      intervalSpy.mockRestore();
+    }
   });
 });

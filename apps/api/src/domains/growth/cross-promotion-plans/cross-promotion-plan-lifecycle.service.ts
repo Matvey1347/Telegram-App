@@ -3,8 +3,8 @@ import type {
   CrossPromotionChannelPlacementInput,
   CrossPromotionPlacementPost,
 } from '@telegram-system/shared';
-import { PrismaService } from '../../../prisma/prisma.service';
 import { notifyScheduledTaskDueWorkChanged } from '../../../common/scheduled-task-wake-notifier';
+import { PrismaService } from '../../../prisma/prisma.service';
 import { MANAGED_POST_IDENTITY_RETRY_MS } from '../../operations/scheduled-tasks/due-work-predicates';
 import { TelegramManagedPostRemoteDeletionService } from '../../telegram/telegram-channels/telegram-managed-post-remote-deletion.service';
 import { CrossPromotionPlanBotNotificationService } from './cross-promotion-plan-bot-notification.service';

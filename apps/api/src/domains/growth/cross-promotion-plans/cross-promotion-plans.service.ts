@@ -377,6 +377,7 @@ export class CrossPromotionPlansService {
         baselinePublisherSubscribers,
       },
     });
+    notifyScheduledTaskDueWorkChanged('mutual_promotion.lifecycle');
     return this.readService.shape(workspaceId, row);
   }
 
