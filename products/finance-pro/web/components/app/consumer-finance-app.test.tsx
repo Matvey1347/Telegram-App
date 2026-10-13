@@ -26,9 +26,12 @@ const mocks = vi.hoisted(() => ({
   updateSettings: vi.fn(),
 }));
 
-vi.mock("@finance-pro/web/components/hooks/use-telegram-mini-app-bootstrap", () => ({
-  useTelegramMiniAppBootstrap: () => mocks.bootstrap,
-}));
+vi.mock(
+  "@finance-pro/web/components/hooks/use-telegram-mini-app-bootstrap",
+  () => ({
+    useTelegramMiniAppBootstrap: () => mocks.bootstrap,
+  }),
+);
 vi.mock("@finance-pro/web/lib/api/consumer-finance-auth-api", () => ({
   consumerFinanceAuthApi: {
     auth: mocks.auth,
@@ -140,6 +143,17 @@ function appElement(client: QueryClient) {
       <ConsumerFinanceApp botId="bot-1" />
     </QueryClientProvider>
   );
+}
+
+function launchQuickAction(name: "Expense" | "Transfers") {
+  const launcher = document.querySelector<HTMLElement>(
+    "[data-finance-action-launcher]",
+  );
+  if (!launcher) throw new Error("Finance quick-action launcher is missing");
+  fireEvent.click(
+    within(launcher).getByRole("button", { name: "Add transaction" }),
+  );
+  fireEvent.click(within(launcher).getByRole("button", { name }));
 }
 
 beforeEach(() => {
@@ -299,9 +313,20 @@ describe("ConsumerFinanceApp bootstrap", () => {
       }),
     ).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Language" })).toBeVisible();
+    const header = document.querySelector(
+      "[data-finance-shell='web-app'] header",
+    );
+    expect(header).toHaveClass("min-h-16", "justify-between");
     expect(
-      document.querySelector("[data-finance-screen-icon='home']"),
-    ).toBeInTheDocument();
+      within(header as HTMLElement).getByRole("heading", {
+        name: "Overview",
+      }),
+    ).toBeVisible();
+    expect(
+      within(header as HTMLElement).queryByRole("link", {
+        name: "Open in browser",
+      }),
+    ).not.toBeInTheDocument();
     expect(screen.getByLabelText("Ada Lovelace")).toBeVisible();
     expect(
       screen.getByRole("button", { name: "Open account menu" }),
@@ -595,7 +620,9 @@ describe("ConsumerFinanceApp bootstrap", () => {
     fireEvent.click(screen.getByRole("button", { name: "Categories" }));
     expect(await screen.findByText(/screen categories/)).toBeInTheDocument();
 
-    expect(await screen.findByRole("link", { name: "Open in browser" })).toHaveAttribute(
+    expect(
+      await screen.findByRole("link", { name: "Open in browser" }),
+    ).toHaveAttribute(
       "href",
       "https://nexeloq.com/finance/bot-1?browserTransfer=one-time-token&screen=categories",
     );
@@ -729,7 +756,7 @@ describe("ConsumerFinanceApp bootstrap", () => {
     renderApp();
     await screen.findByText(/screen home/);
 
-    fireEvent.click(screen.getAllByRole("button", { name: "Expense" })[0]);
+    launchQuickAction("Expense");
     expect(
       await screen.findByText(
         /screen home · transfer false · transaction EXPENSE/,
@@ -737,7 +764,7 @@ describe("ConsumerFinanceApp bootstrap", () => {
     ).toBeInTheDocument();
     expect(window.location.search).toBe("");
 
-    fireEvent.click(screen.getAllByRole("button", { name: "Transfers" })[1]);
+    launchQuickAction("Transfers");
     expect(
       await screen.findByText(/screen home · transfer true/),
     ).toBeInTheDocument();
@@ -786,20 +813,20 @@ describe("ConsumerFinanceApp bootstrap", () => {
     renderApp();
     await screen.findByText(/screen home/);
 
-    fireEvent.click(screen.getAllByRole("button", { name: "Expense" })[0]);
+    launchQuickAction("Expense");
     expect(
       await screen.findByText(/transaction EXPENSE.+request 1/),
     ).toBeInTheDocument();
-    fireEvent.click(screen.getAllByRole("button", { name: "Expense" })[0]);
+    launchQuickAction("Expense");
     expect(
       await screen.findByText(/transaction EXPENSE.+request 2/),
     ).toBeInTheDocument();
 
-    fireEvent.click(screen.getAllByRole("button", { name: "Transfers" })[1]);
+    launchQuickAction("Transfers");
     expect(
       await screen.findByText(/transfer true.+request 3/),
     ).toBeInTheDocument();
-    fireEvent.click(screen.getAllByRole("button", { name: "Transfers" })[1]);
+    launchQuickAction("Transfers");
     expect(
       await screen.findByText(/transfer true.+request 4/),
     ).toBeInTheDocument();

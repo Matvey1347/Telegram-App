@@ -17,6 +17,7 @@ import {
 } from "@finance-pro/web/components/ui";
 import type { FinanceLocale } from "@finance-pro/web/components/i18n/core";
 import { financeInvestmentsCopy } from "@finance-pro/web/components/i18n/investments";
+import { financeAccountSelectEmoji } from "@finance-pro/web/components/accounts/finance-account-select-icon";
 import {
   dateInputToIso,
   todayInputValue,
@@ -102,7 +103,7 @@ export function FinanceInvestmentActionModal({
         ) : (
           <p className="text-sm text-neutral-400">{t.closeHelp}</p>
         )}
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-2 gap-3">
           {cashFlow || closing ? (
             <FormField label={t.account} required={cashFlow}>
               <Select
@@ -112,8 +113,13 @@ export function FinanceInvestmentActionModal({
               >
                 <option value="">{t.chooseAccount}</option>
                 {eligible.map((account) => (
-                  <option key={account.id} value={account.id}>
-                    {account.name} · {account.currency}
+                  <option
+                    key={account.id}
+                    value={account.id}
+                    data-icon-emoji={financeAccountSelectEmoji(account)}
+                    data-option-meta={account.currency}
+                  >
+                    {account.name}
                   </option>
                 ))}
               </Select>
@@ -143,7 +149,11 @@ export function FinanceInvestmentActionModal({
               />
             </FormField>
           ) : null}
-          <FormField label={closing ? t.closeDate : t.date} required>
+          <FormField
+            label={closing ? t.closeDate : t.date}
+            required
+            className="col-span-2"
+          >
             <DateInput
               lang={locale}
               value={date}
@@ -151,7 +161,7 @@ export function FinanceInvestmentActionModal({
             />
           </FormField>
           {action === "VALUATION" ? (
-            <FormField label={t.selectCorrection}>
+            <FormField label={t.selectCorrection} className="col-span-2">
               <Select
                 uiLocale={locale}
                 value={corrects}
@@ -168,7 +178,7 @@ export function FinanceInvestmentActionModal({
             </FormField>
           ) : null}
           {!closing ? (
-            <FormField label={t.note}>
+            <FormField label={t.note} className="col-span-2">
               <Textarea
                 value={note}
                 onChange={(e) => setNote(e.target.value)}

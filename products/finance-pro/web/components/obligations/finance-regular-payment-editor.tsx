@@ -27,6 +27,7 @@ import { localizeFinanceCategory } from "@finance-pro/web/components/catalog/fin
 import type { FinanceLocale } from "@finance-pro/web/components/i18n/core";
 import { financeRegularPaymentsCopy } from "@finance-pro/web/components/i18n/regular-payments";
 import { IconPicker } from "@finance-pro/web/components/ui/finance-icon-picker";
+import { financeAccountSelectEmoji } from "@finance-pro/web/components/accounts/finance-account-select-icon";
 
 export function FinanceRegularPaymentEditor({
   botId,
@@ -182,11 +183,7 @@ export function FinanceRegularPaymentEditor({
                 key={account.id}
                 value={account.id}
                 data-option-meta={account.currency}
-                data-icon-emoji={
-                  account.iconPresentation.type === "unicode"
-                    ? account.iconPresentation.value
-                    : undefined
-                }
+                data-icon-emoji={financeAccountSelectEmoji(account)}
               >
                 {account.name}
               </option>

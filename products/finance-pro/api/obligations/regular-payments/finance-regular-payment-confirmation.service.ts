@@ -3,28 +3,28 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
-} from '@nestjs/common';
-import { FinanceTransactionSource, Prisma } from '@prisma/client';
-import { PrismaService } from '@api/prisma/prisma.service';
-import { FinanceLedgerService } from '@finance-pro/api/ledger/finance-ledger.service';
+} from "@nestjs/common";
+import { FinanceTransactionSource, Prisma } from "@prisma/client";
+import { PrismaService } from "@api/prisma/prisma.service";
+import { FinanceLedgerService } from "@finance-pro/api/ledger/finance-ledger.service";
 import {
   financeTransactionSelect,
   financeTransactionView,
-} from '@finance-pro/api/ledger/finance-transaction-view';
+} from "@finance-pro/api/ledger/finance-transaction-view";
 import type {
   FinanceApplyOccurrenceAmountDto,
   FinanceRegularPaymentConfirmDto,
-} from '@finance-pro/api/obligations/finance-obligation.dto';
-import { financeObligationProfile } from '@finance-pro/api/obligations/finance-obligation-context';
-import { nextFinanceOccurrence } from '@finance-pro/api/obligations/finance-obligation-date';
+} from "@finance-pro/api/obligations/finance-obligation.dto";
+import { financeObligationProfile } from "@finance-pro/api/obligations/finance-obligation-context";
+import { nextFinanceOccurrence } from "@finance-pro/api/obligations/finance-obligation-date";
 import {
   financeRegularPaymentOccurrenceSelect,
   financeRegularPaymentOccurrenceView,
   financeRegularPaymentSelect,
   financeRegularPaymentView,
-} from '@finance-pro/api/obligations/finance-obligation-view';
-import { FinanceRegularPaymentDeliveryService } from '@finance-pro/api/obligations/regular-payments/finance-regular-payment-delivery.service';
-import { financeRegularPaymentRevisionData } from '@finance-pro/api/obligations/regular-payments/finance-regular-payment-write';
+} from "@finance-pro/api/obligations/finance-obligation-view";
+import { FinanceRegularPaymentDeliveryService } from "@finance-pro/api/obligations/regular-payments/finance-regular-payment-delivery.service";
+import { financeRegularPaymentRevisionData } from "@finance-pro/api/obligations/regular-payments/finance-regular-payment-write";
 
 @Injectable()
 export class FinanceRegularPaymentConfirmationService {
@@ -42,9 +42,10 @@ export class FinanceRegularPaymentConfirmationService {
   ) {
     const expectedOccurrenceAt = new Date(input.expectedOccurrenceAt);
     if (Number.isNaN(expectedOccurrenceAt.getTime()))
-      throw new BadRequestException('Expected occurrence is invalid');
+      throw new BadRequestException("Expected occurrence is invalid");
     const profileContext = await this.ledger.profileContext(profileId);
     const now = new Date();
+    const advancesSchedule = !input.preserveSchedule;
     const preflight = await this.prisma.financeRecurringPayment.findFirst({
       where: { id, profileId },
       select: {
@@ -56,9 +57,9 @@ export class FinanceRegularPaymentConfirmationService {
       },
     });
     if (!preflight)
-      throw new NotFoundException('Finance regular payment not found');
+      throw new NotFoundException("Finance regular payment not found");
     const canConfirm =
-      preflight.status === 'ACTIVE' &&
+      preflight.status === "ACTIVE" &&
       preflight.version === input.expectedVersion &&
       preflight.nextOccurrenceAt.getTime() === expectedOccurrenceAt.getTime();
     const selectedAccount = canConfirm
@@ -72,7 +73,7 @@ export class FinanceRegularPaymentConfirmationService {
         })
       : null;
     if (canConfirm && !selectedAccount)
-      throw new NotFoundException('Finance account not found');
+      throw new NotFoundException("Finance account not found");
     const rates =
       canConfirm && selectedAccount
         ? await this.ledger.prepareTransactionRateSource(profileContext, [
@@ -89,7 +90,7 @@ export class FinanceRegularPaymentConfirmationService {
           select: financeRegularPaymentSelect,
         });
         if (!regularPayment)
-          throw new NotFoundException('Finance regular payment not found');
+          throw new NotFoundException("Finance regular payment not found");
         if (
           regularPayment.nextOccurrenceAt.getTime() !==
           expectedOccurrenceAt.getTime()
@@ -99,6 +100,7 @@ export class FinanceRegularPaymentConfirmationService {
             profileId,
             regularPayment,
             expectedOccurrenceAt,
+            advancesSchedule,
           );
           if (duplicate)
             return {
@@ -106,26 +108,26 @@ export class FinanceRegularPaymentConfirmationService {
               scheduledAt: undefined,
               reschedule: false,
             };
-          throw new ConflictException('Regular payment occurrence has changed');
+          throw new ConflictException("Regular payment occurrence has changed");
         }
         if (regularPayment.version !== input.expectedVersion)
-          throw new ConflictException('Regular payment version has changed');
-        if (regularPayment.status !== 'ACTIVE')
-          throw new ConflictException('Regular payment is not active');
+          throw new ConflictException("Regular payment version has changed");
+        if (regularPayment.status !== "ACTIVE")
+          throw new ConflictException("Regular payment is not active");
         const paidAmount = input.amount
           ? new Prisma.Decimal(input.amount)
           : regularPayment.amount;
         if (!paidAmount.isFinite() || !paidAmount.isPositive())
-          throw new BadRequestException('Paid amount must be positive');
+          throw new BadRequestException("Paid amount must be positive");
         if (!rates)
-          throw new ConflictException('Regular payment occurrence has changed');
+          throw new ConflictException("Regular payment occurrence has changed");
         const transactionInput = {
           accountId: input.accountId ?? regularPayment.accountId,
           categoryId:
             input.categoryId === undefined
               ? (regularPayment.categoryId ?? undefined)
               : (input.categoryId ?? undefined),
-          type: 'EXPENSE' as const,
+          type: "EXPENSE" as const,
           amount: paidAmount.toString(),
           description: input.description?.trim() || regularPayment.name,
           necessity: input.necessity ?? regularPayment.necessity,
@@ -156,41 +158,24 @@ export class FinanceRegularPaymentConfirmationService {
             scheduledAmount: regularPayment.amount,
             paidAmount,
             currency: regularPayment.currency,
+            advancesSchedule,
           },
           select: financeRegularPaymentOccurrenceSelect,
         });
-        const nextOccurrenceAt = nextFinanceOccurrence({
-          current: expectedOccurrenceAt,
-          recurrence: regularPayment.recurrence,
-          intervalCount: regularPayment.intervalCount,
-          anchorDay: regularPayment.anchorDay,
-          anchorMonth: regularPayment.anchorMonth,
-          timezone: regularPayment.scheduleTimezone,
-        });
-        const claimed = await tx.financeRecurringPayment.updateMany({
-          where: {
-            id,
-            profileId,
-            status: 'ACTIVE',
-            version: regularPayment.version,
-            nextOccurrenceAt: expectedOccurrenceAt,
-          },
-          data: {
-            nextOccurrenceAt,
-            version: { increment: 1 },
-            ...(input.emoji === undefined
-              ? {}
-              : { emoji: input.emoji?.trim() || null }),
-          },
-        });
-        if (claimed.count !== 1)
-          throw new ConflictException('Regular payment occurrence has changed');
-        const advanced = await tx.financeRecurringPayment.findUniqueOrThrow({
-          where: { id },
-          select: financeRegularPaymentSelect,
-        });
         const profile = await financeObligationProfile(tx, profileId);
-        const delivery = await this.deliveries.replace(tx, profile, advanced);
+        const advanced = advancesSchedule
+          ? await this.advanceSchedule(
+              tx,
+              profileId,
+              id,
+              regularPayment,
+              expectedOccurrenceAt,
+              input.emoji,
+            )
+          : regularPayment;
+        const delivery = advancesSchedule
+          ? await this.deliveries.replace(tx, profile, advanced)
+          : null;
         return {
           value: {
             regularPayment: financeRegularPaymentView(
@@ -206,7 +191,7 @@ export class FinanceRegularPaymentConfirmationService {
             ),
           },
           scheduledAt: delivery?.scheduledAt,
-          reschedule: true,
+          reschedule: advancesSchedule,
         };
       });
       if (result.reschedule) {
@@ -218,12 +203,13 @@ export class FinanceRegularPaymentConfirmationService {
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === 'P2002'
+        error.code === "P2002"
       ) {
         const duplicate = await this.duplicate(
           profileId,
           id,
           expectedOccurrenceAt,
+          advancesSchedule,
         );
         if (duplicate) return duplicate;
       }
@@ -243,13 +229,13 @@ export class FinanceRegularPaymentConfirmationService {
         select: financeRegularPaymentSelect,
       });
       if (!regularPayment)
-        throw new NotFoundException('Finance regular payment not found');
+        throw new NotFoundException("Finance regular payment not found");
       const occurrence = await tx.financeRecurringPaymentOccurrence.findFirst({
         where: { id: occurrenceId, recurringPaymentId: id, profileId },
         select: financeRegularPaymentOccurrenceSelect,
       });
       if (!occurrence)
-        throw new NotFoundException('Regular payment occurrence not found');
+        throw new NotFoundException("Regular payment occurrence not found");
       const profile = await financeObligationProfile(tx, profileId);
       if (occurrence.futureAmountAppliedAt)
         return {
@@ -258,7 +244,7 @@ export class FinanceRegularPaymentConfirmationService {
           changed: false,
         };
       if (regularPayment.version !== input.expectedVersion)
-        throw new ConflictException('Regular payment version has changed');
+        throw new ConflictException("Regular payment version has changed");
       if (regularPayment.amount.equals(occurrence.paidAmount))
         return {
           value: financeRegularPaymentView(regularPayment, profile.timezone),
@@ -273,20 +259,20 @@ export class FinanceRegularPaymentConfirmationService {
         },
       });
       if (claimed.count !== 1)
-        throw new ConflictException('Regular payment version has changed');
+        throw new ConflictException("Regular payment version has changed");
       const occurrenceClaim =
         await tx.financeRecurringPaymentOccurrence.updateMany({
           where: { id: occurrenceId, futureAmountAppliedAt: null },
           data: { futureAmountAppliedAt: new Date() },
         });
       if (occurrenceClaim.count !== 1)
-        throw new ConflictException('Occurrence amount was already applied');
+        throw new ConflictException("Occurrence amount was already applied");
       const updated = await tx.financeRecurringPayment.findUniqueOrThrow({
         where: { id },
         select: financeRegularPaymentSelect,
       });
       await tx.financeRecurringPaymentRevision.create({
-        data: financeRegularPaymentRevisionData(updated, 'AMOUNT_APPLIED'),
+        data: financeRegularPaymentRevisionData(updated, "AMOUNT_APPLIED"),
       });
       const delivery = await this.deliveries.replace(tx, profile, updated);
       return {
@@ -307,6 +293,7 @@ export class FinanceRegularPaymentConfirmationService {
     profileId: string,
     id: string,
     expectedOccurrenceAt: Date,
+    advancesSchedule: boolean,
   ) {
     return this.prisma.$transaction(async (tx) => {
       const regularPayment = await tx.financeRecurringPayment.findFirst({
@@ -319,6 +306,7 @@ export class FinanceRegularPaymentConfirmationService {
         profileId,
         regularPayment,
         expectedOccurrenceAt,
+        advancesSchedule,
       );
     });
   }
@@ -330,12 +318,14 @@ export class FinanceRegularPaymentConfirmationService {
       select: typeof financeRegularPaymentSelect;
     }>,
     expectedOccurrenceAt: Date,
+    advancesSchedule: boolean,
   ) {
     const occurrence = await tx.financeRecurringPaymentOccurrence.findUnique({
       where: {
-        recurringPaymentId_scheduledFor: {
+        recurringPaymentId_scheduledFor_advancesSchedule: {
           recurringPaymentId: regularPayment.id,
           scheduledFor: expectedOccurrenceAt,
+          advancesSchedule,
         },
       },
       select: financeRegularPaymentOccurrenceSelect,
@@ -352,7 +342,7 @@ export class FinanceRegularPaymentConfirmationService {
       }),
     ]);
     if (!transaction || !profile)
-      throw new ConflictException('Confirmed occurrence is incomplete');
+      throw new ConflictException("Confirmed occurrence is incomplete");
     return {
       regularPayment: financeRegularPaymentView(
         regularPayment,
@@ -365,5 +355,45 @@ export class FinanceRegularPaymentConfirmationService {
         !occurrence.futureAmountAppliedAt &&
         !regularPayment.amount.equals(occurrence.paidAmount),
     };
+  }
+
+  private async advanceSchedule(
+    tx: Prisma.TransactionClient,
+    profileId: string,
+    id: string,
+    regularPayment: Prisma.FinanceRecurringPaymentGetPayload<{
+      select: typeof financeRegularPaymentSelect;
+    }>,
+    expectedOccurrenceAt: Date,
+    emoji: string | null | undefined,
+  ) {
+    const nextOccurrenceAt = nextFinanceOccurrence({
+      current: expectedOccurrenceAt,
+      recurrence: regularPayment.recurrence,
+      intervalCount: regularPayment.intervalCount,
+      anchorDay: regularPayment.anchorDay,
+      anchorMonth: regularPayment.anchorMonth,
+      timezone: regularPayment.scheduleTimezone,
+    });
+    const claimed = await tx.financeRecurringPayment.updateMany({
+      where: {
+        id,
+        profileId,
+        status: "ACTIVE",
+        version: regularPayment.version,
+        nextOccurrenceAt: expectedOccurrenceAt,
+      },
+      data: {
+        nextOccurrenceAt,
+        version: { increment: 1 },
+        ...(emoji === undefined ? {} : { emoji: emoji?.trim() || null }),
+      },
+    });
+    if (claimed.count !== 1)
+      throw new ConflictException("Regular payment occurrence has changed");
+    return tx.financeRecurringPayment.findUniqueOrThrow({
+      where: { id },
+      select: financeRegularPaymentSelect,
+    });
   }
 }

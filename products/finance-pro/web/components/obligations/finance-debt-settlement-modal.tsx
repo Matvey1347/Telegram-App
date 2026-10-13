@@ -14,6 +14,7 @@ import {
 } from "@finance-pro/web/components/ui";
 import type { FinanceLocale } from "@finance-pro/web/components/i18n/core";
 import { financeDebtsCopy } from "@finance-pro/web/components/i18n/debts";
+import { financeAccountSelectEmoji } from "@finance-pro/web/components/accounts/finance-account-select-icon";
 import { consumerFinanceLedgerApi } from "@finance-pro/web/lib/api/consumer-finance-ledger-api";
 import { consumerFinanceObligationsApi } from "@finance-pro/web/lib/api/consumer-finance-obligations-api";
 import { consumerFinanceKeys } from "@finance-pro/web/lib/query/consumer-finance-query-keys";
@@ -119,11 +120,7 @@ export function FinanceDebtSettlementModal({
               <option
                 key={account.id}
                 value={account.id}
-                data-icon-emoji={
-                  account.iconPresentation.type === "unicode"
-                    ? account.iconPresentation.value
-                    : undefined
-                }
+                data-icon-emoji={financeAccountSelectEmoji(account)}
                 data-option-meta={account.currency}
               >
                 {account.name} · {account.currency}

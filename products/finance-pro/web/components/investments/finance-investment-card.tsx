@@ -1,13 +1,18 @@
 import {
   ArrowDownToLine,
   ArrowUpFromLine,
+  Archive,
   CircleDollarSign,
   Pencil,
   TrendingDown,
   TrendingUp,
 } from "lucide-react";
 import type { ConsumerFinanceInvestment } from "@telegram-system/shared";
-import { Button, Card } from "@finance-pro/web/components/ui";
+import {
+  Button,
+  Card,
+  FinanceCardActionsMenu,
+} from "@finance-pro/web/components/ui";
 import type { FinanceLocale } from "@finance-pro/web/components/i18n/core";
 import { financeInvestmentsCopy } from "@finance-pro/web/components/i18n/investments";
 import { investmentTypeLabel } from "@finance-pro/web/components/investments/finance-investment-editor";
@@ -18,11 +23,15 @@ export function FinanceInvestmentCard({
   locale,
   onOpen,
   onEdit,
+  onContribution,
+  onArchive,
 }: {
   investment: ConsumerFinanceInvestment;
   locale: FinanceLocale;
   onOpen: () => void;
   onEdit: () => void;
+  onContribution: () => void;
+  onArchive: () => void;
 }) {
   const t = financeInvestmentsCopy(locale);
   const pnl = Number(investment.profitLoss);
@@ -54,14 +63,35 @@ export function FinanceInvestmentCard({
           </p>
         </div>
         {investment.status !== "ARCHIVED" ? (
-          <button
-            type="button"
-            onClick={onEdit}
-            aria-label={t.editInvestment}
-            className="min-h-10 min-w-10 rounded-lg text-neutral-300 hover:bg-neutral-800"
-          >
-            <Pencil className="mx-auto" size={17} />
-          </button>
+          <FinanceCardActionsMenu
+            label={t.actions}
+            actions={[
+              {
+                label: t.editInvestment,
+                icon: <Pencil size={16} aria-hidden="true" />,
+                onSelect: onEdit,
+              },
+              ...(investment.status === "ACTIVE"
+                ? [
+                    {
+                      label: t.contribution,
+                      icon: <ArrowDownToLine size={16} aria-hidden="true" />,
+                      onSelect: onContribution,
+                    },
+                  ]
+                : []),
+              ...(investment.status === "CLOSED"
+                ? [
+                    {
+                      label: t.archiveInvestment,
+                      icon: <Archive size={16} aria-hidden="true" />,
+                      onSelect: onArchive,
+                      danger: true,
+                    },
+                  ]
+                : []),
+            ]}
+          />
         ) : null}
       </div>
       {investment.status === "ARCHIVED" ? (

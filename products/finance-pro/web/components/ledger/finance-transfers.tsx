@@ -27,6 +27,7 @@ import {
 import { consumerFinanceApi } from "@finance-pro/web/lib/api/consumer-finance-api";
 import { consumerFinanceLedgerApi } from "@finance-pro/web/lib/api/consumer-finance-ledger-api";
 import { formatMoney } from "@finance-pro/web/lib/formatters/consumer-finance-money";
+import { financeAccountSelectEmoji } from "@finance-pro/web/components/accounts/finance-account-select-icon";
 import {
   reconcileConsumerTransferCaches,
   removeConsumerTransferFromCaches,
@@ -234,11 +235,7 @@ export function FinanceTransfers({
               <option
                 key={item.id}
                 value={item.id}
-                data-icon-emoji={
-                  item.iconPresentation.type === "unicode"
-                    ? item.iconPresentation.value
-                    : undefined
-                }
+                data-icon-emoji={financeAccountSelectEmoji(item)}
                 data-option-meta={item.currency}
               >
                 {item.name}

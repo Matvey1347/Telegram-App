@@ -4754,13 +4754,15 @@ model FinanceRecurringPaymentOccurrence {
   scheduledAmount       Decimal
   paidAmount            Decimal
   currency              String                  @db.VarChar(3)
+  // An early payment may be recorded against this due date without consuming it.
+  advancesSchedule      Boolean                 @default(true)
   confirmedAt           DateTime                @default(now())
   futureAmountAppliedAt DateTime?
   profile               FinanceProfile          @relation(fields: [profileId], references: [id], onDelete: Cascade)
   recurringPayment      FinanceRecurringPayment @relation(fields: [recurringPaymentId], references: [id], onDelete: Cascade)
   transaction           FinanceTransaction      @relation(fields: [transactionId], references: [id], onDelete: Restrict)
 
-  @@unique([recurringPaymentId, scheduledFor], map: "FinanceRecurringPaymentOccurrence_payment_scheduled_key")
+  @@unique([recurringPaymentId, scheduledFor, advancesSchedule], map: "FinanceRecurringPaymentOccurrence_schedule_adv_key")
   @@index([recurringPaymentId, confirmedAt, id], map: "FinanceRecurringPaymentOccurrence_payment_confirmed_idx")
   @@index([profileId, confirmedAt, id])
 }

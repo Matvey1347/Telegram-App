@@ -23,6 +23,7 @@ import { consumerFinanceKeys } from "@finance-pro/web/lib/query/consumer-finance
 import { financeCalendarDate } from "@finance-pro/web/lib/formatters/consumer-finance-date";
 import type { FinanceLocale } from "@finance-pro/web/components/i18n/core";
 import { financeDebtsCopy } from "@finance-pro/web/components/i18n/debts";
+import { financeAccountSelectEmoji } from "@finance-pro/web/components/accounts/finance-account-select-icon";
 
 export function FinanceDebtEditor({
   botId,
@@ -135,11 +136,7 @@ export function FinanceDebtEditor({
               <option
                 key={account.id}
                 value={account.id}
-                data-icon-emoji={
-                  account.iconPresentation.type === "unicode"
-                    ? account.iconPresentation.value
-                    : undefined
-                }
+                data-icon-emoji={financeAccountSelectEmoji(account)}
                 data-option-meta={account.currency}
               >
                 {account.name}

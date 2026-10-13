@@ -1,4 +1,8 @@
-import { financeCoreCopy, financeIntlLocale, type FinanceLocale } from "@finance-pro/web/components/i18n/core";
+import {
+  financeCoreCopy,
+  financeIntlLocale,
+  type FinanceLocale,
+} from "@finance-pro/web/components/i18n/core";
 
 const en = {
   active: "Active",
@@ -38,9 +42,13 @@ const en = {
   changeAmount: "Change amount",
   paidAmount: "Paid amount",
   confirmQuestion: "Confirm this scheduled payment?",
-  confirmTransactionHelp: "Review the transaction that will be created. Changes apply only to this payment.",
+  confirmTransactionHelp:
+    "Review the transaction that will be created. Changes apply only to this payment.",
   loadingTransaction: "Loading transaction options…",
   paymentDate: "Payment date",
+  preserveSchedule: "Keep the subscription date",
+  preserveScheduleHelp:
+    "Record this early payment without moving the next scheduled payment.",
   applyAmountQuestion: "Use this amount for future payments too?",
   yesApply: "Yes, update future payments",
   noKeep: "No, keep the scheduled amount",
@@ -113,9 +121,13 @@ const uk: RegularCopy = {
   changeAmount: "Змінити суму",
   paidAmount: "Сплачена сума",
   confirmQuestion: "Підтвердити цей запланований платіж?",
-  confirmTransactionHelp: "Перегляньте операцію, яку буде створено. Зміни діють лише для цього платежу.",
+  confirmTransactionHelp:
+    "Перегляньте операцію, яку буде створено. Зміни діють лише для цього платежу.",
   loadingTransaction: "Завантажуємо варіанти операції…",
   paymentDate: "Дата платежу",
+  preserveSchedule: "Не змінювати дату підписки",
+  preserveScheduleHelp:
+    "Зберегти дострокову оплату без перенесення наступного платежу.",
   applyAmountQuestion: "Використовувати цю суму й для майбутніх платежів?",
   yesApply: "Так, оновити майбутні платежі",
   noKeep: "Ні, залишити заплановану суму",
@@ -187,9 +199,13 @@ const ru: RegularCopy = {
   changeAmount: "Изменить сумму",
   paidAmount: "Оплаченная сумма",
   confirmQuestion: "Подтвердить этот запланированный платёж?",
-  confirmTransactionHelp: "Проверьте операцию, которая будет создана. Изменения действуют только для этого платежа.",
+  confirmTransactionHelp:
+    "Проверьте операцию, которая будет создана. Изменения действуют только для этого платежа.",
   loadingTransaction: "Загружаем варианты операции…",
   paymentDate: "Дата платежа",
+  preserveSchedule: "Не сдвигать дату подписки",
+  preserveScheduleHelp:
+    "Записать досрочную оплату, не перенося следующий платёж.",
   applyAmountQuestion: "Использовать эту сумму и для будущих платежей?",
   yesApply: "Да, обновить будущие платежи",
   noKeep: "Нет, оставить запланированную сумму",

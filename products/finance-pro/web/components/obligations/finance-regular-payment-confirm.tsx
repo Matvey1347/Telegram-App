@@ -6,22 +6,34 @@ import type {
   ConsumerFinanceRegularPayment,
   ConsumerFinanceRegularPaymentConfirmation,
 } from "@telegram-system/shared";
-import { Button, DateInput, ErrorState, FormField, Input, Modal, Select } from "@finance-pro/web/components/ui";
+import {
+  Button,
+  DateInput,
+  ErrorState,
+  FormField,
+  Input,
+  Modal,
+  Select,
+} from "@finance-pro/web/components/ui";
 import { consumerFinanceObligationsApi } from "@finance-pro/web/lib/api/consumer-finance-obligations-api";
 import { consumerFinanceLedgerApi } from "@finance-pro/web/lib/api/consumer-finance-ledger-api";
 import { consumerFinanceKeys } from "@finance-pro/web/lib/query/consumer-finance-query-keys";
 import type { FinanceLocale } from "@finance-pro/web/components/i18n/core";
 import { financeRegularPaymentsCopy } from "@finance-pro/web/components/i18n/regular-payments";
-import { financeOccurredAtForDate, financeToday } from "@finance-pro/web/lib/formatters/consumer-finance-date";
+import {
+  financeOccurredAtForDate,
+  financeToday,
+} from "@finance-pro/web/lib/formatters/consumer-finance-date";
 import { localizeFinanceCategory } from "@finance-pro/web/components/catalog/finance-category-i18n";
 import { IconPicker } from "@finance-pro/web/components/ui/finance-icon-picker";
+import { financeAccountSelectEmoji } from "@finance-pro/web/components/accounts/finance-account-select-icon";
 
 export function FinanceRegularPaymentConfirm({
   botId,
   payment,
   expectedOccurrenceAt,
   expectedVersion,
-  customAmount,
+  isEarlyPayment,
   locale,
   timezone,
   onClose,
@@ -32,7 +44,7 @@ export function FinanceRegularPaymentConfirm({
   payment: ConsumerFinanceRegularPayment;
   expectedOccurrenceAt: string;
   expectedVersion: number;
-  customAmount: boolean;
+  isEarlyPayment: boolean;
   locale: FinanceLocale;
   timezone: string;
   onClose: () => void;
@@ -50,6 +62,7 @@ export function FinanceRegularPaymentConfirm({
     return icon.type === "image" ? `image:${icon.url}` : icon.value;
   });
   const [occurredAt, setOccurredAt] = useState(financeToday(timezone));
+  const [preserveSchedule, setPreserveSchedule] = useState(isEarlyPayment);
   const accounts = useQuery({
     queryKey: consumerFinanceKeys.accounts(botId),
     queryFn: () => consumerFinanceLedgerApi.accounts(botId),
@@ -83,12 +96,13 @@ export function FinanceRegularPaymentConfirm({
         ...(iconSource !==
         (payment.iconPresentation?.type === "image"
           ? `image:${payment.iconPresentation.url}`
-          : payment.iconPresentation?.value ?? null)
+          : (payment.iconPresentation?.value ?? null))
           ? { emoji: iconSource }
           : {}),
         ...(occurredAt !== financeToday(timezone)
           ? { occurredAt: financeOccurredAtForDate(occurredAt, timezone) }
           : {}),
+        ...(preserveSchedule ? { preserveSchedule: true } : {}),
       }),
     onSuccess: (result) => {
       onConfirmed(result);
@@ -159,16 +173,16 @@ export function FinanceRegularPaymentConfirm({
             />
           </FormField>
           <FormField label={t.account} required>
-            <Select uiLocale={locale} value={accountId} onChange={(event) => setAccountId(event.target.value)}>
+            <Select
+              uiLocale={locale}
+              value={accountId}
+              onChange={(event) => setAccountId(event.target.value)}
+            >
               {activeAccounts.map((item) => (
                 <option
                   key={item.id}
                   value={item.id}
-                  data-icon-emoji={
-                    item.iconPresentation.type === "unicode"
-                      ? item.iconPresentation.value
-                      : undefined
-                  }
+                  data-icon-emoji={financeAccountSelectEmoji(item)}
                   data-option-meta={item.currency}
                 >
                   {item.name}
@@ -177,7 +191,11 @@ export function FinanceRegularPaymentConfirm({
             </Select>
           </FormField>
           <FormField label={t.category}>
-            <Select uiLocale={locale} value={categoryId} onChange={(event) => setCategoryId(event.target.value)}>
+            <Select
+              uiLocale={locale}
+              value={categoryId}
+              onChange={(event) => setCategoryId(event.target.value)}
+            >
               <option value="">{t.noCategory}</option>
               {visibleCategories.map((item) => (
                 <option
@@ -213,8 +231,36 @@ export function FinanceRegularPaymentConfirm({
             </div>
           </FormField>
           <FormField label={t.paymentDate} required className="col-span-2">
-            <DateInput lang={locale} value={occurredAt} onChange={(event) => setOccurredAt(event.target.value)} />
+            <DateInput
+              lang={locale}
+              value={occurredAt}
+              onChange={(event) => setOccurredAt(event.target.value)}
+            />
           </FormField>
+          {isEarlyPayment ? (
+            <div className="col-span-2 rounded-lg border border-neutral-700 bg-neutral-800/50 px-3 py-2">
+              <div className="flex min-h-10 items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium">{t.preserveSchedule}</p>
+                  <p className="mt-0.5 text-xs text-neutral-400">
+                    {t.preserveScheduleHelp}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={preserveSchedule}
+                  aria-label={t.preserveSchedule}
+                  onClick={() => setPreserveSchedule((value) => !value)}
+                  className={`relative h-8 w-14 shrink-0 rounded-full border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 ${preserveSchedule ? "border-sky-400 bg-sky-500" : "border-neutral-600 bg-neutral-700"}`}
+                >
+                  <span
+                    className={`absolute left-1 top-1 size-6 rounded-full bg-white shadow-md transition-transform ${preserveSchedule ? "translate-x-6" : "translate-x-0"}`}
+                  />
+                </button>
+              </div>
+            </div>
+          ) : null}
         </div>
       )}
       <div className="mt-4 flex justify-end gap-2">
@@ -222,9 +268,7 @@ export function FinanceRegularPaymentConfirm({
           {t.cancel}
         </Button>
         <Button
-          disabled={
-            confirm.isPending || !account || !(Number(amount) > 0)
-          }
+          disabled={confirm.isPending || !account || !(Number(amount) > 0)}
           onClick={() => confirm.mutate()}
         >
           {t.confirmPayment}

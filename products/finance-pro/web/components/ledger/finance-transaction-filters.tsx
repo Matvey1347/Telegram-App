@@ -12,6 +12,7 @@ import { type FinanceLocale } from "@finance-pro/web/components/i18n/core";
 import { financeTransactionsCopy } from "@finance-pro/web/components/i18n/transactions";
 import { localizeFinanceCategory } from "@finance-pro/web/components/catalog/finance-category-i18n";
 import type { ConsumerFinanceSurface } from "@finance-pro/web/components/app/consumer-finance-navigation";
+import { financeAccountSelectEmoji } from "@finance-pro/web/components/accounts/finance-account-select-icon";
 
 type FinanceTransactionFiltersProps = {
   filters: ConsumerFinanceHistoryQuery;
@@ -144,11 +145,7 @@ function FilterFields({
           <option
             key={item.id}
             value={item.id}
-            data-icon-emoji={
-              item.iconPresentation.type === "unicode"
-                ? item.iconPresentation.value
-                : undefined
-            }
+            data-icon-emoji={financeAccountSelectEmoji(item)}
             data-option-meta={item.currency}
           >
             {item.name}

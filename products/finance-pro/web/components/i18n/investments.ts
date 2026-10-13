@@ -1,4 +1,7 @@
-import { financeCoreCopy, type FinanceLocale } from "@finance-pro/web/components/i18n/core";
+import {
+  financeCoreCopy,
+  type FinanceLocale,
+} from "@finance-pro/web/components/i18n/core";
 
 const en = {
   title: "Investments",
@@ -79,6 +82,7 @@ const en = {
     "Some investments are excluded because a current valuation or exchange rate is unavailable.",
   back: "Back to investments",
   editInvestment: "Edit investment",
+  actions: "Investment actions",
   openDetails: "Open details",
   positiveResult: "Positive result",
   negativeResult: "Negative result",
@@ -182,6 +186,7 @@ const uk: InvestmentsCopy = {
     "Деякі інвестиції не враховано через відсутню поточну оцінку або курс обміну.",
   back: "До інвестицій",
   editInvestment: "Редагувати інвестицію",
+  actions: "Дії з інвестицією",
   openDetails: "Відкрити деталі",
   positiveResult: "Позитивний результат",
   negativeResult: "Негативний результат",
@@ -284,6 +289,7 @@ const ru: InvestmentsCopy = {
     "Некоторые инвестиции не учтены из-за отсутствующей текущей оценки или курса обмена.",
   back: "К инвестициям",
   editInvestment: "Редактировать инвестицию",
+  actions: "Действия с инвестицией",
   openDetails: "Открыть детали",
   positiveResult: "Положительный результат",
   negativeResult: "Отрицательный результат",

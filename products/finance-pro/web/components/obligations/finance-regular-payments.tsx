@@ -6,7 +6,15 @@ import {
   useMutation,
   useQueryClient,
 } from "@tanstack/react-query";
-import { CalendarCheck, History, Pause, Pencil, Play, SlidersHorizontal, Trash2 } from "lucide-react";
+import {
+  CalendarCheck,
+  History,
+  Pause,
+  Pencil,
+  Play,
+  SlidersHorizontal,
+  Trash2,
+} from "lucide-react";
 import type {
   ConsumerFinanceRegularPayment,
   ConsumerFinanceRegularPaymentConfirmation,
@@ -35,7 +43,10 @@ import { reconcileConsumerTransactionCaches } from "@finance-pro/web/lib/cache/c
 import { formatMoney } from "@finance-pro/web/lib/formatters/consumer-finance-money";
 import type { ConsumerFinanceRegularPaymentTarget } from "@finance-pro/web/components/app/consumer-finance-navigation";
 import { localizeFinanceCategory } from "@finance-pro/web/components/catalog/finance-category-i18n";
-import { financeIntlLocale, type FinanceLocale } from "@finance-pro/web/components/i18n/core";
+import {
+  financeIntlLocale,
+  type FinanceLocale,
+} from "@finance-pro/web/components/i18n/core";
 import {
   financeRegularPaymentRecurrenceLabel,
   financeRegularPaymentsCopy,
@@ -46,7 +57,7 @@ type ConfirmationRequest = {
   payment: Payment;
   expectedOccurrenceAt: string;
   expectedVersion: number;
-  customAmount: boolean;
+  isEarlyPayment: boolean;
 };
 
 export function FinanceRegularPayments({
@@ -106,7 +117,7 @@ export function FinanceRegularPayments({
           payment: targetPayment,
           expectedOccurrenceAt: target.occurrenceAt,
           expectedVersion: target.expectedVersion,
-          customAmount: true,
+          isEarlyPayment: false,
         }
       : null;
   const activeConfirmation = confirmation ?? targetConfirmation;
@@ -170,8 +181,14 @@ export function FinanceRegularPayments({
           {t.addRegularPayment}
         </Button>
         <div className="w-full">
-          <label className="mb-1 block text-sm text-neutral-300">{t.status}</label>
-          <Select uiLocale={locale} value={status} onChange={(event) => setStatus(event.target.value as typeof status)}>
+          <label className="mb-1 block text-sm text-neutral-300">
+            {t.status}
+          </label>
+          <Select
+            uiLocale={locale}
+            value={status}
+            onChange={(event) => setStatus(event.target.value as typeof status)}
+          >
             <option value="ACTIVE">🟢 {t.active}</option>
             <option value="PAUSED">⏸️ {t.paused}</option>
             <option value="CANCELED">⛔ {t.canceled}</option>
@@ -209,12 +226,12 @@ export function FinanceRegularPayments({
                 statusAction.mutate({ payment, action: "resume" })
               }
               onCancel={() => setCanceling(payment)}
-              onConfirm={(customAmount) =>
+              onConfirm={(isEarlyPayment) =>
                 setConfirmation({
                   payment,
                   expectedOccurrenceAt: payment.nextOccurrenceAt,
                   expectedVersion: payment.version,
-                  customAmount,
+                  isEarlyPayment,
                 })
               }
             />
@@ -256,12 +273,12 @@ export function FinanceRegularPayments({
       ) : null}
       {activeConfirmation ? (
         <FinanceRegularPaymentConfirm
-          key={`${activeConfirmation.payment.id}:${activeConfirmation.expectedOccurrenceAt}:${activeConfirmation.customAmount}`}
+          key={`${activeConfirmation.payment.id}:${activeConfirmation.expectedOccurrenceAt}:${activeConfirmation.isEarlyPayment}`}
           botId={botId}
           payment={activeConfirmation.payment}
           expectedOccurrenceAt={activeConfirmation.expectedOccurrenceAt}
           expectedVersion={activeConfirmation.expectedVersion}
-          customAmount={activeConfirmation.customAmount}
+          isEarlyPayment={activeConfirmation.isEarlyPayment}
           locale={locale}
           timezone={timezone}
           onClose={closeConfirmation}
@@ -307,7 +324,7 @@ function RegularPaymentCard({
   onPause: () => void;
   onResume: () => void;
   onCancel: () => void;
-  onConfirm: (customAmount: boolean) => void;
+  onConfirm: (isEarlyPayment: boolean) => void;
 }) {
   const t = financeRegularPaymentsCopy(locale);
   const recurrence = financeRegularPaymentRecurrenceLabel(
@@ -320,16 +337,18 @@ function RegularPaymentCard({
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 gap-3">
           <IconAvatar
-            icon={payment.category?.iconPresentation ?? payment.iconPresentation ?? payment.account.iconPresentation}
+            icon={
+              payment.category?.iconPresentation ??
+              payment.iconPresentation ??
+              payment.account.iconPresentation
+            }
             label={payment.category?.name ?? payment.name}
             size="sm"
             bordered={false}
           />
           <div className="min-w-0">
             <h2 className="truncate font-medium">{payment.name}</h2>
-            <p className="text-xs text-neutral-400">
-              {recurrence}
-            </p>
+            <p className="text-xs text-neutral-400">{recurrence}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -353,13 +372,13 @@ function RegularPaymentCard({
                     {
                       label: t.payEarly,
                       icon: <CalendarCheck size={16} />,
-                      onSelect: () => onConfirm(false),
+                      onSelect: () => onConfirm(true),
                       disabled: busy,
                     },
                     {
                       label: t.changeAmount,
                       icon: <SlidersHorizontal size={16} />,
-                      onSelect: () => onConfirm(true),
+                      onSelect: () => onConfirm(false),
                       disabled: busy,
                     },
                     {
@@ -403,25 +422,30 @@ function RegularPaymentCard({
         <div>
           <p className="text-xs text-neutral-500">{t.nextPayment}</p>
           <p className={payment.isDue ? "font-medium text-amber-300" : ""}>
-          {payment.isDue ? `${t.due} · ` : ""}
-          {new Intl.DateTimeFormat(financeIntlLocale(locale), {
-            timeZone: payment.scheduleTimezone,
-          }).format(new Date(payment.nextOccurrenceAt))}
+            {payment.isDue ? `${t.due} · ` : ""}
+            {new Intl.DateTimeFormat(financeIntlLocale(locale), {
+              timeZone: payment.scheduleTimezone,
+            }).format(new Date(payment.nextOccurrenceAt))}
           </p>
         </div>
         <div>
           <p className="text-xs text-neutral-500">{t.lastPayment}</p>
-          <p>{payment.lastPaymentAt
-            ? new Intl.DateTimeFormat(financeIntlLocale(locale), {
-                timeZone: payment.scheduleTimezone,
-              }).format(new Date(payment.lastPaymentAt))
-            : t.noPaymentYet}
+          <p>
+            {payment.lastPaymentAt
+              ? new Intl.DateTimeFormat(financeIntlLocale(locale), {
+                  timeZone: payment.scheduleTimezone,
+                }).format(new Date(payment.lastPaymentAt))
+              : t.noPaymentYet}
           </p>
         </div>
       </div>
       {payment.category ? (
         <p className="mt-1 flex items-center gap-1 text-xs text-neutral-500">
-          <IconAvatar icon={payment.category.iconPresentation} label={payment.category.name} size="xs" />
+          <IconAvatar
+            icon={payment.category.iconPresentation}
+            label={payment.category.name}
+            size="xs"
+          />
           {localizeFinanceCategory(
             payment.category.name,
             payment.category.key,
@@ -430,7 +454,9 @@ function RegularPaymentCard({
         </p>
       ) : null}
       {payment.note ? (
-        <p className="mt-2 line-clamp-2 text-sm text-neutral-400">{payment.note}</p>
+        <p className="mt-2 line-clamp-2 text-sm text-neutral-400">
+          {payment.note}
+        </p>
       ) : null}
       {payment.status === "ACTIVE" && payment.isDue ? (
         <div className="mt-4 flex flex-wrap gap-2">

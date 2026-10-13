@@ -1,13 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import {
-  ArrowDown,
-  ArrowLeftRight,
-  ArrowUp,
-  Plus,
-  X,
-} from "lucide-react";
+import { ArrowDown, ArrowLeftRight, ArrowUp, Plus, X } from "lucide-react";
 import type { FinanceCoreCopy } from "@finance-pro/web/components/i18n/core";
 import type { ConsumerFinanceAction } from "@finance-pro/web/components/app/consumer-finance-navigation";
 
@@ -68,6 +62,7 @@ export function ConsumerFinanceActionLauncher({
   return (
     <div
       ref={rootRef}
+      data-finance-action-launcher
       className={`fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] right-[max(1rem,env(safe-area-inset-right))] z-40 ${showOnDesktop ? "" : "md:hidden"}`}
     >
       {open ? (

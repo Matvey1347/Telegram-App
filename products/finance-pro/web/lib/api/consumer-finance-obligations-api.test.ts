@@ -79,6 +79,7 @@ describe("consumerFinanceObligationsApi", () => {
       expectedOccurrenceAt: "2026-09-08T08:00:00.000Z",
       expectedVersion: 3,
       amount: "125",
+      preserveSchedule: true,
     });
     await consumerFinanceObligationsApi.regularPaymentRevisions("bot", "rent", {
       cursor: "cursor",
@@ -115,6 +116,7 @@ describe("consumerFinanceObligationsApi", () => {
       expectedOccurrenceAt: "2026-09-08T08:00:00.000Z",
       expectedVersion: 3,
       amount: "125",
+      preserveSchedule: true,
     });
     expect(requests[4]?.params).toEqual({ cursor: "cursor", limit: 30 });
     expect(JSON.parse(String(requests[5]?.data))).toEqual({

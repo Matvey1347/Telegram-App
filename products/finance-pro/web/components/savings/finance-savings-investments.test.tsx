@@ -14,6 +14,8 @@ const api = vi.hoisted(() => ({
   savings: vi.fn(),
   investments: vi.fn(),
   createInvestment: vi.fn(),
+  updateInvestment: vi.fn(),
+  archiveInvestment: vi.fn(),
   summary: vi.fn(),
   accounts: vi.fn(),
   addCashFlow: vi.fn(),
@@ -29,6 +31,8 @@ vi.mock("@finance-pro/web/lib/api/consumer-finance-investments-api", () => ({
   consumerFinanceInvestmentsApi: {
     list: api.investments,
     create: api.createInvestment,
+    update: api.updateInvestment,
+    archive: api.archiveInvestment,
     summary: api.summary,
     addCashFlow: api.addCashFlow,
   },
@@ -69,6 +73,8 @@ beforeEach(() => {
   api.allocate.mockReset();
   api.addCashFlow.mockReset();
   api.createInvestment.mockReset();
+  api.updateInvestment.mockReset();
+  api.archiveInvestment.mockReset();
 });
 
 describe("Consumer Finance savings and investments screens", () => {
@@ -200,6 +206,123 @@ describe("Consumer Finance savings and investments screens", () => {
     fireEvent.click(screen.getByRole("button", { name: "Open details" }));
     expect(onOpen).toHaveBeenCalledWith("studio");
     expect(api.investments).toHaveBeenCalledOnce();
+  });
+
+  it("adds a contribution from an active investment card with an account emoji", async () => {
+    const investment = {
+      id: "studio",
+      name: "Photo studio",
+      type: "BUSINESS",
+      currency: "USD",
+      status: "ACTIVE" as const,
+      startedAt: "2026-01-01",
+      totalInvested: "0",
+      totalReturned: "0",
+      currentValue: "0",
+      profitLoss: "0",
+      returnPercentage: null,
+      createdAt: "2026-01-01",
+      updatedAt: "2026-01-01",
+    };
+    api.investments.mockResolvedValue({
+      items: [investment],
+      nextCursor: null,
+    });
+    api.accounts.mockResolvedValue([
+      {
+        id: "account-1",
+        name: "Cash",
+        type: "CASH",
+        currency: "USD",
+        iconPresentation: { type: "unicode", value: "💵" },
+      },
+    ]);
+    api.addCashFlow.mockResolvedValue({
+      investment: { ...investment, totalInvested: "20" },
+      account: null,
+      cashFlow: null,
+      valuation: null,
+    });
+    host(
+      <FinanceInvestments
+        botId="bot"
+        locale="en"
+        defaultCurrency="USD"
+        onOpen={vi.fn()}
+      />,
+    );
+    await screen.findByText("Photo studio");
+    fireEvent.click(screen.getByRole("button", { name: "Investment actions" }));
+    fireEvent.click(screen.getByRole("button", { name: "Contribution" }));
+    const dialog = await screen.findByRole("dialog", {
+      name: "Contribution: Photo studio",
+    });
+    await waitFor(() =>
+      expect(
+        within(dialog).getByRole("button", { name: /Cash.*USD/i }),
+      ).toBeInTheDocument(),
+    );
+    expect(within(dialog).getByText("💵")).toBeInTheDocument();
+    const amount = dialog.querySelector('input[inputmode="decimal"]');
+    expect(amount).not.toBeNull();
+    fireEvent.change(amount!, { target: { value: "20" } });
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: "Contribution" }),
+    );
+    await waitFor(() => expect(api.addCashFlow).toHaveBeenCalledOnce());
+    expect(api.addCashFlow).toHaveBeenCalledWith(
+      "bot",
+      "studio",
+      expect.objectContaining({
+        kind: "CONTRIBUTION",
+        accountId: "account-1",
+        amount: "20",
+      }),
+    );
+  });
+
+  it("archives a closed investment from its card actions", async () => {
+    const investment = {
+      id: "studio",
+      name: "Photo studio",
+      type: "BUSINESS",
+      currency: "USD",
+      status: "CLOSED" as const,
+      startedAt: "2026-01-01",
+      totalInvested: "20",
+      totalReturned: "20",
+      currentValue: "0",
+      profitLoss: "0",
+      returnPercentage: 0,
+      createdAt: "2026-01-01",
+      updatedAt: "2026-01-01",
+    };
+    api.investments.mockResolvedValue({
+      items: [investment],
+      nextCursor: null,
+    });
+    api.archiveInvestment.mockResolvedValue({
+      ...investment,
+      status: "ARCHIVED",
+    });
+    host(
+      <FinanceInvestments
+        botId="bot"
+        locale="en"
+        defaultCurrency="USD"
+        onOpen={vi.fn()}
+      />,
+    );
+    await screen.findByText("Photo studio");
+    fireEvent.click(screen.getByRole("button", { name: "Investment actions" }));
+    fireEvent.click(screen.getByRole("button", { name: "Archive" }));
+    const dialog = await screen.findByRole("dialog", {
+      name: "Confirm action",
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Archive" }));
+    await waitFor(() =>
+      expect(api.archiveInvestment).toHaveBeenCalledWith("bot", "studio"),
+    );
   });
 
   it("loads subsequent investment pages without dropping the status filter", async () => {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   useInfiniteQuery,
   useMutation,
@@ -25,15 +25,23 @@ import {
 import type { FinanceLocale } from "@finance-pro/web/components/i18n/core";
 import { financeInvestmentsCopy } from "@finance-pro/web/components/i18n/investments";
 import { consumerFinanceInvestmentsApi } from "@finance-pro/web/lib/api/consumer-finance-investments-api";
+import { consumerFinanceLedgerApi } from "@finance-pro/web/lib/api/consumer-finance-ledger-api";
 import { consumerFinanceKeys } from "@finance-pro/web/lib/query/consumer-finance-query-keys";
 import {
   invalidateConsumerAssetDerivations,
   patchInvestment,
+  patchInvestmentMutation,
 } from "@finance-pro/web/lib/cache/consumer-finance-assets-cache";
+import { consumerFinanceRequestId } from "@finance-pro/web/lib/assets/consumer-finance-assets";
 import { formatMoney } from "@finance-pro/web/lib/formatters/consumer-finance-money";
 import { FinanceInvestmentCard } from "@finance-pro/web/components/investments/finance-investment-card";
 import { FinanceInvestmentEditor } from "@finance-pro/web/components/investments/finance-investment-editor";
 import { FinanceInvestmentCreateModal } from "@finance-pro/web/components/investments/finance-investment-create-modal";
+import {
+  FinanceInvestmentActionModal,
+  type InvestmentActionValues,
+} from "@finance-pro/web/components/investments/finance-investment-action-modal";
+import { FinanceConfirmModal } from "@finance-pro/web/components/shared/finance-confirm-modal";
 import { FinanceSortControl } from "@finance-pro/web/components/ui/finance-sort-control";
 
 type StatusFilter = ConsumerFinanceInvestmentStatus | "ALL";
@@ -60,6 +68,15 @@ export function FinanceInvestments({
     null,
   );
   const [creating, setCreating] = useState(false);
+  const [contributing, setContributing] =
+    useState<ConsumerFinanceInvestment | null>(null);
+  const [archiving, setArchiving] = useState<ConsumerFinanceInvestment | null>(
+    null,
+  );
+  const contributionAttempt = useRef<{
+    fingerprint: string;
+    idempotencyKey: string;
+  } | null>(null);
   const filters = {
     ...(status === "ALL" ? {} : { status }),
     sortBy,
@@ -80,6 +97,11 @@ export function FinanceInvestments({
   const summary = useQuery({
     queryKey: consumerFinanceKeys.investmentSummary(botId),
     queryFn: () => consumerFinanceInvestmentsApi.summary(botId),
+    retry: false,
+  });
+  const accounts = useQuery({
+    queryKey: consumerFinanceKeys.accounts(botId),
+    queryFn: () => consumerFinanceLedgerApi.accounts(botId),
     retry: false,
   });
   const save = useMutation({
@@ -104,6 +126,49 @@ export function FinanceInvestments({
       });
       invalidateConsumerAssetDerivations(client, botId);
       setEditing(null);
+    },
+  });
+  const contribute = useMutation({
+    mutationFn: (values: InvestmentActionValues) => {
+      const investment = contributing;
+      if (!investment) throw new Error("Investment is required");
+      const fingerprint = JSON.stringify({
+        investmentId: investment.id,
+        values,
+      });
+      if (contributionAttempt.current?.fingerprint !== fingerprint)
+        contributionAttempt.current = {
+          fingerprint,
+          idempotencyKey: consumerFinanceRequestId("investment-contribution"),
+        };
+      return consumerFinanceInvestmentsApi.addCashFlow(botId, investment.id, {
+        kind: "CONTRIBUTION",
+        accountId: values.accountId!,
+        amount: values.amount!,
+        occurredAt: values.occurredAt,
+        note: values.note,
+        idempotencyKey: contributionAttempt.current.idempotencyKey,
+      });
+    },
+    retry: false,
+    onSuccess: (result) => {
+      contributionAttempt.current = null;
+      patchInvestmentMutation(client, botId, result);
+      invalidateConsumerAssetDerivations(client, botId);
+      setContributing(null);
+    },
+  });
+  const archive = useMutation({
+    mutationFn: (investment: ConsumerFinanceInvestment) =>
+      consumerFinanceInvestmentsApi.archive(botId, investment.id),
+    retry: false,
+    onSuccess: (investment) => {
+      patchInvestment(client, botId, investment);
+      void client.invalidateQueries({
+        queryKey: consumerFinanceKeys.investmentSummary(botId),
+      });
+      invalidateConsumerAssetDerivations(client, botId);
+      setArchiving(null);
     },
   });
   if (list.isLoading || summary.isLoading)
@@ -177,18 +242,10 @@ export function FinanceInvestments({
             value={status}
             onChange={(e) => setStatus(e.target.value as StatusFilter)}
           >
-            <option value="ACTIVE" className="text-emerald-300">
-              {t.active}
-            </option>
-            <option value="CLOSED" className="text-sky-300">
-              {t.closed}
-            </option>
-            <option value="ARCHIVED" className="text-neutral-400">
-              {t.archived}
-            </option>
-            <option value="ALL" className="text-violet-300">
-              {t.all}
-            </option>
+            <option value="ACTIVE">🟢 {t.active}</option>
+            <option value="CLOSED">✅ {t.closed}</option>
+            <option value="ARCHIVED">📦 {t.archived}</option>
+            <option value="ALL">◌ {t.all}</option>
           </Select>
         </div>
         <div>
@@ -222,6 +279,8 @@ export function FinanceInvestments({
               locale={locale}
               onOpen={() => onOpen(investment.id)}
               onEdit={() => setEditing(investment)}
+              onContribution={() => setContributing(investment)}
+              onArchive={() => setArchiving(investment)}
             />
           ))}
         </div>
@@ -255,6 +314,35 @@ export function FinanceInvestments({
           locale={locale}
           defaultCurrency={defaultCurrency}
           onClose={() => setCreating(false)}
+        />
+      ) : null}
+      {contributing ? (
+        <FinanceInvestmentActionModal
+          key={`${contributing.id}-${accounts.data?.[0]?.id ?? "loading"}`}
+          open
+          action="CONTRIBUTION"
+          investment={contributing}
+          accounts={accounts.data ?? []}
+          valuations={[]}
+          locale={locale}
+          pending={contribute.isPending || accounts.isLoading}
+          error={contribute.isError || accounts.isError}
+          onClose={() => {
+            contributionAttempt.current = null;
+            setContributing(null);
+          }}
+          onSubmit={(values) => contribute.mutate(values)}
+        />
+      ) : null}
+      {archiving ? (
+        <FinanceConfirmModal
+          open
+          locale={locale}
+          entityName={archiving.name}
+          actionLabel={t.archiveInvestment}
+          description={t.confirmArchive}
+          onClose={() => setArchiving(null)}
+          onConfirm={() => archive.mutateAsync(archiving)}
         />
       ) : null}
     </div>

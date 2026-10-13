@@ -118,6 +118,8 @@ export type ConsumerFinanceRegularPaymentOccurrence = {
   scheduledAmount: string;
   paidAmount: string;
   currency: string;
+  /** False for a recorded early payment that deliberately kept the next due date. */
+  advancesSchedule?: boolean;
   confirmedAt: string;
   futureAmountAppliedAt?: string | null;
 };
@@ -135,6 +137,8 @@ export type ConsumerFinanceRegularPaymentConfirmInput = {
   /** The payment icon belongs to the schedule and is updated with this confirmation. */
   emoji?: string | null;
   occurredAt?: string;
+  /** Record this payment but leave the next planned occurrence unchanged. */
+  preserveSchedule?: boolean;
   necessity?: ConsumerFinanceExpenseNecessity;
 };
 

@@ -17,12 +17,12 @@ import {
   FINANCE_NAVIGATION_GROUPS,
   FinanceNavigationButton,
   FinanceNavigationGroupHeader,
-  FinanceScreenIcon,
   isFinanceNavigationActive,
 } from "@finance-pro/web/components/app/finance-navigation-items";
 import { FinanceAccountMenu } from "@finance-pro/web/components/accounts/finance-account-menu";
 import { FinanceMobileNavigation } from "@finance-pro/web/components/app/finance-mobile-navigation";
 import styles from "@finance-pro/web/components/app/finance-navigation-groups.module.css";
+import financeStyles from "@finance-pro/web/components/ui/finance-ui.module.css";
 
 export function FinanceWebAppShell({
   botId,
@@ -72,7 +72,7 @@ export function FinanceWebAppShell({
     <main
       data-finance-surface="browser"
       data-finance-shell="web-app"
-      className="min-h-dvh bg-neutral-950 text-neutral-100"
+      className={`${financeStyles.pwaInset} min-h-dvh bg-neutral-950 text-neutral-100`}
     >
       <div className="mx-auto flex min-h-dvh w-full max-w-[1800px]">
         <aside className="sticky top-0 hidden h-dvh w-64 shrink-0 flex-col overflow-hidden border-r border-neutral-800 bg-neutral-950 px-4 py-5 md:flex">
@@ -144,19 +144,23 @@ export function FinanceWebAppShell({
         </aside>
 
         <div className="min-w-0 flex-1">
-          <header className="sticky top-0 z-30 border-b border-neutral-800 bg-neutral-950/95 px-4 py-3 backdrop-blur md:px-8 xl:px-10">
-            <div className="mx-auto flex max-w-[1440px] flex-wrap items-center justify-between gap-3">
-              <div className="flex min-w-0 items-center gap-3">
-                <FinanceScreenIcon screen={screen} />
-                <h1 className="truncate text-xl font-semibold md:text-2xl">
-                  {title}
-                </h1>
-              </div>
-              <div className="flex items-center gap-2">
-                <ConsumerFinanceActionLauncher
-                  copy={copy}
-                  onAction={onAction}
+          <header className="sticky top-0 z-30 flex min-h-16 items-center justify-between border-b border-neutral-800 bg-neutral-950/95 px-4 pt-[env(safe-area-inset-top)] backdrop-blur md:px-8 xl:px-10">
+            <div className="mx-auto flex w-full max-w-[1440px] items-center justify-between gap-3">
+              <div className="flex min-w-0 flex-1 items-center gap-3">
+                <Image
+                  src={logoUrl || "/brand/finance.png"}
+                  alt=""
+                  width={36}
+                  height={36}
+                  unoptimized
+                  className="h-9 w-9 rounded-lg object-cover"
+                  onError={(event) => {
+                    event.currentTarget.src = "/brand/finance.png";
+                  }}
                 />
+                <h1 className="truncate text-lg font-semibold">{title}</h1>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
                 <FinanceLanguageSelect
                   copy={copy}
                   value={locale}
@@ -187,6 +191,12 @@ export function FinanceWebAppShell({
         copy={copy}
         onNavigate={onNavigate}
         onOpenAssistant={onOpenAssistant}
+      />
+      <ConsumerFinanceActionLauncher
+        compact
+        showOnDesktop
+        copy={copy}
+        onAction={onAction}
       />
     </main>
   );

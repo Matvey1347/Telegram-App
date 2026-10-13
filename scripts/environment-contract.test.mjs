@@ -118,7 +118,7 @@ test("local bot development survives Prisma schema and tunnel transport changes"
   assert.equal(developmentNestConfig.compilerOptions.deleteOutDir, false);
   assert.equal(
     developmentNestConfig.entryFile,
-    "../apps/api/src/main",
-    "the development watcher must run the entrypoint emitted under the workspace-wide TypeScript root",
+    "main",
+    "the development watcher must resolve the API entrypoint relative to apps/api/src",
   );
 });

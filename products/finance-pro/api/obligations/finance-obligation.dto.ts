@@ -1,4 +1,4 @@
-import { Type } from 'class-transformer';
+import { Type } from "class-transformer";
 import {
   ArrayMaxSize,
   ArrayMinSize,
@@ -15,12 +15,12 @@ import {
   Min,
   MinLength,
   ValidateNested,
-} from 'class-validator';
+} from "class-validator";
 
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/u;
 
 export class FinanceDebtInputDto {
-  @IsIn(['I_OWE', 'OWED_TO_ME']) direction!: 'I_OWE' | 'OWED_TO_ME';
+  @IsIn(["I_OWE", "OWED_TO_ME"]) direction!: "I_OWE" | "OWED_TO_ME";
   @IsString() @MinLength(1) @MaxLength(120) @Matches(/\S/u) name!: string;
   @IsNumberString() amount!: string;
   @IsString() accountId!: string;
@@ -30,7 +30,7 @@ export class FinanceDebtInputDto {
 
 export class FinanceDebtQueryDto {
   @IsOptional() @IsString() @Matches(/\S/u) id?: string;
-  @IsOptional() @IsIn(['OPEN', 'SETTLED']) status?: 'OPEN' | 'SETTLED';
+  @IsOptional() @IsIn(["OPEN", "SETTLED"]) status?: "OPEN" | "SETTLED";
   @IsOptional() @IsString() cursor?: string;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(100) limit = 30;
 }
@@ -55,8 +55,8 @@ export class FinanceSharedExpenseInputDto {
   @IsOptional() @IsString() @MaxLength(240) description?: string;
   @IsDateString() occurredAt!: string;
   @IsOptional()
-  @IsIn(['UNSPECIFIED', 'REQUIRED', 'DISCRETIONARY'])
-  necessity?: 'UNSPECIFIED' | 'REQUIRED' | 'DISCRETIONARY';
+  @IsIn(["UNSPECIFIED", "REQUIRED", "DISCRETIONARY"])
+  necessity?: "UNSPECIFIED" | "REQUIRED" | "DISCRETIONARY";
   @IsArray()
   @ArrayMinSize(1)
   @ArrayMaxSize(20)
@@ -71,11 +71,11 @@ export class FinanceRegularPaymentInputDto {
   @IsNumberString() amount!: string;
   @IsString() accountId!: string;
   @IsOptional() @IsString() categoryId?: string | null;
-  @IsIn(['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY']) recurrence!:
-    | 'DAILY'
-    | 'WEEKLY'
-    | 'MONTHLY'
-    | 'YEARLY';
+  @IsIn(["DAILY", "WEEKLY", "MONTHLY", "YEARLY"]) recurrence!:
+    | "DAILY"
+    | "WEEKLY"
+    | "MONTHLY"
+    | "YEARLY";
   @IsOptional()
   @Type(() => Number)
   @IsInt()
@@ -85,15 +85,15 @@ export class FinanceRegularPaymentInputDto {
   @IsString() @Matches(DATE_ONLY) nextPaymentDate!: string;
   @IsOptional() @IsString() @MaxLength(500) note?: string | null;
   @IsOptional()
-  @IsIn(['UNSPECIFIED', 'REQUIRED', 'DISCRETIONARY'])
-  necessity?: 'UNSPECIFIED' | 'REQUIRED' | 'DISCRETIONARY';
+  @IsIn(["UNSPECIFIED", "REQUIRED", "DISCRETIONARY"])
+  necessity?: "UNSPECIFIED" | "REQUIRED" | "DISCRETIONARY";
 }
 
 export class FinanceRegularPaymentQueryDto {
   @IsOptional() @IsString() @Matches(/\S/u) id?: string;
   @IsOptional()
-  @IsIn(['ACTIVE', 'PAUSED', 'CANCELED'])
-  status?: 'ACTIVE' | 'PAUSED' | 'CANCELED';
+  @IsIn(["ACTIVE", "PAUSED", "CANCELED"])
+  status?: "ACTIVE" | "PAUSED" | "CANCELED";
   @IsOptional() @IsString() cursor?: string;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(100) limit = 30;
 }
@@ -112,9 +112,11 @@ export class FinanceRegularPaymentConfirmDto {
   @IsOptional() @IsString() @MaxLength(240) description?: string;
   @IsOptional() @IsString() @MaxLength(2048) emoji?: string | null;
   @IsOptional() @IsDateString() occurredAt?: string;
+  /** Record an early payment without consuming or moving the planned occurrence. */
+  @IsOptional() @IsIn([true, false]) preserveSchedule?: boolean;
   @IsOptional()
-  @IsIn(['UNSPECIFIED', 'REQUIRED', 'DISCRETIONARY'])
-  necessity?: 'UNSPECIFIED' | 'REQUIRED' | 'DISCRETIONARY';
+  @IsIn(["UNSPECIFIED", "REQUIRED", "DISCRETIONARY"])
+  necessity?: "UNSPECIFIED" | "REQUIRED" | "DISCRETIONARY";
 }
 
 export class FinanceApplyOccurrenceAmountDto {

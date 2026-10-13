@@ -17,6 +17,7 @@ import {
 } from "@finance-pro/web/lib/formatters/consumer-finance-date";
 import { type FinanceLocale } from "@finance-pro/web/components/i18n/core";
 import { financeTransfersCopy } from "@finance-pro/web/components/i18n/transfers";
+import { financeAccountSelectEmoji } from "@finance-pro/web/components/accounts/finance-account-select-icon";
 
 export function FinanceTransferEditor({
   botId,
@@ -130,11 +131,7 @@ export function FinanceTransferEditor({
                 <option
                   key={item.id}
                   value={item.id}
-                  data-icon-emoji={
-                    item.iconPresentation.type === "unicode"
-                      ? item.iconPresentation.value
-                      : undefined
-                  }
+                  data-icon-emoji={financeAccountSelectEmoji(item)}
                   data-option-meta={item.currency}
                 >
                   {item.name}
@@ -157,11 +154,7 @@ export function FinanceTransferEditor({
                 <option
                   key={item.id}
                   value={item.id}
-                  data-icon-emoji={
-                    item.iconPresentation.type === "unicode"
-                      ? item.iconPresentation.value
-                      : undefined
-                  }
+                  data-icon-emoji={financeAccountSelectEmoji(item)}
                   data-option-meta={item.currency}
                 >
                   {item.name}

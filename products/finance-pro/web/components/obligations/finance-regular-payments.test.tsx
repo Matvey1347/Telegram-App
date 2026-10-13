@@ -322,6 +322,57 @@ describe("FinanceRegularPayments", () => {
     expect(api.applyOccurrenceAmount).not.toHaveBeenCalled();
   });
 
+  it("keeps the subscription date by default for an early payment and can opt out", async () => {
+    api.confirmRegularPayment.mockResolvedValue({
+      ...confirmation,
+      futureAmountUpdateRequired: false,
+    });
+    renderPayments();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Payment actions" }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Pay early" }));
+
+    const dialog = screen.getByRole("dialog");
+    const preserveSchedule = within(dialog).getByRole("switch", {
+      name: "Keep the subscription date",
+    });
+    expect(preserveSchedule).toHaveAttribute("aria-checked", "true");
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: "Confirm payment" }),
+    );
+    await waitFor(() =>
+      expect(api.confirmRegularPayment).toHaveBeenCalledWith("bot", "rent", {
+        expectedOccurrenceAt: payment.nextOccurrenceAt,
+        expectedVersion: payment.version,
+        amount: "100",
+        preserveSchedule: true,
+      }),
+    );
+
+    api.confirmRegularPayment.mockClear();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Payment actions" }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Pay early" }));
+    const optOutDialog = screen.getByRole("dialog");
+    fireEvent.click(
+      within(optOutDialog).getByRole("switch", {
+        name: "Keep the subscription date",
+      }),
+    );
+    fireEvent.click(
+      within(optOutDialog).getByRole("button", { name: "Confirm payment" }),
+    );
+    await waitFor(() =>
+      expect(api.confirmRegularPayment).toHaveBeenCalledWith("bot", "rent", {
+        expectedOccurrenceAt: payment.nextOccurrenceAt,
+        expectedVersion: payment.version,
+        amount: "100",
+      }),
+    );
+  });
+
   it("applies the confirmed occurrence amount with the returned version", async () => {
     api.confirmRegularPayment.mockResolvedValue(confirmation);
     api.applyOccurrenceAmount.mockResolvedValue({

@@ -1,10 +1,10 @@
-import { Prisma } from '@prisma/client';
+import { Prisma } from "@prisma/client";
 import {
   financeAccountEmoji,
   financeCategoryEmoji,
   financeIconPresentation,
-} from '@finance-pro/api/catalog/finance-entity-emoji';
-import { financeRegularPaymentIsDue } from '@finance-pro/api/obligations/finance-obligation-date';
+} from "@finance-pro/api/catalog/finance-entity-emoji";
+import { financeRegularPaymentIsDue } from "@finance-pro/api/obligations/finance-obligation-date";
 
 const accountSelect = {
   id: true,
@@ -52,7 +52,7 @@ export const financeRegularPaymentSelect = {
   accountId: true,
   account: { select: accountSelect },
   occurrences: {
-    orderBy: { confirmedAt: 'desc' },
+    orderBy: { confirmedAt: "desc" },
     take: 1,
     select: { confirmedAt: true },
   },
@@ -104,6 +104,7 @@ export const financeRegularPaymentOccurrenceSelect = {
   scheduledAmount: true,
   paidAmount: true,
   currency: true,
+  advancesSchedule: true,
   confirmedAt: true,
   futureAmountAppliedAt: true,
 } satisfies Prisma.FinanceRecurringPaymentOccurrenceSelect;
@@ -121,7 +122,7 @@ type OccurrenceRow = Prisma.FinanceRecurringPaymentOccurrenceGetPayload<{
   select: typeof financeRegularPaymentOccurrenceSelect;
 }>;
 
-function accountView(account: DebtRow['account']) {
+function accountView(account: DebtRow["account"]) {
   return {
     id: account.id,
     name: account.name,
@@ -133,7 +134,7 @@ function accountView(account: DebtRow['account']) {
   };
 }
 
-function categoryView(category: RegularPaymentRow['category']) {
+function categoryView(category: RegularPaymentRow["category"]) {
   return category
     ? {
         id: category.id,
@@ -165,7 +166,7 @@ export function financeDebtView(
     dueAt: row.dueAt.toISOString(),
     scheduleTimezone: row.scheduleTimezone,
     note: row.note,
-    isOverdue: row.status === 'OPEN' && row.dueAt < now,
+    isOverdue: row.status === "OPEN" && row.dueAt < now,
     settledAt: row.settledAt?.toISOString() ?? null,
     settlementTransactionId: row.settlementTransactionId,
     originTransactionId: row.originTransactionId,
@@ -183,7 +184,7 @@ export function financeRegularPaymentView(
   return {
     id: row.id,
     name: row.name,
-    iconPresentation: financeIconPresentation(row.emoji, '🔁'),
+    iconPresentation: financeIconPresentation(row.emoji, "🔁"),
     amount: row.amount.toString(),
     currency: row.currency,
     accountId: row.accountId,
@@ -199,7 +200,7 @@ export function financeRegularPaymentView(
     necessity: row.necessity,
     status: row.status,
     isDue:
-      row.status === 'ACTIVE' &&
+      row.status === "ACTIVE" &&
       financeRegularPaymentIsDue(
         row.nextOccurrenceAt,
         row.scheduleTimezone,
@@ -214,7 +215,7 @@ export function financeRegularPaymentView(
 export function financeRegularPaymentRevisionView(row: RevisionRow) {
   return {
     ...row,
-    accountIconPresentation: financeIconPresentation(row.accountEmoji, '💰'),
+    accountIconPresentation: financeIconPresentation(row.accountEmoji, "💰"),
     amount: row.amount.toString(),
     nextOccurrenceAt: row.nextOccurrenceAt.toISOString(),
     effectiveAt: row.effectiveAt.toISOString(),

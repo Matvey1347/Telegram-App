@@ -1,94 +1,94 @@
-import { ConflictException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
-import { FinanceRegularPaymentConfirmationService } from '@finance-pro/api/obligations/regular-payments/finance-regular-payment-confirmation.service';
+import { ConflictException } from "@nestjs/common";
+import { Prisma } from "@prisma/client";
+import { FinanceRegularPaymentConfirmationService } from "@finance-pro/api/obligations/regular-payments/finance-regular-payment-confirmation.service";
 
 const account = {
-  id: 'account-1',
-  name: 'Card',
-  currency: 'USD',
-  type: 'CARD' as const,
+  id: "account-1",
+  name: "Card",
+  currency: "USD",
+  type: "CARD" as const,
   emoji: null,
 };
 const category = {
-  id: 'category-1',
-  name: 'Rent',
-  key: 'rent',
-  type: 'EXPENSE' as const,
+  id: "category-1",
+  name: "Rent",
+  key: "rent",
+  type: "EXPENSE" as const,
   emoji: null,
 };
-const expected = new Date('2026-08-31T00:00:00.000Z');
+const expected = new Date("2026-08-31T00:00:00.000Z");
 
 function regular(overrides: Record<string, unknown> = {}) {
   return {
-    id: 'regular-1',
-    profileId: 'profile-1',
-    name: 'Rent',
+    id: "regular-1",
+    profileId: "profile-1",
+    name: "Rent",
     amount: new Prisma.Decimal(1000),
-    currency: 'USD',
+    currency: "USD",
     accountId: account.id,
     account,
     categoryId: category.id,
     category,
-    recurrence: 'MONTHLY' as const,
+    recurrence: "MONTHLY" as const,
     anchorDay: 31,
     anchorMonth: null,
     nextOccurrenceAt: expected,
-    scheduleTimezone: 'UTC',
+    scheduleTimezone: "UTC",
     note: null,
-    status: 'ACTIVE' as const,
+    status: "ACTIVE" as const,
     version: 3,
-    createdAt: new Date('2026-01-01T00:00:00.000Z'),
-    updatedAt: new Date('2026-08-01T00:00:00.000Z'),
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-08-01T00:00:00.000Z"),
     ...overrides,
   };
 }
 
 const profileContext = {
-  id: 'profile-1',
-  defaultCurrency: 'USD',
+  id: "profile-1",
+  defaultCurrency: "USD",
   // The profile may change timezone after this payment was configured.
-  timezone: 'Pacific/Kiritimati',
-  workspaceId: 'workspace-1',
+  timezone: "Pacific/Kiritimati",
+  workspaceId: "workspace-1",
 };
 const obligationProfile = {
   ...profileContext,
-  locale: 'en',
-  botIntegrationId: 'bot-1',
-  telegramBotUserId: 'user-1',
-  botIntegration: { workspaceId: 'workspace-1' },
+  locale: "en",
+  botIntegrationId: "bot-1",
+  telegramBotUserId: "user-1",
+  botIntegration: { workspaceId: "workspace-1" },
   telegramUser: {
-    telegramChatId: '42',
-    runtimeInstanceId: 'runtime-1',
-    languageCode: 'en',
+    telegramChatId: "42",
+    runtimeInstanceId: "runtime-1",
+    languageCode: "en",
   },
 };
 
 function occurrence(overrides: Record<string, unknown> = {}) {
   return {
-    id: 'occurrence-1',
-    recurringPaymentId: 'regular-1',
-    transactionId: 'transaction-1',
+    id: "occurrence-1",
+    recurringPaymentId: "regular-1",
+    transactionId: "transaction-1",
     configVersion: 3,
     scheduledFor: expected,
     scheduledAmount: new Prisma.Decimal(1000),
     paidAmount: new Prisma.Decimal(900),
-    currency: 'USD',
-    confirmedAt: new Date('2026-08-31T12:00:00.000Z'),
+    currency: "USD",
+    confirmedAt: new Date("2026-08-31T12:00:00.000Z"),
     futureAmountAppliedAt: null,
     ...overrides,
   };
 }
 
-describe('FinanceRegularPaymentConfirmationService', () => {
+describe("FinanceRegularPaymentConfirmationService", () => {
   it.each([
-    ['900', true],
+    ["900", true],
     [undefined, false],
   ] as const)(
-    'confirms amount %s atomically and reports future update=%s',
+    "confirms amount %s atomically and reports future update=%s",
     async (paidAmount, futureAmountUpdateRequired) => {
       const current = regular();
       const advanced = regular({
-        nextOccurrenceAt: new Date('2026-09-30T00:00:00.000Z'),
+        nextOccurrenceAt: new Date("2026-09-30T00:00:00.000Z"),
         version: 4,
       });
       const confirmedOccurrence = occurrence({
@@ -110,8 +110,8 @@ describe('FinanceRegularPaymentConfirmationService', () => {
       const prisma = {
         financeRecurringPayment: {
           findFirst: jest.fn().mockResolvedValue({
-            status: 'ACTIVE',
-            currency: 'USD',
+            status: "ACTIVE",
+            currency: "USD",
             accountId: account.id,
             nextOccurrenceAt: expected,
             version: 3,
@@ -134,7 +134,7 @@ describe('FinanceRegularPaymentConfirmationService', () => {
           .mockResolvedValue(writeContext),
         createTransactionInTransaction: jest
           .fn()
-          .mockResolvedValue({ id: 'transaction-1' }),
+          .mockResolvedValue({ id: "transaction-1" }),
       };
       const deliveries = {
         replace: jest.fn().mockResolvedValue({
@@ -148,7 +148,7 @@ describe('FinanceRegularPaymentConfirmationService', () => {
         deliveries as never,
       );
 
-      const result = await service.confirm('profile-1', 'regular-1', {
+      const result = await service.confirm("profile-1", "regular-1", {
         expectedOccurrenceAt: expected.toISOString(),
         expectedVersion: 3,
         ...(paidAmount ? { amount: paidAmount } : {}),
@@ -159,7 +159,7 @@ describe('FinanceRegularPaymentConfirmationService', () => {
         futureAmountUpdateRequired,
         occurrence: {
           scheduledFor: expected.toISOString(),
-          paidAmount: paidAmount ?? '1000',
+          paidAmount: paidAmount ?? "1000",
         },
       });
       expect(
@@ -167,11 +167,11 @@ describe('FinanceRegularPaymentConfirmationService', () => {
       ).toBeLessThan(prisma.$transaction.mock.invocationCallOrder[0]);
       expect(ledger.prepareTransactionWriteContext).toHaveBeenCalledWith(
         tx,
-        'profile-1',
+        "profile-1",
         [
           expect.objectContaining({
-            accountId: 'account-1',
-            amount: paidAmount ?? '1000',
+            accountId: "account-1",
+            amount: paidAmount ?? "1000",
           }),
         ],
         rates,
@@ -180,10 +180,10 @@ describe('FinanceRegularPaymentConfirmationService', () => {
         tx,
         profileContext,
         expect.objectContaining({
-          type: 'EXPENSE',
-          description: 'Rent',
+          type: "EXPENSE",
+          description: "Rent",
         }),
-        'MINI_APP',
+        "MINI_APP",
         undefined,
         writeContext,
         { suppressMerchantMapping: true },
@@ -206,8 +206,8 @@ describe('FinanceRegularPaymentConfirmationService', () => {
     },
   );
 
-  it('uses occurrence-only transaction overrides without changing the regular payment', async () => {
-    const alternativeAccount = { ...account, id: 'account-2', currency: 'EUR' };
+  it("uses occurrence-only transaction overrides without changing the regular payment", async () => {
+    const alternativeAccount = { ...account, id: "account-2", currency: "EUR" };
     const current = regular();
     const advanced = regular({ version: 4 });
     const tx = {
@@ -217,18 +217,29 @@ describe('FinanceRegularPaymentConfirmationService', () => {
         findUniqueOrThrow: jest.fn().mockResolvedValue(advanced),
       },
       financeRecurringPaymentOccurrence: {
-        create: jest.fn().mockResolvedValue(occurrence({ paidAmount: new Prisma.Decimal(1250) })),
+        create: jest
+          .fn()
+          .mockResolvedValue(
+            occurrence({ paidAmount: new Prisma.Decimal(1250) }),
+          ),
       },
-      financeProfile: { findUnique: jest.fn().mockResolvedValue(obligationProfile) },
+      financeProfile: {
+        findUnique: jest.fn().mockResolvedValue(obligationProfile),
+      },
     };
     const prisma = {
       financeRecurringPayment: {
         findFirst: jest.fn().mockResolvedValue({
-          status: 'ACTIVE', currency: 'USD', accountId: account.id,
-          nextOccurrenceAt: expected, version: 3,
+          status: "ACTIVE",
+          currency: "USD",
+          accountId: account.id,
+          nextOccurrenceAt: expected,
+          version: 3,
         }),
       },
-      financeAccount: { findFirst: jest.fn().mockResolvedValue(alternativeAccount) },
+      financeAccount: {
+        findFirst: jest.fn().mockResolvedValue(alternativeAccount),
+      },
       $transaction: jest.fn((callback) => callback(tx)),
     };
     const rates = { resolve: jest.fn() };
@@ -237,57 +248,146 @@ describe('FinanceRegularPaymentConfirmationService', () => {
       profileContext: jest.fn().mockResolvedValue(profileContext),
       prepareTransactionRateSource: jest.fn().mockResolvedValue(rates),
       prepareTransactionWriteContext: jest.fn().mockResolvedValue(writeContext),
-      createTransactionInTransaction: jest.fn().mockResolvedValue({ id: 'transaction-1' }),
+      createTransactionInTransaction: jest
+        .fn()
+        .mockResolvedValue({ id: "transaction-1" }),
     };
     const service = new FinanceRegularPaymentConfirmationService(
-      prisma as never, ledger as never,
-      { replace: jest.fn().mockResolvedValue({ scheduledAt: null }), reschedule: jest.fn() } as never,
+      prisma as never,
+      ledger as never,
+      {
+        replace: jest.fn().mockResolvedValue({ scheduledAt: null }),
+        reschedule: jest.fn(),
+      } as never,
     );
 
-    await service.confirm('profile-1', 'regular-1', {
-      expectedOccurrenceAt: expected.toISOString(), expectedVersion: 3,
-      amount: '1250', accountId: alternativeAccount.id, categoryId: null,
-      description: 'Paid from another account', occurredAt: '2026-08-31T10:00:00.000Z',
+    await service.confirm("profile-1", "regular-1", {
+      expectedOccurrenceAt: expected.toISOString(),
+      expectedVersion: 3,
+      amount: "1250",
+      accountId: alternativeAccount.id,
+      categoryId: null,
+      description: "Paid from another account",
+      occurredAt: "2026-08-31T10:00:00.000Z",
     });
 
     expect(ledger.prepareTransactionRateSource).toHaveBeenCalledWith(
       profileContext,
-      [expect.objectContaining({ currency: 'EUR' })],
+      [expect.objectContaining({ currency: "EUR" })],
     );
     expect(ledger.createTransactionInTransaction).toHaveBeenCalledWith(
-      tx, profileContext,
+      tx,
+      profileContext,
       expect.objectContaining({
-        accountId: alternativeAccount.id, categoryId: undefined, amount: '1250',
-        description: 'Paid from another account', occurredAt: '2026-08-31T10:00:00.000Z',
+        accountId: alternativeAccount.id,
+        categoryId: undefined,
+        amount: "1250",
+        description: "Paid from another account",
+        occurredAt: "2026-08-31T10:00:00.000Z",
       }),
-      'MINI_APP', undefined, writeContext, { suppressMerchantMapping: true },
+      "MINI_APP",
+      undefined,
+      writeContext,
+      { suppressMerchantMapping: true },
     );
     expect(tx.financeRecurringPayment.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ version: { increment: 1 } }) }),
+      expect.objectContaining({
+        data: expect.objectContaining({ version: { increment: 1 } }),
+      }),
     );
   });
 
-  it('returns the original confirmation on a repeated exact occurrence without advancing again', async () => {
+  it("records an early payment without moving the subscription or rescheduling its reminder", async () => {
+    const current = regular();
+    const confirmedOccurrence = occurrence({ advancesSchedule: false });
+    const tx = {
+      financeRecurringPayment: {
+        findFirst: jest.fn().mockResolvedValue(current),
+        updateMany: jest.fn(),
+        findUniqueOrThrow: jest.fn(),
+      },
+      financeRecurringPaymentOccurrence: {
+        create: jest.fn().mockResolvedValue(confirmedOccurrence),
+      },
+      financeProfile: {
+        findUnique: jest.fn().mockResolvedValue(obligationProfile),
+      },
+    };
+    const prisma = {
+      financeRecurringPayment: {
+        findFirst: jest.fn().mockResolvedValue({
+          status: "ACTIVE",
+          currency: "USD",
+          accountId: account.id,
+          nextOccurrenceAt: expected,
+          version: 3,
+        }),
+      },
+      financeAccount: { findFirst: jest.fn().mockResolvedValue(account) },
+      $transaction: jest.fn((callback) => callback(tx)),
+    };
+    const rates = { resolve: jest.fn() };
+    const writeContext = { accounts: new Map(), categories: new Map(), rates };
+    const ledger = {
+      profileContext: jest.fn().mockResolvedValue(profileContext),
+      prepareTransactionRateSource: jest.fn().mockResolvedValue(rates),
+      prepareTransactionWriteContext: jest.fn().mockResolvedValue(writeContext),
+      createTransactionInTransaction: jest
+        .fn()
+        .mockResolvedValue({ id: "transaction-1" }),
+    };
+    const deliveries = {
+      replace: jest.fn(),
+      reschedule: jest.fn(),
+    };
+    const service = new FinanceRegularPaymentConfirmationService(
+      prisma as never,
+      ledger as never,
+      deliveries as never,
+    );
+
+    const result = await service.confirm("profile-1", "regular-1", {
+      expectedOccurrenceAt: expected.toISOString(),
+      expectedVersion: 3,
+      occurredAt: "2026-08-15T12:00:00.000Z",
+      preserveSchedule: true,
+    });
+
+    expect(result.regularPayment).toMatchObject({
+      nextOccurrenceAt: expected.toISOString(),
+      version: 3,
+    });
+    expect(tx.financeRecurringPaymentOccurrence.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ advancesSchedule: false }),
+      }),
+    );
+    expect(tx.financeRecurringPayment.updateMany).not.toHaveBeenCalled();
+    expect(deliveries.replace).not.toHaveBeenCalled();
+    expect(deliveries.reschedule).not.toHaveBeenCalled();
+  });
+
+  it("returns the original confirmation on a repeated exact occurrence without advancing again", async () => {
     const advanced = regular({
-      nextOccurrenceAt: new Date('2026-09-30T00:00:00.000Z'),
+      nextOccurrenceAt: new Date("2026-09-30T00:00:00.000Z"),
     });
     const storedOccurrence = occurrence({ futureAmountAppliedAt: new Date() });
     const transaction = {
-      id: 'transaction-1',
+      id: "transaction-1",
       accountId: account.id,
       categoryId: category.id,
-      type: 'EXPENSE',
+      type: "EXPENSE",
       amount: new Prisma.Decimal(900),
-      currency: 'USD',
-      valuationCurrency: 'USD',
+      currency: "USD",
+      valuationCurrency: "USD",
       amountInValuationCurrency: new Prisma.Decimal(900),
       exchangeRateToValuation: new Prisma.Decimal(1),
       valuationRateAt: expected,
       occurredAt: expected,
-      description: 'Rent',
+      description: "Rent",
       merchantDisplay: null,
-      merchantNormalized: 'rent',
-      source: 'MINI_APP',
+      merchantNormalized: "rent",
+      source: "MINI_APP",
       deletedAt: null,
       account,
       category,
@@ -304,14 +404,14 @@ describe('FinanceRegularPaymentConfirmationService', () => {
         findUnique: jest.fn().mockResolvedValue(transaction),
       },
       financeProfile: {
-        findUnique: jest.fn().mockResolvedValue({ timezone: 'UTC' }),
+        findUnique: jest.fn().mockResolvedValue({ timezone: "UTC" }),
       },
     };
     const prisma = {
       financeRecurringPayment: {
         findFirst: jest.fn().mockResolvedValue({
-          status: 'ACTIVE',
-          currency: 'USD',
+          status: "ACTIVE",
+          currency: "USD",
           nextOccurrenceAt: advanced.nextOccurrenceAt,
           version: advanced.version,
         }),
@@ -330,20 +430,20 @@ describe('FinanceRegularPaymentConfirmationService', () => {
     );
 
     await expect(
-      service.confirm('profile-1', 'regular-1', {
+      service.confirm("profile-1", "regular-1", {
         expectedOccurrenceAt: expected.toISOString(),
         expectedVersion: 3,
       }),
     ).resolves.toMatchObject({
       duplicate: true,
       futureAmountUpdateRequired: false,
-      transaction: { id: 'transaction-1' },
+      transaction: { id: "transaction-1" },
     });
     expect(ledger.prepareTransactionRateSource).not.toHaveBeenCalled();
     expect(ledger.createTransactionInTransaction).not.toHaveBeenCalled();
   });
 
-  it('rejects a stale notification version without creating a transaction', async () => {
+  it("rejects a stale notification version without creating a transaction", async () => {
     const changed = regular({ version: 4, amount: new Prisma.Decimal(4000) });
     const tx = {
       financeRecurringPayment: {
@@ -353,8 +453,8 @@ describe('FinanceRegularPaymentConfirmationService', () => {
     const prisma = {
       financeRecurringPayment: {
         findFirst: jest.fn().mockResolvedValue({
-          status: 'ACTIVE',
-          currency: 'USD',
+          status: "ACTIVE",
+          currency: "USD",
           nextOccurrenceAt: expected,
           version: 4,
         }),
@@ -373,7 +473,7 @@ describe('FinanceRegularPaymentConfirmationService', () => {
     );
 
     await expect(
-      service.confirm('profile-1', 'regular-1', {
+      service.confirm("profile-1", "regular-1", {
         expectedOccurrenceAt: expected.toISOString(),
         expectedVersion: 3,
       }),
@@ -382,7 +482,7 @@ describe('FinanceRegularPaymentConfirmationService', () => {
     expect(ledger.createTransactionInTransaction).not.toHaveBeenCalled();
   });
 
-  it('guards future amount application with the current config version', async () => {
+  it("guards future amount application with the current config version", async () => {
     const tx = {
       financeRecurringPayment: {
         findFirst: jest.fn().mockResolvedValue(regular()),
@@ -401,13 +501,13 @@ describe('FinanceRegularPaymentConfirmationService', () => {
       {} as never,
     );
     await expect(
-      service.applyFutureAmount('profile-1', 'regular-1', 'occurrence-1', {
+      service.applyFutureAmount("profile-1", "regular-1", "occurrence-1", {
         expectedVersion: 2,
       }),
     ).rejects.toBeInstanceOf(ConflictException);
   });
 
-  it('applies a changed occurrence amount to future payments only after Yes with expectedVersion', async () => {
+  it("applies a changed occurrence amount to future payments only after Yes with expectedVersion", async () => {
     const current = regular();
     const updated = regular({ amount: new Prisma.Decimal(900), version: 4 });
     const tx = {
@@ -441,12 +541,12 @@ describe('FinanceRegularPaymentConfirmationService', () => {
     );
 
     await expect(
-      service.applyFutureAmount('profile-1', 'regular-1', 'occurrence-1', {
+      service.applyFutureAmount("profile-1", "regular-1", "occurrence-1", {
         expectedVersion: 3,
       }),
-    ).resolves.toMatchObject({ amount: '900', version: 4 });
+    ).resolves.toMatchObject({ amount: "900", version: 4 });
     expect(tx.financeRecurringPayment.updateMany).toHaveBeenCalledWith({
-      where: { id: 'regular-1', profileId: 'profile-1', version: 3 },
+      where: { id: "regular-1", profileId: "profile-1", version: 3 },
       data: {
         amount: new Prisma.Decimal(900),
         version: { increment: 1 },
@@ -454,7 +554,7 @@ describe('FinanceRegularPaymentConfirmationService', () => {
     });
     expect(tx.financeRecurringPaymentRevision.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
-        kind: 'AMOUNT_APPLIED',
+        kind: "AMOUNT_APPLIED",
         amount: new Prisma.Decimal(900),
         version: 4,
       }),

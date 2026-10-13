@@ -16,6 +16,7 @@ import {
 } from "@finance-pro/web/components/ui";
 import type { FinanceLocale } from "@finance-pro/web/components/i18n/core";
 import { financeSavingsCopy } from "@finance-pro/web/components/i18n/savings";
+import { financeAccountSelectEmoji } from "@finance-pro/web/components/accounts/finance-account-select-icon";
 import {
   dateInputToIso,
   todayInputValue,
@@ -102,8 +103,13 @@ export function FinanceSavingsActionModal({
             >
               <option value="">{t.chooseAccount}</option>
               {eligibleAccounts.map((account) => (
-                <option key={account.id} value={account.id}>
-                  {account.name} · {account.currency}
+                <option
+                  key={account.id}
+                  value={account.id}
+                  data-icon-emoji={financeAccountSelectEmoji(account)}
+                  data-option-meta={account.currency}
+                >
+                  {account.name}
                 </option>
               ))}
             </Select>
