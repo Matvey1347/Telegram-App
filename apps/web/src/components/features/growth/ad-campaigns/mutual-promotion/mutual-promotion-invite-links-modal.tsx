@@ -21,6 +21,7 @@ import { mutualPromotionFoldersApi } from "@/lib/features/growth/mutual-promotio
 import { inviteLinkCreatorFallback } from "@/lib/features/telegram/telegram-invite-link-creator";
 import { telegramInviteLinkOptionLabel } from "@/lib/features/telegram/telegram-invite-link-options";
 import { TelegramInviteLinkOptionLabel } from "@/components/features/telegram/telegram/telegram-invite-link-option-label";
+import { TelegramInviteLinkCreateInline } from "@/components/features/telegram/telegram/telegram-invite-link-create-inline";
 import { mutualPromotionFolderKeys } from "@/lib/query-keys";
 
 type LinkDraft =
@@ -53,6 +54,9 @@ export function MutualPromotionInviteLinksModal({
   >(null);
   const [importErrors, setImportErrors] = useState<Record<string, string>>({});
   const [refreshingSelected, setRefreshingSelected] = useState(false);
+  const [creatingParticipantId, setCreatingParticipantId] = useState<
+    string | null
+  >(null);
   const queryInput = useMemo(
     () => ({
       folderId: folder.id,
@@ -217,6 +221,7 @@ export function MutualPromotionInviteLinksModal({
                 </div>
               </div>
               <div>
+                {creatingParticipantId !== participant.id ? (
                 <FormField label="Invite link" required>
                   <CustomSelect
                     value={draft.inviteLinkId}
@@ -255,6 +260,53 @@ export function MutualPromotionInviteLinksModal({
                     message={importErrors[participant.id] || undefined}
                   />
                 </FormField>
+                ) : null}
+                <div className="mt-3">
+                  {creatingParticipantId !== participant.id ? (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="w-full"
+                      onClick={() => setCreatingParticipantId(participant.id)}
+                    >
+                      Create a new invite link
+                    </Button>
+                  ) : null}
+                  <TelegramInviteLinkCreateInline
+                    channelId={participant.telegramChannelId}
+                    open={creatingParticipantId === participant.id}
+                    onOpenChange={(open) => {
+                      if (!open) setCreatingParticipantId(null);
+                    }}
+                    onCreated={(link) => {
+                      const option: MutualPromotionInviteLinkOption = {
+                        ...link,
+                        available: true,
+                        unavailableReason: null,
+                        creatorUsername: link.creatorUsername ?? null,
+                        creatorFirstName: link.creatorFirstName ?? null,
+                        creatorPhotoUrl: link.creatorPhotoUrl ?? null,
+                        creatorMember: link.creatorMember
+                          ? {
+                              id: link.creatorMember.id,
+                              name: link.creatorMember.user.name,
+                              avatarPresentation:
+                                link.creatorMember.avatarPresentation ?? null,
+                            }
+                          : null,
+                      };
+                      queryClient.setQueryData<MutualPromotionInviteLinkOption[]>(
+                        mutualPromotionFolderKeys.inviteOptions(queryInput),
+                        (current = []) => [
+                          ...current.filter((item) => item.id !== option.id),
+                          option,
+                        ],
+                      );
+                      update(participant.id, { inviteLinkId: link.id });
+                      setCreatingParticipantId(null);
+                    }}
+                  />
+                </div>
               </div>
             </section>
           );

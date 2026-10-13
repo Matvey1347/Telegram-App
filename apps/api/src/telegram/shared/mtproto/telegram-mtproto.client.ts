@@ -57,7 +57,6 @@ import {
 import { livePending } from '@api/telegram/shared/mtproto/telegram-pending-join-requests';
 import type { BroadcastStatsGraphField } from '@api/telegram/shared/core/telegram-broadcast-stats.types';
 import { runBounded } from '@api/common/run-bounded';
-
 export type { TelegramAccountProfile } from '@api/telegram/shared/mtproto/telegram-mtproto-account-profile';
 
 type ApiCredentials = { apiId: string; apiHash: string };
@@ -69,7 +68,7 @@ type TelegramChannelAccessMode =
   | 'PRIVATE_INVITE'
   | 'PRIVATE_JOIN_REQUEST'
   | 'UNKNOWN';
-type StoredTelegramChannelReference = {
+export type StoredTelegramChannelReference = {
   username?: string | null;
   telegramChatId?: string | null;
   inviteLink?: string | null;
@@ -215,7 +214,7 @@ export class TelegramMtprotoClient {
     },
   ];
 
-  private toFiniteNumber(value: unknown): number | null {
+  public toFiniteNumber(value: unknown): number | null {
     if (value == null) return null;
     if (typeof value === 'number' && Number.isFinite(value)) return value;
     if (typeof value === 'bigint') return Number(value);
@@ -230,7 +229,7 @@ export class TelegramMtprotoClient {
     return null;
   }
 
-  private toTelegramDate(value: unknown): Date | null {
+  public toTelegramDate(value: unknown): Date | null {
     if (value instanceof Date) return value;
     const numeric = this.toFiniteNumber(value);
     if (numeric == null) return null;
@@ -244,7 +243,7 @@ export class TelegramMtprotoClient {
     return normalizeTelegramChannelId(value);
   }
 
-  private unwrapExportedChatInvite(
+  public unwrapExportedChatInvite(
     invite: unknown,
   ): ExportedInvitePayload | null {
     if (!invite || typeof invite !== 'object') {
@@ -272,7 +271,7 @@ export class TelegramMtprotoClient {
     return raw;
   }
 
-  private toBigInt(value: unknown) {
+  public toBigInt(value: unknown) {
     const normalized = this.normalizeChatId(
       typeof value === 'string'
         ? value
@@ -527,7 +526,7 @@ export class TelegramMtprotoClient {
     };
   }
 
-  private async createClient(
+  public async createClient(
     { apiId, apiHash, session }: SessionParams,
     signal?: AbortSignal,
   ) {
@@ -545,11 +544,11 @@ export class TelegramMtprotoClient {
     return client;
   }
 
-  private async closeClient(client: TelegramClient) {
+  public async closeClient(client: TelegramClient) {
     await closeTelegramMtprotoSession(client);
   }
 
-  private async withTimeout<T>(
+  public async withTimeout<T>(
     promise: Promise<T>,
     timeoutMs: number,
     label: string,
@@ -1274,7 +1273,7 @@ export class TelegramMtprotoClient {
     }
   }
 
-  private async resolveStoredChannel(
+  public async resolveStoredChannel(
     client: TelegramClient,
     channel: StoredTelegramChannelReference,
   ): Promise<ResolvedStoredTelegramChannel> {
@@ -2083,7 +2082,7 @@ export class TelegramMtprotoClient {
     }
   }
 
-  private async getInviteAdminPhotoUrl(client: TelegramClient, user: Api.User) {
+  public async getInviteAdminPhotoUrl(client: TelegramClient, user: Api.User) {
     // Invite creators can have a Telegram-generated initials/emoji avatar but no
     // downloadable profile photo. Do not persist a guessed public URL: Telegram
     // commonly returns a 404 for those profiles and the UI must render the
@@ -2915,6 +2914,7 @@ export class TelegramMtprotoClient {
     }
   }
 
+  /** Creates a named, permanent invite link in Telegram for a stored channel. */
   private async getInviteCreatorWithDetails(
     client: TelegramClient,
     fallback: Api.User,

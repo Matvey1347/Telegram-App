@@ -58,6 +58,9 @@ describe('TelegramInviteLinkRegistrationService', () => {
       getChannelInviteLink: jest
         .fn()
         .mockResolvedValue(overrides?.remote ?? remote),
+      createChannelInviteLink: jest
+        .fn()
+        .mockResolvedValue(overrides?.remote ?? remote),
     };
     const attribution = {
       buildInviteAttributionMaps: jest.fn().mockResolvedValue({ members: [] }),
@@ -67,18 +70,34 @@ describe('TelegramInviteLinkRegistrationService', () => {
         .fn()
         .mockResolvedValue({ upserted: { id: 'stored-link' } }),
     };
+    const inviteCreator = {
+      create: jest.fn().mockResolvedValue(overrides?.remote ?? remote),
+    };
+    const sourceAccess = {
+      sourcesForChannel: jest.fn().mockResolvedValue([
+        {
+          sourceId: 'account-1',
+          sourceType: 'MTPROTO',
+          permissions: { canManageInviteLinks: true },
+        },
+      ]),
+    };
     return {
       service: new TelegramInviteLinkRegistrationService(
         prisma as never,
         workspaceService as never,
         access as never,
         mtproto as never,
+        inviteCreator as never,
         attribution as never,
         inviteSync as never,
+        sourceAccess as never,
       ),
       prisma,
       mtproto,
+      inviteCreator,
       inviteSync,
+      sourceAccess,
     };
   }
 
@@ -130,5 +149,26 @@ describe('TelegramInviteLinkRegistrationService', () => {
       service.register('user-1', 'channel-1', 'https://t.me/+revoked'),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(inviteSync.persistInviteLinkFromRemote).not.toHaveBeenCalled();
+  });
+
+  it('creates and persists a named Telegram invite link with an authorized MTProto account', async () => {
+    const { service, inviteCreator, inviteSync, sourceAccess } = createService();
+    await expect(
+      service.create('user-1', 'channel-1', {
+        title: 'Mutual promotion',
+        mtprotoAccountId: 'account-1',
+      }),
+    ).resolves.toEqual({ id: 'stored-link' });
+
+    expect(sourceAccess.sourcesForChannel).toHaveBeenCalledWith(
+      'workspace-1',
+      'channel-1',
+    );
+    expect(inviteCreator.create).toHaveBeenCalledWith(
+      expect.objectContaining({ channel, title: 'Mutual promotion' }),
+    );
+    expect(inviteSync.persistInviteLinkFromRemote).toHaveBeenCalledWith(
+      expect.objectContaining({ link: remote }),
+    );
   });
 });

@@ -10,6 +10,7 @@ import { useTelegramSystemBotPostFlow } from "@/hooks/use-telegram-system-bot-po
 import { TelegramInviteLinkSelect } from "@/components/features/telegram/telegram/telegram-invite-link-select";
 import { IconAvatar } from "@/components/icons/icon-avatar";
 import { useRegisterTelegramInviteLink } from "@/lib/features/telegram/use-register-telegram-invite-link";
+import { TelegramInviteLinkCreateInline } from "@/components/features/telegram/telegram/telegram-invite-link-create-inline";
 import {
   Button,
   FormError,
@@ -31,6 +32,10 @@ export function PromoQuickSendModal({
   onClose: () => void;
 }) {
   const [inviteLinkId, setInviteLinkId] = useState("");
+  const [inviteLinkMode, setInviteLinkMode] = useState<"existing" | "create">(
+    "existing",
+  );
+  const [inviteLinkSearch, setInviteLinkSearch] = useState("");
   // Promo cards contain a compact list read model, not the post or saved link.
   const detail = useQuery({
     queryKey: ["promos", "detail", promo.id],
@@ -49,6 +54,8 @@ export function PromoQuickSendModal({
       ? [currentPromo.defaultInviteLink]
       : [],
     enabled: Boolean(currentPromo),
+    search: inviteLinkSearch,
+    searchMinimumLength: 2,
   });
   const registerLink = useRegisterTelegramInviteLink({
     channelId: currentPromo?.telegramChannelId ?? promo.telegramChannelId,
@@ -124,22 +131,48 @@ export function PromoQuickSendModal({
         {detail.isError ? (
           <FormError message="Could not load the promo post." />
         ) : null}
-        <FormField label="Invite link" required>
-          <TelegramInviteLinkSelect
-            value={selectedLink?.id ?? ""}
-            onChange={setInviteLinkId}
-            onOpen={inviteOptions.requestAll}
-            disabled={resolvingLink || detail.isError || registerLink.isPending}
-            loading={resolvingLink || inviteOptions.loading}
-            loadingLabel="Loading invite link…"
-            placeholder="Select invite link"
-            links={resolvingLink ? [] : inviteOptions.links}
-            onCreate={async (url) => {
-              await registerLink.mutateAsync(url);
+        {inviteLinkMode === "existing" ? (
+          <>
+            <FormField label="Invite link" required>
+              <TelegramInviteLinkSelect
+                value={selectedLink?.id ?? ""}
+                onChange={setInviteLinkId}
+                onSearchChange={setInviteLinkSearch}
+                disabled={resolvingLink || detail.isError || registerLink.isPending}
+                loading={resolvingLink || inviteOptions.loading}
+                loadingLabel="Loading invite link…"
+                placeholder="Select invite link"
+                links={resolvingLink ? [] : inviteOptions.links}
+                onCreate={async (url) => {
+                  await registerLink.mutateAsync(url);
+                }}
+              />
+            </FormField>
+            {currentPromo?.telegramChannelId ? (
+              <Button
+                type="button"
+                variant="secondary"
+                className="w-full"
+                onClick={() => setInviteLinkMode("create")}
+              >
+                Create a new invite link
+              </Button>
+            ) : null}
+          </>
+        ) : currentPromo?.telegramChannelId ? (
+          <TelegramInviteLinkCreateInline
+            channelId={currentPromo.telegramChannelId}
+            open
+            onOpenChange={(open) => {
+              if (!open) setInviteLinkMode("existing");
+            }}
+            onCreated={(link) => {
+              setInviteLinkId(link.id);
+              setInviteLinkMode("existing");
             }}
           />
-        </FormField>
-        {selectedLink?.url ? (
+        ) : null}
+        {inviteLinkMode === "existing" && selectedLink?.url ? (
           <div className="min-w-0 space-y-1 text-xs text-neutral-400">
             <p>The bot will receive this link:</p>
             <p className="break-all text-sky-300">{selectedLink.url}</p>

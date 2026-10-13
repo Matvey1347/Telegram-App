@@ -288,6 +288,17 @@ export function createTelegramChannelsApi({
           quietMutationConfig,
         )
       ).data,
+    createInviteLink: async (
+      id: string,
+      payload: { title: string; mtprotoAccountId?: string },
+    ) =>
+      (
+        await api.post<TelegramInviteLink>(
+          `/telegram-channels/${id}/invite-links/create`,
+          payload,
+          quietMutationConfig,
+        )
+      ).data,
     import: async (payload: TelegramChannelImportPayload) =>
       (
         await api.post<ImportedTelegramSource>(

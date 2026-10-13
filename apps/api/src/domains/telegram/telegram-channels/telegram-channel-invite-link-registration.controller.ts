@@ -1,5 +1,5 @@
 import { Body, Controller, Param, Post, UseGuards } from '@nestjs/common';
-import { IsString, MaxLength } from 'class-validator';
+import { IsOptional, IsString, MaxLength } from 'class-validator';
 import {
   CurrentUser,
   type JwtUser,
@@ -9,6 +9,11 @@ import { TelegramInviteLinkRegistrationService } from './telegram-invite-link-re
 
 class RegisterTelegramChannelInviteLinkDto {
   @IsString() @MaxLength(512) url!: string;
+}
+
+class CreateTelegramChannelInviteLinkDto {
+  @IsString() @MaxLength(32) title!: string;
+  @IsOptional() @IsString() mtprotoAccountId?: string;
 }
 
 @UseGuards(JwtAuthGuard)
@@ -25,5 +30,14 @@ export class TelegramChannelInviteLinkRegistrationController {
     @Body() dto: RegisterTelegramChannelInviteLinkDto,
   ) {
     return this.registration.register(user.sub, id, dto.url);
+  }
+
+  @Post(':id/invite-links/create')
+  create(
+    @CurrentUser() user: JwtUser,
+    @Param('id') id: string,
+    @Body() dto: CreateTelegramChannelInviteLinkDto,
+  ) {
+    return this.registration.create(user.sub, id, dto);
   }
 }
