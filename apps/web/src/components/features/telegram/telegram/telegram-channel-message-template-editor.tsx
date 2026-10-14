@@ -430,13 +430,13 @@ export function TelegramChannelMessageTemplateEditor({
   const canUse = stableSourceIds.length > 0 && bodyTemplate.trim().length > 0;
 
   return (
-    <div className="space-y-4">
+    <div className="min-w-0 space-y-4">
       <TelegramChannelMessageTemplateEditorHeader
         onBack={onBack}
         draftAutosaveEnabled={!savedTemplateId}
       />
-      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(300px,.75fr)]">
-        <Card className="space-y-4">
+      <div className="grid min-w-0 items-start gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(300px,.75fr)]">
+        <Card className="min-w-0 space-y-4">
           <div className="grid items-end gap-2 sm:grid-cols-[40px_minmax(0,1fr)]">
             <FormField label="Emoji">
               <IconPicker

@@ -12,13 +12,7 @@ import {
   type TelegramChannelNetwork,
 } from "@/lib/api";
 import { workspaceKeys } from "@/lib/query-keys";
-import {
-  Button,
-  CustomSelect,
-  FormField,
-  Input,
-} from "@/components/ui/primitives";
-import { IconPicker } from "@/components/icons/icon-picker";
+import { CustomSelect, FormField, Input } from "@/components/ui/primitives";
 import { TelegramMessageTemplateInviteLinkSelect } from "./telegram-message-template-invite-link-select";
 import type { telegramChannelMessageTemplatesApi } from "@/lib/features/telegram/telegram-channel-message-templates-api";
 import { TelegramChannelScopeSelector } from "./telegram-channel-scope-selector";
@@ -30,6 +24,7 @@ import { TelegramChannelMessageTemplatePriceOptions } from "./telegram-channel-m
 import { TelegramChannelMessageTemplateOrder } from "./telegram-channel-message-template-order";
 import { TelegramTextEditor } from "./telegram-text-editor";
 import { TelegramCustomEmojiPickerModal } from "./telegram-custom-emoji-picker-modal";
+import { TelegramCustomEmojiPacksModal } from "./telegram-custom-emoji-packs-modal";
 import { customEmojiToken } from "./telegram-custom-emoji";
 
 type Layout = ReturnType<typeof readTelegramChannelMessageTemplateLayout>;
@@ -175,10 +170,13 @@ export function TelegramChannelMessageTemplateSettings({
 }) {
   const [premiumEmojiPickerOpen, setPremiumEmojiPickerOpen] = useState(false);
   const [premiumEmojiRequested, setPremiumEmojiRequested] = useState(false);
+  const [premiumEmojiPacksOpen, setPremiumEmojiPacksOpen] = useState(false);
   const premiumEmojiPacks = useQuery({
     queryKey: workspaceKeys.telegramCustomEmojiPacks(),
     queryFn: () => telegramChannelsApi.customEmojiPacks(),
-    enabled: premiumEmojiPickerOpen && premiumEmojiRequested,
+    enabled:
+      premiumEmojiPacksOpen ||
+      (premiumEmojiPickerOpen && premiumEmojiRequested),
     staleTime: 5 * 60_000,
   });
   const updateProductNameOverride = (name: string, nextValue: string) => {
@@ -361,31 +359,15 @@ export function TelegramChannelMessageTemplateSettings({
           </label>
           <div className="grid gap-3 sm:grid-cols-2">
             <FormField label="Views emoji">
-              <div className="flex flex-wrap items-center gap-2">
-                <IconPicker
-                  compact
-                  allowImages={false}
-                  icon={{
-                    type: "unicode",
-                    value: displayEmoji(viewsEmoji || "👁"),
-                  }}
-                  onChange={(_iconId, presentation) => {
-                    if (presentation?.type === "unicode") {
-                      onViewsEmojiChange(presentation.value);
-                    }
-                  }}
-                  onEmojiChange={(emoji) => onViewsEmojiChange(emoji || "👁")}
-                  buttonLabel="Choose views emoji"
-                />
-                <Button
-                  type="button"
-                  variant="secondary"
-                  className="h-9"
-                  onClick={() => setPremiumEmojiPickerOpen(true)}
-                >
-                  Premium emoji
-                </Button>
-              </div>
+              <button
+                type="button"
+                aria-label="Choose views emoji"
+                title="Choose views emoji"
+                onClick={() => setPremiumEmojiPickerOpen(true)}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-neutral-700 bg-neutral-900 text-lg hover:border-blue-500 hover:bg-neutral-800"
+              >
+                {displayEmoji(viewsEmoji || "👁")}
+              </button>
             </FormField>
             <FormField label="Round views">
               <CustomSelect
@@ -477,9 +459,24 @@ export function TelegramChannelMessageTemplateSettings({
             setPremiumEmojiPickerOpen(false);
           }}
           onPremiumTabOpen={() => setPremiumEmojiRequested(true)}
+          onManage={() => setPremiumEmojiPacksOpen(true)}
           premiumLoading={premiumEmojiPacks.isLoading}
           premiumError={premiumEmojiPacks.isError}
           onRetryPremium={() => void premiumEmojiPacks.refetch()}
+          standardTabLabel="Icons"
+        />
+        <TelegramCustomEmojiPacksModal
+          open={premiumEmojiPacksOpen}
+          onClose={() => setPremiumEmojiPacksOpen(false)}
+          packs={premiumEmojiPacks.data?.packs || []}
+          onImport={async (input) => {
+            await telegramChannelsApi.importCustomEmojiPack(input);
+            await premiumEmojiPacks.refetch();
+          }}
+          onDetach={async (packId) => {
+            await telegramChannelsApi.detachCustomEmojiPack(packId);
+            await premiumEmojiPacks.refetch();
+          }}
         />
       </>
     );

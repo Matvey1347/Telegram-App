@@ -65,9 +65,10 @@ describe("Telegram custom emoji", () => {
         onSelect={onSelect}
         onSelectStandard={vi.fn()}
         onPremiumTabOpen={onPremiumTabOpen}
+        standardTabLabel="Icons"
       />,
     );
-    expect(screen.getByRole("button", { name: "Standard" })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: "Icons" })).toHaveAttribute(
       "aria-pressed",
       "true",
     );

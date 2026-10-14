@@ -240,7 +240,10 @@ export class TelegramSystemBotHandlerService {
   }
 
   async sendTaskNotification(input: { chatId: string; text: string }) {
-    return this.sendSystemMessage({ chatId: input.chatId, text: `🔔 ${input.text}` });
+    return this.sendSystemMessage({
+      chatId: input.chatId,
+      text: `🔔 ${input.text}`,
+    });
   }
 
   async sendSystemMessage(input: {
@@ -442,12 +445,20 @@ export class TelegramSystemBotHandlerService {
         ],
       },
     };
-    if (messageId)
-      return this.api.editMessageText(this.config.token!, {
-        ...payload,
-        message_id: messageId,
-      });
-    return this.api.sendMessage(this.config.token!, payload);
+    const settingsCard = messageId
+      ? await this.api.editMessageText(this.config.token!, {
+          ...payload,
+          message_id: messageId,
+        })
+      : await this.api.sendMessage(this.config.token!, payload);
+    const selectedWorkspace = workspaces.find(
+      (workspace) => workspace.selected,
+    );
+    // Inline workspace controls cannot carry a ReplyKeyboardMarkup. Restore
+    // the root keyboard in a follow-up message so /start and Settings do not
+    // leave the Telegram client with only its collapsed menu icon.
+    if (selectedWorkspace) return this.sendMenu(chatId, selectedWorkspace);
+    return settingsCard;
   }
 
   private async sync(chatId: string, userId: string, workspaceId: string) {

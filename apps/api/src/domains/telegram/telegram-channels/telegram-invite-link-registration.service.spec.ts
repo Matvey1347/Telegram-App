@@ -152,13 +152,23 @@ describe('TelegramInviteLinkRegistrationService', () => {
   });
 
   it('creates and persists a named Telegram invite link with an authorized MTProto account', async () => {
-    const { service, inviteCreator, inviteSync, sourceAccess } = createService();
+    const { service, inviteCreator, inviteSync, sourceAccess } =
+      createService();
     await expect(
       service.create('user-1', 'channel-1', {
         title: 'Mutual promotion',
         mtprotoAccountId: 'account-1',
       }),
-    ).resolves.toEqual({ id: 'stored-link' });
+    ).resolves.toEqual({
+      id: 'stored-link',
+      name: 'Legacy link',
+      url: 'https://t.me/+valid',
+      creatorTelegramUserId: '42',
+      creatorUsername: 'owner',
+      creatorFirstName: 'Owner',
+      creatorLastName: null,
+      creatorPhotoUrl: 'data:image/jpeg;base64,avatar',
+    });
 
     expect(sourceAccess.sourcesForChannel).toHaveBeenCalledWith(
       'workspace-1',

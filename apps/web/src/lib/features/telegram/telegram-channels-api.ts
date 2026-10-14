@@ -92,6 +92,18 @@ type CrudFactory = <T>(path: string) => {
   remove: (id: string) => Promise<T>;
 };
 
+// Creating a link performs a real MTProto call and can take a few seconds.
+// Keep the mutation visible to the user instead of using the general quiet
+// mutation transport that is appropriate for background updates.
+const createInviteLinkFeedbackConfig = {
+  feedback: {
+    title: "Creating invite link",
+    loadingMessage: "Creating the invite link in Telegram…",
+    successMessage: "Invite link created.",
+    errorMessage: "Telegram could not create the invite link.",
+  },
+} as never;
+
 export function createTelegramChannelsApi({
   api,
   crud,
@@ -230,9 +242,11 @@ export function createTelegramChannelsApi({
         )
       ).data,
     moveToTest: async (id: string) =>
-      (await api.post<TelegramChannel>(`/telegram-channels/${id}/for-test`)).data,
+      (await api.post<TelegramChannel>(`/telegram-channels/${id}/for-test`))
+        .data,
     moveToActive: async (id: string) =>
-      (await api.post<TelegramChannel>(`/telegram-channels/${id}/activate`)).data,
+      (await api.post<TelegramChannel>(`/telegram-channels/${id}/activate`))
+        .data,
     resolveCustomEmojiDocuments: (
       documentIds: string[],
       onProgress: StreamProgressHandler<{
@@ -303,7 +317,7 @@ export function createTelegramChannelsApi({
         await api.post<TelegramInviteLink>(
           `/telegram-channels/${id}/invite-links/create`,
           payload,
-          quietMutationConfig,
+          createInviteLinkFeedbackConfig,
         )
       ).data,
     import: async (payload: TelegramChannelImportPayload) =>

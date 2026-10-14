@@ -52,6 +52,11 @@ export class TelegramWorkspaceFullSyncService {
           workspaceId: input.workspaceId,
           isActive: true,
           archivedAt: null,
+          // Manual "Sync all" covers only channels this workspace can
+          // administer in Telegram, never every catalog channel it tracks.
+          ...(input.actor.type === 'MANUAL'
+            ? { adminLinks: { some: {} } }
+            : {}),
           ...(input.actor.type !== 'MANUAL' ? { autoSyncEnabled: true } : {}),
         },
         orderBy: { title: 'asc' },

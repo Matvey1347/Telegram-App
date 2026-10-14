@@ -162,6 +162,61 @@ describe('TelegramSystemBotHandlerService', () => {
     expect(connections.storeLinkMessage).toHaveBeenCalledWith('link', 91);
   });
 
+  it('restores the bottom menu after /start opens the multi-workspace picker', async () => {
+    const api = {
+      sendMessage: jest.fn().mockResolvedValue({ message_id: 91 }),
+    } as any;
+    const connections = {
+      requireEnabledConnection: jest.fn().mockResolvedValue({
+        id: 'connection',
+        userId: 'user',
+        telegramUserId: '44',
+      }),
+      workspacesForConnection: jest.fn().mockResolvedValue([
+        { id: 'workspace-1', name: 'Business', selected: true },
+        { id: 'workspace-2', name: 'Test', selected: false },
+      ]),
+    } as any;
+    const service = new TelegramSystemBotHandlerService(
+      { token: 'token' } as any,
+      api,
+      connections,
+      {} as any,
+      {} as any,
+    );
+
+    await service.handle({
+      update_id: 2,
+      message: {
+        chat: { id: 44, type: 'private' },
+        from: { id: 44 },
+        text: '/start',
+      },
+    });
+
+    expect(api.sendMessage).toHaveBeenCalledTimes(2);
+    expect(api.sendMessage.mock.calls[0][1]).toEqual(
+      expect.objectContaining({
+        text: expect.stringContaining('Settings'),
+        reply_markup: expect.objectContaining({
+          inline_keyboard: expect.any(Array),
+        }),
+      }),
+    );
+    expect(api.sendMessage.mock.calls[1][1]).toEqual(
+      expect.objectContaining({
+        text: '🏢 Workspace: Business',
+        reply_markup: expect.objectContaining({
+          keyboard: expect.arrayContaining([
+            expect.arrayContaining([
+              expect.objectContaining({ text: '⚙️ Settings' }),
+            ]),
+          ]),
+        }),
+      }),
+    );
+  });
+
   it('removes the connection prompt and sends a collapsible bot menu after confirmation', async () => {
     const api = {
       deleteMessage: jest.fn().mockResolvedValue(true),
@@ -561,7 +616,19 @@ describe('TelegramSystemBotHandlerService', () => {
         text: expect.stringContaining('Settings'),
       }),
     );
-    expect(api.sendMessage).not.toHaveBeenCalled();
+    expect(api.sendMessage).toHaveBeenCalledWith(
+      'token',
+      expect.objectContaining({
+        text: '💬 Workspace: Test',
+        reply_markup: expect.objectContaining({
+          keyboard: expect.arrayContaining([
+            expect.arrayContaining([
+              expect.objectContaining({ text: '⚙️ Settings' }),
+            ]),
+          ]),
+        }),
+      }),
+    );
     expect(
       api.editMessageText.mock.calls[0][1].reply_markup.inline_keyboard,
     ).toEqual(

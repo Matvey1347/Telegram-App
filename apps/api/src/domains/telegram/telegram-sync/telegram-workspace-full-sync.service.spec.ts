@@ -155,7 +155,12 @@ describe('TelegramWorkspaceFullSyncService', () => {
     });
     expect(prisma.telegramChannel.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { workspaceId: 'workspace-1', isActive: true, archivedAt: null },
+        where: {
+          workspaceId: 'workspace-1',
+          isActive: true,
+          archivedAt: null,
+          adminLinks: { some: {} },
+        },
       }),
     );
     expect(syncNow).toHaveBeenCalledWith('user-1', 'channel-1', {

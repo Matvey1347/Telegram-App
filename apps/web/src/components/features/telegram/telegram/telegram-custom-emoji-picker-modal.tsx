@@ -22,6 +22,7 @@ type Props = {
   premiumLoading?: boolean;
   premiumError?: boolean;
   onRetryPremium?: () => void;
+  standardTabLabel?: string;
 };
 
 export function TelegramCustomEmojiPickerModal({
@@ -35,6 +36,7 @@ export function TelegramCustomEmojiPickerModal({
   premiumLoading = false,
   premiumError = false,
   onRetryPremium,
+  standardTabLabel,
 }: Props) {
   const { t } = useI18n();
   const [tab, setTab] = useState<"STANDARD" | "PREMIUM">("STANDARD");
@@ -82,11 +84,10 @@ export function TelegramCustomEmojiPickerModal({
               onClick={() => selectTab(value)}
               className={`px-2 pb-2 text-sm ${tab === value ? "border-b-2 border-blue-500 text-white" : "text-neutral-400"}`}
             >
-              {t(
-                value === "STANDARD"
-                  ? "telegram.posts.editorComponents.emojiPicker.standard"
-                  : "telegram.posts.editorComponents.emojiPicker.premium",
-              )}
+              {value === "STANDARD"
+                ? (standardTabLabel ??
+                  t("telegram.posts.editorComponents.emojiPicker.standard"))
+                : t("telegram.posts.editorComponents.emojiPicker.premium")}
             </button>
           ))}
         </div>

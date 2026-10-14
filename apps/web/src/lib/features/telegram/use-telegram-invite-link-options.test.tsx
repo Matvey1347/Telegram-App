@@ -17,6 +17,35 @@ vi.mock("@/lib/api", () => ({
 }));
 
 describe("useTelegramInviteLinkOptions", () => {
+  it("uses a just-created seeded link without fetching it again", () => {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    );
+
+    const { result } = renderHook(
+      () =>
+        useTelegramInviteLinkOptions({
+          channelId: "channel-1",
+          selectedId: "created-link",
+          seedLinks: [
+            {
+              id: "created-link",
+              telegramChannelId: "channel-1",
+              name: "New link",
+              url: "https://t.me/+new",
+            },
+          ],
+        }),
+      { wrapper },
+    );
+
+    expect(result.current.initialLink?.id).toBe("created-link");
+    expect(mocks.getInitial).not.toHaveBeenCalled();
+  });
+
   it("keeps the initial default link and searches only after two characters", async () => {
     mocks.getInitial.mockResolvedValue([
       {
@@ -44,7 +73,9 @@ describe("useTelegramInviteLinkOptions", () => {
       { initialProps: { search: "" }, wrapper },
     );
 
-    await waitFor(() => expect(result.current.initialLink?.id).toBe("default-link"));
+    await waitFor(() =>
+      expect(result.current.initialLink?.id).toBe("default-link"),
+    );
     expect(mocks.getAll).not.toHaveBeenCalled();
 
     await act(async () => rerender({ search: "a" }));

@@ -200,7 +200,7 @@ describe("ChannelSyncScopeModal", () => {
     expect(setProgress).toHaveBeenCalledWith({
       id: "workspace-channel-sync",
       title: "Sync all channels",
-      message: "Synchronizing active workspace channels…",
+      message: "Synchronizing active channels your workspace can administer…",
     });
     expect(syncWorkspaceChannels).toHaveBeenCalledWith(
       DEFAULT_CHANNEL_SYNC_SELECTION,

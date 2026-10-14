@@ -95,6 +95,45 @@ describe("telegramChannelsApi.syncWorkspaceChannels", () => {
   });
 });
 
+describe("telegramChannelsApi.createInviteLink", () => {
+  it("keeps the real Telegram creation request visible with loading feedback", async () => {
+    const post = vi.fn().mockResolvedValue({
+      data: { id: "link-1", url: "https://t.me/+new" },
+    });
+    const client = createTelegramChannelsApi({
+      api: { post } as unknown as AxiosInstance,
+      crud: vi.fn(() => ({
+        list: vi.fn(),
+        get: vi.fn(),
+        create: vi.fn(),
+        update: vi.fn(),
+        remove: vi.fn(),
+      })),
+      getPaginated: vi.fn(),
+      getAllPaginatedItems: vi.fn(),
+      streamBulkAction: vi.fn(),
+      streamProgressAction: vi.fn(),
+      silentFeedbackConfig: {},
+      quietMutationConfig: {},
+    });
+
+    await client.createInviteLink("channel-1", {
+      title: "Campaign link",
+      requestNeeded: true,
+    });
+
+    expect(post).toHaveBeenCalledWith(
+      "/telegram-channels/channel-1/invite-links/create",
+      { title: "Campaign link", requestNeeded: true },
+      expect.objectContaining({
+        feedback: expect.objectContaining({
+          loadingMessage: "Creating the invite link in Telegram…",
+        }),
+      }),
+    );
+  });
+});
+
 describe("telegramChannelsApi.applyUnifiedImportWithProgress", () => {
   it("streams the manifest with the hash produced by preview", async () => {
     const result = {

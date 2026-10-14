@@ -132,7 +132,9 @@ export class TelegramInviteLinkRegistrationService {
     }
     const expiresAt = input.expiresAt ? new Date(input.expiresAt) : undefined;
     if (expiresAt && expiresAt.getTime() <= Date.now()) {
-      throw new BadRequestException('The invite link expiry must be in the future.');
+      throw new BadRequestException(
+        'The invite link expiry must be in the future.',
+      );
     }
     const account = await this.access.connectedAccount(
       workspaceId,
@@ -159,7 +161,20 @@ export class TelegramInviteLinkRegistrationService {
       warnings: [],
       progressStep: { current: 1, total: 1 },
     });
-    return persisted.upserted;
+    // The compact persistence result only has counters and identifiers. The
+    // caller is an invite-link selector, so return the display fields already
+    // available from the MTProto create response instead of forcing it to
+    // reload the selector collection.
+    return {
+      ...persisted.upserted,
+      name: remote.title || title,
+      url: remote.url,
+      creatorTelegramUserId: remote.telegramCreatorUserId,
+      creatorUsername: remote.creatorUsername,
+      creatorFirstName: remote.creatorFirstName,
+      creatorLastName: remote.creatorLastName,
+      creatorPhotoUrl: remote.creatorPhotoUrl,
+    };
   }
 
   private async accessSources(workspaceId: string, channelId: string) {

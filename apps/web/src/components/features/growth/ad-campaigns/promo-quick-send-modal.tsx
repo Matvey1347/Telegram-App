@@ -3,7 +3,12 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Send } from "lucide-react";
-import { promosApi, telegramSystemBotApi, type Promo } from "@/lib/api";
+import {
+  promosApi,
+  telegramSystemBotApi,
+  type Promo,
+  type TelegramInviteLink,
+} from "@/lib/api";
 import { telegramSystemBotKeys } from "@/lib/query-keys";
 import { useTelegramInviteLinkOptions } from "@/lib/features/telegram/use-telegram-invite-link-options";
 import { useTelegramSystemBotPostFlow } from "@/hooks/use-telegram-system-bot-post-flow";
@@ -36,6 +41,8 @@ export function PromoQuickSendModal({
     "existing",
   );
   const [inviteLinkSearch, setInviteLinkSearch] = useState("");
+  const [createdInviteLink, setCreatedInviteLink] =
+    useState<TelegramInviteLink | null>(null);
   // Promo cards contain a compact list read model, not the post or saved link.
   const detail = useQuery({
     queryKey: ["promos", "detail", promo.id],
@@ -50,9 +57,15 @@ export function PromoQuickSendModal({
   const inviteOptions = useTelegramInviteLinkOptions({
     channelId: currentPromo?.telegramChannelId,
     selectedId: inviteLinkId || currentPromo?.defaultInviteLinkId,
-    seedLinks: currentPromo?.defaultInviteLink
-      ? [currentPromo.defaultInviteLink]
-      : [],
+    // The create endpoint already returns the persisted, display-ready link.
+    // Seeding it prevents the selector from issuing a second initial-link
+    // request before it can render the user's newly created link.
+    seedLinks: [
+      ...(currentPromo?.defaultInviteLink
+        ? [currentPromo.defaultInviteLink]
+        : []),
+      ...(createdInviteLink ? [createdInviteLink] : []),
+    ],
     enabled: Boolean(currentPromo),
     search: inviteLinkSearch,
     searchMinimumLength: 2,
@@ -61,9 +74,15 @@ export function PromoQuickSendModal({
     channelId: currentPromo?.telegramChannelId ?? promo.telegramChannelId,
     onRegistered: (link) => setInviteLinkId(link.id),
   });
-  const resolvingLink =
-    detail.isLoading || Boolean(currentPromo && inviteOptions.initialLoading);
   const preferredLinkId = inviteLinkId || currentPromo?.defaultInviteLinkId;
+  const selectedLinkWasJustCreated = createdInviteLink?.id === preferredLinkId;
+  const resolvingLink =
+    detail.isLoading ||
+    Boolean(
+      currentPromo &&
+      inviteOptions.initialLoading &&
+      !selectedLinkWasJustCreated,
+    );
   const selectedLink = resolvingLink
     ? undefined
     : inviteOptions.links.find(
@@ -137,8 +156,11 @@ export function PromoQuickSendModal({
               <TelegramInviteLinkSelect
                 value={selectedLink?.id ?? ""}
                 onChange={setInviteLinkId}
+                onOpen={inviteOptions.requestAll}
                 onSearchChange={setInviteLinkSearch}
-                disabled={resolvingLink || detail.isError || registerLink.isPending}
+                disabled={
+                  resolvingLink || detail.isError || registerLink.isPending
+                }
                 loading={resolvingLink || inviteOptions.loading}
                 loadingLabel="Loading invite link…"
                 placeholder="Select invite link"
@@ -167,6 +189,7 @@ export function PromoQuickSendModal({
               if (!open) setInviteLinkMode("existing");
             }}
             onCreated={(link) => {
+              setCreatedInviteLink(link);
               setInviteLinkId(link.id);
               setInviteLinkMode("existing");
             }}

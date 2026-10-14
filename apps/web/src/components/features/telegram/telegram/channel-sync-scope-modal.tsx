@@ -296,7 +296,7 @@ export function WorkspaceChannelSyncModal({
       setProgress({
         id: "workspace-channel-sync",
         title: "Sync all channels",
-        message: "Synchronizing active workspace channels…",
+        message: "Synchronizing active channels your workspace can administer…",
       });
     },
     onSuccess: async (result) => {
@@ -341,7 +341,7 @@ export function WorkspaceChannelSyncModal({
     <ChannelSyncScopeModal
       open={open}
       title="Sync all channels"
-      description="Choose what to synchronize across active workspace channels."
+      description="Choose what to synchronize across active channels your workspace can administer."
       helperText="This runs as one workspace operation. Channel-specific saved scopes are not changed."
       selection={selection}
       isSyncing={mutation.isPending}
