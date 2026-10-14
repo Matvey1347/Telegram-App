@@ -9,11 +9,29 @@ import { telegramChannelKeys } from "@/lib/query-keys";
 import {
   Button,
   CustomSelect,
+  DateInput,
   FormError,
   FormField,
   Input,
+  TimeInput,
   ToggleRow,
 } from "@/components/ui/primitives";
+
+const timeLimitPresets = [
+  { label: "1 hour", milliseconds: 60 * 60 * 1000 },
+  { label: "1 week", milliseconds: 7 * 24 * 60 * 60 * 1000 },
+  { label: "1 month", milliseconds: 30 * 24 * 60 * 60 * 1000 },
+  { label: "Unlimited", milliseconds: null },
+] as const;
+const userLimitPresets = [1, 10, 50, 100, null] as const;
+
+function localDateParts(date: Date) {
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return {
+    date: `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`,
+    time: `${pad(date.getHours())}:${pad(date.getMinutes())}`,
+  };
+}
 
 /** Creates a Telegram invite link with a channel-authorized MTProto account. */
 export function TelegramInviteLinkCreateInline({
@@ -39,9 +57,10 @@ export function TelegramInviteLinkCreateInline({
   const [requestNeeded, setRequestNeeded] = useState(true);
   const [monthlyFeeEnabled, setMonthlyFeeEnabled] = useState(false);
   const [monthlyFeeStars, setMonthlyFeeStars] = useState("");
-  const [expiryEnabled, setExpiryEnabled] = useState(false);
-  const [expiresAt, setExpiresAt] = useState("");
-  const [usageLimitEnabled, setUsageLimitEnabled] = useState(false);
+  const [timeLimitPreset, setTimeLimitPreset] = useState(3);
+  const [expiryDate, setExpiryDate] = useState("");
+  const [expiryTime, setExpiryTime] = useState("");
+  const [userLimitPreset, setUserLimitPreset] = useState(4);
   const [usageLimit, setUsageLimit] = useState("");
   const sources = useQuery({
     queryKey: [...telegramChannelKeys.sources(), channelId],
@@ -67,10 +86,10 @@ export function TelegramInviteLinkCreateInline({
         title: title.trim(),
         requestNeeded,
         ...(accountId ? { mtprotoAccountId: accountId } : {}),
-        ...(expiryEnabled && expiresAt
-          ? { expiresAt: new Date(expiresAt).toISOString() }
+        ...(timeLimitPreset < 3 && expiryDate && expiryTime
+          ? { expiresAt: new Date(`${expiryDate}T${expiryTime}`).toISOString() }
           : {}),
-        ...(usageLimitEnabled && Number(usageLimit) > 0
+        ...(userLimitPreset < 4 && Number(usageLimit) > 0
           ? { usageLimit: Number(usageLimit) }
           : {}),
         ...(monthlyFeeEnabled && Number(monthlyFeeStars) > 0
@@ -112,7 +131,20 @@ export function TelegramInviteLinkCreateInline({
 
   const hasInvalidEnabledNumber =
     (monthlyFeeEnabled && Number(monthlyFeeStars) < 1) ||
-    (usageLimitEnabled && Number(usageLimit) < 1);
+    (userLimitPreset < 4 && Number(usageLimit) < 1);
+  const selectTimeLimitPreset = (nextPreset: number) => {
+    setTimeLimitPreset(nextPreset);
+    const duration = timeLimitPresets[nextPreset]?.milliseconds;
+    if (!duration) return;
+    const parts = localDateParts(new Date(Date.now() + duration));
+    setExpiryDate(parts.date);
+    setExpiryTime(parts.time);
+  };
+  const selectUserLimitPreset = (nextPreset: number) => {
+    setUserLimitPreset(nextPreset);
+    const value = userLimitPresets[nextPreset];
+    if (value) setUsageLimit(String(value));
+  };
   return (
     <div className="space-y-3 rounded-lg border border-blue-900/60 bg-blue-950/20 p-3">
       <p className="text-sm font-medium text-blue-100">Create invite link in Telegram</p>
@@ -170,33 +202,55 @@ export function TelegramInviteLinkCreateInline({
           />
         </FormField>
       ) : null}
-      <ToggleRow
-        checked={expiryEnabled}
-        onChange={setExpiryEnabled}
-        activeTone="blue"
-        label="Limit by time period"
-        description="Off means the link never expires."
-      />
-      {expiryEnabled ? (
-        <FormField label="Expiry date" required>
-          <Input
-            type="datetime-local"
-            min={new Date(Date.now() + 60_000).toISOString().slice(0, 16)}
-            value={expiresAt}
-            onChange={(event) => setExpiresAt(event.target.value)}
-            disabled={create.isPending}
-          />
-        </FormField>
-      ) : null}
-      <ToggleRow
-        checked={usageLimitEnabled}
-        onChange={setUsageLimitEnabled}
-        activeTone="blue"
-        label="Limit by number of users"
-        description="Off means an unlimited number of people can use the link."
-      />
-      {usageLimitEnabled ? (
-        <FormField label="Number of users" required>
+      <section className="space-y-3 rounded-lg border border-neutral-800 bg-neutral-950/40 p-3">
+        <div>
+          <p className="text-sm font-medium text-white">Limit by time period</p>
+          <p className="mt-1 text-sm text-neutral-400">Unlimited by default. Choose a preset, then refine its date and time.</p>
+        </div>
+        <input
+          type="range"
+          min="0"
+          max="3"
+          step="1"
+          value={timeLimitPreset}
+          onChange={(event) => selectTimeLimitPreset(Number(event.target.value))}
+          aria-label="Invite link time limit"
+          className="w-full accent-blue-500"
+        />
+        <div className="grid grid-cols-4 text-center text-xs text-neutral-300">
+          {timeLimitPresets.map((preset) => <span key={preset.label}>{preset.label}</span>)}
+        </div>
+        {timeLimitPreset < 3 ? (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <FormField label="Expiry date" required>
+              <DateInput value={expiryDate} min={localDateParts(new Date()).date} onChange={(event) => setExpiryDate(event.target.value)} disabled={create.isPending} />
+            </FormField>
+            <FormField label="Expiry time" required>
+              <TimeInput value={expiryTime} onChange={(event) => setExpiryTime(event.target.value)} disabled={create.isPending} />
+            </FormField>
+          </div>
+        ) : null}
+      </section>
+      <section className="space-y-3 rounded-lg border border-neutral-800 bg-neutral-950/40 p-3">
+        <div>
+          <p className="text-sm font-medium text-white">Limit by number of users</p>
+          <p className="mt-1 text-sm text-neutral-400">Unlimited by default. Choose a preset or enter an exact count.</p>
+        </div>
+        <input
+          type="range"
+          min="0"
+          max="4"
+          step="1"
+          value={userLimitPreset}
+          onChange={(event) => selectUserLimitPreset(Number(event.target.value))}
+          aria-label="Invite link user limit"
+          className="w-full accent-blue-500"
+        />
+        <div className="grid grid-cols-5 text-center text-xs text-neutral-300">
+          {userLimitPresets.map((preset) => <span key={String(preset)}>{preset ?? "Unlimited"}</span>)}
+        </div>
+        {userLimitPreset < 4 ? (
+          <FormField label="Number of users" required>
           <Input
             type="number"
             min="1"
@@ -207,8 +261,9 @@ export function TelegramInviteLinkCreateInline({
             disabled={create.isPending}
             placeholder="Telegram validates its current maximum"
           />
-        </FormField>
-      ) : null}
+          </FormField>
+        ) : null}
+      </section>
       {sources.isError ? <FormError message="Could not load MTProto accounts for this channel." /> : null}
       {!sources.isLoading && !sources.isError && !accounts.length ? (
         <FormError message="No connected MTProto account can manage invite links for this channel." />
@@ -225,7 +280,7 @@ export function TelegramInviteLinkCreateInline({
             !accountId ||
             create.isPending ||
             hasInvalidEnabledNumber ||
-            (expiryEnabled && !expiresAt)
+            (timeLimitPreset < 3 && (!expiryDate || !expiryTime))
           }
           onClick={() => create.mutate()}
         >
