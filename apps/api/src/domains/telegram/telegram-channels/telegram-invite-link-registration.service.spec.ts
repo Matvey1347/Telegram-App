@@ -171,4 +171,26 @@ describe('TelegramInviteLinkRegistrationService', () => {
       expect.objectContaining({ link: remote }),
     );
   });
+
+  it('passes the requested Telegram-only link settings to the MTProto creator', async () => {
+    const { service, inviteCreator } = createService();
+    const expiresAt = '2027-01-01T12:00:00.000Z';
+
+    await service.create('user-1', 'channel-1', {
+      title: 'Paid VP',
+      requestNeeded: false,
+      expiresAt,
+      usageLimit: 50,
+      monthlyFeeStars: 100,
+    });
+
+    expect(inviteCreator.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        requestNeeded: false,
+        expiresAt: new Date(expiresAt),
+        usageLimit: 50,
+        monthlyFeeStars: 100,
+      }),
+    );
+  });
 });

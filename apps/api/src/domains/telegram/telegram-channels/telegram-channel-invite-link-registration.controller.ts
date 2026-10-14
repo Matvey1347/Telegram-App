@@ -1,5 +1,14 @@
 import { Body, Controller, Param, Post, UseGuards } from '@nestjs/common';
-import { IsOptional, IsString, MaxLength } from 'class-validator';
+import { Type } from 'class-transformer';
+import {
+  IsBoolean,
+  IsInt,
+  IsISO8601,
+  IsOptional,
+  IsString,
+  MaxLength,
+  Min,
+} from 'class-validator';
 import {
   CurrentUser,
   type JwtUser,
@@ -14,6 +23,10 @@ class RegisterTelegramChannelInviteLinkDto {
 class CreateTelegramChannelInviteLinkDto {
   @IsString() @MaxLength(32) title!: string;
   @IsOptional() @IsString() mtprotoAccountId?: string;
+  @IsOptional() @IsBoolean() requestNeeded?: boolean;
+  @IsOptional() @IsISO8601() expiresAt?: string;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) usageLimit?: number;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) monthlyFeeStars?: number;
 }
 
 @UseGuards(JwtAuthGuard)

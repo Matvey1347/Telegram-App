@@ -95,7 +95,14 @@ export class TelegramInviteLinkRegistrationService {
   async create(
     userId: string,
     channelId: string,
-    input: { title: string; mtprotoAccountId?: string },
+    input: {
+      title: string;
+      mtprotoAccountId?: string;
+      requestNeeded?: boolean;
+      expiresAt?: string;
+      usageLimit?: number;
+      monthlyFeeStars?: number;
+    },
   ) {
     const title = input.title.trim();
     if (!title) throw new BadRequestException('Enter an invite link name.');
@@ -123,6 +130,10 @@ export class TelegramInviteLinkRegistrationService {
         'Select a connected MTProto account that manages invite links for this channel.',
       );
     }
+    const expiresAt = input.expiresAt ? new Date(input.expiresAt) : undefined;
+    if (expiresAt && expiresAt.getTime() <= Date.now()) {
+      throw new BadRequestException('The invite link expiry must be in the future.');
+    }
     const account = await this.access.connectedAccount(
       workspaceId,
       channelId,
@@ -132,6 +143,10 @@ export class TelegramInviteLinkRegistrationService {
       ...this.access.accountCredentials(account),
       channel,
       title,
+      requestNeeded: input.requestNeeded !== false,
+      expiresAt,
+      usageLimit: input.usageLimit,
+      monthlyFeeStars: input.monthlyFeeStars,
     });
     const maps = await this.attribution.buildInviteAttributionMaps(workspaceId);
     const persisted = await this.inviteSync.persistInviteLinkFromRemote({

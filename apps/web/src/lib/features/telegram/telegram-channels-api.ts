@@ -290,7 +290,14 @@ export function createTelegramChannelsApi({
       ).data,
     createInviteLink: async (
       id: string,
-      payload: { title: string; mtprotoAccountId?: string },
+      payload: {
+        title: string;
+        mtprotoAccountId?: string;
+        requestNeeded: boolean;
+        expiresAt?: string;
+        usageLimit?: number;
+        monthlyFeeStars?: number;
+      },
     ) =>
       (
         await api.post<TelegramInviteLink>(

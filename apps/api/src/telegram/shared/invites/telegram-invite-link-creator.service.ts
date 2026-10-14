@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { Api } from 'telegram';
+import { returnBigInt } from 'telegram/Helpers';
 import { normalizeTelegramUsername } from '@api/telegram/shared/imports/telegram-import.helpers';
 import {
   TelegramMtprotoClient,
@@ -17,6 +18,10 @@ export class TelegramInviteLinkCreatorService {
     session: string;
     channel: StoredTelegramChannelReference;
     title: string;
+    requestNeeded: boolean;
+    expiresAt?: Date;
+    usageLimit?: number;
+    monthlyFeeStars?: number;
   }): Promise<TelegramInviteLinksResult['links'][number]> {
     const client = await this.mtproto.createClient(params);
     try {
@@ -26,11 +31,23 @@ export class TelegramInviteLinkCreatorService {
       );
       let response: unknown;
       try {
+        const subscriptionPricing = params.monthlyFeeStars
+          ? new Api.StarsSubscriptionPricing({
+              period: 30 * 24 * 60 * 60,
+              amount: returnBigInt(params.monthlyFeeStars),
+            })
+          : undefined;
         response = await this.mtproto.withTimeout(
           client.invoke(
             new Api.messages.ExportChatInvite({
               peer: resolved.peer,
               title: params.title,
+              requestNeeded: params.requestNeeded,
+              expireDate: params.expiresAt
+                ? Math.floor(params.expiresAt.getTime() / 1000)
+                : undefined,
+              usageLimit: params.usageLimit,
+              subscriptionPricing,
             }),
           ),
           20_000,
