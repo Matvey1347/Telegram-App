@@ -22,6 +22,9 @@ export class CreateCrossPromotionPlanDto {
   @IsIn(['DIRECT_MUTUAL', 'OWN_CHANNELS'])
   kind!: 'DIRECT_MUTUAL' | 'OWN_CHANNELS';
   @IsOptional() @IsString() advertiserId?: string | null;
+  @IsOptional() @IsString() @MaxLength(33) partnerTelegramUsername?:
+    | string
+    | null;
   @IsString() @MaxLength(160) title!: string;
   @IsArray()
   @ArrayMaxSize(100)
@@ -56,6 +59,15 @@ export class SaveCrossPromotionPlanDraftDto {
  */
 export class RenameCrossPromotionPlanDto {
   @IsString() @MaxLength(160) title!: string;
+}
+
+/** Fields that do not affect an already-created Telegram publication. */
+export class UpdateCrossPromotionPlanDetailsDto {
+  @IsString() @MaxLength(160) title!: string;
+  @IsOptional() @IsString() advertiserId?: string | null;
+  @IsOptional() @IsString() @MaxLength(33) partnerTelegramUsername?:
+    | string
+    | null;
 }
 
 /** Move an already published direct-exchange record into this one. */

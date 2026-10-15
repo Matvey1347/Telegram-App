@@ -61,6 +61,7 @@ export function CrossPromotionPlanView({
   onUpdatePublicationInTelegram,
   onReplacePublicationAndPublishNow,
   onSaveDraft,
+  onUpdateDetails,
   state,
   allChannels,
   ownChannels,
@@ -100,6 +101,7 @@ export function CrossPromotionPlanView({
   onUpdatePublicationInTelegram?: (publicationId: string) => void;
   onReplacePublicationAndPublishNow?: (publicationId: string) => void;
   onSaveDraft: () => void;
+  onUpdateDetails?: () => void;
   state: DraftState;
   allChannels: TelegramChannel[];
   ownChannels: TelegramChannel[];
@@ -183,6 +185,10 @@ export function CrossPromotionPlanView({
     error,
     drafts,
   } = state;
+  const useFirstTrackingLinkAsTitle = (link?: TelegramInviteLinkOption) => {
+    if (title.trim() || !link?.name.trim()) return;
+    setTitle(link.name);
+  };
   const publishedPrimaryMediaCount =
     initial?.status === "ACTIVE"
       ? normalizeTelegramPostMediaItems(
@@ -237,11 +243,20 @@ export function CrossPromotionPlanView({
     return (
       <>
         {changed ? (
-          <Button type="button" disabled={saving || savingDraft} onClick={() => onUpdatePublicationInTelegram?.(publicationId)}>
+          <Button
+            type="button"
+            disabled={saving || savingDraft}
+            onClick={() => onUpdatePublicationInTelegram?.(publicationId)}
+          >
             {published ? "Update in Telegram" : "Update"}
           </Button>
         ) : null}
-        <Button type="button" variant="danger" disabled={saving || savingDraft} onClick={() => onReplacePublicationAndPublishNow?.(publicationId)}>
+        <Button
+          type="button"
+          variant="danger"
+          disabled={saving || savingDraft}
+          onClick={() => onReplacePublicationAndPublishNow?.(publicationId)}
+        >
           {published ? "Delete and publish now" : "Publish now"}
         </Button>
       </>
@@ -366,7 +381,7 @@ export function CrossPromotionPlanView({
                     {kind === "DIRECT_MUTUAL" ? (
                       <>
                         <section className="space-y-3 border-t border-neutral-800 pt-3 sm:rounded-xl sm:border sm:p-3">
-                          <div className="flex items-center justify-between gap-2">
+                          <div className="relative flex items-center justify-between gap-2 pr-8">
                             <div>
                               <h4 className="text-sm font-semibold text-white">
                                 Partner post 1
@@ -378,9 +393,10 @@ export function CrossPromotionPlanView({
                             </div>
                             <div className="flex items-center gap-1">
                               {publicationActions("publisher-1")}
+                            </div>
                             <button
                               type="button"
-                              className="rounded-md p-1 text-neutral-400 transition-colors hover:bg-neutral-800 hover:text-white"
+                              className="absolute right-0 top-0 rounded-md p-1 text-neutral-400 transition-colors hover:bg-neutral-800 hover:text-white"
                               aria-label="Toggle partner post 1"
                               aria-expanded={publisherPostOpen.primary ?? true}
                               onClick={() =>
@@ -395,7 +411,6 @@ export function CrossPromotionPlanView({
                                 className={`transition-transform ${(publisherPostOpen.primary ?? true) ? "rotate-180" : ""}`}
                               />
                             </button>
-                            </div>
                           </div>
                           {(publisherPostOpen.primary ?? true) ? (
                             <>
@@ -449,7 +464,7 @@ export function CrossPromotionPlanView({
                             key={publication.id}
                             className="space-y-3 border-t border-neutral-800 pt-3 sm:rounded-xl sm:border sm:p-3"
                           >
-                            <div className="flex items-center justify-between gap-2">
+                            <div className="relative flex items-center justify-between gap-2 pr-8">
                               <span>
                                 <h4 className="text-sm font-semibold text-white">
                                   Partner post {index + 2}
@@ -475,28 +490,28 @@ export function CrossPromotionPlanView({
                                   <Trash2 size={16} />
                                 </Button>
                                 {publicationActions(publication.id)}
-                                <button
-                                  type="button"
-                                  className="rounded-md p-1 text-neutral-400 transition-colors hover:bg-neutral-800 hover:text-white"
-                                  aria-label={`Toggle partner post ${index + 2}`}
-                                  aria-expanded={
-                                    publisherPostOpen[publication.id] ?? true
-                                  }
-                                  onClick={() =>
-                                    setPublisherPostOpen((current) => ({
-                                      ...current,
-                                      [publication.id]: !(
-                                        current[publication.id] ?? true
-                                      ),
-                                    }))
-                                  }
-                                >
-                                  <ChevronDown
-                                    size={17}
-                                    className={`transition-transform ${(publisherPostOpen[publication.id] ?? true) ? "rotate-180" : ""}`}
-                                  />
-                                </button>
                               </div>
+                              <button
+                                type="button"
+                                className="absolute right-0 top-0 rounded-md p-1 text-neutral-400 transition-colors hover:bg-neutral-800 hover:text-white"
+                                aria-label={`Toggle partner post ${index + 2}`}
+                                aria-expanded={
+                                  publisherPostOpen[publication.id] ?? true
+                                }
+                                onClick={() =>
+                                  setPublisherPostOpen((current) => ({
+                                    ...current,
+                                    [publication.id]: !(
+                                      current[publication.id] ?? true
+                                    ),
+                                  }))
+                                }
+                              >
+                                <ChevronDown
+                                  size={17}
+                                  className={`transition-transform ${(publisherPostOpen[publication.id] ?? true) ? "rotate-180" : ""}`}
+                                />
+                              </button>
                             </div>
                             {(publisherPostOpen[publication.id] ?? true) ? (
                               <>
@@ -586,7 +601,7 @@ export function CrossPromotionPlanView({
                                       ),
                                     )
                                   }
-                                onClear={() => {
+                                  onClear={() => {
                                     setAdditionalPublisherPosts((current) =>
                                       current.map((item) =>
                                         item.id === publication.id
@@ -601,7 +616,7 @@ export function CrossPromotionPlanView({
                                       ...current,
                                       [publication.id]: true,
                                     }));
-                                }}
+                                  }}
                                   publishedMediaCount={
                                     clearedPublisherPosts[publication.id]
                                       ? undefined
@@ -660,7 +675,26 @@ export function CrossPromotionPlanView({
               partnerIds={partnerIds}
               onPartnerIdsChange={(ids) => {
                 setPartnerIds(ids);
-                if (!ids.length) setTargets([]);
+                if (!ids.length) {
+                  setTargets([]);
+                  return;
+                }
+                // A direct mutual promotion needs one reciprocal placement as
+                // soon as the partner confirms where they publish it. Extra
+                // placements remain optional and can be added below.
+                setTargets((current) => {
+                  if (current.length) return current;
+                  const telegramChannelId = ownChannels[0]?.id;
+                  return telegramChannelId
+                    ? [
+                        {
+                          telegramChannelId,
+                          promoId: outboundMode === "CUSTOM" ? null : "",
+                          inviteLinkId: "",
+                        },
+                      ]
+                    : current;
+                });
               }}
               partnerAdvertiserId={partnerAdvertiserId}
               partnerClient={initial?.advertiser ?? null}
@@ -698,9 +732,10 @@ export function CrossPromotionPlanView({
                   },
                 ]);
               }}
-              onResolved={(channelId, resolved) =>
-                resolvedTargets.current.set(channelId, resolved)
-              }
+              onResolved={(channelId, resolved) => {
+                resolvedTargets.current.set(channelId, resolved);
+                useFirstTrackingLinkAsTitle(resolved.inviteLink);
+              }}
               outboundMode={outboundMode}
               onOutboundModeChange={(value) => {
                 setOutboundMode(value);
@@ -776,6 +811,17 @@ export function CrossPromotionPlanView({
                   : initial?.status === "DRAFT"
                     ? "Update draft"
                     : "Save draft"}
+              </Button>
+            ) : null}
+            {onUpdateDetails ? (
+              <Button
+                type="button"
+                variant="secondary"
+                className="w-full sm:w-auto"
+                disabled={saving || savingDraft || !title.trim()}
+                onClick={onUpdateDetails}
+              >
+                {saving ? "Updating…" : "Update details"}
               </Button>
             ) : null}
             {onReplaceAndPublishNow && !hasMultiplePublisherPosts ? (

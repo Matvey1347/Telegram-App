@@ -38,11 +38,17 @@ const json = <T>(value: unknown, fallback: T): T =>
 
 function nextPublisherDeletionAt(post: CrossPromotionPlacementPost) {
   const placements = post.publisherPublications?.length
-    ? post.publisherPublications.flatMap((publication) => publication.placements)
+    ? post.publisherPublications.flatMap(
+        (publication) => publication.placements,
+      )
     : (post.publisherPlacements ?? []);
   const timestamps = placements
-    .flatMap((placement) => (placement.deleteAt ? [Date.parse(placement.deleteAt)] : []))
-    .filter((timestamp) => Number.isFinite(timestamp) && timestamp > Date.now());
+    .flatMap((placement) =>
+      placement.deleteAt ? [Date.parse(placement.deleteAt)] : [],
+    )
+    .filter(
+      (timestamp) => Number.isFinite(timestamp) && timestamp > Date.now(),
+    );
   return timestamps.length ? new Date(Math.min(...timestamps)) : null;
 }
 
@@ -92,9 +98,7 @@ function publisherPlacements(
   );
 }
 
-function partnerPlacements(
-  post: CrossPromotionPlacementPost,
-): Array<{
+function partnerPlacements(post: CrossPromotionPlacementPost): Array<{
   telegramChannelId: string;
   scheduledAt: string;
   deleteAt?: string | null;
@@ -361,6 +365,7 @@ export class CrossPromotionPlansService {
       data: {
         workspaceId,
         advertiserId: dto.advertiserId || null,
+        partnerTelegramUsername: dto.partnerTelegramUsername?.trim() || null,
         createdByUserId: userId,
         kind: dto.kind,
         title: dto.title.trim(),
@@ -572,6 +577,7 @@ export class CrossPromotionPlansService {
         status: true,
         kind: true,
         advertiserId: true,
+        partnerTelegramUsername: true,
         title: true,
         publisherChannelIds: true,
         partnerChannelIds: true,
@@ -590,6 +596,7 @@ export class CrossPromotionPlansService {
       dto: {
         kind: row.kind,
         advertiserId: row.advertiserId,
+        partnerTelegramUsername: row.partnerTelegramUsername,
         title: row.title,
         publisherChannelIds: row.publisherChannelIds,
         partnerChannelIds: row.partnerChannelIds,
@@ -601,6 +608,42 @@ export class CrossPromotionPlansService {
       } satisfies CreateCrossPromotionPlanDto,
       placements: json<ScheduledPlacement[]>(row.placementPostIds, []),
     };
+  }
+
+  async updateDetails(
+    userId: string,
+    id: string,
+    details: {
+      title: string;
+      advertiserId?: string | null;
+      partnerTelegramUsername?: string | null;
+    },
+  ) {
+    const workspaceId = await this.workspace(userId);
+    const existing = await this.prisma.crossPromotionPlan.findFirst({
+      where: { id, workspaceId, status: { not: 'CANCELLED' } },
+      select: { id: true },
+    });
+    if (!existing)
+      throw new NotFoundException('Cross-promotion plan not found');
+    if (details.advertiserId) {
+      const advertiser = await this.prisma.telegramAdvertiser.findFirst({
+        where: { id: details.advertiserId, workspaceId },
+        select: { id: true },
+      });
+      if (!advertiser)
+        throw new NotFoundException('Partner CRM client is unavailable');
+    }
+    const updated = await this.prisma.crossPromotionPlan.update({
+      where: { id },
+      data: {
+        title: details.title.trim(),
+        advertiserId: details.advertiserId || null,
+        partnerTelegramUsername:
+          details.partnerTelegramUsername?.trim() || null,
+      },
+    });
+    return this.readService.shape(workspaceId, updated);
   }
 
   /**
@@ -644,7 +687,9 @@ export class CrossPromotionPlansService {
       ? await this.prisma.telegramManagedPost.findMany({
           where: {
             workspaceId,
-            id: { in: storedPlacements.map((placement) => placement.managedPostId) },
+            id: {
+              in: storedPlacements.map((placement) => placement.managedPostId),
+            },
           },
           select: { id: true, telegramRemoteStatus: true },
         })
@@ -685,6 +730,7 @@ export class CrossPromotionPlansService {
       where: { id },
       data: {
         advertiserId: dto.advertiserId || null,
+        partnerTelegramUsername: dto.partnerTelegramUsername?.trim() || null,
         kind: dto.kind,
         title: dto.title.trim(),
         publisherChannelIds: normalized.publisherChannelIds,
@@ -800,8 +846,9 @@ export class CrossPromotionPlansService {
       source.placementPostIds,
       [],
     );
-    const uniqueBy = <T>(items: T[], key: (item: T) => string) =>
-      [...new Map(items.map((item) => [key(item), item])).values()];
+    const uniqueBy = <T>(items: T[], key: (item: T) => string) => [
+      ...new Map(items.map((item) => [key(item), item])).values(),
+    ];
     const combinedPost: CrossPromotionPlacementPost = {
       ...targetPost,
       publisherPublications: [...targetPublisher, ...sourcePublisher],
@@ -818,7 +865,8 @@ export class CrossPromotionPlansService {
         ...json<CrossPromotionTargetInput[]>(target.targets, []),
         ...json<CrossPromotionTargetInput[]>(source.targets, []),
       ],
-      (item) => `${item.telegramChannelId}:${item.promoId ?? ''}:${item.inviteLinkId}`,
+      (item) =>
+        `${item.telegramChannelId}:${item.promoId ?? ''}:${item.inviteLinkId}`,
     );
     const combinedPlacements = uniqueBy(
       [...targetPlacements, ...sourcePlacements],
@@ -855,12 +903,17 @@ export class CrossPromotionPlansService {
           ]),
           targets: combinedTargets as unknown as Prisma.InputJsonValue,
           publicationPost: combinedPost as unknown as Prisma.InputJsonValue,
-          placementPostIds: combinedPlacements as unknown as Prisma.InputJsonValue,
-          baselineTargetCounters: combinedBaselines as unknown as Prisma.InputJsonValue,
+          placementPostIds:
+            combinedPlacements as unknown as Prisma.InputJsonValue,
+          baselineTargetCounters:
+            combinedBaselines as unknown as Prisma.InputJsonValue,
           baselinePublisherSubscribers:
             combinedSubscribers as unknown as Prisma.InputJsonValue,
           scheduledAt: new Date(
-            Math.min(target.scheduledAt.getTime(), source.scheduledAt.getTime()),
+            Math.min(
+              target.scheduledAt.getTime(),
+              source.scheduledAt.getTime(),
+            ),
           ),
           trackingEndsAt: ends.length
             ? new Date(Math.max(...ends.map((value) => value.getTime())))

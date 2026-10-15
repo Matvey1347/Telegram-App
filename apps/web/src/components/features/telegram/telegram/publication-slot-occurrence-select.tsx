@@ -11,6 +11,7 @@ import {
   zonedDateTimeToUtc,
 } from "@/lib/features/growth/telegram-ad-sales";
 import { useI18n } from "@/providers/i18n-provider";
+import type { TelegramPublicationSlotOccurrence } from "@telegram-system/shared";
 
 const occurrenceDateKey = (scheduledAt: string, timezone: string) => {
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -23,6 +24,29 @@ const occurrenceDateKey = (scheduledAt: string, timezone: string) => {
     parts.find((item) => item.type === type)?.value;
   return `${part("year")}-${part("month")}-${part("day")}`;
 };
+
+export function isSelectedPublicationSlotOccurrence(
+  occurrence: TelegramPublicationSlotOccurrence,
+  selectedSlotId: string | null,
+  selectedInstant: string | null,
+  selectedDate: string,
+) {
+  if (!selectedInstant) return false;
+  if (new Date(occurrence.scheduledAt).getTime() === new Date(selectedInstant).getTime()) {
+    return !selectedSlotId || occurrence.slotId === selectedSlotId;
+  }
+
+  // Slot occurrences use their canonical UTC instant. A manually chosen
+  // schedule time uses the local channel datetime, so those instants differ
+  // by one hour after a DST change even when the entered local time matches
+  // a slot. `selectedSlotId` is absent for a manually entered time.
+  return (
+    (!selectedSlotId || selectedSlotId === occurrence.slotId) &&
+    occurrenceDateKey(selectedInstant, occurrence.timezone) === selectedDate &&
+    channelLocalTime(new Date(selectedInstant), occurrence.timezone) ===
+      occurrence.time
+  );
+}
 
 type PublicationSlotOccurrenceSelectProps = {
   channelId: string;
@@ -167,10 +191,12 @@ export function PublicationSlotOptions({
     dayOccurrences
       .filter(
         (item) =>
-          (!selectedSlotId || item.slotId === selectedSlotId) &&
-          selectedInstant &&
-          new Date(item.scheduledAt).getTime() ===
-            new Date(selectedInstant).getTime(),
+          isSelectedPublicationSlotOccurrence(
+            item,
+            selectedSlotId,
+            selectedInstant,
+            selectedDate,
+          ),
       )
       .map((item) => `${item.slotId}:${item.scheduledAt}`)[0] ?? null;
 

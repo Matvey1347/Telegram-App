@@ -92,8 +92,13 @@ export function CrossPromotionPlansPage({
     enabled: Boolean(previewPromoId),
   });
   const botNotificationPreviewQuery = useQuery({
-    queryKey: ["cross-promotion-plans", "bot-notification-preview", botNotificationPlan?.id],
-    queryFn: () => crossPromotionPlansApi.previewBotNotification(botNotificationPlan!.id),
+    queryKey: [
+      "cross-promotion-plans",
+      "bot-notification-preview",
+      botNotificationPlan?.id,
+    ],
+    queryFn: () =>
+      crossPromotionPlansApi.previewBotNotification(botNotificationPlan!.id),
     enabled: Boolean(botNotificationPlan),
   });
   const saveMutation = useMutation({
@@ -153,7 +158,9 @@ export function CrossPromotionPlansPage({
     // partial plan. Refresh it so the user can continue that exact plan
     // instead of submitting the browser draft as a duplicate.
     onError: async () => {
-      await qc.invalidateQueries({ queryKey: crossPromotionPlanKeys.list(kind) });
+      await qc.invalidateQueries({
+        queryKey: crossPromotionPlanKeys.list(kind),
+      });
     },
   });
   const saveDraftMutation = useMutation({
@@ -165,9 +172,30 @@ export function CrossPromotionPlansPage({
       id?: string;
     }) => crossPromotionPlansApi.saveDraft(kind, draft, id),
     onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: crossPromotionPlanKeys.list(kind) });
+      await qc.invalidateQueries({
+        queryKey: crossPromotionPlanKeys.list(kind),
+      });
       setOpen(false);
       setEditingPlan(null);
+    },
+  });
+  const updateDetailsMutation = useMutation({
+    mutationFn: (details: {
+      title: string;
+      advertiserId?: string | null;
+      partnerTelegramUsername?: string | null;
+    }) => {
+      if (!editingPlan) throw new Error("Promotion is not available");
+      return crossPromotionPlansApi.updateDetails(editingPlan.id, details);
+    },
+    onSuccess: (plan) => {
+      qc.setQueryData<CrossPromotionPlan[]>(
+        crossPromotionPlanKeys.list(kind),
+        (current) =>
+          current?.map((item) => (item.id === plan.id ? plan : item)) ?? [],
+      );
+      setEditingPlan(plan);
+      setOpen(false);
     },
   });
   const replaceAndPublishNowMutation = useMutation({
@@ -211,9 +239,19 @@ export function CrossPromotionPlansPage({
     },
   });
   const updatePublicationMutation = useMutation({
-    mutationFn: ({ publicationId, payload }: { publicationId: string; payload: CreateCrossPromotionPlanPayload }) => {
+    mutationFn: ({
+      publicationId,
+      payload,
+    }: {
+      publicationId: string;
+      payload: CreateCrossPromotionPlanPayload;
+    }) => {
       if (!editingPlan) throw new Error("Promotion is not available");
-      return crossPromotionPlansApi.updatePublicationInTelegram(editingPlan.id, publicationId, payload);
+      return crossPromotionPlansApi.updatePublicationInTelegram(
+        editingPlan.id,
+        publicationId,
+        payload,
+      );
     },
     onSuccess: async () => {
       await Promise.all([
@@ -223,10 +261,19 @@ export function CrossPromotionPlansPage({
     },
   });
   const replacePublicationMutation = useMutation({
-    mutationFn: async ({ publicationId, payload }: { publicationId: string; payload: CreateCrossPromotionPlanPayload }) => {
+    mutationFn: async ({
+      publicationId,
+      payload,
+    }: {
+      publicationId: string;
+      payload: CreateCrossPromotionPlanPayload;
+    }) => {
       if (!editingPlan) throw new Error("Promotion is not available");
       return crossPromotionPlansApi.replacePublicationAndPublishNow(
-        editingPlan.id, publicationId, payload, () => undefined,
+        editingPlan.id,
+        publicationId,
+        payload,
+        () => undefined,
       );
     },
     onSuccess: async () => {
@@ -279,14 +326,18 @@ export function CrossPromotionPlansPage({
       }
     },
     onSettled: async () => {
-      await qc.invalidateQueries({ queryKey: crossPromotionPlanKeys.list(kind) });
+      await qc.invalidateQueries({
+        queryKey: crossPromotionPlanKeys.list(kind),
+      });
     },
   });
   const sendToBotMutation = useMutation({
-    mutationFn: (plan: CrossPromotionPlan) => crossPromotionPlansApi.sendToBot(plan.id),
+    mutationFn: (plan: CrossPromotionPlan) =>
+      crossPromotionPlansApi.sendToBot(plan.id),
   });
   const refreshInviteLinksMutation = useMutation({
-    mutationFn: (id: string) => crossPromotionPlansApi.refreshInviteLinkData(id),
+    mutationFn: (id: string) =>
+      crossPromotionPlansApi.refreshInviteLinkData(id),
     onSuccess: async () => {
       await Promise.all([
         qc.invalidateQueries({ queryKey: crossPromotionPlanKeys.list(kind) }),
@@ -380,7 +431,13 @@ export function CrossPromotionPlansPage({
         channels={channelsQuery.data ?? []}
         networks={networksQuery.data ?? []}
         loading={channelsQuery.isLoading || networksQuery.isLoading}
-        saving={saveMutation.isPending || replaceAndPublishNowMutation.isPending || updatePublicationMutation.isPending || replacePublicationMutation.isPending}
+        saving={
+          saveMutation.isPending ||
+          updateDetailsMutation.isPending ||
+          replaceAndPublishNowMutation.isPending ||
+          updatePublicationMutation.isPending ||
+          replacePublicationMutation.isPending
+        }
         onClose={() => {
           setOpen(false);
           setEditingPlan(null);
@@ -397,6 +454,9 @@ export function CrossPromotionPlansPage({
         }
         onSaveDraft={(draft, id) =>
           saveDraftMutation.mutateAsync({ draft, id })
+        }
+        onUpdateDetails={(details) =>
+          updateDetailsMutation.mutateAsync(details)
         }
       />
       <PromoFormModal

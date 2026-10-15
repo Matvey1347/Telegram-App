@@ -62,6 +62,7 @@ export function CrossPromotionPlanModal({
   onUpdatePublicationInTelegram,
   onReplacePublicationAndPublishNow,
   onSaveDraft,
+  onUpdateDetails,
 }: {
   open: boolean;
   kind: CrossPromotionPlanKind;
@@ -76,12 +77,23 @@ export function CrossPromotionPlanModal({
   onReplaceAndPublishNow?: (
     payload: CreateCrossPromotionPlanPayload,
   ) => Promise<unknown>;
-  onUpdatePublicationInTelegram?: (publicationId: string, payload: CreateCrossPromotionPlanPayload) => Promise<unknown>;
-  onReplacePublicationAndPublishNow?: (publicationId: string, payload: CreateCrossPromotionPlanPayload) => Promise<unknown>;
+  onUpdatePublicationInTelegram?: (
+    publicationId: string,
+    payload: CreateCrossPromotionPlanPayload,
+  ) => Promise<unknown>;
+  onReplacePublicationAndPublishNow?: (
+    publicationId: string,
+    payload: CreateCrossPromotionPlanPayload,
+  ) => Promise<unknown>;
   onSaveDraft: (
     draft: Record<string, unknown>,
     id?: string,
   ) => Promise<unknown>;
+  onUpdateDetails?: (details: {
+    title: string;
+    advertiserId?: string | null;
+    partnerTelegramUsername?: string | null;
+  }) => Promise<unknown>;
 }) {
   const state = useCrossPromotionDraftState({
     open,
@@ -121,7 +133,9 @@ export function CrossPromotionPlanModal({
   const [botFlowTarget, setBotFlowTarget] = useState("post");
   const [showValidationErrors, setShowValidationErrors] = useState(false);
   const [savingDraft, setSavingDraft] = useState(false);
-  const [confirmPublishNow, setConfirmPublishNow] = useState<string | null>(null);
+  const [confirmPublishNow, setConfirmPublishNow] = useState<string | null>(
+    null,
+  );
   const resolvedTargets = useRef(
     new Map<string, { promo?: Promo; inviteLink?: TelegramInviteLinkOption }>(),
   );
@@ -288,11 +302,13 @@ export function CrossPromotionPlanModal({
     ]),
   ) as Record<string, boolean>;
   const publicationHasTelegramMessage = Object.fromEntries(
-    (initial?.placementPostIds ?? []).reduce<string[]>((ids, placement) => {
-      if (placement.isPublishedInTelegram && placement.publicationId)
-        ids.push(placement.publicationId);
-      return ids;
-    }, []).map((publicationId) => [publicationId, true]),
+    (initial?.placementPostIds ?? [])
+      .reduce<string[]>((ids, placement) => {
+        if (placement.isPublishedInTelegram && placement.publicationId)
+          ids.push(placement.publicationId);
+        return ids;
+      }, [])
+      .map((publicationId) => [publicationId, true]),
   ) as Record<string, boolean>;
   const requiresRepublish = Boolean(
     initial?.status === "ACTIVE" &&
@@ -338,7 +354,10 @@ export function CrossPromotionPlanModal({
       expectedViews: product?.estimatedViews ?? null,
     };
   };
-  const submit = async (replaceAndPublishNow = false, publicationId?: string) => {
+  const submit = async (
+    replaceAndPublishNow = false,
+    publicationId?: string,
+  ) => {
     const hasPostContent = Boolean(
       post.text.trim() || post.imageUrls.length || post.mediaItems?.length,
     );
@@ -495,6 +514,8 @@ export function CrossPromotionPlanModal({
       const payload = {
         kind,
         advertiserId: kind === "DIRECT_MUTUAL" ? advertiserId : null,
+        partnerTelegramUsername:
+          kind === "DIRECT_MUTUAL" ? partnerTelegram.trim() || null : null,
         title: title.trim(),
         publisherChannelIds: publisherIds,
         partnerChannelIds: kind === "DIRECT_MUTUAL" ? partnerIds : [],
@@ -542,7 +563,11 @@ export function CrossPromotionPlanModal({
             ).toISOString()
           : null,
       } satisfies CreateCrossPromotionPlanPayload;
-      if (publicationId && replaceAndPublishNow && onReplacePublicationAndPublishNow) {
+      if (
+        publicationId &&
+        replaceAndPublishNow &&
+        onReplacePublicationAndPublishNow
+      ) {
         await onReplacePublicationAndPublishNow(publicationId, payload);
       } else if (publicationId && onUpdatePublicationInTelegram) {
         await onUpdatePublicationInTelegram(publicationId, payload);
@@ -557,6 +582,32 @@ export function CrossPromotionPlanModal({
         cause instanceof Error
           ? cause.message
           : "Could not create and schedule this placement.",
+      );
+    }
+  };
+  const updateDetails = async () => {
+    if (!onUpdateDetails) return;
+    try {
+      setError("");
+      const advertiserId =
+        kind === "DIRECT_MUTUAL" && partnerContact.trim()
+          ? await ensureCrossPromotionPartnerClient({
+              advertiserId: partnerAdvertiserId,
+              contact: partnerContact,
+              telegramUsername: partnerTelegram,
+            })
+          : null;
+      if (advertiserId) setPartnerAdvertiserId(advertiserId);
+      await onUpdateDetails({
+        title: title.trim(),
+        advertiserId,
+        partnerTelegramUsername:
+          kind === "DIRECT_MUTUAL" ? partnerTelegram.trim() || null : null,
+      });
+      drafts.clearCurrentDraft();
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : "Could not update details.",
       );
     }
   };
@@ -608,6 +659,11 @@ export function CrossPromotionPlanModal({
             : undefined
         }
         onSaveDraft={() => void saveDraft()}
+        onUpdateDetails={
+          initial && initial.status !== "DRAFT"
+            ? () => void updateDetails()
+            : undefined
+        }
         state={state}
         allChannels={allChannels}
         ownChannels={ownChannels}
@@ -676,7 +732,12 @@ export function CrossPromotionPlanModal({
             disabled={saving}
             onClick={() => {
               setConfirmPublishNow(null);
-              void submit(true, confirmPublishNow === "all" ? undefined : confirmPublishNow ?? undefined);
+              void submit(
+                true,
+                confirmPublishNow === "all"
+                  ? undefined
+                  : (confirmPublishNow ?? undefined),
+              );
             }}
           >
             {saving

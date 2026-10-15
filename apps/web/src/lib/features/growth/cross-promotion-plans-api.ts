@@ -111,22 +111,45 @@ export const crossPromotionPlansApi = {
       onProgress,
     ),
   sendToBot: async (id: string) =>
-    (await api.post<{ status: "SENT" | "NOT_CONNECTED" }>(`${basePath}/${id}/send-to-bot`)).data,
+    (
+      await api.post<{ status: "SENT" | "NOT_CONNECTED" }>(
+        `${basePath}/${id}/send-to-bot`,
+      )
+    ).data,
   previewBotNotification: async (id: string) =>
-    (await api.get<{ text: string }>(`${basePath}/${id}/bot-notification-preview`)).data,
+    (
+      await api.get<{ text: string }>(
+        `${basePath}/${id}/bot-notification-preview`,
+      )
+    ).data,
   updateCompleted: async (
     id: string,
     payload: CreateCrossPromotionPlanPayload,
   ) => (await api.patch<CrossPromotionPlan>(`${basePath}/${id}`, payload)).data,
-  mergeHistorical: async (id: string, sourcePlanId: string) =>
-    (await api.post<CrossPromotionPlan>(`${basePath}/${id}/merge`, { sourcePlanId }))
+  updateDetails: async (
+    id: string,
+    details: {
+      title: string;
+      advertiserId?: string | null;
+      partnerTelegramUsername?: string | null;
+    },
+  ) =>
+    (await api.patch<CrossPromotionPlan>(`${basePath}/${id}/details`, details))
       .data,
+  mergeHistorical: async (id: string, sourcePlanId: string) =>
+    (
+      await api.post<CrossPromotionPlan>(`${basePath}/${id}/merge`, {
+        sourcePlanId,
+      })
+    ).data,
   rename: async (id: string, title: string) =>
     (await api.patch<CrossPromotionPlan>(`${basePath}/${id}/title`, { title }))
       .data,
   refreshInviteLinkData: async (id: string) =>
     (
-      await api.post<CrossPromotionPlan>(`${basePath}/${id}/refresh-invite-links`)
+      await api.post<CrossPromotionPlan>(
+        `${basePath}/${id}/refresh-invite-links`,
+      )
     ).data,
   remove: async (id: string, silent = false): Promise<{ id: string }> =>
     (

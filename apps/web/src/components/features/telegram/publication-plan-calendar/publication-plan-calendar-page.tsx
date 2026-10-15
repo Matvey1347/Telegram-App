@@ -37,6 +37,14 @@ type SlotRow = {
   time: string;
 };
 
+export function isPublicationCalendarLoading(
+  schedulesLoading: boolean,
+  selectedScheduleId: string,
+  calendarLoading: boolean,
+) {
+  return schedulesLoading || (Boolean(selectedScheduleId) && calendarLoading);
+}
+
 const views: Array<{
   id: CalendarView;
   label: string;
@@ -96,6 +104,24 @@ function displayTime(value: string, timezone: string) {
 }
 function minuteKey(value: string) {
   return new Date(value).toISOString().slice(0, 16);
+}
+
+export function eventMatchesPublicationSlot(
+  event: TelegramPublicationPlanCalendarEvent,
+  slot: SlotRow,
+  timezone: string,
+) {
+  if (minuteKey(event.scheduledAt) === minuteKey(slot.scheduledAt)) return true;
+
+  // Publication-plan slots keep a canonical UTC time, while an externally
+  // scheduled ad or VP is an exact local datetime. Around a DST transition
+  // those instants may differ by an hour even though both are the configured
+  // local slot time. Match the presentation time so the calendar does not
+  // render the same 10:10 as a free slot plus an unrelated event.
+  return (
+    dateKey(event.scheduledAt, timezone) === dateKey(slot.scheduledAt, timezone) &&
+    displayTime(event.scheduledAt, timezone) === slot.time
+  );
 }
 function secondaryButton(active = false) {
   return active
@@ -198,6 +224,14 @@ export function PublicationPlanCalendarPage() {
   const selected = schedulesQuery.data?.find(
     (schedule) => schedule.id === selectedScheduleId,
   );
+  // The default plan is derived from the schedules response, so `scheduleId`
+  // remains empty on the first render of its calendar query. Use the resolved
+  // ID here; otherwise the UI briefly renders neither its loader nor slots.
+  const calendarLoading = isPublicationCalendarLoading(
+    schedulesQuery.isLoading,
+    selectedScheduleId,
+    calendarQuery.isLoading,
+  );
   const days = useMemo(
     () =>
       view === "month"
@@ -222,21 +256,15 @@ export function PublicationPlanCalendarPage() {
     }
     return [...rows.values()];
   }, [calendarQuery.data?.occurrencesByChannel]);
-  const eventsByMoment = useMemo(() => {
-    const grouped = new Map<string, TelegramPublicationPlanCalendarEvent[]>();
-    for (const event of calendarQuery.data?.events ?? []) {
-      if (event.kind === "CONTENT") continue;
-      const key = `${event.slotId ?? "time"}:${minuteKey(event.scheduledAt)}`;
-      grouped.set(key, [...(grouped.get(key) ?? []), event]);
-    }
-    return grouped;
-  }, [calendarQuery.data?.events]);
   const eventsForSlot = (slot: SlotRow) =>
-    relevantEvents([
-      ...(eventsByMoment.get(`${slot.slotId}:${minuteKey(slot.scheduledAt)}`) ??
-        []),
-      ...(eventsByMoment.get(`time:${minuteKey(slot.scheduledAt)}`) ?? []),
-    ]);
+    relevantEvents(
+      (calendarQuery.data?.events ?? []).filter(
+        (event) =>
+          event.slotId === slot.slotId ||
+          (event.slotId === null &&
+            eventMatchesPublicationSlot(event, slot, timezone)),
+      ),
+    );
   const openEvent = (event: TelegramPublicationPlanCalendarEvent) => {
     setConflictEvents([]);
     setEditorEvent(event);
@@ -321,7 +349,7 @@ export function PublicationPlanCalendarPage() {
           </div>
         </div>
       </section>
-      {schedulesQuery.isLoading || (scheduleId && calendarQuery.isLoading) ? (
+      {calendarLoading ? (
         <LoadingState text="Loading publication occupancy…" />
       ) : null}
       {!schedulesQuery.isLoading && !schedulesQuery.data?.length ? (
@@ -333,7 +361,7 @@ export function PublicationPlanCalendarPage() {
           page.
         </div>
       ) : null}
-      {selected && !calendarQuery.isLoading ? (
+      {selected && !calendarLoading ? (
         <section className="rounded-[22px] border border-neutral-800 bg-[#171717]">
           <div className="overflow-x-auto rounded-xl border border-slate-800/80">
             <div className="min-w-[700px]">
@@ -361,14 +389,13 @@ export function PublicationPlanCalendarPage() {
                     .sort((left, right) =>
                       left.scheduledAt.localeCompare(right.scheduledAt),
                     );
-                  const plannedTimes = new Set(
-                    rows.map((row) => minuteKey(row.scheduledAt)),
-                  );
                   const outside = relevantEvents(
                     (calendarQuery.data?.events ?? []).filter(
                       (event) =>
                         dateKey(event.scheduledAt, timezone) === dayKey &&
-                        !plannedTimes.has(minuteKey(event.scheduledAt)),
+                        !rows.some((slot) =>
+                          eventMatchesPublicationSlot(event, slot, timezone),
+                        ),
                     ),
                   );
                   return (

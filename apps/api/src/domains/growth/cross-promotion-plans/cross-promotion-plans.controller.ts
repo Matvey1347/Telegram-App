@@ -22,6 +22,7 @@ import {
   MergeCrossPromotionPlanDto,
   RenameCrossPromotionPlanDto,
   SaveCrossPromotionPlanDraftDto,
+  UpdateCrossPromotionPlanDetailsDto,
 } from './dto';
 import { StreamResponseService } from '../../../common/stream/stream-response.service';
 import { CrossPromotionPlanSchedulingService } from './cross-promotion-plan-scheduling.service';
@@ -112,6 +113,15 @@ export class CrossPromotionPlansController {
     return this.service.updateCompleted(user.sub, id, dto);
   }
 
+  @Patch(':id/details')
+  updateDetails(
+    @CurrentUser() user: JwtUser,
+    @Param('id') id: string,
+    @Body() dto: UpdateCrossPromotionPlanDetailsDto,
+  ) {
+    return this.service.updateDetails(user.sub, id, dto);
+  }
+
   @Post(':id/schedule-stream')
   replaceAndSchedule(
     @CurrentUser() user: JwtUser,
@@ -144,7 +154,13 @@ export class CrossPromotionPlansController {
       eventPrefix: 'cross_promotion_plan.publish_now_stream',
       persistLifecycleLogs: false,
       action: (onProgress, signal) =>
-        this.scheduling.replaceAndPublishNow(user.sub, id, dto, onProgress, signal),
+        this.scheduling.replaceAndPublishNow(
+          user.sub,
+          id,
+          dto,
+          onProgress,
+          signal,
+        ),
     });
   }
 
@@ -155,7 +171,12 @@ export class CrossPromotionPlansController {
     @Param('publicationId') publicationId: string,
     @Body() dto: CreateCrossPromotionPlanDto,
   ) {
-    return this.scheduling.updatePublicationInTelegram(user.sub, id, publicationId, dto);
+    return this.scheduling.updatePublicationInTelegram(
+      user.sub,
+      id,
+      publicationId,
+      dto,
+    );
   }
 
   @Post(':id/publications/:publicationId/publish-now-stream')
@@ -171,7 +192,12 @@ export class CrossPromotionPlansController {
       persistLifecycleLogs: false,
       action: (onProgress, signal) =>
         this.scheduling.replacePublicationAndPublishNow(
-          user.sub, id, publicationId, dto, onProgress, signal,
+          user.sub,
+          id,
+          publicationId,
+          dto,
+          onProgress,
+          signal,
         ),
     });
   }
@@ -196,7 +222,10 @@ export class CrossPromotionPlansController {
   }
 
   @Get(':id/bot-notification-preview')
-  previewBotNotification(@CurrentUser() user: JwtUser, @Param('id') id: string) {
+  previewBotNotification(
+    @CurrentUser() user: JwtUser,
+    @Param('id') id: string,
+  ) {
     return this.botNotification.preview(user.sub, id);
   }
 }

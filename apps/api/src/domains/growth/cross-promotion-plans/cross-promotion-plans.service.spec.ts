@@ -197,6 +197,24 @@ function setup() {
 describe('CrossPromotionPlansService', () => {
   afterEach(() => jest.restoreAllMocks());
 
+  it('updates partner details without changing scheduled publications', async () => {
+    const { service, prisma } = setup();
+
+    await service.updateDetails('user-1', 'plan-1', {
+      title: 'Mentor ↔ @marina_ads1',
+      partnerTelegramUsername: '@marina_ads1',
+    });
+
+    expect(prisma.crossPromotionPlan.update).toHaveBeenCalledWith({
+      where: { id: 'plan-1' },
+      data: {
+        title: 'Mentor ↔ @marina_ads1',
+        advertiserId: null,
+        partnerTelegramUsername: '@marina_ads1',
+      },
+    });
+  });
+
   it('allows a direct exchange without partner channels or promo targets', async () => {
     const { service, prisma } = setup();
     prisma.telegramChannel.findMany.mockImplementation(

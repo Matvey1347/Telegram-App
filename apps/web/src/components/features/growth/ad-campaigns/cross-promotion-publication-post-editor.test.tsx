@@ -63,7 +63,7 @@ describe("CrossPromotionPublicationPostEditor", () => {
     expect(screen.getByText("Composer for Publishing channel")).toBeVisible();
   });
 
-  it("marks manual composition as selected when it already has a post", () => {
+  it("keeps a dedicated expand control while an existing post is collapsed", () => {
     render(
       <CrossPromotionPublicationPostEditor
         directMutual
@@ -79,7 +79,19 @@ describe("CrossPromotionPublicationPostEditor", () => {
     );
 
     expect(
-      screen.getByRole("button", { name: "Update post" }),
+      screen.getByRole("button", { name: "Edit post" }),
+    ).toBeVisible();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Collapse partner post editor" }),
+    );
+    expect(
+      screen.getByRole("button", { name: "Expand partner post editor" }),
+    ).toBeVisible();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Expand partner post editor" }),
+    );
+    expect(
+      screen.getByRole("button", { name: "Collapse partner post editor" }),
     ).toBeVisible();
   });
 

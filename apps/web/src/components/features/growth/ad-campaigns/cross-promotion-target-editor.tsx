@@ -11,7 +11,13 @@ import {
   type TelegramInviteLinkOption,
 } from "@/lib/api";
 import { TelegramInviteLinkSelect } from "@/components/features/telegram/telegram/telegram-invite-link-select";
-import { CustomSelect, FormField } from "@/components/ui/primitives";
+import { TelegramInviteLinkCreateInline } from "@/components/features/telegram/telegram/telegram-invite-link-create-inline";
+import {
+  Button,
+  CustomSelect,
+  FormField,
+  Modal,
+} from "@/components/ui/primitives";
 import { useTelegramInviteLinkOptions } from "@/lib/features/telegram/use-telegram-invite-link-options";
 import { useRegisterTelegramInviteLink } from "@/lib/features/telegram/use-register-telegram-invite-link";
 
@@ -40,6 +46,7 @@ export function CrossPromotionTargetEditor({
   const [registeredLinks, setRegisteredLinks] = useState<TelegramInviteLink[]>(
     [],
   );
+  const [creatingInviteLink, setCreatingInviteLink] = useState(false);
   const [inviteLinkSearch, setInviteLinkSearch] = useState("");
   const promosQuery = useQuery({
     queryKey: ["cross-promotion", "promos", channel.id],
@@ -102,27 +109,35 @@ export function CrossPromotionTargetEditor({
   }, [linkOptions.initialLink, onChange, value]);
 
   return (
-    <section className={framed ? "rounded-xl border border-neutral-800 bg-neutral-950/55 p-3" : "p-0"}>
-      {showChannelIdentity ? <div className="mb-3 flex items-center gap-2">
-        {channel.photoUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={channel.photoUrl}
-            alt=""
-            className="h-8 w-8 rounded-full object-cover"
-          />
-        ) : (
-          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-neutral-800 text-xs">
-            {channel.title.slice(0, 2).toUpperCase()}
-          </span>
-        )}
-        <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-white">
-            {channel.title}
-          </p>
-          <p className="text-xs text-neutral-500">Channel being promoted</p>
+    <section
+      className={
+        framed
+          ? "rounded-xl border border-neutral-800 bg-neutral-950/55 p-3"
+          : "p-0"
+      }
+    >
+      {showChannelIdentity ? (
+        <div className="mb-3 flex items-center gap-2">
+          {channel.photoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={channel.photoUrl}
+              alt=""
+              className="h-8 w-8 rounded-full object-cover"
+            />
+          ) : (
+            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-neutral-800 text-xs">
+              {channel.title.slice(0, 2).toUpperCase()}
+            </span>
+          )}
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold text-white">
+              {channel.title}
+            </p>
+            <p className="text-xs text-neutral-500">Channel being promoted</p>
+          </div>
         </div>
-      </div> : null}
+      ) : null}
       <div
         className={`grid gap-3 ${
           showPromo
@@ -183,6 +198,7 @@ export function CrossPromotionTargetEditor({
                 );
               }}
               onSearchChange={setInviteLinkSearch}
+              onOpen={linkOptions.requestAll}
               loading={linkOptions.loading}
               placeholder="Select invite link"
               links={links}
@@ -191,8 +207,44 @@ export function CrossPromotionTargetEditor({
               }}
             />
           </FormField>
+          <Button
+            type="button"
+            variant="secondary"
+            className="mt-2 w-full"
+            onClick={() => setCreatingInviteLink(true)}
+          >
+            Create a new invite link
+          </Button>
+          <Modal
+            open={creatingInviteLink}
+            onClose={() => setCreatingInviteLink(false)}
+            title="Create tracking invite link"
+            size="sm"
+          >
+            <div className="min-w-0">
+              <TelegramInviteLinkCreateInline
+                channelId={channel.id}
+                open
+                onOpenChange={setCreatingInviteLink}
+                onCreated={(link) => {
+                  setRegisteredLinks((current) => [
+                    ...current.filter((item) => item.id !== link.id),
+                    link,
+                  ]);
+                  const next = { ...value, inviteLinkId: link.id };
+                  onChange(next);
+                  onResolved?.({ promo: resolvedPromo, inviteLink: link });
+                  setCreatingInviteLink(false);
+                }}
+              />
+            </div>
+          </Modal>
         </div>
-        {trailing ? <div className="flex min-w-0 items-end">{trailing}</div> : null}
+        {trailing ? (
+          <div className="flex min-w-0 self-start items-start pt-6">
+            {trailing}
+          </div>
+        ) : null}
       </div>
       {registerLink.isError ? (
         <p className="mt-2 text-xs text-rose-300">

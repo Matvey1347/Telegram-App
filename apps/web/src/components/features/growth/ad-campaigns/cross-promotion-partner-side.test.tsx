@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { CrossPromotionPartnerSide } from "./cross-promotion-partner-side";
 
@@ -21,8 +21,12 @@ vi.mock("./cross-promotion-placement-settings", () => ({
   ),
 }));
 
+vi.mock("./cross-promotion-target-editor", () => ({
+  CrossPromotionTargetEditor: () => <div>Tracking invite link</div>,
+}));
+
 describe("CrossPromotionPartnerSide", () => {
-  it("hides partner formats and promo placement until partner channels are selected", () => {
+  it("hides partner formats until partner channels are selected", async () => {
     const onDefaultDateChange = vi.fn();
     const onAddTarget = vi.fn();
 
@@ -74,10 +78,61 @@ describe("CrossPromotionPartnerSide", () => {
     expect(screen.getByText("Partner channels (optional)")).toBeVisible();
     expect(screen.queryByText("Formats in partner channels")).toBeNull();
     expect(
-      screen.queryByRole("button", { name: "Add promo placement" }),
-    ).toBeNull();
+      screen.getByRole("button", { name: "Add promo placement" }),
+    ).toBeVisible();
+    await waitFor(() => expect(onAddTarget).toHaveBeenCalledOnce());
     expect(onDefaultDateChange).not.toHaveBeenCalled();
-    expect(onAddTarget).not.toHaveBeenCalled();
+  });
+
+  it("keeps formats hidden while retaining the required first promo placement", () => {
+    render(
+      <CrossPromotionPartnerSide
+        expanded
+        onExpandedChange={vi.fn()}
+        channels={[{ id: "own-1", title: "My channel" } as never]}
+        partnerChannels={[]}
+        ownChannels={[{ id: "own-1", title: "My channel" } as never]}
+        partnerIds={[]}
+        onPartnerIdsChange={vi.fn()}
+        partnerAdvertiserId={null}
+        partnerContact=""
+        onPartnerContactChange={vi.fn()}
+        onPartnerTelegramChange={vi.fn()}
+        onPartnerAdvertiserChange={vi.fn()}
+        onSearchAdvertisers={vi.fn().mockResolvedValue([])}
+        importingChannel={false}
+        onImportChannel={vi.fn()}
+        productsByChannelId={{}}
+        settings={{ formatIds: {}, times: {} }}
+        defaultDate="2026-09-15"
+        onDefaultDateChange={vi.fn()}
+        defaultTime="17:00"
+        onSettingsChange={vi.fn()}
+        targets={[
+          {
+            telegramChannelId: "own-1",
+            promoId: "promo-1",
+            inviteLinkId: "link-1",
+          },
+        ]}
+        onTargetsChange={vi.fn()}
+        onAddTarget={vi.fn()}
+        onResolved={vi.fn()}
+        outboundMode="PROMO"
+        onOutboundModeChange={vi.fn()}
+        outboundPost={{ title: "", text: "", imageUrls: [], buttonRows: [] }}
+        onOutboundPostChange={vi.fn()}
+        botConnected
+        importStatus="idle"
+        sendStatus="idle"
+        onImportPost={vi.fn()}
+        onSendPost={vi.fn()}
+        promoReady
+      />,
+    );
+
+    expect(screen.queryByText("Formats in partner channels")).toBeNull();
+    expect(screen.getByText("My channel being promoted")).toBeVisible();
   });
 
   it("can hide the partner side without clearing its fields", () => {

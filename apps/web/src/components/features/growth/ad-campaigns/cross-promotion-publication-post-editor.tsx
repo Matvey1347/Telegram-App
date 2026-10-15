@@ -50,7 +50,7 @@ export function CrossPromotionPublicationPostEditor({
   return (
     <section className="border-y border-neutral-800 py-3 sm:rounded-xl sm:border sm:p-3">
       <div
-        className={`${expanded ? "mb-3" : ""} flex flex-wrap items-center justify-between gap-2`}
+        className={`${expanded ? "mb-3" : ""} relative flex flex-wrap items-center justify-between gap-2 pr-10`}
       >
         <div>
           <h3 className="font-semibold text-white">
@@ -75,7 +75,7 @@ export function CrossPromotionPublicationPostEditor({
                   setOpened(true);
                 }}
               >
-                <Pencil size={15} /> {hasPost ? "Update post" : "Write manually"}
+                <Pencil size={15} /> {hasPost ? "Edit post" : "Write manually"}
               </Button>
               {onClear && hasPost ? (
                 <Button type="button" variant="danger" onClick={onClear}>
@@ -151,17 +151,22 @@ export function CrossPromotionPublicationPostEditor({
                   : "Send preview to bot"}
             </Button>
           ) : null}
-          {directMutual && expanded ? (
-            <button
-              type="button"
-              aria-label="Collapse partner post editor"
-              className="rounded-md p-2 text-neutral-400 hover:bg-neutral-800 hover:text-white"
-              onClick={() => setManuallyCollapsed(true)}
-            >
-              <ChevronDown size={17} className="rotate-180" />
-            </button>
-          ) : null}
         </div>
+        {directMutual ? (
+          <button
+            type="button"
+            aria-label={
+              expanded ? "Collapse partner post editor" : "Expand partner post editor"
+            }
+            className="absolute right-0 top-0 rounded-md p-2 text-neutral-400 hover:bg-neutral-800 hover:text-white"
+            onClick={() => setManuallyCollapsed((current) => !current)}
+          >
+            <ChevronDown
+              size={17}
+              className={expanded ? "rotate-180" : ""}
+            />
+          </button>
+        ) : null}
       </div>
       {expanded ? (
         <MutualPromotionPostComposer

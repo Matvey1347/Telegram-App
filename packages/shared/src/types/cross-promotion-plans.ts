@@ -51,6 +51,8 @@ export type CrossPromotionPlacementPost = TelegramSystemBotPostDraft & {
 export type CreateCrossPromotionPlanPayload = {
   kind: CrossPromotionPlanKind;
   advertiserId?: string | null;
+  /** Telegram username supplied for a non-CRM mutual-promotion partner. */
+  partnerTelegramUsername?: string | null;
   title: string;
   publisherChannelIds: string[];
   partnerChannelIds: string[];

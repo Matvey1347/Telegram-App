@@ -3,7 +3,10 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
 import { useState } from "react";
 import { TestI18nProvider } from "@/test/render-with-i18n";
-import { PublicationSlotOccurrenceSelect } from "./publication-slot-occurrence-select";
+import {
+  isSelectedPublicationSlotOccurrence,
+  PublicationSlotOccurrenceSelect,
+} from "./publication-slot-occurrence-select";
 
 const occurrences = vi.fn();
 vi.mock("@/lib/api", () => ({
@@ -13,6 +16,27 @@ vi.mock("@/lib/api", () => ({
 }));
 
 describe("PublicationSlotOccurrenceSelect", () => {
+  it("highlights a manually entered 10:10 slot across the Warsaw DST boundary", () => {
+    expect(
+      isSelectedPublicationSlotOccurrence(
+        {
+          slotId: "morning",
+          // The canonical slot instant is one hour before the local 10:10
+          // chosen after Warsaw returns to standard time.
+          scheduledAt: "2026-10-25T08:10:00.000Z",
+          title: "Morning",
+          kind: "CONTENT",
+          time: "10:10",
+          timezone: "Europe/Warsaw",
+          state: "AVAILABLE",
+        },
+        null,
+        "2026-10-25T09:10:00.000Z",
+        "2026-10-25",
+      ),
+    ).toBe(true);
+  });
+
   it("shows typed channel slots and prevents reuse of an occupied occurrence", async () => {
     const today = new Date();
     today.setHours(23, 40, 0, 0);

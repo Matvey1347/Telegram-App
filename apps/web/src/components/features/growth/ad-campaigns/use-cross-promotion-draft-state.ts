@@ -121,9 +121,11 @@ export function useCrossPromotionDraftState({
       const initialPost = initial?.publicationPost as
         | CrossPromotionPlacementPost
         | undefined;
-      const persistedDraft = (initialPost as
-        | (CrossPromotionPlacementPost & { formDraft?: unknown })
-        | undefined)?.formDraft;
+      const persistedDraft = (
+        initialPost as
+          | (CrossPromotionPlacementPost & { formDraft?: unknown })
+          | undefined
+      )?.formDraft;
       const savedDraft = normalizeCrossPromotionModalDraft(persistedDraft);
       if (savedDraft) {
         restoreDraft(savedDraft);
@@ -135,11 +137,11 @@ export function useCrossPromotionDraftState({
         publisherPlacements[0]?.scheduledAt ??
         partnerPlacements[0]?.scheduledAt;
       const instant = firstScheduledAt
-          ? new Date(firstScheduledAt)
-          : new Date(Date.now() + 86_400_000);
+        ? new Date(firstScheduledAt)
+        : new Date(Date.now() + 86_400_000);
       const partnerInstant = partnerPlacements[0]?.scheduledAt
-          ? new Date(partnerPlacements[0].scheduledAt)
-          : instant;
+        ? new Date(partnerPlacements[0].scheduledAt)
+        : instant;
       setIconId(initialPost?.iconId ?? null);
       setIconPresentation(null);
       setTitle(initial?.title ?? "");
@@ -153,7 +155,11 @@ export function useCrossPromotionDraftState({
           initial?.advertiser?.displayName ??
           "",
       );
-      setPartnerTelegram(initial?.advertiser?.telegramUsername ?? "");
+      setPartnerTelegram(
+        initial?.advertiser?.telegramUsername ??
+          initial?.partnerTelegramUsername ??
+          "",
+      );
       setTargets(initial?.targets ?? []);
       const storedPublications = initialPost?.publisherPublications ?? [];
       setPost(
@@ -180,12 +186,8 @@ export function useCrossPromotionDraftState({
         partnerPlacements,
         timezone,
       );
-      setPublisherSettings(
-        publisherStored,
-      );
-      setPartnerSettings(
-        partnerStored,
-      );
+      setPublisherSettings(publisherStored);
+      setPartnerSettings(partnerStored);
       setOutboundMode(initialPost?.partnerPostSource ?? "PROMO");
       setOutboundPost(initialPost?.partnerPublicationPost ?? emptyPost());
       setImportedChannels([]);

@@ -3518,6 +3518,7 @@ model CrossPromotionPlan {
   id                           String                   @id @default(cuid())
   workspaceId                  String
   advertiserId                 String?
+  partnerTelegramUsername      String?
   kind                         CrossPromotionPlanKind
   status                       CrossPromotionPlanStatus @default(DRAFT)
   title                        String

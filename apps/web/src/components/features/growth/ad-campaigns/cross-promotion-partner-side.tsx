@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { Bot, ChevronDown, Plus, Send, Trash2 } from "lucide-react";
 import type {
   CrossPromotionTargetInput,
@@ -125,6 +126,11 @@ export function CrossPromotionPartnerSide({
       iconFallback: channel.title,
     }));
 
+  useEffect(() => {
+    if (!expanded || targets.length || !ownChannels.length) return;
+    onAddTarget?.();
+  }, [expanded, onAddTarget, ownChannels.length, targets.length]);
+
   return (
     <section className="space-y-4 border-y border-emerald-900/70 py-4 sm:rounded-xl sm:border sm:bg-emerald-950/10 sm:p-4">
       <button
@@ -173,35 +179,32 @@ export function CrossPromotionPartnerSide({
               />
             </FormField>
           </div>
-          {!partnerIds.length && !targets.length ? (
-            <Button type="button" onClick={onAddTarget}>
-              <Plus size={15} /> Add promo placement
-            </Button>
+          {partnerIds.length ? (
+            <CrossPromotionPlacementSettings
+              title="Formats in partner channels"
+              description="Set the planned publication date, time, and format for every partner channel."
+              channelIds={partnerIds}
+              channels={channels}
+              productsByChannelId={productsByChannelId}
+              value={settings}
+              defaultDate={defaultDate}
+              defaultTime={defaultTime}
+              onDefaultDateChange={onDefaultDateChange}
+              onChange={onSettingsChange}
+              formatErrorChannelIds={
+                showValidationErrors
+                  ? partnerIds.filter((channelId) => {
+                      const products = productsByChannelId[channelId] ?? [];
+                      return (
+                        products.length > 0 && !settings.formatIds[channelId]
+                      );
+                    })
+                  : []
+              }
+            />
           ) : null}
-          {partnerIds.length || targets.length ? (
+          {targets.length ? (
             <>
-              <CrossPromotionPlacementSettings
-                title="Formats in partner channels"
-                description="Set the planned publication date, time, and format for every partner channel."
-                channelIds={partnerIds}
-                channels={channels}
-                productsByChannelId={productsByChannelId}
-                value={settings}
-                defaultDate={defaultDate}
-                defaultTime={defaultTime}
-                onDefaultDateChange={onDefaultDateChange}
-                onChange={onSettingsChange}
-                formatErrorChannelIds={
-                  showValidationErrors
-                    ? partnerIds.filter((channelId) => {
-                        const products = productsByChannelId[channelId] ?? [];
-                        return (
-                          products.length > 0 && !settings.formatIds[channelId]
-                        );
-                      })
-                    : []
-                }
-              />
               <div className="grid gap-3">
                 {targets.map((target, index) => {
                   const channel = channels.find(
@@ -306,11 +309,6 @@ export function CrossPromotionPartnerSide({
                     </section>
                   );
                 })}
-                <div className="flex">
-                  <Button type="button" onClick={onAddTarget}>
-                    <Plus size={15} /> Add promo placement
-                  </Button>
-                </div>
               </div>
               {outboundMode === "CUSTOM" ? (
                 <section className="space-y-3 border-t border-neutral-800 pt-3 sm:rounded-xl sm:border sm:bg-neutral-950/55 sm:p-3">
@@ -364,6 +362,15 @@ export function CrossPromotionPartnerSide({
               ) : null}
             </>
           ) : null}
+          <div className="flex">
+            <Button
+              type="button"
+              disabled={!ownChannels.length}
+              onClick={onAddTarget}
+            >
+              <Plus size={15} /> Add promo placement
+            </Button>
+          </div>
         </>
       ) : null}
     </section>

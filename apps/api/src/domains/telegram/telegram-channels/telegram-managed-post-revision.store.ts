@@ -164,11 +164,18 @@ export class TelegramManagedPostRevisionStore {
     return originalCode === '42P01';
   }
 
-  public async hasManagedPostRevisionStorage() {
+  public async hasManagedPostRevisionStorage(
+    client: Prisma.TransactionClient | PrismaService = this.prisma,
+  ) {
     if (this.managedPostRevisionStorageState === 'available') return true;
     if (this.managedPostRevisionStorageState === 'missing') return false;
     try {
-      const rows = await this.prisma.$queryRaw<
+      // Callers can create a revision inside an interactive transaction. Do
+      // not open a second Prisma query on the root client in that case: with a
+      // constrained pool it waits on the transaction's connection until the
+      // transaction expires. Keeping this probe on the supplied client makes
+      // the whole revision write use one connection and one transaction.
+      const rows = await this.managedPostRevisionQueryClient(client).$queryRaw<
         Array<{ exists: string | null }>
       >(
         Prisma.sql`
@@ -431,7 +438,7 @@ export class TelegramManagedPostRevisionStore {
     reason: string,
     actorUserId?: string | null,
   ) {
-    const storageAvailable = await this.hasManagedPostRevisionStorage();
+    const storageAvailable = await this.hasManagedPostRevisionStorage(client);
     if (!storageAvailable) return;
     const actorMemberId = await this.resolveActorMemberId(
       client,
@@ -463,7 +470,8 @@ export class TelegramManagedPostRevisionStore {
     reason: string,
     actorUserId?: string | null,
   ) {
-    if (!posts.length || !(await this.hasManagedPostRevisionStorage())) return;
+    if (!posts.length || !(await this.hasManagedPostRevisionStorage(client)))
+      return;
     const delegate = this.managedPostRevisionDelegate(client);
     if (!delegate?.createMany) {
       for (const post of posts) {
