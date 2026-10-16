@@ -82,6 +82,30 @@ export const crossPromotionPlansApi = {
         payload,
       )
     ).data,
+  updatePublicationChannelSchedule: async (
+    id: string,
+    publicationId: string,
+    channelId: string,
+    payload: CreateCrossPromotionPlanPayload,
+  ) =>
+    (
+      await api.patch<CrossPromotionPlan>(
+        `${basePath}/${id}/publications/${publicationId}/channels/${channelId}/schedule`,
+        payload,
+      )
+    ).data,
+  replacePublicationChannelSchedule: async (
+    id: string,
+    publicationId: string,
+    channelId: string,
+    payload: CreateCrossPromotionPlanPayload,
+  ) =>
+    (
+      await api.post<CrossPromotionPlan>(
+        `${basePath}/${id}/publications/${publicationId}/channels/${channelId}/replace-schedule`,
+        payload,
+      )
+    ).data,
   replacePublicationAndPublishNow: (
     id: string,
     publicationId: string,

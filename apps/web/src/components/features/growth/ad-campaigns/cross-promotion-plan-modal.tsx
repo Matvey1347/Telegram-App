@@ -61,6 +61,8 @@ export function CrossPromotionPlanModal({
   onReplaceAndPublishNow,
   onUpdatePublicationInTelegram,
   onReplacePublicationAndPublishNow,
+  onUpdatePublicationChannelSchedule,
+  onReplacePublicationChannelSchedule,
   onSaveDraft,
   onUpdateDetails,
 }: {
@@ -83,6 +85,16 @@ export function CrossPromotionPlanModal({
   ) => Promise<unknown>;
   onReplacePublicationAndPublishNow?: (
     publicationId: string,
+    payload: CreateCrossPromotionPlanPayload,
+  ) => Promise<unknown>;
+  onUpdatePublicationChannelSchedule?: (
+    publicationId: string,
+    channelId: string,
+    payload: CreateCrossPromotionPlanPayload,
+  ) => Promise<unknown>;
+  onReplacePublicationChannelSchedule?: (
+    publicationId: string,
+    channelId: string,
     payload: CreateCrossPromotionPlanPayload,
   ) => Promise<unknown>;
   onSaveDraft: (
@@ -357,6 +369,7 @@ export function CrossPromotionPlanModal({
   const submit = async (
     replaceAndPublishNow = false,
     publicationId?: string,
+    channelId?: string,
   ) => {
     const hasPostContent = Boolean(
       post.text.trim() || post.imageUrls.length || post.mediaItems?.length,
@@ -563,7 +576,11 @@ export function CrossPromotionPlanModal({
             ).toISOString()
           : null,
       } satisfies CreateCrossPromotionPlanPayload;
-      if (
+      if (publicationId && channelId && onReplacePublicationChannelSchedule) {
+        await onReplacePublicationChannelSchedule(publicationId, channelId, payload);
+      } else if (publicationId && channelId && onUpdatePublicationChannelSchedule) {
+        await onUpdatePublicationChannelSchedule(publicationId, channelId, payload);
+      } else if (
         publicationId &&
         replaceAndPublishNow &&
         onReplacePublicationAndPublishNow
@@ -656,6 +673,16 @@ export function CrossPromotionPlanModal({
         onReplacePublicationAndPublishNow={
           initial?.status !== "DRAFT" && onReplacePublicationAndPublishNow
             ? (publicationId) => setConfirmPublishNow(publicationId)
+            : undefined
+        }
+        onUpdatePublicationChannelSchedule={
+          initial?.status !== "DRAFT" && onUpdatePublicationChannelSchedule
+            ? (publicationId, channelId) => void submit(false, publicationId, channelId)
+            : undefined
+        }
+        onReplacePublicationChannelSchedule={
+          initial?.status !== "DRAFT" && onReplacePublicationChannelSchedule
+            ? (publicationId, channelId) => void submit(true, publicationId, channelId)
             : undefined
         }
         onSaveDraft={() => void saveDraft()}

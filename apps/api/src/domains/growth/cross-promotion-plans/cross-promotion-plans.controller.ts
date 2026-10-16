@@ -179,6 +179,40 @@ export class CrossPromotionPlansController {
     );
   }
 
+  @Patch(':id/publications/:publicationId/channels/:channelId/schedule')
+  updatePublicationChannelSchedule(
+    @CurrentUser() user: JwtUser,
+    @Param('id') id: string,
+    @Param('publicationId') publicationId: string,
+    @Param('channelId') channelId: string,
+    @Body() dto: CreateCrossPromotionPlanDto,
+  ) {
+    return this.scheduling.updatePublicationChannelSchedule(
+      user.sub,
+      id,
+      publicationId,
+      channelId,
+      dto,
+    );
+  }
+
+  @Post(':id/publications/:publicationId/channels/:channelId/replace-schedule')
+  replacePublicationChannelSchedule(
+    @CurrentUser() user: JwtUser,
+    @Param('id') id: string,
+    @Param('publicationId') publicationId: string,
+    @Param('channelId') channelId: string,
+    @Body() dto: CreateCrossPromotionPlanDto,
+  ) {
+    return this.scheduling.replacePublicationChannelSchedule(
+      user.sub,
+      id,
+      publicationId,
+      channelId,
+      dto,
+    );
+  }
+
   @Post(':id/publications/:publicationId/publish-now-stream')
   replacePublicationAndPublishNow(
     @CurrentUser() user: JwtUser,

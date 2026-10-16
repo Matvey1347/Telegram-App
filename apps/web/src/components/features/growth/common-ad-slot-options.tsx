@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { type ReactNode, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { TelegramPublicationSlotOccurrence } from "@telegram-system/shared";
 import { telegramPublicationSchedulesApi } from "@/lib/api";
@@ -85,6 +85,7 @@ export function CommonAdSlotOptions({
   onSelect,
   occurrencesByChannel,
   loading = false,
+  action,
 }: {
   channelIds: string[];
   date: string;
@@ -93,6 +94,7 @@ export function CommonAdSlotOptions({
   /** Lets a multi-channel editor reuse one availability query for its rows. */
   occurrencesByChannel?: Record<string, TelegramPublicationSlotOccurrence[]>;
   loading?: boolean;
+  action?: ReactNode;
 }) {
   const ids = useMemo(() => [...new Set(channelIds)].sort(), [channelIds]);
   const range = useMemo(() => dayRange(date), [date]);
@@ -116,7 +118,10 @@ export function CommonAdSlotOptions({
   if (!ids.length || !date) return null;
   return (
     <div className="space-y-2">
-      <p className="text-xs text-neutral-500">Advertising slots · {date}</p>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs text-neutral-500">Advertising slots · {date}</p>
+        {action}
+      </div>
       {loading || (occurrencesByChannel === undefined && query.isPending) ? (
         <p className="text-xs text-neutral-400">Loading slots…</p>
       ) : null}

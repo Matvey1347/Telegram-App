@@ -101,6 +101,9 @@ function setup() {
     replacePublicationPlacements: jest
       .fn()
       .mockResolvedValue({ ...plan, status: 'ACTIVE' }),
+    replacePublicationChannelPlacement: jest
+      .fn()
+      .mockResolvedValue({ ...plan, status: 'SCHEDULED' }),
   };
   const telegram = {
     createManagedPost: jest
@@ -325,6 +328,51 @@ describe('CrossPromotionPlanSchedulingService', () => {
     );
 
     expect(telegram.updateManagedPost).not.toHaveBeenCalled();
+  });
+
+  it('reschedules only the requested channel placement', async () => {
+    const { service, plans, telegram } = setup();
+    plans.placementsForReschedule.mockResolvedValueOnce([
+      {
+        telegramChannelId: 'channel-2',
+        managedPostId: 'post-2',
+        postGroupId: 'group-2',
+        publicationId: 'legacy-publisher-publication',
+      },
+      {
+        telegramChannelId: 'channel-1',
+        managedPostId: 'post-1',
+        postGroupId: 'group-1',
+        publicationId: 'legacy-publisher-publication',
+      },
+    ]);
+    const rescheduled = {
+      ...payload,
+      publicationPost: {
+        ...payload.publicationPost,
+        publisherPlacements: payload.publicationPost.publisherPlacements.map(
+          (placement) =>
+            placement.telegramChannelId === 'channel-2'
+              ? { ...placement, scheduledAt: '2026-09-15T12:00:00.000Z' }
+              : placement,
+        ),
+      },
+    };
+
+    await service.updatePublicationChannelSchedule(
+      'user-1', 'plan-1', 'legacy-publisher-publication', 'channel-2', rescheduled,
+    );
+
+    expect(telegram.scheduleManagedPost).toHaveBeenCalledWith(
+      'user-1', 'channel-2', 'post-2',
+      { scheduledAt: '2026-09-15T12:00:00.000Z' },
+    );
+    expect(plans.replacePublicationChannelPlacement).toHaveBeenCalledWith(
+      'user-1', 'plan-1', 'legacy-publisher-publication', 'channel-2',
+      rescheduled,
+      expect.objectContaining({ managedPostId: 'post-2' }),
+      'SCHEDULED',
+    );
   });
 
   it('keeps a resumable plan when Telegram scheduling fails', async () => {

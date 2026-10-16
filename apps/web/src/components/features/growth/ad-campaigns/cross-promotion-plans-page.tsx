@@ -283,6 +283,34 @@ export function CrossPromotionPlansPage({
       ]);
     },
   });
+  const updatePublicationChannelMutation = useMutation({
+    mutationFn: ({ publicationId, channelId, payload }: {
+      publicationId: string; channelId: string; payload: CreateCrossPromotionPlanPayload;
+    }) => {
+      if (!editingPlan) throw new Error("Promotion is not available");
+      return crossPromotionPlansApi.updatePublicationChannelSchedule(
+        editingPlan.id, publicationId, channelId, payload,
+      );
+    },
+    onSuccess: async (plan) => {
+      setEditingPlan(plan);
+      await qc.invalidateQueries({ queryKey: crossPromotionPlanKeys.list(kind) });
+    },
+  });
+  const replacePublicationChannelMutation = useMutation({
+    mutationFn: ({ publicationId, channelId, payload }: {
+      publicationId: string; channelId: string; payload: CreateCrossPromotionPlanPayload;
+    }) => {
+      if (!editingPlan) throw new Error("Promotion is not available");
+      return crossPromotionPlansApi.replacePublicationChannelSchedule(
+        editingPlan.id, publicationId, channelId, payload,
+      );
+    },
+    onSuccess: async (plan) => {
+      setEditingPlan(plan);
+      await qc.invalidateQueries({ queryKey: crossPromotionPlanKeys.list(kind) });
+    },
+  });
   const deleteMutation = useMutation({
     mutationFn: (id: string) => crossPromotionPlansApi.remove(id),
     onSuccess: ({ id }) => {
@@ -437,6 +465,8 @@ export function CrossPromotionPlansPage({
           replaceAndPublishNowMutation.isPending ||
           updatePublicationMutation.isPending ||
           replacePublicationMutation.isPending
+          || updatePublicationChannelMutation.isPending
+          || replacePublicationChannelMutation.isPending
         }
         onClose={() => {
           setOpen(false);
@@ -451,6 +481,12 @@ export function CrossPromotionPlansPage({
         }
         onReplacePublicationAndPublishNow={(publicationId, payload) =>
           replacePublicationMutation.mutateAsync({ publicationId, payload })
+        }
+        onUpdatePublicationChannelSchedule={(publicationId, channelId, payload) =>
+          updatePublicationChannelMutation.mutateAsync({ publicationId, channelId, payload })
+        }
+        onReplacePublicationChannelSchedule={(publicationId, channelId, payload) =>
+          replacePublicationChannelMutation.mutateAsync({ publicationId, channelId, payload })
         }
         onSaveDraft={(draft, id) =>
           saveDraftMutation.mutateAsync({ draft, id })

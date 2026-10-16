@@ -13,6 +13,7 @@ import {
 } from "@/lib/api";
 import { telegramPublicationScheduleKeys } from "@/lib/query-keys";
 import {
+  Button,
   CustomSelect,
   DateInput,
   FormField,
@@ -48,6 +49,7 @@ export function CrossPromotionPlacementSettings({
   onChange,
   showAdSlots = false,
   managedPostUrls = {},
+  placementActions = {},
   formatErrorChannelIds = [],
 }: {
   title: string;
@@ -62,6 +64,10 @@ export function CrossPromotionPlacementSettings({
   onChange: (value: CrossPromotionPlacementSettingsValue) => void;
   showAdSlots?: boolean;
   managedPostUrls?: Record<string, string>;
+  placementActions?: Record<
+    string,
+    { label: string; variant: "primary" | "danger"; onClick: () => void }
+  >;
   formatErrorChannelIds?: string[];
 }) {
   const selected = channelIds
@@ -268,6 +274,7 @@ export function CrossPromotionPlacementSettings({
           {selected.map((channel) => {
             const products = productsByChannelId[channel.id] ?? [];
             const managedPostUrl = managedPostUrls[channel.id];
+            const placementAction = placementActions[channel.id];
             const selectedProduct = products.find(
               (product) => product.id === value.formatIds[channel.id],
             );
@@ -402,6 +409,18 @@ export function CrossPromotionPlacementSettings({
                       }
                       occurrencesByChannel={occurrencesByChannel}
                       loading={slotOccurrences.isPending}
+                      action={
+                        placementAction ? (
+                          <Button
+                            type="button"
+                            variant={placementAction.variant}
+                            onClick={placementAction.onClick}
+                            className="h-8 px-2 text-xs"
+                          >
+                            {placementAction.label}
+                          </Button>
+                        ) : null
+                      }
                     />
                   </div>
                 ) : null}

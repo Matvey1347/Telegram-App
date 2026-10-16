@@ -547,6 +547,113 @@ export class CrossPromotionPlanSchedulingService {
     }
   }
 
+  async updatePublicationChannelSchedule(
+    userId: string,
+    id: string,
+    publicationId: string,
+    channelId: string,
+    dto: CreateCrossPromotionPlanDto,
+  ) {
+    const publication = publisherPublications(dto).find(
+      (item) => item.id === publicationId,
+    );
+    const nextPlacement = publication?.placements.find(
+      (item) => item.telegramChannelId === channelId,
+    );
+    const previous = (await this.plans.placementsForReschedule(userId, id)).find(
+      (item) =>
+        item.publicationId === publicationId &&
+        item.telegramChannelId === channelId,
+    );
+    if (!publication || !nextPlacement || !previous)
+      throw new BadRequestException('Partner-post channel placement not found');
+    await this.telegramChannels.scheduleManagedPost(
+      userId,
+      channelId,
+      previous.managedPostId,
+      { scheduledAt: nextPlacement.scheduledAt },
+    );
+    return this.plans.replacePublicationChannelPlacement(
+      userId,
+      id,
+      publicationId,
+      channelId,
+      dto,
+      previous,
+      'SCHEDULED',
+    );
+  }
+
+  async replacePublicationChannelSchedule(
+    userId: string,
+    id: string,
+    publicationId: string,
+    channelId: string,
+    dto: CreateCrossPromotionPlanDto,
+  ) {
+    const publication = publisherPublications(dto).find(
+      (item) => item.id === publicationId,
+    );
+    const nextPlacement = publication?.placements.find(
+      (item) => item.telegramChannelId === channelId,
+    );
+    const previous = (await this.plans.placementsForReschedule(userId, id)).find(
+      (item) =>
+        item.publicationId === publicationId &&
+        item.telegramChannelId === channelId,
+    );
+    if (!publication || !nextPlacement || !previous)
+      throw new BadRequestException('Partner-post channel placement not found');
+    const context = await this.plans.removalContext(userId, id);
+    const deletion = await this.remoteDeletion.deletePublishedManagedPosts({
+      workspaceId: context.workspaceId,
+      managedPostIds: [previous.managedPostId],
+    });
+    // A user may already have deleted the published Telegram message manually.
+    // That is the desired end state for this replacement, so only fail for an
+    // operational deletion error rather than a missing remote message.
+    const onlyAlreadyMissing = deletion.failed > 0 && deletion.results
+      .filter((result) => !result.success)
+      .every((result) =>
+        result.error?.includes('could not be identified') ||
+        result.error?.includes('no published Telegram message IDs'),
+      );
+    if (deletion.failed && !onlyAlreadyMissing)
+      throw new Error('Existing Telegram post could not be deleted');
+    await this.telegramChannels.deleteManagedPost(
+      userId,
+      channelId,
+      previous.managedPostId,
+    );
+    const group = await this.systemPostGroups.ensureMutualPromotionGroup(
+      userId,
+      channelId,
+    );
+    const post = await this.telegramChannels.createManagedPost(
+      userId,
+      channelId,
+      this.managedPostPayload(dto, publication.post, nextPlacement),
+      { groupId: group.id },
+    );
+    await this.telegramChannels.scheduleManagedPost(userId, channelId, post.id, {
+      scheduledAt: nextPlacement.scheduledAt,
+    });
+    return this.plans.replacePublicationChannelPlacement(
+      userId,
+      id,
+      publicationId,
+      channelId,
+      dto,
+      {
+        telegramChannelId: channelId,
+        managedPostId: post.id,
+        postGroupId: group.id,
+        publicationId,
+      },
+      'SCHEDULED',
+    );
+  }
+
   private async schedulePosts(
     userId: string,
     dto: CreateCrossPromotionPlanDto,

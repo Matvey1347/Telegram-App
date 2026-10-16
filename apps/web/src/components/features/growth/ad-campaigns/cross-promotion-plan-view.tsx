@@ -60,6 +60,8 @@ export function CrossPromotionPlanView({
   onReplaceAndPublishNow,
   onUpdatePublicationInTelegram,
   onReplacePublicationAndPublishNow,
+  onUpdatePublicationChannelSchedule,
+  onReplacePublicationChannelSchedule,
   onSaveDraft,
   onUpdateDetails,
   state,
@@ -100,6 +102,14 @@ export function CrossPromotionPlanView({
   onReplaceAndPublishNow?: () => void;
   onUpdatePublicationInTelegram?: (publicationId: string) => void;
   onReplacePublicationAndPublishNow?: (publicationId: string) => void;
+  onUpdatePublicationChannelSchedule?: (
+    publicationId: string,
+    channelId: string,
+  ) => void;
+  onReplacePublicationChannelSchedule?: (
+    publicationId: string,
+    channelId: string,
+  ) => void;
   onSaveDraft: () => void;
   onUpdateDetails?: () => void;
   state: DraftState;
@@ -262,6 +272,26 @@ export function CrossPromotionPlanView({
       </>
     );
   };
+  const publicationChannelActions = (publicationId: string) =>
+    Object.fromEntries(
+      publisherIds.flatMap((channelId) => {
+        const placement = initial?.placementPostIds.find(
+          (item) =>
+            item.publicationId === publicationId &&
+            item.telegramChannelId === channelId,
+        );
+        if (!placement) return [];
+        const published = Boolean(placement.isPublishedInTelegram);
+        return [[channelId, {
+          label: published ? "Delete current post & schedule again" : "Update",
+          variant: published ? "danger" as const : "primary" as const,
+          onClick: () =>
+            published
+              ? onReplacePublicationChannelSchedule?.(publicationId, channelId)
+              : onUpdatePublicationChannelSchedule?.(publicationId, channelId),
+        }]];
+      }),
+    );
   const importPost = async (target: string) => {
     const previousTarget = botFlowTarget;
     setBotFlowTarget(target);
@@ -427,6 +457,7 @@ export function CrossPromotionPlanView({
                                 onChange={setPublisherSettings}
                                 showAdSlots
                                 managedPostUrls={publisherManagedPostUrls}
+                                placementActions={publicationChannelActions("publisher-1")}
                               />
                               <CrossPromotionPublicationPostEditor
                                 title="Partner post 1"
@@ -560,6 +591,7 @@ export function CrossPromotionPlanView({
                                     )
                                   }
                                   showAdSlots
+                                  placementActions={publicationChannelActions(publication.id)}
                                 />
                                 <CrossPromotionPublicationPostEditor
                                   title={`Partner post ${index + 2}`}
