@@ -85,6 +85,10 @@ export class TelegramInviteLinkRegistrationService {
     });
     return {
       id: persisted.upserted.id,
+      // The selector that initiated registration needs the Telegram title
+      // immediately, before its invite-links query is refetched.
+      name: remote.title || 'Imported MTProto link',
+      url: remote.url,
       workspaceId,
       currentJoinedCount: remote.usage,
       currentRequestedCount: remote.requested,

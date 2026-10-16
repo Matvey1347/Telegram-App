@@ -56,10 +56,26 @@ describe('TelegramChannelBookingReadService', () => {
     const recentWindowStart = new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000);
 
     expect(findMany).toHaveBeenCalledWith({
-      where: {
-        workspaceId: 'workspace-1',
-        telegramChannelId: { in: ['channel-1'] },
-        OR: [
+        where: {
+          workspaceId: 'workspace-1',
+          telegramChannelId: { in: ['channel-1'] },
+          adSalePlacements: { none: {} },
+          AND: [
+            {
+              OR: [
+                { group: { is: null } },
+                { group: { is: { systemKey: null } } },
+                {
+                  group: {
+                    is: {
+                      systemKey: { notIn: ['ADVERTISE', 'MUTUAL_PROMOTION'] },
+                    },
+                  },
+                },
+              ],
+            },
+          ],
+          OR: [
           {
             status: TelegramManagedPostStatus.SCHEDULED,
             scheduledAt: { gt: recentWindowStart, lte: horizon },
@@ -82,6 +98,7 @@ describe('TelegramChannelBookingReadService', () => {
         imageUrls: true,
         mediaItems: true,
         buttonRows: true,
+        group: { select: { systemKey: true } },
       },
       orderBy: [{ scheduledAt: 'asc' }, { publishedAt: 'asc' }],
     });
@@ -167,6 +184,54 @@ describe('TelegramChannelBookingReadService', () => {
       nextAvailableDate: '2026-08-24',
       bookedThroughDate: null,
     });
+  });
+
+  it('does not extend the content horizon with advertising or mutual-promotion posts', async () => {
+    const service = new TelegramChannelBookingReadService({
+      workspace: {
+        findUnique: jest.fn().mockResolvedValue({ timezone: 'UTC' }),
+      },
+      telegramManagedPost: {
+        findMany: jest.fn().mockResolvedValue([
+          ...['17', '18', '19', '20'].map((day) =>
+            scheduledPost('channel-1', `2026-10-${day}T10:10:00.000Z`),
+          ),
+          ...['21', '22', '23', '24', '25'].map((day) =>
+            scheduledPost('channel-1', `2026-10-${day}T10:10:00.000Z`, {
+              group: { systemKey: 'MUTUAL_PROMOTION' },
+            }),
+          ),
+          ...['26', '27', '28', '29'].map((day) =>
+            scheduledPost('channel-1', `2026-10-${day}T10:10:00.000Z`, {
+              group: { systemKey: 'ADVERTISE' },
+            }),
+          ),
+        ]),
+        groupBy: jest.fn().mockResolvedValue([]),
+      },
+    } as never);
+
+    await expect(
+      service.summariesForChannels(
+        'workspace-1',
+        ['channel-1'],
+        new Date('2026-10-16T10:00:00.000Z'),
+      ),
+    ).resolves.toEqual(
+      new Map([
+        [
+          'channel-1',
+          {
+            futureScheduledTotal: 4,
+            draftTotal: 0,
+            pendingJoinRequests: 0,
+            lastScheduledAt: '2026-10-20T10:10:00.000Z',
+            nextAvailableDate: '2026-10-21',
+            bookedThroughDate: '2026-10-20',
+          },
+        ],
+      ]),
+    );
   });
 
   it('does not query the database for an empty channel list', async () => {

@@ -95,3 +95,49 @@ export function getChannelBookingIndicator(
     daysAhead,
   };
 }
+
+/**
+ * The card's calendar value is a content horizon, not a sales-availability
+ * recommendation. A gap tomorrow must not hide content that is already
+ * planned for a later date.
+ */
+export function getChannelContentHorizonIndicator(
+  schedule?: ChannelBookingSchedule,
+  now = new Date(),
+) {
+  const lastScheduledAt = schedule?.lastScheduledAt
+    ? new Date(schedule.lastScheduledAt)
+    : null;
+  const validLastScheduledAt =
+    lastScheduledAt && !Number.isNaN(lastScheduledAt.getTime())
+      ? lastScheduledAt
+      : null;
+  const date = (value: Date) =>
+    value.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  if (!validLastScheduledAt) {
+    return {
+      label: "⚠️ No planned content",
+      compactLabel: "Free today",
+      tone: "text-rose-300",
+      daysAhead: 0,
+    };
+  }
+  const daysAhead = Math.max(
+    0,
+    Math.round(
+      (calendarDayNumber(validLastScheduledAt) - calendarDayNumber(now)) /
+        DAY_MS,
+    ),
+  );
+  return {
+    label: `Content planned through ${date(validLastScheduledAt)}`,
+    compactLabel: date(validLastScheduledAt),
+    tone:
+      daysAhead <= 3
+        ? "text-rose-300"
+        : daysAhead <= 7
+          ? "text-amber-300"
+          : "text-neutral-500",
+    daysAhead,
+  };
+}

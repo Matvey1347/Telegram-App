@@ -145,6 +145,11 @@ export function CrossPromotionPlanModal({
   const [botFlowTarget, setBotFlowTarget] = useState("post");
   const [showValidationErrors, setShowValidationErrors] = useState(false);
   const [savingDraft, setSavingDraft] = useState(false);
+  const [submittingSchedule, setSubmittingSchedule] = useState(false);
+  // React state is applied after this click handler returns. Keep an immediate
+  // guard as well, so rapid repeated clicks cannot start duplicate schedules
+  // while an async partner lookup is still running.
+  const submittingScheduleRef = useRef(false);
   const [confirmPublishNow, setConfirmPublishNow] = useState<string | null>(
     null,
   );
@@ -465,6 +470,9 @@ export function CrossPromotionPlanModal({
     // `publicationPost` is covered by the validation above. Keep this guard
     // explicit so the persisted payload can never contain a null post.
     if (!publicationPost) return;
+    if (submittingScheduleRef.current) return;
+    submittingScheduleRef.current = true;
+    setSubmittingSchedule(true);
     try {
       setShowValidationErrors(false);
       setError("");
@@ -600,6 +608,8 @@ export function CrossPromotionPlanModal({
           ? cause.message
           : "Could not create and schedule this placement.",
       );
+      submittingScheduleRef.current = false;
+      setSubmittingSchedule(false);
     }
   };
   const updateDetails = async () => {
@@ -655,7 +665,7 @@ export function CrossPromotionPlanModal({
         initial={initial}
         mode={mode}
         loading={loading}
-        saving={saving}
+        saving={saving || submittingSchedule}
         savingDraft={savingDraft}
         onClose={onClose}
         onSubmit={() => void submit()}

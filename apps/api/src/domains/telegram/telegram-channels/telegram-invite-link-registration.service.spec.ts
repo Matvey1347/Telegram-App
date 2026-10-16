@@ -108,6 +108,8 @@ describe('TelegramInviteLinkRegistrationService', () => {
       service.register('user-1', 'channel-1', 'https://t.me/+valid'),
     ).resolves.toEqual({
       id: 'stored-link',
+      name: 'Legacy link',
+      url: 'https://t.me/+valid',
       workspaceId: 'workspace-1',
       currentJoinedCount: 3,
       currentRequestedCount: 0,

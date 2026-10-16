@@ -182,6 +182,10 @@ export function createTelegramChannelsApi({
     ) =>
       (
         await api.get<TelegramChannelListResponse>("/telegram-channels", {
+          // Card summaries are operational data. Bypass the short server
+          // response cache so a corrected scheduling read model is visible on
+          // the next query immediately.
+          headers: { "X-Bypass-Response-Cache": "true" },
           params: {
             archived: lifecycle === "archive",
             test: lifecycle === "test",
@@ -296,7 +300,7 @@ export function createTelegramChannelsApi({
       ).data,
     registerInviteLink: async (id: string, url: string) =>
       (
-        await api.post<{ id: string }>(
+        await api.post<{ id: string; name: string; url: string }>(
           `/telegram-channels/${id}/invite-links/register`,
           { url },
           quietMutationConfig,

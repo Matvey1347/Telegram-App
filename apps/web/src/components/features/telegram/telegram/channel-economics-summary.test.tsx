@@ -4,7 +4,10 @@ import { describe, expect, it, vi } from "vitest";
 import type { TelegramChannelAudienceTrend } from "@telegram-system/shared";
 import type { TelegramChannel } from "@/lib/api";
 import { ChannelEconomicsEditor } from "./channel-economics-editor";
-import { getChannelBookingIndicator } from "./channel-booking-indicator";
+import {
+  getChannelBookingIndicator,
+  getChannelContentHorizonIndicator,
+} from "./channel-booking-indicator";
 import {
   ChannelEconomicsSummary,
   sortChannelsByScale,
@@ -110,6 +113,23 @@ describe("ChannelEconomicsSummary", () => {
     ).toMatchObject({
       label: "Booked to Aug 26 · write for Aug 27",
       tone: "text-amber-300",
+    });
+  });
+
+  it("shows the final content date on the channel card even with an earlier gap", () => {
+    expect(
+      getChannelContentHorizonIndicator(
+        {
+          futureScheduledTotal: 4,
+          lastScheduledAt: "2026-10-20T10:10:00.000Z",
+          nextAvailableDate: "2026-10-17",
+          bookedThroughDate: null,
+        },
+        new Date("2026-10-16T10:00:00.000Z"),
+      ),
+    ).toMatchObject({
+      label: "Content planned through Oct 20",
+      compactLabel: "Oct 20",
     });
   });
 
@@ -364,7 +384,9 @@ describe("ChannelEconomicsSummary", () => {
     expect(screen.queryByText("Audience")).not.toBeInTheDocument();
     expect(screen.getByText("CPM 300 UAH")).toBeInTheDocument();
     expect(screen.getByText("Aug 30")).toHaveClass("text-amber-300");
-    expect(screen.getByLabelText("Booked through")).toBeInTheDocument();
+    expect(
+      screen.getByLabelText("Content planned through"),
+    ).toBeInTheDocument();
     expect(screen.getByLabelText("Drafts")).toBeInTheDocument();
     expect(screen.getByText("7")).toBeInTheDocument();
     expect(

@@ -17,6 +17,7 @@ export type TelegramChannelBookingSummary = {
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const BOOKING_LOOKAHEAD_DAYS = 370;
+const NON_CONTENT_SYSTEM_GROUP_KEYS = ['ADVERTISE', 'MUTUAL_PROMOTION'];
 
 function createDateKeyFormatter(timezone: string) {
   let formatter: Intl.DateTimeFormat;
@@ -114,6 +115,28 @@ export class TelegramChannelBookingReadService {
         where: {
           workspaceId,
           telegramChannelId: { in: channelIds },
+          // The channel-card horizon answers “how long is my content planned
+          // for?”. Ads and mutual-promotion placements use managed posts too,
+          // but must not make the content plan look longer than it is.
+          adSalePlacements: { none: {} },
+          // `systemKey` is null for normal content groups. Do not use a
+          // negated SQL predicate here: `NOT (NULL IN (...))` is NULL and
+          // accidentally removes every regular content post.
+          AND: [
+            {
+              OR: [
+                { group: { is: null } },
+                { group: { is: { systemKey: null } } },
+                {
+                  group: {
+                    is: {
+                      systemKey: { notIn: NON_CONTENT_SYSTEM_GROUP_KEYS },
+                    },
+                  },
+                },
+              ],
+            },
+          ],
           OR: [
             {
               status: TelegramManagedPostStatus.SCHEDULED,
@@ -137,6 +160,7 @@ export class TelegramChannelBookingReadService {
           imageUrls: true,
           mediaItems: true,
           buttonRows: true,
+          group: { select: { systemKey: true } },
         },
         orderBy: [{ scheduledAt: 'asc' }, { publishedAt: 'asc' }],
       }),
@@ -158,7 +182,15 @@ export class TelegramChannelBookingReadService {
       draftCounts.map((row) => [row.telegramChannelId, row._count._all]),
     );
     for (const post of posts) {
-      if (isStandaloneSubscriptionEnding(post)) continue;
+      // Keep the semantic filter here as well. It protects the read model
+      // when a Prisma adapter is replaced in tests and documents exactly what
+      // “content planned” means for this summary.
+      if (
+        isStandaloneSubscriptionEnding(post) ||
+        (post.group?.systemKey != null &&
+          NON_CONTENT_SYSTEM_GROUP_KEYS.includes(post.group.systemKey))
+      )
+        continue;
       const rows = postsByChannel.get(post.telegramChannelId) ?? [];
       rows.push(post);
       postsByChannel.set(post.telegramChannelId, rows);

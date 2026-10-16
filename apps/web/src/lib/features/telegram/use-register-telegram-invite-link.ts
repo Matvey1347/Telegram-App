@@ -11,7 +11,10 @@ export function useRegisterTelegramInviteLink({
   onPendingChange,
 }: {
   channelId: string;
-  onRegistered: (link: { id: string }, url: string) => void;
+  onRegistered: (
+    link: { id: string; name: string; url: string },
+    url: string,
+  ) => void;
   onPendingChange?: (pending: boolean) => void;
 }) {
   const queryClient = useQueryClient();

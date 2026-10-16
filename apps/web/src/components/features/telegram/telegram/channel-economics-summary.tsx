@@ -11,7 +11,7 @@ import {
 import type { CurrencySettings, TelegramChannel } from "@/lib/api";
 import { Tooltip } from "@/components/ui/primitives";
 import { ChannelAudienceTrendButton } from "./channel-audience-trend";
-import { getChannelBookingIndicator } from "./channel-booking-indicator";
+import { getChannelContentHorizonIndicator } from "./channel-booking-indicator";
 import { ChannelPaybackStatus } from "./channel-payback-status";
 
 function number(value: unknown, digits = 0) {
@@ -114,16 +114,18 @@ export function ChannelEconomicsSummary({
     invested > 0 && subscriberCostBase > 0 ? invested / subscriberCostBase : 0;
   const activeCpa =
     invested > 0 && activeSubscribers > 0 ? invested / activeSubscribers : 0;
-  const booking = getChannelBookingIndicator(channel.preview?.bookingSchedule);
+  const booking = getChannelContentHorizonIndicator(
+    channel.preview?.bookingSchedule,
+  );
   const draftTotal = channel.preview?.bookingSchedule?.draftTotal ?? 0;
 
   const operationalStatus = (
     <span className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1 text-neutral-400">
       <span
         className={`inline-flex items-center gap-1.5 ${booking.tone}`}
-        title="Booked through"
+        title="Content planned through"
       >
-        <CalendarCheck2 size={14} aria-label="Booked through" />
+        <CalendarCheck2 size={14} aria-label="Content planned through" />
         {booking.compactLabel}
       </span>
       <span className="inline-flex items-center gap-1.5" title="Drafts">

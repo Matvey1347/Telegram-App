@@ -55,6 +55,8 @@ import {
   type TelegramManagedPost,
   type TelegramChannelSourceAccess,
 } from "@/lib/api";
+
+const CHANNEL_CARD_READ_MODEL_VERSION = "content-horizon-v2";
 import { scheduleProgressDismiss, syncProgressToToast } from "@/lib/progress";
 import {
   Button,
@@ -1149,10 +1151,13 @@ export default function TelegramChannelsPage() {
     isLoading: channelsLoading,
     error: channelsError,
   } = useQuery({
-    queryKey: telegramChannelKeys.lifecycleList(
-      lifecycleTab,
-      channelFilter === "own",
-    ),
+    queryKey: [
+      ...telegramChannelKeys.lifecycleList(
+        lifecycleTab,
+        channelFilter === "own",
+      ),
+      CHANNEL_CARD_READ_MODEL_VERSION,
+    ],
     queryFn: () =>
       telegramChannelsApi.listWithCounts(lifecycleTab, channelFilter === "own"),
     enabled:

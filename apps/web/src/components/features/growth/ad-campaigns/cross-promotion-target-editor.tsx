@@ -84,8 +84,8 @@ export function CrossPromotionTargetEditor({
       const link: TelegramInviteLink = {
         id: result.id,
         telegramChannelId: channel.id,
-        name: "Mutual promotion",
-        url,
+        name: result.name,
+        url: result.url || url,
         joinedCount: 0,
         requestedCount: 0,
         isRevoked: false,
