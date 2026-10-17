@@ -158,7 +158,10 @@ describe('TelegramChannelsService invite link sync', () => {
     const progress: string[] = [];
     const remoteLinks = Array.from({ length: 24 }, (_, index) => ({
       url: `https://t.me/+link_${index + 1}`,
-      title: `Link ${index + 1}`,
+      // A date in a title used to be enough to silently assign this link to a
+      // matching campaign. Promo and mutual-promotion links use the same
+      // naming convention, so importing must leave campaign ownership empty.
+      title: index === 12 ? 'VP/Марина/24к//16.10' : `Link ${index + 1}`,
       telegramCreatorUserId: index < 11 ? '100' : '200',
       creatorUsername: index < 11 ? 'owner_admin' : 'sasha_admin',
       creatorFirstName: index < 11 ? 'Owner' : 'Sasha',
@@ -225,6 +228,7 @@ describe('TelegramChannelsService invite link sync', () => {
       expect.objectContaining({
         create: expect.objectContaining({
           url: 'https://t.me/+link_13',
+          adCampaignId: null,
           joinedCount: 13,
           requestedCount: 3,
           peakAttributedCount: 16,
@@ -236,6 +240,7 @@ describe('TelegramChannelsService invite link sync', () => {
         }),
       }),
     );
+    expect(prisma.adCampaign.findMany).not.toHaveBeenCalled();
     expect(prisma.telegramInviteLink.findUnique).toHaveBeenCalledWith(
       expect.objectContaining({
         select: expect.objectContaining({
@@ -388,7 +393,7 @@ describe('TelegramChannelsService invite link sync', () => {
     );
   });
 
-  it('auto-attaches an imported invite link to the only campaign matching the same Warsaw placement date', async () => {
+  it('does not attach an imported promo or VP link to a campaign merely because its title has the same date', async () => {
     prisma.adCampaign.findMany.mockResolvedValue([
       {
         id: 'campaign-27-07',
@@ -463,18 +468,19 @@ describe('TelegramChannelsService invite link sync', () => {
     expect(prisma.telegramInviteLink.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
         create: expect.objectContaining({
-          adCampaignId: 'campaign-27-07',
+          adCampaignId: null,
           requestedCount: 35,
         }),
         update: expect.objectContaining({
-          adCampaignId: 'campaign-27-07',
+          adCampaignId: null,
           requestedCount: 35,
         }),
       }),
     );
+    expect(prisma.adCampaign.findMany).not.toHaveBeenCalled();
     expect(
       (service as any).recalculateCampaignMetricsById,
-    ).toHaveBeenCalledWith('campaign-27-07');
+    ).not.toHaveBeenCalled();
   });
 
   it('retries invite-link upsert without requestedCount when the running Prisma client is outdated', async () => {

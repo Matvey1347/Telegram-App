@@ -115,7 +115,15 @@ export function createMarketingApi({
           | "joined_desc"
           | "joined_asc";
       },
-    ) => getPaginated<AdCampaign>("/ad-campaigns", params),
+    ) =>
+      (
+        await api.get<PaginatedResponse<AdCampaign>>("/ad-campaigns", {
+          params,
+          // Request metrics are derived from live invite-link counters. Do
+          // not keep a stale campaign summary in the response cache.
+          headers: { "X-Bypass-Response-Cache": "true" },
+        })
+      ).data,
     updateAnalyticsInput: async (
       id: string,
       payload: AdCampaignAnalyticsInput,

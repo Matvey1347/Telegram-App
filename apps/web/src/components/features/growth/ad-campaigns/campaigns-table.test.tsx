@@ -35,6 +35,15 @@ function renderTable(campaigns: AdCampaign[], showActions = false) {
 }
 
 describe("AdCampaignsTable admission view analytics", () => {
+  it("keeps the performance card sized to its metrics instead of filling the table cell", () => {
+    renderTable([campaign()]);
+
+    expect(screen.getByTestId("campaign-performance-card")).toHaveClass(
+      "w-fit",
+      "max-w-full",
+    );
+  });
+
   it("shows the latest streamed invite-link refresh progress beside the campaign action", () => {
     renderWithProviders(
       <AdCampaignsTable

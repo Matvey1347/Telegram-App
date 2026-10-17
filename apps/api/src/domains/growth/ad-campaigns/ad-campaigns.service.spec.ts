@@ -483,6 +483,71 @@ describe('AdCampaignListReadService bot request performance', () => {
       ],
     });
   });
+
+  it('keeps all campaign bot links in the result after the placement ends', async () => {
+    const prisma = {
+      telegramInviteLinkSnapshot: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            inviteLinkId: 'synced-link',
+            syncedAt: new Date('2026-10-13T00:00:00Z'),
+            joinedCount: 0,
+            requestedCount: 26,
+          },
+        ]),
+      },
+    };
+    const reader = new AdCampaignListReadService(prisma as never, {} as never);
+    const result = await (reader as any).loadBotRequestMetrics('workspace-1', [
+      {
+        id: 'campaign-1',
+        placementDate: new Date('2026-10-10T00:00:00Z'),
+        startedAt: null,
+        endedAt: new Date('2026-10-12T00:00:00Z'),
+        createdAt: new Date('2026-10-10T00:00:00Z'),
+        botInviteLinks: [
+          {
+            inviteLink: {
+              id: 'synced-link',
+              telegramChannelId: 'channel-1',
+              joinedCount: 0,
+              requestedCount: 26,
+              telegramChannel: { title: 'Synced channel' },
+            },
+            baselineJoinedCount: 0,
+            baselineRequestedCount: 0,
+          },
+          {
+            inviteLink: {
+              id: 'live-only-link',
+              telegramChannelId: 'channel-2',
+              joinedCount: 0,
+              requestedCount: 29,
+              telegramChannel: { title: 'Live-only channel' },
+            },
+            baselineJoinedCount: 0,
+            baselineRequestedCount: 0,
+          },
+        ],
+      },
+    ]);
+
+    expect(result.get('campaign-1')).toMatchObject({
+      total: 55,
+      channels: expect.arrayContaining([
+        expect.objectContaining({
+          telegramChannelId: 'channel-1',
+          requests: 26,
+          peak: 26,
+        }),
+        expect.objectContaining({
+          telegramChannelId: 'channel-2',
+          requests: 29,
+          peak: 29,
+        }),
+      ]),
+    });
+  });
 });
 
 describe('AdCampaignsService admission analytics summary', () => {

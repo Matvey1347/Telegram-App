@@ -393,7 +393,6 @@ export class AdCampaignListReadService {
           channelPhotoUrl: inviteLink.telegramChannel.photoUrl,
           startsAt:
             campaign.placementDate ?? campaign.startedAt ?? campaign.createdAt,
-          endsAt: campaign.endedAt ?? new Date(),
           baselineJoined: Number(link.baselineJoinedCount ?? 0),
           baselineRequested: Number(link.baselineRequestedCount ?? 0),
           currentJoined: Number(inviteLink.joinedCount ?? 0),
@@ -402,9 +401,10 @@ export class AdCampaignListReadService {
       }),
     );
     if (!tracked.length) return new Map<string, BotRequestPerformance>();
-    const latest = new Date(
-      Math.max(...tracked.map((entry) => entry.endsAt.getTime())),
-    );
+    // A bot request can be approved after the placement end date. These are
+    // campaign-specific invite links with a saved baseline, so their outcome
+    // must continue to accumulate instead of being cut off at `endedAt`.
+    const latest = new Date();
     const snapshots = await this.prisma.telegramInviteLinkSnapshot.findMany({
       where: {
         workspaceId,
@@ -446,9 +446,8 @@ export class AdCampaignListReadService {
         }
       >();
       for (const entry of entries) {
-        const snapshotsForEntry = (
-          snapshotsByLink.get(entry.inviteLinkId) ?? []
-        ).filter((snapshot) => snapshot.syncedAt <= entry.endsAt);
+        const snapshotsForEntry =
+          snapshotsByLink.get(entry.inviteLinkId) ?? [];
         const current = channels.get(entry.channelId) ?? {
           telegramChannelId: entry.channelId,
           title: entry.channelTitle,
@@ -483,9 +482,9 @@ export class AdCampaignListReadService {
             );
           }
         }
-        if (!campaign.endedAt) {
-          addPoint(entry.endsAt, entry.currentJoined, entry.currentRequested);
-        }
+        // Some links are only synced intermittently. Always add their live
+        // counters so every linked channel contributes to the current total.
+        addPoint(latest, entry.currentJoined, entry.currentRequested);
         channels.set(entry.channelId, current);
       }
       const channelRows = [...channels.values()].map((channel) => {

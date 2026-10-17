@@ -77,19 +77,16 @@ export class TelegramInviteSyncService {
       },
       select: this.inviteLinkSyncExistingSelect,
     });
-    const inferredCampaignId =
-      await this.telegramInviteAttributionService.inferInviteLinkCampaignId({
-        workspaceId: params.workspaceId,
-        channelId: params.channelId,
-        title: params.link.title,
-        existingCampaignId: existing?.adCampaignId ?? null,
-      });
     const currentAttributedCount =
       Math.max(0, Number(params.link.usage) || 0) +
       Math.max(0, Number(params.link.requested) || 0);
     const payload = {
       name: params.link.title || existing?.name || 'Imported MTProto link',
-      adCampaignId: existing?.adCampaignId ?? inferredCampaignId ?? null,
+      // A link can be used by a promo, mutual promotion, or campaign and a
+      // title/date is not a reliable signal. Campaign ownership is assigned
+      // only by the explicit campaign form, never while importing from
+      // Telegram.
+      adCampaignId: existing?.adCampaignId ?? null,
       telegramInviteLinkId: params.link.url,
       createdBy:
         existing?.createdBy ||

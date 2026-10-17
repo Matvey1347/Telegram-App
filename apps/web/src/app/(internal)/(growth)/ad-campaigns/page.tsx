@@ -43,6 +43,8 @@ import { adCampaignKeys, telegramChannelKeys } from "@/lib/query-keys";
 import { MoneyStack } from "@/components/ui/money-stack";
 import { useAdCampaignMutations } from "@/components/features/growth/ad-campaigns/use-ad-campaign-mutations";
 import { useCampaignInviteLinkRefresh } from "@/components/features/growth/ad-campaigns/use-campaign-invite-link-refresh";
+
+const CAMPAIGN_BOT_REQUESTS_READ_MODEL_VERSION = "campaign-metrics-v3";
 import {
   Button,
   Card,
@@ -216,6 +218,7 @@ function AdCampaignsPage({
         dateFrom,
         dateTo,
         sort,
+        readModelVersion: CAMPAIGN_BOT_REQUESTS_READ_MODEL_VERSION,
       },
     ],
     queryFn: () =>

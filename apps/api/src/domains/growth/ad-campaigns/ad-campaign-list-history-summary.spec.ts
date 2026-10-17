@@ -18,14 +18,22 @@ describe('loadCampaignListHistorySummaries', () => {
         {
           id: 'campaign-1',
           inviteLinks: [
-            { joinedCount: 80, requestedCount: 10 },
-            { joinedCount: 5, requestedCount: 0 },
+            { id: 'current-link-1', joinedCount: 80, requestedCount: 10 },
+            { id: 'current-link-2', joinedCount: 5, requestedCount: 0 },
           ],
         },
       ],
     );
 
     expect(queryRaw).toHaveBeenCalledTimes(1);
+    expect(queryRaw.mock.calls[0][0].values).toEqual(
+      expect.arrayContaining([
+        'campaign-1',
+        'current-link-1',
+        'campaign-1',
+        'current-link-2',
+      ]),
+    );
     expect(result.get('campaign-1')).toMatchObject({
       currentJoinedCount: 85,
       currentRequestedCount: 10,
@@ -48,5 +56,38 @@ describe('loadCampaignListHistorySummaries', () => {
 
     expect(result.size).toBe(0);
     expect(queryRaw).not.toHaveBeenCalled();
+  });
+
+  it('limits campaign peaks to links that are currently assigned', async () => {
+    const queryRaw = jest.fn().mockResolvedValue([
+      {
+        adCampaignId: 'campaign-1',
+        peakJoinedCount: BigInt(30),
+        peakRequestedCount: BigInt(0),
+        peakTotalAttributed: BigInt(30),
+      },
+    ]);
+
+    const result = await loadCampaignListHistorySummaries(
+      { $queryRaw: queryRaw } as never,
+      'workspace-1',
+      [
+        {
+          id: 'campaign-1',
+          inviteLinks: [
+            { id: 'remaining-link', joinedCount: 30, requestedCount: 0 },
+          ],
+        },
+      ],
+    );
+
+    expect(queryRaw.mock.calls[0][0].values).toEqual(
+      expect.arrayContaining(['campaign-1', 'remaining-link']),
+    );
+    expect(result.get('campaign-1')).toMatchObject({
+      peakTotalAttributed: 30,
+      drawdownFromPeak: 0,
+      inviteLinksCount: 1,
+    });
   });
 });

@@ -520,7 +520,10 @@ function PerformanceCell({
   const displayMode = moneySettings?.currencyDisplayMode ?? "code";
 
   return (
-    <div className={`rounded-lg border p-2.5 ${cardClass}`}>
+    <div
+      data-testid="campaign-performance-card"
+      className={`w-fit max-w-full rounded-lg border p-2.5 ${cardClass}`}
+    >
       <div className="inline-grid grid-cols-[minmax(90px,auto)_minmax(92px,auto)_minmax(90px,auto)] gap-x-6">
         <div>
           <p className="mb-0.5 text-[10px] uppercase tracking-wide text-slate-500">

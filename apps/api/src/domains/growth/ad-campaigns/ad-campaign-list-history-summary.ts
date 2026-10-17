@@ -4,6 +4,7 @@ import { PrismaService } from '../../../prisma/prisma.service';
 type CampaignWithInviteLinks = {
   id: string;
   inviteLinks: Array<{
+    id: string;
     joinedCount: number;
     requestedCount: number | null;
   }>;
@@ -41,8 +42,24 @@ export async function loadCampaignListHistorySummaries(
     return new Map<string, CampaignListHistorySummary>();
   }
 
-  const campaignIds = campaignsWithLinks.map((campaign) => campaign.id);
+  // Snapshots retain their former adCampaignId after a link is removed. Build
+  // history from the campaign's current links, otherwise a removed link would
+  // inflate the peak and make the remaining links look like they dropped.
+  const campaignInviteLinkPairs = campaignsWithLinks.flatMap((campaign) =>
+    campaign.inviteLinks.map((inviteLink) => ({
+      campaignId: campaign.id,
+      inviteLinkId: inviteLink.id,
+    })),
+  );
   const peakRows = await prisma.$queryRaw<CampaignHistoryPeakRow[]>(Prisma.sql`
+    WITH "CurrentCampaignInviteLinks" ("adCampaignId", "inviteLinkId") AS (
+      VALUES ${Prisma.join(
+        campaignInviteLinkPairs.map(
+          ({ campaignId, inviteLinkId }) =>
+            Prisma.sql`(${campaignId}, ${inviteLinkId})`,
+        ),
+      )}
+    )
     SELECT
       point."adCampaignId",
       MAX(point."joinedCount") AS "peakJoinedCount",
@@ -50,16 +67,18 @@ export async function loadCampaignListHistorySummaries(
       MAX(point."totalAttributed") AS "peakTotalAttributed"
     FROM (
       SELECT
-        snapshot."adCampaignId",
+        currentLinks."adCampaignId",
         snapshot."syncedAt",
         SUM(snapshot."joinedCount") AS "joinedCount",
         SUM(snapshot."requestedCount") AS "requestedCount",
         SUM(snapshot."joinedCount" + snapshot."requestedCount") AS "totalAttributed"
       FROM "TelegramInviteLinkSnapshot" AS snapshot
+      INNER JOIN "CurrentCampaignInviteLinks" AS currentLinks
+        ON currentLinks."adCampaignId" = snapshot."adCampaignId"
+        AND currentLinks."inviteLinkId" = snapshot."inviteLinkId"
       WHERE
         snapshot."workspaceId" = ${workspaceId}
-        AND snapshot."adCampaignId" IN (${Prisma.join(campaignIds)})
-      GROUP BY snapshot."adCampaignId", snapshot."syncedAt"
+      GROUP BY currentLinks."adCampaignId", snapshot."syncedAt"
     ) AS point
     GROUP BY point."adCampaignId"
   `);

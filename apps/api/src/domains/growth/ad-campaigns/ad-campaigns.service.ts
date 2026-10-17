@@ -1468,24 +1468,32 @@ export class AdCampaignsService {
     }> = [];
     if (this.inviteLinkSnapshotStorageState !== 'missing') {
       try {
-        rows = await this.prisma.telegramInviteLinkSnapshot.findMany({
-          where: { workspaceId, adCampaignId: id },
-          orderBy: [{ syncedAt: 'desc' }, { inviteLinkId: 'asc' }],
-          take: Math.max(
-            2,
-            Math.min(
-              2000,
-              limit * Math.max(1, campaign.inviteLinks.length || 1),
+        if (campaign.inviteLinks.length) {
+          rows = await this.prisma.telegramInviteLinkSnapshot.findMany({
+            // Removed links keep their historical snapshots. The detail view
+            // must use the same current-link scope as the campaign card.
+            where: {
+              workspaceId,
+              adCampaignId: id,
+              inviteLinkId: { in: campaign.inviteLinks.map((link) => link.id) },
+            },
+            orderBy: [{ syncedAt: 'desc' }, { inviteLinkId: 'asc' }],
+            take: Math.max(
+              2,
+              Math.min(
+                2000,
+                limit * Math.max(1, campaign.inviteLinks.length),
+              ),
             ),
-          ),
-          select: {
-            inviteLinkId: true,
-            syncedAt: true,
-            joinedCount: true,
-            requestedCount: true,
-            isRevoked: true,
-          },
-        });
+            select: {
+              inviteLinkId: true,
+              syncedAt: true,
+              joinedCount: true,
+              requestedCount: true,
+              isRevoked: true,
+            },
+          });
+        }
         this.inviteLinkSnapshotStorageState = 'available';
       } catch (error) {
         if (!this.isInviteLinkSnapshotStorageMissing(error)) throw error;
