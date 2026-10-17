@@ -25,12 +25,12 @@ import { TelegramBotDeliveryService } from '@api/domains/telegram/telegram-bots/
 import {
   FinanceConsumerSession,
   FinanceConsumerSessionService,
-} from '@finance-pro/api/identity/finance-consumer-session.service';
-import { FinanceConsumerTransferService } from '@finance-pro/api/identity/finance-consumer-transfer.service';
-import { FinanceContextService } from '@finance-pro/api/identity/finance-context.service';
-import { FinanceCoreService } from '@finance-pro/api/catalog/finance-core.service';
-import { FinanceLedgerService } from '@finance-pro/api/ledger/finance-ledger.service';
-import { FinanceTransferService } from '@finance-pro/api/transfers/finance-transfer.service';
+} from '@consumer-finance/api/identity/finance-consumer-session.service';
+import { FinanceConsumerTransferService } from '@consumer-finance/api/identity/finance-consumer-transfer.service';
+import { FinanceContextService } from '@consumer-finance/api/identity/finance-context.service';
+import { FinanceCoreService } from '@consumer-finance/api/catalog/finance-core.service';
+import { FinanceLedgerService } from '@consumer-finance/api/ledger/finance-ledger.service';
+import { FinanceTransferService } from '@consumer-finance/api/transfers/finance-transfer.service';
 import {
   CreateFinanceAccountDto,
   CreateFinanceCategoryDto,
@@ -45,19 +45,19 @@ import {
   UpdateFinanceTransactionDto,
   UpdateFinanceTransferDto,
   UpsertFinanceLimitDto,
-} from '@finance-pro/api/http/finance.dto';
-import { forecastMonthlyLimit } from '@finance-pro/api/planning/finance-smart-limits';
-import { FinanceEntitlementService } from '@finance-pro/api/billing/finance-entitlement.service';
-import { financeAnalyticsDateRange } from '@finance-pro/api/ledger/finance-history-date-range';
-import { financeChatLocale, t } from '@finance-pro/api/i18n/finance-chat-i18n';
-import { financeMainMenu } from '@finance-pro/api/telegram-presentation/finance-telegram-menu';
+} from '@consumer-finance/api/http/finance.dto';
+import { forecastMonthlyLimit } from '@consumer-finance/api/planning/finance-smart-limits';
+import { FinanceEntitlementService } from '@consumer-finance/api/billing/finance-entitlement.service';
+import { financeAnalyticsDateRange } from '@consumer-finance/api/ledger/finance-history-date-range';
+import { financeChatLocale, t } from '@consumer-finance/api/i18n/finance-chat-i18n';
+import { financeMainMenu } from '@consumer-finance/api/telegram-presentation/finance-telegram-menu';
 import {
   isProductionEnvironment,
   publicApiOrigin,
   publicWebOrigin,
 } from '@api/config/deployment-config';
-import { FinanceConsumerRequestService } from '@finance-pro/api/http/finance-consumer-request.service';
-import { FinanceAnalyticsService } from '@finance-pro/api/analytics/finance-analytics.service';
+import { FinanceConsumerRequestService } from '@consumer-finance/api/http/finance-consumer-request.service';
+import { FinanceAnalyticsService } from '@consumer-finance/api/analytics/finance-analytics.service';
 
 class DeleteFinanceDataDto {
   @IsIn(['DELETE MY FINANCE DATA']) confirmation!: 'DELETE MY FINANCE DATA';

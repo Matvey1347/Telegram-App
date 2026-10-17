@@ -1,10 +1,8 @@
 # Telegram bots layout
 
 - `core`: bot CRUD, application registry/dispatch, webhook runtime, users, and delivery.
-- `products/greeter/api`: Greeter configuration, automation, enrollment,
-  broadcasts, analytics, and controllers.
-- `products/finance-pro/api`: Finance Pro business and consumer HTTP API;
-  `products/finance-pro/bot` contains its Telegram update/presentation adapter.
+- `products/finance/api`: consumer Finance business and HTTP API;
+  `products/finance/bot` contains its Telegram update/presentation adapter.
 
 `telegram-bots.module.ts` is the single composition root. Products remain in
 `products/*`; composition wires their providers through the shared bot registry
@@ -14,7 +12,7 @@ and delivery pipeline without making their implementation part of `core`.
 
 - Replies produced while handling a live Finance update use `TelegramBotInteractiveReplyService` and call the Bot API immediately. They do not create delivery rows or scheduler work.
 - Payment success and genuinely asynchronous notifications use `TelegramBotDeliveryService` for persisted retry. Finance proposal/flow confirmations produced for the current live update reply immediately and rely on mutation idempotency rather than creating queue work.
-- Reminders, Greeter sequences, broadcasts, and other scheduled/retry-sensitive work always remain on durable delivery.
+- Reminders and other approved scheduled/retry-sensitive work remain on durable delivery.
 - Both paths use `telegramBotMessagePayload`; do not add a second reply-markup formatter.
 
 ## LOCAL development lifecycle

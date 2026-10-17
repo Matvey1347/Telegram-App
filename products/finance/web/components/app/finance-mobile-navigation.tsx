@@ -2,19 +2,19 @@
 
 import { Bot, Landmark, Menu, X } from "lucide-react";
 import { useEffect, useRef, useState, type Ref } from "react";
-import type { FinanceCoreCopy } from "@finance-pro/web/components/i18n/core";
+import type { FinanceCoreCopy } from "@consumer-finance/web/components/i18n/core";
 import {
   isMoreScreen,
   type ConsumerFinanceScreen,
-} from "@finance-pro/web/components/app/consumer-finance-navigation";
+} from "@consumer-finance/web/components/app/consumer-finance-navigation";
 import {
   FINANCE_MORE_NAVIGATION_GROUPS,
   FINANCE_PRIMARY_NAVIGATION,
   FinanceNavigationButton,
   FinanceNavigationGroupHeader,
   isFinanceNavigationActive,
-} from "@finance-pro/web/components/app/finance-navigation-items";
-import motionStyles from "@finance-pro/web/components/app/finance-navigation-groups.module.css";
+} from "@consumer-finance/web/components/app/finance-navigation-items";
+import motionStyles from "@consumer-finance/web/components/app/finance-navigation-groups.module.css";
 
 export function FinanceMobileNavigation({
   screen,

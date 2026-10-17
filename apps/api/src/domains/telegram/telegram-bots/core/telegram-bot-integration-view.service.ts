@@ -32,9 +32,7 @@ export class TelegramBotIntegrationViewService {
       workspaceId: String(row.workspaceId),
       label: String(row.label),
       isActive: Boolean(row.isActive),
-      applicationType:
-        (row.applicationType as TelegramBotApplicationType | undefined) ||
-        TelegramBotApplicationType.NONE,
+      applicationType: this.applicationType(row.applicationType),
       assignedMember:
         row.assignedMember && typeof row.assignedMember === 'object'
           ? (row.assignedMember as TelegramBotIntegrationView['assignedMember'])
@@ -96,6 +94,13 @@ export class TelegramBotIntegrationViewService {
       await this.financeSummaryForRuntimes(String(row.workspaceId), runtimes.map((runtime) => runtime.id)),
       runtimes,
     );
+  }
+
+  private applicationType(
+    value: unknown,
+  ): TelegramBotIntegrationView['applicationType'] {
+    if (value === TelegramBotApplicationType.FINANCE) return 'FINANCE';
+    return 'NONE';
   }
 
   private iso(value: unknown) {

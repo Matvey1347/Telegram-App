@@ -3,17 +3,17 @@ import {
   financeCategoryLabel,
   t,
   type FinanceChatLocale,
-} from '@finance-pro/api/i18n/finance-chat-i18n';
+} from '@consumer-finance/api/i18n/finance-chat-i18n';
 import {
   FinanceChatFlowService,
   type FinanceFlowResult,
-} from '@finance-pro/api/chat-flows/finance-chat-flow.service';
+} from '@consumer-finance/api/chat-flows/finance-chat-flow.service';
 import {
   financeAccountEmoji,
   financeCategoryEmoji,
   financeIconPresentation,
   financeStoredIconSource,
-} from '@finance-pro/api/catalog/finance-entity-emoji';
+} from '@consumer-finance/api/catalog/finance-entity-emoji';
 import { telegramBotActionRow } from '@api/telegram/shared/bot/telegram-bot-action-buttons';
 
 type Button = {

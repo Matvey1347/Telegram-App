@@ -1,7 +1,7 @@
 import {
   assertFinanceSavingsMovementStatus,
   assertFinanceSavingsReallocationStatus,
-} from '@finance-pro/api/savings/finance-savings-rules';
+} from '@consumer-finance/api/savings/finance-savings-rules';
 
 describe('finance savings movement rules', () => {
   it('allows completed goals to release and reallocate out before archive', () => {

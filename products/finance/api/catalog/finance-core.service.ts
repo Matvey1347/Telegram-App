@@ -14,20 +14,20 @@ import type {
   UpdateFinanceAccountDto,
   UpdateFinanceSettingsDto,
   UpsertFinanceLimitDto,
-} from '@finance-pro/api/http/finance.dto';
-import { financeChatLocale } from '@finance-pro/api/i18n/finance-chat-i18n';
+} from '@consumer-finance/api/http/finance.dto';
+import { financeChatLocale } from '@consumer-finance/api/i18n/finance-chat-i18n';
 import { CurrencyConversionService } from '@api/common/currency-conversion.service';
-import { FinanceLimitService } from '@finance-pro/api/planning/finance-limit.service';
+import { FinanceLimitService } from '@consumer-finance/api/planning/finance-limit.service';
 import {
   financeAccountEmoji,
   financeCategoryEmoji,
   financeIconPresentation,
-} from '@finance-pro/api/catalog/finance-entity-emoji';
-import { exportFinanceData } from '@finance-pro/api/catalog/finance-portability';
+} from '@consumer-finance/api/catalog/finance-entity-emoji';
+import { exportFinanceData } from '@consumer-finance/api/catalog/finance-portability';
 import {
   archiveFinanceAccount,
   assertFinanceCategoryArchivable,
-} from '@finance-pro/api/catalog/finance-obligation-archive-guards';
+} from '@consumer-finance/api/catalog/finance-obligation-archive-guards';
 
 function categoryView<
   T extends { emoji: string | null; name: string; key: string | null },

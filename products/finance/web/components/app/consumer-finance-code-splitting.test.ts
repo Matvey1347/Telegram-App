@@ -29,7 +29,7 @@ describe("Consumer Finance initial module graph", () => {
       "investments/finance-investment-detail",
     ];
     for (const modulePath of heavy) {
-      const moduleName = `@finance-pro/web/components/${modulePath}`;
+      const moduleName = `@consumer-finance/web/components/${modulePath}`;
       expect(host).toContain(`import("${moduleName}")`);
       expect(host).not.toMatch(new RegExp(`from ["']${moduleName}["']`));
     }
@@ -59,7 +59,7 @@ describe("Consumer Finance initial module graph", () => {
 
   it("keeps the account editor chunk independent from the list screen", () => {
     expect(source("../accounts/finance-account-editor.tsx")).not.toContain(
-      'from "@finance-pro/web/components/accounts/finance-accounts"',
+      'from "@consumer-finance/web/components/accounts/finance-accounts"',
     );
   });
 

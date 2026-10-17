@@ -71,11 +71,9 @@ const TRANSITION_BASELINE = new Map([
 const PRODUCTION_ROOTS = [
   "apps/api/src",
   "apps/web/src",
-  "products/finance-pro/api",
-  "products/finance-pro/bot",
-  "products/finance-pro/web",
-  "products/greeter/api",
-  "products/greeter/web",
+  "products/finance/api",
+  "products/finance/bot",
+  "products/finance/web",
   "packages/shared/src",
 ];
 

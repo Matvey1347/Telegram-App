@@ -1,4 +1,4 @@
-import { Card } from "@finance-pro/web/components/ui";
+import { Card } from "@consumer-finance/web/components/ui";
 
 function SkeletonLine({ className = "" }: { className?: string }) {
   return (

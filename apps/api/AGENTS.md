@@ -12,10 +12,10 @@
 ## Consumer applications
 
 - Read `docs/architecture/PRODUCT_BOUNDARIES.md` before changing bot applications or platform wiring.
-- `src/domains/finance/*` is internal Telegram System Finance. The independent Finance Pro application lives in `products/finance-pro/api/*`, with its thin Telegram adapter in `products/finance-pro/bot/*`; neither product imports the other's implementation.
-- Finance and Greeter own their business behavior, API/use cases, localization and Telegram presentation. They may depend on `telegram-bots/core` ports and `src/telegram/shared` adapters, but never on each other.
-- `telegram-bots/core` must not import concrete Finance/Greeter services, presenters, localization or menu behavior. Only `telegram-bots.module.ts` composes platform and product providers.
-- New application integration starts from the concrete Finance and Greeter use cases. Do not invent a generic application framework without duplicated, semantically identical platform behavior.
+- `src/domains/finance/*` is internal Telegram System Finance. The independent consumer Finance application lives in `products/finance/api/*`, with its thin Telegram adapter in `products/finance/bot/*`; neither product imports the other's implementation.
+- Consumer Finance owns its business behavior, API/use cases, localization and Telegram presentation. It may depend on `telegram-bots/core` ports and `src/telegram/shared` adapters.
+- `telegram-bots/core` must not import concrete consumer-product services, presenters, localization or menu behavior. Only `telegram-bots.module.ts` composes product providers.
+- New application integration starts from concrete approved use cases. Do not invent a generic application framework without duplicated, semantically identical platform behavior.
 
 ## Finance Bot required reading
 

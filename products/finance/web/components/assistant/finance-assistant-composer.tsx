@@ -9,9 +9,9 @@ import {
   Square,
   X,
 } from "lucide-react";
-import { Textarea } from "@finance-pro/web/components/ui";
-import { financeAssistantCopy } from "@finance-pro/web/components/i18n/assistant";
-import type { FinanceAssistantMediaController } from "@finance-pro/web/components/hooks/use-finance-assistant-media";
+import { Textarea } from "@consumer-finance/web/components/ui";
+import { financeAssistantCopy } from "@consumer-finance/web/components/i18n/assistant";
+import type { FinanceAssistantMediaController } from "@consumer-finance/web/components/hooks/use-finance-assistant-media";
 
 export function FinanceAssistantComposer({
   t,

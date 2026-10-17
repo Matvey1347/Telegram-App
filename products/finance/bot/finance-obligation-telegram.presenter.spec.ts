@@ -1,8 +1,8 @@
 import {
   FinanceObligationTelegramPresenter,
   financeRegularPaymentConfirmCallback,
-} from '@finance-pro/bot/finance-obligation-telegram.presenter';
-import { parseFinanceRegularPaymentCallback } from '@finance-pro/bot/finance-regular-payment-callback.handler';
+} from '@consumer-finance/bot/finance-obligation-telegram.presenter';
+import { parseFinanceRegularPaymentCallback } from '@consumer-finance/bot/finance-regular-payment-callback.handler';
 
 describe('Finance obligation Telegram presentation', () => {
   it('keeps the exact occurrence in a bounded callback and links amount changes to the regular screen', () => {

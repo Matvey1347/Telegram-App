@@ -8,26 +8,6 @@ import {
   MinLength,
 } from 'class-validator';
 
-export class UpdateGreeterConfigDto {
-  @IsOptional() captchaEnabled?: boolean;
-  @IsOptional() @IsIn(['BUTTON_CONFIRM', 'SIMPLE_CHOICE']) captchaType?:
-    | 'BUTTON_CONFIRM'
-    | 'SIMPLE_CHOICE';
-  @IsOptional() @IsString() captchaMessage?: string;
-  @IsOptional() @IsString() confirmButtonText?: string;
-  @IsOptional() @IsString() choicePrompt?: string;
-  @IsOptional() timeoutMinutes?: number;
-  @IsOptional() @IsString() successMessage?: string | null;
-  @IsOptional() @IsString() failureMessage?: string | null;
-  @IsOptional() @IsIn(['KEEP_PENDING', 'DECLINE']) failureBehavior?:
-    | 'KEEP_PENDING'
-    | 'DECLINE';
-}
-
-export class ConnectGreeterChannelDto {
-  @IsString() channelId!: string;
-}
-
 export class CreateTelegramBotDto {
   @IsOptional() @IsString() assignedMemberId?: string | null;
   @IsOptional() @IsIn(['LOCAL', 'PRODUCTION']) environment?:
@@ -51,8 +31,8 @@ export class UpdateTelegramBotRuntimeProfileDto {
 }
 
 export class SwitchTelegramBotApplicationDto {
-  @IsIn(['NONE', 'GREETER', 'FINANCE', 'SIMPLE_FINANCE'])
-  applicationType!: 'NONE' | 'GREETER' | 'FINANCE' | 'SIMPLE_FINANCE';
+  @IsIn(['NONE', 'FINANCE'])
+  applicationType!: 'NONE' | 'FINANCE';
 }
 
 export class ImportTelegramChannelsDto {

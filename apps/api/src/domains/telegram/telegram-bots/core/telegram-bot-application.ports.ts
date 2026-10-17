@@ -5,20 +5,12 @@ import type {
 } from '@api/telegram/shared/bot/telegram-bot-api.client';
 import type { TelegramBotApplicationContext } from './telegram-bot-update.types';
 
-export const TELEGRAM_BOT_GREETER_HANDLER = Symbol(
-  'TELEGRAM_BOT_GREETER_HANDLER',
-);
 export const TELEGRAM_BOT_FINANCE_HANDLER = Symbol(
   'TELEGRAM_BOT_FINANCE_HANDLER',
-);
-export const TELEGRAM_BOT_SIMPLE_FINANCE_HANDLER = Symbol('TELEGRAM_BOT_SIMPLE_FINANCE_HANDLER');
-export const TELEGRAM_BOT_GREETER_PRESENTATION = Symbol(
-  'TELEGRAM_BOT_GREETER_PRESENTATION',
 );
 export const TELEGRAM_BOT_FINANCE_PRESENTATION = Symbol(
   'TELEGRAM_BOT_FINANCE_PRESENTATION',
 );
-export const TELEGRAM_BOT_SIMPLE_FINANCE_PRESENTATION = Symbol('TELEGRAM_BOT_SIMPLE_FINANCE_PRESENTATION');
 
 export interface TelegramBotApplicationHandler {
   handle(context: TelegramBotApplicationContext): Promise<unknown>;

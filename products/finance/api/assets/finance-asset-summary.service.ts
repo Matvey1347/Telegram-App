@@ -3,9 +3,9 @@ import { Prisma } from '@prisma/client';
 import type { ConsumerFinanceBalanceSummary } from '@telegram-system/shared';
 import { CurrencyConversionService } from '@api/common/currency-conversion.service';
 import { PrismaService } from '@api/prisma/prisma.service';
-import { financeBalanceSummary } from '@finance-pro/api/ledger/finance-balance-summary';
-import { prepareFinanceAccountRates } from '@finance-pro/api/ledger/finance-transaction-valuation';
-import { FinanceSavingsReadService } from '@finance-pro/api/savings/finance-savings-read.service';
+import { financeBalanceSummary } from '@consumer-finance/api/ledger/finance-balance-summary';
+import { prepareFinanceAccountRates } from '@consumer-finance/api/ledger/finance-transaction-valuation';
+import { FinanceSavingsReadService } from '@consumer-finance/api/savings/finance-savings-read.service';
 
 @Injectable()
 export class FinanceAssetSummaryService {

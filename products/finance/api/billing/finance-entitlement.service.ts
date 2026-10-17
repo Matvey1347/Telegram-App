@@ -16,14 +16,14 @@ import {
   FINANCE_CAPABILITIES,
   FINANCE_PRODUCT_DEFINITIONS,
   type FinanceTier,
-} from '@finance-pro/api/billing/finance-product-definition';
+} from '@consumer-finance/api/billing/finance-product-definition';
 
 /**
  * The Finance vocabulary stays here while subscription state stays in the
  * reusable billing resolver. Premium handlers should ask this service for a
  * capability instead of interpreting provider statuses themselves.
  */
-export { FINANCE_PRODUCT_DEFINITIONS } from '@finance-pro/api/billing/finance-product-definition';
+export { FINANCE_PRODUCT_DEFINITIONS } from '@consumer-finance/api/billing/finance-product-definition';
 export type FinanceCapability = (typeof FINANCE_CAPABILITIES)[number];
 export type FinanceUsageFeature = 'AI_INPUT' | 'RECEIPT_SCAN' | 'AI_INSIGHTS';
 

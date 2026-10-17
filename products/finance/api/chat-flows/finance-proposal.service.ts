@@ -9,8 +9,8 @@ import { PrismaService } from '@api/prisma/prisma.service';
 import {
   DEFAULT_FINANCE_CATEGORIES,
   FINANCE_PROPOSAL_TTL_MS,
-} from '@finance-pro/api/catalog/finance-defaults';
-import { FinanceLedgerService } from '@finance-pro/api/ledger/finance-ledger.service';
+} from '@consumer-finance/api/catalog/finance-defaults';
+import { FinanceLedgerService } from '@consumer-finance/api/ledger/finance-ledger.service';
 
 type ProposalPayload = {
   type: 'INCOME' | 'EXPENSE';

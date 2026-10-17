@@ -6,19 +6,14 @@ import { TelegramBotLoadingFeedbackService } from './telegram-bot-loading-feedba
 import type { TelegramBotApplicationContext } from './telegram-bot-update.types';
 import {
   TELEGRAM_BOT_FINANCE_HANDLER,
-  TELEGRAM_BOT_SIMPLE_FINANCE_HANDLER,
-  TELEGRAM_BOT_GREETER_HANDLER,
   type TelegramBotApplicationHandler,
 } from './telegram-bot-application.ports';
 
 @Injectable()
 export class TelegramBotApplicationDispatcherService {
   constructor(
-    @Inject(TELEGRAM_BOT_GREETER_HANDLER)
-    private readonly greeter: TelegramBotApplicationHandler,
     @Inject(TELEGRAM_BOT_FINANCE_HANDLER)
     private readonly finance: TelegramBotApplicationHandler,
-    @Inject(TELEGRAM_BOT_SIMPLE_FINANCE_HANDLER) private readonly simpleFinance: TelegramBotApplicationHandler,
     private readonly applicationLogger: ApplicationLoggerService,
     private readonly loadingFeedback: TelegramBotLoadingFeedbackService,
   ) {}
@@ -41,22 +36,13 @@ export class TelegramBotApplicationDispatcherService {
       });
       return { handled: false };
     }
-    // Finance owns immediate, step-specific feedback. Its live replies must not
-    // wait for a temporary message round trip. Greeter retains existing behavior.
-    const loading =
-      context.bot.applicationType === TelegramBotApplicationType.GREETER
-        ? await this.loadingFeedback.show(context)
-        : null;
+    // Consumer Finance owns immediate, step-specific feedback. Its live replies
+    // must not wait for a temporary message round trip.
+    const loading = null;
     try {
       switch (context.bot.applicationType) {
-        case TelegramBotApplicationType.GREETER:
-          await this.greeter.handle(context);
-          return { handled: true };
         case TelegramBotApplicationType.FINANCE:
           await this.finance.handle(context);
-          return { handled: true };
-        case TelegramBotApplicationType.SIMPLE_FINANCE:
-          await this.simpleFinance.handle(context);
           return { handled: true };
         default:
           return { handled: false };

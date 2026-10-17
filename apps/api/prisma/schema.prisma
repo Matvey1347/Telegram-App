@@ -4292,7 +4292,8 @@ model FinanceProfile {
   @@unique([botIntegrationId, telegramBotUserId])
 }
 
-// Finance is intentionally independent from the existing Finance Pro ledger.
+// Legacy Simple Finance data is retained for a separately approved data
+// migration or retention plan. No runtime code exposes these models.
 // Amounts are integer kopecks, stored as Decimal(18,0), so no calculation ever
 // depends on JavaScript floating point arithmetic.
 model SimpleFinanceProfile {

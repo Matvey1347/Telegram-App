@@ -21,12 +21,9 @@
     ],
     "paths": {
       "@/*": ["./src/*"],
-      "@finance-pro/web/components/*": ["../../products/finance-pro/web/components/*"],
-      "@finance-pro/web/lib/*": ["../../products/finance-pro/web/lib/*"],
-      "@finance-pro/web/provider/*": ["../../products/finance-pro/web/provider/*"],
-      "@finance/web/components/*": ["../../products/finance/web/components/*"],
-      "@greeter/web/components/*": ["../../products/greeter/web/components/*"],
-      "@greeter/web/lib/*": ["../../products/greeter/web/lib/*"]
+      "@consumer-finance/web/components/*": ["../../products/finance/web/components/*"],
+      "@consumer-finance/web/lib/*": ["../../products/finance/web/lib/*"],
+      "@consumer-finance/web/provider/*": ["../../products/finance/web/provider/*"]
     }
   },
   "include": [

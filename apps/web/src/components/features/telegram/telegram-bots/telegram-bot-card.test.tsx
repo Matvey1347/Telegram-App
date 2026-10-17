@@ -4,7 +4,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { TelegramBot } from "@/lib/api";
 import { TelegramBotCard } from "./telegram-bot-card";
 
-function bot(applicationType: "GREETER" | "FINANCE" | "NONE"): TelegramBot {
+function bot(
+  applicationType: "FINANCE" | "NONE",
+): TelegramBot {
   return {
     id: "bot-1",
     workspaceId: "workspace-1",
@@ -62,11 +64,7 @@ function bot(applicationType: "GREETER" | "FINANCE" | "NONE"): TelegramBot {
       {
         type: applicationType,
         label:
-          applicationType === "NONE"
-            ? "No runtime app"
-            : applicationType === "FINANCE"
-              ? "Finance"
-              : "Greeter",
+          applicationType === "NONE" ? "No runtime app" : "Finance",
         description: "Manage bot behavior.",
         availability: "GLOBAL",
         eligible: true,
@@ -76,7 +74,7 @@ function bot(applicationType: "GREETER" | "FINANCE" | "NONE"): TelegramBot {
 }
 
 function renderCard(
-  applicationType: "GREETER" | "FINANCE" | "NONE",
+  applicationType: "FINANCE" | "NONE",
   checkingEnvironment: "LOCAL" | "PRODUCTION" | null = null,
 ) {
   return render(
@@ -105,8 +103,8 @@ describe("TelegramBotCard", () => {
   });
 
   it("shows a checked running status for a connected webhook", () => {
-    renderCard("GREETER");
-    expect(screen.getByText("RUNNING")).toBeInTheDocument();
+    renderCard("FINANCE");
+    expect(screen.getByText("RUNNING", { selector: "span" })).toBeInTheDocument();
     expect(screen.queryByText("ACTIVE")).toBeNull();
     expect(screen.queryByText(/api\/telegram\/bots\/runtime/)).toBeNull();
     expect(screen.queryByText("Last checked")).toBeNull();
@@ -115,7 +113,7 @@ describe("TelegramBotCard", () => {
 
   it("treats a single connected runtime as one bot until another version is added", async () => {
     const user = userEvent.setup();
-    const localBot = bot("GREETER");
+    const localBot = bot("FINANCE");
     localBot.runtimes[0] = {
       ...localBot.runtimes[0],
       environment: "LOCAL",
@@ -290,7 +288,7 @@ describe("TelegramBotCard", () => {
 
   it("shows a pending refresh for the canonical production runtime", async () => {
     const user = userEvent.setup();
-    renderCard("GREETER", "PRODUCTION");
+    renderCard("FINANCE", "PRODUCTION");
     await user.click(
       screen.getByRole("button", { name: "Actions for Admissions bot" }),
     );

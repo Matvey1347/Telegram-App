@@ -1,4 +1,4 @@
-import { FinanceBotChatResponderService } from '@finance-pro/bot/finance-bot-chat-responder.service';
+import { FinanceBotChatResponderService } from '@consumer-finance/bot/finance-bot-chat-responder.service';
 
 describe('FinanceBotChatResponderService', () => {
   const context = {

@@ -7,8 +7,8 @@ import {
   within,
 } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { FinanceSavings } from "@finance-pro/web/components/savings/finance-savings";
-import { FinanceInvestments } from "@finance-pro/web/components/investments/finance-investments";
+import { FinanceSavings } from "@consumer-finance/web/components/savings/finance-savings";
+import { FinanceInvestments } from "@consumer-finance/web/components/investments/finance-investments";
 
 const api = vi.hoisted(() => ({
   savings: vi.fn(),
@@ -21,13 +21,13 @@ const api = vi.hoisted(() => ({
   addCashFlow: vi.fn(),
   allocate: vi.fn(),
 }));
-vi.mock("@finance-pro/web/lib/api/consumer-finance-savings-goals-api", () => ({
+vi.mock("@consumer-finance/web/lib/api/consumer-finance-savings-goals-api", () => ({
   consumerFinanceSavingsGoalsApi: {
     list: api.savings,
     allocate: api.allocate,
   },
 }));
-vi.mock("@finance-pro/web/lib/api/consumer-finance-investments-api", () => ({
+vi.mock("@consumer-finance/web/lib/api/consumer-finance-investments-api", () => ({
   consumerFinanceInvestmentsApi: {
     list: api.investments,
     create: api.createInvestment,
@@ -37,7 +37,7 @@ vi.mock("@finance-pro/web/lib/api/consumer-finance-investments-api", () => ({
     addCashFlow: api.addCashFlow,
   },
 }));
-vi.mock("@finance-pro/web/lib/api/consumer-finance-ledger-api", () => ({
+vi.mock("@consumer-finance/web/lib/api/consumer-finance-ledger-api", () => ({
   consumerFinanceLedgerApi: { accounts: api.accounts },
 }));
 

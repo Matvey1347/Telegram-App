@@ -1,4 +1,4 @@
-import { financeBalanceSummary } from '@finance-pro/api/ledger/finance-balance-summary';
+import { financeBalanceSummary } from '@consumer-finance/api/ledger/finance-balance-summary';
 
 describe('financeBalanceSummary', () => {
   it('sums only active accounts expressed in the profile currency', () => {

@@ -169,14 +169,14 @@ describe('TelegramBotsService runtime instances', () => {
     );
   });
 
-  it('updates logical application data and never enables a production runtime locally', async () => {
+  it('disables the runtime when the no-runtime application is selected', async () => {
     const { service, runtime } = setup();
 
     await service.switchApplication('user-1', 'bot-1', {
-      applicationType: TelegramBotApplicationType.GREETER,
+      applicationType: TelegramBotApplicationType.NONE,
     });
 
     expect(runtime.enableRuntime).not.toHaveBeenCalled();
-    expect(runtime.disableRuntime).not.toHaveBeenCalled();
+    expect(runtime.disableRuntime).toHaveBeenCalledWith('bot-1', 'LOCAL');
   });
 });

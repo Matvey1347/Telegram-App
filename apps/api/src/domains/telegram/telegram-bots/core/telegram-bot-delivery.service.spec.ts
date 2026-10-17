@@ -68,18 +68,6 @@ function setup(
     telegramBotUser: {
       update: jest.fn().mockResolvedValue({}),
     },
-    greeterSequenceStepExecution: {
-      updateMany: jest.fn().mockResolvedValue({ count: 0 }),
-    },
-    greeterBroadcastRecipient: {
-      updateMany: jest.fn().mockResolvedValue({ count: 0 }),
-      findMany: jest.fn().mockResolvedValue([]),
-      findFirst: jest.fn().mockResolvedValue(null),
-      groupBy: jest.fn().mockResolvedValue([]),
-    },
-    greeterBroadcast: {
-      updateMany: jest.fn().mockResolvedValue({ count: 0 }),
-    },
     $queryRaw: jest.fn().mockResolvedValue([{ id: delivery.id }]),
     $transaction: jest.fn((operation) =>
       typeof operation === 'function'
@@ -254,16 +242,6 @@ describe('TelegramBotDeliveryService', () => {
     );
     expect(encryption.decrypt).not.toHaveBeenCalled();
     expect(botApi.sendMessage).not.toHaveBeenCalled();
-    expect(prisma.greeterSequenceStepExecution.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({ status: 'FAILED' }),
-      }),
-    );
-    expect(prisma.greeterBroadcastRecipient.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({ status: 'FAILED' }),
-      }),
-    );
   });
 
   afterAll(() => {
@@ -441,7 +419,7 @@ describe('TelegramBotDeliveryService', () => {
         inlineButtons: [
           [
             { text: 'Website', url: 'https://example.com' },
-            { text: 'Confirm', callbackData: 'greeter:confirm' },
+            { text: 'Confirm', callbackData: 'finance:confirm' },
           ],
         ],
       },
@@ -458,7 +436,7 @@ describe('TelegramBotDeliveryService', () => {
           inline_keyboard: [
             [
               { text: 'Website', url: 'https://example.com' },
-              { text: 'Confirm', callback_data: 'greeter:confirm' },
+              { text: 'Confirm', callback_data: 'finance:confirm' },
             ],
           ],
         },
@@ -498,35 +476,6 @@ describe('TelegramBotDeliveryService', () => {
     );
   });
 
-  it('reconciles successful sequence and broadcast delivery state', async () => {
-    const { service, prisma } = setup();
-    prisma.greeterBroadcastRecipient.findMany.mockResolvedValue([
-      { broadcastId: 'broadcast-1' },
-    ]);
-    prisma.greeterBroadcastRecipient.groupBy.mockResolvedValue([
-      { status: 'SENT', _count: { _all: 1 } },
-    ]);
-
-    await service.processDue();
-
-    expect(prisma.greeterSequenceStepExecution.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({ status: 'SENT' }),
-      }),
-    );
-    expect(prisma.greeterBroadcastRecipient.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({ status: 'SENT' }),
-      }),
-    );
-    expect(prisma.greeterBroadcast.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: 'broadcast-1', status: { not: 'CANCELLED' } },
-        data: expect.objectContaining({ status: 'COMPLETED' }),
-      }),
-    );
-  });
-
   it('keeps linked work queued and honors Telegram Retry-After', async () => {
     const { service, prisma } = setup(
       jest
@@ -547,94 +496,6 @@ describe('TelegramBotDeliveryService', () => {
           status: TelegramBotDeliveryStatus.RETRY,
           scheduledAt: new Date('2026-08-08T10:05:17.000Z'),
         }),
-      }),
-    );
-    expect(prisma.greeterSequenceStepExecution.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({ status: 'QUEUED' }),
-      }),
-    );
-    expect(prisma.greeterBroadcastRecipient.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({ status: 'QUEUED' }),
-      }),
-    );
-  });
-
-  it('reconciles blocked recipients distinctly from ordinary failures', async () => {
-    const { service, prisma } = setup(
-      jest
-        .fn()
-        .mockRejectedValue(
-          new TelegramBotApiError('bot was blocked', 'BLOCKED'),
-        ),
-    );
-
-    await service.processDue();
-
-    expect(prisma.greeterSequenceStepExecution.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({ status: 'FAILED' }),
-      }),
-    );
-    expect(prisma.greeterBroadcastRecipient.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({ status: 'BLOCKED' }),
-      }),
-    );
-  });
-
-  it('does not resurrect work cancelled while Telegram send was in flight', async () => {
-    const { service, prisma } = setup();
-    prisma.telegramBotDelivery.updateMany.mockResolvedValueOnce({ count: 0 });
-
-    await service.processDue();
-
-    expect(
-      prisma.greeterSequenceStepExecution.updateMany,
-    ).not.toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({ status: 'SENT' }),
-      }),
-    );
-  });
-
-  it('marks a completed mixed-result broadcast partially failed', async () => {
-    const { service, prisma } = setup();
-    prisma.greeterBroadcastRecipient.findMany.mockResolvedValue([
-      { broadcastId: 'broadcast-1' },
-    ]);
-    prisma.greeterBroadcastRecipient.groupBy.mockResolvedValue([
-      { status: 'SENT', _count: { _all: 1 } },
-      { status: 'FAILED', _count: { _all: 1 } },
-    ]);
-    await service.processDue();
-    expect(prisma.greeterBroadcast.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({ status: 'PARTIALLY_FAILED' }),
-      }),
-    );
-  });
-
-  it('marks a terminal broadcast failed when no recipient was sent', async () => {
-    const { service, prisma } = setup(
-      jest
-        .fn()
-        .mockRejectedValue(
-          new TelegramBotApiError('invalid target', 'PERMANENT'),
-        ),
-    );
-    prisma.greeterBroadcastRecipient.findMany.mockResolvedValue([
-      { broadcastId: 'broadcast-1' },
-    ]);
-    prisma.greeterBroadcastRecipient.groupBy.mockResolvedValue([
-      { status: 'FAILED', _count: { _all: 1 } },
-      { status: 'BLOCKED', _count: { _all: 1 } },
-    ]);
-    await service.processDue();
-    expect(prisma.greeterBroadcast.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({ status: 'FAILED' }),
       }),
     );
   });

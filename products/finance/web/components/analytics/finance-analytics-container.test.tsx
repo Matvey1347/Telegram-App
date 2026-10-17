@@ -1,17 +1,17 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { FinanceAnalytics } from "@finance-pro/web/components/analytics/finance-analytics";
+import { FinanceAnalytics } from "@consumer-finance/web/components/analytics/finance-analytics";
 
 const mocks = vi.hoisted(() => ({ analytics: vi.fn() }));
 
-vi.mock("@finance-pro/web/lib/api/consumer-finance-api", () => ({
+vi.mock("@consumer-finance/web/lib/api/consumer-finance-api", () => ({
   consumerFinanceApi: { analytics: mocks.analytics },
 }));
-vi.mock("@finance-pro/web/components/analytics/finance-analytics-ai", () => ({
+vi.mock("@consumer-finance/web/components/analytics/finance-analytics-ai", () => ({
   FinanceAnalyticsAi: () => <div data-testid="analytics-ai" />,
 }));
-vi.mock("@finance-pro/web/components/analytics/finance-analytics-presentation", () => ({
+vi.mock("@consumer-finance/web/components/analytics/finance-analytics-presentation", () => ({
   AnalyticsPresentation: ({ data }: { data: { marker: string } }) => (
     <div>{data.marker}</div>
   ),

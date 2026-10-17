@@ -1,4 +1,4 @@
-import { parseFinanceFlowCallback } from '@finance-pro/bot/finance-bot-flow-callback';
+import { parseFinanceFlowCallback } from '@consumer-finance/bot/finance-bot-flow-callback';
 
 describe('parseFinanceFlowCallback', () => {
   it('keeps selection ids, revision guards, and entity actions distinct', () => {

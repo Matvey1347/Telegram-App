@@ -10,25 +10,25 @@ import { PrismaService } from '@api/prisma/prisma.service';
 import {
   assertFinanceIdempotency,
   financeRequestFingerprint,
-} from '@finance-pro/api/assets/finance-asset-idempotency';
-import { FinanceLedgerService } from '@finance-pro/api/ledger/finance-ledger.service';
-import { financeValuationSnapshot } from '@finance-pro/api/ledger/finance-transaction-valuation';
+} from '@consumer-finance/api/assets/finance-asset-idempotency';
+import { FinanceLedgerService } from '@consumer-finance/api/ledger/finance-ledger.service';
+import { financeValuationSnapshot } from '@consumer-finance/api/ledger/finance-transaction-valuation';
 import type {
   FinanceSavingsAllocationDto,
   FinanceSavingsGoalInputDto,
   FinanceSavingsReallocationDto,
-} from '@finance-pro/api/savings/finance-savings.dto';
-import { FinanceSavingsReadService } from '@finance-pro/api/savings/finance-savings-read.service';
+} from '@consumer-finance/api/savings/finance-savings.dto';
+import { FinanceSavingsReadService } from '@consumer-finance/api/savings/finance-savings-read.service';
 import {
   financeSavingsMovementSelect,
   financeSavingsMovementView,
-} from '@finance-pro/api/savings/finance-savings-view';
-import { FinanceSavingsAllocationService } from '@finance-pro/api/savings/finance-savings-allocation.service';
+} from '@consumer-finance/api/savings/finance-savings-view';
+import { FinanceSavingsAllocationService } from '@consumer-finance/api/savings/finance-savings-allocation.service';
 import {
   assertFinanceSavingsMovementStatus,
   assertFinanceSavingsReallocationStatus,
-} from '@finance-pro/api/savings/finance-savings-rules';
-import { FinanceSavingsGoalService } from '@finance-pro/api/savings/finance-savings-goal.service';
+} from '@consumer-finance/api/savings/finance-savings-rules';
+import { FinanceSavingsGoalService } from '@consumer-finance/api/savings/finance-savings-goal.service';
 
 @Injectable()
 export class FinanceSavingsService {

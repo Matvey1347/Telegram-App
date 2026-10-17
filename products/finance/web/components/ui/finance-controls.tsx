@@ -20,8 +20,8 @@ import {
   Eye,
   EyeOff,
 } from "lucide-react";
-import type { FinanceLocale } from "@finance-pro/web/components/i18n/core";
-import { financeUiTokens } from "@finance-pro/web/components/ui/finance-ui-tokens";
+import type { FinanceLocale } from "@consumer-finance/web/components/i18n/core";
+import { financeUiTokens } from "@consumer-finance/web/components/ui/finance-ui-tokens";
 
 const selectCopy = {
   en: { select: "Select", search: "Search…", empty: "No options found" },

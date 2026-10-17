@@ -14,32 +14,32 @@ import type {
   ConsumerFinanceInvestmentInput,
   ConsumerFinanceInvestmentMutation,
 } from "@telegram-system/shared";
-import { Button, Card, ErrorState, LoadingState } from "@finance-pro/web/components/ui";
-import type { FinanceLocale } from "@finance-pro/web/components/i18n/core";
-import { financeInvestmentsCopy } from "@finance-pro/web/components/i18n/investments";
-import { consumerFinanceInvestmentsApi } from "@finance-pro/web/lib/api/consumer-finance-investments-api";
-import { consumerFinanceLedgerApi } from "@finance-pro/web/lib/api/consumer-finance-ledger-api";
-import { consumerFinanceKeys } from "@finance-pro/web/lib/query/consumer-finance-query-keys";
-import { consumerFinanceRequestId } from "@finance-pro/web/lib/assets/consumer-finance-assets";
+import { Button, Card, ErrorState, LoadingState } from "@consumer-finance/web/components/ui";
+import type { FinanceLocale } from "@consumer-finance/web/components/i18n/core";
+import { financeInvestmentsCopy } from "@consumer-finance/web/components/i18n/investments";
+import { consumerFinanceInvestmentsApi } from "@consumer-finance/web/lib/api/consumer-finance-investments-api";
+import { consumerFinanceLedgerApi } from "@consumer-finance/web/lib/api/consumer-finance-ledger-api";
+import { consumerFinanceKeys } from "@consumer-finance/web/lib/query/consumer-finance-query-keys";
+import { consumerFinanceRequestId } from "@consumer-finance/web/lib/assets/consumer-finance-assets";
 import {
   invalidateConsumerAssetDerivations,
   patchInvestment,
   patchInvestmentMutation,
-} from "@finance-pro/web/lib/cache/consumer-finance-assets-cache";
-import { formatMoney } from "@finance-pro/web/lib/formatters/consumer-finance-money";
+} from "@consumer-finance/web/lib/cache/consumer-finance-assets-cache";
+import { formatMoney } from "@consumer-finance/web/lib/formatters/consumer-finance-money";
 import {
   FinanceInvestmentEditor,
   investmentTypeLabel,
-} from "@finance-pro/web/components/investments/finance-investment-editor";
+} from "@consumer-finance/web/components/investments/finance-investment-editor";
 import {
   FinanceInvestmentActionModal,
   type InvestmentAction,
   type InvestmentActionValues,
-} from "@finance-pro/web/components/investments/finance-investment-action-modal";
-import { FinanceInvestmentValuationChart } from "@finance-pro/web/components/investments/finance-investment-valuation-chart";
-import { FinanceInvestmentMetric } from "@finance-pro/web/components/investments/finance-investment-metric";
-import { FinanceInvestmentHistories } from "@finance-pro/web/components/investments/finance-investment-histories";
-import { useFinanceInvestmentHistories } from "@finance-pro/web/components/investments/use-finance-investment-histories";
+} from "@consumer-finance/web/components/investments/finance-investment-action-modal";
+import { FinanceInvestmentValuationChart } from "@consumer-finance/web/components/investments/finance-investment-valuation-chart";
+import { FinanceInvestmentMetric } from "@consumer-finance/web/components/investments/finance-investment-metric";
+import { FinanceInvestmentHistories } from "@consumer-finance/web/components/investments/finance-investment-histories";
+import { useFinanceInvestmentHistories } from "@consumer-finance/web/components/investments/use-finance-investment-histories";
 
 export function FinanceInvestmentDetailScreen({
   botId,

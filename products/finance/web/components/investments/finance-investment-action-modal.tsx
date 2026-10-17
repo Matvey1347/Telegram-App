@@ -14,15 +14,15 @@ import {
   Modal,
   Select,
   Textarea,
-} from "@finance-pro/web/components/ui";
-import type { FinanceLocale } from "@finance-pro/web/components/i18n/core";
-import { financeInvestmentsCopy } from "@finance-pro/web/components/i18n/investments";
-import { financeAccountSelectEmoji } from "@finance-pro/web/components/accounts/finance-account-select-icon";
+} from "@consumer-finance/web/components/ui";
+import type { FinanceLocale } from "@consumer-finance/web/components/i18n/core";
+import { financeInvestmentsCopy } from "@consumer-finance/web/components/i18n/investments";
+import { financeAccountSelectEmoji } from "@consumer-finance/web/components/accounts/finance-account-select-icon";
 import {
   dateInputToIso,
   todayInputValue,
-} from "@finance-pro/web/lib/assets/consumer-finance-assets";
-import { formatMoney } from "@finance-pro/web/lib/formatters/consumer-finance-money";
+} from "@consumer-finance/web/lib/assets/consumer-finance-assets";
+import { formatMoney } from "@consumer-finance/web/lib/formatters/consumer-finance-money";
 
 export type InvestmentAction =
   | "CONTRIBUTION"

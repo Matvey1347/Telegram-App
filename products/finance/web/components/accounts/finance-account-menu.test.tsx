@@ -1,9 +1,9 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { financeCoreCopy } from "@finance-pro/web/components/i18n/core";
-import { FinanceAccountMenu } from "@finance-pro/web/components/accounts/finance-account-menu";
+import { financeCoreCopy } from "@consumer-finance/web/components/i18n/core";
+import { FinanceAccountMenu } from "@consumer-finance/web/components/accounts/finance-account-menu";
 
-vi.mock("@finance-pro/web/components/hooks/use-finance-entitlements", () => ({
+vi.mock("@consumer-finance/web/components/hooks/use-finance-entitlements", () => ({
   useFinanceEntitlements: () => ({
     data: { tier: "FREE" },
     isLoading: false,

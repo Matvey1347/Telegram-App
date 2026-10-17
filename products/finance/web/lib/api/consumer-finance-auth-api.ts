@@ -8,7 +8,7 @@ import {
   consumerRequest,
   startupRequest,
   telegramBootstrapRequest,
-} from "@finance-pro/web/lib/api/consumer-finance-http";
+} from "@consumer-finance/web/lib/api/consumer-finance-http";
 
 export type ConsumerFinanceBrowserLoginChallenge = {
   token: string;

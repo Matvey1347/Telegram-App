@@ -30,7 +30,6 @@ import {
   FINANCE_REMINDER_DELIVERY_PORT,
   type FinanceReminderDeliveryPort,
 } from './telegram-bot-delivery.ports';
-import { reconcileTerminalDeliveryBroadcasts } from './telegram-bot-delivery-broadcast-reconciliation';
 import {
   claimDueDeliveryIds,
   deliveryMatchesRuntimeScope,
@@ -156,19 +155,15 @@ export class TelegramBotDeliveryService
   async processDue() {
     const batch = await this.claimDueDeliveryBatch(DELIVERY_BATCH_SIZE);
     if (!batch) return 0;
-    const terminalDeliveryIds = [...batch.terminalDeliveryIds];
     for (const delivery of batch.deliveries) {
       try {
-        if (await this.send(delivery, batch.environment)) {
-          terminalDeliveryIds.push(delivery.id);
-        }
+        await this.send(delivery, batch.environment);
       } catch (error) {
         this.logger.warn(
           `Telegram bot delivery ${delivery.id} failed: ${sanitizeOperationalError(error)}`,
         );
       }
     }
-    await reconcileTerminalDeliveryBroadcasts(this.prisma, terminalDeliveryIds);
     return batch.deliveries.length;
   }
 
@@ -361,30 +356,6 @@ export class TelegramBotDeliveryService
           },
         });
         if (claimed.count !== 1) return false;
-        await tx.greeterSequenceStepExecution.updateMany({
-          where: {
-            deliveryId: delivery.id,
-            status: { in: ['PENDING', 'QUEUED'] },
-          },
-          data: {
-            status: 'SENT',
-            sentAt,
-            completedAt: sentAt,
-            lastError: null,
-          },
-        });
-        await tx.greeterBroadcastRecipient.updateMany({
-          where: {
-            deliveryId: delivery.id,
-            status: { in: ['PENDING', 'QUEUED'] },
-          },
-          data: {
-            status: 'SENT',
-            sentAt,
-            completedAt: sentAt,
-            lastError: null,
-          },
-        });
         return true;
       });
       if (!finalized) return false;
@@ -445,7 +416,6 @@ export class TelegramBotDeliveryService
         )
       : delivery.scheduledAt;
     const completedAt = retry ? null : new Date();
-    const recipientStatus = blocked ? 'BLOCKED' : retry ? 'QUEUED' : 'FAILED';
     const finalized = await this.prisma.$transaction(async (tx) => {
       const claimed = await tx.telegramBotDelivery.updateMany({
         where: {
@@ -462,16 +432,6 @@ export class TelegramBotDeliveryService
         },
       });
       if (claimed.count !== 1) return false;
-      await tx.greeterSequenceStepExecution.updateMany({
-        where: { deliveryId: delivery.id },
-        data: retry
-          ? { status: 'QUEUED', lastError: message }
-          : { status: 'FAILED', completedAt, lastError: message },
-      });
-      await tx.greeterBroadcastRecipient.updateMany({
-        where: { deliveryId: delivery.id },
-        data: { status: recipientStatus, completedAt, lastError: message },
-      });
       if (blocked && delivery.telegramBotUserId) {
         await tx.telegramBotUser.update({
           where: { id: delivery.telegramBotUserId },

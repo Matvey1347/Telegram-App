@@ -7,12 +7,12 @@ import {
 import {
   FINANCE_OBLIGATION_PRESENTATION,
   type FinanceObligationPresentationPort,
-} from '@finance-pro/api/obligations/finance-obligation-presentation.port';
+} from '@consumer-finance/api/obligations/finance-obligation-presentation.port';
 import {
   financeObligationDeliveryTarget,
   type FinanceObligationProfile,
-} from '@finance-pro/api/obligations/finance-obligation-context';
-import type { FinanceRegularPaymentRow } from '@finance-pro/api/obligations/regular-payments/finance-regular-payment-write';
+} from '@consumer-finance/api/obligations/finance-obligation-context';
+import type { FinanceRegularPaymentRow } from '@consumer-finance/api/obligations/regular-payments/finance-regular-payment-write';
 
 @Injectable()
 export class FinanceRegularPaymentDeliveryService {

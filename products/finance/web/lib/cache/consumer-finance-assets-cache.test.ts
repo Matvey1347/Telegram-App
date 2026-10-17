@@ -4,11 +4,11 @@ import type {
   ConsumerFinanceInvestment,
   ConsumerFinanceSavingsGoal,
 } from "@telegram-system/shared";
-import { consumerFinanceKeys } from "@finance-pro/web/lib/query/consumer-finance-query-keys";
+import { consumerFinanceKeys } from "@consumer-finance/web/lib/query/consumer-finance-query-keys";
 import {
   patchInvestmentMutation,
   patchSavingsMutation,
-} from "@finance-pro/web/lib/cache/consumer-finance-assets-cache";
+} from "@consumer-finance/web/lib/cache/consumer-finance-assets-cache";
 
 const goal: ConsumerFinanceSavingsGoal = {
   id: "trip",

@@ -1,26 +1,26 @@
 import { describe, expect, it } from "vitest";
-import { financeAccountsCopy } from "@finance-pro/web/components/i18n/accounts";
-import { financeAccountCenterCopy } from "@finance-pro/web/components/i18n/account-center";
-import { financeAnalyticsCopy } from "@finance-pro/web/components/i18n/analytics";
-import { financeAuthCopy } from "@finance-pro/web/components/i18n/auth";
-import { financeBudgetCopy } from "@finance-pro/web/components/i18n/budget";
-import { financeCategoriesCopy } from "@finance-pro/web/components/i18n/categories";
-import { financeConfirmCopy } from "@finance-pro/web/components/i18n/confirm";
+import { financeAccountsCopy } from "@consumer-finance/web/components/i18n/accounts";
+import { financeAccountCenterCopy } from "@consumer-finance/web/components/i18n/account-center";
+import { financeAnalyticsCopy } from "@consumer-finance/web/components/i18n/analytics";
+import { financeAuthCopy } from "@consumer-finance/web/components/i18n/auth";
+import { financeBudgetCopy } from "@consumer-finance/web/components/i18n/budget";
+import { financeCategoriesCopy } from "@consumer-finance/web/components/i18n/categories";
+import { financeConfirmCopy } from "@consumer-finance/web/components/i18n/confirm";
 import {
   financeCoreCopy,
   normalizeFinanceLocale,
   supportedFinanceLocales,
-} from "@finance-pro/web/components/i18n/core";
-import { financeDashboardCopy } from "@finance-pro/web/components/i18n/dashboard";
-import { financeDebtsCopy } from "@finance-pro/web/components/i18n/debts";
-import { financePlansCopy } from "@finance-pro/web/components/i18n/plans";
-import { financeRemindersCopy } from "@finance-pro/web/components/i18n/reminders";
-import { financeRegularPaymentsCopy } from "@finance-pro/web/components/i18n/regular-payments";
-import { financeTransactionsCopy } from "@finance-pro/web/components/i18n/transactions";
-import { financeTransfersCopy } from "@finance-pro/web/components/i18n/transfers";
-import { financeSettingsCopy } from "@finance-pro/web/components/i18n/settings";
-import { financeSavingsCopy } from "@finance-pro/web/components/i18n/savings";
-import { financeInvestmentsCopy } from "@finance-pro/web/components/i18n/investments";
+} from "@consumer-finance/web/components/i18n/core";
+import { financeDashboardCopy } from "@consumer-finance/web/components/i18n/dashboard";
+import { financeDebtsCopy } from "@consumer-finance/web/components/i18n/debts";
+import { financePlansCopy } from "@consumer-finance/web/components/i18n/plans";
+import { financeRemindersCopy } from "@consumer-finance/web/components/i18n/reminders";
+import { financeRegularPaymentsCopy } from "@consumer-finance/web/components/i18n/regular-payments";
+import { financeTransactionsCopy } from "@consumer-finance/web/components/i18n/transactions";
+import { financeTransfersCopy } from "@consumer-finance/web/components/i18n/transfers";
+import { financeSettingsCopy } from "@consumer-finance/web/components/i18n/settings";
+import { financeSavingsCopy } from "@consumer-finance/web/components/i18n/savings";
+import { financeInvestmentsCopy } from "@consumer-finance/web/components/i18n/investments";
 
 const namespaces = {
   core: financeCoreCopy,

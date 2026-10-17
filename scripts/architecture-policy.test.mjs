@@ -1,8 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  architecturePolicyInternals,
-  inspectArchitectureExceptionInventory,
   inspectArchitectureSource,
   resolveImport,
   staticImports,
@@ -28,22 +26,14 @@ test("extracts and resolves static imports without a TypeScript compiler", () =>
 test("rejects platform imports of product implementation", () => {
   const failures = inspectArchitectureSource(
     "apps/api/src/domains/telegram/telegram-bots/core/new-dispatcher.ts",
-    `import { FinanceCoreService } from "@finance-pro/api/catalog/finance-core.service";`,
+    `import { FinanceCoreService } from "@consumer-finance/api/catalog/finance-core.service";`,
   );
   assert.match(failures.join("\n"), /core\/platform cannot import finance/);
 });
 
-test("rejects imports between independent bot products", () => {
-  const failures = inspectArchitectureSource(
-    "products/greeter/api/new-rule.ts",
-    `import { FinanceCoreService } from "@finance-pro/api/catalog/finance-core.service";`,
-  );
-  assert.match(failures.join("\n"), /products cannot import each other/);
-});
-
 test("keeps internal Finance separate from consumer Finance", () => {
   const failures = inspectArchitectureSource(
-    "products/finance-pro/api/catalog/new-use-case.ts",
+    "products/finance/api/catalog/new-use-case.ts",
     `import { AccountsService } from "@api/domains/finance/accounts/accounts.service";`,
   );
   assert.match(failures.join("\n"), /separate products/);
@@ -51,8 +41,8 @@ test("keeps internal Finance separate from consumer Finance", () => {
 
 test("consumer Finance business does not depend on its Telegram adapter", () => {
   const failures = inspectArchitectureSource(
-    "products/finance-pro/api/ledger/new-use-case.ts",
-    `import { FinanceBotService } from "@finance-pro/bot/finance-bot.service";`,
+    "products/finance/api/ledger/new-use-case.ts",
+    `import { FinanceBotService } from "@consumer-finance/bot/finance-bot.service";`,
   );
   assert.match(
     failures.join("\n"),
@@ -62,7 +52,7 @@ test("consumer Finance business does not depend on its Telegram adapter", () => 
 
 test("rejects consumer imports of internal Finance helpers and product UI", () => {
   const file =
-    "products/finance-pro/web/components/new-screen.tsx";
+    "products/finance/web/components/new-screen.tsx";
   const failures = inspectArchitectureSource(
     file,
     `
@@ -76,7 +66,7 @@ test("rejects consumer imports of internal Finance helpers and product UI", () =
 
 test("consumer Finance owns visual components, providers, and query keys", () => {
   const failures = inspectArchitectureSource(
-    "products/finance-pro/web/components/new-screen.tsx",
+    "products/finance/web/components/new-screen.tsx",
     `
       import { Button } from "@/components/ui/primitives";
       import { IconAvatar } from "@/components/icons/icon-avatar";
@@ -91,7 +81,7 @@ test("consumer Finance owns visual components, providers, and query keys", () =>
 
 test("consumer Finance does not rely on global table presentation classes", () => {
   const failures = inspectArchitectureSource(
-    "products/finance-pro/web/components/new-table.tsx",
+    "products/finance/web/components/new-table.tsx",
     `export const table = <div className="table-scroll" />;`,
   );
   assert.match(failures.join("\n"), /Finance-owned table styles/);
@@ -99,14 +89,14 @@ test("consumer Finance does not rely on global table presentation classes", () =
 
 test("consumer Finance cannot bypass or leak its API and state boundary", () => {
   const consumerFailures = inspectArchitectureSource(
-    "products/finance-pro/web/components/new-screen.tsx",
+    "products/finance/web/components/new-screen.tsx",
     `import { accountsApi } from "@/lib/api";`,
   );
   const internalFailures = inspectArchitectureSource(
     "apps/web/src/components/features/finance/accounts/new-screen.tsx",
     `
-      import { consumerFinanceApi } from "@finance-pro/web/lib/consumer-finance-api";
-      import { ConsumerFinanceProvider } from "@finance-pro/web/provider/consumer-finance-provider";
+      import { consumerFinanceApi } from "@consumer-finance/web/lib/consumer-finance-api";
+      import { ConsumerFinanceProvider } from "@consumer-finance/web/provider/consumer-finance-provider";
     `,
   );
   assert.match(consumerFailures.join("\n"), /consumer-owned API boundary/);
@@ -215,15 +205,4 @@ test("allows product code to depend on platform adapters and shared contracts", 
     `,
   );
   assert.deepEqual(failures, []);
-});
-
-test("stale legacy import and deleted-file exceptions fail closed", () => {
-  const [edge] = architecturePolicyInternals.LEGACY_IMPORT_EXCEPTIONS.keys();
-  const separator = edge.indexOf("::");
-  const source = edge.slice(0, separator);
-  const staleEdgeFailures = inspectArchitectureSource(source, "export {};\n");
-  assert.match(staleEdgeFailures.join("\n"), /stale legacy import exception/);
-
-  const inventoryFailures = inspectArchitectureExceptionInventory([]);
-  assert.match(inventoryFailures.join("\n"), /no longer exists/);
 });

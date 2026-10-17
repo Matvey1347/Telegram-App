@@ -2,11 +2,11 @@
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { ConsumerFinanceInvestmentInput } from "@telegram-system/shared";
-import { FinanceInvestmentEditor } from "@finance-pro/web/components/investments/finance-investment-editor";
-import type { FinanceLocale } from "@finance-pro/web/components/i18n/core";
-import { consumerFinanceInvestmentsApi } from "@finance-pro/web/lib/api/consumer-finance-investments-api";
-import { consumerFinanceKeys } from "@finance-pro/web/lib/query/consumer-finance-query-keys";
-import { invalidateConsumerAssetDerivations } from "@finance-pro/web/lib/cache/consumer-finance-assets-cache";
+import { FinanceInvestmentEditor } from "@consumer-finance/web/components/investments/finance-investment-editor";
+import type { FinanceLocale } from "@consumer-finance/web/components/i18n/core";
+import { consumerFinanceInvestmentsApi } from "@consumer-finance/web/lib/api/consumer-finance-investments-api";
+import { consumerFinanceKeys } from "@consumer-finance/web/lib/query/consumer-finance-query-keys";
+import { invalidateConsumerAssetDerivations } from "@consumer-finance/web/lib/cache/consumer-finance-assets-cache";
 
 export function FinanceInvestmentCreateModal({
   botId,

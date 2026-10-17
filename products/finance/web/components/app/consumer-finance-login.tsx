@@ -3,11 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Send } from "lucide-react";
-import { Button, ErrorState, LoadingState, WaitingState } from "@finance-pro/web/components/ui";
-import { consumerFinanceAuthApi } from "@finance-pro/web/lib/api/consumer-finance-auth-api";
-import { consumerFinanceKeys } from "@finance-pro/web/lib/query/consumer-finance-query-keys";
-import { normalizeFinanceLocale } from "@finance-pro/web/components/i18n/core";
-import { financeAuthCopy } from "@finance-pro/web/components/i18n/auth";
+import { Button, ErrorState, LoadingState, WaitingState } from "@consumer-finance/web/components/ui";
+import { consumerFinanceAuthApi } from "@consumer-finance/web/lib/api/consumer-finance-auth-api";
+import { consumerFinanceKeys } from "@consumer-finance/web/lib/query/consumer-finance-query-keys";
+import { normalizeFinanceLocale } from "@consumer-finance/web/components/i18n/core";
+import { financeAuthCopy } from "@consumer-finance/web/components/i18n/auth";
 
 /** Browser authentication is delegated to the API so Telegram verifies identity server-side. */
 export function ConsumerFinanceLogin({

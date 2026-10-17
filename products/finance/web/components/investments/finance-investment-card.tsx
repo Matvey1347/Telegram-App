@@ -12,11 +12,11 @@ import {
   Button,
   Card,
   FinanceCardActionsMenu,
-} from "@finance-pro/web/components/ui";
-import type { FinanceLocale } from "@finance-pro/web/components/i18n/core";
-import { financeInvestmentsCopy } from "@finance-pro/web/components/i18n/investments";
-import { investmentTypeLabel } from "@finance-pro/web/components/investments/finance-investment-editor";
-import { formatMoney } from "@finance-pro/web/lib/formatters/consumer-finance-money";
+} from "@consumer-finance/web/components/ui";
+import type { FinanceLocale } from "@consumer-finance/web/components/i18n/core";
+import { financeInvestmentsCopy } from "@consumer-finance/web/components/i18n/investments";
+import { investmentTypeLabel } from "@consumer-finance/web/components/investments/finance-investment-editor";
+import { formatMoney } from "@consumer-finance/web/lib/formatters/consumer-finance-money";
 
 export function FinanceInvestmentCard({
   investment,

@@ -15,25 +15,17 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
-      "@finance-pro/web/components": path.resolve(
+      "@consumer-finance/web/components": path.resolve(
         __dirname,
-        "../../products/finance-pro/web/components",
+        "../../products/finance/web/components",
       ),
-      "@finance-pro/web/lib": path.resolve(
+      "@consumer-finance/web/lib": path.resolve(
         __dirname,
-        "../../products/finance-pro/web/lib",
+        "../../products/finance/web/lib",
       ),
-      "@finance-pro/web/provider": path.resolve(
+      "@consumer-finance/web/provider": path.resolve(
         __dirname,
-        "../../products/finance-pro/web/provider",
-      ),
-      "@greeter/web/components": path.resolve(
-        __dirname,
-        "../../products/greeter/web/components",
-      ),
-      "@greeter/web/lib": path.resolve(
-        __dirname,
-        "../../products/greeter/web/lib",
+        "../../products/finance/web/provider",
       ),
     },
   },

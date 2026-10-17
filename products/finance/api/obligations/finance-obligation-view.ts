@@ -3,8 +3,8 @@ import {
   financeAccountEmoji,
   financeCategoryEmoji,
   financeIconPresentation,
-} from "@finance-pro/api/catalog/finance-entity-emoji";
-import { financeRegularPaymentIsDue } from "@finance-pro/api/obligations/finance-obligation-date";
+} from "@consumer-finance/api/catalog/finance-entity-emoji";
+import { financeRegularPaymentIsDue } from "@consumer-finance/api/obligations/finance-obligation-date";
 
 const accountSelect = {
   id: true,

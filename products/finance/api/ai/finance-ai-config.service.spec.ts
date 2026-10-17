@@ -1,4 +1,4 @@
-import { FinanceAiConfigService } from '@finance-pro/api/ai/finance-ai-config.service';
+import { FinanceAiConfigService } from '@consumer-finance/api/ai/finance-ai-config.service';
 
 describe('FinanceAiConfigService global provider credential', () => {
   function setup(existing: Record<string, unknown> | null = null) {

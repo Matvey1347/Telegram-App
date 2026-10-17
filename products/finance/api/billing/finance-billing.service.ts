@@ -6,12 +6,12 @@ import {
 import type { ConsumerBillingCatalog } from '@telegram-system/shared';
 import { PrismaService } from '@api/prisma/prisma.service';
 import { BotBillingService } from '@api/domains/telegram/bot-billing/bot-billing.service';
-import { FinanceEntitlementService } from '@finance-pro/api/billing/finance-entitlement.service';
+import { FinanceEntitlementService } from '@consumer-finance/api/billing/finance-entitlement.service';
 import {
   FINANCE_PRODUCT_DEFINITIONS,
   FINANCE_TIERS,
   type FinanceTier,
-} from '@finance-pro/api/billing/finance-product-definition';
+} from '@consumer-finance/api/billing/finance-product-definition';
 
 @Injectable()
 export class FinanceBillingService {

@@ -3,8 +3,6 @@ import { TelegramBotApplicationType } from '@prisma/client';
 import { TelegramBotApiClient } from '@api/telegram/shared/bot/telegram-bot-api.client';
 import {
   TELEGRAM_BOT_FINANCE_PRESENTATION,
-  TELEGRAM_BOT_SIMPLE_FINANCE_PRESENTATION,
-  TELEGRAM_BOT_GREETER_PRESENTATION,
   type TelegramBotApplicationPresentation,
 } from './telegram-bot-application.ports';
 
@@ -12,11 +10,8 @@ import {
 export class TelegramBotRuntimePresentationService {
   constructor(
     private readonly botApi: TelegramBotApiClient,
-    @Inject(TELEGRAM_BOT_GREETER_PRESENTATION)
-    private readonly greeter: TelegramBotApplicationPresentation,
     @Inject(TELEGRAM_BOT_FINANCE_PRESENTATION)
     private readonly finance: TelegramBotApplicationPresentation,
-    @Inject(TELEGRAM_BOT_SIMPLE_FINANCE_PRESENTATION) private readonly simpleFinance: TelegramBotApplicationPresentation,
   ) {}
 
   async reconcile(
@@ -50,9 +45,6 @@ export class TelegramBotRuntimePresentationService {
   application(applicationType: TelegramBotApplicationType) {
     if (applicationType === TelegramBotApplicationType.FINANCE)
       return this.finance;
-    if (applicationType === TelegramBotApplicationType.SIMPLE_FINANCE) return this.simpleFinance;
-    if (applicationType === TelegramBotApplicationType.GREETER)
-      return this.greeter;
     return null;
   }
 }

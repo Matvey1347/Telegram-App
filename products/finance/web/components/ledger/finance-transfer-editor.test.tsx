@@ -5,14 +5,14 @@ import type {
   ConsumerFinanceAccount,
   ConsumerFinanceTransfer,
 } from "@telegram-system/shared";
-import { FinanceTransferEditor } from "@finance-pro/web/components/ledger/finance-transfer-editor";
+import { FinanceTransferEditor } from "@consumer-finance/web/components/ledger/finance-transfer-editor";
 
 const apiMocks = vi.hoisted(() => ({
   createTransfer: vi.fn(),
   updateTransfer: vi.fn(),
 }));
 
-vi.mock("@finance-pro/web/lib/api/consumer-finance-api", () => ({
+vi.mock("@consumer-finance/web/lib/api/consumer-finance-api", () => ({
   consumerFinanceApi: apiMocks,
 }));
 

@@ -6,13 +6,13 @@ import type {
   ConsumerFinanceImportResult,
 } from '@telegram-system/shared';
 import type { TelegramBotDeliveryWriterPort } from '@api/domains/telegram/telegram-bots/core/telegram-bot-delivery-writer';
-import type { FinanceObligationPresentationPort } from '@finance-pro/api/obligations/finance-obligation-presentation.port';
-import { financeRequestFingerprint } from '@finance-pro/api/assets/finance-asset-idempotency';
-import type { FinanceImportRates } from '@finance-pro/api/portability/finance-import-rates';
-import { pruneFinanceRollbackSnapshots } from '@finance-pro/api/portability/finance-portability-history';
-import { writeFinanceAssetImport } from '@finance-pro/api/portability/finance-import-asset-writer';
-import { writeFinanceObligationImport } from '@finance-pro/api/portability/finance-import-obligation-writer';
-import { clearFinanceDataForReplacement } from '@finance-pro/api/portability/finance-import-replace';
+import type { FinanceObligationPresentationPort } from '@consumer-finance/api/obligations/finance-obligation-presentation.port';
+import { financeRequestFingerprint } from '@consumer-finance/api/assets/finance-asset-idempotency';
+import type { FinanceImportRates } from '@consumer-finance/api/portability/finance-import-rates';
+import { pruneFinanceRollbackSnapshots } from '@consumer-finance/api/portability/finance-portability-history';
+import { writeFinanceAssetImport } from '@consumer-finance/api/portability/finance-import-asset-writer';
+import { writeFinanceObligationImport } from '@consumer-finance/api/portability/finance-import-obligation-writer';
+import { clearFinanceDataForReplacement } from '@consumer-finance/api/portability/finance-import-replace';
 
 type Progress = (
   item: ConsumerFinanceImportProgress,

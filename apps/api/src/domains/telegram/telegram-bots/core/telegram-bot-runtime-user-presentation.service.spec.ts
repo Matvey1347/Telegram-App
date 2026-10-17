@@ -81,12 +81,12 @@ describe('TelegramBotRuntimeUserPresentationService', () => {
     expect(botApi.setChatMenuButton).toHaveBeenCalledTimes(2);
   });
 
-  it('does no per-user work for applications that never create chat overrides', async () => {
+  it('does no per-user work for applications with no presentation overrides', async () => {
     await expect(
       service.reconcile({
         runtimeId: 'runtime-1',
-        botIntegrationId: 'greeter-1',
-        applicationType: TelegramBotApplicationType.GREETER,
+        botIntegrationId: 'none-1',
+        applicationType: TelegramBotApplicationType.NONE,
         token: 'token',
       }),
     ).resolves.toEqual({ attempted: 0, failed: 0 });

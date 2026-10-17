@@ -8,7 +8,7 @@ const bot: TelegramBot = {
   workspaceId: "workspace-1",
   label: "Admissions bot",
   isActive: true,
-  applicationType: "GREETER",
+  applicationType: "FINANCE",
   channelAccessSummary: {
     totalChannels: 1,
     canPost: 1,
@@ -40,9 +40,9 @@ const bot: TelegramBot = {
       eligible: true,
     },
     {
-      type: "GREETER",
-      label: "Greeter",
-      description: "Welcome new users.",
+      type: "FINANCE",
+      label: "Finance",
+      description: "Manage consumer finance.",
       availability: "GLOBAL",
       eligible: true,
     },
@@ -67,7 +67,7 @@ describe("SwitchApplicationForm", () => {
       ),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /switch to greeter/i }),
+      screen.getByRole("button", { name: /switch to finance/i }),
     ).toBeDisabled();
   });
 });

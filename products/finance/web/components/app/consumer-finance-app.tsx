@@ -2,27 +2,27 @@
 
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ConsumerFinanceScreens } from "@finance-pro/web/components/app/consumer-finance-screens";
-import { useTelegramMiniAppBootstrap } from "@finance-pro/web/components/hooks/use-telegram-mini-app-bootstrap";
-import { consumerFinanceAuthApi } from "@finance-pro/web/lib/api/consumer-finance-auth-api";
-import { consumerFinanceProfileApi } from "@finance-pro/web/lib/api/consumer-finance-profile-api";
-import { consumerFinanceKeys } from "@finance-pro/web/lib/query/consumer-finance-query-keys";
+import { ConsumerFinanceScreens } from "@consumer-finance/web/components/app/consumer-finance-screens";
+import { useTelegramMiniAppBootstrap } from "@consumer-finance/web/components/hooks/use-telegram-mini-app-bootstrap";
+import { consumerFinanceAuthApi } from "@consumer-finance/web/lib/api/consumer-finance-auth-api";
+import { consumerFinanceProfileApi } from "@consumer-finance/web/lib/api/consumer-finance-profile-api";
+import { consumerFinanceKeys } from "@consumer-finance/web/lib/query/consumer-finance-query-keys";
 import {
   ConsumerFinanceBootstrapError,
   ConsumerFinanceLogin,
-} from "@finance-pro/web/components/app/consumer-finance-login";
+} from "@consumer-finance/web/components/app/consumer-finance-login";
 import type {
   ConsumerFinanceProfile,
   ConsumerFinanceSessionState,
 } from "@telegram-system/shared";
-import { financeCoreCopy, normalizeFinanceLocale } from "@finance-pro/web/components/i18n/core";
-import { FinanceMiniAppShell } from "@finance-pro/web/components/app/finance-mini-app-shell";
-import { FinanceWebAppShell } from "@finance-pro/web/components/app/finance-web-app-shell";
-import { LoadingState } from "@finance-pro/web/components/ui";
+import { financeCoreCopy, normalizeFinanceLocale } from "@consumer-finance/web/components/i18n/core";
+import { FinanceMiniAppShell } from "@consumer-finance/web/components/app/finance-mini-app-shell";
+import { FinanceWebAppShell } from "@consumer-finance/web/components/app/finance-web-app-shell";
+import { LoadingState } from "@consumer-finance/web/components/ui";
 import {
   FinanceVisualContextProvider,
   financeVisualContextForScreen,
-} from "@finance-pro/web/components/ui/finance-visual-context";
+} from "@consumer-finance/web/components/ui/finance-visual-context";
 import {
   consumerFinanceAccountUrl,
   consumerFinanceInvestmentUrl,
@@ -37,10 +37,10 @@ import {
   readConsumerFinanceScreen,
   type ConsumerFinanceAction,
   type ConsumerFinanceScreen,
-} from "@finance-pro/web/components/app/consumer-finance-navigation";
-import { useFinanceBotBranding } from "@finance-pro/web/components/hooks/use-finance-bot-branding";
-import { FinanceAssistantDrawer } from "@finance-pro/web/components/assistant/finance-assistant-drawer";
-import { FinanceOnboardingTour } from "@finance-pro/web/components/onboarding/finance-onboarding-tour";
+} from "@consumer-finance/web/components/app/consumer-finance-navigation";
+import { useFinanceBotBranding } from "@consumer-finance/web/components/hooks/use-finance-bot-branding";
+import { FinanceAssistantDrawer } from "@consumer-finance/web/components/assistant/finance-assistant-drawer";
+import { FinanceOnboardingTour } from "@consumer-finance/web/components/onboarding/finance-onboarding-tour";
 
 const subscribeToStaticBrowserState = () => () => undefined;
 

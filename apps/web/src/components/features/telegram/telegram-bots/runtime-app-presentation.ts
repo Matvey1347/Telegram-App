@@ -1,12 +1,10 @@
 import type { TelegramBotApplicationType } from "@telegram-system/shared";
 
-const presentation: Record<TelegramBotApplicationType, { label: string; emoji: string }> = {
+const presentation = {
   NONE: { label: "Access", emoji: "🤖" },
-  GREETER: { label: "Greeter", emoji: "👋" },
   FINANCE: { label: "Finance", emoji: "💰" },
-  SIMPLE_FINANCE: { label: "Finance Pro", emoji: "👛" },
-};
+} as const;
 
 export function runtimeAppPresentation(type: TelegramBotApplicationType) {
-  return presentation[type];
+  return presentation[type as keyof typeof presentation] ?? presentation.NONE;
 }

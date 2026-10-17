@@ -2,8 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ArrowDown, ArrowLeftRight, ArrowUp, Plus, X } from "lucide-react";
-import type { FinanceCoreCopy } from "@finance-pro/web/components/i18n/core";
-import type { ConsumerFinanceAction } from "@finance-pro/web/components/app/consumer-finance-navigation";
+import type { FinanceCoreCopy } from "@consumer-finance/web/components/i18n/core";
+import type { ConsumerFinanceAction } from "@consumer-finance/web/components/app/consumer-finance-navigation";
 
 export function ConsumerFinanceActionLauncher({
   copy,

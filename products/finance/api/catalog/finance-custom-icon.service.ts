@@ -4,7 +4,7 @@ import {
   B2ObjectStorageService,
   isSupportedImmutableImageMimeType,
 } from '@api/common/object-storage/b2-object-storage.service';
-import { CreateFinanceCustomIconDto } from '@finance-pro/api/catalog/finance-custom-icon.dto';
+import { CreateFinanceCustomIconDto } from '@consumer-finance/api/catalog/finance-custom-icon.dto';
 
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 

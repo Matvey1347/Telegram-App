@@ -2,8 +2,8 @@ import {
   supportedFinanceLocales,
   type FinanceCoreCopy,
   type FinanceLocale,
-} from "@finance-pro/web/components/i18n/core";
-import { Select } from "@finance-pro/web/components/ui/finance-controls";
+} from "@consumer-finance/web/components/i18n/core";
+import { Select } from "@consumer-finance/web/components/ui/finance-controls";
 
 const FLAGS: Record<FinanceLocale, string> = {
   uk: "🇺🇦",

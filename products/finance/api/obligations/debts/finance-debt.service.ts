@@ -11,26 +11,26 @@ import {
   TELEGRAM_BOT_DELIVERY_WRITER,
   type TelegramBotDeliveryWriterPort,
 } from '@api/domains/telegram/telegram-bots/core/telegram-bot-delivery-writer';
-import { FinanceLedgerService } from '@finance-pro/api/ledger/finance-ledger.service';
+import { FinanceLedgerService } from '@consumer-finance/api/ledger/finance-ledger.service';
 import {
   financeTransactionSelect,
   financeTransactionView,
-} from '@finance-pro/api/ledger/finance-transaction-view';
+} from '@consumer-finance/api/ledger/finance-transaction-view';
 import {
   FINANCE_OBLIGATION_PRESENTATION,
   type FinanceObligationPresentationPort,
-} from '@finance-pro/api/obligations/finance-obligation-presentation.port';
+} from '@consumer-finance/api/obligations/finance-obligation-presentation.port';
 import type {
   FinanceDebtInputDto,
   FinanceDebtQueryDto,
   FinanceSharedExpenseInputDto,
-} from '@finance-pro/api/obligations/finance-obligation.dto';
+} from '@consumer-finance/api/obligations/finance-obligation.dto';
 import {
   financeObligationDeliveryTarget,
   financeObligationProfile,
-} from '@finance-pro/api/obligations/finance-obligation-context';
-import { financeObligationDate } from '@finance-pro/api/obligations/finance-obligation-date';
-import { financeDebtSelect, financeDebtView } from '@finance-pro/api/obligations/finance-obligation-view';
+} from '@consumer-finance/api/obligations/finance-obligation-context';
+import { financeObligationDate } from '@consumer-finance/api/obligations/finance-obligation-date';
+import { financeDebtSelect, financeDebtView } from '@consumer-finance/api/obligations/finance-obligation-view';
 
 @Injectable()
 export class FinanceDebtService {

@@ -15,14 +15,14 @@ import {
   Input,
   LoadingState,
   Select,
-} from "@finance-pro/web/components/ui";
-import { consumerFinanceLedgerApi } from "@finance-pro/web/lib/api/consumer-finance-ledger-api";
-import { consumerFinanceKeys } from "@finance-pro/web/lib/query/consumer-finance-query-keys";
-import { patchConsumerFinanceAccountCache } from "@finance-pro/web/lib/cache/consumer-finance-cache";
-import { type FinanceLocale } from "@finance-pro/web/components/i18n/core";
-import { financeAccountsCopy } from "@finance-pro/web/components/i18n/accounts";
-import { IconPicker } from "@finance-pro/web/components/ui/finance-icon-picker";
-import { FinanceCurrencySelect } from "@finance-pro/web/components/ui/finance-currency-select";
+} from "@consumer-finance/web/components/ui";
+import { consumerFinanceLedgerApi } from "@consumer-finance/web/lib/api/consumer-finance-ledger-api";
+import { consumerFinanceKeys } from "@consumer-finance/web/lib/query/consumer-finance-query-keys";
+import { patchConsumerFinanceAccountCache } from "@consumer-finance/web/lib/cache/consumer-finance-cache";
+import { type FinanceLocale } from "@consumer-finance/web/components/i18n/core";
+import { financeAccountsCopy } from "@consumer-finance/web/components/i18n/accounts";
+import { IconPicker } from "@consumer-finance/web/components/ui/finance-icon-picker";
+import { FinanceCurrencySelect } from "@consumer-finance/web/components/ui/finance-currency-select";
 
 const TYPES: ConsumerFinanceAccountType[] = [
   "CASH",

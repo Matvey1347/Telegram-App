@@ -10,18 +10,18 @@ import {
   AI_MODEL_POLICY,
   priceAiUsage,
 } from '@api/domains/telegram/telegram-bots/core/ai-usage-cost';
-import { FinanceAiCredentialService } from '@finance-pro/api/ai/finance-ai-credential.service';
+import { FinanceAiCredentialService } from '@consumer-finance/api/ai/finance-ai-credential.service';
 import {
   requestFinanceStructuredResponse,
   type FinanceAiResponseUsage,
-} from '@finance-pro/api/ai/finance-ai-responses.client';
+} from '@consumer-finance/api/ai/finance-ai-responses.client';
 import {
   assertFinanceAiOperation,
   financeAiOperationItemSchema,
   normalizeFinanceAiOperation,
   type AiFinanceOperationOutput,
-} from '@finance-pro/api/ai/finance-ai.provider';
-import { partialJsonStringField } from '@finance-pro/api/ai/finance-ai-json-stream';
+} from '@consumer-finance/api/ai/finance-ai.provider';
+import { partialJsonStringField } from '@consumer-finance/api/ai/finance-ai-json-stream';
 
 const analyticsInsightSchema = {
   type: 'object',

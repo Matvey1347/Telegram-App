@@ -4,7 +4,7 @@ import type {
   CurrencyConversionService,
   PreparedCurrencyRateSource,
 } from '@api/common/currency-conversion.service';
-import { financeRateDateForWrite } from '@finance-pro/api/ledger/finance-transaction-valuation';
+import { financeRateDateForWrite } from '@consumer-finance/api/ledger/finance-transaction-valuation';
 import type { HistoricalExchangeRateService } from '@api/common/historical-exchange-rate.service';
 
 type RateValue = { rate: string; rateAt: Date };

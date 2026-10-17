@@ -4,25 +4,25 @@ import { useState } from "react";
 import { Bot } from "lucide-react";
 import type { ConsumerFinanceProfile } from "@telegram-system/shared";
 import Image from "next/image";
-import type { FinanceCoreCopy } from "@finance-pro/web/components/i18n/core";
-import type { FinanceLocale } from "@finance-pro/web/components/i18n/core";
+import type { FinanceCoreCopy } from "@consumer-finance/web/components/i18n/core";
+import type { FinanceLocale } from "@consumer-finance/web/components/i18n/core";
 import type {
   ConsumerFinanceAction,
   ConsumerFinanceScreen,
-} from "@finance-pro/web/components/app/consumer-finance-navigation";
-import { financeScreenLabel } from "@finance-pro/web/components/app/consumer-finance-navigation";
-import { ConsumerFinanceActionLauncher } from "@finance-pro/web/components/app/consumer-finance-action-launcher";
-import { FinanceLanguageSelect } from "@finance-pro/web/components/ui/finance-language-select";
+} from "@consumer-finance/web/components/app/consumer-finance-navigation";
+import { financeScreenLabel } from "@consumer-finance/web/components/app/consumer-finance-navigation";
+import { ConsumerFinanceActionLauncher } from "@consumer-finance/web/components/app/consumer-finance-action-launcher";
+import { FinanceLanguageSelect } from "@consumer-finance/web/components/ui/finance-language-select";
 import {
   FINANCE_NAVIGATION_GROUPS,
   FinanceNavigationButton,
   FinanceNavigationGroupHeader,
   isFinanceNavigationActive,
-} from "@finance-pro/web/components/app/finance-navigation-items";
-import { FinanceAccountMenu } from "@finance-pro/web/components/accounts/finance-account-menu";
-import { FinanceMobileNavigation } from "@finance-pro/web/components/app/finance-mobile-navigation";
-import styles from "@finance-pro/web/components/app/finance-navigation-groups.module.css";
-import financeStyles from "@finance-pro/web/components/ui/finance-ui.module.css";
+} from "@consumer-finance/web/components/app/finance-navigation-items";
+import { FinanceAccountMenu } from "@consumer-finance/web/components/accounts/finance-account-menu";
+import { FinanceMobileNavigation } from "@consumer-finance/web/components/app/finance-mobile-navigation";
+import styles from "@consumer-finance/web/components/app/finance-navigation-groups.module.css";
+import financeStyles from "@consumer-finance/web/components/ui/finance-ui.module.css";
 
 export function FinanceWebAppShell({
   botId,

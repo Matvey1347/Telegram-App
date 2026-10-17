@@ -6,7 +6,7 @@ import {
 } from "./bot-billing-metrics-section";
 
 describe("BotBillingMetricsSection", () => {
-  it("renders the generic owner metrics required by GREETER", () => {
+  it("renders generic owner metrics", () => {
     render(
       <BillingMetrics
         data={{

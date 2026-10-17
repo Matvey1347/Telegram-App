@@ -1,9 +1,9 @@
 @import "tailwindcss";
 
-/* Finance Pro is a separate product, but its Mini App is rendered by this
+/* Consumer Finance is a separate product, but its Mini App is rendered by this
  * Next host. Without this source Tailwind v4 omits its utility classes from
  * the generated stylesheet (notably rounded controls and switch transforms). */
-@source "../../../../products/finance-pro/web";
+@source "../../../../products/finance/web";
 
 :root {
   --background: #0a0a0a;

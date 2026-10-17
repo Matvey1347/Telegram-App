@@ -2,7 +2,7 @@ import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@n
 import { IsOptional, IsString, MinLength } from 'class-validator';
 import { CurrentUser, type JwtUser } from '@api/common/current-user.decorator';
 import { JwtAuthGuard } from '@api/common/jwt-auth.guard';
-import { FinanceAiConfigService } from '@finance-pro/api/ai/finance-ai-config.service';
+import { FinanceAiConfigService } from '@consumer-finance/api/ai/finance-ai-config.service';
 
 class SaveFinanceAiConfigDto {
   @IsOptional() @IsString() @MinLength(20) apiKey?: string;

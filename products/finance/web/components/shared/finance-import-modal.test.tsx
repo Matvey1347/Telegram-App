@@ -1,14 +1,14 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { FinanceImportModal } from "@finance-pro/web/components/shared/finance-import-modal";
+import { FinanceImportModal } from "@consumer-finance/web/components/shared/finance-import-modal";
 import {
   financeImportInstructions,
   financeImportTemplate,
-} from "@finance-pro/web/components/shared/finance-import-instructions";
+} from "@consumer-finance/web/components/shared/finance-import-instructions";
 
 const portability = vi.hoisted(() => ({ importData: vi.fn() }));
-vi.mock("@finance-pro/web/lib/api/consumer-finance-portability-api", () => ({
+vi.mock("@consumer-finance/web/lib/api/consumer-finance-portability-api", () => ({
   CONSUMER_FINANCE_IMPORT_MAX_BYTES: 10 * 1024 * 1024,
   importConsumerFinanceData: portability.importData,
 }));

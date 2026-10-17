@@ -3,13 +3,13 @@
 import { useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import type { ConsumerFinanceAnalytics } from "@telegram-system/shared";
-import { EmptyState } from "@finance-pro/web/components/ui";
-import { formatMoney } from "@finance-pro/web/lib/formatters/consumer-finance-money";
-import type { FinanceLocale } from "@finance-pro/web/components/i18n/core";
-import { financeAnalyticsCopy } from "@finance-pro/web/components/i18n/analytics";
-import { localizeFinanceCategory } from "@finance-pro/web/components/catalog/finance-category-i18n";
-import { IconAvatar } from "@finance-pro/web/components/ui/finance-icon-avatar";
-import { CashflowChart } from "@finance-pro/web/components/analytics/finance-cashflow-chart";
+import { EmptyState } from "@consumer-finance/web/components/ui";
+import { formatMoney } from "@consumer-finance/web/lib/formatters/consumer-finance-money";
+import type { FinanceLocale } from "@consumer-finance/web/components/i18n/core";
+import { financeAnalyticsCopy } from "@consumer-finance/web/components/i18n/analytics";
+import { localizeFinanceCategory } from "@consumer-finance/web/components/catalog/finance-category-i18n";
+import { IconAvatar } from "@consumer-finance/web/components/ui/finance-icon-avatar";
+import { CashflowChart } from "@consumer-finance/web/components/analytics/finance-cashflow-chart";
 
 export function AnalyticsPresentation({
   data,

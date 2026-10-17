@@ -1,13 +1,13 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { FinancePortabilityHistory } from "@finance-pro/web/components/portability/finance-portability-history";
+import { FinancePortabilityHistory } from "@consumer-finance/web/components/portability/finance-portability-history";
 
 const api = vi.hoisted(() => ({
   portabilityHistory: vi.fn(),
   rollbackImport: vi.fn(),
 }));
-vi.mock("@finance-pro/web/lib/api/consumer-finance-api", () => ({
+vi.mock("@consumer-finance/web/lib/api/consumer-finance-api", () => ({
   consumerFinanceApi: api,
 }));
 

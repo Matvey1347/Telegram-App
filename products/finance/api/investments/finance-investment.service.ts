@@ -10,25 +10,25 @@ import { PrismaService } from '@api/prisma/prisma.service';
 import {
   assertFinanceIdempotency,
   financeRequestFingerprint,
-} from '@finance-pro/api/assets/finance-asset-idempotency';
-import { FinanceLedgerService } from '@finance-pro/api/ledger/finance-ledger.service';
-import { financeValuationSnapshot } from '@finance-pro/api/ledger/finance-transaction-valuation';
+} from '@consumer-finance/api/assets/finance-asset-idempotency';
+import { FinanceLedgerService } from '@consumer-finance/api/ledger/finance-ledger.service';
+import { financeValuationSnapshot } from '@consumer-finance/api/ledger/finance-transaction-valuation';
 import type {
   FinanceInvestmentCashFlowDto,
   FinanceInvestmentCloseDto,
   FinanceInvestmentInputDto,
   FinanceInvestmentUpdateDto,
   FinanceInvestmentValuationDto,
-} from '@finance-pro/api/investments/finance-investment.dto';
-import { FinanceInvestmentReadService } from '@finance-pro/api/investments/finance-investment-read.service';
+} from '@consumer-finance/api/investments/finance-investment.dto';
+import { FinanceInvestmentReadService } from '@consumer-finance/api/investments/finance-investment-read.service';
 import {
   financeInvestmentCashFlowSelect,
   financeInvestmentCashFlowView,
   financeInvestmentValuationSelect,
   financeInvestmentValuationView,
-} from '@finance-pro/api/investments/finance-investment-view';
-import { FinanceInvestmentValuationService } from '@finance-pro/api/investments/finance-investment-valuation.service';
-import { FinanceInvestmentCashFlowService } from '@finance-pro/api/investments/finance-investment-cash-flow.service';
+} from '@consumer-finance/api/investments/finance-investment-view';
+import { FinanceInvestmentValuationService } from '@consumer-finance/api/investments/finance-investment-valuation.service';
+import { FinanceInvestmentCashFlowService } from '@consumer-finance/api/investments/finance-investment-cash-flow.service';
 
 type InvestmentWriteRow = {
   currency: string;

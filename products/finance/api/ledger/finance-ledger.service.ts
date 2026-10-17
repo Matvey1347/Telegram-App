@@ -11,27 +11,27 @@ import {
 } from '@prisma/client';
 import { PrismaService } from '@api/prisma/prisma.service';
 import { CurrencyConversionService } from '@api/common/currency-conversion.service';
-import { FINANCE_UNDO_TTL_MS } from '@finance-pro/api/catalog/finance-defaults';
-import { financeAccountView } from '@finance-pro/api/catalog/finance-account-view';
+import { FINANCE_UNDO_TTL_MS } from '@consumer-finance/api/catalog/finance-defaults';
+import { financeAccountView } from '@consumer-finance/api/catalog/finance-account-view';
 import {
   financeHistoryDateRange,
   financeOccurredAtFilter,
-} from '@finance-pro/api/ledger/finance-history-date-range';
-import { FinanceAnalyticsService } from '@finance-pro/api/analytics/finance-analytics.service';
+} from '@consumer-finance/api/ledger/finance-history-date-range';
+import { FinanceAnalyticsService } from '@consumer-finance/api/analytics/finance-analytics.service';
 import {
   financeTransactionSearchFilter,
   financeTransactionSelect,
   financeTransactionView,
-} from '@finance-pro/api/ledger/finance-transaction-view';
+} from '@consumer-finance/api/ledger/finance-transaction-view';
 import type {
   CreateFinanceTransactionDto,
   FinanceHistoryQueryDto,
   UpdateFinanceTransactionDto,
-} from '@finance-pro/api/http/finance.dto';
+} from '@consumer-finance/api/http/finance.dto';
 import {
   financeAccountEmoji,
   financeIconPresentation,
-} from '@finance-pro/api/catalog/finance-entity-emoji';
+} from '@consumer-finance/api/catalog/finance-entity-emoji';
 import {
   financeDefaultCurrencySnapshot,
   financeValuationSnapshot,
@@ -41,24 +41,24 @@ import {
   type FinanceProfileContext,
   type FinanceTransactionRateSource,
   type FinanceTransactionWriteContext,
-} from '@finance-pro/api/ledger/finance-transaction-valuation';
+} from '@consumer-finance/api/ledger/finance-transaction-valuation';
 import {
   normalizeFinanceMerchant,
   writeFinanceMerchantMapping,
-} from '@finance-pro/api/ledger/finance-merchant-mapping';
+} from '@consumer-finance/api/ledger/finance-merchant-mapping';
 import {
   assertFinanceTransactionMutable,
   assertFinanceTransactionRemoved,
-} from '@finance-pro/api/ledger/finance-generated-transaction-policy';
+} from '@consumer-finance/api/ledger/finance-generated-transaction-policy';
 import {
   findLinkedInvestmentTransaction,
   lockLinkedInvestment,
   removeLinkedInvestmentTransaction,
   refreshLinkedInvestmentTransaction,
   syncLinkedInvestmentEdit,
-} from '@finance-pro/api/ledger/finance-investment-transaction-mutation';
-import { FinanceAssetSummaryService } from '@finance-pro/api/assets/finance-asset-summary.service';
-import { financeLedgerStats } from '@finance-pro/api/ledger/finance-ledger-stats';
+} from '@consumer-finance/api/ledger/finance-investment-transaction-mutation';
+import { FinanceAssetSummaryService } from '@consumer-finance/api/assets/finance-asset-summary.service';
+import { financeLedgerStats } from '@consumer-finance/api/ledger/finance-ledger-stats';
 @Injectable()
 export class FinanceLedgerService {
   constructor(

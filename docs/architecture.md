@@ -12,7 +12,7 @@ The current architecture is service-oriented rather than heavily layered: contro
 - `apps/api/src/domains/telegram/telegram-channels`: main Telegram channel domain service. Owns import, sync, managed posts, stats, and channel-facing orchestration.
 - `apps/api/src/telegram/shared`: Telegram adapter layer. MTProto/Bot API specifics, parsing, entity resolution, formatting, and helper utilities belong here.
 - `apps/api/src/domains/telegram/telegram-user-accounts` and `apps/api/src/domains/telegram/telegram-bots`: manage Telegram identities and credentials, then hand channel operations off to channel services.
-- `telegram-bots` is divided into `core`, `greeter`, and `finance`; one Nest module remains the composition root so shared runtime and delivery providers are not duplicated.
+- `telegram-bots` is divided into `core` and consumer Finance composition; one Nest module remains the composition root so shared runtime and delivery providers are not duplicated.
 - Other feature modules keep their own service/controller boundaries inside the matching domain group and use shared workspace/auth primitives.
 - `apps/api/src/common`: workspace resolution, auth helpers, security utilities, caching, and shared backend primitives.
 
@@ -44,7 +44,7 @@ Mutable metadata such as `username`, `inviteLink`, `accessMode`, `requiresJoinRe
 ## Telegram bot runtime environments
 
 `TelegramBotIntegration` is the logical product bot. It owns the workspace,
-application type, Finance/Greeter configuration, Telegram users, profiles and
+application type, Finance configuration, Telegram users, profiles and
 other business data shared by every environment. BotFather credentials and
 Telegram infrastructure state belong to `TelegramBotRuntimeInstance` instead.
 

@@ -20,24 +20,24 @@ import {
   FinanceCardActionsMenu,
   LoadingState,
   Select,
-} from "@finance-pro/web/components/ui";
-import { IconAvatar } from "@finance-pro/web/components/ui/finance-icon-avatar";
-import { FinanceDebtCreateModal } from "@finance-pro/web/components/obligations/finance-debt-create-modal";
-import { FinanceDebtEditor } from "@finance-pro/web/components/obligations/finance-debt-editor";
-import { FinanceDebtSettlementModal } from "@finance-pro/web/components/obligations/finance-debt-settlement-modal";
-import { FinanceConfirmModal } from "@finance-pro/web/components/shared/finance-confirm-modal";
-import { consumerFinanceObligationsApi } from "@finance-pro/web/lib/api/consumer-finance-obligations-api";
-import { consumerFinanceKeys } from "@finance-pro/web/lib/query/consumer-finance-query-keys";
+} from "@consumer-finance/web/components/ui";
+import { IconAvatar } from "@consumer-finance/web/components/ui/finance-icon-avatar";
+import { FinanceDebtCreateModal } from "@consumer-finance/web/components/obligations/finance-debt-create-modal";
+import { FinanceDebtEditor } from "@consumer-finance/web/components/obligations/finance-debt-editor";
+import { FinanceDebtSettlementModal } from "@consumer-finance/web/components/obligations/finance-debt-settlement-modal";
+import { FinanceConfirmModal } from "@consumer-finance/web/components/shared/finance-confirm-modal";
+import { consumerFinanceObligationsApi } from "@consumer-finance/web/lib/api/consumer-finance-obligations-api";
+import { consumerFinanceKeys } from "@consumer-finance/web/lib/query/consumer-finance-query-keys";
 import {
   invalidateConsumerFinanceLedgerReads,
   removeConsumerDebtFromPages,
   reconcileConsumerDebtPages,
-} from "@finance-pro/web/lib/cache/consumer-finance-obligations-cache";
-import { reconcileConsumerTransactionCaches } from "@finance-pro/web/lib/cache/consumer-finance-cache";
-import { formatMoney } from "@finance-pro/web/lib/formatters/consumer-finance-money";
-import { financeIntlLocale, type FinanceLocale } from "@finance-pro/web/components/i18n/core";
-import { financeDebtsCopy } from "@finance-pro/web/components/i18n/debts";
-import type { ConsumerFinanceDebtTarget } from "@finance-pro/web/components/app/consumer-finance-navigation";
+} from "@consumer-finance/web/lib/cache/consumer-finance-obligations-cache";
+import { reconcileConsumerTransactionCaches } from "@consumer-finance/web/lib/cache/consumer-finance-cache";
+import { formatMoney } from "@consumer-finance/web/lib/formatters/consumer-finance-money";
+import { financeIntlLocale, type FinanceLocale } from "@consumer-finance/web/components/i18n/core";
+import { financeDebtsCopy } from "@consumer-finance/web/components/i18n/debts";
+import type { ConsumerFinanceDebtTarget } from "@consumer-finance/web/components/app/consumer-finance-navigation";
 
 export function FinanceDebts({
   botId,

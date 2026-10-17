@@ -13,28 +13,28 @@ import type {
   ConsumerFinanceHistoryQuery,
   ConsumerFinanceTransaction,
 } from "@telegram-system/shared";
-import { Button, Card, EmptyState, ErrorState, LoadingState } from "@finance-pro/web/components/ui";
-import { useFinanceFeedback } from "@finance-pro/web/components/ui/finance-feedback";
-import { consumerFinanceApi } from "@finance-pro/web/lib/api/consumer-finance-api";
-import { consumerFinanceLedgerApi } from "@finance-pro/web/lib/api/consumer-finance-ledger-api";
+import { Button, Card, EmptyState, ErrorState, LoadingState } from "@consumer-finance/web/components/ui";
+import { useFinanceFeedback } from "@consumer-finance/web/components/ui/finance-feedback";
+import { consumerFinanceApi } from "@consumer-finance/web/lib/api/consumer-finance-api";
+import { consumerFinanceLedgerApi } from "@consumer-finance/web/lib/api/consumer-finance-ledger-api";
 import {
   prependConsumerTransactionToCaches,
   reconcileConsumerTransactionCaches,
   removeConsumerTransactionFromCaches,
-} from "@finance-pro/web/lib/cache/consumer-finance-cache";
-import { consumerFinanceKeys } from "@finance-pro/web/lib/query/consumer-finance-query-keys";
-import { type FinanceLocale } from "@finance-pro/web/components/i18n/core";
-import { financeTransactionsCopy } from "@finance-pro/web/components/i18n/transactions";
-import type { ConsumerFinanceSurface } from "@finance-pro/web/components/app/consumer-finance-navigation";
-import { FinanceTransactionEditor } from "@finance-pro/web/components/ledger/finance-transaction-editor";
-import { FinanceTransactionFilters } from "@finance-pro/web/components/ledger/finance-transaction-filters";
-import { useDebouncedValue } from "@finance-pro/web/components/hooks/use-debounced-value";
-import { FinanceConfirmModal } from "@finance-pro/web/components/shared/finance-confirm-modal";
-import { FinanceTransactionDetailModal } from "@finance-pro/web/components/ledger/finance-transaction-detail-modal";
-import { FinanceMobileTransactionRow } from "@finance-pro/web/components/ledger/finance-mobile-transaction-row";
-import { DesktopTransactionTable } from "@finance-pro/web/components/ledger/finance-desktop-transaction-table";
-import { financePeriodDateRange } from "@finance-pro/web/components/planning/finance-period-selector";
-import { FinanceCursorPagination } from "@finance-pro/web/components/ui/finance-cursor-pagination";
+} from "@consumer-finance/web/lib/cache/consumer-finance-cache";
+import { consumerFinanceKeys } from "@consumer-finance/web/lib/query/consumer-finance-query-keys";
+import { type FinanceLocale } from "@consumer-finance/web/components/i18n/core";
+import { financeTransactionsCopy } from "@consumer-finance/web/components/i18n/transactions";
+import type { ConsumerFinanceSurface } from "@consumer-finance/web/components/app/consumer-finance-navigation";
+import { FinanceTransactionEditor } from "@consumer-finance/web/components/ledger/finance-transaction-editor";
+import { FinanceTransactionFilters } from "@consumer-finance/web/components/ledger/finance-transaction-filters";
+import { useDebouncedValue } from "@consumer-finance/web/components/hooks/use-debounced-value";
+import { FinanceConfirmModal } from "@consumer-finance/web/components/shared/finance-confirm-modal";
+import { FinanceTransactionDetailModal } from "@consumer-finance/web/components/ledger/finance-transaction-detail-modal";
+import { FinanceMobileTransactionRow } from "@consumer-finance/web/components/ledger/finance-mobile-transaction-row";
+import { DesktopTransactionTable } from "@consumer-finance/web/components/ledger/finance-desktop-transaction-table";
+import { financePeriodDateRange } from "@consumer-finance/web/components/planning/finance-period-selector";
+import { FinanceCursorPagination } from "@consumer-finance/web/components/ui/finance-cursor-pagination";
 
 export function FinanceTransactions({
   botId,

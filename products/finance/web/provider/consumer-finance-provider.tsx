@@ -2,8 +2,8 @@
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { type PropsWithChildren, useEffect, useState } from "react";
-import { FinanceFeedbackProvider } from "@finance-pro/web/components/ui/finance-feedback";
-import financeStyles from "@finance-pro/web/components/ui/finance-ui.module.css";
+import { FinanceFeedbackProvider } from "@consumer-finance/web/components/ui/finance-feedback";
+import financeStyles from "@consumer-finance/web/components/ui/finance-ui.module.css";
 import { registerAppServiceWorker } from "@/lib/pwa/service-worker";
 
 /** Consumer Finance owns an in-memory, bot-scoped cache and local feedback UI. */

@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { ConsumerFinanceProvider } from "@finance-pro/web/provider/consumer-finance-provider";
+import { ConsumerFinanceProvider } from "@consumer-finance/web/provider/consumer-finance-provider";
 
 export const metadata: Metadata = {
   title: "Finance",

@@ -19,26 +19,26 @@ import {
   ErrorState,
   LoadingState,
   Select,
-} from "@finance-pro/web/components/ui";
-import type { FinanceLocale } from "@finance-pro/web/components/i18n/core";
-import { financeSavingsCopy } from "@finance-pro/web/components/i18n/savings";
-import { consumerFinanceSavingsGoalsApi } from "@finance-pro/web/lib/api/consumer-finance-savings-goals-api";
-import { consumerFinanceLedgerApi } from "@finance-pro/web/lib/api/consumer-finance-ledger-api";
-import { consumerFinanceKeys } from "@finance-pro/web/lib/query/consumer-finance-query-keys";
-import { consumerFinanceRequestId } from "@finance-pro/web/lib/assets/consumer-finance-assets";
+} from "@consumer-finance/web/components/ui";
+import type { FinanceLocale } from "@consumer-finance/web/components/i18n/core";
+import { financeSavingsCopy } from "@consumer-finance/web/components/i18n/savings";
+import { consumerFinanceSavingsGoalsApi } from "@consumer-finance/web/lib/api/consumer-finance-savings-goals-api";
+import { consumerFinanceLedgerApi } from "@consumer-finance/web/lib/api/consumer-finance-ledger-api";
+import { consumerFinanceKeys } from "@consumer-finance/web/lib/query/consumer-finance-query-keys";
+import { consumerFinanceRequestId } from "@consumer-finance/web/lib/assets/consumer-finance-assets";
 import {
   invalidateConsumerAssetDerivations,
   patchSavingsGoal,
   patchSavingsMutation,
-} from "@finance-pro/web/lib/cache/consumer-finance-assets-cache";
-import { FinanceSavingsGoalEditor } from "@finance-pro/web/components/savings/finance-savings-goal-editor";
-import { FinanceSavingsGoalCard } from "@finance-pro/web/components/savings/finance-savings-goal-card";
+} from "@consumer-finance/web/lib/cache/consumer-finance-assets-cache";
+import { FinanceSavingsGoalEditor } from "@consumer-finance/web/components/savings/finance-savings-goal-editor";
+import { FinanceSavingsGoalCard } from "@consumer-finance/web/components/savings/finance-savings-goal-card";
 import {
   FinanceSavingsActionModal,
   type SavingsAction,
   type SavingsActionValues,
-} from "@finance-pro/web/components/savings/finance-savings-action-modal";
-import { FinanceSavingsHistory } from "@finance-pro/web/components/savings/finance-savings-history";
+} from "@consumer-finance/web/components/savings/finance-savings-action-modal";
+import { FinanceSavingsHistory } from "@consumer-finance/web/components/savings/finance-savings-history";
 
 type StatusFilter = ConsumerFinanceSavingsGoalStatus | "ALL";
 

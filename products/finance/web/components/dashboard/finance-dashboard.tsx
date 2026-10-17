@@ -2,14 +2,14 @@ import type {
   ConsumerFinanceAnalyticsQuery,
   ConsumerFinanceDashboard,
 } from "@telegram-system/shared";
-import { Card, EmptyState } from "@finance-pro/web/components/ui";
-import { formatMoney } from "@finance-pro/web/lib/formatters/consumer-finance-money";
-import type { ConsumerFinanceSurface } from "@finance-pro/web/components/app/consumer-finance-navigation";
-import { IconAvatar } from "@finance-pro/web/components/ui/finance-icon-avatar";
-import { type FinanceLocale } from "@finance-pro/web/components/i18n/core";
-import { financeDashboardCopy } from "@finance-pro/web/components/i18n/dashboard";
-import { FinancePeriodSelector } from "@finance-pro/web/components/planning/finance-period-selector";
-import { FinanceDashboardSkeleton } from "@finance-pro/web/components/dashboard/finance-dashboard-skeleton";
+import { Card, EmptyState } from "@consumer-finance/web/components/ui";
+import { formatMoney } from "@consumer-finance/web/lib/formatters/consumer-finance-money";
+import type { ConsumerFinanceSurface } from "@consumer-finance/web/components/app/consumer-finance-navigation";
+import { IconAvatar } from "@consumer-finance/web/components/ui/finance-icon-avatar";
+import { type FinanceLocale } from "@consumer-finance/web/components/i18n/core";
+import { financeDashboardCopy } from "@consumer-finance/web/components/i18n/dashboard";
+import { FinancePeriodSelector } from "@consumer-finance/web/components/planning/finance-period-selector";
+import { FinanceDashboardSkeleton } from "@consumer-finance/web/components/dashboard/finance-dashboard-skeleton";
 
 export function FinanceDashboard({
   data,

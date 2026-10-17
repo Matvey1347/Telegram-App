@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { CurrencyConversionService } from '@api/common/currency-conversion.service';
-import { FinanceLedgerService } from '@finance-pro/api/ledger/finance-ledger.service';
+import { FinanceLedgerService } from '@consumer-finance/api/ledger/finance-ledger.service';
 
 describe('FinanceLedgerService tenant and money rules', () => {
   const restoredTransaction = {

@@ -1,5 +1,5 @@
 {
-  "name": "@telegram-system/finance-pro",
+  "name": "@telegram-system/finance",
   "private": true,
   "version": "0.0.1",
   "dependencies": {

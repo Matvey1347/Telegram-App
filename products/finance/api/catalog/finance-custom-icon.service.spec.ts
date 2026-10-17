@@ -1,5 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
-import { FinanceCustomIconService } from '@finance-pro/api/catalog/finance-custom-icon.service';
+import { FinanceCustomIconService } from '@consumer-finance/api/catalog/finance-custom-icon.service';
 
 describe('FinanceCustomIconService', () => {
   const prisma = {

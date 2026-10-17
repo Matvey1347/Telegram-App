@@ -6,8 +6,8 @@ import {
 import { Prisma } from '@prisma/client';
 import { CurrencyConversionService } from '@api/common/currency-conversion.service';
 import { PrismaService } from '@api/prisma/prisma.service';
-import { financeAnalyticsDateRange } from '@finance-pro/api/ledger/finance-history-date-range';
-import { financeLimitView } from '@finance-pro/api/planning/finance-limit-view';
+import { financeAnalyticsDateRange } from '@consumer-finance/api/ledger/finance-history-date-range';
+import { financeLimitView } from '@consumer-finance/api/planning/finance-limit-view';
 
 type LimitSpendRow = {
   categoryId: string;

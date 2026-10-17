@@ -1,5 +1,5 @@
 import { BadGatewayException } from '@nestjs/common';
-import { requestFinanceStructuredResponse } from '@finance-pro/api/ai/finance-ai-responses.client';
+import { requestFinanceStructuredResponse } from '@consumer-finance/api/ai/finance-ai-responses.client';
 
 describe('requestFinanceStructuredResponse', () => {
   const originalFetch = global.fetch;

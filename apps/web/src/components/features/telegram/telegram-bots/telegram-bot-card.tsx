@@ -3,7 +3,6 @@ import type { TelegramBotRuntimeEnvironment } from "@telegram-system/shared";
 import { AccessBotSummary } from "./access-bot-summary";
 import { BotCardShell } from "./bot-card-shell";
 import { FinanceBotSummary } from "./finance-bot-summary";
-import { GreeterBotSummary } from "./greeter-bot-summary";
 
 export function TelegramBotCard({
   bot,
@@ -40,8 +39,6 @@ export function TelegramBotCard({
             bot.applicationSummary?.finance?.LOCAL
           }
         />
-      ) : appType === "GREETER" ? (
-        <GreeterBotSummary />
       ) : (
         <AccessBotSummary summary={bot.channelAccessSummary} />
       )}

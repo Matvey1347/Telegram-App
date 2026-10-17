@@ -1,7 +1,4 @@
 import {
-  GreeterBroadcastRecipientStatus,
-  GreeterBroadcastStatus,
-  GreeterJoinRequestStatus,
   Prisma,
   TelegramAdPlacementStatus,
   TelegramManagedPostIdVerificationStatus,
@@ -16,9 +13,6 @@ export const MANAGED_POST_IDENTITY_RETRY_MS = 45_000;
 export const MANAGED_POST_DEPENDENT_REPAIR_RETRY_MS = 5 * 60_000;
 export const MANAGED_POST_MISSING_IDENTITY_RETRY_MS = 30 * 60_000;
 export const MANAGED_POST_LOCAL_PUBLISHING_STALE_MS = 10 * 60_000;
-export const GREETER_BROADCAST_RETRY_MS = 5 * 60_000;
-export const GREETER_EXPIRY_RETRY_MS = 5 * 60_000;
-export const GREETER_AUTOMATION_RETRY_MS = 5 * 60_000;
 export const AD_DELETION_RETRY_MS = 5 * 60_000;
 
 export const MANAGED_POST_DEPENDENT_REPAIR_PENDING_NOTE =
@@ -123,69 +117,6 @@ export function managedPostIdentityReadyWhere(
       },
     ],
   };
-}
-
-export function greeterBroadcastDispatchableWhere(
-  now: Date,
-): Prisma.GreeterBroadcastWhereInput {
-  return {
-    OR: [
-      {
-        status: GreeterBroadcastStatus.SCHEDULED,
-        scheduledAt: { lte: now },
-      },
-      {
-        status: GreeterBroadcastStatus.PROCESSING,
-        OR: [
-          { recipients: { none: {} } },
-          {
-            recipients: {
-              some: {
-                status: GreeterBroadcastRecipientStatus.PENDING,
-                OR: [
-                  { nextQueueAttemptAt: null },
-                  { nextQueueAttemptAt: { lte: now } },
-                ],
-              },
-            },
-          },
-          {
-            AND: [
-              { recipients: { some: {} } },
-              {
-                recipients: {
-                  none: {
-                    status: {
-                      in: [
-                        GreeterBroadcastRecipientStatus.PENDING,
-                        GreeterBroadcastRecipientStatus.QUEUED,
-                      ],
-                    },
-                  },
-                },
-              },
-            ],
-          },
-        ],
-      },
-    ],
-  };
-}
-
-export function greeterExpiryClaimableWhere(
-  now: Date,
-): Prisma.GreeterJoinRequestWhereInput {
-  return {
-    status: GreeterJoinRequestStatus.PENDING_CAPTCHA,
-    expiredAt: { lte: now },
-    OR: [{ expiryClaimUntil: null }, { expiryClaimUntil: { lte: now } }],
-  };
-}
-
-export function greeterAutomationDueWhere(
-  now: Date,
-): Prisma.GreeterSequenceStepExecutionWhereInput {
-  return { status: 'PENDING', dueAt: { lte: now } };
 }
 
 export function adDeletionReadyWhere(

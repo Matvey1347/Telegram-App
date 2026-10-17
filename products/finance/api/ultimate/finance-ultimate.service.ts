@@ -4,16 +4,16 @@ import type {
   ConsumerFinanceAssistantMessageResult,
 } from '@telegram-system/shared';
 import { PrismaService } from '@api/prisma/prisma.service';
-import { FinanceAiAnalyticsService } from '@finance-pro/api/ai/finance-ai-analytics.service';
-import { FinanceAnalyticsService } from '@finance-pro/api/analytics/finance-analytics.service';
-import { financeChatLocale, t } from '@finance-pro/api/i18n/finance-chat-i18n';
-import type { FinanceUltimateQuestionDto } from '@finance-pro/api/http/finance.dto';
-import type { FinanceAssistantMessageDto } from '@finance-pro/api/http/finance.dto';
-import { FinanceEntitlementService } from '@finance-pro/api/billing/finance-entitlement.service';
+import { FinanceAiAnalyticsService } from '@consumer-finance/api/ai/finance-ai-analytics.service';
+import { FinanceAnalyticsService } from '@consumer-finance/api/analytics/finance-analytics.service';
+import { financeChatLocale, t } from '@consumer-finance/api/i18n/finance-chat-i18n';
+import type { FinanceUltimateQuestionDto } from '@consumer-finance/api/http/finance.dto';
+import type { FinanceAssistantMessageDto } from '@consumer-finance/api/http/finance.dto';
+import { FinanceEntitlementService } from '@consumer-finance/api/billing/finance-entitlement.service';
 import { AI_MODEL_POLICY } from '@api/domains/telegram/telegram-bots/core/ai-usage-cost';
-import { FinanceLedgerService } from '@finance-pro/api/ledger/finance-ledger.service';
-import { FinanceProposalService } from '@finance-pro/api/chat-flows/finance-proposal.service';
-import { FinanceAssistantEntryService, explicitCategoryHint, stripExplicitCategoryLabel } from '@finance-pro/api/ultimate/finance-assistant-entry.service';
+import { FinanceLedgerService } from '@consumer-finance/api/ledger/finance-ledger.service';
+import { FinanceProposalService } from '@consumer-finance/api/chat-flows/finance-proposal.service';
+import { FinanceAssistantEntryService, explicitCategoryHint, stripExplicitCategoryLabel } from '@consumer-finance/api/ultimate/finance-assistant-entry.service';
 
 /** On-demand AI interpretation over the canonical bounded Analytics read model. */
 @Injectable()

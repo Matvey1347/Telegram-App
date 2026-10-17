@@ -72,14 +72,6 @@ describe('ScheduledTasksService', () => {
       },
       telegramManagedPost: { findFirst: jest.fn().mockResolvedValue(null) },
       telegramAdSalePlacement: { findFirst: jest.fn().mockResolvedValue(null) },
-      greeterJoinRequest: { findFirst: jest.fn().mockResolvedValue(null) },
-      greeterBroadcast: { findFirst: jest.fn().mockResolvedValue(null) },
-      greeterBroadcastRecipient: {
-        findFirst: jest.fn().mockResolvedValue(null),
-      },
-      greeterSequenceStepExecution: {
-        findFirst: jest.fn().mockResolvedValue(null),
-      },
       scheduledTaskConfig: {
         upsert: jest.fn().mockResolvedValue(config),
         findMany: jest.fn().mockResolvedValue(config.enabled ? [config] : []),
@@ -141,7 +133,7 @@ describe('ScheduledTasksService', () => {
 
   it('treats a null runner result as an attempted due-driven occurrence', async () => {
     const { service, runner, definition, config } = setup();
-    definition.key = 'greeter.automations.repair';
+    definition.key = 'mutual_promotion.lifecycle';
     definition.dueDriven = true;
     config.taskKey = definition.key;
     const refresh = jest.fn().mockResolvedValue(undefined);

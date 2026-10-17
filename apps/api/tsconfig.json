@@ -16,11 +16,8 @@
     "baseUrl": "./",
     "paths": {
       "@api/*": ["./src/*"],
-      "@finance-pro/api/*": ["../../products/finance-pro/api/*"],
-      "@finance-pro/bot/*": ["../../products/finance-pro/bot/*"],
-      "@finance/api/*": ["../../products/finance/api/*"],
-      "@finance/bot/*": ["../../products/finance/bot/*"],
-      "@greeter/api/*": ["../../products/greeter/api/*"]
+      "@consumer-finance/api/*": ["../../products/finance/api/*"],
+      "@consumer-finance/bot/*": ["../../products/finance/bot/*"]
     },
     "incremental": true,
     "skipLibCheck": true,

@@ -1,5 +1,5 @@
 import { BadGatewayException } from '@nestjs/common';
-import { FinanceAiAnalyticsService } from '@finance-pro/api/ai/finance-ai-analytics.service';
+import { FinanceAiAnalyticsService } from '@consumer-finance/api/ai/finance-ai-analytics.service';
 
 describe('FinanceAiAnalyticsService', () => {
   const originalFetch = global.fetch;

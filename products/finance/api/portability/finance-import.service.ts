@@ -15,8 +15,8 @@ import type {
 import { CurrencyConversionService } from '@api/common/currency-conversion.service';
 import { HistoricalExchangeRateService } from '@api/common/historical-exchange-rate.service';
 import { PrismaService } from '@api/prisma/prisma.service';
-import { financeRequestFingerprint } from '@finance-pro/api/assets/finance-asset-idempotency';
-import { financeDataSnapshot } from '@finance-pro/api/catalog/finance-portability';
+import { financeRequestFingerprint } from '@consumer-finance/api/assets/finance-asset-idempotency';
+import { financeDataSnapshot } from '@consumer-finance/api/catalog/finance-portability';
 import {
   TELEGRAM_BOT_DELIVERY_WRITER,
   type TelegramBotDeliveryWriterPort,
@@ -24,15 +24,15 @@ import {
 import {
   FINANCE_OBLIGATION_PRESENTATION,
   type FinanceObligationPresentationPort,
-} from '@finance-pro/api/obligations/finance-obligation-presentation.port';
-import { prepareFinanceImportRates } from '@finance-pro/api/portability/finance-import-rates';
-import { normalizeFinanceImportDocument } from '@finance-pro/api/portability/finance-import-normalizer';
+} from '@consumer-finance/api/obligations/finance-obligation-presentation.port';
+import { prepareFinanceImportRates } from '@consumer-finance/api/portability/finance-import-rates';
+import { normalizeFinanceImportDocument } from '@consumer-finance/api/portability/finance-import-normalizer';
 import {
   decodeFinanceRollbackSnapshot,
   encodeFinanceRollbackSnapshot,
-} from '@finance-pro/api/portability/finance-portability-history';
-import { validateFinanceImportDocument } from '@finance-pro/api/portability/finance-import-validator';
-import { writeFinanceImport } from '@finance-pro/api/portability/finance-import-writer';
+} from '@consumer-finance/api/portability/finance-portability-history';
+import { validateFinanceImportDocument } from '@consumer-finance/api/portability/finance-import-validator';
+import { writeFinanceImport } from '@consumer-finance/api/portability/finance-import-writer';
 
 type Progress = (
   item: ConsumerFinanceImportProgress,

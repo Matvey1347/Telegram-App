@@ -5,10 +5,10 @@ import type {
   ConsumerFinanceSavingsGoal,
   ConsumerFinanceSavingsGoalInput,
 } from "@telegram-system/shared";
-import { Button, DateInput, FormField, Input, Modal, Textarea } from "@finance-pro/web/components/ui";
-import { FinanceCurrencySelect } from "@finance-pro/web/components/ui/finance-currency-select";
-import type { FinanceLocale } from "@finance-pro/web/components/i18n/core";
-import { financeSavingsCopy } from "@finance-pro/web/components/i18n/savings";
+import { Button, DateInput, FormField, Input, Modal, Textarea } from "@consumer-finance/web/components/ui";
+import { FinanceCurrencySelect } from "@consumer-finance/web/components/ui/finance-currency-select";
+import type { FinanceLocale } from "@consumer-finance/web/components/i18n/core";
+import { financeSavingsCopy } from "@consumer-finance/web/components/i18n/savings";
 
 export function FinanceSavingsGoalEditor({
   open,

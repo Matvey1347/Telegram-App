@@ -1,6 +1,6 @@
 import { FinanceTransactionSource } from '@prisma/client';
-import { FinanceRegularPaymentCallbackHandler } from '@finance-pro/bot/finance-regular-payment-callback.handler';
-import { financeRegularPaymentConfirmCallback } from '@finance-pro/bot/finance-obligation-telegram.presenter';
+import { FinanceRegularPaymentCallbackHandler } from '@consumer-finance/bot/finance-regular-payment-callback.handler';
+import { financeRegularPaymentConfirmCallback } from '@consumer-finance/bot/finance-obligation-telegram.presenter';
 
 describe('FinanceRegularPaymentCallbackHandler', () => {
   it('confirms the exact occurrence as a chat transaction', async () => {

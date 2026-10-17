@@ -61,13 +61,9 @@ export function BotCardShell({
   const appType = bot.applicationType;
   const currentApp = bot.applications.find((option) => option.type === appType);
   const configureHref =
-    appType === "GREETER"
-      ? `/telegram-bots/${bot.id}/greeter`
-      : appType === "FINANCE"
-        ? `/telegram-bots/${bot.id}/finance`
-        : appType === "SIMPLE_FINANCE"
-          ? `/telegram-bots/${bot.id}/simple-finance`
-        : null;
+    appType === "FINANCE"
+      ? `/telegram-bots/${bot.id}/finance`
+      : null;
 
   return (
     <article className="rounded-lg border border-neutral-800 bg-neutral-950 p-3 shadow-sm">
@@ -404,11 +400,5 @@ function runtimeStatusTooltip(runtime: TelegramBotRuntimeSummary) {
   return "Runtime or its webhook is stopped.";
 }
 function applicationLabel(type: TelegramBotApplicationType) {
-  return type === "GREETER"
-    ? "Greeter"
-    : type === "FINANCE"
-      ? "Finance"
-      : type === "SIMPLE_FINANCE"
-        ? "Finance Pro"
-      : "Access";
+  return type === "FINANCE" ? "Finance" : "Access";
 }

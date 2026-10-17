@@ -3,8 +3,8 @@
 import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import type { ConsumerFinanceAnalyticsQuery } from "@telegram-system/shared";
-import { consumerFinanceApi } from "@finance-pro/web/lib/api/consumer-finance-api";
-import { consumerFinanceKeys } from "@finance-pro/web/lib/query/consumer-finance-query-keys";
+import { consumerFinanceApi } from "@consumer-finance/web/lib/api/consumer-finance-api";
+import { consumerFinanceKeys } from "@consumer-finance/web/lib/query/consumer-finance-query-keys";
 import {
   Button,
   Card,
@@ -12,11 +12,11 @@ import {
   LoadingState,
   SyncingState,
   Textarea,
-} from "@finance-pro/web/components/ui";
-import type { FinanceLocale } from "@finance-pro/web/components/i18n/core";
-import { financeAnalyticsCopy } from "@finance-pro/web/components/i18n/analytics";
-import { formatMoney } from "@finance-pro/web/lib/formatters/consumer-finance-money";
-import { FinancePlanPromotion } from "@finance-pro/web/components/planning/finance-plan-promotion";
+} from "@consumer-finance/web/components/ui";
+import type { FinanceLocale } from "@consumer-finance/web/components/i18n/core";
+import { financeAnalyticsCopy } from "@consumer-finance/web/components/i18n/analytics";
+import { formatMoney } from "@consumer-finance/web/lib/formatters/consumer-finance-money";
+import { FinancePlanPromotion } from "@consumer-finance/web/components/planning/finance-plan-promotion";
 
 export function FinanceAnalyticsAi({
   botId,

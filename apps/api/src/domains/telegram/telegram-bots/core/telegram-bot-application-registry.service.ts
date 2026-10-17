@@ -16,22 +16,10 @@ const DEFINITIONS: Definition[] = [
     availability: 'GLOBAL',
   },
   {
-    type: TelegramBotApplicationType.GREETER,
-    label: 'Greeter',
-    description: 'Basic onboarding runtime for incoming private chats.',
-    availability: 'GLOBAL',
-  },
-  {
     type: TelegramBotApplicationType.FINANCE,
     label: 'Finance',
     description: 'Finance automation runtime for approved workspaces.',
     availability: 'WORKSPACE_RESTRICTED',
-  },
-  {
-    type: TelegramBotApplicationType.SIMPLE_FINANCE,
-    label: 'Finance Pro',
-    description: 'Simple personal-finance Mini App for Telegram users.',
-    availability: 'GLOBAL',
   },
 ];
 

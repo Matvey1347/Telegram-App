@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Button, Modal } from "@finance-pro/web/components/ui";
-import { type FinanceLocale } from "@finance-pro/web/components/i18n/core";
-import { financeConfirmCopy } from "@finance-pro/web/components/i18n/confirm";
+import { Button, Modal } from "@consumer-finance/web/components/ui";
+import { type FinanceLocale } from "@consumer-finance/web/components/i18n/core";
+import { financeConfirmCopy } from "@consumer-finance/web/components/i18n/confirm";
 
 export function FinanceConfirmModal({
   open,

@@ -15,10 +15,10 @@ import {
   WalletCards,
   type LucideIcon,
 } from "lucide-react";
-import type { FinanceVisualContext } from "@finance-pro/web/components/ui/finance-visual-context";
-import type { FinanceStateGraphicKind } from "@finance-pro/web/components/ui/finance-state-context-graphic";
-import { FinanceStateContextGraphic } from "@finance-pro/web/components/ui/finance-state-context-graphic";
-import styles from "@finance-pro/web/components/ui/finance-state-illustration.module.css";
+import type { FinanceVisualContext } from "@consumer-finance/web/components/ui/finance-visual-context";
+import type { FinanceStateGraphicKind } from "@consumer-finance/web/components/ui/finance-state-context-graphic";
+import { FinanceStateContextGraphic } from "@consumer-finance/web/components/ui/finance-state-context-graphic";
+import styles from "@consumer-finance/web/components/ui/finance-state-illustration.module.css";
 
 export type FinanceVisualState =
   | "loading"

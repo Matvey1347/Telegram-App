@@ -11,16 +11,16 @@ import type {
   CreateFinanceTransferDto,
   FinanceTransferQueryDto,
   UpdateFinanceTransferDto,
-} from '@finance-pro/api/http/finance.dto';
-import { financeTransferSavingsLinkLockKey } from '@finance-pro/api/assets/finance-asset-locks';
+} from '@consumer-finance/api/http/finance.dto';
+import { financeTransferSavingsLinkLockKey } from '@consumer-finance/api/assets/finance-asset-locks';
 import {
   financeAccountEmoji,
   financeIconPresentation,
-} from '@finance-pro/api/catalog/finance-entity-emoji';
+} from '@consumer-finance/api/catalog/finance-entity-emoji';
 import {
   financeHistoryDateRange,
   financeOccurredAtFilter,
-} from '@finance-pro/api/ledger/finance-history-date-range';
+} from '@consumer-finance/api/ledger/finance-history-date-range';
 
 const transferSelect = {
   id: true,

@@ -5,7 +5,7 @@ import { PrismaService } from '@api/prisma/prisma.service';
 import {
   financeAccountEmoji,
   financeIconPresentation,
-} from '@finance-pro/api/catalog/finance-entity-emoji';
+} from '@consumer-finance/api/catalog/finance-entity-emoji';
 
 /** Builds one authoritative account response in constant query count. */
 export async function financeAccountView(

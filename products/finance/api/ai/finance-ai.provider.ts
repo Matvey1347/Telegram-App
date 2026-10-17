@@ -6,7 +6,7 @@ import {
 import { FinanceAiProvider } from '@prisma/client';
 import { PrismaService } from '@api/prisma/prisma.service';
 import { TelegramBotApiClient } from '@api/telegram/shared/bot/telegram-bot-api.client';
-import { FinanceEntitlementService } from '@finance-pro/api/billing/finance-entitlement.service';
+import { FinanceEntitlementService } from '@consumer-finance/api/billing/finance-entitlement.service';
 import {
   AI_MODEL_POLICY,
   priceAiUsage,
@@ -14,12 +14,12 @@ import {
 import {
   requestFinanceStructuredResponse,
   type FinanceAiResponseUsage,
-} from '@finance-pro/api/ai/finance-ai-responses.client';
-import { FinanceAiCredentialService } from '@finance-pro/api/ai/finance-ai-credential.service';
+} from '@consumer-finance/api/ai/finance-ai-responses.client';
+import { FinanceAiCredentialService } from '@consumer-finance/api/ai/finance-ai-credential.service';
 import {
   financeVoiceFileName,
   isSupportedFinanceVoiceMime,
-} from '@finance-pro/api/ai/finance-ai-media';
+} from '@consumer-finance/api/ai/finance-ai-media';
 
 export type AiFinanceOperation = {
   type: 'INCOME' | 'EXPENSE';

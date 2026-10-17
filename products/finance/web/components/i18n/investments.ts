@@ -1,7 +1,7 @@
 import {
   financeCoreCopy,
   type FinanceLocale,
-} from "@finance-pro/web/components/i18n/core";
+} from "@consumer-finance/web/components/i18n/core";
 
 const en = {
   title: "Investments",

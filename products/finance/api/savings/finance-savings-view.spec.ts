@@ -1,5 +1,5 @@
 import { Prisma } from '@prisma/client';
-import { financeSavingsGoalView } from '@finance-pro/api/savings/finance-savings-view';
+import { financeSavingsGoalView } from '@consumer-finance/api/savings/finance-savings-view';
 
 const now = new Date('2026-09-08T00:00:00.000Z');
 const base = {

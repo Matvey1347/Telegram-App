@@ -6,25 +6,25 @@ import {
 } from "@nestjs/common";
 import { FinanceTransactionSource, Prisma } from "@prisma/client";
 import { PrismaService } from "@api/prisma/prisma.service";
-import { FinanceLedgerService } from "@finance-pro/api/ledger/finance-ledger.service";
+import { FinanceLedgerService } from "@consumer-finance/api/ledger/finance-ledger.service";
 import {
   financeTransactionSelect,
   financeTransactionView,
-} from "@finance-pro/api/ledger/finance-transaction-view";
+} from "@consumer-finance/api/ledger/finance-transaction-view";
 import type {
   FinanceApplyOccurrenceAmountDto,
   FinanceRegularPaymentConfirmDto,
-} from "@finance-pro/api/obligations/finance-obligation.dto";
-import { financeObligationProfile } from "@finance-pro/api/obligations/finance-obligation-context";
-import { nextFinanceOccurrence } from "@finance-pro/api/obligations/finance-obligation-date";
+} from "@consumer-finance/api/obligations/finance-obligation.dto";
+import { financeObligationProfile } from "@consumer-finance/api/obligations/finance-obligation-context";
+import { nextFinanceOccurrence } from "@consumer-finance/api/obligations/finance-obligation-date";
 import {
   financeRegularPaymentOccurrenceSelect,
   financeRegularPaymentOccurrenceView,
   financeRegularPaymentSelect,
   financeRegularPaymentView,
-} from "@finance-pro/api/obligations/finance-obligation-view";
-import { FinanceRegularPaymentDeliveryService } from "@finance-pro/api/obligations/regular-payments/finance-regular-payment-delivery.service";
-import { financeRegularPaymentRevisionData } from "@finance-pro/api/obligations/regular-payments/finance-regular-payment-write";
+} from "@consumer-finance/api/obligations/finance-obligation-view";
+import { FinanceRegularPaymentDeliveryService } from "@consumer-finance/api/obligations/regular-payments/finance-regular-payment-delivery.service";
+import { financeRegularPaymentRevisionData } from "@consumer-finance/api/obligations/regular-payments/finance-regular-payment-write";
 
 @Injectable()
 export class FinanceRegularPaymentConfirmationService {

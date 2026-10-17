@@ -6,11 +6,11 @@ import {
   financeChatMenuButton,
   financeMainMenu,
   financeMiniAppUrl,
-} from '@finance-pro/api/telegram-presentation/finance-telegram-menu';
+} from '@consumer-finance/api/telegram-presentation/finance-telegram-menu';
 import {
   financeChatLocale,
   type FinanceChatLocale,
-} from '@finance-pro/api/i18n/finance-chat-i18n';
+} from '@consumer-finance/api/i18n/finance-chat-i18n';
 import { publicWebOrigin } from '@api/config/deployment-config';
 
 const COMMAND_DESCRIPTIONS: Record<FinanceChatLocale, string[]> = {

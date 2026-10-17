@@ -10,12 +10,12 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   CONSUMER_FINANCE_IMPORT_MAX_BYTES,
   importConsumerFinanceData,
-} from "@finance-pro/web/lib/api/consumer-finance-portability-api";
-import { consumerFinanceKeys } from "@finance-pro/web/lib/query/consumer-finance-query-keys";
-import { Button, Modal } from "@finance-pro/web/components/ui";
-import type { FinanceLocale } from "@finance-pro/web/components/i18n/core";
-import { financeSettingsCopy } from "@finance-pro/web/components/i18n/settings";
-import { financeImportInstructions } from "@finance-pro/web/components/shared/finance-import-instructions";
+} from "@consumer-finance/web/lib/api/consumer-finance-portability-api";
+import { consumerFinanceKeys } from "@consumer-finance/web/lib/query/consumer-finance-query-keys";
+import { Button, Modal } from "@consumer-finance/web/components/ui";
+import type { FinanceLocale } from "@consumer-finance/web/components/i18n/core";
+import { financeSettingsCopy } from "@consumer-finance/web/components/i18n/settings";
+import { financeImportInstructions } from "@consumer-finance/web/components/shared/finance-import-instructions";
 
 type ImportError = Error & { path?: string; code?: string };
 

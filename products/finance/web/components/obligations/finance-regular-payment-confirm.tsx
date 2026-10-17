@@ -14,19 +14,19 @@ import {
   Input,
   Modal,
   Select,
-} from "@finance-pro/web/components/ui";
-import { consumerFinanceObligationsApi } from "@finance-pro/web/lib/api/consumer-finance-obligations-api";
-import { consumerFinanceLedgerApi } from "@finance-pro/web/lib/api/consumer-finance-ledger-api";
-import { consumerFinanceKeys } from "@finance-pro/web/lib/query/consumer-finance-query-keys";
-import type { FinanceLocale } from "@finance-pro/web/components/i18n/core";
-import { financeRegularPaymentsCopy } from "@finance-pro/web/components/i18n/regular-payments";
+} from "@consumer-finance/web/components/ui";
+import { consumerFinanceObligationsApi } from "@consumer-finance/web/lib/api/consumer-finance-obligations-api";
+import { consumerFinanceLedgerApi } from "@consumer-finance/web/lib/api/consumer-finance-ledger-api";
+import { consumerFinanceKeys } from "@consumer-finance/web/lib/query/consumer-finance-query-keys";
+import type { FinanceLocale } from "@consumer-finance/web/components/i18n/core";
+import { financeRegularPaymentsCopy } from "@consumer-finance/web/components/i18n/regular-payments";
 import {
   financeOccurredAtForDate,
   financeToday,
-} from "@finance-pro/web/lib/formatters/consumer-finance-date";
-import { localizeFinanceCategory } from "@finance-pro/web/components/catalog/finance-category-i18n";
-import { IconPicker } from "@finance-pro/web/components/ui/finance-icon-picker";
-import { financeAccountSelectEmoji } from "@finance-pro/web/components/accounts/finance-account-select-icon";
+} from "@consumer-finance/web/lib/formatters/consumer-finance-date";
+import { localizeFinanceCategory } from "@consumer-finance/web/components/catalog/finance-category-i18n";
+import { IconPicker } from "@consumer-finance/web/components/ui/finance-icon-picker";
+import { financeAccountSelectEmoji } from "@consumer-finance/web/components/accounts/finance-account-select-icon";
 
 export function FinanceRegularPaymentConfirm({
   botId,

@@ -2,17 +2,15 @@ import path from "node:path";
 
 const API_BOTS_ROOT = "apps/api/src/domains/telegram/telegram-bots";
 const BOT_CORE_ROOT = `${API_BOTS_ROOT}/core`;
-const BOT_FINANCE_ROOT = "products/finance-pro/bot";
-const BOT_GREETER_ROOT = "products/greeter/api";
+const BOT_FINANCE_ROOT = "products/finance/bot";
 const CONSUMER_FINANCE_API_ROOT =
-  "products/finance-pro/api";
+  "products/finance/api";
 const INTERNAL_FINANCE_API_ROOT = "apps/api/src/domains/finance";
 const CONSUMER_FINANCE_APP_ROOT = "apps/web/src/app/(consumer-finance)";
 const CONSUMER_FINANCE_UI_ROOT =
-  "products/finance-pro/web/components";
-const CONSUMER_FINANCE_WEB_LIB_ROOT = "products/finance-pro/web/lib";
-const CONSUMER_FINANCE_WEB_ROOT = "products/finance-pro/web";
-const GREETER_WEB_ROOT = "products/greeter/web";
+  "products/finance/web/components";
+const CONSUMER_FINANCE_WEB_LIB_ROOT = "products/finance/web/lib";
+const CONSUMER_FINANCE_WEB_ROOT = "products/finance/web";
 const INTERNAL_FINANCE_WEB_LIB_ROOT = "apps/web/src/lib/features/finance";
 
 function normalize(value) {
@@ -39,14 +37,11 @@ export function staticImports(source) {
 export function resolveImport(sourceFile, specifier) {
   const aliases = [
     ["@api/", "apps/api/src"],
-    ["@finance-pro/api/", CONSUMER_FINANCE_API_ROOT],
-    ["@finance-pro/bot/", BOT_FINANCE_ROOT],
-    ["@greeter/api/", BOT_GREETER_ROOT],
-    ["@finance-pro/web/components/", CONSUMER_FINANCE_UI_ROOT],
-    ["@finance-pro/web/lib/", CONSUMER_FINANCE_WEB_LIB_ROOT],
-    ["@finance-pro/web/provider/", "products/finance-pro/web/provider"],
-    ["@greeter/web/components/", `${GREETER_WEB_ROOT}/components`],
-    ["@greeter/web/lib/", `${GREETER_WEB_ROOT}/lib`],
+    ["@consumer-finance/api/", CONSUMER_FINANCE_API_ROOT],
+    ["@consumer-finance/bot/", BOT_FINANCE_ROOT],
+    ["@consumer-finance/web/components/", CONSUMER_FINANCE_UI_ROOT],
+    ["@consumer-finance/web/lib/", CONSUMER_FINANCE_WEB_LIB_ROOT],
+    ["@consumer-finance/web/provider/", "products/finance/web/provider"],
   ];
   for (const [prefix, root] of aliases) {
     if (specifier.startsWith(prefix)) {
@@ -69,21 +64,6 @@ function allowImport(source, target, reason, removalSlice) {
     reason,
     removalSlice,
   });
-}
-
-const scheduledGreeterSource =
-  "apps/api/src/domains/operations/scheduled-tasks/scheduled-task-executor.service.ts";
-for (const service of [
-  "enrollment/greeter-expiry.service",
-  "broadcast/greeter-broadcast.service",
-  "automation/greeter-automation.service",
-]) {
-  allowImport(
-    scheduledGreeterSource,
-    `${BOT_GREETER_ROOT}/${service}`,
-    "The platform scheduler invokes a concrete Greeter use case directly.",
-    "Register product-owned scheduled handlers behind a stable scheduler port.",
-  );
 }
 
 const consumerUiRoot = CONSUMER_FINANCE_UI_ROOT;
@@ -113,14 +93,6 @@ allowPattern(
   "User-triggered five-minute browser-login challenge polls only while approval is pending.",
   "Keep bounded and user-triggered; replace only if an event-driven browser channel is introduced.",
 );
-allowPattern(
-  "frontend-polling",
-  "products/greeter/web/components/broadcast/greeter-broadcasts-section.tsx",
-  1,
-  "Legacy UI polls every five seconds while any broadcast is SCHEDULED or PROCESSING; a far-future schedule can keep it active.",
-  "Greeter network-cost refactor: use due-aware activation or event reconciliation and remove this exception.",
-);
-
 const pageSlice =
   "Frontend page decomposition: move queries, mutations and API access into a feature container.";
 const pageHookAllowances = [
@@ -201,7 +173,6 @@ function apiProduct(file) {
   ) {
     return "finance";
   }
-  if (within(file, BOT_GREETER_ROOT)) return "greeter";
   return null;
 }
 

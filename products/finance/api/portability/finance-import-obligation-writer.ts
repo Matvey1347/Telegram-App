@@ -9,16 +9,16 @@ import type {
   TelegramBotDeliveryWriterPort,
   TransactionalTelegramDeliveryInput,
 } from '@api/domains/telegram/telegram-bots/core/telegram-bot-delivery-writer';
-import { t } from '@finance-pro/api/i18n/finance-chat-i18n';
+import { t } from '@consumer-finance/api/i18n/finance-chat-i18n';
 import {
   financeObligationDeliveryTarget,
   financeObligationProfile,
-} from '@finance-pro/api/obligations/finance-obligation-context';
-import type { FinanceObligationPresentationPort } from '@finance-pro/api/obligations/finance-obligation-presentation.port';
+} from '@consumer-finance/api/obligations/finance-obligation-context';
+import type { FinanceObligationPresentationPort } from '@consumer-finance/api/obligations/finance-obligation-presentation.port';
 import {
   financeLocalCalendarDate,
   financeRecurrenceAnchor,
-} from '@finance-pro/api/obligations/finance-obligation-date';
+} from '@consumer-finance/api/obligations/finance-obligation-date';
 
 type Progress = (
   item: ConsumerFinanceImportProgress,

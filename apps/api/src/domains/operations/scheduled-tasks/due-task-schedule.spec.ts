@@ -7,14 +7,6 @@ function setup() {
   const prisma = {
     telegramManagedPost: { findFirst: jest.fn().mockResolvedValue(null) },
     telegramAdSalePlacement: { findFirst: jest.fn().mockResolvedValue(null) },
-    greeterJoinRequest: { findFirst: jest.fn().mockResolvedValue(null) },
-    greeterBroadcast: { findFirst: jest.fn().mockResolvedValue(null) },
-    greeterBroadcastRecipient: {
-      findFirst: jest.fn().mockResolvedValue(null),
-    },
-    greeterSequenceStepExecution: {
-      findFirst: jest.fn().mockResolvedValue(null),
-    },
     scheduledTaskConfig: {
       findMany: jest.fn().mockResolvedValue([]),
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
@@ -136,76 +128,6 @@ describe('DueTaskSchedule', () => {
     expect(
       schedule.guardNoProgress('task', new Date(now.getTime() + 60_000), false),
     ).toEqual(new Date(now.getTime() + 60_000));
-  });
-
-  it('does not issue an update when the persisted due state is unchanged', async () => {
-    const { schedule, prisma } = setup();
-    const updatedAt = new Date(now.getTime() - 60_000);
-    prisma.greeterSequenceStepExecution.findFirst.mockResolvedValue({
-      dueAt: new Date(now.getTime() + 60_000),
-    });
-    prisma.scheduledTaskConfig.findMany.mockResolvedValue([
-      {
-        id: 'config',
-        updatedAt,
-        nextScheduledRunAt: new Date(now.getTime() + 60_000),
-        scheduledClaimOwner: null,
-        scheduledClaimExpiresAt: null,
-      },
-    ]);
-
-    await schedule.refresh('greeter.automations.repair');
-
-    expect(prisma.scheduledTaskConfig.updateMany).not.toHaveBeenCalled();
-  });
-
-  it('does not consider a processing broadcast with only downstream deliveries due', async () => {
-    const { schedule, prisma } = setup();
-
-    await expect(
-      schedule.nextDueAt('greeter.broadcasts.dispatch'),
-    ).resolves.toBeNull();
-
-    expect(prisma.greeterBroadcast.findFirst).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({ OR: expect.any(Array) }),
-      }),
-    );
-  });
-
-  it('uses the persisted broadcast recipient retry time', async () => {
-    const { schedule, prisma } = setup();
-    const retryAt = new Date(now.getTime() + 5 * 60_000);
-    prisma.greeterBroadcastRecipient.findFirst.mockResolvedValue({
-      nextQueueAttemptAt: retryAt,
-    });
-
-    await expect(
-      schedule.nextDueAt('greeter.broadcasts.dispatch'),
-    ).resolves.toEqual(retryAt);
-  });
-
-  it('uses the persisted captcha lease as the bounded retry time', async () => {
-    const { schedule, prisma } = setup();
-    const retryAt = new Date(now.getTime() + 5 * 60_000);
-    prisma.greeterJoinRequest.findFirst
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce({ expiredAt: now, expiryClaimUntil: retryAt });
-
-    await expect(schedule.nextDueAt('greeter.expire_pending')).resolves.toEqual(
-      retryAt,
-    );
-  });
-
-  it('keeps future automation work scheduled without making it immediately due', async () => {
-    const { schedule, prisma } = setup();
-    const dueAt = new Date(now.getTime() + 60_000);
-    prisma.greeterSequenceStepExecution.findFirst.mockResolvedValue({ dueAt });
-
-    await expect(
-      schedule.nextDueAt('greeter.automations.repair'),
-    ).resolves.toEqual(dueAt);
   });
 
   it('changes managed-post due time after the eligible row makes progress', async () => {

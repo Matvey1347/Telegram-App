@@ -1,9 +1,6 @@
 import { ApplicationLogsService } from '../application-logs/application-logs.service';
 import { CurrenciesService } from '../../finance/currencies/currencies.service';
 import { TelegramAdSalesService } from '../../telegram/telegram-ad-sales/telegram-ad-sales.service';
-import { GreeterExpiryService } from '@greeter/api/enrollment/greeter-expiry.service';
-import { GreeterBroadcastService } from '@greeter/api/broadcast/greeter-broadcast.service';
-import { GreeterAutomationService } from '@greeter/api/automation/greeter-automation.service';
 import { OperationalHistoryRetentionService } from '../../telegram/telegram-bots/core/operational-history-retention.service';
 import { TelegramWorkspaceFullSyncService } from '../../telegram/telegram-sync/telegram-workspace-full-sync.service';
 import { ScheduledTaskExecutorService } from './scheduled-task-executor.service';
@@ -19,21 +16,6 @@ describe('scheduled task registry executors', () => {
     const fullSync = {
       syncWorkspace: jest.fn().mockResolvedValue({
         summary: 'Synced 3 channels: 2 successful, 1 failed.',
-      }),
-    };
-    const greeter = {
-      processDueBatch: jest
-        .fn()
-        .mockResolvedValue({ claimed: 4, processed: 3, failed: 1 }),
-    };
-    const broadcasts = {
-      dispatchDue: jest.fn().mockResolvedValue({ processed: 2 }),
-    };
-    const automations = {
-      repairPendingExecutions: jest.fn().mockResolvedValue({
-        processed: 3,
-        queued: 2,
-        failed: 1,
       }),
     };
     const retention = {
@@ -85,9 +67,6 @@ describe('scheduled task registry executors', () => {
     };
     const services = new Map<unknown, unknown>([
       [TelegramWorkspaceFullSyncService, fullSync],
-      [GreeterExpiryService, greeter],
-      [GreeterBroadcastService, broadcasts],
-      [GreeterAutomationService, automations],
       [OperationalHistoryRetentionService, retention],
       [CurrenciesService, {}],
       [TelegramAdSalesService, {}],
@@ -108,9 +87,6 @@ describe('scheduled task registry executors', () => {
     return {
       executor,
       fullSync,
-      greeter,
-      broadcasts,
-      automations,
       retention,
       managedPosts,
       placementLifecycle,
@@ -181,13 +157,6 @@ describe('scheduled task registry executors', () => {
     expect(directPromotion.processDueActions).not.toHaveBeenCalled();
   });
 
-  it('processes a bounded greeter expiry batch', async () => {
-    const { executor, greeter } = setup();
-    const result = await executor.executors['greeter.expire_pending']();
-    expect(greeter.processDueBatch).toHaveBeenCalledWith(50);
-    expect(result.summary).toContain('1 failed');
-  });
-
   it('runs the due-driven mutual-promotion lifecycle with one aggregate summary', async () => {
     const { executor, mutualPromotion, directPromotion } = setup();
     const result = await executor.executors['mutual_promotion.lifecycle']();
@@ -201,20 +170,6 @@ describe('scheduled task registry executors', () => {
       folders: { considered: 5, completed: 3 },
       direct: { considered: 2, completed: 1 },
     });
-  });
-
-  it('dispatches due Greeter broadcasts through persistent maintenance', async () => {
-    const { executor, broadcasts } = setup();
-    const result = await executor.executors['greeter.broadcasts.dispatch']();
-    expect(broadcasts.dispatchDue).toHaveBeenCalledWith(10);
-    expect(result.summary).toContain('2 due Greeter broadcasts');
-  });
-
-  it('repairs interrupted Greeter execution queueing', async () => {
-    const { executor, automations } = setup();
-    const result = await executor.executors['greeter.automations.repair']();
-    expect(automations.repairPendingExecutions).toHaveBeenCalledWith(100);
-    expect(result.summary).toContain('1 failed');
   });
 
   it('reports every operational retention result', async () => {
@@ -258,15 +213,6 @@ describe('scheduled task registry executors', () => {
       defaultSchedule: { frequency: 'DAILY', time: '06:00' },
       supportedFrequencies: ['DAILY'],
     });
-    expect(
-      definitions.find((item) => item.key === 'greeter.expire_pending'),
-    ).toMatchObject({ scope: 'SYSTEM_MAINTENANCE' });
-    expect(
-      definitions.find((item) => item.key === 'greeter.broadcasts.dispatch'),
-    ).toMatchObject({ scope: 'SYSTEM_MAINTENANCE' });
-    expect(
-      definitions.find((item) => item.key === 'greeter.automations.repair'),
-    ).toMatchObject({ scope: 'SYSTEM_MAINTENANCE' });
     expect(
       definitions.find((item) => item.key === 'operational_history.cleanup'),
     ).toMatchObject({ scope: 'SYSTEM_MAINTENANCE' });

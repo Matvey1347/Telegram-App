@@ -12,7 +12,7 @@ import {
   consumerFinanceHttp,
   consumerFinanceRoot,
   consumerRequest,
-} from "@finance-pro/web/lib/api/consumer-finance-http";
+} from "@consumer-finance/web/lib/api/consumer-finance-http";
 
 type PageQuery = {
   status?: ConsumerFinanceSavingsGoalStatus;

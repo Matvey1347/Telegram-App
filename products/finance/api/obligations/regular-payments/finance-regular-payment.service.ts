@@ -14,26 +14,26 @@ import type {
   FinanceRegularPaymentInputDto,
   FinanceRegularPaymentQueryDto,
   FinanceRegularPaymentRevisionQueryDto,
-} from '@finance-pro/api/obligations/finance-obligation.dto';
+} from '@consumer-finance/api/obligations/finance-obligation.dto';
 import {
   financeObligationProfile,
   type FinanceObligationProfile,
-} from '@finance-pro/api/obligations/finance-obligation-context';
+} from '@consumer-finance/api/obligations/finance-obligation-context';
 import {
   financeObligationDate,
   financeRecurrenceAnchor,
-} from '@finance-pro/api/obligations/finance-obligation-date';
+} from '@consumer-finance/api/obligations/finance-obligation-date';
 import {
   financeRegularPaymentRevisionSelect,
   financeRegularPaymentRevisionView,
   financeRegularPaymentSelect,
   financeRegularPaymentView,
-} from '@finance-pro/api/obligations/finance-obligation-view';
-import { FinanceRegularPaymentDeliveryService } from '@finance-pro/api/obligations/regular-payments/finance-regular-payment-delivery.service';
+} from '@consumer-finance/api/obligations/finance-obligation-view';
+import { FinanceRegularPaymentDeliveryService } from '@consumer-finance/api/obligations/regular-payments/finance-regular-payment-delivery.service';
 import {
   financeRegularPaymentRevisionData,
   type FinanceRegularPaymentRow,
-} from '@finance-pro/api/obligations/regular-payments/finance-regular-payment-write';
+} from '@consumer-finance/api/obligations/regular-payments/finance-regular-payment-write';
 
 type RegularValues = {
   name: string;

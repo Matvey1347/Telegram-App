@@ -23,24 +23,24 @@ import {
   Input,
   LoadingState,
   Select,
-} from "@finance-pro/web/components/ui";
-import { consumerFinanceApi } from "@finance-pro/web/lib/api/consumer-finance-api";
-import { consumerFinanceLedgerApi } from "@finance-pro/web/lib/api/consumer-finance-ledger-api";
-import { formatMoney } from "@finance-pro/web/lib/formatters/consumer-finance-money";
-import { financeAccountSelectEmoji } from "@finance-pro/web/components/accounts/finance-account-select-icon";
+} from "@consumer-finance/web/components/ui";
+import { consumerFinanceApi } from "@consumer-finance/web/lib/api/consumer-finance-api";
+import { consumerFinanceLedgerApi } from "@consumer-finance/web/lib/api/consumer-finance-ledger-api";
+import { formatMoney } from "@consumer-finance/web/lib/formatters/consumer-finance-money";
+import { financeAccountSelectEmoji } from "@consumer-finance/web/components/accounts/finance-account-select-icon";
 import {
   reconcileConsumerTransferCaches,
   removeConsumerTransferFromCaches,
-} from "@finance-pro/web/lib/cache/consumer-finance-cache";
-import { consumerFinanceKeys } from "@finance-pro/web/lib/query/consumer-finance-query-keys";
-import { FinanceConfirmModal } from "@finance-pro/web/components/shared/finance-confirm-modal";
-import { FinanceTransferEditor } from "@finance-pro/web/components/ledger/finance-transfer-editor";
-import { useDebouncedValue } from "@finance-pro/web/components/hooks/use-debounced-value";
-import { financeIntlLocale, type FinanceLocale } from "@finance-pro/web/components/i18n/core";
-import { financeTransfersCopy } from "@finance-pro/web/components/i18n/transfers";
-import { financePeriodDateRange } from "@finance-pro/web/components/planning/finance-period-selector";
-import { IconAvatar } from "@finance-pro/web/components/ui/finance-icon-avatar";
-import { FinanceCursorPagination } from "@finance-pro/web/components/ui/finance-cursor-pagination";
+} from "@consumer-finance/web/lib/cache/consumer-finance-cache";
+import { consumerFinanceKeys } from "@consumer-finance/web/lib/query/consumer-finance-query-keys";
+import { FinanceConfirmModal } from "@consumer-finance/web/components/shared/finance-confirm-modal";
+import { FinanceTransferEditor } from "@consumer-finance/web/components/ledger/finance-transfer-editor";
+import { useDebouncedValue } from "@consumer-finance/web/components/hooks/use-debounced-value";
+import { financeIntlLocale, type FinanceLocale } from "@consumer-finance/web/components/i18n/core";
+import { financeTransfersCopy } from "@consumer-finance/web/components/i18n/transfers";
+import { financePeriodDateRange } from "@consumer-finance/web/components/planning/finance-period-selector";
+import { IconAvatar } from "@consumer-finance/web/components/ui/finance-icon-avatar";
+import { FinanceCursorPagination } from "@consumer-finance/web/components/ui/finance-cursor-pagination";
 
 export function FinanceTransfers({
   botId,

@@ -6,104 +6,104 @@ import type {
   ConsumerFinanceAnalyticsQuery,
   ConsumerFinanceProfile,
 } from "@telegram-system/shared";
-import { Button, ErrorState, LoadingState } from "@finance-pro/web/components/ui";
-import { consumerFinanceInsightsApi } from "@finance-pro/web/lib/api/consumer-finance-insights-api";
-import { consumerFinanceKeys } from "@finance-pro/web/lib/query/consumer-finance-query-keys";
-import { FinanceDashboard } from "@finance-pro/web/components/dashboard/finance-dashboard";
-import { financeCoreCopy, normalizeFinanceLocale } from "@finance-pro/web/components/i18n/core";
+import { Button, ErrorState, LoadingState } from "@consumer-finance/web/components/ui";
+import { consumerFinanceInsightsApi } from "@consumer-finance/web/lib/api/consumer-finance-insights-api";
+import { consumerFinanceKeys } from "@consumer-finance/web/lib/query/consumer-finance-query-keys";
+import { FinanceDashboard } from "@consumer-finance/web/components/dashboard/finance-dashboard";
+import { financeCoreCopy, normalizeFinanceLocale } from "@consumer-finance/web/components/i18n/core";
 import type {
   ConsumerFinanceAction,
   ConsumerFinanceDebtTarget,
   ConsumerFinanceRegularPaymentTarget,
   ConsumerFinanceScreen,
   ConsumerFinanceSurface,
-} from "@finance-pro/web/components/app/consumer-finance-navigation";
-import { FinanceDebtEditor } from "@finance-pro/web/components/obligations/finance-debt-editor";
-import { FinanceInvestmentCreateModal } from "@finance-pro/web/components/investments/finance-investment-create-modal";
-export type { ConsumerFinanceScreen } from "@finance-pro/web/components/app/consumer-finance-navigation";
+} from "@consumer-finance/web/components/app/consumer-finance-navigation";
+import { FinanceDebtEditor } from "@consumer-finance/web/components/obligations/finance-debt-editor";
+import { FinanceInvestmentCreateModal } from "@consumer-finance/web/components/investments/finance-investment-create-modal";
+export type { ConsumerFinanceScreen } from "@consumer-finance/web/components/app/consumer-finance-navigation";
 
 const FinanceAccounts = lazy(() =>
-  import("@finance-pro/web/components/accounts/finance-accounts").then((module) => ({
+  import("@consumer-finance/web/components/accounts/finance-accounts").then((module) => ({
     default: module.FinanceAccountsScreen,
   })),
 );
 const FinanceAccountEditor = lazy(() =>
-  import("@finance-pro/web/components/accounts/finance-account-editor").then((module) => ({
+  import("@consumer-finance/web/components/accounts/finance-account-editor").then((module) => ({
     default: module.FinanceAccountEditorScreen,
   })),
 );
 const FinanceAnalytics = lazy(() =>
-  import("@finance-pro/web/components/analytics/finance-analytics").then((module) => ({
+  import("@consumer-finance/web/components/analytics/finance-analytics").then((module) => ({
     default: module.FinanceAnalytics,
   })),
 );
 const FinanceBudget = lazy(() =>
-  import("@finance-pro/web/components/planning/finance-budget").then((module) => ({
+  import("@consumer-finance/web/components/planning/finance-budget").then((module) => ({
     default: module.FinanceBudget,
   })),
 );
 const FinanceCategories = lazy(() =>
-  import("@finance-pro/web/components/catalog/finance-categories").then((module) => ({
+  import("@consumer-finance/web/components/catalog/finance-categories").then((module) => ({
     default: module.FinanceCategories,
   })),
 );
 const FinanceOnboarding = lazy(() =>
-  import("@finance-pro/web/components/onboarding/finance-onboarding").then((module) => ({
+  import("@consumer-finance/web/components/onboarding/finance-onboarding").then((module) => ({
     default: module.FinanceOnboardingScreen,
   })),
 );
 const FinancePlans = lazy(() =>
-  import("@finance-pro/web/components/planning/finance-plans").then((module) => ({
+  import("@consumer-finance/web/components/planning/finance-plans").then((module) => ({
     default: module.FinancePlans,
   })),
 );
 const FinanceReminders = lazy(() =>
-  import("@finance-pro/web/components/planning/finance-reminders").then((module) => ({
+  import("@consumer-finance/web/components/planning/finance-reminders").then((module) => ({
     default: module.FinanceReminders,
   })),
 );
 const FinanceSettings = lazy(() =>
-  import("@finance-pro/web/components/profile/finance-settings").then((module) => ({
+  import("@consumer-finance/web/components/profile/finance-settings").then((module) => ({
     default: module.FinanceSettings,
   })),
 );
 const FinanceAccountCenter = lazy(() =>
-  import("@finance-pro/web/components/accounts/finance-account-center").then((module) => ({
+  import("@consumer-finance/web/components/accounts/finance-account-center").then((module) => ({
     default: module.FinanceAccountCenter,
   })),
 );
 const FinanceTransactions = lazy(() =>
-  import("@finance-pro/web/components/ledger/finance-transactions").then((module) => ({
+  import("@consumer-finance/web/components/ledger/finance-transactions").then((module) => ({
     default: module.FinanceTransactions,
   })),
 );
 const FinanceTransfers = lazy(() =>
-  import("@finance-pro/web/components/ledger/finance-transfers").then((module) => ({
+  import("@consumer-finance/web/components/ledger/finance-transfers").then((module) => ({
     default: module.FinanceTransfers,
   })),
 );
 const FinanceDebts = lazy(() =>
-  import("@finance-pro/web/components/obligations/finance-debts").then((module) => ({
+  import("@consumer-finance/web/components/obligations/finance-debts").then((module) => ({
     default: module.FinanceDebts,
   })),
 );
 const FinanceRegularPayments = lazy(() =>
-  import("@finance-pro/web/components/obligations/finance-regular-payments").then((module) => ({
+  import("@consumer-finance/web/components/obligations/finance-regular-payments").then((module) => ({
     default: module.FinanceRegularPayments,
   })),
 );
 const FinanceSavings = lazy(() =>
-  import("@finance-pro/web/components/savings/finance-savings").then((module) => ({
+  import("@consumer-finance/web/components/savings/finance-savings").then((module) => ({
     default: module.FinanceSavings,
   })),
 );
 const FinanceInvestments = lazy(() =>
-  import("@finance-pro/web/components/investments/finance-investments").then((module) => ({
+  import("@consumer-finance/web/components/investments/finance-investments").then((module) => ({
     default: module.FinanceInvestments,
   })),
 );
 const FinanceInvestmentDetail = lazy(() =>
-  import("@finance-pro/web/components/investments/finance-investment-detail").then((module) => ({
+  import("@consumer-finance/web/components/investments/finance-investment-detail").then((module) => ({
     default: module.FinanceInvestmentDetailScreen,
   })),
 );

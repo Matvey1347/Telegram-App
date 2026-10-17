@@ -2,7 +2,7 @@ import {
   ForbiddenException,
   InternalServerErrorException,
 } from '@nestjs/common';
-import { FinanceConsumerTransferService } from '@finance-pro/api/identity/finance-consumer-transfer.service';
+import { FinanceConsumerTransferService } from '@consumer-finance/api/identity/finance-consumer-transfer.service';
 
 describe('FinanceConsumerTransferService', () => {
   const session = {

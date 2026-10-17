@@ -10,7 +10,6 @@ export * from "./types/telegram-publication-schedules";
 export * from "./types/telegram-content-hypotheses";
 export * from "./types/telegram-unified-import";
 export * from "./types/telegram-bot-platform";
-export * from "./types/greeter";
 export * from "./types/bot-billing";
 export * from "./types/consumer-finance";
 export * from "./types/telegram-system-bot";

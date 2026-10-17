@@ -67,4 +67,4 @@ export function parseFinanceMenuText(
 import {
   FINANCE_CHAT_LOCALES,
   t,
-} from '@finance-pro/api/i18n/finance-chat-i18n';
+} from '@consumer-finance/api/i18n/finance-chat-i18n';

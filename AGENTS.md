@@ -4,8 +4,10 @@
 
 - `apps/api`: NestJS API composition host. Internal business modules live under `src/domains/{finance,growth,identity,operations,telegram,workspace}`; cross-domain infrastructure remains in `src/common`, `src/prisma`, and `src/telegram/shared`.
 - `apps/web`: Next.js App Router composition host. URL-preserving route groups live under `src/app/(domain)`; internal domain UI and clients live under `src/components/features` and `src/lib/features`; shared providers, UI primitives, and app-wide utilities remain at their top-level locations.
-- `products/finance-pro`: the independent consumer Finance product. Its API use cases live in `api/*`, its thin Telegram runtime adapter in `bot/*`, and its product-owned UI, state, localization, and clients in `web/*`.
-- `products/greeter`: the independent Greeter product. Its API implementation lives in `api/*` and its management UI and clients in `web/*`.
+- `products/finance`: the independent consumer Finance product. Its API use cases live in `api/*`, its thin Telegram runtime adapter in `bot/*`, and its product-owned UI, state, localization, and clients in `web/*`.
+- Legacy `SimpleFinance*` Prisma records are retained as a non-runtime data layer
+  until an approved data-retention migration; they are distinct from both
+  consumer Finance and `apps/api/src/domains/finance`.
 - `packages/shared`: shared TypeScript contracts used across API and web. Put stable cross-app response types here when both sides consume them.
 - `apps/api/prisma/schema.prisma` and `apps/api/prisma/migrations`: database contract and migrations. Schema/API changes are incomplete until both are updated.
 - Telegram adapters: `apps/api/src/telegram/shared/*` is the single integration layer for MTProto/Bot API details, parsing, entity resolution, and Telegram-specific helpers.
@@ -16,9 +18,12 @@
 ## Global agent policy
 
 - This root file is the single source of repository-wide agent guidance.
-- Do not create `AGENTS.md` files inside `products/*` or product subfolders,
-  and do not create product-specific agent routing. Finance Pro, Greeter, and
-  future products all use this workflow plus the product-boundary document.
+- Do not create `AGENTS.md` files inside `products/*` or product subfolders.
+- The development-only scoped agents `finance-product`, `support-platform`, and
+  `partner-platform` in `.codex/agents/` are permitted product/platform routing.
+  They must read this workflow and the product-boundary document, stay within
+  their declared scope, and never become production runtime services. Do not
+  add other product-specific agents without an explicit architecture decision.
 - Existing `apps/api/AGENTS.md`, `apps/web/AGENTS.md`, and
   `packages/shared/AGENTS.md` describe their technical hosts only; they do not
   define product agents or override this global policy.
@@ -39,7 +44,7 @@
 
 - Read `docs/architecture/PRODUCT_BOUNDARIES.md` before adding or moving a product, consumer application, bot application, cross-product import, shared abstraction, configuration access, or architecture exception.
 - A consumer application owns its behavior, API/use cases, UI/presentation, state/query layer, localization, and Telegram-specific presentation. Its surfaces may share code inside that application boundary.
-- `telegram-bots/core` is platform infrastructure and must not import Finance or Greeter implementation. `telegram-bots.module.ts` may compose products through stable providers/ports.
+- `telegram-bots/core` is platform infrastructure and must not import consumer-product implementation. `telegram-bots.module.ts` may compose products through stable providers/ports.
 - Internal Finance and consumer Finance are separate products. Do not share their implementation paths automatically because their concepts or names overlap.
 - Product-to-product UI, services, hooks, state, presenters, query behavior, localization, and business-rule imports are forbidden. Reuse stable contracts and technical infrastructure; extract a neutral helper only after two real use cases prove identical semantics.
 - Do not add architecture exceptions as ordinary feature work. Existing exact exceptions are shrinking-only and name their reason/removal slice; the completed Consumer Finance boundary has no import exceptions.

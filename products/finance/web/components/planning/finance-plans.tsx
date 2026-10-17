@@ -7,11 +7,11 @@ import type {
   ConsumerFinanceRenewalUpdate,
   ConsumerFinanceTier,
 } from "@telegram-system/shared";
-import { Button, Card, EmptyState, ErrorState, LoadingState } from "@finance-pro/web/components/ui";
-import { consumerFinancePlanningApi } from "@finance-pro/web/lib/api/consumer-finance-planning-api";
-import { consumerFinanceKeys } from "@finance-pro/web/lib/query/consumer-finance-query-keys";
-import { financeIntlLocale, type FinanceLocale } from "@finance-pro/web/components/i18n/core";
-import { financePlansCopy } from "@finance-pro/web/components/i18n/plans";
+import { Button, Card, EmptyState, ErrorState, LoadingState } from "@consumer-finance/web/components/ui";
+import { consumerFinancePlanningApi } from "@consumer-finance/web/lib/api/consumer-finance-planning-api";
+import { consumerFinanceKeys } from "@consumer-finance/web/lib/query/consumer-finance-query-keys";
+import { financeIntlLocale, type FinanceLocale } from "@consumer-finance/web/components/i18n/core";
+import { financePlansCopy } from "@consumer-finance/web/components/i18n/plans";
 import {
   consumerFinanceProviderLabel,
   consumerFinanceSubscriptionStatusLabel,
@@ -19,9 +19,9 @@ import {
   formatConsumerFinancePlanPrice,
   type ConsumerFinanceCatalogPlan,
   type ConsumerFinanceCheckoutOffer,
-} from "@finance-pro/web/components/shared/finance-consumer-billing-format";
-import { FinancePlanCard } from "@finance-pro/web/components/planning/finance-plan-card";
-import styles from "@finance-pro/web/components/planning/finance-plans.module.css";
+} from "@consumer-finance/web/components/shared/finance-consumer-billing-format";
+import { FinancePlanCard } from "@consumer-finance/web/components/planning/finance-plan-card";
+import styles from "@consumer-finance/web/components/planning/finance-plans.module.css";
 
 export function FinancePlans({
   botId,

@@ -10,19 +10,19 @@ import { PrismaService } from '@api/prisma/prisma.service';
 import {
   assertFinanceIdempotency,
   financeRequestFingerprint,
-} from '@finance-pro/api/assets/finance-asset-idempotency';
-import { FinanceLedgerService } from '@finance-pro/api/ledger/finance-ledger.service';
+} from '@consumer-finance/api/assets/finance-asset-idempotency';
+import { FinanceLedgerService } from '@consumer-finance/api/ledger/finance-ledger.service';
 import {
   financeRateDateForWrite,
   type FinanceProfileContext,
-} from '@finance-pro/api/ledger/finance-transaction-valuation';
-import type { FinanceInvestmentCashFlowDto } from '@finance-pro/api/investments/finance-investment.dto';
-import { FinanceInvestmentReadService } from '@finance-pro/api/investments/finance-investment-read.service';
-import { FinanceInvestmentValuationService } from '@finance-pro/api/investments/finance-investment-valuation.service';
+} from '@consumer-finance/api/ledger/finance-transaction-valuation';
+import type { FinanceInvestmentCashFlowDto } from '@consumer-finance/api/investments/finance-investment.dto';
+import { FinanceInvestmentReadService } from '@consumer-finance/api/investments/finance-investment-read.service';
+import { FinanceInvestmentValuationService } from '@consumer-finance/api/investments/finance-investment-valuation.service';
 import {
   financeInvestmentCashFlowSelect,
   financeInvestmentCashFlowView,
-} from '@finance-pro/api/investments/finance-investment-view';
+} from '@consumer-finance/api/investments/finance-investment-view';
 
 @Injectable()
 export class FinanceInvestmentCashFlowService {

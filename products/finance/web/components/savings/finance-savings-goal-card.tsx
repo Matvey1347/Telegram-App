@@ -10,10 +10,10 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import type { ConsumerFinanceSavingsGoal } from "@telegram-system/shared";
-import { Button, Card } from "@finance-pro/web/components/ui";
-import type { FinanceLocale } from "@finance-pro/web/components/i18n/core";
-import { financeSavingsCopy } from "@finance-pro/web/components/i18n/savings";
-import { formatMoney } from "@finance-pro/web/lib/formatters/consumer-finance-money";
+import { Button, Card } from "@consumer-finance/web/components/ui";
+import type { FinanceLocale } from "@consumer-finance/web/components/i18n/core";
+import { financeSavingsCopy } from "@consumer-finance/web/components/i18n/savings";
+import { formatMoney } from "@consumer-finance/web/lib/formatters/consumer-finance-money";
 
 export function FinanceSavingsGoalCard({
   goal,

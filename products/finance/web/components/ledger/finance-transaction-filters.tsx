@@ -7,12 +7,12 @@ import type {
   ConsumerFinanceCategory,
   ConsumerFinanceHistoryQuery,
 } from "@telegram-system/shared";
-import { Button, Card, DateRangeInput, Input, Modal, Select } from "@finance-pro/web/components/ui";
-import { type FinanceLocale } from "@finance-pro/web/components/i18n/core";
-import { financeTransactionsCopy } from "@finance-pro/web/components/i18n/transactions";
-import { localizeFinanceCategory } from "@finance-pro/web/components/catalog/finance-category-i18n";
-import type { ConsumerFinanceSurface } from "@finance-pro/web/components/app/consumer-finance-navigation";
-import { financeAccountSelectEmoji } from "@finance-pro/web/components/accounts/finance-account-select-icon";
+import { Button, Card, DateRangeInput, Input, Modal, Select } from "@consumer-finance/web/components/ui";
+import { type FinanceLocale } from "@consumer-finance/web/components/i18n/core";
+import { financeTransactionsCopy } from "@consumer-finance/web/components/i18n/transactions";
+import { localizeFinanceCategory } from "@consumer-finance/web/components/catalog/finance-category-i18n";
+import type { ConsumerFinanceSurface } from "@consumer-finance/web/components/app/consumer-finance-navigation";
+import { financeAccountSelectEmoji } from "@consumer-finance/web/components/accounts/finance-account-select-icon";
 
 type FinanceTransactionFiltersProps = {
   filters: ConsumerFinanceHistoryQuery;

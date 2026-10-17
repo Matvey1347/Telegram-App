@@ -11,9 +11,9 @@ import type {
   ConsumerFinanceAnalyticsPeriod,
   ConsumerFinanceAnalyticsQuery,
 } from "@telegram-system/shared";
-import { Button, DateRangeInput } from "@finance-pro/web/components/ui";
-import type { FinanceLocale } from "@finance-pro/web/components/i18n/core";
-import { financeAnalyticsCopy } from "@finance-pro/web/components/i18n/analytics";
+import { Button, DateRangeInput } from "@consumer-finance/web/components/ui";
+import type { FinanceLocale } from "@consumer-finance/web/components/i18n/core";
+import { financeAnalyticsCopy } from "@consumer-finance/web/components/i18n/analytics";
 
 const PERIODS: Array<{
   value: ConsumerFinanceAnalyticsPeriod;

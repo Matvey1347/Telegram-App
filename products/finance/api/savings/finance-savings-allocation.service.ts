@@ -5,12 +5,12 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { assertFinanceIdempotency } from '@finance-pro/api/assets/finance-asset-idempotency';
+import { assertFinanceIdempotency } from '@consumer-finance/api/assets/finance-asset-idempotency';
 import {
   financeAccountAllocationLockKey,
   financeTransferSavingsLinkLockKey,
-} from '@finance-pro/api/assets/finance-asset-locks';
-import { financeSavingsMovementSelect } from '@finance-pro/api/savings/finance-savings-view';
+} from '@consumer-finance/api/assets/finance-asset-locks';
+import { financeSavingsMovementSelect } from '@consumer-finance/api/savings/finance-savings-view';
 
 type AllocationRow = {
   accountBalance: Prisma.Decimal;

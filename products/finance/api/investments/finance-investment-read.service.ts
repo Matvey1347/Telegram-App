@@ -3,7 +3,7 @@ import { PrismaService } from '@api/prisma/prisma.service';
 import type {
   FinanceInvestmentHistoryQueryDto,
   FinanceInvestmentQueryDto,
-} from '@finance-pro/api/investments/finance-investment.dto';
+} from '@consumer-finance/api/investments/finance-investment.dto';
 import {
   financeInvestmentCashFlowSelect,
   financeInvestmentCashFlowView,
@@ -11,7 +11,7 @@ import {
   financeInvestmentValuationSelect,
   financeInvestmentValuationView,
   financeInvestmentView,
-} from '@finance-pro/api/investments/finance-investment-view';
+} from '@consumer-finance/api/investments/finance-investment-view';
 
 @Injectable()
 export class FinanceInvestmentReadService {

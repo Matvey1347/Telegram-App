@@ -18,16 +18,9 @@ describe('TelegramBotRuntimePresentationService', () => {
         webAppUrl: 'https://finance.example/finance/bot-1',
       }),
     };
-    const greeter = {
-      commands: jest.fn().mockReturnValue([]),
-      supportedLocales: jest.fn().mockReturnValue([]),
-      menuButton: jest.fn().mockReturnValue({ type: 'commands' }),
-    };
     const service = new TelegramBotRuntimePresentationService(
       botApi as never,
-      greeter as never,
       finance as never,
-      {} as never,
     );
 
     await service.reconcile(
@@ -55,8 +48,6 @@ describe('TelegramBotRuntimePresentationService', () => {
     };
     const service = new TelegramBotRuntimePresentationService(
       botApi as never,
-      {} as never,
-      {} as never,
       {} as never,
     );
 

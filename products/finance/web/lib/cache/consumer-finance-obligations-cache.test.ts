@@ -11,8 +11,8 @@ import {
   reconcileConsumerDebtPages,
   removeConsumerDebtFromPages,
   reconcileConsumerRegularPaymentPages,
-} from "@finance-pro/web/lib/cache/consumer-finance-obligations-cache";
-import { consumerFinanceKeys } from "@finance-pro/web/lib/query/consumer-finance-query-keys";
+} from "@consumer-finance/web/lib/cache/consumer-finance-obligations-cache";
+import { consumerFinanceKeys } from "@consumer-finance/web/lib/query/consumer-finance-query-keys";
 
 const account = {
   id: "account",

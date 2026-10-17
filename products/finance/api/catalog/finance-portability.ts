@@ -5,7 +5,7 @@ import {
   financeDocumentCounts,
   financeDocumentRecordCount,
   pruneFinanceExportHistory,
-} from '@finance-pro/api/portability/finance-portability-history';
+} from '@consumer-finance/api/portability/finance-portability-history';
 
 const iso = (value: Date | null) => value?.toISOString() ?? null;
 const decimal = (value: Prisma.Decimal) => value.toString();

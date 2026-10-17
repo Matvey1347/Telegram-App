@@ -133,7 +133,7 @@ export async function failClosedUnhydratableDeliveryIds(
   return rows.map((row) => row.id);
 }
 
-/** Fails a lost-ownership claim and its linked work in one transaction. */
+/** Fails a lost-ownership claim in one transaction. */
 export async function failClosedUnhydratableDeliveries(
   prisma: PrismaService,
   input: {
@@ -149,28 +149,6 @@ export async function failClosedUnhydratableDeliveries(
   return prisma.$transaction(async (tx) => {
     const failedIds = await failClosedUnhydratableDeliveryIds(tx, input);
     if (!failedIds.length) return [];
-    await tx.greeterSequenceStepExecution.updateMany({
-      where: {
-        deliveryId: { in: failedIds },
-        status: { in: ['PENDING', 'QUEUED'] },
-      },
-      data: {
-        status: 'FAILED',
-        completedAt: input.failedAt,
-        lastError: input.error,
-      },
-    });
-    await tx.greeterBroadcastRecipient.updateMany({
-      where: {
-        deliveryId: { in: failedIds },
-        status: { in: ['PENDING', 'QUEUED'] },
-      },
-      data: {
-        status: 'FAILED',
-        completedAt: input.failedAt,
-        lastError: input.error,
-      },
-    });
     return failedIds;
   });
 }

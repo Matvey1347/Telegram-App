@@ -8,8 +8,6 @@ import {
   MANAGED_POST_MISSING_IDENTITY_RETRY_MS,
   adDeletionReadyWhere,
   adPlacementLifecycleReadyWhere,
-  greeterBroadcastDispatchableWhere,
-  greeterExpiryClaimableWhere,
   managedPostIdentityCandidateWhere,
   managedPostIdentityReadyWhere,
 } from './due-work-predicates';
@@ -135,18 +133,6 @@ export class DueTaskSchedule {
         return this.nextAdDeletionDueAt(now);
       case 'operations.notifications.publish_due':
         return this.nextOperationsNotificationDueAt();
-      case 'greeter.expire_pending':
-        return this.nextGreeterExpiryDueAt(now);
-      case 'greeter.broadcasts.dispatch':
-        return this.nextGreeterBroadcastDueAt(now);
-      case 'greeter.automations.repair': {
-        const row = await this.prisma.greeterSequenceStepExecution.findFirst({
-          where: { status: 'PENDING' },
-          orderBy: { dueAt: 'asc' },
-          select: { dueAt: true },
-        });
-        return row?.dueAt ?? null;
-      }
       default:
         return null;
     }
@@ -361,75 +347,6 @@ export class DueTaskSchedule {
     ]);
   }
 
-  private async nextGreeterExpiryDueAt(now: Date) {
-    const [ready, future, claimed] = await Promise.all([
-      this.prisma.greeterJoinRequest.findFirst({
-        where: greeterExpiryClaimableWhere(now),
-        orderBy: { expiredAt: 'asc' },
-        select: { expiredAt: true },
-      }),
-      this.prisma.greeterJoinRequest.findFirst({
-        where: { status: 'PENDING_CAPTCHA', expiredAt: { gt: now } },
-        orderBy: { expiredAt: 'asc' },
-        select: { expiredAt: true },
-      }),
-      this.prisma.greeterJoinRequest.findFirst({
-        where: {
-          status: 'PENDING_CAPTCHA',
-          expiredAt: { lte: now },
-          expiryClaimUntil: { gt: now },
-        },
-        orderBy: { expiryClaimUntil: 'asc' },
-        select: { expiredAt: true, expiryClaimUntil: true },
-      }),
-    ]);
-    const claimedAt = claimed?.expiryClaimUntil
-      ? new Date(
-          Math.max(
-            claimed.expiredAt?.getTime() ?? 0,
-            claimed.expiryClaimUntil.getTime(),
-          ),
-        )
-      : null;
-    return earliest([ready?.expiredAt, future?.expiredAt, claimedAt]);
-  }
-
-  private async nextGreeterBroadcastDueAt(now: Date) {
-    const [ready, future, retry] = await Promise.all([
-      this.prisma.greeterBroadcast.findFirst({
-        where: greeterBroadcastDispatchableWhere(now),
-        orderBy: { updatedAt: 'asc' },
-        select: {
-          status: true,
-          scheduledAt: true,
-          processingStartedAt: true,
-          updatedAt: true,
-        },
-      }),
-      this.prisma.greeterBroadcast.findFirst({
-        where: { status: 'SCHEDULED', scheduledAt: { gt: now } },
-        orderBy: { scheduledAt: 'asc' },
-        select: { scheduledAt: true },
-      }),
-      this.prisma.greeterBroadcastRecipient.findFirst({
-        where: {
-          status: 'PENDING',
-          lastError: { not: null },
-          nextQueueAttemptAt: { gt: now },
-          broadcast: { status: 'PROCESSING' },
-        },
-        orderBy: { nextQueueAttemptAt: 'asc' },
-        select: { nextQueueAttemptAt: true },
-      }),
-    ]);
-    const readyAt = ready
-      ? ready.status === 'SCHEDULED'
-        ? ready.scheduledAt
-        : (ready.processingStartedAt ?? ready.updatedAt)
-      : null;
-    const retryAt = retry?.nextQueueAttemptAt ?? null;
-    return earliest([readyAt, future?.scheduledAt, retryAt]);
-  }
 }
 
 function earliest(values: Array<Date | null | undefined>) {

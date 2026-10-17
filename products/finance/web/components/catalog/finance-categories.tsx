@@ -18,19 +18,19 @@ import {
   LoadingState,
   Modal,
   Select,
-} from "@finance-pro/web/components/ui";
-import { IconAvatar } from "@finance-pro/web/components/ui/finance-icon-avatar";
-import { consumerFinanceApi } from "@finance-pro/web/lib/api/consumer-finance-api";
-import { consumerFinanceKeys } from "@finance-pro/web/lib/query/consumer-finance-query-keys";
-import { type FinanceLocale } from "@finance-pro/web/components/i18n/core";
-import { financeCategoriesCopy } from "@finance-pro/web/components/i18n/categories";
-import { localizeFinanceCategory } from "@finance-pro/web/components/catalog/finance-category-i18n";
-import { FinanceConfirmModal } from "@finance-pro/web/components/shared/finance-confirm-modal";
-import { IconPicker } from "@finance-pro/web/components/ui/finance-icon-picker";
+} from "@consumer-finance/web/components/ui";
+import { IconAvatar } from "@consumer-finance/web/components/ui/finance-icon-avatar";
+import { consumerFinanceApi } from "@consumer-finance/web/lib/api/consumer-finance-api";
+import { consumerFinanceKeys } from "@consumer-finance/web/lib/query/consumer-finance-query-keys";
+import { type FinanceLocale } from "@consumer-finance/web/components/i18n/core";
+import { financeCategoriesCopy } from "@consumer-finance/web/components/i18n/categories";
+import { localizeFinanceCategory } from "@consumer-finance/web/components/catalog/finance-category-i18n";
+import { FinanceConfirmModal } from "@consumer-finance/web/components/shared/finance-confirm-modal";
+import { IconPicker } from "@consumer-finance/web/components/ui/finance-icon-picker";
 import {
   categoryDescendantIds,
   FinanceCategoryTree,
-} from "@finance-pro/web/components/catalog/finance-category-tree";
+} from "@consumer-finance/web/components/catalog/finance-category-tree";
 
 export function FinanceCategories({
   botId,

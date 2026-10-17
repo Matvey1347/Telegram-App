@@ -3,7 +3,7 @@ import {
   financeAccountEmoji,
   financeCategoryEmoji,
   financeIconPresentation,
-} from '@finance-pro/api/catalog/finance-entity-emoji';
+} from '@consumer-finance/api/catalog/finance-entity-emoji';
 
 type Payload = Record<string, string | null | undefined>;
 type Result = { step: string; payload: Payload };

@@ -15,8 +15,8 @@ import { PrismaService } from '@api/prisma/prisma.service';
 import {
   DEFAULT_FINANCE_CATEGORIES,
   FINANCE_INIT_DATA_MAX_AGE_SECONDS,
-} from '@finance-pro/api/catalog/finance-defaults';
-import { FinanceConsumerRuntimeEnvironmentService } from '@finance-pro/api/identity/finance-consumer-runtime-environment.service';
+} from '@consumer-finance/api/catalog/finance-defaults';
+import { FinanceConsumerRuntimeEnvironmentService } from '@consumer-finance/api/identity/finance-consumer-runtime-environment.service';
 
 type TelegramWebAppUser = {
   id: number | string;

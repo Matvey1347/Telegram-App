@@ -1,8 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import {
   adDeletionReadyWhere,
-  greeterAutomationDueWhere,
-  greeterBroadcastDispatchableWhere,
   managedPostIdentityReadyWhere,
 } from './due-work-predicates';
 
@@ -36,40 +34,6 @@ describe('due-work predicate parity', () => {
     expect(serialized).toContain('"telegramIdVerificationStatus":"MISSING"');
     expect(serialized).toContain('2026-08-18T07:30:00.000Z');
     expect(serialized).not.toContain('2026-08-16T08:00:00.000Z');
-  });
-
-  it('dispatches processing broadcasts only for materialization or retryable pending recipients', () => {
-    expect(greeterBroadcastDispatchableWhere(now)).toEqual(
-      expect.objectContaining({
-        OR: expect.arrayContaining([
-          expect.objectContaining({
-            status: 'PROCESSING',
-            OR: expect.arrayContaining([
-              { recipients: { none: {} } },
-              expect.objectContaining({ recipients: expect.any(Object) }),
-            ]),
-          }),
-        ]),
-      }),
-    );
-  });
-
-  it('does not keep terminal broadcasts due', () => {
-    const predicate = greeterBroadcastDispatchableWhere(now);
-    const serialized = JSON.stringify(predicate);
-
-    expect(serialized).toContain('SCHEDULED');
-    expect(serialized).toContain('PROCESSING');
-    expect(serialized).not.toContain('COMPLETED');
-    expect(serialized).not.toContain('FAILED');
-    expect(serialized).not.toContain('CANCELLED');
-  });
-
-  it('requires automation repair work to be due', () => {
-    expect(greeterAutomationDueWhere(now)).toEqual({
-      status: 'PENDING',
-      dueAt: { lte: now },
-    });
   });
 
   it('excludes ad deletions until their persisted retry backoff expires', () => {

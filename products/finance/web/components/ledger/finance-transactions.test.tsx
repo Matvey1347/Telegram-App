@@ -1,16 +1,16 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { FinanceFeedbackProvider } from "@finance-pro/web/components/ui/finance-feedback";
-import { consumerFinanceApi } from "@finance-pro/web/lib/api/consumer-finance-api";
-import { FinanceTransactions } from "@finance-pro/web/components/ledger/finance-transactions";
+import { FinanceFeedbackProvider } from "@consumer-finance/web/components/ui/finance-feedback";
+import { consumerFinanceApi } from "@consumer-finance/web/lib/api/consumer-finance-api";
+import { FinanceTransactions } from "@consumer-finance/web/components/ledger/finance-transactions";
 
 const ledger = vi.hoisted(() => ({
   accounts: vi.fn(),
   categories: vi.fn(),
 }));
 
-vi.mock("@finance-pro/web/lib/api/consumer-finance-api", () => ({
+vi.mock("@consumer-finance/web/lib/api/consumer-finance-api", () => ({
   consumerFinanceApi: {
     transactions: vi.fn(),
     transaction: vi.fn(),
@@ -20,7 +20,7 @@ vi.mock("@finance-pro/web/lib/api/consumer-finance-api", () => ({
     undoTransaction: vi.fn(),
   },
 }));
-vi.mock("@finance-pro/web/lib/api/consumer-finance-ledger-api", () => ({
+vi.mock("@consumer-finance/web/lib/api/consumer-finance-ledger-api", () => ({
   consumerFinanceLedgerApi: ledger,
 }));
 

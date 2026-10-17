@@ -4,9 +4,6 @@ import { ApplicationLogsService } from '../application-logs/application-logs.ser
 import { CurrenciesService } from '../../finance/currencies/currencies.service';
 import { TelegramAdSalesService } from '../../telegram/telegram-ad-sales/telegram-ad-sales.service';
 import { TelegramAdPlacementLifecycleService } from '../../telegram/telegram-ad-sales/telegram-ad-placement-lifecycle.service';
-import { GreeterExpiryService } from '@greeter/api/enrollment/greeter-expiry.service';
-import { GreeterBroadcastService } from '@greeter/api/broadcast/greeter-broadcast.service';
-import { GreeterAutomationService } from '@greeter/api/automation/greeter-automation.service';
 import { OperationalHistoryRetentionService } from '../../telegram/telegram-bots/core/operational-history-retention.service';
 import { DailyAnalyticsSyncService } from '../../telegram/telegram-sync/daily-analytics-sync.service';
 import { TelegramWorkspaceFullSyncService } from '../../telegram/telegram-sync/telegram-workspace-full-sync.service';
@@ -151,30 +148,6 @@ export class ScheduledTaskExecutorService {
       }
       return { summary: `Deleted ${result.deletedCount} expired logs.` };
     },
-    'greeter.expire_pending': async () => {
-      const result = await (
-        await this.greeterExpiryService()
-      ).processDueBatch(50);
-      return {
-        summary: `Processed ${result.processed} expired join requests, ${result.failed} failed.`,
-      };
-    },
-    'greeter.broadcasts.dispatch': async () => {
-      const result = await (
-        await this.greeterBroadcastService()
-      ).dispatchDue(10);
-      return {
-        summary: `Processed ${result.processed} due Greeter broadcasts.`,
-      };
-    },
-    'greeter.automations.repair': async () => {
-      const result = await (
-        await this.greeterAutomationService()
-      ).repairPendingExecutions(100);
-      return {
-        summary: `Repaired ${result.queued} Greeter executions, ${result.failed} failed.`,
-      };
-    },
     'operational_history.cleanup': async () => {
       const result = await (await this.retentionService()).cleanup();
       return {
@@ -232,24 +205,6 @@ export class ScheduledTaskExecutorService {
 
   private fullSyncService() {
     return this.moduleRef.resolve(TelegramWorkspaceFullSyncService, undefined, {
-      strict: false,
-    });
-  }
-
-  private greeterExpiryService() {
-    return this.moduleRef.resolve(GreeterExpiryService, undefined, {
-      strict: false,
-    });
-  }
-
-  private greeterBroadcastService() {
-    return this.moduleRef.resolve(GreeterBroadcastService, undefined, {
-      strict: false,
-    });
-  }
-
-  private greeterAutomationService() {
-    return this.moduleRef.resolve(GreeterAutomationService, undefined, {
       strict: false,
     });
   }

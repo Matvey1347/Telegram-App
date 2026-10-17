@@ -10,15 +10,15 @@ import { PrismaService } from '@api/prisma/prisma.service';
 import {
   assertFinanceIdempotency,
   financeRequestFingerprint,
-} from '@finance-pro/api/assets/finance-asset-idempotency';
-import { FinanceLedgerService } from '@finance-pro/api/ledger/finance-ledger.service';
-import { financeValuationSnapshot } from '@finance-pro/api/ledger/finance-transaction-valuation';
-import type { FinanceInvestmentValuationDto } from '@finance-pro/api/investments/finance-investment.dto';
-import { FinanceInvestmentReadService } from '@finance-pro/api/investments/finance-investment-read.service';
+} from '@consumer-finance/api/assets/finance-asset-idempotency';
+import { FinanceLedgerService } from '@consumer-finance/api/ledger/finance-ledger.service';
+import { financeValuationSnapshot } from '@consumer-finance/api/ledger/finance-transaction-valuation';
+import type { FinanceInvestmentValuationDto } from '@consumer-finance/api/investments/finance-investment.dto';
+import { FinanceInvestmentReadService } from '@consumer-finance/api/investments/finance-investment-read.service';
 import {
   financeInvestmentValuationSelect,
   financeInvestmentValuationView,
-} from '@finance-pro/api/investments/finance-investment-view';
+} from '@consumer-finance/api/investments/finance-investment-view';
 
 @Injectable()
 export class FinanceInvestmentValuationService {

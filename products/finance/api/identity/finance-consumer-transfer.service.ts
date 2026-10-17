@@ -7,7 +7,7 @@ import {
 import { createHash, randomBytes } from 'crypto';
 import { PrismaService } from '@api/prisma/prisma.service';
 import { ApplicationLoggerService } from '@api/domains/operations/application-logs/application-logger.service';
-import type { FinanceConsumerSession } from '@finance-pro/api/identity/finance-consumer-session.service';
+import type { FinanceConsumerSession } from '@consumer-finance/api/identity/finance-consumer-session.service';
 
 const TTL_SECONDS = 10 * 60;
 const BROWSER_LOGIN_TTL_SECONDS = 5 * 60;

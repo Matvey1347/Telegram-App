@@ -1,9 +1,9 @@
 import { BadRequestException, ConflictException } from '@nestjs/common';
-import { FinanceImportService } from '@finance-pro/api/portability/finance-import.service';
-import { prepareFinanceImportRates } from '@finance-pro/api/portability/finance-import-rates';
-import { writeFinanceImport } from '@finance-pro/api/portability/finance-import-writer';
-import { financeDataSnapshot } from '@finance-pro/api/catalog/finance-portability';
-import { encodeFinanceRollbackSnapshot } from '@finance-pro/api/portability/finance-portability-history';
+import { FinanceImportService } from '@consumer-finance/api/portability/finance-import.service';
+import { prepareFinanceImportRates } from '@consumer-finance/api/portability/finance-import-rates';
+import { writeFinanceImport } from '@consumer-finance/api/portability/finance-import-writer';
+import { financeDataSnapshot } from '@consumer-finance/api/catalog/finance-portability';
+import { encodeFinanceRollbackSnapshot } from '@consumer-finance/api/portability/finance-portability-history';
 
 jest.mock('./finance-import-rates', () => ({
   prepareFinanceImportRates: jest.fn(),

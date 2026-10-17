@@ -2,7 +2,7 @@ import { TelegramBotApplicationType } from '@prisma/client';
 import { TelegramBotApplicationRegistryService } from './telegram-bot-application-registry.service';
 
 describe('TelegramBotApplicationRegistryService', () => {
-  it('makes Greeter global and keeps Finance workspace restricted', async () => {
+  it('keeps Finance workspace restricted', async () => {
     const prisma = {
       telegramBotApplicationWorkspaceAccess: {
         findMany: jest.fn().mockResolvedValue([]),
@@ -13,17 +13,12 @@ describe('TelegramBotApplicationRegistryService', () => {
     const options = await service.optionsForWorkspace('workspace-1');
 
     expect(
-      options.find((item) => item.type === TelegramBotApplicationType.GREETER),
-    ).toMatchObject({
-      availability: 'GLOBAL',
-      eligible: true,
-    });
-    expect(
       options.find((item) => item.type === TelegramBotApplicationType.FINANCE),
     ).toMatchObject({
       availability: 'WORKSPACE_RESTRICTED',
       eligible: false,
     });
+    expect(options.map((item) => item.type)).not.toContain('SIMPLE_FINANCE');
     expect(
       await service.isEligible(
         'workspace-1',

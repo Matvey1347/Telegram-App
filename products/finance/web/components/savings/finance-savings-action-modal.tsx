@@ -13,14 +13,14 @@ import {
   Modal,
   Select,
   Textarea,
-} from "@finance-pro/web/components/ui";
-import type { FinanceLocale } from "@finance-pro/web/components/i18n/core";
-import { financeSavingsCopy } from "@finance-pro/web/components/i18n/savings";
-import { financeAccountSelectEmoji } from "@finance-pro/web/components/accounts/finance-account-select-icon";
+} from "@consumer-finance/web/components/ui";
+import type { FinanceLocale } from "@consumer-finance/web/components/i18n/core";
+import { financeSavingsCopy } from "@consumer-finance/web/components/i18n/savings";
+import { financeAccountSelectEmoji } from "@consumer-finance/web/components/accounts/finance-account-select-icon";
 import {
   dateInputToIso,
   todayInputValue,
-} from "@finance-pro/web/lib/assets/consumer-finance-assets";
+} from "@consumer-finance/web/lib/assets/consumer-finance-assets";
 
 export type SavingsAction = "ALLOCATE" | "RELEASE" | "REALLOCATE";
 export type SavingsActionValues = {

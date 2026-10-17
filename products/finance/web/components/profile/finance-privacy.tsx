@@ -3,14 +3,14 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Download, Trash2, Upload } from "lucide-react";
-import { Button, Card } from "@finance-pro/web/components/ui";
-import { consumerFinanceApi } from "@finance-pro/web/lib/api/consumer-finance-api";
-import { consumerFinanceKeys } from "@finance-pro/web/lib/query/consumer-finance-query-keys";
-import { FinanceConfirmModal } from "@finance-pro/web/components/shared/finance-confirm-modal";
-import { type FinanceLocale } from "@finance-pro/web/components/i18n/core";
-import { financeSettingsCopy } from "@finance-pro/web/components/i18n/settings";
-import { FinanceImportModal } from "@finance-pro/web/components/shared/finance-import-modal";
-import { FinancePortabilityHistory } from "@finance-pro/web/components/portability/finance-portability-history";
+import { Button, Card } from "@consumer-finance/web/components/ui";
+import { consumerFinanceApi } from "@consumer-finance/web/lib/api/consumer-finance-api";
+import { consumerFinanceKeys } from "@consumer-finance/web/lib/query/consumer-finance-query-keys";
+import { FinanceConfirmModal } from "@consumer-finance/web/components/shared/finance-confirm-modal";
+import { type FinanceLocale } from "@consumer-finance/web/components/i18n/core";
+import { financeSettingsCopy } from "@consumer-finance/web/components/i18n/settings";
+import { FinanceImportModal } from "@consumer-finance/web/components/shared/finance-import-modal";
+import { FinancePortabilityHistory } from "@consumer-finance/web/components/portability/finance-portability-history";
 
 export function FinancePrivacy({
   botId,

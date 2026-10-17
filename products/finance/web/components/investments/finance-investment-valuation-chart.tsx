@@ -1,8 +1,8 @@
 import type { ConsumerFinanceInvestmentValuation } from "@telegram-system/shared";
-import { Card } from "@finance-pro/web/components/ui";
-import { financeIntlLocale, type FinanceLocale } from "@finance-pro/web/components/i18n/core";
-import { financeInvestmentsCopy } from "@finance-pro/web/components/i18n/investments";
-import { formatMoney } from "@finance-pro/web/lib/formatters/consumer-finance-money";
+import { Card } from "@consumer-finance/web/components/ui";
+import { financeIntlLocale, type FinanceLocale } from "@consumer-finance/web/components/i18n/core";
+import { financeInvestmentsCopy } from "@consumer-finance/web/components/i18n/investments";
+import { formatMoney } from "@consumer-finance/web/lib/formatters/consumer-finance-money";
 
 const WIDTH = 760;
 const HEIGHT = 230;

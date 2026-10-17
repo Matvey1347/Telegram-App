@@ -17,8 +17,8 @@ import { StreamResponseService } from '@api/common/stream/stream-response.servic
 import {
   FinanceConsumerAuthGuard,
   type FinanceImportRequest,
-} from '@finance-pro/api/portability/finance-consumer-auth.guard';
-import { FinanceImportService } from '@finance-pro/api/portability/finance-import.service';
+} from '@consumer-finance/api/portability/finance-consumer-auth.guard';
+import { FinanceImportService } from '@consumer-finance/api/portability/finance-import.service';
 
 const MAX_IMPORT_BYTES = 10 * 1024 * 1024;
 

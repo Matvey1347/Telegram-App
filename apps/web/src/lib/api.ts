@@ -26,7 +26,6 @@ import { createTelegramAdSalesApi } from "./features/growth/telegram-ad-sales-ap
 import { createScheduledTasksApi } from "./features/operations/scheduled-tasks-api";
 import { createWorkspaceApi } from "./features/workspace/workspace-api";
 import { createTelegramSystemBotApi } from "./features/telegram/telegram-system-bot-api";
-import { createGreeterApi } from "@greeter/web/lib/greeter-api";
 import {
   clearAccessToken,
   getAccessToken,
@@ -635,8 +634,6 @@ export const {
 } = workspaceApi;
 
 export const telegramSystemBotApi = createTelegramSystemBotApi(api);
-export const greeterApi = createGreeterApi(api);
-
 const financeApi = createFinanceApi({
   api,
   getPaginated,

@@ -1,6 +1,6 @@
 import { Prisma } from '@prisma/client';
-import { FinanceLedgerService } from '@finance-pro/api/ledger/finance-ledger.service';
-import { FinanceProposalService } from '@finance-pro/api/chat-flows/finance-proposal.service';
+import { FinanceLedgerService } from '@consumer-finance/api/ledger/finance-ledger.service';
+import { FinanceProposalService } from '@consumer-finance/api/chat-flows/finance-proposal.service';
 
 describe('FinanceProposalService confirmation atomicity', () => {
   const input = {

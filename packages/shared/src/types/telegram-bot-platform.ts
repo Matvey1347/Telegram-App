@@ -1,4 +1,4 @@
-export type TelegramBotApplicationType = "NONE" | "GREETER" | "FINANCE" | "SIMPLE_FINANCE";
+export type TelegramBotApplicationType = "NONE" | "FINANCE";
 
 export type TelegramBotRuntimeEnvironment = "LOCAL" | "PRODUCTION";
 

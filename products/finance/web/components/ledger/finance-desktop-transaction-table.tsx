@@ -1,11 +1,11 @@
 import { List, Pencil, Trash2 } from "lucide-react";
 import type { ConsumerFinanceTransaction } from "@telegram-system/shared";
-import { Table } from "@finance-pro/web/components/ui";
-import { financeIntlLocale, type FinanceLocale } from "@finance-pro/web/components/i18n/core";
-import { financeTransactionsCopy } from "@finance-pro/web/components/i18n/transactions";
-import { localizeFinanceCategory } from "@finance-pro/web/components/catalog/finance-category-i18n";
-import { formatMoney } from "@finance-pro/web/lib/formatters/consumer-finance-money";
-import { IconAvatar } from "@finance-pro/web/components/ui/finance-icon-avatar";
+import { Table } from "@consumer-finance/web/components/ui";
+import { financeIntlLocale, type FinanceLocale } from "@consumer-finance/web/components/i18n/core";
+import { financeTransactionsCopy } from "@consumer-finance/web/components/i18n/transactions";
+import { localizeFinanceCategory } from "@consumer-finance/web/components/catalog/finance-category-i18n";
+import { formatMoney } from "@consumer-finance/web/lib/formatters/consumer-finance-money";
+import { IconAvatar } from "@consumer-finance/web/components/ui/finance-icon-avatar";
 
 export function DesktopTransactionTable({
   items,

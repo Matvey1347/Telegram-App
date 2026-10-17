@@ -12,19 +12,19 @@ import {
   LoadingState,
   Select,
   Modal,
-} from "@finance-pro/web/components/ui";
-import { consumerFinanceInsightsApi } from "@finance-pro/web/lib/api/consumer-finance-insights-api";
-import { consumerFinanceLedgerApi } from "@finance-pro/web/lib/api/consumer-finance-ledger-api";
-import { consumerFinancePlanningApi } from "@finance-pro/web/lib/api/consumer-finance-planning-api";
-import { formatMoney } from "@finance-pro/web/lib/formatters/consumer-finance-money";
-import { consumerFinanceKeys } from "@finance-pro/web/lib/query/consumer-finance-query-keys";
-import { type FinanceLocale } from "@finance-pro/web/components/i18n/core";
-import { financeBudgetCopy } from "@finance-pro/web/components/i18n/budget";
-import { localizeFinanceCategory } from "@finance-pro/web/components/catalog/finance-category-i18n";
-import { FinancePlanPromotion } from "@finance-pro/web/components/planning/finance-plan-promotion";
-import { IconAvatar } from "@finance-pro/web/components/ui/finance-icon-avatar";
+} from "@consumer-finance/web/components/ui";
+import { consumerFinanceInsightsApi } from "@consumer-finance/web/lib/api/consumer-finance-insights-api";
+import { consumerFinanceLedgerApi } from "@consumer-finance/web/lib/api/consumer-finance-ledger-api";
+import { consumerFinancePlanningApi } from "@consumer-finance/web/lib/api/consumer-finance-planning-api";
+import { formatMoney } from "@consumer-finance/web/lib/formatters/consumer-finance-money";
+import { consumerFinanceKeys } from "@consumer-finance/web/lib/query/consumer-finance-query-keys";
+import { type FinanceLocale } from "@consumer-finance/web/components/i18n/core";
+import { financeBudgetCopy } from "@consumer-finance/web/components/i18n/budget";
+import { localizeFinanceCategory } from "@consumer-finance/web/components/catalog/finance-category-i18n";
+import { FinancePlanPromotion } from "@consumer-finance/web/components/planning/finance-plan-promotion";
+import { IconAvatar } from "@consumer-finance/web/components/ui/finance-icon-avatar";
 import { Pencil, Trash2 } from "lucide-react";
-import { FinanceConfirmModal } from "@finance-pro/web/components/shared/finance-confirm-modal";
+import { FinanceConfirmModal } from "@consumer-finance/web/components/shared/finance-confirm-modal";
 export function FinanceBudget({
   botId,
   locale,

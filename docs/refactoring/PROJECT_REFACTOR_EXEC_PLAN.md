@@ -4,8 +4,8 @@ Updated: 2026-09-20
 
 ## 2026-10-03 Finance Pro and Greeter product boundaries
 
-Consumer Finance implementation now lives in `products/finance-pro/api`,
-`products/finance-pro/bot`, and `products/finance-pro/web`; Greeter now lives
+Consumer Finance implementation now lives in `products/finance/api`,
+`products/finance/bot`, and `products/finance/web`; Greeter now lives
 in `products/greeter/api` and `products/greeter/web`. The Nest and Next apps
 retain composition, route entrypoints, proxy behavior, Prisma ownership, and
 the single Railway deployment. Product workspace manifests make their direct
@@ -15,6 +15,11 @@ entrypoint. No database models, migrations, API URLs, frontend URLs, or
 environment variables changed. Generic Telegram infrastructure remains in
 `apps/api/src/telegram/shared` and `telegram-bots/core`; no second platform
 package was introduced because it would only repackage existing infrastructure.
+
+Historical note: this 2026-10-03 record predates Greeter retirement. As of
+2026-10-17, its source product, routes, runtime wiring, and shared contracts
+are removed; the non-destructive database transition is documented in
+`docs/refactoring/PRODUCT_SPLIT_PLAN.md`.
 
 ## 2026-09-20 Investor profit at historical ownership shares
 

@@ -248,28 +248,6 @@ export const telegramAccountKeys = {
   botChannels: (botId: string) => ["telegram-bots", botId, "channels"] as const,
 };
 
-export const greeterKeys = {
-  root: (botId: string) => ["greeter", botId] as const,
-  overview: (botId: string) => ["greeter", botId, "overview"] as const,
-  users: (botId: string, query: Record<string, unknown>) =>
-    ["greeter", botId, "users", query] as const,
-  analytics: (botId: string, query: Record<string, unknown>) =>
-    ["greeter", botId, "analytics", query] as const,
-  sequences: (botId: string) => ["greeter", botId, "sequences"] as const,
-  sequence: (botId: string, sequenceId: string) =>
-    ["greeter", botId, "sequences", sequenceId] as const,
-  sequencePreview: (botId: string, sequenceId: string) =>
-    ["greeter", botId, "sequences", sequenceId, "preview"] as const,
-  testers: (botId: string, search: string) =>
-    ["greeter", botId, "testers", search] as const,
-  testMode: (botId: string) => ["greeter", botId, "test-mode"] as const,
-  broadcasts: (botId: string) => ["greeter", botId, "broadcasts"] as const,
-  broadcast: (botId: string, broadcastId: string) =>
-    ["greeter", botId, "broadcasts", broadcastId] as const,
-  broadcastEstimate: (botId: string, broadcastId: string) =>
-    ["greeter", botId, "broadcasts", broadcastId, "estimate"] as const,
-};
-
 export const adCampaignKeys = {
   root: ["ad-campaigns"] as const,
   list: () => ["ad-campaigns"] as const,

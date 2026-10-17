@@ -5,7 +5,7 @@ import {
   financeRecurrenceAnchor,
   financeRegularPaymentIsDue,
   nextFinanceOccurrence,
-} from '@finance-pro/api/obligations/finance-obligation-date';
+} from '@consumer-finance/api/obligations/finance-obligation-date';
 
 describe('Finance obligation calendar dates', () => {
   it('stores profile-local dates at the correct DST-aware instant', () => {

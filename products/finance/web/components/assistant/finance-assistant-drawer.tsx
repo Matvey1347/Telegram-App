@@ -9,22 +9,22 @@ import type {
   ConsumerFinanceAssistantProposal,
   ConsumerFinanceAssistantScreen,
 } from "@telegram-system/shared";
-import { consumerFinanceAssistantApi, FinanceAssistantRequestError } from "@finance-pro/web/lib/api/consumer-finance-assistant-api";
-import { consumerFinanceKeys } from "@finance-pro/web/lib/query/consumer-finance-query-keys";
-import { Button } from "@finance-pro/web/components/ui";
-import type { FinanceLocale } from "@finance-pro/web/components/i18n/core";
-import { financeAssistantCopy } from "@finance-pro/web/components/i18n/assistant";
-import { useFinanceAssistantMedia } from "@finance-pro/web/components/hooks/use-finance-assistant-media";
+import { consumerFinanceAssistantApi, FinanceAssistantRequestError } from "@consumer-finance/web/lib/api/consumer-finance-assistant-api";
+import { consumerFinanceKeys } from "@consumer-finance/web/lib/query/consumer-finance-query-keys";
+import { Button } from "@consumer-finance/web/components/ui";
+import type { FinanceLocale } from "@consumer-finance/web/components/i18n/core";
+import { financeAssistantCopy } from "@consumer-finance/web/components/i18n/assistant";
+import { useFinanceAssistantMedia } from "@consumer-finance/web/components/hooks/use-finance-assistant-media";
 import {
   AssistantBubble,
   AssistantProposalCard,
-} from "@finance-pro/web/components/assistant/finance-assistant-message-content";
-import { FinanceAssistantComposer } from "@finance-pro/web/components/assistant/finance-assistant-composer";
+} from "@consumer-finance/web/components/assistant/finance-assistant-message-content";
+import { FinanceAssistantComposer } from "@consumer-finance/web/components/assistant/finance-assistant-composer";
 import {
   FinancePlanPromotion,
   FinanceTierBadge,
-} from "@finance-pro/web/components/planning/finance-plan-promotion";
-import { useFinanceEntitlements } from "@finance-pro/web/components/hooks/use-finance-entitlements";
+} from "@consumer-finance/web/components/planning/finance-plan-promotion";
+import { useFinanceEntitlements } from "@consumer-finance/web/components/hooks/use-finance-entitlements";
 
 type LastRequest =
   | {

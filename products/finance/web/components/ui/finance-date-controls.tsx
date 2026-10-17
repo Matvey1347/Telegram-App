@@ -3,8 +3,8 @@
 import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import type { FinanceLocale } from "@finance-pro/web/components/i18n/core";
-import { financeUiTokens } from "@finance-pro/web/components/ui/finance-ui-tokens";
+import type { FinanceLocale } from "@consumer-finance/web/components/i18n/core";
+import { financeUiTokens } from "@consumer-finance/web/components/ui/finance-ui-tokens";
 
 const dateCopy = {
   en: {

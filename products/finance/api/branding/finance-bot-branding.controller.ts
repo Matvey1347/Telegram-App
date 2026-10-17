@@ -17,7 +17,7 @@ import type { Response } from 'express';
 import { CurrentUser } from '@api/common/current-user.decorator';
 import type { JwtUser } from '@api/common/current-user.decorator';
 import { JwtAuthGuard } from '@api/common/jwt-auth.guard';
-import { FinanceBotBrandingService } from '@finance-pro/api/branding/finance-bot-branding.service';
+import { FinanceBotBrandingService } from '@consumer-finance/api/branding/finance-bot-branding.service';
 import { TelegramBotsService } from '@api/domains/telegram/telegram-bots/core/telegram-bots.service';
 
 @Controller('telegram-bots/:botId/finance-branding')

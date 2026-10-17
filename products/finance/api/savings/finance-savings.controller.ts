@@ -9,15 +9,15 @@ import {
   Req,
 } from '@nestjs/common';
 import type { Request } from 'express';
-import { FinanceConsumerRequestService } from '@finance-pro/api/http/finance-consumer-request.service';
+import { FinanceConsumerRequestService } from '@consumer-finance/api/http/finance-consumer-request.service';
 import {
   FinanceSavingsAllocationDto,
   FinanceSavingsGoalInputDto,
   FinanceSavingsGoalQueryDto,
   FinanceSavingsMovementQueryDto,
   FinanceSavingsReallocationDto,
-} from '@finance-pro/api/savings/finance-savings.dto';
-import { FinanceSavingsService } from '@finance-pro/api/savings/finance-savings.service';
+} from '@consumer-finance/api/savings/finance-savings.dto';
+import { FinanceSavingsService } from '@consumer-finance/api/savings/finance-savings.service';
 
 @Controller('finance-bots/:botId/savings-goals')
 export class FinanceSavingsController {

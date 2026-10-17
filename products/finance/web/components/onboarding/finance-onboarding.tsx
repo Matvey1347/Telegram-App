@@ -3,14 +3,14 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { ConsumerFinanceProfile } from "@telegram-system/shared";
-import { Button, Card, FormField } from "@finance-pro/web/components/ui";
-import { normalizeFinanceLocale, type FinanceLocale } from "@finance-pro/web/components/i18n/core";
-import { financeAuthCopy } from "@finance-pro/web/components/i18n/auth";
-import { FinanceLanguageSelect } from "@finance-pro/web/components/ui/finance-language-select";
-import { FinanceTimezoneSelect } from "@finance-pro/web/components/ui/finance-timezone-select";
-import { FinanceCurrencySelect } from "@finance-pro/web/components/ui/finance-currency-select";
-import { consumerFinanceProfileApi } from "@finance-pro/web/lib/api/consumer-finance-profile-api";
-import { consumerFinanceKeys } from "@finance-pro/web/lib/query/consumer-finance-query-keys";
+import { Button, Card, FormField } from "@consumer-finance/web/components/ui";
+import { normalizeFinanceLocale, type FinanceLocale } from "@consumer-finance/web/components/i18n/core";
+import { financeAuthCopy } from "@consumer-finance/web/components/i18n/auth";
+import { FinanceLanguageSelect } from "@consumer-finance/web/components/ui/finance-language-select";
+import { FinanceTimezoneSelect } from "@consumer-finance/web/components/ui/finance-timezone-select";
+import { FinanceCurrencySelect } from "@consumer-finance/web/components/ui/finance-currency-select";
+import { consumerFinanceProfileApi } from "@consumer-finance/web/lib/api/consumer-finance-profile-api";
+import { consumerFinanceKeys } from "@consumer-finance/web/lib/query/consumer-finance-query-keys";
 
 export function FinanceOnboardingScreen({
   botId,

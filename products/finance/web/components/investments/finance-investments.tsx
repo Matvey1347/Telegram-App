@@ -21,28 +21,28 @@ import {
   ErrorState,
   LoadingState,
   Select,
-} from "@finance-pro/web/components/ui";
-import type { FinanceLocale } from "@finance-pro/web/components/i18n/core";
-import { financeInvestmentsCopy } from "@finance-pro/web/components/i18n/investments";
-import { consumerFinanceInvestmentsApi } from "@finance-pro/web/lib/api/consumer-finance-investments-api";
-import { consumerFinanceLedgerApi } from "@finance-pro/web/lib/api/consumer-finance-ledger-api";
-import { consumerFinanceKeys } from "@finance-pro/web/lib/query/consumer-finance-query-keys";
+} from "@consumer-finance/web/components/ui";
+import type { FinanceLocale } from "@consumer-finance/web/components/i18n/core";
+import { financeInvestmentsCopy } from "@consumer-finance/web/components/i18n/investments";
+import { consumerFinanceInvestmentsApi } from "@consumer-finance/web/lib/api/consumer-finance-investments-api";
+import { consumerFinanceLedgerApi } from "@consumer-finance/web/lib/api/consumer-finance-ledger-api";
+import { consumerFinanceKeys } from "@consumer-finance/web/lib/query/consumer-finance-query-keys";
 import {
   invalidateConsumerAssetDerivations,
   patchInvestment,
   patchInvestmentMutation,
-} from "@finance-pro/web/lib/cache/consumer-finance-assets-cache";
-import { consumerFinanceRequestId } from "@finance-pro/web/lib/assets/consumer-finance-assets";
-import { formatMoney } from "@finance-pro/web/lib/formatters/consumer-finance-money";
-import { FinanceInvestmentCard } from "@finance-pro/web/components/investments/finance-investment-card";
-import { FinanceInvestmentEditor } from "@finance-pro/web/components/investments/finance-investment-editor";
-import { FinanceInvestmentCreateModal } from "@finance-pro/web/components/investments/finance-investment-create-modal";
+} from "@consumer-finance/web/lib/cache/consumer-finance-assets-cache";
+import { consumerFinanceRequestId } from "@consumer-finance/web/lib/assets/consumer-finance-assets";
+import { formatMoney } from "@consumer-finance/web/lib/formatters/consumer-finance-money";
+import { FinanceInvestmentCard } from "@consumer-finance/web/components/investments/finance-investment-card";
+import { FinanceInvestmentEditor } from "@consumer-finance/web/components/investments/finance-investment-editor";
+import { FinanceInvestmentCreateModal } from "@consumer-finance/web/components/investments/finance-investment-create-modal";
 import {
   FinanceInvestmentActionModal,
   type InvestmentActionValues,
-} from "@finance-pro/web/components/investments/finance-investment-action-modal";
-import { FinanceConfirmModal } from "@finance-pro/web/components/shared/finance-confirm-modal";
-import { FinanceSortControl } from "@finance-pro/web/components/ui/finance-sort-control";
+} from "@consumer-finance/web/components/investments/finance-investment-action-modal";
+import { FinanceConfirmModal } from "@consumer-finance/web/components/shared/finance-confirm-modal";
+import { FinanceSortControl } from "@consumer-finance/web/components/ui/finance-sort-control";
 
 type StatusFilter = ConsumerFinanceInvestmentStatus | "ALL";
 

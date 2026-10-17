@@ -4,7 +4,7 @@ import type {
   FinanceReminderDelivery,
   FinanceReminderDeliveryPort,
 } from '@api/domains/telegram/telegram-bots/core/telegram-bot-delivery.ports';
-import { financeChatLocale, t } from '@finance-pro/api/i18n/finance-chat-i18n';
+import { financeChatLocale, t } from '@consumer-finance/api/i18n/finance-chat-i18n';
 
 @Injectable()
 export class FinanceReminderDeliveryService implements FinanceReminderDeliveryPort {

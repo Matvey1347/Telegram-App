@@ -1,4 +1,4 @@
-import type { FinanceLocale } from "@finance-pro/web/components/i18n/core";
+import type { FinanceLocale } from "@consumer-finance/web/components/i18n/core";
 
 const copy = {
   en: {

@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 import type { ConsumerFinanceAnalytics } from "@telegram-system/shared";
-import { formatMoney } from "@finance-pro/web/lib/formatters/consumer-finance-money";
-import type { FinanceLocale } from "@finance-pro/web/components/i18n/core";
-import { financeAnalyticsCopy } from "@finance-pro/web/components/i18n/analytics";
+import { formatMoney } from "@consumer-finance/web/lib/formatters/consumer-finance-money";
+import type { FinanceLocale } from "@consumer-finance/web/components/i18n/core";
+import { financeAnalyticsCopy } from "@consumer-finance/web/components/i18n/analytics";
 
 export function CashflowChart({
   data,

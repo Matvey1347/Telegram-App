@@ -1,8 +1,8 @@
 "use client";
 
 import { ArrowDown, ArrowUp } from "lucide-react";
-import { Button, Select } from "@finance-pro/web/components/ui/finance-controls";
-import type { FinanceLocale } from "@finance-pro/web/components/i18n/core";
+import { Button, Select } from "@consumer-finance/web/components/ui/finance-controls";
+import type { FinanceLocale } from "@consumer-finance/web/components/i18n/core";
 
 export function FinanceSortControl<TField extends string>({
   locale,

@@ -4,7 +4,7 @@ import {
   removeLinkedInvestmentTransaction,
   syncLinkedInvestmentEdit,
   type LinkedInvestmentTransaction,
-} from '@finance-pro/api/ledger/finance-investment-transaction-mutation';
+} from '@consumer-finance/api/ledger/finance-investment-transaction-mutation';
 
 const linked = (): LinkedInvestmentTransaction => ({
   id: 'transaction-1',

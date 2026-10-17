@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 import type { ConsumerFinanceDebt } from "@telegram-system/shared";
-import { Button, FormField, Modal, Select } from "@finance-pro/web/components/ui";
-import type { FinanceLocale } from "@finance-pro/web/components/i18n/core";
-import { financeDebtsCopy } from "@finance-pro/web/components/i18n/debts";
+import { Button, FormField, Modal, Select } from "@consumer-finance/web/components/ui";
+import type { FinanceLocale } from "@consumer-finance/web/components/i18n/core";
+import { financeDebtsCopy } from "@consumer-finance/web/components/i18n/debts";
 
 type DebtCreateMode = "NEW" | "SETTLE";
 

@@ -1,7 +1,7 @@
 import { ConflictException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import type { PrismaService } from '@api/prisma/prisma.service';
-import { financeAccountAllocationLockKey } from '@finance-pro/api/assets/finance-asset-locks';
+import { financeAccountAllocationLockKey } from '@consumer-finance/api/assets/finance-asset-locks';
 
 type AccountArchivePrisma = Pick<
   Prisma.TransactionClient,

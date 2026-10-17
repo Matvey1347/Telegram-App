@@ -96,9 +96,8 @@
     "rootDir": "src",
     "roots": [
       "<rootDir>",
-      "<rootDir>/../../../products/finance-pro/api",
-      "<rootDir>/../../../products/finance-pro/bot",
-      "<rootDir>/../../../products/greeter/api"
+      "<rootDir>/../../../products/finance/api",
+      "<rootDir>/../../../products/finance/bot"
     ],
     "testRegex": ".*\\.spec\\.ts$",
     "transform": {
@@ -106,9 +105,8 @@
     },
     "moduleNameMapper": {
       "^@api/(.*)$": "<rootDir>/$1",
-      "^@finance-pro/api/(.*)$": "<rootDir>/../../../products/finance-pro/api/$1",
-      "^@finance-pro/bot/(.*)$": "<rootDir>/../../../products/finance-pro/bot/$1",
-      "^@greeter/api/(.*)$": "<rootDir>/../../../products/greeter/api/$1"
+      "^@consumer-finance/api/(.*)$": "<rootDir>/../../../products/finance/api/$1",
+      "^@consumer-finance/bot/(.*)$": "<rootDir>/../../../products/finance/bot/$1"
     },
     "collectCoverageFrom": [
       "**/*.(t|j)s"

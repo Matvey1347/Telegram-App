@@ -5,7 +5,7 @@ import {
   FinanceChatFlowService,
   type FinanceFlowInput,
   type FinanceFlowResult,
-} from '@finance-pro/api/chat-flows/finance-chat-flow.service';
+} from '@consumer-finance/api/chat-flows/finance-chat-flow.service';
 import type { TelegramBotWebhookUpdate } from '@api/domains/telegram/telegram-bots/core/telegram-bot-update.types';
 
 export type FinanceBotIconInputResult =

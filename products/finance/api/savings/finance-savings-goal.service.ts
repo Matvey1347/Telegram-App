@@ -6,8 +6,8 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '@api/prisma/prisma.service';
-import type { FinanceSavingsGoalInputDto } from '@finance-pro/api/savings/finance-savings.dto';
-import { FinanceSavingsReadService } from '@finance-pro/api/savings/finance-savings-read.service';
+import type { FinanceSavingsGoalInputDto } from '@consumer-finance/api/savings/finance-savings.dto';
+import { FinanceSavingsReadService } from '@consumer-finance/api/savings/finance-savings-read.service';
 
 @Injectable()
 export class FinanceSavingsGoalService {

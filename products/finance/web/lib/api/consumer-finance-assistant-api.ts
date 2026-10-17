@@ -12,7 +12,7 @@ import {
   consumerFinanceRoot,
   consumerRequest,
   resolveConsumerFinanceApiBase,
-} from "@finance-pro/web/lib/api/consumer-finance-http";
+} from "@consumer-finance/web/lib/api/consumer-finance-http";
 
 export class FinanceAssistantRequestError extends Error {
   constructor(message: string, readonly code?: string) {

@@ -1,4 +1,4 @@
-import { Bot, Handshake, Wallet } from "lucide-react";
+import { Bot, Wallet } from "lucide-react";
 import type { TelegramBotApplicationType } from "@telegram-system/shared";
 
 export function BotRuntimeAvatar({
@@ -8,16 +8,15 @@ export function BotRuntimeAvatar({
   type: TelegramBotApplicationType;
   avatarUrl?: string | null;
 }) {
-  const Icon = type === "GREETER" ? Handshake : type === "FINANCE" || type === "SIMPLE_FINANCE" ? Wallet : Bot;
+  const isFinanceBot = type === "FINANCE";
+  const Icon = isFinanceBot ? Wallet : Bot;
   const tone =
-    type === "FINANCE"
+    isFinanceBot
       ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"
-      : type === "GREETER"
-        ? "border-amber-500/30 bg-amber-500/10 text-amber-200"
-        : "border-sky-500/30 bg-sky-500/10 text-sky-200";
+      : "border-sky-500/30 bg-sky-500/10 text-sky-200";
   return (
     <div
-      aria-label={`${type === "FINANCE" ? "Finance" : type === "GREETER" ? "Greeter" : "Access"} bot`}
+      aria-label={`${isFinanceBot ? "Finance" : "Access"} bot`}
       className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border ${tone}`}
     >
       {avatarUrl ? (
