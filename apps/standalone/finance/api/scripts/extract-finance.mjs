@@ -4,7 +4,7 @@ import { parse } from 'dotenv';
 import pg from 'pg';
 
 const { Client } = pg;
-const root = resolve(import.meta.dirname, '..', '..', '..');
+const root = resolve(import.meta.dirname, '..', '..', '..', '..', '..');
 const sourceUrl = parse(readFileSync(resolve(root, '.env'))).DATABASE_URL;
 const destinationUrl = parse(readFileSync(resolve(root, 'products/finance/.env.local'))).FINANCE_DATABASE_URL;
 if (!sourceUrl || !destinationUrl || sourceUrl === destinationUrl) throw new Error('Source and dedicated Finance database URLs must be distinct.');

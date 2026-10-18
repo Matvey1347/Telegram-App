@@ -4,7 +4,7 @@ import { parse } from 'dotenv';
 import pg from 'pg';
 
 const { Client } = pg;
-const workspaceRoot = resolve(import.meta.dirname, '..', '..', '..', '..');
+const workspaceRoot = resolve(import.meta.dirname, '..', '..', '..', '..', '..');
 const sourceProfile = resolve(workspaceRoot, '.env');
 const destinationProfile = resolve(workspaceRoot, 'products', 'finance', '.env.local');
 const supportingSourceTables = new Set([

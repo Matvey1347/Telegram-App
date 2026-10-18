@@ -6,7 +6,7 @@ import { parse } from 'dotenv';
 import pg from 'pg';
 
 const { Client } = pg;
-const root = resolve(import.meta.dirname, '..', '..', '..');
+const root = resolve(import.meta.dirname, '..', '..', '..', '..', '..');
 const backupName = process.argv.find((value) => value.startsWith('--backup='))?.slice(9);
 const username = process.argv.find((value) => value.startsWith('--username='))?.slice(11)?.replace(/^@/, '').toLowerCase();
 const execute = process.argv.includes('--execute');

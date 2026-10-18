@@ -6,7 +6,7 @@ import { parse } from 'dotenv';
 import pg from 'pg';
 
 const { Client } = pg;
-const root = resolve(import.meta.dirname, '..', '..', '..');
+const root = resolve(import.meta.dirname, '..', '..', '..', '..', '..');
 const sourceProfile = resolve(root, '.env');
 const backupDirectory = resolve(root, '.finance-backups');
 const sourceUrl = parse(readFileSync(sourceProfile)).DATABASE_URL;

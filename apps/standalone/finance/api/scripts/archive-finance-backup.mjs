@@ -6,7 +6,7 @@ import { parse } from 'dotenv';
 import pg from 'pg';
 
 const { Client } = pg;
-const root = resolve(import.meta.dirname, '..', '..', '..', '..');
+const root = resolve(import.meta.dirname, '..', '..', '..', '..', '..');
 const backupDirectory = resolve(root, '.finance-backups');
 const requested = process.argv[2];
 const backupName = requested ?? readdirSync(backupDirectory)
