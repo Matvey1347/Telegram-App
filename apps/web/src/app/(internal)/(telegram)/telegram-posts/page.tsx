@@ -90,6 +90,7 @@ import {
   type TelegramTextEditorHandle,
 } from "@/components/features/telegram/telegram/telegram-text-editor";
 import { TelegramPostPreview } from "@/components/features/telegram/telegram/telegram-post-preview";
+import { TelegramPostSendToBotButton } from "@/components/features/telegram/telegram/telegram-post-send-to-bot-button";
 import { TelegramCustomEmojiPacksModal } from "@/components/features/telegram/telegram/telegram-custom-emoji-packs-modal";
 import {
   mapManagedPostPages,
@@ -5676,6 +5677,16 @@ function TelegramPostWorkspace({
                   ) : null}
                 </div>
               ) : null}
+              <TelegramPostSendToBotButton
+                disabled={busy || editorIsSaving}
+                draft={{
+                  title,
+                  text,
+                  imageUrls,
+                  mediaItems,
+                  buttonRows,
+                }}
+              />
               <Button
                 onClick={run}
                 disabled={!!publishDisabledReason || dependencyPublishBlocked}

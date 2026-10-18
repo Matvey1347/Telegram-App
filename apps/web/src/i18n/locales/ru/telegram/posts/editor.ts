@@ -128,6 +128,11 @@ const messages = {
     "Доступ системного бота подтверждён. Теперь можно добавлять встроенные кнопки.",
   "telegram.posts.editor.botAccessError":
     "Не удалось проверить доступ системного бота.",
+  "telegram.posts.editor.sendToBot": "Отправить в бота",
+  "telegram.posts.editor.sendingToBot": "Отправляем в бота…",
+  "telegram.posts.editor.sentToBot": "✓ Отправлено в бота",
+  "telegram.posts.editor.sendToBotError":
+    "Не удалось отправить текущую публикацию системному боту.",
   "telegram.posts.editor.restored":
     "«{title}» восстановлена из резервной копии и перенесена в черновики.",
   "telegram.posts.editor.restoreError":

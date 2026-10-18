@@ -126,6 +126,11 @@ const messages = {
   "telegram.posts.editor.botAccessConfirmed":
     "System bot access confirmed. You can now add inline buttons.",
   "telegram.posts.editor.botAccessError": "Could not verify system bot access.",
+  "telegram.posts.editor.sendToBot": "Send to bot",
+  "telegram.posts.editor.sendingToBot": "Sending to bot…",
+  "telegram.posts.editor.sentToBot": "✓ Sent to bot",
+  "telegram.posts.editor.sendToBotError":
+    "Could not send the current post to the System Bot.",
   "telegram.posts.editor.restored":
     '"{title}" restored from backup and moved to draft.',
   "telegram.posts.editor.restoreError": "Could not restore post backup.",
