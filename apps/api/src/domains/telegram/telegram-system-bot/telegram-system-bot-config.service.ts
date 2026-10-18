@@ -62,6 +62,18 @@ export class TelegramSystemBotConfigService {
     }));
   }
 
+  /** Public runtime metadata for dashboard cards. Credentials stay in env. */
+  dashboardRuntimes() {
+    return (['LOCAL', 'PRODUCTION'] as const)
+      .map((environment) => ({
+        environment,
+        username: this.valueForEnvironment(environment, 'USERNAME'),
+        configured: Boolean(this.valueForEnvironment(environment, 'TOKEN')),
+        selected: environment === this.environment,
+      }))
+      .filter((runtime) => runtime.configured || runtime.username);
+  }
+
   get frontendUrl() {
     return (
       publicWebOrigin({

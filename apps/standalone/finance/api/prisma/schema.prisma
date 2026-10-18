@@ -1,0 +1,130 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum FinanceWebhookUpdateStatus {
+  RECEIVED
+  ACCEPTED
+  FAILED
+}
+
+enum FinanceTransactionKind {
+  INCOME
+  EXPENSE
+}
+
+enum FinanceBotRuntimeEnvironment {
+  LOCAL
+  PRODUCTION
+}
+
+model FinanceBot {
+  id                      String                  @id @default(cuid())
+  legacyBotIntegrationId  String?                 @unique
+  telegramBotId           String?                 @unique
+  telegramUsername        String?                 @unique
+  telegramDisplayName     String?
+  telegramDescription     String?
+  avatarImage             Bytes?
+  avatarMimeType          String?
+  avatarFetchedAt         DateTime?
+  runtimeEnvironment      FinanceBotRuntimeEnvironment? @unique
+  webhookEnabled          Boolean                 @default(false)
+  createdAt               DateTime                @default(now())
+  updatedAt               DateTime                @updatedAt
+  telegramUsers           FinanceTelegramUser[]
+  webhookUpdates          FinanceWebhookUpdate[]
+  profiles                FinanceProfile[]
+}
+
+model FinanceTelegramUser {
+  id              String      @id @default(cuid())
+  financeBotId    String
+  telegramUserId  String
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  financeBot      FinanceBot  @relation(fields: [financeBotId], references: [id], onDelete: Cascade)
+  profile         FinanceProfile?
+
+  @@unique([financeBotId, telegramUserId])
+  @@index([telegramUserId])
+}
+
+model FinanceProfile {
+  id                    String              @id @default(cuid())
+  financeBotId          String
+  financeTelegramUserId String              @unique
+  defaultCurrency       String              @default("USD")
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+  financeBot            FinanceBot          @relation(fields: [financeBotId], references: [id], onDelete: Cascade)
+  financeTelegramUser   FinanceTelegramUser @relation(fields: [financeTelegramUserId], references: [id], onDelete: Cascade)
+  accounts              FinanceAccount[]
+  transactions          FinanceTransaction[]
+
+  @@unique([id, financeBotId])
+  @@index([financeBotId])
+}
+
+model FinanceAccount {
+  id           String           @id @default(cuid())
+  profileId    String
+  name         String
+  currency     String
+  balanceMinor BigInt           @default(0)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  profile      FinanceProfile   @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  transactions FinanceTransaction[]
+
+  @@index([profileId])
+}
+
+model FinanceTransaction {
+  id                   String               @id @default(cuid())
+  profileId            String
+  accountId            String
+  kind                 FinanceTransactionKind
+  amountMinor          BigInt
+  economicAmountMinor  BigInt
+  occurredAt           DateTime             @default(now())
+  createdAt            DateTime             @default(now())
+  profile              FinanceProfile       @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  account              FinanceAccount       @relation(fields: [accountId], references: [id], onDelete: Restrict)
+
+  @@index([profileId, occurredAt])
+  @@index([accountId, occurredAt])
+}
+
+model FinanceWebhookUpdate {
+  id            String                      @id @default(cuid())
+  financeBotId  String
+  updateId      String
+  payload       Json
+  status        FinanceWebhookUpdateStatus  @default(RECEIVED)
+  receivedAt    DateTime                    @default(now())
+  processedAt   DateTime?
+  error         String?
+  createdAt     DateTime                    @default(now())
+  updatedAt     DateTime                    @updatedAt
+  financeBot    FinanceBot                  @relation(fields: [financeBotId], references: [id], onDelete: Cascade)
+
+  @@unique([financeBotId, updateId])
+  @@index([status, receivedAt])
+}
+
+model FinanceLegacyArchive {
+  sourceTable    String
+  sourceId       String
+  payload        Json
+  backupChecksum String
+  copiedAt       DateTime @default(now())
+
+  @@id([sourceTable, sourceId])
+  @@index([backupChecksum])
+}

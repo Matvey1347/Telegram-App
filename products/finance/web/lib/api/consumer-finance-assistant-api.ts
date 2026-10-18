@@ -6,7 +6,7 @@ import type {
   ConsumerFinanceAssistantProposal,
   ConsumerFinanceAssistantStreamEvent,
 } from "@telegram-system/shared";
-import { createRequestCorrelationId } from "@/lib/http/transport";
+import { createRequestCorrelationId } from "@finance-web/lib/http/transport";
 import {
   consumerFinanceHttp,
   consumerFinanceRoot,

@@ -7,6 +7,7 @@ build
 .env.*.local
 .DS_Store
 coverage
+.finance-backups/
 .vscode
 .idea
 

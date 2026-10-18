@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ImagePlus, LoaderCircle, Plus, Search, Upload } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { emojiIcons, type EmojiCategory } from "@/lib/emoji-icons";
+import { emojiIcons, type EmojiCategory } from "@finance-web/lib/emoji-icons";
 import type {
   ConsumerFinanceCustomIcon,
   ResolvedEmoji,

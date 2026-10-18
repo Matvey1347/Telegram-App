@@ -1,7 +1,6 @@
 import type { AxiosAdapter, InternalAxiosRequestConfig } from "axios";
 import { AxiosError } from "axios";
 import { afterEach, describe, expect, it } from "vitest";
-import { AUTH_TOKEN_KEY } from "@/lib/features/identity/auth";
 import {
   CONSUMER_FINANCE_REQUEST_TIMEOUT_MS,
   consumerFinanceApi,
@@ -17,7 +16,7 @@ afterEach(() => {
 
 describe("consumerFinanceApi", () => {
   it("omits internal auth and workspace headers", async () => {
-    localStorage.setItem(AUTH_TOKEN_KEY, "internal-token");
+    localStorage.setItem("telegram_system_access_token", "internal-token");
     localStorage.setItem("selected-workspace-id", "workspace-id");
     let request: InternalAxiosRequestConfig | undefined;
     consumerFinanceHttp.defaults.adapter = async (config) => {
@@ -35,7 +34,7 @@ describe("consumerFinanceApi", () => {
   });
 
   it("keeps the internal token after a consumer 401", async () => {
-    localStorage.setItem(AUTH_TOKEN_KEY, "internal-token");
+    localStorage.setItem("telegram_system_access_token", "internal-token");
     consumerFinanceHttp.defaults.adapter = ((config) =>
       Promise.reject(
         new AxiosError("Unauthorized", undefined, config, undefined, {
@@ -50,7 +49,7 @@ describe("consumerFinanceApi", () => {
     await expect(consumerFinanceApi.dashboard("bot-id")).rejects.toThrow(
       "Unauthorized",
     );
-    expect(localStorage.getItem(AUTH_TOKEN_KEY)).toBe("internal-token");
+    expect(localStorage.getItem("telegram_system_access_token")).toBe("internal-token");
   });
 
   it("requests analytics as a single filtered consumer read", async () => {

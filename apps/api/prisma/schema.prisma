@@ -540,6 +540,10 @@ enum TelegramBotRuntimeEnvironment {
   PRODUCTION
 }
 
+enum TelegramConfiguredBotKind {
+  SYSTEM
+}
+
 enum TelegramBotRuntimeStatus {
   DISABLED
   STARTING
@@ -1006,6 +1010,7 @@ model Workspace {
   telegramCustomEmojiPacks               TelegramCustomEmojiPack[]
   telegramBotIntegrations                TelegramBotIntegration[]
   telegramBotRuntimeInstances            TelegramBotRuntimeInstance[]
+  telegramConfiguredBotAvatars           TelegramConfiguredBotAvatar[]
   telegramBotApplicationAccesses         TelegramBotApplicationWorkspaceAccess[]
   telegramBotUsers                       TelegramBotUser[]
   telegramBotUpdateLogs                  TelegramBotUpdateLog[]
@@ -3763,6 +3768,27 @@ model TelegramBotRuntimeInstance {
   @@unique([id, workspaceId, botIntegrationId])
   @@index([workspaceId, botIntegrationId])
   @@index([environment, runtimeStatus])
+}
+
+// Environment-managed bots are not TelegramBotIntegration records. Their
+// profile photos are cached here so opening the dashboard never calls Telegram.
+model TelegramConfiguredBotAvatar {
+  id          String                         @id @default(cuid())
+  workspaceId String
+  kind        TelegramConfiguredBotKind
+  environment TelegramBotRuntimeEnvironment
+  username    String
+  displayName String?
+  description String?
+  image       Bytes?
+  mimeType    String?
+  fetchedAt   DateTime                       @default(now())
+  updatedAt   DateTime                       @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, kind, environment])
+  @@index([workspaceId, kind])
 }
 
 model TelegramBotApplicationWorkspaceAccess {

@@ -15,7 +15,7 @@ are nearby or have similar names.
 | Boundary                   | Backend ownership                                                        | Frontend ownership                                                                           |
 | -------------------------- | ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------- |
 | Internal Finance           | `apps/api/src/domains/finance/*`                                         | internal Finance routes and non-consumer Finance feature modules                             |
-| Consumer Finance | `products/finance/api/*`; `products/finance/bot/*` adapter | `products/finance/web/*`; `(consumer-finance)` routes remain Next entrypoints |
+| Consumer Finance | product code in `products/finance/{api,bot}`; independent host foundation in `apps/standalone/finance/api` | product UI in `products/finance/web`; independent host foundation in `apps/standalone/finance/web` |
 | Telegram bot platform      | `telegram-bots/core/*` and the bot composition root                      | shared management shell and low-level integration presentation only                          |
 | Telegram protocol adapters | `apps/api/src/telegram/shared/*`                                         | hydrated contracts such as `ResolvedEmoji`, never protocol clients                           |
 | Stable cross-app contracts | `packages/shared`                                                        | serializable contracts and pure dependency-free helpers only                                 |

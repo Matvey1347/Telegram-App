@@ -30,6 +30,12 @@ export class UpdateTelegramBotRuntimeProfileDto {
   @Equals('true') confirmTelegramUpdate!: string;
 }
 
+export class UpdateConfiguredSystemBotProfileDto {
+  @IsOptional() @IsString() @MaxLength(64) name?: string;
+  @IsOptional() @IsString() @MaxLength(512) description?: string;
+  @Equals('true') confirmTelegramUpdate!: string;
+}
+
 export class SwitchTelegramBotApplicationDto {
   @IsIn(['NONE', 'FINANCE'])
   applicationType!: 'NONE' | 'FINANCE';

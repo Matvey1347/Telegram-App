@@ -15,6 +15,7 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      "@finance-web": path.resolve(__dirname, "../standalone/finance/web/src"),
       "@consumer-finance/web/components": path.resolve(
         __dirname,
         "../../products/finance/web/components",

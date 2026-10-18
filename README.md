@@ -61,16 +61,22 @@ Finance has one logical profile and data model across its entry points. Telegram
 
 ## Environment contract
 
-The project has one environment profile:
+Nexeloq and the standalone Finance foundation have isolated environment
+profiles:
 
 - `.env` contains the real runtime/deployment values and is git-ignored.
 - `.env.example` contains the same keys and section order with safe example values.
 - `.env.prod` is not supported. Do not recreate it.
-- Nested app-level `.env*` files are not supported; root scripts inject their
-  local/build topology explicitly, and `pnpm env:check` rejects extra profiles.
-- Add, rename, move, or remove an environment key in `.env` and `.env.example`
-  together, then run `pnpm env:check`. The check compares key names only and
-  never prints secret values.
+- Nexeloq continues to use the root `.env` and `.env.example` during its
+  transition. It must not contain `FINANCE_*` values.
+- Finance uses one ignored `products/finance/.env.local`, created from the
+  product-root example. Its dedicated database URL and secrets must never be
+  copied from Nexeloq.
+- Run `pnpm env:check` after changing a profile. It checks the profile
+  allowlists and required names without printing values.
+
+See [Finance setup](docs/setup/FINANCE_SETUP.md) for the port map, local
+commands and separate Railway/Neon requirements.
 
 Runtime profile keys are intentionally limited to secrets, deployment topology,
 and operational switches that may legitimately differ between deployments:
@@ -129,17 +135,18 @@ Key generation:
 
 ## Telegram runtime and public URLs
 
-- `FRONTEND_URL` is the one public web origin. Application URLs are code-owned
-  routes below that origin; Finance uses `/finance/:botId` rather than a
-  product-specific environment URL.
+- `FRONTEND_URL` is Nexeloq's public web origin. Standalone consumer Finance
+  has its own root origin, `FINANCE_WEB_PUBLIC_URL` (for example
+  `https://groshly.nexeloq.com`), and never exposes a bot ID in its public URL.
 - `API_PUBLIC_URL` is the canonical public API origin for browser callback and
   webhook flows when it differs from the web origin. There is no legacy alias.
 - `NEXT_PUBLIC_API_URL` selects browser-to-API topology at build time. Public
   HTTPS pages never use a configured loopback API: they fall back to
   same-origin `/api`. Railway builds with `/api`; local `localhost:3000` uses
   `http://localhost:4000/api`.
-- Workspace and System Bot webhook routes are built from `API_PUBLIC_URL`; there
-  are no separate webhook-origin variables while both share the same ingress.
+- Workspace and System Bot webhook routes are built from `API_PUBLIC_URL`.
+  Finance owns the separate `FINANCE_API_PUBLIC_URL`, including its own
+  Telegram webhook ingress and bot credentials.
 - Workspace bot runtime selection uses `TELEGRAM_BOT_RUNTIME_ENVIRONMENT=LOCAL|PRODUCTION`. Both environments use separate BotFather bots and webhooks while sharing one logical bot's business data.
 - Finance consumer authentication uses the same `TELEGRAM_BOT_RUNTIME_ENVIRONMENT` selection as the workspace bot runtime.
 - System Bot runtime selection uses `TELEGRAM_SYSTEM_BOT_ENVIRONMENT=LOCAL|PRODUCTION` with distinct `TELEGRAM_SYSTEM_BOT_LOCAL_{TOKEN,USERNAME,WEBHOOK_SECRET}` and `TELEGRAM_SYSTEM_BOT_PRODUCTION_{TOKEN,USERNAME,WEBHOOK_SECRET}` credentials. There is no legacy unsuffixed-token fallback and no polling mode.

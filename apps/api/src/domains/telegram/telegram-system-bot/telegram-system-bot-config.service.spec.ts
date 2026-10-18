@@ -92,6 +92,20 @@ describe('TelegramSystemBotConfigService', () => {
         selected: true,
       },
     ]);
+    expect(production.dashboardRuntimes()).toEqual([
+      {
+        environment: 'LOCAL',
+        username: 'local_bot',
+        configured: true,
+        selected: false,
+      },
+      {
+        environment: 'PRODUCTION',
+        username: 'production_bot',
+        configured: true,
+        selected: true,
+      },
+    ]);
   });
 
   it('stays disabled without an exact environment and ignores legacy credentials', () => {

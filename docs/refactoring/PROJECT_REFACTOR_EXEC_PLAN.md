@@ -1,6 +1,19 @@
 # Project Refactor ExecPlan
 
-Updated: 2026-09-20
+Updated: 2026-10-18
+
+## 2026-10-18 Finance host namespace
+
+Consumer Finance remains at `products/finance/{api,bot,web}`. Its independent
+runtime hosts now live at `apps/standalone/finance/api` and
+`apps/standalone/finance/web`, replacing the flat `apps/finance-api` and
+`apps/finance-web` directories. The `apps/standalone/*/*` workspace glob makes
+room for future products without conflating a product implementation with its
+runtime host. TypeScript/Jest/Vitest aliases, Tailwind sources, deployment
+watch paths, local profile readers, and host tooling point to their respective
+new locations. Package names, public API and web URLs, data contracts,
+database records, and runtime behavior are unchanged; this relocation adds no
+process, polling, persistence, network request, or deployment.
 
 ## 2026-10-03 Finance Pro and Greeter product boundaries
 

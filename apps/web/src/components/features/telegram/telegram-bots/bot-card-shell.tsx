@@ -29,6 +29,7 @@ import {
 } from "../telegram/telegram-card-actions-menu";
 import { runtimeAppPresentation } from "./runtime-app-presentation";
 import { BotRuntimeAvatar } from "./bot-runtime-avatar";
+import { BotRuntimeEnvironmentTabs } from "./bot-runtime-environment-tabs";
 
 export function BotCardShell({
   bot,
@@ -156,26 +157,11 @@ export function BotCardShell({
           />
         </TelegramCardActionsMenu>
       </div>
-      {!hasSingleRuntime ? (
-        <div
-          className="mt-2 inline-flex rounded-lg border border-neutral-800 bg-neutral-900 p-0.5"
-          role="tablist"
-          aria-label="Bot runtime environment"
-        >
-          {(["PRODUCTION", "LOCAL"] as const).map((option) => (
-            <button
-              key={option}
-              type="button"
-              role="tab"
-              aria-selected={environment === option}
-              onClick={() => setEnvironment(option)}
-              className={`rounded-md px-2.5 py-1 text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${environment === option ? "bg-neutral-700 text-white" : "text-neutral-400 hover:text-neutral-200"}`}
-            >
-              {option === "PRODUCTION" ? "Production" : "Local"}
-            </button>
-          ))}
-        </div>
-      ) : null}
+      <BotRuntimeEnvironmentTabs
+        environment={environment}
+        availableEnvironments={bot.runtimes.map((item) => item.environment)}
+        onChange={setEnvironment}
+      />
       {runtime ? (
         <RuntimeDetails
           runtime={runtime}

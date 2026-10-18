@@ -40,6 +40,10 @@ import { BotBillingModule } from '../bot-billing/bot-billing.module';
 import { FinanceAiConfigService } from '@consumer-finance/api/ai/finance-ai-config.service';
 import { FinanceAiConfigController } from '@consumer-finance/api/ai/finance-ai-config.controller';
 import { FinanceController } from '@consumer-finance/api/http/finance.controller';
+import { FinanceBrowserContextController } from '@consumer-finance/api/http/finance-browser-context.controller';
+import { FinanceLocalDevelopmentController } from '@consumer-finance/api/http/finance-local-development.controller';
+import { FinanceBrowserContextService } from '@consumer-finance/api/http/finance-browser-context.service';
+import { FinanceLocalDevelopmentService } from '@consumer-finance/api/http/finance-local-development.service';
 import { FinanceUltimateController } from '@consumer-finance/api/ultimate/finance-ultimate.controller';
 import { FinanceUltimateService } from '@consumer-finance/api/ultimate/finance-ultimate.service';
 import { FinanceAssistantEntryService } from '@consumer-finance/api/ultimate/finance-assistant-entry.service';
@@ -96,6 +100,7 @@ import { FinanceImportService } from '@consumer-finance/api/portability/finance-
 import { FinanceConsumerAuthGuard } from '@consumer-finance/api/portability/finance-consumer-auth.guard';
 import { FinanceCustomIconController } from '@consumer-finance/api/catalog/finance-custom-icon.controller';
 import { FinanceCustomIconService } from '@consumer-finance/api/catalog/finance-custom-icon.service';
+import { ConfiguredBotAnalyticsService } from './core/configured-bot-analytics.service';
 
 @Module({
   imports: [BotBillingModule],
@@ -103,6 +108,8 @@ import { FinanceCustomIconService } from '@consumer-finance/api/catalog/finance-
     TelegramBotsController,
     TelegramBotRuntimeController,
     TelegramBotRuntimeAvatarController,
+    FinanceBrowserContextController,
+    FinanceLocalDevelopmentController,
     FinanceAiConfigController,
     FinanceController,
     FinanceDebtController,
@@ -159,6 +166,7 @@ import { FinanceCustomIconService } from '@consumer-finance/api/catalog/finance-
     FinanceSavingsGoalService,
     FinanceImportService,
     FinanceCustomIconService,
+    ConfiguredBotAnalyticsService,
     FinanceConsumerAuthGuard,
     FinanceInvestmentService,
     FinanceInvestmentReadService,
@@ -176,6 +184,8 @@ import { FinanceCustomIconService } from '@consumer-finance/api/catalog/finance-
     FinanceReminderDeliveryService,
     FinanceBotBrandingService,
     FinanceConsumerRequestService,
+    FinanceBrowserContextService,
+    FinanceLocalDevelopmentService,
     FinanceDebtService,
     FinanceRegularPaymentService,
     FinanceRegularPaymentConfirmationService,
@@ -205,8 +215,6 @@ import { FinanceCustomIconService } from '@consumer-finance/api/catalog/finance-
     TelegramBotDeliveryService,
     OperationalHistoryRetentionService,
   ],
-  exports: [
-    OperationalHistoryRetentionService,
-  ],
+  exports: [OperationalHistoryRetentionService],
 })
 export class TelegramBotsModule {}

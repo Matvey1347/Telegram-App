@@ -3,20 +3,20 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
-} from '@nestjs/common';
+} from "@nestjs/common";
 import {
   Prisma,
   TelegramBotApplicationType,
   type FinanceProfile,
-} from '@prisma/client';
-import { createHash, createHmac, timingSafeEqual } from 'crypto';
-import { TokenEncryptionService } from '@api/common/security/token-encryption.service';
-import { PrismaService } from '@api/prisma/prisma.service';
+} from "@prisma/client";
+import { createHash, createHmac, timingSafeEqual } from "crypto";
+import { TokenEncryptionService } from "@api/common/security/token-encryption.service";
+import { PrismaService } from "@api/prisma/prisma.service";
 import {
   DEFAULT_FINANCE_CATEGORIES,
   FINANCE_INIT_DATA_MAX_AGE_SECONDS,
-} from '@consumer-finance/api/catalog/finance-defaults';
-import { FinanceConsumerRuntimeEnvironmentService } from '@consumer-finance/api/identity/finance-consumer-runtime-environment.service';
+} from "@consumer-finance/api/catalog/finance-defaults";
+import { FinanceConsumerRuntimeEnvironmentService } from "@consumer-finance/api/identity/finance-consumer-runtime-environment.service";
 
 type TelegramWebAppUser = {
   id: number | string;
@@ -37,7 +37,7 @@ export class FinanceContextService {
   async fromInitData(botIntegrationId: string, initData: string | undefined) {
     if (!initData)
       throw new ForbiddenException(
-        'Telegram Mini App authentication is required',
+        "Telegram Mini App authentication is required",
       );
     const { bot, runtime } = await this.selectedRuntime(botIntegrationId);
     const token = this.encryption.decrypt({
@@ -53,7 +53,9 @@ export class FinanceContextService {
     botIntegrationId: string,
     login: Record<string, string | undefined>,
   ) {
-    const { bot, runtime } = await this.selectedRuntime(botIntegrationId);
+    const { bot, runtime } = await this.selectedRuntime(botIntegrationId, {
+      allowDisabledLocalBrowserRuntime: true,
+    });
     const token = this.encryption.decrypt({
       encrypted: runtime.botTokenEncrypted,
       iv: runtime.botTokenIv,
@@ -67,20 +69,26 @@ export class FinanceContextService {
   }
 
   async browserLoginConfig(botIntegrationId: string) {
-    const { runtime } = await this.selectedRuntime(botIntegrationId);
-    const username = runtime.username;
+    const { runtime } = await this.selectedRuntime(botIntegrationId, {
+      allowDisabledLocalBrowserRuntime: true,
+    });
+    const username =
+      this.environments.browserLoginBotUsername() ?? runtime.username;
     if (!username)
-      throw new NotFoundException('Finance bot browser login is unavailable');
+      throw new NotFoundException("Finance bot browser login is unavailable");
     return { username };
   }
 
-  private async selectedRuntime(botIntegrationId: string) {
+  private async selectedRuntime(
+    botIntegrationId: string,
+    options: { allowDisabledLocalBrowserRuntime?: boolean } = {},
+  ) {
     // Consumer auth validates against one configured runtime only. It never
     // probes another token after a signature failure.
     const environment = this.environments.current();
     if (!environment) {
       throw new NotFoundException(
-        'Finance bot runtime is not enabled in this process',
+        "Finance bot runtime is not enabled in this process",
       );
     }
     const bot = await this.prisma.telegramBotIntegration.findFirst({
@@ -93,7 +101,10 @@ export class FinanceContextService {
         id: true,
         workspaceId: true,
         runtimeInstances: {
-          where: { environment, runtimeStatus: 'ACTIVE' },
+          where:
+            options.allowDisabledLocalBrowserRuntime && environment === "LOCAL"
+              ? { environment }
+              : { environment, runtimeStatus: "ACTIVE" },
           select: {
             id: true,
             username: true,
@@ -106,7 +117,7 @@ export class FinanceContextService {
       },
     });
     const runtime = bot?.runtimeInstances[0];
-    if (!bot || !runtime) throw new NotFoundException('Finance bot not found');
+    if (!bot || !runtime) throw new NotFoundException("Finance bot not found");
     return { bot, runtime };
   }
 
@@ -188,7 +199,7 @@ export class FinanceContextService {
       (preloadedProfile.botIntegrationId !== botIntegrationId ||
         preloadedProfile.telegramBotUserId !== telegramBotUserId)
     ) {
-      throw new Error('Preloaded Finance profile scope mismatch');
+      throw new Error("Preloaded Finance profile scope mismatch");
     }
     const where = {
       botIntegrationId_telegramBotUserId: {
@@ -213,7 +224,7 @@ export class FinanceContextService {
             create: DEFAULT_FINANCE_CATEGORIES.map((item) => ({
               name: item.name,
               type: item.type,
-              key: item.name.toLowerCase().replace(/\s+/g, '-'),
+              key: item.name.toLowerCase().replace(/\s+/g, "-"),
             })),
           },
         },
@@ -221,7 +232,7 @@ export class FinanceContextService {
     } catch (error) {
       if (
         !(error instanceof Prisma.PrismaClientKnownRequestError) ||
-        error.code !== 'P2002'
+        error.code !== "P2002"
       ) {
         throw error;
       }
@@ -257,26 +268,26 @@ export class FinanceContextService {
 
   verifyInitData(initData: string, botToken: string, now = new Date()) {
     const params = new URLSearchParams(initData);
-    const hash = params.get('hash');
-    const authDateRaw = params.get('auth_date');
-    const userRaw = params.get('user');
+    const hash = params.get("hash");
+    const authDateRaw = params.get("auth_date");
+    const userRaw = params.get("user");
     if (!hash || !/^[a-f0-9]{64}$/i.test(hash) || !authDateRaw || !userRaw)
-      throw new BadRequestException('Invalid Telegram initData');
+      throw new BadRequestException("Invalid Telegram initData");
     const dataCheckString = [...params.entries()]
-      .filter(([key]) => key !== 'hash')
+      .filter(([key]) => key !== "hash")
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([key, value]) => `${key}=${value}`)
-      .join('\n');
-    const secret = createHmac('sha256', 'WebAppData').update(botToken).digest();
-    const expected = createHmac('sha256', secret)
+      .join("\n");
+    const secret = createHmac("sha256", "WebAppData").update(botToken).digest();
+    const expected = createHmac("sha256", secret)
       .update(dataCheckString)
       .digest();
-    const supplied = Buffer.from(hash, 'hex');
+    const supplied = Buffer.from(hash, "hex");
     if (
       supplied.length !== expected.length ||
       !timingSafeEqual(supplied, expected)
     )
-      throw new ForbiddenException('Telegram initData signature is invalid');
+      throw new ForbiddenException("Telegram initData signature is invalid");
     const authDate = Number(authDateRaw);
     const age = Math.floor(now.getTime() / 1000) - authDate;
     if (
@@ -284,15 +295,15 @@ export class FinanceContextService {
       age < -30 ||
       age > FINANCE_INIT_DATA_MAX_AGE_SECONDS
     )
-      throw new ForbiddenException('Telegram initData has expired');
+      throw new ForbiddenException("Telegram initData has expired");
     let user: TelegramWebAppUser;
     try {
       user = JSON.parse(userRaw) as TelegramWebAppUser;
     } catch {
-      throw new BadRequestException('Telegram initData user is invalid');
+      throw new BadRequestException("Telegram initData user is invalid");
     }
     if (!user || !/^\d+$/.test(String(user.id)))
-      throw new BadRequestException('Telegram initData user is invalid');
+      throw new BadRequestException("Telegram initData user is invalid");
     return { user, authDate };
   }
 
@@ -311,31 +322,31 @@ export class FinanceContextService {
       !/^\d+$/.test(id) ||
       !Number.isInteger(authDate)
     )
-      throw new BadRequestException('Invalid Telegram login data');
+      throw new BadRequestException("Invalid Telegram login data");
     const telegramFields = new Set([
-      'id',
-      'first_name',
-      'last_name',
-      'username',
-      'photo_url',
-      'auth_date',
+      "id",
+      "first_name",
+      "last_name",
+      "username",
+      "photo_url",
+      "auth_date",
     ]);
     const data = Object.entries(login)
       .filter(([key, value]) => telegramFields.has(key) && value !== undefined)
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([key, value]) => `${key}=${value}`)
-      .join('\n');
-    const secret = createHash('sha256').update(botToken).digest();
-    const expected = createHmac('sha256', secret).update(data).digest();
-    const supplied = Buffer.from(hash, 'hex');
+      .join("\n");
+    const secret = createHash("sha256").update(botToken).digest();
+    const expected = createHmac("sha256", secret).update(data).digest();
+    const supplied = Buffer.from(hash, "hex");
     if (
       supplied.length !== expected.length ||
       !timingSafeEqual(supplied, expected)
     )
-      throw new ForbiddenException('Telegram login signature is invalid');
+      throw new ForbiddenException("Telegram login signature is invalid");
     const age = Math.floor(now.getTime() / 1000) - authDate;
     if (age < -30 || age > FINANCE_INIT_DATA_MAX_AGE_SECONDS)
-      throw new ForbiddenException('Telegram login has expired');
+      throw new ForbiddenException("Telegram login has expired");
     return {
       id,
       username: login.username,

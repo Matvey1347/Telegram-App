@@ -245,6 +245,9 @@ export const telegramContentHypothesisKeys = {
 export const telegramAccountKeys = {
   accounts: () => ["telegram-user-accounts"] as const,
   bots: () => ["telegram-bots"] as const,
+  configuredBots: () => ["telegram-bots", "configured"] as const,
+  configuredFinanceUsers: (environment: "LOCAL" | "PRODUCTION") =>
+    ["telegram-bots", "configured", "finance-users", environment] as const,
   botChannels: (botId: string) => ["telegram-bots", botId, "channels"] as const,
 };
 

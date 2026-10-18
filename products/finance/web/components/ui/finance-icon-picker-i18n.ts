@@ -1,4 +1,4 @@
-import type { EmojiCategory } from "@/lib/emoji-icons";
+import type { EmojiCategory } from "@finance-web/lib/emoji-icons";
 import type { FinanceLocale } from "@consumer-finance/web/components/i18n/core";
 
 type FinanceIconPickerCopy = {

@@ -21,6 +21,7 @@
     ],
     "paths": {
       "@/*": ["./src/*"],
+      "@finance-web/*": ["../standalone/finance/web/src/*"],
       "@consumer-finance/web/components/*": ["../../products/finance/web/components/*"],
       "@consumer-finance/web/lib/*": ["../../products/finance/web/lib/*"],
       "@consumer-finance/web/provider/*": ["../../products/finance/web/provider/*"]

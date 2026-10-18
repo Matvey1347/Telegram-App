@@ -40,6 +40,28 @@ export type TelegramChatMenuButtonInfo =
   | { type: 'web_app'; text?: string; webAppUrl?: string }
   | { type: string; [key: string]: unknown };
 
+function getTelegramProfileImageUrl(profileHtml: string) {
+  const match =
+    /<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i.exec(
+      profileHtml,
+    ) ??
+    /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i.exec(
+      profileHtml,
+    );
+  if (!match?.[1]) return null;
+
+  try {
+    const imageUrl = new URL(match[1].replace(/&amp;/g, '&'));
+    const isTelegramImageHost =
+      imageUrl.protocol === 'https:' &&
+      (imageUrl.hostname === 'telegram.org' ||
+        imageUrl.hostname.endsWith('.telegram.org'));
+    return isTelegramImageHost ? imageUrl.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
 @Injectable()
 export class TelegramBotApiClient {
   async getMe(token: string) {
@@ -57,6 +79,10 @@ export class TelegramBotApiClient {
 
   async setMyName(token: string, name: string) {
     return this.call<boolean>(token, 'setMyName', { name });
+  }
+
+  async setMyDescription(token: string, description: string) {
+    return this.call<boolean>(token, 'setMyDescription', { description });
   }
 
   async getUserProfilePhotos(token: string, userId: string) {
@@ -85,6 +111,37 @@ export class TelegramBotApiClient {
       'profile-photo.jpg',
     );
     return this.callForm<boolean>(token, 'setMyProfilePhoto', form);
+  }
+
+  /**
+   * Bot API does not consistently return a bot's own BotFather profile photo.
+   * Read the current public Telegram profile preview as a bounded dashboard
+   * fallback; updates remain owned by BotFather/Telegram.
+   */
+  async downloadUsernameProfilePhoto(username: string) {
+    const normalizedUsername = username.replace(/^@/, '').trim();
+    if (!/^[a-zA-Z0-9_]{5,32}$/.test(normalizedUsername)) return null;
+    const profileResponse = await fetch(
+      `https://t.me/${encodeURIComponent(normalizedUsername)}`,
+      { signal: AbortSignal.timeout(15_000) },
+    );
+    if (!profileResponse.ok) return null;
+
+    const imageUrl = getTelegramProfileImageUrl(await profileResponse.text());
+    if (!imageUrl) return null;
+
+    const response = await fetch(imageUrl, {
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!response.ok || !response.headers.get('content-type')?.startsWith('image/')) {
+      return null;
+    }
+    const bytes = Buffer.from(await response.arrayBuffer());
+    if (!bytes.length || bytes.length > 5 * 1024 * 1024) return null;
+    return {
+      bytes,
+      contentType: response.headers.get('content-type') || 'image/jpeg',
+    };
   }
 
   async getChatMember(token: string, chatId: string, userId: string) {

@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   TELEGRAM_WEB_APP_SDK_FAILED_EVENT,
   TELEGRAM_WEB_APP_SDK_READY_EVENT,
-} from "@/components/telegram/telegram-web-app-sdk";
+} from "@finance-web/components/telegram/telegram-web-app-sdk";
 import { useTelegramMiniAppBootstrap } from "@consumer-finance/web/components/hooks/use-telegram-mini-app-bootstrap";
 
 afterEach(() => {

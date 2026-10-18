@@ -1,15 +1,15 @@
 import type { AxiosRequestConfig } from "axios";
-import { publicWebEnvironment } from "@/config/public-env";
+import { publicFinanceWebEnvironment } from "@finance-web/config/public-env";
 import {
   createHttpTransport,
   createRequestCorrelationId,
-} from "@/lib/http/transport";
-import { resolveBrowserApiBase } from "@/lib/http/api-base";
+} from "@finance-web/lib/http/transport";
+import { resolveFinanceBrowserApiBase } from "@finance-web/lib/http/api-base";
 
 export function resolveConsumerFinanceApiBase(
   location = typeof window === "undefined" ? undefined : window.location,
 ) {
-  return resolveBrowserApiBase(publicWebEnvironment.apiUrl, location);
+  return resolveFinanceBrowserApiBase(publicFinanceWebEnvironment.apiUrl, location);
 }
 
 export const consumerFinanceHttp = createHttpTransport({

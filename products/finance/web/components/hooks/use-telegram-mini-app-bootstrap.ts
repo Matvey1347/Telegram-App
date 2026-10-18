@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   TELEGRAM_WEB_APP_SDK_FAILED_EVENT,
   TELEGRAM_WEB_APP_SDK_READY_EVENT,
-} from "@/components/telegram/telegram-web-app-sdk";
+} from "@finance-web/components/telegram/telegram-web-app-sdk";
 
 type TelegramWebApp = {
   initData?: string;

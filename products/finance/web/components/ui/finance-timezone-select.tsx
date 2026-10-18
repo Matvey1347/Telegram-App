@@ -1,4 +1,4 @@
-import { timezonePresentations } from "@/lib/timezones";
+import { timezonePresentations } from "@finance-web/lib/timezones";
 import type { FinanceLocale } from "@consumer-finance/web/components/i18n/core";
 import { Select } from "@consumer-finance/web/components/ui/finance-controls";
 

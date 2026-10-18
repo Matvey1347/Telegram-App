@@ -32,10 +32,17 @@ import {
 import { useAppToast } from "@/providers/toast-provider";
 import { TelegramBotCard } from "./telegram-bot-card";
 import { RuntimeProfileModal } from "./runtime-profile-modal";
+import { ConfiguredBotCards } from "./configured-bot-cards";
+import { configuredBotsApi } from "@/lib/features/telegram/configured-bots-api";
 
 function errorMessage(error: unknown, fallback: string) {
   const responseError = error as { response?: { data?: { message?: string } } };
   return responseError?.response?.data?.message || fallback;
+}
+
+function normalizeBotUsername(username: string | null | undefined) {
+  const normalized = username?.trim().replace(/^@/, "").toLowerCase();
+  return normalized || null;
 }
 
 export function TelegramBotsPage() {
@@ -63,7 +70,22 @@ export function TelegramBotsPage() {
     queryKey: telegramAccountKeys.bots(),
     queryFn: telegramBotsApi.list,
   });
-  const bots = botsQuery.data || [];
+  const configuredBotsQuery = useQuery({
+    queryKey: telegramAccountKeys.configuredBots(),
+    queryFn: configuredBotsApi.overview,
+  });
+  const managedEnvironmentUsernames = new Set(
+    configuredBotsQuery.data?.financeBot?.bots
+      .map((bot) => normalizeBotUsername(bot.username))
+      .filter((username): username is string => Boolean(username)) ?? [],
+  );
+  const bots = (botsQuery.data || []).filter(
+    (bot) =>
+      !bot.runtimes.some((runtime) => {
+        const username = normalizeBotUsername(runtime.username);
+        return username ? managedEnvironmentUsernames.has(username) : false;
+      }),
+  );
   const createMutation = useMutation({
     mutationFn: telegramBotsApi.create,
     onSuccess: (bot) => {
@@ -215,42 +237,47 @@ export function TelegramBotsPage() {
           </div>
         }
       />
-      <QueryContentState
-        isLoading={botsQuery.isLoading}
-        isError={botsQuery.isError}
-        isEmpty={!bots.length}
-        loadingText="Loading bots"
-        errorText="Failed to load Telegram bots."
-        emptyText="No Telegram bots connected"
-      >
-        <div className="grid gap-4 xl:grid-cols-2">
-          {bots.map((bot) => (
-            <TelegramBotCard
-              key={bot.id}
-              bot={bot}
-              checkingEnvironment={
-                checkMutation.isPending &&
-                checkMutation.variables?.id === bot.id
-                  ? checkMutation.variables.environment
-                  : null
-              }
-              onCheck={(environment) =>
-                checkMutation.mutate({ id: bot.id, environment })
-              }
-              onRequestDelete={(environment) =>
-                setDeleteChoice({ bot, environment })
-              }
-              onSwitch={() => setSwitching(bot)}
-              onConfigureRuntime={(environment) =>
-                setRuntimeConfig({ bot, environment })
-              }
-              onEditProfile={(environment) =>
-                setProfileConfig({ bot, environment })
-              }
-            />
-          ))}
+      <ConfiguredBotCards />
+      {bots.length || botsQuery.isLoading || botsQuery.isError ? (
+        <div className="mt-6">
+          <QueryContentState
+            isLoading={botsQuery.isLoading}
+            isError={botsQuery.isError}
+            isEmpty={!bots.length}
+            loadingText="Loading bots"
+            errorText="Failed to load Telegram bots."
+            emptyText=""
+          >
+            <div className="grid gap-4 xl:grid-cols-2">
+              {bots.map((bot) => (
+                <TelegramBotCard
+                  key={bot.id}
+                  bot={bot}
+                  checkingEnvironment={
+                    checkMutation.isPending &&
+                    checkMutation.variables?.id === bot.id
+                      ? checkMutation.variables.environment
+                      : null
+                  }
+                  onCheck={(environment) =>
+                    checkMutation.mutate({ id: bot.id, environment })
+                  }
+                  onRequestDelete={(environment) =>
+                    setDeleteChoice({ bot, environment })
+                  }
+                  onSwitch={() => setSwitching(bot)}
+                  onConfigureRuntime={(environment) =>
+                    setRuntimeConfig({ bot, environment })
+                  }
+                  onEditProfile={(environment) =>
+                    setProfileConfig({ bot, environment })
+                  }
+                />
+              ))}
+            </div>
+          </QueryContentState>
         </div>
-      </QueryContentState>
+      ) : null}
       <CreateBotModal
         open={createOpen}
         saving={createMutation.isPending}

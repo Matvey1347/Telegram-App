@@ -1,0 +1,24 @@
+"use client";
+
+import {
+  financeCoreCopy,
+  normalizeFinanceLocale,
+} from "@consumer-finance/web/components/i18n/core";
+
+export default function FinanceError({ reset }: { reset: () => void }) {
+  const t = financeCoreCopy(
+    normalizeFinanceLocale(
+      typeof navigator === "undefined" ? undefined : navigator.language,
+    ),
+  );
+  return (
+    <main className="flex min-h-dvh items-center justify-center bg-neutral-950 p-4 text-neutral-100">
+      <div className="max-w-md rounded-lg border border-neutral-800 bg-neutral-900 p-5">
+        <p>{t.bootstrapError}</p>
+        <button className="mt-3 min-h-11 rounded-lg px-3 text-sky-300" onClick={reset}>
+          {t.retry}
+        </button>
+      </div>
+    </main>
+  );
+}

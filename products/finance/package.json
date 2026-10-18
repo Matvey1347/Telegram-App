@@ -2,6 +2,9 @@
   "name": "@telegram-system/finance",
   "private": true,
   "version": "0.0.1",
+  "scripts": {
+    "dev": "pnpm --dir ../../.. dev:finance"
+  },
   "dependencies": {
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.4",

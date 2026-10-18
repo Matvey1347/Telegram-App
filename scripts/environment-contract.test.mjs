@@ -71,7 +71,9 @@ test("script-only flags stay out of the permanent environment profile", () => {
 
 test("local System Bot has an explicit opt-in development command", () => {
   const scripts = JSON.parse(readFileSync("package.json", "utf8")).scripts;
-  assert.match(scripts.dev, /TELEGRAM_SYSTEM_BOT_ENVIRONMENT=\s/u);
+  const localProducts = readFileSync("scripts/dev-products.mjs", "utf8");
+  assert.equal(scripts.dev, "pnpm dev:nexeloq");
+  assert.match(localProducts, /TELEGRAM_SYSTEM_BOT_ENVIRONMENT:\s*""/u);
   assert.match(scripts["dev:system-bot"], /--system-bot(?:\s|$)/u);
 
   const runner = readFileSync("scripts/dev-tunnel.mjs", "utf8");
@@ -83,6 +85,24 @@ test("local System Bot has an explicit opt-in development command", () => {
     runner,
     /TELEGRAM_BOT_RUNTIME_ENVIRONMENT:\s*withWorkspaceBots\s*\?\s*"LOCAL"\s*:\s*""/u,
   );
+});
+
+test("Finance tunnel starts an isolated local Finance bot runtime", () => {
+  const scripts = JSON.parse(readFileSync("package.json", "utf8")).scripts;
+  const runner = readFileSync("scripts/dev-tunnel.mjs", "utf8");
+  assert.match(scripts["dev:finance:tunnel"], /--finance/u);
+  assert.match(
+    runner,
+    /--finance cannot be combined with --bots or --system-bot/u,
+  );
+  assert.match(runner, /startBotGateway\(4001, 3001\)/u);
+  assert.match(runner, /TELEGRAM_BOT_RUNTIME_ENVIRONMENT:\s*"LOCAL"/u);
+  assert.match(
+    runner,
+    /waitForHttpReady\("http:\/\/127\.0\.0\.1:4001\/api\/health"\)/u,
+  );
+  assert.match(runner, /waitForHttpReady\("http:\/\/127\.0\.0\.1:3001"\)/u);
+  assert.match(runner, /await activateLocalBots\(\)/u);
 });
 
 test("local bot development survives Prisma schema and tunnel transport changes", () => {

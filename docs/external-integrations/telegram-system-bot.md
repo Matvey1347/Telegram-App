@@ -21,6 +21,11 @@ Environment-specific credentials:
 - `TELEGRAM_SYSTEM_BOT_PRODUCTION_USERNAME`
 - `TELEGRAM_SYSTEM_BOT_PRODUCTION_WEBHOOK_SECRET`
 
+Dashboard visibility is separately scoped with
+`TELEGRAM_SYSTEM_BOT_DASHBOARD_WORKSPACE_ID`. It only controls which
+workspace's administrators can see the environment-managed System Bot card;
+it does not create a workspace bot connection or alter bot runtime behavior.
+
 Shared process configuration:
 
 - `API_PUBLIC_URL`: canonical public API origin used for webhook routes

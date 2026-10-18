@@ -69,14 +69,14 @@ export function FinanceMiniAppShell({
           <header className="sticky top-0 z-30 flex min-h-16 items-center justify-between border-b border-neutral-800 bg-neutral-950/95 px-4 pt-[env(safe-area-inset-top)] backdrop-blur">
             <div className="flex min-w-0 flex-1 items-center gap-3">
               <Image
-                src={logoUrl || "/brand/finance.png"}
+                src={logoUrl || "/brand/finance-pwa-512.png"}
                 alt=""
                 width={36}
                 height={36}
                 unoptimized
                 className="h-9 w-9 rounded-lg object-cover"
                 onError={(event) => {
-                  event.currentTarget.src = "/brand/finance.png";
+                  event.currentTarget.src = "/brand/finance-pwa-512.png";
                 }}
               />
               <h1 className="truncate text-lg font-semibold">

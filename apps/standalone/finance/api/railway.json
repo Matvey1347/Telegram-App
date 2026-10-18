@@ -1,0 +1,21 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "builder": "RAILPACK",
+    "buildCommand": "pnpm --filter finance-api prisma:generate && pnpm --filter finance-api build",
+    "watchPatterns": [
+      "apps/standalone/finance/api/**",
+      "products/finance/api/**",
+      "products/finance/bot/**",
+      "pnpm-lock.yaml",
+      "pnpm-workspace.yaml"
+    ]
+  },
+  "deploy": {
+    "preDeployCommand": "pnpm --filter finance-api prisma:migrate:deploy",
+    "startCommand": "pnpm --filter finance-api start:prod",
+    "healthcheckPath": "/api/health/ready",
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 3
+  }
+}

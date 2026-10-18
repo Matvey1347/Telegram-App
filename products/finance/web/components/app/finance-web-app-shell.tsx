@@ -78,14 +78,14 @@ export function FinanceWebAppShell({
         <aside className="sticky top-0 hidden h-dvh w-64 shrink-0 flex-col overflow-hidden border-r border-neutral-800 bg-neutral-950 px-4 py-5 md:flex">
           <div className="mb-5 flex shrink-0 items-center gap-3 px-3">
             <Image
-              src={logoUrl || "/brand/finance.png"}
+              src={logoUrl || "/brand/finance-pwa-512.png"}
               alt=""
               width={40}
               height={40}
               unoptimized
               className="h-10 w-10 rounded-xl object-cover"
               onError={(event) => {
-                event.currentTarget.src = "/brand/finance.png";
+                event.currentTarget.src = "/brand/finance-pwa-512.png";
               }}
             />
             <p className="text-xl font-semibold">Finance</p>
@@ -148,14 +148,14 @@ export function FinanceWebAppShell({
             <div className="mx-auto flex w-full max-w-[1440px] items-center justify-between gap-3">
               <div className="flex min-w-0 flex-1 items-center gap-3">
                 <Image
-                  src={logoUrl || "/brand/finance.png"}
+                  src={logoUrl || "/brand/finance-pwa-512.png"}
                   alt=""
                   width={36}
                   height={36}
                   unoptimized
                   className="h-9 w-9 rounded-lg object-cover"
                   onError={(event) => {
-                    event.currentTarget.src = "/brand/finance.png";
+                    event.currentTarget.src = "/brand/finance-pwa-512.png";
                   }}
                 />
                 <h1 className="truncate text-lg font-semibold">{title}</h1>

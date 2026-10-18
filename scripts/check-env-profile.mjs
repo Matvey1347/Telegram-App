@@ -1,28 +1,103 @@
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import process from "node:process";
 
-const runtimeFile = ".env";
-const templateFile = ".env.example";
-
-const extraProfiles = [".", "apps/api", "apps/web"].flatMap((directory) =>
-  readdirSync(directory)
-    .filter((name) => name.startsWith(".env"))
-    .map((name) => (directory === "." ? name : `${directory}/${name}`)),
-).filter((file) => file !== runtimeFile && file !== templateFile);
-
-if (extraProfiles.length) {
-  console.error(
-    `Unsupported environment profile: ${extraProfiles.join(", ")}. Keep runtime values in .env.`,
-  );
-  process.exit(1);
-}
-
-for (const file of [runtimeFile, templateFile]) {
-  if (!existsSync(file)) {
-    console.error(`${file} is required for the unified environment profile.`);
-    process.exit(1);
-  }
-}
+const profiles = [
+  {
+    name: "Nexeloq",
+    template: ".env.example",
+    local: ".env",
+    forbiddenPrefix: "FINANCE_",
+    allowedFinanceBridgeKeys: [
+      "FINANCE_BOT_DASHBOARD_WORKSPACE_ID",
+      "FINANCE_ADMIN_ANALYTICS_URL",
+      "FINANCE_ADMIN_ANALYTICS_TOKEN",
+    ],
+    required: [
+      "DATABASE_URL",
+      "API_PORT",
+      "FRONTEND_URL",
+      "NEXT_PUBLIC_API_URL",
+    ],
+    allowed: [
+      "DATABASE_URL",
+      "GPT_API_SEKRET",
+      "API_PORT",
+      "API_PUBLIC_URL",
+      "JWT_SECRET",
+      "BOT_TOKEN_ENCRYPTION_KEY",
+      "FRONTEND_URL",
+      "NEXT_PUBLIC_API_URL",
+      "SMTP_HOST",
+      "SMTP_PORT",
+      "SMTP_USER",
+      "SMTP_PASSWORD",
+      "SMTP_FROM",
+      "TELEGRAM_BOT_RUNTIME_ENVIRONMENT",
+      "TELEGRAM_API_ID",
+      "TELEGRAM_API_HASH",
+      "TELEGRAM_SYSTEM_BOT_ENVIRONMENT",
+      "TELEGRAM_SYSTEM_BOT_LOCAL_USERNAME",
+      "TELEGRAM_SYSTEM_BOT_LOCAL_TOKEN",
+      "TELEGRAM_SYSTEM_BOT_LOCAL_WEBHOOK_SECRET",
+      "TELEGRAM_SYSTEM_BOT_PRODUCTION_USERNAME",
+      "TELEGRAM_SYSTEM_BOT_PRODUCTION_TOKEN",
+      "TELEGRAM_SYSTEM_BOT_PRODUCTION_WEBHOOK_SECRET",
+      "TELEGRAM_SYSTEM_BOT_DASHBOARD_WORKSPACE_ID",
+      "FINANCE_BOT_DASHBOARD_WORKSPACE_ID",
+      "FINANCE_ADMIN_ANALYTICS_URL",
+      "FINANCE_ADMIN_ANALYTICS_TOKEN",
+      "WEB_PUSH_VAPID_SUBJECT",
+      "WEB_PUSH_VAPID_PUBLIC_KEY",
+      "WEB_PUSH_VAPID_PRIVATE_KEY",
+      "B2_KEY_ID",
+      "B2_APP_KEY",
+      "B2_BUCKET_NAME",
+      "B2_ENDPOINT",
+      "APP_LOG_MIN_LEVEL",
+      "APP_CONSOLE_LOG_LEVEL",
+      "APP_LOG_HTTP_ENABLED",
+      "APP_LOG_HTTP_SUCCESS_ENABLED",
+      "TRUST_PROXY_HOPS",
+      "MEMORY_MONITOR_ENABLED",
+      "MEMORY_MONITOR_WARN_RSS_MB",
+      "MEMORY_MONITOR_DETAILED_TELEMETRY",
+      "RAILWAY_API_TOKEN",
+    ],
+  },
+  {
+    name: "Finance",
+    template: "products/finance/.env.example",
+    local: "products/finance/.env.local",
+    required: [
+      "FINANCE_DATABASE_URL",
+      "FINANCE_SESSION_SIGNING_KEY",
+      "FINANCE_BOOTSTRAP_SIGNING_KEY",
+      "FINANCE_API_PORT",
+      "NEXT_PUBLIC_FINANCE_API_URL",
+      "FINANCE_API_PROXY",
+    ],
+    allowed: [
+      "FINANCE_DATABASE_URL",
+      "FINANCE_SESSION_SIGNING_KEY",
+      "FINANCE_BOOTSTRAP_SIGNING_KEY",
+      "FINANCE_API_PORT",
+      "NEXT_PUBLIC_FINANCE_API_URL",
+      "FINANCE_API_PROXY",
+      "FINANCE_ALLOWED_DEV_ORIGIN",
+      "FINANCE_WEB_PUBLIC_URL",
+      "FINANCE_API_PUBLIC_URL",
+      "FINANCE_BOT_RUNTIME_ENVIRONMENT",
+      "FINANCE_BOT_LOCAL_USERNAME",
+      "FINANCE_BOT_LOCAL_TOKEN",
+      "FINANCE_BOT_LOCAL_WEBHOOK_SECRET",
+      "FINANCE_BOT_PRODUCTION_USERNAME",
+      "FINANCE_BOT_PRODUCTION_TOKEN",
+      "FINANCE_BOT_PRODUCTION_WEBHOOK_SECRET",
+      "FINANCE_ADMIN_ANALYTICS_WORKSPACE_ID",
+      "FINANCE_ADMIN_ANALYTICS_TOKEN",
+    ],
+  },
+];
 
 function keys(file) {
   const result = [];
@@ -30,47 +105,85 @@ function keys(file) {
   for (const line of readFileSync(file, "utf8").split(/\r?\n/u)) {
     const match = line.match(/^([A-Za-z_][A-Za-z0-9_]*)=/u);
     if (!match) continue;
-    if (seen.has(match[1])) {
-      console.error(`${file} contains duplicate key ${match[1]}.`);
-      process.exit(1);
-    }
+    if (seen.has(match[1]))
+      throw new Error(`${file} contains a duplicate key.`);
     seen.add(match[1]);
     result.push(match[1]);
   }
   return result;
 }
 
-const runtimeKeys = keys(runtimeFile);
-const templateKeys = keys(templateFile);
-const missingFromRuntime = templateKeys.filter(
-  (key) => !runtimeKeys.includes(key),
-);
-const missingFromTemplate = runtimeKeys.filter(
-  (key) => !templateKeys.includes(key),
-);
-
-if (missingFromRuntime.length || missingFromTemplate.length) {
-  if (missingFromRuntime.length)
-    console.error(`Missing from .env: ${missingFromRuntime.join(", ")}`);
-  if (missingFromTemplate.length)
-    console.error(
-      `Missing from .env.example: ${missingFromTemplate.join(", ")}`,
+let failed = false;
+for (const profile of profiles) {
+  try {
+    if (!existsSync(profile.template)) {
+      throw new Error(`${profile.name} template is missing.`);
+    }
+    const templateKeys = keys(profile.template);
+    const missing = profile.required.filter(
+      (key) => !templateKeys.includes(key),
     );
-  process.exit(1);
+    if (missing.length)
+      throw new Error(`${profile.name} template misses required keys.`);
+    if (
+      profile.forbiddenPrefix &&
+      templateKeys.some(
+        (key) =>
+          key.startsWith(profile.forbiddenPrefix) &&
+          !profile.allowedFinanceBridgeKeys?.includes(key),
+      )
+    ) {
+      throw new Error(
+        `${profile.name} template contains keys owned by Finance.`,
+      );
+    }
+    if (
+      profile.allowed &&
+      templateKeys.some((key) => !profile.allowed.includes(key))
+    ) {
+      throw new Error(
+        `${profile.name} template contains a key outside its allowlist.`,
+      );
+    }
+
+    if (existsSync(profile.local)) {
+      const localKeys = keys(profile.local);
+      const localMissing = profile.required.filter(
+        (key) => !localKeys.includes(key),
+      );
+      if (localMissing.length)
+        throw new Error(`${profile.name} local profile misses required keys.`);
+      if (
+        profile.forbiddenPrefix &&
+        localKeys.some(
+          (key) =>
+            key.startsWith(profile.forbiddenPrefix) &&
+            !profile.allowedFinanceBridgeKeys?.includes(key),
+        )
+      ) {
+        throw new Error(
+          `${profile.name} local profile contains keys owned by Finance.`,
+        );
+      }
+      if (profile.allowed) {
+        const unknownKeys = localKeys.filter(
+          (key) => !profile.allowed.includes(key),
+        );
+        if (unknownKeys.length) {
+          throw new Error(
+            `${profile.name} local profile contains a key outside its allowlist: ${unknownKeys.join(", ")}.`,
+          );
+        }
+      }
+    }
+    console.log(`✓ ${profile.name} profile contract is valid.`);
+  } catch (error) {
+    failed = true;
+    console.error(error instanceof Error ? error.message : String(error));
+  }
 }
 
-if (runtimeKeys.join("\n") !== templateKeys.join("\n")) {
-  console.error(".env and .env.example must keep keys in the same order.");
-  process.exit(1);
-}
-
-const sections = (file) =>
-  readFileSync(file, "utf8")
-    .split(/\r?\n/u)
-    .filter((line) => /^#\s+\S/u.test(line));
-if (sections(runtimeFile).join("\n") !== sections(templateFile).join("\n")) {
-  console.error(".env and .env.example must use the same section headings.");
-  process.exit(1);
-}
-
-console.log(`Environment profile is synchronized (${runtimeKeys.length} keys).`);
+if (failed) process.exit(1);
+console.log(
+  "Environment profiles are isolated; values were not read or printed.",
+);
