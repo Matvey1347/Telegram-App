@@ -25,6 +25,9 @@ export const LOCAL_PRODUCTS = {
         readyUrl: "http://127.0.0.1:4000/api/health",
         args: ["--filter", "api", "dev"],
         env: {
+          // The root .env may be configured for a different local API. Keep
+          // the Nexeloq host pinned to its declared, non-overlapping port.
+          API_PORT: "4000",
           NEXT_PUBLIC_API_URL: "http://localhost:4000/api",
           FRONTEND_URL: "http://localhost:3000",
           TELEGRAM_SYSTEM_BOT_ENVIRONMENT: "",

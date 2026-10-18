@@ -24,6 +24,14 @@ test("local product commands use non-overlapping fixed ports", () => {
   );
 });
 
+test("Nexeloq API overrides a conflicting root API port", () => {
+  const api = LOCAL_PRODUCTS.nexeloq.processes.find(
+    (processDefinition) => processDefinition.name === "Nexeloq API",
+  );
+
+  assert.equal(api?.env.API_PORT, "4000");
+});
+
 test("Finance waits for its API before starting the web host", () => {
   const api = LOCAL_PRODUCTS.finance.processes.find(
     (processDefinition) => processDefinition.name === "Finance API",
