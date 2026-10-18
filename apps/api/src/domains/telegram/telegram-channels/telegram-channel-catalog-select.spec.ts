@@ -49,6 +49,7 @@ describe('TelegramChannelCatalogService.selectOptions', () => {
         where: expect.objectContaining({
           workspaceId: 'workspace-1',
           archivedAt: null,
+          isTest: false,
           adminLinks: { some: {} },
         }),
         select: expect.objectContaining({
@@ -60,6 +61,41 @@ describe('TelegramChannelCatalogService.selectOptions', () => {
       }),
     );
     expect(result).toHaveLength(1);
+  });
+
+  it('includes active test channels only when a post composer explicitly requests them', async () => {
+    const prisma = {
+      telegramChannel: { findMany: jest.fn().mockResolvedValue([]) },
+    };
+    const service = new TelegramChannelCatalogService(
+      prisma as never,
+      {
+        publishingCapabilitiesForChannels: jest
+          .fn()
+          .mockResolvedValue(new Map()),
+      } as never,
+      { workspace: jest.fn().mockResolvedValue('workspace-1') } as never,
+      {
+        timePostsByChannelIds: jest.fn().mockResolvedValue(new Map()),
+      } as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+
+    await service.selectOptions('user-1', { includeTest: true });
+
+    expect(prisma.telegramChannel.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          workspaceId: 'workspace-1',
+          isTest: undefined,
+          archivedAt: null,
+        }),
+      }),
+    );
   });
 });
 

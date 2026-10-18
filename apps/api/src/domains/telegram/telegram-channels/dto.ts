@@ -300,6 +300,8 @@ export class ImportTelegramManagedPostsDto {
 export class TelegramChannelSelectQueryDto {
   @IsOptional() @Type(() => Boolean) @IsBoolean() canPostMessagesOnly?: boolean;
   @IsOptional() @Type(() => Boolean) @IsBoolean() owned?: boolean;
+  /** Post composition can deliberately target a workspace's test channels. */
+  @IsOptional() @Type(() => Boolean) @IsBoolean() includeTest?: boolean;
 }
 
 export class UpdateTelegramManagedPostDto {

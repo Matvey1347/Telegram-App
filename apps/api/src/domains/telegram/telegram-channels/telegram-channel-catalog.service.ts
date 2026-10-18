@@ -450,7 +450,7 @@ export class TelegramChannelCatalogService {
         workspaceId,
         isActive: true,
         archivedAt: null,
-        isTest: false,
+        isTest: query.includeTest ? undefined : false,
         adminLinks: query.owned === true ? { some: {} } : undefined,
       },
       select: {

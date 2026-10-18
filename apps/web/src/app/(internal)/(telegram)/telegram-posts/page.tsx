@@ -530,8 +530,15 @@ export function TelegramPostsPageClient({
     [routeChannelIdValue, searchParams],
   );
   const channels = useQuery({
-    queryKey: telegramChannelKeys.select({ canPostMessagesOnly: true }),
-    queryFn: () => telegramChannelsApi.select({ canPostMessagesOnly: true }),
+    queryKey: telegramChannelKeys.select({
+      canPostMessagesOnly: true,
+      includeTest: true,
+    }),
+    queryFn: () =>
+      telegramChannelsApi.select({
+        canPostMessagesOnly: true,
+        includeTest: true,
+      }),
   });
   const availableChannels = channels.data || [];
   const channel =
@@ -1239,7 +1246,10 @@ function TelegramPostWorkspace({
       const publishingCapabilities =
         await telegramChannelsApi.checkInlineButtonPublishingAccess(channelId);
       queryClient.setQueryData<TelegramChannel[]>(
-        telegramChannelKeys.select({ canPostMessagesOnly: true }),
+        telegramChannelKeys.select({
+          canPostMessagesOnly: true,
+          includeTest: true,
+        }),
         (current) =>
           current?.map((item) =>
             item.id === channelId ? { ...item, publishingCapabilities } : item,

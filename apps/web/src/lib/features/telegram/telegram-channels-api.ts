@@ -167,6 +167,7 @@ export function createTelegramChannelsApi({
     select: async (params?: {
       canPostMessagesOnly?: boolean;
       owned?: boolean;
+      includeTest?: boolean;
     }) =>
       (
         await api.get<TelegramChannelSelectOption[]>(
