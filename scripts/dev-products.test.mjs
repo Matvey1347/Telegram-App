@@ -44,6 +44,7 @@ test("Finance waits for its API before starting the web host", () => {
   assert.equal(web?.readyUrl, undefined);
   assert.equal(web?.webReadyUrl, "http://127.0.0.1:3001/health");
   assert.equal(web?.localUrl, "http://localhost:3001");
+  assert.equal(web?.env.NEXT_PUBLIC_FINANCE_API_URL, "/api");
 });
 
 test("local product services declare concise dashboard labels", () => {

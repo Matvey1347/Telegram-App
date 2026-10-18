@@ -3,7 +3,7 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
-    "dev": "FINANCE_API_PROXY=true next dev --port 3001",
+    "dev": "NEXT_PUBLIC_FINANCE_API_URL=/api FINANCE_API_PROXY=true next dev --webpack --port 3001",
     "build": "next build",
     "start": "next start --port 3001",
     "lint": "eslint .",

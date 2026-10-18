@@ -90,6 +90,11 @@ export const LOCAL_PRODUCTS = {
         webReadyUrl: "http://127.0.0.1:3001/health",
         args: ["--filter", "@telegram-system/finance-web", "dev"],
         env: {
+          // A checked-in/local Finance profile can contain the public API URL
+          // for deployments. Local Web must always use its same-origin proxy,
+          // otherwise context is read from :4001 while session and product
+          // requests are sent to a different production API.
+          NEXT_PUBLIC_FINANCE_API_URL: "/api",
           FINANCE_API_PROXY: "true",
           FINANCE_ALLOWED_DEV_ORIGIN: "http://localhost:3001",
         },
