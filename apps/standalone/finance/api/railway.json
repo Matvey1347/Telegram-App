@@ -5,6 +5,7 @@
     "buildCommand": "pnpm --filter finance-api prisma:generate && pnpm --filter finance-api build",
     "watchPatterns": [
       "apps/standalone/finance/api/**",
+      "packages/shared/**",
       "products/finance/api/**",
       "products/finance/bot/**",
       "pnpm-lock.yaml",

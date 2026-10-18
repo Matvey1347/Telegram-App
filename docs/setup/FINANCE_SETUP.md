@@ -59,7 +59,7 @@ Telegram webhook activation is explicit and available only through
 `pnpm dev:finance:tunnel`, so an ordinary browser-development session never
 points a LOCAL bot at a stale deployed URL.
 Its production origins are `https://groshly.nexeloq.com/` and
-`https://groshly.api.nexeloq.com/` when provisioned. Check `/api/health` and
+`https://api.groshly.nexeloq.com/` when provisioned. Check `/api/health` and
 `/api/health/ready`, then stop `pnpm dev:nexeloq` and repeat the Finance health
 request.
 
