@@ -45,7 +45,7 @@ async function run() {
     logger: ['error', 'warn'],
   });
   try {
-    const runtime = app.get(TelegramBotRuntimeService);
+    const runtime = await app.resolve(TelegramBotRuntimeService);
     const summary = await configureFinanceProductionRuntime(runtime, {
       botIntegrationId: required('FINANCE_BOT_INTEGRATION_ID'),
       token: required('FINANCE_PRODUCTION_RUNTIME_TOKEN'),
