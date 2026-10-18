@@ -13,6 +13,18 @@ const gatewayHostname = configuredDevHostname(
   process.env.FINANCE_ALLOWED_DEV_ORIGIN,
 );
 
+function configuredApiProxy(value: string | undefined) {
+  if (!value) return undefined;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" ? url.origin.replace(/\/$/u, "") : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+const apiProxy = configuredApiProxy(process.env.FINANCE_API_PROXY_URL);
+
 const nextConfig: NextConfig = {
   devIndicators: false,
   allowedDevOrigins: [
@@ -21,6 +33,14 @@ const nextConfig: NextConfig = {
     ...(gatewayHostname ? [gatewayHostname] : []),
   ],
   async rewrites() {
+    if (apiProxy) {
+      return [
+        {
+          source: "/api/:path*",
+          destination: `${apiProxy}/api/:path*`,
+        },
+      ];
+    }
     if (process.env.FINANCE_API_PROXY !== "true") return [];
     return [
       {
