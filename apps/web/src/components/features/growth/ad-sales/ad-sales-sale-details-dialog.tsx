@@ -14,6 +14,7 @@ import {
 } from "@/lib/api";
 import { telegramPostKeys } from "@/lib/query-keys";
 import { invalidateTelegramAdSalesDerivedQueries } from "@/lib/features/growth/telegram-ad-sales-query";
+import { useAppToast } from "@/providers/toast-provider";
 import { SaleDetailsModal } from "./ad-sales-sale-details-modal";
 
 type PostEditorPlacement = { saleId: string; placementId: string };
@@ -52,6 +53,7 @@ export function AdSalesSaleDetailsDialog({
     channelIds: string[],
   ) => Promise<void>;
 }) {
+  const { startOperation } = useAppToast();
   return (
     <SaleDetailsModal
       sale={selectedSale}
@@ -264,6 +266,47 @@ export function AdSalesSaleDetailsDialog({
             await telegramAdSalesApi.cancelPlacement(sale.id, placementId, {});
           } else {
             await telegramAdSalesApi.cancelSale(sale.id);
+          }
+        } else if (action === "delete-publications") {
+          const operation = startOperation({
+            id: `delete-sale-publications-${sale.id}`,
+            title: "Deleting publications",
+            message: "Preparing publication deletion…",
+          });
+          try {
+            const result = await telegramAdSalesApi.cancelSalePublications(
+              sale.id,
+              (item, current, total) =>
+                operation.update({
+                  message: item.message,
+                  current,
+                  total,
+                  details: item.state === "FAILED" ? item.message : undefined,
+                }),
+            );
+            if (result.failed) {
+              operation.fail({
+                message: `${result.deleted} deleted · ${result.failed} failed`,
+                details: result.results
+                  .filter((item) => !item.success)
+                  .map((item) => item.message)
+                  .join("\n"),
+              });
+            } else {
+              operation.succeed({
+                message: `${result.deleted} publication${
+                  result.deleted === 1 ? "" : "s"
+                } deleted`,
+              });
+            }
+          } catch (error) {
+            operation.fail({
+              message:
+                error instanceof Error
+                  ? error.message
+                  : "Could not delete publications",
+            });
+            throw error;
           }
         } else if (action === "create-post" && placementId) {
           setPostEditorPlacement({ saleId: sale.id, placementId });

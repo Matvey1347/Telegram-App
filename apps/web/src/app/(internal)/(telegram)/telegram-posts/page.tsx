@@ -91,6 +91,7 @@ import {
 } from "@/components/features/telegram/telegram/telegram-text-editor";
 import { TelegramPostPreview } from "@/components/features/telegram/telegram/telegram-post-preview";
 import { TelegramPostSendToBotButton } from "@/components/features/telegram/telegram/telegram-post-send-to-bot-button";
+import { hasInvalidTelegramInlineButtons } from "@/lib/features/telegram/telegram-inline-buttons";
 import { TelegramCustomEmojiPacksModal } from "@/components/features/telegram/telegram/telegram-custom-emoji-packs-modal";
 import {
   mapManagedPostPages,
@@ -3316,6 +3317,10 @@ function TelegramPostWorkspace({
     const saveHypothesisIds = newPostHypothesisIds;
     const saveIcon = iconRef.current;
     const saveLongTextMode = longTextMode;
+    if (hasInvalidTelegramInlineButtons(buttonRows)) {
+      setError(t("telegram.posts.editor.error.inlineButtonUrl"));
+      return;
+    }
     if (saveMode === "schedule" && !isValidTimeInputValue(scheduleTime)) {
       setError(t("telegram.posts.editor.invalidPublishTime"));
       return;

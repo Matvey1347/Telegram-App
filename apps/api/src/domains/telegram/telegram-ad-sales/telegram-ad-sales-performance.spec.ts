@@ -92,6 +92,7 @@ function createPerformanceService() {
     noop,
     noop,
     noop,
+    noop,
   );
   const workspaceSettingsService = new TelegramAdSalesWorkspaceSettingsService(
     prisma as never,

@@ -38,6 +38,22 @@ describe("allowedSaleActions", () => {
     ).toContain("schedule");
   });
 
+  it("offers a separate publication cancellation without cancelling the deal", () => {
+    expect(
+      allowedSaleActions({
+        ...sale,
+        status: "CONFIRMED",
+        placements: [
+          {
+            id: "placement-1",
+            status: "SCHEDULED",
+            managedPostId: "post-1",
+          },
+        ],
+      } as never),
+    ).toContain("delete-publications");
+  });
+
   it("does not expose a manual deletion retry for published placements", () => {
     expect(
       allowedSaleActions(

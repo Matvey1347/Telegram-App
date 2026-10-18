@@ -559,6 +559,22 @@ export type TelegramAdSale = {
   advertiser?: TelegramAdvertiser | null;
 };
 
+export type TelegramAdSalePublicationDeletionProgress = {
+  placementId: string;
+  telegramChannelId: string;
+  managedPostId: string | null;
+  state: "DELETING" | "DELETED" | "FAILED";
+  success: boolean;
+  message: string;
+};
+
+export type TelegramAdSalePublicationDeletionResult = {
+  sale: TelegramAdSale;
+  deleted: number;
+  failed: number;
+  results: TelegramAdSalePublicationDeletionProgress[];
+};
+
 export type TelegramAdvertiserContact = {
   id: string;
   workspaceId: string;

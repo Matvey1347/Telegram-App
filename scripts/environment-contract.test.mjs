@@ -74,6 +74,11 @@ test("local System Bot has an explicit opt-in development command", () => {
   const localProducts = readFileSync("scripts/dev-products.mjs", "utf8");
   assert.equal(scripts.dev, "pnpm dev:nexeloq");
   assert.match(localProducts, /TELEGRAM_SYSTEM_BOT_ENVIRONMENT:\s*""/u);
+  assert.match(scripts["dev:all:tunnel"], /--system-bot(?:\s|$)/u);
+  assert.match(
+    localProducts,
+    /TELEGRAM_SYSTEM_BOT_ENVIRONMENT:\s*withSystemBot\s*\?\s*"LOCAL"\s*:\s*""/u,
+  );
   assert.match(scripts["dev:system-bot"], /--system-bot(?:\s|$)/u);
 
   const runner = readFileSync("scripts/dev-tunnel.mjs", "utf8");

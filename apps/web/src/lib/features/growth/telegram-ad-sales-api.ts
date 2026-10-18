@@ -6,6 +6,8 @@ import type {
   TelegramAdPricingSeriesResponse,
   TelegramAdProduct,
   TelegramAdSale,
+  TelegramAdSalePublicationDeletionProgress,
+  TelegramAdSalePublicationDeletionResult,
   TelegramAdAnalyticsAlertsResponse,
   TelegramAdAnalyticsOverviewResponse,
   TelegramAdAnalyticsSummaryResponse,
@@ -717,6 +719,22 @@ export function createTelegramAdSalesApi({
           payload ?? {},
         )
       ).data,
+    cancelSalePublications: async (
+      saleId: string,
+      onProgress: (
+        item: TelegramAdSalePublicationDeletionProgress,
+        current: number,
+        total: number,
+      ) => void,
+    ) =>
+      streamProgressAction<
+        TelegramAdSalePublicationDeletionResult,
+        TelegramAdSalePublicationDeletionProgress
+      >(
+        `/telegram-ad-sales/${saleId}/cancel-publications`,
+        {},
+        onProgress,
+      ),
     completePermanentPlacement: async (
       saleId: string,
       placementId: string,

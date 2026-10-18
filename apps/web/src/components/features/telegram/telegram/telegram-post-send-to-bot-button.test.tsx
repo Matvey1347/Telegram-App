@@ -41,4 +41,20 @@ describe("TelegramPostSendToBotButton", () => {
 
     expect(screen.getByRole("button", { name: "Send to bot" })).toBeDisabled();
   });
+
+  it("does not send a labelled inline button without a URL", () => {
+    render(
+      <TelegramPostSendToBotButton
+        draft={{
+          ...draft,
+          buttonRows: [[{ text: "Open", url: "", style: "default" }]],
+        }}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Send to bot" })).toBeDisabled();
+    expect(
+      screen.getByText(/every inline button needs a label/i),
+    ).toBeInTheDocument();
+  });
 });

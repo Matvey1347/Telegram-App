@@ -22,6 +22,16 @@ describe("TelegramInlineKeyboardEditor", () => {
     expect(screen.getByText("Enter a valid link")).toBeInTheDocument();
   });
 
+  it("does not close with a labelled button that has no URL", () => {
+    const onOpenChange = vi.fn();
+    render(<TelegramInlineKeyboardEditor open onOpenChange={onOpenChange} buttonRows={[[{ text: "Open", url: "", style: "default" }]]} onChange={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Done" }));
+
+    expect(onOpenChange).not.toHaveBeenCalled();
+    expect(screen.getByText("Enter a valid link")).toBeInTheDocument();
+  });
+
   it("accepts the reusable invite-link token in the standard editor", () => {
     render(<TelegramInlineKeyboardEditor open onOpenChange={vi.fn()} buttonRows={[[{ text: "Join", url: "{{invite_link}}", style: "default" }]]} onChange={vi.fn()} />);
     expect(screen.queryByText("Enter a valid link")).not.toBeInTheDocument();

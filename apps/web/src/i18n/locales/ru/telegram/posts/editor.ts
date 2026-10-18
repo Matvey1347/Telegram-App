@@ -174,6 +174,8 @@ const messages = {
     "Не удалось изменить порядок публикаций.",
   "telegram.posts.editor.error.inlineButtonsPermission":
     "В публикации есть встроенные кнопки. Перед отправкой подключите активного бота рабочего пространства и выдайте ему право публиковать в этом канале.",
+  "telegram.posts.editor.error.inlineButtonUrl":
+    "У каждой встроенной кнопки должны быть текст и корректная ссылка HTTP(S) или tg://.",
 } as const satisfies Record<keyof typeof en, string>;
 
 export default messages;

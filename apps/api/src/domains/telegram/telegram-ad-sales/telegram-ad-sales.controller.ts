@@ -740,6 +740,20 @@ export class TelegramAdSalesController {
     return this.service.cancelPlacement(user.sub, saleId, placementId, dto);
   }
 
+  @Post(':saleId/cancel-publications')
+  cancelSalePublications(
+    @CurrentUser() user: JwtUser,
+    @Param('saleId') saleId: string,
+    @Res() response: Response,
+  ) {
+    return this.streamResponse.stream(response, {
+      eventPrefix: 'telegram_ad_sales.delete_publications',
+      persistLifecycleLogs: false,
+      action: (onProgress, signal) =>
+        this.service.cancelSalePublications(user.sub, saleId, onProgress, signal),
+    });
+  }
+
   @Post(':saleId/placements/:placementId/complete-permanent')
   completePermanentPlacement(
     @CurrentUser() user: JwtUser,

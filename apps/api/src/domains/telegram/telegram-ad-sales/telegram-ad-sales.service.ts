@@ -5,7 +5,10 @@ import {
   NotFoundException,
   Optional,
 } from '@nestjs/common';
-import { TELEGRAM_AD_ANALYTICS_MAX_SELECTED_CHANNELS } from '@telegram-system/shared';
+import {
+  TELEGRAM_AD_ANALYTICS_MAX_SELECTED_CHANNELS,
+  type TelegramAdSalePublicationDeletionProgress,
+} from '@telegram-system/shared';
 import {
   Prisma,
   TelegramAdCrmDealStage,
@@ -53,6 +56,7 @@ import {
   telegramAdvertiserInclude,
 } from './telegram-ad-sales-advertiser-read-model';
 import { TelegramManagedPostPublicationService } from '../telegram-channels/telegram-managed-post-publication.service';
+import { TelegramManagedPostMoveService } from '../telegram-channels/telegram-managed-post-move.service';
 import { TelegramManagedPostRemoteSyncService } from '../telegram-channels/telegram-managed-post-remote-sync.service';
 import { TelegramPostGroupsService } from '../telegram-channels/telegram-post-groups.service';
 import { TelegramChannelAccessService } from '../telegram-channels/telegram-channel-access.service';
@@ -207,6 +211,7 @@ export class TelegramAdSalesService {
     private readonly telegramPostGroupsService: TelegramPostGroupsService,
     private readonly telegramManagedPostPublicationService: TelegramManagedPostPublicationService,
     private readonly telegramManagedPostRemoteSyncService: TelegramManagedPostRemoteSyncService,
+    private readonly telegramManagedPostMoveService: TelegramManagedPostMoveService,
     private readonly mtprotoClient: TelegramMtprotoClient,
     private readonly sourceAccessService: TelegramSourceAccessService,
     private readonly encryptionService: TokenEncryptionService,
@@ -5079,6 +5084,132 @@ export class TelegramAdSalesService {
       include: { paymentAllocations: { include: { payment: true } } },
     });
     return this.mapPlacement(this.appendPlacementFinancials(updated));
+  }
+
+  /**
+   * Stops the delivery plan without cancelling the commercial deal or its
+   * payments. Scheduled native Telegram messages are removed before the
+   * placement records are marked cancelled, so neither Telegram nor the local
+   * publisher can release them later.
+   */
+  async cancelSalePublications(
+    userId: string,
+    saleId: string,
+    onProgress?: (
+      item: TelegramAdSalePublicationDeletionProgress,
+      current: number,
+      total: number,
+    ) => void,
+    signal?: AbortSignal,
+  ) {
+    const workspaceId = await this.workspace(userId);
+    const sale = await this.getSaleDetails(workspaceId, saleId);
+    const cancellableStatuses: TelegramAdPlacementStatus[] = [
+      TelegramAdPlacementStatus.DRAFT,
+      TelegramAdPlacementStatus.RESERVED,
+      TelegramAdPlacementStatus.SCHEDULED,
+    ];
+    // A previous version of this action only returned scheduled posts to
+    // drafts. Include those already-cancelled placements when they still own a
+    // managed post so the new deletion action cleans up that legacy state too.
+    const placements = sale.placements.filter(
+      (placement) =>
+        cancellableStatuses.includes(placement.status) ||
+        (placement.status === TelegramAdPlacementStatus.CANCELLED &&
+          Boolean(placement.managedPostId)),
+    );
+    if (!placements.length) {
+      throw new BadRequestException(
+        'This deal has no unpublished placements to cancel',
+      );
+    }
+
+    const results: TelegramAdSalePublicationDeletionProgress[] = [];
+    for (const [offset, placement] of placements.entries()) {
+      if (signal?.aborted) {
+        const abortError = new Error('Publication deletion was cancelled');
+        abortError.name = 'AbortError';
+        throw abortError;
+      }
+      const managedPostId = placement.managedPostId;
+      onProgress?.(
+        {
+          placementId: placement.id,
+          telegramChannelId: placement.telegramChannelId,
+          managedPostId,
+          state: 'DELETING',
+          success: false,
+          message: managedPostId
+            ? 'Deleting the scheduled post from Telegram and the system'
+            : 'Removing the unpublished placement from the deal',
+        },
+        offset,
+        placements.length,
+      );
+      try {
+        if (managedPostId) {
+          await this.telegramManagedPostMoveService.deleteManagedPost(
+            userId,
+            placement.telegramChannelId,
+            managedPostId,
+          );
+        }
+        await this.prisma.telegramAdSalePlacement.updateMany({
+          where: {
+            id: placement.id,
+            workspaceId,
+            telegramAdSaleId: saleId,
+            status: {
+              in: [
+                ...cancellableStatuses,
+                TelegramAdPlacementStatus.CANCELLED,
+              ],
+            },
+          },
+          data: {
+            status: TelegramAdPlacementStatus.CANCELLED,
+            // The database relation also uses onDelete: SetNull. Set this
+            // explicitly so the placement cannot retain a local publication
+            // reference if deletion semantics change in a future migration.
+            managedPostId: null,
+            scheduledManagedAt: null,
+          },
+        });
+        const result = {
+          placementId: placement.id,
+          telegramChannelId: placement.telegramChannelId,
+          managedPostId,
+          state: 'DELETED' as const,
+          success: true,
+          message: managedPostId
+            ? 'Publication deleted from the system'
+            : 'Unpublished placement cancelled',
+        };
+        results.push(result);
+        onProgress?.(result, offset + 1, placements.length);
+      } catch (error) {
+        const result = {
+          placementId: placement.id,
+          telegramChannelId: placement.telegramChannelId,
+          managedPostId,
+          state: 'FAILED' as const,
+          success: false,
+          message:
+            error instanceof Error
+              ? error.message
+              : 'Could not delete publication',
+        };
+        results.push(result);
+        onProgress?.(result, offset + 1, placements.length);
+      }
+    }
+    this.invalidateAvailabilityCache(workspaceId);
+    return {
+      sale: await this.getSale(userId, saleId),
+      deleted: results.filter((result) => result.success).length,
+      failed: results.filter((result) => !result.success).length,
+      results,
+    };
   }
 
   async completePermanentPlacement(

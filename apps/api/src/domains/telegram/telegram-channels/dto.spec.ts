@@ -19,6 +19,7 @@ const buttonRows = [
       text: 'Open',
       url: 'https://example.com',
       style: 'primary',
+      iconCustomEmojiId: '5330237710655306682',
     },
   ],
 ];
@@ -41,6 +42,27 @@ describe('managed post button DTOs', () => {
       expect(
         validateSync(dto, { whitelist: true, forbidNonWhitelisted: true }),
       ).toEqual([]);
+    },
+  );
+
+  it.each(managedPostDtoConstructors)(
+    'rejects a malformed Premium emoji id for %p',
+    (Dto) => {
+      const dto = plainToInstance(Dto, {
+        title: 'Post',
+        buttonRows: [
+          [
+            {
+              text: 'Open',
+              url: 'https://example.com',
+              style: 'primary',
+              iconCustomEmojiId: 'not-a-telegram-document-id',
+            },
+          ],
+        ],
+      });
+
+      expect(validateSync(dto)).not.toEqual([]);
     },
   );
 });

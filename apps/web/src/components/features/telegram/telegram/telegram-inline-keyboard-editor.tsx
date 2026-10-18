@@ -62,7 +62,15 @@ export function TelegramInlineKeyboardEditor({ buttonRows, onChange, disabled, o
     onChange(next);
   };
   const moveRow = (from: number, to: number) => { if (from === to) return; const next = [...buttonRows]; const [row] = next.splice(from, 1); next.splice(to, 0, row!); onChange(next); };
-  return <Modal open={open} onClose={() => onOpenChange(false)} title={t("telegram.posts.editorComponents.inlineButtons.title")} size="md">
+  const closeEditor = () => {
+    // A Telegram inline button is only usable with both a label and a URL.
+    // Keep an untouched blank draft quiet, but never let a partly filled row
+    // escape the modal and fail later as a generic API error.
+    if (errors.flat().some((error) => error.text || error.link)) return;
+    onChange(compactRows(buttonRows));
+    onOpenChange(false);
+  };
+  return <Modal open={open} onClose={closeEditor} title={t("telegram.posts.editorComponents.inlineButtons.title")} size="md">
     <div className="space-y-3">
       {!canPublishInlineButtons ? <div className="rounded-md border border-amber-700/60 bg-amber-950/30 p-3 text-xs text-amber-100"><p className="font-medium">{t("telegram.posts.editorComponents.inlineButtons.accessRequired")}</p><p className="mt-1 text-amber-200/80">{t("telegram.posts.editorComponents.inlineButtons.accessHelp")}</p><Button type="button" className="mt-3" disabled={disabled || checkingAccess || !onCheckPublishingAccess} onClick={async () => { if (!onCheckPublishingAccess) return; setCheckingAccess(true); try { await onCheckPublishingAccess(); } finally { setCheckingAccess(false); } }}>{checkingAccess ? t("telegram.posts.editorComponents.inlineButtons.checkingAccess") : t("telegram.posts.editorComponents.inlineButtons.checkAccess")}</Button></div> : null}
       {canPublishInlineButtons ? <><p className="text-xs text-neutral-400">{t("telegram.posts.editorComponents.inlineButtons.description")}</p>
@@ -77,7 +85,7 @@ export function TelegramInlineKeyboardEditor({ buttonRows, onChange, disabled, o
         </div>)}</div>
         <button type="button" disabled={disabled || !canPublishInlineButtons} onClick={() => onChange(buttonRows.map((currentRow, index) => index === rowIndex ? [...currentRow, blankButton()] : currentRow))} className="mt-2 inline-flex items-center gap-1 text-xs text-sky-400 hover:text-sky-300 disabled:opacity-50"><Plus size={14} /> {t("telegram.posts.editorComponents.inlineButtons.button")}</button>
       </div>)}
-      <div className="flex items-center justify-between"><button type="button" disabled={disabled} onClick={() => onChange([...buttonRows, [blankButton()]])} className="inline-flex items-center gap-1 text-sm text-sky-400 hover:text-sky-300 disabled:opacity-50"><Plus size={15} /> {t("telegram.posts.editorComponents.inlineButtons.addRow")}</button><Button type="button" disabled={disabled} onClick={() => { if (errors.flat().some((error) => error.text || error.link)) return; onChange(compactRows(buttonRows)); onOpenChange(false); }}>{t("telegram.posts.editorComponents.inlineButtons.done")}</Button></div></> : null}
+      <div className="flex items-center justify-between"><button type="button" disabled={disabled} onClick={() => onChange([...buttonRows, [blankButton()]])} className="inline-flex items-center gap-1 text-sm text-sky-400 hover:text-sky-300 disabled:opacity-50"><Plus size={15} /> {t("telegram.posts.editorComponents.inlineButtons.addRow")}</button><Button type="button" disabled={disabled} onClick={closeEditor}>{t("telegram.posts.editorComponents.inlineButtons.done")}</Button></div></> : null}
     </div>
     <TelegramCustomEmojiPickerModal
       open={emojiTarget !== null}

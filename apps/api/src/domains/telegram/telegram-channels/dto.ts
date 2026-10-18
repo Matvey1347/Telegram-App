@@ -270,6 +270,11 @@ export class TelegramManagedPostButtonDto {
     | 'primary'
     | 'success'
     | 'danger';
+  /** Native Bot API icon rendered before the button label. */
+  @IsOptional()
+  @IsString()
+  @Matches(/^\d{1,20}$/)
+  iconCustomEmojiId?: string;
 }
 
 export class ImportTelegramManagedPostRowDto {

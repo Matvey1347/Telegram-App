@@ -202,6 +202,10 @@ export function selectedProducts(mode) {
 
 const mode = process.argv[2];
 const withCloudflare = process.argv.includes("--cloudflare");
+// System Bot traffic is an explicit opt-in: it needs the HTTPS tunnel so
+// Telegram can reach the local webhook. Keep ordinary local development
+// disabled, but make the all-products tunnel usable from the post editor.
+const withSystemBot = process.argv.includes("--system-bot");
 let stopping = false;
 const children = new Set();
 let dashboard;
@@ -281,6 +285,14 @@ function start(product, definition) {
           ...localBotPublicEnvironment(tunnelOrigins.get("finance")),
         }
       : {};
+  const systemBotTunnelEnvironment =
+    name === "Nexeloq API" && withSystemBot
+      ? localBotPublicEnvironment(tunnelOrigins.get("nexeloq"))
+      : {};
+  const systemBotEnvironment =
+    name === "Nexeloq API"
+      ? { TELEGRAM_SYSTEM_BOT_ENVIRONMENT: withSystemBot ? "LOCAL" : "" }
+      : {};
   const child = spawn("pnpm", args, {
     cwd: process.cwd(),
     env: {
@@ -291,6 +303,8 @@ function start(product, definition) {
       ...localFinanceBotEnvironment,
       ...financeTunnelEnvironment,
       ...tunnelProcessEnvironment(product, name, tunnelOrigins.get(product)),
+      ...systemBotTunnelEnvironment,
+      ...systemBotEnvironment,
     },
     stdio: ["ignore", "pipe", "pipe"],
     detached: process.platform !== "win32",

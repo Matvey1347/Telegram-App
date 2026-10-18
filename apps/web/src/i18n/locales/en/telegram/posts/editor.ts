@@ -168,6 +168,8 @@ const messages = {
   "telegram.posts.editor.error.reorder": "Could not reorder posts.",
   "telegram.posts.editor.error.inlineButtonsPermission":
     "This post has inline buttons. Connect an active workspace bot and grant it posting permission for this channel before publishing.",
+  "telegram.posts.editor.error.inlineButtonUrl":
+    "Every inline button needs a label and a valid HTTP(S) or tg:// link.",
 } as const satisfies TranslationCatalog;
 
 export default messages;

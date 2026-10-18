@@ -10,6 +10,7 @@ export type SaleActionKey =
   | "reserve"
   | "confirm"
   | "cancel"
+  | "delete-publications"
   | "create-post"
   | "attach-post"
   | "schedule"
@@ -32,6 +33,14 @@ export function allowedSaleActions(
       sale.status === "IN_PROGRESS"
     ) {
       actions.push("cancel");
+    }
+    if (
+      sale.placements.some((item) =>
+        ["DRAFT", "RESERVED", "SCHEDULED"].includes(item.status) ||
+        (item.status === "CANCELLED" && Boolean(item.managedPostId)),
+      )
+    ) {
+      actions.push("delete-publications");
     }
     return actions;
   }
@@ -73,7 +82,11 @@ export function SaleStatusActions({
         <Button
           key={action}
           type="button"
-          variant={action === "cancel" ? "danger" : "secondary"}
+          variant={
+            action === "cancel" || action === "delete-publications"
+              ? "danger"
+              : "secondary"
+          }
           onClick={() => onAction(action)}
           className="capitalize"
         >

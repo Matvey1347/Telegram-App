@@ -377,6 +377,7 @@ function createService() {
     cancelScheduledManagedPost: jest.fn(),
     returnManagedPostToDraft: jest.fn(),
     syncManagedPosts: jest.fn(),
+    deleteManagedPost: jest.fn(),
   };
   const telegramPostGroupsService: any = {
     ensureAdvertiseSystemGroup: jest
@@ -412,6 +413,7 @@ function createService() {
     financeCategoriesService,
     telegramChannelsService,
     telegramPostGroupsService,
+    telegramChannelsService,
     telegramChannelsService,
     telegramChannelsService,
     mtprotoClient,
@@ -1497,6 +1499,97 @@ describe('TelegramAdSalesService', () => {
       'channel-1',
       'managed-post-1',
       { scheduledAt: '2026-08-28T13:30:00.000Z' },
+    );
+  });
+
+  it('deletes unpublished managed posts and clears their placement links without cancelling the sale', async () => {
+    const { service, prisma, telegramChannelsService } = createService();
+    const sale = makeSale({
+      status: TelegramAdSaleStatus.IN_PROGRESS,
+      placements: [
+        makePlacement({
+          id: 'placement-scheduled',
+          status: TelegramAdPlacementStatus.SCHEDULED,
+          managedPostId: 'managed-post-1',
+          managedPost: {
+            id: 'managed-post-1',
+            status: TelegramManagedPostStatus.SCHEDULED,
+          },
+        }),
+        makePlacement({
+          id: 'placement-reserved',
+          status: TelegramAdPlacementStatus.RESERVED,
+          managedPost: null,
+        }),
+        makePlacement({
+          id: 'placement-previously-cancelled',
+          status: TelegramAdPlacementStatus.CANCELLED,
+          managedPostId: 'managed-post-legacy',
+          managedPost: {
+            id: 'managed-post-legacy',
+            status: TelegramManagedPostStatus.DRAFT,
+          },
+        }),
+        makePlacement({
+          id: 'placement-published',
+          status: TelegramAdPlacementStatus.PUBLISHED,
+          managedPost: {
+            id: 'managed-post-published',
+            status: TelegramManagedPostStatus.PUBLISHED,
+          },
+        }),
+      ],
+    });
+    jest.spyOn(service as any, 'getSaleDetails').mockResolvedValue(sale);
+    jest.spyOn(service, 'getSale').mockResolvedValue(sale as never);
+
+    const onProgress = jest.fn();
+    await service.cancelSalePublications('user-1', 'sale-1', onProgress);
+
+    expect(telegramChannelsService.deleteManagedPost).toHaveBeenCalledWith(
+      'user-1',
+      'channel-1',
+      'managed-post-1',
+    );
+    expect(telegramChannelsService.deleteManagedPost).toHaveBeenCalledWith(
+      'user-1',
+      'channel-1',
+      'managed-post-legacy',
+    );
+    expect(prisma.telegramAdSalePlacement.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          id: 'placement-scheduled',
+        }),
+        data: {
+          status: TelegramAdPlacementStatus.CANCELLED,
+          managedPostId: null,
+          scheduledManagedAt: null,
+        },
+      }),
+    );
+    expect(prisma.telegramAdSalePlacement.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: 'placement-reserved' }),
+      }),
+    );
+    expect(prisma.telegramAdSale.update).not.toHaveBeenCalled();
+    expect(onProgress).toHaveBeenCalledWith(
+      expect.objectContaining({
+        placementId: 'placement-scheduled',
+        state: 'DELETING',
+        message: expect.stringContaining('Deleting'),
+      }),
+      0,
+      3,
+    );
+    expect(onProgress).toHaveBeenCalledWith(
+      expect.objectContaining({
+        placementId: 'placement-scheduled',
+        state: 'DELETED',
+      }),
+      1,
+      3,
     );
   });
 

@@ -234,6 +234,7 @@ import { TelegramChannelTrafficAttributionService } from './telegram-channel-tra
     TelegramChannelImportPolicyService,
     TelegramInviteAttributionService,
     TelegramManagedPostPublicationService,
+    TelegramManagedPostMoveService,
     TelegramManagedPostBulkService,
     TelegramManagedPostCommandService,
     TelegramPostGroupsService,
