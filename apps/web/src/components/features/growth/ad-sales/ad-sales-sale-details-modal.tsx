@@ -5,7 +5,7 @@ import type {
   TelegramAdProduct,
   TelegramAdSale,
 } from "@telegram-system/shared";
-import { ArrowLeft, CalendarDays, ExternalLink, Pencil } from "lucide-react";
+import { ArrowLeft, CalendarDays, ExternalLink } from "lucide-react";
 import { MemberSelect } from "@/components/features/workspace/member-select";
 import { TelegramEntityAvatar } from "@/components/features/telegram/telegram/telegram-entity-avatar";
 import { adSaleOriginOptions } from "./ad-sale-origin";
@@ -35,11 +35,16 @@ import {
 } from "./ad-placement-lifecycle";
 import { AdSalePostMetrics, PostMetrics } from "./ad-sale-post-metrics";
 import { AdSaleSharedPostEditor } from "./ad-sale-shared-post-editor";
+import { AdSaleDealPlacementActions } from "./ad-sale-deal-placement-actions";
 import type { RegisterPaymentPayload } from "./register-payment-form";
 import { DealFinanceTransaction } from "./deal-finance-transaction";
 import { DealFinanceTransactionDeleteModal } from "./deal-finance-transaction-delete-modal";
 import { nativeAdSalePayment } from "./ad-sale-native-payment";
 import { formatCompactMoney } from "@/lib/features/finance/money";
+import {
+  AdSalePlacementValue,
+  adSaleClientName,
+} from "./ad-sale-placement-value";
 import type { PlacementManagedPostDraft } from "./placement-post/placement-post-composer";
 import {
   PlacementDeletionCountdown,
@@ -212,12 +217,44 @@ export function SaleDetailsModal(props: {
       items.map((p) => (p.id === id ? { ...p, ...patch } : p)),
     );
 
-  const save = async (placementId?: string) => {
+  const applyFormatToAllPlacements = async (formatName: string) => {
+    try {
+      const nextPlacements = placements.map((placementDraft) => {
+        const placement = sale.placements.find(
+          (item) => item.id === placementDraft.id,
+        );
+        const product = placement
+          ? props.productsByChannelId[placement.telegramChannelId]?.find(
+              (candidate) => candidate.name === formatName,
+            )
+          : undefined;
+        if (!product) {
+          throw new Error(`Format ${formatName} is unavailable for a placement.`);
+        }
+        return { ...placementDraft, telegramAdProductId: product.id };
+      });
+      setPlacements(nextPlacements);
+      await save(undefined, nextPlacements);
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : "Could not apply the format.",
+      );
+    }
+  };
+
+  const save = async (
+    placementId?: string,
+    replacements?: PlacementDraft[],
+  ) => {
+    const sourcePlacements = replacements ?? placements;
     const placementsToSave = placementId
-      ? placements.filter((placement) => placement.id === placementId)
-      : [];
-    const paymentsToSave =
-      placementId && !(priceChanged && syncPayment) ? [] : payments;
+      ? sourcePlacements.filter((placement) => placement.id === placementId)
+      : replacements ?? [];
+    const paymentsToSave = replacements
+      ? []
+      : placementId && !(priceChanged && syncPayment)
+        ? []
+        : payments;
     setSaving(true);
     setError("");
     try {
@@ -280,7 +317,7 @@ export function SaleDetailsModal(props: {
           ? "Edit shared post"
           : placement
             ? "Edit placement"
-            : `Deal · ${clientName(sale)}`
+            : `Deal · ${adSaleClientName(sale)}`
       }
       size="xl"
       leadingHeaderAction={
@@ -366,6 +403,8 @@ export function SaleDetailsModal(props: {
           onSharedPost={
             props.onUpdateSharedPost ? () => setSharedPostOpen(true) : undefined
           }
+          productsByChannelId={props.productsByChannelId}
+          onApplyFormat={applyFormatToAllPlacements}
           onTogglePayment={() => setPaymentOpen((v) => !v)}
           onCreatePayment={
             props.onCreatePayment
@@ -497,6 +536,8 @@ function DealOverview(props: {
   onMember: (v: string) => void;
   onBuyerContact: (v: string) => void;
   onPlacement: (v: string) => void;
+  productsByChannelId: Record<string, TelegramAdProduct[]>;
+  onApplyFormat: (formatName: string) => Promise<void>;
   onSharedPost?: () => void;
   onTogglePayment: () => void;
   onCreatePayment?: (payload: RegisterPaymentPayload) => Promise<void>;
@@ -553,20 +594,13 @@ function DealOverview(props: {
               Choose the placement you want to edit.
             </p>
           </div>
-          {props.onSharedPost &&
-          props.sale.placements.length > 1 &&
-          props.sale.placements.every(
-            (placement) => placement.managedPostId && placement.managedPost,
-          ) ? (
-            <Button className="w-full sm:w-auto" onClick={props.onSharedPost}>
-              <span className="inline-flex items-center gap-2">
-                <Pencil size={16} aria-hidden="true" />
-                Edit shared post
-              </span>
-            </Button>
-          ) : (
-            <span aria-hidden="true" />
-          )}
+          <AdSaleDealPlacementActions
+            sale={props.sale}
+            productsByChannelId={props.productsByChannelId}
+            saving={props.saving}
+            onApplyFormat={props.onApplyFormat}
+            onSharedPost={props.onSharedPost}
+          />
           <div className="text-left sm:text-right">
             <span className="block text-[10px] font-medium uppercase tracking-wider text-neutral-600">
               Deal value
@@ -688,7 +722,7 @@ function DealOverview(props: {
                     />
                   ) : null}
                 </div>
-                <PlacementValue sale={props.sale} placement={p} />
+                <AdSalePlacementValue sale={props.sale} placement={p} />
               </div>
             </div>
           ))}
@@ -741,69 +775,3 @@ function allocatePayment(amount: number, placements: PlacementDraft[]) {
   });
 }
 
-function PlacementValue({
-  sale,
-  placement,
-}: {
-  sale: TelegramAdSale;
-  placement: TelegramAdSale["placements"][number];
-}) {
-  const allocations = (sale.payments ?? []).flatMap((payment) =>
-    payment.status === "VOIDED"
-      ? []
-      : (payment.allocations ?? [])
-          .filter(
-            (allocation) =>
-              allocation.telegramAdSalePlacementId === placement.id,
-          )
-          .map((allocation) => ({
-            amount: Number(allocation.amount),
-            currency: allocation.currency,
-          })),
-  );
-  if (allocations.length) {
-    const currency = allocations[0].currency;
-    const amount = allocations
-      .filter((allocation) => allocation.currency === currency)
-      .reduce((sum, allocation) => sum + allocation.amount, 0);
-    return (
-      <span className="shrink-0 font-semibold text-white">
-        {formatCompactMoney(amount, currency)}
-      </span>
-    );
-  }
-  const paid = nativeAdSalePayment(sale);
-  const freePlacements = sale.placements.every(
-    (item) => Number(item.agreedPrice) <= 0,
-  );
-  if (freePlacements && paid.amount > 0) {
-    const index = sale.placements.findIndex((item) => item.id === placement.id);
-    const minorUnitAmount = Math.round(paid.amount * 100);
-    const base = Math.floor(minorUnitAmount / sale.placements.length);
-    const amount =
-      (base +
-        (index === sale.placements.length - 1
-          ? minorUnitAmount - base * sale.placements.length
-          : 0)) /
-      100;
-    return (
-      <span className="shrink-0 font-semibold text-white">
-        {formatCompactMoney(amount, paid.currency)}
-      </span>
-    );
-  }
-  return (
-    <span className="shrink-0 font-semibold text-white">
-      {formatCompactMoney(placement.agreedPrice, placement.currency)}
-    </span>
-  );
-}
-function clientName(sale: TelegramAdSale) {
-  return (
-    sale.advertiserTelegramSnapshot ||
-    sale.advertiserTelegram ||
-    sale.advertiserNameSnapshot ||
-    sale.advertiserName ||
-    "Client"
-  );
-}
