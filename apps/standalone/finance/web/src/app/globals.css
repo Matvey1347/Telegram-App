@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 /* Finance owns this source tree; Tailwind must scan its product UI directly. */
-@source "../../../../../products/finance/web";
+@source "../../../../../../products/finance/web";
 
 :root {
   --background: #0a0a0a;
