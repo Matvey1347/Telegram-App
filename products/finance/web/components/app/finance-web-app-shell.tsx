@@ -72,10 +72,10 @@ export function FinanceWebAppShell({
     <main
       data-finance-surface="browser"
       data-finance-shell="web-app"
-      className={`${financeStyles.pwaInset} min-h-dvh bg-neutral-950 text-neutral-100`}
+      className={`${financeStyles.pwaInset} ${financeStyles.groshlySurface} min-h-dvh bg-[#f7f8f4] text-[#18382d]`}
     >
       <div className="mx-auto flex min-h-dvh w-full max-w-[1800px]">
-        <aside className="sticky top-0 hidden h-dvh w-64 shrink-0 flex-col overflow-hidden border-r border-neutral-800 bg-neutral-950 px-4 py-5 md:flex">
+        <aside className="sticky top-0 hidden h-dvh w-64 shrink-0 flex-col overflow-hidden border-r border-[#e4ebe3] bg-white px-4 py-5 md:flex">
           <div className="mb-5 flex shrink-0 items-center gap-3 px-3">
             <Image
               src={logoUrl || "/brand/finance-pwa-512.png"}
@@ -88,7 +88,7 @@ export function FinanceWebAppShell({
                 event.currentTarget.src = "/brand/finance-pwa-512.png";
               }}
             />
-            <p className="text-xl font-semibold">Finance</p>
+            <p className="text-xl font-semibold tracking-tight">Groshly</p>
           </div>
           <nav
             aria-label={copy.financeNavigation}
@@ -144,7 +144,7 @@ export function FinanceWebAppShell({
         </aside>
 
         <div className="min-w-0 flex-1">
-          <header className="sticky top-0 z-30 flex min-h-16 items-center justify-between border-b border-neutral-800 bg-neutral-950/95 px-4 pt-[env(safe-area-inset-top)] backdrop-blur md:px-8 xl:px-10">
+          <header className="sticky top-0 z-30 flex min-h-16 items-center justify-between border-b border-[#e4ebe3] bg-[#f7f8f4]/95 px-4 pt-[env(safe-area-inset-top)] backdrop-blur md:px-8 xl:px-10">
             <div className="mx-auto flex w-full max-w-[1440px] items-center justify-between gap-3">
               <div className="flex min-w-0 flex-1 items-center gap-3">
                 <Image
@@ -158,7 +158,7 @@ export function FinanceWebAppShell({
                     event.currentTarget.src = "/brand/finance-pwa-512.png";
                   }}
                 />
-                <h1 className="truncate text-lg font-semibold">{title}</h1>
+                <h1 className="truncate text-lg font-semibold tracking-tight">{title}</h1>
               </div>
               <div className="flex shrink-0 items-center gap-2">
                 <FinanceLanguageSelect

@@ -2,6 +2,101 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Groshly v21 visual contract. The Finance product keeps its own components
+   and API layer; these tokens only re-skin its real browser and Mini App UI. */
+.groshlySurface {
+  --groshly-bg: #f7f8f4;
+  --groshly-paper: #ffffff;
+  --groshly-ink: #18382d;
+  --groshly-muted: #82958b;
+  --groshly-line: #e4ebe3;
+  --groshly-soft: #edf3eb;
+  --groshly-deep: #113e30;
+  --groshly-lime: #cff08b;
+  background: var(--groshly-bg);
+  color: var(--groshly-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.groshlySurface :global(.bg-neutral-950),
+.groshlySurface :global(.bg-neutral-900),
+.groshlySurface :global(.bg-\[\#0c1117\]),
+.groshlySurface :global(.bg-\[\#10151c\]) {
+  background-color: var(--groshly-paper) !important;
+}
+
+.groshlySurface :global(.border-neutral-800),
+.groshlySurface :global(.border-neutral-700),
+.groshlySurface :global(.border-white\/10) {
+  border-color: var(--groshly-line) !important;
+}
+
+.groshlySurface :global(.text-neutral-100),
+.groshlySurface :global(.text-neutral-200),
+.groshlySurface :global(.text-white) {
+  color: var(--groshly-ink) !important;
+}
+
+.groshlySurface :global(.text-neutral-300),
+.groshlySurface :global(.text-neutral-400),
+.groshlySurface :global(.text-neutral-500) {
+  color: var(--groshly-muted) !important;
+}
+
+.groshlySurface :global(.bg-blue-600),
+.groshlySurface :global(.bg-blue-500) {
+  background-color: var(--groshly-deep) !important;
+  color: white !important;
+}
+
+.groshlySurface :global(.bg-sky-500\/15),
+.groshlySurface :global(.bg-sky-950\/30) {
+  background-color: #e4f4c9 !important;
+}
+
+.groshlySurface :global(.text-sky-200),
+.groshlySurface :global(.text-sky-300) {
+  color: #315e49 !important;
+}
+
+/* Existing Finance feature screens use the shared neutral/surface utility
+   vocabulary. Map that vocabulary once so every domain screen (ledger,
+   accounts, plans, obligations, investments, analytics and assistant) adopts
+   the same Groshly system without duplicating visual policy per feature. */
+.groshlySurface :global(.bg-neutral-800),
+.groshlySurface :global(.bg-slate-900),
+.groshlySurface :global(.bg-slate-950) {
+  background-color: var(--groshly-soft) !important;
+}
+
+.groshlySurface :global(.border-sky-800),
+.groshlySurface :global(.border-sky-700),
+.groshlySurface :global(.border-blue-600) {
+  border-color: #cfe5bc !important;
+}
+
+.groshlySurface :global(.bg-emerald-950),
+.groshlySurface :global(.bg-emerald-900),
+.groshlySurface :global(.bg-rose-950) {
+  background-color: var(--groshly-paper) !important;
+}
+
+.groshlySurface :global(.text-emerald-200),
+.groshlySurface :global(.text-emerald-300) {
+  color: #448e6b !important;
+}
+
+.groshlySurface :global(.text-rose-200),
+.groshlySurface :global(.text-rose-300) {
+  color: #bb6b5c !important;
+}
+
+.groshlySurface :global(input),
+.groshlySurface :global(textarea),
+.groshlySurface :global(select) {
+  accent-color: #448e6b;
+}
+
 /* Telegram owns the Mini App viewport inset. A standalone installed PWA does
    not, so reserve a small top breathing room only in that display mode. */
 @media (display-mode: standalone) {

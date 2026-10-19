@@ -6,6 +6,7 @@ import {
   ForbiddenException,
   Get,
   Headers,
+  HttpCode,
   InternalServerErrorException,
   NotFoundException,
   Param,
@@ -58,11 +59,9 @@ import {
 } from '@api/config/deployment-config';
 import { FinanceConsumerRequestService } from '@consumer-finance/api/http/finance-consumer-request.service';
 import { FinanceAnalyticsService } from '@consumer-finance/api/analytics/finance-analytics.service';
-
 class DeleteFinanceDataDto {
   @IsIn(['DELETE MY FINANCE DATA']) confirmation!: 'DELETE MY FINANCE DATA';
 }
-
 class FinanceBrowserLoginChallengeDto {
   @IsString()
   @Matches(/^[A-Za-z0-9_-]{32}$/u)
@@ -76,7 +75,6 @@ class FinanceBrowserTransferDto {
 @Controller('finance-bots/:botId')
 export class FinanceController {
   private readonly browserLoginStateCookie = 'finance_browser_login_state';
-
   constructor(
     private readonly contexts: FinanceContextService,
     private readonly sessions: FinanceConsumerSessionService,
@@ -246,6 +244,29 @@ export class FinanceController {
       return { authenticated: false as const };
     }
     return { authenticated: true as const, profile };
+  }
+  @Post('startup') @HttpCode(200) async startup(@Param('botId') botId: string, @Headers('x-telegram-init-data') initData: string | undefined, @Req() request: Request, @Res({ passthrough: true }) response: Response) {
+    this.requests.assertMutation(request);
+    const inspection = this.sessions.inspectRequest(request, botId);
+    let profileId = inspection.authenticated ? inspection.session.profileId : null;
+    let workspaceId = inspection.authenticated ? inspection.session.workspaceId : null;
+    if (!profileId && initData) {
+      const context = await this.contexts.fromInitData(botId, initData);
+      profileId = context.profile.id;
+      workspaceId = context.bot.workspaceId;
+      await this.setCookie(response, { profileId, botIntegrationId: context.bot.id, telegramBotUserId: context.telegramUser.id, telegramChatId: context.telegramUser.telegramChatId, workspaceId, defaultCurrency: context.profile.defaultCurrency }, botId, request);
+    }
+    if (!profileId || !workspaceId) return { authenticated: false as const };
+    const profile = await this.core.profile(profileId);
+    if (!profile) throw new NotFoundException('Finance profile not found');
+    const range = financeAnalyticsDateRange({ period: 'CURRENT_MONTH' }, profile.timezone);
+    const [stats, limits, transactions, accounts, categories] = await Promise.all([
+      this.ledger.stats(profileId, range.from, range.to), this.core.limits(profileId),
+      this.ledger.history(profileId, Object.assign(new FinanceHistoryQueryDto(), { limit: 100 }), profile.timezone),
+      this.ledger.accounts(profileId), this.core.categories(profileId),
+    ]);
+    const { savings, investments, ...periodStats } = stats;
+    return { authenticated: true as const, profile, dashboard: { profile, stats: { ...periodStats, currency: profile.defaultCurrency, categories: stats.categories.map((item) => ({ ...item, currency: profile.defaultCurrency })) }, limits, savings, investments, recent: transactions.items.slice(0, 8) }, accounts, categories, transactions };
   }
   @Post('auth/logout') logout(
     @Param('botId') b: string,

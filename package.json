@@ -13,6 +13,7 @@
     "dev:finance": "node scripts/dev-products.mjs finance",
     "dev:all": "node scripts/dev-products.mjs all",
     "dev:all:tunnel": "node scripts/dev-products.mjs all --cloudflare --system-bot",
+    "dev:stop": "node scripts/stop-local-dev.mjs",
     "dev:finance:tunnel": "TUNNEL_TARGET_PORT=4001 node scripts/dev-tunnel.mjs --cloudflare --finance",
     "dev:bots": "TUNNEL_TARGET_PORT=4000 node scripts/dev-tunnel.mjs --cloudflare --bots",
     "dev:local-bot": "TUNNEL_TARGET_PORT=4000 node scripts/dev-tunnel.mjs --cloudflare --bots",

@@ -1,7 +1,10 @@
-import { useQueryClient } from "@tanstack/react-query";
+import { dehydrate, QueryClient, useQueryClient } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { ConsumerFinanceProvider } from "./consumer-finance-provider";
+import {
+  ConsumerFinanceProvider,
+  isPersistedConsumerFinanceQuery,
+} from "./consumer-finance-provider";
 
 function CacheProbe() {
   const client = useQueryClient();
@@ -19,8 +22,23 @@ function CacheProbe() {
   );
 }
 
+function RestoredCacheProbe() {
+  const client = useQueryClient();
+  return (
+    <output data-testid="restored-cache">
+      {String(
+        client.getQueryData<string>([
+          "consumer-finance",
+          "bot-a",
+          "groshly-read-model",
+        ]),
+      )}
+    </output>
+  );
+}
+
 describe("ConsumerFinanceProvider", () => {
-  it("owns a non-persisted Finance query client with bounded defaults", () => {
+  it("uses short-lived persisted read models with bounded query defaults", () => {
     localStorage.setItem(
       "telegram-system-react-query-cache",
       JSON.stringify({ unrelated: true }),
@@ -34,7 +52,7 @@ describe("ConsumerFinanceProvider", () => {
 
     expect(screen.getByTestId("cache-policy")).toHaveTextContent(
       JSON.stringify({
-        staleTime: 240_000,
+        staleTime: 30_000,
         gcTime: 2_700_000,
         hasGlobalPlaceholder: false,
         refetchOnWindowFocus: false,
@@ -49,6 +67,56 @@ describe("ConsumerFinanceProvider", () => {
         .getByTestId("cache-policy")
         .closest("[data-consumer-finance-theme]"),
     ).toHaveAttribute("data-consumer-finance-theme", "neutral-blue");
+  });
+
+  it("persists finance read models but never session or payment state", () => {
+    expect(
+      isPersistedConsumerFinanceQuery([
+        "consumer-finance",
+        "bot-a",
+        "accounts",
+      ]),
+    ).toBe(true);
+    expect(
+      isPersistedConsumerFinanceQuery([
+        "consumer-finance",
+        "bot-a",
+        "session",
+      ]),
+    ).toBe(false);
+    expect(
+      isPersistedConsumerFinanceQuery([
+        "consumer-finance",
+        "bot-a",
+        "entitlements",
+      ]),
+    ).toBe(false);
+  });
+
+  it("hydrates a valid Finance snapshot before the first child render", () => {
+    const source = new QueryClient();
+    source.setQueryData(
+      ["consumer-finance", "bot-a", "groshly-read-model"],
+      "available immediately",
+    );
+    localStorage.setItem(
+      "consumer-finance-react-query-cache",
+      JSON.stringify({
+        buster: "consumer-finance-cache-v1",
+        timestamp: Date.now(),
+        clientState: dehydrate(source),
+      }),
+    );
+
+    render(
+      <ConsumerFinanceProvider>
+        <RestoredCacheProbe />
+      </ConsumerFinanceProvider>,
+    );
+
+    expect(screen.getByTestId("restored-cache")).toHaveTextContent(
+      "available immediately",
+    );
   });
 
   it("does not expose cached data across bot-scoped query keys", () => {

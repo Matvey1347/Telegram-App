@@ -62,11 +62,11 @@ export function FinanceMiniAppShell({
     <main
       data-finance-surface="telegram"
       data-finance-shell="mini-app"
-      className={`${financeStyles.pwaInset} min-h-dvh bg-neutral-950 pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] text-neutral-100`}
+      className={`${financeStyles.pwaInset} ${financeStyles.groshlySurface} min-h-dvh bg-[#f7f8f4] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] text-[#18382d]`}
     >
       <div className="mx-auto flex min-h-dvh w-full max-w-2xl">
         <div className="min-w-0 flex-1">
-          <header className="sticky top-0 z-30 flex min-h-16 items-center justify-between border-b border-neutral-800 bg-neutral-950/95 px-4 pt-[env(safe-area-inset-top)] backdrop-blur">
+          <header className="sticky top-0 z-30 flex min-h-16 items-center justify-between border-b border-[#e4ebe3] bg-[#f7f8f4]/95 px-4 pt-[env(safe-area-inset-top)] backdrop-blur">
             <div className="flex min-w-0 flex-1 items-center gap-3">
               <Image
                 src={logoUrl || "/brand/finance-pwa-512.png"}
@@ -79,7 +79,7 @@ export function FinanceMiniAppShell({
                   event.currentTarget.src = "/brand/finance-pwa-512.png";
                 }}
               />
-              <h1 className="truncate text-lg font-semibold">
+              <h1 className="truncate text-lg font-semibold tracking-tight">
                 {financeScreenLabel(copy, screen)}
               </h1>
             </div>
@@ -98,7 +98,7 @@ export function FinanceMiniAppShell({
                   onClick={(event) => {
                     if (onOpenBrowser?.() === false) event.preventDefault();
                   }}
-                  className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-neutral-700 px-3 text-sm text-neutral-200 outline-none focus-visible:ring-2 focus-visible:ring-sky-300 disabled:opacity-50"
+                  className="inline-flex min-h-11 items-center gap-2 rounded-2xl border border-[#dce8db] bg-white px-3 text-sm text-[#315944] outline-none focus-visible:ring-2 focus-visible:ring-[#98c876] disabled:opacity-50"
                 >
                   <ExternalLink size={17} aria-hidden="true" />
                   <span className="hidden sm:inline">{copy.openBrowser}</span>
@@ -108,7 +108,7 @@ export function FinanceMiniAppShell({
                   type="button"
                   disabled={openingBrowser}
                   onClick={onOpenBrowser}
-                  className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-neutral-700 px-3 text-sm text-neutral-200 outline-none focus-visible:ring-2 focus-visible:ring-sky-300 disabled:opacity-50"
+                  className="inline-flex min-h-11 items-center gap-2 rounded-2xl border border-[#dce8db] bg-white px-3 text-sm text-[#315944] outline-none focus-visible:ring-2 focus-visible:ring-[#98c876] disabled:opacity-50"
                 >
                   <ExternalLink size={17} aria-hidden="true" />
                   <span className="hidden sm:inline">
@@ -130,7 +130,7 @@ export function FinanceMiniAppShell({
             </div>
           </header>
           {browserOpenError ? (
-            <p role="alert" className="px-4 pt-3 text-sm text-rose-300">
+            <p role="alert" className="px-4 pt-3 text-sm text-[#bb6b5c]">
               {browserOpenError}
             </p>
           ) : null}

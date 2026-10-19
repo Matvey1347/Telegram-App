@@ -1,11 +1,8 @@
 "use client";
 
-import { useEffect, useState, useSyncExternalStore } from "react";
-import { ConsumerFinanceApp } from "@consumer-finance/web/components/app/consumer-finance-app";
-import {
-  financeCoreCopy,
-  normalizeFinanceLocale,
-} from "@consumer-finance/web/components/i18n/core";
+import { useEffect, useState } from "react";
+import { GroshlyFinanceApp } from "@finance-web/components/groshly-finance-app";
+import { GroshlyLoadingScreen } from "@finance-web/components/groshly-loading-screen";
 
 type FinanceContext = { financeBotId: string };
 
@@ -14,16 +11,12 @@ type FinanceContextState =
   | { status: "ready"; financeBotId: string }
   | { status: "error" };
 
-function currentLocale() {
-  return normalizeFinanceLocale(
-    typeof navigator === "undefined" ? undefined : navigator.language,
-  );
-}
+const FINANCE_CONTEXT_CACHE_KEY = "finance-active-bot-id";
 
-const serverLocale = normalizeFinanceLocale(undefined);
-
-function subscribeToLocale() {
-  return () => {};
+function initialFinanceContextState(): FinanceContextState {
+  if (typeof window === "undefined") return { status: "loading" };
+  const financeBotId = window.localStorage.getItem(FINANCE_CONTEXT_CACHE_KEY)?.trim();
+  return financeBotId ? { status: "ready", financeBotId } : { status: "loading" };
 }
 
 function readFinanceContext(value: unknown): FinanceContext | null {
@@ -35,19 +28,21 @@ function readFinanceContext(value: unknown): FinanceContext | null {
 }
 
 export function FinanceRootApp() {
-  const [state, setState] = useState<FinanceContextState>({ status: "loading" });
-  // The first browser render must use the same locale as SSR. Resolve the
-  // navigator locale only after hydration, otherwise a Russian browser can
-  // render "Загрузка…" where the server emitted "Loading…".
-  const locale = useSyncExternalStore(
-    subscribeToLocale,
-    currentLocale,
-    () => serverLocale,
+  // Do not wait for an effect just to read public routing metadata that is
+  // already in localStorage. This is the first cache gate on every reload.
+  const [state, setState] = useState<FinanceContextState>(
+    initialFinanceContextState,
   );
-  const t = financeCoreCopy(locale);
-
   useEffect(() => {
     const controller = new AbortController();
+
+    // This ID is public routing/configuration metadata, not finance data or a
+    // credential. Using the last known active bot lets the persisted Finance
+    // snapshot render before the optional configuration check comes back.
+    const cachedBotId = window.localStorage
+      .getItem(FINANCE_CONTEXT_CACHE_KEY)
+      ?.trim();
+    if (cachedBotId) setState({ status: "ready", financeBotId: cachedBotId });
 
     async function loadContext() {
       try {
@@ -57,9 +52,13 @@ export function FinanceRootApp() {
         });
         const context = response.ok ? readFinanceContext(await response.json()) : null;
         if (!context) throw new Error("Finance context is unavailable");
+        window.localStorage.setItem(FINANCE_CONTEXT_CACHE_KEY, context.financeBotId);
         setState({ status: "ready", financeBotId: context.financeBotId });
       } catch {
-        if (!controller.signal.aborted) setState({ status: "error" });
+        // A cached route is still safe to use if the lightweight background
+        // check is temporarily unavailable. The actual Finance API remains
+        // authenticated and validates every data request.
+        if (!controller.signal.aborted && !cachedBotId) setState({ status: "error" });
       }
     }
 
@@ -68,27 +67,22 @@ export function FinanceRootApp() {
   }, []);
 
   if (state.status === "ready") {
-    return <ConsumerFinanceApp botId={state.financeBotId} />;
+    return <GroshlyFinanceApp botId={state.financeBotId} />;
   }
 
   if (state.status === "loading") {
-    return (
-      <main className="flex min-h-dvh items-center justify-center bg-neutral-950 p-4 text-neutral-100">
-        <p aria-live="polite">{t.loading}</p>
-      </main>
-    );
+    return <GroshlyLoadingScreen />;
   }
 
   return (
-    <main className="flex min-h-dvh items-center justify-center bg-neutral-950 p-4 text-neutral-100">
-      <div className="max-w-md rounded-lg border border-neutral-800 bg-neutral-900 p-5">
-        <p>{t.bootstrapError}</p>
-        <button
-          className="mt-3 min-h-11 rounded-lg px-3 text-sky-300"
-          onClick={() => window.location.reload()}
-        >
-          {t.retry}
-        </button>
+    <main className="app-shell">
+      <div className="busy-cover">
+        <div className="busy-card">
+          <b>Unable to open Groshly.</b>
+          <button className="btn primary" onClick={() => window.location.reload()}>
+            Retry
+          </button>
+        </div>
       </div>
     </main>
   );

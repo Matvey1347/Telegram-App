@@ -49,7 +49,7 @@ export function ConsumerFinanceActionLauncher({
             key={id}
             type="button"
             onClick={() => onAction(id)}
-            className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-neutral-700 bg-neutral-900 px-3 text-sm font-medium text-neutral-100 outline-none transition hover:border-neutral-600 focus-visible:ring-2 focus-visible:ring-sky-300"
+            className="inline-flex min-h-11 items-center gap-2 rounded-2xl border border-[#dce8db] bg-white px-3 text-sm font-semibold text-[#18382d] outline-none transition hover:bg-[#edf3eb] focus-visible:ring-2 focus-visible:ring-[#98c876]"
           >
             <Icon size={17} aria-hidden="true" />
             {label}
@@ -66,7 +66,7 @@ export function ConsumerFinanceActionLauncher({
       className={`fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] right-[max(1rem,env(safe-area-inset-right))] z-40 ${showOnDesktop ? "" : "md:hidden"}`}
     >
       {open ? (
-        <div className="mb-3 grid min-w-48 gap-2 rounded-xl border border-neutral-800 bg-neutral-900 p-2 shadow-2xl">
+        <div className="mb-3 grid min-w-48 gap-2 rounded-[22px] border border-[#e4ebe3] bg-white p-2 shadow-[0_18px_48px_rgba(21,58,41,0.16)]">
           {quickActions.map(({ id, label, Icon }) => (
             <button
               key={id}
@@ -75,9 +75,9 @@ export function ConsumerFinanceActionLauncher({
                 setOpen(false);
                 onAction(id);
               }}
-              className="flex min-h-11 items-center gap-3 rounded-lg px-3 text-left text-sm text-neutral-100 outline-none hover:bg-neutral-800 focus-visible:ring-2 focus-visible:ring-sky-300"
+              className="flex min-h-11 items-center gap-3 rounded-2xl px-3 text-left text-sm font-medium text-[#18382d] outline-none hover:bg-[#edf3eb] focus-visible:ring-2 focus-visible:ring-[#98c876]"
             >
-              <Icon size={18} className="text-sky-300" aria-hidden="true" />
+              <Icon size={18} className="text-[#448e6b]" aria-hidden="true" />
               {label}
             </button>
           ))}
@@ -88,7 +88,7 @@ export function ConsumerFinanceActionLauncher({
         aria-label={copy.addTransaction}
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
-        className="ml-auto flex size-12 items-center justify-center rounded-full bg-sky-500 text-neutral-950 shadow-lg outline-none focus-visible:ring-2 focus-visible:ring-sky-200"
+        className="ml-auto flex size-14 items-center justify-center rounded-[22px] border-[3px] border-white bg-[#174a37] text-[#cff08b] shadow-[0_12px_30px_rgba(21,58,41,0.25)] outline-none transition hover:bg-[#113e30] focus-visible:ring-2 focus-visible:ring-[#98c876]"
       >
         {open ? <X size={21} /> : <Plus size={21} />}
       </button>

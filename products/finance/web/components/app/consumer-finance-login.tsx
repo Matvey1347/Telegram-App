@@ -9,6 +9,22 @@ import { consumerFinanceKeys } from "@consumer-finance/web/lib/query/consumer-fi
 import { normalizeFinanceLocale } from "@consumer-finance/web/components/i18n/core";
 import { financeAuthCopy } from "@consumer-finance/web/components/i18n/auth";
 
+function GroshlyMark() {
+  return (
+    <svg viewBox="0 0 44 44" fill="none" aria-hidden="true" className="h-11 w-11 shrink-0">
+      <rect width="44" height="44" rx="14" fill="#103E30" />
+      <path
+        d="M29.3 15.7a11.1 11.1 0 1 0 1.2 12.9v-6.3h-8.1"
+        stroke="#fff"
+        strokeWidth="6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <circle cx="33.7" cy="10.6" r="4" fill="#D3F18B" />
+    </svg>
+  );
+}
+
 /** Browser authentication is delegated to the API so Telegram verifies identity server-side. */
 export function ConsumerFinanceLogin({
   botId,
@@ -67,19 +83,28 @@ export function ConsumerFinanceLogin({
   };
 
   return (
-    <div className="mx-auto grid min-h-dvh max-w-6xl items-center gap-10 px-4 py-10 text-neutral-100 md:grid-cols-[1.1fr_.9fr] md:px-8">
+    <main className="min-h-dvh bg-[#f7f8f4] px-4 py-8 text-[#18382d] md:px-8 md:py-12">
+      <div className="mx-auto grid min-h-[calc(100dvh-4rem)] max-w-5xl items-center gap-10 md:grid-cols-[1.1fr_.9fr]">
       <div className="hidden md:block">
-        <p className="text-xs uppercase tracking-[0.22em] text-sky-300">
-          Finance
+        <div className="flex items-center gap-3">
+          <GroshlyMark />
+          <p className="text-xl font-extrabold tracking-tight">Groshly</p>
+        </div>
+        <p className="mt-10 text-xs font-bold uppercase tracking-[0.22em] text-[#82958b]">
+          {"YOUR FINANCES"}
         </p>
-        <h2 className="mt-3 max-w-xl text-4xl font-semibold leading-tight">
+        <h2 className="mt-3 max-w-xl text-4xl font-semibold leading-tight tracking-tight">
           {t.onboardingTitle}
         </h2>
-        <p className="mt-4 max-w-lg text-neutral-400">{t.signInHelp}</p>
+        <p className="mt-4 max-w-lg text-[#82958b]">{t.signInHelp}</p>
       </div>
-      <section className="w-full rounded-lg border border-neutral-800 bg-neutral-900 p-6 md:p-8">
-        <h1 className="mt-2 text-2xl font-semibold">{t.signInTelegram}</h1>
-        <p className="mt-2 text-sm text-neutral-400">{t.signInHelp}</p>
+      <section className="w-full rounded-[29px] border border-[#e4ebe3] bg-white p-6 shadow-[0_12px_36px_rgba(21,58,41,0.05)] md:p-8">
+        <div className="mb-6 flex items-center gap-3 md:hidden">
+          <GroshlyMark />
+          <p className="text-xl font-extrabold tracking-tight">Groshly</p>
+        </div>
+        <h1 className="mt-2 text-2xl font-semibold tracking-tight">{t.signInTelegram}</h1>
+        <p className="mt-2 text-sm text-[#82958b]">{t.signInHelp}</p>
         {challenge.isLoading ? <LoadingState text={t.loadingSignIn} /> : null}
         {challenge.isError || approval.isError ? (
           <div className="mt-4 space-y-3">
@@ -96,7 +121,7 @@ export function ConsumerFinanceLogin({
               target="_blank"
               rel="noreferrer"
               onClick={() => setWaiting(true)}
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-[#229ED9] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#1b8fc5] focus:outline-none focus:ring-2 focus:ring-sky-400"
+              className="inline-flex min-h-12 items-center justify-center gap-2 rounded-[17px] bg-[#229ED9] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#1b8fc5] focus:outline-none focus:ring-2 focus:ring-[#98c876]"
             >
               <Send className="h-4 w-4" aria-hidden="true" />
               {t.telegramSignIn}
@@ -119,7 +144,8 @@ export function ConsumerFinanceLogin({
           </div>
         ) : null}
       </section>
-    </div>
+      </div>
+    </main>
   );
 }
 

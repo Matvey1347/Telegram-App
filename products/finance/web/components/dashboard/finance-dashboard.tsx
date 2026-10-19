@@ -58,8 +58,18 @@ function FinanceDashboardContent({
   );
   return (
     <>
-      <Card className="!p-3">
-        <div className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
+      <section
+        aria-label={t.netWorth}
+        className="relative overflow-hidden rounded-[27px] bg-[linear-gradient(138deg,#265746_0%,#123c2e_74%,#092b20_100%)] p-6 text-white shadow-[0_12px_36px_rgba(21,58,41,0.12)] before:absolute before:-right-[72px] before:-top-[129px] before:size-[230px] before:rounded-full before:border before:border-white/15 after:absolute after:-bottom-[70px] after:-right-[73px] after:size-[150px] after:rounded-full after:border-[22px] after:border-white/[0.06]"
+      >
+        <div className="relative z-10 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.13em] text-[#c7e0ce]">
+          <span className="size-2 rounded-full bg-[#cff08b]" aria-hidden="true" />
+          {t.netWorth}
+        </div>
+        <p className="relative z-10 my-6 text-[clamp(31px,7.8vw,41px)] font-extrabold leading-none tracking-[-0.055em] tabular-nums">
+          {formatMoney(stats.netWorth.amount, stats.netWorth.currency, "symbol")}
+        </p>
+        <div className="relative z-10 grid grid-cols-2 gap-x-5 gap-y-3 border-t border-white/15 pt-4 sm:grid-cols-4">
           {[
             [t.cash, stats.netWorth.cashAmount, stats.netWorth.currency, ""],
             [
@@ -80,24 +90,26 @@ function FinanceDashboardContent({
               stats.netWorth.currency,
               "text-emerald-200",
             ],
-          ].filter(([, value]) => Number(value) !== 0).map(([label, value, currency, tone]) => (
-            <div key={label}>
-              <p className="text-[10px] uppercase text-neutral-500">{label}</p>
-              <p className={`text-base font-semibold tabular-nums ${tone}`}>
+          ].filter(([, value]) => Number(value) !== 0).map(([label, value, currency]) => (
+            <div key={label} className="min-w-0">
+              <p className="truncate text-[10px] font-semibold uppercase tracking-wide text-[#c7e0ce]">{label}</p>
+              <p className="mt-1 truncate text-sm font-bold tabular-nums text-white">
                 {formatMoney(value, currency, "symbol")}
               </p>
             </div>
           ))}
         </div>
-        <p className="mt-2 text-[11px] text-neutral-500">{t.savingsPartCash}</p>
+        <p className="relative z-10 mt-4 text-[11px] text-[#c7e0ce]">{t.savingsPartCash}</p>
         {!stats.netWorth.complete &&
         (stats.netWorth.excludedAccountCount > 0 ||
           data.investments.excludedInvestments.some(
             (investment) => investment.reason === "RATE_UNAVAILABLE",
           )) ? (
-          <p className="mt-2 text-xs text-amber-300">{t.incompleteWorth}</p>
+          <p className="relative z-10 mt-2 text-xs text-[#cff08b]">{t.incompleteWorth}</p>
         ) : null}
-        <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-2 border-t border-neutral-800 pt-2 sm:grid-cols-3 lg:grid-cols-6">
+      </section>
+      <Card className="!p-5">
+        <div className="grid grid-cols-2 gap-x-4 gap-y-4 sm:grid-cols-3 lg:grid-cols-6">
           {[
             [t.income, stats.income, "text-emerald-300"],
             [t.expense, stats.expense, "text-rose-300"],
@@ -107,15 +119,15 @@ function FinanceDashboardContent({
             [t.net, stats.net, "text-sky-200"],
           ].filter(([, value]) => Number(value) !== 0).map(([label, value, tone]) => (
             <div key={label} className="min-w-0">
-              <p className="text-[10px] uppercase text-neutral-500">{label}</p>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-[#82958b]">{label}</p>
               <p
-                className={`truncate text-sm font-semibold tabular-nums ${tone}`}
+                className={`mt-1 truncate text-sm font-bold tabular-nums ${tone}`}
               >
                 {formatMoney(value, stats.currency, "symbol")}
               </p>
               {label === t.net ? (
                 <p
-                  className="mt-0.5 truncate text-[9px] text-neutral-500"
+                  className="mt-0.5 truncate text-[9px] text-[#82958b]"
                   title={t.netExplanation}
                 >
                   {t.netExplanation}
@@ -125,13 +137,13 @@ function FinanceDashboardContent({
           ))}
         </div>
       </Card>
-      <Card className="!p-3">
-        <h2 className="mb-1 text-sm font-medium">{t.balancesByAccount}</h2>
+      <Card className="!p-0">
+        <h2 className="px-5 pb-2 pt-5 text-base font-semibold tracking-tight">{t.balancesByAccount}</h2>
         {accounts.length ? (
           accounts.map((account) => (
             <div
               key={account.id}
-              className="flex items-center justify-between gap-3 border-t border-neutral-800 py-1.5 text-xs first:border-0"
+              className="flex items-center justify-between gap-3 border-t border-[#e4ebe3] px-5 py-3 text-xs first:border-0"
             >
               <span className="flex min-w-0 items-center gap-2">
                 <IconAvatar
@@ -150,7 +162,7 @@ function FinanceDashboardContent({
                 </strong>
                 {account.equivalentBalance &&
                 account.equivalentBalance.currency !== account.currency ? (
-                  <span className="mt-1 block text-xs text-neutral-500">
+                  <span className="mt-1 block text-xs text-[#82958b]">
                     ≈{" "}
                     {formatMoney(
                       account.equivalentBalance.amount,
@@ -163,7 +175,9 @@ function FinanceDashboardContent({
             </div>
           ))
         ) : (
-          <EmptyState text={t.addAccountHint} context="accounts" compact />
+          <div className="px-5 pb-5">
+            <EmptyState text={t.addAccountHint} context="accounts" compact />
+          </div>
         )}
       </Card>
     </>

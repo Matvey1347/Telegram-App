@@ -96,7 +96,7 @@ export function FinanceMobileNavigation({
     <>
       <nav
         aria-label={copy.financeNavigation}
-        className={`fixed inset-x-0 bottom-0 z-30 mx-auto grid max-w-2xl ${onOpenAssistant ? "grid-cols-5" : "grid-cols-4"} border-t border-neutral-800 bg-neutral-950/95 pb-[max(.5rem,env(safe-area-inset-bottom))] pl-[max(.25rem,env(safe-area-inset-left))] pr-[max(.25rem,env(safe-area-inset-right))] pt-1 backdrop-blur ${alwaysVisible ? "" : "md:hidden"}`}
+        className={`fixed inset-x-0 bottom-0 z-30 mx-auto grid max-w-2xl ${onOpenAssistant ? "grid-cols-5" : "grid-cols-4"} rounded-t-[25px] border border-b-0 border-[#e4ebe3] bg-white/95 pb-[max(.5rem,env(safe-area-inset-bottom))] pl-[max(.25rem,env(safe-area-inset-left))] pr-[max(.25rem,env(safe-area-inset-right))] pt-1 backdrop-blur ${alwaysVisible ? "" : "md:hidden"}`}
       >
         {FINANCE_PRIMARY_NAVIGATION.slice(0, 2).map((item) => (
           <FinanceNavigationButton
@@ -154,14 +154,14 @@ export function FinanceMobileNavigation({
             aria-modal="true"
             aria-label={copy.more}
             data-finance-more-panel
-            className={`${motionStyles.menuPanel} fixed bottom-0 left-[max(.5rem,env(safe-area-inset-left))] right-[max(.5rem,env(safe-area-inset-right))] z-40 mx-auto max-h-[min(82dvh,44rem)] max-w-xl overflow-y-auto rounded-t-3xl border border-b-0 border-sky-950 bg-[#101820]/98 px-3 pb-[calc(4.75rem+env(safe-area-inset-bottom))] pt-3 shadow-[0_-24px_70px_rgba(0,0,0,0.55)] ${alwaysVisible ? "" : "md:hidden"}`}
+            className={`${motionStyles.menuPanel} fixed bottom-0 left-[max(.5rem,env(safe-area-inset-left))] right-[max(.5rem,env(safe-area-inset-right))] z-40 mx-auto max-h-[min(82dvh,44rem)] max-w-xl overflow-y-auto rounded-t-3xl border border-b-0 border-[#e4ebe3] bg-[#f7f8f4]/98 px-3 pb-[calc(4.75rem+env(safe-area-inset-bottom))] pt-3 text-[#18382d] shadow-[0_-24px_70px_rgba(21,58,41,0.15)] ${alwaysVisible ? "" : "md:hidden"}`}
           >
             <div className="mb-2 flex items-center justify-end px-1">
               <button
                 type="button"
                 aria-label={copy.close}
                 onClick={() => setMore(false)}
-                className="flex h-10 w-10 items-center justify-center rounded-xl border border-neutral-700 bg-neutral-900 text-neutral-200 outline-none transition active:scale-95 focus-visible:ring-2 focus-visible:ring-sky-300 motion-reduce:transition-none"
+                className="flex h-10 w-10 items-center justify-center rounded-2xl border border-[#dce8db] bg-white text-[#315944] outline-none transition active:scale-95 focus-visible:ring-2 focus-visible:ring-[#98c876] motion-reduce:transition-none"
               >
                 <X size={18} aria-hidden="true" />
               </button>
@@ -233,7 +233,7 @@ function MobileItem({
       aria-expanded={expanded}
       aria-controls={controls}
       onClick={onClick}
-      className={`flex min-h-12 min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg px-1 text-[11px] outline-none transition active:scale-95 motion-reduce:transition-none focus-visible:ring-2 focus-visible:ring-sky-300 ${active ? "text-sky-200" : "text-neutral-500"}`}
+      className={`flex min-h-12 min-w-0 flex-col items-center justify-center gap-0.5 rounded-2xl px-1 text-[11px] outline-none transition active:scale-95 motion-reduce:transition-none focus-visible:ring-2 focus-visible:ring-[#98c876] ${active ? "bg-[#edf3eb] text-[#1b5039]" : "text-[#82958b]"}`}
     >
       <Icon size={19} aria-hidden="true" />
       <span className="max-w-full truncate">{label}</span>

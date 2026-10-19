@@ -26,7 +26,7 @@ export function Card({
 export function Table({ children }: PropsWithChildren) {
   return (
     <div className="w-full overflow-x-auto overflow-y-clip [scrollbar-color:#3a3a3a_transparent] [scrollbar-width:thin] [-webkit-overflow-scrolling:touch] max-sm:-mx-1 max-sm:px-1">
-      <table className="w-max min-w-full text-left text-sm text-neutral-200 [&_thead_th]:sticky [&_thead_th]:top-0 [&_thead_th]:z-20 [&_thead_th]:bg-slate-900">
+      <table className="w-max min-w-full text-left text-sm text-[#18382d] [&_thead_th]:sticky [&_thead_th]:top-0 [&_thead_th]:z-20 [&_thead_th]:bg-[#edf3eb]">
         {children}
       </table>
     </div>
@@ -41,12 +41,12 @@ type FinanceFeedbackStateProps = {
 };
 
 const stateSurface: Record<FinanceVisualState, string> = {
-  loading: "border-sky-950 bg-[#0c1117] text-neutral-300",
-  waiting: "border-amber-950 bg-[#0c1117] text-neutral-300",
-  saving: "border-emerald-950 bg-[#0c1117] text-neutral-200",
-  syncing: "border-blue-950 bg-[#0c1117] text-neutral-200",
-  empty: "border-neutral-800 bg-[#0c1117] text-neutral-300",
-  error: "border-rose-900 bg-[#120e12] text-rose-100",
+  loading: "border-[#e4ebe3] bg-white text-[#82958b]",
+  waiting: "border-[#e4ebe3] bg-white text-[#82958b]",
+  saving: "border-[#cfe5bc] bg-[#edf3eb] text-[#315944]",
+  syncing: "border-[#cfe5bc] bg-[#edf3eb] text-[#315944]",
+  empty: "border-[#e4ebe3] bg-white text-[#82958b]",
+  error: "border-[#f1cfc7] bg-[#fff0ec] text-[#a74343]",
 };
 
 export function FinanceFeedbackState({
@@ -62,7 +62,7 @@ export function FinanceFeedbackState({
   return (
     <div
       data-finance-feedback={state}
-      className={`relative flex w-full flex-col overflow-hidden rounded-2xl border p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.035),0_18px_50px_rgba(0,0,0,0.18)] sm:p-4 ${compact ? "min-h-32" : "min-h-48"} ${stateSurface[state]} ${className}`}
+      className={`relative flex w-full flex-col overflow-hidden rounded-[24px] border p-3 shadow-[0_12px_36px_rgba(21,58,41,0.05)] sm:p-4 ${compact ? "min-h-32" : "min-h-48"} ${stateSurface[state]} ${className}`}
       role={role}
       aria-live={state === "error" ? "assertive" : "polite"}
       aria-busy={

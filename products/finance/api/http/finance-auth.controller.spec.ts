@@ -64,6 +64,7 @@ describe('FinanceController consumer auth', () => {
       updateSettings: jest.fn().mockResolvedValue(profile),
       notificationTarget: jest.fn().mockResolvedValue(null),
       limits: jest.fn().mockResolvedValue([]),
+      categories: jest.fn().mockResolvedValue([]),
       goal: jest.fn().mockResolvedValue(null),
     };
     const ledger = {
@@ -81,6 +82,7 @@ describe('FinanceController consumer auth', () => {
         },
       }),
       history: jest.fn().mockResolvedValue({ items: [], nextCursor: null }),
+      accounts: jest.fn().mockResolvedValue([]),
     };
     const transfers = {
       create: jest.fn(),
@@ -208,6 +210,47 @@ describe('FinanceController consumer auth', () => {
         response,
       ),
     ).resolves.toEqual({ authenticated: true, profile });
+  });
+
+  it('returns the complete home read model in one authenticated startup request', async () => {
+    const { controller, sessions, response, core, ledger } = setup();
+    const token = (
+      await sessions.issue({
+        profileId: 'profile-1',
+        botIntegrationId: 'bot-1',
+        telegramBotUserId: 'telegram-user-1',
+        workspaceId: 'workspace-1',
+        defaultCurrency: 'UAH',
+      })
+    ).token;
+    const startupRequest = trustedMutationRequest();
+    startupRequest.headers.cookie = `finance_consumer_session=${token}`;
+
+    await expect(
+      controller.startup('bot-1', undefined, startupRequest, response),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        authenticated: true,
+        profile,
+        dashboard: expect.objectContaining({ profile, recent: [] }),
+        accounts: [],
+        categories: [],
+        transactions: { items: [], nextCursor: null },
+      }),
+    );
+    expect(ledger.history).toHaveBeenCalledTimes(1);
+    expect(ledger.accounts).toHaveBeenCalledTimes(1);
+    expect(core.categories).toHaveBeenCalledWith('profile-1');
+  });
+
+  it('keeps startup unauthenticated without reading any finance data', async () => {
+    const { controller, core, ledger, response } = setup();
+
+    await expect(
+      controller.startup('bot-1', undefined, trustedMutationRequest(), response),
+    ).resolves.toEqual({ authenticated: false });
+    expect(core.profile).not.toHaveBeenCalled();
+    expect(ledger.stats).not.toHaveBeenCalled();
   });
 
   it('logs out idempotently by clearing only the bot-scoped Finance session cookie', () => {

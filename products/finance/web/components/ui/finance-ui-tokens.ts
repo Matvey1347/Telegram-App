@@ -1,9 +1,9 @@
 export const financeUiTokens = {
   control:
-    "rounded-[10px] border border-white/10 bg-[#0c1117] text-white outline-none ring-blue-500 focus:ring",
+    "rounded-2xl border border-[#dce8db] bg-white text-[#18382d] outline-none ring-[#98c876] focus:ring",
   card:
-    "rounded-xl border border-white/10 bg-[#10151c] shadow-[inset_0_1px_0_rgba(255,255,255,0.025)]",
-  muted: "text-neutral-400",
+    "rounded-[24px] border border-[#e0e9df] bg-white shadow-[0_12px_36px_rgba(21,58,41,0.05)]",
+  muted: "text-[#82958b]",
   focus:
-    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500",
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#98c876]",
 } as const;

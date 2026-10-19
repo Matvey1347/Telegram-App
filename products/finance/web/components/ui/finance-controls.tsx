@@ -47,17 +47,18 @@ export function Button({
   variant?: "primary" | "secondary" | "outline" | "cancel" | "danger";
 }) {
   const styles = {
-    primary: "bg-blue-600 hover:bg-blue-500 text-white",
-    secondary: "bg-blue-600 hover:bg-blue-500 text-white",
+    primary: "bg-[#194d38] text-white hover:bg-[#113e30]",
+    secondary:
+      "border border-[#e4ebe3] bg-[#edf3eb] text-[#18382d] hover:bg-[#e4f4c9]",
     outline:
-      "border border-sky-700 bg-sky-950/30 text-sky-100 hover:bg-sky-900/50",
-    cancel: "bg-neutral-700 hover:bg-neutral-600 text-white",
-    danger: "bg-red-600 hover:bg-red-500 text-white",
+      "border border-[#cbdcc7] bg-[#edf3eb] text-[#18382d] hover:bg-[#e4f4c9]",
+    cancel: "bg-[#edf3eb] text-[#18382d] hover:bg-[#e4f4c9]",
+    danger: "bg-[#fff0ec] text-[#a74343] hover:bg-[#ffe3dc]",
   }[variant];
   return (
     <button
       {...props}
-      className={`inline-flex cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50 ${styles} ${financeUiTokens.focus} ${props.className ?? ""}`}
+      className={`inline-flex min-h-12 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-[17px] px-4 py-2 text-sm font-semibold disabled:opacity-50 ${styles} ${financeUiTokens.focus} ${props.className ?? ""}`}
     />
   );
 }

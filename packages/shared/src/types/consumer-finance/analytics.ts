@@ -47,6 +47,18 @@ export type ConsumerFinanceDashboard = {
   recent: ConsumerFinanceTransaction[];
 };
 
+/** Compact, one-request read model for the Consumer Finance home screen. */
+export type ConsumerFinanceStartup =
+  | { authenticated: false }
+  | {
+      authenticated: true;
+      profile: ConsumerFinanceProfile;
+      dashboard: ConsumerFinanceDashboard;
+      accounts: ConsumerFinanceAccount[];
+      categories: import("./ledger").ConsumerFinanceCategory[];
+      transactions: import("./ledger").ConsumerFinanceHistoryPage;
+    };
+
 export type ConsumerFinanceAnalyticsPeriod =
   | "CURRENT_MONTH"
   | "PREVIOUS_MONTH"

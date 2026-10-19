@@ -4,6 +4,7 @@ import type {
   ConsumerFinanceAnalytics,
   ConsumerFinanceAnalyticsQuery,
   ConsumerFinanceDashboard,
+  ConsumerFinanceStartup,
 } from "@telegram-system/shared";
 import {
   consumerFinanceHttp,
@@ -12,6 +13,18 @@ import {
 } from "@consumer-finance/web/lib/api/consumer-finance-http";
 
 export const consumerFinanceInsightsApi = {
+  startup: async (botId: string, initData?: string) =>
+    (
+      await consumerFinanceHttp.post<ConsumerFinanceStartup>(
+        `${consumerFinanceRoot(botId)}/startup`,
+        {},
+        consumerRequest(
+          initData
+            ? { headers: { "X-Telegram-Init-Data": initData } }
+            : undefined,
+        ),
+      )
+    ).data,
   dashboard: async (
     botId: string,
     query: ConsumerFinanceAnalyticsQuery = { period: "CURRENT_MONTH" },
