@@ -42,38 +42,55 @@ export class TelegramManagedPostPremiumEmojiRepairService {
   }) {
     if (!parseTelegramCustomEmojiTokens(params.text || '').length) return;
 
-    const premiumEditor = params.sources.find(
+    const premiumEditors = params.sources.filter(
       (source) =>
         source.sourceType === TelegramSourceType.MTPROTO &&
         source.isPremium &&
         source.mtprotoPublishingEnabled !== false &&
         source.permissions.canEditMessages,
     );
-    if (!premiumEditor) {
+    if (!premiumEditors.length) {
       throw new BadRequestException(
         'A connected Premium Telegram account with permission to edit channel messages is required to preserve premium emoji in a bot-published post.',
       );
     }
-
-    const account = await this.telegramChannelAccessService.connectedAccount(
-      params.workspaceId,
-      params.channelId,
-      premiumEditor.sourceId,
-    );
-    const result = await this.mtprotoClient.editPostText({
-      ...this.telegramChannelAccessService.accountCredentials(account),
-      channel: this.telegramChannelAccessService.mtprotoChannelReference(
-        params.channel,
-      ),
-      messageIds: params.messageIds,
-      imageCount: params.imageCount,
-      publishMode: params.publishMode,
-      captionHtml: params.captionHtml,
-      followupHtmlParts: params.followupHtmlParts,
-      textHtmlParts: params.textHtmlParts,
-    });
-    if (result.updatedCount + result.unchangedCount !== params.messageIds.length) {
-      throw new Error('Telegram did not confirm every premium emoji repair.');
+    let lastError: unknown;
+    for (const premiumEditor of premiumEditors) {
+      try {
+        const account =
+          await this.telegramChannelAccessService.connectedAccount(
+            params.workspaceId,
+            params.channelId,
+            premiumEditor.sourceId,
+          );
+        const result = await this.mtprotoClient.editPostText({
+          ...this.telegramChannelAccessService.accountCredentials(account),
+          channel: this.telegramChannelAccessService.mtprotoChannelReference(
+            params.channel,
+          ),
+          messageIds: params.messageIds,
+          imageCount: params.imageCount,
+          publishMode: params.publishMode,
+          captionHtml: params.captionHtml,
+          followupHtmlParts: params.followupHtmlParts,
+          textHtmlParts: params.textHtmlParts,
+        });
+        if (
+          result.updatedCount + result.unchangedCount ===
+          params.messageIds.length
+        )
+          return;
+        lastError = new Error(
+          'Telegram did not confirm every premium emoji repair.',
+        );
+      } catch (error) {
+        lastError = error;
+      }
     }
+    throw lastError instanceof Error
+      ? lastError
+      : new Error(
+          'Telegram could not repair premium emoji with any connected Premium account.',
+        );
   }
 }

@@ -194,6 +194,44 @@ describe('TelegramCrmRuntimeManager', () => {
     await manager.onApplicationShutdown();
   });
 
+  it('does not open a duplicate MTProto transport when another instance owns the runtime lease', async () => {
+    const sessions = {
+      startupAccounts: jest.fn().mockResolvedValue([account]),
+    };
+    const adapter = { open: jest.fn() };
+    const lease = {
+      acquire: jest.fn().mockResolvedValue(false),
+      startRenewing: jest.fn(),
+      release: jest.fn(),
+    };
+    const manager = new TelegramCrmRuntimeManager(
+      {} as never,
+      sessions as never,
+      adapter as never,
+      {} as never,
+      new TelegramAccountRuntimeNotifier(),
+      {} as never,
+      undefined,
+      undefined,
+      lease as never,
+    );
+
+    await manager.onApplicationBootstrap();
+
+    expect(lease.acquire).toHaveBeenCalledTimes(1);
+    expect(adapter.open).not.toHaveBeenCalled();
+    await expect(
+      manager.withAccountHandle(
+        account.workspaceId,
+        account.id,
+        'sync',
+        async () => undefined,
+      ),
+    ).rejects.toThrow('active in another application instance');
+    await manager.onApplicationShutdown();
+    expect(lease.release).toHaveBeenCalledTimes(1);
+  });
+
   it('does not delay HTTP bootstrap when an MTProto connection stalls', async () => {
     jest.useFakeTimers();
     const sessions = {
@@ -351,7 +389,8 @@ describe('TelegramCrmRuntimeManager', () => {
       },
       data: {
         status: 'error',
-        lastErrorMessage: 'Telegram session was revoked (AUTH_KEY_UNREGISTERED)',
+        lastErrorMessage:
+          'Telegram session was revoked (AUTH_KEY_UNREGISTERED)',
       },
     });
     expect(handle.close).toHaveBeenCalledTimes(1);
@@ -360,16 +399,13 @@ describe('TelegramCrmRuntimeManager', () => {
       'AUTH_KEY_UNREGISTERED',
       expect.any(Error),
     );
-    expect(notifications.upsertMany).toHaveBeenCalledWith(
-      expect.anything(),
-      [
-        expect.objectContaining({
-          recipientMemberId: 'member-1',
-          type: 'TELEGRAM_ACCOUNT_REAUTH_REQUIRED',
-          sourceKey: 'telegram-account:account-1:reauth-required',
-        }),
-      ],
-    );
+    expect(notifications.upsertMany).toHaveBeenCalledWith(expect.anything(), [
+      expect.objectContaining({
+        recipientMemberId: 'member-1',
+        type: 'TELEGRAM_ACCOUNT_REAUTH_REQUIRED',
+        sourceKey: 'telegram-account:account-1:reauth-required',
+      }),
+    ]);
     expect(publisher.publish).toHaveBeenCalledWith(['notification-1']);
     await manager.onApplicationShutdown();
   });

@@ -102,4 +102,45 @@ describe('TelegramManagedPostPremiumEmojiRepairService', () => {
       service.restoreCustomEmojiAfterBotDelivery({ ...params, sources: [] }),
     ).rejects.toThrow('Premium Telegram account');
   });
+
+  it('uses the next Premium editor when the first account session is unavailable', async () => {
+    const { service, mtprotoClient, access } = setup();
+    access.connectedAccount
+      .mockRejectedValueOnce(new Error('AUTH_KEY_DUPLICATED'))
+      .mockResolvedValueOnce({ id: 'backup-premium-account' });
+
+    await service.restoreCustomEmojiAfterBotDelivery({
+      ...params,
+      sources: [
+        {
+          sourceId: 'revoked',
+          sourceType: TelegramSourceType.MTPROTO,
+          isPremium: true,
+          mtprotoPublishingEnabled: true,
+          permissions: { canEditMessages: true },
+        },
+        {
+          sourceId: 'backup',
+          sourceType: TelegramSourceType.MTPROTO,
+          isPremium: true,
+          mtprotoPublishingEnabled: true,
+          permissions: { canEditMessages: true },
+        },
+      ],
+    });
+
+    expect(access.connectedAccount).toHaveBeenNthCalledWith(
+      1,
+      'workspace-1',
+      'channel-1',
+      'revoked',
+    );
+    expect(access.connectedAccount).toHaveBeenNthCalledWith(
+      2,
+      'workspace-1',
+      'channel-1',
+      'backup',
+    );
+    expect(mtprotoClient.editPostText).toHaveBeenCalledTimes(1);
+  });
 });

@@ -1,4 +1,5 @@
 import {
+  ConflictException,
   Injectable,
   Logger,
   OnApplicationBootstrap,
@@ -38,6 +39,7 @@ import {
 } from './telegram-crm-runtime.policy';
 import { OperationsNotificationStoreService } from '../../operations/notifications/operations-notification-store.service';
 import { OperationsNotificationPublisherService } from '../../operations/notifications/operations-notification-publisher.service';
+import { TelegramCrmRuntimeLeaseService } from './telegram-crm-runtime-lease.service';
 
 @Injectable()
 export class TelegramCrmRuntimeManager
@@ -46,6 +48,7 @@ export class TelegramCrmRuntimeManager
   private readonly logger = new Logger(TelegramCrmRuntimeManager.name);
   private readonly accounts = new Map<string, ManagedAccount>();
   private notifierSubscription?: Subscription;
+  private runtimeHeldByAnotherInstance = false;
   private shuttingDown = false;
   private totalQueued = 0;
 
@@ -60,12 +63,11 @@ export class TelegramCrmRuntimeManager
     private readonly notifications?: OperationsNotificationStoreService,
     @Optional()
     private readonly notificationPublisher?: OperationsNotificationPublisherService,
+    @Optional()
+    private readonly runtimeLease?: TelegramCrmRuntimeLeaseService,
   ) {}
 
   async onApplicationBootstrap() {
-    this.notifierSubscription = this.notifier.stream.subscribe((change) => {
-      void this.reconcile(change.accountId, change.workspaceId);
-    });
     const accounts = await this.sessions.startupAccounts(
       CRM_RUNTIME_POLICY.startupAccountLimit + 1,
     );
@@ -74,6 +76,10 @@ export class TelegramCrmRuntimeManager
         `CRM runtime account safety limit exceeded (${CRM_RUNTIME_POLICY.startupAccountLimit})`,
       );
     }
+    if (accounts.length && !(await this.acquireRuntimeLease())) return;
+    this.notifierSubscription = this.notifier.stream.subscribe((change) => {
+      void this.reconcile(change.accountId, change.workspaceId);
+    });
     const startupConnections = this.connectStartupAccounts(accounts);
     await this.reconcileRevokedAccountNotifications();
     // A reachable HTTP API is more important than eagerly restoring every
@@ -89,6 +95,7 @@ export class TelegramCrmRuntimeManager
     await Promise.all(
       [...this.accounts.keys()].map((accountId) => this.stop(accountId)),
     );
+    await this.runtimeLease?.release();
   }
 
   async withAccountHandle<T>(
@@ -97,6 +104,11 @@ export class TelegramCrmRuntimeManager
     purpose: 'sync' | 'send',
     operation: (handle: TelegramCrmMtprotoHandle) => Promise<T>,
   ) {
+    if (this.runtimeHeldByAnotherInstance) {
+      throw new ConflictException(
+        'Telegram CRM runtime is active in another application instance. Retry shortly.',
+      );
+    }
     const resolved =
       purpose === 'sync'
         ? await this.sessions.requireForSync(workspaceId, accountId)
@@ -132,6 +144,7 @@ export class TelegramCrmRuntimeManager
       await this.stop(accountId);
       return;
     }
+    if (!(await this.acquireRuntimeLease())) return;
     const current = this.accounts.get(accountId);
     if (
       current &&
@@ -142,6 +155,33 @@ export class TelegramCrmRuntimeManager
     }
     await this.stop(accountId);
     await this.start(account);
+  }
+
+  private async acquireRuntimeLease() {
+    // Optional only for direct unit construction; Nest always provides it.
+    if (!this.runtimeLease) return true;
+    const acquired = await this.runtimeLease.acquire();
+    if (!acquired) {
+      this.runtimeHeldByAnotherInstance = true;
+      this.logger.warn(
+        'Telegram CRM runtime is already owned by another application instance; skipping MTProto connections.',
+      );
+      return false;
+    }
+    this.runtimeLease.startRenewing(() => void this.handleRuntimeLeaseLost());
+    return true;
+  }
+
+  private async handleRuntimeLeaseLost() {
+    if (this.shuttingDown) return;
+    this.logger.error(
+      'Telegram CRM runtime lease was lost; closing live MTProto connections.',
+    );
+    this.runtimeHeldByAnotherInstance = true;
+    this.notifierSubscription?.unsubscribe();
+    await Promise.all(
+      [...this.accounts.keys()].map((accountId) => this.stop(accountId)),
+    );
   }
 
   private async start(account: CrmRuntimeAccount) {

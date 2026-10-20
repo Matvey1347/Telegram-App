@@ -40,6 +40,8 @@ import { TelegramCrmConversationAttachService } from './telegram-crm-conversatio
 import { TelegramCrmSystemTagsService } from './telegram-crm-system-tags.service';
 import { TelegramCrmPurchaseFolderSyncService } from './telegram-crm-purchase-folder-sync.service';
 import { TelegramCrmContactExportService } from './telegram-crm-contact-export.service';
+import { ScheduledTaskLockService } from '../../operations/scheduled-tasks/scheduled-task-lock.service';
+import { TelegramCrmRuntimeLeaseService } from './telegram-crm-runtime-lease.service';
 
 @Module({
   imports: [OperationsNotificationsModule],
@@ -86,6 +88,10 @@ import { TelegramCrmContactExportService } from './telegram-crm-contact-export.s
     TelegramCrmIncomingNotificationProjector,
     TelegramCrmNotificationRecipientService,
     TelegramCrmInternalNotificationProjector,
+    // Shared persistent lease; only one API instance may retain CRM's live
+    // MTProto transports for a database at a time.
+    ScheduledTaskLockService,
+    TelegramCrmRuntimeLeaseService,
   ],
   exports: [
     TelegramCrmManualMessagePolicyService,
