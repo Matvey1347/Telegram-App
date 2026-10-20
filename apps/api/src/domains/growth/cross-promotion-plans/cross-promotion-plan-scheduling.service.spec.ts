@@ -75,6 +75,7 @@ function setup() {
     managedPostsForPublicationUpdate: jest.fn().mockResolvedValue([
       {
         id: 'old-post',
+        telegramChannelId: 'old-channel',
         title: 'Partner post',
         text: 'Text',
         imageUrls: [],
@@ -317,7 +318,7 @@ describe('CrossPromotionPlanSchedulingService', () => {
     expect(telegram.updateManagedPost).not.toHaveBeenCalled();
   });
 
-  it('does not update Telegram when this publication has no content changes', async () => {
+  it('reapplies unchanged content to repair remote Telegram formatting drift', async () => {
     const { service, telegram } = setup();
 
     await service.updatePublicationInTelegram(
@@ -327,7 +328,204 @@ describe('CrossPromotionPlanSchedulingService', () => {
       payload,
     );
 
+    expect(telegram.updateManagedPost).toHaveBeenCalledWith(
+      'user-1',
+      'old-channel',
+      'old-post',
+      expect.objectContaining({ text: payload.publicationPost.text }),
+    );
+  });
+
+  it('updates the selected partner post in every one of its channels', async () => {
+    const { service, plans, telegram } = setup();
+    const progress = jest.fn();
+    const changedPost = {
+      ...payload,
+      publicationPost: {
+        ...payload.publicationPost,
+        text: 'Revised partner promotion',
+      },
+    };
+    plans.placementsForReschedule.mockResolvedValueOnce([
+      {
+        telegramChannelId: 'channel-1',
+        managedPostId: 'post-1',
+        publicationId: 'legacy-publisher-publication',
+      },
+      {
+        telegramChannelId: 'channel-2',
+        managedPostId: 'post-2',
+        publicationId: 'legacy-publisher-publication',
+      },
+    ]);
+    plans.managedPostsForPublicationUpdate.mockResolvedValueOnce([
+      {
+        id: 'post-1',
+        telegramChannelId: 'channel-1',
+        title: 'Partner post',
+        text: 'Text',
+        imageUrls: [],
+        mediaItems: [],
+        buttonRows: payload.publicationPost.buttonRows,
+      },
+      {
+        id: 'post-2',
+        telegramChannelId: 'channel-2',
+        title: 'Partner post',
+        text: 'Text',
+        imageUrls: [],
+        mediaItems: [],
+        buttonRows: payload.publicationPost.buttonRows,
+      },
+    ]);
+
+    await service.updatePublicationInTelegram(
+      'user-1',
+      'plan-1',
+      'legacy-publisher-publication',
+      changedPost,
+      progress,
+      new AbortController().signal,
+    );
+
+    expect(telegram.updateManagedPost).toHaveBeenCalledTimes(2);
+    expect(telegram.updateManagedPost).toHaveBeenNthCalledWith(
+      1,
+      'user-1',
+      'channel-1',
+      'post-1',
+      expect.objectContaining({ text: 'Revised partner promotion' }),
+    );
+    expect(telegram.updateManagedPost).toHaveBeenNthCalledWith(
+      2,
+      'user-1',
+      'channel-2',
+      'post-2',
+      expect.objectContaining({ text: 'Revised partner promotion' }),
+    );
+    expect(plans.replacePublicationPlacements).toHaveBeenCalledWith(
+      'user-1',
+      'plan-1',
+      'legacy-publisher-publication',
+      changedPost,
+      expect.any(Array),
+      'ACTIVE',
+    );
+    expect(progress).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        phase: 'SAVING',
+        message: 'Partner post updated',
+        success: true,
+      }),
+      4,
+      4,
+    );
+  });
+
+  it('fails before editing any channel when a linked managed post is missing', async () => {
+    const { service, plans, telegram } = setup();
+    plans.placementsForReschedule.mockResolvedValueOnce([
+      {
+        telegramChannelId: 'channel-1',
+        managedPostId: 'post-1',
+        publicationId: 'legacy-publisher-publication',
+      },
+      {
+        telegramChannelId: 'channel-2',
+        managedPostId: 'deleted-post',
+        publicationId: 'legacy-publisher-publication',
+      },
+    ]);
+    plans.managedPostsForPublicationUpdate.mockResolvedValueOnce([
+      {
+        id: 'post-1',
+        telegramChannelId: 'channel-1',
+        title: 'Partner post',
+        text: 'Text',
+        imageUrls: [],
+        mediaItems: [],
+        buttonRows: payload.publicationPost.buttonRows,
+      },
+    ]);
+
+    await expect(
+      service.updatePublicationInTelegram(
+        'user-1',
+        'plan-1',
+        'legacy-publisher-publication',
+        {
+          ...payload,
+          publicationPost: { ...payload.publicationPost, text: 'Revised copy' },
+        },
+      ),
+    ).rejects.toThrow('managed post is missing for channel-2');
+
     expect(telegram.updateManagedPost).not.toHaveBeenCalled();
+    expect(plans.replacePublicationPlacements).not.toHaveBeenCalled();
+  });
+
+  it('updates and saves a reimported Telegram post when the original local id was lost', async () => {
+    const { service, plans, telegram } = setup();
+    plans.placementsForReschedule.mockResolvedValueOnce([
+      {
+        telegramChannelId: 'channel-2',
+        managedPostId: 'deleted-local-post',
+        publicationId: 'legacy-publisher-publication',
+      },
+    ]);
+    plans.publicationScheduleForUpdate.mockResolvedValueOnce([
+      {
+        telegramChannelId: 'channel-2',
+        scheduledAt: '2026-09-15T09:00:00.000Z',
+      },
+    ]);
+    plans.managedPostsForPublicationUpdate.mockResolvedValueOnce([
+      {
+        id: 'reimported-live-post',
+        linkedManagedPostId: 'deleted-local-post',
+        telegramChannelId: 'channel-2',
+        title: 'Partner post',
+        text: 'Original Telegram text',
+        imageUrls: [],
+        mediaItems: [],
+        buttonRows: payload.publicationPost.buttonRows,
+      },
+    ]);
+    const changedPost = {
+      ...payload,
+      publicationPost: {
+        ...payload.publicationPost,
+        text: 'Corrected copy',
+        publisherPlacements: [payload.publicationPost.publisherPlacements[1]],
+      },
+    };
+
+    await service.updatePublicationInTelegram(
+      'user-1',
+      'plan-1',
+      'legacy-publisher-publication',
+      changedPost,
+    );
+
+    expect(telegram.updateManagedPost).toHaveBeenCalledWith(
+      'user-1',
+      'channel-2',
+      'reimported-live-post',
+      expect.objectContaining({ text: 'Corrected copy' }),
+    );
+    expect(plans.replacePublicationPlacements).toHaveBeenCalledWith(
+      'user-1',
+      'plan-1',
+      'legacy-publisher-publication',
+      changedPost,
+      [
+        expect.objectContaining({
+          telegramChannelId: 'channel-2',
+          managedPostId: 'reimported-live-post',
+        }),
+      ],
+      'ACTIVE',
+    );
   });
 
   it('reschedules only the requested channel placement', async () => {
@@ -360,15 +558,24 @@ describe('CrossPromotionPlanSchedulingService', () => {
     };
 
     await service.updatePublicationChannelSchedule(
-      'user-1', 'plan-1', 'legacy-publisher-publication', 'channel-2', rescheduled,
+      'user-1',
+      'plan-1',
+      'legacy-publisher-publication',
+      'channel-2',
+      rescheduled,
     );
 
     expect(telegram.scheduleManagedPost).toHaveBeenCalledWith(
-      'user-1', 'channel-2', 'post-2',
+      'user-1',
+      'channel-2',
+      'post-2',
       { scheduledAt: '2026-09-15T12:00:00.000Z' },
     );
     expect(plans.replacePublicationChannelPlacement).toHaveBeenCalledWith(
-      'user-1', 'plan-1', 'legacy-publisher-publication', 'channel-2',
+      'user-1',
+      'plan-1',
+      'legacy-publisher-publication',
+      'channel-2',
       rescheduled,
       expect.objectContaining({ managedPostId: 'post-2' }),
       'SCHEDULED',

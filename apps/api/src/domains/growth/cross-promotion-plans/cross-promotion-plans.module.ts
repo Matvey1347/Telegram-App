@@ -8,6 +8,7 @@ import { CrossPromotionPlanLifecycleService } from './cross-promotion-plan-lifec
 import { TelegramSystemBotModule } from '../../telegram/telegram-system-bot/telegram-system-bot.module';
 import { CrossPromotionPlanBotNotificationService } from './cross-promotion-plan-bot-notification.service';
 import { CrossPromotionPlanDraftService } from './cross-promotion-plan-draft.service';
+import { CrossPromotionPublicationPostResolverService } from './cross-promotion-publication-post-resolver.service';
 
 @Module({
   imports: [TelegramChannelsModule, forwardRef(() => TelegramSystemBotModule)],
@@ -19,6 +20,7 @@ import { CrossPromotionPlanDraftService } from './cross-promotion-plan-draft.ser
     CrossPromotionPlanLifecycleService,
     CrossPromotionPlanBotNotificationService,
     CrossPromotionPlanDraftService,
+    CrossPromotionPublicationPostResolverService,
   ],
   exports: [CrossPromotionPlanLifecycleService],
 })

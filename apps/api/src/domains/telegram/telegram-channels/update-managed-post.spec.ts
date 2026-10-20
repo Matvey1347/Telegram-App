@@ -14,6 +14,7 @@ describe('TelegramChannelsService updateManagedPost', () => {
   it('edits a bot-owned advertising post through its bot even when MTProto is also available', async () => {
     const botCall = jest.fn().mockResolvedValue({ ok: true });
     const editReplyMarkup = jest.fn().mockResolvedValue({ ok: true });
+    const repairCustomEmoji = jest.fn().mockResolvedValue(undefined);
     const service = new TelegramManagedPostEditTransportService(
       { editPostText: jest.fn() } as never,
       {
@@ -56,6 +57,7 @@ describe('TelegramChannelsService updateManagedPost', () => {
         }),
         toBotMessageEntity: jest.fn(),
       } as never,
+      { restoreCustomEmojiAfterBotDelivery: repairCustomEmoji } as never,
     );
 
     await service.editManagedPostTextInTelegram({
@@ -92,6 +94,12 @@ describe('TelegramChannelsService updateManagedPost', () => {
       expect.objectContaining({ message_id: 42 }),
     );
     expect(editReplyMarkup).toHaveBeenCalled();
+    expect(repairCustomEmoji).toHaveBeenCalledWith(
+      expect.objectContaining({
+        messageIds: ['42'],
+        text: 'Updated text',
+      }),
+    );
   });
 
   it('passes the original schedule time when editing an MTProto scheduled message', async () => {
@@ -138,6 +146,7 @@ describe('TelegramChannelsService updateManagedPost', () => {
           textHtmlParts: [],
         }),
       } as never,
+      { restoreCustomEmojiAfterBotDelivery: jest.fn() } as never,
     );
 
     await service.editManagedPostTextInTelegram({

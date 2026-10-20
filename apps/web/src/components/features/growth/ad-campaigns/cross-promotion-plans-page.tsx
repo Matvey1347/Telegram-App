@@ -239,7 +239,7 @@ export function CrossPromotionPlansPage({
     },
   });
   const updatePublicationMutation = useMutation({
-    mutationFn: ({
+    mutationFn: async ({
       publicationId,
       payload,
     }: {
@@ -247,13 +247,42 @@ export function CrossPromotionPlansPage({
       payload: CreateCrossPromotionPlanPayload;
     }) => {
       if (!editingPlan) throw new Error("Promotion is not available");
-      return crossPromotionPlansApi.updatePublicationInTelegram(
-        editingPlan.id,
-        publicationId,
-        payload,
-      );
+      const operation = startOperation({
+        id: `cross-promotion-update-${editingPlan.id}-${publicationId}`,
+        title: "Updating partner post",
+        message: "Validating post update…",
+        current: 0,
+        total: payload.publisherChannelIds.length + 2,
+      });
+      try {
+        const plan = await crossPromotionPlansApi.updatePublicationInTelegram(
+          editingPlan.id,
+          publicationId,
+          payload,
+          (progress, current, total) =>
+            operation.update({
+              message: progress.message,
+              current,
+              total,
+            }),
+        );
+        operation.succeed({ message: "Partner post updated in all channels." });
+        return plan;
+      } catch (error) {
+        operation.fail({
+          message:
+            error instanceof Error
+              ? error.message
+              : "Could not update the partner post.",
+        });
+        throw error;
+      }
     },
-    onSuccess: async () => {
+    onSuccess: async (plan) => {
+      // Keep the open editor aligned with the authoritative content returned
+      // by the all-channel update. Otherwise the same local diff remains
+      // visible and invites a duplicate update click.
+      setEditingPlan(plan);
       await Promise.all([
         qc.invalidateQueries({ queryKey: crossPromotionPlanKeys.list(kind) }),
         qc.invalidateQueries({ queryKey: telegramChannelKeys.lists() }),

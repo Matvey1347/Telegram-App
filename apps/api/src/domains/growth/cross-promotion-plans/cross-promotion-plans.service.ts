@@ -17,6 +17,7 @@ import {
 } from './dto';
 import { CrossPromotionPlanReadService } from './cross-promotion-plan-read.service';
 import { TelegramInviteLinkRegistrationService } from '../../telegram/telegram-channels/telegram-invite-link-registration.service';
+import { CrossPromotionPublicationPostResolverService } from './cross-promotion-publication-post-resolver.service';
 
 type CounterBaseline = {
   inviteLinkId: string;
@@ -126,6 +127,7 @@ export class CrossPromotionPlansService {
     private readonly workspaceService: WorkspaceService,
     private readonly readService: CrossPromotionPlanReadService,
     private readonly inviteLinkRegistration: TelegramInviteLinkRegistrationService,
+    private readonly publicationPostResolver: CrossPromotionPublicationPostResolverService,
   ) {}
 
   async refreshInviteLinkData(userId: string, id: string) {
@@ -518,22 +520,14 @@ export class CrossPromotionPlansService {
     const workspaceId = await this.workspace(userId);
     const row = await this.prisma.crossPromotionPlan.findFirst({
       where: { id, workspaceId, status: { not: 'CANCELLED' } },
-      select: { placementPostIds: true },
+      select: { placementPostIds: true, publicationPost: true },
     });
     if (!row) throw new NotFoundException('Cross-promotion plan not found');
-    const ids = json<ScheduledPlacement[]>(row.placementPostIds, [])
-      .filter((placement) => placement.publicationId === publicationId)
-      .map((placement) => placement.managedPostId);
-    return this.prisma.telegramManagedPost.findMany({
-      where: { workspaceId, id: { in: ids } },
-      select: {
-        id: true,
-        title: true,
-        text: true,
-        imageUrls: true,
-        mediaItems: true,
-        buttonRows: true,
-      },
+    return this.publicationPostResolver.resolve({
+      workspaceId,
+      placementPostIds: row.placementPostIds,
+      publicationPost: row.publicationPost,
+      publicationId,
     });
   }
 
@@ -584,7 +578,10 @@ export class CrossPromotionPlansService {
     });
     if (!row) throw new NotFoundException('Cross-promotion plan not found');
     const currentPost = json<CrossPromotionPlacementPost>(row.publicationPost, {
-      title: '', text: '', imageUrls: [], buttonRows: [],
+      title: '',
+      text: '',
+      imageUrls: [],
+      buttonRows: [],
     });
     const nextPublication = dto.publicationPost.publisherPublications?.find(
       (publication) => publication.id === publicationId,

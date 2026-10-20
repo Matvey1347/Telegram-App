@@ -23,6 +23,7 @@ import {
   TELEGRAM_TEXT_MESSAGE_LIMIT,
 } from './telegram-channels.internal';
 import { TelegramManagedPostPresentationService } from './telegram-managed-post-presentation.service';
+import { TelegramManagedPostPremiumEmojiRepairService } from './telegram-managed-post-premium-emoji-repair.service';
 import { normalizeTelegramPostMediaItems } from '@telegram-system/shared';
 
 @Injectable()
@@ -34,6 +35,7 @@ export class TelegramManagedPostEditTransportService {
     private readonly telegramChannelAccessService: TelegramChannelAccessService,
     private readonly telegramChannelsSupportService: TelegramChannelsSupportService,
     private readonly telegramManagedPostPresentationService: TelegramManagedPostPresentationService,
+    private readonly telegramManagedPostPremiumEmojiRepairService: TelegramManagedPostPremiumEmojiRepairService,
   ) {}
 
   public async editManagedPostTextInTelegram(params: {
@@ -456,6 +458,24 @@ export class TelegramManagedPostEditTransportService {
       chat_id: chatId,
       message_id: Number(effectiveMessageIds.at(-1)),
       reply_markup: toTelegramBotInlineKeyboard(buttonRows),
+    });
+    // The Bot API can accept the fallback character yet drop its custom-emoji
+    // document entity while editing a bot-owned message.  Restore entities via
+    // an eligible Premium editor after the keyboard update, just as delivery
+    // does.  MTProto edits message text/caption only, so the Bot-owned inline
+    // keyboard remains intact.
+    await this.telegramManagedPostPremiumEmojiRepairService.restoreCustomEmojiAfterBotDelivery({
+      text: resolvedText,
+      workspaceId,
+      channelId,
+      channel,
+      sources,
+      messageIds: effectiveMessageIds,
+      imageCount: mediaItems.length,
+      publishMode: rendered.publishMode,
+      captionHtml: rendered.captionHtml,
+      followupHtmlParts: rendered.followupHtmlParts,
+      textHtmlParts: rendered.textHtmlParts,
     });
 
     return {

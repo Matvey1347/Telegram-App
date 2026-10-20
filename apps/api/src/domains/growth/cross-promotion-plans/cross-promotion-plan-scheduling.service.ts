@@ -25,18 +25,6 @@ type ScheduledPost = {
 
 type PublisherPublication = CrossPromotionPublicationItem;
 
-const stableJson = (value: unknown): string => {
-  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
-  if (value && typeof value === 'object') {
-    const record = value as Record<string, unknown>;
-    return `{${Object.keys(record)
-      .sort()
-      .map((key) => `${JSON.stringify(key)}:${stableJson(record[key])}`)
-      .join(',')}}`;
-  }
-  return JSON.stringify(value ?? null);
-};
-
 function publisherPublications(
   dto: CreateCrossPromotionPlanDto,
 ): PublisherPublication[] {
@@ -422,16 +410,26 @@ export class CrossPromotionPlanSchedulingService {
     id: string,
     publicationId: string,
     dto: CreateCrossPromotionPlanDto,
+    onProgress: Progress = () => undefined,
+    signal?: AbortSignal,
   ) {
     const publication = publisherPublications(dto).find(
       (item) => item.id === publicationId,
     );
     if (!publication) throw new BadRequestException('Partner post not found');
-    const placements = (await this.plans.placementsForReschedule(userId, id)).filter(
-      (item) => item.publicationId === publicationId,
-    );
+    const placements = (
+      await this.plans.placementsForReschedule(userId, id)
+    ).filter((item) => item.publicationId === publicationId);
     if (!placements.length)
-      throw new BadRequestException('Partner post has no Telegram publications');
+      throw new BadRequestException(
+        'Partner post has no Telegram publications',
+      );
+    const total = placements.length + 2;
+    onProgress(
+      { phase: 'VALIDATING', message: 'Validating partner post update' },
+      0,
+      total,
+    );
     // This action edits an already-created Telegram message in place. It
     // cannot move its local/native delivery clock. Do not persist a changed
     // timestamp unless the replacement flow has recreated the delivery.
@@ -467,33 +465,78 @@ export class CrossPromotionPlanSchedulingService {
           id,
           publicationId,
         )
-      ).map((post) => [post.id, post]),
+      ).map((post) => [post.linkedManagedPostId ?? post.id, post]),
     );
-    for (const placement of placements) {
-      const current = existingPosts.get(placement.managedPostId);
-      const changed =
-        !current ||
-        current.title !== nextPost.title ||
-        (current.text ?? '') !== nextPost.text ||
-        stableJson(current.imageUrls) !== stableJson(nextPost.imageUrls) ||
-        stableJson(current.mediaItems) !== stableJson(nextPost.mediaItems) ||
-        stableJson(current.buttonRows ?? []) !== stableJson(nextPost.buttonRows);
-      if (!changed) continue;
+    // Do this before the first remote edit.  Telegram cannot atomically edit
+    // messages in several channels; without this preflight a deleted/stale
+    // managed-post record makes the operation stop halfway through and leaves
+    // earlier channels with the new copy while later ones retain the old copy.
+    const unavailablePlacements = placements.filter((placement) => {
+      const post = existingPosts.get(placement.managedPostId);
+      return !post || post.telegramChannelId !== placement.telegramChannelId;
+    });
+    if (unavailablePlacements.length) {
+      throw new BadRequestException(
+        `Partner post cannot be updated because its managed post is missing for ${unavailablePlacements.map((placement) => placement.telegramChannelId).join(', ')}. Replace the publication to recreate the missing Telegram post, then try again.`,
+      );
+    }
+    const resolvedPlacements: ScheduledPost[] = [];
+    for (const [index, placement] of placements.entries()) {
+      signal?.throwIfAborted();
+      const current = existingPosts.get(placement.managedPostId)!;
+      const resolvedPlacement = { ...placement, managedPostId: current.id };
+      resolvedPlacements.push(resolvedPlacement);
+      // This is an explicit remote-repair action. Do not skip Telegram merely
+      // because the local snapshot already matches: a previous Bot API edit can
+      // have saved the new text locally while Telegram still has degraded
+      // premium custom-emoji entities. Reapplying every placement lets the
+      // MTProto repair stage restore those entities consistently.
+      onProgress(
+        {
+          phase: 'SCHEDULING',
+          message: `Updating post in ${placement.telegramChannelId}`,
+          telegramChannelId: placement.telegramChannelId,
+        },
+        index,
+        total,
+      );
       await this.telegramChannels.updateManagedPost(
         userId,
         placement.telegramChannelId,
-        placement.managedPostId,
+        resolvedPlacement.managedPostId,
         nextPost,
       );
+      onProgress(
+        {
+          phase: 'SCHEDULING',
+          message: `Updated post in ${placement.telegramChannelId}`,
+          telegramChannelId: placement.telegramChannelId,
+          success: true,
+        },
+        index + 1,
+        total,
+      );
     }
-    return this.plans.replacePublicationPlacements(
+    signal?.throwIfAborted();
+    onProgress(
+      { phase: 'SAVING', message: 'Saving partner post update' },
+      total - 1,
+      total,
+    );
+    const updated = await this.plans.replacePublicationPlacements(
       userId,
       id,
       publicationId,
       dto,
-      placements,
+      resolvedPlacements,
       'ACTIVE',
     );
+    onProgress(
+      { phase: 'SAVING', message: 'Partner post updated', success: true },
+      total,
+      total,
+    );
+    return updated;
   }
 
   async replacePublicationAndPublishNow(
@@ -508,18 +551,25 @@ export class CrossPromotionPlanSchedulingService {
       (item) => item.id === publicationId,
     );
     if (!publication) throw new BadRequestException('Partner post not found');
-    const previous = (await this.plans.placementsForReschedule(userId, id)).filter(
-      (item) => item.publicationId === publicationId,
-    );
+    const previous = (
+      await this.plans.placementsForReschedule(userId, id)
+    ).filter((item) => item.publicationId === publicationId);
     if (!previous.length)
-      throw new BadRequestException('Partner post has no Telegram publications');
+      throw new BadRequestException(
+        'Partner post has no Telegram publications',
+      );
     const context = await this.plans.removalContext(userId, id);
     const previousIds = new Set(previous.map((item) => item.managedPostId));
-    const remotePostIds = context.remotePostIds.filter((item) => previousIds.has(item));
+    const remotePostIds = context.remotePostIds.filter((item) =>
+      previousIds.has(item),
+    );
     const immediate = this.withImmediatePublisherTimes(
       {
         ...dto,
-        publicationPost: { ...dto.publicationPost, publisherPublications: [publication] },
+        publicationPost: {
+          ...dto.publicationPost,
+          publisherPublications: [publication],
+        },
       },
       new Date().toISOString(),
     );
@@ -527,20 +577,43 @@ export class CrossPromotionPlanSchedulingService {
     const total = publication.placements.length + 2;
     try {
       if (remotePostIds.length) {
-        onProgress({ phase: 'DELETING', message: 'Deleting this partner post' }, 1, total);
+        onProgress(
+          { phase: 'DELETING', message: 'Deleting this partner post' },
+          1,
+          total,
+        );
         const deletion = await this.remoteDeletion.deletePublishedManagedPosts({
           workspaceId: context.workspaceId,
           managedPostIds: remotePostIds,
         });
-        if (deletion.failed) throw new Error('Existing Telegram posts could not be deleted');
+        if (deletion.failed)
+          throw new Error('Existing Telegram posts could not be deleted');
       }
       for (const placement of previous) {
         if (!remotePostIds.includes(placement.managedPostId)) {
-          await this.telegramChannels.deleteManagedPost(userId, placement.telegramChannelId, placement.managedPostId);
+          await this.telegramChannels.deleteManagedPost(
+            userId,
+            placement.telegramChannelId,
+            placement.managedPostId,
+          );
         }
       }
-      await this.publishPostsNow(userId, immediate, createdPosts, onProgress, total, signal);
-      return this.plans.replacePublicationPlacements(userId, id, publicationId, dto, createdPosts, 'ACTIVE');
+      await this.publishPostsNow(
+        userId,
+        immediate,
+        createdPosts,
+        onProgress,
+        total,
+        signal,
+      );
+      return this.plans.replacePublicationPlacements(
+        userId,
+        id,
+        publicationId,
+        dto,
+        createdPosts,
+        'ACTIVE',
+      );
     } catch (error) {
       await this.rollback(userId, createdPosts, onProgress, total);
       throw error;
@@ -560,7 +633,9 @@ export class CrossPromotionPlanSchedulingService {
     const nextPlacement = publication?.placements.find(
       (item) => item.telegramChannelId === channelId,
     );
-    const previous = (await this.plans.placementsForReschedule(userId, id)).find(
+    const previous = (
+      await this.plans.placementsForReschedule(userId, id)
+    ).find(
       (item) =>
         item.publicationId === publicationId &&
         item.telegramChannelId === channelId,
@@ -597,7 +672,9 @@ export class CrossPromotionPlanSchedulingService {
     const nextPlacement = publication?.placements.find(
       (item) => item.telegramChannelId === channelId,
     );
-    const previous = (await this.plans.placementsForReschedule(userId, id)).find(
+    const previous = (
+      await this.plans.placementsForReschedule(userId, id)
+    ).find(
       (item) =>
         item.publicationId === publicationId &&
         item.telegramChannelId === channelId,
@@ -612,12 +689,15 @@ export class CrossPromotionPlanSchedulingService {
     // A user may already have deleted the published Telegram message manually.
     // That is the desired end state for this replacement, so only fail for an
     // operational deletion error rather than a missing remote message.
-    const onlyAlreadyMissing = deletion.failed > 0 && deletion.results
-      .filter((result) => !result.success)
-      .every((result) =>
-        result.error?.includes('could not be identified') ||
-        result.error?.includes('no published Telegram message IDs'),
-      );
+    const onlyAlreadyMissing =
+      deletion.failed > 0 &&
+      deletion.results
+        .filter((result) => !result.success)
+        .every(
+          (result) =>
+            result.error?.includes('could not be identified') ||
+            result.error?.includes('no published Telegram message IDs'),
+        );
     if (deletion.failed && !onlyAlreadyMissing)
       throw new Error('Existing Telegram post could not be deleted');
     await this.telegramChannels.deleteManagedPost(
@@ -635,9 +715,14 @@ export class CrossPromotionPlanSchedulingService {
       this.managedPostPayload(dto, publication.post, nextPlacement),
       { groupId: group.id },
     );
-    await this.telegramChannels.scheduleManagedPost(userId, channelId, post.id, {
-      scheduledAt: nextPlacement.scheduledAt,
-    });
+    await this.telegramChannels.scheduleManagedPost(
+      userId,
+      channelId,
+      post.id,
+      {
+        scheduledAt: nextPlacement.scheduledAt,
+      },
+    );
     return this.plans.replacePublicationChannelPlacement(
       userId,
       id,

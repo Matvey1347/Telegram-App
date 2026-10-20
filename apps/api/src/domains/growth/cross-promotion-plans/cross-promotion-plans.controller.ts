@@ -170,13 +170,21 @@ export class CrossPromotionPlansController {
     @Param('id') id: string,
     @Param('publicationId') publicationId: string,
     @Body() dto: CreateCrossPromotionPlanDto,
+    @Res() res: Response,
   ) {
-    return this.scheduling.updatePublicationInTelegram(
-      user.sub,
-      id,
-      publicationId,
-      dto,
-    );
+    return this.streamResponse.stream(res, {
+      eventPrefix: 'cross_promotion_plan.publication_update_stream',
+      persistLifecycleLogs: false,
+      action: (onProgress, signal) =>
+        this.scheduling.updatePublicationInTelegram(
+          user.sub,
+          id,
+          publicationId,
+          dto,
+          onProgress,
+          signal,
+        ),
+    });
   }
 
   @Patch(':id/publications/:publicationId/channels/:channelId/schedule')

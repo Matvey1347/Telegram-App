@@ -75,13 +75,18 @@ export const crossPromotionPlansApi = {
     id: string,
     publicationId: string,
     payload: CreateCrossPromotionPlanPayload,
+    onProgress: (
+      item: CrossPromotionSchedulingProgress,
+      current: number,
+      total: number,
+    ) => void = () => undefined,
   ) =>
-    (
-      await api.patch<CrossPromotionPlan>(
-        `${basePath}/${id}/publications/${publicationId}/telegram`,
-        payload,
-      )
-    ).data,
+    streamProgressAction<CrossPromotionPlan, CrossPromotionSchedulingProgress>(
+      `${basePath}/${id}/publications/${publicationId}/telegram`,
+      payload,
+      onProgress,
+      { method: "PATCH" },
+    ),
   updatePublicationChannelSchedule: async (
     id: string,
     publicationId: string,

@@ -208,6 +208,7 @@ export type StreamProgressHandler<TItem = BulkActionResultItem> = (
 export type StreamRequestOptions = {
   signal?: AbortSignal;
   headers?: Record<string, string>;
+  method?: "POST" | "PATCH";
 };
 
 async function streamAction<TResult, TItem = BulkActionResultItem>(
@@ -231,7 +232,7 @@ async function streamAction<TResult, TItem = BulkActionResultItem>(
   }
   Object.assign(headers, options?.headers);
   const response = await fetch(`${apiBaseUrl}${path}`, {
-    method: "POST",
+    method: options?.method ?? "POST",
     headers,
     credentials: "include",
     body: JSON.stringify(payload ?? {}),

@@ -43,6 +43,7 @@ import {
   type CrossPromotionModalMode,
 } from "./cross-promotion-modal-title";
 import { emptyCrossPromotionPost } from "./cross-promotion-plan-draft";
+import { canUpdatePublicationInTelegram } from "./cross-promotion-publication-actions";
 
 type DraftState = ReturnType<typeof useCrossPromotionDraftState>;
 type BotFlow = ReturnType<typeof useTelegramSystemBotPostFlow<"single">>;
@@ -252,13 +253,13 @@ export function CrossPromotionPlanView({
     if (!initial || initial.status === "DRAFT") return null;
     return (
       <>
-        {changed ? (
+        {canUpdatePublicationInTelegram({ changed, published }) ? (
           <Button
             type="button"
             disabled={saving || savingDraft}
             onClick={() => onUpdatePublicationInTelegram?.(publicationId)}
           >
-            {published ? "Update in Telegram" : "Update"}
+            {published ? "Update in all channels" : "Update scheduled posts"}
           </Button>
         ) : null}
         <Button
@@ -282,14 +283,27 @@ export function CrossPromotionPlanView({
         );
         if (!placement) return [];
         const published = Boolean(placement.isPublishedInTelegram);
-        return [[channelId, {
-          label: published ? "Delete current post & schedule again" : "Update",
-          variant: published ? "danger" as const : "primary" as const,
-          onClick: () =>
-            published
-              ? onReplacePublicationChannelSchedule?.(publicationId, channelId)
-              : onUpdatePublicationChannelSchedule?.(publicationId, channelId),
-        }]];
+        return [
+          [
+            channelId,
+            {
+              label: published
+                ? "Delete current post & schedule again"
+                : "Update",
+              variant: published ? ("danger" as const) : ("primary" as const),
+              onClick: () =>
+                published
+                  ? onReplacePublicationChannelSchedule?.(
+                      publicationId,
+                      channelId,
+                    )
+                  : onUpdatePublicationChannelSchedule?.(
+                      publicationId,
+                      channelId,
+                    ),
+            },
+          ],
+        ];
       }),
     );
   const importPost = async (target: string) => {
@@ -457,7 +471,9 @@ export function CrossPromotionPlanView({
                                 onChange={setPublisherSettings}
                                 showAdSlots
                                 managedPostUrls={publisherManagedPostUrls}
-                                placementActions={publicationChannelActions("publisher-1")}
+                                placementActions={publicationChannelActions(
+                                  "publisher-1",
+                                )}
                               />
                               <CrossPromotionPublicationPostEditor
                                 title="Partner post 1"
@@ -591,7 +607,9 @@ export function CrossPromotionPlanView({
                                     )
                                   }
                                   showAdSlots
-                                  placementActions={publicationChannelActions(publication.id)}
+                                  placementActions={publicationChannelActions(
+                                    publication.id,
+                                  )}
                                 />
                                 <CrossPromotionPublicationPostEditor
                                   title={`Partner post ${index + 2}`}
