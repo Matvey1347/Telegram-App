@@ -150,4 +150,61 @@ describe('TelegramManagedPostPublicationService failure persistence', () => {
       jest.useRealTimers();
     }
   });
+
+  it('accepts the same local slot time after the Kyiv autumn DST transition', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-10-20T08:00:00.000Z'));
+    const publisher = {
+      publishManagedPost: jest.fn().mockResolvedValue({ id: 'post-1' }),
+    };
+    const updateMany = jest.fn().mockResolvedValue({ count: 1 });
+    const service = new TelegramManagedPostPublicationService(
+      {
+        telegramPublicationScheduleSlot: {
+          findFirst: jest.fn().mockResolvedValue({
+            id: 'slot-1',
+            time: '07:10',
+            schedule: { workspace: { timezone: 'Europe/Kyiv' } },
+          }),
+        },
+        telegramManagedPost: {
+          findFirst: jest.fn().mockResolvedValue(null),
+          updateMany,
+        },
+      } as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      { workspace: jest.fn().mockResolvedValue('workspace-1') } as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      publisher as never,
+    );
+    try {
+      await expect(
+        service.scheduleManagedPost('user-1', 'channel-1', 'post-1', {
+          scheduledAt: '2026-10-25T07:10:00+02:00',
+          publicationSlotId: 'slot-1',
+        }),
+      ).resolves.toEqual({ id: 'post-1' });
+      expect(updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: { publicationSlotId: 'slot-1' },
+        }),
+      );
+      expect(publisher.publishManagedPost).toHaveBeenCalledWith(
+        'workspace-1',
+        'channel-1',
+        'post-1',
+        new Date('2026-10-25T05:10:00.000Z'),
+        'IMAGES_THEN_TEXT',
+        'user-1',
+        false,
+      );
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 });

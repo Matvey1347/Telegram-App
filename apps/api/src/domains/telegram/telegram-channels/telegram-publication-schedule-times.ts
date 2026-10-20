@@ -1,49 +1,32 @@
-import { utcTimeKey, zonedDateTimeToUtc } from '../telegram-ad-sales/domain/timezone';
+import {
+  utcTimeKey,
+  zonedDateTimeToUtc,
+} from '../telegram-ad-sales/domain/timezone';
 
-function dateKeyInTimezone(timezone: string, reference: Date) {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: timezone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(reference);
-  const value = (type: string) =>
-    parts.find((part) => part.type === type)?.value ?? '';
-  return `${value('year')}-${value('month')}-${value('day')}`;
+/** Slot times are workspace-local wall-clock values and survive DST changes. */
+export function publicationScheduleTimeForStorage(localTime: string) {
+  return localTime;
 }
 
-/** Converts a workspace-local editor value to the canonical UTC slot time. */
-export function publicationScheduleTimeToUtc(
-  localTime: string,
+export function publicationScheduleTimeForDisplay(storedTime: string) {
+  return storedTime;
+}
+
+export function publicationScheduleTimeAtInstant(
+  instant: Date,
   timezone: string,
-  reference = new Date(),
 ) {
-  return utcTimeKey(
-    zonedDateTimeToUtc(dateKeyInTimezone(timezone, reference), localTime, timezone),
-    'UTC',
-  );
+  return utcTimeKey(instant, timezone);
 }
 
-/** Presents the canonical UTC slot time in the workspace timezone. */
-export function publicationScheduleTimeInTimezone(
-  utcTime: string,
-  timezone: string,
-  reference = new Date(),
-) {
-  const [hour, minute] = utcTime.split(':').map(Number);
-  const [year, month, day] = dateKeyInTimezone(timezone, reference)
-    .split('-')
-    .map(Number);
-  return utcTimeKey(new Date(Date.UTC(year, month - 1, day, hour, minute)), timezone);
-}
-
-/** A UTC slot recurs at the same instant-of-day; its displayed day is workspace-local. */
+/** Resolves a recurring local slot to its actual instant on the requested day. */
 export function publicationScheduleOccurrenceAt(
   localDate: { year: number; month: number; day: number },
-  utcTime: string,
+  localTime: string,
+  timezone: string,
 ) {
-  const [hour, minute] = utcTime.split(':').map(Number);
-  return new Date(
-    Date.UTC(localDate.year, localDate.month - 1, localDate.day, hour, minute),
-  );
+  const dateKey = `${String(localDate.year).padStart(4, '0')}-${String(
+    localDate.month,
+  ).padStart(2, '0')}-${String(localDate.day).padStart(2, '0')}`;
+  return zonedDateTimeToUtc(dateKey, localTime, timezone);
 }

@@ -1839,7 +1839,7 @@ model TelegramPublicationScheduleSlot {
   scheduleId   String
   title        String
   kind         TelegramPublicationSlotKind
-  /// Canonical UTC time of day. API input/output is converted through the workspace timezone.
+  /// Workspace-local wall-clock time of day. The timezone comes from Workspace.
   time         String                                           @db.VarChar(5)
   position     Int                                              @default(0)
   isActive     Boolean                                          @default(true)

@@ -26,6 +26,7 @@ import {
   telegramPostsBadRequest,
 } from './telegram-posts.errors';
 import { requireNonBatchManagedPosts } from './telegram-managed-post-ownership';
+import { publicationScheduleTimeAtInstant } from './telegram-publication-schedule-times';
 
 @Injectable()
 export class TelegramManagedPostPublicationService {
@@ -258,6 +259,7 @@ export class TelegramManagedPostPublicationService {
         !this.matchesPublicationSlot(
           scheduledAt,
           assignedSlot.time,
+          assignedSlot.schedule.workspace.timezone || 'UTC',
         )
       ) {
         throw telegramPostsBadRequest(
@@ -301,12 +303,9 @@ export class TelegramManagedPostPublicationService {
   private matchesPublicationSlot(
     scheduledAt: Date,
     time: string,
+    timezone: string,
   ) {
-    return (
-      `${String(scheduledAt.getUTCHours()).padStart(2, '0')}:${String(
-        scheduledAt.getUTCMinutes(),
-      ).padStart(2, '0')}` === time
-    );
+    return publicationScheduleTimeAtInstant(scheduledAt, timezone) === time;
   }
 
   public async cancelScheduledManagedPost(

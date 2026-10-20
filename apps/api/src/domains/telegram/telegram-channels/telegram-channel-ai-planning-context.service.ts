@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { TelegramContentHypothesesService } from './telegram-content-hypotheses.service';
-import { publicationScheduleTimeInTimezone } from './telegram-publication-schedule-times';
+import { publicationScheduleTimeForDisplay } from './telegram-publication-schedule-times';
 
 @Injectable()
 export class TelegramChannelAiPlanningContextService {
@@ -62,7 +62,7 @@ export class TelegramChannelAiPlanningContextService {
   formatSlots(context: Awaited<ReturnType<this['read']>>) {
     if (!context.schedule) return ['[] — no publication schedule is assigned'];
     return context.schedule.slots.map((slot) =>
-      `- slot_id: ${slot.id} — ${slot.title} — type: ${slot.kind} — every day at: ${publicationScheduleTimeInTimezone(slot.time, context.schedule!.timezone)} — timezone: ${context.schedule!.timezone}`,
+      `- slot_id: ${slot.id} — ${slot.title} — type: ${slot.kind} — every day at: ${publicationScheduleTimeForDisplay(slot.time)} — timezone: ${context.schedule!.timezone}`,
     );
   }
 

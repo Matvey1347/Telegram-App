@@ -34,7 +34,7 @@ describe('TelegramPublicationSchedulesService', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
-  it('keeps canonical UTC publication slots at the same instant across a DST boundary', async () => {
+  it('keeps publication slots at the same local time across a DST boundary', async () => {
     prisma.workspace.findUnique.mockResolvedValue({
       timezone: 'Europe/Warsaw',
     });
@@ -62,7 +62,7 @@ describe('TelegramPublicationSchedulesService', () => {
             scheduleId: 'schedule-1',
             title: 'Morning',
             kind: 'CONTENT',
-            time: '07:00',
+            time: '09:00',
             position: 0,
             isActive: true,
             iconPresentation: null,
@@ -93,11 +93,11 @@ describe('TelegramPublicationSchedulesService', () => {
       }),
       expect.objectContaining({
         slotId: 'morning',
-        scheduledAt: '2026-10-25T07:00:00.000Z',
+        scheduledAt: '2026-10-25T08:00:00.000Z',
       }),
       expect.objectContaining({
         slotId: 'morning',
-        scheduledAt: '2026-10-26T07:00:00.000Z',
+        scheduledAt: '2026-10-26T08:00:00.000Z',
       }),
     ]);
   });
@@ -140,7 +140,7 @@ describe('TelegramPublicationSchedulesService', () => {
         title: 'Booked',
         telegramChannelId: 'channel-1',
         publicationSlotId: 'ad-1',
-        scheduledAt: new Date('2026-10-24T07:00:00.000Z'),
+        scheduledAt: new Date('2026-10-24T05:00:00.000Z'),
         publishedAt: null,
       },
     ]);
@@ -152,11 +152,11 @@ describe('TelegramPublicationSchedulesService', () => {
     });
     expect(rows['channel-1']).toEqual([
       expect.objectContaining({
-        scheduledAt: '2026-10-24T07:00:00.000Z',
+        scheduledAt: '2026-10-24T05:00:00.000Z',
         state: 'OCCUPIED',
         postId: 'post-1',
       }),
-      expect.objectContaining({ scheduledAt: '2026-10-25T07:00:00.000Z' }),
+      expect.objectContaining({ scheduledAt: '2026-10-25T06:00:00.000Z' }),
     ]);
     expect(rows['channel-2']).toHaveLength(2);
     expect(rows['channel-2']?.[0]?.postId).toBeNull();
@@ -200,7 +200,7 @@ describe('TelegramPublicationSchedulesService', () => {
         title: 'Scheduled without a slot',
         telegramChannelId: 'channel-1',
         publicationSlotId: null,
-        scheduledAt: new Date('2026-10-24T07:10:00.000Z'),
+        scheduledAt: new Date('2026-10-24T05:10:00.000Z'),
         publishedAt: null,
       },
     ]);
@@ -213,7 +213,7 @@ describe('TelegramPublicationSchedulesService', () => {
 
     expect(rows['channel-1']).toEqual([
       expect.objectContaining({
-        time: '09:10',
+        time: '07:10',
         state: 'OCCUPIED',
         postId: 'legacy-post',
       }),

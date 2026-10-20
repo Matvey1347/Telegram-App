@@ -19,11 +19,7 @@ import {
   TelegramPublicationScheduleAssignmentInputDto,
   TelegramPublicationScheduleInputDto,
 } from './telegram-publication-schedules.dto';
-import {
-  publicationScheduleOccurrenceAt,
-  publicationScheduleTimeInTimezone,
-  publicationScheduleTimeToUtc,
-} from './telegram-publication-schedule-times';
+import { publicationScheduleOccurrenceAt, publicationScheduleTimeForDisplay, publicationScheduleTimeForStorage } from './telegram-publication-schedule-times';
 
 const scheduleInclude = {
   icon: true,
@@ -60,7 +56,7 @@ export class TelegramPublicationSchedulesService {
         scheduleId: slot.scheduleId,
         title: slot.title,
         kind: slot.kind,
-        time: publicationScheduleTimeInTimezone(slot.time, timezone),
+        time: publicationScheduleTimeForDisplay(slot.time),
         position: slot.position,
         isActive: slot.isActive,
         iconPresentation: iconToResolvedEmoji(slot.icon),
@@ -102,7 +98,7 @@ export class TelegramPublicationSchedulesService {
   ) {
     return slots.map((slot, index) => ({
       ...slot,
-      time: publicationScheduleTimeToUtc(slot.time, timezone),
+      time: publicationScheduleTimeForStorage(slot.time),
       position: slot.position ?? index,
       isActive: slot.isActive ?? true,
       iconId: slot.iconId ?? null,
@@ -370,13 +366,7 @@ export class TelegramPublicationSchedulesService {
     ) {
       for (const slot of slots) {
         const localDate = this.localDateParts(cursor, timezone);
-        // Slot time is persisted as its canonical UTC time-of-day. Converting
-        // it from the workspace timezone again shifts its instant at DST
-        // boundaries and makes the returned occurrence fail SLOT validation.
-        const scheduledAt = publicationScheduleOccurrenceAt(
-          localDate,
-          slot.time,
-        );
+        const scheduledAt = publicationScheduleOccurrenceAt(localDate, slot.time, timezone);
         if (scheduledAt >= from && scheduledAt < to) {
           const reservation = reservationByScheduledAt.get(
             scheduledAt.toISOString(),
@@ -530,7 +520,7 @@ export class TelegramPublicationSchedulesService {
     ) {
       const localDate = this.localDateParts(cursor, timezone);
       for (const slot of uniqueSlots.values()) {
-        const scheduledAt = publicationScheduleOccurrenceAt(localDate, slot.time);
+        const scheduledAt = publicationScheduleOccurrenceAt(localDate, slot.time, timezone);
         if (scheduledAt < from || scheduledAt >= to) continue;
         const times = timesBySlot.get(slot.id) ?? [];
         times.push(scheduledAt.toISOString());
@@ -547,7 +537,7 @@ export class TelegramPublicationSchedulesService {
             scheduledAt,
             title: slot.title,
             kind: slot.kind,
-            time: publicationScheduleTimeInTimezone(slot.time, timezone),
+            time: publicationScheduleTimeForDisplay(slot.time),
             timezone,
             state: reservation
               ? 'OCCUPIED'
@@ -624,14 +614,14 @@ export class TelegramPublicationSchedulesService {
       const localDate = this.localDateParts(cursor, timezone);
       for (const slot of schedule.slots) {
         if (!selectedSlotIds.has(slot.id)) continue;
-        const scheduledAt = publicationScheduleOccurrenceAt(localDate, slot.time);
+        const scheduledAt = publicationScheduleOccurrenceAt(localDate, slot.time, timezone);
         if (scheduledAt < from || scheduledAt >= to) continue;
         calendarRows.push({
           slotId: slot.id,
           scheduledAt: scheduledAt.toISOString(),
           title: slot.title,
           kind: slot.kind,
-          time: publicationScheduleTimeInTimezone(slot.time, timezone),
+          time: publicationScheduleTimeForDisplay(slot.time),
           timezone,
           state: scheduledAt.getTime() <= Date.now() ? 'PAST' : 'AVAILABLE',
           postId: null,
