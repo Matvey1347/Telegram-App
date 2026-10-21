@@ -27,13 +27,17 @@ function readFinanceContext(value: unknown): FinanceContext | null {
     : null;
 }
 
-export function FinanceRootApp() {
+export function FinanceRootApp({ botId }: { botId?: string } = {}) {
   // Do not wait for an effect just to read public routing metadata that is
   // already in localStorage. This is the first cache gate on every reload.
-  const [state, setState] = useState<FinanceContextState>(
-    initialFinanceContextState,
+  const [state, setState] = useState<FinanceContextState>(() =>
+    botId ? { status: "ready", financeBotId: botId } : initialFinanceContextState(),
   );
   useEffect(() => {
+    if (botId) {
+      window.localStorage.setItem(FINANCE_CONTEXT_CACHE_KEY, botId);
+      return;
+    }
     const controller = new AbortController();
 
     // This ID is public routing/configuration metadata, not finance data or a
@@ -42,8 +46,6 @@ export function FinanceRootApp() {
     const cachedBotId = window.localStorage
       .getItem(FINANCE_CONTEXT_CACHE_KEY)
       ?.trim();
-    if (cachedBotId) setState({ status: "ready", financeBotId: cachedBotId });
-
     async function loadContext() {
       try {
         const response = await fetch("/api/finance/context", {
@@ -64,7 +66,7 @@ export function FinanceRootApp() {
 
     void loadContext();
     return () => controller.abort();
-  }, []);
+  }, [botId]);
 
   if (state.status === "ready") {
     return <GroshlyFinanceApp botId={state.financeBotId} />;

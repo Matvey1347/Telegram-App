@@ -88,7 +88,7 @@ export function FinanceInvestments({
       consumerFinanceInvestmentsApi.list(botId, {
         ...filters,
         cursor: pageParam,
-        limit: 30,
+        limit: 50,
       }),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (page) => page.nextCursor ?? undefined,

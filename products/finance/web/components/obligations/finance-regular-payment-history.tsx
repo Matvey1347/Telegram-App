@@ -34,7 +34,7 @@ export function FinanceRegularPaymentHistory({
     queryFn: ({ pageParam }) =>
       consumerFinanceObligationsApi.regularPaymentRevisions(botId, payment.id, {
         cursor: pageParam,
-        limit: 30,
+        limit: 50,
       }),
     getNextPageParam: (page) => page.nextCursor ?? undefined,
   });

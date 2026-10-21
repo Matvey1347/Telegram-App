@@ -66,7 +66,7 @@ export function FinanceTransfers({
   const client = useQueryClient();
   const t = financeTransfersCopy(locale);
   const [filters, setFilters] = useState<ConsumerFinanceTransferQuery>({
-    limit: 30,
+    limit: 50,
     ...financePeriodDateRange(period),
   });
   const [editing, setEditing] = useState<ConsumerFinanceTransfer | null>(null);
@@ -253,7 +253,7 @@ export function FinanceTransfers({
           <Button
             variant="secondary"
             className="col-span-2"
-            onClick={() => { setPage(0); setFilters({ limit: 30 }); }}
+            onClick={() => { setPage(0); setFilters({ limit: 50 }); }}
           >
             {t.clearFilters}
           </Button>

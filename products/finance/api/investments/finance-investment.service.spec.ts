@@ -74,6 +74,7 @@ describe('FinanceInvestmentService', () => {
       financeInvestment: {
         findFirst: jest.fn().mockResolvedValue({
           status: 'ACTIVE',
+          description: 'Original thesis',
           startedAt: new Date('2026-01-01T00:00:00.000Z'),
           currentValuationAt: new Date('2026-08-01T00:00:00.000Z'),
         }),
@@ -131,6 +132,7 @@ describe('FinanceInvestmentService', () => {
     const result = await service.close('profile-1', 'investment-1', {
       closedAt: now.toISOString(),
       idempotencyKey: 'close-request-1',
+      note: 'Demand was lower than expected',
     });
 
     expect(valuationWriter.appendClosing).toHaveBeenCalledWith(
@@ -148,6 +150,7 @@ describe('FinanceInvestmentService', () => {
     expect(updateCalls[0][0].data).toMatchObject({
       status: 'CLOSED',
       closedAt: now,
+      description: 'Original thesis\n\nDemand was lower than expected',
     });
     expect(result).toMatchObject({
       investment: { status: 'CLOSED', currentValue: '0' },

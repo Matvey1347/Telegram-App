@@ -45,8 +45,8 @@ export function FinanceDebtSettlementModal({
     queryFn: () => consumerFinanceLedgerApi.accounts(botId),
   });
   const debts = useQuery({
-    queryKey: consumerFinanceKeys.debts(botId, { status: "OPEN", limit: 100 }),
-    queryFn: () => consumerFinanceObligationsApi.debts(botId, { status: "OPEN", limit: 100 }),
+    queryKey: consumerFinanceKeys.debts(botId, { status: "OPEN", limit: 50 }),
+    queryFn: () => consumerFinanceObligationsApi.debts(botId, { status: "OPEN", limit: 50 }),
   });
   const openDebts = debts.data?.items ?? [initialDebt];
   const [debtId, setDebtId] = useState(initialDebt.id);

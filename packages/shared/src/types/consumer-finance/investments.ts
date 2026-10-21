@@ -139,6 +139,7 @@ export type ConsumerFinanceInvestmentMutation = {
 export type ConsumerFinanceInvestmentCloseInput = {
   closedAt: string;
   idempotencyKey: string;
+  note?: string;
   finalReturn?: Omit<
     ConsumerFinanceInvestmentCashFlowInput,
     "kind" | "occurredAt" | "idempotencyKey"

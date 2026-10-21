@@ -186,7 +186,7 @@ describe("FinanceRegularPayments", () => {
     await waitFor(() =>
       expect(api.regularPaymentRevisions).toHaveBeenCalledWith("bot", "rent", {
         cursor: undefined,
-        limit: 30,
+        limit: 50,
       }),
     );
     expect(await screen.findByText("No revisions yet.")).toBeInTheDocument();

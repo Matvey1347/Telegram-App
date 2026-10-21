@@ -124,13 +124,13 @@ describe("FinanceInvestmentDetailScreen histories", () => {
     await waitFor(() =>
       expect(api.cashFlows).toHaveBeenLastCalledWith("bot", "asset", {
         cursor: "embedded-is-not-terminal",
-        limit: 30,
+        limit: 50,
       }),
     );
     await waitFor(() =>
       expect(api.valuations).toHaveBeenLastCalledWith("bot", "asset", {
         cursor: "embedded-is-not-terminal",
-        limit: 30,
+        limit: 50,
       }),
     );
     expect((await screen.findAllByText("$ 2.00")).length).toBeGreaterThan(1);

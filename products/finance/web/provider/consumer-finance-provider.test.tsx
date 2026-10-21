@@ -93,7 +93,32 @@ describe("ConsumerFinanceProvider", () => {
     ).toBe(false);
   });
 
-  it("hydrates a valid Finance snapshot before the first child render", () => {
+  it("persists Groshly ledgers only with a verified Telegram identity scope", () => {
+    expect(
+      isPersistedConsumerFinanceQuery([
+        "consumer-finance",
+        "bot-a",
+        "groshly-read-model",
+      ]),
+    ).toBe(false);
+    expect(
+      isPersistedConsumerFinanceQuery([
+        "consumer-finance",
+        "bot-a",
+        "groshly-read-model",
+        "telegram-user:42",
+      ]),
+    ).toBe(true);
+    expect(
+      isPersistedConsumerFinanceQuery([
+        "consumer-finance",
+        "bot-a",
+        "groshly-obligations",
+      ]),
+    ).toBe(false);
+  });
+
+  it("invalidates legacy persisted Groshly ledgers", () => {
     const source = new QueryClient();
     source.setQueryData(
       ["consumer-finance", "bot-a", "groshly-read-model"],
@@ -114,9 +139,7 @@ describe("ConsumerFinanceProvider", () => {
       </ConsumerFinanceProvider>,
     );
 
-    expect(screen.getByTestId("restored-cache")).toHaveTextContent(
-      "available immediately",
-    );
+    expect(screen.getByTestId("restored-cache")).toHaveTextContent("undefined");
   });
 
   it("does not expose cached data across bot-scoped query keys", () => {

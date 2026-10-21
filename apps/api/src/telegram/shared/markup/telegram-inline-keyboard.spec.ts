@@ -54,4 +54,26 @@ describe('Telegram inline keyboard', () => {
       ],
     });
   });
+
+  it('removes invisible copied characters from a button URL for Bot API delivery', () => {
+    const keyboard = toTelegramBotInlineKeyboard(
+      normalizeTelegramPostButtonRows([
+        [
+          {
+            text: 'Join',
+            // U+2060 can be copied with a Telegram invite link. Bot API
+            // rejects it with BUTTON_URL_INVALID.
+            url: 'https://t.me/+ovHEbXGetFhiNDhi\u2060',
+            style: 'default',
+          },
+        ],
+      ]),
+    );
+
+    expect(keyboard).toEqual({
+      inline_keyboard: [
+        [{ text: 'Join', url: 'https://t.me/+ovHEbXGetFhiNDhi' }],
+      ],
+    });
+  });
 });

@@ -37,6 +37,40 @@ describe('sendTelegramSystemBotPostPreview', () => {
     }));
   });
 
+  it('sanitizes an invisible copied URL character before previewing a normal button', async () => {
+    const api = {
+      call: jest.fn(),
+      sendMessage: jest.fn().mockResolvedValue({ message_id: 7 }),
+      sendMediaGroup: jest.fn(),
+      sendPhoto: jest.fn(),
+    };
+
+    await sendTelegramSystemBotPostPreview({
+      api: api as never,
+      token: 'bot-token',
+      scope: {
+        connectionId: 'connection-1', workspaceId: 'workspace-1', userId: 'user-1',
+        telegramUserId: 'telegram-user-1', chatId: 'chat-1', timezone: 'Europe/Warsaw',
+      },
+      draft: {
+        text: 'Preview', imageUrls: [], mediaItems: [],
+        buttonRows: [[{
+          text: 'Join',
+          url: 'https://t.me/+ovHEbXGetFhiNDhi\u2060',
+          style: 'default',
+        }]],
+      },
+    });
+
+    expect(api.sendMessage).toHaveBeenCalledWith('bot-token', expect.objectContaining({
+      reply_markup: {
+        inline_keyboard: [[{
+          text: 'Join', url: 'https://t.me/+ovHEbXGetFhiNDhi',
+        }]],
+      },
+    }));
+  });
+
   it('keeps a video and a custom-emoji caption together when the visible caption fits', async () => {
     const api = {
       call: jest.fn().mockResolvedValue({ message_id: 42 }),

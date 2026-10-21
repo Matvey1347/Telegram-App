@@ -3,6 +3,7 @@ import { normalizeTelegramPostMediaItems } from '@telegram-system/shared';
 import { TelegramBotApiClient } from '@api/telegram/shared/bot/telegram-bot-api.client';
 import {
   normalizeTelegramPostButtonRows,
+  normalizeTelegramButtonUrl,
   toTelegramBotInlineKeyboard,
 } from '@api/telegram/shared/markup/telegram-inline-keyboard';
 import { telegramMarkupToHtml } from '@api/telegram/shared/markup/telegram-markup';
@@ -45,7 +46,7 @@ export async function sendTelegramSystemBotPostPreview(input: {
       (draft.buttonRows ?? []).map((row) =>
         row.map((button) => ({
           text: String(button.text ?? '').trim(),
-          url: String(button.url ?? '').trim(),
+          url: normalizeTelegramButtonUrl(String(button.url ?? '')),
           style: button.style ?? 'default',
           // Preserve the native Bot API button icon. Without this mapping the
           // System Bot preview silently dropped the ID and sent the stored

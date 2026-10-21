@@ -262,7 +262,7 @@ export class FinanceController {
     const range = financeAnalyticsDateRange({ period: 'CURRENT_MONTH' }, profile.timezone);
     const [stats, limits, transactions, accounts, categories] = await Promise.all([
       this.ledger.stats(profileId, range.from, range.to), this.core.limits(profileId),
-      this.ledger.history(profileId, Object.assign(new FinanceHistoryQueryDto(), { limit: 100 }), profile.timezone),
+      this.ledger.history(profileId, Object.assign(new FinanceHistoryQueryDto(), { limit: 50 }), profile.timezone),
       this.ledger.accounts(profileId), this.core.categories(profileId),
     ]);
     const { savings, investments, ...periodStats } = stats;

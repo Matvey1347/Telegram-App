@@ -286,6 +286,7 @@ export class FinanceInvestmentService {
             status: true,
             startedAt: true,
             currentValuationAt: true,
+            description: true,
           },
         }),
         tx.financeInvestmentCashFlow.findFirst({
@@ -327,7 +328,21 @@ export class FinanceInvestmentService {
       });
       const changed = await tx.financeInvestment.updateMany({
         where: { id: investmentId, profileId, status: 'ACTIVE' },
-        data: { status: 'CLOSED', closedAt, version: { increment: 1 } },
+        data: {
+          status: 'CLOSED',
+          closedAt,
+          ...(input.note?.trim()
+            ? {
+                description: [
+                  lockedInvestment.description,
+                  input.note.trim(),
+                ]
+                  .filter(Boolean)
+                  .join('\n\n'),
+              }
+            : {}),
+          version: { increment: 1 },
+        },
       });
       if (changed.count !== 1)
         throw new ConflictException('Investment changed concurrently');

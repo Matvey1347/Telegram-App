@@ -22,6 +22,17 @@ const styles: readonly TelegramPostButtonStyle[] = [
   'danger',
 ];
 
+// Invisible format characters are frequently carried over when invite links
+// are copied from Telegram. They are not valid in a Bot API button URL, even
+// though WHATWG URL parsing accepts them. Normalize them at the shared
+// transport boundary so existing saved posts, previews, and publication all
+// send the same valid URL.
+const telegramButtonUrlFormatCharacters = /[\u200B-\u200D\u2060\uFEFF]/g;
+
+export function normalizeTelegramButtonUrl(value: string) {
+  return value.trim().replace(telegramButtonUrlFormatCharacters, '');
+}
+
 /** Converts persisted JSON to the stable API representation; legacy null means no buttons. */
 export function normalizeTelegramPostButtonRows(value: unknown): TelegramPostButtonRows {
   if (!Array.isArray(value)) return [];
@@ -47,7 +58,7 @@ export function normalizeTelegramPostButtonRows(value: unknown): TelegramPostBut
       return [
         {
           text: candidate.text,
-          url: candidate.url,
+          url: normalizeTelegramButtonUrl(candidate.url),
           style: candidate.style as TelegramPostButtonStyle,
           ...(iconCustomEmojiId ? { iconCustomEmojiId } : {}),
         },

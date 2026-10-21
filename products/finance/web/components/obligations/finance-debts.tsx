@@ -74,12 +74,12 @@ export function FinanceDebts({
     }
   }, [dismissedTargetId, settling, targetedDebt.data]);
   const debts = useInfiniteQuery({
-    queryKey: consumerFinanceKeys.debts(botId, { status, limit: 30 }),
+    queryKey: consumerFinanceKeys.debts(botId, { status, limit: 50 }),
     initialPageParam: undefined as string | undefined,
     queryFn: ({ pageParam }) =>
       consumerFinanceObligationsApi.debts(botId, {
         status,
-        limit: 30,
+        limit: 50,
         cursor: pageParam,
       }),
     getNextPageParam: (page) => page.nextCursor ?? undefined,

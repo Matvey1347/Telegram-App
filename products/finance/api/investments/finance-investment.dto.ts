@@ -98,6 +98,7 @@ class FinanceInvestmentFinalReturnDto {
 export class FinanceInvestmentCloseDto {
   @IsDateString() closedAt!: string;
   @IsString() @MinLength(8) @MaxLength(160) idempotencyKey!: string;
+  @IsOptional() @IsString() @MaxLength(1000) note?: string;
   @IsOptional()
   @ValidateNested()
   @Type(() => FinanceInvestmentFinalReturnDto)

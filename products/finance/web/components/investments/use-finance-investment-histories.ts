@@ -30,7 +30,7 @@ export function useFinanceInvestmentHistories(
       }
       return consumerFinanceInvestmentsApi.cashFlows(botId, investmentId, {
         cursor: pageParam,
-        limit: 30,
+        limit: 50,
       });
     },
     initialPageParam: undefined as string | undefined,
@@ -51,7 +51,7 @@ export function useFinanceInvestmentHistories(
       }
       return consumerFinanceInvestmentsApi.valuations(botId, investmentId, {
         cursor: pageParam,
-        limit: 30,
+        limit: 50,
       });
     },
     initialPageParam: undefined as string | undefined,

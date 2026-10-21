@@ -90,7 +90,7 @@ describe("Consumer Finance savings and investments screens", () => {
     expect(api.savings).toHaveBeenLastCalledWith("bot", {
       status: "ACTIVE",
       cursor: "goal-next",
-      limit: 30,
+      limit: 50,
     });
   });
 
@@ -102,7 +102,7 @@ describe("Consumer Finance savings and investments screens", () => {
       expect(api.savings).toHaveBeenCalledWith("bot", {
         status: "ACTIVE",
         cursor: undefined,
-        limit: 100,
+        limit: 50,
       }),
     );
   });
@@ -347,7 +347,7 @@ describe("Consumer Finance savings and investments screens", () => {
       sortBy: "UPDATED",
       sortDirection: "DESC",
       cursor: "asset-next",
-      limit: 30,
+      limit: 50,
     });
   });
 
@@ -380,7 +380,7 @@ describe("Consumer Finance savings and investments screens", () => {
         sortBy: "INVESTED",
         sortDirection: "DESC",
         cursor: undefined,
-        limit: 30,
+        limit: 50,
       }),
     );
 
@@ -395,7 +395,7 @@ describe("Consumer Finance savings and investments screens", () => {
         sortBy: "INVESTED",
         sortDirection: "ASC",
         cursor: undefined,
-        limit: 30,
+        limit: 50,
       }),
     );
   });

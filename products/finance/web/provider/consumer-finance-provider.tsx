@@ -13,7 +13,9 @@ import financeStyles from "@consumer-finance/web/components/ui/finance-ui.module
 import { registerFinanceServiceWorker } from "@finance-web/lib/pwa/service-worker";
 
 const CONSUMER_FINANCE_QUERY_CACHE_KEY = "consumer-finance-react-query-cache";
-const CONSUMER_FINANCE_QUERY_CACHE_BUSTER = "consumer-finance-cache-v1";
+// v2 discards older snapshots that may contain an aggregate Groshly ledger
+// without a verified Telegram-user scope.
+const CONSUMER_FINANCE_QUERY_CACHE_BUSTER = "consumer-finance-cache-v2";
 const CONSUMER_FINANCE_QUERY_CACHE_MAX_AGE_MS = 12 * 60 * 60_000;
 
 type PersistedClient = {
@@ -27,7 +29,16 @@ type PersistedClient = {
  * models are scoped by bot id in their query key and revalidated on startup.
  */
 export function isPersistedConsumerFinanceQuery(queryKey: readonly unknown[]) {
-  const [domain, , kind] = queryKey;
+  const [domain, , kind, identityScope] = queryKey;
+  if (
+    ["groshly-read-model", "groshly-obligations"].includes(String(kind))
+  ) {
+    return (
+      domain === "consumer-finance" &&
+      typeof identityScope === "string" &&
+      identityScope.startsWith("telegram-user:")
+    );
+  }
   return (
     domain === "consumer-finance" &&
     typeof kind === "string" &&

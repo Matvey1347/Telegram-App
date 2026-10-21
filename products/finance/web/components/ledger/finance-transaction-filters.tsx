@@ -186,7 +186,7 @@ function FilterFields({
       <Button
         variant="secondary"
         className={compact ? "col-span-2" : ""}
-        onClick={() => onChange({ limit: 30 })}
+        onClick={() => onChange({ limit: 50 })}
       >
         {t.clearFilters}
       </Button>

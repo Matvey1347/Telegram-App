@@ -35,4 +35,16 @@ describe("FinanceRootApp", () => {
       expect.objectContaining({ credentials: "include" }),
     );
   });
+
+  it("uses the bot id from a Telegram Mini App route without resolving another runtime", () => {
+    global.fetch = vi.fn(() => new Promise(() => {})) as typeof fetch;
+
+    render(<FinanceRootApp botId="telegram-menu-bot" />);
+
+    expect(screen.getByText("Finance application")).toBeInTheDocument();
+    expect(global.fetch).not.toHaveBeenCalled();
+    expect(window.localStorage.getItem("finance-active-bot-id")).toBe(
+      "telegram-menu-bot",
+    );
+  });
 });

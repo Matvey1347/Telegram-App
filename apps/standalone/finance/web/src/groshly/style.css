@@ -533,6 +533,7 @@ body.money-input-active .app-shell .app-main.page-investmentDetail{padding-botto
 .app-shell .status-pill.active{color:#277b59;background:#d9efd9}
 .app-shell .status-pill.paused{color:#856536;background:#f7eccf}
 .app-shell .recurring-primary-actions{margin:8px 0 18px}
+.app-shell .recurring-primary-actions button{justify-content:center;text-align:center}
 .app-shell .recurring-secondary-actions{margin:18px 0 3px}
 .app-shell .recurring-secondary-actions button{justify-content:center}
 .app-shell .recurring-detail-meta{margin-top:0}
@@ -546,9 +547,9 @@ body.money-input-active .app-shell .app-main.page-investmentDetail{padding-botto
 .app-shell .recurring-advance-option b{font-size:13px;line-height:1.25}
 .app-shell .recurring-advance-option small{color:var(--sub);font-size:11px;line-height:1.3}
 .app-shell .recurring-advance-option .switch-toggle{flex:none}
-.app-shell .recurring-side{gap:8px}
+.app-shell .recurring-side{gap:8px;flex-direction:row;align-items:center}
 .app-shell .recurring-side strong{font-size:12px}
-.app-shell .recurring-side svg{align-self:flex-end}
+.app-shell .recurring-side svg{align-self:center}
 
 /* AI: editable proposals, native-like message context actions and opaque compose dock */
 .app-shell .page-ai{padding-bottom:210px!important}
@@ -697,6 +698,42 @@ body.money-input-active .app-shell .app-main.page-investmentDetail{padding-botto
   .app-main.page-analytics .chart-card{padding:26px}.app-main.page-analytics .donut{max-width:300px}.app-main.page-analytics .legend{grid-template-columns:repeat(2,minmax(0,1fr))}
   .app-main.page-investments .investment-line,.app-main.page-accounts .account-line,.app-main.page-categories .category-line{font-size:15px}
   .app-shell .groshly-numpad-layer{position:fixed!important;z-index:110!important}
+}
+
+/* v22: compact forms and a distraction-free assistant surface. */
+.app-shell .form-grid{display:grid;gap:16px}
+.app-shell .form-grid>.field{margin:0}
+.app-shell .screen-title h1,.app-shell .section-bar h2,.app-shell .section-bar h3{font-weight:750}
+.app-shell .balance-value,.app-shell .donut-hole strong,.app-shell .highlight-card strong,.app-shell .debt-summary strong,.app-shell .detail-amount h1,.app-shell .amount-entry input{font-weight:850}
+.app-shell .ai-compose-dock{box-shadow:none!important}
+.app-shell .app-main.page-ai{padding-bottom:104px!important;scroll-padding-bottom:104px!important}
+.app-shell .trend-bars .bar-item{appearance:none;background:transparent;color:inherit;border:0;cursor:pointer}
+.app-shell .trend-bars .bar-item:focus-visible{outline:2px solid var(--green);outline-offset:4px;border-radius:8px}
+.app-shell .trend-bars .bar-col.negative{background:var(--red)}
+.app-shell .trend-bars .bar-item.active .bar-col{background:var(--deep)}
+.app-shell .trend-bars .bar-item.active small{color:var(--ink);font-weight:800}
+.app-shell .investment-line>.soft-icon{margin-left:2px}
+.app-shell .field textarea{border:1px solid var(--line);background:var(--paper);color:var(--ink);border-radius:15px;width:100%;padding:13px;resize:vertical;outline:0}
+.app-shell .field textarea:focus{border-color:#7fb48d}
+.app-shell .close-preview{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.app-shell .close-preview>div{display:flex;flex-direction:column;gap:6px;min-width:0}
+.app-shell .close-preview small{color:var(--sub)}
+.app-shell .close-preview b{font-size:14px;overflow-wrap:anywhere}
+.app-shell .investment-closed-note{display:flex;align-items:center;gap:10px;color:var(--green)}
+.app-shell .investment-closed-note span{display:flex;flex-direction:column;gap:4px}
+.app-shell .investment-closed-note small{color:var(--sub)}
+.app-shell .analytics-group-picker{max-width:310px;margin:16px 0 4px}
+.app-shell .legend .legend-emoji{flex:0 0 auto;color:inherit;font-size:15px;overflow:visible}
+@media(min-width:1024px){
+  .app-main.page-ai .ai-screen{max-width:760px!important}
+  .app-shell .ai-compose-dock{width:min(760px,calc(100vw - 252px - 90px))!important}
+}
+@media(max-width:480px){
+  .app-shell .tutorial-hero{align-items:flex-start;flex-direction:column;padding:20px}
+  .app-shell .tutorial-hero .coach-mascot{width:62px;height:62px}
+  .app-shell .tutorial-level{padding:15px}
+  .app-shell .tutorial-level>.section-bar{align-items:flex-start;gap:10px}
+  .app-shell .tour-list>div{align-items:flex-start}
 }
 @media(min-width:1024px) and (max-width:1240px){.desktop-sidebar{width:222px}.app-shell .app-header{left:222px}.app-shell .app-main{left:222px!important}.app-shell .ai-compose-dock{left:calc(222px + (100vw - 222px)/2)!important;width:min(860px,calc(100vw - 222px - 60px))!important}.desktop-home-grid{gap:20px}}
 @media(min-width:680px) and (max-width:1023px){

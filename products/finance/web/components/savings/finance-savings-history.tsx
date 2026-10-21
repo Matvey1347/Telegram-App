@@ -29,7 +29,7 @@ export function FinanceSavingsHistory({
     queryFn: ({ pageParam }) =>
       consumerFinanceSavingsGoalsApi.history(botId, goal.id, {
         cursor: pageParam,
-        limit: 30,
+        limit: 50,
       }),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (page) => page.nextCursor ?? undefined,

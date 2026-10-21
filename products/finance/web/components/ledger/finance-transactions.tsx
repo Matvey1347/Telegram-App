@@ -61,7 +61,7 @@ export function FinanceTransactions({
   const t = financeTransactionsCopy(locale);
   const { pushToast } = useFinanceFeedback();
   const [filters, setFilters] = useState<ConsumerFinanceHistoryQuery>(() => ({
-    limit: 30,
+    limit: 50,
     ...financePeriodDateRange(period),
   }));
   const [editing, setEditing] = useState<ConsumerFinanceTransaction | null>(

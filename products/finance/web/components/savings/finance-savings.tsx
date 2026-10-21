@@ -75,7 +75,7 @@ export function FinanceSavings({
       consumerFinanceSavingsGoalsApi.list(botId, {
         ...filters,
         cursor: pageParam,
-        limit: 30,
+        limit: 50,
       }),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (page) => page.nextCursor ?? undefined,
@@ -87,7 +87,7 @@ export function FinanceSavings({
       consumerFinanceSavingsGoalsApi.list(botId, {
         status: "ACTIVE",
         cursor: pageParam,
-        limit: 100,
+        limit: 50,
       }),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (page) => page.nextCursor ?? undefined,

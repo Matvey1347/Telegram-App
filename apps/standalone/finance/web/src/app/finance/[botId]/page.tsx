@@ -6,6 +6,11 @@ import { FinanceRootApp } from "@finance-web/components/finance-root-app";
  * its API session, but retains this route so those buttons open the real app
  * rather than Next's 404 page.
  */
-export default function FinanceTelegramMiniAppPage() {
-  return <FinanceRootApp />;
+export default async function FinanceTelegramMiniAppPage({
+  params,
+}: {
+  params: Promise<{ botId: string }>;
+}) {
+  const { botId } = await params;
+  return <FinanceRootApp botId={botId} />;
 }
