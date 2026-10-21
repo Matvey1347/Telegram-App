@@ -84,6 +84,98 @@ describe("AdSaleSharedPost", () => {
     expect(telegramSystemBotApi.sendPostPreview).toHaveBeenCalledWith(draft);
   });
 
+  it("renders the invite placeholder before sending the current ad-sale post", async () => {
+    const draft = {
+      title: "Advertising post",
+      text: "Join {{invite_link}}",
+      imageUrls: [],
+      buttonRows: [
+        [{ text: "Join", url: "{{invite_link}}", style: "primary" }],
+      ],
+    };
+    render(
+      <AdSaleSharedPost
+        placements={
+          (placements as unknown as Array<Record<string, unknown>>).map(
+            (placement, index) => ({
+              ...placement,
+              managedPostDraft: draft,
+              inviteLinkUrl:
+                index === 0
+                  ? "https://t.me/+first_channel"
+                  : "https://t.me/+second_channel",
+            }),
+          ) as never
+        }
+        channels={[{ id: "channel-1", title: "Main" }] as never}
+        mode="shared"
+        systemBotConnected
+        systemBotUsername="@system_bot"
+        workspaceId="workspace-1"
+        onModeChange={vi.fn()}
+        setPlacements={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Send current post to bot" }),
+    );
+
+    await waitFor(() =>
+      expect(telegramSystemBotApi.sendPostPreview).toHaveBeenCalledWith({
+        ...draft,
+        text: "Join https://t.me/+first_channel",
+        buttonRows: [
+          [
+            {
+              text: "Join",
+              url: "https://t.me/+first_channel",
+              style: "primary",
+            },
+          ],
+        ],
+      }),
+    );
+  });
+
+  it("can preview a tokenized button before an invite link is selected", async () => {
+    const draft = {
+      title: "Advertising post",
+      text: "Join {{invite_link}}",
+      imageUrls: [],
+      buttonRows: [
+        [{ text: "Join", url: "{{invite_link}}", style: "primary" }],
+      ],
+    };
+    render(
+      <AdSaleSharedPost
+        placements={
+          (placements as unknown as Array<Record<string, unknown>>).map(
+            (placement) => ({ ...placement, managedPostDraft: draft }),
+          ) as never
+        }
+        channels={[{ id: "channel-1", title: "Main" }] as never}
+        mode="shared"
+        systemBotConnected
+        systemBotUsername="@system_bot"
+        workspaceId="workspace-1"
+        onModeChange={vi.fn()}
+        setPlacements={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Send current post to bot" }),
+    );
+
+    await waitFor(() =>
+      expect(telegramSystemBotApi.sendPostPreview).toHaveBeenCalledWith({
+        ...draft,
+        buttonRows: [[{ text: "Join", url: "https://t.me", style: "primary" }]],
+      }),
+    );
+  });
+
   it("starts the connected bot import without opening Telegram", async () => {
     const open = vi.spyOn(window, "open").mockImplementation(() => null);
     let resolveWorkflow!: (value: {

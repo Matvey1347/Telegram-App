@@ -10,6 +10,7 @@ import { hasPlacementPostContent } from "./placement-post/placement-post-content
 import { useTelegramSystemBotPostFlow } from "@/hooks/use-telegram-system-bot-post-flow";
 import { replacePromoTelegramLinksWithToken } from "../ad-campaigns/promo-invite-template";
 import type { PlacementManagedPostDraft } from "./placement-post/placement-post-composer";
+import { renderAdSaleBotPreview } from "./ad-sale-invite-template";
 
 export function AdSaleSharedPost({
   placements,
@@ -50,6 +51,9 @@ export function AdSaleSharedPost({
     (placement) =>
       placement.date >= channelLocalDateKey(new Date(), placement.timezone),
   );
+  const previewInviteLink = placements.find((placement) =>
+    placement.inviteLinkUrl?.trim(),
+  )?.inviteLinkUrl;
   const botFlow = useTelegramSystemBotPostFlow({
     mode: "single",
     recoveryKey: "ad-sale",
@@ -66,7 +70,9 @@ export function AdSaleSharedPost({
         })),
       );
     },
-    previewDraft: draft ?? null,
+    previewDraft: draft
+      ? renderAdSaleBotPreview(draft, previewInviteLink)
+      : null,
     errorCopy: {
       read: "Could not load the post from Telegram. Try again.",
       start: "Could not prepare the bot workspace. Try again.",
@@ -233,7 +239,10 @@ export function AdSaleSharedPost({
                   onChange={(event) => {
                     const inviteLinkUrl = event.target.value;
                     setPlacements((current) =>
-                      current.map((placement) => ({ ...placement, inviteLinkUrl })),
+                      current.map((placement) => ({
+                        ...placement,
+                        inviteLinkUrl,
+                      })),
                     );
                   }}
                   placeholder="https://t.me/+invite"
@@ -248,7 +257,12 @@ export function AdSaleSharedPost({
                     current.map((placement) => ({
                       ...placement,
                       managedPostDraft: placement.managedPostDraft
-                        ? ({ ...placement.managedPostDraft, ...replacePromoTelegramLinksWithToken(placement.managedPostDraft) } as PlacementManagedPostDraft)
+                        ? ({
+                            ...placement.managedPostDraft,
+                            ...replacePromoTelegramLinksWithToken(
+                              placement.managedPostDraft,
+                            ),
+                          } as PlacementManagedPostDraft)
                         : placement.managedPostDraft,
                     })),
                   )
