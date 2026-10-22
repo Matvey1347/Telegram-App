@@ -1,4 +1,4 @@
-import { Injectable, Optional } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { TelegramCrmRuntimeManager } from './telegram-crm-runtime-manager.service';
 
@@ -10,6 +10,8 @@ const folderKey = (value: string | null) => {
 /** Applies the configured customer tag to the matching Telegram dialogs. */
 @Injectable()
 export class TelegramCrmPurchaseFolderSyncService {
+  private readonly logger = new Logger(TelegramCrmPurchaseFolderSyncService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     @Optional() private readonly runtime?: TelegramCrmRuntimeManager,
@@ -43,20 +45,29 @@ export class TelegramCrmPurchaseFolderSyncService {
       },
     });
     if (!conversations.length) return;
-    await this.runtime.withAccountHandle(
-      workspaceId,
-      folder.accountId,
-      'sync',
-      async (handle) => {
-        for (const conversation of conversations) {
-          await handle.setDialogFolderMembership({
-            folderId: folder.folderId,
-            telegramUserId: conversation.peer.telegramUserId,
-            telegramAccessHash: conversation.telegramAccessHash!,
-            included: true,
-          });
-        }
-      },
-    );
+    try {
+      await this.runtime.withAccountHandle(
+        workspaceId,
+        folder.accountId,
+        'sync',
+        async (handle) => {
+          for (const conversation of conversations) {
+            await handle.setDialogFolderMembership({
+              folderId: folder.folderId,
+              telegramUserId: conversation.peer.telegramUserId,
+              telegramAccessHash: conversation.telegramAccessHash!,
+              included: true,
+            });
+          }
+        },
+      );
+    } catch (error) {
+      // This Telegram folder tag is an auxiliary CRM side effect. It must not
+      // turn an already-persisted sale into a failed checkout (and invite a
+      // duplicate retry) when this API instance does not own the MTProto lease.
+      this.logger.warn(
+        `Skipped purchase-folder sync for advertiser ${advertiserId} in workspace ${workspaceId}: ${error instanceof Error ? error.message : 'unknown Telegram sync error'}`,
+      );
+    }
   }
 }

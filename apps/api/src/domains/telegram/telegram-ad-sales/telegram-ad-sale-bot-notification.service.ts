@@ -112,12 +112,15 @@ export class TelegramAdSaleBotNotificationService {
             select: {
               status: true,
               scheduledAt: true,
+              deleteAfterHoursSnapshot: true,
+              isPermanentSnapshot: true,
               plannedDeleteAt: true,
               telegramChannelId: true,
               managedPost: {
                 select: {
                   status: true,
                   title: true,
+                  publishedAt: true,
                   telegramMessageUrls: true,
                 },
               },
@@ -161,12 +164,24 @@ export class TelegramAdSaleBotNotificationService {
         placements: placements.map((placement) => ({
           telegramChannelId: placement.telegramChannelId,
           scheduledAt: placement.scheduledAt,
+          publishedAt: placement.managedPost?.publishedAt,
           deleteAt: placement.plannedDeleteAt,
+          formatLabel: adPlacementFormatLabel(placement),
           telegramMessageUrls: placement.managedPost?.telegramMessageUrls ?? [],
         })),
       })),
     });
   }
+}
+
+function adPlacementFormatLabel(placement: {
+  deleteAfterHoursSnapshot: number | null;
+  isPermanentSnapshot: boolean;
+}) {
+  if (placement.isPermanentSnapshot || placement.deleteAfterHoursSnapshot == null) {
+    return 'Без автовидалення';
+  }
+  return `Автовидалення через ${placement.deleteAfterHoursSnapshot} годин`;
 }
 
 function isFullyScheduled(

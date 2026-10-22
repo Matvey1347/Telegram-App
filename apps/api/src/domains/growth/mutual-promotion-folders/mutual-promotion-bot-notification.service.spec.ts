@@ -15,6 +15,7 @@ describe('MutualPromotionBotNotificationService', () => {
         findFirstOrThrow: jest.fn().mockResolvedValue({
           id: 'folder-1', workspaceId: 'workspace-1', createdByUserId: 'user-1',
           scheduledBotConfirmationSentAt: null,
+          workspace: { timezone: 'Europe/Kyiv' },
           participants: [{ telegramChannel: channel }],
           posts: [{ title: 'VP post', deliveries: [{ telegramChannelId: 'channel-1', managedPost: { status: 'SCHEDULED', scheduledAt: new Date('2026-10-01T10:00:00Z'), deleteAt: new Date('2026-10-03T10:00:00Z'), telegramMessageUrls: [] } }] }],
         }),
@@ -44,6 +45,7 @@ describe('MutualPromotionBotNotificationService', () => {
       mutualPromotionFolder: {
         findFirstOrThrow: jest.fn().mockResolvedValue({
           id: 'folder-1', workspaceId: 'workspace-1', createdByUserId: 'user-1', scheduledBotConfirmationSentAt: null,
+          workspace: { timezone: 'Europe/Kyiv' },
           participants: [{ telegramChannel: channel }],
           posts: [{ title: 'VP post', deliveries: [{ telegramChannelId: 'channel-1', managedPost: { status: 'PUBLISHED', scheduledAt: new Date('2026-10-01T10:00:00Z'), deleteAt: null, telegramMessageUrls: ['https://t.me/test_channel/42'] } }] }],
         }),

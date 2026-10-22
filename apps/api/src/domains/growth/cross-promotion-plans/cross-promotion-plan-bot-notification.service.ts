@@ -25,6 +25,7 @@ type PublishedPost = {
   telegramMessageUrls: string[];
   publicationId?: string | null;
   scheduledAt?: string;
+  publishedAt?: string | Date | null;
   deleteAt?: string | null;
 };
 type StoredPlacement = {
@@ -138,6 +139,7 @@ export class CrossPromotionPlanBotNotificationService {
             id: true,
             status: true,
             telegramChannelId: true,
+            publishedAt: true,
             telegramMessageUrls: true,
           },
         })
@@ -223,6 +225,7 @@ function publishedPostsForStoredPlacements(
   managedPosts: Array<{
     id: string;
     telegramChannelId: string;
+    publishedAt: Date | null;
     telegramMessageUrls: string[];
   }>,
 ): PublishedPost[] {
@@ -256,6 +259,7 @@ function publishedPostsForStoredPlacements(
         telegramMessageUrls: managedPost.telegramMessageUrls,
         publicationId: storedPlacement.publicationId ?? matched?.publicationId,
         scheduledAt: matched?.placement.scheduledAt,
+        publishedAt: managedPost.publishedAt,
         deleteAt: matched?.placement.deleteAt,
       },
     ];

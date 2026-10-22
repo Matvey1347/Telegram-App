@@ -107,6 +107,30 @@ describe('TelegramPostBatchPublicationRunnerService', () => {
     expect(prisma.telegramManagedPost.updateMany).not.toHaveBeenCalled();
   });
 
+  it('keeps the remote-side-effect marker when the publisher fails after batch publication starts', async () => {
+    const { service, prisma, publication } = setup('BOT');
+    publication.publishBatchManagedPost.mockRejectedValue(
+      new Error('Bad Request: BUTTON_URL_INVALID'),
+    );
+
+    await expect(service.run(delivery as never, new Map())).rejects.toThrow(
+      'BUTTON_URL_INVALID',
+    );
+
+    expect(prisma.telegramManagedPost.updateMany).toHaveBeenLastCalledWith({
+      where: {
+        id: 'post-1',
+        workspaceId: 'workspace-1',
+        scheduleMode: 'BATCH',
+        status: { in: ['PUBLISHING', 'FAILED'] },
+      },
+      data: {
+        status: 'FAILED',
+        lastError: 'POST_BATCH_REMOTE_SIDE_EFFECT_PENDING',
+      },
+    });
+  });
+
   it.each([
     { label: 'media-only', text: null },
     { label: 'duplicate-content', text: 'Same content as another post' },

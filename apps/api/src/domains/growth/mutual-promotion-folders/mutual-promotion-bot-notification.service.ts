@@ -129,6 +129,7 @@ export class MutualPromotionBotNotificationService {
                   select: {
                     status: true,
                     scheduledAt: true,
+                    publishedAt: true,
                     deleteAt: true,
                     telegramMessageUrls: true,
                   },
@@ -161,6 +162,7 @@ export class MutualPromotionBotNotificationService {
                 {
                   telegramChannelId: delivery.telegramChannelId,
                   scheduledAt: delivery.managedPost.scheduledAt ?? undefined,
+                  publishedAt: delivery.managedPost.publishedAt,
                   deleteAt: delivery.managedPost.deleteAt,
                   telegramMessageUrls: delivery.managedPost.telegramMessageUrls,
                 },

@@ -13,6 +13,7 @@ import {
   ErrorState,
   ConfirmDeleteModal,
   Input,
+  Skeleton,
   TableLoadingState,
   Button,
   Modal,
@@ -387,7 +388,7 @@ export function SalesTab(props: {
         title="Preview bot confirmation"
       >
         <div className="space-y-4">
-          {!botText && !botError ? <TableLoadingState /> : null}
+          {!botText && !botError ? <BotConfirmationPreviewSkeleton /> : null}
           {botError ? (
             <ErrorState text="Could not prepare the bot confirmation." />
           ) : null}
@@ -450,6 +451,28 @@ export function SalesTab(props: {
           setDeleteSale(null);
         }}
       />
+    </div>
+  );
+}
+
+function BotConfirmationPreviewSkeleton() {
+  return (
+    <div
+      aria-label="Loading bot confirmation preview"
+      className="space-y-5 rounded-xl border border-neutral-800 bg-neutral-950/55 p-4"
+    >
+      <Skeleton className="h-5 w-44" />
+      <Skeleton className="h-4 w-52" />
+      <div className="space-y-3 pt-1">
+        <Skeleton className="h-5 w-3/4" />
+        <Skeleton className="h-4 w-64 max-w-full" />
+        <Skeleton className="h-4 w-56 max-w-full" />
+      </div>
+      <div className="space-y-2 border-l-2 border-sky-500/40 pl-3">
+        <Skeleton className="h-4 w-40" />
+        <Skeleton className="h-4 w-3/5" />
+        <Skeleton className="h-4 w-2/5" />
+      </div>
     </div>
   );
 }

@@ -96,7 +96,7 @@ export function AdSaleSharedPost({
             {!isSinglePlacement ? (
               <Tooltip
                 align="left"
-                content="Turn on to create one post from scratch for all channels. You can edit an individual channel copy later."
+                content="On: one shared post is published to every channel (copies can be edited later). Off: each channel has its own post, with separate send-to-bot and import-from-bot actions."
               >
                 <button
                   type="button"
@@ -119,7 +119,7 @@ export function AdSaleSharedPost({
             {isSinglePlacement
               ? "Create or import the post that will be published in this channel."
               : mode === "shared"
-                ? "One post for every channel; each copy can be edited later."
+                ? "One shared post is used for every channel; each copy can be edited later. Turn off to configure and import posts separately per channel."
                 : "Configure every channel separately."}
           </p>
         </div>

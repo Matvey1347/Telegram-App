@@ -9,7 +9,11 @@ export type PublicationConfirmationChannel = {
 export type PublicationConfirmationPlacement = {
   telegramChannelId: string;
   scheduledAt?: string | Date;
+  /** Confirmed Telegram publication instant; never substitute the requested schedule for it. */
+  publishedAt?: string | Date | null;
   deleteAt?: string | Date | null;
+  /** Persisted product format, including an explicit no-auto-delete choice. */
+  formatLabel?: string | null;
   telegramMessageUrls?: string[];
 };
 
@@ -29,30 +33,26 @@ export function renderPublicationConfirmation(input: {
   const channels = new Map(
     input.channels.map((channel) => [channel.id, channel]),
   );
-  const sections = input.groups
-    .map((group) => {
-      const placements = group.placements.filter((placement) =>
+  const visibleGroups = input.groups
+    .map((group) => ({
+      ...group,
+      placements: group.placements.filter((placement) =>
         input.state === 'published'
           ? placement.telegramMessageUrls?.length
           : true,
-      );
-      if (!placements.length) return null;
-      const heading =
-        input.state === 'published'
-          ? `<b>Пост «${escapeHtml(group.title)}» опубліковано в каналах:</b>`
-          : `<b>Пост «${escapeHtml(group.title)}» буде опубліковано в каналах:</b>`;
-      return [
-        heading,
-        ...placements.map((placement) =>
-          line(
-            placement,
-            channels.get(placement.telegramChannelId),
-            input.state,
-            input.timezone,
-          ),
-        ),
-      ].join('\n');
-    })
+      ),
+    }))
+    .filter((group) => group.placements.length);
+  const sections = visibleGroups
+    .map((group) =>
+      renderGroup(
+        group.title,
+        group.placements,
+        channels,
+        input.state,
+        input.timezone,
+      ),
+    )
     .filter((section): section is string => Boolean(section));
   return [
     input.state === 'published'
@@ -63,29 +63,125 @@ export function renderPublicationConfirmation(input: {
   ].join('\n\n');
 }
 
+function renderGroup(
+  title: string,
+  placements: PublicationConfirmationPlacement[],
+  channels: Map<string, PublicationConfirmationChannel>,
+  state: 'scheduled' | 'published',
+  timezone: string,
+) {
+  const timing = placements.map((placement) => placementTiming(placement, state));
+  const shared = timing.every((value) =>
+    sameTiming(value, timing[0], timezone),
+  );
+  const heading =
+    `<b>Пост «${escapeHtml(title)}»:</b>`;
+  const common = shared && timing[0]?.publishedOrScheduledAt
+      ? timingLines(timing[0], timezone)
+      : null;
+  const channelHeading = state === 'published'
+    ? '<b>✅ Опубліковано в каналах:</b>'
+    : '<b>🗓️ Заплановано в каналах:</b>';
+  return [
+    heading,
+    ...(common ?? []),
+    channelHeading,
+    ...placements.map((placement, index) =>
+      line(
+        placement,
+        channels.get(placement.telegramChannelId),
+        state,
+        timezone,
+        common !== null ? null : timing[index],
+      ),
+    ),
+  ].join('\n');
+}
+
 function line(
   placement: PublicationConfirmationPlacement,
   channel: PublicationConfirmationChannel | undefined,
   state: 'scheduled' | 'published',
   timezone: string,
+  timing: PublicationTiming | null,
 ) {
-  const scheduled = placement.scheduledAt
-    ? new Date(placement.scheduledAt)
-    : null;
   const postLinks =
     state === 'published'
       ? (placement.telegramMessageUrls ?? []).map(
           (url, index, urls) =>
-            `<a href="${escapeHtml(url)}">${urls.length === 1 ? 'Опублікований пост' : `Опублікований пост ${index + 1}`}</a>`,
+            `<a href="${escapeHtml(url)}">${urls.length === 1 ? 'Пост' : `Пост ${index + 1}`}</a>`,
         )
       : [];
   return [
-    `${channelPresentation(channel)}${scheduled ? ` — <b>${formatDate(scheduled, timezone)}</b>` : ''}`,
-    ...postLinks.map((link) => `   ${link}`),
-    scheduled ? deletionLine(placement.deleteAt, scheduled) : '',
+    `${channelPresentation(channel)}${postLinks.length ? ` — ${postLinks.join(', ')}` : ''}`,
+    ...(timing ? timingLines(timing, timezone).map((value) => `   ${value}`) : []),
   ]
     .filter(Boolean)
     .join('\n');
+}
+
+type PublicationTiming = {
+  publishedOrScheduledAt: Date | null;
+  deleteAt: Date | null;
+  formatLabel: string | null;
+};
+
+function placementTiming(
+  placement: PublicationConfirmationPlacement,
+  state: 'scheduled' | 'published',
+): PublicationTiming {
+  return {
+    publishedOrScheduledAt: dateOrNull(
+      state === 'published' ? placement.publishedAt : placement.scheduledAt,
+    ),
+    deleteAt: dateOrNull(placement.deleteAt),
+    formatLabel: placement.formatLabel?.trim() || null,
+  };
+}
+
+function sameTiming(
+  left: PublicationTiming,
+  right: PublicationTiming,
+  timezone: string,
+) {
+  const leftDate = left.publishedOrScheduledAt
+    ? formatDateParts(left.publishedOrScheduledAt, timezone)
+    : null;
+  const rightDate = right.publishedOrScheduledAt
+    ? formatDateParts(right.publishedOrScheduledAt, timezone)
+    : null;
+  return (
+    leftDate?.year === rightDate?.year &&
+    leftDate?.dayMonth === rightDate?.dayMonth &&
+    leftDate?.hourMinute === rightDate?.hourMinute &&
+    timingFormat(left) === timingFormat(right)
+  );
+}
+
+function timingLines(timing: PublicationTiming, timezone: string) {
+  const date = timing.publishedOrScheduledAt;
+  if (!date) return [];
+  const format = timingFormat(timing);
+  const { dayMonth, hourMinute } = formatDateParts(date, timezone);
+  return [
+    `📅 Дата — <b>${dayMonth}</b>; 🕒 Час — <b>${hourMinute}</b>`,
+    ...(format ? [`🗑️ Формат — <b>${escapeHtml(format)}</b>`] : []),
+  ]
+    .filter(Boolean)
+    .map(String);
+}
+
+function timingFormat(timing: PublicationTiming) {
+  if (timing.formatLabel) return timing.formatLabel;
+  const date = timing.publishedOrScheduledAt;
+  const deletion = date ? deletionFormat(timing.deleteAt, date) : '';
+  return deletion ? `Автовидалення ${deletion}` : null;
+}
+
+function dateOrNull(value: string | Date | null | undefined) {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
 }
 
 function channelPresentation(
@@ -99,20 +195,26 @@ function channelPresentation(
     : `${icon} ${title}`;
 }
 
-function formatDate(value: Date, timezone: string) {
-  return new Intl.DateTimeFormat('uk-UA', {
+function formatDateParts(value: Date, timezone: string) {
+  const parts = new Intl.DateTimeFormat('uk-UA', {
     timeZone: timezone,
     hour: '2-digit',
     minute: '2-digit',
     day: '2-digit',
     month: '2-digit',
+    year: 'numeric',
     hour12: false,
-  })
-    .format(value)
-    .replace(',', '');
+  }).formatToParts(value);
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((item) => item.type === type)?.value ?? '';
+  return {
+    dayMonth: `${part('day')}.${part('month')}`,
+    hourMinute: `${part('hour')}:${part('minute')}`,
+    year: part('year'),
+  };
 }
 
-function deletionLine(
+function deletionFormat(
   value: string | Date | null | undefined,
   scheduled: Date,
 ) {
@@ -124,10 +226,24 @@ function deletionLine(
   const hours = Math.floor(minutes / 60);
   const remaining = minutes % 60;
   const duration =
-    [hours ? `${hours} год` : '', remaining ? `${remaining} хв` : '']
+    [hours ? formatHours(hours) : '', remaining ? `${remaining} хв` : '']
       .filter(Boolean)
       .join(' ') || 'менше хвилини';
-  return `   Автовидалення: <b>через ${duration}</b>`;
+  return `через ${duration}`;
+}
+
+function formatHours(hours: number) {
+  const lastTwo = hours % 100;
+  const last = hours % 10;
+  const unit =
+    lastTwo >= 11 && lastTwo <= 14
+      ? 'годин'
+      : last === 1
+        ? 'годину'
+        : last >= 2 && last <= 4
+          ? 'години'
+          : 'годин';
+  return `${hours} ${unit}`;
 }
 
 function stripTitleEmoji(value: string) {

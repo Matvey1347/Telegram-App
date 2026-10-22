@@ -11,7 +11,6 @@ import { TelegramEntityAvatar } from "@/components/features/telegram/telegram/te
 import { adSaleOriginOptions } from "./ad-sale-origin";
 import { SaleStatusActions, type SaleActionKey } from "./sale-status-actions";
 import {
-  Button,
   CustomSelect,
   FormField,
   Input,
@@ -36,6 +35,7 @@ import {
 import { AdSalePostMetrics, PostMetrics } from "./ad-sale-post-metrics";
 import { AdSaleSharedPostEditor } from "./ad-sale-shared-post-editor";
 import { AdSaleDealPlacementActions } from "./ad-sale-deal-placement-actions";
+import type { AdSaleApplyAllChanges } from "./ad-sale-deal-placement-actions";
 import type { RegisterPaymentPayload } from "./register-payment-form";
 import { DealFinanceTransaction } from "./deal-finance-transaction";
 import { DealFinanceTransactionDeleteModal } from "./deal-finance-transaction-delete-modal";
@@ -217,27 +217,36 @@ export function SaleDetailsModal(props: {
       items.map((p) => (p.id === id ? { ...p, ...patch } : p)),
     );
 
-  const applyFormatToAllPlacements = async (formatName: string) => {
+  const applyChangesToAllPlacements = async (
+    changes: AdSaleApplyAllChanges,
+  ) => {
     try {
       const nextPlacements = placements.map((placementDraft) => {
         const placement = sale.placements.find(
           (item) => item.id === placementDraft.id,
         );
-        const product = placement
+        const product = placement && changes.formatName
           ? props.productsByChannelId[placement.telegramChannelId]?.find(
-              (candidate) => candidate.name === formatName,
+              (candidate) => candidate.name === changes.formatName,
             )
           : undefined;
-        if (!product) {
-          throw new Error(`Format ${formatName} is unavailable for a placement.`);
+        if (changes.formatName && !product) {
+          throw new Error(
+            `Format ${changes.formatName} is unavailable for a placement.`,
+          );
         }
-        return { ...placementDraft, telegramAdProductId: product.id };
+        return {
+          ...placementDraft,
+          ...(changes.date ? { date: changes.date } : {}),
+          ...(changes.time ? { time: changes.time } : {}),
+          ...(product ? { telegramAdProductId: product.id } : {}),
+        };
       });
       setPlacements(nextPlacements);
       await save(undefined, nextPlacements);
     } catch (cause) {
       setError(
-        cause instanceof Error ? cause.message : "Could not apply the format.",
+        cause instanceof Error ? cause.message : "Could not apply changes.",
       );
     }
   };
@@ -404,7 +413,7 @@ export function SaleDetailsModal(props: {
             props.onUpdateSharedPost ? () => setSharedPostOpen(true) : undefined
           }
           productsByChannelId={props.productsByChannelId}
-          onApplyFormat={applyFormatToAllPlacements}
+          onApplyAll={applyChangesToAllPlacements}
           onTogglePayment={() => setPaymentOpen((v) => !v)}
           onCreatePayment={
             props.onCreatePayment
@@ -537,7 +546,7 @@ function DealOverview(props: {
   onBuyerContact: (v: string) => void;
   onPlacement: (v: string) => void;
   productsByChannelId: Record<string, TelegramAdProduct[]>;
-  onApplyFormat: (formatName: string) => Promise<void>;
+  onApplyAll: (changes: AdSaleApplyAllChanges) => Promise<void>;
   onSharedPost?: () => void;
   onTogglePayment: () => void;
   onCreatePayment?: (payload: RegisterPaymentPayload) => Promise<void>;
@@ -595,10 +604,11 @@ function DealOverview(props: {
             </p>
           </div>
           <AdSaleDealPlacementActions
+            key={props.sale.id}
             sale={props.sale}
             productsByChannelId={props.productsByChannelId}
             saving={props.saving}
-            onApplyFormat={props.onApplyFormat}
+            onApplyAll={props.onApplyAll}
             onSharedPost={props.onSharedPost}
           />
           <div className="text-left sm:text-right">

@@ -8,6 +8,7 @@ describe('CrossPromotionPlanBotNotificationService', () => {
         crossPromotionPlan: {
           findFirst: jest.fn().mockResolvedValue({
             title: 'ВП <тест>',
+            workspace: { timezone: 'Europe/Kyiv' },
             partnerChannelIds: ['partner'],
             publisherChannelIds: ['channel'],
             publicationPost: {
@@ -54,8 +55,8 @@ describe('CrossPromotionPlanBotNotificationService', () => {
       }),
     );
     const text = notifications.sendToWorkspaceUser.mock.calls[0][0].text;
-    expect(text).toContain('Пост «Перший пост» буде опубліковано в каналах:');
-    expect(text).toContain('Пост «Другий пост» буде опубліковано в каналах:');
+    expect(text).toContain('<b>Пост «Перший пост»:</b>');
+    expect(text).toContain('<b>Пост «Другий пост»:</b>');
     expect(text).toContain('<a href="https://t.me/women_power">🍃 <b>Жіноча сила</b></a>');
     expect(text).toContain('<a href="https://t.me/cards">💌 <b>Листівки</b></a>');
     expect(text).not.toContain('💝 Листівки');
@@ -74,6 +75,9 @@ describe('CrossPromotionPlanBotNotificationService', () => {
           findMany: jest.fn().mockResolvedValue([
             { id: 'channel', title: 'Жіноча сила', publicInviteLink: { url: 'https://t.me/women_power' }, defaultInviteLink: null, presentationIcon: { emoji: '🍃' } },
           ]),
+        },
+        workspace: {
+          findUnique: jest.fn().mockResolvedValue({ timezone: 'Europe/Kyiv' }),
         },
       } as never,
       {} as never,
@@ -95,14 +99,15 @@ describe('CrossPromotionPlanBotNotificationService', () => {
         telegramChannelId: 'channel',
         publicationId: 'post-1',
         scheduledAt: '2026-09-29T08:00:00.000Z',
+        publishedAt: '2026-09-29T08:00:00.000Z',
         deleteAt: '2026-10-01T08:00:00.000Z',
         telegramMessageUrls: ['https://t.me/women_power/123'],
       }],
     });
 
     const text = notifications.sendToWorkspaceUser.mock.calls[0][0].text;
-    expect(text).toContain('Пост «Опублікований креатив» опубліковано в каналах:');
-    expect(text).toContain('\n   <a href="https://t.me/women_power/123">Опублікований пост</a>');
+    expect(text).toContain('<b>Пост «Опублікований креатив»:</b>');
+    expect(text).toContain('— <a href="https://t.me/women_power/123">Пост</a>');
     expect(text).toContain('через 48 год');
   });
 
@@ -112,6 +117,7 @@ describe('CrossPromotionPlanBotNotificationService', () => {
         crossPromotionPlan: {
           findFirst: jest.fn().mockResolvedValue({
             title: 'ВП',
+            workspace: { timezone: 'Europe/Kyiv' },
             placementPostIds: [
               { telegramChannelId: 'channel', managedPostId: 'managed-1' },
             ],
@@ -138,6 +144,7 @@ describe('CrossPromotionPlanBotNotificationService', () => {
             {
               id: 'managed-1',
               status: 'PUBLISHED',
+              publishedAt: new Date('2026-09-29T08:00:00.000Z'),
               telegramChannelId: 'channel',
               telegramMessageUrls: ['https://t.me/women_power/123'],
             },
@@ -151,8 +158,8 @@ describe('CrossPromotionPlanBotNotificationService', () => {
     const preview = await service.preview('user-1', 'plan-1');
 
     expect(preview.text).toContain('✅ <b>Пости опубліковано</b>');
-    expect(preview.text).toContain('Пост «Готовий пост» опубліковано в каналах:');
-    expect(preview.text).toContain('\n   <a href="https://t.me/women_power/123">Опублікований пост</a>');
+    expect(preview.text).toContain('<b>Пост «Готовий пост»:</b>');
+    expect(preview.text).toContain('— <a href="https://t.me/women_power/123">Пост</a>');
     expect(preview.text).toContain('💌 <b>Жіноча сила</b>');
   });
 });

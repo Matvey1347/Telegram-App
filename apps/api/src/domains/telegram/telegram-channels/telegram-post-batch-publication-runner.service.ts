@@ -98,14 +98,39 @@ export class TelegramPostBatchPublicationRunnerService {
             return current;
           throw new Error('Managed post is no longer publishable');
         }
-        await this.publication.publishBatchManagedPost(
-          delivery.workspaceId,
-          delivery.telegramChannelId,
-          delivery.managedPostId,
-          delivery.longTextMode === 'CAPTION_THEN_TEXT'
-            ? 'CAPTION_THEN_TEXT'
-            : 'IMAGES_THEN_TEXT',
-        );
+        try {
+          await this.publication.publishBatchManagedPost(
+            delivery.workspaceId,
+            delivery.telegramChannelId,
+            delivery.managedPostId,
+            delivery.longTextMode === 'CAPTION_THEN_TEXT'
+              ? 'CAPTION_THEN_TEXT'
+              : 'IMAGES_THEN_TEXT',
+          );
+        } catch (error) {
+          // A Bot API request can succeed remotely while its response or the
+          // following journal write fails locally. The generic publisher
+          // records the user-facing error on the managed post, so restore this
+          // batch-only marker before the delivery is made retryable. On the
+          // next attempt recovery will inspect the durable Bot journal rather
+          // than send the post again without knowing whether Telegram did.
+          await this.prisma.telegramManagedPost.updateMany({
+            where: {
+              id: delivery.managedPostId,
+              workspaceId: delivery.workspaceId,
+              scheduleMode: 'BATCH',
+              status: { in: ['PUBLISHING', 'FAILED'] },
+            },
+            data: {
+              // Keep FAILED so a persisted Bot message journal can resume its
+              // deterministic plan. The marker still makes an empty journal
+              // fail closed as ambiguous instead of resending.
+              status: 'FAILED',
+              lastError: 'POST_BATCH_REMOTE_SIDE_EFFECT_PENDING',
+            },
+          });
+          throw error;
+        }
         return this.published(delivery);
       },
     );

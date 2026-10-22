@@ -137,6 +137,27 @@ describe("AdSaleModal", () => {
     );
   });
 
+  it("keeps one current server draft and removes the saved-draft selector", async () => {
+    const onSaveDraft = vi.fn().mockResolvedValue("saved-draft-1");
+    renderModal({
+      savedDrafts: [{
+        id: "saved-draft-1",
+        title: "Existing saved sale",
+        payload: {},
+      }] as never,
+      onSaveDraft,
+    });
+
+    expect(screen.queryByText("Saved drafts")).toBeNull();
+    const save = screen.getByRole("button", { name: "Save draft" });
+    fireEvent.click(save);
+    await waitFor(() => expect(onSaveDraft).toHaveBeenCalledTimes(1));
+    fireEvent.click(save);
+    await waitFor(() => expect(onSaveDraft).toHaveBeenCalledTimes(2));
+    expect(onSaveDraft.mock.calls[0][1]).toBe("saved-draft-1");
+    expect(onSaveDraft.mock.calls[1][1]).toBe("saved-draft-1");
+  });
+
   it("loads formats for a channel selected only inside the modal", async () => {
     const productLoader = vi
       .spyOn(telegramAdSalesApi, "listProductsByChannels")
@@ -585,6 +606,10 @@ describe("AdSaleModal", () => {
   it("creates placement rows for every selected date without a separate bulk mode", async () => {
     renderModal({ initialScheduledAt: "2099-08-10T12:00:00.000Z" });
 
+    expect(screen.getByRole("button", { name: "Add multiple dates" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Add date" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Add multiple dates" }));
+
     fireEvent.change(screen.getByRole("textbox", { name: "Time for all" }), {
       target: { value: "18:30" },
     });
@@ -606,6 +631,22 @@ describe("AdSaleModal", () => {
     expect(screen.queryByRole("button", { name: /Bulk sales/ })).toBeNull();
   });
 
+  it("applies a changed date immediately while in the default single-date mode", async () => {
+    renderModal();
+
+    fireEvent.click(screen.getByRole("button", { name: /\d{2}\.\d{2}\.\d{4}/ }));
+    fireEvent.click(screen.getAllByRole("button", { name: "11" })[0]);
+
+    expect(
+      document.querySelector<HTMLInputElement>("#ad-sale-date-to-add")?.value,
+    ).toMatch(/-\d{2}-11$/);
+    expect(screen.getByRole("button", { name: "Add multiple dates" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Add date" })).toBeNull();
+    expect(
+      screen.getAllByRole("button", { name: /Actions for Example channel/ }),
+    ).toHaveLength(1);
+  });
+
   it("applies an existing shared post to a placement added later", async () => {
     const onSubmit = vi.fn().mockResolvedValue({});
     renderModal({
@@ -617,6 +658,7 @@ describe("AdSaleModal", () => {
     fireEvent.change(screen.getByPlaceholderText(/Write your Telegram post/), {
       target: { value: "One post for every placement" },
     });
+    fireEvent.click(screen.getByRole("button", { name: "Add multiple dates" }));
     fireEvent.click(screen.getAllByRole("button", { name: "10.08.2099" })[0]);
     fireEvent.click(screen.getAllByRole("button", { name: "11" })[0]);
     fireEvent.click(screen.getByRole("button", { name: "Add date" }));

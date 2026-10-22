@@ -83,6 +83,7 @@ export class CrossPromotionPlanLifecycleService {
               status: true,
               telegramRemoteStatus: true,
               telegramChannelId: true,
+              publishedAt: true,
               telegramMessageUrls: true,
               telegramIdLastCheckedAt: true,
             },
@@ -122,6 +123,7 @@ export class CrossPromotionPlanLifecycleService {
               publicationId:
                 storedPlacement?.publicationId ?? configuredPlacement?.publicationId,
               scheduledAt: configuredPlacement?.scheduledAt,
+              publishedAt: managedPost.publishedAt,
               deleteAt: configuredPlacement?.deleteAt,
             };
           });

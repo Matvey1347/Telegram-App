@@ -20,12 +20,19 @@ export class TelegramAdSalesDraftsService {
       this.prisma.telegramAdSaleDraft.findMany({
         where: { workspaceId, createdByUserId: userId },
         orderBy: { updatedAt: 'desc' },
+        take: 1,
       }),
     );
   }
 
   async create(userId: string, dto: SaveTelegramAdSaleDraftDto) {
     const workspaceId = await this.workspace(userId);
+    const existing = await this.prisma.telegramAdSaleDraft.findFirst({
+      where: { workspaceId, createdByUserId: userId },
+      orderBy: { updatedAt: 'desc' },
+      select: { id: true },
+    });
+    if (existing) return this.update(userId, existing.id, dto);
     return this.prisma.telegramAdSaleDraft.create({
       data: {
         workspaceId,

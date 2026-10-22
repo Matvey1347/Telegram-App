@@ -88,11 +88,15 @@ export function useAdSaleModalSession(
   >("network");
   const [selectedNetworkId, setSelectedNetworkId] = useState("");
   const [selectedChannelIds, setSelectedChannelIds] = useState<string[]>([]);
-  const [placementDateRange, setPlacementDateRange] = useState({
-    from: "",
-    to: "",
+  const [placementDateRange, setPlacementDateRange] = useState(() => {
+    const initialDate =
+      initialScheduledAt?.slice(0, 10) ??
+      new Date().toISOString().slice(0, 10);
+    return { from: initialDate, to: initialDate };
   });
-  const [placementDates, setPlacementDates] = useState<string[]>([]);
+  const [placementDates, setPlacementDates] = useState<string[]>(() => [
+    initialScheduledAt?.slice(0, 10) ?? new Date().toISOString().slice(0, 10),
+  ]);
   const [submissionError, setSubmissionError] = useState("");
   const [publishedPostsByPlacement, setPublishedPostsByPlacement] = useState<
     Record<string, PublishedPostOption[]>

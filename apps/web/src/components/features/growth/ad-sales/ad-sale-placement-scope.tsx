@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { useState } from "react";
 import { Plus } from "lucide-react";
 import type { TelegramChannel, TelegramChannelNetwork } from "@/lib/api";
 import { DateInput, Select, TimeInput } from "@/components/ui/primitives";
@@ -46,6 +47,8 @@ export function AdSalePlacementScope({
   onNetworkChange,
   onChannelsChange,
   onDateToAddChange,
+  onSingleDateChange,
+  onUseSingleDate,
   onAddDate,
   onRemoveDate,
   onCommonTimeChange,
@@ -67,11 +70,15 @@ export function AdSalePlacementScope({
   onNetworkChange: (networkId: string) => void;
   onChannelsChange: (channelIds: string[]) => void;
   onDateToAddChange: (date: string) => void;
+  onSingleDateChange: (date: string) => void;
+  onUseSingleDate: (date: string) => void;
   onAddDate: () => void;
   onRemoveDate: (date: string) => void;
   onCommonTimeChange: (time: string) => void;
   onCommonFormatChange: (formatName: string) => void;
 }) {
+  const [multipleDates, setMultipleDates] = useState(placementDates.length > 1);
+
   return (
     <section className="space-y-3">
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(260px,1fr)_minmax(360px,1.6fr)_160px_minmax(190px,0.8fr)] xl:items-start">
@@ -88,43 +95,70 @@ export function AdSalePlacementScope({
         />
         <div className="space-y-1">
           <label className="flex h-7 items-center text-sm text-neutral-300" htmlFor="ad-sale-date-to-add">
-            Placement dates
+            {multipleDates ? "Placement dates" : "Placement date"}
           </label>
           <div className="flex gap-2">
             <div className="min-w-0 flex-1">
               <DateInput
                 id="ad-sale-date-to-add"
                 value={dateToAdd}
-                onChange={(event) => onDateToAddChange(event.target.value)}
+                onChange={(event) =>
+                  multipleDates
+                    ? onDateToAddChange(event.target.value)
+                    : onSingleDateChange(event.target.value)
+                }
                 className="h-[42px] min-h-0 w-full"
               />
             </div>
+            {multipleDates ? (
+              <button
+                type="button"
+                onClick={onAddDate}
+                disabled={!dateToAdd || placementDates.includes(dateToAdd)}
+                aria-label="Add date"
+                title="Add date"
+                className="inline-flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-lg border border-neutral-700 bg-neutral-900 text-neutral-100 hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Plus size={17} />
+              </button>
+            ) : null}
+          </div>
+          {multipleDates ? (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {placementDates.map((date) => (
+                <span key={date} className="inline-flex items-center gap-1 rounded-md border border-blue-800/70 bg-blue-950/30 px-2 py-1 text-xs text-blue-100">
+                  {date}
+                  <button
+                    type="button"
+                    aria-label={`Remove ${date}`}
+                    onClick={() => onRemoveDate(date)}
+                    className="text-blue-300 hover:text-white"
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+              <button
+                type="button"
+                onClick={() => {
+                  const date = placementDates[0] ?? dateToAdd;
+                  onUseSingleDate(date);
+                  setMultipleDates(false);
+                }}
+                className="px-1 text-xs text-neutral-400 underline-offset-2 hover:text-neutral-200 hover:underline"
+              >
+                Use one date
+              </button>
+            </div>
+          ) : (
             <button
               type="button"
-              onClick={onAddDate}
-              disabled={!dateToAdd || placementDates.includes(dateToAdd)}
-              aria-label="Add date"
-              title="Add date"
-              className="inline-flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-lg border border-neutral-700 bg-neutral-900 text-neutral-100 hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-50"
+              onClick={() => setMultipleDates(true)}
+              className="mt-1 text-xs text-neutral-400 underline-offset-2 hover:text-neutral-200 hover:underline"
             >
-              <Plus size={17} />
+              Add multiple dates
             </button>
-          </div>
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            {placementDates.map((date) => (
-              <span key={date} className="inline-flex items-center gap-1 rounded-md border border-blue-800/70 bg-blue-950/30 px-2 py-1 text-xs text-blue-100">
-                {date}
-                <button
-                  type="button"
-                  aria-label={`Remove ${date}`}
-                  onClick={() => onRemoveDate(date)}
-                  className="text-blue-300 hover:text-white"
-                >
-                  ×
-                </button>
-              </span>
-            ))}
-          </div>
+          )}
         </div>
         <div className="min-w-0 space-y-2">
           <label className="block space-y-1">

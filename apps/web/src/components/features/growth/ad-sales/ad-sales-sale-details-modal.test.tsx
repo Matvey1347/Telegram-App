@@ -210,6 +210,56 @@ describe("SaleDetailsModal", () => {
     );
   });
 
+  it("applies a changed common time to every placement in the deal", async () => {
+    const user = userEvent.setup();
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    const sourceSale = sale as unknown as Record<string, unknown> & {
+      placements: Array<Record<string, unknown>>;
+    };
+    const saleWithTwoPlacements = {
+      ...sourceSale,
+      placements: [
+        sourceSale.placements[0],
+        {
+          ...sourceSale.placements[0],
+          id: "placement-2",
+          telegramChannelId: "channel-2",
+          scheduledAt: "2026-08-25T17:00:00.000Z",
+        },
+      ],
+    } as never;
+
+    render(
+      <SaleDetailsModal
+        open
+        onClose={vi.fn()}
+        sale={saleWithTwoPlacements}
+        accounts={[]}
+        channels={[
+          { id: "channel-1", title: "Psychology" } as never,
+          { id: "channel-2", title: "Psychology 2" } as never,
+        ]}
+        productsByChannelId={{}}
+        settings={undefined}
+        rates={undefined}
+        onSave={onSave}
+        onAction={vi.fn()}
+      />,
+    );
+
+    await user.clear(screen.getByLabelText("Time for all"));
+    await user.type(screen.getByLabelText("Time for all"), "19:30");
+    await user.click(screen.getByRole("button", { name: /Apply all \(2\)/ }));
+
+    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+    const savedPlacements = onSave.mock.calls[0][1].placements;
+    expect(savedPlacements).toHaveLength(2);
+    expect(savedPlacements.map((placement: { scheduledAt: string }) => placement.scheduledAt)).toEqual([
+      "2026-08-25T17:30:00.000Z",
+      "2026-08-25T17:30:00.000Z",
+    ]);
+  });
+
   it("confirms removal of a linked finance transaction so it can be registered later", async () => {
     const user = userEvent.setup();
     const onDeletePayment = vi.fn().mockResolvedValue(undefined);

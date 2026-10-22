@@ -28,6 +28,7 @@ import {
 } from "../ad-campaigns/promo-invite-template";
 import type { PlacementManagedPostDraft } from "./placement-post/placement-post-composer";
 import { renderAdSaleInviteLink } from "./ad-sale-invite-template";
+import { AdSalePlacementBotActions } from "./ad-sale-placement-bot-actions";
 
 export function AdSalePlacementCard({
   placement,
@@ -37,6 +38,10 @@ export function AdSalePlacementCard({
   priceLocked,
   showPricing,
   sharedPostActive,
+  individualPostMode,
+  systemBotConnected,
+  systemBotUsername,
+  workspaceId,
   publishedPosts,
   postsLoading,
   setPlacements,
@@ -50,6 +55,10 @@ export function AdSalePlacementCard({
   priceLocked: boolean;
   showPricing: boolean;
   sharedPostActive: boolean;
+  individualPostMode: boolean;
+  systemBotConnected?: boolean;
+  systemBotUsername?: string | null;
+  workspaceId?: string | null;
   publishedPosts: PublishedPostOption[];
   postsLoading: boolean;
   setPlacements: Dispatch<SetStateAction<SalePlacementDraft[]>>;
@@ -89,7 +98,6 @@ export function AdSalePlacementCard({
     setPlacements((current) =>
       current.map((item) => (item.key === placement.key ? next(item) : item)),
     );
-
   const runMenuAction = (action: () => void) => {
     setMenuOpen(false);
     action();
@@ -149,6 +157,28 @@ export function AdSalePlacementCard({
           ) : null}
         </div>
       </div>
+
+      {individualPostMode ? (
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <AdSalePlacementBotActions
+            placementKey={placement.key}
+            channelTitle={channel?.title ?? "channel"}
+            workspaceId={workspaceId}
+            systemBotUsername={systemBotUsername}
+            systemBotConnected={systemBotConnected}
+            draft={placementPostPreview}
+            inviteLinkUrl={placement.inviteLinkUrl}
+            onImported={(draft) => {
+              update((item) => ({
+                ...item,
+                managedPostDraft: draft,
+                telegramPostId: null,
+              }));
+              setPostOpen(true);
+            }}
+          />
+        </div>
+      ) : null}
 
       {detailsOpen ? (
         <div className="mt-3 grid gap-3 border-t border-neutral-800 pt-3 sm:grid-cols-2 xl:grid-cols-4">

@@ -19,7 +19,6 @@ import { AdSaleSharedPost } from "./ad-sale-shared-post";
 import { AdSaleClientField } from "./ad-sale-client-field";
 import { applyProductToPlacement } from "./ad-sale-placement-draft";
 import { AdSalePlacementCard } from "./ad-sale-placement-card";
-import { normalizeAdSaleModalDraft } from "./ad-sale-modal-draft";
 import { addAdSalePlacementDate } from "@/lib/features/growth/ad-sales-bulk-date-builder";
 import {
   useAdSaleModalController,
@@ -38,7 +37,6 @@ export function AdSaleModal(props: AdSaleModalProps) {
     channels,
     networks,
     productsByChannelId: providedProductsByChannelId,
-    workspaceTimezone,
     onSearchAdvertisers,
     busy = false,
     headerAction,
@@ -102,7 +100,6 @@ export function AdSaleModal(props: AdSaleModalProps) {
     deleteDraft,
     createNewDraft,
     currentDraft,
-    restoreDraft,
   } = useAdSaleModalController({
     ...props,
     productsByChannelId: providedProductsByChannelId,
@@ -129,39 +126,6 @@ export function AdSaleModal(props: AdSaleModalProps) {
         ) : (
           <>
             <div className="space-y-4 pr-1">
-              {savedDrafts.length ? (
-                <section className="rounded-lg border border-neutral-800 bg-neutral-950/50 p-3">
-                  <p className="text-sm font-medium text-white">Saved drafts</p>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {savedDrafts.map((draft) => (
-                      <div key={draft.id} className="inline-flex items-center gap-1 rounded-md border border-neutral-700 bg-neutral-900 px-2 py-1">
-                        <button
-                          type="button"
-                          className="text-xs text-sky-300 hover:text-sky-200"
-                          onClick={() => {
-                            const value = normalizeAdSaleModalDraft(draft.payload);
-                            if (!value) return;
-                            restoreDraft(value);
-                            setSavedDraftId(draft.id);
-                          }}
-                        >
-                          {draft.title || "Unfinished sale"}
-                        </button>
-                        {onDeleteSavedDraft ? (
-                          <button
-                            type="button"
-                            aria-label={`Delete draft ${draft.title || draft.id}`}
-                            className="text-xs text-neutral-500 hover:text-rose-300"
-                            onClick={() => void onDeleteSavedDraft(draft.id)}
-                          >
-                            ×
-                          </button>
-                        ) : null}
-                      </div>
-                    ))}
-                  </div>
-                </section>
-              ) : null}
               <section className="space-y-3">
                 <div className="grid gap-3 [&>div>span:first-child]:flex [&>div>span:first-child]:h-7 [&>div>span:first-child]:items-center xl:grid-cols-4 xl:items-start">
                   <AdSaleClientField
@@ -284,6 +248,14 @@ export function AdSaleModal(props: AdSaleModalProps) {
                 onDateToAddChange={(date) =>
                   setPlacementDateRange({ from: date, to: date })
                 }
+                onSingleDateChange={(date) => {
+                  setPlacementDateRange({ from: date, to: date });
+                  setPlacementDates(date ? [date] : []);
+                }}
+                onUseSingleDate={(date) => {
+                  setPlacementDateRange({ from: date, to: date });
+                  setPlacementDates(date ? [date] : []);
+                }}
                 onAddDate={() => {
                   if (!placementDateRange.from) return;
                   setPlacementDates((current) =>
@@ -362,6 +334,10 @@ export function AdSaleModal(props: AdSaleModalProps) {
                           priceLocked={!financeSkipped && networkPricing.mode === "total"}
                           showPricing={!financeSkipped}
                           sharedPostActive={sharedPostActive}
+                          individualPostMode={postMode === "individual"}
+                          systemBotConnected={systemBotConnected}
+                          systemBotUsername={systemBotUsername}
+                          workspaceId={systemBotWorkspaceId}
                           publishedPosts={
                             publishedPostsByPlacement[postsKey] ?? []
                           }
@@ -419,7 +395,10 @@ export function AdSaleModal(props: AdSaleModalProps) {
                       void (async () => {
                         setSavingDraft(true);
                         try {
-                          const id = await onSaveDraft(currentDraft, savedDraftId);
+                          const id = await onSaveDraft(
+                            currentDraft,
+                            savedDraftId ?? savedDrafts[0]?.id,
+                          );
                           setSavedDraftId(id);
                         } finally {
                           setSavingDraft(false);
