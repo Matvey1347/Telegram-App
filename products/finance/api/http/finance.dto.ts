@@ -1,6 +1,7 @@
-import { Type } from 'class-transformer';
+import { Type } from "class-transformer";
 import {
   IsDateString,
+  IsBoolean,
   ArrayMaxSize,
   ArrayMinSize,
   IsIn,
@@ -13,27 +14,27 @@ import {
   Min,
   MinLength,
   ValidateNested,
-} from 'class-validator';
+} from "class-validator";
 
 export class CreateFinanceAccountDto {
   @IsString() @MinLength(1) @MaxLength(80) name!: string;
   @IsOptional() @IsString() @MaxLength(2048) emoji?: string | null;
-  @IsIn(['CASH', 'CARD', 'SAVINGS', 'OTHER']) type!:
-    | 'CASH'
-    | 'CARD'
-    | 'SAVINGS'
-    | 'OTHER';
+  @IsIn(["CASH", "CARD", "SAVINGS", "OTHER"]) type!:
+    | "CASH"
+    | "CARD"
+    | "SAVINGS"
+    | "OTHER";
   @IsOptional() @IsString() @MinLength(3) @MaxLength(3) currency?: string;
   @IsOptional() @IsNumberString() openingBalance?: string;
 }
 export class UpdateFinanceAccountDto {
   @IsOptional() @IsString() @MinLength(1) @MaxLength(80) name?: string;
   @IsOptional() @IsString() @MaxLength(2048) emoji?: string | null;
-  @IsOptional() @IsIn(['CASH', 'CARD', 'SAVINGS', 'OTHER']) type?:
-    | 'CASH'
-    | 'CARD'
-    | 'SAVINGS'
-    | 'OTHER';
+  @IsOptional() @IsIn(["CASH", "CARD", "SAVINGS", "OTHER"]) type?:
+    | "CASH"
+    | "CARD"
+    | "SAVINGS"
+    | "OTHER";
   @IsOptional() @IsString() @MinLength(3) @MaxLength(3) currency?: string;
 }
 export class FinanceTransactionItemDto {
@@ -47,15 +48,15 @@ export class FinanceTransactionItemDto {
 export class CreateFinanceTransactionDto {
   @IsString() accountId!: string;
   @IsOptional() @IsString() categoryId?: string;
-  @IsIn(['INCOME', 'EXPENSE']) type!: 'INCOME' | 'EXPENSE';
+  @IsIn(["INCOME", "EXPENSE"]) type!: "INCOME" | "EXPENSE";
   @IsNumberString() amount!: string;
   @IsOptional() @IsNumberString() economicAmount?: string;
   @IsOptional()
-  @IsIn(['ORDINARY', 'REIMBURSEMENT', 'PASS_THROUGH', 'DEBT_REPAYMENT'])
-  purpose?: 'ORDINARY' | 'REIMBURSEMENT' | 'PASS_THROUGH' | 'DEBT_REPAYMENT';
+  @IsIn(["ORDINARY", "REIMBURSEMENT", "PASS_THROUGH", "DEBT_REPAYMENT"])
+  purpose?: "ORDINARY" | "REIMBURSEMENT" | "PASS_THROUGH" | "DEBT_REPAYMENT";
   @IsOptional()
-  @IsIn(['UNSPECIFIED', 'REQUIRED', 'DISCRETIONARY'])
-  necessity?: 'UNSPECIFIED' | 'REQUIRED' | 'DISCRETIONARY';
+  @IsIn(["UNSPECIFIED", "REQUIRED", "DISCRETIONARY"])
+  necessity?: "UNSPECIFIED" | "REQUIRED" | "DISCRETIONARY";
   // Currency and rates are derived from the selected account by the server.
   /** @deprecated Ignored; retained temporarily for API compatibility. */
   @IsOptional() @IsString() @MinLength(3) @MaxLength(3) currency?: string;
@@ -83,7 +84,7 @@ export class UpdateFinanceTransferDto extends CreateFinanceTransferDto {}
 export class FinanceHistoryQueryDto {
   @IsOptional() @IsDateString() from?: string;
   @IsOptional() @IsDateString() to?: string;
-  @IsOptional() @IsIn(['INCOME', 'EXPENSE']) type?: 'INCOME' | 'EXPENSE';
+  @IsOptional() @IsIn(["INCOME", "EXPENSE"]) type?: "INCOME" | "EXPENSE";
   @IsOptional() @IsString() categoryId?: string;
   @IsOptional() @IsString() accountId?: string;
   @IsOptional() @IsString() @MaxLength(120) search?: string;
@@ -91,8 +92,8 @@ export class FinanceHistoryQueryDto {
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(100) limit = 30;
 }
 export class FinanceUltimateQuestionDto {
-  @IsIn(['CURRENT_MONTH', 'PREVIOUS_MONTH', 'LAST_3_MONTHS', 'CUSTOM'])
-  period!: 'CURRENT_MONTH' | 'PREVIOUS_MONTH' | 'LAST_3_MONTHS' | 'CUSTOM';
+  @IsIn(["CURRENT_MONTH", "PREVIOUS_MONTH", "LAST_3_MONTHS", "CUSTOM"])
+  period!: "CURRENT_MONTH" | "PREVIOUS_MONTH" | "LAST_3_MONTHS" | "CUSTOM";
   @IsOptional() @IsDateString() from?: string;
   @IsOptional() @IsDateString() to?: string;
   @IsString() @MinLength(3) @MaxLength(500) question!: string;
@@ -108,11 +109,11 @@ export class UpdateFinanceAssistantProposalOperationDto {
   @IsOptional() @IsString() @MaxLength(240) description?: string;
   @IsDateString() occurredAt!: string;
   @IsOptional()
-  @IsIn(['ORDINARY', 'REIMBURSEMENT', 'PASS_THROUGH', 'DEBT_REPAYMENT'])
-  purpose?: 'ORDINARY' | 'REIMBURSEMENT' | 'PASS_THROUGH' | 'DEBT_REPAYMENT';
+  @IsIn(["ORDINARY", "REIMBURSEMENT", "PASS_THROUGH", "DEBT_REPAYMENT"])
+  purpose?: "ORDINARY" | "REIMBURSEMENT" | "PASS_THROUGH" | "DEBT_REPAYMENT";
   @IsOptional()
-  @IsIn(['UNSPECIFIED', 'REQUIRED', 'DISCRETIONARY'])
-  necessity?: 'UNSPECIFIED' | 'REQUIRED' | 'DISCRETIONARY';
+  @IsIn(["UNSPECIFIED", "REQUIRED", "DISCRETIONARY"])
+  necessity?: "UNSPECIFIED" | "REQUIRED" | "DISCRETIONARY";
 }
 export class UpdateFinanceAssistantProposalDto {
   @IsOptional()
@@ -127,7 +128,7 @@ export class UpdateFinanceAssistantProposalDto {
   operations!: UpdateFinanceAssistantProposalOperationDto[];
 }
 export class FinanceAssistantHistoryItemDto {
-  @IsIn(['user', 'assistant']) role!: 'user' | 'assistant';
+  @IsIn(["user", "assistant"]) role!: "user" | "assistant";
   @IsString() @MinLength(1) @MaxLength(1200) text!: string;
 }
 export class FinanceAssistantMessageDto extends FinanceAssistantEntryDto {
@@ -140,28 +141,32 @@ export class FinanceAssistantMessageDto extends FinanceAssistantEntryDto {
 export class UpdateFinanceSettingsDto {
   @IsString() @MinLength(3) @MaxLength(3) defaultCurrency!: string;
   @IsString() @MinLength(1) @MaxLength(80) timezone!: string;
-  @IsOptional() @IsIn(['uk', 'ru', 'en']) locale?: 'uk' | 'ru' | 'en' | null;
+  @IsOptional() @IsIn(["uk", "ru", "en"]) locale?: "uk" | "ru" | "en" | null;
   @IsOptional() @IsString() @MinLength(1) @MaxLength(120) displayName?:
     | string
     | null;
+  @IsOptional() @IsBoolean() classifyExpenses?: boolean;
+  @IsOptional() @IsBoolean() splitExpenses?: boolean;
+  @IsOptional() @IsString() defaultExpenseCategoryId?: string | null;
+  @IsOptional() @IsString() defaultIncomeCategoryId?: string | null;
 }
 export class CreateFinanceCategoryDto {
   @IsString() @MinLength(1) @MaxLength(80) name!: string;
   @IsOptional() @IsString() @MaxLength(2048) emoji?: string | null;
-  @IsIn(['INCOME', 'EXPENSE']) type!: 'INCOME' | 'EXPENSE';
+  @IsIn(["INCOME", "EXPENSE"]) type!: "INCOME" | "EXPENSE";
   @IsOptional() @IsString() parentId?: string;
   @IsOptional()
-  @IsIn(['UNSPECIFIED', 'REQUIRED', 'DISCRETIONARY'])
-  necessity?: 'UNSPECIFIED' | 'REQUIRED' | 'DISCRETIONARY';
+  @IsIn(["UNSPECIFIED", "REQUIRED", "DISCRETIONARY"])
+  necessity?: "UNSPECIFIED" | "REQUIRED" | "DISCRETIONARY";
 }
 export class UpdateFinanceCategoryDto {
   @IsString() @MinLength(1) @MaxLength(80) name!: string;
   @IsOptional() @IsString() @MaxLength(2048) emoji?: string | null;
-  @IsIn(['INCOME', 'EXPENSE']) type!: 'INCOME' | 'EXPENSE';
+  @IsIn(["INCOME", "EXPENSE"]) type!: "INCOME" | "EXPENSE";
   @IsOptional() @IsString() parentId?: string | null;
   @IsOptional()
-  @IsIn(['UNSPECIFIED', 'REQUIRED', 'DISCRETIONARY'])
-  necessity?: 'UNSPECIFIED' | 'REQUIRED' | 'DISCRETIONARY';
+  @IsIn(["UNSPECIFIED", "REQUIRED", "DISCRETIONARY"])
+  necessity?: "UNSPECIFIED" | "REQUIRED" | "DISCRETIONARY";
 }
 export class FinanceTransferQueryDto {
   @IsOptional() @IsDateString() from?: string;

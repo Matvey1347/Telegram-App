@@ -2,18 +2,18 @@ import {
   BadRequestException,
   ConflictException,
   NotFoundException,
-} from '@nestjs/common';
-import { FinanceCoreService } from '@consumer-finance/api/catalog/finance-core.service';
-import { Prisma } from '@prisma/client';
+} from "@nestjs/common";
+import { FinanceCoreService } from "@consumer-finance/api/catalog/finance-core.service";
+import { Prisma } from "@prisma/client";
 
-describe('FinanceCoreService consumer read models', () => {
-  it('changes the currency of an account without financial movements', async () => {
+describe("FinanceCoreService consumer read models", () => {
+  it("changes the currency of an account without financial movements", async () => {
     const update = jest.fn();
     const prisma: any = {
       financeAccount: {
         findFirst: jest
           .fn()
-          .mockResolvedValue({ id: 'account-1', currency: 'USD' }),
+          .mockResolvedValue({ id: "account-1", currency: "USD" }),
         update,
       },
       financeTransaction: { count: jest.fn().mockResolvedValue(0) },
@@ -21,72 +21,72 @@ describe('FinanceCoreService consumer read models', () => {
     };
 
     await new FinanceCoreService(prisma).updateAccount(
-      'profile-1',
-      'account-1',
+      "profile-1",
+      "account-1",
       {
-        name: 'Cash',
-        type: 'CASH',
-        currency: 'eur',
+        name: "Cash",
+        type: "CASH",
+        currency: "eur",
       },
     );
 
     expect(update).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ currency: 'EUR' }),
+        data: expect.objectContaining({ currency: "EUR" }),
       }),
     );
   });
 
-  it('keeps account currency immutable after a financial movement', async () => {
+  it("keeps account currency immutable after a financial movement", async () => {
     const prisma: any = {
       financeAccount: {
         findFirst: jest
           .fn()
-          .mockResolvedValue({ id: 'account-1', currency: 'USD' }),
+          .mockResolvedValue({ id: "account-1", currency: "USD" }),
       },
       financeTransaction: { count: jest.fn().mockResolvedValue(1) },
       financeTransfer: { count: jest.fn().mockResolvedValue(0) },
     };
 
     await expect(
-      new FinanceCoreService(prisma).updateAccount('profile-1', 'account-1', {
-        currency: 'EUR',
+      new FinanceCoreService(prisma).updateAccount("profile-1", "account-1", {
+        currency: "EUR",
       }),
     ).rejects.toBeInstanceOf(ConflictException);
   });
 
-  it('maps an explicit locale override and Telegram fallback deterministically', async () => {
+  it("maps an explicit locale override and Telegram fallback deterministically", async () => {
     const prisma: any = {
       financeProfile: {
         findUnique: jest
           .fn()
           .mockResolvedValueOnce({
-            id: 'p',
-            botIntegrationId: 'bot-1',
+            id: "p",
+            botIntegrationId: "bot-1",
             avatarMimeType: null,
-            updatedAt: new Date('2026-09-14T00:00:00.000Z'),
-            defaultCurrency: 'USD',
-            timezone: 'UTC',
+            updatedAt: new Date("2026-09-14T00:00:00.000Z"),
+            defaultCurrency: "USD",
+            timezone: "UTC",
             locale: null,
             onboardingCompletedAt: null,
             telegramUser: {
-              languageCode: 'uk-UA',
-              username: 'ada_lovelace',
-              firstName: 'Ada',
-              lastName: 'Lovelace',
+              languageCode: "uk-UA",
+              username: "ada_lovelace",
+              firstName: "Ada",
+              lastName: "Lovelace",
             },
           })
           .mockResolvedValueOnce({
-            id: 'p',
-            botIntegrationId: 'bot-1',
+            id: "p",
+            botIntegrationId: "bot-1",
             avatarMimeType: null,
-            updatedAt: new Date('2026-09-14T00:00:00.000Z'),
-            defaultCurrency: 'USD',
-            timezone: 'UTC',
-            locale: 'ru',
+            updatedAt: new Date("2026-09-14T00:00:00.000Z"),
+            defaultCurrency: "USD",
+            timezone: "UTC",
+            locale: "ru",
             onboardingCompletedAt: null,
             telegramUser: {
-              languageCode: 'uk-UA',
+              languageCode: "uk-UA",
               username: null,
               firstName: null,
               lastName: null,
@@ -95,35 +95,35 @@ describe('FinanceCoreService consumer read models', () => {
       },
     };
     const service = new FinanceCoreService(prisma);
-    await expect(service.profile('p')).resolves.toMatchObject({
-      locale: 'uk',
+    await expect(service.profile("p")).resolves.toMatchObject({
+      locale: "uk",
       localeOverride: null,
       telegramUser: {
-        displayName: 'Ada Lovelace',
-        username: 'ada_lovelace',
-        avatarUrl: 'https://t.me/i/userpic/320/ada_lovelace.jpg',
+        displayName: "Ada Lovelace",
+        username: "ada_lovelace",
+        avatarUrl: "https://t.me/i/userpic/320/ada_lovelace.jpg",
       },
     });
-    await expect(service.profile('p')).resolves.toMatchObject({
-      locale: 'ru',
-      localeOverride: 'ru',
+    await expect(service.profile("p")).resolves.toMatchObject({
+      locale: "ru",
+      localeOverride: "ru",
     });
   });
 
-  it('preserves an omitted locale on settings PATCH and returns the mapped profile', async () => {
+  it("preserves an omitted locale on settings PATCH and returns the mapped profile", async () => {
     const profile = {
-      id: 'p',
-      botIntegrationId: 'bot-1',
+      id: "p",
+      botIntegrationId: "bot-1",
       avatarMimeType: null,
-      updatedAt: new Date('2026-09-14T00:00:00.000Z'),
-      defaultCurrency: 'USD',
-      timezone: 'UTC',
-      locale: 'en',
+      updatedAt: new Date("2026-09-14T00:00:00.000Z"),
+      defaultCurrency: "USD",
+      timezone: "UTC",
+      locale: "en",
       onboardingCompletedAt: null,
       telegramUser: {
-        languageCode: 'uk',
+        languageCode: "uk",
         username: null,
-        firstName: 'Ada',
+        firstName: "Ada",
         lastName: null,
       },
     };
@@ -133,62 +133,147 @@ describe('FinanceCoreService consumer read models', () => {
         findUnique: jest.fn().mockResolvedValue(profile),
       },
     };
-    const result = await new FinanceCoreService(prisma).updateSettings('p', {
-      defaultCurrency: 'USD',
-      timezone: 'UTC',
+    const result = await new FinanceCoreService(prisma).updateSettings("p", {
+      defaultCurrency: "USD",
+      timezone: "UTC",
     });
     expect(
       prisma.financeProfile.update.mock.calls[0][0].data,
-    ).not.toHaveProperty('locale');
-    expect(result).toMatchObject({ locale: 'en', localeOverride: 'en' });
+    ).not.toHaveProperty("locale");
+    expect(result).toMatchObject({ locale: "en", localeOverride: "en" });
   });
 
-  it('stores a Finance-only display name without mutating Telegram identity', async () => {
+  it("persists finance preferences and profile-scoped default categories", async () => {
+    const update = jest.fn();
+    const prisma: any = {
+      financeCategory: {
+        findMany: jest
+          .fn()
+          .mockResolvedValue([{ id: "expense-category", type: "EXPENSE" }]),
+      },
+      financeProfile: {
+        update,
+        findUnique: jest.fn().mockResolvedValue({
+          id: "p",
+          botIntegrationId: "bot-1",
+          avatarMimeType: null,
+          updatedAt: new Date("2026-09-14T00:00:00.000Z"),
+          defaultCurrency: "USD",
+          classifyExpenses: true,
+          splitExpenses: false,
+          defaultExpenseCategoryId: "expense-category",
+          defaultIncomeCategoryId: null,
+          timezone: "UTC",
+          locale: "en",
+          onboardingCompletedAt: null,
+          telegramUser: {
+            languageCode: "en",
+            username: null,
+            firstName: "Ada",
+            lastName: null,
+          },
+        }),
+      },
+    };
+
+    const result = await new FinanceCoreService(prisma).updateSettings("p", {
+      defaultCurrency: "USD",
+      timezone: "UTC",
+      classifyExpenses: true,
+      splitExpenses: false,
+      defaultExpenseCategoryId: "expense-category",
+    });
+
+    expect(prisma.financeCategory.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          profileId: "p",
+          archivedAt: null,
+          OR: [{ id: "expense-category", type: "EXPENSE" }],
+        }),
+      }),
+    );
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          classifyExpenses: true,
+          splitExpenses: false,
+          defaultExpenseCategoryId: "expense-category",
+        }),
+      }),
+    );
+    expect(result).toMatchObject({
+      classifyExpenses: true,
+      splitExpenses: false,
+      defaultExpenseCategoryId: "expense-category",
+    });
+  });
+
+  it("rejects a default category of the wrong type without writing settings", async () => {
+    const update = jest.fn();
+    const prisma: any = {
+      financeCategory: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+      financeProfile: { update },
+    };
+
+    await expect(
+      new FinanceCoreService(prisma).updateSettings("p", {
+        defaultCurrency: "USD",
+        timezone: "UTC",
+        defaultExpenseCategoryId: "income-category",
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it("stores a Finance-only display name without mutating Telegram identity", async () => {
     const update = jest.fn();
     const prisma = {
       financeProfile: {
         update,
         findUnique: jest.fn().mockResolvedValue({
-          id: 'p',
-          botIntegrationId: 'bot-1',
+          id: "p",
+          botIntegrationId: "bot-1",
           avatarMimeType: null,
-          updatedAt: new Date('2026-09-14T00:00:00.000Z'),
-          displayName: 'Ada Finance',
-          defaultCurrency: 'USD',
-          timezone: 'UTC',
+          updatedAt: new Date("2026-09-14T00:00:00.000Z"),
+          displayName: "Ada Finance",
+          defaultCurrency: "USD",
+          timezone: "UTC",
           locale: null,
           onboardingCompletedAt: null,
           telegramUser: {
-            languageCode: 'en',
-            username: 'ada',
-            firstName: 'Ada',
-            lastName: 'Lovelace',
+            languageCode: "en",
+            username: "ada",
+            firstName: "Ada",
+            lastName: "Lovelace",
           },
         }),
       },
     };
 
     const result = await new FinanceCoreService(prisma as never).updateSettings(
-      'p',
+      "p",
       {
-        defaultCurrency: 'USD',
-        timezone: 'UTC',
-        displayName: '  Ada Finance  ',
+        defaultCurrency: "USD",
+        timezone: "UTC",
+        displayName: "  Ada Finance  ",
       },
     );
 
     expect(update).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ displayName: 'Ada Finance' }),
+        data: expect.objectContaining({ displayName: "Ada Finance" }),
       }),
     );
     expect(result).toMatchObject({
-      displayNameOverride: 'Ada Finance',
-      telegramUser: { displayName: 'Ada Finance', username: 'ada' },
+      displayNameOverride: "Ada Finance",
+      telegramUser: { displayName: "Ada Finance", username: "ada" },
     });
   });
 
-  it('stores and serves a Finance-only uploaded avatar without mutating Telegram identity', async () => {
+  it("stores and serves a Finance-only uploaded avatar without mutating Telegram identity", async () => {
     const update = jest.fn();
     const image = Buffer.from([1, 2, 3]);
     const prisma = {
@@ -197,58 +282,58 @@ describe('FinanceCoreService consumer read models', () => {
         findUnique: jest
           .fn()
           .mockResolvedValueOnce({
-            id: 'p',
-            botIntegrationId: 'bot-1',
-            avatarMimeType: 'image/png',
-            updatedAt: new Date('2026-09-14T00:00:00.000Z'),
-            defaultCurrency: 'USD',
-            timezone: 'UTC',
+            id: "p",
+            botIntegrationId: "bot-1",
+            avatarMimeType: "image/png",
+            updatedAt: new Date("2026-09-14T00:00:00.000Z"),
+            defaultCurrency: "USD",
+            timezone: "UTC",
             locale: null,
             onboardingCompletedAt: null,
             telegramUser: {
-              languageCode: 'en',
-              username: 'ada',
-              firstName: 'Ada',
-              lastName: 'Lovelace',
+              languageCode: "en",
+              username: "ada",
+              firstName: "Ada",
+              lastName: "Lovelace",
             },
           })
           .mockResolvedValueOnce({
             avatarImage: image,
-            avatarMimeType: 'image/png',
+            avatarMimeType: "image/png",
           }),
       },
     };
 
     const service = new FinanceCoreService(prisma as never);
-    const result = await service.updateAvatar('p', {
+    const result = await service.updateAvatar("p", {
       buffer: image,
-      mimetype: 'image/png',
+      mimetype: "image/png",
     } as Express.Multer.File);
 
     expect(update).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
           avatarImage: image,
-          avatarMimeType: 'image/png',
+          avatarMimeType: "image/png",
         }),
       }),
     );
     expect(result).toMatchObject({
-      avatarUrl: '/finance-bots/bot-1/avatar?v=2026-09-14T00%3A00%3A00.000Z',
-      telegramUser: { username: 'ada' },
+      avatarUrl: "/finance-bots/bot-1/avatar?v=2026-09-14T00%3A00%3A00.000Z",
+      telegramUser: { username: "ada" },
     });
-    await expect(service.avatar('p')).resolves.toEqual({
+    await expect(service.avatar("p")).resolves.toEqual({
       bytes: image,
-      mimeType: 'image/png',
+      mimeType: "image/png",
     });
   });
 
-  it('rejects cross-profile parents and category cycles', async () => {
+  it("rejects cross-profile parents and category cycles", async () => {
     const prisma: any = {
       financeCategory: {
         findFirst: jest
           .fn()
-          .mockResolvedValue({ id: 'child', type: 'EXPENSE' }),
+          .mockResolvedValue({ id: "child", type: "EXPENSE" }),
         findMany: jest.fn().mockResolvedValue([]),
         count: jest.fn(),
         update: jest.fn(),
@@ -259,31 +344,31 @@ describe('FinanceCoreService consumer read models', () => {
     };
     const service = new FinanceCoreService(prisma);
     await expect(
-      service.updateCategory('profile-a', 'child', {
-        name: 'Child',
-        type: 'EXPENSE',
-        parentId: 'foreign',
+      service.updateCategory("profile-a", "child", {
+        name: "Child",
+        type: "EXPENSE",
+        parentId: "foreign",
       }),
     ).rejects.toBeInstanceOf(NotFoundException);
     prisma.financeCategory.findMany.mockResolvedValue([
-      { id: 'parent', parentId: 'child', type: 'EXPENSE', archivedAt: null },
-      { id: 'child', parentId: null, type: 'EXPENSE', archivedAt: null },
+      { id: "parent", parentId: "child", type: "EXPENSE", archivedAt: null },
+      { id: "child", parentId: null, type: "EXPENSE", archivedAt: null },
     ]);
     await expect(
-      service.updateCategory('profile-a', 'child', {
-        name: 'Child',
-        type: 'EXPENSE',
-        parentId: 'parent',
+      service.updateCategory("profile-a", "child", {
+        name: "Child",
+        type: "EXPENSE",
+        parentId: "parent",
       }),
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
-  it('blocks a referenced category type change so history is not corrupted', async () => {
+  it("blocks a referenced category type change so history is not corrupted", async () => {
     const prisma: any = {
       financeCategory: {
         findFirst: jest
           .fn()
-          .mockResolvedValue({ id: 'category', type: 'EXPENSE' }),
+          .mockResolvedValue({ id: "category", type: "EXPENSE" }),
         count: jest.fn().mockResolvedValue(0),
       },
       financeTransaction: { count: jest.fn().mockResolvedValue(1) },
@@ -291,29 +376,29 @@ describe('FinanceCoreService consumer read models', () => {
       financeMerchantMapping: { count: jest.fn().mockResolvedValue(0) },
     };
     await expect(
-      new FinanceCoreService(prisma).updateCategory('profile', 'category', {
-        name: 'Salary',
-        type: 'INCOME',
+      new FinanceCoreService(prisma).updateCategory("profile", "category", {
+        name: "Salary",
+        type: "INCOME",
         parentId: null,
       }),
     ).rejects.toBeInstanceOf(ConflictException);
   });
 
-  it('rejects an omitted parent that would become cross-type', async () => {
+  it("rejects an omitted parent that would become cross-type", async () => {
     const prisma: any = {
       financeCategory: {
         findFirst: jest.fn().mockResolvedValue({
-          id: 'child',
-          parentId: 'expense-parent',
-          name: 'Child',
+          id: "child",
+          parentId: "expense-parent",
+          name: "Child",
           key: null,
-          type: 'EXPENSE',
+          type: "EXPENSE",
         }),
         findMany: jest.fn().mockResolvedValue([
           {
-            id: 'expense-parent',
+            id: "expense-parent",
             parentId: null,
-            type: 'EXPENSE',
+            type: "EXPENSE",
             archivedAt: null,
           },
         ]),
@@ -324,57 +409,58 @@ describe('FinanceCoreService consumer read models', () => {
       financeMerchantMapping: { count: jest.fn().mockResolvedValue(0) },
     };
     await expect(
-      new FinanceCoreService(prisma).updateCategory('profile', 'child', {
-        name: 'Child',
-        type: 'INCOME',
+      new FinanceCoreService(prisma).updateCategory("profile", "child", {
+        name: "Child",
+        type: "INCOME",
       }),
     ).rejects.toBeInstanceOf(NotFoundException);
   });
 
-  it('clears a default category key when the user gives it a custom name', async () => {
+  it("clears a default category key when the user gives it a custom name", async () => {
     const prisma: any = {
       financeCategory: {
         findFirst: jest.fn().mockResolvedValue({
-          id: 'category',
-          name: 'Food',
-          key: 'food',
-          type: 'EXPENSE',
+          id: "category",
+          name: "Food",
+          key: "food",
+          type: "EXPENSE",
         }),
         update: jest.fn().mockResolvedValue({
-          id: 'category',
-          name: 'Dining',
+          id: "category",
+          name: "Dining",
           key: null,
-          type: 'EXPENSE',
+          type: "EXPENSE",
           parentId: null,
           archivedAt: null,
         }),
       },
     };
     await expect(
-      new FinanceCoreService(prisma).updateCategory('profile', 'category', {
-        name: 'Dining',
-        type: 'EXPENSE',
+      new FinanceCoreService(prisma).updateCategory("profile", "category", {
+        name: "Dining",
+        type: "EXPENSE",
       }),
-    ).resolves.toMatchObject({ name: 'Dining', key: null });
+    ).resolves.toMatchObject({ name: "Dining", key: null });
     expect(prisma.financeCategory.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ name: 'Dining', key: null }),
+        data: expect.objectContaining({ name: "Dining", key: null }),
       }),
     );
   });
 
-  it('promotes direct children to root categories when their parent is archived', async () => {
+  it("promotes direct children to root categories when their parent is archived", async () => {
     const archived = {
-      id: 'parent',
+      id: "parent",
       parentId: null,
-      name: 'Food',
-      emoji: '🍽️',
+      name: "Food",
+      emoji: "🍽️",
       key: null,
-      type: 'EXPENSE',
-      necessity: 'UNSPECIFIED',
-      archivedAt: new Date('2026-10-11T00:00:00.000Z'),
+      type: "EXPENSE",
+      necessity: "UNSPECIFIED",
+      archivedAt: new Date("2026-10-11T00:00:00.000Z"),
     };
     const tx = {
+      financeProfile: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
       financeCategory: {
         updateMany: jest.fn().mockResolvedValue({ count: 2 }),
         update: jest.fn().mockResolvedValue(archived),
@@ -382,79 +468,95 @@ describe('FinanceCoreService consumer read models', () => {
     };
     const prisma: any = {
       financeCategory: {
-        findFirst: jest.fn().mockResolvedValue({ id: 'parent' }),
+        findFirst: jest
+          .fn()
+          .mockResolvedValue({ id: "parent", type: "EXPENSE" }),
       },
       financeRecurringPayment: { count: jest.fn().mockResolvedValue(0) },
       $transaction: jest.fn((work) => work(tx)),
     };
 
     await expect(
-      new FinanceCoreService(prisma).archiveCategory('profile', 'parent'),
-    ).resolves.toMatchObject({ id: 'parent', archivedAt: archived.archivedAt });
+      new FinanceCoreService(prisma).archiveCategory("profile", "parent"),
+    ).resolves.toMatchObject({ id: "parent", archivedAt: archived.archivedAt });
     expect(tx.financeCategory.updateMany).toHaveBeenCalledWith({
-      where: { profileId: 'profile', parentId: 'parent' },
+      where: { profileId: "profile", parentId: "parent" },
       data: { parentId: null },
+    });
+    expect(tx.financeProfile.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: "profile",
+        OR: [
+          { defaultExpenseCategoryId: "parent" },
+          { defaultIncomeCategoryId: "parent" },
+        ],
+      },
+      data: { defaultExpenseCategoryId: null },
     });
     expect(tx.financeCategory.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 'parent' },
+        where: { id: "parent" },
         data: { archivedAt: expect.any(Date) },
       }),
     );
   });
 
-  it('restores an archived category within its own profile', async () => {
+  it("restores an archived category within its own profile", async () => {
     const restored = {
-      id: 'category',
+      id: "category",
       parentId: null,
-      name: 'Dining',
-      emoji: '🍽️',
+      name: "Dining",
+      emoji: "🍽️",
       key: null,
-      type: 'EXPENSE',
-      necessity: 'DISCRETIONARY',
+      type: "EXPENSE",
+      necessity: "DISCRETIONARY",
       archivedAt: null,
     };
     const prisma: any = {
       financeCategory: {
-        findFirst: jest.fn().mockResolvedValue({ id: 'category' }),
+        findFirst: jest.fn().mockResolvedValue({ id: "category" }),
         update: jest.fn().mockResolvedValue(restored),
       },
     };
 
     await expect(
-      new FinanceCoreService(prisma).restoreCategory('profile', 'category'),
-    ).resolves.toMatchObject({ id: 'category', archivedAt: null });
+      new FinanceCoreService(prisma).restoreCategory("profile", "category"),
+    ).resolves.toMatchObject({ id: "category", archivedAt: null });
     expect(prisma.financeCategory.findFirst).toHaveBeenCalledWith({
-      where: { id: 'category', profileId: 'profile', archivedAt: { not: null } },
+      where: {
+        id: "category",
+        profileId: "profile",
+        archivedAt: { not: null },
+      },
       select: { id: true },
     });
     expect(prisma.financeCategory.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 'category' },
+        where: { id: "category" },
         data: { archivedAt: null },
       }),
     );
   });
 
-  it('does not restore an active or foreign category', async () => {
+  it("does not restore an active or foreign category", async () => {
     const prisma: any = {
       financeCategory: { findFirst: jest.fn().mockResolvedValue(null) },
     };
 
     await expect(
-      new FinanceCoreService(prisma).restoreCategory('profile', 'category'),
+      new FinanceCoreService(prisma).restoreCategory("profile", "category"),
     ).rejects.toBeInstanceOf(NotFoundException);
   });
 
-  it('applies an expense category necessity to its existing ordinary expenses', async () => {
+  it("applies an expense category necessity to its existing ordinary expenses", async () => {
     const tx = {
       financeCategory: {
         update: jest.fn().mockResolvedValue({
-          id: 'category',
-          name: 'Dining',
+          id: "category",
+          name: "Dining",
           key: null,
-          type: 'EXPENSE',
-          necessity: 'DISCRETIONARY',
+          type: "EXPENSE",
+          necessity: "DISCRETIONARY",
           parentId: null,
           archivedAt: null,
         }),
@@ -466,61 +568,61 @@ describe('FinanceCoreService consumer read models', () => {
     const prisma: any = {
       financeCategory: {
         findFirst: jest.fn().mockResolvedValue({
-          id: 'category',
-          name: 'Dining',
+          id: "category",
+          name: "Dining",
           key: null,
-          type: 'EXPENSE',
+          type: "EXPENSE",
           parentId: null,
         }),
       },
       $transaction: jest.fn((work) => work(tx)),
     };
 
-    await new FinanceCoreService(prisma).updateCategory('profile', 'category', {
-      name: 'Dining',
-      type: 'EXPENSE',
-      necessity: 'DISCRETIONARY',
+    await new FinanceCoreService(prisma).updateCategory("profile", "category", {
+      name: "Dining",
+      type: "EXPENSE",
+      necessity: "DISCRETIONARY",
     });
 
     expect(tx.financeTransaction.updateMany).toHaveBeenCalledWith({
       where: {
-        profileId: 'profile',
-        categoryId: 'category',
-        type: 'EXPENSE',
-        purpose: 'ORDINARY',
+        profileId: "profile",
+        categoryId: "category",
+        type: "EXPENSE",
+        purpose: "ORDINARY",
         deletedAt: null,
       },
-      data: { necessity: 'DISCRETIONARY' },
+      data: { necessity: "DISCRETIONARY" },
     });
   });
 
-  it('returns a hydrated saved limit and calculates spend in the profile calendar month', async () => {
-    jest.useFakeTimers().setSystemTime(new Date('2026-01-31T10:30:00.000Z'));
+  it("returns a hydrated saved limit and calculates spend in the profile calendar month", async () => {
+    jest.useFakeTimers().setSystemTime(new Date("2026-01-31T10:30:00.000Z"));
     const stored = {
-      id: 'limit-1',
-      categoryId: 'food',
+      id: "limit-1",
+      categoryId: "food",
       amount: new Prisma.Decimal(500),
-      currency: 'UAH',
-      category: { id: 'food', name: 'Food', key: 'food' },
+      currency: "UAH",
+      category: { id: "food", name: "Food", key: "food" },
     };
     const prisma: any = {
       financeProfile: {
         findUnique: jest.fn().mockResolvedValue({
-          timezone: 'Pacific/Kiritimati',
-          botIntegration: { workspaceId: 'workspace-1' },
+          timezone: "Pacific/Kiritimati",
+          botIntegration: { workspaceId: "workspace-1" },
         }),
       },
       financeCategory: {
-        findFirst: jest.fn().mockResolvedValue({ id: 'food' }),
+        findFirst: jest.fn().mockResolvedValue({ id: "food" }),
       },
       financeSpendingLimit: {
-        upsert: jest.fn().mockResolvedValue({ id: 'limit-1' }),
+        upsert: jest.fn().mockResolvedValue({ id: "limit-1" }),
         findMany: jest.fn().mockResolvedValue([stored]),
       },
       $queryRaw: jest.fn().mockResolvedValue([
         {
-          categoryId: 'food',
-          currency: 'EUR',
+          categoryId: "food",
+          currency: "EUR",
           valuedAmount: new Prisma.Decimal(5),
           legacyNativeAmount: new Prisma.Decimal(0),
           legacyTransactionCount: BigInt(0),
@@ -537,36 +639,36 @@ describe('FinanceCoreService consumer read models', () => {
     try {
       await expect(
         new FinanceCoreService(prisma, conversion as never).upsertLimit(
-          'profile-1',
+          "profile-1",
           {
-            categoryId: 'food',
-            amount: '500',
-            currency: 'uah',
+            categoryId: "food",
+            amount: "500",
+            currency: "uah",
           },
         ),
       ).resolves.toEqual({
         ...stored,
         category: {
           ...stored.category,
-          iconPresentation: { type: 'unicode', value: '🍽️' },
+          iconPresentation: { type: "unicode", value: "🍽️" },
         },
-        amount: '500',
-        spent: '125',
-        remaining: '375',
+        amount: "500",
+        spent: "125",
+        remaining: "375",
         percentage: 25,
         legacyFallback: null,
       });
       expect(conversion.getRateMetadata).toHaveBeenCalledWith(
-        'USD',
-        'UAH',
-        'workspace-1',
+        "USD",
+        "UAH",
+        "workspace-1",
       );
     } finally {
       jest.useRealTimers();
     }
   });
 
-  it('fails a limit read when its profile scope no longer exists', async () => {
+  it("fails a limit read when its profile scope no longer exists", async () => {
     const prisma: any = {
       financeProfile: { findUnique: jest.fn().mockResolvedValue(null) },
       financeSpendingLimit: { findMany: jest.fn() },
@@ -574,55 +676,55 @@ describe('FinanceCoreService consumer read models', () => {
     };
 
     await expect(
-      new FinanceCoreService(prisma).limits('missing-profile'),
+      new FinanceCoreService(prisma).limits("missing-profile"),
     ).rejects.toBeInstanceOf(NotFoundException);
     expect(prisma.financeSpendingLimit.findMany).not.toHaveBeenCalled();
   });
 
-  it('deletes obligations and asset records before the profile during privacy deletion', async () => {
+  it("deletes obligations and asset records before the profile during privacy deletion", async () => {
     const calls: string[] = [];
     const tx = {
       financeDebt: {
         deleteMany: jest.fn().mockImplementation(async () => {
-          calls.push('debts');
+          calls.push("debts");
         }),
       },
       financeRecurringPayment: {
         deleteMany: jest.fn().mockImplementation(async () => {
-          calls.push('regular-payments');
+          calls.push("regular-payments");
         }),
       },
       financeSavingsMovement: {
         deleteMany: jest.fn().mockImplementation(async () => {
-          calls.push('savings-movements');
+          calls.push("savings-movements");
         }),
       },
       financeSavingsGoal: {
         deleteMany: jest.fn().mockImplementation(async () => {
-          calls.push('savings-goals');
+          calls.push("savings-goals");
         }),
       },
       financeInvestmentValuation: {
         updateMany: jest.fn().mockImplementation(async () => {
-          calls.push('unlink-valuation-corrections');
+          calls.push("unlink-valuation-corrections");
         }),
         deleteMany: jest.fn().mockImplementation(async () => {
-          calls.push('investment-valuations');
+          calls.push("investment-valuations");
         }),
       },
       financeInvestmentCashFlow: {
         deleteMany: jest.fn().mockImplementation(async () => {
-          calls.push('investment-cash-flows');
+          calls.push("investment-cash-flows");
         }),
       },
       financeInvestment: {
         deleteMany: jest.fn().mockImplementation(async () => {
-          calls.push('investments');
+          calls.push("investments");
         }),
       },
       financeProfile: {
         delete: jest.fn().mockImplementation(async () => {
-          calls.push('profile');
+          calls.push("profile");
         }),
       },
     };
@@ -631,21 +733,21 @@ describe('FinanceCoreService consumer read models', () => {
     };
 
     await expect(
-      new FinanceCoreService(prisma).deleteData('profile-1'),
+      new FinanceCoreService(prisma).deleteData("profile-1"),
     ).resolves.toEqual({ deleted: true });
     expect(calls).toEqual([
-      'debts',
-      'regular-payments',
-      'savings-movements',
-      'savings-goals',
-      'unlink-valuation-corrections',
-      'investment-valuations',
-      'investment-cash-flows',
-      'investments',
-      'profile',
+      "debts",
+      "regular-payments",
+      "savings-movements",
+      "savings-goals",
+      "unlink-valuation-corrections",
+      "investment-valuations",
+      "investment-cash-flows",
+      "investments",
+      "profile",
     ]);
     expect(tx.financeDebt.deleteMany).toHaveBeenCalledWith({
-      where: { profileId: 'profile-1' },
+      where: { profileId: "profile-1" },
     });
   });
 });

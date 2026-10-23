@@ -2,6 +2,7 @@ import type {
   ConsumerFinanceAccountSummary,
   ConsumerFinanceTransaction,
 } from "./ledger";
+import type { ResolvedEmoji } from "../resolved-emoji";
 
 export type ConsumerFinanceDebtDirection = "I_OWE" | "OWED_TO_ME";
 export type ConsumerFinanceDebtStatus = "OPEN" | "SETTLED";
@@ -11,6 +12,7 @@ export type ConsumerFinanceDebt = {
   direction: ConsumerFinanceDebtDirection;
   status: ConsumerFinanceDebtStatus;
   name: string;
+  iconPresentation: ResolvedEmoji;
   amount: string;
   /** Derived from the selected account and never supplied by the client. */
   currency: string;
@@ -53,6 +55,7 @@ export type ConsumerFinanceSharedExpense = {
 export type ConsumerFinanceDebtInput = {
   direction: ConsumerFinanceDebtDirection;
   name: string;
+  emoji?: string | null;
   amount: string;
   accountId: string;
   /** Profile-local calendar date in YYYY-MM-DD format. */

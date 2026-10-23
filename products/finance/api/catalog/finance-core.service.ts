@@ -3,9 +3,9 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
-} from '@nestjs/common';
-import { Prisma } from '@prisma/client';
-import { PrismaService } from '@api/prisma/prisma.service';
+} from "@nestjs/common";
+import { Prisma } from "@prisma/client";
+import { PrismaService } from "@api/prisma/prisma.service";
 import type {
   CreateFinanceAccountDto,
   CreateFinanceCategoryDto,
@@ -14,20 +14,20 @@ import type {
   UpdateFinanceAccountDto,
   UpdateFinanceSettingsDto,
   UpsertFinanceLimitDto,
-} from '@consumer-finance/api/http/finance.dto';
-import { financeChatLocale } from '@consumer-finance/api/i18n/finance-chat-i18n';
-import { CurrencyConversionService } from '@api/common/currency-conversion.service';
-import { FinanceLimitService } from '@consumer-finance/api/planning/finance-limit.service';
+} from "@consumer-finance/api/http/finance.dto";
+import { financeChatLocale } from "@consumer-finance/api/i18n/finance-chat-i18n";
+import { CurrencyConversionService } from "@api/common/currency-conversion.service";
+import { FinanceLimitService } from "@consumer-finance/api/planning/finance-limit.service";
 import {
   financeAccountEmoji,
   financeCategoryEmoji,
   financeIconPresentation,
-} from '@consumer-finance/api/catalog/finance-entity-emoji';
-import { exportFinanceData } from '@consumer-finance/api/catalog/finance-portability';
+} from "@consumer-finance/api/catalog/finance-entity-emoji";
+import { exportFinanceData } from "@consumer-finance/api/catalog/finance-portability";
 import {
   archiveFinanceAccount,
   assertFinanceCategoryArchivable,
-} from '@consumer-finance/api/catalog/finance-obligation-archive-guards';
+} from "@consumer-finance/api/catalog/finance-obligation-archive-guards";
 
 function categoryView<
   T extends { emoji: string | null; name: string; key: string | null },
@@ -55,6 +55,10 @@ export class FinanceCoreService {
       select: {
         id: true,
         defaultCurrency: true,
+        classifyExpenses: true,
+        splitExpenses: true,
+        defaultExpenseCategoryId: true,
+        defaultIncomeCategoryId: true,
         timezone: true,
         locale: true,
         onboardingCompletedAt: true,
@@ -74,18 +78,18 @@ export class FinanceCoreService {
     });
     if (!profile) return null;
     const localeOverride =
-      profile.locale === 'uk' ||
-      profile.locale === 'ru' ||
-      profile.locale === 'en'
+      profile.locale === "uk" ||
+      profile.locale === "ru" ||
+      profile.locale === "en"
         ? profile.locale
         : null;
     const telegramDisplayName =
       [profile.telegramUser.firstName, profile.telegramUser.lastName]
         .filter(Boolean)
-        .join(' ') ||
+        .join(" ") ||
       (profile.telegramUser.username
         ? `@${profile.telegramUser.username}`
-        : 'Telegram user');
+        : "Telegram user");
     const displayName = profile.displayName?.trim() || telegramDisplayName;
     return {
       id: profile.id,
@@ -94,6 +98,10 @@ export class FinanceCoreService {
         ? `/finance-bots/${profile.botIntegrationId}/avatar?v=${encodeURIComponent(profile.updatedAt.toISOString())}`
         : null,
       defaultCurrency: profile.defaultCurrency,
+      classifyExpenses: profile.classifyExpenses,
+      splitExpenses: profile.splitExpenses,
+      defaultExpenseCategoryId: profile.defaultExpenseCategoryId,
+      defaultIncomeCategoryId: profile.defaultIncomeCategoryId,
       timezone: profile.timezone,
       locale: financeChatLocale(
         localeOverride,
@@ -140,7 +148,7 @@ export class FinanceCoreService {
         necessity: true,
         archivedAt: true,
       },
-      orderBy: [{ archivedAt: 'asc' }, { type: 'asc' }, { name: 'asc' }],
+      orderBy: [{ archivedAt: "asc" }, { type: "asc" }, { name: "asc" }],
     });
     return categories.map(categoryView);
   }
@@ -153,25 +161,76 @@ export class FinanceCoreService {
   reminders(profileId: string) {
     return this.prisma.financeReminder.findMany({
       where: { profileId },
-      orderBy: { nextOccurrenceAt: 'asc' },
+      orderBy: { nextOccurrenceAt: "asc" },
     });
   }
   async updateSettings(profileId: string, dto: UpdateFinanceSettingsDto) {
     try {
-      Intl.DateTimeFormat('en', { timeZone: dto.timezone }).format();
+      Intl.DateTimeFormat("en", { timeZone: dto.timezone }).format();
     } catch {
-      throw new BadRequestException('Unknown timezone');
+      throw new BadRequestException("Unknown timezone");
+    }
+    const defaultCategoryIds = [
+      ...(Object.prototype.hasOwnProperty.call(
+        dto,
+        "defaultExpenseCategoryId",
+      ) && dto.defaultExpenseCategoryId
+        ? [{ id: dto.defaultExpenseCategoryId, type: "EXPENSE" as const }]
+        : []),
+      ...(Object.prototype.hasOwnProperty.call(
+        dto,
+        "defaultIncomeCategoryId",
+      ) && dto.defaultIncomeCategoryId
+        ? [{ id: dto.defaultIncomeCategoryId, type: "INCOME" as const }]
+        : []),
+    ];
+    if (defaultCategoryIds.length) {
+      const validCategories = await this.prisma.financeCategory.findMany({
+        where: {
+          profileId,
+          archivedAt: null,
+          OR: defaultCategoryIds.map(({ id, type }) => ({ id, type })),
+        },
+        select: { id: true, type: true },
+      });
+      const validIds = new Set(
+        validCategories.map(({ id, type }) => `${type}:${id}`),
+      );
+      if (
+        defaultCategoryIds.some(
+          ({ id, type }) => !validIds.has(`${type}:${id}`),
+        )
+      ) {
+        throw new BadRequestException(
+          "Default category must be active and match its transaction type",
+        );
+      }
     }
     await this.prisma.financeProfile.update({
       where: { id: profileId },
       data: {
         defaultCurrency: dto.defaultCurrency.toUpperCase(),
         timezone: dto.timezone,
-        ...(Object.prototype.hasOwnProperty.call(dto, 'locale')
+        ...(Object.prototype.hasOwnProperty.call(dto, "locale")
           ? { locale: dto.locale ?? null }
           : {}),
-        ...(Object.prototype.hasOwnProperty.call(dto, 'displayName')
+        ...(Object.prototype.hasOwnProperty.call(dto, "displayName")
           ? { displayName: dto.displayName?.trim() || null }
+          : {}),
+        ...(Object.prototype.hasOwnProperty.call(dto, "classifyExpenses")
+          ? { classifyExpenses: dto.classifyExpenses }
+          : {}),
+        ...(Object.prototype.hasOwnProperty.call(dto, "splitExpenses")
+          ? { splitExpenses: dto.splitExpenses }
+          : {}),
+        ...(Object.prototype.hasOwnProperty.call(
+          dto,
+          "defaultExpenseCategoryId",
+        )
+          ? { defaultExpenseCategoryId: dto.defaultExpenseCategoryId || null }
+          : {}),
+        ...(Object.prototype.hasOwnProperty.call(dto, "defaultIncomeCategoryId")
+          ? { defaultIncomeCategoryId: dto.defaultIncomeCategoryId || null }
           : {}),
         onboardingCompletedAt: new Date(),
       },
@@ -181,11 +240,11 @@ export class FinanceCoreService {
 
   async updateAvatar(profileId: string, file?: Express.Multer.File) {
     if (!file?.buffer?.length)
-      throw new BadRequestException('Avatar image is required');
+      throw new BadRequestException("Avatar image is required");
     if (file.buffer.length > 2 * 1024 * 1024)
-      throw new BadRequestException('Avatar image exceeds the 2 MB limit');
-    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.mimetype))
-      throw new BadRequestException('Avatar must be a JPEG, PNG or WebP image');
+      throw new BadRequestException("Avatar image exceeds the 2 MB limit");
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.mimetype))
+      throw new BadRequestException("Avatar must be a JPEG, PNG or WebP image");
     await this.prisma.financeProfile.update({
       where: { id: profileId },
       data: {
@@ -210,7 +269,7 @@ export class FinanceCoreService {
       select: { avatarImage: true, avatarMimeType: true },
     });
     if (!avatar?.avatarImage || !avatar.avatarMimeType)
-      throw new NotFoundException('Finance profile avatar not found');
+      throw new NotFoundException("Finance profile avatar not found");
     return {
       bytes: Buffer.from(avatar.avatarImage),
       mimeType: avatar.avatarMimeType,
@@ -224,12 +283,12 @@ export class FinanceCoreService {
   ) {
     const opening = new Prisma.Decimal(dto.openingBalance || 0);
     if (!opening.isFinite())
-      throw new BadRequestException('Opening balance is invalid');
+      throw new BadRequestException("Opening balance is invalid");
     const profile = await this.prisma.financeProfile.findUnique({
       where: { id: profileId },
       select: { defaultCurrency: true },
     });
-    if (!profile) throw new NotFoundException('Finance profile not found');
+    if (!profile) throw new NotFoundException("Finance profile not found");
     return this.prisma.financeAccount
       .create({
         data: {
@@ -270,7 +329,7 @@ export class FinanceCoreService {
     const row = await this.prisma.financeAccount.findFirst({
       where: { id, profileId },
     });
-    if (!row) throw new NotFoundException('Finance account not found');
+    if (!row) throw new NotFoundException("Finance account not found");
     const currency = dto.currency?.toUpperCase();
     if (currency && currency !== row.currency) {
       const [transactions, outgoingTransfers, incomingTransfers] =
@@ -287,7 +346,7 @@ export class FinanceCoreService {
         ]);
       if (transactions || outgoingTransfers || incomingTransfers)
         throw new ConflictException(
-          'Account currency cannot change after transactions or transfers exist',
+          "Account currency cannot change after transactions or transfers exist",
         );
     }
     return this.prisma.financeAccount.update({
@@ -296,7 +355,7 @@ export class FinanceCoreService {
         ...(dto.name ? { name: dto.name.trim() } : {}),
         ...(dto.type ? { type: dto.type } : {}),
         ...(currency ? { currency } : {}),
-        ...(Object.prototype.hasOwnProperty.call(dto, 'emoji')
+        ...(Object.prototype.hasOwnProperty.call(dto, "emoji")
           ? { emoji: dto.emoji || null }
           : {}),
       },
@@ -305,8 +364,21 @@ export class FinanceCoreService {
   }
   async archiveAccount(profileId: string, id: string) {
     const account = await archiveFinanceAccount(this.prisma, profileId, id);
-    if (!account) throw new NotFoundException('Finance account not found');
+    if (!account) throw new NotFoundException("Finance account not found");
     return account;
+  }
+
+  async restoreAccount(profileId: string, id: string) {
+    const account = await this.prisma.financeAccount.findFirst({
+      where: { id, profileId, archivedAt: { not: null } },
+      select: { id: true },
+    });
+    if (!account) throw new NotFoundException("Finance account not found");
+    return this.prisma.financeAccount.update({
+      where: { id: account.id },
+      data: { archivedAt: null },
+      select: { id: true },
+    });
   }
 
   async createCategory(
@@ -323,7 +395,7 @@ export class FinanceCoreService {
           archivedAt: null,
         },
       });
-      if (!parent) throw new NotFoundException('Parent category not found');
+      if (!parent) throw new NotFoundException("Parent category not found");
     }
     return this.prisma.financeCategory
       .create({
@@ -335,7 +407,7 @@ export class FinanceCoreService {
           type: dto.type,
           parentId: dto.parentId || null,
           key: null,
-          necessity: dto.necessity ?? 'UNSPECIFIED',
+          necessity: dto.necessity ?? "UNSPECIFIED",
         },
         select: {
           id: true,
@@ -359,9 +431,9 @@ export class FinanceCoreService {
       where: { id, profileId },
       select: { id: true, parentId: true, name: true, key: true, type: true },
     });
-    if (!existing) throw new NotFoundException('Finance category not found');
+    if (!existing) throw new NotFoundException("Finance category not found");
     if (dto.parentId === id)
-      throw new BadRequestException('Category cannot be its own parent');
+      throw new BadRequestException("Category cannot be its own parent");
     if (dto.type !== existing.type) {
       const [transactions, limits, children, mappings] = await Promise.all([
         this.prisma.financeTransaction.count({
@@ -379,10 +451,10 @@ export class FinanceCoreService {
       ]);
       if (transactions || limits || children || mappings)
         throw new ConflictException(
-          'Category type cannot change while it is referenced',
+          "Category type cannot change while it is referenced",
         );
     }
-    const parentId = Object.prototype.hasOwnProperty.call(dto, 'parentId')
+    const parentId = Object.prototype.hasOwnProperty.call(dto, "parentId")
       ? dto.parentId
       : existing.parentId;
     if (parentId) {
@@ -395,13 +467,13 @@ export class FinanceCoreService {
       );
       const parent = byId.get(parentId);
       if (!parent || parent.archivedAt || parent.type !== dto.type)
-        throw new NotFoundException('Parent category not found');
+        throw new NotFoundException("Parent category not found");
       let ancestorId = parent.parentId;
       const visited = new Set<string>();
       while (ancestorId) {
         if (ancestorId === id || visited.has(ancestorId))
           throw new BadRequestException(
-            'Category hierarchy cannot contain a cycle',
+            "Category hierarchy cannot contain a cycle",
           );
         visited.add(ancestorId);
         ancestorId = byId.get(ancestorId)?.parentId || null;
@@ -412,13 +484,13 @@ export class FinanceCoreService {
       data: {
         name: dto.name.trim(),
         type: dto.type,
-        ...(Object.prototype.hasOwnProperty.call(dto, 'emoji')
+        ...(Object.prototype.hasOwnProperty.call(dto, "emoji")
           ? { emoji: dto.emoji || null }
           : {}),
         ...(existing.key && dto.name.trim() !== existing.name
           ? { key: null }
           : {}),
-        ...(Object.prototype.hasOwnProperty.call(dto, 'parentId')
+        ...(Object.prototype.hasOwnProperty.call(dto, "parentId")
           ? { parentId: dto.parentId ?? null }
           : {}),
         ...(dto.necessity ? { necessity: dto.necessity } : {}),
@@ -434,18 +506,18 @@ export class FinanceCoreService {
         archivedAt: true,
       },
     } as const;
-    const updateCategory = (tx: Pick<PrismaService, 'financeCategory'>) =>
+    const updateCategory = (tx: Pick<PrismaService, "financeCategory">) =>
       tx.financeCategory.update(categoryUpdate);
     const updated = dto.necessity
       ? await this.prisma.$transaction(async (tx) => {
           const category = await updateCategory(tx);
-          if (dto.necessity && dto.necessity !== 'UNSPECIFIED')
+          if (dto.necessity && dto.necessity !== "UNSPECIFIED")
             await tx.financeTransaction.updateMany({
               where: {
                 profileId,
                 categoryId: id,
-                type: 'EXPENSE',
-                purpose: 'ORDINARY',
+                type: "EXPENSE",
+                purpose: "ORDINARY",
                 deletedAt: null,
               },
               data: { necessity: dto.necessity },
@@ -453,14 +525,32 @@ export class FinanceCoreService {
           return category;
         })
       : await updateCategory(this.prisma);
+    if (dto.type !== existing.type) {
+      await this.prisma.financeProfile.updateMany({
+        where: {
+          id: profileId,
+          ...(existing.type === "EXPENSE"
+            ? { defaultExpenseCategoryId: id }
+            : { defaultIncomeCategoryId: id }),
+        },
+        data: {
+          ...(existing.type === "EXPENSE"
+            ? { defaultExpenseCategoryId: null }
+            : {}),
+          ...(existing.type === "INCOME"
+            ? { defaultIncomeCategoryId: null }
+            : {}),
+        },
+      });
+    }
     return categoryView(updated);
   }
   async archiveCategory(profileId: string, id: string) {
     const category = await this.prisma.financeCategory.findFirst({
       where: { id, profileId, archivedAt: null },
-      select: { id: true },
+      select: { id: true, type: true },
     });
-    if (!category) throw new NotFoundException('Finance category not found');
+    if (!category) throw new NotFoundException("Finance category not found");
     await assertFinanceCategoryArchivable(this.prisma, profileId, category.id);
     const archived = await this.prisma.$transaction(async (tx) => {
       // An archived category is no longer a valid parent. Its direct children
@@ -468,6 +558,23 @@ export class FinanceCoreService {
       await tx.financeCategory.updateMany({
         where: { profileId, parentId: category.id },
         data: { parentId: null },
+      });
+      await tx.financeProfile.updateMany({
+        where: {
+          id: profileId,
+          OR: [
+            { defaultExpenseCategoryId: category.id },
+            { defaultIncomeCategoryId: category.id },
+          ],
+        },
+        data: {
+          ...(category.type === "EXPENSE"
+            ? { defaultExpenseCategoryId: null }
+            : {}),
+          ...(category.type === "INCOME"
+            ? { defaultIncomeCategoryId: null }
+            : {}),
+        },
       });
       return tx.financeCategory.update({
         where: { id: category.id },
@@ -492,7 +599,7 @@ export class FinanceCoreService {
       where: { id, profileId, archivedAt: { not: null } },
       select: { id: true },
     });
-    if (!category) throw new NotFoundException('Finance category not found');
+    if (!category) throw new NotFoundException("Finance category not found");
     return this.prisma.financeCategory
       .update({
         where: { id: category.id },
@@ -516,21 +623,21 @@ export class FinanceCoreService {
       where: {
         id: dto.categoryId,
         profileId,
-        type: 'EXPENSE',
+        type: "EXPENSE",
         archivedAt: null,
       },
       select: { id: true },
     });
-    if (!category) throw new NotFoundException('Expense category not found');
+    if (!category) throw new NotFoundException("Expense category not found");
     const amount = new Prisma.Decimal(dto.amount);
     if (!amount.isFinite() || amount.lte(0))
-      throw new BadRequestException('Limit amount must be positive');
+      throw new BadRequestException("Limit amount must be positive");
     await this.prisma.financeSpendingLimit.upsert({
       where: {
         profileId_categoryId_period: {
           profileId,
           categoryId: category.id,
-          period: 'MONTH',
+          period: "MONTH",
         },
       },
       update: { amount, currency: dto.currency.toUpperCase() },
@@ -543,7 +650,7 @@ export class FinanceCoreService {
       select: { id: true },
     });
     const [limit] = await this.limits(profileId, category.id);
-    if (!limit) throw new NotFoundException('Finance limit not found');
+    if (!limit) throw new NotFoundException("Finance limit not found");
     return limit;
   }
 
@@ -559,7 +666,7 @@ export class FinanceCoreService {
       where: { id: profileId },
       select: { timezone: true },
     });
-    if (!profile) throw new NotFoundException('Finance profile not found');
+    if (!profile) throw new NotFoundException("Finance profile not found");
     const nextOccurrenceAt = this.nextMonthly(dto.dayOfMonth, profile.timezone);
     return this.prisma.financeReminder.create({
       data: {
@@ -599,11 +706,11 @@ export class FinanceCoreService {
 
   private nextMonthly(day: number, timezone: string) {
     const now = new Date();
-    const parts = new Intl.DateTimeFormat('en-CA', {
+    const parts = new Intl.DateTimeFormat("en-CA", {
       timeZone: timezone,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
     }).formatToParts(now);
     const value = Object.fromEntries(
       parts.map((part) => [part.type, part.value]),

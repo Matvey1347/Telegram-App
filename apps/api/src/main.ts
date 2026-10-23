@@ -1,5 +1,6 @@
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
 import { ApplicationLoggerService } from './domains/operations/application-logs/application-logger.service';
 import {
@@ -20,6 +21,10 @@ async function bootstrap() {
     bufferLogs: true,
     rawBody: true,
   });
+  // Unified post imports contain up to 100 posts with their text and media
+  // references. Nest's default JSON parser limit (100 KB) rejects these before
+  // DTO validation or the import preview handler can run.
+  (app as NestExpressApplication).useBodyParser('json', { limit: '8mb' });
   installDevelopmentConnectionDrain(
     app.getHttpServer(),
     configuredRuntimeEnvironmentName(),

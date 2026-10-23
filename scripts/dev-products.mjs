@@ -3,6 +3,7 @@ import { randomBytes } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import process from "node:process";
 import { assertPortAvailable } from "./dev-port-availability.mjs";
+import { stopLocalDevProcesses } from "./stop-local-dev.mjs";
 import { terminateDevChildren } from "./dev-process-termination.mjs";
 import { waitForHttpReady } from "./dev-service-readiness.mjs";
 import { extractCloudflareQuickTunnelUrl } from "./dev-cloudflare-tunnel.mjs";
@@ -472,6 +473,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   try {
     products = selectedProducts(mode);
     if (products.includes("finance")) assertFinanceLocalProfile();
+    if (withCloudflare) await stopLocalDevProcesses();
     await Promise.all(
       products.flatMap((product) =>
         LOCAL_PRODUCTS[product].ports.map(([port, name]) =>

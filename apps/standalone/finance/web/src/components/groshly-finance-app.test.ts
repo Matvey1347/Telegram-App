@@ -1,9 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { groshlyIdentityScope, groshlySnapshot } from "./groshly-finance-app";
+import {
+  groshlyDebtInput,
+  groshlyIdentityScope,
+  groshlySnapshot,
+} from "./groshly-finance-app";
 
 const base = {
   profile: {
     defaultCurrency: "PLN",
+    classifyExpenses: true,
+    splitExpenses: false,
+    defaultExpenseCategoryId: "category-1",
+    defaultIncomeCategoryId: null,
+    timezone: "Europe/Warsaw",
     locale: "uk" as const,
     telegramUser: { displayName: "Matvey", username: null, avatarUrl: null },
   },
@@ -30,6 +39,15 @@ const base = {
 };
 
 describe("groshlySnapshot", () => {
+  it("maps persisted classification and default-category settings into the app snapshot", () => {
+    const snapshot = groshlySnapshot(base) as Record<string, unknown>;
+    expect(snapshot).toMatchObject({
+      classifyExpenses: true,
+      splitExpenses: false,
+      defaultExpenseCategoryId: "category-1",
+      defaultIncomeCategoryId: null,
+    });
+  });
   it("isolates persisted snapshots by Telegram user", () => {
     expect(groshlyIdentityScope("user=%7B%22id%22%3A42%7D&hash=signed")).toBe(
       "telegram-user:42",
@@ -48,6 +66,7 @@ describe("groshlySnapshot", () => {
               direction: "I_OWE",
               status: "OPEN",
               name: "Alex",
+              iconPresentation: { type: "unicode", value: "🤝" },
               amount: "25",
               currency: "PLN",
               accountId: "account-1",
@@ -110,5 +129,29 @@ describe("groshlySnapshot", () => {
     expect(snapshot.recurring).toHaveLength(1);
     expect(snapshot.debts).toHaveLength(1);
     expect(snapshot.investments).toHaveLength(1);
+  });
+});
+
+describe("Groshly debt API input", () => {
+  it("maps the debt form to the persisted API contract", () => {
+    expect(
+      groshlyDebtInput({
+        direction: "owe",
+        name: "  Alex  ",
+        emoji: "🚗",
+        amount: 250,
+        accountId: "account-1",
+        due: "2026-11-01",
+        notes: "Personal loan",
+      }),
+    ).toEqual({
+      direction: "I_OWE",
+      name: "Alex",
+      emoji: "🚗",
+      amount: "250",
+      accountId: "account-1",
+      dueDate: "2026-11-01",
+      note: "Personal loan",
+    });
   });
 });

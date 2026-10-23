@@ -8,8 +8,12 @@ import { useTelegramMiniAppBootstrap } from "@consumer-finance/web/components/ho
 import { consumerFinanceInsightsApi } from "@consumer-finance/web/lib/api/consumer-finance-insights-api";
 import { consumerFinanceInvestmentsApi } from "@consumer-finance/web/lib/api/consumer-finance-investments-api";
 import { consumerFinanceLedgerApi } from "@consumer-finance/web/lib/api/consumer-finance-ledger-api";
+import { consumerFinanceProfileApi } from "@consumer-finance/web/lib/api/consumer-finance-profile-api";
 import { consumerFinanceObligationsApi } from "@consumer-finance/web/lib/api/consumer-finance-obligations-api";
 import { consumerFinanceKeys } from "@consumer-finance/web/lib/query/consumer-finance-query-keys";
+import type { ConsumerFinanceRegularPaymentInput } from "@telegram-system/shared";
+import type { ConsumerFinanceSettingsInput } from "@telegram-system/shared";
+import type { ConsumerFinanceDebtInput } from "@telegram-system/shared";
 
 type GroshlySnapshot = Record<string, unknown>;
 const GroshlyRoot = GroshlyApp as ComponentType<{
@@ -23,6 +27,46 @@ const GroshlyRoot = GroshlyApp as ComponentType<{
     note: string;
     idempotencyKey: string;
   }) => Promise<GroshlySnapshot>;
+  onSaveLedgerEntry: (input: {
+    draft: Record<string, unknown>;
+    editing?: Record<string, unknown> | null;
+    recurring?: {
+      id: string;
+      expectedOccurrenceAt: string;
+      expectedVersion: number;
+    };
+  }) => Promise<GroshlySnapshot>;
+  onDeleteLedgerEntry: (input: {
+    id: string;
+    type: string;
+  }) => Promise<GroshlySnapshot>;
+  onSaveRegularPayment: (input: {
+    id?: string;
+    values: Record<string, any>;
+  }) => Promise<GroshlySnapshot>;
+  onChangeRegularPayment: (input: {
+    id: string;
+    action: "pause" | "resume" | "cancel";
+  }) => Promise<GroshlySnapshot>;
+  onSaveDebt: (input: {
+    id?: string;
+    values: Record<string, unknown>;
+  }) => Promise<GroshlySnapshot>;
+  onDeleteDebt: (id: string) => Promise<GroshlySnapshot>;
+  onSettleDebt: (input: {
+    id: string;
+    accountId: string;
+    amount: string;
+    settlementDate: string;
+  }) => Promise<GroshlySnapshot>;
+  onSaveSettings: (
+    input: Partial<ConsumerFinanceSettingsInput>,
+  ) => Promise<GroshlySnapshot>;
+  onArchiveEntity: (input: {
+    kind: "account" | "category";
+    id: string;
+    restore: boolean;
+  }) => Promise<GroshlySnapshot>;
   onLoadMore: (
     kind: "transactions" | "debts" | "recurring" | "investments",
   ) => Promise<GroshlySnapshot>;
@@ -30,7 +74,13 @@ const GroshlyRoot = GroshlyApp as ComponentType<{
     status: string;
     closedAt: string;
     description: string;
-    events: Array<{ id: string; date: string; type: string; amount: number; accountId?: string | null }>;
+    events: Array<{
+      id: string;
+      date: string;
+      type: string;
+      amount: number;
+      accountId?: string | null;
+    }>;
   }>;
 }>;
 
@@ -58,7 +108,9 @@ function emoji(presentation: unknown, fallback: string) {
 export function groshlyIdentityScope(initData?: string) {
   if (!initData) return "unverified";
   try {
-    const user = JSON.parse(new URLSearchParams(initData).get("user") ?? "null") as {
+    const user = JSON.parse(
+      new URLSearchParams(initData).get("user") ?? "null",
+    ) as {
       id?: unknown;
     } | null;
     return typeof user?.id === "number" || typeof user?.id === "string"
@@ -69,6 +121,18 @@ export function groshlyIdentityScope(initData?: string) {
   }
 }
 
+export function groshlyDebtInput(values: Record<string, unknown>): ConsumerFinanceDebtInput {
+  return {
+    direction: values.direction === "owe" ? "I_OWE" : "OWED_TO_ME",
+    name: String(values.name ?? "").trim(),
+    emoji: values.emoji == null ? null : String(values.emoji),
+    amount: String(values.amount ?? ""),
+    accountId: String(values.accountId ?? ""),
+    dueDate: String(values.due ?? new Date().toISOString().slice(0, 10)),
+    ...(values.notes ? { note: String(values.notes) } : {}),
+  };
+}
+
 export function groshlySnapshot({
   profile,
   dashboard,
@@ -77,14 +141,61 @@ export function groshlySnapshot({
   transactions,
   obligations,
 }: {
-  profile: { defaultCurrency: string; locale: "uk" | "ru" | "en"; telegramUser: { displayName: string; username: string | null; avatarUrl: string | null }; displayNameOverride?: string | null; avatarUrl?: string | null };
+  profile: {
+    defaultCurrency: string;
+    classifyExpenses: boolean;
+    splitExpenses: boolean;
+    defaultExpenseCategoryId: string | null;
+    defaultIncomeCategoryId: string | null;
+    timezone: string;
+    locale: "uk" | "ru" | "en";
+    localeOverride?: "uk" | "ru" | "en" | null;
+    telegramUser: {
+      displayName: string;
+      username: string | null;
+      avatarUrl: string | null;
+    };
+    displayNameOverride?: string | null;
+    avatarUrl?: string | null;
+  };
   dashboard: unknown;
-  accounts: Array<{ id: string; name: string; iconPresentation: unknown; type: keyof typeof defaultEmojiByAccountType; currency: string; balance: string }>;
-  categories: Array<{ id: string; name: string; type: "INCOME" | "EXPENSE"; iconPresentation: unknown; necessity?: "UNSPECIFIED" | "REQUIRED" | "DISCRETIONARY" }>;
-  transactions: { items: Array<{ id: string; accountId: string; categoryId?: string | null; type: "INCOME" | "EXPENSE"; amount: string; currency: string; occurredAt: string; description?: string | null; necessity?: "UNSPECIFIED" | "REQUIRED" | "DISCRETIONARY"; category?: { iconPresentation: unknown } | null }>; nextCursor?: string | null };
+  accounts: Array<{
+    id: string;
+    name: string;
+    iconPresentation: unknown;
+    type: keyof typeof defaultEmojiByAccountType;
+    currency: string;
+    balance: string;
+    archivedAt?: string | null;
+  }>;
+  categories: Array<{
+    id: string;
+    name: string;
+    type: "INCOME" | "EXPENSE";
+    iconPresentation: unknown;
+    archivedAt?: string | null;
+    necessity?: "UNSPECIFIED" | "REQUIRED" | "DISCRETIONARY";
+  }>;
+  transactions: {
+    items: Array<{
+      id: string;
+      accountId: string;
+      categoryId?: string | null;
+      type: "INCOME" | "EXPENSE";
+      amount: string;
+      currency: string;
+      occurredAt: string;
+      description?: string | null;
+      necessity?: "UNSPECIFIED" | "REQUIRED" | "DISCRETIONARY";
+      category?: { iconPresentation: unknown } | null;
+    }>;
+    nextCursor?: string | null;
+  };
   obligations?: {
     debts: Awaited<ReturnType<typeof consumerFinanceObligationsApi.debts>>;
-    regularPayments: Awaited<ReturnType<typeof consumerFinanceObligationsApi.regularPayments>>;
+    regularPayments: Awaited<
+      ReturnType<typeof consumerFinanceObligationsApi.regularPayments>
+    >;
     investments: Awaited<ReturnType<typeof consumerFinanceInvestmentsApi.list>>;
   };
 }): GroshlySnapshot {
@@ -93,21 +204,31 @@ export function groshlySnapshot({
     onboarded: true,
     lang: profile.locale === "ru" ? "uk" : profile.locale,
     currency: profile.defaultCurrency,
+    classifyExpenses: profile.classifyExpenses,
+    splitExpenses: profile.splitExpenses,
+    defaultExpenseCategoryId: profile.defaultExpenseCategoryId,
+    defaultIncomeCategoryId: profile.defaultIncomeCategoryId,
     theme: "light",
     rates: { UAH: 1, PLN: 10.7, USD: 41.8, EUR: 48.2 },
     rateSource: "api",
     profile: {
       name: profile.displayNameOverride || profile.telegramUser.displayName,
-      handle: profile.telegramUser.username ? `@${profile.telegramUser.username}` : "",
+      handle: profile.telegramUser.username
+        ? `@${profile.telegramUser.username}`
+        : "",
       photo: profile.avatarUrl || profile.telegramUser.avatarUrl || "",
       notifications: true,
     },
     accounts: accounts.map((account) => ({
       id: account.id,
       name: account.name,
-      emoji: emoji(account.iconPresentation, defaultEmojiByAccountType[account.type]),
+      emoji: emoji(
+        account.iconPresentation,
+        defaultEmojiByAccountType[account.type],
+      ),
       balance: Number(account.balance),
       currency: account.currency,
+      archivedAt: account.archivedAt ?? null,
     })),
     categories: categories.map((category) => ({
       id: category.id,
@@ -115,6 +236,7 @@ export function groshlySnapshot({
       nameEn: category.name,
       emoji: emoji(category.iconPresentation, "✨"),
       type: category.type.toLowerCase(),
+      archivedAt: category.archivedAt ?? null,
       necessity:
         category.necessity === "REQUIRED"
           ? "essential"
@@ -141,6 +263,8 @@ export function groshlySnapshot({
     })),
     recurring: (obligations?.regularPayments.items ?? []).map((payment) => ({
       id: payment.id,
+      version: payment.version,
+      nextOccurrenceAt: payment.nextOccurrenceAt,
       title: payment.name,
       amount: Number(payment.amount),
       accountId: payment.accountId,
@@ -163,7 +287,7 @@ export function groshlySnapshot({
         accountId: debt.accountId,
         currency: debt.currency,
         due: debt.dueAt.slice(0, 10),
-        emoji: "🤝",
+        emoji: emoji(debt.iconPresentation, "🤝"),
         notes: debt.note || "",
       })),
     investments: (obligations?.investments.items ?? [])
@@ -199,11 +323,21 @@ export function GroshlyFinanceApp({ botId }: { botId: string }) {
     bootstrap.status === "ready" ? bootstrap.initData : undefined,
   );
   const groshlyReadKey = useMemo(
-    () => [...consumerFinanceKeys.root(botId), "groshly-read-model", identityScope] as const,
+    () =>
+      [
+        ...consumerFinanceKeys.root(botId),
+        "groshly-read-model",
+        identityScope,
+      ] as const,
     [botId, identityScope],
   );
   const obligationsKey = useMemo(
-    () => [...consumerFinanceKeys.root(botId), "groshly-obligations", identityScope] as const,
+    () =>
+      [
+        ...consumerFinanceKeys.root(botId),
+        "groshly-obligations",
+        identityScope,
+      ] as const,
     [botId, identityScope],
   );
   const financeData = useQuery({
@@ -241,8 +375,14 @@ export function GroshlyFinanceApp({ botId }: { botId: string }) {
     const reconcileAfterExternalChange = () => {
       if (document.visibilityState !== "visible") return;
       void Promise.all([
-        queryClient.invalidateQueries({ queryKey: groshlyReadKey, refetchType: "active" }),
-        queryClient.invalidateQueries({ queryKey: obligationsKey, refetchType: "active" }),
+        queryClient.invalidateQueries({
+          queryKey: groshlyReadKey,
+          refetchType: "active",
+        }),
+        queryClient.invalidateQueries({
+          queryKey: obligationsKey,
+          refetchType: "active",
+        }),
       ]);
     };
     document.addEventListener("visibilitychange", reconcileAfterExternalChange);
@@ -251,7 +391,12 @@ export function GroshlyFinanceApp({ botId }: { botId: string }) {
         "visibilitychange",
         reconcileAfterExternalChange,
       );
-  }, [financeData.data?.authenticated, groshlyReadKey, obligationsKey, queryClient]);
+  }, [
+    financeData.data?.authenticated,
+    groshlyReadKey,
+    obligationsKey,
+    queryClient,
+  ]);
   const snapshot = useMemo(() => {
     if (!financeData.data?.authenticated) return null;
     return groshlySnapshot({
@@ -280,6 +425,24 @@ export function GroshlyFinanceApp({ botId }: { botId: string }) {
       ...result.data,
       obligations: obligationResult.data,
     });
+  };
+  const archiveEntity = async (input: {
+    kind: "account" | "category";
+    id: string;
+    restore: boolean;
+  }) => {
+    if (input.kind === "account") {
+      if (input.restore) {
+        await consumerFinanceLedgerApi.restoreAccount(botId, input.id);
+      } else {
+        await consumerFinanceLedgerApi.archiveAccount(botId, input.id);
+      }
+    } else if (input.restore) {
+      await consumerFinanceLedgerApi.restoreCategory(botId, input.id);
+    } else {
+      await consumerFinanceLedgerApi.archiveCategory(botId, input.id);
+    }
+    return refreshSnapshot();
   };
   const closeInvestment = async (input: {
     id: string;
@@ -320,7 +483,234 @@ export function GroshlyFinanceApp({ botId }: { botId: string }) {
       },
     };
     queryClient.setQueryData(obligationsKey, nextObligations);
-    return groshlySnapshot({ ...financeData.data, obligations: nextObligations });
+    return groshlySnapshot({
+      ...financeData.data,
+      obligations: nextObligations,
+    });
+  };
+  const saveLedgerEntry = async (input: {
+    draft: Record<string, any>;
+    editing?: Record<string, any> | null;
+    recurring?: {
+      id: string;
+      expectedOccurrenceAt: string;
+      expectedVersion: number;
+    };
+  }) => {
+    if (!financeData.data?.authenticated)
+      throw new Error("Finance data is unavailable");
+    const { draft, editing, recurring } = input;
+    const occurredAt = `${draft.date || new Date().toISOString().slice(0, 10)}T12:00:00.000Z`;
+    if (recurring) {
+      await consumerFinanceObligationsApi.confirmRegularPayment(
+        botId,
+        recurring.id,
+        {
+          expectedOccurrenceAt: recurring.expectedOccurrenceAt,
+          expectedVersion: recurring.expectedVersion,
+          amount: String(draft.amount),
+          accountId: draft.accountId,
+          categoryId: draft.categoryId || null,
+          description: draft.title,
+          emoji: draft.emoji,
+          occurredAt,
+          ...(draft.necessity
+            ? {
+                necessity:
+                  draft.necessity === "essential"
+                    ? "REQUIRED"
+                    : draft.necessity === "desired"
+                      ? "DISCRETIONARY"
+                      : "UNSPECIFIED",
+              }
+            : {}),
+        },
+      );
+    } else if (draft.type === "transfer") {
+      const payload = {
+        fromAccountId: draft.fromId,
+        toAccountId: draft.toId,
+        amount: String(draft.amount),
+        toAmount: String(draft.receivedAmount ?? draft.amount),
+        description: draft.title,
+        occurredAt,
+      };
+      if (editing?.id)
+        await consumerFinanceLedgerApi.updateTransfer(
+          botId,
+          String(editing.id),
+          payload,
+        );
+      else await consumerFinanceLedgerApi.createTransfer(botId, payload);
+    } else if (
+      draft.sharedEnabled &&
+      Array.isArray(draft.sharedRows) &&
+      draft.sharedRows.length
+    ) {
+      if (editing?.id)
+        throw new Error("Shared expense edits are not supported");
+      const shares = draft.sharedRows.filter(
+        (row: any) => Number(row.amount) > 0,
+      );
+      await consumerFinanceObligationsApi.createSharedExpense(botId, {
+        accountId: draft.accountId,
+        categoryId: draft.categoryId || undefined,
+        amount: String(draft.amount),
+        ownShare: String(
+          Math.max(
+            0,
+            Number(draft.amount) -
+              shares.reduce(
+                (sum: number, row: any) => sum + Number(row.amount),
+                0,
+              ),
+          ),
+        ),
+        description: draft.title,
+        occurredAt,
+        participants: shares.map((row: any) => ({
+          name: row.person,
+          amount: String(row.amount),
+          dueDate: draft.date || new Date().toISOString().slice(0, 10),
+        })),
+      });
+    } else {
+      const payload = {
+        accountId: draft.accountId,
+        categoryId: draft.categoryId || undefined,
+        type:
+          draft.type === "income" ? ("INCOME" as const) : ("EXPENSE" as const),
+        amount: String(draft.amount),
+        description: draft.title,
+        occurredAt,
+        ...(draft.necessity
+          ? {
+              necessity:
+                draft.necessity === "essential"
+                  ? ("REQUIRED" as const)
+                  : draft.necessity === "desired"
+                    ? ("DISCRETIONARY" as const)
+                    : ("UNSPECIFIED" as const),
+            }
+          : {}),
+      };
+      if (editing?.id)
+        await consumerFinanceLedgerApi.updateTransaction(
+          botId,
+          String(editing.id),
+          payload,
+        );
+      else await consumerFinanceLedgerApi.createTransaction(botId, payload);
+    }
+    return refreshSnapshot();
+  };
+  const deleteLedgerEntry = async ({
+    id,
+    type,
+  }: {
+    id: string;
+    type: string;
+  }) => {
+    if (type === "transfer")
+      await consumerFinanceLedgerApi.deleteTransfer(botId, id);
+    else await consumerFinanceLedgerApi.deleteTransaction(botId, id);
+    return refreshSnapshot();
+  };
+  const saveRegularPayment = async ({
+    id,
+    values,
+  }: {
+    id?: string;
+    values: Record<string, any>;
+  }) => {
+    const input: ConsumerFinanceRegularPaymentInput = {
+      name: values.title.trim(),
+      emoji: values.emoji,
+      amount: String(values.amount),
+      accountId: values.accountId,
+      categoryId: values.categoryId || null,
+      recurrence: String(
+        values.interval || "monthly",
+      ).toUpperCase() as ConsumerFinanceRegularPaymentInput["recurrence"],
+      intervalCount: Math.max(1, Number(values.intervalCount) || 1),
+      nextPaymentDate: values.next,
+      note: values.notes || null,
+      necessity:
+        values.necessity === "essential"
+          ? "REQUIRED"
+          : values.necessity === "desired"
+            ? "DISCRETIONARY"
+            : "UNSPECIFIED",
+    };
+    if (id)
+      await consumerFinanceObligationsApi.updateRegularPayment(
+        botId,
+        id,
+        input,
+      );
+    else await consumerFinanceObligationsApi.createRegularPayment(botId, input);
+    return refreshSnapshot();
+  };
+  const changeRegularPayment = async ({
+    id,
+    action,
+  }: {
+    id: string;
+    action: "pause" | "resume" | "cancel";
+  }) => {
+    if (action === "pause")
+      await consumerFinanceObligationsApi.pauseRegularPayment(botId, id);
+    else if (action === "resume")
+      await consumerFinanceObligationsApi.resumeRegularPayment(botId, id);
+    else await consumerFinanceObligationsApi.cancelRegularPayment(botId, id);
+    return refreshSnapshot();
+  };
+  const saveDebt = async ({
+    id,
+    values,
+  }: {
+    id?: string;
+    values: Record<string, unknown>;
+  }) => {
+    const input = groshlyDebtInput(values);
+    if (id) await consumerFinanceObligationsApi.updateDebt(botId, id, input);
+    else await consumerFinanceObligationsApi.createDebt(botId, input);
+    return refreshSnapshot();
+  };
+  const deleteDebt = async (id: string) => {
+    await consumerFinanceObligationsApi.deleteDebt(botId, id);
+    return refreshSnapshot();
+  };
+  const settleDebt = async (input: {
+    id: string;
+    accountId: string;
+    amount: string;
+    settlementDate: string;
+  }) => {
+    await consumerFinanceObligationsApi.settleDebt(botId, input.id, {
+      accountId: input.accountId,
+      amount: input.amount,
+      settlementDate: input.settlementDate,
+    });
+    return refreshSnapshot();
+  };
+  const saveSettings = async (
+    changes: Partial<ConsumerFinanceSettingsInput>,
+  ) => {
+    if (!financeData.data?.authenticated || !obligations.data) {
+      throw new Error("Finance data is unavailable");
+    }
+    const current = financeData.data.profile;
+    const profile = await consumerFinanceProfileApi.updateSettings(botId, {
+      defaultCurrency: current.defaultCurrency,
+      timezone: current.timezone,
+      locale: current.localeOverride,
+      displayName: current.displayNameOverride,
+      ...changes,
+    });
+    const nextFinance = { ...financeData.data, profile };
+    queryClient.setQueryData(groshlyReadKey, nextFinance);
+    return groshlySnapshot({ ...nextFinance, obligations: obligations.data });
   };
   const loadMore = async (
     kind: "transactions" | "debts" | "recurring" | "investments",
@@ -351,7 +741,13 @@ export function GroshlyFinanceApp({ botId }: { botId: string }) {
         cursor: current.debts.nextCursor,
         limit: 50,
       });
-      const next = { ...current, debts: { items: [...current.debts.items, ...page.items], nextCursor: page.nextCursor } };
+      const next = {
+        ...current,
+        debts: {
+          items: [...current.debts.items, ...page.items],
+          nextCursor: page.nextCursor,
+        },
+      };
       queryClient.setQueryData(obligationsKey, next);
       return groshlySnapshot({ ...financeData.data, obligations: next });
     }
@@ -360,7 +756,13 @@ export function GroshlyFinanceApp({ botId }: { botId: string }) {
         cursor: current.regularPayments.nextCursor,
         limit: 50,
       });
-      const next = { ...current, regularPayments: { items: [...current.regularPayments.items, ...page.items], nextCursor: page.nextCursor } };
+      const next = {
+        ...current,
+        regularPayments: {
+          items: [...current.regularPayments.items, ...page.items],
+          nextCursor: page.nextCursor,
+        },
+      };
       queryClient.setQueryData(obligationsKey, next);
       return groshlySnapshot({ ...financeData.data, obligations: next });
     }
@@ -369,7 +771,13 @@ export function GroshlyFinanceApp({ botId }: { botId: string }) {
         cursor: current.investments.nextCursor,
         limit: 50,
       });
-      const next = { ...current, investments: { items: [...current.investments.items, ...page.items], nextCursor: page.nextCursor } };
+      const next = {
+        ...current,
+        investments: {
+          items: [...current.investments.items, ...page.items],
+          nextCursor: page.nextCursor,
+        },
+      };
       queryClient.setQueryData(obligationsKey, next);
       return groshlySnapshot({ ...financeData.data, obligations: next });
     }
@@ -408,13 +816,59 @@ export function GroshlyFinanceApp({ botId }: { botId: string }) {
     return <GroshlyLoadingScreen />;
   }
   if (!financeData.data?.authenticated) {
-    return <main className="auth-screen"><div className="auth-panel"><span className="auth-panel-kicker">GROSHLY</span><h2>Sign in with Telegram</h2><p>Open Finance from the Telegram bot to securely authenticate your account.</p></div></main>;
+    return (
+      <main className="auth-screen">
+        <div className="auth-panel">
+          <span className="auth-panel-kicker">GROSHLY</span>
+          <h2>Sign in with Telegram</h2>
+          <p>
+            Open Finance from the Telegram bot to securely authenticate your
+            account.
+          </p>
+        </div>
+      </main>
+    );
   }
   if (obligations.isError) {
-    return <main className="app-shell"><div className="busy-cover"><div className="busy-card"><b>Could not load debts, recurring payments, or investments.</b><button onClick={() => obligations.refetch()}>Retry</button></div></div></main>;
+    return (
+      <main className="app-shell">
+        <div className="busy-cover">
+          <div className="busy-card">
+            <b>Could not load debts, recurring payments, or investments.</b>
+            <button onClick={() => obligations.refetch()}>Retry</button>
+          </div>
+        </div>
+      </main>
+    );
   }
   if (!snapshot) {
-    return <main className="app-shell"><div className="busy-cover"><div className="busy-card"><b>Finance data is unavailable.</b><button onClick={() => financeData.refetch()}>Retry</button></div></div></main>;
+    return (
+      <main className="app-shell">
+        <div className="busy-cover">
+          <div className="busy-card">
+            <b>Finance data is unavailable.</b>
+            <button onClick={() => financeData.refetch()}>Retry</button>
+          </div>
+        </div>
+      </main>
+    );
   }
-  return <GroshlyRoot initialData={snapshot} onRefresh={refreshSnapshot} onCloseInvestment={closeInvestment} onLoadMore={loadMore} onOpenInvestment={openInvestment} />;
+  return (
+    <GroshlyRoot
+      initialData={snapshot}
+      onRefresh={refreshSnapshot}
+      onCloseInvestment={closeInvestment}
+      onSaveLedgerEntry={saveLedgerEntry}
+      onDeleteLedgerEntry={deleteLedgerEntry}
+      onSaveRegularPayment={saveRegularPayment}
+      onChangeRegularPayment={changeRegularPayment}
+      onSaveDebt={saveDebt}
+      onDeleteDebt={deleteDebt}
+      onSettleDebt={settleDebt}
+      onSaveSettings={saveSettings}
+      onArchiveEntity={archiveEntity}
+      onLoadMore={loadMore}
+      onOpenInvestment={openInvestment}
+    />
+  );
 }

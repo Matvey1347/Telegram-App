@@ -273,7 +273,12 @@ describe("FinanceRegularPaymentConfirmationService", () => {
 
     expect(ledger.prepareTransactionRateSource).toHaveBeenCalledWith(
       profileContext,
-      [expect.objectContaining({ currency: "EUR" })],
+      [
+        expect.objectContaining({
+          currency: "EUR",
+          occurredAt: "2026-08-31T10:00:00.000Z",
+        }),
+      ],
     );
     expect(ledger.createTransactionInTransaction).toHaveBeenCalledWith(
       tx,

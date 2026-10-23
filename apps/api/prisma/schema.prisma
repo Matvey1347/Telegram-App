@@ -4283,6 +4283,10 @@ model FinanceProfile {
   botIntegrationId       String
   telegramBotUserId      String
   defaultCurrency        String                              @default("UAH") @db.VarChar(3)
+  classifyExpenses       Boolean                             @default(false)
+  splitExpenses          Boolean                             @default(false)
+  defaultExpenseCategoryId String?
+  defaultIncomeCategoryId String?
   timezone               String                              @default("Europe/Warsaw")
   locale                 String?
   onboardingCompletedAt  DateTime?
@@ -4678,6 +4682,7 @@ model FinanceDebt {
   direction               FinanceDebtDirection
   status                  FinanceDebtStatus     @default(OPEN)
   name                    String
+  emoji                   String?               @db.Text
   amount                  Decimal
   /// Immutable account-currency snapshot; currency conversion is never entered manually.
   currency                String                @db.VarChar(3)

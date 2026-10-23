@@ -151,6 +151,7 @@ function preparedRateSource(
 @Injectable()
 export class CurrencyConversionService {
   private readonly currentRefreshes = new Map<string, Promise<void>>();
+  private readonly historicalRefreshes = new Map<string, Promise<void>>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -173,7 +174,7 @@ export class CurrencyConversionService {
       ORDER BY "baseCurrency", "targetCurrency", "date" DESC
     `);
     let source = preparedRateSource(await loadRows(), date);
-    if (date || !this.externalRates) return source;
+    if (!this.externalRates) return source;
 
     const attemptedPairs = new Set<string>();
     const getRateMetadata = async (
@@ -188,8 +189,12 @@ export class CurrencyConversionService {
       if (attemptedPairs.has(pair)) return result;
       attemptedPairs.add(pair);
       try {
-        await this.refreshCurrentPair(workspaceId, pair.split(':'));
-        source = preparedRateSource(await loadRows());
+        if (date) {
+          await this.refreshHistoricalPair(workspaceId, date, pair.split(':'));
+        } else {
+          await this.refreshCurrentPair(workspaceId, pair.split(':'));
+        }
+        source = preparedRateSource(await loadRows(), date);
         result = await source.getRateMetadata(fromCurrency, toCurrency);
       } catch {
         // Preserve the original structured RATE_STALE/RATE_UNAVAILABLE result
@@ -222,6 +227,26 @@ export class CurrencyConversionService {
       .then(() => undefined)
       .finally(() => this.currentRefreshes.delete(key));
     this.currentRefreshes.set(key, refresh);
+    return refresh;
+  }
+
+  private async refreshHistoricalPair(
+    workspaceId: string,
+    date: Date,
+    currencies: string[],
+  ) {
+    const day = date.toISOString().slice(0, 10);
+    const key = `${workspaceId}:${day}:${currencies.join(':')}`;
+    const existing = this.historicalRefreshes.get(key);
+    if (existing) return existing;
+    const refresh = this.externalRates!.ensureRates({
+      dates: [date],
+      currencies,
+      signal: AbortSignal.timeout(10_000),
+    })
+      .then(() => undefined)
+      .finally(() => this.historicalRefreshes.delete(key));
+    this.historicalRefreshes.set(key, refresh);
     return refresh;
   }
 

@@ -22,6 +22,7 @@ const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/u;
 export class FinanceDebtInputDto {
   @IsIn(["I_OWE", "OWED_TO_ME"]) direction!: "I_OWE" | "OWED_TO_ME";
   @IsString() @MinLength(1) @MaxLength(120) @Matches(/\S/u) name!: string;
+  @IsOptional() @IsString() @MaxLength(2048) emoji?: string | null;
   @IsNumberString() amount!: string;
   @IsString() accountId!: string;
   @IsString() @Matches(DATE_ONLY) dueDate!: string;

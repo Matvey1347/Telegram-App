@@ -33,7 +33,10 @@ System Bot token.
 | `pnpm dev:finance:tunnel`                                          | Finance Web, APIs, and LOCAL Finance bot via HTTPS tunnel            | 3001 + 4001 + 4002               |
 
 Each command checks its target ports first and terminates its child process
-group on Ctrl-C. The Finance command does not apply migrations automatically.
+group on Ctrl-C. Tunnel commands first stop this workspace's existing local
+development listeners and wait for those ports to clear. A listener outside
+this workspace is left running and reported as a port conflict. The Finance
+command does not apply migrations automatically.
 With a dedicated development database, explicitly run
 `pnpm --filter finance-api prisma:migrate:deploy` after reviewing the migration.
 

@@ -13,6 +13,10 @@ export type ConsumerFinanceProfile = {
   /** Finance-only uploaded avatar. Falls back to the Telegram avatar when absent. */
   avatarUrl?: string | null;
   defaultCurrency: string;
+  classifyExpenses: boolean;
+  splitExpenses: boolean;
+  defaultExpenseCategoryId: string | null;
+  defaultIncomeCategoryId: string | null;
   timezone: string;
   /** Effective locale after applying the Telegram fallback. */
   locale: FinanceLocale;
@@ -38,4 +42,8 @@ export type ConsumerFinanceSettingsInput = {
   timezone: string;
   locale?: FinanceLocale | null;
   displayName?: string | null;
+  classifyExpenses?: boolean;
+  splitExpenses?: boolean;
+  defaultExpenseCategoryId?: string | null;
+  defaultIncomeCategoryId?: string | null;
 };

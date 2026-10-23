@@ -45,6 +45,7 @@ export class FinanceRegularPaymentConfirmationService {
       throw new BadRequestException("Expected occurrence is invalid");
     const profileContext = await this.ledger.profileContext(profileId);
     const now = new Date();
+    const transactionOccurredAt = input.occurredAt ?? now.toISOString();
     const advancesSchedule = !input.preserveSchedule;
     const preflight = await this.prisma.financeRecurringPayment.findFirst({
       where: { id, profileId },
@@ -79,7 +80,7 @@ export class FinanceRegularPaymentConfirmationService {
         ? await this.ledger.prepareTransactionRateSource(profileContext, [
             {
               currency: selectedAccount.currency,
-              occurredAt: now.toISOString(),
+              occurredAt: transactionOccurredAt,
             },
           ])
         : null;
@@ -131,7 +132,7 @@ export class FinanceRegularPaymentConfirmationService {
           amount: paidAmount.toString(),
           description: input.description?.trim() || regularPayment.name,
           necessity: input.necessity ?? regularPayment.necessity,
-          occurredAt: input.occurredAt ?? now.toISOString(),
+          occurredAt: transactionOccurredAt,
         };
         const writeContext = await this.ledger.prepareTransactionWriteContext(
           tx,

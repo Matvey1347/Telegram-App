@@ -533,6 +533,15 @@ export class FinanceController {
     await this.core.archiveAccount(profileId, id);
     return this.ledger.account(profileId, id);
   }
+  @Post('accounts/:id/restore') async restoreAccount(
+    @Param('botId') b: string,
+    @Param('id') id: string,
+    @Req() r: Request,
+  ) {
+    const profileId = this.auth(b, r).profileId;
+    await this.core.restoreAccount(profileId, id);
+    return this.ledger.account(profileId, id);
+  }
   @Get('categories') categories(@Param('botId') b: string, @Req() r: Request) {
     return this.core.categories(this.auth(b, r).profileId);
   }

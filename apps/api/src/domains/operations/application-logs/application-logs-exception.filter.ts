@@ -28,9 +28,16 @@ export class ApplicationLogsExceptionFilter implements ExceptionFilter {
     const correlationId = requestContext?.correlationId || null;
 
     const isHttpException = exception instanceof HttpException;
+    const isPayloadTooLarge =
+      exception instanceof Error &&
+      (exception as Error & { status?: number; type?: string }).status ===
+        413 &&
+      (exception as Error & { type?: string }).type === 'entity.too.large';
     const status = isHttpException
       ? exception.getStatus()
-      : HttpStatus.INTERNAL_SERVER_ERROR;
+      : isPayloadTooLarge
+        ? HttpStatus.PAYLOAD_TOO_LARGE
+        : HttpStatus.INTERNAL_SERVER_ERROR;
     const payload = isHttpException ? exception.getResponse() : null;
     const payloadMessage =
       typeof payload === 'string'
@@ -39,15 +46,19 @@ export class ApplicationLogsExceptionFilter implements ExceptionFilter {
           ? (payload as any).message.join('\n')
           : typeof (payload as any)?.message === 'string'
             ? (payload as any).message
-            : status === 500
-              ? 'Internal server error'
-              : 'Request failed';
+            : isPayloadTooLarge
+              ? 'Request body exceeds the configured size limit.'
+              : status === 500
+                ? 'Internal server error'
+                : 'Request failed';
     const code =
       typeof (payload as any)?.code === 'string'
         ? (payload as any).code
-        : isHttpException
-          ? exception.name
-          : 'INTERNAL_SERVER_ERROR';
+        : isPayloadTooLarge
+          ? 'PAYLOAD_TOO_LARGE'
+          : isHttpException
+            ? exception.name
+            : 'INTERNAL_SERVER_ERROR';
     const params =
       typeof payload === 'object' &&
       payload != null &&
@@ -90,11 +101,13 @@ export class ApplicationLogsExceptionFilter implements ExceptionFilter {
       error:
         isHttpException && typeof (payload as any)?.error === 'string'
           ? (payload as any).error
-          : status >= 500
-            ? 'Internal Server Error'
-            : exception instanceof Error
-              ? exception.name
-              : 'Request Failed',
+          : isPayloadTooLarge
+            ? 'Payload Too Large'
+            : status >= 500
+              ? 'Internal Server Error'
+              : exception instanceof Error
+                ? exception.name
+                : 'Request Failed',
       message: payloadMessage,
       ...(typeof payload === 'object' &&
       payload != null &&

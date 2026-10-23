@@ -100,6 +100,7 @@ export class FinanceDebtService {
           accountId: account.id,
           direction: input.direction,
           name,
+          emoji: input.emoji?.trim() || null,
           amount,
           currency: account.currency,
           dueAt,
@@ -276,6 +277,7 @@ export class FinanceDebtService {
       const values = {
         direction: input.direction,
         name: this.name(input.name),
+        emoji: input.emoji?.trim() || null,
         amount,
         accountId: account.id,
         currency: account.currency,
@@ -558,6 +560,7 @@ export class FinanceDebtService {
     values: {
       direction: FinanceDebtInputDto['direction'];
       name: string;
+      emoji: string | null;
       amount: Prisma.Decimal;
       accountId: string;
       currency: string;
@@ -569,6 +572,7 @@ export class FinanceDebtService {
     return (
       existing.direction === values.direction &&
       existing.name === values.name &&
+      existing.emoji === values.emoji &&
       existing.amount.equals(values.amount) &&
       existing.accountId === values.accountId &&
       existing.currency === values.currency &&

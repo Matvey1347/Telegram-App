@@ -6,6 +6,7 @@ import {
 import { connect as connectToUpstream, createServer } from "node:net";
 import { randomBytes } from "node:crypto";
 import { assertPortAvailable } from "./dev-port-availability.mjs";
+import { stopLocalDevProcesses } from "./stop-local-dev.mjs";
 import { terminateDevChildren } from "./dev-process-termination.mjs";
 import { waitForHttpReady } from "./dev-service-readiness.mjs";
 import { localBotPublicEnvironment } from "./public-origin-environment.mjs";
@@ -470,6 +471,7 @@ if (withFinanceApi) {
         "dev:finance:tunnel requires FINANCE_BOT_RUNTIME_ENVIRONMENT=LOCAL in products/finance/.env.local",
       );
     }
+    await stopLocalDevProcesses();
     await Promise.all([
       assertPortAvailable(4001, "Finance API"),
       assertPortAvailable(4002, "Finance analytics API"),
@@ -530,6 +532,7 @@ if (withFinanceApi) {
 } else {
   dashboard.notice("Starting local development…");
   try {
+    await stopLocalDevProcesses();
     await Promise.all([
       assertPortAvailable(4000, "Backend"),
       assertPortAvailable(3000, "Frontend"),
