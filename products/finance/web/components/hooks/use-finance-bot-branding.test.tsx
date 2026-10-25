@@ -75,4 +75,20 @@ describe("useFinanceBotBranding", () => {
       ),
     );
   });
+
+  it("switches the PWA manifest to the selected bot's favicon", async () => {
+    const manifest = document.createElement("link");
+    manifest.rel = "manifest";
+    manifest.href = "/manifest.webmanifest";
+    document.head.appendChild(manifest);
+    const { unmount } = render(<BrandingImage />);
+    await waitFor(() =>
+      expect(manifest.getAttribute("href")).toBe(
+        "/finance/finance%20bot/manifest.webmanifest",
+      ),
+    );
+    unmount();
+    expect(manifest.href).toContain("/manifest.webmanifest");
+    manifest.remove();
+  });
 });

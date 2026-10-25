@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import { ConsumerFinanceApp } from '@consumer-finance/web/components/app/consumer-finance-app';
+import { resolveConsumerFinanceApiBase } from "@consumer-finance/web/lib/api/consumer-finance-http";
+import { ConsumerFinanceApp } from "@consumer-finance/web/components/app/consumer-finance-app";
 
 export async function generateMetadata({
   params,
@@ -8,6 +9,7 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { botId } = await params;
   const encodedBotId = encodeURIComponent(botId);
+  const faviconUrl = `${resolveConsumerFinanceApiBase()}/finance-bots/${encodedBotId}/branding/favicon`;
   return {
     title: "Finance",
     description: "Track income, expenses, accounts, and plans in Finance.",
@@ -19,14 +21,18 @@ export async function generateMetadata({
       title: "Finance",
     },
     icons: {
-      icon: "/brand/favicon-finance.png",
-      shortcut: "/brand/favicon-finance.png",
-      apple: "/brand/finance-apple-touch.png",
+      icon: faviconUrl,
+      shortcut: faviconUrl,
+      apple: faviconUrl,
     },
   };
 }
 
-export default async function FinanceMiniAppPage({ params }: { params: Promise<{ botId: string }> }) {
+export default async function FinanceMiniAppPage({
+  params,
+}: {
+  params: Promise<{ botId: string }>;
+}) {
   const { botId } = await params;
   return <ConsumerFinanceApp botId={botId} />;
 }

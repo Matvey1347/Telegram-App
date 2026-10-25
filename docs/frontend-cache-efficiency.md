@@ -34,6 +34,15 @@ complex financial operations may refetch. Their invalidation must still be
 narrow: affected detail, analytics, posts, calendar range, or derived aggregate
 only—not an entire application or unrelated workspace domain.
 
+## Consumer Finance shell
+
+The authenticated startup read returns profile preferences, account balances,
+and categories. Transaction history and obligations use separate query keys
+and load after the shell renders. Ordinary transaction mutations reconcile the
+returned transaction and affected account balance in those caches; they do not
+refetch startup, debts, recurring payments, and investments. Explicit refresh
+and complex financial operations may reconcile the wider snapshot.
+
 ## Anti-patterns
 
 Do not add `onSuccess: () => invalidateQueries({ queryKey: domainRoot })` when

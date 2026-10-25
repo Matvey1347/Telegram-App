@@ -10,6 +10,7 @@ import type {
 import type { ReactNode } from "react";
 import { Card, Button } from "@/components/ui/primitives";
 import { configuredBotsApi } from "@/lib/features/telegram/configured-bots-api";
+import { telegramBotsApi } from "@/lib/api";
 import { telegramAccountKeys } from "@/lib/query-keys";
 import { useAppToast } from "@/providers/toast-provider";
 import { BotRuntimeAvatar } from "./bot-runtime-avatar";
@@ -24,25 +25,62 @@ import {
 export function ConfiguredBotCards() {
   const qc = useQueryClient();
   const { pushToast } = useAppToast();
-  const [editingEnvironment, setEditingEnvironment] = useState<"LOCAL" | "PRODUCTION" | null>(null);
-  const [editingFinanceEnvironment, setEditingFinanceEnvironment] = useState<"LOCAL" | "PRODUCTION" | null>(null);
+  const [editingEnvironment, setEditingEnvironment] = useState<
+    "LOCAL" | "PRODUCTION" | null
+  >(null);
+  const [editingFinanceEnvironment, setEditingFinanceEnvironment] = useState<
+    "LOCAL" | "PRODUCTION" | null
+  >(null);
   const overview = useQuery({
     queryKey: telegramAccountKeys.configuredBots(),
     queryFn: configuredBotsApi.overview,
   });
   const updateFinanceProfile = useMutation({
-    mutationFn: (input: { environment: "LOCAL" | "PRODUCTION"; name?: string; description?: string; avatar?: File }) =>
-      configuredBotsApi.updateFinanceProfile(input.environment, input),
+    mutationFn: async (input: {
+      environment: "LOCAL" | "PRODUCTION";
+      managementBotId?: string | null;
+      name?: string;
+      description?: string;
+      logo?: File;
+      favicon?: File;
+      telegramPhoto?: File;
+    }) => {
+      if ((input.logo || input.favicon || input.telegramPhoto) && !input.managementBotId) {
+        throw new Error("This Finance bot has no linked branding profile.");
+      }
+      let data:
+        | Awaited<ReturnType<typeof configuredBotsApi.updateFinanceProfile>>
+        | undefined;
+      if (input.name !== undefined || input.description !== undefined) {
+        data = await configuredBotsApi.updateFinanceProfile(input.environment, {
+          name: input.name,
+          description: input.description,
+        });
+      }
+      if (input.logo || input.favicon || input.telegramPhoto) {
+        await telegramBotsApi.updateFinanceBranding(
+          input.managementBotId!,
+          input.environment,
+          { logo: input.logo, favicon: input.favicon, telegramPhoto: input.telegramPhoto },
+        );
+        data = await configuredBotsApi.overview();
+      }
+      return data ?? configuredBotsApi.overview();
+    },
     onSuccess: (data) => {
       qc.setQueryData(telegramAccountKeys.configuredBots(), data);
       setEditingFinanceEnvironment(null);
-      pushToast("Finance bot updated in Telegram.", "success");
+      pushToast("Finance bot profile and branding updated.", "success");
     },
     onError: () => pushToast("Could not update the Finance bot.", "error"),
   });
   const updateProfile = useMutation({
-    mutationFn: (input: { environment: "LOCAL" | "PRODUCTION"; name?: string; description?: string; avatar?: File }) =>
-      configuredBotsApi.updateSystemProfile(input.environment, input),
+    mutationFn: (input: {
+      environment: "LOCAL" | "PRODUCTION";
+      name?: string;
+      description?: string;
+      avatar?: File;
+    }) => configuredBotsApi.updateSystemProfile(input.environment, input),
     onSuccess: (data) => {
       qc.setQueryData(telegramAccountKeys.configuredBots(), data);
       setEditingEnvironment(null);
@@ -130,8 +168,12 @@ export function ConfiguredBotCards() {
           environment={editingEnvironment}
           saving={updateProfile.isPending}
           onClose={() => setEditingEnvironment(null)}
-          onEnvironmentChange={(environment) => setEditingEnvironment(environment)}
-          onSubmit={(input) => updateProfile.mutate({ environment: editingEnvironment, ...input })}
+          onEnvironmentChange={(environment) =>
+            setEditingEnvironment(environment)
+          }
+          onSubmit={(input) =>
+            updateProfile.mutate({ environment: editingEnvironment, ...input })
+          }
         />
       ) : null}
       {editingFinanceEnvironment ? (
@@ -145,12 +187,25 @@ export function ConfiguredBotCards() {
             name: bot.name,
             description: bot.description,
             avatarUrl: bot.avatarUrl,
+            logoUrl: bot.logoUrl,
+            faviconUrl: bot.faviconUrl,
+            telegramPhotoUrl: bot.telegramPhotoUrl,
           }))}
           environment={editingFinanceEnvironment}
           saving={updateFinanceProfile.isPending}
           onClose={() => setEditingFinanceEnvironment(null)}
-          onEnvironmentChange={(environment) => setEditingFinanceEnvironment(environment)}
-          onSubmit={(input) => updateFinanceProfile.mutate({ environment: editingFinanceEnvironment, ...input })}
+          onEnvironmentChange={(environment) =>
+            setEditingFinanceEnvironment(environment)
+          }
+          onSubmit={(input) =>
+            updateFinanceProfile.mutate({
+              environment: editingFinanceEnvironment,
+              managementBotId: overview.data.financeBot?.bots.find(
+                (bot) => bot.environment === editingFinanceEnvironment,
+              )?.managementBotId,
+              ...input,
+            })
+          }
         />
       ) : null}
     </section>
@@ -188,8 +243,16 @@ function SystemBotCard({
       avatarRefreshKey={avatarRefreshKey}
       actions={
         <TelegramCardActionsMenu label="System bot actions">
-          <TelegramCardMenuAction label="Refresh from Telegram" icon={<RefreshCw size={17} />} onClick={() => void onRefresh()} />
-          <TelegramCardMenuAction label="Edit bot" icon={<Pencil size={17} />} onClick={() => onEdit(environment)} />
+          <TelegramCardMenuAction
+            label="Refresh from Telegram"
+            icon={<RefreshCw size={17} />}
+            onClick={() => void onRefresh()}
+          />
+          <TelegramCardMenuAction
+            label="Edit bot"
+            icon={<Pencil size={17} />}
+            onClick={() => onEdit(environment)}
+          />
         </TelegramCardActionsMenu>
       }
     >
@@ -244,8 +307,16 @@ function FinanceBotCard({
               icon={<BarChart3 size={17} />}
             />
           ) : null}
-          <TelegramCardMenuAction label="Refresh analytics" icon={<RefreshCw size={17} />} onClick={() => void onRefresh()} />
-          <TelegramCardMenuAction label="Edit bot" icon={<Pencil size={17} />} onClick={() => onEdit(environment)} />
+          <TelegramCardMenuAction
+            label="Refresh analytics"
+            icon={<RefreshCw size={17} />}
+            onClick={() => void onRefresh()}
+          />
+          <TelegramCardMenuAction
+            label="Edit bot"
+            icon={<Pencil size={17} />}
+            onClick={() => onEdit(environment)}
+          />
         </TelegramCardActionsMenu>
       }
     >
@@ -300,28 +371,30 @@ function BotAnalyticsCard({
     <article className="rounded-lg border border-neutral-800 bg-neutral-950 p-3 shadow-sm">
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-start gap-3">
-        <BotRuntimeAvatar
-          type={appType}
-          avatarUrl={runtime?.avatarUrl}
-          refreshKey={avatarRefreshKey}
-        />
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="font-semibold text-white">{title}</h3>
-            <span className={`inline-flex rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${
-            appType === "FINANCE"
-              ? "border-emerald-800 bg-emerald-950/50 text-emerald-300"
-              : "border-sky-800 bg-sky-950/50 text-sky-300"
-          }`}>
-            {appType === "FINANCE" ? "Finance bot" : "System bot"}
-            </span>
+          <BotRuntimeAvatar
+            type={appType}
+            avatarUrl={runtime?.avatarUrl}
+            refreshKey={avatarRefreshKey}
+          />
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="font-semibold text-white">{title}</h3>
+              <span
+                className={`inline-flex rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${
+                  appType === "FINANCE"
+                    ? "border-emerald-800 bg-emerald-950/50 text-emerald-300"
+                    : "border-sky-800 bg-sky-950/50 text-sky-300"
+                }`}
+              >
+                {appType === "FINANCE" ? "Finance bot" : "System bot"}
+              </span>
+            </div>
+            <p className="mt-0.5 text-xs text-neutral-500">
+              {runtime?.username
+                ? `@${runtime.username.replace(/^@/, "")}`
+                : "Not configured"}
+            </p>
           </div>
-          <p className="mt-0.5 text-xs text-neutral-500">
-            {runtime?.username
-              ? `@${runtime.username.replace(/^@/, "")}`
-              : "Not configured"}
-          </p>
-        </div>
         </div>
         {actions}
       </div>
@@ -345,4 +418,3 @@ function Metric({ label, value }: { label: string; value: number }) {
     </div>
   );
 }
-

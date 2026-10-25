@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { GroshlyApp } from "@finance-web/groshly/main";
 import { GroshlyLoadingScreen } from "@finance-web/components/groshly-loading-screen";
 import { useTelegramMiniAppBootstrap } from "@consumer-finance/web/components/hooks/use-telegram-mini-app-bootstrap";
+import { useFinanceBotBranding } from "@consumer-finance/web/components/hooks/use-finance-bot-branding";
 import { consumerFinanceInsightsApi } from "@consumer-finance/web/lib/api/consumer-finance-insights-api";
 import { consumerFinanceInvestmentsApi } from "@consumer-finance/web/lib/api/consumer-finance-investments-api";
 import { consumerFinanceLedgerApi } from "@consumer-finance/web/lib/api/consumer-finance-ledger-api";
@@ -14,10 +15,15 @@ import { consumerFinanceKeys } from "@consumer-finance/web/lib/query/consumer-fi
 import type { ConsumerFinanceRegularPaymentInput } from "@telegram-system/shared";
 import type { ConsumerFinanceSettingsInput } from "@telegram-system/shared";
 import type { ConsumerFinanceDebtInput } from "@telegram-system/shared";
+import type { ConsumerFinanceHistoryPage, ConsumerFinanceTransaction } from "@telegram-system/shared";
+import type { ConsumerFinanceStartup } from "@telegram-system/shared";
 
 type GroshlySnapshot = Record<string, unknown>;
 const GroshlyRoot = GroshlyApp as ComponentType<{
   initialData: GroshlySnapshot;
+  logoUrl: string;
+  faviconUrl: string;
+  telegramAuthenticated: boolean;
   onRefresh: () => Promise<GroshlySnapshot>;
   onCloseInvestment: (input: {
     id: string;
@@ -68,7 +74,7 @@ const GroshlyRoot = GroshlyApp as ComponentType<{
     restore: boolean;
   }) => Promise<GroshlySnapshot>;
   onLoadMore: (
-    kind: "transactions" | "debts" | "recurring" | "investments",
+    kind: "transactions" | "analytics" | "debts" | "recurring" | "investments",
   ) => Promise<GroshlySnapshot>;
   onOpenInvestment: (id: string) => Promise<{
     status: string;
@@ -158,7 +164,7 @@ export function groshlySnapshot({
     displayNameOverride?: string | null;
     avatarUrl?: string | null;
   };
-  dashboard: unknown;
+  dashboard?: unknown;
   accounts: Array<{
     id: string;
     name: string;
@@ -182,7 +188,10 @@ export function groshlySnapshot({
       accountId: string;
       categoryId?: string | null;
       type: "INCOME" | "EXPENSE";
+      purpose: "ORDINARY" | "REIMBURSEMENT" | "PASS_THROUGH" | "DEBT_REPAYMENT" | "INVESTMENT_CONTRIBUTION" | "INVESTMENT_RETURN";
       amount: string;
+      economicAmount?: string;
+      recurringPaymentId?: string | null;
       currency: string;
       occurredAt: string;
       description?: string | null;
@@ -247,7 +256,10 @@ export function groshlySnapshot({
     transactions: transactions.items.map((transaction) => ({
       id: transaction.id,
       type: transaction.type.toLowerCase(),
+      purpose: transaction.purpose,
       amount: Number(transaction.amount),
+      economicAmount: Number(transaction.economicAmount ?? transaction.amount),
+      recurringId: transaction.recurringPaymentId || "",
       accountId: transaction.accountId,
       categoryId: transaction.categoryId || "",
       title: transaction.description || "",
@@ -318,6 +330,7 @@ export function groshlySnapshot({
 
 export function GroshlyFinanceApp({ botId }: { botId: string }) {
   const queryClient = useQueryClient();
+  const { logoUrl, faviconUrl } = useFinanceBotBranding(botId);
   const bootstrap = useTelegramMiniAppBootstrap();
   const identityScope = groshlyIdentityScope(
     bootstrap.status === "ready" ? bootstrap.initData : undefined,
@@ -338,6 +351,10 @@ export function GroshlyFinanceApp({ botId }: { botId: string }) {
         "groshly-obligations",
         identityScope,
       ] as const,
+    [botId, identityScope],
+  );
+  const historyKey = useMemo(
+    () => consumerFinanceKeys.transactions(botId, { view: "groshly", identityScope, limit: 50 }),
     [botId, identityScope],
   );
   const financeData = useQuery({
@@ -370,6 +387,14 @@ export function GroshlyFinanceApp({ botId }: { botId: string }) {
     refetchOnMount: "always",
     refetchOnReconnect: false,
   });
+  const history = useQuery({
+    queryKey: historyKey,
+    queryFn: () => consumerFinanceLedgerApi.transactions(botId, { limit: 50 }),
+    enabled: financeData.data?.authenticated === true,
+    retry: false,
+    refetchOnMount: "always",
+    refetchOnReconnect: false,
+  });
   useEffect(() => {
     if (!financeData.data?.authenticated) return;
     const reconcileAfterExternalChange = () => {
@@ -381,6 +406,10 @@ export function GroshlyFinanceApp({ botId }: { botId: string }) {
         }),
         queryClient.invalidateQueries({
           queryKey: obligationsKey,
+          refetchType: "active",
+        }),
+        queryClient.invalidateQueries({
+          queryKey: historyKey,
           refetchType: "active",
         }),
       ]);
@@ -395,15 +424,21 @@ export function GroshlyFinanceApp({ botId }: { botId: string }) {
     financeData.data?.authenticated,
     groshlyReadKey,
     obligationsKey,
+    historyKey,
     queryClient,
   ]);
   const snapshot = useMemo(() => {
     if (!financeData.data?.authenticated) return null;
-    return groshlySnapshot({
+    return {
+      ...groshlySnapshot({
       ...financeData.data,
+      transactions: history.data ?? { items: [], nextCursor: null },
       obligations: obligations.data,
-    });
-  }, [financeData.data, obligations.data]);
+      }),
+      loading: { history: history.isPending, obligations: obligations.isPending },
+      loadErrors: { history: history.isError, obligations: obligations.isError },
+    };
+  }, [financeData.data, history.data, history.isPending, history.isError, obligations.data, obligations.isPending, obligations.isError]);
   // Client initData is not an authentication boundary. Persisted finance data
   // may render only after this mount's startup request verifies the Telegram
   // signature/session on the server.
@@ -416,13 +451,17 @@ export function GroshlyFinanceApp({ botId }: { botId: string }) {
       queryKey: groshlyReadKey,
       refetchType: "none",
     });
-    const result = await financeData.refetch({ throwOnError: true });
-    const obligationResult = await obligations.refetch({ throwOnError: true });
+    const [result, historyResult, obligationResult] = await Promise.all([
+      financeData.refetch({ throwOnError: true }),
+      history.refetch({ throwOnError: true }),
+      obligations.refetch({ throwOnError: true }),
+    ]);
     if (!result.data?.authenticated) {
       throw new Error("Finance data is unavailable");
     }
     return groshlySnapshot({
       ...result.data,
+      transactions: historyResult.data ?? { items: [], nextCursor: null },
       obligations: obligationResult.data,
     });
   };
@@ -485,6 +524,7 @@ export function GroshlyFinanceApp({ botId }: { botId: string }) {
     queryClient.setQueryData(obligationsKey, nextObligations);
     return groshlySnapshot({
       ...financeData.data,
+      transactions: history.data ?? { items: [], nextCursor: null },
       obligations: nextObligations,
     });
   };
@@ -501,6 +541,7 @@ export function GroshlyFinanceApp({ botId }: { botId: string }) {
       throw new Error("Finance data is unavailable");
     const { draft, editing, recurring } = input;
     const occurredAt = `${draft.date || new Date().toISOString().slice(0, 10)}T12:00:00.000Z`;
+    let savedTransaction: ConsumerFinanceTransaction | undefined;
     if (recurring) {
       await consumerFinanceObligationsApi.confirmRegularPayment(
         botId,
@@ -595,12 +636,41 @@ export function GroshlyFinanceApp({ botId }: { botId: string }) {
           : {}),
       };
       if (editing?.id)
-        await consumerFinanceLedgerApi.updateTransaction(
+        savedTransaction = await consumerFinanceLedgerApi.updateTransaction(
           botId,
           String(editing.id),
           payload,
         );
-      else await consumerFinanceLedgerApi.createTransaction(botId, payload);
+      else savedTransaction = await consumerFinanceLedgerApi.createTransaction(botId, payload);
+    }
+    if (savedTransaction) {
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: groshlyReadKey }),
+        queryClient.cancelQueries({ queryKey: historyKey }),
+      ]);
+      const currentFinance = queryClient.getQueryData<ConsumerFinanceStartup>(groshlyReadKey);
+      if (!currentFinance?.authenticated) throw new Error("Finance data is unavailable");
+      const currentHistory = queryClient.getQueryData<ConsumerFinanceHistoryPage>(historyKey);
+      const previous = currentHistory?.items.find((item) => item.id === savedTransaction.id);
+      const nextHistory: ConsumerFinanceHistoryPage = {
+        items: [savedTransaction, ...(currentHistory?.items ?? []).filter((item) => item.id !== savedTransaction.id)],
+        nextCursor: currentHistory?.nextCursor ?? null,
+      };
+      const accountDelta = (transaction: ConsumerFinanceTransaction, sign: number) =>
+        (transaction.type === "INCOME" ? 1 : -1) * Number(transaction.amount) * sign;
+      const nextFinance = {
+        ...currentFinance,
+        accounts: currentFinance.accounts.map((account) => {
+          const change =
+            (previous?.accountId === account.id ? accountDelta(previous, -1) : 0) +
+            (savedTransaction?.accountId === account.id ? accountDelta(savedTransaction, 1) : 0);
+          return change ? { ...account, balance: (Math.round((Number(account.balance) + change) * 100) / 100).toFixed(2) } : account;
+        }),
+      };
+      queryClient.setQueryData(groshlyReadKey, nextFinance);
+      queryClient.setQueryData(historyKey, nextHistory);
+      if (!currentHistory) void queryClient.invalidateQueries({ queryKey: historyKey, refetchType: "active" });
+      return groshlySnapshot({ ...nextFinance, transactions: nextHistory, obligations: queryClient.getQueryData<NonNullable<typeof obligations.data>>(obligationsKey) ?? obligations.data });
     }
     return refreshSnapshot();
   };
@@ -611,10 +681,30 @@ export function GroshlyFinanceApp({ botId }: { botId: string }) {
     id: string;
     type: string;
   }) => {
-    if (type === "transfer")
+    if (type === "transfer") {
       await consumerFinanceLedgerApi.deleteTransfer(botId, id);
-    else await consumerFinanceLedgerApi.deleteTransaction(botId, id);
-    return refreshSnapshot();
+      return refreshSnapshot();
+    }
+    await consumerFinanceLedgerApi.deleteTransaction(botId, id);
+    await Promise.all([
+      queryClient.cancelQueries({ queryKey: groshlyReadKey }),
+      queryClient.cancelQueries({ queryKey: historyKey }),
+    ]);
+    const currentFinance = queryClient.getQueryData<ConsumerFinanceStartup>(groshlyReadKey);
+    const currentHistory = queryClient.getQueryData<ConsumerFinanceHistoryPage>(historyKey);
+    const removed = currentHistory?.items.find((item) => item.id === id);
+    if (!currentHistory || !removed || !currentFinance?.authenticated) return refreshSnapshot();
+    const nextHistory = { ...currentHistory, items: currentHistory.items.filter((item) => item.id !== id) };
+    const delta = (removed.type === "INCOME" ? -1 : 1) * Number(removed.amount);
+    const nextFinance = {
+      ...currentFinance,
+      accounts: currentFinance.accounts.map((account) => account.id === removed.accountId
+        ? { ...account, balance: (Math.round((Number(account.balance) + delta) * 100) / 100).toFixed(2) }
+        : account),
+    };
+    queryClient.setQueryData(groshlyReadKey, nextFinance);
+    queryClient.setQueryData(historyKey, nextHistory);
+    return groshlySnapshot({ ...nextFinance, transactions: nextHistory, obligations: queryClient.getQueryData<NonNullable<typeof obligations.data>>(obligationsKey) ?? obligations.data });
   };
   const saveRegularPayment = async ({
     id,
@@ -697,7 +787,7 @@ export function GroshlyFinanceApp({ botId }: { botId: string }) {
   const saveSettings = async (
     changes: Partial<ConsumerFinanceSettingsInput>,
   ) => {
-    if (!financeData.data?.authenticated || !obligations.data) {
+    if (!financeData.data?.authenticated) {
       throw new Error("Finance data is unavailable");
     }
     const current = financeData.data.profile;
@@ -708,34 +798,47 @@ export function GroshlyFinanceApp({ botId }: { botId: string }) {
       displayName: current.displayNameOverride,
       ...changes,
     });
-    const nextFinance = { ...financeData.data, profile };
+    await queryClient.cancelQueries({ queryKey: groshlyReadKey });
+    const liveFinance = queryClient.getQueryData<ConsumerFinanceStartup>(groshlyReadKey);
+    if (!liveFinance?.authenticated) throw new Error("Finance data is unavailable");
+    const nextFinance = { ...liveFinance, profile };
     queryClient.setQueryData(groshlyReadKey, nextFinance);
-    return groshlySnapshot({ ...nextFinance, obligations: obligations.data });
+    return groshlySnapshot({
+      ...nextFinance,
+      transactions: queryClient.getQueryData<ConsumerFinanceHistoryPage>(historyKey) ?? { items: [], nextCursor: null },
+      obligations: queryClient.getQueryData<NonNullable<typeof obligations.data>>(obligationsKey) ?? obligations.data,
+    });
   };
   const loadMore = async (
-    kind: "transactions" | "debts" | "recurring" | "investments",
+    kind: "transactions" | "analytics" | "debts" | "recurring" | "investments",
   ) => {
-    if (!financeData.data?.authenticated || !obligations.data) {
+    if (!financeData.data?.authenticated) {
       throw new Error("Finance data is unavailable");
     }
-    if (kind === "transactions") {
-      const cursor = financeData.data.transactions.nextCursor;
+    if (kind === "transactions" || kind === "analytics") {
+      let cursor = history.data?.nextCursor;
       if (!cursor) return snapshot!;
-      const page = await consumerFinanceLedgerApi.transactions(botId, {
-        cursor,
-        limit: 50,
-      });
-      const nextFinance = {
+      const items = [...(history.data?.items ?? [])];
+      const maxItems = kind === "analytics" ? 1000 : items.length + 50;
+      while (cursor && items.length < maxItems) {
+        const page = await consumerFinanceLedgerApi.transactions(botId, {
+          cursor,
+          limit: kind === "analytics" ? 100 : 50,
+        });
+        if (!page.items.length) break;
+        items.push(...page.items);
+        cursor = page.nextCursor;
+      }
+      const nextHistory = { items, nextCursor: cursor };
+      queryClient.setQueryData(historyKey, nextHistory);
+      return groshlySnapshot({
         ...financeData.data,
-        transactions: {
-          items: [...financeData.data.transactions.items, ...page.items],
-          nextCursor: page.nextCursor,
-        },
-      };
-      queryClient.setQueryData(groshlyReadKey, nextFinance);
-      return groshlySnapshot({ ...nextFinance, obligations: obligations.data });
+        transactions: nextHistory,
+        obligations: obligations.data,
+      });
     }
     const current = obligations.data;
+    if (!current) throw new Error("Obligations are still loading");
     if (kind === "debts" && current.debts.nextCursor) {
       const page = await consumerFinanceObligationsApi.debts(botId, {
         cursor: current.debts.nextCursor,
@@ -749,7 +852,7 @@ export function GroshlyFinanceApp({ botId }: { botId: string }) {
         },
       };
       queryClient.setQueryData(obligationsKey, next);
-      return groshlySnapshot({ ...financeData.data, obligations: next });
+      return groshlySnapshot({ ...financeData.data, transactions: history.data ?? { items: [], nextCursor: null }, obligations: next });
     }
     if (kind === "recurring" && current.regularPayments.nextCursor) {
       const page = await consumerFinanceObligationsApi.regularPayments(botId, {
@@ -764,7 +867,7 @@ export function GroshlyFinanceApp({ botId }: { botId: string }) {
         },
       };
       queryClient.setQueryData(obligationsKey, next);
-      return groshlySnapshot({ ...financeData.data, obligations: next });
+      return groshlySnapshot({ ...financeData.data, transactions: history.data ?? { items: [], nextCursor: null }, obligations: next });
     }
     if (kind === "investments" && current.investments.nextCursor) {
       const page = await consumerFinanceInvestmentsApi.list(botId, {
@@ -779,7 +882,7 @@ export function GroshlyFinanceApp({ botId }: { botId: string }) {
         },
       };
       queryClient.setQueryData(obligationsKey, next);
-      return groshlySnapshot({ ...financeData.data, obligations: next });
+      return groshlySnapshot({ ...financeData.data, transactions: history.data ?? { items: [], nextCursor: null }, obligations: next });
     }
     return snapshot!;
   };
@@ -810,7 +913,6 @@ export function GroshlyFinanceApp({ botId }: { botId: string }) {
 
   if (
     !financeData.isFetchedAfterMount ||
-    (financeData.data?.authenticated && obligations.isLoading) ||
     (bootstrap.status === "loading" && !canDrawCachedSnapshot)
   ) {
     return <GroshlyLoadingScreen />;
@@ -825,18 +927,6 @@ export function GroshlyFinanceApp({ botId }: { botId: string }) {
             Open Finance from the Telegram bot to securely authenticate your
             account.
           </p>
-        </div>
-      </main>
-    );
-  }
-  if (obligations.isError) {
-    return (
-      <main className="app-shell">
-        <div className="busy-cover">
-          <div className="busy-card">
-            <b>Could not load debts, recurring payments, or investments.</b>
-            <button onClick={() => obligations.refetch()}>Retry</button>
-          </div>
         </div>
       </main>
     );
@@ -856,6 +946,9 @@ export function GroshlyFinanceApp({ botId }: { botId: string }) {
   return (
     <GroshlyRoot
       initialData={snapshot}
+      logoUrl={logoUrl}
+      faviconUrl={faviconUrl}
+      telegramAuthenticated={financeData.data.authenticated}
       onRefresh={refreshSnapshot}
       onCloseInvestment={closeInvestment}
       onSaveLedgerEntry={saveLedgerEntry}

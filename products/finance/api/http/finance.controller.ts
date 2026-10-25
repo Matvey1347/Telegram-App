@@ -259,14 +259,8 @@ export class FinanceController {
     if (!profileId || !workspaceId) return { authenticated: false as const };
     const profile = await this.core.profile(profileId);
     if (!profile) throw new NotFoundException('Finance profile not found');
-    const range = financeAnalyticsDateRange({ period: 'CURRENT_MONTH' }, profile.timezone);
-    const [stats, limits, transactions, accounts, categories] = await Promise.all([
-      this.ledger.stats(profileId, range.from, range.to), this.core.limits(profileId),
-      this.ledger.history(profileId, Object.assign(new FinanceHistoryQueryDto(), { limit: 50 }), profile.timezone),
-      this.ledger.accounts(profileId), this.core.categories(profileId),
-    ]);
-    const { savings, investments, ...periodStats } = stats;
-    return { authenticated: true as const, profile, dashboard: { profile, stats: { ...periodStats, currency: profile.defaultCurrency, categories: stats.categories.map((item) => ({ ...item, currency: profile.defaultCurrency })) }, limits, savings, investments, recent: transactions.items.slice(0, 8) }, accounts, categories, transactions };
+    const [accounts, categories] = await Promise.all([this.ledger.accounts(profileId), this.core.categories(profileId)]);
+    return { authenticated: true as const, profile, accounts, categories };
   }
   @Post('auth/logout') logout(
     @Param('botId') b: string,

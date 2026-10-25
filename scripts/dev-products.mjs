@@ -378,6 +378,35 @@ async function assertCloudflaredAvailable() {
   });
 }
 
+async function prepareDatabase() {
+  const id = "database";
+  dashboard?.update(id, "starting", "Applying migrations");
+  const capture = createOutputCapture();
+  const child = spawn("pnpm", ["--filter", "api", "run", "db:deploy:safe"], {
+    cwd: process.cwd(),
+    env: process.env,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  children.add(child);
+  child.stdout?.on("data", (chunk) => capture.write(chunk));
+  child.stderr?.on("data", (chunk) => capture.write(chunk));
+  try {
+    await new Promise((resolve, reject) => {
+      child.once("error", reject);
+      child.once("exit", (code) => {
+        if (code === 0) resolve();
+        else {
+          const recent = capture.recentLines().slice(-8).join("\n");
+          reject(new Error(`Database preparation failed (code ${code ?? "unknown"})${recent ? `\n${recent}` : ""}`));
+        }
+      });
+    });
+    dashboard?.update(id, "ready", "Schema ready");
+  } finally {
+    children.delete(child);
+  }
+}
+
 async function startCloudflareTunnel(product, port) {
   const id = cloudflareServiceId(product);
   dashboard?.update(id, "starting", "Starting");
@@ -515,8 +544,13 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       });
     }
   }
+  dashboard.register("database", {
+    column: products[0],
+    label: "Database",
+  });
   dashboard.render();
   try {
+    await prepareDatabase();
     if (withCloudflare) {
       await assertCloudflaredAvailable();
       const publicUrls = await Promise.all(

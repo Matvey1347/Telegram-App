@@ -6,6 +6,7 @@ import {
   NotFoundException,
   Param,
   Patch,
+  Query,
   Res,
   UploadedFiles,
   UseGuards,
@@ -34,6 +35,7 @@ export class FinanceBotBrandingAdminController {
       [
         { name: 'logo', maxCount: 1 },
         { name: 'favicon', maxCount: 1 },
+        { name: 'telegramPhoto', maxCount: 1 },
       ],
       { limits: { fileSize: 5 * 1024 * 1024 } },
     ),
@@ -44,7 +46,7 @@ export class FinanceBotBrandingAdminController {
     @Param('environment') environment: TelegramBotRuntimeEnvironment,
     @Body() body: { name?: string; confirmTelegramUpdate?: string },
     @UploadedFiles()
-    files: { logo?: Express.Multer.File[]; favicon?: Express.Multer.File[] },
+    files: { logo?: Express.Multer.File[]; favicon?: Express.Multer.File[]; telegramPhoto?: Express.Multer.File[] },
   ) {
     if (body.confirmTelegramUpdate !== 'true') {
       throw new BadRequestException(
@@ -55,6 +57,7 @@ export class FinanceBotBrandingAdminController {
       name: body.name,
       logo: files?.logo?.[0],
       favicon: files?.favicon?.[0],
+      telegramPhoto: files?.telegramPhoto?.[0],
     });
     return this.bots.findOne(user.sub, botId);
   }
@@ -67,15 +70,31 @@ export class FinanceBotBrandingAssetController {
   @Get(':kind')
   async asset(
     @Param('botId') botId: string,
-    @Param('kind') kind: 'logo' | 'favicon',
+    @Param('kind') kind: 'logo' | 'favicon' | 'telegram',
+    @Query('environment') environment: string | undefined,
+    @Query('version') version: string | undefined,
     @Res() response: Response,
   ) {
-    if (kind !== 'logo' && kind !== 'favicon') {
+    if (kind !== 'logo' && kind !== 'favicon' && kind !== 'telegram') {
       throw new NotFoundException();
     }
-    const asset = await this.branding.asset(botId, kind);
+    if (
+      environment &&
+      environment !== 'LOCAL' &&
+      environment !== 'PRODUCTION'
+    ) {
+      throw new NotFoundException();
+    }
+    const asset = await this.branding.asset(
+      botId,
+      kind,
+      environment as TelegramBotRuntimeEnvironment | undefined,
+    );
     response.setHeader('Content-Type', asset.contentType);
-    response.setHeader('Cache-Control', 'no-cache');
+    response.setHeader(
+      'Cache-Control',
+      version ? 'public, max-age=31536000, immutable' : 'no-cache',
+    );
     if (asset.updatedAt)
       response.setHeader('Last-Modified', asset.updatedAt.toUTCString());
     response.send(asset.bytes);

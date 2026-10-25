@@ -346,24 +346,38 @@ export class ConfiguredBotAnalyticsService {
       if (body.status === 'MIGRATION_REQUIRED') {
         return { status: 'MIGRATION_REQUIRED' as const, bots: [] };
       }
-      const legacyMetrics = await this.legacyFinanceMetrics(
-        workspaceId,
-        body.bots.map((bot) => bot.username),
-      );
+      const legacyMetrics = await this.legacyFinanceMetrics(workspaceId);
       return {
         status: 'AVAILABLE' as const,
-        bots: body.bots.map((bot) => ({
+        bots: body.bots.map((bot) => {
+          const legacy = legacyMetrics.get(
+            `${bot.environment}:${bot.username?.trim().replace(/^@/, '').toLowerCase() ?? ''}`,
+          );
+          const brandingVersion = encodeURIComponent(
+            legacy?.brandingUpdatedAt ?? 'initial',
+          );
+          return {
           ...bot,
           // Consumer Finance is being moved to its own host. Until a runtime
           // has been migrated, its users still belong to the retained platform
           // record; use that real read-model instead of displaying a false 0.
-          registeredUsers: Math.max(bot.registeredUsers, legacyMetrics?.registeredUsers ?? 0),
-          profiles: Math.max(bot.profiles, legacyMetrics?.profiles ?? 0),
-          managementBotId: legacyMetrics?.botId ?? null,
-          // Finance owns its Telegram profile; render the actual profile photo
-          // when the product exposes one, with the UI fallback used only for 204.
-          avatarUrl: `/telegram-bots/configured/finance/avatar?environment=${bot.environment}&version=${encodeURIComponent(bot.avatarUpdatedAt ?? 'initial')}`,
-        })),
+          registeredUsers: Math.max(bot.registeredUsers, legacy?.registeredUsers ?? 0),
+          profiles: Math.max(bot.profiles, legacy?.profiles ?? 0),
+          managementBotId: legacy?.botId ?? null,
+          logoUrl: legacy?.hasLogo
+            ? `/finance-bots/${legacy.botId}/branding/logo?environment=${bot.environment}&version=${brandingVersion}`
+            : null,
+          faviconUrl: legacy?.hasFavicon
+            ? `/finance-bots/${legacy.botId}/branding/favicon?environment=${bot.environment}&version=${brandingVersion}`
+            : null,
+          telegramPhotoUrl: legacy?.hasTelegramPhoto
+            ? `/finance-bots/${legacy.botId}/branding/telegram?environment=${bot.environment}&version=${encodeURIComponent(legacy.telegramPhotoUpdatedAt ?? 'initial')}`
+            : null,
+          avatarUrl: legacy?.hasTelegramPhoto
+            ? `/finance-bots/${legacy.botId}/branding/telegram?environment=${bot.environment}&version=${encodeURIComponent(legacy.telegramPhotoUpdatedAt ?? 'initial')}`
+            : `/telegram-bots/configured/finance/avatar?environment=${bot.environment}&version=${encodeURIComponent(bot.avatarUpdatedAt ?? 'initial')}`,
+          };
+        }),
       };
     } catch {
       // The dashboard remains usable while a separately deployed product is down.
@@ -371,37 +385,55 @@ export class ConfiguredBotAnalyticsService {
     }
   }
 
-  private async legacyFinanceMetrics(
-    workspaceId: string,
-    usernames: Array<string | null>,
-  ) {
-    const normalized = new Set(
-      usernames
-        .map((username) => username?.trim().replace(/^@/, '').toLowerCase())
-        .filter((username): username is string => Boolean(username)),
-    );
-    if (!normalized.size) return null;
+  private async legacyFinanceMetrics(workspaceId: string) {
     const bots = await this.prisma.telegramBotIntegration.findMany({
       where: { workspaceId, applicationType: 'FINANCE' },
       select: {
         id: true,
         _count: { select: { botUsers: true, financeProfiles: true } },
-        runtimeInstances: { select: { username: true } },
+        runtimeInstances: {
+          select: {
+            environment: true,
+            username: true,
+            financeLogoMimeType: true,
+            financeFaviconMimeType: true,
+            financeBrandingUpdatedAt: true,
+            avatarMimeType: true,
+            avatarUpdatedAt: true,
+          },
+        },
       },
     });
-    const matching = bots.find((bot) =>
-      bot.runtimeInstances.some((runtime) => {
+    const metrics = new Map<
+      string,
+      {
+        botId: string;
+        hasLogo: boolean;
+        hasFavicon: boolean;
+        hasTelegramPhoto: boolean;
+        brandingUpdatedAt: string | null;
+        telegramPhotoUpdatedAt: string | null;
+        registeredUsers: number;
+        profiles: number;
+      }
+    >();
+    for (const bot of bots) {
+      for (const runtime of bot.runtimeInstances) {
         const username = runtime.username?.trim().replace(/^@/, '').toLowerCase();
-        return Boolean(username && normalized.has(username));
-      }),
-    );
-    return matching
-      ? {
-          botId: matching.id,
-          registeredUsers: matching._count.botUsers,
-          profiles: matching._count.financeProfiles,
-        }
-      : null;
+        if (!username) continue;
+        metrics.set(`${runtime.environment}:${username}`, {
+          botId: bot.id,
+          hasLogo: Boolean(runtime.financeLogoMimeType),
+          hasFavicon: Boolean(runtime.financeFaviconMimeType),
+          hasTelegramPhoto: Boolean(runtime.avatarMimeType),
+          brandingUpdatedAt: runtime.financeBrandingUpdatedAt?.toISOString() ?? null,
+          telegramPhotoUpdatedAt: runtime.avatarUpdatedAt?.toISOString() ?? null,
+          registeredUsers: bot._count.botUsers,
+          profiles: bot._count.financeProfiles,
+        });
+      }
+    }
+    return metrics;
   }
 
   private configuredWorkspaceId(name: string) {

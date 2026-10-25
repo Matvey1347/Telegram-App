@@ -212,7 +212,7 @@ describe('FinanceController consumer auth', () => {
     ).resolves.toEqual({ authenticated: true, profile });
   });
 
-  it('returns the complete home read model in one authenticated startup request', async () => {
+  it('returns the authenticated shell without waiting for history and analytics', async () => {
     const { controller, sessions, response, core, ledger } = setup();
     const token = (
       await sessions.issue({
@@ -232,13 +232,12 @@ describe('FinanceController consumer auth', () => {
       expect.objectContaining({
         authenticated: true,
         profile,
-        dashboard: expect.objectContaining({ profile, recent: [] }),
         accounts: [],
         categories: [],
-        transactions: { items: [], nextCursor: null },
       }),
     );
-    expect(ledger.history).toHaveBeenCalledTimes(1);
+    expect(ledger.history).not.toHaveBeenCalled();
+    expect(ledger.stats).not.toHaveBeenCalled();
     expect(ledger.accounts).toHaveBeenCalledTimes(1);
     expect(core.categories).toHaveBeenCalledWith('profile-1');
   });

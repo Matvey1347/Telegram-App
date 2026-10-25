@@ -9,6 +9,9 @@ describe('FinanceBotBrandingService', () => {
   const prisma = {
     telegramBotIntegration: {
       findFirst: jest.fn(),
+    },
+    telegramBotRuntimeInstance: {
+      findFirst: jest.fn(),
       update: jest.fn(),
     },
   };
@@ -33,15 +36,12 @@ describe('FinanceBotBrandingService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     prisma.telegramBotIntegration.findFirst.mockResolvedValue({ id: 'bot-1' });
+    prisma.telegramBotRuntimeInstance.findFirst.mockResolvedValue({ id: 'runtime-local' });
   });
 
-  it('updates Telegram immediately and persists the same logo for the Finance app', async () => {
-    profiles.update.mockResolvedValue({
-      avatarImage: Uint8Array.from([1, 2, 3]),
-      avatarMimeType: 'image/jpeg',
-    });
+  it('saves a site logo on the selected runtime without replacing the Telegram avatar', async () => {
     const logo = {
-      buffer: Buffer.from([4, 5, 6]),
+      buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/P3sAAAAASUVORK5CYII=', 'base64'),
       mimetype: 'image/png',
     } as Express.Multer.File;
 
@@ -61,16 +61,12 @@ describe('FinanceBotBrandingService', () => {
         }),
       }),
     );
-    expect(profiles.update).toHaveBeenCalledWith(
-      'bot-1',
-      TelegramBotRuntimeEnvironment.LOCAL,
-      { name: undefined, avatar: logo },
-    );
-    expect(prisma.telegramBotIntegration.update).toHaveBeenCalledWith({
-      where: { id: 'bot-1' },
+    expect(profiles.update).not.toHaveBeenCalled();
+    expect(prisma.telegramBotRuntimeInstance.update).toHaveBeenCalledWith({
+      where: { id: 'runtime-local' },
       data: expect.objectContaining({
-        financeLogoImage: Uint8Array.from([1, 2, 3]),
-        financeLogoMimeType: 'image/jpeg',
+        financeLogoImage: expect.any(Uint8Array),
+        financeLogoMimeType: 'image/png',
         financeBrandingUpdatedAt: expect.any(Date),
       }),
     });
@@ -113,11 +109,28 @@ describe('FinanceBotBrandingService', () => {
           runtimeInstances: expect.objectContaining({
             where: {
               environment: TelegramBotRuntimeEnvironment.PRODUCTION,
-              runtimeStatus: 'ACTIVE',
             },
           }),
         }),
       }),
     );
+  });
+
+  it('serves the LOCAL favicon independently of the PRODUCTION image', async () => {
+    prisma.telegramBotIntegration.findFirst.mockImplementation(({ select }) => ({
+      runtimeInstances: [{
+        financeFaviconImage: Uint8Array.from(
+          select.runtimeInstances.where.environment === TelegramBotRuntimeEnvironment.LOCAL
+            ? [1, 2, 3]
+            : [4, 5, 6],
+        ),
+        financeFaviconMimeType: 'image/png',
+        financeBrandingUpdatedAt: new Date('2026-10-25T00:00:00Z'),
+      }],
+    }));
+    const local = await service.asset('bot-1', 'favicon', TelegramBotRuntimeEnvironment.LOCAL);
+    const production = await service.asset('bot-1', 'favicon', TelegramBotRuntimeEnvironment.PRODUCTION);
+    expect(local.bytes).toEqual(Buffer.from([1, 2, 3]));
+    expect(production.bytes).toEqual(Buffer.from([4, 5, 6]));
   });
 });

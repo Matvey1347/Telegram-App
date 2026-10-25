@@ -1,4 +1,19 @@
+import type { Metadata } from "next";
 import { FinanceRootApp } from "@finance-web/components/finance-root-app";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ botId: string }>;
+}): Promise<Metadata> {
+  const { botId } = await params;
+  const encodedBotId = encodeURIComponent(botId);
+  const favicon = `/api/finance-bots/${encodedBotId}/branding/favicon`;
+  return {
+    icons: { icon: favicon, shortcut: favicon, apple: favicon },
+    manifest: `/finance/${encodedBotId}/manifest.webmanifest`,
+  };
+}
 
 /**
  * Telegram's existing Finance menu buttons include the logical bot ID in the

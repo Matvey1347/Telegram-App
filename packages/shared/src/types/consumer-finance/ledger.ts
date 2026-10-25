@@ -96,6 +96,7 @@ export type ConsumerFinanceTransaction = {
   merchantDisplay?: string | null;
   merchantNormalized?: string | null;
   source?: ConsumerFinanceTransactionSource;
+  recurringPaymentId?: string | null;
   itemCount?: number;
   account?: ConsumerFinanceAccountSummary;
   category?: ConsumerFinanceCategorySummary | null;

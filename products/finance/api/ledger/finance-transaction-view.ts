@@ -31,6 +31,9 @@ export const financeTransactionSelect = {
   category: {
     select: { id: true, name: true, key: true, type: true, emoji: true },
   },
+  recurringPaymentOccurrence: {
+    select: { recurringPaymentId: true },
+  },
   _count: { select: { items: true } },
 } satisfies Prisma.FinanceTransactionSelect;
 
@@ -54,6 +57,7 @@ export function financeTransactionView(row: FinanceTransactionViewRow) {
     merchantDisplay: row.merchantDisplay,
     merchantNormalized: row.merchantNormalized,
     source: row.source,
+    recurringPaymentId: row.recurringPaymentOccurrence?.recurringPaymentId ?? null,
     itemCount: row._count?.items ?? 0,
     account: row.account
       ? {

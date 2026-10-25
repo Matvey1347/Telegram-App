@@ -54,6 +54,31 @@ describe("groshlySnapshot", () => {
     );
     expect(groshlyIdentityScope("hash=missing-user")).toBe("unverified");
   });
+  it("retains economic amount, purpose, and recorded recurrence for analytics", () => {
+    const snapshot = groshlySnapshot({
+      ...base,
+      transactions: {
+        items: [{
+          id: "transaction-1",
+          accountId: "account-1",
+          categoryId: "category-1",
+          type: "EXPENSE" as const,
+          purpose: "ORDINARY" as const,
+          amount: "50",
+          economicAmount: "40",
+          recurringPaymentId: "regular-1",
+          currency: "PLN",
+          occurredAt: "2026-10-24T10:00:00Z",
+        }],
+      },
+    }) as { transactions: Array<Record<string, unknown>> };
+    expect(snapshot.transactions[0]).toMatchObject({
+      purpose: "ORDINARY",
+      amount: 50,
+      economicAmount: 40,
+      recurringId: "regular-1",
+    });
+  });
   it("keeps server debts, regular payments, and investments visible", () => {
     const snapshot = groshlySnapshot({
       ...base,
