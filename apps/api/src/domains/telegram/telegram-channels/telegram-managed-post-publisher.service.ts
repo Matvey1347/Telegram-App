@@ -33,7 +33,7 @@ import { TelegramManagedPostMediaStorageService } from './telegram-managed-post-
 import { TelegramManagedPostPremiumEmojiRepairService } from './telegram-managed-post-premium-emoji-repair.service';
 import { TelegramManagedPostRevisionStore } from './telegram-managed-post-revision.store';
 import { TelegramPostGroupsService } from './telegram-post-groups.service';
-import { deliverTelegramManagedPostViaBot, type TelegramBotDeliveryOperation } from './telegram-managed-post-bot-delivery';
+import { deliverTelegramManagedPostViaBot, includeReplyMarkupInBotDelivery, type TelegramBotDeliveryOperation } from './telegram-managed-post-bot-delivery';
 import { telegramBotMediaDelivery } from './telegram-managed-post-media-delivery';
 
 @Injectable()
@@ -398,6 +398,12 @@ export class TelegramManagedPostPublisherService {
           post.status === TelegramManagedPostStatus.FAILED || post.status === TelegramManagedPostStatus.PUBLISHING
             ? post.telegramMessageIds
             : [];
+        const replyMarkupIncludedOnSend =
+          replyMarkupIncludedOnMedia ||
+          includeReplyMarkupInBotDelivery(operations, inlineKeyboard);
+        const finalOperationAlreadyJournaled =
+          journaledMessageIds.length >=
+          operations.reduce((count, operation) => count + operation.expectedMessageCount, 0);
         ids = await deliverTelegramManagedPostViaBot({
           operations,
           journaledMessageIds,
@@ -413,7 +419,7 @@ export class TelegramManagedPostPublisherService {
               },
             });
           },
-          ...(buttonRows.length && !replyMarkupIncludedOnMedia
+          ...(buttonRows.length && (!replyMarkupIncludedOnSend || finalOperationAlreadyJournaled)
             ? {
                 applyReplyMarkup: async (lastMessageId: string) => {
                   await this.botApiClient.editMessageReplyMarkup(token, {

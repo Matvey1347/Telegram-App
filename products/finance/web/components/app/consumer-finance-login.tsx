@@ -2,28 +2,18 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Send } from "lucide-react";
-import { Button, ErrorState, LoadingState, WaitingState } from "@consumer-finance/web/components/ui";
+import { ArrowRight, Send, ShieldCheck } from "lucide-react";
+import {
+  Button,
+  ErrorState,
+} from "@consumer-finance/web/components/ui";
 import { consumerFinanceAuthApi } from "@consumer-finance/web/lib/api/consumer-finance-auth-api";
 import { consumerFinanceKeys } from "@consumer-finance/web/lib/query/consumer-finance-query-keys";
 import { normalizeFinanceLocale } from "@consumer-finance/web/components/i18n/core";
 import { financeAuthCopy } from "@consumer-finance/web/components/i18n/auth";
-
-function GroshlyMark() {
-  return (
-    <svg viewBox="0 0 44 44" fill="none" aria-hidden="true" className="h-11 w-11 shrink-0">
-      <rect width="44" height="44" rx="14" fill="#103E30" />
-      <path
-        d="M29.3 15.7a11.1 11.1 0 1 0 1.2 12.9v-6.3h-8.1"
-        stroke="#fff"
-        strokeWidth="6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <circle cx="33.7" cy="10.6" r="4" fill="#D3F18B" />
-    </svg>
-  );
-}
+import { financeLandingCopy } from "@consumer-finance/web/components/i18n/landing";
+import { ConsumerFinanceLanding } from "@consumer-finance/web/components/app/consumer-finance-landing";
+import { useFinanceBotBranding } from "@consumer-finance/web/components/hooks/use-finance-bot-branding";
 
 /** Browser authentication is delegated to the API so Telegram verifies identity server-side. */
 export function ConsumerFinanceLogin({
@@ -33,11 +23,29 @@ export function ConsumerFinanceLogin({
   botId: string;
   onAuthenticated: () => void;
 }) {
-  const t = financeAuthCopy(
-    normalizeFinanceLocale(
-      typeof navigator === "undefined" ? undefined : navigator.language,
-    ),
-  );
+  const [locale, setLocale] = useState<"uk" | "en">("uk");
+  const [theme, setTheme] = useState<"light" | "dark">("light");
+  const [preferencesReady, setPreferencesReady] = useState(false);
+  useEffect(() => {
+    let active = true;
+    queueMicrotask(() => {
+      if (!active) return;
+      const saved = window.localStorage.getItem("groshly-language") || navigator.language;
+      setLocale(normalizeFinanceLocale(saved) === "en" ? "en" : "uk");
+      setTheme(window.localStorage.getItem("groshly-theme") === "dark" ? "dark" : "light");
+      setPreferencesReady(true);
+    });
+    return () => { active = false; };
+  }, []);
+  const branding = useFinanceBotBranding(botId);
+  useEffect(() => {
+    if (!preferencesReady) return;
+    window.localStorage.setItem("groshly-language", locale);
+    window.localStorage.setItem("groshly-theme", theme);
+    document.documentElement.lang = locale;
+    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme === "dark" ? "#0c1712" : "#f7f8f4");
+  }, [locale, theme, preferencesReady]);
+  const t = financeLandingCopy(locale);
   const [waiting, setWaiting] = useState(false);
   const completedToken = useRef<string | null>(null);
   const challenge = useQuery({
@@ -83,69 +91,72 @@ export function ConsumerFinanceLogin({
   };
 
   return (
-    <main className="min-h-dvh bg-[#f7f8f4] px-4 py-8 text-[#18382d] md:px-8 md:py-12">
-      <div className="mx-auto grid min-h-[calc(100dvh-4rem)] max-w-5xl items-center gap-10 md:grid-cols-[1.1fr_.9fr]">
-      <div className="hidden md:block">
-        <div className="flex items-center gap-3">
-          <GroshlyMark />
-          <p className="text-xl font-extrabold tracking-tight">Groshly</p>
-        </div>
-        <p className="mt-10 text-xs font-bold uppercase tracking-[0.22em] text-[#82958b]">
-          {"YOUR FINANCES"}
-        </p>
-        <h2 className="mt-3 max-w-xl text-4xl font-semibold leading-tight tracking-tight">
-          {t.onboardingTitle}
-        </h2>
-        <p className="mt-4 max-w-lg text-[#82958b]">{t.signInHelp}</p>
-      </div>
-      <section className="w-full rounded-[29px] border border-[#e4ebe3] bg-white p-6 shadow-[0_12px_36px_rgba(21,58,41,0.05)] md:p-8">
-        <div className="mb-6 flex items-center gap-3 md:hidden">
-          <GroshlyMark />
-          <p className="text-xl font-extrabold tracking-tight">Groshly</p>
-        </div>
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight">{t.signInTelegram}</h1>
-        <p className="mt-2 text-sm text-[#82958b]">{t.signInHelp}</p>
-        {challenge.isLoading ? <LoadingState text={t.loadingSignIn} /> : null}
-        {challenge.isError || approval.isError ? (
-          <div className="mt-4 space-y-3">
-            <ErrorState text={t.signInUnavailable} />
-            <Button variant="secondary" onClick={() => void retry()}>
-              {t.retry}
-            </Button>
+    <ConsumerFinanceLanding
+      locale={locale}
+      botId={botId}
+      iconUrl={theme === "dark" ? branding.faviconLightUrl : branding.faviconUrl}
+      theme={theme}
+      onThemeChange={() => setTheme((current) => current === "dark" ? "light" : "dark")}
+      onLocaleChange={(value) => setLocale(value === "en" ? "en" : "uk")}
+      loginUrl={
+        challenge.data && approval.data?.status !== "expired"
+          ? challenge.data.loginUrl
+          : undefined
+      }
+      onLoginClick={() => setWaiting(true)}
+      login={
+        <section
+          className="landing-login-card"
+          aria-labelledby="telegram-login-title"
+        >
+          <div className="landing-login-icon">
+            <Send size={25} aria-hidden="true" />
           </div>
-        ) : null}
-        {challenge.data && approval.data?.status !== "expired" ? (
-          <div className="mt-5 space-y-3">
+          <h3 id="telegram-login-title">{t.signInTelegram}</h3>
+          <p>{t.signInHelp}</p>
+          {challenge.data && approval.data?.status !== "expired" ? (
             <a
               href={challenge.data.loginUrl}
               target="_blank"
               rel="noreferrer"
               onClick={() => setWaiting(true)}
-              className="inline-flex min-h-12 items-center justify-center gap-2 rounded-[17px] bg-[#229ED9] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#1b8fc5] focus:outline-none focus:ring-2 focus:ring-[#98c876]"
+              className="landing-login-button"
             >
-              <Send className="h-4 w-4" aria-hidden="true" />
-              {t.telegramSignIn}
+              <Send size={19} aria-hidden="true" />
+              {t.landingCta}
+              <ArrowRight size={19} aria-hidden="true" />
             </a>
-            {waiting ? (
-              <WaitingState
-                text={t.telegramSignInWaiting}
-                context="settings"
-                compact
+          ) : (
+            <button type="button" disabled className="landing-login-button">
+              <Send size={19} aria-hidden="true" />
+              {t.landingCta}
+              <ArrowRight size={19} aria-hidden="true" />
+            </button>
+          )}
+          {waiting ? <p className="landing-login-waiting" role="status">{t.telegramSignInWaiting}</p> : null}
+          {challenge.isError ||
+          approval.isError ||
+          approval.data?.status === "expired" ? (
+            <div className="landing-login-error">
+              <ErrorState
+                text={
+                  approval.data?.status === "expired"
+                    ? t.telegramSignInExpired
+                    : t.signInUnavailable
+                }
               />
-            ) : null}
+              <Button variant="secondary" onClick={() => void retry()}>
+                {t.retry}
+              </Button>
+            </div>
+          ) : null}
+          <div className="landing-login-security">
+            <ShieldCheck size={19} aria-hidden="true" />
+            <span>{t.landingSecurity}</span>
           </div>
-        ) : null}
-        {approval.data?.status === "expired" ? (
-          <div className="mt-4 space-y-3">
-            <ErrorState text={t.telegramSignInExpired} />
-            <Button variant="secondary" onClick={() => void retry()}>
-              {t.retry}
-            </Button>
-          </div>
-        ) : null}
-      </section>
-      </div>
-    </main>
+        </section>
+      }
+    />
   );
 }
 

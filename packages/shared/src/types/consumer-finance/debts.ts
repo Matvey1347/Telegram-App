@@ -58,6 +58,8 @@ export type ConsumerFinanceDebtInput = {
   emoji?: string | null;
   amount: string;
   accountId: string;
+  /** On creation, record the corresponding cash movement in the account. Defaults to true. */
+  recordTransaction?: boolean;
   /** Profile-local calendar date in YYYY-MM-DD format. */
   dueDate: string;
   note?: string | null;

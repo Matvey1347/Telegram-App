@@ -364,11 +364,11 @@ export class ConfiguredBotAnalyticsService {
           registeredUsers: Math.max(bot.registeredUsers, legacy?.registeredUsers ?? 0),
           profiles: Math.max(bot.profiles, legacy?.profiles ?? 0),
           managementBotId: legacy?.botId ?? null,
-          logoUrl: legacy?.hasLogo
-            ? `/finance-bots/${legacy.botId}/branding/logo?environment=${bot.environment}&version=${brandingVersion}`
-            : null,
           faviconUrl: legacy?.hasFavicon
             ? `/finance-bots/${legacy.botId}/branding/favicon?environment=${bot.environment}&version=${brandingVersion}`
+            : null,
+          faviconLightUrl: legacy?.hasFaviconLight
+            ? `/finance-bots/${legacy.botId}/branding/favicon-light?environment=${bot.environment}&version=${brandingVersion}`
             : null,
           telegramPhotoUrl: legacy?.hasTelegramPhoto
             ? `/finance-bots/${legacy.botId}/branding/telegram?environment=${bot.environment}&version=${encodeURIComponent(legacy.telegramPhotoUpdatedAt ?? 'initial')}`
@@ -395,8 +395,8 @@ export class ConfiguredBotAnalyticsService {
           select: {
             environment: true,
             username: true,
-            financeLogoMimeType: true,
             financeFaviconMimeType: true,
+            financeFaviconLightMimeType: true,
             financeBrandingUpdatedAt: true,
             avatarMimeType: true,
             avatarUpdatedAt: true,
@@ -408,8 +408,8 @@ export class ConfiguredBotAnalyticsService {
       string,
       {
         botId: string;
-        hasLogo: boolean;
         hasFavicon: boolean;
+        hasFaviconLight: boolean;
         hasTelegramPhoto: boolean;
         brandingUpdatedAt: string | null;
         telegramPhotoUpdatedAt: string | null;
@@ -423,8 +423,8 @@ export class ConfiguredBotAnalyticsService {
         if (!username) continue;
         metrics.set(`${runtime.environment}:${username}`, {
           botId: bot.id,
-          hasLogo: Boolean(runtime.financeLogoMimeType),
           hasFavicon: Boolean(runtime.financeFaviconMimeType),
+          hasFaviconLight: Boolean(runtime.financeFaviconLightMimeType),
           hasTelegramPhoto: Boolean(runtime.avatarMimeType),
           brandingUpdatedAt: runtime.financeBrandingUpdatedAt?.toISOString() ?? null,
           telegramPhotoUpdatedAt: runtime.avatarUpdatedAt?.toISOString() ?? null,

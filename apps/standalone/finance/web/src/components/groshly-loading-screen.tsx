@@ -1,22 +1,10 @@
 export function GroshlyLoadingScreen() {
-  const language =
-    typeof window === "undefined"
-      ? "uk"
-      : window.localStorage.getItem("groshly-language") || "uk";
-  const label =
-    language === "en"
-      ? "Loading…"
-      : language === "ru"
-        ? "Загрузка…"
-        : "Завантаження…";
-
+  const icon = process.env.NODE_ENV === "development" ? "/brand/groshly-dev-icon.png" : "/brand/groshly-icon.png";
   return (
-    <main className="app-shell" aria-busy="true" data-testid="groshly-loading">
-      <div className="busy-cover">
-        <div className="busy-card" role="status" aria-live="polite">
-          <span className="loader-ring" aria-hidden="true" />
-          <b>{label}</b>
-        </div>
+    <main className="groshly-page-loading" aria-busy="true" data-testid="groshly-loading">
+      <div role="status" aria-live="polite">
+        <span className="groshly-loading-brand"><img src={icon} alt="" />Groshly<span>.</span></span>
+        <span>Завантаження…</span>
       </div>
     </main>
   );

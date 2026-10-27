@@ -377,6 +377,8 @@ describe('TelegramSystemBotPostImportService', () => {
     await test.service.input(scope, { message_id: 10, photo: [] });
 
     expect(test.workflows.completeCapture).not.toHaveBeenCalled();
+    expect(test.api.sendPhoto).not.toHaveBeenCalled();
+    expect(test.api.sendMediaGroup).not.toHaveBeenCalled();
     expect(test.api.sendMessage).toHaveBeenCalledWith(
       'token',
       expect.objectContaining({
@@ -440,6 +442,103 @@ describe('TelegramSystemBotPostImportService', () => {
 
     expect(transitionedPayload?.contents).toHaveLength(1);
     expect(transitionedPayload?.contents[0].mediaItems).toHaveLength(2);
+    expect(test.api.sendPhoto).not.toHaveBeenCalled();
+    expect(test.api.sendMediaGroup).not.toHaveBeenCalled();
+  });
+
+  it('sends one complete album preview only after Finish', async () => {
+    const test = setup();
+    const album = {
+      ...captured,
+      mediaGroupId: 'album-1',
+      imageUrls: ['https://cdn.test/first.jpg', 'https://cdn.test/second.jpg'],
+      mediaItems: [
+        {
+          kind: 'PHOTO' as const,
+          url: 'https://cdn.test/first.jpg',
+          sourceMessageId: 10,
+        },
+        {
+          kind: 'PHOTO' as const,
+          url: 'https://cdn.test/second.jpg',
+          sourceMessageId: 11,
+        },
+      ],
+      buttonRows: [],
+    };
+    test.workflows.get.mockResolvedValue(
+      workflow({
+        version: 4,
+        step: 'COLLECT_CONTENT',
+        payload: { mode: 'single', contents: [album] },
+      }),
+    );
+    test.workflows.completeCapture.mockResolvedValue(
+      workflow({
+        version: 5,
+        status: TelegramSystemBotWorkflowStatus.COMPLETED,
+        payload: { mode: 'single', contents: [album] },
+      }),
+    );
+    test.api.sendMediaGroup.mockResolvedValue([
+      { message_id: 81 },
+      { message_id: 82 },
+    ]);
+
+    await test.service.callback(scope, 'sbi:workflow-1:4:finish');
+
+    expect(test.workflows.completeCapture).toHaveBeenCalledTimes(1);
+    expect(test.api.sendMediaGroup).toHaveBeenCalledTimes(1);
+    expect(test.api.sendMediaGroup).toHaveBeenCalledWith(
+      'token',
+      expect.objectContaining({
+        chat_id: '42',
+        media: [
+          expect.objectContaining({
+            media: 'https://cdn.test/first.jpg',
+            caption: 'Formatted post',
+          }),
+          expect.objectContaining({ media: 'https://cdn.test/second.jpg' }),
+        ],
+      }),
+    );
+    expect(test.api.sendMessage).not.toHaveBeenCalled();
+    expect(test.api.editMessageText).toHaveBeenCalledWith(
+      'token',
+      expect.objectContaining({
+        text: expect.stringContaining('Return to the website to continue.'),
+      }),
+    );
+  });
+
+  it('keeps a completed album import available when Telegram preview delivery fails', async () => {
+    const test = setup();
+    const album = { ...captured, mediaGroupId: 'album-1' };
+    test.workflows.get.mockResolvedValue(
+      workflow({ version: 4, payload: { mode: 'single', contents: [album] } }),
+    );
+    test.workflows.completeCapture.mockResolvedValue(
+      workflow({
+        version: 5,
+        status: TelegramSystemBotWorkflowStatus.COMPLETED,
+        payload: { mode: 'single', contents: [album] },
+      }),
+    );
+    test.api.sendPhoto.mockRejectedValue(new Error('Telegram unavailable'));
+
+    await expect(
+      test.service.callback(scope, 'sbi:workflow-1:4:finish'),
+    ).resolves.toBeDefined();
+
+    expect(test.workflows.completeCapture).toHaveBeenCalledTimes(1);
+    expect(test.api.editMessageText).toHaveBeenCalledWith(
+      'token',
+      expect.objectContaining({
+        text: expect.stringContaining(
+          'Post captured, but its preview could not be sent.',
+        ),
+      }),
+    );
   });
 
   it('enforces the multiple-import post limit', async () => {

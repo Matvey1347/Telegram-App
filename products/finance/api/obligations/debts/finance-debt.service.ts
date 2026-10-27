@@ -80,10 +80,15 @@ export class FinanceDebtService {
       select: { id: true, currency: true },
     });
     if (!selectedAccount) throw new NotFoundException('Finance account not found');
-    const profile = await this.ledger.profileContext(profileId);
-    const rates = await this.ledger.prepareTransactionRateSource(profile, [
-      { currency: selectedAccount.currency, occurredAt },
-    ]);
+    const recordTransaction = input.recordTransaction !== false;
+    const profile = recordTransaction
+      ? await this.ledger.profileContext(profileId)
+      : null;
+    const rates = profile
+      ? await this.ledger.prepareTransactionRateSource(profile, [
+          { currency: selectedAccount.currency, occurredAt },
+        ])
+      : null;
     const result = await this.prisma.$transaction(async (tx) => {
       const [obligationProfile, account] = await Promise.all([
         financeObligationProfile(tx, profileId),
@@ -109,10 +114,15 @@ export class FinanceDebtService {
         },
         select: financeDebtSelect,
       });
-      // Recording a debt is also a cash movement. It must not be represented
-      // only by the obligation, otherwise the selected account balance is
-      // wrong until settlement. These balance-only purposes keep it out of
-      // income and expense analytics while retaining the cash flow.
+      if (!recordTransaction) {
+        const scheduledAt = await this.schedule(tx, obligationProfile, debt);
+        return {
+          value: financeDebtView(debt, obligationProfile.timezone),
+          scheduledAt,
+        };
+      }
+      if (!profile || !rates) throw new Error('Debt transaction context is missing');
+      // When cash moved, record it without affecting income/expense analytics.
       const transactionInput = {
         accountId: account.id,
         type:

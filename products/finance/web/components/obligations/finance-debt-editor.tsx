@@ -54,6 +54,7 @@ export function FinanceDebtEditor({
     editing ? financeCalendarDate(editing.dueAt, editing.scheduleTimezone) : "",
   );
   const [note, setNote] = useState(editing?.note ?? "");
+  const [recordTransaction, setRecordTransaction] = useState(true);
   const rows = (accounts.data ?? []).filter(
     (account) => !account.archivedAt || account.id === editing?.accountId,
   );
@@ -71,6 +72,7 @@ export function FinanceDebtEditor({
         accountId: selectedAccountId,
         dueDate,
         note: note.trim() || null,
+        ...(!editing ? { recordTransaction } : {}),
       };
       return editing
         ? consumerFinanceObligationsApi.updateDebt(botId, editing.id, input)
@@ -144,6 +146,23 @@ export function FinanceDebtEditor({
             ))}
           </Select>
         </FormField>
+        {!editing ? (
+          <div className="flex items-center justify-between gap-4 rounded-2xl border border-[#cbdcc7] bg-[#edf3eb] px-4 py-3">
+            <span id="debt-record-transaction-label" className="text-sm font-semibold text-[#18382d]">
+              {t.recordTransaction}
+            </span>
+            <button
+              type="button"
+              role="switch"
+              aria-labelledby="debt-record-transaction-label"
+              aria-checked={recordTransaction}
+              className={`relative h-7 w-12 shrink-0 rounded-full transition-colors ${recordTransaction ? "bg-[#194d38]" : "bg-[#9aaba0]"}`}
+              onClick={() => setRecordTransaction((current) => !current)}
+            >
+              <span className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${recordTransaction ? "left-1 translate-x-5" : "left-1"}`} />
+            </button>
+          </div>
+        ) : null}
         <FormField label={t.dueDate}>
           <DateInput
             lang={locale}
@@ -164,6 +183,12 @@ export function FinanceDebtEditor({
         >
           {save.isPending ? t.saving : t.save}
         </Button>
+        {save.isPending ? (
+          <div role="status" aria-live="polite" className="flex items-center gap-2 rounded-xl border border-[#cbdcc7] bg-[#edf3eb] px-3 py-2 text-sm text-[#194d38]">
+            <span className="h-4 w-4 animate-spin rounded-full border-2 border-[#194d38] border-r-transparent" aria-hidden="true" />
+            {t.saving}
+          </div>
+        ) : null}
         {save.isError ? (
           <div className="sm:col-span-2">
             <ErrorState text={t.debtSaveError} />

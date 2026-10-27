@@ -742,11 +742,19 @@ export class CrossPromotionPlansService {
         'Only historical promotions can be updated without rescheduling',
       );
     }
-    const normalized = await this.validateInput(workspaceId, dto);
     const storedPlacements = json<ScheduledPlacement[]>(
       existing.placementPostIds,
       [],
     );
+    if (
+      existing.status === 'DRAFT' ||
+      (existing.status === 'ACTIVE' && !storedPlacements.length)
+    ) {
+      throw new BadRequestException(
+        'This promotion has no scheduled posts. Activate it to create the publications first',
+      );
+    }
+    const normalized = await this.validateInput(workspaceId, dto);
     const nextDeletionAt = nextPublisherDeletionAt(dto.publicationPost);
     const managedPosts = storedPlacements.length
       ? await this.prisma.telegramManagedPost.findMany({

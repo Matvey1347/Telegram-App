@@ -29,9 +29,8 @@ export class FinanceBotBrandingService {
     environment: TelegramBotRuntimeEnvironment,
     input: {
       name?: string;
-      logo?: Express.Multer.File;
       favicon?: Express.Multer.File;
-      telegramPhoto?: Express.Multer.File;
+      faviconLight?: Express.Multer.File;
     },
   ) {
     const membership = await this.workspace.requireWorkspaceRole(userId, [
@@ -56,7 +55,7 @@ export class FinanceBotBrandingService {
       select: { id: true },
     });
     if (!runtime) throw new NotFoundException('Finance bot runtime not found');
-    if (!input.name?.trim() && !input.logo && !input.favicon && !input.telegramPhoto) {
+    if (!input.name?.trim() && !input.favicon && !input.faviconLight) {
       throw new BadRequestException('Bot name or branding image is required');
     }
 
@@ -67,50 +66,49 @@ export class FinanceBotBrandingService {
       }
       favicon = await sharp(input.favicon.buffer)
         .rotate()
-        .resize(512, 512, {
+        .resize(440, 440, {
           fit: 'contain',
           background: { r: 0, g: 0, b: 0, alpha: 0 },
         })
+        .extend({ top: 36, bottom: 36, left: 36, right: 36, background: '#ffffff' })
+        .flatten({ background: '#ffffff' })
         .png()
         .toBuffer();
     }
 
-    let logo: { bytes: Buffer; mimeType: string } | undefined;
-    if (input.logo) {
-      if (!input.logo.mimetype.startsWith('image/')) {
-        throw new BadRequestException('Finance logo must be an image');
+    let faviconLight: Buffer | undefined;
+    if (input.faviconLight) {
+      if (!input.faviconLight.mimetype.startsWith('image/')) {
+        throw new BadRequestException('Light finance favicon must be an image');
       }
-      logo = {
-        bytes: await sharp(input.logo.buffer)
-          .rotate()
-          .resize(1024, 1024, { fit: 'inside', withoutEnlargement: true })
-          .png()
-          .toBuffer(),
-        mimeType: 'image/png',
-      };
+      faviconLight = await sharp(input.faviconLight.buffer)
+        .rotate()
+        .resize(512, 512, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+        .png()
+        .toBuffer();
     }
 
-    if (input.name?.trim() || input.telegramPhoto) {
+    if (input.name?.trim() || favicon) {
       await this.profiles.update(botIntegrationId, environment, {
         name: input.name,
-        avatar: input.telegramPhoto,
+        avatar: favicon ? { buffer: favicon, mimetype: 'image/png' } as Express.Multer.File : undefined,
       });
     }
 
-    if (logo || favicon) {
+    if (favicon || faviconLight) {
       await this.prisma.telegramBotRuntimeInstance.update({
         where: { id: runtime.id },
         data: {
-          ...(logo
-            ? {
-                financeLogoImage: Uint8Array.from(logo.bytes),
-                financeLogoMimeType: logo.mimeType,
-              }
-            : {}),
           ...(favicon
             ? {
                 financeFaviconImage: Uint8Array.from(favicon),
                 financeFaviconMimeType: 'image/png',
+              }
+            : {}),
+          ...(faviconLight
+            ? {
+                financeFaviconLightImage: Uint8Array.from(faviconLight),
+                financeFaviconLightMimeType: 'image/png',
               }
             : {}),
           financeBrandingUpdatedAt: new Date(),
@@ -121,7 +119,7 @@ export class FinanceBotBrandingService {
 
   async asset(
     botIntegrationId: string,
-    kind: 'logo' | 'favicon' | 'telegram',
+    kind: 'favicon' | 'favicon-light',
     requestedEnvironment?: TelegramBotRuntimeEnvironment,
   ) {
     const environment = requestedEnvironment ?? this.environments.current();
@@ -140,10 +138,10 @@ export class FinanceBotBrandingService {
             avatarImage: true,
             avatarMimeType: true,
             avatarUpdatedAt: true,
-            financeLogoImage: true,
-            financeLogoMimeType: true,
             financeFaviconImage: true,
             financeFaviconMimeType: true,
+            financeFaviconLightImage: true,
+            financeFaviconLightMimeType: true,
             financeBrandingUpdatedAt: true,
           },
           take: 1,
@@ -151,20 +149,17 @@ export class FinanceBotBrandingService {
       },
     });
     const runtime = bot?.runtimeInstances[0];
-    const bytes = kind === 'logo'
-      ? (runtime?.financeLogoImage ?? runtime?.avatarImage)
-      : kind === 'favicon' ? runtime?.financeFaviconImage : runtime?.avatarImage;
+    const bytes = kind === 'favicon-light'
+      ? (runtime?.financeFaviconLightImage ?? runtime?.financeFaviconImage ?? runtime?.avatarImage)
+      : (runtime?.financeFaviconImage ?? runtime?.avatarImage);
     if (!bytes) throw new NotFoundException('Finance branding asset not found');
     return {
       bytes: Buffer.from(bytes),
-      contentType:
-        (kind === 'logo'
-          ? (runtime?.financeLogoImage ? runtime.financeLogoMimeType : runtime?.avatarMimeType)
-          : kind === 'favicon' ? runtime?.financeFaviconMimeType : runtime?.avatarMimeType) || 'image/png',
-      updatedAt:
-        kind === 'logo'
-          ? (runtime?.financeLogoImage ? runtime.financeBrandingUpdatedAt : runtime?.avatarUpdatedAt)
-          : kind === 'favicon' ? runtime?.financeBrandingUpdatedAt : runtime?.avatarUpdatedAt,
+      contentType: (kind === 'favicon-light' && runtime?.financeFaviconLightImage
+        ? runtime.financeFaviconLightMimeType
+        : runtime?.financeFaviconImage ? runtime.financeFaviconMimeType : runtime?.avatarMimeType) || 'image/png',
+      updatedAt: runtime?.financeFaviconImage || runtime?.financeFaviconLightImage
+        ? runtime.financeBrandingUpdatedAt : runtime?.avatarUpdatedAt,
     };
   }
 }

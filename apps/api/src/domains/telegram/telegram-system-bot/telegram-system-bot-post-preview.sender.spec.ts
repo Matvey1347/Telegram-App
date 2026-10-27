@@ -1,6 +1,54 @@
 import { sendTelegramSystemBotPostPreview } from './telegram-system-bot-post-preview.sender';
 
 describe('sendTelegramSystemBotPostPreview', () => {
+  it('keeps a photo album and its caption in one Telegram publication', async () => {
+    const api = {
+      call: jest.fn(),
+      sendMessage: jest.fn(),
+      sendMediaGroup: jest
+        .fn()
+        .mockResolvedValue([{ message_id: 11 }, { message_id: 12 }]),
+      sendPhoto: jest.fn(),
+    };
+
+    await expect(
+      sendTelegramSystemBotPostPreview({
+        api: api as never,
+        token: 'bot-token',
+        scope: {
+          connectionId: 'connection-1',
+          workspaceId: 'workspace-1',
+          userId: 'user-1',
+          telegramUserId: 'telegram-user-1',
+          chatId: 'chat-1',
+          timezone: 'Europe/Warsaw',
+        },
+        draft: {
+          text: '**Album caption**',
+          mediaItems: [
+            { kind: 'PHOTO', url: 'https://cdn.test/first.jpg' },
+            { kind: 'PHOTO', url: 'https://cdn.test/second.jpg' },
+          ],
+          buttonRows: [],
+        },
+      }),
+    ).resolves.toEqual({ status: 'SENT', messageIds: [11, 12] });
+
+    expect(api.sendMediaGroup).toHaveBeenCalledWith('bot-token', {
+      chat_id: 'chat-1',
+      media: [
+        {
+          type: 'photo',
+          media: 'https://cdn.test/first.jpg',
+          caption: '<b>Album caption</b>',
+          parse_mode: 'HTML',
+        },
+        { type: 'photo', media: 'https://cdn.test/second.jpg' },
+      ],
+    });
+    expect(api.sendMessage).not.toHaveBeenCalled();
+  });
+
   it('sends a Premium emoji button through Bot API native icon markup', async () => {
     const api = {
       call: jest.fn(),
@@ -13,28 +61,48 @@ describe('sendTelegramSystemBotPostPreview', () => {
       api: api as never,
       token: 'bot-token',
       scope: {
-        connectionId: 'connection-1', workspaceId: 'workspace-1', userId: 'user-1',
-        telegramUserId: 'telegram-user-1', chatId: 'chat-1', timezone: 'Europe/Warsaw',
+        connectionId: 'connection-1',
+        workspaceId: 'workspace-1',
+        userId: 'user-1',
+        telegramUserId: 'telegram-user-1',
+        chatId: 'chat-1',
+        timezone: 'Europe/Warsaw',
       },
       draft: {
-        text: 'Preview', imageUrls: [], mediaItems: [],
+        text: 'Preview',
+        imageUrls: [],
+        mediaItems: [],
         // Existing drafts may still contain the old markup. The shared
         // keyboard normalizer must repair that form as well.
-        buttonRows: [[{
-          text: '![📣](tg://emoji?id=5330237710655306682) Subscribe',
-          url: 'https://example.com', style: 'primary',
-        }]],
+        buttonRows: [
+          [
+            {
+              text: '![📣](tg://emoji?id=5330237710655306682) Subscribe',
+              url: 'https://example.com',
+              style: 'primary',
+            },
+          ],
+        ],
       },
     });
 
-    expect(api.sendMessage).toHaveBeenCalledWith('bot-token', expect.objectContaining({
-      reply_markup: {
-        inline_keyboard: [[{
-          text: '📣 Subscribe', url: 'https://example.com', style: 'primary',
-          icon_custom_emoji_id: '5330237710655306682',
-        }]],
-      },
-    }));
+    expect(api.sendMessage).toHaveBeenCalledWith(
+      'bot-token',
+      expect.objectContaining({
+        reply_markup: {
+          inline_keyboard: [
+            [
+              {
+                text: '📣 Subscribe',
+                url: 'https://example.com',
+                style: 'primary',
+                icon_custom_emoji_id: '5330237710655306682',
+              },
+            ],
+          ],
+        },
+      }),
+    );
   });
 
   it('sanitizes an invisible copied URL character before previewing a normal button', async () => {
@@ -49,26 +117,44 @@ describe('sendTelegramSystemBotPostPreview', () => {
       api: api as never,
       token: 'bot-token',
       scope: {
-        connectionId: 'connection-1', workspaceId: 'workspace-1', userId: 'user-1',
-        telegramUserId: 'telegram-user-1', chatId: 'chat-1', timezone: 'Europe/Warsaw',
+        connectionId: 'connection-1',
+        workspaceId: 'workspace-1',
+        userId: 'user-1',
+        telegramUserId: 'telegram-user-1',
+        chatId: 'chat-1',
+        timezone: 'Europe/Warsaw',
       },
       draft: {
-        text: 'Preview', imageUrls: [], mediaItems: [],
-        buttonRows: [[{
-          text: 'Join',
-          url: 'https://t.me/+ovHEbXGetFhiNDhi\u2060',
-          style: 'default',
-        }]],
+        text: 'Preview',
+        imageUrls: [],
+        mediaItems: [],
+        buttonRows: [
+          [
+            {
+              text: 'Join',
+              url: 'https://t.me/+ovHEbXGetFhiNDhi\u2060',
+              style: 'default',
+            },
+          ],
+        ],
       },
     });
 
-    expect(api.sendMessage).toHaveBeenCalledWith('bot-token', expect.objectContaining({
-      reply_markup: {
-        inline_keyboard: [[{
-          text: 'Join', url: 'https://t.me/+ovHEbXGetFhiNDhi',
-        }]],
-      },
-    }));
+    expect(api.sendMessage).toHaveBeenCalledWith(
+      'bot-token',
+      expect.objectContaining({
+        reply_markup: {
+          inline_keyboard: [
+            [
+              {
+                text: 'Join',
+                url: 'https://t.me/+ovHEbXGetFhiNDhi',
+              },
+            ],
+          ],
+        },
+      }),
+    );
   });
 
   it('keeps a video and a custom-emoji caption together when the visible caption fits', async () => {

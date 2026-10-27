@@ -45,8 +45,36 @@ describe("ConsumerFinanceLogin", () => {
     });
     const onAuthenticated = renderLogin();
 
-    const link = await screen.findByRole("link", {
-      name: "Telegram sign in",
+    expect(
+      await screen.findByRole("heading", {
+        level: 1,
+        name: "Know where your money goes.",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", {
+        level: 3,
+        name: "All accounts in one view",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { level: 3, name: "Sign in with Telegram" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", {
+        level: 2,
+        name: "A clearer picture of your money.",
+      }),
+    ).toBeInTheDocument();
+
+    const link = await waitFor(() => {
+      const candidate = screen
+        .getAllByRole("link", {
+          name: "Sign in or sign up",
+        })
+        .find((item) => item.getAttribute("href")?.startsWith("https://t.me/"));
+      if (!candidate) throw new Error("Telegram sign-in link is missing");
+      return candidate;
     });
     expect(link).toHaveAttribute(
       "href",

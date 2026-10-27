@@ -168,10 +168,59 @@ describe("consumer finance obligation editors", () => {
       name: "Alex",
       amount: "42",
       accountId: "cash",
+      recordTransaction: true,
       dueDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
       note: "Dinner",
     });
     expect(onSaved).toHaveBeenCalledWith(debt);
+  });
+
+  it("lets a debt be created without an account transaction", async () => {
+    api.createDebt.mockResolvedValue({ ...debt, originTransactionId: null });
+    wrapper(
+      <FinanceDebtEditor
+        botId="bot" editing={null} locale="en" timezone="UTC"
+        onClose={vi.fn()} onSaved={vi.fn()}
+      />,
+    );
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.change(dialog.querySelector("input:not([type='hidden'])")!, {
+      target: { value: "Item" },
+    });
+    const inputs = dialog.querySelectorAll("input:not([type='hidden'])");
+    fireEvent.change(inputs[1]!, { target: { value: "42" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Select date" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Today" }));
+    fireEvent.click(within(dialog).getByRole("switch", {
+      name: "Record money movement in this account",
+    }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(api.createDebt).toHaveBeenCalledWith("bot",
+      expect.objectContaining({ recordTransaction: false })));
+  });
+
+  it("shows a loading alert until debt creation finishes", async () => {
+    let finish!: (value: ConsumerFinanceDebt) => void;
+    api.createDebt.mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
+    wrapper(
+      <FinanceDebtEditor
+        botId="bot" editing={null} locale="en" timezone="UTC"
+        onClose={vi.fn()} onSaved={vi.fn()}
+      />,
+    );
+    const dialog = await screen.findByRole("dialog");
+    const inputs = dialog.querySelectorAll("input:not([type='hidden'])");
+    fireEvent.change(inputs[0]!, { target: { value: "Item" } });
+    fireEvent.change(inputs[1]!, { target: { value: "42" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Select date" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Today" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(api.createDebt).toHaveBeenCalledOnce());
+    expect(within(dialog).getByRole("status")).toHaveTextContent("Saving");
+    expect(within(dialog).getByRole("button", { name: "Saving…" })).toBeDisabled();
+    finish(debt);
+    await waitFor(() => expect(within(dialog).queryByRole("status")).not.toBeInTheDocument());
   });
 
   it("updates a debt without changing its existing relation defaults", async () => {

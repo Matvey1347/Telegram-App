@@ -31,7 +31,7 @@ describe("useFinanceBotBranding", () => {
     mocks.apiBase = "/api";
 
     expect(serverHtml).toContain(
-      'data-logo-url="/api/finance-bots/finance%20bot/branding/logo"',
+      'data-logo-url="/api/finance-bots/finance%20bot/branding/favicon"',
     );
 
     const container = document.createElement("div");
@@ -56,7 +56,7 @@ describe("useFinanceBotBranding", () => {
     ).toBe(false);
     expect(container.querySelector("span")).toHaveAttribute(
       "data-logo-url",
-      "/api/finance-bots/finance%20bot/branding/logo",
+      "/api/finance-bots/finance%20bot/branding/favicon",
     );
 
     await act(async () => root?.unmount());
@@ -71,7 +71,7 @@ describe("useFinanceBotBranding", () => {
     await waitFor(() =>
       expect(container.querySelector("span")).toHaveAttribute(
         "data-logo-url",
-        "http://localhost:4000/api/finance-bots/finance%20bot/branding/logo",
+        "http://localhost:4000/api/finance-bots/finance%20bot/branding/favicon",
       ),
     );
   });

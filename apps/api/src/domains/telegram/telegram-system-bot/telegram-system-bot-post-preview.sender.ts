@@ -94,19 +94,29 @@ export async function sendTelegramSystemBotPostPreview(input: {
     }
   } else {
     if (mediaItems.length) {
+      const captionFits = visibleCaptionText.length <= 1024;
       const sent = await api.sendMediaGroup(token, {
         chat_id: scope.chatId,
-        media: mediaItems.map((media) => ({
+        media: mediaItems.map((media, index) => ({
           type: media.kind === 'VIDEO' ? 'video' : 'photo',
           media: media.url,
+          ...(index === 0 && captionFits && formattedText
+            ? { caption: formattedText, parse_mode: 'HTML' }
+            : {}),
         })),
       });
       messageIds.push(...sent.map((message) => message.message_id));
     }
-    if (text || replyMarkup.inline_keyboard.length) {
+    if (
+      (text && (!mediaItems.length || visibleCaptionText.length > 1024)) ||
+      replyMarkup.inline_keyboard.length
+    ) {
       const sent = await api.sendMessage(token, {
         chat_id: scope.chatId,
-        text: formattedText || 'Advertising post',
+        text:
+          mediaItems.length && visibleCaptionText.length <= 1024
+            ? 'Post buttons'
+            : formattedText || 'Advertising post',
         parse_mode: 'HTML',
         reply_markup: replyMarkup,
       });

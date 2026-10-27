@@ -3,6 +3,7 @@ import {
   ArrayMaxSize,
   ArrayMinSize,
   IsArray,
+  IsBoolean,
   IsDateString,
   IsIn,
   IsInt,
@@ -25,6 +26,7 @@ export class FinanceDebtInputDto {
   @IsOptional() @IsString() @MaxLength(2048) emoji?: string | null;
   @IsNumberString() amount!: string;
   @IsString() accountId!: string;
+  @IsOptional() @IsBoolean() recordTransaction?: boolean;
   @IsString() @Matches(DATE_ONLY) dueDate!: string;
   @IsOptional() @IsString() @MaxLength(500) note?: string | null;
 }

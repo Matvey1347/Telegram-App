@@ -1,23 +1,33 @@
 import type { MetadataRoute } from "next";
 
 export function buildFinanceManifest(): MetadataRoute.Manifest {
+  const icon = process.env.NODE_ENV === "development" ? "/brand/groshly-dev-icon.png" : "/brand/groshly-icon.png";
+  const smallIcon = process.env.NODE_ENV === "development" ? "/brand/groshly-dev-icon-192.png" : "/brand/groshly-icon-192.png";
   return {
     id: "/?app=finance",
-    name: "Finance",
-    short_name: "Finance",
-    description: "Personal finance companion for your Telegram Finance bot.",
+    name: "Groshly",
+    short_name: "Groshly",
+    description: "Your accounts, spending, debts and insights in one place.",
     start_url: "/?source=pwa",
     scope: "/",
     display: "standalone",
     orientation: "any",
-    background_color: "#0a0a0a",
-    theme_color: "#0a0a0a",
+    background_color: "#f7f8f2",
+    theme_color: "#123d2d",
     categories: ["finance", "productivity"],
     icons: [
-      { src: "/brand/finance-pwa-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
-      { src: "/brand/finance-pwa-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
-      { src: "/brand/finance-pwa-maskable-192.png", sizes: "192x192", type: "image/png", purpose: "maskable" },
-      { src: "/brand/finance-pwa-maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
+      {
+        src: smallIcon,
+        sizes: "192x192",
+        type: "image/png",
+        purpose: "any",
+      },
+      {
+        src: icon,
+        sizes: "512x512",
+        type: "image/png",
+        purpose: "any",
+      },
     ],
   };
 }

@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { GroshlyApp } from "@finance-web/groshly/main";
 import { GroshlyLoadingScreen } from "@finance-web/components/groshly-loading-screen";
 import { useTelegramMiniAppBootstrap } from "@consumer-finance/web/components/hooks/use-telegram-mini-app-bootstrap";
+import { ConsumerFinanceLogin } from "@consumer-finance/web/components/app/consumer-finance-login";
 import { useFinanceBotBranding } from "@consumer-finance/web/components/hooks/use-finance-bot-branding";
 import { consumerFinanceInsightsApi } from "@consumer-finance/web/lib/api/consumer-finance-insights-api";
 import { consumerFinanceInvestmentsApi } from "@consumer-finance/web/lib/api/consumer-finance-investments-api";
@@ -23,6 +24,7 @@ const GroshlyRoot = GroshlyApp as ComponentType<{
   initialData: GroshlySnapshot;
   logoUrl: string;
   faviconUrl: string;
+  faviconLightUrl?: string;
   telegramAuthenticated: boolean;
   onRefresh: () => Promise<GroshlySnapshot>;
   onCloseInvestment: (input: {
@@ -134,6 +136,7 @@ export function groshlyDebtInput(values: Record<string, unknown>): ConsumerFinan
     emoji: values.emoji == null ? null : String(values.emoji),
     amount: String(values.amount ?? ""),
     accountId: String(values.accountId ?? ""),
+    recordTransaction: values.recordTransaction !== false,
     dueDate: String(values.due ?? new Date().toISOString().slice(0, 10)),
     ...(values.notes ? { note: String(values.notes) } : {}),
   };
@@ -297,6 +300,7 @@ export function groshlySnapshot({
         amount: Number(debt.amount),
         remaining: Number(debt.amount),
         accountId: debt.accountId,
+        recordTransaction: Boolean(debt.originTransactionId),
         currency: debt.currency,
         due: debt.dueAt.slice(0, 10),
         emoji: emoji(debt.iconPresentation, "🤝"),
@@ -330,7 +334,6 @@ export function groshlySnapshot({
 
 export function GroshlyFinanceApp({ botId }: { botId: string }) {
   const queryClient = useQueryClient();
-  const { logoUrl, faviconUrl } = useFinanceBotBranding(botId);
   const bootstrap = useTelegramMiniAppBootstrap();
   const identityScope = groshlyIdentityScope(
     bootstrap.status === "ready" ? bootstrap.initData : undefined,
@@ -372,6 +375,10 @@ export function GroshlyFinanceApp({ botId }: { botId: string }) {
     refetchOnMount: "always",
     refetchOnReconnect: false,
   });
+  const { logoUrl, faviconUrl, faviconLightUrl } = useFinanceBotBranding(
+    botId,
+    financeData.data?.authenticated === true,
+  );
   const obligations = useQuery({
     queryKey: obligationsKey,
     queryFn: async () => {
@@ -919,16 +926,12 @@ export function GroshlyFinanceApp({ botId }: { botId: string }) {
   }
   if (!financeData.data?.authenticated) {
     return (
-      <main className="auth-screen">
-        <div className="auth-panel">
-          <span className="auth-panel-kicker">GROSHLY</span>
-          <h2>Sign in with Telegram</h2>
-          <p>
-            Open Finance from the Telegram bot to securely authenticate your
-            account.
-          </p>
-        </div>
-      </main>
+      <ConsumerFinanceLogin
+        botId={botId}
+        onAuthenticated={() => {
+          void queryClient.invalidateQueries({ queryKey: groshlyReadKey });
+        }}
+      />
     );
   }
   if (!snapshot) {
@@ -948,6 +951,7 @@ export function GroshlyFinanceApp({ botId }: { botId: string }) {
       initialData={snapshot}
       logoUrl={logoUrl}
       faviconUrl={faviconUrl}
+      faviconLightUrl={faviconLightUrl}
       telegramAuthenticated={financeData.data.authenticated}
       onRefresh={refreshSnapshot}
       onCloseInvestment={closeInvestment}

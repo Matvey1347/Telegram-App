@@ -41,11 +41,10 @@ export function ConfiguredBotCards() {
       managementBotId?: string | null;
       name?: string;
       description?: string;
-      logo?: File;
       favicon?: File;
-      telegramPhoto?: File;
+      faviconLight?: File;
     }) => {
-      if ((input.logo || input.favicon || input.telegramPhoto) && !input.managementBotId) {
+      if ((input.favicon || input.faviconLight) && !input.managementBotId) {
         throw new Error("This Finance bot has no linked branding profile.");
       }
       let data:
@@ -57,11 +56,11 @@ export function ConfiguredBotCards() {
           description: input.description,
         });
       }
-      if (input.logo || input.favicon || input.telegramPhoto) {
+      if (input.favicon || input.faviconLight) {
         await telegramBotsApi.updateFinanceBranding(
           input.managementBotId!,
           input.environment,
-          { logo: input.logo, favicon: input.favicon, telegramPhoto: input.telegramPhoto },
+          { favicon: input.favicon, faviconLight: input.faviconLight },
         );
         data = await configuredBotsApi.overview();
       }
@@ -187,9 +186,8 @@ export function ConfiguredBotCards() {
             name: bot.name,
             description: bot.description,
             avatarUrl: bot.avatarUrl,
-            logoUrl: bot.logoUrl,
             faviconUrl: bot.faviconUrl,
-            telegramPhotoUrl: bot.telegramPhotoUrl,
+            faviconLightUrl: bot.faviconLightUrl,
           }))}
           environment={editingFinanceEnvironment}
           saving={updateFinanceProfile.isPending}

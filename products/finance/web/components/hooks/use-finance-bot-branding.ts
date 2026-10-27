@@ -6,7 +6,7 @@ import { resolveConsumerFinanceApiBase } from "@consumer-finance/web/lib/api/con
 const DEFAULT_FAVICON = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1 1'/%3E";
 const subscribeToStaticApiTopology = () => () => undefined;
 
-export function useFinanceBotBranding(botId: string) {
+export function useFinanceBotBranding(botId: string, applyBranding = true) {
   const sameOriginRoot = useMemo(
     () => `/api/finance-bots/${encodeURIComponent(botId)}/branding`,
     [botId],
@@ -23,6 +23,7 @@ export function useFinanceBotBranding(botId: string) {
   );
 
   useEffect(() => {
+    if (!applyBranding) return;
     const links = Array.from(
       document.head.querySelectorAll<HTMLLinkElement>(
         'link[rel="icon"], link[rel="shortcut icon"], link[rel="apple-touch-icon"]',
@@ -33,12 +34,13 @@ export function useFinanceBotBranding(botId: string) {
     const preload = new Image();
     preload.onload = () => links.forEach((link) => (link.href = faviconUrl));
     preload.onerror = () =>
-      links.forEach((link) => (link.href = DEFAULT_FAVICON));
+      links.forEach((link, index) => (link.href = previous[index] || DEFAULT_FAVICON));
     preload.src = faviconUrl;
     return () => links.forEach((link, index) => (link.href = previous[index]));
-  }, [root]);
+  }, [root, applyBranding]);
 
   useEffect(() => {
+    if (!applyBranding) return;
     let manifest = document.head.querySelector<HTMLLinkElement>('link[rel="manifest"]');
     const created = !manifest;
     if (!manifest) {
@@ -52,7 +54,7 @@ export function useFinanceBotBranding(botId: string) {
       if (created) manifest.remove();
       else manifest.href = previous;
     };
-  }, [botId]);
+  }, [botId, applyBranding]);
 
-  return { logoUrl: `${root}/logo`, faviconUrl: `${root}/favicon` };
+  return { logoUrl: `${root}/favicon`, faviconUrl: `${root}/favicon`, faviconLightUrl: `${root}/favicon-light` };
 }

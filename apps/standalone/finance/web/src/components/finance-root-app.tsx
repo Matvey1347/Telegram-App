@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { GroshlyFinanceApp } from "@finance-web/components/groshly-finance-app";
 import { GroshlyLoadingScreen } from "@finance-web/components/groshly-loading-screen";
 
@@ -13,11 +13,8 @@ type FinanceContextState =
 
 const FINANCE_CONTEXT_CACHE_KEY = "finance-active-bot-id";
 
-function initialFinanceContextState(): FinanceContextState {
-  if (typeof window === "undefined") return { status: "loading" };
-  const financeBotId = window.localStorage.getItem(FINANCE_CONTEXT_CACHE_KEY)?.trim();
-  return financeBotId ? { status: "ready", financeBotId } : { status: "loading" };
-}
+const subscribeToCachedContext = () => () => undefined;
+const cachedFinanceContext = () => window.localStorage.getItem(FINANCE_CONTEXT_CACHE_KEY)?.trim() || null;
 
 function readFinanceContext(value: unknown): FinanceContext | null {
   if (!value || typeof value !== "object") return null;
@@ -28,10 +25,9 @@ function readFinanceContext(value: unknown): FinanceContext | null {
 }
 
 export function FinanceRootApp({ botId }: { botId?: string } = {}) {
-  // Do not wait for an effect just to read public routing metadata that is
-  // already in localStorage. This is the first cache gate on every reload.
+  const cachedBotId = useSyncExternalStore(subscribeToCachedContext, cachedFinanceContext, () => null);
   const [state, setState] = useState<FinanceContextState>(() =>
-    botId ? { status: "ready", financeBotId: botId } : initialFinanceContextState(),
+    botId ? { status: "ready", financeBotId: botId } : { status: "loading" },
   );
   useEffect(() => {
     if (botId) {
@@ -68,8 +64,8 @@ export function FinanceRootApp({ botId }: { botId?: string } = {}) {
     return () => controller.abort();
   }, [botId]);
 
-  if (state.status === "ready") {
-    return <GroshlyFinanceApp botId={state.financeBotId} />;
+  if (state.status === "ready" || (state.status === "loading" && cachedBotId)) {
+    return <GroshlyFinanceApp botId={state.status === "ready" ? state.financeBotId : cachedBotId!} />;
   }
 
   if (state.status === "loading") {

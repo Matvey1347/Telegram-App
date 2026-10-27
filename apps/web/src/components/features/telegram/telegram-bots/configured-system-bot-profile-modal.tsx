@@ -31,9 +31,8 @@ export function ConfiguredSystemBotProfileModal({
     name: string | null;
     description?: string | null;
     avatarUrl: string | null;
-    logoUrl?: string | null;
     faviconUrl?: string | null;
-    telegramPhotoUrl?: string | null;
+    faviconLightUrl?: string | null;
   }>;
   environment: "LOCAL" | "PRODUCTION";
   saving: boolean;
@@ -43,9 +42,8 @@ export function ConfiguredSystemBotProfileModal({
     name?: string;
     description?: string;
     avatar?: File;
-    logo?: File;
     favicon?: File;
-    telegramPhoto?: File;
+    faviconLight?: File;
   }) => void;
 }) {
   const runtime =
@@ -55,9 +53,8 @@ export function ConfiguredSystemBotProfileModal({
     () => runtime?.description ?? "",
   );
   const [avatar, setAvatar] = useState<File>();
-  const [logo, setLogo] = useState<File>();
   const [favicon, setFavicon] = useState<File>();
-  const [telegramPhoto, setTelegramPhoto] = useState<File>();
+  const [faviconLight, setFaviconLight] = useState<File>();
   const submit = () => {
     onSubmit({
       name:
@@ -66,7 +63,7 @@ export function ConfiguredSystemBotProfileModal({
         description !== (runtime?.description ?? "")
           ? description.trim()
           : undefined,
-      ...(applicationType === "FINANCE" ? { logo, favicon, telegramPhoto } : { avatar }),
+      ...(applicationType === "FINANCE" ? { favicon, faviconLight } : { avatar }),
     });
   };
   return (
@@ -119,47 +116,39 @@ export function ConfiguredSystemBotProfileModal({
         </FormField>
         <div
           className={
-            applicationType === "FINANCE" ? "grid gap-3 lg:grid-cols-3" : ""
+            applicationType === "FINANCE" ? "grid gap-3 lg:grid-cols-2" : ""
           }
         >
           <ImageUploadField
-            label={applicationType === "FINANCE" ? "Logo" : "Bot logo"}
+            label={applicationType === "FINANCE" ? "Favicon" : "Bot logo"}
             description={
               applicationType === "FINANCE"
-                ? "Finance website and Mini App. PNG, JPEG, or WebP up to 5 MB."
+                ? "Browser, PWA and Telegram icon. A white background is added automatically."
                 : "PNG, JPEG, or WebP up to 5 MB"
             }
-            value={applicationType === "FINANCE" ? logo : avatar}
+            value={applicationType === "FINANCE" ? favicon : avatar}
             existingImageUrl={
-              applicationType === "FINANCE" ? runtime?.logoUrl : undefined
+              applicationType === "FINANCE" ? runtime?.faviconUrl : undefined
             }
             disabled={saving}
-            onChange={applicationType === "FINANCE" ? setLogo : setAvatar}
+            onChange={applicationType === "FINANCE" ? setFavicon : setAvatar}
           />
           {applicationType === "FINANCE" ? (
             <>
               <ImageUploadField
-                label="Favicon"
-                description="Browser and PWA icon. PNG, JPEG, or WebP up to 5 MB."
-                value={favicon}
-                existingImageUrl={runtime?.faviconUrl}
+                label="Favicon light"
+                description="Alternative icon for the other color theme. PNG, JPEG, or WebP up to 5 MB."
+                value={faviconLight}
+                existingImageUrl={runtime?.faviconLightUrl}
                 disabled={saving}
-                onChange={setFavicon}
-              />
-              <ImageUploadField
-                label="Telegram logo"
-                description="Bot profile photo in Telegram. PNG, JPEG, or WebP up to 5 MB."
-                value={telegramPhoto}
-                existingImageUrl={runtime?.telegramPhotoUrl || runtime?.avatarUrl}
-                disabled={saving}
-                onChange={setTelegramPhoto}
+                onChange={setFaviconLight}
               />
             </>
           ) : null}
         </div>
         <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-100">
           {applicationType === "FINANCE"
-            ? "Each environment has its own website logo, browser/PWA favicon, and Telegram profile photo."
+            ? "Each environment has two icons. Saving Favicon also updates the Telegram bot photo with a white background."
             : "Saving applies these changes to Telegram immediately."}
         </p>
         <div className="flex justify-end gap-2">
@@ -171,9 +160,8 @@ export function ConfiguredSystemBotProfileModal({
             disabled={
               saving ||
               (!avatar &&
-                !logo &&
                 !favicon &&
-                !telegramPhoto &&
+                !faviconLight &&
                 name.trim() === (runtime?.name ?? "").trim() &&
                 description === (runtime?.description ?? ""))
             }

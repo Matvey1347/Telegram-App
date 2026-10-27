@@ -3,14 +3,17 @@ import { TelegramWebAppSdk } from "@finance-web/components/telegram/telegram-web
 import { ConsumerFinanceProvider } from "@consumer-finance/web/provider/consumer-finance-provider";
 import "../groshly/style.css";
 import "./globals.css";
+import "./legal.css";
+import "@consumer-finance/web/components/app/consumer-finance-landing-base.css";
+import "@consumer-finance/web/components/app/consumer-finance-landing-sections.css";
+import "@consumer-finance/web/components/app/consumer-finance-landing-motion.css";
+import "@consumer-finance/web/components/app/consumer-finance-landing-updates.css";
 
-// A neutral initial icon prevents the old bundled artwork from appearing while
-// the active bot is being resolved on the root route.
-const initialFavicon = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1 1'/%3E";
+const initialFavicon = process.env.NODE_ENV === "development" ? "/brand/groshly-dev-icon.png" : "/brand/groshly-icon.png";
 
 const restoreBotFavicon = `try {
   const pathBotId = location.pathname.match(/^\\/finance\\/([^/]+)/)?.[1];
-  const botId = pathBotId ? decodeURIComponent(pathBotId) : localStorage.getItem('finance-active-bot-id')?.trim();
+  const botId = pathBotId ? decodeURIComponent(pathBotId) : null;
   if (botId) {
     const href = '/api/finance-bots/' + encodeURIComponent(botId) + '/branding/favicon';
     const icons = document.querySelectorAll('link[rel="icon"],link[rel="shortcut icon"],link[rel="apple-touch-icon"]');
@@ -33,9 +36,16 @@ const restoreBotFavicon = `try {
 } catch { /* Storage can be unavailable in private browsing. */ }`;
 
 export const metadata: Metadata = {
-  title: "Groshly",
-  description: "Track income, expenses, accounts, and plans in Groshly.",
+  title: "Groshly — особисті фінанси в Telegram і браузері",
+  description:
+    "Контролюйте рахунки, витрати, борги й аналітику в Groshly. Увійдіть або зареєструйтеся через Telegram.",
   applicationName: "Groshly",
+  openGraph: {
+    title: "Groshly — ваші гроші зрозуміло",
+    description:
+      "Рахунки, витрати, борги й аналітика в одному місці. Вхід через Telegram.",
+    type: "website",
+  },
   icons: {
     icon: initialFavicon,
     shortcut: initialFavicon,
@@ -52,7 +62,7 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en">
+    <html lang="uk">
       <head>
         <TelegramWebAppSdk />
         <script dangerouslySetInnerHTML={{ __html: restoreBotFavicon }} />

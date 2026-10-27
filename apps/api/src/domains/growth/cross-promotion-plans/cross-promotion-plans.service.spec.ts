@@ -311,6 +311,23 @@ describe('CrossPromotionPlansService', () => {
     );
   });
 
+  it('rejects historical metadata activation for a draft with no publications', async () => {
+    const { service, prisma } = setup();
+    prisma.crossPromotionPlan.findFirst.mockResolvedValueOnce({
+      id: 'plan-1',
+      status: 'ACTIVE',
+      scheduledAt: new Date('2026-09-15T08:00:00.000Z'),
+      placementPostIds: [],
+      baselineTargetCounters: [],
+    });
+
+    await expect(
+      service.updateCompleted('user-1', 'plan-1', payload),
+    ).rejects.toThrow('has no scheduled posts');
+
+    expect(prisma.crossPromotionPlan.update).not.toHaveBeenCalled();
+  });
+
   it('keeps an edited historical placement active until its scheduled deletion', async () => {
     const { service, prisma } = setup();
     const deleteAt = new Date(Date.now() + 48 * 3_600_000).toISOString();

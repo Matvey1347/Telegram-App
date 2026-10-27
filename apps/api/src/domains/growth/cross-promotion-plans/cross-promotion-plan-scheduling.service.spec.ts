@@ -670,6 +670,57 @@ describe('CrossPromotionPlanSchedulingService', () => {
     );
   });
 
+  it('creates and persists all five posts when activating a draft with an old anchor', async () => {
+    const { service, plans, telegram, systemPostGroups } = setup();
+    jest.setSystemTime(new Date('2026-10-27T21:30:00.000Z'));
+    plans.placementsForReschedule.mockResolvedValue([]);
+    telegram.createManagedPost
+      .mockReset()
+      .mockImplementation((_userId: string, channelId: string) =>
+        Promise.resolve({ id: `post-${channelId}` }),
+      );
+    systemPostGroups.ensureMutualPromotionGroup
+      .mockReset()
+      .mockResolvedValue({ id: 'mutual-group' });
+    const channelIds = Array.from(
+      { length: 5 },
+      (_, index) => `channel-${index + 1}`,
+    );
+    const draft = {
+      ...payload,
+      publisherChannelIds: channelIds,
+      scheduledAt: '2026-10-27T12:13:00.000Z',
+      publicationPost: {
+        ...payload.publicationPost,
+        publisherPlacements: channelIds.map((telegramChannelId) => ({
+          telegramChannelId,
+          scheduledAt: '2026-10-30T08:10:00.000Z',
+        })),
+      },
+    };
+
+    await service.replaceAndSchedule(
+      'user-1',
+      'plan-1',
+      draft,
+      jest.fn(),
+      new AbortController().signal,
+    );
+
+    expect(telegram.createManagedPost).toHaveBeenCalledTimes(5);
+    expect(telegram.scheduleManagedPost).toHaveBeenCalledTimes(5);
+    expect(plans.replaceScheduled).toHaveBeenCalledWith(
+      'user-1',
+      'plan-1',
+      draft,
+      channelIds.map((telegramChannelId) => ({
+        telegramChannelId,
+        managedPostId: `post-${telegramChannelId}`,
+        postGroupId: 'mutual-group',
+      })),
+    );
+  });
+
   it('deletes active remote posts and publishes their replacements immediately', async () => {
     const { service, plans, telegram, remoteDeletion } = setup();
     remoteDeletion.deletePublishedManagedPosts.mockResolvedValue({

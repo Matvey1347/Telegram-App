@@ -208,6 +208,30 @@ describe('TelegramAdSalesCheckoutService', () => {
     );
   });
 
+  it('accepts a four-photo System Bot album as one Ad Sale post draft', () => {
+    const raw = checkoutDto();
+    raw.placements[0].managedPostDraft = {
+      title: 'Album campaign',
+      text: 'Album caption',
+      imageUrls: Array.from(
+        { length: 4 },
+        (_, index) => `https://cdn.test/${index}.jpg`,
+      ),
+      mediaItems: Array.from({ length: 4 }, (_, index) => ({
+        kind: 'PHOTO',
+        url: `https://cdn.test/${index}.jpg`,
+        sourceMessageId: index + 10,
+      })),
+      buttonRows: [],
+    };
+    const dto = plainToInstance(CreateTelegramAdSaleCheckoutDto, raw);
+
+    expect(
+      validateSync(dto, { whitelist: true, forbidNonWhitelisted: true }),
+    ).toEqual([]);
+    expect(dto.placements[0].managedPostDraft?.mediaItems).toHaveLength(4);
+  });
+
   it('reports a failed post operation and retries only unfinished workflow steps', async () => {
     const { service, salesService } = setup();
     const dto = {
@@ -296,6 +320,11 @@ describe('TelegramAdSalesCheckoutService', () => {
     dto.placements[0].managedPostDraft = {
       title: 'Campaign',
       text: 'Ad text',
+      imageUrls: ['https://cdn.test/first.jpg', 'https://cdn.test/second.jpg'],
+      mediaItems: [
+        { kind: 'PHOTO', url: 'https://cdn.test/first.jpg' },
+        { kind: 'PHOTO', url: 'https://cdn.test/second.jpg' },
+      ],
       buttonRows: [
         [
           {
@@ -330,6 +359,10 @@ describe('TelegramAdSalesCheckoutService', () => {
       'sale-1',
       'placement-1',
       expect.objectContaining({
+        mediaItems: [
+          { kind: 'PHOTO', url: 'https://cdn.test/first.jpg' },
+          { kind: 'PHOTO', url: 'https://cdn.test/second.jpg' },
+        ],
         buttonRows: [
           [
             {

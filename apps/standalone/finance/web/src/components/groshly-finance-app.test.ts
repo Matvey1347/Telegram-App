@@ -175,8 +175,16 @@ describe("Groshly debt API input", () => {
       emoji: "🚗",
       amount: "250",
       accountId: "account-1",
+      recordTransaction: true,
       dueDate: "2026-11-01",
       note: "Personal loan",
     });
+  });
+
+  it("keeps a debt off the account when the form toggle is off", () => {
+    expect(groshlyDebtInput({
+      direction: "owed", name: "Item", amount: "20",
+      accountId: "account-1", due: "2026-11-01", recordTransaction: false,
+    }).recordTransaction).toBe(false);
   });
 });

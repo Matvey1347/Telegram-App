@@ -255,13 +255,12 @@ export function createTelegramSourcesApi({
     updateFinanceBranding: async (
       id: string,
       environment: TelegramBotRuntimeEnvironment,
-      payload: { name?: string; logo?: File; favicon?: File; telegramPhoto?: File },
+      payload: { name?: string; favicon?: File; faviconLight?: File },
     ) => {
       const form = new FormData();
       if (payload.name?.trim()) form.append("name", payload.name.trim());
-      if (payload.logo) form.append("logo", payload.logo);
       if (payload.favicon) form.append("favicon", payload.favicon);
-      if (payload.telegramPhoto) form.append("telegramPhoto", payload.telegramPhoto);
+      if (payload.faviconLight) form.append("faviconLight", payload.faviconLight);
       form.append("confirmTelegramUpdate", "true");
       return (
         await api.patch<TelegramBot>(

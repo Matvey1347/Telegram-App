@@ -33,9 +33,8 @@ export class FinanceBotBrandingAdminController {
   @UseInterceptors(
     FileFieldsInterceptor(
       [
-        { name: 'logo', maxCount: 1 },
         { name: 'favicon', maxCount: 1 },
-        { name: 'telegramPhoto', maxCount: 1 },
+        { name: 'faviconLight', maxCount: 1 },
       ],
       { limits: { fileSize: 5 * 1024 * 1024 } },
     ),
@@ -46,7 +45,7 @@ export class FinanceBotBrandingAdminController {
     @Param('environment') environment: TelegramBotRuntimeEnvironment,
     @Body() body: { name?: string; confirmTelegramUpdate?: string },
     @UploadedFiles()
-    files: { logo?: Express.Multer.File[]; favicon?: Express.Multer.File[]; telegramPhoto?: Express.Multer.File[] },
+    files: { favicon?: Express.Multer.File[]; faviconLight?: Express.Multer.File[] },
   ) {
     if (body.confirmTelegramUpdate !== 'true') {
       throw new BadRequestException(
@@ -55,9 +54,8 @@ export class FinanceBotBrandingAdminController {
     }
     await this.branding.update(user.sub, botId, environment, {
       name: body.name,
-      logo: files?.logo?.[0],
       favicon: files?.favicon?.[0],
-      telegramPhoto: files?.telegramPhoto?.[0],
+      faviconLight: files?.faviconLight?.[0],
     });
     return this.bots.findOne(user.sub, botId);
   }
@@ -70,12 +68,12 @@ export class FinanceBotBrandingAssetController {
   @Get(':kind')
   async asset(
     @Param('botId') botId: string,
-    @Param('kind') kind: 'logo' | 'favicon' | 'telegram',
+    @Param('kind') kind: 'favicon' | 'favicon-light',
     @Query('environment') environment: string | undefined,
     @Query('version') version: string | undefined,
     @Res() response: Response,
   ) {
-    if (kind !== 'logo' && kind !== 'favicon' && kind !== 'telegram') {
+    if (kind !== 'favicon' && kind !== 'favicon-light') {
       throw new NotFoundException();
     }
     if (

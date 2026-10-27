@@ -32,8 +32,8 @@ export type ConfiguredBotsOverview = {
       description: string | null;
       avatarUpdatedAt?: string | null;
       avatarUrl: string;
-      logoUrl?: string | null;
       faviconUrl?: string | null;
+      faviconLightUrl?: string | null;
       telegramPhotoUrl?: string | null;
       registeredUsers: number;
       profiles: number;

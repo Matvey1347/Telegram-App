@@ -16,6 +16,7 @@ function debtRow(overrides: Record<string, unknown> = {}) {
     direction: 'I_OWE' as const,
     status: 'OPEN' as const,
     name: 'Alex',
+    emoji: null,
     amount: new Prisma.Decimal(50),
     currency: 'EUR',
     accountId: account.id,
@@ -353,6 +354,47 @@ describe('FinanceDebtService', () => {
     );
     expect(delivery.notify).toHaveBeenCalledWith(row.dueAt);
     expect(delivery.reschedule).not.toHaveBeenCalled();
+  });
+
+  it('creates an obligation without changing the account when no cash moved', async () => {
+    const row = debtRow();
+    const tx = {
+      financeProfile: { findUnique: jest.fn().mockResolvedValue(obligationProfile()) },
+      financeAccount: { findFirst: jest.fn().mockResolvedValue(account) },
+      financeDebt: {
+        create: jest.fn().mockResolvedValue(row),
+        update: jest.fn(),
+      },
+    };
+    const prisma = {
+      financeAccount: { findFirst: jest.fn().mockResolvedValue(account) },
+      $transaction: jest.fn((callback) => callback(tx)),
+    };
+    const ledger = {
+      profileContext: jest.fn(),
+      prepareTransactionRateSource: jest.fn(),
+      createTransactionInTransaction: jest.fn(),
+    };
+    const delivery = {
+      enqueueInTransaction: jest.fn().mockResolvedValue({ scheduledAt: row.dueAt }),
+      notify: jest.fn(),
+    };
+    const presentation = { debtDue: jest.fn().mockReturnValue({ text: 'Due' }) };
+    const service = new FinanceDebtService(
+      prisma as never, ledger as never, delivery as never, presentation as never,
+    );
+
+    await expect(service.create('profile-1', {
+      direction: 'I_OWE', name: 'Alex', amount: '50',
+      accountId: account.id, dueDate: '2026-09-01', recordTransaction: false,
+    })).resolves.toMatchObject({ originTransactionId: null, amount: '50' });
+
+    expect(tx.financeDebt.create).toHaveBeenCalledTimes(1);
+    expect(tx.financeDebt.update).not.toHaveBeenCalled();
+    expect(ledger.profileContext).not.toHaveBeenCalled();
+    expect(ledger.prepareTransactionRateSource).not.toHaveBeenCalled();
+    expect(ledger.createTransactionInTransaction).not.toHaveBeenCalled();
+    expect(delivery.enqueueInTransaction).toHaveBeenCalledTimes(1);
   });
 
   it('performs zero writes and creates no delivery for a no-op edit', async () => {

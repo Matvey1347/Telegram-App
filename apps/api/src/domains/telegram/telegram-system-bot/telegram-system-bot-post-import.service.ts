@@ -198,17 +198,15 @@ export class TelegramSystemBotPostImportService {
     const appendedPayload = parseWebsitePostImportPayload(appended.payload);
     const preview = appendedPayload.contents.at(-1);
     let previewNotice: string | undefined;
-    if (preview) {
+    // Telegram delivers an album one item at a time. An intermediate preview
+    // looks like a separate publication and may omit later media or caption.
+    if (preview && !preview.mediaGroupId) {
       await this.sendPreview(scope, preview).catch(() => {
         previewNotice =
           'Post captured, but its preview could not be sent. You can still finish the import.';
       });
     }
-    if (
-      appendedPayload.mode === 'single' &&
-      preview &&
-      !preview.mediaGroupId
-    ) {
+    if (appendedPayload.mode === 'single' && preview && !preview.mediaGroupId) {
       const completed = await this.workflows.completeCapture({
         ...scope,
         id: appended.id,
@@ -263,14 +261,20 @@ export class TelegramSystemBotPostImportService {
     }
     if (!payload.contents.length)
       throw new ConflictException('Forward at least one post');
-    return this.render(
-      await this.workflows.completeCapture({
-        ...scope,
-        id: workflow.id,
-        expectedVersion: workflow.version,
-      }),
-      scope,
-    );
+    const completed = await this.workflows.completeCapture({
+      ...scope,
+      id: workflow.id,
+      expectedVersion: workflow.version,
+    });
+    let previewNotice: string | undefined;
+    for (const content of payload.contents) {
+      if (!content.mediaGroupId) continue;
+      await this.sendPreview(scope, content).catch(() => {
+        previewNotice =
+          'Post captured, but its preview could not be sent. Return to the website to continue.';
+      });
+    }
+    return this.render(completed, scope, previewNotice);
   }
 
   private async append(
@@ -334,6 +338,7 @@ export class TelegramSystemBotPostImportService {
     const text =
       workflow.status === TelegramSystemBotWorkflowStatus.COMPLETED
         ? [
+            notice ? `⚠️ ${notice}` : null,
             `✅ ${count} post(s) captured. Return to the website to continue.`,
             context,
           ]
@@ -346,6 +351,9 @@ export class TelegramSystemBotPostImportService {
               count
                 ? `✅ ${count} post(s) captured. Finish the import${payload.mode === 'multiple' ? ' or add another post' : ''}.`
                 : `📨 Forward a post (text, photo, video, or GIF)${payload.context ? ` for ${payload.context}` : ''}.`,
+              active && payload.contents.at(-1)?.mediaGroupId
+                ? 'For an album, wait until all photos arrive, then press Finish.'
+                : null,
               count ? context : null,
             ]
               .filter(Boolean)

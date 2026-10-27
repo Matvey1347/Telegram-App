@@ -45,13 +45,15 @@ conflict. The shared hook asks for English-language replacement confirmation;
 the app-wide provider renders that confirmation as a product modal rather than
 a native browser dialog. On confirmation it retries with `replaceActive: true`.
 The API cancels the old workflow and removes its Telegram control message before
-creating the new one. After every successful capture, the Bot sends the actual
-post preview. A `single` import completes immediately after a non-album post is
-captured, so the website can continue without an extra Telegram callback.
-Telegram albums remain active until the user presses Finish because their media
-arrives as several updates. A `multiple` import recreates its Finish/Add/Cancel
-controls beneath the preview. Reload recovery always uses the persisted workflow
-ID and read route.
+creating the new one. After a non-album capture, the Bot sends the post preview.
+A `single` import completes immediately after a non-album post is captured, so
+the website can continue without an extra Telegram callback. Telegram albums
+arrive as several updates and remain active until the user presses Finish. The
+Bot sends one complete album preview at Finish, never an intermediate one after
+each photo. An album caption that fits Telegram's media caption limit stays on
+the first media item. A `multiple` import recreates its Finish/Add/Cancel
+controls while capturing. Reload recovery always uses the persisted workflow ID
+and read route.
 
 For `multiple`, keep the returned drafts in feature state and collect each
 draft's schedule or other business fields there. Folder saving, Post Batch

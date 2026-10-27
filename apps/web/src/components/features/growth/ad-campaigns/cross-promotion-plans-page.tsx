@@ -34,6 +34,7 @@ import { CrossPromotionPlanModal } from "./cross-promotion-plan-modal";
 import { CrossPromotionPlanCard } from "./cross-promotion-plan-card";
 import { PromoFormModal } from "./promo-form-modal";
 import { adsSectionHeader } from "./ads-section-header";
+import { shouldUpdateHistoricalPromotion } from "./cross-promotion-plan-save-mode";
 import { useAppToast } from "@/providers/toast-provider";
 import {
   CrossPromotionPlanStatusTabs,
@@ -103,10 +104,7 @@ export function CrossPromotionPlansPage({
   });
   const saveMutation = useMutation({
     mutationFn: async (payload: CreateCrossPromotionPlanPayload) => {
-      const isHistorical =
-        editingPlan &&
-        new Date(editingPlan.scheduledAt).getTime() <= Date.now();
-      if (editingPlan && isHistorical) {
+      if (editingPlan && shouldUpdateHistoricalPromotion(editingPlan)) {
         return crossPromotionPlansApi.updateCompleted(editingPlan.id, payload);
       }
       const operation = startOperation({

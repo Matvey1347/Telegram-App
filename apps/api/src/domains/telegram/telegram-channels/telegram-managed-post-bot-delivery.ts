@@ -5,6 +5,23 @@ export type TelegramBotDeliveryOperation = {
   messageIds(result: unknown): string[];
 };
 
+/** Send the keyboard with the final message whenever the Bot API supports it. */
+export function includeReplyMarkupInBotDelivery(
+  operations: TelegramBotDeliveryOperation[],
+  replyMarkup: unknown,
+): boolean {
+  const last = operations.at(-1);
+  if (
+    !replyMarkup ||
+    !last ||
+    (last.method !== 'sendMessage' && last.method !== 'sendRichMessage')
+  ) {
+    return false;
+  }
+  last.body.reply_markup = replyMarkup;
+  return true;
+}
+
 type TelegramBotDeliveryInput = {
   operations: TelegramBotDeliveryOperation[];
   journaledMessageIds: string[];

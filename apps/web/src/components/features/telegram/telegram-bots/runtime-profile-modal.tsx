@@ -17,7 +17,7 @@ export function RuntimeProfileModal({
   } | null;
   saving: boolean;
   onClose: () => void;
-  onSubmit: (input: { name?: string; logo?: File; favicon?: File; telegramPhoto?: File }) => void;
+  onSubmit: (input: { name?: string; avatar?: File; favicon?: File; faviconLight?: File }) => void;
 }) {
   const runtime = config?.bot.runtimes.find(
     (item) => item.environment === config.environment,
@@ -27,9 +27,9 @@ export function RuntimeProfileModal({
       ? "/brand/finance.png"
       : "/brand/telegram-system.png";
   const [name, setName] = useState("");
-  const [logo, setLogo] = useState<File>();
+  const [avatar, setAvatar] = useState<File>();
   const [favicon, setFavicon] = useState<File>();
-  const [telegramPhoto, setTelegramPhoto] = useState<File>();
+  const [faviconLight, setFaviconLight] = useState<File>();
   const [confirmed, setConfirmed] = useState(false);
   const financeBot = config?.bot.applicationType === "FINANCE";
 
@@ -43,7 +43,7 @@ export function RuntimeProfileModal({
         className="space-y-4"
         onSubmit={(event) => {
           event.preventDefault();
-          onSubmit({ name: name.trim() || undefined, logo, favicon, telegramPhoto });
+          onSubmit({ name: name.trim() || undefined, avatar: financeBot ? undefined : avatar, favicon, faviconLight });
         }}
       >
         <div className="flex items-center gap-3 rounded-lg border border-neutral-800 bg-neutral-950 p-3">
@@ -69,18 +69,7 @@ export function RuntimeProfileModal({
             maxLength={64}
           />
         </FormField>
-        <FormField label={financeBot ? "Logo" : "New Telegram profile photo"}>
-          <Input
-            type="file"
-            accept="image/png,image/jpeg,image/webp"
-            onChange={(event) => setLogo(event.target.files?.[0])}
-          />
-          {financeBot ? (
-            <p className="mt-1 text-xs text-neutral-400">
-              Used on the Finance website and Mini App.
-            </p>
-          ) : null}
-        </FormField>
+        {!financeBot ? <FormField label="New Telegram profile photo"><Input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => setAvatar(event.target.files?.[0])} /></FormField> : null}
         {financeBot ? (
           <FormField label="Favicon">
             <Input
@@ -89,19 +78,19 @@ export function RuntimeProfileModal({
               onChange={(event) => setFavicon(event.target.files?.[0])}
             />
             <p className="mt-1 text-xs text-neutral-400">
-              Used as the browser and PWA icon.
+              Used in the browser, PWA and Telegram. A white background is added automatically.
             </p>
           </FormField>
         ) : null}
         {financeBot ? (
-          <FormField label="Telegram logo">
+          <FormField label="Favicon light">
             <Input
               type="file"
               accept="image/png,image/jpeg,image/webp"
-              onChange={(event) => setTelegramPhoto(event.target.files?.[0])}
+              onChange={(event) => setFaviconLight(event.target.files?.[0])}
             />
             <p className="mt-1 text-xs text-neutral-400">
-              Used as this bot&apos;s photo in Telegram.
+              Alternative icon for the other color theme.
             </p>
           </FormField>
         ) : null}
@@ -114,7 +103,7 @@ export function RuntimeProfileModal({
           />
           <span>
             {financeBot
-              ? "I understand that the logo, favicon, and Telegram profile photo are updated independently for this environment."
+              ? "I understand that saving the favicon also updates this environment's Telegram photo."
               : "I understand that saving here immediately changes the bot name and/or profile photo in Telegram for the selected token."}
           </span>
         </label>
@@ -125,7 +114,7 @@ export function RuntimeProfileModal({
           <Button
             type="submit"
             disabled={
-              saving || !confirmed || (!name.trim() && !logo && !favicon && !telegramPhoto)
+              saving || !confirmed || (!name.trim() && !avatar && !favicon && !faviconLight)
             }
           >
             {saving

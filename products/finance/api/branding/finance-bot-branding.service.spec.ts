@@ -3,6 +3,7 @@ import {
   TelegramBotApplicationType,
   TelegramBotRuntimeEnvironment,
 } from '@prisma/client';
+import sharp from 'sharp';
 import { FinanceBotBrandingService } from '@consumer-finance/api/branding/finance-bot-branding.service';
 
 describe('FinanceBotBrandingService', () => {
@@ -39,8 +40,8 @@ describe('FinanceBotBrandingService', () => {
     prisma.telegramBotRuntimeInstance.findFirst.mockResolvedValue({ id: 'runtime-local' });
   });
 
-  it('saves a site logo on the selected runtime without replacing the Telegram avatar', async () => {
-    const logo = {
+  it('saves one white-backed favicon and uses it for the Telegram photo', async () => {
+    const favicon = {
       buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/P3sAAAAASUVORK5CYII=', 'base64'),
       mimetype: 'image/png',
     } as Express.Multer.File;
@@ -49,7 +50,7 @@ describe('FinanceBotBrandingService', () => {
       'user-1',
       'bot-1',
       TelegramBotRuntimeEnvironment.LOCAL,
-      { logo },
+      { favicon },
     );
 
     expect(prisma.telegramBotIntegration.findFirst).toHaveBeenCalledWith(
@@ -61,15 +62,36 @@ describe('FinanceBotBrandingService', () => {
         }),
       }),
     );
-    expect(profiles.update).not.toHaveBeenCalled();
+    expect(profiles.update).toHaveBeenCalledWith('bot-1', TelegramBotRuntimeEnvironment.LOCAL, expect.objectContaining({ avatar: expect.objectContaining({ mimetype: 'image/png' }) }));
     expect(prisma.telegramBotRuntimeInstance.update).toHaveBeenCalledWith({
       where: { id: 'runtime-local' },
       data: expect.objectContaining({
-        financeLogoImage: expect.any(Uint8Array),
-        financeLogoMimeType: 'image/png',
+        financeFaviconImage: expect.any(Uint8Array),
+        financeFaviconMimeType: 'image/png',
         financeBrandingUpdatedAt: expect.any(Date),
       }),
     });
+    const image = prisma.telegramBotRuntimeInstance.update.mock.calls[0][0].data.financeFaviconImage;
+    const { data, info } = await sharp(Buffer.from(image)).raw().toBuffer({ resolveWithObject: true });
+    expect(info.width).toBe(512);
+    expect(info.height).toBe(512);
+    expect(Array.from(data.subarray(0, 3))).toEqual([255, 255, 255]);
+  });
+
+  it('rejects non-image uploads before changing Telegram or database state', async () => {
+    await expect(service.update('user-1', 'bot-1', TelegramBotRuntimeEnvironment.LOCAL, {
+      favicon: { buffer: Buffer.from('bad'), mimetype: 'text/plain' } as Express.Multer.File,
+    })).rejects.toThrow('Finance favicon must be an image');
+    expect(profiles.update).not.toHaveBeenCalled();
+    expect(prisma.telegramBotRuntimeInstance.update).not.toHaveBeenCalled();
+  });
+
+  it('does not persist a favicon if Telegram rejects its profile photo', async () => {
+    profiles.update.mockRejectedValueOnce(new Error('Telegram rejected photo'));
+    await expect(service.update('user-1', 'bot-1', TelegramBotRuntimeEnvironment.PRODUCTION, {
+      favicon: { buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/P3sAAAAASUVORK5CYII=', 'base64'), mimetype: 'image/png' } as Express.Multer.File,
+    })).rejects.toThrow('Telegram rejected photo');
+    expect(prisma.telegramBotRuntimeInstance.update).not.toHaveBeenCalled();
   });
 
   it('does not allow branding a non-Finance bot or a bot outside the workspace', async () => {
@@ -86,7 +108,7 @@ describe('FinanceBotBrandingService', () => {
     expect(profiles.update).not.toHaveBeenCalled();
   });
 
-  it('serves the logo from the active runtime in the process environment', async () => {
+  it('serves the favicon from the active runtime in the process environment', async () => {
     const updatedAt = new Date('2026-08-22T18:00:00Z');
     prisma.telegramBotIntegration.findFirst.mockResolvedValue({
       runtimeInstances: [
@@ -98,7 +120,7 @@ describe('FinanceBotBrandingService', () => {
       ],
     });
 
-    await expect(service.asset('bot-1', 'logo')).resolves.toEqual({
+    await expect(service.asset('bot-1', 'favicon')).resolves.toEqual({
       bytes: Buffer.from([9, 8, 7]),
       contentType: 'image/jpeg',
       updatedAt,
