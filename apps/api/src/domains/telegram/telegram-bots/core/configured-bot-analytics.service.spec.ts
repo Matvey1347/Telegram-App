@@ -119,7 +119,7 @@ describe('ConfiguredBotAnalyticsService', () => {
         telegramBotIntegration: {
           findMany: jest.fn().mockResolvedValue([{
             id: 'legacy-finance-bot',
-            runtimeInstances: [{ username: 'groshly_DEV_bot' }],
+            runtimeInstances: [{ environment: 'LOCAL', username: 'groshly_DEV_bot' }],
             _count: { botUsers: 1, financeProfiles: 1 },
           }]),
         },

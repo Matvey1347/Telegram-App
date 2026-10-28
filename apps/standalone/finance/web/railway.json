@@ -6,6 +6,7 @@
     "watchPatterns": [
       "apps/standalone/finance/web/**",
       "products/finance/web/**",
+      "products/finance/assets/**",
       "packages/shared/**",
       "pnpm-lock.yaml",
       "pnpm-workspace.yaml"

@@ -3727,6 +3727,7 @@ model TelegramBotRuntimeInstance {
   avatarMimeType                String?
   avatarTelegramFileId          String?
   avatarUpdatedAt               DateTime?
+  profileAssetHash              String?
   financeLogoImage              Bytes?
   financeLogoMimeType            String?
   financeFaviconImage            Bytes?
@@ -3784,6 +3785,7 @@ model TelegramConfiguredBotAvatar {
   description String?
   image       Bytes?
   mimeType    String?
+  profileAssetHash String?
   fetchedAt   DateTime                       @default(now())
   updatedAt   DateTime                       @updatedAt
 

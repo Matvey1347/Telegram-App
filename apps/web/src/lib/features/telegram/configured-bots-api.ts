@@ -34,7 +34,6 @@ export type ConfiguredBotsOverview = {
       avatarUrl: string;
       faviconUrl?: string | null;
       faviconLightUrl?: string | null;
-      telegramPhotoUrl?: string | null;
       registeredUsers: number;
       profiles: number;
     }>;
@@ -65,13 +64,12 @@ export const configuredBotsApi = {
     (await api.post("/telegram-bots/configured/finance/avatars/refresh")).data,
   updateSystemProfile: async (
     environment: "LOCAL" | "PRODUCTION",
-    input: { name?: string; description?: string; avatar?: File },
+    input: { name?: string; description?: string },
   ) => {
     const form = new FormData();
     if (input.name) form.set("name", input.name);
     if (input.description !== undefined)
       form.set("description", input.description);
-    if (input.avatar) form.set("avatar", input.avatar);
     form.set("confirmTelegramUpdate", "true");
     return (
       await api.patch<ConfiguredBotsOverview>(
@@ -82,13 +80,12 @@ export const configuredBotsApi = {
   },
   updateFinanceProfile: async (
     environment: "LOCAL" | "PRODUCTION",
-    input: { name?: string; description?: string; avatar?: File },
+    input: { name?: string; description?: string },
   ) => {
     const form = new FormData();
     if (input.name !== undefined) form.set("name", input.name);
     if (input.description !== undefined)
       form.set("description", input.description);
-    if (input.avatar) form.set("avatar", input.avatar);
     form.set("confirmTelegramUpdate", "true");
     return (
       await api.patch<ConfiguredBotsOverview>(

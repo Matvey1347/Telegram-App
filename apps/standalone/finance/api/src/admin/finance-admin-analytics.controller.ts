@@ -1,5 +1,4 @@
-import { Body, Controller, Get, Headers, Param, Patch, Post, Query, Res, UploadedFile, UseInterceptors } from "@nestjs/common";
-import { FileInterceptor } from "@nestjs/platform-express";
+import { Body, Controller, Get, Headers, Param, Patch, Post, Query, Res } from "@nestjs/common";
 import type { Response } from "express";
 import { FinanceAdminAnalyticsService } from "./finance-admin-analytics.service";
 
@@ -52,16 +51,14 @@ export class FinanceAdminAnalyticsController {
   }
 
   @Patch("bots/:environment/profile")
-  @UseInterceptors(FileInterceptor("avatar", { limits: { fileSize: 5 * 1024 * 1024 } }))
   updateProfile(
     @Headers("x-finance-admin-analytics-token") token: string | undefined,
     @Headers("x-nexeloq-workspace-id") workspaceId: string | undefined,
     @Param("environment") environment: "LOCAL" | "PRODUCTION",
     @Body() body: { name?: string; description?: string; confirmTelegramUpdate?: string },
-    @UploadedFile() avatar?: { buffer: Buffer; mimetype: string; originalname?: string },
   ) {
     this.analytics.authorize(token, workspaceId);
     if (body.confirmTelegramUpdate !== "true") throw new Error("Telegram confirmation is required");
-    return this.analytics.updateProfile(environment, { name: body.name, description: body.description, avatar });
+    return this.analytics.updateProfile(environment, { name: body.name, description: body.description });
   }
 }

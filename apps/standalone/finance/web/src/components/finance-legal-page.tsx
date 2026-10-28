@@ -88,7 +88,9 @@ export function FinanceLegalPage({ kind }: { kind: Kind }) {
     document.documentElement.lang = locale;
   }, [locale, theme, preferencesReady]);
   const content = copy[locale][kind];
-  const icon = process.env.NODE_ENV === "development" ? "/brand/groshly-dev-icon.png" : "/brand/groshly-icon.png";
+  const icon = theme === "dark"
+    ? (process.env.NODE_ENV === "development" ? "/brand/groshly-dev-dark-icon.png" : "/brand/groshly-dark-icon.png")
+    : (process.env.NODE_ENV === "development" ? "/brand/groshly-dev-icon.png" : "/brand/groshly-icon.png");
   return <main className="groshly-legal" data-theme={theme} lang={locale}>
     <header>
       <Link href="/" className="groshly-legal-brand"><img src={icon} alt="" /><span>Groshly<span>.</span></span></Link>

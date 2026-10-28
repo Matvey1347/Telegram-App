@@ -168,3 +168,32 @@ states independently for the selected `LOCAL` or `PRODUCTION` runtime.
   JWT authentication and dashboard infrastructure.
 - Keep Telegram chat as the quick-action surface and use the Mini App for the workflows
   where a richer interface genuinely helps.
+
+## Brand assets
+
+Groshly icons are owned by `products/finance/assets`. The 512 px PNG files
+`groshly-icon.png`, `groshly-dev-icon.png`, `groshly-dark-icon.png`, and
+`groshly-dev-dark-icon.png` are the deployment sources. The first two have an
+opaque white canvas for browser favicons, PWA icons, and Telegram photos. The
+brighter green dark variants are used for logos inside dark UI. The higher
+resolution `groshly-white.png`, `groshly-dev-white.png`, `groshly-dark-ui.png`,
+and `groshly-dev-dark-ui.png` are editable source renditions.
+
+`node scripts/sync-finance-brand-assets.mjs` copies the deployment icons to
+both web hosts before their builds. The standalone web host also keeps the
+192 px PWA variants in this folder. When replacing an icon, update its 192 px
+variant, then run the sync script. Finance bot profile photos are reconciled
+once on API startup. A SHA-256 hash in the runtime record avoids Telegram API
+calls and database writes when the asset has not changed. The Finance bot
+profile form edits the name and description only; image uploads are not part
+of that contract.
+
+The environment-managed Telegram System bot uses the existing
+`apps/web/public/brand/telegram-system.png` and `telegram-system-dev.png`
+assets. Its selected runtime also reconciles its white-backed Telegram photo
+at API startup, with a stored asset hash to avoid repeat calls. The bot
+management forms contain name and description controls, with no logo uploader.
+
+Older uploaded-image columns in the platform database are retained only for
+historical data. Brand rendering and startup reconciliation never read them;
+removing those columns requires a separate data-retention decision.

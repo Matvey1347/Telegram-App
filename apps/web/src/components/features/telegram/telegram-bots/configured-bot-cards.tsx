@@ -10,7 +10,6 @@ import type {
 import type { ReactNode } from "react";
 import { Card, Button } from "@/components/ui/primitives";
 import { configuredBotsApi } from "@/lib/features/telegram/configured-bots-api";
-import { telegramBotsApi } from "@/lib/api";
 import { telegramAccountKeys } from "@/lib/query-keys";
 import { useAppToast } from "@/providers/toast-provider";
 import { BotRuntimeAvatar } from "./bot-runtime-avatar";
@@ -38,38 +37,18 @@ export function ConfiguredBotCards() {
   const updateFinanceProfile = useMutation({
     mutationFn: async (input: {
       environment: "LOCAL" | "PRODUCTION";
-      managementBotId?: string | null;
       name?: string;
       description?: string;
-      favicon?: File;
-      faviconLight?: File;
     }) => {
-      if ((input.favicon || input.faviconLight) && !input.managementBotId) {
-        throw new Error("This Finance bot has no linked branding profile.");
-      }
-      let data:
-        | Awaited<ReturnType<typeof configuredBotsApi.updateFinanceProfile>>
-        | undefined;
-      if (input.name !== undefined || input.description !== undefined) {
-        data = await configuredBotsApi.updateFinanceProfile(input.environment, {
+      return configuredBotsApi.updateFinanceProfile(input.environment, {
           name: input.name,
           description: input.description,
         });
-      }
-      if (input.favicon || input.faviconLight) {
-        await telegramBotsApi.updateFinanceBranding(
-          input.managementBotId!,
-          input.environment,
-          { favicon: input.favicon, faviconLight: input.faviconLight },
-        );
-        data = await configuredBotsApi.overview();
-      }
-      return data ?? configuredBotsApi.overview();
     },
     onSuccess: (data) => {
       qc.setQueryData(telegramAccountKeys.configuredBots(), data);
       setEditingFinanceEnvironment(null);
-      pushToast("Finance bot profile and branding updated.", "success");
+      pushToast("Finance bot profile updated.", "success");
     },
     onError: () => pushToast("Could not update the Finance bot.", "error"),
   });
@@ -78,7 +57,6 @@ export function ConfiguredBotCards() {
       environment: "LOCAL" | "PRODUCTION";
       name?: string;
       description?: string;
-      avatar?: File;
     }) => configuredBotsApi.updateSystemProfile(input.environment, input),
     onSuccess: (data) => {
       qc.setQueryData(telegramAccountKeys.configuredBots(), data);
@@ -106,10 +84,7 @@ export function ConfiguredBotCards() {
   }
   if (!overview.data?.systemBot && !overview.data?.financeBot) return null;
   const refresh = async () => {
-    await Promise.allSettled([
-      configuredBotsApi.refreshSystemAvatars(),
-      configuredBotsApi.refreshFinanceAvatars(),
-    ]);
+    await configuredBotsApi.refreshSystemAvatars();
     await overview.refetch();
   };
   return (
@@ -186,8 +161,6 @@ export function ConfiguredBotCards() {
             name: bot.name,
             description: bot.description,
             avatarUrl: bot.avatarUrl,
-            faviconUrl: bot.faviconUrl,
-            faviconLightUrl: bot.faviconLightUrl,
           }))}
           environment={editingFinanceEnvironment}
           saving={updateFinanceProfile.isPending}
@@ -198,9 +171,6 @@ export function ConfiguredBotCards() {
           onSubmit={(input) =>
             updateFinanceProfile.mutate({
               environment: editingFinanceEnvironment,
-              managementBotId: overview.data.financeBot?.bots.find(
-                (bot) => bot.environment === editingFinanceEnvironment,
-              )?.managementBotId,
               ...input,
             })
           }

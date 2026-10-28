@@ -140,26 +140,17 @@ export function TelegramBotsPage() {
       botId,
       environment,
       name,
-      avatar,
-      favicon,
-      faviconLight,
     }: {
       botId: string;
       environment: TelegramBotRuntimeEnvironment;
       name?: string;
-      avatar?: File;
-      favicon?: File;
-      faviconLight?: File;
     }) =>
       profileConfig?.bot.applicationType === "FINANCE"
         ? telegramBotsApi.updateFinanceBranding(botId, environment, {
             name,
-            favicon,
-            faviconLight,
           })
         : telegramBotsApi.updateRuntimeProfile(botId, environment, {
             name,
-            avatar,
           }),
     onSuccess: (bot) => {
       reconcileTelegramBotCache(qc, bot);
@@ -319,15 +310,12 @@ export function TelegramBotsPage() {
         config={profileConfig}
         saving={profileMutation.isPending}
         onClose={() => setProfileConfig(null)}
-        onSubmit={({ name, avatar, favicon, faviconLight }) => {
+        onSubmit={({ name }) => {
           if (!profileConfig) return;
           profileMutation.mutate({
             botId: profileConfig.bot.id,
             environment: profileConfig.environment,
             name,
-            avatar,
-            favicon,
-            faviconLight,
           });
         }}
       />

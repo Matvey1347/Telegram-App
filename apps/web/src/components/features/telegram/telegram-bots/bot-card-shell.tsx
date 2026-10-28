@@ -70,7 +70,12 @@ export function BotCardShell({
     <article className="rounded-lg border border-neutral-800 bg-neutral-950 p-3 shadow-sm">
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
-          <BotRuntimeAvatar type={appType} avatarUrl={runtime?.avatarUrl} />
+          <BotRuntimeAvatar
+            type={appType}
+            avatarUrl={appType === "FINANCE"
+              ? (environment === "LOCAL" ? "/brand/groshly-dev-icon.png" : "/brand/groshly-icon.png")
+              : runtime?.avatarUrl}
+          />
           <div className="min-w-0">
             <h3 className="truncate text-base font-semibold text-white">
               {runtime?.firstName || bot.label}

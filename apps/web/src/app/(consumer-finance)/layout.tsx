@@ -2,12 +2,12 @@ import type { Metadata } from "next";
 import { ConsumerFinanceProvider } from "@consumer-finance/web/provider/consumer-finance-provider";
 
 export const metadata: Metadata = {
-  title: "Finance",
+  title: "Groshly",
   description: "Track income, expenses, accounts, and plans in Finance.",
   icons: {
-    icon: "/brand/favicon-finance.png",
-    shortcut: "/brand/favicon-finance.png",
-    apple: "/brand/finance-apple-touch.png",
+    icon: "/brand/groshly-icon.png",
+    shortcut: "/brand/groshly-icon.png",
+    apple: "/brand/groshly-icon.png",
   },
 };
 

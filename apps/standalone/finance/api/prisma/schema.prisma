@@ -33,6 +33,7 @@ model FinanceBot {
   avatarImage             Bytes?
   avatarMimeType          String?
   avatarFetchedAt         DateTime?
+  profileAssetHash        String?
   runtimeEnvironment      FinanceBotRuntimeEnvironment? @unique
   webhookEnabled          Boolean                 @default(false)
   createdAt               DateTime                @default(now())

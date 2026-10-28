@@ -10,11 +10,6 @@ import { FinancePrismaService } from "../prisma/finance-prisma.service";
 import { FinanceTelegramBotApiClient } from "../telegram/finance-telegram-bot-api.client";
 
 type FinanceBotEnvironment = "LOCAL" | "PRODUCTION";
-type UploadedAvatar = {
-  buffer: Buffer;
-  mimetype: string;
-  originalname?: string;
-};
 
 /**
  * A deliberately small, read-only projection for the Nexeloq admin host.
@@ -134,7 +129,7 @@ export class FinanceAdminAnalyticsService {
 
   async updateProfile(
     environment: FinanceBotEnvironment,
-    input: { name?: string; description?: string; avatar?: UploadedAvatar },
+    input: { name?: string; description?: string },
   ) {
     const runtime = this.config.botForEnvironment(environment);
     if (!runtime) throw new BadRequestException("Finance bot runtime is not configured");
@@ -142,17 +137,9 @@ export class FinanceAdminAnalyticsService {
     const hasDescription = input.description !== undefined;
     const description = input.description?.trim() ?? "";
     if (input.name !== undefined && !name) throw new BadRequestException("Bot name cannot be empty");
-    if (!name && !hasDescription && !input.avatar) {
-      throw new BadRequestException("A name, description, or logo is required");
-    }
-    if (input.avatar && !input.avatar.mimetype.startsWith("image/")) {
-      throw new BadRequestException("Bot logo must be an image");
-    }
+    if (!name && !hasDescription) throw new BadRequestException("A name or description is required");
     if (name) await this.botApi.setMyName(runtime.token, name);
     if (hasDescription) await this.botApi.setMyDescription(runtime.token, description);
-    if (input.avatar) {
-      await this.botApi.setMyProfilePhoto(runtime.token, input.avatar.buffer, input.avatar.mimetype);
-    }
     await this.prisma.financeBot.upsert({
       where: { runtimeEnvironment: environment },
       create: {
@@ -160,21 +147,11 @@ export class FinanceAdminAnalyticsService {
         telegramUsername: runtime.username,
         ...(name ? { telegramDisplayName: name } : {}),
         ...(hasDescription ? { telegramDescription: description } : {}),
-        ...(input.avatar ? {
-          avatarImage: Uint8Array.from(input.avatar.buffer),
-          avatarMimeType: input.avatar.mimetype,
-          avatarFetchedAt: new Date(),
-        } : {}),
       },
       update: {
         telegramUsername: runtime.username,
         ...(name ? { telegramDisplayName: name } : {}),
         ...(hasDescription ? { telegramDescription: description } : {}),
-        ...(input.avatar ? {
-          avatarImage: Uint8Array.from(input.avatar.buffer),
-          avatarMimeType: input.avatar.mimetype,
-          avatarFetchedAt: new Date(),
-        } : {}),
       },
     });
     return this.overview();

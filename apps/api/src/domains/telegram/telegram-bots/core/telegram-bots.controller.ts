@@ -69,19 +69,14 @@ export class TelegramBotsController {
   }
 
   @Patch('configured/system/:environment/profile')
-  @UseInterceptors(
-    FileInterceptor('avatar', { limits: { fileSize: 5 * 1024 * 1024 } }),
-  )
   updateConfiguredSystemProfile(
     @CurrentUser() user: JwtUser,
     @Param('environment') environment: 'LOCAL' | 'PRODUCTION',
     @Body() dto: UpdateConfiguredSystemBotProfileDto,
-    @UploadedFile() avatar?: Express.Multer.File,
   ) {
     return this.configuredBots.updateSystemBotProfile(user.sub, environment, {
       name: dto.name,
       description: dto.description,
-      avatar,
     });
   }
 
@@ -116,17 +111,14 @@ export class TelegramBotsController {
   }
 
   @Patch('configured/finance/:environment/profile')
-  @UseInterceptors(FileInterceptor('avatar', { limits: { fileSize: 5 * 1024 * 1024 } }))
   updateConfiguredFinanceProfile(
     @CurrentUser() user: JwtUser,
     @Param('environment') environment: 'LOCAL' | 'PRODUCTION',
     @Body() dto: UpdateConfiguredSystemBotProfileDto,
-    @UploadedFile() avatar?: Express.Multer.File,
   ) {
     return this.configuredBots.updateFinanceBotProfile(user.sub, environment, {
       name: dto.name,
       description: dto.description,
-      avatar,
     });
   }
 

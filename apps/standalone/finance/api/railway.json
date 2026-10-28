@@ -7,6 +7,7 @@
       "apps/standalone/finance/api/**",
       "packages/shared/**",
       "products/finance/api/**",
+      "products/finance/assets/**",
       "products/finance/bot/**",
       "pnpm-lock.yaml",
       "pnpm-workspace.yaml"

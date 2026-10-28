@@ -15,8 +15,9 @@ const production = {
 };
 
 describe('FinanceTelegramRuntimeService', () => {
-  const api = { getWebhookInfo: jest.fn(), setWebhook: jest.fn() };
+  const api = { getWebhookInfo: jest.fn(), setWebhook: jest.fn(), setMyProfilePhoto: jest.fn() };
   const primaryBot = { resolve: jest.fn() };
+  const prisma = { financeBot: { update: jest.fn() } };
   const config: { selectedBot: typeof local | typeof production; apiPublicUrl?: string } = {
     selectedBot: local,
     apiPublicUrl: 'https://api.groshly.nexeloq.com',
@@ -31,7 +32,7 @@ describe('FinanceTelegramRuntimeService', () => {
     api.getWebhookInfo.mockResolvedValue({ url: 'https://other.example/webhook' });
     api.setWebhook.mockResolvedValue(undefined);
     primaryBot.resolve.mockResolvedValue({ id: 'finance-bot-1' });
-    service = new FinanceTelegramRuntimeService(config as never, primaryBot as never, api as never);
+    service = new FinanceTelegramRuntimeService(config as never, primaryBot as never, api as never, prisma as never);
   });
 
   afterEach(() => jest.restoreAllMocks());
@@ -70,6 +71,25 @@ describe('FinanceTelegramRuntimeService', () => {
 
     expect(api.setWebhook).not.toHaveBeenCalled();
     expect(primaryBot.resolve).toHaveBeenCalledTimes(1);
+  });
+
+  it('sets the bundled photo once and records its hash only after Telegram accepts it', async () => {
+    await service.onModuleInit();
+    expect(api.setMyProfilePhoto).toHaveBeenCalledWith('local-token', expect.any(Buffer), 'image/png');
+    expect(prisma.financeBot.update).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ profileAssetHash: expect.stringMatching(/^[a-f0-9]{64}$/) }),
+    }));
+    const hash = prisma.financeBot.update.mock.calls[0][0].data.profileAssetHash;
+    primaryBot.resolve.mockResolvedValue({ id: 'finance-bot-1', profileAssetHash: hash });
+    api.setMyProfilePhoto.mockClear();
+    await service.onModuleInit();
+    expect(api.setMyProfilePhoto).not.toHaveBeenCalled();
+  });
+
+  it('keeps the hash unchanged when Telegram rejects the photo', async () => {
+    api.setMyProfilePhoto.mockRejectedValue(new Error('Telegram rejected photo'));
+    await service.onModuleInit();
+    expect(prisma.financeBot.update).not.toHaveBeenCalled();
   });
 
   it('has no external call when no public HTTPS API URL exists', async () => {

@@ -8,7 +8,7 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { botId } = await params;
   const encodedBotId = encodeURIComponent(botId);
-  const favicon = `/api/finance-bots/${encodedBotId}/branding/favicon`;
+  const favicon = "/brand/groshly-icon.png";
   return {
     icons: { icon: favicon, shortcut: favicon, apple: favicon },
     manifest: `/finance/${encodedBotId}/manifest.webmanifest`,

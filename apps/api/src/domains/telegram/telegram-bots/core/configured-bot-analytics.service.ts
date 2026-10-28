@@ -11,7 +11,6 @@ import { PrismaService } from '../../../../prisma/prisma.service';
 import { TelegramBotApiClient } from '../../../../telegram/shared/bot/telegram-bot-api.client';
 
 type Environment = 'LOCAL' | 'PRODUCTION';
-const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
 
 type FinanceOverview = {
   status: 'AVAILABLE' | 'MIGRATION_REQUIRED';
@@ -88,7 +87,6 @@ export class ConfiguredBotAnalyticsService {
     input: {
       name?: string;
       description?: string;
-      avatar?: Express.Multer.File;
     },
   ) {
     const membership = await this.workspace.requireWorkspaceRole(userId, [
@@ -107,32 +105,13 @@ export class ConfiguredBotAnalyticsService {
     if (input.name !== undefined && !name) {
       throw new BadRequestException('Bot name cannot be empty');
     }
-    if (!name && !hasDescription && !input.avatar) {
-      throw new BadRequestException('A name, description, or logo is required');
-    }
+    if (!name && !hasDescription) throw new BadRequestException('A name or description is required');
     if (name) await this.botApi.setMyName(runtime.token, name);
     if (hasDescription) await this.botApi.setMyDescription(runtime.token, description || '');
 
-    let avatar: { bytes: Buffer; contentType: string } | undefined;
-    if (input.avatar) {
-      if (!input.avatar.mimetype.startsWith('image/')) {
-        throw new BadRequestException('Bot logo must be an image');
-      }
-      const jpeg = await sharp(input.avatar.buffer)
-        .rotate()
-        .resize(512, 512, { fit: 'contain', background: { r: 5, g: 8, b: 12, alpha: 1 } })
-        .jpeg({ quality: 92 })
-        .toBuffer();
-      if (jpeg.length > MAX_AVATAR_BYTES) {
-        throw new BadRequestException('Bot logo is too large');
-      }
-      await this.botApi.setMyProfilePhoto(runtime.token, jpeg);
-      avatar = { bytes: jpeg, contentType: 'image/jpeg' };
-    }
     await this.saveSystemBotProfile(workspaceId, runtime, {
       name,
       ...(hasDescription ? { description: description || '' } : {}),
-      avatar,
     });
     return this.overview(userId);
   }
@@ -271,7 +250,7 @@ export class ConfiguredBotAnalyticsService {
   async updateFinanceBotProfile(
     userId: string,
     environment: Environment,
-    input: { name?: string; description?: string; avatar?: Express.Multer.File },
+    input: { name?: string; description?: string },
   ) {
     const workspaceId = await this.workspace.requireWorkspaceRole(userId, [WorkspaceRole.owner, WorkspaceRole.admin]).then((membership) => membership.workspaceId);
     if (this.configuredWorkspaceId('FINANCE_BOT_DASHBOARD_WORKSPACE_ID') !== workspaceId) {
@@ -282,7 +261,6 @@ export class ConfiguredBotAnalyticsService {
     const form = new FormData();
     if (input.name !== undefined) form.set('name', input.name);
     if (input.description !== undefined) form.set('description', input.description);
-    if (input.avatar) form.set('avatar', new Blob([new Uint8Array(input.avatar.buffer)], { type: input.avatar.mimetype }), input.avatar.originalname || 'bot-logo.jpg');
     form.set('confirmTelegramUpdate', 'true');
     try {
       const response = await fetch(new URL(`/api/admin/analytics/bots/${environment}/profile`, settings.url), {
@@ -353,9 +331,7 @@ export class ConfiguredBotAnalyticsService {
           const legacy = legacyMetrics.get(
             `${bot.environment}:${bot.username?.trim().replace(/^@/, '').toLowerCase() ?? ''}`,
           );
-          const brandingVersion = encodeURIComponent(
-            legacy?.brandingUpdatedAt ?? 'initial',
-          );
+          const financeIcon = bot.environment === 'LOCAL' ? '/brand/groshly-dev-icon.png' : '/brand/groshly-icon.png';
           return {
           ...bot,
           // Consumer Finance is being moved to its own host. Until a runtime
@@ -364,18 +340,9 @@ export class ConfiguredBotAnalyticsService {
           registeredUsers: Math.max(bot.registeredUsers, legacy?.registeredUsers ?? 0),
           profiles: Math.max(bot.profiles, legacy?.profiles ?? 0),
           managementBotId: legacy?.botId ?? null,
-          faviconUrl: legacy?.hasFavicon
-            ? `/finance-bots/${legacy.botId}/branding/favicon?environment=${bot.environment}&version=${brandingVersion}`
-            : null,
-          faviconLightUrl: legacy?.hasFaviconLight
-            ? `/finance-bots/${legacy.botId}/branding/favicon-light?environment=${bot.environment}&version=${brandingVersion}`
-            : null,
-          telegramPhotoUrl: legacy?.hasTelegramPhoto
-            ? `/finance-bots/${legacy.botId}/branding/telegram?environment=${bot.environment}&version=${encodeURIComponent(legacy.telegramPhotoUpdatedAt ?? 'initial')}`
-            : null,
-          avatarUrl: legacy?.hasTelegramPhoto
-            ? `/finance-bots/${legacy.botId}/branding/telegram?environment=${bot.environment}&version=${encodeURIComponent(legacy.telegramPhotoUpdatedAt ?? 'initial')}`
-            : `/telegram-bots/configured/finance/avatar?environment=${bot.environment}&version=${encodeURIComponent(bot.avatarUpdatedAt ?? 'initial')}`,
+          faviconUrl: financeIcon,
+          faviconLightUrl: bot.environment === 'LOCAL' ? '/brand/groshly-dev-dark-icon.png' : '/brand/groshly-dark-icon.png',
+          avatarUrl: financeIcon,
           };
         }),
       };
@@ -395,11 +362,6 @@ export class ConfiguredBotAnalyticsService {
           select: {
             environment: true,
             username: true,
-            financeFaviconMimeType: true,
-            financeFaviconLightMimeType: true,
-            financeBrandingUpdatedAt: true,
-            avatarMimeType: true,
-            avatarUpdatedAt: true,
           },
         },
       },
@@ -408,11 +370,6 @@ export class ConfiguredBotAnalyticsService {
       string,
       {
         botId: string;
-        hasFavicon: boolean;
-        hasFaviconLight: boolean;
-        hasTelegramPhoto: boolean;
-        brandingUpdatedAt: string | null;
-        telegramPhotoUpdatedAt: string | null;
         registeredUsers: number;
         profiles: number;
       }
@@ -423,11 +380,6 @@ export class ConfiguredBotAnalyticsService {
         if (!username) continue;
         metrics.set(`${runtime.environment}:${username}`, {
           botId: bot.id,
-          hasFavicon: Boolean(runtime.financeFaviconMimeType),
-          hasFaviconLight: Boolean(runtime.financeFaviconLightMimeType),
-          hasTelegramPhoto: Boolean(runtime.avatarMimeType),
-          brandingUpdatedAt: runtime.financeBrandingUpdatedAt?.toISOString() ?? null,
-          telegramPhotoUpdatedAt: runtime.avatarUpdatedAt?.toISOString() ?? null,
           registeredUsers: bot._count.botUsers,
           profiles: bot._count.financeProfiles,
         });
@@ -478,12 +430,9 @@ export class ConfiguredBotAnalyticsService {
           // Ordinary dashboard navigation must not call Telegram.
           name: cachedAvatar?.displayName || runtime.username,
           description: cachedAvatar?.description || null,
-          avatarUrl:
-            cachedAvatar?.hasImage
-              ? `/telegram-bots/configured/system/avatar?environment=${runtime.environment}&version=${cachedAvatar.updatedAt.toISOString()}`
-              : runtime.environment === 'LOCAL'
-                ? '/brand/telegram-system-dev.png'
-                : '/brand/telegram-system.png',
+          avatarUrl: runtime.environment === 'LOCAL'
+            ? '/brand/telegram-system-dev.png'
+            : '/brand/telegram-system.png',
           configured: true,
           selected: selected === runtime.environment,
       };
@@ -542,13 +491,8 @@ export class ConfiguredBotAnalyticsService {
           username: true,
           displayName: true,
           description: true,
-          updatedAt: true,
-          image: true,
         },
-      }).then((avatars) => avatars.map(({ image, ...avatar }) => ({
-        ...avatar,
-        hasImage: Boolean(image),
-      })));
+      });
     } catch (error) {
       if (isMissingConfiguredBotAvatarTable(error)) return [];
       throw error;
@@ -595,7 +539,6 @@ export class ConfiguredBotAnalyticsService {
     profile: {
       name?: string;
       description?: string;
-      avatar?: { bytes: Buffer; contentType: string };
     },
   ) {
     try {
@@ -614,18 +557,10 @@ export class ConfiguredBotAnalyticsService {
           username: runtime.username,
           displayName: profile.name,
           description: profile.description,
-          image: profile.avatar ? Uint8Array.from(profile.avatar.bytes) : null,
-          mimeType: profile.avatar?.contentType ?? null,
         },
         update: {
           ...(profile.name ? { displayName: profile.name } : {}),
           ...(profile.description !== undefined ? { description: profile.description } : {}),
-          ...(profile.avatar
-            ? {
-                image: Uint8Array.from(profile.avatar.bytes),
-                mimeType: profile.avatar.contentType,
-              }
-            : {}),
         },
       });
     } catch (error) {

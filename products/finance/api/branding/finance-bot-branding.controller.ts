@@ -8,11 +8,8 @@ import {
   Patch,
   Query,
   Res,
-  UploadedFiles,
   UseGuards,
-  UseInterceptors,
 } from '@nestjs/common';
-import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { TelegramBotRuntimeEnvironment } from '@prisma/client';
 import type { Response } from 'express';
 import { CurrentUser } from '@api/common/current-user.decorator';
@@ -30,33 +27,18 @@ export class FinanceBotBrandingAdminController {
   ) {}
 
   @Patch(':environment')
-  @UseInterceptors(
-    FileFieldsInterceptor(
-      [
-        { name: 'favicon', maxCount: 1 },
-        { name: 'faviconLight', maxCount: 1 },
-      ],
-      { limits: { fileSize: 5 * 1024 * 1024 } },
-    ),
-  )
   async update(
     @CurrentUser() user: JwtUser,
     @Param('botId') botId: string,
     @Param('environment') environment: TelegramBotRuntimeEnvironment,
     @Body() body: { name?: string; confirmTelegramUpdate?: string },
-    @UploadedFiles()
-    files: { favicon?: Express.Multer.File[]; faviconLight?: Express.Multer.File[] },
   ) {
     if (body.confirmTelegramUpdate !== 'true') {
       throw new BadRequestException(
         'Telegram profile update must be confirmed',
       );
     }
-    await this.branding.update(user.sub, botId, environment, {
-      name: body.name,
-      favicon: files?.favicon?.[0],
-      faviconLight: files?.faviconLight?.[0],
-    });
+    await this.branding.update(user.sub, botId, environment, { name: body.name });
     return this.bots.findOne(user.sub, botId);
   }
 }
@@ -70,7 +52,6 @@ export class FinanceBotBrandingAssetController {
     @Param('botId') botId: string,
     @Param('kind') kind: 'favicon' | 'favicon-light',
     @Query('environment') environment: string | undefined,
-    @Query('version') version: string | undefined,
     @Res() response: Response,
   ) {
     if (kind !== 'favicon' && kind !== 'favicon-light') {
@@ -89,12 +70,7 @@ export class FinanceBotBrandingAssetController {
       environment as TelegramBotRuntimeEnvironment | undefined,
     );
     response.setHeader('Content-Type', asset.contentType);
-    response.setHeader(
-      'Cache-Control',
-      version ? 'public, max-age=31536000, immutable' : 'no-cache',
-    );
-    if (asset.updatedAt)
-      response.setHeader('Last-Modified', asset.updatedAt.toUTCString());
+    response.setHeader('Cache-Control', 'public, max-age=300');
     response.send(asset.bytes);
   }
 }

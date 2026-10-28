@@ -28,7 +28,10 @@ export function FinanceProductPreview({
   data.onboarded = true;
   data.lang = lang === "en" ? "en" : "uk";
   data.theme = theme === "dark" ? "dark" : "light";
-  const iconUrl = botId ? `/api/finance-bots/${encodeURIComponent(botId)}/branding/${data.theme === "dark" ? "favicon-light" : "favicon"}` : "/brand/groshly-icon.png";
+  void botId;
+  const iconUrl = data.theme === "dark"
+    ? (process.env.NODE_ENV === "development" ? "/brand/groshly-dev-dark-icon.png" : "/brand/groshly-dark-icon.png")
+    : (process.env.NODE_ENV === "development" ? "/brand/groshly-dev-icon.png" : "/brand/groshly-icon.png");
   return (
     <div className="finance-product-preview" aria-label="Groshly product preview">
       <PreviewApp initialData={data} previewScreen={screen} logoUrl={iconUrl} faviconUrl={iconUrl} faviconLightUrl={iconUrl} />

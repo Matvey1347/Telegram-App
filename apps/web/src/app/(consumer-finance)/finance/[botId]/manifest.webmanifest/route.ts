@@ -1,14 +1,13 @@
 import type { MetadataRoute } from "next";
-import { resolveConsumerFinanceApiBase } from "@consumer-finance/web/lib/api/consumer-finance-http";
 
 export function buildFinanceManifest(botId: string): MetadataRoute.Manifest {
   const encodedBotId = encodeURIComponent(botId);
   const appPath = `/finance/${encodedBotId}`;
-  const faviconUrl = `${resolveConsumerFinanceApiBase()}/finance-bots/${encodedBotId}/branding/favicon`;
+  const faviconUrl = "/brand/groshly-icon.png";
   return {
     id: `${appPath}?app=finance`,
-    name: "Finance",
-    short_name: "Finance",
+    name: "Groshly",
+    short_name: "Groshly",
     description: "Personal finance companion for your Telegram Finance bot.",
     start_url: `${appPath}?source=pwa`,
     scope: appPath,

@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { resolveConsumerFinanceApiBase } from "@consumer-finance/web/lib/api/consumer-finance-http";
 import { ConsumerFinanceApp } from "@consumer-finance/web/components/app/consumer-finance-app";
 
 export async function generateMetadata({
@@ -9,16 +8,16 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { botId } = await params;
   const encodedBotId = encodeURIComponent(botId);
-  const faviconUrl = `${resolveConsumerFinanceApiBase()}/finance-bots/${encodedBotId}/branding/favicon`;
+  const faviconUrl = "/brand/groshly-icon.png";
   return {
-    title: "Finance",
+    title: "Groshly",
     description: "Track income, expenses, accounts, and plans in Finance.",
-    applicationName: "Finance",
+    applicationName: "Groshly",
     manifest: `/finance/${encodedBotId}/manifest.webmanifest`,
     appleWebApp: {
       capable: true,
       statusBarStyle: "black-translucent",
-      title: "Finance",
+      title: "Groshly",
     },
     icons: {
       icon: faviconUrl,

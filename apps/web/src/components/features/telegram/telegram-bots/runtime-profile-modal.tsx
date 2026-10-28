@@ -17,19 +17,13 @@ export function RuntimeProfileModal({
   } | null;
   saving: boolean;
   onClose: () => void;
-  onSubmit: (input: { name?: string; avatar?: File; favicon?: File; faviconLight?: File }) => void;
+  onSubmit: (input: { name?: string }) => void;
 }) {
   const runtime = config?.bot.runtimes.find(
     (item) => item.environment === config.environment,
   );
-  const fallbackAvatar =
-    config?.bot.applicationType === "FINANCE"
-      ? "/brand/finance.png"
-      : "/brand/telegram-system.png";
+  const fallbackAvatar = "/brand/telegram-system.png";
   const [name, setName] = useState("");
-  const [avatar, setAvatar] = useState<File>();
-  const [favicon, setFavicon] = useState<File>();
-  const [faviconLight, setFaviconLight] = useState<File>();
   const [confirmed, setConfirmed] = useState(false);
   const financeBot = config?.bot.applicationType === "FINANCE";
 
@@ -43,12 +37,16 @@ export function RuntimeProfileModal({
         className="space-y-4"
         onSubmit={(event) => {
           event.preventDefault();
-          onSubmit({ name: name.trim() || undefined, avatar: financeBot ? undefined : avatar, favicon, faviconLight });
+          onSubmit({ name: name.trim() || undefined });
         }}
       >
         <div className="flex items-center gap-3 rounded-lg border border-neutral-800 bg-neutral-950 p-3">
+          {/* Telegram and bundled brand URLs are already small, square assets. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={runtime?.avatarUrl || fallbackAvatar}
+            src={financeBot
+              ? (config?.environment === "LOCAL" ? "/brand/groshly-dev-icon.png" : "/brand/groshly-icon.png")
+              : (runtime?.avatarUrl || fallbackAvatar)}
             alt="Current Telegram bot profile"
             className="h-14 w-14 rounded-full object-cover"
           />
@@ -69,31 +67,7 @@ export function RuntimeProfileModal({
             maxLength={64}
           />
         </FormField>
-        {!financeBot ? <FormField label="New Telegram profile photo"><Input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => setAvatar(event.target.files?.[0])} /></FormField> : null}
-        {financeBot ? (
-          <FormField label="Favicon">
-            <Input
-              type="file"
-              accept="image/png,image/jpeg,image/webp,image/x-icon"
-              onChange={(event) => setFavicon(event.target.files?.[0])}
-            />
-            <p className="mt-1 text-xs text-neutral-400">
-              Used in the browser, PWA and Telegram. A white background is added automatically.
-            </p>
-          </FormField>
-        ) : null}
-        {financeBot ? (
-          <FormField label="Favicon light">
-            <Input
-              type="file"
-              accept="image/png,image/jpeg,image/webp"
-              onChange={(event) => setFaviconLight(event.target.files?.[0])}
-            />
-            <p className="mt-1 text-xs text-neutral-400">
-              Alternative icon for the other color theme.
-            </p>
-          </FormField>
-        ) : null}
+        <p className="text-xs text-neutral-400">The bot logo is set automatically from the project assets at startup.</p>
         <label className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-100">
           <input
             type="checkbox"
@@ -102,9 +76,7 @@ export function RuntimeProfileModal({
             onChange={(event) => setConfirmed(event.target.checked)}
           />
           <span>
-            {financeBot
-              ? "I understand that saving the favicon also updates this environment's Telegram photo."
-              : "I understand that saving here immediately changes the bot name and/or profile photo in Telegram for the selected token."}
+            I understand that saving changes the bot name in Telegram for the selected token.
           </span>
         </label>
         <div className="flex justify-end gap-2">
@@ -114,13 +86,13 @@ export function RuntimeProfileModal({
           <Button
             type="submit"
             disabled={
-              saving || !confirmed || (!name.trim() && !avatar && !favicon && !faviconLight)
+              saving || !confirmed || !name.trim()
             }
           >
             {saving
               ? "Updating Telegram"
               : financeBot
-                ? "Update bot branding"
+                ? "Update bot name"
                 : "Update Telegram profile"}
           </Button>
         </div>

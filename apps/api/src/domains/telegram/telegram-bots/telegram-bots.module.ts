@@ -101,6 +101,7 @@ import { FinanceConsumerAuthGuard } from '@consumer-finance/api/portability/fina
 import { FinanceCustomIconController } from '@consumer-finance/api/catalog/finance-custom-icon.controller';
 import { FinanceCustomIconService } from '@consumer-finance/api/catalog/finance-custom-icon.service';
 import { ConfiguredBotAnalyticsService } from './core/configured-bot-analytics.service';
+import { SystemBotBrandingStartupService } from './core/system-bot-branding-startup.service';
 
 @Module({
   imports: [BotBillingModule],
@@ -167,6 +168,7 @@ import { ConfiguredBotAnalyticsService } from './core/configured-bot-analytics.s
     FinanceImportService,
     FinanceCustomIconService,
     ConfiguredBotAnalyticsService,
+    SystemBotBrandingStartupService,
     FinanceConsumerAuthGuard,
     FinanceInvestmentService,
     FinanceInvestmentReadService,

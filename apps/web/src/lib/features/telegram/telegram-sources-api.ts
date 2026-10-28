@@ -255,12 +255,10 @@ export function createTelegramSourcesApi({
     updateFinanceBranding: async (
       id: string,
       environment: TelegramBotRuntimeEnvironment,
-      payload: { name?: string; favicon?: File; faviconLight?: File },
+      payload: { name?: string },
     ) => {
       const form = new FormData();
       if (payload.name?.trim()) form.append("name", payload.name.trim());
-      if (payload.favicon) form.append("favicon", payload.favicon);
-      if (payload.faviconLight) form.append("faviconLight", payload.faviconLight);
       form.append("confirmTelegramUpdate", "true");
       return (
         await api.patch<TelegramBot>(

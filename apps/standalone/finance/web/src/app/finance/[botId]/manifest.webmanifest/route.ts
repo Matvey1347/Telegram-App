@@ -4,8 +4,8 @@ function buildManifest(botId: string): MetadataRoute.Manifest {
   const appPath = `/finance/${encodeURIComponent(botId)}`;
   return {
     id: `${appPath}?app=finance`,
-    name: "Finance",
-    short_name: "Finance",
+    name: "Groshly",
+    short_name: "Groshly",
     description: "Personal finance companion for your Telegram Finance bot.",
     start_url: `${appPath}?source=pwa`,
     scope: appPath,
@@ -15,7 +15,7 @@ function buildManifest(botId: string): MetadataRoute.Manifest {
     theme_color: "#0a0a0a",
     categories: ["finance", "productivity"],
     icons: [{
-      src: `/api/finance-bots/${encodeURIComponent(botId)}/branding/favicon`,
+      src: "/brand/groshly-icon.png",
       sizes: "512x512",
       type: "image/png",
       purpose: "any",
