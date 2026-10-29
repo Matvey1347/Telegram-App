@@ -8,9 +8,9 @@ function BrandingImage() {
 }
 
 describe("useFinanceBotBranding", () => {
-  it("uses bundled light and dark brand assets", () => {
+  it("uses the transparent brand asset on every theme", () => {
     const { container } = render(<BrandingImage />);
-    expect(container.querySelector("span")).toHaveAttribute("data-logo-url", "/brand/groshly-icon.png");
+    expect(container.querySelector("span")).toHaveAttribute("data-logo-url", "/brand/groshly-dark-icon.png");
     expect(container.querySelector("span")).toHaveAttribute("data-dark-url", "/brand/groshly-dark-icon.png");
   });
 

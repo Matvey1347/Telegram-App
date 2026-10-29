@@ -1,4 +1,5 @@
 import type { Request } from 'express';
+import { ForbiddenException } from '@nestjs/common';
 import { FinanceConsumerBillingController } from '@consumer-finance/api/billing/finance-consumer-billing.controller';
 
 describe('FinanceConsumerBillingController', () => {
@@ -13,31 +14,25 @@ describe('FinanceConsumerBillingController', () => {
     else process.env.FRONTEND_URL = previousFrontend;
   });
 
-  it('returns from the Stripe portal to the dedicated Plans screen', async () => {
+  it('closes old purchases and portal without changing subscription reads', () => {
     const requests = {
       authenticate: jest.fn().mockReturnValue({
         profileId: 'profile-1',
         telegramBotUserId: 'telegram-user-1',
       }),
     };
-    const billing = {
-      stripePortal: jest.fn().mockResolvedValue({
-        url: 'https://billing.example/portal',
-      }),
-    };
+    const billing = { stripePortal: jest.fn(), createStripeCheckout: jest.fn(), createStarsCheckout: jest.fn() };
     const controller = new FinanceConsumerBillingController(
       requests as never,
       billing as never,
       {} as never,
     );
 
-    await expect(
-      controller.paymentPortal('bot-1', {} as Request),
-    ).resolves.toEqual({ url: 'https://billing.example/portal' });
-    expect(billing.stripePortal).toHaveBeenCalledWith({
-      botIntegrationId: 'bot-1',
-      telegramBotUserId: 'telegram-user-1',
-      returnUrl: 'https://finance.example/finance/bot-1?screen=billing',
-    });
+    expect(() => controller.checkout('bot-1', {} as Request)).toThrow(ForbiddenException);
+    expect(() => controller.starsCheckout('bot-1', {} as Request)).toThrow(ForbiddenException);
+    expect(() => controller.paymentPortal('bot-1', {} as Request)).toThrow(ForbiddenException);
+    expect(billing.createStripeCheckout).not.toHaveBeenCalled();
+    expect(billing.createStarsCheckout).not.toHaveBeenCalled();
+    expect(billing.stripePortal).not.toHaveBeenCalled();
   });
 });

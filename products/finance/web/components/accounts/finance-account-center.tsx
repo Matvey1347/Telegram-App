@@ -10,7 +10,7 @@ import type { FinanceLocale } from "@consumer-finance/web/components/i18n/core";
 import { financeAccountCenterCopy } from "@consumer-finance/web/components/i18n/account-center";
 import { FinanceProfileAvatar } from "@consumer-finance/web/components/profile/finance-profile-avatar";
 import { FinanceSettings } from "@consumer-finance/web/components/profile/finance-settings";
-import { FinancePlans } from "@consumer-finance/web/components/planning/finance-plans";
+import { FinanceLegacyBillingSummary } from "@consumer-finance/web/components/planning/finance-legacy-billing-summary";
 import { FinanceTierBadge } from "@consumer-finance/web/components/planning/finance-plan-promotion";
 import { useFinanceEntitlements } from "@consumer-finance/web/components/hooks/use-finance-entitlements";
 
@@ -142,7 +142,7 @@ export function FinanceAccountCenter({
         </div>
       </Card>
       <FinanceSettings botId={botId} profile={profile} locale={locale} />
-      <FinancePlans botId={botId} locale={locale} />
+      <FinanceLegacyBillingSummary botId={botId} locale={locale} />
     </div>
   );
 }

@@ -6,20 +6,22 @@ import {
   CreditCard,
   Handshake,
   LockKeyhole,
+  Sparkles,
   Moon,
   Send,
   Sun,
   Wallet,
 } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { FinanceLocale } from "@consumer-finance/web/components/i18n/core";
 import { financeLandingCopy } from "@consumer-finance/web/components/i18n/landing";
+import { ConsumerFinancePricing } from "@consumer-finance/web/components/app/consumer-finance-pricing";
 
 type Copy = ReturnType<typeof financeLandingCopy>;
 
 function Brand({ iconUrl }: { iconUrl: string }) {
   const [failed, setFailed] = useState(false);
-  const fallback = process.env.NODE_ENV === "development" ? "/brand/groshly-dev-icon.png" : "/brand/groshly-icon.png";
+  const fallback = "/brand/groshly-dark-icon.png";
   return (
     <span className="landing-brand">
       <img src={failed ? fallback : iconUrl} alt="" onError={() => setFailed(true)} />
@@ -28,14 +30,20 @@ function Brand({ iconUrl }: { iconUrl: string }) {
   );
 }
 
-function ProductPreview({ t, botId, locale, theme, screen }: { t: Copy; botId: string; locale: FinanceLocale; theme: "light" | "dark"; screen: "home" | "analytics" }) {
+type PreviewScreen = "home" | "accounts" | "history" | "debts" | "analytics";
+
+function ProductPreview({ t, locale, theme, screen }: { t: Copy; locale: FinanceLocale; theme: "light" | "dark"; screen: PreviewScreen }) {
+  const frame = useRef<HTMLIFrameElement>(null);
+  useEffect(() => {
+    frame.current?.contentWindow?.postMessage({ type: "groshly-preview-preferences", locale, theme }, window.location.origin);
+  }, [locale, theme]);
   return (
     <div className={`landing-real-preview landing-real-preview-${screen}`} aria-label={t.previewLabel}>
       <iframe
+        ref={frame}
         title={t.previewLabel}
-        aria-hidden="true"
-        src={`/preview/${screen}?lang=${locale}&theme=${theme}&botId=${encodeURIComponent(botId)}`}
-        tabIndex={-1}
+        src={`/preview/${screen}`}
+        onLoad={() => frame.current?.contentWindow?.postMessage({ type: "groshly-preview-preferences", locale, theme }, window.location.origin)}
         loading={screen === "home" ? "eager" : "lazy"}
       />
     </div>
@@ -75,31 +83,25 @@ function Feature({
 
 export function ConsumerFinanceLanding({
   locale,
-  botId,
   iconUrl,
-  login,
-  loginUrl,
-  onLoginClick,
   theme,
   onThemeChange,
   onLocaleChange,
 }: {
   locale: FinanceLocale;
-  botId: string;
   iconUrl: string;
-  login: ReactNode;
-  loginUrl?: string;
-  onLoginClick: () => void;
   theme: "light" | "dark";
   onThemeChange: () => void;
   onLocaleChange: (locale: FinanceLocale) => void;
 }) {
   const t = financeLandingCopy(locale);
+  const [tourScreen, setTourScreen] = useState<PreviewScreen>("analytics");
+  const onRegistrationClick = () => {
+    window.dispatchEvent(new CustomEvent("finance:registration_start", { detail: { locale, source: "landing" } }));
+  };
   const signInLink = {
-    href: loginUrl ?? "#start",
-    ...(loginUrl
-      ? { target: "_blank", rel: "noreferrer", onClick: onLoginClick }
-      : {}),
+    href: "/login",
+    onClick: onRegistrationClick,
   };
   return (
     <main className="groshly-landing" data-theme={theme} lang={locale}>
@@ -111,6 +113,7 @@ export function ConsumerFinanceLanding({
           <nav aria-label={t.landingNavLabel}>
             <a href="#features">{t.landingNavFeatures}</a>
             <a href="#how">{t.landingNavHow}</a>
+            <a href="#pricing">{t.landingNavPricing}</a>
             <a href="#questions">{t.landingNavQuestions}</a>
           </nav>
           <div className="landing-header-actions">
@@ -162,7 +165,7 @@ export function ConsumerFinanceLanding({
         <div className="landing-hero-visual">
           <span className="landing-visual-orbit landing-visual-orbit-one" />
           <span className="landing-visual-orbit landing-visual-orbit-two" />
-          <ProductPreview t={t} botId={botId} locale={locale} theme={theme} screen="home" />
+          <ProductPreview t={t} locale={locale} theme={theme} screen="home" />
         </div>
       </section>
       <div className="landing-signal">
@@ -235,13 +238,34 @@ export function ConsumerFinanceLanding({
             </a>
           </div>
           <div className="landing-showcase-visual">
-            <ProductPreview t={t} botId={botId} locale={locale} theme={theme} screen="analytics" />
+            <div className="landing-preview-tabs" role="group" aria-label={locale === "uk" ? "Екрани застосунку" : "App screens"}>
+              {([ ["accounts", t.landingAccounts], ["history", t.landingTransactions], ["debts", t.landingDebts], ["analytics", t.landingAnalytics] ] as const).map(([screen, label]) => (
+                <button key={screen} type="button" aria-pressed={tourScreen === screen} onClick={() => setTourScreen(screen)}>{label}</button>
+              ))}
+            </div>
+            <ProductPreview t={t} locale={locale} theme={theme} screen={tourScreen} />
           </div>
+        </div>
+      </section>
+      <section className="landing-section landing-container landing-ai" aria-labelledby="landing-ai-title">
+        <div className="landing-ai-copy">
+          <span className="landing-kicker">03 / {t.landingAiKicker}</span>
+          <h2 id="landing-ai-title">{t.landingAiTitle}</h2>
+          <p>{t.landingAiBody}</p>
+          <small>{t.landingAiAvailability}</small>
+        </div>
+        <div className="landing-ai-demo" aria-label={t.landingAiKicker}>
+          <span className="landing-ai-demo-label">Jarvis · {t.previewTag}</span>
+          <div className="landing-ai-conversation">
+            <p className="landing-ai-message"><span>{t.landingAiExample}</span></p>
+            <p className="landing-ai-response"><Sparkles size={18} aria-hidden="true" /><span>{t.landingAiExampleResult}</span></p>
+          </div>
+          <p className="landing-ai-demo-note">{t.landingAiDemoNote}</p>
         </div>
       </section>
       <section className="landing-section landing-container" id="how">
         <div className="landing-section-intro">
-          <span className="landing-kicker">03 / {t.landingNavHow}</span>
+          <span className="landing-kicker">04 / {t.landingNavHow}</span>
           <h2>{t.landingHowTitle}</h2>
           <p>{t.landingHowLead}</p>
         </div>
@@ -276,38 +300,19 @@ export function ConsumerFinanceLanding({
           <p>{t.landingSecurity}</p>
         </div>
       </section>
+      <ConsumerFinancePricing locale={locale} t={t} signInLink={signInLink} onRegistrationClick={onRegistrationClick} />
       <section
         className="landing-section landing-container landing-faq"
         id="questions"
       >
         <div className="landing-section-intro">
-          <span className="landing-kicker">04 / FAQ</span>
+          <span className="landing-kicker">06 / FAQ</span>
           <h2>{t.landingFaqTitle}</h2>
         </div>
         <div className="landing-faq-list">
           <FaqItem question={t.landingFaqOneQ} answer={t.landingFaqOneA} />
           <FaqItem question={t.landingFaqTwoQ} answer={t.landingFaqTwoA} />
           <FaqItem question={t.landingFaqThreeQ} answer={t.landingFaqThreeA} />
-        </div>
-      </section>
-      <section className="landing-start" id="start">
-        <div className="landing-container landing-start-inner">
-          <div>
-            <span className="landing-kicker">{t.landingStartKicker}</span>
-            <h2>{t.landingStartTitle}</h2>
-            <p>{t.landingStartBody}</p>
-            <div className="landing-start-checks">
-              <span>
-                <Check size={17} />
-                {t.landingNoInstall}
-              </span>
-              <span>
-                <Check size={17} />
-                {t.landingOneAccount}
-              </span>
-            </div>
-          </div>
-          {login}
         </div>
       </section>
       <footer className="landing-footer landing-container">

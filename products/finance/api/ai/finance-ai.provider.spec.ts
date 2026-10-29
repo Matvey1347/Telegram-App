@@ -44,13 +44,14 @@ describe('FinanceAiProviderService', () => {
         contentType: 'audio/ogg',
       }),
     };
+    const entitlements = { reserve: jest.fn().mockResolvedValue({ id: 'reservation-1' }) };
     const service = new FinanceAiProviderService(
       prisma as never,
       credentials as never,
-      {} as never,
+      entitlements as never,
       botApi as never,
     );
-    return { service, botApi, credentials, prisma };
+    return { service, botApi, credentials, entitlements, prisma };
   }
 
   it('downloads a bounded Telegram voice note and transcribes it through the configured provider', async () => {
@@ -121,5 +122,26 @@ describe('FinanceAiProviderService', () => {
         fileId: 'voice-file',
       }),
     ).rejects.toThrow('Finance AI returned an invalid transcription');
+  });
+
+  it('accepts one proposed expense per image in a two-receipt batch', async () => {
+    const { service, entitlements } = createService();
+    const operation = (description: string) => ({
+      type: 'EXPENSE', amount: '10', economicAmount: null, purpose: null,
+      necessity: null, currency: 'UAH', description,
+      occurredAt: new Date().toISOString(), accountHint: null,
+      merchantDisplay: null, items: null,
+    });
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: jest.fn().mockResolvedValue({ output_text: JSON.stringify({ operations: [operation('First'), operation('Second')] }), usage: { input_tokens: 80, output_tokens: 60 } }),
+    }) as never;
+    await expect(service.extractReceipts({
+      profileId: 'profile-1', botIntegrationId: 'bot-1',
+      files: [{ bytes: Buffer.from('first'), mime: 'image/png' }, { bytes: Buffer.from('second'), mime: 'image/png' }],
+      timezone: 'Europe/Kyiv', defaultCurrency: 'UAH',
+    })).resolves.toEqual([expect.objectContaining({ description: 'First' }), expect.objectContaining({ description: 'Second' })]);
+    expect(entitlements.reserve).toHaveBeenCalledTimes(1);
+    expect(global.fetch).toHaveBeenCalledTimes(1);
   });
 });

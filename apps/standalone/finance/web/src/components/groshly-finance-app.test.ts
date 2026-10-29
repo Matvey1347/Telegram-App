@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { writeFinanceRateCache } from "@finance-web/groshly/rate-cache";
 import {
   groshlyDebtInput,
   groshlyIdentityScope,
@@ -39,6 +40,13 @@ const base = {
 };
 
 describe("groshlySnapshot", () => {
+  it("uses the last confirmed rates after reopening the PWA", () => {
+    writeFinanceRateCache({ rates: { UAH: 1, PLN: 11.2, USD: 42, EUR: 49 }, rateDate: "2026-10-28" });
+    const snapshot = groshlySnapshot(base) as { rates: Record<string, number>; rateSource: string };
+    expect(snapshot.rates.PLN).toBe(11.2);
+    expect(snapshot.rateSource).toBe("cached");
+    localStorage.removeItem("finance-fx-rates-v1");
+  });
   it("maps persisted classification and default-category settings into the app snapshot", () => {
     const snapshot = groshlySnapshot(base) as Record<string, unknown>;
     expect(snapshot).toMatchObject({

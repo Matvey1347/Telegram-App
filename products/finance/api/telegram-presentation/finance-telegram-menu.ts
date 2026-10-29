@@ -6,7 +6,7 @@ import type { ConsumerFinanceAssistantScreen } from '@telegram-system/shared';
 export function financeMiniAppUrl(
   botId: string,
   base = publicWebOrigin(),
-  screen?: ConsumerFinanceAssistantScreen | 'more',
+  screen?: ConsumerFinanceAssistantScreen | 'settings',
   transfer = false,
 ) {
   const normalized = base?.trim().replace(/\/$/u, '');

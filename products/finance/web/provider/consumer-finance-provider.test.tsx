@@ -93,7 +93,7 @@ describe("ConsumerFinanceProvider", () => {
     ).toBe(false);
   });
 
-  it("persists Groshly ledgers only with a verified Telegram identity scope", () => {
+  it("skips startup snapshots and persists deferred obligations only with a verified Telegram identity scope", () => {
     expect(
       isPersistedConsumerFinanceQuery([
         "consumer-finance",
@@ -108,7 +108,7 @@ describe("ConsumerFinanceProvider", () => {
         "groshly-read-model",
         "telegram-user:42",
       ]),
-    ).toBe(true);
+    ).toBe(false);
     expect(
       isPersistedConsumerFinanceQuery([
         "consumer-finance",
@@ -116,6 +116,14 @@ describe("ConsumerFinanceProvider", () => {
         "groshly-obligations",
       ]),
     ).toBe(false);
+    expect(
+      isPersistedConsumerFinanceQuery([
+        "consumer-finance",
+        "bot-a",
+        "groshly-obligations",
+        "telegram-user:42",
+      ]),
+    ).toBe(true);
   });
 
   it("invalidates legacy persisted Groshly ledgers", () => {

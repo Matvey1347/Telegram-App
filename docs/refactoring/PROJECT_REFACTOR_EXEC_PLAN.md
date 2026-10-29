@@ -2056,3 +2056,33 @@ internal Finance product.
   At 100 channels the schedule and query count are unchanged; shorter retention
   reduces stored rows and index size. No new Railway process, CPU loop, memory
   baseline, external request, or network egress was added.
+
+## 2026-10-28 Finance FREE + PLUS billing foundation
+
+- The independent Finance host now has additive billing tables, a single
+  four-offer catalog, Finance-only Stripe ENV, explicit `billing:sync`, signed
+  mode-scoped webhooks, a Finance Mini App session, and a FREE/PLUS billing
+  screen. Legacy PRO/ULTIMATE source rows and Stripe Price identities remain
+  intact. A checksummed backup and dry-run importer prepare preservation of
+  existing paid/gift rights without cross-database SQL.
+- This is a staged foundation, not a production cutover. The old hosted
+  consumer Finance surface still exposes PRO/ULTIMATE and Telegram Stars;
+  browser-only login does not yet issue a standalone Finance session. TEST
+  Stripe, 7 UAH minimum acceptance, old-subscription webhook routing, and a
+  staging database import must be verified before switching new sales.
+- Local Finance API tests/typecheck/build and Finance Web tests/typecheck/build
+  pass. The repository architecture checker and full web lints still fail on
+  pre-existing violations outside this billing slice. See
+  `docs/finance-bot/BILLING_ROLLOUT.md` for cutover and rollback steps.
+
+### Runtime-cost assessment
+
+- Billing adds no poll, cron, startup Stripe call, or idle database query. A
+  billing-screen open performs bounded subscription/history reads and a
+  payment aggregation for active candidates. Checkout and webhooks perform
+  event-driven DB/Stripe work; catalog sync runs only by explicit CLI command.
+- At 100 Telegram channels, idle billing work remains zero because billing
+  scales with paying users and events, not channel count. Payment facts and
+  webhook IDs are append-only audit data; UI history is bounded to 30 rows.
+  The Finance API uses its existing process, so there is no new Railway
+  process or persistent connection baseline from this feature.

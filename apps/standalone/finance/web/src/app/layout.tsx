@@ -8,8 +8,10 @@ import "@consumer-finance/web/components/app/consumer-finance-landing-base.css";
 import "@consumer-finance/web/components/app/consumer-finance-landing-sections.css";
 import "@consumer-finance/web/components/app/consumer-finance-landing-motion.css";
 import "@consumer-finance/web/components/app/consumer-finance-landing-updates.css";
+import "@consumer-finance/web/components/app/consumer-finance-landing-pricing.css";
+import "@consumer-finance/web/components/app/consumer-finance-landing-polish.css";
 
-const initialFavicon = process.env.NODE_ENV === "development" ? "/brand/groshly-dev-icon.png" : "/brand/groshly-icon.png";
+const initialFavicon = process.env.NODE_ENV === "development" ? "/brand/groshly-dev-dark-icon.png" : "/brand/groshly-dark-icon.png";
 
 export const metadata: Metadata = {
   title: "Groshly — особисті фінанси в Telegram і браузері",

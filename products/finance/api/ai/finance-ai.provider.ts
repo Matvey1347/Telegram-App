@@ -520,7 +520,7 @@ export class FinanceAiProviderService {
       if (
         !operations?.length ||
         operations.length > 10 ||
-        (input.feature === 'RECEIPT_SCAN' && operations.length !== 1)
+        (input.feature === 'RECEIPT_SCAN' && operations.length !== input.content.length - 1)
       )
         throw new BadGatewayException(
           'Finance AI returned an invalid proposal',

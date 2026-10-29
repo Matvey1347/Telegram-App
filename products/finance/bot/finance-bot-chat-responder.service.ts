@@ -297,7 +297,7 @@ export class FinanceBotChatResponderService {
               },
             ];
           }),
-          ...(financeMiniAppUrl(context.bot.id, undefined, 'more')
+          ...(financeMiniAppUrl(context.bot.id, undefined, 'categories')
             ? [
                 [
                   {
@@ -305,7 +305,7 @@ export class FinanceBotChatResponderService {
                     webAppUrl: financeMiniAppUrl(
                       context.bot.id,
                       undefined,
-                      'more',
+                      'categories',
                     )!,
                   },
                 ],
@@ -363,7 +363,8 @@ export class FinanceBotChatResponderService {
     locale: FinanceChatLocale,
     defaultCurrency: string,
   ) {
-    const settingsUrl = financeMiniAppUrl(context.bot.id, undefined, 'more');
+    const settingsUrl = financeMiniAppUrl(context.bot.id, undefined, 'settings');
+    const subscriptionUrl = financeMiniAppUrl(context.bot.id, undefined, 'billing');
     await this.interactive.send(context.token, chatId, {
       text: t(locale, 'settingsSummary', { currency: defaultCurrency }),
       inlineButtons: [
@@ -377,7 +378,7 @@ export class FinanceBotChatResponderService {
           ? [
               [
                 { text: t(locale, 'fullSettings'), webAppUrl: settingsUrl },
-                { text: t(locale, 'subscription'), webAppUrl: settingsUrl },
+                ...(subscriptionUrl ? [{ text: t(locale, 'subscription'), webAppUrl: subscriptionUrl }] : []),
               ],
             ]
           : []),

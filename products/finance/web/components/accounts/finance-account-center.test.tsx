@@ -15,8 +15,8 @@ vi.mock("@consumer-finance/web/lib/api/consumer-finance-profile-api", () => ({
 vi.mock("@consumer-finance/web/components/profile/finance-settings", () => ({
   FinanceSettings: () => <div>Finance preferences</div>,
 }));
-vi.mock("@consumer-finance/web/components/planning/finance-plans", () => ({
-  FinancePlans: () => <div>Billing and payments</div>,
+vi.mock("@consumer-finance/web/components/planning/finance-legacy-billing-summary", () => ({
+  FinanceLegacyBillingSummary: () => <div>Billing and payments</div>,
 }));
 vi.mock("@consumer-finance/web/components/hooks/use-finance-entitlements", () => ({
   useFinanceEntitlements: () => ({

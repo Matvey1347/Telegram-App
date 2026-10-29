@@ -30,4 +30,13 @@ describe('FinanceSessionService', () => {
       ForbiddenException,
     );
   });
+
+  it('allows Checkout only with an explicitly signed external web surface', () => {
+    const service = new FinanceSessionService(config as never);
+    const subject = { financeBotId: 'bot-1', financeTelegramUserId: 'user-1', profileId: 'profile-1' };
+    const external = service.authenticate(`Bearer ${service.issue({ ...subject, surface: 'EXTERNAL_WEB' })}`);
+    expect(() => service.assertExternalCheckout(external)).not.toThrow();
+    const legacy = service.authenticate(`Bearer ${service.issue(subject)}`);
+    expect(() => service.assertExternalCheckout(legacy)).toThrow(ForbiddenException);
+  });
 });

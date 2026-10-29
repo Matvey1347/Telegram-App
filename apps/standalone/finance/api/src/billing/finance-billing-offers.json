@@ -1,0 +1,6 @@
+{
+  "INTRO": { "amountMinor": 700, "interval": "day", "intervalCount": 3, "intervalLabel": "3 days", "introNextAmountMinor": 17900 },
+  "MONTH": { "amountMinor": 17900, "interval": "month", "intervalCount": 1, "intervalLabel": "1 month" },
+  "QUARTER": { "amountMinor": 39900, "interval": "month", "intervalCount": 3, "intervalLabel": "3 months" },
+  "YEAR": { "amountMinor": 109900, "interval": "year", "intervalCount": 1, "intervalLabel": "12 months" }
+}

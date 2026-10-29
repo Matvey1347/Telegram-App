@@ -91,6 +91,7 @@ export class FinanceUltimateController {
           signal: abortController.signal,
           onMessageDelta: (delta) => write({ type: 'delta', delta }),
           onProgress: (stage, completed, total) => write({ type: 'progress', stage, completed, total }),
+          onTiming: (timing) => write({ type: 'timing', ...timing }),
         },
       );
       write({ type: 'done', result });

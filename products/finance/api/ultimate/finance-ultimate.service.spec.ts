@@ -365,26 +365,35 @@ describe('FinanceUltimateService', () => {
     );
   });
 
-  it('falls back to the canonical entry parser when the strict AI route is unavailable', async () => {
+  it('emits bounded stage timings without including finance facts', async () => {
+    const { service } = setup();
+    const onTiming = jest.fn();
+    await service.message(context, { text: 'What changed this month?', history: [] }, {
+      onMessageDelta: jest.fn(), onTiming,
+    });
+    expect(onTiming).toHaveBeenCalledWith({
+      totalMs: expect.any(Number), contextMs: expect.any(Number),
+      modelMs: expect.any(Number), firstDeltaMs: null, proposalMs: 0,
+    });
+    expect(JSON.stringify(onTiming.mock.calls)).not.toContain('Groceries');
+  });
+
+  it('does not launch a second model request when the conversational route fails', async () => {
     const { service, ai, entries } = setup();
     ai.routeAssistantMessage.mockRejectedValue(
       new BadGatewayException('provider response was invalid'),
     );
 
     await expect(
-      service.message(context, { text: 'Record a 9 PLN expense called bun' }),
-    ).resolves.toEqual({
-      kind: 'PROPOSAL',
-      message: expect.stringContaining('1'),
-      recommendedScreen: null,
-      proposal: {
-        token: 'fallback-proposal-token',
-        operations: expect.any(Array),
-      },
-    });
-    expect(entries.fromText).toHaveBeenCalledWith(
-      context,
-      'Record a 9 PLN expense called bun',
-    );
+      service.message(context, { text: 'Why is my balance different?' }),
+    ).rejects.toBeInstanceOf(BadGatewayException);
+    expect(entries.fromText).not.toHaveBeenCalled();
+  });
+
+  it('routes a question about past spending to analysis instead of proposing a duplicate expense', async () => {
+    const { service, ai, entries } = setup();
+    await service.message(context, { text: 'Сколько я потратил 120 грн на продукты', history: [] });
+    expect(ai.routeAssistantMessage).toHaveBeenCalledTimes(1);
+    expect(entries.fromText).not.toHaveBeenCalled();
   });
 });

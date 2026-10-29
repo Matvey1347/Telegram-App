@@ -1,4 +1,4 @@
-import { BadGatewayException, BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import type {
   ConsumerFinanceAnalytics,
   ConsumerFinanceAssistantMessageResult,
@@ -6,7 +6,7 @@ import type {
 import { PrismaService } from '@api/prisma/prisma.service';
 import { FinanceAiAnalyticsService } from '@consumer-finance/api/ai/finance-ai-analytics.service';
 import { FinanceAnalyticsService } from '@consumer-finance/api/analytics/finance-analytics.service';
-import { financeChatLocale, t } from '@consumer-finance/api/i18n/finance-chat-i18n';
+import { financeChatLocale } from '@consumer-finance/api/i18n/finance-chat-i18n';
 import type { FinanceUltimateQuestionDto } from '@consumer-finance/api/http/finance.dto';
 import type { FinanceAssistantMessageDto } from '@consumer-finance/api/http/finance.dto';
 import { FinanceEntitlementService } from '@consumer-finance/api/billing/finance-entitlement.service';
@@ -39,14 +39,17 @@ export class FinanceUltimateService {
     stream?: {
       onMessageDelta: (delta: string) => void;
       onProgress?: (stage: 'UNDERSTANDING' | 'PREPARING' | 'CHECKING', completed: number, total: number) => void;
+      onTiming?: (timing: { totalMs: number; contextMs: number | null; modelMs: number | null; firstDeltaMs: number | null; proposalMs: number | null }) => void;
       signal?: AbortSignal;
     },
   ): Promise<ConsumerFinanceAssistantMessageResult> {
+    const startedAt = Date.now();
     // A plain payment note does not need the expensive conversational router.
     // Send it through the canonical extractor once; questions still use the
     // richer analytics-aware route below.
     if (this.entries && isLikelyFinanceEntry(dto.text)) {
       const proposal = await this.entries.fromText(input, dto.text, (completed, stage) => stream?.onProgress?.(stage, completed, 3), stream?.signal);
+      stream?.onTiming?.({ totalMs: Date.now() - startedAt, contextMs: null, modelMs: null, firstDeltaMs: null, proposalMs: null });
       return {
         kind: 'PROPOSAL',
         message: '',
@@ -105,15 +108,16 @@ export class FinanceUltimateService {
           take: 40,
         }),
       ]);
+      const contextMs = Date.now() - startedAt;
       providerCalled = true;
       const locale = financeChatLocale(
         profile.locale,
         profile.telegramUser?.languageCode,
       );
       stream?.onProgress?.('PREPARING', 2, 4);
-      let route;
-      try {
-        route = await this.ai.routeAssistantMessage({
+      const modelStartedAt = Date.now();
+      let firstDeltaMs: number | null = null;
+      const route = await this.ai.routeAssistantMessage({
           profileId: input.profileId,
           botIntegrationId: input.botIntegrationId,
           locale,
@@ -146,21 +150,15 @@ export class FinanceUltimateService {
             workspaceId: input.workspaceId,
             telegramBotUserId: input.telegramBotUserId,
           },
-          onMessageDelta: stream?.onMessageDelta,
+          onMessageDelta: stream?.onMessageDelta ? (delta) => {
+            firstDeltaMs ??= Date.now() - startedAt;
+            stream.onMessageDelta(delta);
+          } : undefined,
           signal: stream?.signal,
         });
-      } catch (error) {
-        if (!(error instanceof BadGatewayException) || !this.entries) throw error;
-        stream?.onProgress?.('CHECKING', 3, 4);
-        const proposal = await this.entries.fromText(input, dto.text);
-        return {
-          kind: 'PROPOSAL',
-          message: `${t(locale, 'suggested', { count: proposal.operations.length })}\n${t(locale, 'review')}`,
-          recommendedScreen: null,
-          proposal,
-        };
-      }
+      const modelMs = Date.now() - modelStartedAt;
       if (route.kind !== 'RECORD') {
+        stream?.onTiming?.({ totalMs: Date.now() - startedAt, contextMs, modelMs, firstDeltaMs, proposalMs: 0 });
         return {
           kind: route.kind,
           message: route.message,
@@ -199,6 +197,7 @@ export class FinanceUltimateService {
           categoryName: item.categoryName,
         })),
       };
+      stream?.onTiming?.({ totalMs: Date.now() - startedAt, contextMs, modelMs, firstDeltaMs, proposalMs: Date.now() - modelStartedAt - modelMs });
       return {
         kind: 'PROPOSAL' as const,
         message: route.message,
@@ -310,6 +309,8 @@ export class FinanceUltimateService {
 }
 
 function isLikelyFinanceEntry(text: string) {
+  if (/[?？]/u.test(text) || /^(?:why|how|what|when|where|which|сколько|почему|зачем|как|когда|где|скільки|чому|навіщо|як|коли|де)(?:\s|$)/iu.test(text.trim()))
+    return false;
   return (
     /\d+(?:[.,]\d{1,2})?/u.test(text) &&
     /(?:spent|paid|bought|купил(?:а)?|потратил(?:а)?|заплатил(?:а)?|витратив(?:ла)?|купив(?:ла)?|заплатив(?:ла)?|отримав(?:ла)?|получил(?:а)?)/iu.test(

@@ -59,6 +59,8 @@ import {
 } from '@consumer-finance/api/ledger/finance-investment-transaction-mutation';
 import { FinanceAssetSummaryService } from '@consumer-finance/api/assets/finance-asset-summary.service';
 import { financeLedgerStats } from '@consumer-finance/api/ledger/finance-ledger-stats';
+import { prepareFinanceDebtOriginReplacement, type FinanceDebtOriginSyncInput } from '@consumer-finance/api/ledger/finance-debt-origin-sync';
+import { assertFinancePurposeDirection } from '@consumer-finance/api/ledger/finance-transaction-purpose';
 @Injectable()
 export class FinanceLedgerService {
   constructor(
@@ -90,46 +92,46 @@ export class FinanceLedgerService {
     profileCurrency?: string,
     workspaceId?: string,
   ) {
-    const accounts = await this.prisma.financeAccount.findMany({
-      where: { profileId },
-      select: {
-        id: true,
-        name: true,
-        emoji: true,
-        type: true,
-        currency: true,
-        openingBalance: true,
-        archivedAt: true,
-      },
-      orderBy: [{ archivedAt: 'asc' }, { createdAt: 'asc' }],
-    });
-    const [transactions, outgoing, incoming] = await Promise.all([
-      this.prisma.financeTransaction.groupBy({
-        by: ['accountId', 'type'],
-        where: { profileId, deletedAt: null },
-        _sum: { amount: true },
-      }),
-      this.prisma.financeTransfer.groupBy({
-        by: ['fromAccountId'],
-        where: { profileId, deletedAt: null },
-        _sum: { fromAmount: true },
-      }),
-      this.prisma.financeTransfer.groupBy({
-        by: ['toAccountId'],
-        where: { profileId, deletedAt: null },
-        _sum: { toAmount: true },
-      }),
-    ]);
-    const missingContext =
-      !profileCurrency || !workspaceId
-        ? await this.prisma.financeProfile.findUnique({
-            where: { id: profileId },
-            select: {
-              defaultCurrency: true,
-              botIntegration: { select: { workspaceId: true } },
-            },
-          })
-        : null;
+    const [accounts, transactions, outgoing, incoming, missingContext] =
+      await Promise.all([
+        this.prisma.financeAccount.findMany({
+          where: { profileId },
+          select: {
+            id: true,
+            name: true,
+            emoji: true,
+            type: true,
+            currency: true,
+            openingBalance: true,
+            archivedAt: true,
+          },
+          orderBy: [{ archivedAt: 'asc' }, { createdAt: 'asc' }],
+        }),
+        this.prisma.financeTransaction.groupBy({
+          by: ['accountId', 'type'],
+          where: { profileId, deletedAt: null },
+          _sum: { amount: true },
+        }),
+        this.prisma.financeTransfer.groupBy({
+          by: ['fromAccountId'],
+          where: { profileId, deletedAt: null },
+          _sum: { fromAmount: true },
+        }),
+        this.prisma.financeTransfer.groupBy({
+          by: ['toAccountId'],
+          where: { profileId, deletedAt: null },
+          _sum: { toAmount: true },
+        }),
+        !profileCurrency || !workspaceId
+          ? this.prisma.financeProfile.findUnique({
+              where: { id: profileId },
+              select: {
+                defaultCurrency: true,
+                botIntegration: { select: { workspaceId: true } },
+              },
+            })
+          : Promise.resolve(null),
+      ]);
     const defaultCurrency =
       profileCurrency || missingContext?.defaultCurrency || 'USD';
     const resolvedWorkspaceId =
@@ -140,23 +142,22 @@ export class FinanceLedgerService {
       currencies: accounts.map((account) => account.currency),
       defaultCurrency,
     });
+    const transactionDelta = new Map<string, Prisma.Decimal>();
+    for (const row of transactions) {
+      const amount = row._sum.amount || new Prisma.Decimal(0);
+      const previous = transactionDelta.get(row.accountId) || new Prisma.Decimal(0);
+      transactionDelta.set(
+        row.accountId,
+        row.type === 'INCOME' ? previous.plus(amount) : previous.minus(amount),
+      );
+    }
+    const outgoingByAccount = new Map(outgoing.map((row) => [row.fromAccountId, row._sum.fromAmount]));
+    const incomingByAccount = new Map(incoming.map((row) => [row.toAccountId, row._sum.toAmount]));
     return accounts.map((account) => {
-      let balance = new Prisma.Decimal(account.openingBalance);
-      for (const row of transactions.filter(
-        (item) => item.accountId === account.id,
-      ))
-        balance =
-          row.type === 'INCOME'
-            ? balance.plus(row._sum.amount || 0)
-            : balance.minus(row._sum.amount || 0);
-      balance = balance.minus(
-        outgoing.find((item) => item.fromAccountId === account.id)?._sum
-          .fromAmount || 0,
-      );
-      balance = balance.plus(
-        incoming.find((item) => item.toAccountId === account.id)?._sum
-          .toAmount || 0,
-      );
+      const balance = new Prisma.Decimal(account.openingBalance)
+        .plus(transactionDelta.get(account.id) || 0)
+        .minus(outgoingByAccount.get(account.id) || 0)
+        .plus(incomingByAccount.get(account.id) || 0);
       return {
         id: account.id,
         name: account.name,
@@ -255,7 +256,7 @@ export class FinanceLedgerService {
       dto.economicAmount,
       purpose,
     );
-    this.assertPurposeDirection(purpose, dto.type, dto.categoryId);
+    assertFinancePurposeDirection(purpose, dto.type, dto.categoryId);
     const account = writeContext
       ? writeContext.accounts.get(dto.accountId)
       : await tx.financeAccount.findFirst({
@@ -418,6 +419,16 @@ export class FinanceLedgerService {
     });
   }
 
+  async syncDebtOriginInTransaction(
+    tx: Prisma.TransactionClient,
+    profile: FinanceProfileContext,
+    input: FinanceDebtOriginSyncInput,
+  ) {
+    const replacement = await prepareFinanceDebtOriginReplacement(tx, profile, input);
+    if (!replacement) return;
+    await this.createReplacement(tx, profile, replacement.origin, replacement.dto, replacement.purpose, true);
+  }
+
   private async createReplacement(
     tx: Prisma.TransactionClient,
     profile: FinanceProfileContext,
@@ -429,6 +440,7 @@ export class FinanceLedgerService {
     },
     dto: UpdateFinanceTransactionDto,
     purposeOverride?: FinanceTransactionPurpose,
+    suppressMerchantMapping = false,
   ) {
     const amount = this.positive(dto.amount, 'amount');
     const purpose = purposeOverride ?? dto.purpose ?? 'ORDINARY';
@@ -437,7 +449,7 @@ export class FinanceLedgerService {
       dto.economicAmount,
       purpose,
     );
-    this.assertPurposeDirection(purpose, dto.type, dto.categoryId);
+    assertFinancePurposeDirection(purpose, dto.type, dto.categoryId);
     const account = await tx.financeAccount.findFirst({
       where: {
         id: dto.accountId,
@@ -531,7 +543,7 @@ export class FinanceLedgerService {
       select: financeTransactionSelect,
     });
     const merchantMappingKey = merchantDisplay || description;
-    await writeFinanceMerchantMapping(
+    if (!suppressMerchantMapping) await writeFinanceMerchantMapping(
       tx,
       profile.id,
       merchantMappingKey,
@@ -771,27 +783,5 @@ export class FinanceLedgerService {
     return economicAmount;
   }
 
-  private assertPurposeDirection(
-    purpose: FinanceTransactionPurpose,
-    type: CreateFinanceTransactionDto['type'],
-    categoryId?: string,
-  ) {
-    const expectedType =
-      purpose === FinanceTransactionPurpose.REIMBURSEMENT ||
-      purpose === FinanceTransactionPurpose.PASS_THROUGH ||
-      purpose === FinanceTransactionPurpose.INVESTMENT_RETURN
-        ? 'INCOME'
-        : purpose === FinanceTransactionPurpose.DEBT_REPAYMENT ||
-            purpose === FinanceTransactionPurpose.INVESTMENT_CONTRIBUTION
-          ? 'EXPENSE'
-          : type;
-    if (type !== expectedType)
-      throw new BadRequestException(
-        'Transaction purpose does not match transaction type',
-      );
-    if (purpose !== FinanceTransactionPurpose.ORDINARY && categoryId)
-      throw new BadRequestException(
-        'Balance-only transactions cannot use an income or expense category',
-      );
-  }
+
 }

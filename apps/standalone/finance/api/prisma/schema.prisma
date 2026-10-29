@@ -41,6 +41,7 @@ model FinanceBot {
   telegramUsers           FinanceTelegramUser[]
   webhookUpdates          FinanceWebhookUpdate[]
   profiles                FinanceProfile[]
+  billingSubscriptions    FinanceBillingSubscription[]
 }
 
 model FinanceTelegramUser {
@@ -67,6 +68,8 @@ model FinanceProfile {
   financeTelegramUser   FinanceTelegramUser @relation(fields: [financeTelegramUserId], references: [id], onDelete: Cascade)
   accounts              FinanceAccount[]
   transactions          FinanceTransaction[]
+  billingSubscriptions  FinanceBillingSubscription[]
+  billingPayments       FinanceBillingPayment[]
 
   @@unique([id, financeBotId])
   @@index([financeBotId])
@@ -128,4 +131,106 @@ model FinanceLegacyArchive {
 
   @@id([sourceTable, sourceId])
   @@index([backupChecksum])
+}
+
+enum FinanceBillingMode {
+  TEST
+  LIVE
+}
+enum FinanceBillingOffer {
+  INTRO
+  MONTH
+  QUARTER
+  YEAR
+}
+enum FinanceBillingStatus {
+  PENDING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  EXPIRED
+  GIFT
+}
+
+model FinanceBillingPrice {
+  id String @id @default(cuid())
+  mode FinanceBillingMode
+  offer FinanceBillingOffer
+  version Int
+  amountMinor Int
+  currency String @default("UAH")
+  stripeProductId String?
+  stripePriceId String?
+  isCurrent Boolean @default(true)
+  createdAt DateTime @default(now())
+  subscriptions FinanceBillingSubscription[]
+  @@unique([mode, offer, version])
+  @@unique([mode, stripePriceId])
+  @@index([mode, offer, isCurrent])
+}
+
+model FinanceBillingSubscription {
+  id String @id @default(cuid())
+  financeBotId String
+  profileId String
+  mode FinanceBillingMode
+  offer FinanceBillingOffer?
+  status FinanceBillingStatus @default(PENDING)
+  priceId String?
+  source String @default("STRIPE")
+  legacySourceId String? @unique
+  stripeCustomerId String?
+  stripeCheckoutId String? @unique
+  stripeSubscriptionId String?
+  stripeScheduleId String?
+  currentPeriodStart DateTime?
+  currentPeriodEnd DateTime?
+  cancelAtPeriodEnd Boolean @default(false)
+  introUsed Boolean @default(false)
+  checkoutExpiresAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  financeBot FinanceBot @relation(fields: [financeBotId], references: [id], onDelete: Restrict)
+  profile FinanceProfile @relation(fields: [profileId], references: [id], onDelete: Restrict)
+  price FinanceBillingPrice? @relation(fields: [priceId], references: [id], onDelete: SetNull)
+  payments FinanceBillingPayment[]
+  @@unique([mode, stripeSubscriptionId])
+  @@index([profileId, mode, status, currentPeriodEnd])
+}
+
+model FinanceBillingPayment {
+  id String @id @default(cuid())
+  profileId String
+  subscriptionId String?
+  mode FinanceBillingMode
+  stripeEventId String
+  stripeInvoiceId String?
+  stripePaymentIntentId String?
+  stripeChargeId String?
+  stripeRefundId String?
+  stripeDisputeId String?
+  kind String
+  currency String
+  amountMinor Int
+  internalBonusMinor Int @default(0)
+  confirmedCashMinor Int @default(0)
+  occurredAt DateTime
+  createdAt DateTime @default(now())
+  profile FinanceProfile @relation(fields: [profileId], references: [id], onDelete: Restrict)
+  subscription FinanceBillingSubscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  @@unique([mode, stripeEventId])
+  @@unique([mode, stripeRefundId])
+  @@unique([mode, stripeInvoiceId, kind])
+  @@unique([mode, stripeDisputeId])
+  @@index([profileId, occurredAt])
+  @@index([mode, stripeInvoiceId])
+}
+
+model FinanceBillingWebhookEvent {
+  id String @id @default(cuid())
+  mode FinanceBillingMode
+  stripeEventId String
+  type String
+  createdAt DateTime @default(now())
+  @@unique([mode, stripeEventId])
 }

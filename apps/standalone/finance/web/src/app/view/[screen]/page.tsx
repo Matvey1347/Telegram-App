@@ -1,5 +1,4 @@
-import { notFound } from "next/navigation";
-import { FinanceRootApp } from "@finance-web/components/finance-root-app";
+import { notFound, redirect } from "next/navigation";
 
 const browserScreens = new Set([
   "home", "history", "analytics", "ai", "accounts", "categories",
@@ -14,5 +13,5 @@ export default async function FinanceBrowserScreen({
 }) {
   const { screen } = await params;
   if (!browserScreens.has(screen)) notFound();
-  return <FinanceRootApp />;
+  redirect(screen === "home" ? "/app" : `/app/${screen}`);
 }

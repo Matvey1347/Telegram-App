@@ -808,3 +808,49 @@ body.money-input-active .app-shell .app-main.page-investmentDetail{padding-botto
 .category-default-action{margin:0 0 12px!important}
 
 .desktop-sidebar a{text-decoration:none}.desktop-brand,.desktop-side-profile{color:var(--ink)}
+
+.finance-billing { display: grid; gap: 14px; }
+.finance-billing .billing-message { display: flex; align-items: center; gap: 12px; padding: 20px; }
+.finance-billing .billing-message p { margin: 0; }
+.finance-billing .billing-message button,
+.finance-billing .billing-manage button,
+.finance-billing .billing-refresh { border: 1px solid var(--line); background: var(--paper); color: var(--deep); border-radius: 12px; padding: 10px 14px; font-weight: 700; }
+.finance-billing .billing-current { padding: 20px; }
+.finance-billing .billing-current > div:first-child { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.finance-billing .billing-current small { color: var(--sub); font-weight: 700; }
+.finance-billing .billing-current strong { color: var(--deep); font-size: 22px; }
+.finance-billing .billing-current p { margin: 12px 0 0; }
+.finance-billing .billing-manage { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
+.finance-billing .billing-disclosure { padding: 17px 20px; border: 1px solid #b8d68b; background: var(--lime2); color: var(--deep); font-weight: 650; }
+.finance-billing .billing-error { color: var(--red); font-weight: 700; }
+.finance-billing .billing-history { padding: 20px; }
+.finance-billing .billing-history h2 { margin-bottom: 16px; }
+.finance-billing .billing-history ul { list-style: none; margin: 0 0 16px; padding: 0; }
+.finance-billing .billing-history li { display: flex; justify-content: space-between; align-items: center; gap: 12px; border-top: 1px solid var(--line); padding: 12px 0; }
+.finance-billing .billing-history li span { display: grid; gap: 4px; }
+.finance-billing .billing-history li small { color: var(--sub); }
+.finance-billing .billing-refresh { display: inline-flex; align-items: center; gap: 7px; }
+
+/* Keep category names readable in the chart legend and in a drilled-down history. */
+.app-shell .page-analytics .legend { grid-template-columns: 1fr; }
+.app-shell .page-analytics .legend>button span:not(.legend-emoji) { white-space: normal; overflow: visible; line-height: 1.35; }
+.history-back-analytics { display: inline-flex; align-items: center; gap: 7px; min-height: 42px; margin: 0 0 8px; color: var(--green); font-size: 13px; font-weight: 800; }
+@media (min-width: 900px) { .app-shell .page-analytics .legend { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+@media (max-width: 679px) {
+  .app-shell .tabbar {
+    left: 14px; right: 14px; bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+    height: 67px; padding-bottom: 0; border: 1px solid var(--line);
+    border-radius: 24px; background: var(--paper);
+    box-shadow: 0 12px 36px #092b2030;
+  }
+  .app-shell .tab { min-height: 53px; margin: 0 2px; }
+  .app-shell .tab-add { top: -12px; width: 62px; height: 62px; border-radius: 20px; box-shadow: 0 7px 16px #092b2030; }
+  .app-shell .app-main:not(.page-form):not(.page-ai) { bottom: calc(91px + env(safe-area-inset-bottom, 0px)); }
+  .app-shell .app-main.page-ai { bottom: 0; padding-bottom: calc(102px + env(safe-area-inset-bottom, 0px)) !important; }
+  .app-shell:not(.keyboard-open):not(.ai-focused) .ai-compose-dock { bottom: calc(10px + env(safe-area-inset-bottom, 0px)) !important; }
+  .app-shell.keyboard-open .ai-compose-dock, .app-shell.ai-focused .ai-compose-dock { bottom: calc(var(--groshly-kb, 0px) + 6px) !important; }
+}
+/* Brand icon is transparent; presentation surfaces provide their own background. */
+.app-shell .brand-logo,.app-shell .brand-logo img,.finance-product-preview .brand-logo,.finance-product-preview .brand-logo img{background:transparent!important;border:0!important;padding:0!important;box-shadow:none!important}
+.desktop-brand:has(.brand-logo img) .brand-logo,.drawer-brand:has(.brand-logo img) .brand-logo,.auth-brandline:has(.brand-logo img)>.brand-logo,.onboard-head:has(.brand-logo img)>.brand-logo{width:42px!important;height:42px!important}

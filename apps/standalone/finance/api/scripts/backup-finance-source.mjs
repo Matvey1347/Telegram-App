@@ -18,7 +18,10 @@ const scopedTables = new Set([
   'BotBillingProviderConfig',
   'BotBillingEvent',
   'BotSubscriptionPlan',
+  'BotPlanPrice',
   'BotSubscription',
+  'BotSubscriptionGrant',
+  'BotProviderSubscription',
   'BotCoupon',
   'BotCouponRedemption',
   'BotProviderCustomer',
@@ -59,10 +62,14 @@ try {
       [table],
     );
     const hasBotIntegration = columns.rows.some(({ column_name: name }) => name === 'botIntegrationId');
-    const query = hasBotIntegration
+    const parent = table === 'BotPlanPrice' ? ['BotSubscriptionPlan', 'planId']
+      : table === 'BotSubscriptionGrant' || table === 'BotProviderSubscription' ? ['BotSubscription', 'subscriptionId'] : null;
+    const query = parent
+      ? `SELECT row_to_json(item) AS row FROM (SELECT child.* FROM ${quote(table)} child JOIN ${quote(parent[0])} parent ON parent.id = child.${quote(parent[1])} WHERE parent."botIntegrationId" = ANY($1::text[])) item`
+      : hasBotIntegration
       ? `SELECT row_to_json(item) AS row FROM (SELECT * FROM ${quote(table)} WHERE "botIntegrationId" = ANY($1::text[])) item`
       : `SELECT row_to_json(item) AS row FROM (SELECT * FROM ${quote(table)}) item`;
-    const rows = await client.query(query, hasBotIntegration ? [botIds] : []);
+    const rows = await client.query(query, parent || hasBotIntegration ? [botIds] : []);
     data[table] = rows.rows.map(({ row }) => row);
   }
 

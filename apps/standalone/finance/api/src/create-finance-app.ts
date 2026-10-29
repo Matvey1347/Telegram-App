@@ -24,7 +24,7 @@ export async function createFinanceApp(adapter?: ExpressAdapter) {
   );
   const runtime = app.get(FinanceRuntimeConfig);
   if (runtime.webPublicUrl) {
-    app.enableCors({ origin: runtime.webPublicUrl });
+    app.enableCors({ origin: runtime.webPublicUrl, credentials: true });
   }
   await app.init();
   return app;

@@ -67,30 +67,18 @@ const copy: Record<Locale, Record<Kind, { title: string; intro: string; sections
 const legalName = "Groshly";
 const legalEmail = "matveybogdantg@gmail.com";
 
-export function FinanceLegalPage({ kind }: { kind: Kind }) {
-  const [locale, setLocale] = useState<Locale>("uk");
-  const [theme, setTheme] = useState<"light" | "dark">("light");
-  const [preferencesReady, setPreferencesReady] = useState(false);
+export function FinanceLegalPage({ kind, initialLocale = "uk", initialTheme = "light" }: { kind: Kind; initialLocale?: Locale; initialTheme?: "light" | "dark" }) {
+  const [locale, setLocale] = useState<Locale>(initialLocale);
+  const [theme, setTheme] = useState<"light" | "dark">(initialTheme);
   useEffect(() => {
-    let active = true;
-    queueMicrotask(() => {
-      if (!active) return;
-      setLocale(window.localStorage.getItem("groshly-language") === "en" ? "en" : "uk");
-      setTheme(window.localStorage.getItem("groshly-theme") === "dark" ? "dark" : "light");
-      setPreferencesReady(true);
-    });
-    return () => { active = false; };
-  }, []);
-  useEffect(() => {
-    if (!preferencesReady) return;
     window.localStorage.setItem("groshly-language", locale);
     window.localStorage.setItem("groshly-theme", theme);
+    document.cookie = `groshly-language=${locale}; Path=/; Max-Age=31536000; SameSite=Lax`;
+    document.cookie = `groshly-theme=${theme}; Path=/; Max-Age=31536000; SameSite=Lax`;
     document.documentElement.lang = locale;
-  }, [locale, theme, preferencesReady]);
+  }, [locale, theme]);
   const content = copy[locale][kind];
-  const icon = theme === "dark"
-    ? (process.env.NODE_ENV === "development" ? "/brand/groshly-dev-dark-icon.png" : "/brand/groshly-dark-icon.png")
-    : (process.env.NODE_ENV === "development" ? "/brand/groshly-dev-icon.png" : "/brand/groshly-icon.png");
+  const icon = process.env.NODE_ENV === "development" ? "/brand/groshly-dev-dark-icon.png" : "/brand/groshly-dark-icon.png";
   return <main className="groshly-legal" data-theme={theme} lang={locale}>
     <header>
       <Link href="/" className="groshly-legal-brand"><img src={icon} alt="" /><span>Groshly<span>.</span></span></Link>

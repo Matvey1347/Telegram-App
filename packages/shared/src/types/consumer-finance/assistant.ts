@@ -60,6 +60,7 @@ export type ConsumerFinanceAssistantMessageResult = {
 
 export type ConsumerFinanceAssistantStreamEvent =
   | { type: "start" }
+  | { type: "timing"; totalMs: number; contextMs: number | null; modelMs: number | null; firstDeltaMs: number | null; proposalMs: number | null }
   | {
       type: "progress";
       stage: "UNDERSTANDING" | "PREPARING" | "CHECKING";

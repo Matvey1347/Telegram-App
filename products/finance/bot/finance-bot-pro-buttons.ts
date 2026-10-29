@@ -5,6 +5,6 @@ import {
 } from '@consumer-finance/api/i18n/finance-chat-i18n';
 
 export function financeBotProButtons(botId: string, locale: FinanceChatLocale) {
-  const url = financeMiniAppUrl(botId, undefined, 'more');
+  const url = financeMiniAppUrl(botId, undefined, 'billing');
   return url ? [[{ text: t(locale, 'unlockPro'), webAppUrl: url }]] : undefined;
 }

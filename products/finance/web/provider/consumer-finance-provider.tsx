@@ -13,9 +13,9 @@ import financeStyles from "@consumer-finance/web/components/ui/finance-ui.module
 import { registerFinanceServiceWorker } from "@finance-web/lib/pwa/service-worker";
 
 const CONSUMER_FINANCE_QUERY_CACHE_KEY = "consumer-finance-react-query-cache";
-// v2 discards older snapshots that may contain an aggregate Groshly ledger
-// without a verified Telegram-user scope.
-const CONSUMER_FINANCE_QUERY_CACHE_BUSTER = "consumer-finance-cache-v2";
+// v3 drops startup snapshots: they cannot render until the server verifies
+// the current Finance session, so hydrating them only adds synchronous work.
+const CONSUMER_FINANCE_QUERY_CACHE_BUSTER = "consumer-finance-cache-v3";
 const CONSUMER_FINANCE_QUERY_CACHE_MAX_AGE_MS = 12 * 60 * 60_000;
 
 type PersistedClient = {
@@ -35,6 +35,7 @@ export function isPersistedConsumerFinanceQuery(queryKey: readonly unknown[]) {
   ) {
     return (
       domain === "consumer-finance" &&
+      kind !== "groshly-read-model" &&
       typeof identityScope === "string" &&
       identityScope.startsWith("telegram-user:")
     );
@@ -133,7 +134,8 @@ export function ConsumerFinanceProvider({ children }: PropsWithChildren) {
       });
     };
     return queryClient.getQueryCache().subscribe((event) => {
-      if (["added", "removed", "updated"].includes(event.type)) persist();
+      if (["added", "removed", "updated"].includes(event.type) &&
+          isPersistedConsumerFinanceQuery(event.query.queryKey)) persist();
     });
   }, [persister, queryClient]);
 

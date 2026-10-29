@@ -20,6 +20,10 @@ import { FinanceTelegramBotApiClient } from "./telegram/finance-telegram-bot-api
 import { FinanceTelegramRuntimeService } from "./telegram/finance-telegram-runtime.service";
 import { FinanceAdminAnalyticsController } from "./admin/finance-admin-analytics.controller";
 import { FinanceAdminAnalyticsService } from "./admin/finance-admin-analytics.service";
+import { FinanceBillingController, FinanceStripeWebhookController } from "./billing/finance-billing.controller";
+import { FinanceBillingService } from "./billing/finance-billing.service";
+import { FinanceStripeService } from "./billing/finance-stripe.service";
+import { FinanceStripeWebhookService } from "./billing/finance-stripe-webhook.service";
 
 @Module({
   imports: [
@@ -61,6 +65,8 @@ import { FinanceAdminAnalyticsService } from "./admin/finance-admin-analytics.se
     FinanceAuthController,
     FinanceLedgerController,
     FinanceAdminAnalyticsController,
+    FinanceBillingController,
+    FinanceStripeWebhookController,
   ],
   providers: [
     FinanceRuntimeConfig,
@@ -73,6 +79,9 @@ import { FinanceAdminAnalyticsService } from "./admin/finance-admin-analytics.se
     FinanceAuthService,
     FinanceLedgerService,
     FinanceAdminAnalyticsService,
+    FinanceBillingService,
+    FinanceStripeService,
+    FinanceStripeWebhookService,
   ],
 })
 export class FinanceApiModule {}

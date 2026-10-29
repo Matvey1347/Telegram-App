@@ -308,6 +308,23 @@ export class FinanceDebtService {
       });
       if (claimed.count !== 1)
         throw new ConflictException('Finance debt changed concurrently');
+      if (existing.originTransactionId) {
+        await this.ledger.syncDebtOriginInTransaction(tx, {
+          id: profileId,
+          defaultCurrency: profile.defaultCurrency,
+          timezone: profile.timezone,
+          workspaceId: profile.botIntegration.workspaceId,
+        }, {
+          transactionId: existing.originTransactionId,
+          previousAmount: existing.amount,
+          previousAccountId: existing.accountId,
+          previousDirection: existing.direction,
+          amount,
+          accountId: account.id,
+          direction: input.direction,
+          name: values.name,
+        });
+      }
       const debt = await tx.financeDebt.findUniqueOrThrow({
         where: { id },
         select: financeDebtSelect,

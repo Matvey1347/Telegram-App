@@ -26,4 +26,10 @@ describe("FinanceLegalPage", () => {
     expect(screen.getByRole("heading", { name: "Сервіс" })).toBeInTheDocument();
     expect(screen.getByText(/Groshly ·/)).toBeInTheDocument();
   });
+  it("renders saved language and theme on the first frame", () => {
+    render(<FinanceLegalPage kind="privacy" initialLocale="en" initialTheme="dark" />);
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Privacy Policy");
+    expect(document.querySelector(".groshly-legal")).toHaveAttribute("data-theme", "dark");
+    expect(document.querySelector(".groshly-legal-brand img")?.getAttribute("src")).toMatch(/groshly-(?:dev-)?dark-icon\.png$/);
+  });
 });

@@ -7,6 +7,7 @@ export interface FinanceSession {
   financeTelegramUserId: string;
   profileId: string;
   expiresAt: number;
+  surface?: 'EXTERNAL_WEB' | 'TELEGRAM_MINI_APP';
 }
 
 @Injectable()
@@ -43,6 +44,19 @@ export class FinanceSessionService {
       return session;
     } catch {
       throw new ForbiddenException('Finance session is invalid');
+    }
+  }
+
+  authenticateBrowser(authorization: string | undefined, cookie: string | undefined, origin: string | undefined, expectedBotId: string, mutating = false) {
+    if (authorization?.startsWith('Bearer ')) return this.authenticate(authorization, expectedBotId);
+    if (mutating && (!origin || origin !== this.config.webPublicUrl)) throw new ForbiddenException('Finance billing origin is invalid');
+    const token = cookie?.split(';').map(part => part.trim()).find(part => part.startsWith('finance_session='))?.slice('finance_session='.length);
+    return this.authenticate(token ? `Bearer ${token}` : undefined, expectedBotId);
+  }
+
+  assertExternalCheckout(session: FinanceSession) {
+    if (session.surface !== 'EXTERNAL_WEB') {
+      throw new ForbiddenException('Checkout requires an external Finance Web session');
     }
   }
 

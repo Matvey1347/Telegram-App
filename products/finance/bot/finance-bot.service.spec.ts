@@ -40,6 +40,11 @@ describe('parseFinanceChatCommand', () => {
     ['/categories', 'categories'],
     ['/transfer', 'transfer'],
     ['/assistant', 'assistant'],
+    ['/analytics', 'analytics'],
+    ['/plus', 'plus'],
+    ['/support', 'support'],
+    ['/paysupport', 'paysupport'],
+    ['/terms', 'terms'],
     ['/help', 'help'],
   ])('parses %s before free-form finance input', (input, expected) =>
     expect(parseFinanceChatCommand(input)).toBe(expected),
@@ -288,6 +293,25 @@ describe('FinanceBotService chat UX', () => {
     );
     expect(test.assistant.message).not.toHaveBeenCalled();
   });
+
+  it.each(['/analytics', '/plus', '/support', '/paysupport', '/terms'])(
+    'handles %s with a real response',
+    async (command) => {
+      const test = service();
+      await test.instance.handle({
+        bot,
+        runtime,
+        token: 'bot-token',
+        updateLogId: `navigation-${command}`,
+        update: { message: { text: command, chat: { id: 'chat-1' } } },
+      } as any);
+      expect(test.delivery.send).toHaveBeenCalledWith(
+        'bot-token',
+        'chat-1',
+        expect.objectContaining({ text: expect.any(String) }),
+      );
+    },
+  );
 
   it('routes ordinary prose to Jarvis and returns its answer', async () => {
     const test = service();

@@ -54,6 +54,11 @@ describe('FinanceLedgerService tenant and money rules', () => {
             type: 'INCOME',
             _sum: { amount: new Prisma.Decimal(25) },
           },
+          {
+            accountId: 'usd',
+            type: 'EXPENSE',
+            _sum: { amount: new Prisma.Decimal(5) },
+          },
         ]),
       },
       financeTransfer: {
@@ -87,7 +92,7 @@ describe('FinanceLedgerService tenant and money rules', () => {
     ).accounts('profile-a', 'USD', 'workspace-a');
 
     expect(accounts).toEqual([
-      expect.objectContaining({ id: 'usd', balance: '105' }),
+      expect.objectContaining({ id: 'usd', balance: '100' }),
       expect.objectContaining({
         id: 'eur',
         balance: '68',
@@ -121,6 +126,20 @@ describe('FinanceLedgerService tenant and money rules', () => {
         botIntegration: { select: { workspaceId: true } },
       },
     });
+  });
+  it('starts account and aggregate reads together before waiting for the account list', async () => {
+    let releaseAccounts!: (value: []) => void;
+    const accountsReady = new Promise<[]>((resolve) => { releaseAccounts = resolve; });
+    const prisma: any = {
+      financeAccount: { findMany: jest.fn().mockReturnValue(accountsReady) },
+      financeTransaction: { groupBy: jest.fn().mockResolvedValue([]) },
+      financeTransfer: { groupBy: jest.fn().mockResolvedValue([]) },
+    };
+    const pending = new FinanceLedgerService(prisma).accounts('profile-a', 'UAH', 'workspace-a');
+    expect(prisma.financeTransaction.groupBy).toHaveBeenCalledTimes(1);
+    expect(prisma.financeTransfer.groupBy).toHaveBeenCalledTimes(2);
+    releaseAccounts([]);
+    await expect(pending).resolves.toEqual([]);
   });
   it('uses one request-scoped rate graph for ten account currencies', async () => {
     const prisma: any = {
@@ -595,6 +614,40 @@ describe('FinanceLedgerService tenant and money rules', () => {
         }),
       }),
     );
+  });
+
+  it('synchronizes a standalone debt origin from 1500 to 2000 without assigning a category', async () => {
+    const occurredAt = new Date('2026-10-01T12:00:00.000Z');
+    const tx: any = {
+      financeTransaction: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'origin-1', accountId: 'account-a', categoryId: null,
+          merchantDisplay: null, type: 'INCOME', purpose: 'PASS_THROUGH',
+          amount: new Prisma.Decimal(1500), occurredAt,
+          originatedDebts: [{ id: 'debt-1' }],
+        }),
+        update: jest.fn().mockResolvedValue({
+          ...restoredTransaction, id: 'origin-1', type: 'INCOME', purpose: 'PASS_THROUGH',
+          amount: new Prisma.Decimal(2000), economicAmount: new Prisma.Decimal(0),
+          currency: 'USD', occurredAt, account: { id: 'account-a', name: 'Cash', currency: 'USD' },
+        }),
+      },
+      financeAccount: { findFirst: jest.fn().mockResolvedValue({ id: 'account-a', currency: 'USD' }) },
+    };
+    const ledger = new FinanceLedgerService({} as never);
+    await ledger.syncDebtOriginInTransaction(tx, {
+      id: 'profile-a', defaultCurrency: 'USD', workspaceId: 'workspace-a', timezone: 'UTC',
+    }, {
+      transactionId: 'origin-1', previousAmount: new Prisma.Decimal(1500),
+      previousAccountId: 'account-a', previousDirection: 'I_OWE',
+      amount: new Prisma.Decimal(2000), accountId: 'account-a', direction: 'I_OWE', name: 'Alex',
+    });
+    expect(tx.financeTransaction.update).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        amount: new Prisma.Decimal(2000), economicAmount: new Prisma.Decimal(0),
+        categoryId: null, purpose: 'PASS_THROUGH', description: 'Alex', occurredAt,
+      }),
+    }));
   });
 
   it('suppresses merchant learning for a generated recurring transaction', async () => {

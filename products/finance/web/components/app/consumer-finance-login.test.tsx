@@ -21,13 +21,15 @@ function renderLogin(onAuthenticated = vi.fn()) {
   });
   render(
     <QueryClientProvider client={client}>
-      <ConsumerFinanceLogin botId="bot-1" onAuthenticated={onAuthenticated} />
+      <ConsumerFinanceLogin botId="bot-1" initialLocale="en" onAuthenticated={onAuthenticated} />
     </QueryClientProvider>,
   );
   return onAuthenticated;
 }
 
 beforeEach(() => {
+  document.cookie = "groshly-language=en; Path=/";
+  window.localStorage.setItem("groshly-language", "en");
   mocks.create.mockReset();
   mocks.consume.mockReset();
   mocks.create.mockResolvedValue({
@@ -45,37 +47,9 @@ describe("ConsumerFinanceLogin", () => {
     });
     const onAuthenticated = renderLogin();
 
-    expect(
-      await screen.findByRole("heading", {
-        level: 1,
-        name: "Know where your money goes.",
-      }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("heading", {
-        level: 3,
-        name: "All accounts in one view",
-      }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("heading", { level: 3, name: "Sign in with Telegram" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("heading", {
-        level: 2,
-        name: "A clearer picture of your money.",
-      }),
-    ).toBeInTheDocument();
-
-    const link = await waitFor(() => {
-      const candidate = screen
-        .getAllByRole("link", {
-          name: "Sign in or sign up",
-        })
-        .find((item) => item.getAttribute("href")?.startsWith("https://t.me/"));
-      if (!candidate) throw new Error("Telegram sign-in link is missing");
-      return candidate;
-    });
+    expect(await screen.findByRole("heading", { level: 1, name: "Your money, clearly. Pick up where you left off." })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2, name: "Sign in with Telegram" })).toBeInTheDocument();
+    const link = await screen.findByRole("link", { name: "Continue with Telegram" });
     expect(link).toHaveAttribute(
       "href",
       `https://t.me/finance_bot?start=finlogin_${"a".repeat(32)}`,

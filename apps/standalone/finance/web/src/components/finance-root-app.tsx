@@ -3,6 +3,7 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { GroshlyFinanceApp } from "@finance-web/components/groshly-finance-app";
 import { GroshlyLoadingScreen } from "@finance-web/components/groshly-loading-screen";
+import { ConsumerFinanceLogin } from "@consumer-finance/web/components/app/consumer-finance-login";
 
 type FinanceContext = { financeBotId: string };
 
@@ -24,7 +25,7 @@ function readFinanceContext(value: unknown): FinanceContext | null {
     : null;
 }
 
-export function FinanceRootApp({ botId }: { botId?: string } = {}) {
+export function FinanceRootApp({ botId, entry = "app", initialLocale = "uk", initialTheme = "light" }: { botId?: string; entry?: "app" | "login"; initialLocale?: "uk" | "en"; initialTheme?: "light" | "dark" } = {}) {
   const cachedBotId = useSyncExternalStore(subscribeToCachedContext, cachedFinanceContext, () => null);
   const [state, setState] = useState<FinanceContextState>(() =>
     botId ? { status: "ready", financeBotId: botId } : { status: "loading" },
@@ -65,7 +66,10 @@ export function FinanceRootApp({ botId }: { botId?: string } = {}) {
   }, [botId]);
 
   if (state.status === "ready" || (state.status === "loading" && cachedBotId)) {
-    return <GroshlyFinanceApp botId={state.status === "ready" ? state.financeBotId : cachedBotId!} />;
+    const activeBotId = state.status === "ready" ? state.financeBotId : cachedBotId!;
+    return entry === "login"
+      ? <ConsumerFinanceLogin botId={activeBotId} initialLocale={initialLocale} initialTheme={initialTheme} onAuthenticated={() => window.location.replace("/app")} />
+      : <GroshlyFinanceApp botId={activeBotId} />;
   }
 
   if (state.status === "loading") {

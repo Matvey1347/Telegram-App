@@ -1,6 +1,5 @@
 import {
-  BadRequestException,
-  Body,
+  ForbiddenException,
   Controller,
   Get,
   Param,
@@ -8,9 +7,6 @@ import {
   Req,
 } from '@nestjs/common';
 import type { Request } from 'express';
-import { CreateStripeCheckoutDto } from '@api/domains/telegram/bot-billing/dto';
-import { publicWebOrigin } from '@api/config/deployment-config';
-import { financeCheckoutReturnUrl } from '@consumer-finance/api/telegram-presentation/finance-telegram-menu';
 import { FinanceConsumerRequestService } from '@consumer-finance/api/http/finance-consumer-request.service';
 import { FinanceBillingService } from '@consumer-finance/api/billing/finance-billing.service';
 import { FinanceEntitlementService } from '@consumer-finance/api/billing/finance-entitlement.service';
@@ -47,37 +43,18 @@ export class FinanceConsumerBillingController {
   checkout(
     @Param('botId') botId: string,
     @Req() request: Request,
-    @Body() dto: CreateStripeCheckoutDto,
   ) {
-    const successUrl = financeCheckoutReturnUrl(botId, 'success');
-    const cancelUrl = financeCheckoutReturnUrl(botId, 'cancelled');
-    if (!successUrl || !cancelUrl) {
-      throw new BadRequestException('Public web origin is not configured');
-    }
-    return this.billing.createStripeCheckout({
-      botIntegrationId: botId,
-      telegramBotUserId: this.requests.authenticate(botId, request)
-        .telegramBotUserId,
-      priceId: dto.priceId,
-      requestedMode: dto.mode,
-      couponCode: dto.couponCode,
-      successUrl,
-      cancelUrl,
-    });
+    this.requests.authenticate(botId, request);
+    throw new ForbiddenException('New Finance purchases are available only on standalone Finance Web');
   }
 
   @Post('billing/stars/checkout')
   starsCheckout(
     @Param('botId') botId: string,
     @Req() request: Request,
-    @Body() dto: CreateStripeCheckoutDto,
   ) {
-    return this.billing.createStarsCheckout({
-      botIntegrationId: botId,
-      telegramBotUserId: this.requests.authenticate(botId, request)
-        .telegramBotUserId,
-      priceId: dto.priceId,
-    });
+    this.requests.authenticate(botId, request);
+    throw new ForbiddenException('Legacy Finance offers are closed to new purchases');
   }
 
   @Post('billing/cancel-auto-renew')
@@ -92,12 +69,8 @@ export class FinanceConsumerBillingController {
 
   @Post('billing/payment-portal')
   paymentPortal(@Param('botId') botId: string, @Req() request: Request) {
-    return this.billing.stripePortal({
-      botIntegrationId: botId,
-      telegramBotUserId: this.requests.authenticate(botId, request)
-        .telegramBotUserId,
-      returnUrl: financePlansUrl(botId),
-    });
+    this.requests.authenticate(botId, request);
+    throw new ForbiddenException('Stripe portal requires standalone Finance Web');
   }
 
   private setAutoRenewal(
@@ -112,10 +85,4 @@ export class FinanceConsumerBillingController {
       cancelAtPeriodEnd,
     });
   }
-}
-
-function financePlansUrl(botId: string) {
-  const path = `/finance/${encodeURIComponent(botId)}?screen=billing`;
-  const origin = publicWebOrigin();
-  return origin ? new URL(path, origin).toString() : path;
 }

@@ -22,6 +22,11 @@ const COMMAND_DESCRIPTIONS: Record<FinanceChatLocale, string[]> = {
     'Accounts',
     'Categories',
     'Transfer between accounts',
+    'Finance analytics',
+    'PLUS access and subscription',
+    'Contact support',
+    'Payment support',
+    'Terms of service',
     'Help',
   ],
   uk: [
@@ -32,6 +37,11 @@ const COMMAND_DESCRIPTIONS: Record<FinanceChatLocale, string[]> = {
     'Рахунки',
     'Категорії',
     'Переказ між рахунками',
+    'Аналітика Finance',
+    'Доступ PLUS і підписка',
+    'Зв’язатися з підтримкою',
+    'Підтримка з оплати',
+    'Умови користування',
     'Допомога',
   ],
   ru: [
@@ -42,6 +52,11 @@ const COMMAND_DESCRIPTIONS: Record<FinanceChatLocale, string[]> = {
     'Счета',
     'Категории',
     'Перевод между счетами',
+    'Аналитика Finance',
+    'Доступ PLUS и подписка',
+    'Связаться с поддержкой',
+    'Поддержка по оплате',
+    'Условия использования',
     'Помощь',
   ],
 };
@@ -73,6 +88,11 @@ export class FinanceTelegramPresentationService implements TelegramBotApplicatio
       accounts,
       categories,
       transfer,
+      analytics,
+      plus,
+      support,
+      paysupport,
+      terms,
       help,
     ] = COMMAND_DESCRIPTIONS[resolved];
     return [
@@ -83,6 +103,11 @@ export class FinanceTelegramPresentationService implements TelegramBotApplicatio
       { command: 'accounts', description: accounts },
       { command: 'categories', description: categories },
       { command: 'transfer', description: transfer },
+      { command: 'analytics', description: analytics },
+      { command: 'plus', description: plus },
+      { command: 'support', description: support },
+      { command: 'paysupport', description: paysupport },
+      { command: 'terms', description: terms },
       { command: 'help', description: help },
     ];
   }

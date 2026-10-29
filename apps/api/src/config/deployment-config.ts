@@ -52,6 +52,18 @@ export function publicApiOrigin(
   return normalizedOrigin(environment.API_PUBLIC_URL);
 }
 
+/** Optional standalone Finance site origin for legal links from the legacy bot. */
+export function financeStandaloneWebOrigin(
+  environment: DeploymentEnvironment = process.env,
+) {
+  const origin = normalizedOrigin(environment.FINANCE_WEB_PUBLIC_URL);
+  if (!origin) return undefined;
+  const parsed = new URL(origin);
+  return parsed.protocol === 'https:' || parsed.hostname === 'localhost'
+    ? origin
+    : undefined;
+}
+
 export function runtimeEnvironmentName(
   environment: DeploymentEnvironment = process.env,
 ) {

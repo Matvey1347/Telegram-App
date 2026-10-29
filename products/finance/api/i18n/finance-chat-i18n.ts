@@ -28,7 +28,7 @@ const en = {
     `Reminder: ${name}\n${amount} ${currency}`,
   incomeHelp: '💰 Add income\n\nSend it as: +125.50 client payment',
   expenseHelp: '💸 Add expense\n\nSend it as: 125.50 groceries',
-  help: '❓ Finance Bot guide\n\n💸 Expense: 125.50 groceries\n💰 Income: +3000 client payment\n🧠 Free quick input uses the syntax above. Pro adds free-form AI and voice; receipt scans have plan limits.\n📱 Open Finance for history, analytics, budgets, and full settings.\n\nEvery operation is reviewed before it is saved.',
+  help: '❓ Finance Bot guide\n\n💸 Expense: 125.50 groceries\n💰 Income: +3000 client payment\n🧠 Free quick input uses the syntax above. Paid access adds AI and voice; receipt scans have plan limits.\n📱 Open Finance for history, analytics, budgets, and settings. Use /plus for access and /support for help.\n\nEvery operation is reviewed before it is saved.',
   openFinance:
     '📱 Open Finance for accounts, categories, budgets, goals, and detailed history.',
   noMiniApp:
@@ -64,10 +64,10 @@ const en = {
   startTransfer: '↔️ Start transfer',
   manageAccounts: 'Manage accounts',
   aiGate:
-    'AI input is a Pro feature. Free quick input still works: “250 coffee” or “+3000 salary”.',
-  receiptGate: 'Receipt recognition is a Pro feature.',
-  unlockPro: '✨ Unlock Pro',
-  proActive: 'Finance Pro is active. Thank you!',
+    'AI input requires paid access. Free quick input still works: “250 coffee” or “+3000 salary”.',
+  receiptGate: 'Receipt recognition requires paid access.',
+  unlockPro: '✨ View access',
+  proActive: 'Finance paid access is active. Thank you!',
   paymentInvalid: 'This Finance subscription offer is no longer valid.',
   proposalExpired:
     'That proposal is no longer available. Please create a new one and try again.',
@@ -236,7 +236,7 @@ const uk = {
     `Нагадування: ${name}\n${amount} ${currency}`,
   incomeHelp: '💰 Додати дохід\n\nНадішліть: +125.50 оплата клієнта',
   expenseHelp: '💸 Додати витрату\n\nНадішліть: 125.50 продукти',
-  help: '❓ Довідка Finance Bot\n\n💸 Витрата: 125.50 продукти\n💰 Дохід: +3000 оплата клієнта\n🧠 Швидкий ввід безкоштовний. Pro додає довільний AI-текст і голос; сканування чеків має ліміти плану.\n📱 Історія, аналітика, бюджети й повні налаштування — у Finance.\n\nКожна операція зберігається лише після перевірки.',
+  help: '❓ Довідка Finance Bot\n\n💸 Витрата: 125.50 продукти\n💰 Дохід: +3000 оплата клієнта\n🧠 Швидкий ввід безкоштовний. Платний доступ додає AI і голос; сканування чеків має ліміти.\n📱 Історія, аналітика, бюджети й налаштування — у Finance. /plus — доступ, /support — допомога.\n\nКожна операція зберігається лише після перевірки.',
   openFinance:
     '📱 Відкрийте Finance для рахунків, категорій, бюджетів, цілей і детальної історії.',
   noMiniApp:
@@ -271,10 +271,10 @@ const uk = {
   startTransfer: '↔️ Почати переказ',
   manageAccounts: 'Керувати рахунками',
   aiGate:
-    'AI-ввід — функція Pro. Безкоштовний швидкий ввід: «250 кава» або «+3000 зарплата».',
-  receiptGate: 'Розпізнавання чеків — функція Pro.',
-  unlockPro: '✨ Відкрити Pro',
-  proActive: 'Finance Pro активний. Дякуємо!',
+    'AI-ввід потребує платного доступу. Безкоштовний швидкий ввід: «250 кава» або «+3000 зарплата».',
+  receiptGate: 'Розпізнавання чеків потребує платного доступу.',
+  unlockPro: '✨ Переглянути доступ',
+  proActive: 'Платний доступ Finance активний. Дякуємо!',
   paymentInvalid: 'Ця пропозиція підписки Finance більше не дійсна.',
   proposalExpired:
     'Ця пропозиція більше недоступна. Створіть нову й спробуйте ще раз.',
@@ -442,7 +442,7 @@ const ru = {
     `Напоминание: ${name}\n${amount} ${currency}`,
   incomeHelp: '💰 Добавить доход\n\nОтправьте: +125.50 оплата клиента',
   expenseHelp: '💸 Добавить расход\n\nОтправьте: 125.50 продукты',
-  help: '❓ Справка Finance Bot\n\n💸 Расход: 125.50 продукты\n💰 Доход: +3000 оплата клиента\n🧠 Быстрый ввод бесплатен. Pro добавляет свободный AI-текст и голос; сканирование чеков ограничено планом.\n📱 История, аналитика, бюджеты и полные настройки — в Finance.\n\nКаждая операция сохраняется только после проверки.',
+  help: '❓ Справка Finance Bot\n\n💸 Расход: 125.50 продукты\n💰 Доход: +3000 оплата клиента\n🧠 Быстрый ввод бесплатен. Платный доступ добавляет AI и голос; сканирование чеков ограничено.\n📱 История, аналитика, бюджеты и настройки — в Finance. /plus — доступ, /support — помощь.\n\nКаждая операция сохраняется только после проверки.',
   openFinance:
     '📱 Откройте Finance для счетов, категорий, бюджетов, целей и подробной истории.',
   noMiniApp: 'Чтобы открыть Mini App в Telegram, нужен публичный HTTPS-адрес.',
@@ -476,10 +476,10 @@ const ru = {
   startTransfer: '↔️ Начать перевод',
   manageAccounts: 'Управлять счетами',
   aiGate:
-    'AI-ввод — функция Pro. Бесплатный быстрый ввод: «250 кофе» или «+3000 зарплата».',
-  receiptGate: 'Распознавание чеков — функция Pro.',
-  unlockPro: '✨ Открыть Pro',
-  proActive: 'Finance Pro активен. Спасибо!',
+    'AI-ввод требует платного доступа. Бесплатный быстрый ввод: «250 кофе» или «+3000 зарплата».',
+  receiptGate: 'Распознавание чеков требует платного доступа.',
+  unlockPro: '✨ Посмотреть доступ',
+  proActive: 'Платный доступ Finance активен. Спасибо!',
   paymentInvalid: 'Это предложение подписки Finance больше недействительно.',
   proposalExpired:
     'Это предложение больше недоступно. Создайте новое и попробуйте ещё раз.',

@@ -18,7 +18,9 @@
     "migration:plan": "node scripts/plan-finance-extraction.mjs",
     "migration:backup-source": "node scripts/backup-finance-source.mjs",
     "migration:restore-profile": "node scripts/restore-finance-profile-from-backup.mjs",
-    "migration:archive-backup": "node scripts/archive-finance-backup.mjs"
+    "migration:archive-backup": "node scripts/archive-finance-backup.mjs",
+    "billing:sync": "node scripts/billing-sync.mjs",
+    "billing:import-legacy": "node scripts/import-legacy-finance-billing.mjs"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",
@@ -28,11 +30,13 @@
     "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",
     "@prisma/client-runtime-utils": "^7.8.0",
+    "@telegram-system/shared": "workspace:^",
     "dotenv": "^17.4.2",
     "express": "^5.1.0",
     "pg": "^8.21.0",
     "reflect-metadata": "^0.2.2",
-    "rxjs": "^7.8.1"
+    "rxjs": "^7.8.1",
+    "stripe": "^22.4.0"
   },
   "devDependencies": {
     "@nestjs/cli": "^11.0.0",
@@ -49,10 +53,16 @@
     "typescript": "^5.7.3"
   },
   "jest": {
-    "moduleFileExtensions": ["js", "json", "ts"],
+    "moduleFileExtensions": [
+      "js",
+      "json",
+      "ts"
+    ],
     "rootDir": "src",
     "testRegex": ".*\\.spec\\.ts$",
-    "transform": { "^.+\\.(t|j)s$": "ts-jest" },
+    "transform": {
+      "^.+\\.(t|j)s$": "ts-jest"
+    },
     "testEnvironment": "node"
   }
 }

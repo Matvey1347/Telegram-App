@@ -55,4 +55,12 @@ describe('validateFinanceEnvironment', () => {
       }),
     ).toThrow('FINANCE_API_PUBLIC_URL');
   });
+
+  it('does not allow TEST Stripe mode with the production Finance bot', () => {
+    expect(() => validateFinanceEnvironment({
+      ...valid,
+      FINANCE_BOT_RUNTIME_ENVIRONMENT: 'PRODUCTION',
+      FINANCE_STRIPE_MODE: 'TEST',
+    })).toThrow('Production Finance bot cannot use Stripe TEST mode');
+  });
 });

@@ -15,6 +15,11 @@ export interface FinanceEnvironment {
   FINANCE_BOT_PRODUCTION_WEBHOOK_SECRET?: string;
   FINANCE_WEB_PUBLIC_URL?: string;
   FINANCE_API_PUBLIC_URL?: string;
+  FINANCE_STRIPE_MODE?: "TEST" | "LIVE";
+  FINANCE_STRIPE_TEST_SECRET_KEY?: string;
+  FINANCE_STRIPE_TEST_WEBHOOK_SECRET?: string;
+  FINANCE_STRIPE_LIVE_SECRET_KEY?: string;
+  FINANCE_STRIPE_LIVE_WEBHOOK_SECRET?: string;
   /** Shared only with the Nexeloq API for its authenticated admin read model. */
   FINANCE_ADMIN_ANALYTICS_TOKEN?: string;
   FINANCE_ADMIN_ANALYTICS_WORKSPACE_ID?: string;
@@ -39,6 +44,8 @@ export function validateFinanceEnvironment(
   const botEnvironment = parseBotRuntimeEnvironment(
     input.FINANCE_BOT_RUNTIME_ENVIRONMENT,
   );
+  if (botEnvironment === "PRODUCTION" && input.FINANCE_STRIPE_MODE === "TEST")
+    throw new Error("Production Finance bot cannot use Stripe TEST mode");
   // Railway assigns PORT at runtime. Locally, Finance remains on its own
   // default port and never falls back to an API-host setting from Nexeloq.
   const port = optionalPort(input.PORT ?? input.FINANCE_API_PORT);
@@ -73,6 +80,7 @@ export function validateFinanceEnvironment(
       "FINANCE_API_PUBLIC_URL",
       botEnvironment,
     ),
+    ...stripeEnvironment(input),
   };
 }
 
@@ -85,6 +93,11 @@ export class FinanceRuntimeConfig {
   readonly botRuntimeEnvironment: FinanceBotRuntimeEnvironment;
   readonly webPublicUrl?: string;
   readonly apiPublicUrl?: string;
+  readonly stripeMode?: "TEST" | "LIVE";
+  readonly stripeTestSecretKey?: string;
+  readonly stripeTestWebhookSecret?: string;
+  readonly stripeLiveSecretKey?: string;
+  readonly stripeLiveWebhookSecret?: string;
   readonly adminAnalyticsToken?: string;
   readonly adminAnalyticsWorkspaceId?: string;
   readonly selectedBot?: SelectedFinanceBotConfig;
@@ -109,6 +122,11 @@ export class FinanceRuntimeConfig {
     });
     this.webPublicUrl = config.get("FINANCE_WEB_PUBLIC_URL", { infer: true });
     this.apiPublicUrl = config.get("FINANCE_API_PUBLIC_URL", { infer: true });
+    this.stripeMode = config.get("FINANCE_STRIPE_MODE", { infer: true });
+    this.stripeTestSecretKey = config.get("FINANCE_STRIPE_TEST_SECRET_KEY", { infer: true });
+    this.stripeTestWebhookSecret = config.get("FINANCE_STRIPE_TEST_WEBHOOK_SECRET", { infer: true });
+    this.stripeLiveSecretKey = config.get("FINANCE_STRIPE_LIVE_SECRET_KEY", { infer: true });
+    this.stripeLiveWebhookSecret = config.get("FINANCE_STRIPE_LIVE_WEBHOOK_SECRET", { infer: true });
     this.adminAnalyticsToken = config.get("FINANCE_ADMIN_ANALYTICS_TOKEN", {
       infer: true,
     });
@@ -135,6 +153,31 @@ export class FinanceRuntimeConfig {
       return runtime ? [runtime] : [];
     });
   }
+}
+
+function stripeEnvironment(input: Record<string, unknown>) {
+  const mode = input.FINANCE_STRIPE_MODE;
+  if (mode !== undefined && mode !== "" && mode !== "TEST" && mode !== "LIVE")
+    throw new Error("FINANCE_STRIPE_MODE must be TEST or LIVE");
+  for (const selected of ["TEST", "LIVE"] as const) {
+    const key = optionalString(input[`FINANCE_STRIPE_${selected}_SECRET_KEY`]);
+    const webhook = optionalString(input[`FINANCE_STRIPE_${selected}_WEBHOOK_SECRET`]);
+    if ((key || webhook) && (!key || !webhook))
+      throw new Error(`FINANCE_STRIPE_${selected} requires both secret key and webhook secret`);
+    if (key && !key.startsWith(selected === "TEST" ? "sk_test_" : "sk_live_"))
+      throw new Error(`FINANCE_STRIPE_${selected}_SECRET_KEY has the wrong mode`);
+    if (webhook && !webhook.startsWith("whsec_"))
+      throw new Error(`FINANCE_STRIPE_${selected}_WEBHOOK_SECRET is invalid`);
+  }
+  if (mode && (!input[`FINANCE_STRIPE_${mode}_SECRET_KEY`] || !input[`FINANCE_STRIPE_${mode}_WEBHOOK_SECRET`]))
+    throw new Error(`FINANCE_STRIPE_${mode} credentials are required`);
+  return {
+    FINANCE_STRIPE_MODE: (mode || undefined) as "TEST" | "LIVE" | undefined,
+    FINANCE_STRIPE_TEST_SECRET_KEY: optionalString(input.FINANCE_STRIPE_TEST_SECRET_KEY),
+    FINANCE_STRIPE_TEST_WEBHOOK_SECRET: optionalString(input.FINANCE_STRIPE_TEST_WEBHOOK_SECRET),
+    FINANCE_STRIPE_LIVE_SECRET_KEY: optionalString(input.FINANCE_STRIPE_LIVE_SECRET_KEY),
+    FINANCE_STRIPE_LIVE_WEBHOOK_SECRET: optionalString(input.FINANCE_STRIPE_LIVE_WEBHOOK_SECRET),
+  };
 }
 
 function selectedBotEnvironment(

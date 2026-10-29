@@ -2,8 +2,8 @@
 
 import { useEffect } from "react";
 
-const iconUrl = "/brand/groshly-icon.png";
-const darkIconUrl = "/brand/groshly-dark-icon.png";
+const iconUrl = "/brand/groshly-dark-icon.png";
+const darkIconUrl = iconUrl;
 
 export function useFinanceBotBranding(botId: string, applyBranding = true) {
   useEffect(() => {

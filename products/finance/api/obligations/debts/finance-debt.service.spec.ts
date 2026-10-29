@@ -504,6 +504,35 @@ describe('FinanceDebtService', () => {
     expect(delivery.notify).toHaveBeenCalledWith(changed.dueAt);
   });
 
+  it('updates a linked cash transaction in the same debt edit transaction', async () => {
+    const existing = debtRow({ amount: new Prisma.Decimal(1500), originTransactionId: 'origin-1' });
+    const changed = debtRow({ amount: new Prisma.Decimal(2000), originTransactionId: 'origin-1', version: 2 });
+    const tx = {
+      financeDebt: {
+        findFirst: jest.fn().mockResolvedValue(existing),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        findUniqueOrThrow: jest.fn().mockResolvedValue(changed),
+      },
+      financeProfile: { findUnique: jest.fn().mockResolvedValue(obligationProfile()) },
+      financeAccount: { findFirst: jest.fn().mockResolvedValue({ id: account.id, currency: 'EUR' }) },
+    };
+    const prisma = { $transaction: jest.fn((callback) => callback(tx)) };
+    const ledger = { syncDebtOriginInTransaction: jest.fn().mockResolvedValue(undefined) };
+    const delivery = {
+      enqueueInTransaction: jest.fn().mockResolvedValue({ scheduledAt: changed.dueAt }),
+      cancelPendingInTransaction: jest.fn().mockResolvedValue(1),
+      notify: jest.fn(), reschedule: jest.fn().mockResolvedValue(undefined),
+    };
+    const service = new FinanceDebtService(prisma as never, ledger as never, delivery as never, { debtDue: jest.fn().mockReturnValue({ text: 'Due' }) } as never);
+    await service.update('profile-1', 'debt-1', { ...inputDebt(), amount: '2000' });
+    expect(ledger.syncDebtOriginInTransaction).toHaveBeenCalledWith(tx, expect.objectContaining({ id: 'profile-1' }), expect.objectContaining({
+      transactionId: 'origin-1', previousAmount: new Prisma.Decimal(1500), amount: new Prisma.Decimal(2000),
+    }));
+    expect(tx.financeDebt.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ amount: new Prisma.Decimal(2000) }),
+    }));
+  });
+
   it('settles atomically with prepared rates and cancels the due notification', async () => {
     const open = debtRow();
     const settled = debtRow({

@@ -216,6 +216,9 @@ importers:
       '@prisma/client-runtime-utils':
         specifier: ^7.8.0
         version: 7.8.0
+      '@telegram-system/shared':
+        specifier: workspace:^
+        version: link:../../../../packages/shared
       dotenv:
         specifier: ^17.4.2
         version: 17.4.2
@@ -231,6 +234,9 @@ importers:
       rxjs:
         specifier: ^7.8.1
         version: 7.8.2
+      stripe:
+        specifier: ^22.4.0
+        version: 22.4.0(@types/node@24.12.4)
     devDependencies:
       '@nestjs/cli':
         specifier: ^11.0.0

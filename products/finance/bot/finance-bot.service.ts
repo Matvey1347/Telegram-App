@@ -34,6 +34,7 @@ import {
   parseFinanceQuickInput,
 } from '@consumer-finance/bot/finance-chat-input-parser';
 import { financeBotProButtons } from '@consumer-finance/bot/finance-bot-pro-buttons';
+import { financeBotNavigation } from '@consumer-finance/bot/finance-bot-navigation';
 import { warnSlowFinanceContext } from '@consumer-finance/bot/finance-bot-observability';
 import { FinanceBotBrowserLogin } from '@consumer-finance/bot/finance-bot-browser-login';
 import {
@@ -549,6 +550,14 @@ export class FinanceBotService {
     }
     if (command === 'start') {
       await this.chat.sendMainMenu(context, user.id, chatId, locale);
+      return;
+    }
+    if (command === 'analytics' || command === 'plus' || command === 'support' || command === 'paysupport' || command === 'terms') {
+      await this.interactive.send(context.token, chatId, financeBotNavigation(
+        context.bot.id,
+        locale,
+        command === 'paysupport' ? 'support' : command,
+      ));
       return;
     }
     if (command === 'assistant' || persistedMenuCommand === 'assistant') {

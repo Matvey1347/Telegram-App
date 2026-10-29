@@ -17,7 +17,7 @@ describe("Consumer Finance initial module graph", () => {
       "planning/finance-budget",
       "catalog/finance-categories",
       "onboarding/finance-onboarding",
-      "planning/finance-plans",
+      "planning/finance-legacy-billing-summary",
       "planning/finance-reminders",
       "profile/finance-settings",
       "ledger/finance-transactions",

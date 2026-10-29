@@ -12,27 +12,34 @@ import { consumerFinanceKeys } from "@consumer-finance/web/lib/query/consumer-fi
 import { normalizeFinanceLocale } from "@consumer-finance/web/components/i18n/core";
 import { financeAuthCopy } from "@consumer-finance/web/components/i18n/auth";
 import { financeLandingCopy } from "@consumer-finance/web/components/i18n/landing";
-import { ConsumerFinanceLanding } from "@consumer-finance/web/components/app/consumer-finance-landing";
 import { useFinanceBotBranding } from "@consumer-finance/web/components/hooks/use-finance-bot-branding";
 
 /** Browser authentication is delegated to the API so Telegram verifies identity server-side. */
 export function ConsumerFinanceLogin({
   botId,
+  initialLocale = "uk",
+  initialTheme = "light",
   onAuthenticated,
 }: {
   botId: string;
+  initialLocale?: "uk" | "en";
+  initialTheme?: "light" | "dark";
   onAuthenticated: () => void;
 }) {
-  const [locale, setLocale] = useState<"uk" | "en">("uk");
-  const [theme, setTheme] = useState<"light" | "dark">("light");
+  const [locale, setLocale] = useState<"uk" | "en">(initialLocale);
+  const [theme, setTheme] = useState<"light" | "dark">(initialTheme);
   const [preferencesReady, setPreferencesReady] = useState(false);
   useEffect(() => {
     let active = true;
     queueMicrotask(() => {
       if (!active) return;
-      const saved = window.localStorage.getItem("groshly-language") || navigator.language;
-      setLocale(normalizeFinanceLocale(saved) === "en" ? "en" : "uk");
-      setTheme(window.localStorage.getItem("groshly-theme") === "dark" ? "dark" : "light");
+      if (!document.cookie.includes("groshly-language=")) {
+        const saved = window.localStorage.getItem("groshly-language") || navigator.language;
+        setLocale(normalizeFinanceLocale(saved) === "en" ? "en" : "uk");
+      }
+      if (!document.cookie.includes("groshly-theme=")) {
+        setTheme(window.localStorage.getItem("groshly-theme") === "dark" ? "dark" : "light");
+      }
       setPreferencesReady(true);
     });
     return () => { active = false; };
@@ -42,6 +49,8 @@ export function ConsumerFinanceLogin({
     if (!preferencesReady) return;
     window.localStorage.setItem("groshly-language", locale);
     window.localStorage.setItem("groshly-theme", theme);
+    document.cookie = `groshly-language=${locale}; Path=/; Max-Age=31536000; SameSite=Lax`;
+    document.cookie = `groshly-theme=${theme}; Path=/; Max-Age=31536000; SameSite=Lax`;
     document.documentElement.lang = locale;
     document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme === "dark" ? "#0c1712" : "#f7f8f4");
   }, [locale, theme, preferencesReady]);
@@ -91,72 +100,43 @@ export function ConsumerFinanceLogin({
   };
 
   return (
-    <ConsumerFinanceLanding
-      locale={locale}
-      botId={botId}
-      iconUrl={theme === "dark" ? branding.faviconLightUrl : branding.faviconUrl}
-      theme={theme}
-      onThemeChange={() => setTheme((current) => current === "dark" ? "light" : "dark")}
-      onLocaleChange={(value) => setLocale(value === "en" ? "en" : "uk")}
-      loginUrl={
-        challenge.data && approval.data?.status !== "expired"
-          ? challenge.data.loginUrl
-          : undefined
-      }
-      onLoginClick={() => setWaiting(true)}
-      login={
-        <section
-          className="landing-login-card"
-          aria-labelledby="telegram-login-title"
-        >
-          <div className="landing-login-icon">
-            <Send size={25} aria-hidden="true" />
+    <main className="groshly-login" data-theme={theme} lang={locale}>
+      <header className="groshly-login-header">
+        <a className="groshly-login-brand" href="/"><img src={branding.faviconLightUrl} alt="" /><strong>Groshly<span>.</span></strong></a>
+        <div className="groshly-login-controls">
+          <div className="landing-language-control" role="group" aria-label="Language">
+            <button type="button" aria-pressed={locale === "uk"} onClick={() => setLocale("uk")}>🇺🇦 Українська</button>
+            <button type="button" aria-pressed={locale === "en"} onClick={() => setLocale("en")}>🇬🇧 English</button>
           </div>
-          <h3 id="telegram-login-title">{t.signInTelegram}</h3>
+          <button className="landing-theme-control" type="button" onClick={() => setTheme((current) => current === "dark" ? "light" : "dark")} aria-label={theme === "dark" ? "Light theme" : "Dark theme"}>{theme === "dark" ? "☀" : "☾"}</button>
+        </div>
+      </header>
+      <div className="groshly-login-body">
+        <section className="groshly-login-story">
+          <span className="landing-kicker">{locale === "uk" ? "ТВІЙ ФІНАНСОВИЙ ПРОСТІР" : "YOUR FINANCIAL SPACE"}</span>
+          <h1>{locale === "uk" ? "Гроші під контролем. Увійди й продовжуй." : "Your money, clearly. Pick up where you left off."}</h1>
+          <p>{locale === "uk" ? "Один профіль для браузера й Telegram Mini App. Після підтвердження в Telegram ця сторінка відкриє твій застосунок." : "One profile for the browser and Telegram Mini App. Confirm in Telegram and this page will open your app."}</p>
+          <a href="/">← {locale === "uk" ? "Назад на головну" : "Back to home"}</a>
+        </section>
+        <section className="groshly-login-card" aria-labelledby="telegram-login-title">
+          <div className="groshly-login-icon"><Send size={26} aria-hidden="true" /></div>
+          <h2 id="telegram-login-title">{t.signInTelegram}</h2>
           <p>{t.signInHelp}</p>
           {challenge.data && approval.data?.status !== "expired" ? (
-            <a
-              href={challenge.data.loginUrl}
-              target="_blank"
-              rel="noreferrer"
-              onClick={() => setWaiting(true)}
-              className="landing-login-button"
-            >
-              <Send size={19} aria-hidden="true" />
-              {t.landingCta}
-              <ArrowRight size={19} aria-hidden="true" />
+            <a href={challenge.data.loginUrl} target="_blank" rel="noreferrer" onClick={() => setWaiting(true)} className="groshly-login-button">
+              <Send size={19} aria-hidden="true" />{locale === "uk" ? "Продовжити з Telegram" : "Continue with Telegram"}<ArrowRight size={19} aria-hidden="true" />
             </a>
           ) : (
-            <button type="button" disabled className="landing-login-button">
-              <Send size={19} aria-hidden="true" />
-              {t.landingCta}
-              <ArrowRight size={19} aria-hidden="true" />
-            </button>
+            <button type="button" disabled className="groshly-login-button"><Send size={19} aria-hidden="true" />{locale === "uk" ? "Готуємо вхід…" : "Preparing sign in…"}</button>
           )}
-          {waiting ? <p className="landing-login-waiting" role="status">{t.telegramSignInWaiting}</p> : null}
-          {challenge.isError ||
-          approval.isError ||
-          approval.data?.status === "expired" ? (
-            <div className="landing-login-error">
-              <ErrorState
-                text={
-                  approval.data?.status === "expired"
-                    ? t.telegramSignInExpired
-                    : t.signInUnavailable
-                }
-              />
-              <Button variant="secondary" onClick={() => void retry()}>
-                {t.retry}
-              </Button>
-            </div>
+          {waiting ? <p className="groshly-login-waiting" role="status">{t.telegramSignInWaiting}</p> : null}
+          {challenge.isError || approval.isError || approval.data?.status === "expired" ? (
+            <div className="groshly-login-error"><ErrorState text={approval.data?.status === "expired" ? t.telegramSignInExpired : t.signInUnavailable} /><Button variant="secondary" onClick={() => void retry()}>{t.retry}</Button></div>
           ) : null}
-          <div className="landing-login-security">
-            <ShieldCheck size={19} aria-hidden="true" />
-            <span>{t.landingSecurity}</span>
-          </div>
+          <div className="groshly-login-security"><ShieldCheck size={18} aria-hidden="true" /><span>{t.landingSecurity}</span></div>
         </section>
-      }
-    />
+      </div>
+    </main>
   );
 }
 

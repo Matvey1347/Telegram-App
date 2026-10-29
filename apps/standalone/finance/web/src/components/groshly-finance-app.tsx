@@ -3,6 +3,7 @@
 import { useEffect, useMemo, type ComponentType } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { GroshlyApp } from "@finance-web/groshly/main";
+import { readFinanceRateCache } from "@finance-web/groshly/rate-cache";
 import { GroshlyLoadingScreen } from "@finance-web/components/groshly-loading-screen";
 import { useTelegramMiniAppBootstrap } from "@consumer-finance/web/components/hooks/use-telegram-mini-app-bootstrap";
 import { ConsumerFinanceLogin } from "@consumer-finance/web/components/app/consumer-finance-login";
@@ -20,7 +21,15 @@ import type { ConsumerFinanceHistoryPage, ConsumerFinanceTransaction } from "@te
 import type { ConsumerFinanceStartup } from "@telegram-system/shared";
 
 type GroshlySnapshot = Record<string, unknown>;
+function BrowserLoginRedirect() {
+  useEffect(() => { window.location.replace("/login"); }, []);
+  return <GroshlyLoadingScreen />;
+}
+
 const GroshlyRoot = GroshlyApp as ComponentType<{
+  financeBotId: string;
+  financeIdentityScope: string;
+  financeTelegramInitData?: string;
   initialData: GroshlySnapshot;
   logoUrl: string;
   faviconUrl: string;
@@ -221,8 +230,7 @@ export function groshlySnapshot({
     defaultExpenseCategoryId: profile.defaultExpenseCategoryId,
     defaultIncomeCategoryId: profile.defaultIncomeCategoryId,
     theme: "light",
-    rates: { UAH: 1, PLN: 10.7, USD: 41.8, EUR: 48.2 },
-    rateSource: "api",
+    ...(readFinanceRateCache() ?? { rates: { UAH: 1, PLN: 10.7, USD: 41.8, EUR: 48.2 }, rateSource: "demo" }),
     profile: {
       name: profile.displayNameOverride || profile.telegramUser.displayName,
       handle: profile.telegramUser.username
@@ -300,6 +308,8 @@ export function groshlySnapshot({
         amount: Number(debt.amount),
         remaining: Number(debt.amount),
         accountId: debt.accountId,
+        originTransactionId: debt.originTransactionId,
+        settlementTransactionId: debt.settlementTransactionId,
         recordTransaction: Boolean(debt.originTransactionId),
         currency: debt.currency,
         due: debt.dueAt.slice(0, 10),
@@ -925,6 +935,7 @@ export function GroshlyFinanceApp({ botId }: { botId: string }) {
     return <GroshlyLoadingScreen />;
   }
   if (!financeData.data?.authenticated) {
+    if (typeof window !== "undefined" && window.location.pathname.startsWith("/app")) return <BrowserLoginRedirect />;
     return (
       <ConsumerFinanceLogin
         botId={botId}
@@ -948,6 +959,9 @@ export function GroshlyFinanceApp({ botId }: { botId: string }) {
   }
   return (
     <GroshlyRoot
+      financeBotId={botId}
+      financeIdentityScope={identityScope}
+      financeTelegramInitData={bootstrap.status === "ready" ? bootstrap.initData : undefined}
       initialData={snapshot}
       logoUrl={logoUrl}
       faviconUrl={faviconUrl}

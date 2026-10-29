@@ -52,9 +52,9 @@ const FinanceOnboarding = lazy(() =>
     default: module.FinanceOnboardingScreen,
   })),
 );
-const FinancePlans = lazy(() =>
-  import("@consumer-finance/web/components/planning/finance-plans").then((module) => ({
-    default: module.FinancePlans,
+const FinanceLegacyBillingSummary = lazy(() =>
+  import("@consumer-finance/web/components/planning/finance-legacy-billing-summary").then((module) => ({
+    default: module.FinanceLegacyBillingSummary,
   })),
 );
 const FinanceReminders = lazy(() =>
@@ -382,7 +382,7 @@ export function ConsumerFinanceScreens({
           timezone={financeProfile.timezone}
         />
       )}
-      {screen === "billing" && <FinancePlans botId={botId} locale={locale} />}
+      {screen === "billing" && <FinanceLegacyBillingSummary botId={botId} locale={locale} />}
     </Suspense>
   );
 }
