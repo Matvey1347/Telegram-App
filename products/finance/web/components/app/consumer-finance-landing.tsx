@@ -96,6 +96,7 @@ export function ConsumerFinanceLanding({
 }) {
   const t = financeLandingCopy(locale);
   const [tourScreen, setTourScreen] = useState<PreviewScreen>("analytics");
+  const [aiDemoStage, setAiDemoStage] = useState<"compose" | "proposal" | "saved">("proposal");
   const onRegistrationClick = () => {
     window.dispatchEvent(new CustomEvent("finance:registration_start", { detail: { locale, source: "landing" } }));
   };
@@ -255,11 +256,13 @@ export function ConsumerFinanceLanding({
           <small>{t.landingAiAvailability}</small>
         </div>
         <div className="landing-ai-demo" aria-label={t.landingAiKicker}>
-          <span className="landing-ai-demo-label">Jarvis · {t.previewTag}</span>
-          <div className="landing-ai-conversation">
-            <p className="landing-ai-message"><span>{t.landingAiExample}</span></p>
-            <p className="landing-ai-response"><Sparkles size={18} aria-hidden="true" /><span>{t.landingAiExampleResult}</span></p>
+          <div className="landing-ai-chat-head"><span className="landing-ai-avatar"><Sparkles size={18} /></span><div><strong>Jarvis</strong><small>{locale === "uk" ? "Помічник Groshly" : "Groshly assistant"}</small></div><span className="landing-ai-demo-label">{t.previewTag}</span></div>
+          <div className="landing-ai-conversation" aria-live="polite">
+            {aiDemoStage !== "compose" && <p className="landing-ai-message"><span>{t.landingAiExample}</span></p>}
+            {aiDemoStage === "proposal" && <div className="landing-ai-result"><span className="landing-ai-result-label"><Sparkles size={16} />{locale === "uk" ? "Готово до перевірки" : "Ready to review"}</span><strong>{locale === "uk" ? "Продукти" : "Groceries"}</strong><span>{locale === "uk" ? "Витрата · 120 грн" : "Expense · 120 UAH"}</span><button type="button" onClick={() => setAiDemoStage("saved")}>{locale === "uk" ? "Підтвердити витрату" : "Confirm expense"}<ArrowRight size={16} /></button></div>}
+            {aiDemoStage === "saved" && <p className="landing-ai-response"><Check size={18} aria-hidden="true" /><span>{locale === "uk" ? "Витрату 120 грн на продукти записано." : "The 120 UAH grocery expense was recorded."}</span></p>}
           </div>
+          <div className="landing-ai-compose"><span>{t.landingAiExample}</span><button type="button" aria-label={locale === "uk" ? "Показати приклад" : "Play example"} onClick={() => setAiDemoStage(aiDemoStage === "compose" ? "proposal" : "compose")}><Send size={18} /></button></div>
           <p className="landing-ai-demo-note">{t.landingAiDemoNote}</p>
         </div>
       </section>

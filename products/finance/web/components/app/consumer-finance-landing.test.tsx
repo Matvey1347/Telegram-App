@@ -44,6 +44,17 @@ describe("ConsumerFinanceLanding", () => {
     expect(preview).not.toHaveAttribute("aria-hidden");
   });
 
+  it("walks through the illustrative assistant review and confirmation", () => {
+    render(<ConsumerFinanceLanding locale="en" theme="light" iconUrl="/brand/groshly-icon.png" onThemeChange={vi.fn()} onLocaleChange={vi.fn()} />);
+    expect(screen.getByText("Expense · 120 UAH")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Confirm expense" }));
+    expect(screen.getByText("The 120 UAH grocery expense was recorded.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Play example" }));
+    expect(screen.queryByText("The 120 UAH grocery expense was recorded.")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Play example" }));
+    expect(screen.getByRole("button", { name: "Confirm expense" })).toBeInTheDocument();
+  });
+
   it("shows the four current billing prices and the automatic intro renewal in both languages", () => {
     for (const [locale, currency] of [["uk", "грн"], ["en", "UAH"]] as const) {
       const { unmount } = render(<ConsumerFinanceLanding

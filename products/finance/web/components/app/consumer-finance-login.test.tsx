@@ -6,12 +6,14 @@ import { ConsumerFinanceLogin } from "@consumer-finance/web/components/app/consu
 const mocks = vi.hoisted(() => ({
   create: vi.fn(),
   consume: vi.fn(),
+  session: vi.fn(),
 }));
 
 vi.mock("@consumer-finance/web/lib/api/consumer-finance-auth-api", () => ({
   consumerFinanceAuthApi: {
     createBrowserLoginChallenge: mocks.create,
     consumeBrowserLoginChallenge: mocks.consume,
+    session: mocks.session,
   },
 }));
 
@@ -32,6 +34,8 @@ beforeEach(() => {
   window.localStorage.setItem("groshly-language", "en");
   mocks.create.mockReset();
   mocks.consume.mockReset();
+  mocks.session.mockReset();
+  mocks.session.mockResolvedValue({ authenticated: false });
   mocks.create.mockResolvedValue({
     token: "a".repeat(32),
     expiresAt: "2026-08-21T23:59:00.000Z",
@@ -40,6 +44,13 @@ beforeEach(() => {
 });
 
 describe("ConsumerFinanceLogin", () => {
+  it("keeps an existing session and opens the app without a new Telegram challenge", async () => {
+    mocks.session.mockResolvedValue({ authenticated: true, profile: { id: "profile-1" } });
+    const onAuthenticated = renderLogin();
+    await waitFor(() => expect(onAuthenticated).toHaveBeenCalledOnce());
+    expect(mocks.create).not.toHaveBeenCalled();
+  });
+
   it("renders a domain-independent Telegram button and completes the challenge", async () => {
     mocks.consume.mockResolvedValue({
       status: "authenticated",
@@ -47,8 +58,8 @@ describe("ConsumerFinanceLogin", () => {
     });
     const onAuthenticated = renderLogin();
 
-    expect(await screen.findByRole("heading", { level: 1, name: "Your money, clearly. Pick up where you left off." })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { level: 2, name: "Sign in with Telegram" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 1, name: "Sign in with Telegram" })).toBeInTheDocument();
+    expect(screen.queryByText("Your money, clearly. Pick up where you left off.")).not.toBeInTheDocument();
     const link = await screen.findByRole("link", { name: "Continue with Telegram" });
     expect(link).toHaveAttribute(
       "href",

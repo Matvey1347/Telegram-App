@@ -4,14 +4,15 @@ import { useFinanceBotBranding } from "@consumer-finance/web/components/hooks/us
 
 function BrandingImage() {
   const branding = useFinanceBotBranding("finance bot");
-  return <span data-logo-url={branding.logoUrl} data-dark-url={branding.faviconLightUrl} />;
+  return <span data-logo-url={branding.logoUrl} data-dark-url={branding.faviconLightUrl} data-favicon-url={branding.faviconUrl} />;
 }
 
 describe("useFinanceBotBranding", () => {
-  it("uses the transparent brand asset on every theme", () => {
+  it("uses the matching logo for light and dark surfaces", () => {
     const { container } = render(<BrandingImage />);
-    expect(container.querySelector("span")).toHaveAttribute("data-logo-url", "/brand/groshly-dark-icon.png");
+    expect(container.querySelector("span")).toHaveAttribute("data-logo-url", "/brand/groshly-icon.png");
     expect(container.querySelector("span")).toHaveAttribute("data-dark-url", "/brand/groshly-dark-icon.png");
+    expect(container.querySelector("span")).toHaveAttribute("data-favicon-url", "/brand/groshly-dark-icon.png");
   });
 
   it("switches the PWA manifest while preserving the prior value on unmount", async () => {

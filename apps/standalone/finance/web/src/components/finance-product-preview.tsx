@@ -31,10 +31,11 @@ export function FinanceProductPreview({
   data.onboarded = true;
   data.lang = preferences.lang;
   data.theme = preferences.theme;
-  const iconUrl = process.env.NODE_ENV === "development" ? "/brand/groshly-dev-dark-icon.png" : "/brand/groshly-dark-icon.png";
+  const iconUrl = process.env.NODE_ENV === "development" ? "/brand/groshly-dev-icon.png" : "/brand/groshly-icon.png";
+  const darkIconUrl = process.env.NODE_ENV === "development" ? "/brand/groshly-dev-dark-icon.png" : "/brand/groshly-dark-icon.png";
   return (
     <div className="finance-product-preview" aria-label="Groshly product preview">
-      <PreviewApp initialData={data} previewScreen={screen} logoUrl={iconUrl} faviconUrl={iconUrl} faviconLightUrl={iconUrl} />
+      <PreviewApp initialData={data} previewScreen={screen} logoUrl={iconUrl} faviconUrl={iconUrl} faviconLightUrl={darkIconUrl} />
       <style jsx global>{`
         html, body { overflow: hidden !important; }
         .finance-product-preview { width: 100vw; height: 100vh; }

@@ -1,49 +1,84 @@
 /* The public site keeps the same Groshly surfaces as the product preview. */
 .landing-brand img { background:transparent!important; border-radius:0!important; object-fit:contain!important; }
+.groshly-landing[data-theme=light] .landing-brand img, .groshly-login[data-theme=light] .groshly-login-brand img { mix-blend-mode:multiply; }
 .landing-real-preview iframe { pointer-events:auto; }
 .landing-real-preview { transform:none!important; animation:none!important; }
+.landing-real-preview, .landing-real-preview-analytics { width:min(100%,470px); height:680px; }
+.landing-real-preview iframe, .landing-real-preview-analytics iframe { display:block; width:100%; height:100%; transform:none; }
+.groshly-landing[data-theme=dark] .landing-header-cta:hover { background:#c8ee8a; color:#173d2d; }
 .landing-hero-copy { animation:none; }
 .landing-preview-tabs { position:relative; z-index:2; display:flex; flex-wrap:wrap; gap:7px; width:min(100%,470px); margin:0 auto 12px; }
 .landing-preview-tabs button { flex:1 0 auto; min-height:40px; padding:8px 12px; border:1px solid #bad0bd; border-radius:999px; background:transparent; color:var(--land-muted); font-size:12px; font-weight:750; white-space:nowrap; }
 .landing-preview-tabs button[aria-pressed=true] { border-color:#c8ee8a; background:#c8ee8a; color:#173d2d; }
 .landing-showcase-visual { display:flex; flex-direction:column; align-items:center; justify-content:center; }
 #how .landing-section-intro { max-width:100%; }
-.landing-ai-demo { min-height:320px; display:flex; flex-direction:column; overflow:hidden; }
-.landing-ai-conversation { display:flex; flex:1; flex-direction:column; justify-content:center; gap:18px; }
-.landing-ai-message { margin-top:0!important; }
-.landing-ai-message span { display:block; overflow:hidden; width:0; max-width:100%; white-space:nowrap; border-right:2px solid #173d2d; animation:groshly-type 2.2s steps(33,end) .25s forwards, groshly-caret .7s steps(1) 4; }
-.landing-ai-response { margin-top:0!important; opacity:0; transform:translateY(12px); animation:groshly-answer .55s ease 2.65s forwards; }
-.landing-ai-demo-note { margin-top:12px!important; }
-@keyframes groshly-type { to { width:100%; } }
-@keyframes groshly-caret { 50% { opacity:0; } }
-@keyframes groshly-answer { to { opacity:1; transform:translateY(0); } }
+.landing-ai-demo { min-height:430px; display:flex; flex-direction:column; gap:18px; overflow:hidden; padding:0; }
+.landing-ai-chat-head { display:flex; align-items:center; gap:12px; padding:17px 20px; border-bottom:1px solid #d8e4d4; }
+.landing-ai-avatar { display:grid; place-items:center; width:37px; height:37px; border-radius:12px; background:#c8ee8a; color:#173d2d; }
+.landing-ai-chat-head strong, .landing-ai-chat-head small { display:block; line-height:1.2; }
+.landing-ai-chat-head small { margin-top:3px; color:var(--land-muted); font-size:11px; }
+.landing-ai-demo-label { margin:0 0 0 auto; padding:5px 8px; border-radius:999px; background:#edf3eb; letter-spacing:.08em; }
+.landing-ai-conversation { display:flex; flex:1; flex-direction:column; justify-content:flex-end; align-items:flex-start; gap:18px; min-height:220px; padding:12px 22px 0; }
+.landing-ai-message { width:min(88%,330px); max-width:min(88%,330px); margin:0 0 0 auto!important; animation:groshly-chat-in .35s ease both; }
+.landing-ai-message span { display:block; width:0; max-width:100%; overflow:hidden; white-space:nowrap; border-right:2px solid currentColor; animation:groshly-typing 1.4s steps(34,end) forwards,groshly-caret .7s step-end 2; }
+.landing-ai-result { display:grid; gap:5px; width:min(88%,300px); padding:16px; border:1px solid #bcd7c2; border-radius:16px 16px 16px 5px; background:#f4faed; color:#173d2d; animation:groshly-chat-in .4s .15s ease both; }
+.landing-ai-result-label { display:flex; align-items:center; gap:6px; color:#4e8865; font-size:11px; font-weight:750; }
+.landing-ai-result strong { font-size:19px; }
+.landing-ai-result > span:not(.landing-ai-result-label) { font-size:13px; }
+.landing-ai-result button { display:flex; justify-content:space-between; align-items:center; gap:8px; margin-top:10px; padding:10px 12px; border-radius:9px; background:#123d2d; color:white; font-size:12px; font-weight:750; }
+.landing-ai-result button:hover { background:#176747; }
+.landing-ai-response { margin:0!important; animation:groshly-chat-in .4s ease both; }
+.landing-ai-compose { display:flex; align-items:center; gap:10px; margin:0 20px; padding:7px 8px 7px 15px; border:1px solid #d8e4d4; border-radius:13px; color:var(--land-muted); font-size:13px; }
+.landing-ai-compose span { flex:1; min-width:0; }
+.landing-ai-compose button { display:grid; place-items:center; flex:none; width:34px; height:34px; border-radius:9px; background:#c8ee8a; color:#173d2d; }
+.landing-ai-compose button:hover { background:#b5e576; }
+.landing-ai-demo-note { margin:0 22px 18px!important; }
+@keyframes groshly-chat-in { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
+@keyframes groshly-typing { to { width:100%; } }
+@keyframes groshly-caret { 50% { border-color:transparent; } }
 .groshly-landing[data-theme=dark] .landing-preview-tabs button { border-color:#476455; color:#b7cdbb; }
 .groshly-landing[data-theme=dark] .landing-preview-tabs button[aria-pressed=true] { border-color:#c8ee8a; color:#173d2d; }
-.groshly-login { --land-muted:#657c6b; min-height:100dvh; height:100dvh; overflow:auto; background:#f7f8f4; color:#163b2d; font:16px/1.5 Inter,system-ui,sans-serif; }
+.groshly-landing[data-theme=dark] .landing-ai-chat-head { border-color:#38543f; }
+.groshly-landing[data-theme=dark] .landing-ai-demo-label { background:#284533; color:#c8ee8a; }
+.groshly-landing[data-theme=dark] .landing-ai-result { background:#203b2a; border-color:#476455; color:#eef7eb; }
+.groshly-landing[data-theme=dark] .landing-ai-result button { background:#c8ee8a; color:#173d2d; }
+.groshly-landing[data-theme=dark] .landing-ai-compose { border-color:#476455; }
+@media(max-width:760px) { .landing-header-cta { display:none; } .landing-hero-visual, .landing-showcase-visual { min-height:0; width:100%; } .landing-real-preview, .landing-real-preview-analytics { width:min(100%,390px); height:min(650px,75dvh); min-height:480px; } .landing-preview-tabs { width:min(100%,390px); } .landing-visual-orbit { pointer-events:none; } }
+@media(max-width:420px) { .landing-preview-tabs { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); } .landing-preview-tabs button { min-width:0; white-space:normal; } .landing-real-preview, .landing-real-preview-analytics { width:100%; height:580px; min-height:0; } .landing-ai-demo { min-height:440px; } }
+
+/* A focused authentication screen, shared with the public site controls. */
+.groshly-login { --land-muted:#657c6b; min-height:100dvh; background:#f7f8f4; color:#163b2d; font:16px/1.5 Inter,system-ui,sans-serif; }
 .groshly-login[data-theme=dark] { --land-muted:#a5bca9; background:#101d17; color:#eef7eb; }
 .groshly-login * { box-sizing:border-box; }
-.groshly-login-header { display:flex; align-items:center; justify-content:space-between; gap:18px; max-width:1240px; margin:auto; padding:24px 28px; border-bottom:1px solid #d8e4d4; }
-.groshly-login[data-theme=dark] .groshly-login-header { border-color:#38543f; }
+.groshly-login-header { display:flex; align-items:center; justify-content:space-between; gap:16px; width:min(100% - 40px,1100px); margin:auto; padding:24px 0; }
 .groshly-login-brand { display:inline-flex; align-items:center; gap:10px; color:inherit; text-decoration:none; font-size:25px; letter-spacing:-.05em; }
-.groshly-login-brand img { width:43px; height:43px; object-fit:contain; }
+.groshly-login-brand img { width:40px; height:40px; object-fit:contain; }
 .groshly-login-brand strong span { color:#80af48; }
 .groshly-login-controls { display:flex; align-items:center; gap:10px; }
-.groshly-login-body { display:grid; grid-template-columns:minmax(0,1fr) minmax(350px,480px); align-items:center; gap:8vw; width:min(100% - 56px,1160px); min-height:calc(100dvh - 96px); margin:auto; padding:64px 0; }
-.groshly-login-story h1 { max-width:660px; margin:20px 0; font-size:clamp(42px,5.2vw,74px); line-height:1.03; letter-spacing:-.06em; }
-.groshly-login-story p { max-width:540px; color:var(--land-muted); font-size:18px; line-height:1.65; }
-.groshly-login-story > a { display:inline-block; margin-top:28px; color:inherit; font-weight:750; }
-.groshly-login-card { padding:32px; border:1px solid #d8e4d4; border-radius:26px; background:#fff; }
+.groshly-login .landing-language-control { border-color:#c8d8c4; }
+.groshly-login .landing-language-control button { color:var(--land-muted); }
+.groshly-login .landing-language-control button[aria-pressed=true] { background:#dfeccc; color:#173d2d; }
+.groshly-login[data-theme=dark] .landing-language-control { border-color:#476455; }
+.groshly-login[data-theme=dark] .landing-language-control button[aria-pressed=true] { background:#c8ee8a; }
+.groshly-login .landing-theme-control { flex:none; width:39px; height:39px; min-height:39px; display:grid; place-items:center; border:1px solid #c8d8c4; border-radius:50%; background:transparent; color:inherit; }
+.groshly-login[data-theme=dark] .landing-theme-control { border-color:#476455; }
+.groshly-login-body { display:grid; place-items:center; min-height:calc(100dvh - 90px); padding:24px 20px 90px; }
+.groshly-login-card { width:min(100%,420px); padding:36px; border:1px solid #d8e4d4; border-radius:24px; background:#fff; box-shadow:0 24px 70px #123d2d0d; }
 .groshly-login[data-theme=dark] .groshly-login-card { border-color:#38543f; background:#1a2c21; }
-.groshly-login-icon { width:48px; height:48px; display:grid; place-items:center; border-radius:13px; background:#e1f5f8; color:#168db4; }
-.groshly-login-card h2 { margin:24px 0 8px; font-size:27px; letter-spacing:-.04em; }
-.groshly-login-card > p { margin:0 0 22px; color:var(--land-muted); }
-.groshly-login-button { display:flex; align-items:center; justify-content:center; gap:10px; min-height:50px; width:100%; padding:10px 14px; border:0; border-radius:12px; background:#229ed9; color:white; font-weight:750; text-decoration:none; }
+.groshly-login-card h1 { margin:0 0 8px; font-size:clamp(26px,5vw,32px); line-height:1.15; letter-spacing:-.04em; }
+.groshly-login-card > p { margin:0 0 24px; color:var(--land-muted); font-size:14px; line-height:1.6; }
+.groshly-login-button { display:flex; align-items:center; justify-content:center; gap:10px; min-height:52px; width:100%; padding:11px 14px; border:0; border-radius:12px; background:#176747; color:#fff; font-weight:750; text-decoration:none; text-align:center; }
+.groshly-login-button:hover { background:#125238; color:#fff; }
+.groshly-login[data-theme=dark] .groshly-login-button { background:#c8ee8a; color:#173d2d; }
+.groshly-login[data-theme=dark] .groshly-login-button:hover { background:#d9f5a6; color:#173d2d; }
 .groshly-login-button:disabled { opacity:.55; }
 .groshly-login-waiting { margin-top:16px!important; color:var(--land-muted); }
 .groshly-login-error { margin-top:16px; }
-.groshly-login-security { display:flex; gap:10px; align-items:flex-start; margin-top:26px; padding-top:22px; border-top:1px solid #d8e4d4; color:var(--land-muted); font-size:13px; }
+.groshly-login-security { display:flex; gap:10px; align-items:flex-start; margin-top:24px; padding-top:20px; border-top:1px solid #d8e4d4; color:var(--land-muted); font-size:12px; }
 .groshly-login-security svg { flex:none; }
 .groshly-login[data-theme=dark] .groshly-login-security { border-color:#38543f; }
-@media(max-width:900px) { .groshly-login-body { grid-template-columns:1fr; gap:36px; min-height:0; padding:48px 0; } .groshly-login-story h1 { max-width:660px; } }
-@media(max-width:600px) { .groshly-login-header { padding:16px 18px; } .groshly-login-brand { font-size:20px; } .groshly-login-brand img { width:36px; height:36px; } .groshly-login-controls .landing-language-control button { padding:7px; font-size:0; } .groshly-login-controls .landing-language-control button::first-letter { font-size:17px; } .groshly-login-body { width:min(100% - 32px,500px); padding:40px 0 60px; } .groshly-login-card { padding:22px; } .landing-ai-message span { width:auto; white-space:normal; border-right:0; animation:none; } }
+.groshly-login-back { display:inline-block; margin-top:24px; color:inherit; font-size:13px; font-weight:700; text-decoration:none; }
+.groshly-login-back:hover { text-decoration:underline; }
+@media(max-width:600px) { .groshly-login-header { width:min(100% - 32px,420px); padding:20px 0; } .groshly-login-brand { font-size:21px; } .groshly-login-brand img { width:34px; height:34px; } .groshly-login-controls { gap:8px; } .groshly-login .landing-language-control button { padding:7px 8px; font-size:0; } .groshly-login .landing-language-control button::first-letter { font-size:16px; } .groshly-login-body { min-height:calc(100dvh - 74px); padding:0 16px 76px; } .groshly-login-card { padding:26px 22px; } .landing-ai-message span { width:auto; white-space:normal; border-right:0; animation:none; } }
+@media(max-width:350px) { .groshly-login-header { width:calc(100% - 24px); } .groshly-login-brand { font-size:19px; gap:6px; } .groshly-login-brand img { width:30px; height:30px; } .groshly-login .landing-language-control button { padding:6px; } .groshly-login .landing-theme-control { width:34px; height:34px; min-height:34px; } .groshly-login-body { padding-inline:12px; } .groshly-login-card { padding:24px 18px; } .groshly-login-button { gap:5px; padding-inline:8px; font-size:13px; white-space:nowrap; } .groshly-login-button svg { width:16px; } }
 @media(prefers-reduced-motion:reduce) { .landing-ai-message span { width:auto; border-right:0; animation:none; } .landing-ai-response { opacity:1; transform:none; animation:none; } }

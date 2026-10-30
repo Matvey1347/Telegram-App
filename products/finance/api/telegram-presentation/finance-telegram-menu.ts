@@ -1,11 +1,11 @@
 import type { TelegramChatMenuButton } from '@api/telegram/shared/bot/telegram-bot-api.client';
-import { publicWebOrigin } from '@api/config/deployment-config';
+import { financeStandaloneWebOrigin, isProductionEnvironment, publicWebOrigin } from '@api/config/deployment-config';
 import { t, type FinanceChatLocale } from '@consumer-finance/api/i18n/finance-chat-i18n';
 import type { ConsumerFinanceAssistantScreen } from '@telegram-system/shared';
 
 export function financeMiniAppUrl(
   botId: string,
-  base = publicWebOrigin(),
+  base = financeStandaloneWebOrigin() ?? (isProductionEnvironment() ? undefined : publicWebOrigin()),
   screen?: ConsumerFinanceAssistantScreen | 'settings',
   transfer = false,
 ) {
@@ -21,7 +21,7 @@ export function financeMiniAppUrl(
 export function financeCheckoutReturnUrl(
   botId: string,
   checkout: 'success' | 'cancelled',
-  base = publicWebOrigin(),
+  base = financeStandaloneWebOrigin() ?? (isProductionEnvironment() ? undefined : publicWebOrigin()),
 ) {
   const applicationUrl = financeMiniAppUrl(botId, base);
   if (!applicationUrl) return null;

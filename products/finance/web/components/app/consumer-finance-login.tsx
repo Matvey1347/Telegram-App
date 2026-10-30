@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowRight, Send, ShieldCheck } from "lucide-react";
+import { ArrowRight, Moon, Send, ShieldCheck, Sun } from "lucide-react";
 import {
   Button,
   ErrorState,
@@ -57,12 +57,25 @@ export function ConsumerFinanceLogin({
   const t = financeLandingCopy(locale);
   const [waiting, setWaiting] = useState(false);
   const completedToken = useRef<string | null>(null);
+  const existingSession = useQuery({
+    queryKey: consumerFinanceKeys.session(botId),
+    queryFn: () => consumerFinanceAuthApi.session(botId),
+    retry: false,
+    staleTime: 0,
+  });
+  useEffect(() => {
+    if (existingSession.data?.authenticated && completedToken.current !== "existing-session") {
+      completedToken.current = "existing-session";
+      onAuthenticated();
+    }
+  }, [existingSession.data?.authenticated, onAuthenticated]);
   const challenge = useQuery({
     queryKey: consumerFinanceKeys.browserLoginChallenge(botId),
     queryFn: () => consumerFinanceAuthApi.createBrowserLoginChallenge(botId),
     retry: false,
     staleTime: Number.POSITIVE_INFINITY,
     gcTime: 0,
+    enabled: existingSession.isFetched && !existingSession.data?.authenticated,
   });
   const approval = useQuery({
     queryKey: consumerFinanceKeys.browserLoginApproval(
@@ -102,25 +115,18 @@ export function ConsumerFinanceLogin({
   return (
     <main className="groshly-login" data-theme={theme} lang={locale}>
       <header className="groshly-login-header">
-        <a className="groshly-login-brand" href="/"><img src={branding.faviconLightUrl} alt="" /><strong>Groshly<span>.</span></strong></a>
+        <a className="groshly-login-brand" href="/"><img src={theme === "dark" ? branding.faviconLightUrl : branding.logoUrl} alt="" /><strong>Groshly<span>.</span></strong></a>
         <div className="groshly-login-controls">
           <div className="landing-language-control" role="group" aria-label="Language">
             <button type="button" aria-pressed={locale === "uk"} onClick={() => setLocale("uk")}>🇺🇦 Українська</button>
             <button type="button" aria-pressed={locale === "en"} onClick={() => setLocale("en")}>🇬🇧 English</button>
           </div>
-          <button className="landing-theme-control" type="button" onClick={() => setTheme((current) => current === "dark" ? "light" : "dark")} aria-label={theme === "dark" ? "Light theme" : "Dark theme"}>{theme === "dark" ? "☀" : "☾"}</button>
+          <button className="landing-theme-control" type="button" onClick={() => setTheme((current) => current === "dark" ? "light" : "dark")} aria-label={theme === "dark" ? "Light theme" : "Dark theme"}>{theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}</button>
         </div>
       </header>
       <div className="groshly-login-body">
-        <section className="groshly-login-story">
-          <span className="landing-kicker">{locale === "uk" ? "ТВІЙ ФІНАНСОВИЙ ПРОСТІР" : "YOUR FINANCIAL SPACE"}</span>
-          <h1>{locale === "uk" ? "Гроші під контролем. Увійди й продовжуй." : "Your money, clearly. Pick up where you left off."}</h1>
-          <p>{locale === "uk" ? "Один профіль для браузера й Telegram Mini App. Після підтвердження в Telegram ця сторінка відкриє твій застосунок." : "One profile for the browser and Telegram Mini App. Confirm in Telegram and this page will open your app."}</p>
-          <a href="/">← {locale === "uk" ? "Назад на головну" : "Back to home"}</a>
-        </section>
         <section className="groshly-login-card" aria-labelledby="telegram-login-title">
-          <div className="groshly-login-icon"><Send size={26} aria-hidden="true" /></div>
-          <h2 id="telegram-login-title">{t.signInTelegram}</h2>
+          <h1 id="telegram-login-title">{t.signInTelegram}</h1>
           <p>{t.signInHelp}</p>
           {challenge.data && approval.data?.status !== "expired" ? (
             <a href={challenge.data.loginUrl} target="_blank" rel="noreferrer" onClick={() => setWaiting(true)} className="groshly-login-button">
@@ -134,6 +140,7 @@ export function ConsumerFinanceLogin({
             <div className="groshly-login-error"><ErrorState text={approval.data?.status === "expired" ? t.telegramSignInExpired : t.signInUnavailable} /><Button variant="secondary" onClick={() => void retry()}>{t.retry}</Button></div>
           ) : null}
           <div className="groshly-login-security"><ShieldCheck size={18} aria-hidden="true" /><span>{t.landingSecurity}</span></div>
+          <a className="groshly-login-back" href="/">← {locale === "uk" ? "На головну" : "Back to home"}</a>
         </section>
       </div>
     </main>

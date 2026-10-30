@@ -4,6 +4,7 @@
 .groshly-legal header { display:flex; align-items:center; justify-content:space-between; gap:24px; max-width:1120px; margin:auto; padding:24px 32px; border-bottom:1px solid var(--legal-line); }
 .groshly-legal-brand { display:inline-flex; align-items:center; gap:10px; color:inherit; font-size:24px; font-weight:850; letter-spacing:-.06em; text-decoration:none; }
 .groshly-legal-brand img { display:block; width:42px; height:42px; object-fit:contain; }
+.groshly-legal[data-theme=light] .groshly-legal-brand img { mix-blend-mode:multiply; }
 .groshly-legal-brand span span { color:#80af48; }
 .groshly-legal header > div { display:flex; align-items:center; gap:10px; }
 .groshly-legal button { min-height:40px; border:1px solid var(--legal-line); border-radius:999px; background:transparent; color:inherit; cursor:pointer; }

@@ -7,10 +7,25 @@ import {
 
 describe('Finance Telegram application URLs', () => {
   const previousFrontendUrl = process.env.FRONTEND_URL;
+  const previousFinanceUrl = process.env.FINANCE_WEB_PUBLIC_URL;
 
   afterEach(() => {
     if (previousFrontendUrl === undefined) delete process.env.FRONTEND_URL;
     else process.env.FRONTEND_URL = previousFrontendUrl;
+    if (previousFinanceUrl === undefined) delete process.env.FINANCE_WEB_PUBLIC_URL;
+    else process.env.FINANCE_WEB_PUBLIC_URL = previousFinanceUrl;
+  });
+
+  it('opens the independent Finance site when both public origins are configured', () => {
+    process.env.FRONTEND_URL = 'https://nexeloq.example';
+    process.env.FINANCE_WEB_PUBLIC_URL = 'https://finance.example';
+    expect(financeChatMenuButton('finance-bot')).toMatchObject({
+      type: 'web_app',
+      webAppUrl: 'https://finance.example/finance/finance-bot',
+    });
+    expect(financeCheckoutReturnUrl('finance-bot', 'success')).toBe(
+      'https://finance.example/finance/finance-bot?checkout=success',
+    );
   });
 
   it('builds the product route from the canonical public web origin', () => {

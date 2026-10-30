@@ -2,8 +2,8 @@
 
 import { useEffect } from "react";
 
-const iconUrl = "/brand/groshly-dark-icon.png";
-const darkIconUrl = iconUrl;
+const iconUrl = "/brand/groshly-icon.png";
+const darkIconUrl = "/brand/groshly-dark-icon.png";
 
 export function useFinanceBotBranding(botId: string, applyBranding = true) {
   useEffect(() => {
@@ -12,7 +12,7 @@ export function useFinanceBotBranding(botId: string, applyBranding = true) {
       'link[rel="icon"], link[rel="shortcut icon"], link[rel="apple-touch-icon"]',
     ));
     const previous = links.map((link) => link.href);
-    links.forEach((link) => { link.href = iconUrl; });
+    links.forEach((link) => { link.href = darkIconUrl; });
     return () => links.forEach((link, index) => { link.href = previous[index]; });
   }, [applyBranding]);
 
@@ -33,5 +33,5 @@ export function useFinanceBotBranding(botId: string, applyBranding = true) {
     };
   }, [botId, applyBranding]);
 
-  return { logoUrl: iconUrl, faviconUrl: iconUrl, faviconLightUrl: darkIconUrl };
+  return { logoUrl: iconUrl, faviconUrl: darkIconUrl, faviconLightUrl: darkIconUrl };
 }
