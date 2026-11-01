@@ -1,5 +1,29 @@
 import { ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../../../prisma/prisma.service';
+import type { LeadAnalysisResult } from '@telegram-system/shared';
+
+/** Only bounded public reason codes, never provider output or private source excerpts. */
+export function addLeadFailure(
+  summary: LeadAnalysisResult,
+  observationId: string,
+  stage: 'classification' | 'extraction',
+  error: unknown,
+) {
+  let code = error instanceof Error ? error.message : '';
+  if (error && typeof error === 'object' && !(error instanceof Error)) {
+    const outcome = error as { errorCategory?: unknown; status?: unknown };
+    code =
+      typeof outcome.errorCategory === 'string'
+        ? `AI_${outcome.errorCategory}`
+        : outcome.status === 'UNKNOWN'
+          ? 'AI_OUTCOME_UNCERTAIN'
+          : 'AI_OUTPUT_UNAVAILABLE';
+  }
+  if (!/^(?:AI|LEAD)_[A-Z_]{1,90}$/.test(code)) code = 'LEAD_ANALYSIS_FAILED';
+  summary.failures ??= [];
+  if (summary.failures.length < 10)
+    summary.failures.push({ observationId, stage, code });
+}
 export async function recordLeadAnalysisFailure(
   prisma: PrismaService,
   request: {

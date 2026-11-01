@@ -185,6 +185,15 @@ export function LeadFeed({
           {analyze.data.unknown} · Failed {analyze.data.failed}
         </p>
       ) : null}
+      {analyze.data?.failed ? (
+        <p role="alert" className="text-sm text-amber-200">
+          {analyze.data.failures?.some((failure) =>
+            failure.code.includes("EVIDENCE"),
+          )
+            ? "ИИ не подтвердил вывод фрагментами публикации. Результат не сохранён как проверенный. Автоматического повторного списания не будет."
+            : "Часть публикаций не удалось проанализировать. Проверьте доступ к источнику и журнал расходов ИИ. Автоматического повторного списания не будет."}
+        </p>
+      ) : null}
       <LeadQueryState
         loading={query.isLoading}
         error={query.isError}

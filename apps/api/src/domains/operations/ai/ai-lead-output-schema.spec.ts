@@ -9,7 +9,7 @@ const classified = {
   relevance: 'POSSIBLE',
   confidence: 0.7,
   risks: [],
-  evidence: ['Public business contact stated'],
+  evidence: ['e1'],
 };
 const extracted = {
   projectName: 'Synthetic project',
@@ -27,13 +27,13 @@ const extracted = {
 describe('Lead Discovery strict transport contracts', () => {
   it('versions Discovery and Qualification independently while preserving Sales', () => {
     expect(registry.schema('LEAD_AD_CLASSIFICATION').id).toBe(
-      'lead_ad_classification_discovery_v1',
+      'lead_ad_classification_discovery_evidence_v2',
     );
     expect(registry.schema('LEAD_CONTACT_EXTRACTION').id).toBe(
       'lead_contact_extraction_discovery_v1',
     );
     expect(registry.category('LEAD_AD_CLASSIFICATION').promptVersion).toBe(
-      'lead-discovery-v1',
+      'lead-classification-evidence-v2',
     );
     expect(registry.schema('LEAD_QUALIFICATION').id).toBe(
       'lead_qualification_qualification_v1',
@@ -59,7 +59,10 @@ describe('Lead Discovery strict transport contracts', () => {
     { ...classified, classification: 'PAID_AD' },
     { ...classified, confidence: 2 },
     { ...classified, risks: Array(11).fill('risk') },
-    { ...classified, evidence: ['x'.repeat(201)] },
+    { ...classified, evidence: ['Literal quote instead of supplied ID'] },
+    { ...classified, evidence: ['e101'] },
+    { ...classified, evidence: ['e0'] },
+    { ...classified, evidence: ['e01'] },
   ])('rejects unapproved fields and unbounded model assertions %#', (value) => {
     expect(registry.validate('LEAD_AD_CLASSIFICATION', value)).toBe(false);
   });

@@ -85,7 +85,7 @@ export class AiModelRegistry {
   }
   schema(category: AiCategory) {
     return {
-      id: `${category.toLowerCase()}_${category === 'LEAD_QUALIFICATION' ? 'qualification_v1' : category.startsWith('SALES_') ? 'copilot_v1' : ['LEAD_AD_CLASSIFICATION', 'LEAD_CONTACT_EXTRACTION'].includes(category) ? 'discovery_v1' : 'infra_v1'}`,
+      id: `${category.toLowerCase()}_${category === 'LEAD_AD_CLASSIFICATION' ? 'discovery_evidence_v2' : category === 'LEAD_QUALIFICATION' ? 'qualification_v1' : category.startsWith('SALES_') ? 'copilot_v1' : ['LEAD_AD_CLASSIFICATION', 'LEAD_CONTACT_EXTRACTION'].includes(category) ? 'discovery_v1' : 'infra_v1'}`,
       jsonSchema: structuredClone(SCHEMAS[category]),
     };
   }
@@ -112,15 +112,17 @@ export class AiModelRegistry {
       maxRequestCost: null,
       schemaId: this.schema(category).id,
       promptVersion:
-        category === 'LEAD_QUALIFICATION'
-          ? 'lead-qualification-v1'
-          : category.startsWith('SALES_')
-            ? 'sales-copilot-v1'
-            : ['LEAD_AD_CLASSIFICATION', 'LEAD_CONTACT_EXTRACTION'].includes(
-                  category,
-                )
-              ? 'lead-discovery-v1'
-              : 'infra-v1',
+        category === 'LEAD_AD_CLASSIFICATION'
+          ? 'lead-classification-evidence-v2'
+          : category === 'LEAD_QUALIFICATION'
+            ? 'lead-qualification-v1'
+            : category.startsWith('SALES_')
+              ? 'sales-copilot-v1'
+              : ['LEAD_AD_CLASSIFICATION', 'LEAD_CONTACT_EXTRACTION'].includes(
+                    category,
+                  )
+                ? 'lead-discovery-v1'
+                : 'infra-v1',
       configurationVersion: 1,
     };
   }

@@ -222,6 +222,17 @@ describe("Lead Discovery operational UI", () => {
       5,
     );
   });
+  it("explains rejected evidence without silently retrying a paid analysis", async () => {
+    vi.mocked(leadDiscoveryApi.analyze).mockResolvedValue({
+      analyzed: 0, extracted: 0, skipped: 0, unknown: 0, failed: 1,
+      failures: [{ observationId: "observation-1", stage: "classification", code: "LEAD_CLASSIFICATION_EVIDENCE_NOT_LITERAL" }],
+    });
+    mount(<LeadFeed workspace="workspace-one" config={leadConfig} />);
+    fireEvent.click(await screen.findByRole("checkbox", { name: "Select material 1" }));
+    fireEvent.click(screen.getByRole("button", { name: "Analyze 1 selected materials" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("ИИ не подтвердил вывод");
+    expect(leadDiscoveryApi.analyze).toHaveBeenCalledTimes(1);
+  });
   it("sends the risk filter to the server instead of filtering one loaded page", async () => {
     mount(<LeadFeed workspace="workspace-one" config={leadConfig} />);
     await screen.findByText("Public business offer 1");

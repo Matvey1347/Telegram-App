@@ -89,7 +89,9 @@ export const leadDiscoveryApi = {
       })
     ).data,
   analyze: async (observationIds: string[]) =>
-    (await api.post<LeadAnalysisResult>(`${base}/analyze`, { observationIds }))
+    (await api.post<LeadAnalysisResult>(`${base}/analyze`, { observationIds }, {
+      feedback: { mode: "managed" },
+    } as Parameters<typeof api.post>[2]))
       .data,
   reviewObservation: async (
     observation: string,

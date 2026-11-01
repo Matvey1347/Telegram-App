@@ -25,7 +25,7 @@ function fixture(overrides: Partial<TelegramLeadObservation> = {}) {
     relevance: 'POSSIBLE',
     confidence: 0.8,
     risks: ['UNVERIFIED_IDENTITY'],
-    evidence: ['@business_contact'],
+    evidence: ['e1'],
   };
   const extraction: LeadExtraction = {
     projectName: '',
@@ -138,6 +138,17 @@ describe('Lead explicitly requested AI stages', () => {
       extractionVersion: LEAD_DISCOVERY_VERSION,
       processingStatus: 'EXTRACTED',
     });
+    expect(h.row.classification).toMatchObject({ evidence: [h.row.text] });
+    const classifierInput = JSON.parse(
+      h.gateway.execute.mock.calls[0][0].input,
+    ) as {
+      text?: string;
+      evidenceOptions: Array<{ id: string; text: string }>;
+    };
+    expect(classifierInput).not.toHaveProperty('text');
+    expect(classifierInput.evidenceOptions).toEqual([
+      { id: 'e1', text: h.row.text },
+    ]);
     expect(h.candidates.materialCandidate).toHaveBeenCalledTimes(1);
     await h.service.analyze('manager', ['observation']);
     expect(h.gateway.execute).toHaveBeenCalledTimes(2);
@@ -221,9 +232,16 @@ describe('Lead explicitly requested AI stages', () => {
   });
   it('refuses hallucinated evidence, preserves known billed failure metadata and does not create CRM', async () => {
     const h = fixture();
-    h.classification.evidence = ['@invented'];
+    h.classification.evidence = ['e99'];
     expect(await h.service.analyze('manager', ['observation'])).toMatchObject({
       failed: 1,
+      failures: [
+        {
+          observationId: 'observation',
+          stage: 'classification',
+          code: 'LEAD_CLASSIFICATION_EVIDENCE_ID_INVALID',
+        },
+      ],
     });
     expect(h.row).toMatchObject({
       processingStatus: 'FAILED',

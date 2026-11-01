@@ -23,7 +23,17 @@ export const AI_LEAD_CLASSIFICATION_SCHEMA = shape({
   },
   confidence: { type: 'number', minimum: 0, maximum: 1 },
   risks: strings(10, 100),
-  evidence: strings(12, 200),
+  evidence: {
+    type: 'array',
+    maxItems: 12,
+    items: {
+      type: 'string',
+      pattern: '^e(?:[1-9][0-9]?|100)$',
+      maxLength: 4,
+      description:
+        'Only an ID from supplied evidenceOptions; never source text or paraphrases.',
+    },
+  },
 });
 export const AI_LEAD_EXTRACTION_SCHEMA = shape({
   projectName: text(300),

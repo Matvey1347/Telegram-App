@@ -18,7 +18,10 @@ export type LeadCandidateReviewInput = {
 export type LeadCandidateListFilter = { cursor?: string; limit?: number; search?: string; reviewStatus?: LeadReviewStatus; riskStatus?: LeadRiskStatus; sourceId?: string };
 export type LeadSourceListFilter = { cursor?: string; limit?: number; search?: string; status?: string };
 export type LeadFeedFilter = { cursor?: string; limit?: number; sourceId?: string; classification?: string; reviewStatus?: LeadReviewStatus; riskStatus?: LeadRiskStatus };
-export type LeadAnalysisResult = { analyzed: number; extracted: number; skipped: number; unknown: number; failed: number };
+export type LeadAnalysisResult = {
+  analyzed: number; extracted: number; skipped: number; unknown: number; failed: number;
+  failures?: Array<{ observationId: string; stage: 'classification' | 'extraction'; code: string }>;
+};
 
 export type LeadSourceImportResult = { created: number; existing: number; errors: Array<{ reference: string; error: string }> };
 export type LeadScanResult = LeadIngestResult & { hasMore: boolean; nextBeforeId: number | null };
