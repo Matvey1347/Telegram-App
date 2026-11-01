@@ -9,13 +9,7 @@ import {
   TelegramAdvertiserStatus,
 } from '@prisma/client';
 import { Transform } from 'class-transformer';
-import {
-  IsBoolean,
-  IsEnum,
-  IsIn,
-  IsOptional,
-  IsString,
-} from 'class-validator';
+import { IsBoolean, IsEnum, IsIn, IsOptional, IsString } from 'class-validator';
 import { PaginationQueryDto } from '../../../common/pagination/pagination-query.dto';
 
 export class TelegramAdvertisersQueryDto extends PaginationQueryDto {

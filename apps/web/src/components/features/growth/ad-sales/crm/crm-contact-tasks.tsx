@@ -20,8 +20,7 @@ import { telegramCrmKeys } from "@/lib/features/growth/telegram-crm-query";
 import { formatDateTime } from "@/lib/date-format";
 import { MemberSelect } from "@/components/features/workspace/member-select";
 
-const taskKey = (contactId: string) =>
-  ["telegram-ad-sales", "crm-contact", contactId, "tasks"] as const;
+
 
 function defaultReminderDate() {
   const now = new Date();
@@ -53,7 +52,7 @@ export function CrmContactTasks({
     () => contact.ownerMemberId ?? "",
   );
   const query = useQuery({
-    queryKey: taskKey(contact.id),
+    queryKey: telegramCrmKeys.contactTasks(contact.id),
     queryFn: () =>
       telegramAdSalesApi.listCrmTasks({
         advertiserId: contact.id,
@@ -63,7 +62,7 @@ export function CrmContactTasks({
   });
   const refresh = async () =>
     Promise.all([
-      queryClient.invalidateQueries({ queryKey: taskKey(contact.id) }),
+      queryClient.invalidateQueries({ queryKey: telegramCrmKeys.contactTasks(contact.id) }),
       queryClient.invalidateQueries({
         queryKey: telegramCrmKeys.contactDetail(contact.id),
       }),

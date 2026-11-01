@@ -1,0 +1,271 @@
+{
+  "summary": {
+    "passedFiles": 357,
+    "failedFiles": 19,
+    "passedTests": 1809,
+    "failedTests": 29
+  },
+  "failures": [
+    {
+      "file": "apps/web/src/components/layout/app-navigation.test.tsx",
+      "test": "AppNavigation permissions > renders posts directly when it is the only accessible page",
+      "category": "OLD_TECHNICAL_DEBT",
+      "evidence": "AssertionError: expected <button type=\"button\" …(3)>…(3)</button> to be null",
+      "baselineUnchanged": true,
+      "severity": "P2",
+      "status": "FAILED"
+    },
+    {
+      "file": "products/finance/web/components/accounts/finance-account-editor.test.tsx",
+      "test": "FinanceAccountEditor > preserves a hydrated image icon when only name/type are updated",
+      "category": "OLD_TECHNICAL_DEBT",
+      "evidence": "Error: expect(element).toHaveAttribute(\"readonly\") // element.hasAttribute(\"readonly\")",
+      "baselineUnchanged": true,
+      "severity": "P2",
+      "status": "FAILED"
+    },
+    {
+      "file": "products/finance/web/components/accounts/finance-accounts.test.tsx",
+      "test": "FinanceAccounts list > archives only after typed confirmation",
+      "category": "OLD_TECHNICAL_DEBT",
+      "evidence": "TestingLibraryElementError: Unable to find an element with the placeholder text of: Daily card",
+      "baselineUnchanged": true,
+      "severity": "P2",
+      "status": "FAILED"
+    },
+    {
+      "file": "products/finance/web/components/app/consumer-finance-app.test.tsx",
+      "test": "ConsumerFinanceApp bootstrap > opens Finance from an existing browser session",
+      "category": "OLD_TECHNICAL_DEBT",
+      "evidence": "TestingLibraryElementError: Unable to find an element with the text: Finance. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.",
+      "baselineUnchanged": true,
+      "severity": "P2",
+      "status": "FAILED"
+    },
+    {
+      "file": "products/finance/web/components/app/consumer-finance-app.test.tsx",
+      "test": "ConsumerFinanceApp bootstrap > pushes an editor URL and explicit Back restores the accounts entry",
+      "category": "OLD_TECHNICAL_DEBT",
+      "evidence": "Error: expect(element).toHaveClass(\"text-sky-200\")",
+      "baselineUnchanged": true,
+      "severity": "P2",
+      "status": "FAILED"
+    },
+    {
+      "file": "products/finance/web/components/ledger/finance-transaction-editor.test.tsx",
+      "test": "FinanceTransactionEditor > creates a shared expense and one debt per participant",
+      "category": "OLD_TECHNICAL_DEBT",
+      "evidence": "Error: expect(element).toHaveClass(\"bg-red-600\")",
+      "baselineUnchanged": true,
+      "severity": "P2",
+      "status": "FAILED"
+    },
+    {
+      "file": "products/finance/web/components/ledger/finance-transactions.test.tsx",
+      "test": "FinanceTransactions receipt detail > localizes filters and portals the calendar above the modal",
+      "category": "OLD_TECHNICAL_DEBT",
+      "evidence": "TestingLibraryElementError: Unable to find an accessible element with the role \"button\" and name `/01\\.09\\.2026/`",
+      "baselineUnchanged": true,
+      "severity": "P2",
+      "status": "FAILED"
+    },
+    {
+      "file": "products/finance/web/components/portability/finance-portability-history.test.tsx",
+      "test": "FinancePortabilityHistory > shows both import and export history and rolls an import back after confirmation",
+      "category": "OLD_TECHNICAL_DEBT",
+      "evidence": "TestingLibraryElementError: Unable to find an element with the placeholder text of: ROLLBACK",
+      "baselineUnchanged": true,
+      "severity": "P2",
+      "status": "FAILED"
+    },
+    {
+      "file": "apps/web/src/components/features/growth/ad-sales/ad-sale-placement-lifecycle-preview.test.tsx",
+      "test": "AdSalePlacementLifecyclePreview > animates pending and shows observed publication confirmation for three seconds before the post timer",
+      "category": "OLD_TECHNICAL_DEBT",
+      "evidence": "TestingLibraryElementError: Unable to find a label with the text of: Publication pending",
+      "baselineUnchanged": true,
+      "severity": "P2",
+      "status": "FAILED"
+    },
+    {
+      "file": "apps/web/src/components/features/telegram/telegram-bots/telegram-bot-card.test.tsx",
+      "test": "TelegramBotCard > renders the selected runtime avatar pulled from Telegram",
+      "category": "OLD_TECHNICAL_DEBT",
+      "evidence": "Error: expect(received).toBeInTheDocument()",
+      "baselineUnchanged": true,
+      "severity": "P2",
+      "status": "FAILED"
+    },
+    {
+      "file": "apps/web/src/components/features/operations/dashboard/dashboard-page.test.tsx",
+      "test": "dashboard > shows one success metric and the three essential cash flows",
+      "category": "OLD_TECHNICAL_DEBT",
+      "evidence": "TestingLibraryElementError: Unable to find an accessible element with the role \"button\" and name `/Expenses/`",
+      "baselineUnchanged": true,
+      "severity": "P2",
+      "status": "FAILED"
+    },
+    {
+      "file": "apps/web/src/components/features/telegram/telegram/channel-settings-completion.test.ts",
+      "test": "getOverallChannelSettingsCompletion > includes the publication schedule in the same setup percentage used by cards",
+      "category": "OLD_TECHNICAL_DEBT",
+      "evidence": "AssertionError: expected 67 to be 83 // Object.is equality",
+      "baselineUnchanged": true,
+      "severity": "P2",
+      "status": "FAILED"
+    },
+    {
+      "file": "apps/web/src/components/features/telegram/telegram/channel-settings-completion.test.ts",
+      "test": "getOverallChannelSettingsCompletion > excludes bot setup for channels where bot management is unavailable",
+      "category": "OLD_TECHNICAL_DEBT",
+      "evidence": "AssertionError: expected 80 to be 100 // Object.is equality",
+      "baselineUnchanged": true,
+      "severity": "P2",
+      "status": "FAILED"
+    },
+    {
+      "file": "apps/web/src/components/features/telegram/telegram/channel-settings-completion.test.ts",
+      "test": "getOverallChannelSettingsCompletion > does not count Appearance until every required field is configured",
+      "category": "OLD_TECHNICAL_DEBT",
+      "evidence": "AssertionError: expected 'empty' to be 'complete' // Object.is equality",
+      "baselineUnchanged": true,
+      "severity": "P2",
+      "status": "FAILED"
+    },
+    {
+      "file": "apps/web/src/components/features/telegram/telegram/channel-settings-completion.test.ts",
+      "test": "getOverallChannelSettingsCompletion > includes newsletter and audience-transfer links in setup progress",
+      "category": "OLD_TECHNICAL_DEBT",
+      "evidence": "AssertionError: expected 'empty' to be 'complete' // Object.is equality",
+      "baselineUnchanged": true,
+      "severity": "P2",
+      "status": "FAILED"
+    },
+    {
+      "file": "apps/web/src/components/features/telegram/telegram/channel-settings-modal.test.tsx",
+      "test": "ChannelSettingsModal > groups channel configuration into icon-labelled tabs and shows the channel avatar",
+      "category": "OLD_TECHNICAL_DEBT",
+      "evidence": "TestingLibraryElementError: Unable to find an element with the text: 67%. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.",
+      "baselineUnchanged": true,
+      "severity": "P2",
+      "status": "FAILED"
+    },
+    {
+      "file": "apps/web/src/components/features/telegram/telegram/telegram-account-panels.test.tsx",
+      "test": "MtprotoAccountsPanel QR recovery > opens QR recovery for a revoked account without starting phone login",
+      "category": "OLD_TECHNICAL_DEBT",
+      "evidence": "TestingLibraryElementError: Unable to find role=\"button\" and name \"Refresh via QR\"",
+      "baselineUnchanged": true,
+      "severity": "P2",
+      "status": "FAILED"
+    },
+    {
+      "file": "apps/web/src/components/features/telegram/telegram/telegram-account-panels.test.tsx",
+      "test": "MtprotoAccountsPanel QR recovery > closes QR recovery before opening the existing 2FA modal",
+      "category": "OLD_TECHNICAL_DEBT",
+      "evidence": "TestingLibraryElementError: Unable to find role=\"button\" and name \"Refresh via QR\"",
+      "baselineUnchanged": true,
+      "severity": "P2",
+      "status": "FAILED"
+    },
+    {
+      "file": "apps/web/src/components/features/telegram/telegram/telegram-account-panels.test.tsx",
+      "test": "MtprotoAccountsPanel QR recovery > aborts QR recovery when the active workspace changes",
+      "category": "OLD_TECHNICAL_DEBT",
+      "evidence": "TestingLibraryElementError: Unable to find role=\"button\" and name \"Refresh via QR\"",
+      "baselineUnchanged": true,
+      "severity": "P2",
+      "status": "FAILED"
+    },
+    {
+      "file": "apps/web/src/components/features/telegram/telegram/telegram-channel-message-templates-modal.test.tsx",
+      "test": "TelegramChannelMessageTemplatesModal > shows the standard pencil action for a local draft",
+      "category": "OLD_TECHNICAL_DEBT",
+      "evidence": "Error: useI18n must be used within I18nProvider",
+      "baselineUnchanged": true,
+      "severity": "P2",
+      "status": "FAILED"
+    },
+    {
+      "file": "apps/web/src/components/features/telegram/telegram/telegram-channel-message-templates-modal.test.tsx",
+      "test": "TelegramChannelMessageTemplatesModal > shows the template emoji and standard actions, including direct send",
+      "category": "OLD_TECHNICAL_DEBT",
+      "evidence": "TestingLibraryElementError: Unable to find an accessible element with the role \"button\" and name \"Edit template\"",
+      "baselineUnchanged": true,
+      "severity": "P2",
+      "status": "FAILED"
+    },
+    {
+      "file": "apps/web/src/components/features/telegram/telegram/telegram-channel-message-templates-modal.test.tsx",
+      "test": "TelegramChannelMessageTemplatesModal > opens a duplicate as a new editable template",
+      "category": "OLD_TECHNICAL_DEBT",
+      "evidence": "TestingLibraryElementError: Unable to find role=\"button\" and name \"Duplicate All Channels\"",
+      "baselineUnchanged": true,
+      "severity": "P2",
+      "status": "FAILED"
+    },
+    {
+      "file": "apps/web/src/components/features/telegram/telegram/telegram-channel-message-templates-modal.test.tsx",
+      "test": "TelegramChannelMessageTemplatesModal > shows only a preview skeleton and never creates a draft while editing a saved template",
+      "category": "OLD_TECHNICAL_DEBT",
+      "evidence": "TestingLibraryElementError: Unable to find role=\"button\" and name \"Edit template\"",
+      "baselineUnchanged": true,
+      "severity": "P2",
+      "status": "FAILED"
+    },
+    {
+      "file": "apps/web/src/components/features/telegram/telegram/telegram-channel-message-templates-modal.test.tsx",
+      "test": "TelegramChannelMessageTemplatesModal > requires the shared destructive confirmation before deleting a template",
+      "category": "OLD_TECHNICAL_DEBT",
+      "evidence": "TestingLibraryElementError: Unable to find role=\"button\" and name \"Delete template\"",
+      "baselineUnchanged": true,
+      "severity": "P2",
+      "status": "FAILED"
+    },
+    {
+      "file": "apps/web/src/components/features/workspace/roles/roles-workspace.test.tsx",
+      "test": "RolesWorkspace assignments > uses navigation and permission icons without generated access prose",
+      "category": "OLD_TECHNICAL_DEBT",
+      "evidence": "Error: expect(received).toBeInTheDocument()",
+      "baselineUnchanged": true,
+      "severity": "P2",
+      "status": "FAILED"
+    },
+    {
+      "file": "apps/web/src/app/(consumer-finance)/finance/[botId]/manifest.webmanifest/route.test.ts",
+      "test": "Finance PWA manifest > keeps Finance separately installable and scoped to its bot",
+      "category": "OLD_TECHNICAL_DEBT",
+      "evidence": "AssertionError: expected [ { …(4) } ] to deeply equal ArrayContaining{…}",
+      "baselineUnchanged": true,
+      "severity": "P2",
+      "status": "FAILED"
+    },
+    {
+      "file": "apps/web/src/components/features/growth/ad-campaigns/mutual-promotion/mutual-promotion-folder-detail-modal.test.tsx",
+      "test": "MutualPromotionFolderDetailModal > offers invite-link editing for an active folder",
+      "category": "OLD_TECHNICAL_DEBT",
+      "evidence": "Error: expect(element).not.toBeInTheDocument()",
+      "baselineUnchanged": true,
+      "severity": "P2",
+      "status": "FAILED"
+    },
+    {
+      "file": "apps/web/src/components/features/growth/ad-campaigns/mutual-promotion/mutual-promotion-folder-detail-skeleton-modal.test.tsx",
+      "test": "MutualPromotionFolderDetailSkeletonModal > uses the full detail-dialog layout and remains dismissible",
+      "category": "OLD_TECHNICAL_DEBT",
+      "evidence": "Error: expect(element).toHaveClass(\"max-w-[1280px]\")",
+      "baselineUnchanged": true,
+      "severity": "P2",
+      "status": "FAILED"
+    },
+    {
+      "file": "apps/web/src/components/features/growth/ad-campaigns/mutual-promotion/mutual-promotion-saved-post-card.test.tsx",
+      "test": "MutualPromotionSavedPostCard > keeps the list compact and edits content and schedule from the pencil",
+      "category": "OLD_TECHNICAL_DEBT",
+      "evidence": "TestingLibraryElementError: Unable to find an accessible element with the role \"button\" and name \"08.09.2026\"",
+      "baselineUnchanged": true,
+      "severity": "P2",
+      "status": "FAILED"
+    }
+  ]
+}

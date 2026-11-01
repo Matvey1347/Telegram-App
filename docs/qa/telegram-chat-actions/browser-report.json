@@ -1,0 +1,194 @@
+{
+  "checks": [
+    {
+      "scenario": "media does not load on thread mount",
+      "pass": true
+    },
+    {
+      "scenario": "no idle chat writes",
+      "pass": true
+    },
+    {
+      "scenario": "thread 320px",
+      "pass": true
+    },
+    {
+      "scenario": "thread 360px",
+      "pass": true
+    },
+    {
+      "scenario": "thread 390px",
+      "pass": true
+    },
+    {
+      "scenario": "thread 768px",
+      "pass": true
+    },
+    {
+      "scenario": "thread 1024px",
+      "pass": true
+    },
+    {
+      "scenario": "thread 1440px",
+      "pass": true
+    },
+    {
+      "scenario": "edit preserves ordinary composer draft",
+      "pass": true
+    },
+    {
+      "scenario": "reply can cancel without send",
+      "pass": true
+    },
+    {
+      "scenario": "reactions render authoritative count",
+      "pass": true
+    },
+    {
+      "scenario": "explicit media click fetches one authorized blob",
+      "pass": true
+    },
+    {
+      "scenario": "unknown forward uses GET check without another POST",
+      "pass": true
+    },
+    {
+      "scenario": "unsupported voice requires explicit file consent",
+      "pass": true
+    },
+    {
+      "scenario": "attachment preview never sends automatically",
+      "pass": true
+    },
+    {
+      "scenario": "keyboard-sized viewport keeps composer reachable",
+      "pass": true
+    },
+    {
+      "scenario": "delete requires confirmation",
+      "pass": true
+    },
+    {
+      "scenario": "no real provider/Telegram/AI call",
+      "pass": true
+    }
+  ],
+  "errors": [],
+  "requests": [
+    {
+      "method": "GET",
+      "path": "/auth/me"
+    },
+    {
+      "method": "GET",
+      "path": "/workspaces"
+    },
+    {
+      "method": "GET",
+      "path": "/account/me"
+    },
+    {
+      "method": "POST",
+      "path": "/telegram/system-bot/connection/workspace"
+    },
+    {
+      "method": "GET",
+      "path": "/telegram-crm/conversations/dialog-qa/sales-workflow"
+    },
+    {
+      "method": "GET",
+      "path": "/telegram-crm/conversations/dialog-qa"
+    },
+    {
+      "method": "GET",
+      "path": "/telegram-crm/inbox/conversations"
+    },
+    {
+      "method": "GET",
+      "path": "/telegram-crm/events/stream"
+    },
+    {
+      "method": "GET",
+      "path": "/telegram-crm/unread"
+    },
+    {
+      "method": "GET",
+      "path": "/operations/notifications/events/stream"
+    },
+    {
+      "method": "GET",
+      "path": "/operations/notifications/unread-count"
+    },
+    {
+      "method": "GET",
+      "path": "/telegram-user-accounts"
+    },
+    {
+      "method": "GET",
+      "path": "/telegram-crm/conversations/dialog-qa/messages"
+    },
+    {
+      "method": "GET",
+      "path": "/telegram-crm/conversations/dialog-qa/chat-capabilities"
+    },
+    {
+      "method": "POST",
+      "path": "/telegram/system-bot/connection/workspace"
+    },
+    {
+      "method": "GET",
+      "path": "/operations/notifications/events/stream"
+    },
+    {
+      "method": "GET",
+      "path": "/telegram-crm/events/stream"
+    },
+    {
+      "method": "POST",
+      "path": "/telegram-crm/conversations/dialog-qa/message-actions"
+    },
+    {
+      "method": "POST",
+      "path": "/telegram-crm/conversations/dialog-qa/message-actions"
+    },
+    {
+      "method": "GET",
+      "path": "/telegram-crm/conversations/dialog-qa/messages/msg-4/media"
+    },
+    {
+      "method": "GET",
+      "path": "/telegram-crm/conversations"
+    },
+    {
+      "method": "POST",
+      "path": "/telegram-crm/conversations/dialog-qa/message-actions"
+    },
+    {
+      "method": "GET",
+      "path": "/telegram-crm/conversations/dialog-qa/message-actions/2026-11-01%3Adcbf4d81-e039-45fe-a09a-b7b1f837dbb3"
+    },
+    {
+      "method": "POST",
+      "path": "/telegram-crm/conversations/dialog-qa/message-actions"
+    },
+    {
+      "method": "GET",
+      "path": "/telegram-crm/inbox/conversations"
+    },
+    {
+      "method": "GET",
+      "path": "/telegram-crm/conversations/dialog-qa"
+    },
+    {
+      "method": "GET",
+      "path": "/telegram-crm/unread"
+    }
+  ],
+  "externalRequests": [
+    "https://telegram.org/js/telegram-web-app.js?63"
+  ],
+  "allApisIntercepted": true,
+  "providerCalls": 0,
+  "telegramSends": 0,
+  "physicalIPhoneTest": false
+}

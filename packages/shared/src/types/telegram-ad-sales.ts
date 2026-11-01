@@ -54,6 +54,7 @@ export type TelegramAdvertiserContactType =
   | "PHONE"
   | "EMAIL"
   | "WEBSITE"
+  | "INSTAGRAM"
   | "OTHER";
 
 export type TelegramAdCrmDealStage =
@@ -576,6 +577,7 @@ export type TelegramAdSalePublicationDeletionResult = {
 };
 
 export type TelegramAdvertiserContact = {
+  instagram?: import('./crm-instagram-contacts').CrmInstagramMethod;
   id: string;
   workspaceId: string;
   advertiserId: string;

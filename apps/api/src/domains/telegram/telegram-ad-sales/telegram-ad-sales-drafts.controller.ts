@@ -1,4 +1,13 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { CurrentUser } from '../../../common/current-user.decorator';
 import type { JwtUser } from '../../../common/current-user.decorator';
 import { JwtAuthGuard } from '../../../common/jwt-auth.guard';
@@ -16,7 +25,10 @@ export class TelegramAdSalesDraftsController {
   }
 
   @Post()
-  create(@CurrentUser() user: JwtUser, @Body() dto: SaveTelegramAdSaleDraftDto) {
+  create(
+    @CurrentUser() user: JwtUser,
+    @Body() dto: SaveTelegramAdSaleDraftDto,
+  ) {
     return this.drafts.create(user.sub, dto);
   }
 

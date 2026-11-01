@@ -1,9 +1,10 @@
 "use client";
+import { useDismissiblePopover } from "@/hooks/use-dismissible-popover";
+import { OptionIcon, floatingMenuStyle } from "./select-shared";
+import { overlayPortalHost } from "./overlay-portal-host";
 import {
-  Children,
   PropsWithChildren,
   forwardRef,
-  isValidElement,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -32,7 +33,6 @@ import { Modal } from "./modal";
 import { uiCopy, type UiLocale } from "@/lib/ui-i18n";
 import { currencyPresentation } from "@telegram-system/shared";
 import type { ResolvedEmoji } from "@telegram-system/shared";
-import { IconAvatar } from "@/components/icons/icon-avatar";
 import { useOptionalI18n } from "@/providers/i18n-provider";
 import { CreateActionIcon } from "./create-action-icon";
 export { Modal } from "./modal";
@@ -168,365 +168,8 @@ export const Input = forwardRef<
     </span>
   );
 });
-function OptionIcon({
-  iconNode,
-  iconPresentation,
-  iconUrl,
-  iconEmoji,
-  premium,
-  fallback,
-}: {
-  iconNode?: React.ReactNode;
-  iconPresentation?: ResolvedEmoji;
-  iconUrl?: string;
-  iconEmoji?: string;
-  premium?: boolean;
-  fallback?: string;
-}) {
-  const premiumLabel =
-    useOptionalI18n()?.t("common.premiumEmoji") ?? "Telegram Premium emoji";
-  if (iconNode) return iconNode;
-  if (iconPresentation)
-    return (
-      <IconAvatar
-        icon={iconPresentation}
-        size="xs"
-        bordered={false}
-        decorative
-        className="!rounded-md"
-      />
-    );
-  if (iconUrl)
-    return (
-      <IconAvatar
-        icon={{ type: "image", id: iconUrl, url: iconUrl }}
-        label={fallback}
-        size="xs"
-        bordered={false}
-        decorative
-      />
-    );
-  if (iconEmoji)
-    return (
-      <span
-        className={`relative flex h-5 w-5 shrink-0 items-center justify-center text-[15px] leading-none ${premium ? "rounded-md ring-1 ring-sky-400/70" : ""}`}
-        title={premium ? premiumLabel : undefined}
-      >
-        {iconEmoji}
-        {premium ? (
-          <span
-            className="absolute -right-1 -top-1 text-[8px] leading-none text-sky-300"
-            aria-label={premiumLabel}
-          >
-            ✦
-          </span>
-        ) : null}
-      </span>
-    );
-  if (!fallback) return null;
-  return (
-    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md border border-neutral-700 bg-neutral-800 text-[11px] font-semibold text-neutral-200">
-      {fallback.trim().slice(0, 1).toUpperCase()}
-    </span>
-  );
-}
+export { Select } from "./select";
 
-function floatingMenuStyle(
-  rect: DOMRect,
-  {
-    direction = "auto",
-    maxMenuHeight,
-  }: { direction?: "auto" | "up"; maxMenuHeight: number },
-): React.CSSProperties {
-  const gap = 4;
-  const padding = 8;
-  const visualViewport = window.visualViewport;
-  // `getBoundingClientRect` is relative to the visible viewport, whereas a
-  // fixed portal is positioned in the layout viewport. On iOS those origins
-  // diverge while the keyboard is open, which used to make the menu jump.
-  const viewportLeft = visualViewport?.offsetLeft ?? 0;
-  const viewportTop = visualViewport?.offsetTop ?? 0;
-  const viewportWidth = visualViewport?.width ?? window.innerWidth;
-  const viewportHeight = visualViewport?.height ?? window.innerHeight;
-  const viewportRight = viewportLeft + viewportWidth;
-  const viewportBottom = viewportTop + viewportHeight;
-  const triggerLeft = rect.left + viewportLeft;
-  const triggerTop = rect.top + viewportTop;
-  const triggerBottom = rect.bottom + viewportTop;
-  const width = Math.min(rect.width, viewportWidth - padding * 2);
-  const left = Math.min(
-    Math.max(triggerLeft, viewportLeft + padding),
-    viewportRight - width - padding,
-  );
-  const availableBelow = viewportBottom - triggerBottom - gap - padding;
-  const availableAbove = triggerTop - viewportTop - gap - padding;
-  const openUp =
-    direction === "up" ||
-    (availableBelow < 240 && availableAbove > availableBelow);
-  const maxHeight = Math.max(
-    120,
-    Math.min(maxMenuHeight, openUp ? availableAbove : availableBelow),
-  );
-
-  return {
-    position: "fixed",
-    left,
-    top: openUp
-      ? Math.max(viewportTop + padding, triggerTop - gap - maxHeight)
-      : Math.min(triggerBottom + gap, viewportBottom - gap),
-    width,
-    maxHeight,
-  };
-}
-
-export function Select(
-  props: React.SelectHTMLAttributes<HTMLSelectElement> & {
-    uiLocale?: UiLocale;
-    onSearchPaste?: (value: string) => boolean | Promise<boolean>;
-    searchPlaceholder?: string;
-  },
-) {
-  const i18n = useOptionalI18n(),
-    ui = uiCopy(props.uiLocale ?? i18n?.locale);
-  const financeTypeClass = (value: string) => {
-    if (value === "income") return "text-emerald-300";
-    if (value === "expense" || value === "expenses" || value === "expences")
-      return "text-rose-300";
-    return "";
-  };
-
-  const options = Children.toArray(props.children)
-    .filter(isValidElement)
-    .map((child: any, idx: number) => {
-      const rawChildren = Children.toArray(child.props?.children);
-      const label = rawChildren.length
-        ? rawChildren
-            .map((node: any) =>
-              typeof node === "string" || typeof node === "number"
-                ? String(node)
-                : "",
-            )
-            .join("")
-        : String(child.props?.children ?? "");
-      const hasExplicitValue = child.props?.value !== undefined;
-      const value = String(hasExplicitValue ? child.props?.value : label);
-      return {
-        value,
-        label,
-        disabled: Boolean(child.props?.disabled),
-        hidden: Boolean(child.props?.hidden),
-        className: child.props?.className || financeTypeClass(value),
-        iconUrl: child.props?.["data-icon-url"]
-          ? String(child.props["data-icon-url"])
-          : undefined,
-        iconEmoji: child.props?.["data-icon-emoji"]
-          ? String(child.props["data-icon-emoji"])
-          : undefined,
-        iconFallback: child.props?.["data-icon-fallback"]
-          ? String(child.props["data-icon-fallback"])
-          : undefined,
-        key: `${value}-${idx}`,
-      };
-    });
-
-  const [internalValue, setInternalValue] = useState(
-    String(props.defaultValue ?? options[0]?.value ?? ""),
-  );
-  const isControlled = props.value !== undefined;
-  const currentValue = String(
-    (isControlled ? props.value : internalValue) ?? "",
-  );
-
-  const selected = options.find((o) => o.value === currentValue);
-  const menuOptions = options.filter((o) => !o.hidden);
-  const showSearch = menuOptions.length > 5 || Boolean(props.onSearchPaste);
-  const rootRef = useRef<HTMLDivElement | null>(null);
-  const triggerRef = useRef<HTMLButtonElement | null>(null);
-  const menuRef = useRef<HTMLDivElement | null>(null);
-  const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState("");
-  const [menuStyle, setMenuStyle] = useState<React.CSSProperties | null>(null);
-  const filteredMenuOptions = showSearch
-    ? menuOptions.filter((option) =>
-        option.label
-          .toLocaleLowerCase()
-          .includes(search.trim().toLocaleLowerCase()),
-      )
-    : menuOptions;
-
-  const pickFirstFilteredOption = () => {
-    const normalizedSearch = search.trim();
-    const candidate = normalizedSearch
-      ? filteredMenuOptions.find((option) => !option.disabled)
-      : menuOptions.find((option) => !option.disabled);
-    if (!candidate) return;
-    commit(candidate.value);
-    setOpen(false);
-    setSearch("");
-  };
-
-  useEffect(() => {
-    const onDocPointerDown = (event: PointerEvent) => {
-      if (!rootRef.current) return;
-      const target = event.target as Node;
-      if (
-        !rootRef.current.contains(target) &&
-        !menuRef.current?.contains(target)
-      ) {
-        setOpen(false);
-        setSearch("");
-      }
-    };
-    document.addEventListener("pointerdown", onDocPointerDown);
-    return () => document.removeEventListener("pointerdown", onDocPointerDown);
-  }, []);
-
-  useLayoutEffect(() => {
-    if (!open) return;
-    const update = () => {
-      const trigger = triggerRef.current;
-      if (!trigger) return;
-      setMenuStyle(
-        floatingMenuStyle(trigger.getBoundingClientRect(), {
-          maxMenuHeight: 320,
-        }),
-      );
-    };
-    update();
-    window.addEventListener("resize", update);
-    window.addEventListener("scroll", update, true);
-    return () => {
-      window.removeEventListener("resize", update);
-      window.removeEventListener("scroll", update, true);
-    };
-  }, [open]);
-
-  const commit = (next: string) => {
-    if (!isControlled) setInternalValue(next);
-    if (props.onChange) {
-      props.onChange({ target: { name: props.name, value: next } } as any);
-    }
-  };
-
-  return (
-    <div ref={rootRef} className="relative">
-      <button
-        ref={triggerRef}
-        type="button"
-        disabled={props.disabled}
-        onClick={() => {
-          if (!open && props.onFocus) {
-            props.onFocus({
-              target: { name: props.name, value: currentValue },
-            } as unknown as React.FocusEvent<HTMLSelectElement>);
-          }
-          setOpen((value) => {
-            if (value) setSearch("");
-            return !value;
-          });
-        }}
-        className={`flex min-h-9 w-full items-center justify-between rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-left text-sm text-white outline-none ring-blue-500 focus:ring disabled:opacity-50 ${props.className ?? ""}`}
-      >
-        <span className="flex min-w-0 items-center gap-2">
-          {selected ? (
-            <OptionIcon
-              iconUrl={selected.iconUrl}
-              iconEmoji={selected.iconEmoji}
-              fallback={selected.iconFallback}
-            />
-          ) : null}
-          <span
-            className={`truncate ${selected ? selected.className || "text-white" : "text-neutral-400"}`}
-          >
-            {selected?.label || ui.select}
-          </span>
-        </span>
-        <ChevronDown size={16} className="text-neutral-400" />
-      </button>
-      {open && menuStyle
-        ? createPortal(
-            <div
-              ref={menuRef}
-              style={menuStyle}
-              className="z-[120] flex flex-col overflow-hidden overscroll-contain rounded-lg border border-neutral-700 bg-neutral-900 shadow-2xl"
-            >
-              {showSearch ? (
-                <div className="border-b border-neutral-800 p-2">
-                  <input
-                    autoFocus
-                    value={search}
-                    onChange={(event) => setSearch(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Escape") {
-                        setOpen(false);
-                        setSearch("");
-                        return;
-                      }
-                      if (event.key === "Enter") {
-                        event.preventDefault();
-                        pickFirstFilteredOption();
-                      }
-                    }}
-                    placeholder={props.searchPlaceholder ?? ui.search}
-                    onPaste={(event) => {
-                      const pasted = event.clipboardData.getData("text").trim();
-                      if (!pasted || !props.onSearchPaste) return;
-                      setSearch(pasted);
-                      void Promise.resolve(props.onSearchPaste(pasted)).then(
-                        (resolved) => {
-                          if (!resolved) return;
-                          setOpen(false);
-                          setSearch("");
-                        },
-                      );
-                    }}
-                    className="w-full rounded-md border border-neutral-700 bg-neutral-950 px-2.5 py-2 text-sm text-white outline-none placeholder:text-neutral-500 focus:border-blue-600"
-                  />
-                </div>
-              ) : null}
-              <div className="min-h-0 flex-1 overflow-auto overscroll-contain">
-                {filteredMenuOptions.map((opt) => (
-                  <button
-                    key={opt.key}
-                    type="button"
-                    disabled={opt.disabled}
-                    onClick={() => {
-                      if (opt.disabled) return;
-                      commit(opt.value);
-                      setOpen(false);
-                      setSearch("");
-                    }}
-                    className="flex w-full items-center justify-between px-3 py-2 text-left text-sm text-neutral-200 hover:bg-neutral-800 disabled:opacity-50"
-                  >
-                    <span className="flex min-w-0 items-center gap-2">
-                      <OptionIcon
-                        iconUrl={opt.iconUrl}
-                        iconEmoji={opt.iconEmoji}
-                        fallback={opt.iconFallback}
-                      />
-                      <span className={`truncate ${opt.className}`}>
-                        {opt.label}
-                      </span>
-                    </span>
-                    {opt.value === currentValue ? (
-                      <Check size={14} className="text-blue-300" />
-                    ) : null}
-                  </button>
-                ))}
-                {!filteredMenuOptions.length ? (
-                  <p className="px-3 py-3 text-center text-sm text-neutral-500">
-                    {ui.noOptions}
-                  </p>
-                ) : null}
-              </div>
-            </div>,
-            document.body,
-          )
-        : null}
-      <input type="hidden" name={props.name} value={currentValue} />
-    </div>
-  );
-}
 export function CurrencySelect({
   value,
   onChange,
@@ -571,6 +214,7 @@ type MultiSelectOption = {
   iconPremium?: boolean;
   iconFallback?: string;
   badgeClassName?: string;
+  badgeStyle?: React.CSSProperties;
 };
 
 export function MultiSelect({
@@ -619,28 +263,14 @@ export function MultiSelect({
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [menuStyle, setMenuStyle] = useState<React.CSSProperties | null>(null);
-
-  useEffect(() => {
-    const onDocPointerDown = (event: PointerEvent) => {
-      if (!rootRef.current) return;
-      const target = event.target as Node;
-      if (
-        !rootRef.current.contains(target) &&
-        !menuRef.current?.contains(target)
-      ) {
-        setOpen(false);
-        setSearch("");
-      }
-    };
-    document.addEventListener("pointerdown", onDocPointerDown);
-    return () => document.removeEventListener("pointerdown", onDocPointerDown);
-  }, []);
-
+  const [portalHost, setPortalHost] = useState<HTMLElement | null>(null);
+  useDismissiblePopover({ open, onDismiss: () => { setOpen(false); setSearch(""); }, triggerRef: rootRef, contentRef: menuRef });
   useLayoutEffect(() => {
     if (!open) return;
     const update = () => {
       const trigger = triggerRef.current;
       if (!trigger) return;
+      setPortalHost(overlayPortalHost(trigger));
       setMenuStyle(
         floatingMenuStyle(trigger.getBoundingClientRect(), {
           maxMenuHeight: 360,
@@ -659,7 +289,6 @@ export function MultiSelect({
       window.visualViewport?.removeEventListener("scroll", update);
     };
   }, [open]);
-
   const selectedSet = useMemo(() => new Set(value), [value]);
   const selectedOptions = options.filter((option) =>
     selectedSet.has(option.value),
@@ -679,7 +308,6 @@ export function MultiSelect({
   );
   const resolvedCreateOptionLabel =
     createOptionLabel?.(normalizedSearch) ?? `Add ${normalizedSearch}`;
-
   const toggleValue = (nextValue: string) => {
     onChange(
       selectedSet.has(nextValue)
@@ -743,6 +371,7 @@ export function MultiSelect({
                 <span
                   key={option.value}
                   className={`inline-flex max-w-full items-center gap-1 rounded-full border px-2 py-0.5 text-xs ${option.badgeClassName ?? "border-neutral-700 bg-neutral-800 text-neutral-100"}`}
+                  style={option.badgeStyle}
                 >
                   <OptionIcon
                     iconNode={option.icon}
@@ -812,6 +441,7 @@ export function MultiSelect({
                           />
                           <span
                             className={`truncate ${option.badgeClassName ?? ""}`}
+                            style={option.badgeStyle}
                           >
                             {option.label}
                           </span>
@@ -856,7 +486,7 @@ export function MultiSelect({
                 ) : null}
               </div>
             </div>,
-            document.body,
+            portalHost ?? document.body,
           )
         : null}
     </div>
@@ -960,6 +590,7 @@ export function CustomSelect({
   const dropdownRef = useRef<HTMLDivElement | null>(null);
   const [dropdownStyle, setDropdownStyle] =
     useState<React.CSSProperties | null>(null);
+  const [portalHost, setPortalHost] = useState<HTMLElement | null>(null);
   const selected = options.find((o) => o.value === value);
   const showSearch =
     searchable &&
@@ -1002,21 +633,7 @@ export function CustomSelect({
     resetSearch();
   };
 
-  useEffect(() => {
-    const onDocPointerDown = (event: PointerEvent) => {
-      if (!rootRef.current) return;
-      const target = event.target as Node;
-      if (
-        !rootRef.current.contains(target) &&
-        !dropdownRef.current?.contains(target)
-      ) {
-        setOpen(false);
-        resetSearch();
-      }
-    };
-    document.addEventListener("pointerdown", onDocPointerDown);
-    return () => document.removeEventListener("pointerdown", onDocPointerDown);
-  }, [resetSearch]);
+  useDismissiblePopover({ open, onDismiss: () => { setOpen(false); resetSearch(); }, triggerRef: rootRef, contentRef: dropdownRef });
 
   useLayoutEffect(() => {
     if (!open) return;
@@ -1024,6 +641,7 @@ export function CustomSelect({
     const updateDropdownStyle = () => {
       const trigger = triggerRef.current;
       if (!trigger) return;
+      setPortalHost(overlayPortalHost(trigger));
       setDropdownStyle(
         floatingMenuStyle(trigger.getBoundingClientRect(), {
           direction: dropdownDirection === "up" ? "up" : "auto",
@@ -1210,7 +828,7 @@ export function CustomSelect({
                 ) : null}
               </div>
             </div>,
-            document.body,
+            portalHost ?? document.body,
           )
         : null}
     </div>

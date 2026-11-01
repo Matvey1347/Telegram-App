@@ -9,7 +9,9 @@ describe('ConfiguredBotAnalyticsService', () => {
     };
     const prisma = {
       telegramSystemBotConnection: { count: jest.fn().mockResolvedValue(3) },
-      telegramConfiguredBotAvatar: { findMany: jest.fn().mockResolvedValue([]) },
+      telegramConfiguredBotAvatar: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
     };
     const config = {
       get: jest.fn((name: string) => {
@@ -99,39 +101,66 @@ describe('ConfiguredBotAnalyticsService', () => {
 
   it('uses the active platform Finance runtime metrics while its data is being migrated', async () => {
     const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue(
-      new Response(JSON.stringify({
-        status: 'AVAILABLE',
-        bots: [{
-          id: 'finance-local', environment: 'LOCAL', username: 'Groshly_dev_bot',
-          name: 'Groshly', registeredUsers: 0, profiles: 0, avatarUpdatedAt: null,
-        }],
-      }), { status: 200 }),
+      new Response(
+        JSON.stringify({
+          status: 'AVAILABLE',
+          bots: [
+            {
+              id: 'finance-local',
+              environment: 'LOCAL',
+              username: 'Groshly_dev_bot',
+              name: 'Groshly',
+              registeredUsers: 0,
+              profiles: 0,
+              avatarUpdatedAt: null,
+            },
+          ],
+        }),
+        { status: 200 },
+      ),
     );
     const service = new ConfiguredBotAnalyticsService(
       {
-        get: jest.fn((name: string) => ({
-          FINANCE_BOT_DASHBOARD_WORKSPACE_ID: 'business-workspace',
-          FINANCE_ADMIN_ANALYTICS_URL: 'http://finance.test',
-          FINANCE_ADMIN_ANALYTICS_TOKEN: 'analytics-token',
-        })[name]),
+        get: jest.fn(
+          (name: string) =>
+            ({
+              FINANCE_BOT_DASHBOARD_WORKSPACE_ID: 'business-workspace',
+              FINANCE_ADMIN_ANALYTICS_URL: 'http://finance.test',
+              FINANCE_ADMIN_ANALYTICS_TOKEN: 'analytics-token',
+            })[name],
+        ),
       } as never,
       {
         telegramBotIntegration: {
-          findMany: jest.fn().mockResolvedValue([{
-            id: 'legacy-finance-bot',
-            runtimeInstances: [{ environment: 'LOCAL', username: 'groshly_DEV_bot' }],
-            _count: { botUsers: 1, financeProfiles: 1 },
-          }]),
+          findMany: jest.fn().mockResolvedValue([
+            {
+              id: 'legacy-finance-bot',
+              runtimeInstances: [
+                { environment: 'LOCAL', username: 'groshly_DEV_bot' },
+              ],
+              _count: { botUsers: 1, financeProfiles: 1 },
+            },
+          ]),
         },
       } as never,
-      { resolveWorkspaceIdForUser: jest.fn().mockResolvedValue('business-workspace') } as never,
+      {
+        resolveWorkspaceIdForUser: jest
+          .fn()
+          .mockResolvedValue('business-workspace'),
+      } as never,
       {} as never,
     );
 
     await expect(service.overview('member')).resolves.toMatchObject({
       financeBot: {
         status: 'AVAILABLE',
-        bots: [{ managementBotId: 'legacy-finance-bot', registeredUsers: 1, profiles: 1 }],
+        bots: [
+          {
+            managementBotId: 'legacy-finance-bot',
+            registeredUsers: 1,
+            profiles: 1,
+          },
+        ],
       },
     });
     fetchSpy.mockRestore();
@@ -163,12 +192,10 @@ describe('ConfiguredBotAnalyticsService', () => {
       {
         getMe: jest.fn().mockResolvedValue({ id: 123 }),
         getUserProfilePhotos: jest.fn().mockResolvedValue({ photos: [] }),
-        downloadUsernameProfilePhoto: jest
-          .fn()
-          .mockResolvedValue({
-            bytes: Buffer.from('avatar'),
-            contentType: 'image/jpeg',
-          }),
+        downloadUsernameProfilePhoto: jest.fn().mockResolvedValue({
+          bytes: Buffer.from('avatar'),
+          contentType: 'image/jpeg',
+        }),
       } as never,
     );
 
@@ -185,11 +212,14 @@ describe('ConfiguredBotAnalyticsService', () => {
     };
     const service = new ConfiguredBotAnalyticsService(
       {
-        get: jest.fn((name: string) => ({
-          TELEGRAM_SYSTEM_BOT_DASHBOARD_WORKSPACE_ID: 'business-workspace',
-          TELEGRAM_SYSTEM_BOT_LOCAL_USERNAME: 'nexeloq_local_bot',
-          TELEGRAM_SYSTEM_BOT_LOCAL_TOKEN: 'local-token',
-        })[name]),
+        get: jest.fn(
+          (name: string) =>
+            ({
+              TELEGRAM_SYSTEM_BOT_DASHBOARD_WORKSPACE_ID: 'business-workspace',
+              TELEGRAM_SYSTEM_BOT_LOCAL_USERNAME: 'nexeloq_local_bot',
+              TELEGRAM_SYSTEM_BOT_LOCAL_TOKEN: 'local-token',
+            })[name],
+        ),
       } as never,
       {
         telegramConfiguredBotAvatar: {
@@ -200,7 +230,11 @@ describe('ConfiguredBotAnalyticsService', () => {
           }),
         },
       } as never,
-      { resolveWorkspaceIdForUser: jest.fn().mockResolvedValue('business-workspace') } as never,
+      {
+        resolveWorkspaceIdForUser: jest
+          .fn()
+          .mockResolvedValue('business-workspace'),
+      } as never,
       botApi as never,
     );
 
@@ -222,14 +256,21 @@ describe('ConfiguredBotAnalyticsService', () => {
     };
     const service = new ConfiguredBotAnalyticsService(
       {
-        get: jest.fn((name: string) => ({
-          TELEGRAM_SYSTEM_BOT_DASHBOARD_WORKSPACE_ID: 'business-workspace',
-          TELEGRAM_SYSTEM_BOT_LOCAL_USERNAME: 'nexeloq_local_bot',
-          TELEGRAM_SYSTEM_BOT_LOCAL_TOKEN: 'local-token',
-        })[name]),
+        get: jest.fn(
+          (name: string) =>
+            ({
+              TELEGRAM_SYSTEM_BOT_DASHBOARD_WORKSPACE_ID: 'business-workspace',
+              TELEGRAM_SYSTEM_BOT_LOCAL_USERNAME: 'nexeloq_local_bot',
+              TELEGRAM_SYSTEM_BOT_LOCAL_TOKEN: 'local-token',
+            })[name],
+        ),
       } as never,
       { telegramConfiguredBotAvatar: avatars } as never,
-      { resolveWorkspaceIdForUser: jest.fn().mockResolvedValue('business-workspace') } as never,
+      {
+        resolveWorkspaceIdForUser: jest
+          .fn()
+          .mockResolvedValue('business-workspace'),
+      } as never,
       {
         getMe: jest.fn().mockResolvedValue({ id: 123 }),
         getUserProfilePhotos: jest.fn().mockResolvedValue({ photos: [] }),
@@ -248,11 +289,14 @@ describe('ConfiguredBotAnalyticsService', () => {
     const missingTable = { code: 'P2021' };
     const service = new ConfiguredBotAnalyticsService(
       {
-        get: jest.fn((name: string) => ({
-          TELEGRAM_SYSTEM_BOT_DASHBOARD_WORKSPACE_ID: 'business-workspace',
-          TELEGRAM_SYSTEM_BOT_LOCAL_USERNAME: 'nexeloq_local_bot',
-          TELEGRAM_SYSTEM_BOT_LOCAL_TOKEN: 'local-token',
-        })[name]),
+        get: jest.fn(
+          (name: string) =>
+            ({
+              TELEGRAM_SYSTEM_BOT_DASHBOARD_WORKSPACE_ID: 'business-workspace',
+              TELEGRAM_SYSTEM_BOT_LOCAL_USERNAME: 'nexeloq_local_bot',
+              TELEGRAM_SYSTEM_BOT_LOCAL_TOKEN: 'local-token',
+            })[name],
+        ),
       } as never,
       {
         telegramConfiguredBotAvatar: {
@@ -260,7 +304,11 @@ describe('ConfiguredBotAnalyticsService', () => {
           upsert: jest.fn().mockRejectedValue(missingTable),
         },
       } as never,
-      { resolveWorkspaceIdForUser: jest.fn().mockResolvedValue('business-workspace') } as never,
+      {
+        resolveWorkspaceIdForUser: jest
+          .fn()
+          .mockResolvedValue('business-workspace'),
+      } as never,
       {
         getMe: jest.fn().mockResolvedValue({ id: 123 }),
         getUserProfilePhotos: jest.fn().mockResolvedValue({ photos: [] }),

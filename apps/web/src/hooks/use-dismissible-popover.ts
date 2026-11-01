@@ -32,14 +32,21 @@ export function useDismissiblePopover({
       onDismissRef.current();
     };
     const dismissOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onDismissRef.current();
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      onDismissRef.current();
+      const root = triggerRef.current;
+      const selector = 'button:not([disabled]),input:not([disabled]):not([type="hidden"]),[tabindex]:not([tabindex="-1"])';
+      const trigger = root?.matches(selector) ? root : root?.querySelector<HTMLElement>(selector);
+      trigger?.focus();
     };
 
     document.addEventListener("pointerdown", dismissOnOutsidePress);
-    document.addEventListener("keydown", dismissOnEscape);
+    document.addEventListener("keydown", dismissOnEscape, true);
     return () => {
       document.removeEventListener("pointerdown", dismissOnOutsidePress);
-      document.removeEventListener("keydown", dismissOnEscape);
+      document.removeEventListener("keydown", dismissOnEscape, true);
     };
   }, [contentRef, open, triggerRef]);
 }

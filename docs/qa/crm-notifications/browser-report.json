@@ -1,0 +1,110 @@
+{
+  "date": "2026-10-31",
+  "source": "Production React Settings UI on existing user-owned localhost:3000 with test-only intercepted API",
+  "checks": [
+    {
+      "scenario": "private initial defaults",
+      "incomingOff": true,
+      "previewOff": true,
+      "aiLeadsDisabled": true,
+      "testDisabledWithoutGlobalPush": true
+    },
+    {
+      "scenario": "explicit settings mutations",
+      "incomingEnabled": true,
+      "previewEnabled": true,
+      "patchBodies": [
+        {
+          "crmIncomingMessagesEnabled": true
+        },
+        {
+          "crmMessagePreviewEnabled": true
+        }
+      ]
+    },
+    {
+      "scenario": "responsive Settings",
+      "width": 1440,
+      "horizontalOverflow": false,
+      "permissionRequests": 0,
+      "subscribeRequests": 0
+    },
+    {
+      "scenario": "responsive Settings",
+      "width": 390,
+      "horizontalOverflow": false,
+      "permissionRequests": 0,
+      "subscribeRequests": 0
+    }
+  ],
+  "pageErrors": [],
+  "requests": [
+    {
+      "method": "GET",
+      "path": "/auth/me"
+    },
+    {
+      "method": "GET",
+      "path": "/workspaces"
+    },
+    {
+      "method": "GET",
+      "path": "/account/me"
+    },
+    {
+      "method": "POST",
+      "path": "/telegram/system-bot/connection/workspace"
+    },
+    {
+      "method": "GET",
+      "path": "/operations/notifications/preferences"
+    },
+    {
+      "method": "GET",
+      "path": "/operations/notifications/push/config"
+    },
+    {
+      "method": "GET",
+      "path": "/operations/notifications/events/stream"
+    },
+    {
+      "method": "GET",
+      "path": "/operations/notifications/unread-count"
+    },
+    {
+      "method": "POST",
+      "path": "/telegram/system-bot/connection/workspace"
+    },
+    {
+      "method": "GET",
+      "path": "/operations/notifications/events/stream"
+    },
+    {
+      "method": "PATCH",
+      "path": "/operations/notifications/preferences"
+    },
+    {
+      "method": "GET",
+      "path": "/operations/notifications/unread-count"
+    },
+    {
+      "method": "PATCH",
+      "path": "/operations/notifications/preferences"
+    },
+    {
+      "method": "GET",
+      "path": "/operations/notifications/unread-count"
+    }
+  ],
+  "unknownMockedEndpoints": [],
+  "realApiRequests": 0,
+  "realPushRequests": 0,
+  "realPermissionPrompts": 0,
+  "inboxRequests": 0,
+  "screenshots": [
+    "settings-desktop-1440.png",
+    "settings-mobile-390.png"
+  ],
+  "browserClosed": true,
+  "existingServerLeftRunning": true
+}

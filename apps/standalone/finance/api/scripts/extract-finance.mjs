@@ -10,6 +10,11 @@ const destinationUrl = parse(readFileSync(resolve(root, 'products/finance/.env.l
 if (!sourceUrl || !destinationUrl || sourceUrl === destinationUrl) throw new Error('Source and dedicated Finance database URLs must be distinct.');
 
 const execute = process.argv.includes('--execute');
+if (execute) {
+  throw new Error(
+    'Finance extraction execution is blocked: the destination schema does not yet cover the source Finance data, and backup, staging restore, reconciliation, and rollback gates are not implemented. Run migration:plan for a read-only inventory.',
+  );
+}
 const support = new Set(['TelegramBotIntegration', 'TelegramBotUser', 'BotBillingProviderConfig', 'BotBillingEvent', 'BotSubscriptionPlan', 'BotSubscription', 'BotCoupon', 'BotCouponRedemption', 'BotProviderCustomer', 'AiUsageEvent']);
 const quote = (name) => `"${name.replaceAll('"', '""')}"`;
 

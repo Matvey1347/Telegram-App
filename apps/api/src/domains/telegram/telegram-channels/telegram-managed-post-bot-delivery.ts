@@ -55,7 +55,9 @@ export async function deliverTelegramManagedPostViaBot(
       continue;
     }
     if (messageIds.length !== completedCount) {
-      throw new Error('Telegram delivery journal is incomplete or inconsistent');
+      throw new Error(
+        'Telegram delivery journal is incomplete or inconsistent',
+      );
     }
     const createdIds = operation.messageIds(
       await input.call(operation.method, operation.body),

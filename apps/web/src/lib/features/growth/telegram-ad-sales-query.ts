@@ -1,7 +1,8 @@
 "use client";
 
-import type { QueryClient, QueryKey } from "@tanstack/react-query";
+import type { InfiniteData, QueryClient, QueryKey } from "@tanstack/react-query";
 import type {
+  CrmPurchasesPage,
   TelegramAdSale,
   TelegramAdSaleListItem,
 } from "@telegram-system/shared";
@@ -130,11 +131,24 @@ export type TelegramAdSaleCacheChange =
   | { type: "update"; sale: TelegramAdSale }
   | { type: "delete"; saleId: string };
 
+/** Financial/placement changes invalidate only linked CRM purchase projections. */
+function invalidateCrmPurchasesForSale(client: QueryClient, saleId: string, nextContactId?: string | null) {
+  const contactIds = new Set<string>();
+  const previous = client.getQueryData<TelegramAdSale>(telegramAdSalesKeys.detail(saleId));
+  if (previous?.advertiserId) contactIds.add(previous.advertiserId);
+  if (nextContactId) contactIds.add(nextContactId);
+  for (const [key, data] of client.getQueriesData<InfiniteData<CrmPurchasesPage>>({ queryKey: telegramCrmKeys.purchasesRoot() })) {
+    if (typeof key[2] === "string" && data?.pages.some(page => page.items.some(sale => sale.id === saleId))) contactIds.add(key[2]);
+  }
+  return Promise.all([...contactIds].map(id => client.invalidateQueries({ queryKey: telegramCrmKeys.purchases(id), exact: true })));
+}
+
 /** Reconciles only pages whose membership is knowable from the cached row. */
 export function reconcileTelegramAdSaleCache(
   queryClient: QueryClient,
   change: TelegramAdSaleCacheChange,
 ) {
+  void invalidateCrmPurchasesForSale(queryClient, change.type === "delete" ? change.saleId : change.sale.id, change.type === "delete" ? undefined : change.sale.advertiserId);
   if (change.type === "delete") {
     queryClient.removeQueries({
       queryKey: telegramAdSalesKeys.detail(change.saleId),
@@ -216,6 +230,7 @@ export async function invalidateTelegramAdSaleReads(
   options: { saleId?: string; lists?: boolean },
 ) {
   await Promise.all([
+    ...(options.saleId ? [invalidateCrmPurchasesForSale(queryClient, options.saleId)] : []),
     ...(options.saleId
       ? [
           queryClient.invalidateQueries({

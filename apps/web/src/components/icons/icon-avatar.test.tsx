@@ -64,6 +64,15 @@ describe("IconAvatar", () => {
     );
   });
 
+  it("shows a fallback for a successfully loaded one-pixel Telegram placeholder", () => {
+    render(<IconAvatar label="Manager" icon={{ type: "image", id: "peer", url: "https://t.me/i/userpic/320/manager.jpg" }} />);
+    const image = screen.getByRole("img", { name: "Manager" });
+    Object.defineProperties(image, { naturalWidth: { value: 1 }, naturalHeight: { value: 1 } });
+    fireEvent.load(image);
+    expect(screen.queryByRole("img", { name: "Manager" })).toBeNull();
+    expect(screen.getByText("M")).toBeInTheDocument();
+  });
+
   it("renders the standard fallback when an avatar URL cannot be loaded", () => {
     render(
       <IconAvatar

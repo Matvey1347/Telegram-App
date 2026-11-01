@@ -8,10 +8,8 @@ import { OperationsNotificationStoreService } from '../../operations/notificatio
 import { OperationsNotificationPublisherService } from '../../operations/notifications/operations-notification-publisher.service';
 import type { OperationsNotificationInsert } from '../../operations/notifications/operations-notification-store.service';
 import { TelegramCrmNotificationRecipientService } from './telegram-crm-notification-recipient.service';
-import {
-  crmContactIdFromNotificationVisibilityKey,
-  crmContactNotificationVisibilityKey,
-} from './telegram-crm-notification-visibility';
+import { resolveCrmFollowUpNotifications } from './telegram-crm-follow-up-notification-resolver';
+import { crmContactNotificationVisibilityKey } from './telegram-crm-notification-visibility';
 import {
   OperationsNotificationDueFact,
   OperationsNotificationDueResolutionService,
@@ -79,6 +77,28 @@ export class TelegramCrmInternalNotificationProjector
       typeof (task.metadata as Record<string, unknown>).emoji === 'string'
         ? (task.metadata as Record<string, string>).emoji.slice(0, 16)
         : '';
+    const metadata = task.metadata;
+    const requestedConversation =
+      metadata &&
+      typeof metadata === 'object' &&
+      !Array.isArray(metadata) &&
+      typeof metadata.conversationId === 'string'
+        ? metadata.conversationId
+        : null;
+    const conversation = requestedConversation
+      ? await tx.telegramCrmConversation.findFirst({
+          where: {
+            id: requestedConversation,
+            workspaceId: task.workspaceId,
+            contactId: task.advertiserId,
+            state: 'ACTIVE',
+          },
+          select: { id: true },
+        })
+      : null;
+    const targetUrl = conversation
+      ? `/ad-sales/inbox?${new URLSearchParams({ conversationId: conversation.id, workspaceId: task.workspaceId }).toString()}`
+      : `/ad-sales/clients/${encodeURIComponent(contact.id)}?workspaceId=${encodeURIComponent(task.workspaceId)}`;
     return this.notifications.insertMany(tx, [
       {
         workspaceId: task.workspaceId,
@@ -96,8 +116,9 @@ export class TelegramCrmInternalNotificationProjector
           taskId: task.id,
           contactId: contact.id,
           reminderEmoji: reminderEmoji || null,
+          conversationId: requestedConversation,
         },
-        targetUrl: `/ad-sales/contacts/${encodeURIComponent(contact.id)}?workspaceId=${encodeURIComponent(task.workspaceId)}`,
+        targetUrl,
         deliverAt,
         publishedAt: null,
         requiredPermissionKey: 'adSales.crm.view',
@@ -107,6 +128,25 @@ export class TelegramCrmInternalNotificationProjector
         visibilityResourceKey: crmContactNotificationVisibilityKey(contact.id),
       },
     ]);
+  }
+
+  async dismissPublishedTask(
+    tx: Prisma.TransactionClient,
+    task: { id: string; workspaceId: string },
+  ) {
+    const rows = await tx.$queryRaw<
+      Array<{ recipientMemberId: string }>
+    >(Prisma.sql`
+      WITH dismissed AS (
+        DELETE FROM "OperationsNotification"
+        WHERE "workspaceId" = ${task.workspaceId}
+          AND "type" = 'CRM_FOLLOW_UP_DUE'::"OperationsNotificationType"
+          AND starts_with("sourceKey", ${`task:${task.id}:due:`})
+          AND "publishedAt" IS NOT NULL
+        RETURNING "recipientMemberId"
+      ) SELECT DISTINCT "recipientMemberId" FROM dismissed
+    `);
+    return rows.map((row) => row.recipientMemberId);
   }
 
   dueWorkChanged() {
@@ -136,55 +176,11 @@ export class TelegramCrmInternalNotificationProjector
     this.publisher.invalidate(workspaceId, recipientMemberIds);
   }
 
-  private async resolveDueRecipients(
+  private resolveDueRecipients(
     tx: Prisma.TransactionClient,
     facts: readonly OperationsNotificationDueFact[],
   ) {
-    const due = facts.flatMap((fact) => {
-      if (fact.type !== OperationsNotificationType.CRM_FOLLOW_UP_DUE) {
-        return [];
-      }
-      const contactId = crmContactIdFromNotificationVisibilityKey(
-        fact.visibilityResourceKey,
-      );
-      return contactId ? [{ fact, contactId }] : [];
-    });
-    if (!due.length) return false;
-    const byWorkspace = new Map<string, typeof due>();
-    for (const item of due) {
-      const rows = byWorkspace.get(item.fact.workspaceId) ?? [];
-      byWorkspace.set(item.fact.workspaceId, [...rows, item]);
-    }
-    for (const [workspaceId, rows] of byWorkspace) {
-      const snapshot = await this.recipients.load(
-        tx,
-        workspaceId,
-        rows.map((item) => item.contactId),
-      );
-      for (const { fact, contactId } of rows) {
-        const contact = snapshot.contact(contactId);
-        const recipient = snapshot.recipient(contact);
-        if (!contact || !recipient) {
-          await tx.operationsNotification.deleteMany({
-            where: { id: fact.id, workspaceId, publishedAt: { not: null } },
-          });
-          continue;
-        }
-        if (
-          fact.recipientMemberId !== recipient.id ||
-          fact.visibilityMemberId !== contact.ownerMemberId
-        ) {
-          await tx.operationsNotification.updateMany({
-            where: { id: fact.id, workspaceId, publishedAt: { not: null } },
-            data: {
-              recipientMemberId: recipient.id,
-              visibilityMemberId: contact.ownerMemberId,
-            },
-          });
-        }
-      }
-    }
-    return true;
+    return resolveCrmFollowUpNotifications(tx, facts, this.recipients);
   }
 
   async placementMissed(

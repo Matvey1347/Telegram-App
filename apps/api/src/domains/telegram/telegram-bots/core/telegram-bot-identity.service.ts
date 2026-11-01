@@ -14,9 +14,7 @@ export class TelegramBotIdentityService {
       where: {
         workspaceId,
         botId: telegramBotId,
-        ...(excludedRuntimeId
-          ? { id: { not: excludedRuntimeId } }
-          : {}),
+        ...(excludedRuntimeId ? { id: { not: excludedRuntimeId } } : {}),
       },
       select: { id: true },
     });
@@ -34,7 +32,11 @@ export class TelegramBotIdentityService {
   recordsForBot(input: {
     id: string;
     workspaceId: string;
-    runtimeInstances?: Array<{ id: string; botId: string | null; webhookStatus: string }>;
+    runtimeInstances?: Array<{
+      id: string;
+      botId: string | null;
+      webhookStatus: string;
+    }>;
   }) {
     return Promise.resolve(input.runtimeInstances ?? []);
   }

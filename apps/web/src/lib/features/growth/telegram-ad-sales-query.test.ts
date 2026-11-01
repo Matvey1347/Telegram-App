@@ -3,6 +3,7 @@ import { QueryClient } from "@tanstack/react-query";
 import type { TelegramAdSale } from "@telegram-system/shared";
 import {
   invalidateTelegramAdSalesDerivedQueries,
+  invalidateTelegramAdSaleReads,
   reconcileTelegramAdSaleCache,
   telegramAdSalesKeys,
 } from "./telegram-ad-sales-query";
@@ -184,5 +185,38 @@ describe("telegram-ad-sales derived invalidation", () => {
       ["telegram-channel-analytics", "channel-1"],
       ["telegram-crm", "contacts", "list"],
     ]);
+  });
+});
+
+
+describe("CRM purchase projections after existing Deals mutations", () => {
+  it("invalidates only the changed sale's old/new clients and retains unrelated catalog/history caches", () => {
+    const client = new QueryClient();
+    const key = (id: string) => ["telegram-crm", "purchases", id] as const;
+    for (const id of ["previous-client", "next-client", "unrelated-client"]) client.setQueryData(key(id), { pages: [{ items: [], summary: null }], pageParams: [null] });
+    client.setQueryData(["telegram-crm", "package-sales-context"], { products: [] });
+    client.setQueryData(telegramAdSalesKeys.detail("edited-sale"), sale("edited-sale", "CONFIRMED", "previous-client"));
+    reconcileTelegramAdSaleCache(client, { type: "update", sale: sale("edited-sale", "CONFIRMED", "next-client") });
+    expect(client.getQueryState(key("previous-client"))?.isInvalidated).toBe(true);
+    expect(client.getQueryState(key("next-client"))?.isInvalidated).toBe(true);
+    expect(client.getQueryState(key("unrelated-client"))?.isInvalidated).toBe(false);
+    expect(client.getQueryState(["telegram-crm", "package-sales-context"])?.isInvalidated).toBe(false);
+  });
+  it("marks cached CRM purchase totals stale after a payment/placement refresh even if sale detail was evicted", async () => {
+    const client = new QueryClient();
+    const key = ["telegram-crm", "purchases", "linked-client"] as const;
+    client.setQueryData(key, { pages: [{ items: [{ id: "paid-sale" }], summary: { receivedByCurrency: [{ currency: "USD", amount: "10" }] } }], pageParams: [null] });
+    await invalidateTelegramAdSaleReads(client, { saleId: "paid-sale" });
+    expect(client.getQueryState(key)?.isInvalidated).toBe(true);
+    expect(client.getQueryData(key)).toMatchObject({ pages: [{ summary: { receivedByCurrency: [{ currency: "USD", amount: "10" }] } }] });
+  });
+  it("invalidates the linked purchase summary before deleting a deal cache", () => {
+    const client = new QueryClient();
+    const key = ["telegram-crm", "purchases", "linked-client"] as const;
+    client.setQueryData(key, { pages: [{ items: [] }], pageParams: [null] });
+    client.setQueryData(telegramAdSalesKeys.detail("deleted-sale"), sale("deleted-sale", "DRAFT", "linked-client"));
+    reconcileTelegramAdSaleCache(client, { type: "delete", saleId: "deleted-sale" });
+    expect(client.getQueryState(key)?.isInvalidated).toBe(true);
+    expect(client.getQueryData(telegramAdSalesKeys.detail("deleted-sale"))).toBeUndefined();
   });
 });

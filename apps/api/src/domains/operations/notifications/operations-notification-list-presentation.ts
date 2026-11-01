@@ -61,7 +61,7 @@ export function groupCrmNotificationRows(
       : undefined;
     const isCrmMessage = row.type === 'CRM_MESSAGE_RECEIVED' && conversationId;
     const groupKey = isCrmMessage
-      ? `crm:${string(metadata.contactId) || conversation?.contactId || string(metadata.peerId) || conversation?.peer.id || conversationId}`
+      ? `crm:${row.workspaceId}:${row.recipientMemberId}:${conversationId}`
       : `notification:${row.id}`;
     const current = groups.get(groupKey);
     const storedCount =

@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import {
   Prisma,
+  type TelegramChannel,
   TelegramChannelDataType,
   TelegramSourceType,
   TelegramUserAccountStatus,
@@ -210,7 +211,7 @@ export class TelegramUserAccountsService {
       },
       orderBy: { createdAt: 'desc' },
     });
-    const refreshed = await this.capabilityRefresh.refreshMany(rows as never);
+    const refreshed = await this.capabilityRefresh.refreshMany(rows);
     return rows.map((row) =>
       safeTelegramUserAccount(
         (refreshed.get(row.id) as Record<string, unknown>) || row,
@@ -481,7 +482,12 @@ export class TelegramUserAccountsService {
       session: result.session,
       profile: result.me,
     });
-    const channelSync = await syncDialogsThenWakeTelegramRuntime(workspaceId, account.id, () => this.syncDialogsAfterConnect(userId, account.id), this.runtimeNotifier);
+    const channelSync = await syncDialogsThenWakeTelegramRuntime(
+      workspaceId,
+      account.id,
+      () => this.syncDialogsAfterConnect(userId, account.id),
+      this.runtimeNotifier,
+    );
     const safeRow = safeTelegramUserAccount(
       row as unknown as Record<string, unknown>,
     );
@@ -535,7 +541,12 @@ export class TelegramUserAccountsService {
       session: result.session,
       profile: result.me,
     });
-    const channelSync = await syncDialogsThenWakeTelegramRuntime(workspaceId, account.id, () => this.syncDialogsAfterConnect(userId, account.id), this.runtimeNotifier);
+    const channelSync = await syncDialogsThenWakeTelegramRuntime(
+      workspaceId,
+      account.id,
+      () => this.syncDialogsAfterConnect(userId, account.id),
+      this.runtimeNotifier,
+    );
     const safeRow = safeTelegramUserAccount(
       row as unknown as Record<string, unknown>,
     );
@@ -548,7 +559,14 @@ export class TelegramUserAccountsService {
     onProgress: (progress: TelegramQrLoginProgress) => void | Promise<void>,
     signal: AbortSignal,
   ) {
-    return this.qrLoginService.login(userId, id, onProgress, signal, async () => syncDialogsThenWakeTelegramRuntime(await this.getWorkspaceId(userId), id, () => this.syncDialogsAfterConnect(userId, id), this.runtimeNotifier));
+    return this.qrLoginService.login(userId, id, onProgress, signal, async () =>
+      syncDialogsThenWakeTelegramRuntime(
+        await this.getWorkspaceId(userId),
+        id,
+        () => this.syncDialogsAfterConnect(userId, id),
+        this.runtimeNotifier,
+      ),
+    );
   }
 
   async check(userId: string, id: string) {
@@ -581,7 +599,7 @@ export class TelegramUserAccountsService {
     }
 
     const row =
-      (await this.capabilityRefresh.refreshOne(account as never, {
+      (await this.capabilityRefresh.refreshOne(account, {
         force: true,
       })) ||
       (await this.prisma.telegramUserAccountIntegration.findFirstOrThrow({
@@ -784,7 +802,6 @@ export class TelegramUserAccountsService {
     ) {
       return { success: false, message: 'Connect account first', channels: [] };
     }
-
     const apiHash = this.encryptionService.decrypt({
       encrypted: account.apiHashEncrypted,
       iv: account.apiHashIv,
@@ -820,28 +837,21 @@ export class TelegramUserAccountsService {
       channelCount: selectedChannels.length,
     }).preparing();
     await this.telegramChannelImportPolicyService.ensureStorageAvailable();
-
-    const existingChannels = (await this.prisma.$queryRaw(Prisma.sql`
-      SELECT
-        "id",
-        "username",
-        "telegramChatId",
-        "acquisitionType",
-        "postsSyncFrom",
-        "inviteLinksSyncFrom",
-        "purchaseTransactionId"
-      FROM "TelegramChannel"
-      WHERE "workspaceId" = ${workspaceId}
-        AND "isActive" = true
-    `)) as Array<{
-      id: string;
-      username: string | null;
-      telegramChatId: string | null;
-      acquisitionType: 'CREATED' | 'PURCHASED' | null;
-      postsSyncFrom: Date | null;
-      inviteLinksSyncFrom: Date | null;
-      purchaseTransactionId: string | null;
-    }>;
+    const existingChannels = await this.prisma.$queryRaw<
+      Pick<
+        TelegramChannel,
+        | 'id'
+        | 'username'
+        | 'telegramChatId'
+        | 'acquisitionType'
+        | 'postsSyncFrom'
+        | 'inviteLinksSyncFrom'
+        | 'purchaseTransactionId'
+      >[]
+    >(Prisma.sql`
+      SELECT "id", "username", "telegramChatId", "acquisitionType", "postsSyncFrom", "inviteLinksSyncFrom", "purchaseTransactionId"
+      FROM "TelegramChannel" WHERE "workspaceId" = ${workspaceId} AND "isActive" = true
+    `);
     const findExistingId = (channel: (typeof dialogs)[number]) =>
       existingChannels.find(
         (existing) =>
@@ -852,7 +862,6 @@ export class TelegramUserAccountsService {
             this.normalizeChatId(existing.telegramChatId) ===
               this.normalizeChatId(channel.id)),
       )?.id;
-
     const imported: ImportedTelegramUserAccountChannel[] = [];
     const defaultCutoff = new Date();
     for (const [channelIndex, channel] of selectedChannels.entries()) {
@@ -966,7 +975,6 @@ export class TelegramUserAccountsService {
       );
       await progress.completed(workspaceChannel.title);
     }
-
     return {
       success: true,
       channels: imported,

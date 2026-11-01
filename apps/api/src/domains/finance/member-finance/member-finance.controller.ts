@@ -43,5 +43,4 @@ export class MemberFinanceController {
   ) {
     return this.service.investCommission(user.sub, memberId, dto);
   }
-
 }

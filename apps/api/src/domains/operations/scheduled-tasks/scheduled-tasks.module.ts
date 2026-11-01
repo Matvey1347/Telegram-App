@@ -1,3 +1,4 @@
+import { AiModule } from '../ai/ai.module';
 import { forwardRef, Module } from '@nestjs/common';
 import { ApplicationLogsModule } from '../application-logs/application-logs.module';
 import { CurrenciesModule } from '../../finance/currencies/currencies.module';
@@ -28,6 +29,7 @@ import { CrossPromotionPlansModule } from '../../growth/cross-promotion-plans/cr
     TelegramBotsModule,
     ApplicationLogsModule,
     OperationsNotificationsModule,
+    AiModule,
     forwardRef(() => MutualPromotionFoldersModule),
     forwardRef(() => CrossPromotionPlansModule),
   ],

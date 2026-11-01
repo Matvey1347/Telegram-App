@@ -1016,11 +1016,11 @@ export class AdCampaignsService {
     promoIds: string[],
   ) {
     if (!(await this.hasCampaignPromoStorage())) return;
-    await (tx as any).adCampaignPromo.deleteMany({
+    await tx.adCampaignPromo.deleteMany({
       where: { adCampaignId: campaignId },
     });
     if (!promoIds.length) return;
-    await (tx as any).adCampaignPromo.createMany({
+    await tx.adCampaignPromo.createMany({
       data: promoIds.map((promoId) => ({
         adCampaignId: campaignId,
         promoId,
@@ -1480,10 +1480,7 @@ export class AdCampaignsService {
             orderBy: [{ syncedAt: 'desc' }, { inviteLinkId: 'asc' }],
             take: Math.max(
               2,
-              Math.min(
-                2000,
-                limit * Math.max(1, campaign.inviteLinks.length),
-              ),
+              Math.min(2000, limit * Math.max(1, campaign.inviteLinks.length)),
             ),
             select: {
               inviteLinkId: true,
@@ -2126,7 +2123,7 @@ export class AdCampaignsService {
         acc[status] = (acc[status] || 0) + 1;
         return acc;
       },
-      { good: 0, acceptable: 0, bad: 0, unknown: 0 } as Record<string, number>,
+      { good: 0, acceptable: 0, bad: 0, unknown: 0 },
     );
     const dataQualityCounts = campaigns.reduce(
       (acc, campaign) => {

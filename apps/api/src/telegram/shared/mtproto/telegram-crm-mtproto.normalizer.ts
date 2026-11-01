@@ -7,7 +7,16 @@ import type {
   TelegramCrmMtprotoUpdate,
 } from '@api/telegram/shared/mtproto/telegram-crm-mtproto.types';
 
-const TELEGRAM_SERVICE_USER_ID = '777000';
+import {
+  crmMessageMetadata,
+  crmMessageReactions,
+} from './telegram-crm-message-metadata';
+
+import {
+  filterCrmPrivatePeerUpdates,
+  isCrmExcludedTelegramUser,
+  rememberCrmExcludedTelegramUsers,
+} from './telegram-crm-private-peer-policy';
 
 export type TelegramCrmDialogCursor = {
   offsetDate: number;
@@ -46,7 +55,7 @@ export function parseTelegramCrmMessage(
     text: value.message || null,
     sentAt: new Date(value.date * 1_000),
     editedAt: value.editDate ? new Date(value.editDate * 1_000) : null,
-    contentMetadata: value.media ? { mediaType: value.media.className } : null,
+    contentMetadata: crmMessageMetadata(value),
   };
 }
 
@@ -56,11 +65,7 @@ export function parseTelegramCrmPeer(
   const telegramUserId = telegramLongString(user.id);
   if (
     !telegramUserId ||
-    telegramUserId === TELEGRAM_SERVICE_USER_ID ||
-    user.bot ||
-    user.self ||
-    user.deleted ||
-    user.support ||
+    isCrmExcludedTelegramUser(user) ||
     user.accessHash == null
   ) {
     return null;
@@ -128,6 +133,37 @@ export function telegramCrmCheckpoint(state: {
 export function normalizeTelegramCrmUpdate(
   update: Api.TypeUpdate,
 ): TelegramCrmMtprotoUpdate | null {
+  if (update instanceof Api.UpdateNotifySettings) {
+    if (update.peer instanceof Api.NotifyUsers)
+      return { type: 'folders.changed' };
+    if (
+      update.peer instanceof Api.NotifyPeer &&
+      update.peer.peer instanceof Api.PeerUser
+    )
+      return {
+        type: 'folders.changed',
+        telegramUserIds: [telegramLongString(update.peer.peer.userId)],
+      };
+    return null;
+  }
+  if (update instanceof Api.UpdateFolderPeers) {
+    const telegramUserIds = update.folderPeers.flatMap((folder) =>
+      folder.peer instanceof Api.PeerUser
+        ? [telegramLongString(folder.peer.userId)]
+        : [],
+    );
+    return {
+      type: 'folders.changed',
+      telegramUserIds,
+      sequence: { pts: update.pts, ptsCount: update.ptsCount },
+    };
+  }
+  if (
+    update instanceof Api.UpdateDialogFilter ||
+    update instanceof Api.UpdateDialogFilters ||
+    update instanceof Api.UpdateDialogFilterOrder
+  )
+    return { type: 'folders.changed' };
   if (
     update instanceof Api.UpdateNewMessage ||
     update instanceof Api.UpdateEditMessage
@@ -163,6 +199,24 @@ export function normalizeTelegramCrmUpdate(
       sequence: { pts: update.pts, ptsCount: update.ptsCount },
     };
   }
+  if (update instanceof Api.UpdateDeleteMessages) {
+    return {
+      type: 'message.deleted',
+      telegramMessageIds: update.messages,
+      sequence: { pts: update.pts, ptsCount: update.ptsCount },
+    };
+  }
+  if (update instanceof Api.UpdateMessageReactions) {
+    const telegramUserId = peerUserId(update.peer);
+    return telegramUserId
+      ? {
+          type: 'message.reactions',
+          telegramUserId,
+          telegramMessageId: update.msgId,
+          reactions: crmMessageReactions(update.reactions),
+        }
+      : null;
+  }
   if (update instanceof Api.UpdateUserName) {
     return {
       type: 'peer.metadata',
@@ -175,7 +229,18 @@ export function normalizeTelegramCrmUpdate(
   return null;
 }
 
-export function normalizeTelegramCrmRaw(raw: unknown) {
+export function normalizeTelegramCrmRaw(
+  raw: unknown,
+  excluded = new Set<string>(),
+) {
+  const current =
+    raw instanceof Api.Updates || raw instanceof Api.UpdatesCombined
+      ? rememberCrmExcludedTelegramUsers(raw.users, excluded)
+      : excluded;
+  return filterCrmPrivatePeerUpdates(normalizeCrmRawUpdates(raw), current);
+}
+
+function normalizeCrmRawUpdates(raw: unknown) {
   if (raw instanceof Api.UpdatesTooLong) {
     return [
       { type: 'sync.gap', reason: 'UPDATES_TOO_LONG' },
@@ -192,7 +257,22 @@ export function normalizeTelegramCrmRaw(raw: unknown) {
           text: raw.message || null,
           sentAt: new Date(raw.date * 1_000),
           editedAt: null,
-          contentMetadata: null,
+          contentMetadata: (() => {
+            const metadata = crmMessageMetadata(
+              new Api.Message({
+                id: raw.id,
+                peerId: new Api.PeerUser({ userId: raw.userId }),
+                message: raw.message,
+                date: raw.date,
+                out: raw.out,
+                entities: raw.entities,
+                replyTo: raw.replyTo,
+                fwdFrom: raw.fwdFrom,
+                viaBotId: raw.viaBotId,
+              }),
+            );
+            return metadata;
+          })(),
         },
         sequence: { pts: raw.pts, ptsCount: raw.ptsCount },
       },
@@ -230,7 +310,7 @@ export function extractTelegramCrmSentMessage(
   for (const update of updates) {
     if (update instanceof Api.UpdateNewMessage) {
       const message = parseTelegramCrmMessage(update.message);
-      if (message) return message;
+      if (message?.telegramUserId === telegramUserId) return message;
     }
   }
   return null;

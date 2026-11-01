@@ -253,7 +253,11 @@ export class CreateTelegramManagedPostDto {
   @IsOptional() @IsArray() mediaItems?: unknown[];
   @IsOptional() @IsString() assignedMemberId?: string;
   @IsOptional() @IsString() icon?: string | null;
-  @IsOptional() @Type(() => Number) @IsInt() @IsIn([24, 48, 72]) deleteAfterHours?: 24 | 48 | 72 | null;
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @IsIn([24, 48, 72])
+  deleteAfterHours?: 24 | 48 | 72 | null;
   @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
@@ -316,7 +320,11 @@ export class UpdateTelegramManagedPostDto {
   @IsOptional() @IsArray() mediaItems?: unknown[];
   @IsOptional() @IsString() assignedMemberId?: string;
   @IsOptional() @IsString() icon?: string | null;
-  @IsOptional() @Type(() => Number) @IsInt() @IsIn([24, 48, 72]) deleteAfterHours?: 24 | 48 | 72 | null;
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @IsIn([24, 48, 72])
+  deleteAfterHours?: 24 | 48 | 72 | null;
   @IsOptional() @IsBoolean() inPlaceOnly?: boolean;
   @IsOptional()
   @IsArray()

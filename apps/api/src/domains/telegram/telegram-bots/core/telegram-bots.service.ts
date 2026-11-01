@@ -167,9 +167,12 @@ export class TelegramBotsService {
       workspaceId,
       uniqueRows.map((row) => row.id),
     );
-    const applications = await this.applicationRegistry.optionsForWorkspace(workspaceId);
+    const applications =
+      await this.applicationRegistry.optionsForWorkspace(workspaceId);
     const financeRuntimeIds = uniqueRows
-      .filter((row) => row.applicationType === TelegramBotApplicationType.FINANCE)
+      .filter(
+        (row) => row.applicationType === TelegramBotApplicationType.FINANCE,
+      )
       .flatMap((row) => row.runtimeInstances.map((runtime) => runtime.id));
     const financeSummaries = await this.viewService.financeSummaryForRuntimes(
       workspaceId,
@@ -182,7 +185,10 @@ export class TelegramBotsService {
           summaries.get(row.id),
           applications,
           row.applicationType === TelegramBotApplicationType.FINANCE
-            ? this.viewService.financeApplicationSummary(financeSummaries, row.runtimeInstances)
+            ? this.viewService.financeApplicationSummary(
+                financeSummaries,
+                row.runtimeInstances,
+              )
             : null,
         ),
       ),
@@ -297,7 +303,9 @@ export class TelegramBotsService {
         token: dto.botToken,
       });
     } catch (error) {
-      await this.prisma.telegramBotIntegration.delete({ where: { id: logical.id } });
+      await this.prisma.telegramBotIntegration.delete({
+        where: { id: logical.id },
+      });
       throw error;
     }
     await this.prisma.telegramBotIntegration.update({
@@ -403,7 +411,10 @@ export class TelegramBotsService {
       const ownedRuntime = row.runtimeInstances.find(
         (item) => item.environment === environment,
       );
-      if (ownedRuntime && ownedRuntime.runtimeStatus !== TelegramBotRuntimeStatus.ACTIVE) {
+      if (
+        ownedRuntime &&
+        ownedRuntime.runtimeStatus !== TelegramBotRuntimeStatus.ACTIVE
+      ) {
         try {
           await this.runtime.enableRuntime({
             botIntegrationId: existing.id,

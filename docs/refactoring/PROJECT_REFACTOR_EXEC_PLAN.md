@@ -1,6 +1,27 @@
 # Project Refactor ExecPlan
 
-Updated: 2026-10-18
+Updated: 2026-10-30
+
+## 2026-10-30 CRM Inbox 2.0 and shared Chat UI
+
+Implemented a neutral browser Chat UI and a CRM-owned adapter, compact cursor conversation read model, mounted desktop list/thread/details, single-screen mobile navigation, canonical workspace conversation drafts, idempotent retries and scoped SSE cache reconciliation. Existing Telegram runtime and message store are reused. Incoming edit events use the existing update result. No schema/index, worker, polling, recurring DB work, AI call or Support implementation was added. Grace/Knuth/Parnas preflights and Turing integration review were performed; review regressions are covered before handoff. Architecture retains the same 20 pre-existing errors with no new allowance. Full behavior, capability limits, verification and cost model: [CRM Inbox 2.0](../plans/crm-inbox-2.md).
+
+## 2026-10-30 Finance independence audit and safety gate
+
+The standalone Finance host is not ready for cutover. A read-only
+`finance-api migration:plan` found distinct source/destination databases, but
+the source has 28 Finance tables (714 rows) and the destination has 11 Finance
+tables (8 rows). Shared-name Account, Profile, and Transaction tables lack
+4, 12, and 20 source columns respectively. The standalone API does not yet
+serve the existing Web client's startup, ledger reads, obligations,
+investments, browser challenge, or AI contracts. Its Telegram webhook lacks a
+command/callback dispatcher. Until those paths and a reconciled staging
+restore are implemented, the legacy Finance runtime remains the webhook
+owner and data source; standalone startup cannot take over that webhook, and
+signed updates received there return 503 without being marked processed.
+`migration:extract --execute` is blocked to prevent an incompatible partial
+copy. See `docs/refactoring/FINANCE_INDEPENDENCE_CONTRACT.md` for the cutover
+gates. No production data was changed in this audit.
 
 ## 2026-10-18 Finance host namespace
 
@@ -2086,3 +2107,83 @@ internal Finance product.
   webhook IDs are append-only audit data; UI history is bounded to 30 rows.
   The Finance API uses its existing process, so there is no new Railway
   process or persistent connection baseline from this feature.
+
+## 2026-10-31 CRM Notifications & PWA Web Push
+
+- Restored live incoming CRM intents through the existing transactional batch writer and after-commit Operations publisher. Incoming alerts require explicit opt-in; existing global Web Push preferences and due-driven follow-up scheduling remain intact.
+- Added exact account/conversation grouping, monotonic read reconciliation, bounded cooldown/fanout, current privacy/permission/subscription checks at network-ready dispatch and shared current follow-up occurrence validation. No new Telegram runtime, worker, polling or presence writes.
+- Existing Settings now exposes EN/RU CRM flags, device status and an explicit throttled test. The Service Worker safely restores conversation/workspace destinations through authentication; notification SSE patches bounded caches without full Inbox refetch.
+- Grace/Knuth/Parnas preflight and Parnas/Turing final integration review completed. The queued stale-privacy finding was fixed with fresh readiness cohorts before provider calls. Normal architecture remains16/16 policy tests with20 existing source violations; strict mode reports26 existing violations. Thresholds/allowances were unchanged.
+- Delivery, cost bounds, deployment migration, test evidence, physical-device QA and rollback: [CRM notification plan](../plans/crm-notifications-pwa.md) and [QA](../qa/crm-notifications/README.md). Migration was not applied and no production-device push was sent.
+
+## 2026-10-31 CRM Sales Workflow, Follow-up & Package Sales
+
+- Added explicit nullable client-owned manual sales decisions while deriving reply/waiting/due attention from existing facts. Operational conversation state and contact classification remain distinct. DNC survives merges and is enforced against the current conversation immediately before manual sending; compact timestamps are monotonic under incoming/outgoing races.
+- Inbox actions reuse canonical advertiser tasks, current-owner authorization, effective occurrence ordering and existing due/notification delivery. No-op/repeated commands avoid writes; changed occurrences dismiss obsolete published reminders. Purchase history uses a lazy linked-sale cursor and currency-safe aggregates; package context reads existing products/networks/constraints without materialization or repricing.
+- CRM owns the sales controls and adapters; Shared Chat UI remains neutral. Native-dialog overlay portal behavior is corrected in the shared UI layer for mobile controls. Mutation/realtime caches reconcile exact affected entities rather than refetching the entire Inbox.
+- Grace/Knuth/Parnas preflight and Turing integration review were performed; queued DNC, follow-up independent read/edit scopes, exact-origin retention and overdue INTERESTED/HUMAN_REVIEW filter cases were corrected. Final structural/check evidence and concurrent outside-slice failures are recorded in the QA handoff; checker thresholds/allowances were unchanged.
+- Plan, contracts, operation budgets, migration prerequisites, rollback and acceptance steps: [CRM sales workflow](../plans/crm-sales-workflow.md). No production migration, real commercial message or AI request was executed.
+
+## 2026-10-31 Internal AI infrastructure and usage
+
+- Added one internal Operations AI gateway, immutable Decimal tariff/configuration snapshots, workspace/category reservations, bounded idempotency and explicit reconciliation. Consumer Finance AI implementation/accounting remains independent.
+- Added compact daily usage read models, bounded cursor history, role-scoped AI Usage settings/dashboard and lazy CRM Sales cost summary. No producer, HTTP execution endpoint, new worker, polling or deployment was added.
+- Grace/Knuth/Parnas preflight and Turing final read-only review completed. Late UNKNOWN reconciliation, all-age hold discovery, exact UTC accounting, configuration bounds and cache isolation were verified. Policy16/16; normal23/strict28 pre-existing source violations unchanged; thresholds untouched.
+- Operational cost, migration/rollback and QA evidence: [plan](../plans/ai-infrastructure-usage.md), [QA](../qa/ai-infrastructure/README.md). Migration not applied; all provider calls mocked. Existing API five TypeScript errors remain outside scope.
+
+## 2026-10-31 AI Sales Copilot
+
+- Added four manually requested CRM use cases through the existing Operations gateway, bounded selected-source context, seven-day CRM draft claims/results and human approval bound to text/revision/current facts. No Discovery, outreach automation or Support implementation was added.
+- Reused the existing composer, canonical browser drafts, manual Telegram sender/idempotency and shared mobile details surface. AI provenance, canonical keys, fresh authorization/DNC/price/source-grant checks and retained-receipt replay protect explicit sends; ordinary manual chat remains independent of AI availability.
+- Grace/Knuth/Parnas preflight and Turing final review completed. Review fixes cover verified source scope, financial assertion aliases/spelled/free claims, pre-call permissions, uncertain persistence, repeated-approval no-ops, TTL receipt replay, cancellation and keyboard composer priority. Policy16/16; normal23/strict28 source violations unchanged, with no allowance edits.
+- [Plan](../plans/ai-sales-copilot.md) and [QA](../qa/ai-sales-copilot/README.md) record actual source-level costs, synthetic evaluation, blocked production rollout and migration/rollback. No migration, paid benchmark or commercial send was executed; five existing API build errors remain outside scope.
+
+## 2026-11-01 Telegram Lead Discovery
+
+- Added a distinct Growth CRM source registry, one-copy evidence pipeline and human candidate queue; existing TelegramAdvertiser, Operations AI Gateway, Scheduled Tasks and live MTProto handle remain canonical. The shared contract was fixed before backend/frontend implementation.
+- Grace/Knuth/Parnas preflight and Turing integration review covered source access/grants, workspace isolation, bounded cost, stale edits/deletes/RPC origins, UNKNOWN paid attempts, coverage proof, strong identities and DNC. Discovery creates no artificial conversation, outbound message, join, second runtime or idle polling.
+- Cohesive neutral extractions reduce the MTProto adapter and runtime. Shared Select accessibility was fixed once and tested in affected consumers; the primitives legacy ceiling was lowered from1,737 to1,505 without raising thresholds. Policy16/16; normal22 inherited violations versus23 baseline, strict28.
+- [Implementation/rollout/costs](../plans/telegram-lead-discovery.md) and [QA](../qa/telegram-lead-discovery/README.md) record the feature-off default, reviewed deployment grants, bounded retention capacity, unchanged five API build errors and staging prerequisites. No production migration, real collection or paid call was executed.
+
+## 2026-11-01 AI Lead Qualification and Candidate Preparation
+
+- Extended Discovery with an independent qualification dimension and derived review workflow, strict grounded AI output, versioned explainable scores, cited risk signals and separate human risk decisions. Existing rejection, CRM ownership/status and DNC remain independent.
+- Candidate drafts use minimal candidate-specific records while preserving required conversation FKs. Common Copilot provenance/pricing guards and Operations Gateway remain canonical; explicit candidate approval enables freshness-checked Copy, never a fake conversation/send.
+- Grace preflight, Parnas/Knuth source-level cost/structure audit, separate backend/frontend writes and Turing read-only review covered paid claims, UNKNOWN, current identity/source/product facts, human-decision revocation and actual Gateway business-object limits. No new polling/runtime/worker/service was added. Policy16/16; normal22/strict28 inherited violations, no raised allowance.
+- [Plan and costs](../plans/ai-lead-qualification.md), [QA and staging benchmark](../qa/ai-lead-qualification/README.md) document known collection/uncertainty limits, optional notifications extension, additive migration/rollback and existing five API build errors. No real provider/channel/DB migration or release was executed.
+
+## 2026-11-01 Instagram contacts and manual CRM workflow
+
+- Extended canonical advertiser contact identity with typed Instagram syntax, preserved raw values, separate human ownership/state and compact manual dates. Existing activity/task records own manual reports and peerless reminders; no second client/message store, transport, poll or worker was introduced.
+- Explicit Clients/manual workflow and AI Lead attribution reuse current approval, source/DNC and own/any checks. Removed an existing contact-on-mount mutation and unsafe raw contact link behavior. Shared Chat UI remains transport-neutral.
+- Grace preflight, Parnas/Knuth structural/cost preflight, separate backend/frontend files and Turing read-only integration checks covered all typed write paths, strong identity, legacy promotion, request receipts, merge, reminder privacy and manual-only status. Cohesive legacy Contact CRUD extraction shrank the Sales facade; no threshold/allowance was raised.
+- [Plan](../plans/crm-instagram-contacts.md) and [QA](../qa/crm-instagram-contacts/README.md) record actual gates/debt, official Meta adapter research,365-day bounded audit retention, staged enum/schema migration and compatible rollback. No production migration, Instagram login/message or paid AI call was executed.
+
+### Prompt №10 — shared chat actions (2026-11-01)
+
+Extended the existing CRM MTProto handle and neutral Shared Chat UI for real reply/edit/delete/reaction/forward and bounded lazy media/voice. Reused canonical messages, account runtime, notifications, rich editor and drafts; added compact operation receipts/deletion identities and unread snapshot ordering. No Bot Support runtime, second client/store, polling or media blobs in PostgreSQL. Grace exploration and Parnas/Knuth source/cost check preceded integration; Turing read-only final review cleared known P1/P2 after regressions. Rollout defaults disabled, migration unapplied, global baseline build/architecture failures retained. [Plan](../plans/telegram-chat-actions.md), [QA](../qa/telegram-chat-actions/README.md).
+
+
+### 2026-11-01 — AI Sales CRM final integration (Prompt 11)
+
+Completed read-only runtime/cost/structure mapping, bounded integration fixes and independent integration review. Current authorization is refreshed for manual sends, locked contact merge and bounded SSE batches; private CRM reads bypass server response caching, unresolved AI records survive retention, and workspace AI query cleanup and UNKNOWN send behavior are covered. Original five API typing blockers and CRM fixture drift were fixed. Vitest now owns product web tests only; all 75 excluded backend suites remain owned by API Jest.
+
+Release decision remains **NO-GO**: focused API138 suites/1083 tests and web55 files/409 tests pass, but full API has13 failing suites/23 tests and web19 failing files/29 tests. Disposable PostgreSQL forward migration has zero drift; genuine clean bootstrap fails at a historical missing-Workspace precondition. Last-account lease cleanup, supported Node LTS alignment, live staging/device/provider checks and measured capacity remain acceptance work. No production migration/deploy or paid/live outreach was executed. See [release readiness](../plans/ai-sales-crm-release-readiness.md) and [QA/checklist](../qa/ai-sales-crm-final/README.md).
+
+## 2026-11-01 CRM runtime ownership and history repair
+
+- Grace/Knuth runtime and cost analysis traced the reported conflict to localhost versus the production lease owner and an outdated deployed history contract. Preserve exclusive cloud ownership and relay local CRM HTTP/SSE through one trusted origin before body parsing.
+- Separate backend/frontend changes repair raw-ID history pagination, stale exhaustion, automatic bounded recent sync, immediate older-page display, legacy media enrichment and post-commit cache invalidation. No new idle polling or second runtime.
+- Turing final review found no blocking issue; final structural rerun retains the same22 unrelated failures with zero new violations. API/web builds and typechecks pass; full API has23 unrelated existing test failures. [Operational QA and costs](../qa/ai-sales-crm-final/runtime-history-fix.md) records live rollout evidence and limits.
+
+## 2026-11-01 Compact working CRM and one-click AI
+
+- Grace traced the actual failed operation to an invalid token-count payload, disabled chat-action rollout and unconfigured source registry. Knuth/Parnas bounded catalog/feedback/usage/source costs before backend/frontend assignments.
+- Added server-owned one-click suggestion context, corrected provider contract, bounded scoped feedback and unresolved-operation fencing. Simplified Copilot, editor control, sidebar and Discovery; Usage is always visible and includes all workspace AI categories. No new persistence model or polling.
+- Turing reviewed authorization/freshness, exact source metadata grants, pricing/provenance, UNKNOWN recovery and constant-query catalog limits. Targeted gates/builds pass; existing full-suite/lint/architecture debt remains. [QA, costs and live acceptance](../qa/ai-sales-crm-final/compact-crm-fix.md).
+
+## 2026-11-01 Telegram CRM folder rail
+
+- Mapped the prior account-specific contact-tag limitation and introduced workspace/account-isolated conversation membership, complete server unread aggregates and a compact folder rail with a global Unread filter.
+- Folder membership uses existing Telegram runtime and event-driven reconciliation. Reads carry the actually visible message watermark; hidden tabs, unfocused windows, older-history views and modal overlays do not automatically mark messages read.
+- A disposable PostgreSQL migration and aggregate fixture verifies account/workspace isolation, overlap, unlinked chats and cascade. [QA and runtime costs](../qa/ai-sales-crm-final/telegram-folders.md) records limits, rollout and manual checks.

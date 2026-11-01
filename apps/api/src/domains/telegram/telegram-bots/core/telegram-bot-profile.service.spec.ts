@@ -31,15 +31,20 @@ describe('TelegramBotProfileService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     prisma.telegramBotRuntimeInstance.findUnique.mockResolvedValue(runtime);
-    prisma.telegramBotRuntimeInstance.update.mockImplementation(({ data }: any) => ({
-      ...runtime,
-      ...data,
-    }));
+    prisma.telegramBotRuntimeInstance.update.mockImplementation(
+      ({ data }: any) => ({
+        ...runtime,
+        ...data,
+      }),
+    );
   });
 
   it('pulls the current Telegram name and absence of a profile photo', async () => {
     botApi.getMyName.mockResolvedValue({ name: 'Finance Bot' });
-    botApi.getUserProfilePhotos.mockResolvedValue({ total_count: 0, photos: [] });
+    botApi.getUserProfilePhotos.mockResolvedValue({
+      total_count: 0,
+      photos: [],
+    });
 
     await service.sync('bot-1', TelegramBotRuntimeEnvironment.PRODUCTION);
 

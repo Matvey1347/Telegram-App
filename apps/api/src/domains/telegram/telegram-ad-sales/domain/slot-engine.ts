@@ -76,12 +76,18 @@ function daysBetween(left: Date, right: Date) {
   return Math.abs(left.getTime() - right.getTime()) / (24 * 60 * 60 * 1000);
 }
 
-export function buildAvailabilitySlots(input: SlotEngineInput): SlotEngineSlot[] {
+export function buildAvailabilitySlots(
+  input: SlotEngineInput,
+): SlotEngineSlot[] {
   if (input.policy.slotStrategy === 'MANUAL') {
     return [
       {
         date: input.dateKey,
-        scheduledAt: zonedDateTimeToUtc(input.dateKey, '00:00', input.policy.timezone),
+        scheduledAt: zonedDateTimeToUtc(
+          input.dateKey,
+          '00:00',
+          input.policy.timezone,
+        ),
         timezone: input.policy.timezone,
         source: 'manual',
         state: 'MANUAL_ONLY',
@@ -99,10 +105,15 @@ export function buildAvailabilitySlots(input: SlotEngineInput): SlotEngineSlot[]
     ];
   }
 
-  const organicCadence = Math.max(1, Number(input.policy.organicPostsPerAdSlot || 1));
+  const organicCadence = Math.max(
+    1,
+    Number(input.policy.organicPostsPerAdSlot || 1),
+  );
   const organicCandidateTimes =
     organicCadence > 1
-      ? input.organicTimes.filter((_, index) => (index + 1) % organicCadence === 0)
+      ? input.organicTimes.filter(
+          (_, index) => (index + 1) % organicCadence === 0,
+        )
       : input.organicTimes;
   const candidateTimes =
     input.policy.slotStrategy === 'FIXED_TIMES'
@@ -111,7 +122,8 @@ export function buildAvailabilitySlots(input: SlotEngineInput): SlotEngineSlot[]
           const [hour, minute] = time.split(':').map(Number);
           const shifted = new Date(Date.UTC(2000, 0, 1, hour, minute, 0));
           shifted.setUTCMinutes(
-            shifted.getUTCMinutes() - Number(input.product.topDurationMinutes ?? 0),
+            shifted.getUTCMinutes() -
+              Number(input.product.topDurationMinutes ?? 0),
           );
           return `${shifted.getUTCHours().toString().padStart(2, '0')}:${shifted
             .getUTCMinutes()
@@ -133,11 +145,17 @@ export function buildAvailabilitySlots(input: SlotEngineInput): SlotEngineSlot[]
       (placement) =>
         !candidateScheduledTimeSet.has(placement.scheduledAt.getTime()),
     )
-    .sort((left, right) => left.scheduledAt.getTime() - right.scheduledAt.getTime());
+    .sort(
+      (left, right) => left.scheduledAt.getTime() - right.scheduledAt.getTime(),
+    );
   let fallbackPlacementIndex = 0;
 
   return candidateTimes.map((time, index) => {
-    const scheduledAt = zonedDateTimeToUtc(input.dateKey, time, input.policy.timezone);
+    const scheduledAt = zonedDateTimeToUtc(
+      input.dateKey,
+      time,
+      input.policy.timezone,
+    );
     const nextOrganicPostAt =
       input.organicScheduledAt
         .filter((value) => value.getTime() >= scheduledAt.getTime())
@@ -160,8 +178,7 @@ export function buildAvailabilitySlots(input: SlotEngineInput): SlotEngineSlot[]
     let state: SlotEngineSlot['state'] = 'AVAILABLE';
     let blockingReason: string | null = null;
     if (existingPlacement) {
-      state =
-        existingPlacement.status === 'RESERVED' ? 'RESERVED' : 'SOLD';
+      state = existingPlacement.status === 'RESERVED' ? 'RESERVED' : 'SOLD';
       blockingReason = 'existing_placement';
     } else if (scheduledAt.getTime() <= input.now.getTime()) {
       state = 'PAST';
@@ -193,7 +210,9 @@ export function buildAvailabilitySlots(input: SlotEngineInput): SlotEngineSlot[]
       scheduledAt,
       timezone: input.policy.timezone,
       source:
-        input.policy.slotStrategy === 'FIXED_TIMES' ? 'fixed_time' : `organic_${index}`,
+        input.policy.slotStrategy === 'FIXED_TIMES'
+          ? 'fixed_time'
+          : `organic_${index}`,
       state,
       blockingReason,
       nextOrganicPostAt,

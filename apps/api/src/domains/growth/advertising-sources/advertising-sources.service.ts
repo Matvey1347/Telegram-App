@@ -42,7 +42,10 @@ export class AdvertisingSourcesService {
     const workspaceId = await this.workspace(userId);
     const rows = await this.prisma.advertisingSource.findMany({
       where: { workspaceId, type: { not: 'telegram_channel' } },
-      include: { assignedMember: WorkspaceService.assignedMemberInclude, createdByUser: WorkspaceService.createdByUserInclude },
+      include: {
+        assignedMember: WorkspaceService.assignedMemberInclude,
+        createdByUser: WorkspaceService.createdByUserInclude,
+      },
       orderBy: { createdAt: 'desc' },
     });
     return rows.map((row) => this.toView(row));
@@ -52,14 +55,21 @@ export class AdvertisingSourcesService {
     const workspaceId = await this.workspace(userId);
     const row = await this.prisma.advertisingSource.findFirst({
       where: { id, workspaceId },
-      include: { assignedMember: WorkspaceService.assignedMemberInclude, createdByUser: WorkspaceService.createdByUserInclude },
+      include: {
+        assignedMember: WorkspaceService.assignedMemberInclude,
+        createdByUser: WorkspaceService.createdByUserInclude,
+      },
     });
     if (!row) throw new NotFoundException('Advertising channel not found');
     return this.toView(row);
   }
 
   async create(userId: string, dto: CreateAdvertisingSourceDto) {
-    const { workspaceId, assignedMemberId } = await this.workspaceService.resolveAssignedMemberId(userId, dto.assignedMemberId);
+    const { workspaceId, assignedMemberId } =
+      await this.workspaceService.resolveAssignedMemberId(
+        userId,
+        dto.assignedMemberId,
+      );
     const row = await (this.prisma as any).advertisingSource.create({
       data: {
         workspaceId,
@@ -75,14 +85,25 @@ export class AdvertisingSourcesService {
         assignedMemberId,
         createdByUserId: userId,
       },
-      include: { assignedMember: WorkspaceService.assignedMemberInclude, createdByUser: WorkspaceService.createdByUserInclude },
+      include: {
+        assignedMember: WorkspaceService.assignedMemberInclude,
+        createdByUser: WorkspaceService.createdByUserInclude,
+      },
     });
     return this.toView(row);
   }
 
   async update(userId: string, id: string, dto: UpdateAdvertisingSourceDto) {
     await this.findOne(userId, id);
-    const assignedMemberId = dto.assignedMemberId === undefined ? undefined : (await this.workspaceService.resolveAssignedMemberId(userId, dto.assignedMemberId)).assignedMemberId;
+    const assignedMemberId =
+      dto.assignedMemberId === undefined
+        ? undefined
+        : (
+            await this.workspaceService.resolveAssignedMemberId(
+              userId,
+              dto.assignedMemberId,
+            )
+          ).assignedMemberId;
     const row = await (this.prisma as any).advertisingSource.update({
       where: { id },
       data: {
@@ -102,7 +123,10 @@ export class AdvertisingSourcesService {
         channelTags: dto.channelTags,
         assignedMemberId,
       },
-      include: { assignedMember: WorkspaceService.assignedMemberInclude, createdByUser: WorkspaceService.createdByUserInclude },
+      include: {
+        assignedMember: WorkspaceService.assignedMemberInclude,
+        createdByUser: WorkspaceService.createdByUserInclude,
+      },
     });
     return this.toView(row);
   }

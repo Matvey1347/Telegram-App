@@ -32,7 +32,8 @@ export class AdCampaignAnalyticsService {
   }
 
   private ratio(numerator: number | null, denominator: number | null) {
-    if (numerator == null || denominator == null || denominator <= 0) return null;
+    if (numerator == null || denominator == null || denominator <= 0)
+      return null;
     return (numerator / denominator) * 100;
   }
 
@@ -48,14 +49,16 @@ export class AdCampaignAnalyticsService {
     const acceptableFrom = this.numberOrNull(channel.acceptableCpaFrom);
     const acceptable = this.numberOrNull(channel.acceptableCpa);
     const stopFrom =
-      this.numberOrNull(channel.stopCpaFrom) ?? this.numberOrNull(channel.stopCpa);
+      this.numberOrNull(channel.stopCpaFrom) ??
+      this.numberOrNull(channel.stopCpa);
     if (
       targetFrom == null &&
       target == null &&
       acceptableFrom == null &&
       acceptable == null &&
       stopFrom == null
-    ) return 'unknown';
+    )
+      return 'unknown';
     if (this.inRange(value, targetFrom, target)) return 'good';
     if (this.inRange(value, acceptableFrom, acceptable)) return 'acceptable';
     if (this.inRange(value, stopFrom, null)) return 'bad';
@@ -78,9 +81,12 @@ export class AdCampaignAnalyticsService {
   }
 
   private decisionText(status: KpiStatus) {
-    if (status === 'good') return 'Campaign performs well. Candidate for repeat or scaling.';
-    if (status === 'acceptable') return 'Campaign is acceptable. Continue testing carefully.';
-    if (status === 'bad') return 'Campaign is weak. Do not scale before changing source, creative or offer.';
+    if (status === 'good')
+      return 'Campaign performs well. Candidate for repeat or scaling.';
+    if (status === 'acceptable')
+      return 'Campaign is acceptable. Continue testing carefully.';
+    if (status === 'bad')
+      return 'Campaign is weak. Do not scale before changing source, creative or offer.';
     return 'Not enough data yet.';
   }
 
@@ -160,7 +166,8 @@ export class AdCampaignAnalyticsService {
       knownFakeSubscribersCount: Number(
         campaign.telegramChannel?.knownFakeSubscribersCount || 0,
       ),
-      manualSubscriberBaseQuality: campaign.telegramChannel?.subscriberBaseQuality,
+      manualSubscriberBaseQuality:
+        campaign.telegramChannel?.subscriberBaseQuality,
     });
     const effectiveSubscribers =
       effectiveSubscribersBeforeSeed == null
@@ -180,7 +187,9 @@ export class AdCampaignAnalyticsService {
         ? Math.max(0, Math.round(avgViewsAfter - avgViewsBefore))
         : null;
     const rawViewRateAfter =
-      avgViewsAfter != null && effectiveSubscribers != null && effectiveSubscribers > 0
+      avgViewsAfter != null &&
+      effectiveSubscribers != null &&
+      effectiveSubscribers > 0
         ? (avgViewsAfter / effectiveSubscribers) * 100
         : null;
     const cappedActiveSubscribersFromAd =
@@ -191,7 +200,9 @@ export class AdCampaignAnalyticsService {
     const cappedViewRateAfter =
       rawViewRateAfter == null ? null : Math.min(rawViewRateAfter, 100);
     const cpa =
-      newSubscribers != null && newSubscribers > 0 ? cost / newSubscribers : null;
+      newSubscribers != null && newSubscribers > 0
+        ? cost / newSubscribers
+        : null;
     const activeCpa =
       activeSubscribersFromAd != null && activeSubscribersFromAd > 0
         ? cost / activeSubscribersFromAd
@@ -257,7 +268,10 @@ export class AdCampaignAnalyticsService {
       adDataQuality = maxDataQuality(adDataQuality, 'suspicious');
       adDataQualityReason = 'views_uplift_exceeds_new_subscribers';
     }
-    if (subscriberBaseQuality === 'polluted' || subscriberBaseQuality === 'suspicious') {
+    if (
+      subscriberBaseQuality === 'polluted' ||
+      subscriberBaseQuality === 'suspicious'
+    ) {
       adDataQuality = maxDataQuality(adDataQuality, 'suspicious');
       adDataQualityReason = 'subscriber_base_polluted';
     }
@@ -280,23 +294,42 @@ export class AdCampaignAnalyticsService {
           : this.decisionText(overallStatus);
 
     const analyticsData = {
-      newSubscribers, rawActiveSubscribersFromAd, rawViewRateAfter,
-      cappedActiveSubscribersFromAd, activeSubscribersFromAd, cpa,
-      activeCpa: cappedActiveCpa, activeRate, cappedActiveRate,
-      cappedActiveCpa, cappedViewRateAfter, adDataQuality, adDataQualityReason,
-      hasViewAnomaly, hasSubscriberBasePollution,
+      newSubscribers,
+      rawActiveSubscribersFromAd,
+      rawViewRateAfter,
+      cappedActiveSubscribersFromAd,
+      activeSubscribersFromAd,
+      cpa,
+      activeCpa: cappedActiveCpa,
+      activeRate,
+      cappedActiveRate,
+      cappedActiveCpa,
+      cappedViewRateAfter,
+      adDataQuality,
+      adDataQualityReason,
+      hasViewAnomaly,
+      hasSubscriberBasePollution,
       unsub24h: this.unsub(after24h, after48h),
       unsub48h: this.unsub(after24h, after72h),
       unsub72h: this.unsub(after24h, after7d),
       unsub7d: this.unsub(after24h, after7d),
       unsub30d: this.unsub(after24h, after30d),
-      retention24h, retention48h, retention72h, retention7d, retention30d,
-      cpaStatus, activeCpaStatus, retentionStatus, overallStatus, decisionText,
+      retention24h,
+      retention48h,
+      retention72h,
+      retention7d,
+      retention30d,
+      cpaStatus,
+      activeCpaStatus,
+      retentionStatus,
+      overallStatus,
+      decisionText,
     };
-    const unchanged = Object.entries(analyticsData).every(([key, value]) =>
-      String(campaign[key] ?? '') === String(value ?? ''),
+    const unchanged = Object.entries(analyticsData).every(
+      ([key, value]) => String(campaign[key] ?? '') === String(value ?? ''),
     );
-    if (unchanged) return { campaign, summary: this.summary(campaign), changed: false };
+    if (unchanged)
+      return { campaign, summary: this.summary(campaign), changed: false };
     const updated = await (this.prisma.adCampaign as any).update({
       where: { id: campaign.id },
       data: {

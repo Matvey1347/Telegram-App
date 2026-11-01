@@ -88,6 +88,9 @@ function AvatarImage({
       src={url}
       alt={alt}
       className={`${className} object-cover`}
+      onLoad={(event) => {
+        if (event.currentTarget.naturalWidth <= 1 || event.currentTarget.naturalHeight <= 1) setFailed(true);
+      }}
       onError={() => setFailed(true)}
     />
   );

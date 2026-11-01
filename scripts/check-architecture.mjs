@@ -38,7 +38,7 @@ const TRANSITION_BASELINE = new Map([
   ["apps/web/src/lib/api.ts", 742],
   ["apps/web/src/app/(internal)/(growth)/ad-campaigns/page.tsx", 2382],
   ["apps/api/src/domains/growth/ad-campaigns/ad-campaigns.service.ts", 1782],
-  ["apps/web/src/components/ui/primitives.tsx", 1737],
+  ["apps/web/src/components/ui/primitives.tsx", 1504],
   [
     "apps/web/src/components/features/growth/ad-campaigns/campaigns-table.tsx",
     1239,

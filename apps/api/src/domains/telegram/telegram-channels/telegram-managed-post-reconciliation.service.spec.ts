@@ -3,9 +3,7 @@ import { TelegramManagedPostReconciliationService } from './telegram-managed-pos
 describe('TelegramManagedPostReconciliationService local delivery', () => {
   it('does not let a stalled identity check block the next local delivery wake', async () => {
     const identity = {
-      reconcilePendingWorkspaces: jest.fn(
-        () => new Promise(() => undefined),
-      ),
+      reconcilePendingWorkspaces: jest.fn(() => new Promise(() => undefined)),
     };
     const prisma = {
       telegramManagedPost: { findMany: jest.fn().mockResolvedValue([]) },

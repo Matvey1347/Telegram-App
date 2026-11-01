@@ -1,0 +1,151 @@
+{
+  "summary": {
+    "passedSuites": 504,
+    "failedSuites": 13,
+    "passedTests": 3300,
+    "failedTests": 23
+  },
+  "failures": [
+    {
+      "file": "apps/api/src/domains/telegram/telegram-channels/telegram-channels.characterization.spec.ts",
+      "category": "INVALID_TEST_CONFIGURATION",
+      "severity": "P2",
+      "baselineUnchanged": true,
+      "detail": "Inherited missing/incomplete mock contract; production intent still needs owner acceptance.",
+      "failedTests": [
+        "TelegramChannelsService characterization seams treats missing revision storage as a supported no-op"
+      ]
+    },
+    {
+      "file": "apps/api/src/domains/telegram/telegram-system-bot/telegram-system-bot-handler-layout.spec.ts",
+      "category": "OLD_TECHNICAL_DEBT",
+      "severity": "P2",
+      "baselineUnchanged": true,
+      "detail": "Inherited API/UI expectation mismatch; no claim that changing assertions alone is safe.",
+      "failedTests": [
+        "Telegram System Bot handler option layouts packs workspace choices into two columns"
+      ]
+    },
+    {
+      "file": "apps/api/src/domains/telegram/telegram-channels/telegram-unified-import.service.spec.ts",
+      "category": "OLD_TECHNICAL_DEBT",
+      "severity": "P2",
+      "baselineUnchanged": true,
+      "detail": "Inherited API/UI expectation mismatch; no claim that changing assertions alone is safe.",
+      "failedTests": [
+        "TelegramUnifiedImportService describes changed fields for update operations"
+      ]
+    },
+    {
+      "file": "apps/api/src/domains/telegram/telegram-channels/managed-post-scheduling-identity.spec.ts",
+      "category": "INVALID_TEST_CONFIGURATION",
+      "severity": "P2",
+      "baselineUnchanged": true,
+      "detail": "Inherited missing/incomplete mock contract; production intent still needs owner acceptance.",
+      "failedTests": [
+        "Telegram managed post scheduled identity stores scheduled ids separately and exposes no public permalink",
+        "Telegram managed post scheduled identity deletes old scheduled ids when updating a scheduled post",
+        "Telegram managed post scheduled identity does not report success when Telegram returns no scheduled message id",
+        "Telegram managed post scheduled identity rejects local scheduling before persistence when this runtime has no bot token"
+      ]
+    },
+    {
+      "file": "apps/api/src/domains/telegram/bot-billing/bot-billing.service.spec.ts",
+      "category": "INVALID_TEST_CONFIGURATION",
+      "severity": "P2",
+      "baselineUnchanged": true,
+      "detail": "Inherited missing/incomplete mock contract; production intent still needs owner acceptance.",
+      "failedTests": [
+        "BotBillingService overview calculates metrics from all live subscriptions, not the 200-row list",
+        "BotBillingService overview keeps local runtime data out of production analytics",
+        "BotBillingService user support lists free and paid users from only the selected runtime"
+      ]
+    },
+    {
+      "file": "apps/api/src/domains/telegram/telegram-system-bot/telegram-system-bot-post-flow-groups.spec.ts",
+      "category": "OLD_TECHNICAL_DEBT",
+      "severity": "P2",
+      "baselineUnchanged": true,
+      "detail": "Inherited API/UI expectation mismatch; no claim that changing assertions alone is safe.",
+      "failedTests": [
+        "TelegramSystemBotPostFlowService groups defaults a selected channel to the System Bot posts group"
+      ]
+    },
+    {
+      "file": "apps/api/src/domains/telegram/telegram-system-bot/telegram-system-bot-posts-routing.spec.ts",
+      "category": "OLD_TECHNICAL_DEBT",
+      "severity": "P2",
+      "baselineUnchanged": true,
+      "detail": "Inherited API/UI expectation mismatch; no claim that changing assertions alone is safe.",
+      "failedTests": [
+        "TelegramSystemBot Posts routing starts Add new and routes list navigation with its control message id"
+      ]
+    },
+    {
+      "file": "apps/api/src/domains/telegram/telegram-channel-networks/telegram-channel-networks.service.spec.ts",
+      "category": "OLD_TECHNICAL_DEBT",
+      "severity": "P2",
+      "baselineUnchanged": true,
+      "detail": "Inherited API/UI expectation mismatch; no claim that changing assertions alone is safe.",
+      "failedTests": [
+        "TelegramChannelNetworksService icons builds one aggregate traffic detail for a network instead of reading each member separately",
+        "TelegramChannelNetworksService system All network places All first and counts it in paginated workspace results",
+        "TelegramChannelNetworksService financial source batching loads overlapping system/custom sources once while preserving archived membership and each network currency"
+      ]
+    },
+    {
+      "file": "products/finance/api/ledger/finance-ledger.service.spec.ts",
+      "category": "BUSINESS_LOGIC",
+      "severity": "P1",
+      "baselineUnchanged": true,
+      "detail": "Inherited observable rate/formatting assertion failure; root cause and intended behavior remain untriaged by owning product.",
+      "failedTests": [
+        "FinanceLedgerService tenant and money rules rejects a stale rate for a current write even when occurredAt is provided",
+        "FinanceLedgerService tenant and money rules uses a dated historical rate for a transaction before today"
+      ]
+    },
+    {
+      "file": "apps/api/src/domains/telegram/telegram-system-bot/telegram-system-bot-finance.service.spec.ts",
+      "category": "OLD_TECHNICAL_DEBT",
+      "severity": "P2",
+      "baselineUnchanged": true,
+      "detail": "Inherited API/UI expectation mismatch; no claim that changing assertions alone is safe.",
+      "failedTests": [
+        "TelegramSystemBotFinanceService requires account and category choices even when only one option exists",
+        "TelegramSystemBotFinanceService atomically rejects Finance while a website or legacy batch import owns the interaction slot"
+      ]
+    },
+    {
+      "file": "apps/api/src/domains/identity/account/account-locale.service.spec.ts",
+      "category": "INVALID_TEST_CONFIGURATION",
+      "severity": "P2",
+      "baselineUnchanged": true,
+      "detail": "Inherited missing/incomplete mock contract; production intent still needs owner acceptance.",
+      "failedTests": [
+        "AccountService locale preference persists a supported locale and returns the normalized preference"
+      ]
+    },
+    {
+      "file": "apps/api/src/domains/telegram/telegram-system-bot/telegram-system-bot-forwarded-content.parser.spec.ts",
+      "category": "BUSINESS_LOGIC",
+      "severity": "P2",
+      "baselineUnchanged": true,
+      "detail": "Inherited observable rate/formatting assertion failure; root cause and intended behavior remain untriaged by owning product.",
+      "failedTests": [
+        "parseTelegramSystemBotForwardedContent round-trips multiline links, nested formatting, spoilers, emoji offsets, and literal markup",
+        "parseTelegramSystemBotForwardedContent does not interpret literal managed-markup characters in an unformatted forwarded post"
+      ]
+    },
+    {
+      "file": "products/finance/api/portability/finance-import-rates.spec.ts",
+      "category": "OLD_TECHNICAL_DEBT",
+      "severity": "P2",
+      "baselineUnchanged": true,
+      "detail": "Inherited API/UI expectation mismatch; no claim that changing assertions alone is safe.",
+      "failedTests": [
+        "prepareFinanceImportRates backfills a missing PLN to USD rate and reloads the prepared sources"
+      ]
+    }
+  ],
+  "runtime": "Node20.19.0 pinned compatibility run; same remaining failures reproduced under Node22.22.2"
+}

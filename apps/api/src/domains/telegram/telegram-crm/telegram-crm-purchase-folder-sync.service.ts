@@ -10,7 +10,9 @@ const folderKey = (value: string | null) => {
 /** Applies the configured customer tag to the matching Telegram dialogs. */
 @Injectable()
 export class TelegramCrmPurchaseFolderSyncService {
-  private readonly logger = new Logger(TelegramCrmPurchaseFolderSyncService.name);
+  private readonly logger = new Logger(
+    TelegramCrmPurchaseFolderSyncService.name,
+  );
 
   constructor(
     private readonly prisma: PrismaService,

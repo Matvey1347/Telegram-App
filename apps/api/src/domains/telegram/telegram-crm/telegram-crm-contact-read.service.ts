@@ -159,56 +159,53 @@ export class TelegramCrmContactReadService {
       icons,
       tagged,
       untagged,
-    ] =
-      await Promise.all([
-        this.activeDealTotals(
-          access.workspaceId,
-          rows.flatMap((row) => (row.sales[0] ? [row.sales[0].id] : [])),
-        ),
-        loadCrmContactSalesSummaries(
-          this.prisma,
-          access.workspaceId,
-          rows
-            .filter(
-              (row) =>
-                row.totalSalesCount > 0 ||
-                row._count.sales > 0 ||
-                Boolean(row.telegramUsername) ||
-                isUnassignedCrmContact(row),
-            )
-            .map((row) => ({
-              id: row.id,
-              displayName: row.displayName,
-              companyName: row.companyName,
-              telegramUsername: row.telegramUsername,
-            })),
-        ),
-        loadCrmReplySummaries(this.prisma, access.workspaceId, rows),
-        this.listTagFacets(access.workspaceId, facetWhere),
-        crossPromotionIconIds.length
-          ? this.prisma.icon.findMany({
-              where: { id: { in: crossPromotionIconIds } },
-              select: {
-                id: true,
-                type: true,
-                name: true,
-                emoji: true,
-                imageUrl: true,
-              },
-            })
-          : Promise.resolve([]),
-        this.prisma.telegramAdvertiser.count({
-          where: { ...facetWhere, tags: { some: {} } },
-        }),
-        this.prisma.telegramAdvertiser.count({
-          where: { ...facetWhere, tags: { none: {} } },
-        }),
-      ]);
+    ] = await Promise.all([
+      this.activeDealTotals(
+        access.workspaceId,
+        rows.flatMap((row) => (row.sales[0] ? [row.sales[0].id] : [])),
+      ),
+      loadCrmContactSalesSummaries(
+        this.prisma,
+        access.workspaceId,
+        rows
+          .filter(
+            (row) =>
+              row.totalSalesCount > 0 ||
+              row._count.sales > 0 ||
+              Boolean(row.telegramUsername) ||
+              isUnassignedCrmContact(row),
+          )
+          .map((row) => ({
+            id: row.id,
+            displayName: row.displayName,
+            companyName: row.companyName,
+            telegramUsername: row.telegramUsername,
+          })),
+      ),
+      loadCrmReplySummaries(this.prisma, access.workspaceId, rows),
+      this.listTagFacets(access.workspaceId, facetWhere),
+      crossPromotionIconIds.length
+        ? this.prisma.icon.findMany({
+            where: { id: { in: crossPromotionIconIds } },
+            select: {
+              id: true,
+              type: true,
+              name: true,
+              emoji: true,
+              imageUrl: true,
+            },
+          })
+        : Promise.resolve([]),
+      this.prisma.telegramAdvertiser.count({
+        where: { ...facetWhere, tags: { some: {} } },
+      }),
+      this.prisma.telegramAdvertiser.count({
+        where: { ...facetWhere, tags: { none: {} } },
+      }),
+    ]);
     const iconById = new Map<string, ResolvedEmoji>();
     for (const icon of icons) {
-      const presentation = iconToResolvedEmoji(
-        icon as ResolvedEmojiIconSource,
-      );
+      const presentation = iconToResolvedEmoji(icon);
       if (presentation) iconById.set(icon.id, presentation);
     }
     return {

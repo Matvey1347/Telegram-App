@@ -42,7 +42,11 @@ export class TelegramCrmHistoryService {
       'adSales.crm.viewOwn',
       'adSales.crm.viewAny',
     );
-    if (conversation.historyExhausted && !dto.beforeTelegramMessageId) {
+    if (
+      !dto.recent &&
+      conversation.historyExhausted &&
+      !dto.beforeTelegramMessageId
+    ) {
       return {
         conversationId,
         imported: 0,
@@ -78,9 +82,10 @@ export class TelegramCrmHistoryService {
         return handle.getHistory({
           telegramUserId: peer.telegramUserId,
           telegramAccessHash: peer.telegramAccessHash,
-          beforeTelegramMessageId:
-            dto.beforeTelegramMessageId ??
-            conversation.historyCursorTelegramMessageId,
+          beforeTelegramMessageId: dto.recent
+            ? null
+            : (dto.beforeTelegramMessageId ??
+              conversation.historyCursorTelegramMessageId),
           limit: dto.limit ?? 50,
         });
       },
@@ -95,6 +100,7 @@ export class TelegramCrmHistoryService {
       messages: history.messages,
       nextBeforeTelegramMessageId: history.nextBeforeTelegramMessageId,
       exhausted: history.exhausted,
+      ...(dto.recent ? { preserveHistoryCursor: true } : {}),
     });
     return {
       conversationId,

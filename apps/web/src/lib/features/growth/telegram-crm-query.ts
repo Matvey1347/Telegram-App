@@ -16,9 +16,16 @@ import type {
   CrmConversationsParams,
   CrmInboxParams,
 } from "./telegram-crm-api";
+import type { CrmInboxConversationParams } from "./crm-inbox-api";
 
 export const telegramCrmKeys = {
   root: ["telegram-crm"] as const,
+  salesWorkflows: () => ["telegram-crm", "sales-workflow"] as const,
+  salesWorkflow: (conversationId: string) => ["telegram-crm", "sales-workflow", conversationId] as const,
+  purchasesRoot: () => ["telegram-crm", "purchases"] as const,
+  purchases: (contactId: string) => ["telegram-crm", "purchases", contactId] as const,
+  packageSalesContext: () => ["telegram-crm", "package-sales-context"] as const,
+  contactTasks: (contactId: string) => ["telegram-ad-sales", "crm-contact", contactId, "tasks"] as const,
   analytics: () => ["telegram-crm", "analytics"] as const,
   contactLists: () => ["telegram-crm", "contacts", "list"] as const,
   contactList: (params: CrmContactsParams) =>
@@ -31,6 +38,10 @@ export const telegramCrmKeys = {
   chatContext: (contactId: string) =>
     ["telegram-crm", "contacts", "chat-context", contactId] as const,
   inboxLists: () => ["telegram-crm", "inbox", "list"] as const,
+  inboxConversations: () => ["telegram-crm", "inbox-conversations"] as const,
+  inboxFolders: () => ["telegram-crm", "inbox-folders"] as const,
+  inboxConversationsList: (params: CrmInboxConversationParams) =>
+    ["telegram-crm", "inbox-conversations", params] as const,
   inboxList: (params: CrmInboxParams) =>
     ["telegram-crm", "inbox", "list", params] as const,
   conversations: () => ["telegram-crm", "conversations"] as const,
@@ -40,6 +51,8 @@ export const telegramCrmKeys = {
     ["telegram-crm", "conversations", "list", params] as const,
   conversationDetail: (conversationId: string) =>
     [...telegramCrmKeys.conversations(), "detail", conversationId] as const,
+  chatCapabilities: (conversationId: string) => ["telegram-crm", "chat-capabilities", conversationId] as const,
+  forwardDestinations: (accountId: string, page: number) => ["telegram-crm", "forward-destinations", accountId, page] as const,
   messages: () => ["telegram-crm", "messages"] as const,
   messagesInfinite: (conversationId: string) =>
     [...telegramCrmKeys.messages(), "infinite", conversationId] as const,
@@ -318,6 +331,8 @@ export function reconcileCrmMessage(
           ) {
             if (found) return [];
             found = true;
+            if (item.deletedAt && !message.deletedAt) return [item];
+            if (item.editedAt && (!message.editedAt || item.editedAt > message.editedAt)) return [item];
             return [message];
           }
           return [item];

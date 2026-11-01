@@ -75,9 +75,7 @@ describe('Telegram post batch deletion lifecycle schema', () => {
   });
 
   it('installs the batch editor columns and removes workflow attachment tables', () => {
-    expect(postEditorMigration).toContain(
-      'ADD COLUMN "iconId" TEXT',
-    );
+    expect(postEditorMigration).toContain('ADD COLUMN "iconId" TEXT');
     expect(postEditorMigration).toContain(
       'ADD COLUMN "resultPostBatchPostId" TEXT',
     );

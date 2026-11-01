@@ -7,6 +7,9 @@ import { TelegramNetworkPerformanceHistoryService } from './telegram-network-per
 @Module({
   imports: [TelegramChannelsModule],
   controllers: [TelegramChannelNetworksController],
-  providers: [TelegramChannelNetworksService, TelegramNetworkPerformanceHistoryService],
+  providers: [
+    TelegramChannelNetworksService,
+    TelegramNetworkPerformanceHistoryService,
+  ],
 })
 export class TelegramChannelNetworksModule {}

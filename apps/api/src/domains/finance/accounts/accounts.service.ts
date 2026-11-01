@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { CurrencyConversionService } from '../../../common/currency-conversion.service';
 import {
@@ -379,34 +383,37 @@ export class AccountsService {
     const initialBalance = dto.initialBalance ?? 0;
     const finalCurrency = dto.currency?.toUpperCase() ?? account.currency;
     const finalAssignedMemberId =
-      assignedMemberId === undefined ? account.assignedMemberId : assignedMemberId;
+      assignedMemberId === undefined
+        ? account.assignedMemberId
+        : assignedMemberId;
     if (initialBalance > 0 && !finalAssignedMemberId) {
       throw new BadRequestException(
         'Assign a member before adding an opening investment',
       );
     }
-    const [workspace, investmentCategory] = initialBalance > 0
-      ? await Promise.all([
-          this.prisma.workspace.findUniqueOrThrow({
-            where: { id: workspaceId },
-            select: { primaryCurrency: true },
-          }),
-          this.financeCategoriesService
-            .ensureSystemCategories(workspaceId)
-            .then(() =>
-              this.prisma.transactionCategory.findUniqueOrThrow({
-                where: {
-                  workspaceId_type_key: {
-                    workspaceId,
-                    type: 'income',
-                    key: 'investment',
+    const [workspace, investmentCategory] =
+      initialBalance > 0
+        ? await Promise.all([
+            this.prisma.workspace.findUniqueOrThrow({
+              where: { id: workspaceId },
+              select: { primaryCurrency: true },
+            }),
+            this.financeCategoriesService
+              .ensureSystemCategories(workspaceId)
+              .then(() =>
+                this.prisma.transactionCategory.findUniqueOrThrow({
+                  where: {
+                    workspaceId_type_key: {
+                      workspaceId,
+                      type: 'income',
+                      key: 'investment',
+                    },
                   },
-                },
-                select: { id: true, name: true },
-              }),
-            ),
-        ])
-      : [null, null];
+                  select: { id: true, name: true },
+                }),
+              ),
+          ])
+        : [null, null];
     const exchangeRateToPrimary =
       initialBalance <= 0 || finalCurrency === workspace?.primaryCurrency
         ? 1

@@ -170,9 +170,10 @@ export class TelegramManagedPostQueryService {
       telegramPosts.map((post) => [post.telegramMessageId, post]),
     );
     return posts.map((post) => {
-      const { adSalePlacements, ...managedPost } = post as ManagedPostReadRow & {
-        adSalePlacements?: Array<{ timezone: string }>;
-      };
+      const { adSalePlacements, ...managedPost } =
+        post as ManagedPostReadRow & {
+          adSalePlacements?: Array<{ timezone: string }>;
+        };
       const linkedMessageIds = this.linkedMessageIds(post);
       return {
         ...managedPost,

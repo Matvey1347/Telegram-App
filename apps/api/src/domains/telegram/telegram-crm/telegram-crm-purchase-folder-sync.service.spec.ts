@@ -99,7 +99,9 @@ describe('TelegramCrmPurchaseFolderSyncService', () => {
       runtime as never,
     );
 
-    await expect(service.sync('workspace-1', 'advertiser-1')).resolves.toBeUndefined();
+    await expect(
+      service.sync('workspace-1', 'advertiser-1'),
+    ).resolves.toBeUndefined();
     expect(runtime.withAccountHandle).toHaveBeenCalledTimes(1);
   });
 });

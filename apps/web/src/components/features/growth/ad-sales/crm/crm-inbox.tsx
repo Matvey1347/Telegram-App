@@ -1,251 +1,124 @@
 "use client";
 
-import { useState } from "react";
-import {
-  keepPreviousData,
-  useMutation,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
-import type {
-  CrmInboxItem,
-  CrmInboxPromotionStage,
-} from "@telegram-system/shared";
-import { TelegramEntityAvatar } from "@/components/features/telegram/telegram/telegram-entity-avatar";
-import {
-  Button,
-  EmptyState,
-  LoadingState,
-  Select,
-} from "@/components/ui/primitives";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Inbox, Search } from "lucide-react";
+import type { CrmInboxFilter } from "@telegram-system/shared";
+import { ChatShell } from "@/components/chat/chat-shell";
+import { ChatDetailsPanel } from "@/components/chat/chat-details-panel";
+import { ConversationList } from "@/components/chat/conversation-list";
+import { Input } from "@/components/ui/primitives";
+import { listCrmInboxConversations } from "@/lib/features/growth/crm-inbox-api";
+import { useCrmInboxFolders } from "@/lib/features/growth/use-crm-inbox-folders";
 import { telegramCrmApi } from "@/lib/features/growth/telegram-crm-api";
-import {
-  removeCrmInboxPeer,
-  telegramCrmKeys,
-} from "@/lib/features/growth/telegram-crm-query";
-import { crmText } from "./crm-copy";
-import { Pagination } from "@/components/ui/pagination";
+import { telegramCrmKeys } from "@/lib/features/growth/telegram-crm-query";
+import { crmConversationTitle, toChatConversation } from "./crm-chat-adapter";
+import { LeadInboxCandidates } from "./leads/lead-inbox-candidates";
 import { CrmInboxConversation } from "./crm-inbox-conversation";
+import { CrmInboxDetails } from "./crm-inbox-details";
+import { CrmInboxFolders } from "./crm-inbox-folders";
+import { useCrmSalesCopy } from "./crm-sales-copy";
+import { useInboxViewport } from "./use-inbox-viewport";
+import styles from "./crm-inbox.module.css";
 
-const promotions: CrmInboxPromotionStage[] = [
-  "NEW",
-  "LEAD",
-  "CUSTOMER",
-  "LOST",
-  "ANOTHER",
+const filters: Array<[CrmInboxFilter, string]> = [
+  ["ALL", "All"], ["UNREAD", "Unread"], ["NEEDS_REPLY", "Needs reply"],
+  ["AI_LEADS", "AI Leads"], ["FOLLOW_UP", "Follow-up"], ["ARCHIVED", "Archived"],
 ];
 
-function peerName(item: CrmInboxItem) {
-  const name = [item.peer.firstName, item.peer.lastName]
-    .filter(Boolean)
-    .join(" ");
-  return (
-    name ||
-    (item.peer.username ? `@${item.peer.username}` : item.peer.telegramUserId)
-  );
-}
-
-function InboxRow({
-  item,
-  canManage,
-}: {
-  item: CrmInboxItem;
-  canManage: boolean;
-}) {
-  const router = useRouter();
-  const queryClient = useQueryClient();
-  const [stage, setStage] = useState<CrmInboxPromotionStage>("LEAD");
-  const promote = useMutation({
-    mutationFn: () => telegramCrmApi.promoteInboxPeer(item.peer.id, stage),
-    onSuccess: () => {
-      removeCrmInboxPeer(queryClient, item.peer.id);
-      void queryClient.invalidateQueries({
-        queryKey: telegramCrmKeys.unread(),
-      });
-      void queryClient.invalidateQueries({
-        queryKey: telegramCrmKeys.contactLists(),
-      });
-      router.push("/ad-sales/clients");
-    },
-  });
-  const state = useMutation({
-    mutationFn: (next: "IGNORED" | "ARCHIVED") =>
-      telegramCrmApi.setInboxPeerState(item.peer.id, next),
-    onSuccess: () => {
-      removeCrmInboxPeer(queryClient, item.peer.id);
-      void queryClient.invalidateQueries({
-        queryKey: telegramCrmKeys.unread(),
-      });
-    },
-  });
-  return (
-    <li className="rounded-xl border border-neutral-800 bg-neutral-900/55 p-4">
-      <div className="flex items-start gap-3">
-        <TelegramEntityAvatar
-          imageUrl={item.peer.photoUrl ?? undefined}
-          alt={peerName(item)}
-          kind="person"
-          size="md"
-        />
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h2 className="truncate font-medium text-white">
-              {peerName(item)}
-            </h2>
-            {item.unreadCount ? (
-              <span className="rounded-full bg-teal-500 px-2 py-0.5 text-[11px] font-semibold text-neutral-950">
-                {item.unreadCount} unread
-              </span>
-            ) : null}
-          </div>
-          <p className="mt-1 text-sm text-neutral-400">
-            {item.peer.username
-              ? `@${item.peer.username.replace(/^@/, "")}`
-              : `Telegram ${item.peer.telegramUserId}`}
-          </p>
-          <p className="mt-2 line-clamp-2 text-sm text-neutral-300">
-            {item.latestConversation?.lastMessage?.text || "No message preview"}
-          </p>
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            {item.conversations.map((conversation) => (
-              <span
-                key={conversation.id}
-                className="rounded-md bg-neutral-800 px-2 py-1 text-[11px] text-neutral-300"
-              >
-                via{" "}
-                {conversation.account.username
-                  ? `@${conversation.account.username}`
-                  : conversation.account.label}
-              </span>
-            ))}
-          </div>
-        </div>
-      </div>
-      {item.latestConversation ? (
-        <Link
-          href={`/ad-sales/inbox?conversationId=${encodeURIComponent(item.latestConversation.id)}&peerId=${encodeURIComponent(item.peer.id)}`}
-          className="mt-3 inline-flex rounded-lg border border-neutral-700 px-3 py-2 text-sm text-neutral-200 transition hover:bg-neutral-800"
-        >
-          Open conversation
-        </Link>
-      ) : null}
-      {canManage ? (
-        <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-neutral-800 pt-3">
-          <Select
-            value={stage}
-            onChange={(event) =>
-              setStage(event.target.value as CrmInboxPromotionStage)
-            }
-            aria-label={`Promote ${peerName(item)} as`}
-          >
-            {promotions.map((value) => (
-              <option key={value} value={value}>
-                {value.replace("_", "-")}
-              </option>
-            ))}
-          </Select>
-          <Button
-            onClick={() => promote.mutate()}
-            disabled={promote.isPending || state.isPending}
-          >
-            Promote
-          </Button>
-          <Button
-            variant="secondary"
-            onClick={() => state.mutate("IGNORED")}
-            disabled={promote.isPending || state.isPending}
-          >
-            Ignore
-          </Button>
-          <Button
-            variant="secondary"
-            onClick={() => state.mutate("ARCHIVED")}
-            disabled={promote.isPending || state.isPending}
-          >
-            Archive
-          </Button>
-          {promote.error || state.error ? (
-            <span className="text-xs text-rose-300">
-              Action failed. Try again.
-            </span>
-          ) : null}
-        </div>
-      ) : (
-        <p className="mt-3 border-t border-neutral-800 pt-3 text-xs text-neutral-500">
-          You have read-only access to this inbox.
-        </p>
-      )}
-    </li>
-  );
-}
-
-function CrmInboxList({ canManage }: { canManage: boolean }) {
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(25);
-  const params = { page, pageSize, state: "ACTIVE" as const };
-  const query = useQuery({
-    queryKey: telegramCrmKeys.inboxList(params),
-    queryFn: ({ signal }) => telegramCrmApi.listInbox(params, signal),
-    placeholderData: keepPreviousData,
-  });
-  if (query.isLoading)
-    return <LoadingState text={crmText("states.loadingInbox")} />;
-  if (query.error)
-    return (
-      <div className="py-6 text-center">
-        <EmptyState text="Inbox could not be loaded." />
-        <Button
-          className="mt-3"
-          variant="secondary"
-          onClick={() => query.refetch()}
-        >
-          Retry
-        </Button>
-      </div>
-    );
-  if (!query.data?.items.length)
-    return <EmptyState text={crmText("states.emptyInbox")} />;
-  return (
-    <>
-      <ol className="space-y-3" aria-label="CRM inbox">
-        {query.data.items.map((item) => (
-          <InboxRow key={item.peer.id} item={item} canManage={canManage} />
-        ))}
-      </ol>
-      <Pagination
-        {...query.data.pagination}
-        onPageChange={setPage}
-        onPageSizeChange={(size) => {
-          setPage(1);
-          setPageSize(size);
-        }}
-        loading={query.isFetching}
-      />
-    </>
-  );
-}
-
-export function CrmInbox({
-  canManage,
-  canSendManual,
-  conversationId,
-  peerId,
-}: {
+export function CrmInbox({ canManage, canSendManual, canViewSales = false, canEditOwn = false, currentMemberId, conversationId, peerId }: {
   canManage: boolean;
   canSendManual: boolean;
+  canViewSales?: boolean;
+  canEditOwn?: boolean;
+  currentMemberId?: string;
   conversationId: string | null;
   peerId: string | null;
 }) {
-  if (conversationId) {
-    return (
-      <CrmInboxConversation
-        conversationId={conversationId}
-        peerId={peerId}
-        canSendManual={canSendManual}
-      />
-    );
-  }
-  return <CrmInboxList canManage={canManage} />;
+  const t = useCrmSalesCopy();
+  const [contextMenuId, setContextMenuId] = useState<string | null>(null);
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const [filter, setFilter] = useState<CrmInboxFilter>("ALL");
+  const [folderId, setFolderId] = useState("");
+  const folders = useCrmInboxFolders();
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const viewport = useInboxViewport(Boolean(conversationId) && filter !== "AI_LEADS");
+  // Only entries created here use history.back; deep links return directly to the list.
+  const navigated = useRef(false);
+  const detailNavigated = useRef(false);
+  const detailsOpen = Boolean(conversationId && searchParams.get("details") === "1");
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search.trim()), 250);
+    return () => clearTimeout(timer);
+  }, [search]);
+  const params = useMemo(() => ({ filter, search: debouncedSearch || undefined, ...(folderId ? { folderId } : {}), limit: 50 }), [filter, debouncedSearch, folderId]);
+  const list = useInfiniteQuery({
+    queryKey: telegramCrmKeys.inboxConversationsList(params),
+    queryFn: ({ pageParam, signal }) => listCrmInboxConversations(params, pageParam, signal),
+    initialPageParam: null as string | null,
+    getNextPageParam: (page) => page.hasMore ? page.nextCursor : undefined,
+    staleTime: 60_000,
+    // A different folder/filter must never display the preceding list while loading.
+    placeholderData: undefined,
+    enabled: filter !== "AI_LEADS",
+  });
+  const items = useMemo(() => {
+    const unique = new Map((list.data?.pages.flatMap((page) => page.items) ?? []).map((item) => [item.id, item]));
+    return [...unique.values()].sort((a, b) => (b.lastMessageAt ?? "").localeCompare(a.lastMessageAt ?? "") || b.id.localeCompare(a.id));
+  }, [list.data]);
+  const detail = useQuery({
+    queryKey: telegramCrmKeys.conversationDetail(conversationId ?? "none"),
+    queryFn: ({ signal }) => telegramCrmApi.getConversation(conversationId!, signal),
+    enabled: Boolean(conversationId && detailsOpen && filter !== "AI_LEADS"), staleTime: 60_000,
+  });
+  const select = (id: string) => {
+    if (id === conversationId) return;
+    navigated.current = true;
+    detailNavigated.current = false;
+    // Replacing subsequent selections makes one browser Back return to the list.
+    const href = `/ad-sales/inbox?conversationId=${encodeURIComponent(id)}`;
+    if (conversationId) router.replace(href, { scroll: false });
+    else router.push(href, { scroll: false });
+  };
+  const closeDetails = () => {
+    if (detailNavigated.current) { detailNavigated.current = false; router.back(); }
+    else router.replace(`/ad-sales/inbox?conversationId=${encodeURIComponent(conversationId!)}`, { scroll: false });
+  };
+  const openDetails = () => {
+    if (!conversationId || detailsOpen) return;
+    detailNavigated.current = true;
+    router.push(`/ad-sales/inbox?conversationId=${encodeURIComponent(conversationId)}&details=1`, { scroll: false });
+  };
+  const back = () => {
+    if (navigated.current) { navigated.current = false; router.back(); }
+    else router.replace("/ad-sales/inbox", { scroll: false });
+  };
+  const selectedItem = items.find((item) => item.id === conversationId);
+  const selectedFolder = folders.data?.items.find((folder) => folder.id === folderId);
+  const validDetail = detail.data && (!peerId || detail.data.telegramCrmPeerId === peerId);
+  return <div ref={viewport} className={styles.inbox} data-selected={Boolean(conversationId) && filter !== "AI_LEADS"}>
+    <ChatShell selected={Boolean(conversationId) && filter !== "AI_LEADS"} list={<div className={styles.listLayout}>
+      <CrmInboxFolders folders={folders.data?.items ?? []} selectedId={folderId} totalUnread={folders.data?.totalUnread ?? null} loading={folders.isLoading} error={folders.isError} onRetry={() => void folders.refetch()} onSelect={(id) => { setFolderId(id); setFilter("ALL"); }} />
+      <div className={styles.listContent}>
+      <div className="shrink-0 space-y-3 border-b border-neutral-800 p-3">
+        <div className="flex items-center gap-2"><Inbox size={19} className="text-blue-400" /><h2 className="font-semibold text-neutral-100">Inbox</h2><span className="ml-auto text-xs text-neutral-500">Telegram</span></div>
+        {selectedFolder ? <p className="break-words text-xs text-neutral-400">{selectedFolder.name}</p> : null}
+        <div className="relative"><Search size={16} className="pointer-events-none absolute left-3 top-3 text-neutral-500" /><Input className="pl-9" type="search" aria-label="Search conversations" placeholder="Search chats and clients" maxLength={100} value={search} onChange={(event) => setSearch(event.target.value)} /></div>
+        <div className="flex gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" role="group" aria-label="Inbox filters">{filters.map(([value, label]) => <button type="button" key={value} aria-pressed={filter === value && (value !== "ALL" || !folderId)} onClick={() => { if (value === "ALL" || value === "UNREAD" || value === "AI_LEADS" || value === "ARCHIVED") setFolderId(""); setFilter(value); }} className={`shrink-0 rounded-full border px-3 py-1.5 text-xs transition ${filter === value && (value !== "ALL" || !folderId) ? "border-blue-500 bg-blue-500/20 text-blue-200" : "border-neutral-700 text-neutral-400 hover:bg-neutral-800"}`}>{label}{value === "UNREAD" && (folders.data?.totalUnread ?? 0) > 0 ? ` · ${folders.data!.totalUnread}` : ""}</button>)}</div>
+      </div>
+      {filter === "AI_LEADS" ? <LeadInboxCandidates search={debouncedSearch}/> : <ConversationList key={`${filter}:${folderId}:${debouncedSearch}`} items={items.map((item) => toChatConversation(item, t))} selectedId={conversationId} onSelect={select}
+        onContextMenu={(id) => { setContextMenuId(id); select(id); }}
+        loading={list.isLoading} error={Boolean(list.error)} onRetry={() => void list.refetch()}
+        emptyText="No conversations match this view."
+        hasMore={list.hasNextPage} loadingMore={list.isFetchingNextPage} onLoadMore={() => void list.fetchNextPage()} />}
+      </div>
+    </div>} thread={filter === "AI_LEADS" ? <div className="m-auto p-6 text-center text-sm text-neutral-400">Lead candidates are evidence records. Open a candidate for review; an existing CRM client link never fabricates a conversation.</div> : conversationId ? <CrmInboxConversation key={conversationId} conversationId={conversationId} peerId={peerId} detailsOpen={detailsOpen}
+      canSendManual={canSendManual} workflowMenuOpen={contextMenuId === conversationId ? true : undefined} onWorkflowMenuOpenChange={(open) => { if (!open) setContextMenuId(null); }} displayName={selectedItem ? crmConversationTitle(selectedItem) : undefined} photoUrl={selectedItem?.peer.photoUrl} onBack={back} onOpenDetails={openDetails} /> : <div className="m-auto p-6 text-center"><Inbox size={36} className="mx-auto mb-4 text-neutral-600" /><h2 className="text-lg font-medium text-neutral-200">Your conversations, in one place</h2><p className="mt-2 text-sm text-neutral-500">Choose a conversation to read or reply.</p></div>}
+      details={detailsOpen && filter !== "AI_LEADS" ? <ChatDetailsPanel hideTitle title={selectedItem ? crmConversationTitle(selectedItem) : "Client details"} onClose={closeDetails}>
+        {validDetail ? <CrmInboxDetails key={detail.data!.id} conversation={detail.data!} canManage={canManage} canEditOwn={canEditOwn} currentMemberId={currentMemberId} canViewSales={canViewSales} /> : <p className="text-sm text-neutral-400">{detail.error ? "Client details could not be loaded." : "Loading client details…"}</p>}
+      </ChatDetailsPanel> : undefined} />
+  </div>;
 }

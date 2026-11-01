@@ -149,3 +149,61 @@ export function trustedProxyHops(
   }
   return isProductionEnvironment(environment) ? 1 : 0;
 }
+
+/** Explicit rollout boundary: legacy manual text remains available when chat actions are off. */
+export function crmChatRollout(
+  environment: DeploymentEnvironment = process.env,
+) {
+  const flag = (key: 'CRM_CHAT_ACTIONS_ENABLED' | 'CRM_CHAT_MEDIA_ENABLED') => {
+    const value = nonBlank(environment[key])?.toLowerCase();
+    if (value && value !== 'true' && value !== 'false')
+      throw new Error(`${key} must be true or false`);
+    return value === 'true';
+  };
+  return {
+    actions: flag('CRM_CHAT_ACTIONS_ENABLED'),
+    media: flag('CRM_CHAT_MEDIA_ENABLED'),
+  };
+}
+
+/** Allow compatibility API hosts to avoid owning the shared CRM MTProto runtime. */
+export function crmRuntimeProxyOrigin(
+  environment: DeploymentEnvironment = process.env,
+) {
+  const configured = nonBlank(environment.CRM_RUNTIME_PROXY_URL);
+  if (!configured) return undefined;
+  let target: URL;
+  try {
+    target = new URL(configured);
+  } catch {
+    throw new Error('CRM_RUNTIME_PROXY_URL must be a trusted HTTP origin');
+  }
+  const localHttp =
+    target.protocol === 'http:' &&
+    ['localhost', '127.0.0.1', '[::1]'].includes(target.hostname) &&
+    !isProductionEnvironment(environment);
+  if (
+    (!localHttp && target.protocol !== 'https:') ||
+    target.username ||
+    target.password ||
+    target.search ||
+    target.hash ||
+    target.pathname !== '/'
+  )
+    throw new Error('CRM_RUNTIME_PROXY_URL must be a trusted HTTP origin');
+  return target.origin;
+}
+
+export function crmRuntimeEnabled(
+  environment: DeploymentEnvironment = process.env,
+) {
+  if (environment.CRM_RUNTIME_ENABLED?.trim().toLowerCase() === 'false')
+    return false;
+  if (crmRuntimeProxyOrigin(environment)) return false;
+  const configuredOwnerPort = nonBlank(environment.CRM_RUNTIME_OWNER_API_PORT);
+  if (!configuredOwnerPort) return true;
+  const ownerPort = Number(configuredOwnerPort);
+  if (!Number.isInteger(ownerPort) || ownerPort < 1 || ownerPort > 65535)
+    throw new Error('CRM_RUNTIME_OWNER_API_PORT must be a valid TCP port');
+  return apiPort(environment) === ownerPort;
+}

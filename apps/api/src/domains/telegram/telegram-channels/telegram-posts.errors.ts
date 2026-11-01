@@ -1,5 +1,11 @@
-import type { TelegramPostsErrorCode, TranslationParams } from '@telegram-system/shared';
-import { badRequest, notFound } from '../../../common/http/structured-http-error';
+import type {
+  TelegramPostsErrorCode,
+  TranslationParams,
+} from '@telegram-system/shared';
+import {
+  badRequest,
+  notFound,
+} from '../../../common/http/structured-http-error';
 
 export function telegramPostsBadRequest(
   code: TelegramPostsErrorCode,

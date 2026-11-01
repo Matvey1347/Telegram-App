@@ -42,6 +42,8 @@ describe("resolveAdSalesSurface", () => {
     });
   });
 
+  it("opens direct clients without inventing a conversation",()=>{expect(resolveAdSalesSurface("/ad-sales/clients/manual-only-client")).toEqual({kind:"contacts",contactId:"manual-only-client"});});
+
   it("preserves an exact unassigned inbox thread deep link", () => {
     expect(
       resolveAdSalesSurface(

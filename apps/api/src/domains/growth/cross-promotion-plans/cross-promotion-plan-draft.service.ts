@@ -16,9 +16,7 @@ const asString = (value: unknown) =>
   typeof value === 'string' ? value.trim() : '';
 
 const stringIds = (value: unknown) =>
-  Array.isArray(value)
-    ? [...new Set(value.map(asString).filter(Boolean))]
-    : [];
+  Array.isArray(value) ? [...new Set(value.map(asString).filter(Boolean))] : [];
 
 const draftObject = (value: unknown) =>
   value && typeof value === 'object' && !Array.isArray(value)
@@ -33,14 +31,9 @@ export class CrossPromotionPlanDraftService {
     private readonly readService: CrossPromotionPlanReadService,
   ) {}
 
-  async save(
-    userId: string,
-    dto: SaveCrossPromotionPlanDraftDto,
-    id?: string,
-  ) {
-    const workspaceId = await this.workspaceService.resolveWorkspaceIdForUser(
-      userId,
-    );
+  async save(userId: string, dto: SaveCrossPromotionPlanDraftDto, id?: string) {
+    const workspaceId =
+      await this.workspaceService.resolveWorkspaceIdForUser(userId);
     const draft = draftObject(dto.draft);
     const post = draftObject(draft.post);
     const date = asString(draft.date);
@@ -62,7 +55,9 @@ export class CrossPromotionPlanDraftService {
       title: asString(draft.title) || 'Untitled mutual promotion',
       publisherChannelIds: stringIds(draft.publisherIds),
       partnerChannelIds: stringIds(draft.partnerIds),
-      targets: (Array.isArray(draft.targets) ? draft.targets : []) as Prisma.InputJsonValue,
+      targets: (Array.isArray(draft.targets)
+        ? draft.targets
+        : []) as Prisma.InputJsonValue,
       publicationPost,
       scheduledAt,
       trackingEndsAt: null,

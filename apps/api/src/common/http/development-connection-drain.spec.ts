@@ -2,6 +2,11 @@ import { EventEmitter } from 'node:events';
 import { installDevelopmentConnectionDrain } from './development-connection-drain';
 
 describe('installDevelopmentConnectionDrain', () => {
+  beforeEach(() => jest.useFakeTimers());
+  afterEach(() => {
+    jest.clearAllTimers();
+    jest.useRealTimers();
+  });
   it('closes long-lived HTTP connections before a development restart', () => {
     const signals = new EventEmitter();
     const server = new EventEmitter() as EventEmitter & {
@@ -12,17 +17,25 @@ describe('installDevelopmentConnectionDrain', () => {
       destroy: jest.Mock;
     };
     socket.destroy = jest.fn();
-    installDevelopmentConnectionDrain(server as never, 'development', signals);
+    const forceExit = jest.fn();
+    installDevelopmentConnectionDrain(
+      server as never,
+      'development',
+      signals,
+      forceExit,
+    );
     server.emit('connection', socket);
 
     signals.emit('SIGTERM');
 
     expect(server.closeAllConnections).toHaveBeenCalledTimes(1);
     expect(socket.destroy).toHaveBeenCalledTimes(1);
+    jest.advanceTimersByTime(1500);
+    expect(forceExit).toHaveBeenCalledTimes(1);
+    expect(forceExit).toHaveBeenCalledWith(0);
   });
 
   it('bounds a development shutdown when an async lifecycle hook hangs', () => {
-    jest.useFakeTimers();
     const signals = new EventEmitter();
     const server = new EventEmitter() as EventEmitter & {
       closeAllConnections: jest.Mock;
@@ -42,7 +55,6 @@ describe('installDevelopmentConnectionDrain', () => {
     jest.advanceTimersByTime(1);
 
     expect(forceExit).toHaveBeenCalledWith(0);
-    jest.useRealTimers();
   });
 
   it('keeps production shutdown graceful', () => {
@@ -51,7 +63,7 @@ describe('installDevelopmentConnectionDrain', () => {
       closeAllConnections: jest.fn(),
       on: jest.fn(),
     };
-    installDevelopmentConnectionDrain(server as never, 'production', signals);
+    installDevelopmentConnectionDrain(server, 'production', signals);
 
     signals.emit('SIGTERM');
 
@@ -64,7 +76,7 @@ describe('installDevelopmentConnectionDrain', () => {
       closeAllConnections: jest.fn(),
       on: jest.fn(),
     };
-    installDevelopmentConnectionDrain(server as never, 'staging', signals);
+    installDevelopmentConnectionDrain(server, 'staging', signals);
 
     signals.emit('SIGTERM');
 

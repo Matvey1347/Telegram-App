@@ -3,6 +3,13 @@ import { describe, expect, it, vi } from "vitest";
 import { AppNavigation } from "./app-navigation";
 
 describe("AppNavigation permissions", () => {
+  it("keeps one CRM entry and lands leads-only roles in their permitted workspace", () => {
+    render(<AppNavigation pathname="/ad-sales/leads" openGroups={{growth:true}} onToggleGroup={vi.fn()} canViewAdmin={false} effectiveFeatureIds={['adSales.leads']} effectivePermissionKeys={['adSales.leads.view']}/>);
+    expect(screen.getByRole('link',{name:'CRM'})).toHaveAttribute('href','/ad-sales/leads');
+    expect(screen.getByRole('link',{name:'CRM'})).toHaveAttribute('aria-current','page');
+    expect(screen.queryByRole('link',{name:'Finance'})).toBeNull();
+  });
+
   it("omits features absent from effective access", () => {
     render(
       <AppNavigation

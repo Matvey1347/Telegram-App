@@ -1,0 +1,4 @@
+-- Synthetic offline-only existing rows; account sync/send stay disabled.
+INSERT INTO "TelegramUserAccountIntegration" (id,"workspaceId",label,"apiId","apiHashEncrypted","apiHashIv","apiHashAuthTag","updatedAt") VALUES ('crm_migration_account','cmptsyujx0001flritxdrq84b','Synthetic offline migration account','0','not-real','not-real','not-real',NOW());
+INSERT INTO "TelegramAdvertiser" (id,"workspaceId","displayName","updatedAt") VALUES ('crm_migration_advertiser','cmptsyujx0001flritxdrq84b','Synthetic existing migration client',NOW());
+INSERT INTO "TelegramAdvertiserContact" (id,"workspaceId","advertiserId",type,value,"normalizedValue",label,"updatedAt") VALUES ('crm_migration_legacy_other','cmptsyujx0001flritxdrq84b','crm_migration_advertiser','OTHER','@synthetic_profile','synthetic_profile','Instagram',NOW());

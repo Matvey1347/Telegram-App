@@ -92,7 +92,10 @@ export class TelegramAdSalesController {
   ) {}
 
   @Get(':saleId/bot-notification-preview')
-  botNotificationPreview(@CurrentUser() user: JwtUser, @Param('saleId') saleId: string) {
+  botNotificationPreview(
+    @CurrentUser() user: JwtUser,
+    @Param('saleId') saleId: string,
+  ) {
     return this.botConfirmation.preview(user.sub, saleId);
   }
 
@@ -750,7 +753,12 @@ export class TelegramAdSalesController {
       eventPrefix: 'telegram_ad_sales.delete_publications',
       persistLifecycleLogs: false,
       action: (onProgress, signal) =>
-        this.service.cancelSalePublications(user.sub, saleId, onProgress, signal),
+        this.service.cancelSalePublications(
+          user.sub,
+          saleId,
+          onProgress,
+          signal,
+        ),
     });
   }
 

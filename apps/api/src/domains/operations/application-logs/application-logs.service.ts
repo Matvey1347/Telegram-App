@@ -83,7 +83,10 @@ export class ApplicationLogsService {
     };
   }
 
-  private emptyListResult(query: ApplicationLogsQueryDto, limit: number): ApplicationLogsListResult {
+  private emptyListResult(
+    query: ApplicationLogsQueryDto,
+    limit: number,
+  ): ApplicationLogsListResult {
     return {
       items: [],
       nextCursor: null,
@@ -136,7 +139,10 @@ export class ApplicationLogsService {
     );
   }
 
-  async list(userId: string, query: ApplicationLogsQueryDto): Promise<ApplicationLogsListResult> {
+  async list(
+    userId: string,
+    query: ApplicationLogsQueryDto,
+  ): Promise<ApplicationLogsListResult> {
     const membership = await this.requireAdminWorkspace(userId);
     const limit = Math.min(200, Math.max(1, query.limit || 50));
     const cursor = query.cursor ? decodeCursor(query.cursor) : null;
@@ -185,7 +191,9 @@ export class ApplicationLogsService {
     } else if (query.statusCodeFrom != null || query.statusCodeTo != null) {
       and.push({
         statusCode: {
-          ...(query.statusCodeFrom != null ? { gte: query.statusCodeFrom } : {}),
+          ...(query.statusCodeFrom != null
+            ? { gte: query.statusCodeFrom }
+            : {}),
           ...(query.statusCodeTo != null ? { lte: query.statusCodeTo } : {}),
         },
       });
@@ -298,7 +306,10 @@ export class ApplicationLogsService {
           take: 100,
         }),
         this.repository.findMany({
-          where: { workspaceId: membership.workspaceId, endpoint: { not: null } },
+          where: {
+            workspaceId: membership.workspaceId,
+            endpoint: { not: null },
+          },
           distinct: ['endpoint'],
           orderBy: { endpoint: 'asc' },
           select: { endpoint: true },
@@ -318,13 +329,24 @@ export class ApplicationLogsService {
 
       return {
         levels: ['debug', 'info', 'warn', 'error'],
-        kinds: ['http', 'application', 'integration', 'cron', 'client', 'audit'],
+        kinds: [
+          'http',
+          'application',
+          'integration',
+          'cron',
+          'client',
+          'audit',
+        ],
         sources: sources.map((item) => item.source).filter(Boolean) as string[],
         events: events.map((item) => item.event).filter(Boolean),
         endpoints: endpoints
           .map((item) => item.endpoint)
           .filter(Boolean) as string[],
-        users: (users as Array<{ user?: { id: string; name: string; email: string } | null }>)
+        users: (
+          users as Array<{
+            user?: { id: string; name: string; email: string } | null;
+          }>
+        )
           .map((item) => item.user)
           .filter(Boolean)
           .map((user) => ({
@@ -343,7 +365,8 @@ export class ApplicationLogsService {
   }
 
   async createClientLog(userId: string, dto: ClientLogDto) {
-    const membership = await this.workspaceService.resolveWorkspaceMembershipForUser(userId);
+    const membership =
+      await this.workspaceService.resolveWorkspaceMembershipForUser(userId);
     if (this.shouldSkipForMissingStorage()) {
       return { skipped: true };
     }
@@ -390,7 +413,10 @@ export class ApplicationLogsService {
     try {
       const result = await this.repository.deleteMany({
         where: {
-          OR: [{ expiresAt: { lt: new Date() } }, { createdAt: { lt: cutoff } }],
+          OR: [
+            { expiresAt: { lt: new Date() } },
+            { createdAt: { lt: cutoff } },
+          ],
         },
       });
       this.markStorageAvailable();
@@ -404,7 +430,9 @@ export class ApplicationLogsService {
     }
   }
 
-  async clearWorkspaceLogs(userId: string): Promise<ApplicationLogsDeleteResult> {
+  async clearWorkspaceLogs(
+    userId: string,
+  ): Promise<ApplicationLogsDeleteResult> {
     const membership = await this.requireAdminWorkspace(userId);
     if (this.shouldSkipForMissingStorage()) {
       return { success: true, deletedCount: 0 };

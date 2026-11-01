@@ -28,6 +28,7 @@ import {
 import { operationsNotificationKeys } from "@/lib/query-keys";
 import { NotificationPanel } from "./notification-panel";
 import { NotificationPushSettings } from "./notification-push-settings";
+import { useNotificationRealtime } from "./use-notification-realtime";
 
 const PAGE_SIZE = 25;
 
@@ -45,6 +46,7 @@ export function NotificationCenter({
   const [open, setOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [anchorStyle, setAnchorStyle] = useState<CSSProperties>();
+  useNotificationRealtime({ workspaceId, enabled, panelOpen: open });
 
   const unreadQuery = useQuery({
     queryKey: operationsNotificationKeys.unread(workspaceId),

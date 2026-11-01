@@ -5,25 +5,26 @@ import type { CrmRealtimeEvent } from "@telegram-system/shared";
 import { useDocumentVisibility } from "@/hooks/use-document-visibility";
 import { fetchCrmEventStream } from "./telegram-crm-api";
 
-const MAX_RECONNECT_ATTEMPTS = 6;
 const MAX_RECONNECT_DELAY_MS = 30_000;
 
 export function useTelegramCrmRealtime({
   active,
   onEvent,
   onReconnect,
+  scopeKey,
 }: {
   active: boolean;
   onEvent: (event: CrmRealtimeEvent) => void;
   onReconnect?: () => void;
+  /** Reopen the authenticated stream when the active workspace changes. */
+  scopeKey?: string;
 }) {
-  const [status, setStatus] = useState<"connecting" | "connected" | "paused">(
+  const [status, setStatus] = useState<"connecting" | "connected">(
     "connecting",
   );
   const documentVisible = useDocumentVisibility();
   const onEventRef = useRef(onEvent);
   const onReconnectRef = useRef(onReconnect);
-  const streamAttemptedRef = useRef(false);
   useEffect(() => {
     onEventRef.current = onEvent;
     onReconnectRef.current = onReconnect;
@@ -37,8 +38,6 @@ export function useTelegramCrmRealtime({
     let controller: AbortController | null = null;
 
     const connect = () => {
-      const shouldReconcileOnOpen = streamAttemptedRef.current;
-      streamAttemptedRef.current = true;
       const currentController = new AbortController();
       controller = currentController;
       void fetchCrmEventStream({
@@ -46,7 +45,9 @@ export function useTelegramCrmRealtime({
         onEvent: (event) => onEventRef.current(event),
         onOpen: () => {
           setStatus("connected");
-          if (shouldReconcileOnOpen) onReconnectRef.current?.();
+          // The initial list read can precede stream attachment. Reconcile
+          // after every successful handshake so that gap is never permanent.
+          onReconnectRef.current?.();
           attempts = 0;
         },
       })
@@ -55,10 +56,6 @@ export function useTelegramCrmRealtime({
           if (controller === currentController) controller = null;
           if (stopped || currentController.signal.aborted) return;
           attempts += 1;
-          if (attempts > MAX_RECONNECT_ATTEMPTS) {
-            setStatus("paused");
-            return;
-          }
           setStatus("connecting");
           const delay = Math.min(
             MAX_RECONNECT_DELAY_MS,
@@ -74,6 +71,6 @@ export function useTelegramCrmRealtime({
       controller?.abort();
       if (reconnectTimer) clearTimeout(reconnectTimer);
     };
-  }, [active, documentVisible]);
+  }, [active, documentVisible, scopeKey]);
   return status;
 }

@@ -1,0 +1,40 @@
+Datasource "db": PostgreSQL database "crm_forward", schema "public" at "localhost:55491"
+
+196 migrations found in prisma/migrations
+
+Applying migration `20261031080000_crm_notification_preferences`
+Applying migration `20261031110000_crm_sales_workflow`
+Applying migration `20261031150000_internal_ai_infrastructure`
+Applying migration `20261031180000_crm_ai_sales_copilot`
+Applying migration `20261101010000_telegram_lead_discovery`
+Applying migration `20261101100000_ai_lead_qualification`
+Applying migration `20261101120000_crm_instagram_contact_type`
+Applying migration `20261101120100_crm_instagram_manual_contacts`
+Applying migration `20261101130000_telegram_chat_actions`
+
+The following migration(s) have been applied:
+
+migrations/
+  └─ 20261031080000_crm_notification_preferences/
+    └─ migration.sql
+  └─ 20261031110000_crm_sales_workflow/
+    └─ migration.sql
+  └─ 20261031150000_internal_ai_infrastructure/
+    └─ migration.sql
+  └─ 20261031180000_crm_ai_sales_copilot/
+    └─ migration.sql
+  └─ 20261101010000_telegram_lead_discovery/
+    └─ migration.sql
+  └─ 20261101100000_ai_lead_qualification/
+    └─ migration.sql
+  └─ 20261101120000_crm_instagram_contact_type/
+    └─ migration.sql
+  └─ 20261101120100_crm_instagram_manual_contacts/
+    └─ migration.sql
+  └─ 20261101130000_telegram_chat_actions/
+    └─ migration.sql
+
+All migrations have been successfully applied.
+Loaded Prisma config from ../../../../../../tmp/crm-migration-uvwZdM/all.config.mjs.
+
+Prisma schema loaded from prisma/schema.prisma.

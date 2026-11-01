@@ -66,9 +66,7 @@ export class TelegramManagedPostReconciliationService {
     return this.reconcileManagedPostIdentities({ workspaceId, channelId });
   }
 
-  async reconcileAllDueManagedPosts(options?: {
-    identityTimeoutMs?: number;
-  }) {
+  async reconcileAllDueManagedPosts(options?: { identityTimeoutMs?: number }) {
     const localDelivery = await this.publishDueLocallyScheduledManagedPosts();
     const identity = await this.reconcilePendingIdentitiesWithin(
       options?.identityTimeoutMs ?? IDENTITY_RECONCILIATION_TIMEOUT_MS,
@@ -129,7 +127,8 @@ export class TelegramManagedPostReconciliationService {
               },
               data: {
                 deleteAt: new Date(
-                  post.publishedAt.getTime() + post.deleteAfterHours * 3_600_000,
+                  post.publishedAt.getTime() +
+                    post.deleteAfterHours * 3_600_000,
                 ),
               },
             })
@@ -157,10 +156,12 @@ export class TelegramManagedPostReconciliationService {
     for (const [workspaceId, managedPostIds] of byWorkspace) {
       try {
         const result =
-          await this.telegramManagedPostRemoteDeletionService.deletePublishedManagedPosts({
-            workspaceId,
-            managedPostIds,
-          });
+          await this.telegramManagedPostRemoteDeletionService.deletePublishedManagedPosts(
+            {
+              workspaceId,
+              managedPostIds,
+            },
+          );
         deleted += result.deleted;
         failed += result.failed;
       } catch {

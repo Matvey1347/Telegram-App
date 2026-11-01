@@ -2,6 +2,7 @@ import { BadRequestException } from '@nestjs/common';
 import {
   OperationsNotificationPriority,
   OperationsNotificationType,
+  Prisma,
 } from '@prisma/client';
 import { OperationsNotificationStoreService } from './operations-notification-store.service';
 
@@ -70,6 +71,32 @@ describe('OperationsNotificationStoreService', () => {
       ]),
     ).resolves.toHaveLength(2);
     expect(queryRaw).toHaveBeenCalledTimes(1);
+  });
+
+  it('atomically keeps a 30-second CRM push cooldown and rejects same/older source messages without changing non-CRM upserts', async () => {
+    const queryRaw = jest
+      .fn<Promise<{ id: string }[]>, [Prisma.Sql]>()
+      .mockResolvedValue([]);
+    const service = new OperationsNotificationStoreService();
+    await service.upsertMany({ $queryRaw: queryRaw } as never, [
+      {
+        ...input,
+        metadata: {
+          messageSentAt: '2026-10-31T12:00:00.000Z',
+          telegramMessageId: 42,
+        },
+      },
+    ]);
+    const sql = queryRaw.mock.calls[0][0].sql;
+    expect(sql).toContain("INTERVAL '30 seconds'");
+    expect(sql).toContain('THEN "OperationsNotification"."pushAttemptedAt"');
+    expect(sql).toContain('WHERE EXCLUDED."type" <> \'CRM_MESSAGE_RECEIVED\'');
+    expect(sql).toContain(
+      "COALESCE(EXCLUDED.\"metadata\"::jsonb->>'messageSentAt', '')",
+    );
+    expect(sql).toContain(
+      'COALESCE((EXCLUDED."metadata"::jsonb->>\'telegramMessageId\')::bigint, 0)',
+    );
   });
 
   it('revokes published previews and transfers only pending rows on resource reassignment', async () => {

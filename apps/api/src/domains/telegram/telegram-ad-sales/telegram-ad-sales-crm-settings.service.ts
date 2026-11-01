@@ -41,7 +41,10 @@ export class TelegramAdSalesCrmSettingsService {
   }
 
   async getCrmWorkspaceSettings(userId: string) {
-    const { workspaceId } = await this.authorization.require(userId, 'adSales.crm.view');
+    const { workspaceId } = await this.authorization.require(
+      userId,
+      'adSales.crm.view',
+    );
     const settings =
       (await this.prisma.telegramAdCrmWorkspaceSettings.findUnique({
         where: { workspaceId },
@@ -56,7 +59,10 @@ export class TelegramAdSalesCrmSettingsService {
     userId: string,
     dto: TelegramAdCrmWorkspaceSettingsDto,
   ) {
-    const { workspaceId } = await this.authorization.require(userId, 'adSales.crm.manage');
+    const { workspaceId } = await this.authorization.require(
+      userId,
+      'adSales.crm.manage',
+    );
     const settings = await this.prisma.telegramAdCrmWorkspaceSettings.upsert({
       where: { workspaceId },
       create: { workspaceId, ...(dto as Record<string, unknown>) },

@@ -1,5 +1,17 @@
 import { Type } from 'class-transformer';
-import { IsBoolean, IsDateString, IsIn, IsInt, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength } from 'class-validator';
+import {
+  IsBoolean,
+  IsDateString,
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsString,
+  Matches,
+  Max,
+  MaxLength,
+  Min,
+  MinLength,
+} from 'class-validator';
 
 export class UpsertBillingProviderConfigDto {
   @IsOptional() @IsString() secretKey?: string;
@@ -46,7 +58,12 @@ export class CreateStripeCheckoutDto {
 export class CreateBillingCouponDto {
   @IsString() @MinLength(1) code!: string;
   @IsOptional() @IsString() planId?: string;
-  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(100) percentOff?: number;
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  percentOff?: number;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) amountOffMinor?: number;
   @IsOptional() @IsString() @MinLength(3) @MaxLength(3) currency?: string;
   @IsOptional() @IsDateString() startsAt?: string;
@@ -59,18 +76,30 @@ export class BillingSubscribersQueryDto {
   @IsOptional() @IsString() cursor?: string;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(100) limit?: number;
   @IsOptional() @IsString() search?: string;
-  @IsOptional() @IsIn(['ACTIVE', 'PAST_DUE', 'CANCELED', 'EXPIRED', 'INCOMPLETE']) status?: 'ACTIVE' | 'PAST_DUE' | 'CANCELED' | 'EXPIRED' | 'INCOMPLETE';
-  @IsOptional() @IsIn(['STRIPE', 'TELEGRAM_STARS', 'MANUAL', 'GIFT']) source?: 'STRIPE' | 'TELEGRAM_STARS' | 'MANUAL' | 'GIFT';
-  @IsOptional() @IsIn(['STRIPE', 'TELEGRAM_STARS']) provider?: 'STRIPE' | 'TELEGRAM_STARS';
+  @IsOptional()
+  @IsIn(['ACTIVE', 'PAST_DUE', 'CANCELED', 'EXPIRED', 'INCOMPLETE'])
+  status?: 'ACTIVE' | 'PAST_DUE' | 'CANCELED' | 'EXPIRED' | 'INCOMPLETE';
+  @IsOptional() @IsIn(['STRIPE', 'TELEGRAM_STARS', 'MANUAL', 'GIFT']) source?:
+    | 'STRIPE'
+    | 'TELEGRAM_STARS'
+    | 'MANUAL'
+    | 'GIFT';
+  @IsOptional() @IsIn(['STRIPE', 'TELEGRAM_STARS']) provider?:
+    | 'STRIPE'
+    | 'TELEGRAM_STARS';
   @IsOptional() @IsString() planId?: string;
-  @IsOptional() @IsIn(['LOCAL', 'PRODUCTION']) environment?: 'LOCAL' | 'PRODUCTION';
+  @IsOptional() @IsIn(['LOCAL', 'PRODUCTION']) environment?:
+    | 'LOCAL'
+    | 'PRODUCTION';
 }
 
 export class BillingUsersQueryDto {
   @IsOptional() @IsString() cursor?: string;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(100) limit?: number;
   @IsOptional() @IsString() search?: string;
-  @IsOptional() @IsIn(['LOCAL', 'PRODUCTION']) environment?: 'LOCAL' | 'PRODUCTION';
+  @IsOptional() @IsIn(['LOCAL', 'PRODUCTION']) environment?:
+    | 'LOCAL'
+    | 'PRODUCTION';
 }
 
 export class UpdateFinanceSupportProfileDto {

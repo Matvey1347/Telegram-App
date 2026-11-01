@@ -294,3 +294,185 @@ describe('TelegramCrmSystemTagsService', () => {
     ).not.toHaveBeenCalled();
   });
 });
+
+it.each([null, 'TELEGRAM_FOLDER:other-account:4'])(
+  'preserves legacy name on collision with another workspace tag (%s)',
+  async (conflictingSystemKey) => {
+    const rows = [
+      {
+        id: 'old',
+        workspaceId: 'w',
+        systemKey: 'TELEGRAM_FOLDER:a:9',
+        name: 'Old name',
+        color: '#000000',
+        position: 9,
+      },
+      {
+        id: 'unrelated',
+        workspaceId: 'w',
+        systemKey: conflictingSystemKey,
+        name: 'Customers',
+        color: null,
+        position: 0,
+      },
+      {
+        id: 'foreign',
+        workspaceId: 'other-workspace',
+        systemKey: null,
+        name: 'Unrelated',
+        color: null,
+        position: 0,
+      },
+    ];
+    type Where = {
+      workspaceId: string;
+      systemKey?: { in: string[] };
+      name?: { in: string[] };
+      OR?: Where[];
+    };
+    const matches = (row: (typeof rows)[number], where: Where): boolean =>
+      (!where.workspaceId || row.workspaceId === where.workspaceId) &&
+      (!where.systemKey || where.systemKey.in.includes(row.systemKey ?? '')) &&
+      (!where.name || where.name.in.includes(row.name)) &&
+      (!where.OR || where.OR.some((part) => matches(row, part)));
+    const prisma = {
+      telegramAdvertiserTag: {
+        findMany: jest.fn(({ where }: { where: Where }) =>
+          rows.filter((row) => matches(row, where)),
+        ),
+        createMany: jest.fn(),
+        updateMany: jest.fn(
+          ({
+            where,
+            data,
+          }: {
+            where: { workspaceId: string; systemKey: string };
+            data: { name: string };
+          }) => {
+            const current = rows.find(
+              (row) =>
+                row.workspaceId === where.workspaceId &&
+                row.systemKey === where.systemKey,
+            )!;
+            if (
+              rows.some(
+                (row) =>
+                  row.workspaceId === where.workspaceId &&
+                  row.id !== current.id &&
+                  row.name === data.name,
+              )
+            )
+              throw new Error('Unique constraint failed: workspaceId,name');
+            current.name = data.name;
+            return { count: 1 };
+          },
+        ),
+      },
+    };
+    await new TelegramCrmSystemTagsService(
+      prisma as never,
+    ).syncTelegramFolderTags(
+      {
+        workspaceId: 'w',
+        accountId: 'a',
+        folders: [{ id: 9, title: 'Customers', emoticon: null, color: 3 }],
+        dialogs: [],
+        contactIdByTelegramUserId: new Map(),
+      },
+      prisma as never,
+    );
+    expect(prisma.telegramAdvertiserTag.findMany).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        where: {
+          workspaceId: 'w',
+          OR: [
+            { systemKey: { in: ['TELEGRAM_FOLDER:a:9'] } },
+            { name: { in: ['Customers'] } },
+          ],
+        },
+      }),
+    );
+    expect(prisma.telegramAdvertiserTag.findMany).toHaveBeenCalledTimes(2);
+    expect(rows[0].name).toBe('Old name');
+    expect(rows[1].name).toBe('Customers');
+    expect(
+      prisma.telegramAdvertiserTag.updateMany.mock.calls[0]?.[0].data.name,
+    ).toBe('Old name');
+  },
+);
+
+it('preserves an existing folder name when a newly inserted folder claims its proposed rename in the same batch', async () => {
+  const rows = [
+    {
+      id: 'existing',
+      systemKey: 'TELEGRAM_FOLDER:a:1',
+      name: 'Original',
+      color: null as string | null,
+      position: 301,
+    },
+  ];
+  const prisma = {
+    telegramAdvertiserTag: {
+      findMany: jest
+        .fn()
+        .mockImplementation(() => rows.map((row) => ({ ...row }))),
+      createMany: jest.fn(
+        ({
+          data,
+        }: {
+          data: Array<{
+            systemKey: string;
+            name: string;
+            color: string | null;
+            position: number;
+          }>;
+        }) => {
+          for (const definition of data)
+            if (!rows.some((row) => row.name === definition.name))
+              rows.push({ id: 'new', ...definition });
+          return { count: 1 };
+        },
+      ),
+      updateMany: jest.fn(
+        ({
+          where,
+          data,
+        }: {
+          where: { systemKey: string };
+          data: { name: string };
+        }) => {
+          const current = rows.find(
+            (row) => row.systemKey === where.systemKey,
+          )!;
+          if (
+            rows.some((row) => row.id !== current.id && row.name === data.name)
+          )
+            throw new Error('Unique constraint failed');
+          current.name = data.name;
+          return { count: 1 };
+        },
+      ),
+    },
+  };
+  await new TelegramCrmSystemTagsService(
+    prisma as never,
+  ).syncTelegramFolderTags(
+    {
+      workspaceId: 'w',
+      accountId: 'a',
+      folders: [
+        { id: 1, title: 'Shared', emoticon: null, color: 3 },
+        { id: 2, title: 'Shared', emoticon: null, color: 3 },
+      ],
+      dialogs: [],
+      contactIdByTelegramUserId: new Map(),
+    },
+    prisma as never,
+  );
+  expect(rows.map((row) => [row.systemKey, row.name])).toEqual([
+    ['TELEGRAM_FOLDER:a:1', 'Original'],
+    ['TELEGRAM_FOLDER:a:2', 'Shared'],
+  ]);
+  expect(prisma.telegramAdvertiserTag.findMany).toHaveBeenCalledTimes(2);
+});

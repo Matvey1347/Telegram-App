@@ -1,0 +1,55 @@
+Prompt №8 — local verification,2026-11-01 Europe/Warsaw
+No production migration, paid model request, Telegram collection/join/send or release.
+
+Focused API final
+> jest "--runInBand" "lead-discovery|telegram-crm-copilot|operations/ai|telegram-crm-contact-merge|scheduled-task-executor|response-cache.interceptor"
+Test Suites: 33 passed, 33 total
+Tests:       422 passed, 422 total
+Time:        6.955 s
+Ran all test suites matching lead-discovery|telegram-crm-copilot|operations/ai|telegram-crm-contact-merge|scheduled-task-executor|response-cache.interceptor.
+
+API typecheck five unchanged baseline errors
+src/domains/telegram/telegram-bots/core/system-bot-branding-startup.service.ts(49,16): error TS2322: Type '{ workspaceId: string; kind: "SYSTEM"; environment: string; }' is not assignable to type 'TelegramConfiguredBotAvatarWorkspaceIdKindEnvironmentCompoundUniqueInput'.
+src/domains/telegram/telegram-bots/core/system-bot-branding-startup.service.ts(56,18): error TS2322: Type '{ workspaceId: string; kind: "SYSTEM"; environment: string; }' is not assignable to type 'TelegramConfiguredBotAvatarWorkspaceIdKindEnvironmentCompoundUniqueInput'.
+src/domains/telegram/telegram-bots/core/system-bot-branding-startup.service.ts(57,9): error TS2322: Type '{ username: string; image: Uint8Array<ArrayBuffer>; mimeType: string; profileAssetHash: string; workspaceId: string; kind: "SYSTEM"; environment: string; }' is not assignable to type '(Without<TelegramConfiguredBotAvatarCreateInput, TelegramConfiguredBotAvatarUncheckedCreateInput> & TelegramConfiguredBotAvatarUncheckedCreateInput) | (Without<...> & TelegramConfiguredBotAvatarCreateInput)'.
+src/domains/telegram/telegram-user-accounts/telegram-user-accounts.service.ts(855,7): error TS18046: 'existingChannels' is of type 'unknown'.
+src/domains/telegram/telegram-user-accounts/telegram-user-accounts.service.ts(877,9): error TS18046: 'existingChannels' is of type 'unknown'.
+
+API build five unchanged baseline errors
+ERROR in ./src/domains/telegram/telegram-bots/core/system-bot-branding-startup.service.ts:49:16
+ERROR in ./src/domains/telegram/telegram-bots/core/system-bot-branding-startup.service.ts:56:18
+ERROR in ./src/domains/telegram/telegram-bots/core/system-bot-branding-startup.service.ts:57:9
+ERROR in ./src/domains/telegram/telegram-user-accounts/telegram-user-accounts.service.ts:855:7
+ERROR in ./src/domains/telegram/telegram-user-accounts/telegram-user-accounts.service.ts:877:9
+webpack 5.106.0 compiled with 5 errors in 8372 ms
+
+Frontend qualification final
+ Test Files  7 passed (7)
+      Tests  82 passed (82)
+
+AI Usage frontend final
+ Test Files  1 passed (1)
+      Tests  15 passed (15)
+
+Benchmark harness (mock HTTP only, server closed)
+✔ benchmark defaults to offline synthetic validation without credentials (29.585084ms)
+✔ live mode fails before networking when cost acknowledgement and fixtures are absent (27.371625ms)
+✔ production origin is rejected before any benchmark request (27.040208ms)
+✔ mock staging run calls only explicit qualification and stops on UNKNOWN without approval, draft or send (52.896ms)
+ℹ tests 4
+ℹ pass 4
+ℹ fail 0
+
+Prisma validate/generate: passed; existing unrelated SetNull warning; migration not applied.
+Shared typecheck/build: passed. Web typecheck/build: passed, including final AI Usage filter delta.
+Scoped API ESLint:37 changed TypeScript files passed. Frontend agent scoped lint and final root AI Usage/i18n scoped lint: passed.
+i18n check: passed. git diff --check and owned-file whitespace checked.
+Full web (before final history-filter delta):354 passed/95 failed files;1764 passed/30 failed tests. Final history-filter delta: full AI infrastructure component suite15 passed. No newly failing names in agent full run vs Prompt7.
+Full web lint:142 errors/168 warnings outside scoped slice.
+Full API attempt:14 failing files outside this stage, then existing development connection drain invoked process.exit(0) before full Jest summary. This is NOT a passing full run.
+Architecture final:16/16 policy tests;22 normal/28 strict inherited violations; no threshold/allowance growth.
+Browser mock QA:24 checks,6 viewport widths,20 screenshots;0 overflow/errors/provider/send/join. Browser closed; existing localhost server untouched.
+Turing independent final review:8 suites/135 tests passed; no blocking issue found in current action paths. Counts overlap focused suite.
+Known collection limitation: new unlinked identity/DNC matches may lag in list/metrics; detail/AI/approval/Copy recheck current identity and block.
+Known UNKNOWN limitation: ledger financial reconciliation does not reconstruct result or clear domain claim; no self-service domain retry/discard implemented.
+

@@ -8,5 +8,20 @@ import { StripeBillingProvider } from './stripe-billing.provider';
 import { TelegramBotApiClient } from '@api/telegram/shared/bot/telegram-bot-api.client';
 import { BotBillingAnalyticsService } from './bot-billing-analytics.service';
 
-@Module({ controllers: [BotBillingController, StripeWebhookController], providers: [BotBillingService, BotBillingAnalyticsService, BotEntitlementsService, StripeWebhookService, StripeBillingProvider, TelegramBotApiClient], exports: [BotEntitlementsService, BotBillingAnalyticsService, BotBillingService] })
+@Module({
+  controllers: [BotBillingController, StripeWebhookController],
+  providers: [
+    BotBillingService,
+    BotBillingAnalyticsService,
+    BotEntitlementsService,
+    StripeWebhookService,
+    StripeBillingProvider,
+    TelegramBotApiClient,
+  ],
+  exports: [
+    BotEntitlementsService,
+    BotBillingAnalyticsService,
+    BotBillingService,
+  ],
+})
 export class BotBillingModule {}

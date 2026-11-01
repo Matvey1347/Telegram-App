@@ -1,11 +1,53 @@
 import {
   apiPort,
+  crmRuntimeEnabled,
+  crmRuntimeProxyOrigin,
   publicApiOrigin,
   publicWebOrigin,
   trustedProxyHops,
 } from './deployment-config';
 
 describe('deployment config', () => {
+  it('routes CRM only to an explicitly trusted origin and disables a relay host runtime', () => {
+    const relay = { CRM_RUNTIME_PROXY_URL: 'https://api.example/' };
+    expect(crmRuntimeProxyOrigin(relay)).toBe('https://api.example');
+    expect(crmRuntimeEnabled(relay)).toBe(false);
+    expect(
+      crmRuntimeProxyOrigin({ CRM_RUNTIME_PROXY_URL: 'http://127.0.0.1:4100' }),
+    ).toBe('http://127.0.0.1:4100');
+    for (const value of [
+      'javascript:alert(1)',
+      'http://api.example',
+      'https://secret@api.example',
+      'https://api.example/path',
+      'https://api.example?token=secret',
+    ])
+      expect(() =>
+        crmRuntimeProxyOrigin({ CRM_RUNTIME_PROXY_URL: value }),
+      ).toThrow('trusted HTTP origin');
+    expect(() =>
+      crmRuntimeProxyOrigin({
+        NODE_ENV: 'production',
+        CRM_RUNTIME_PROXY_URL: 'http://127.0.0.1:4100',
+      }),
+    ).toThrow('trusted HTTP origin');
+  });
+  it('designates only one local API port for the shared CRM runtime', () => {
+    const local = { CRM_RUNTIME_OWNER_API_PORT: '4000' };
+    expect(crmRuntimeEnabled({ ...local, API_PORT: '4000' })).toBe(true);
+    expect(crmRuntimeEnabled({ ...local, API_PORT: '4001' })).toBe(false);
+    expect(
+      crmRuntimeEnabled({
+        ...local,
+        API_PORT: '4000',
+        CRM_RUNTIME_ENABLED: 'false',
+      }),
+    ).toBe(false);
+    expect(crmRuntimeEnabled({})).toBe(true);
+    expect(() =>
+      crmRuntimeEnabled({ CRM_RUNTIME_OWNER_API_PORT: 'invalid' }),
+    ).toThrow('valid TCP port');
+  });
   it('uses FRONTEND_URL as the single public web origin', () => {
     expect(publicWebOrigin({ FRONTEND_URL: ' https://web.example/ ' })).toBe(
       'https://web.example',

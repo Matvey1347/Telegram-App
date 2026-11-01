@@ -23,7 +23,7 @@ describe('TelegramChannelsService channel lifecycle', () => {
     jest.spyOn(service, 'findOne').mockResolvedValue({
       id: 'channel-1',
       archivedAt: null,
-    } as never);
+    });
   });
 
   it('archives through a workspace-scoped conditional write without deleting data', async () => {

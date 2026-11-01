@@ -74,4 +74,24 @@ describe('operations notification list presentation', () => {
     expect(notificationConversationIds([row])).toEqual([]);
     expect(groupCrmNotificationRows([row], [])).toEqual([row]);
   });
+
+  it('never merges another account conversation, workspace, or recipient for the same contact', () => {
+    const rows = [
+      ['workspace-a', 'member-a', 'conversation-a'],
+      ['workspace-a', 'member-a', 'conversation-b'],
+      ['workspace-b', 'member-a', 'conversation-a'],
+      ['workspace-a', 'member-b', 'conversation-a'],
+    ].map(([workspaceId, recipientMemberId, conversationId], index) => ({
+      id: `notification-${index}`,
+      type: 'CRM_MESSAGE_RECEIVED',
+      workspaceId,
+      recipientMemberId,
+      metadata: {
+        conversationId,
+        contactId: 'shared-contact',
+        peerId: 'shared-peer',
+      },
+    })) as never[];
+    expect(groupCrmNotificationRows(rows, [])).toHaveLength(4);
+  });
 });

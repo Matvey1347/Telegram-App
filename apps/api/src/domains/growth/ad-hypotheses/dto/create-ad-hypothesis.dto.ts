@@ -1,4 +1,10 @@
-import { ArrayMinSize, IsArray, IsOptional, IsString, MinLength } from 'class-validator';
+import {
+  ArrayMinSize,
+  IsArray,
+  IsOptional,
+  IsString,
+  MinLength,
+} from 'class-validator';
 
 export class CreateAdHypothesisDto {
   @IsOptional() @IsString() iconId?: string | null;

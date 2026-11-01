@@ -34,12 +34,11 @@ describe('telegram-post-url helpers', () => {
     const telegramChatId = '-1003976683330';
 
     expect(
-      ['test_tg_system', 'new_test_tg_system', 'another_name', null].map(
-        () =>
-          buildStableTelegramPostUrl({
-            telegramChatId,
-            messageId,
-          }),
+      ['test_tg_system', 'new_test_tg_system', 'another_name', null].map(() =>
+        buildStableTelegramPostUrl({
+          telegramChatId,
+          messageId,
+        }),
       ),
     ).toEqual([
       'https://t.me/c/3976683330/33',

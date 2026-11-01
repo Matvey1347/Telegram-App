@@ -5,6 +5,8 @@ import {
   CrmTagEmoji,
   CrmTelegramFolderBadge,
   crmTagDisplayName,
+  crmTagColorStyle,
+  isCrmContactTag,
 } from "./crm-tag-presentation";
 
 export function CrmTagMultiSelect({
@@ -38,9 +40,11 @@ export function CrmTagMultiSelect({
       value={value}
       onChange={onChange}
       disabled={disabled}
-      options={tags.map((tag) => ({
+      options={tags.filter(isCrmContactTag).map((tag) => ({
         value: tag.id,
         label: crmTagDisplayName(tag),
+        badgeClassName: "rounded-full border px-1.5 py-0.5",
+        badgeStyle: crmTagColorStyle(tag),
         icon: (
           <span className="inline-flex items-center gap-1">
             <span

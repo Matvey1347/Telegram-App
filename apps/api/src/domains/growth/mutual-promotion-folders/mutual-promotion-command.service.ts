@@ -480,7 +480,9 @@ export class MutualPromotionCommandService {
     });
     if (activeDeliveries) {
       if (!this.telegramChannels) {
-        throw new BadRequestException('Telegram publication editing is unavailable');
+        throw new BadRequestException(
+          'Telegram publication editing is unavailable',
+        );
       }
       for (const delivery of activeDeliveries.deliveries) {
         await this.telegramChannels.updateManagedPost(

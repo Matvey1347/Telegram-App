@@ -53,7 +53,7 @@ describe("MutualPromotionParticipantsEditor", () => {
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: "📣 Publisher" }));
-    fireEvent.click(screen.getByRole("button", { name: "💳 Paid" }));
+    fireEvent.click(screen.getByRole("option", { name: "💳 Paid" }));
     expect(onChange).toHaveBeenLastCalledWith({
       participants: [
         expect.objectContaining({ channelId: "channel-1", role: "PAID" }),

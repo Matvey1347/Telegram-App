@@ -105,7 +105,9 @@ describe('TelegramCrmConversationAttachService', () => {
         data: { advertiserId: 'contact-target' },
       }),
     );
-    expect(context.prisma.telegramAdvertiserContact.create).toHaveBeenCalledWith(
+    expect(
+      context.prisma.telegramAdvertiserContact.create,
+    ).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
           advertiserId: 'contact-target',

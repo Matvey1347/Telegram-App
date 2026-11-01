@@ -1,16 +1,16 @@
 import { Injectable } from '@nestjs/common';
 import type { BotBillingEntitlements } from '@telegram-system/shared';
-import {
-  BotBillingProviderMode,
-  BotSubscriptionStatus,
-} from '@prisma/client';
+import { BotBillingProviderMode, BotSubscriptionStatus } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 
 @Injectable()
 export class BotEntitlementsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async resolve(input: { botIntegrationId: string; telegramBotUserId: string }): Promise<BotBillingEntitlements> {
+  async resolve(input: {
+    botIntegrationId: string;
+    telegramBotUserId: string;
+  }): Promise<BotBillingEntitlements> {
     const now = new Date();
     const plans = await this.prisma.botSubscriptionPlan.findMany({
       // Plan activation controls the sale catalog. It must not revoke an
@@ -25,7 +25,9 @@ export class BotEntitlementsService {
         // A cancellation changes the provider status before the already-paid
         // period ends. Access must follow the effective period, not just the
         // provider status label.
-        status: { in: [BotSubscriptionStatus.ACTIVE, BotSubscriptionStatus.CANCELED] },
+        status: {
+          in: [BotSubscriptionStatus.ACTIVE, BotSubscriptionStatus.CANCELED],
+        },
         OR: [
           {
             source: { in: ['STRIPE', 'TELEGRAM_STARS'] },
@@ -35,26 +37,46 @@ export class BotEntitlementsService {
             // provider environment and are managed by their own expiry.
             providerSubscription: { mode: BotBillingProviderMode.LIVE },
           },
-          { source: { in: ['MANUAL', 'GIFT'] }, grants: { some: { revokedAt: null, OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] } } },
+          {
+            source: { in: ['MANUAL', 'GIFT'] },
+            grants: {
+              some: {
+                revokedAt: null,
+                OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+              },
+            },
+          },
         ],
       },
-      select: { planId: true, currentPeriodEnd: true, grants: { where: { revokedAt: null }, select: { expiresAt: true } } },
+      select: {
+        planId: true,
+        currentPeriodEnd: true,
+        grants: { where: { revokedAt: null }, select: { expiresAt: true } },
+      },
     });
-    const paidPlanIds = new Set(subscriptions.map((item) => item.planId).filter(Boolean));
-    const capabilities = new Set(plans.flatMap((plan) => [
-      ...plan.freeCapabilities,
-      ...(paidPlanIds.has(plan.id) ? plan.paidCapabilities : []),
-    ]));
-    const expirations = subscriptions.flatMap((subscription) => [
-      subscription.currentPeriodEnd,
-      ...subscription.grants.map((grant) => grant.expiresAt),
-    ]).filter((value): value is Date => value instanceof Date);
+    const paidPlanIds = new Set(
+      subscriptions.map((item) => item.planId).filter(Boolean),
+    );
+    const capabilities = new Set(
+      plans.flatMap((plan) => [
+        ...plan.freeCapabilities,
+        ...(paidPlanIds.has(plan.id) ? plan.paidCapabilities : []),
+      ]),
+    );
+    const expirations = subscriptions
+      .flatMap((subscription) => [
+        subscription.currentPeriodEnd,
+        ...subscription.grants.map((grant) => grant.expiresAt),
+      ])
+      .filter((value): value is Date => value instanceof Date);
     return {
       botIntegrationId: input.botIntegrationId,
       telegramBotUserId: input.telegramBotUserId,
       capabilities: [...capabilities].sort(),
       hasPaidEntitlement: paidPlanIds.size > 0,
-      activeUntil: expirations.length ? new Date(Math.max(...expirations.map(Number))).toISOString() : null,
+      activeUntil: expirations.length
+        ? new Date(Math.max(...expirations.map(Number))).toISOString()
+        : null,
     };
   }
 }

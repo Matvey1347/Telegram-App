@@ -9,6 +9,7 @@ const featureLandingPaths: readonly [featureId: string, path: string][] = [
   ["bots", "/telegram-bots"],
   ["adSales.crm", "/ad-sales/clients"],
   ["adSales.sales", "/ad-sales/sales"],
+  ["adSales.leads", "/ad-sales/leads"],
   ["advertising", "/ad-campaigns"],
   ["finance", "/finance"],
   ["operations", "/scheduled-tasks"],
@@ -26,6 +27,7 @@ const featureRoutePrefixes: readonly [
   ["/telegram/channels", ["channels"]],
   ["/telegram-bots", ["bots"]],
   ["/system-bot", ["systemBots"]],
+  ["/ad-sales/leads", ["adSales.leads"]],
   ["/ad-sales", ["adSales.crm", "adSales.sales"]],
   ["/ad-campaigns", ["advertising"]],
   ["/promos", ["advertising"]],
@@ -77,9 +79,23 @@ export function workspacePathIsAllowed(
 export function resolveWorkspacePath(
   requestedPath: string,
   access?: WorkspaceAccessSnapshot,
+  activeWorkspaceId?: string,
 ) {
+  const destination = notificationWorkspaceDestination(requestedPath);
+  if (destination && activeWorkspaceId && destination !== activeWorkspaceId)
+    return requestedPath;
   const pathname = requestedPath.split(/[?#]/, 1)[0] || "/";
   return workspacePathIsAllowed(pathname, access)
     ? requestedPath
     : workspaceLandingPath(access);
+}
+
+/** Membership is validated by NotificationNavigationCoordinator before mounting a target. */
+export function notificationWorkspaceDestination(path: string) {
+  if (!path.startsWith("/") || path.startsWith("//")) return null;
+  return (
+    new URLSearchParams(path.split("?")[1]?.split("#")[0] ?? "")
+      .get("workspaceId")
+      ?.trim() || null
+  );
 }

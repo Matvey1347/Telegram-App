@@ -1,3 +1,4 @@
+import { applyCrmMessageEdits } from './telegram-crm-message-edits';
 import { Injectable, Optional } from '@nestjs/common';
 import {
   Prisma,
@@ -19,6 +20,8 @@ export type CrmMessageBatchInput = {
     telegramCrmPeerId?: string;
     contactId: string | null;
     unreadCount?: number;
+    unreadCountOverride?: number;
+    lastReadInboxTelegramMessageId?: number | null;
     lastInboundAt?: Date | null;
     lastOutboundAt?: Date | null;
     lastMessageAt?: Date | null;
@@ -33,6 +36,7 @@ export type CrmMessageBatchInput = {
   };
   message: TelegramCrmMtprotoMessage;
   edited?: boolean;
+  metadataOnly?: boolean;
 };
 
 type Context = { workspaceId: string; accountId: string };
@@ -64,11 +68,30 @@ export class TelegramCrmMessageBatchWriter {
     rawInputs: CrmMessageBatchInput[],
     mode: CrmMessageBatchMode,
   ) {
-    const inputs = this.dedupe(rawInputs);
+    let inputs = this.dedupe(rawInputs);
     if (!inputs.length)
       return { created: [] as MessageRow[], edited: 0, inputs };
+    await tx.$queryRaw(
+      Prisma.sql`SELECT id FROM "TelegramCrmConversation" WHERE "workspaceId"=${context.workspaceId} AND id IN (${Prisma.join([...new Set(inputs.map((input) => input.conversation.id))].sort())}) ORDER BY id FOR UPDATE`,
+    );
+    const tombstones = await tx.telegramCrmDeletedMessage.findMany({
+      where: {
+        workspaceId: context.workspaceId,
+        mtprotoAccountId: context.accountId,
+        telegramMessageId: {
+          in: inputs.map((input) => input.message.telegramMessageId),
+        },
+      },
+      select: { telegramMessageId: true },
+    });
+    const deletedIds = new Set(tombstones.map((row) => row.telegramMessageId));
+    inputs = inputs.filter(
+      (input) => !deletedIds.has(input.message.telegramMessageId),
+    );
     const existing = await tx.telegramCrmMessage.findMany({
       where: {
+        workspaceId: context.workspaceId,
+        mtprotoAccountId: context.accountId,
         OR: inputs.map(({ conversation, message }) => ({
           conversationId: conversation.id,
           telegramMessageId: String(message.telegramMessageId),
@@ -80,6 +103,9 @@ export class TelegramCrmMessageBatchWriter {
         telegramMessageId: true,
         text: true,
         editedAt: true,
+        deletedAt: true,
+        contentMetadata: true,
+        origin: true,
       },
     });
     const existingByKey = new Map(
@@ -109,9 +135,16 @@ export class TelegramCrmMessageBatchWriter {
             sentAt: message.sentAt,
             editedAt: message.editedAt,
             readState:
-              message.direction === 'INBOUND' && mode === 'live'
-                ? TelegramCrmReadState.UNREAD
-                : TelegramCrmReadState.UNKNOWN,
+              message.direction === 'INBOUND' &&
+              message.telegramMessageId <=
+                (fresh.find((entry) => entry.message === message)?.conversation
+                  .lastReadInboxTelegramMessageId ?? 0)
+                ? TelegramCrmReadState.READ
+                : !fresh.find((entry) => entry.message === message)?.edited &&
+                    message.direction === 'INBOUND' &&
+                    mode === 'live'
+                  ? TelegramCrmReadState.UNREAD
+                  : TelegramCrmReadState.UNKNOWN,
           })),
           skipDuplicates: true,
           select: { id: true, conversationId: true, telegramMessageId: true },
@@ -125,28 +158,17 @@ export class TelegramCrmMessageBatchWriter {
     const insertedInputs = fresh.filter(({ conversation, message }) =>
       insertedKeys.has(`${conversation.id}:${message.telegramMessageId}`),
     );
-    let edited = 0;
-    const editedInputs: CrmMessageBatchInput[] = [];
-    for (const input of inputs) {
-      const current = existingByKey.get(
-        `${input.conversation.id}:${input.message.telegramMessageId}`,
-      );
-      if (
-        !current ||
-        (!input.edited && !input.message.editedAt) ||
-        (current.text === input.message.text &&
-          current.editedAt?.getTime() === input.message.editedAt?.getTime())
-      ) {
-        continue;
-      }
-      await tx.telegramCrmMessage.update({
-        where: { id: current.id },
-        data: { text: input.message.text, editedAt: input.message.editedAt },
-      });
-      edited += 1;
-      editedInputs.push(input);
-    }
-    await this.updateCompacts(tx, context.workspaceId, insertedInputs, mode);
+    const { edited, editedMessages, editedInputs } = await applyCrmMessageEdits(
+      tx,
+      inputs,
+      existingByKey,
+      mode,
+      context,
+    );
+    const newInputs = insertedInputs.filter(
+      (input) => !input.edited && !input.metadataOnly,
+    );
+    await this.updateCompacts(tx, context.workspaceId, newInputs, mode);
     const created = inserted.length
       ? await tx.telegramCrmMessage.findMany({
           where: { id: { in: inserted.map((message) => message.id) } },
@@ -160,14 +182,39 @@ export class TelegramCrmMessageBatchWriter {
               tx,
               context.workspaceId,
               mode,
-              insertedInputs,
-              created,
+              newInputs,
+              created.filter((row) =>
+                newInputs.some(
+                  (input) =>
+                    String(input.message.telegramMessageId) ===
+                      row.telegramMessageId &&
+                    input.conversation.id === row.conversationId,
+                ),
+              ),
             )
           ).map((item) => item.id)
         : [];
     return {
-      created,
-      edited,
+      created: created.filter((row) =>
+        newInputs.some(
+          (input) =>
+            String(input.message.telegramMessageId) === row.telegramMessageId &&
+            input.conversation.id === row.conversationId,
+        ),
+      ),
+      edited: edited + insertedInputs.length - newInputs.length,
+      editedMessages: [
+        ...editedMessages,
+        ...created.filter(
+          (row) =>
+            !newInputs.some(
+              (input) =>
+                String(input.message.telegramMessageId) ===
+                  row.telegramMessageId &&
+                input.conversation.id === row.conversationId,
+            ),
+        ),
+      ],
       inputs: [...insertedInputs, ...editedInputs],
       notificationIds,
     };
@@ -178,6 +225,7 @@ export class TelegramCrmMessageBatchWriter {
     stored: {
       created: MessageRow[];
       edited: number;
+      editedMessages?: MessageRow[];
       inputs: CrmMessageBatchInput[];
       notificationIds?: string[];
     },
@@ -259,6 +307,7 @@ export class TelegramCrmMessageBatchWriter {
   ) {
     if (!fresh.length) return;
     const groups = this.messageGroups(fresh);
+    const unreadIncrement = Prisma.sql`(SELECT COUNT(*)::INTEGER FROM jsonb_array_elements_text(incoming."inboundIds") AS ids(value) WHERE ids.value::INTEGER > COALESCE(conversation."unreadSnapshotTopMessageId",0) AND ids.value::INTEGER > COALESCE(conversation."lastReadInboxTelegramMessageId",0))`;
     await tx.$executeRaw(Prisma.sql`
       UPDATE "TelegramCrmConversation" AS conversation
       SET
@@ -282,9 +331,9 @@ export class TelegramCrmMessageBatchWriter {
             THEN incoming."lastOutboundAt"
           ELSE conversation."lastOutboundAt"
         END,
-        "unreadCount" = conversation."unreadCount" + incoming."unreadIncrement",
+        "unreadCount" = conversation."unreadCount" + ${unreadIncrement},
         "readState" = CASE
-          WHEN incoming."unreadIncrement" > 0 THEN ${TelegramCrmReadState.UNREAD}::"TelegramCrmReadState"
+          WHEN ${unreadIncrement} > 0 THEN ${TelegramCrmReadState.UNREAD}::"TelegramCrmReadState"
           ELSE conversation."readState"
         END,
         "lastMeaningfulSyncAt" = CASE
@@ -302,7 +351,7 @@ export class TelegramCrmMessageBatchWriter {
               CAST(${group.lastMessageAt} AS TIMESTAMPTZ),
               CAST(${group.lastInboundAt} AS TIMESTAMPTZ),
               CAST(${group.lastOutboundAt} AS TIMESTAMPTZ),
-              CAST(${mode === 'live' ? group.inboundCount : 0} AS INTEGER)
+              CAST(${JSON.stringify(mode === 'live' ? group.inboundIds : [])} AS JSONB)
             )`,
           ),
         )}
@@ -313,7 +362,7 @@ export class TelegramCrmMessageBatchWriter {
         "lastMessageAt",
         "lastInboundAt",
         "lastOutboundAt",
-        "unreadIncrement"
+        "inboundIds"
       )
       WHERE conversation."id" = incoming."conversationId"
         AND conversation."workspaceId" = ${workspaceId}
@@ -369,7 +418,11 @@ export class TelegramCrmMessageBatchWriter {
     for (const input of inputs) {
       const key = `${input.conversation.id}:${input.message.telegramMessageId}`;
       const current = result.get(key);
-      if (!current || (input.message.editedAt && !current.message.editedAt)) {
+      if (
+        !current ||
+        (input.message.editedAt?.getTime() ?? 0) >=
+          (current.message.editedAt?.getTime() ?? 0)
+      ) {
         result.set(key, input);
       }
     }
@@ -404,6 +457,9 @@ export class TelegramCrmMessageBatchWriter {
     }
     return [...grouped].map(([conversationId, values]) => ({
       conversationId,
+      inboundIds: values
+        .filter((input) => input.message.direction === 'INBOUND')
+        .map((input) => input.message.telegramMessageId),
       inboundCount: values.filter(
         (input) => input.message.direction === 'INBOUND',
       ).length,

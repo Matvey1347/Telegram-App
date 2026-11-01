@@ -3,6 +3,8 @@ export const OPERATIONS_NOTIFICATION_TYPES = [
   "CRM_FOLLOW_UP_DUE",
   "CRM_PLACEMENT_FAILURE",
   "TELEGRAM_ACCOUNT_REAUTH_REQUIRED",
+  "CRM_AI_LEAD_QUALIFIED",
+  "SYSTEM_TEST",
 ] as const;
 
 export type OperationsNotificationType =
@@ -22,6 +24,8 @@ export const OPERATIONS_NOTIFICATION_COPY_KEYS = [
   "crm.notification.followUpDue",
   "crm.notification.placementFailure",
   "telegram.notification.accountReauthRequired",
+  "crm.notification.aiLeadQualified",
+  "operations.notification.pushTest",
 ] as const;
 
 export type OperationsNotificationCopyKey =
@@ -83,6 +87,31 @@ export type OperationsNotificationPreferences = {
   webPushEnabled: boolean;
   pushConfigured: boolean;
   activeSubscriptionCount: number;
+  /** Optional during a rolling deployment; absent fields use the defaults below. */
+  crmNotificationsEnabled?: boolean;
+  crmIncomingMessagesEnabled?: boolean;
+  crmFollowUpEnabled?: boolean;
+  crmAiLeadsEnabled?: boolean;
+  crmMessagePreviewEnabled?: boolean;
+};
+
+export const CRM_NOTIFICATION_PREFERENCE_DEFAULTS = {
+  crmNotificationsEnabled: true,
+  crmIncomingMessagesEnabled: false,
+  crmFollowUpEnabled: true,
+  crmAiLeadsEnabled: false,
+  crmMessagePreviewEnabled: false,
+} as const;
+
+export type OperationsNotificationPreferencesPatch = Partial<Pick<OperationsNotificationPreferences,
+  "webPushEnabled" | keyof typeof CRM_NOTIFICATION_PREFERENCE_DEFAULTS>>;
+
+export type OperationsNotificationTestResult = {
+  status: "sent" | "failed" | "disabled" | "unavailable" | "no_subscription" | "rate_limited";
+  attempted: number;
+  delivered: number;
+  failed: number;
+  skipped: number;
 };
 
 export type OperationsNotificationPushConfig = {

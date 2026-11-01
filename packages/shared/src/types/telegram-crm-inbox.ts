@@ -72,7 +72,7 @@ export type CrmConversationReadResult = {
   conversationId: string;
   lastReadInboxTelegramMessageId: number | null;
   readMessageCount: number;
-  unreadCount: 0;
+  unreadCount: number;
 };
 
 export type CrmHistoryImportResult = {

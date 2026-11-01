@@ -41,6 +41,7 @@ test("Finance waits for its API before starting the web host", () => {
   );
 
   assert.equal(api?.readyUrl, "http://127.0.0.1:4001/api/health");
+  assert.equal(api?.env.CRM_RUNTIME_ENABLED, "false");
   assert.equal(web?.readyUrl, undefined);
   assert.equal(web?.webReadyUrl, "http://127.0.0.1:3001/health");
   assert.equal(web?.localUrl, "http://localhost:3001");

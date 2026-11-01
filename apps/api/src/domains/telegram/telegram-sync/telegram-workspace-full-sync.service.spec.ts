@@ -261,26 +261,28 @@ describe('TelegramWorkspaceFullSyncService', () => {
   });
 
   it('streams the current channel, nested sync step, and completed channel count', async () => {
-    const syncNow = jest.fn().mockImplementation(
-      async (
-        _userId: string,
-        _channelId: string,
-        _selection: unknown,
-        onProgress: (item: unknown, current: number, total: number) => void,
-      ) => {
-        onProgress(
-          {
-            phase: 'saving_invite_links',
-            message: 'Saving invite links…',
-            stageCurrent: 3,
-            stageTotal: 8,
-          },
-          3,
-          8,
-        );
-        return { status: 'success' };
-      },
-    );
+    const syncNow = jest
+      .fn()
+      .mockImplementation(
+        async (
+          _userId: string,
+          _channelId: string,
+          _selection: unknown,
+          onProgress: (item: unknown, current: number, total: number) => void,
+        ) => {
+          onProgress(
+            {
+              phase: 'saving_invite_links',
+              message: 'Saving invite links…',
+              stageCurrent: 3,
+              stageTotal: 8,
+            },
+            3,
+            8,
+          );
+          return { status: 'success' };
+        },
+      );
     const prisma = {
       workspace: {
         findUniqueOrThrow: jest.fn().mockResolvedValue({ name: 'Business' }),

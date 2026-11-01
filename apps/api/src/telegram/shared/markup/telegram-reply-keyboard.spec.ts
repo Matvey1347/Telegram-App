@@ -8,7 +8,12 @@ describe('createCollapsibleReplyKeyboard', () => {
       ]),
     ).toEqual({
       keyboard: [
-        [{ text: 'Open app', web_app: { url: 'https://app.example/finance/bot-1' } }],
+        [
+          {
+            text: 'Open app',
+            web_app: { url: 'https://app.example/finance/bot-1' },
+          },
+        ],
       ],
       resize_keyboard: true,
       one_time_keyboard: false,

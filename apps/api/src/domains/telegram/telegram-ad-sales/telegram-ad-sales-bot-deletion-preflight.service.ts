@@ -1,8 +1,5 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import {
-  TelegramSourceType,
-  TelegramUserAccountStatus,
-} from '@prisma/client';
+import { TelegramSourceType, TelegramUserAccountStatus } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { normalizeTelegramPostMediaItems } from '@telegram-system/shared';
 import { requiresNativeTelegramRichMessage } from '@api/telegram/shared/markup/telegram-markup';
@@ -43,10 +40,11 @@ export class TelegramAdSalesBotDeletionPreflightService {
       return;
     }
 
-    const capabilities = await this.sourceAccess.publishingCapabilitiesForChannels(
-      input.workspaceId,
-      input.channelIds,
-    );
+    const capabilities =
+      await this.sourceAccess.publishingCapabilitiesForChannels(
+        input.workspaceId,
+        input.channelIds,
+      );
     const accessRows = await this.prisma.telegramChannelSourceAccess.findMany({
       where: {
         workspaceId: input.workspaceId,

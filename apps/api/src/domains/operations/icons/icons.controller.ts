@@ -53,10 +53,7 @@ export class IconsController {
   }
 
   @Post('custom')
-  createCustom(
-    @CurrentUser() user: JwtUser,
-    @Body() dto: CreateCustomIconDto,
-  ) {
+  createCustom(@CurrentUser() user: JwtUser, @Body() dto: CreateCustomIconDto) {
     return this.service.createCustom(user.sub, dto);
   }
 
@@ -69,10 +66,7 @@ export class IconsController {
   }
 
   @Post('emoji')
-  createEmoji(
-    @CurrentUser() user: JwtUser,
-    @Body() dto: CreateEmojiIconDto,
-  ) {
+  createEmoji(@CurrentUser() user: JwtUser, @Body() dto: CreateEmojiIconDto) {
     return this.service.createEmoji(user.sub, dto);
   }
 

@@ -86,6 +86,24 @@ Before adding a primitive or domain wrapper, search for an existing selector, da
 
 ## Domain Components
 
+### Shared Chat UI
+
+- Import focused modules from `@/components/chat/*`.
+- `ChatShell`, `ConversationList`, `ChatThread`, `MessageBubble`,
+  `MessageActions`, `MessageComposer`, `AttachmentPreview` and
+  `ChatDetailsPanel` are neutral presentation controls.
+- Hosts supply typed models, capabilities, action callbacks, editor and details
+  slots. Keep transport mapping, business rules, query state and drafts in the
+  owning feature. Never enable an action without its server implementation.
+- Reuse the existing Telegram editor/picker through the composer slot.
+- See [CRM Inbox 2.0](../plans/crm-inbox-2.md) for the first adapter, mobile
+  behavior, test-only Support scenario and capability matrix.
+
+### CRM Inbox folders
+
+- The CRM host places `CrmInboxFolders` beside the conversation list. It displays account-specific Telegram folders and server-calculated unread-message counts; choosing Unread returns to all folders.
+- Folder selection and unread aggregates use the workspace-scoped CRM query layer. Visible-message auto-read uses the shared chat viewport and existing body-overlay lock; Telegram read watermarks remain owned by CRM.
+
 ### `MemberSelect`
 
 - Import: `@/components/features/workspace/member-select`
@@ -142,3 +160,36 @@ Before adding a primitive or domain wrapper, search for an existing selector, da
 - Import compatibility remains `@/lib/api`.
 - Implementation file: `@/lib/api-types`.
 - Do not import directly from `api-types` in app code unless the facade is intentionally being retired.
+
+### Overlay hosts and nested scroll locks
+
+- Internal popups use `overlayPortalHost(anchor)` from `components/ui/overlay-portal-host`: prefer their owning `[data-app-modal]`, then an open native dialog, then the document body. Shared `Modal` consumes the neutral `OverlayPortalContext` when a native parent owns the top layer.
+- Reuse `useDismissiblePopover` for outside-click/Escape dismissal and trigger focus restoration. A popup must consume its own Escape before a parent dialog closes, and its interactive portal must remain within the parent focus boundary.
+- Native and shared modal hosts use `acquireBodyScrollLock` from `lib/body-scroll-lock`, releasing their own token on cleanup. Do not independently restore `document.body.style.overflow` in nested overlays; parent/child unmount order must preserve the original value.
+- CRM is only the first nested native-dialog consumer; these helpers contain no CRM state, transport, permissions or business logic. See the regression tests in `components/ui/overlay-portal-host.test.tsx` and `components/chat/chat-details-scroll-lock.test.tsx`.
+
+### Internal AI Usage
+
+`CrmAiUsage` shows the current workspace's month-to-date cost, tokens and request count in one compact always-visible row. It uses the canonical workspace ALL usage query (including Sales and Discovery), shared 60-second cache and operation-settlement invalidation; no polling or per-chat request. Detailed statistics remain at `/settings/ai-usage`. Unknown charges remain explicit.
+
+### CRM AI Sales Copilot
+
+The thread exposes one `Сгенерировать ответ` action. The server-owned `copilot/suggest` preset assembles bounded verified workspace offers/networks, client history, purchases, authorized notes and the current manager's recent accepted/rejected examples in this conversation. No per-chat configuration or catalog-selection waterfall is required. The result is an editable compact text field with `Использовать` (approve exact text then insert) and `Не подходит` (persist negative feedback). Normal Send remains explicit; canonical composer drafts and overwrite confirmation remain. This is contextual adaptation from bounded seven-day feedback, not model fine-tuning. Unresolved generation is checked using the same operation, even after closing the panel; server claims prevent duplicate paid requests across tabs.
+
+The sidebar uses compact chat context and parallel independent purchases/workflow/notes reads. Telegram contact links, Add note, notes/history and follow-up are visible; package catalog and profile navigation do not occupy this surface. A single purchase does not repeat its aggregate total. The editor-expansion action is an accessible lucide icon button.
+
+### CRM Lead Discovery
+
+`/ad-sales/leads` has one Sources screen with compact source rows and a primary refresh action. Connection status explains unconfigured, lost access, paused, active and public manual-scan states. Additional source actions use the shared ActionMenu. Found advertisements and candidate review are lazily opened sections on the same screen, preserving the pipeline without three top-level tabs. No analysis occurs simply by opening the page. Activation requires actual verified access and exact processing grants; registered sources are never presented as active merely because a URL was saved.
+
+### AI Leads qualification workbench
+
+CRM `features/growth/ad-sales/crm/leads` composes the candidate queue, evidence/contact center and qualification/first-offer pane. Desktop uses separate operational panes; mobile switches between list and details. Qualify, human qualification, Generate, Save, Approve and freshness-checked Copy remain separate explicit actions. Reuse canonical candidate review/linking and shared controls; no lead rule enters Shared Chat UI. The lazy CRM acquisition section loads only when expanded. AI Usage request history can filter candidate-first-offer receipts without changing aggregate scope.
+
+### Manual Instagram CRM contacts
+
+Clients manual mode composes a compact list and contact detail workflow under `features/growth/ad-sales/crm/manual`. Mobile switches list/detail and restores Back focus; purchases/info/prepared offers stay lazy. Typed Instagram profiles use the shared parser/server presentation and explicit Open action. Human ownership confirmation is distinct from unverified profile existence. Manual reports reuse canonical activities/status/tasks and never render as chat messages or receipts. `CrmContactChannels` no longer writes detected contacts on mount and does not render unsafe raw OTHER links.
+
+### Shared Chat UI actions and lazy media
+
+`components/chat/*` exposes neutral per-message capabilities/callbacks, typed attachments, reply context and accessible action menus. CRM owns Telegram operations, entity mapping, permissions, DNC, provenance and cache reconciliation. Reuse the existing rich editor for edit; preserve normal composer drafts. Media loading is explicit and adapter-authorized; UNKNOWN operations require result checks rather than blind Retry. A test-only Support adapter verifies differing capabilities. See [chat action plan](../plans/telegram-chat-actions.md).

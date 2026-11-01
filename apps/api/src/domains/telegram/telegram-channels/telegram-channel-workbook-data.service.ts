@@ -150,7 +150,9 @@ export class TelegramChannelWorkbookDataService {
           placements: { some: { telegramChannelId: channel.id } },
         },
         include: {
-          advertiser: { include: { contacts: true, tags: { include: { tag: true } } } },
+          advertiser: {
+            include: { contacts: true, tags: { include: { tag: true } } },
+          },
           placements: {
             where: { telegramChannelId: channel.id },
             include: { managedPost: true, telegramPost: true },
@@ -181,7 +183,9 @@ export class TelegramChannelWorkbookDataService {
             { mutualPromotionParticipant: { telegramChannelId: channel.id } },
             {
               telegramAdSalePayment: {
-                sale: { placements: { some: { telegramChannelId: channel.id } } },
+                sale: {
+                  placements: { some: { telegramChannelId: channel.id } },
+                },
               },
             },
           ],

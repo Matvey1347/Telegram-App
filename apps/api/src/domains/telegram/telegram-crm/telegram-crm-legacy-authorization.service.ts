@@ -23,6 +23,11 @@ export class TelegramCrmLegacyAuthorizationService {
     return this.scope(userId, 'viewOwn', 'viewAny');
   }
 
+  async refreshEditScope(userId: string) {
+    await this.authorization.refresh(userId);
+    return this.editScope(userId);
+  }
+
   editScope(userId: string) {
     return this.scope(userId, 'editOwn', 'editAny');
   }

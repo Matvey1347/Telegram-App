@@ -1,0 +1,16 @@
+Datasource "db": PostgreSQL database "crm_forward", schema "public" at "localhost:55491"
+
+1 migration found in prisma/migrations
+
+Applying migration `000000000000_squashed_migrations`
+
+The following migration(s) have been applied:
+
+migrations/
+  └─ 000000000000_squashed_migrations/
+    └─ migration.sql
+
+All migrations have been successfully applied.
+Loaded Prisma config from ../../../../../../tmp/crm-migration-uvwZdM/bootstrap.config.mjs.
+
+Prisma schema loaded from prisma/schema.prisma.

@@ -46,6 +46,12 @@ export class WorkspaceAuthorizationService {
     return pending;
   }
 
+  /** Explicit security boundary after long external work; never a polling refresh. */
+  refresh(userId: string): Promise<WorkspaceAuthorizationContext> {
+    this.contexts.delete(userId);
+    return this.context(userId);
+  }
+
   async can(userId: string, permissionKey: string) {
     return hasWorkspacePermission(await this.context(userId), permissionKey);
   }

@@ -87,8 +87,7 @@ export class TelegramSystemBotNotificationsService {
             taskName: input.taskName,
           }),
           t(locale, 'workspace', {
-            workspaceName:
-              workspace?.name ?? t(locale, 'unknownWorkspace'),
+            workspaceName: workspace?.name ?? t(locale, 'unknownWorkspace'),
           }),
         ];
         if (input.status === 'SUCCESS' && input.resultSummary) {

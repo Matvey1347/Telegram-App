@@ -1,6 +1,12 @@
 import {
+  TelegramCrmManualSendIntentService,
+  manualTextHash,
+} from './telegram-crm-manual-send-intent.service';
+import { resolveManualReply } from './telegram-crm-manual-reply';
+import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
   Optional,
@@ -24,8 +30,8 @@ import {
 } from './telegram-crm-read-model.mapper';
 import { TelegramCrmRuntimeManager } from './telegram-crm-runtime-manager.service';
 import { isPrismaUniqueConflict } from './telegram-crm-prisma-errors';
-import { telegramMarkupToHtml } from '@api/telegram/shared/markup/telegram-markup';
-import { parseTelegramHtml } from '@api/telegram/shared/markup/telegram-html-parser';
+import { advanceCrmManualSendCompact } from './telegram-crm-manual-send-compact';
+import { TelegramCrmCopilotSendGuard } from './telegram-crm-copilot-send-guard.service';
 import { ResponseCacheService } from '../../../common/response-cache.service';
 
 const crmManualMessageSelect = {
@@ -50,6 +56,8 @@ export class TelegramCrmManualSendService {
     private readonly runtime: TelegramCrmRuntimeManager,
     private readonly events: TelegramCrmEventHub,
     @Optional() private readonly responseCache?: ResponseCacheService,
+    @Optional() private readonly copilot?: TelegramCrmCopilotSendGuard,
+    @Optional() private readonly intents?: TelegramCrmManualSendIntentService,
   ) {}
 
   async send(
@@ -62,9 +70,22 @@ export class TelegramCrmManualSendService {
       'adSales.crm.sendManualMessages',
     );
     const text = dto.text.trim();
-    const [telegramText] = parseTelegramHtml(telegramMarkupToHtml(text));
+    if (Boolean(dto.aiDraftId) !== (dto.aiDraftRevision !== undefined))
+      throw new BadRequestException('COPILOT_APPROVAL_INCOMPLETE');
+    const approval = dto.aiDraftId
+      ? { aiDraftId: dto.aiDraftId, aiDraftRevision: dto.aiDraftRevision! }
+      : undefined;
+    if (approval && !this.copilot)
+      throw new ConflictException('COPILOT_APPROVAL_UNAVAILABLE');
     const key = dto.clientIdempotencyKey.trim();
+    if (!approval && key.startsWith('ai:'))
+      throw new BadRequestException('COPILOT_APPROVAL_REQUIRED');
     if (!text) throw new BadRequestException('Message text is required');
+    if (
+      approval &&
+      key !== `ai:${approval.aiDraftId}:${approval.aiDraftRevision}`
+    )
+      throw new BadRequestException('COPILOT_IDEMPOTENCY_KEY_REQUIRED');
     if (!key)
       throw new BadRequestException('Client idempotency key is required');
     const conversation = await this.prisma.telegramCrmConversation.findFirst({
@@ -76,7 +97,7 @@ export class TelegramCrmManualSendService {
         telegramAccessHash: true,
         contactId: true,
         peer: { select: { id: true, telegramUserId: true, username: true } },
-        contact: { select: { ownerMemberId: true } },
+        contact: { select: { ownerMemberId: true, manualSalesStatus: true } },
       },
     });
     if (!conversation)
@@ -87,10 +108,48 @@ export class TelegramCrmManualSendService {
       'adSales.crm.viewOwn',
       'adSales.crm.viewAny',
     );
-    const replay = await this.findReplay(conversation.id, key, telegramText);
-    if (replay)
+    // The idempotency body is the trimmed editor markup stored on MANUAL rows.
+    // Telegram's rendered text would lose entities and conflict on a retry.
+    const replay = await this.findReplay(
+      conversation.id,
+      key,
+      text,
+      dto.replyToMessageId,
+    );
+    if (replay) {
+      if (
+        approval &&
+        (
+          replay.contentMetadata as {
+            aiDraftId?: string;
+            aiDraftRevision?: number;
+          } | null
+        )?.aiDraftId !== approval.aiDraftId
+      )
+        throw new ConflictException('COPILOT_RECEIPT_MISMATCH');
+      if (
+        approval &&
+        (replay.contentMetadata as { aiDraftRevision?: number } | null)
+          ?.aiDraftRevision !== approval.aiDraftRevision
+      )
+        throw new ConflictException('COPILOT_RECEIPT_MISMATCH');
+      if (approval)
+        await this.copilot!.markSent(
+          userId,
+          conversationId,
+          approval,
+          replay.id,
+          access.workspaceId,
+        );
       return { message: mapCrmManualMessage(replay), idempotentReplay: true };
+    }
 
+    if (conversation.contact?.manualSalesStatus === 'DO_NOT_CONTACT') {
+      throw new ForbiddenException(
+        'Do not contact: clear the sales restriction before sending',
+      );
+    }
+    let intent: string | undefined;
     const sent = await this.runtime.withAccountHandle(
       access.workspaceId,
       conversation.mtprotoAccountId,
@@ -115,7 +174,61 @@ export class TelegramCrmManualSendService {
             data: { telegramAccessHash: peer.telegramAccessHash },
           });
         }
+        await this.authorization.refresh(userId);
+        const currentAccess = await this.authorization.require(
+          userId,
+          'adSales.crm.sendManualMessages',
+        );
+        if (
+          currentAccess.workspaceId !== access.workspaceId ||
+          currentAccess.memberId !== access.memberId
+        )
+          throw new ForbiddenException('CRM_SEND_ACCESS_CHANGED');
+        const ownership = await this.authorization.scope(
+          userId,
+          'adSales.crm.viewOwn',
+          'adSales.crm.viewAny',
+        );
+        const current = await this.prisma.telegramCrmConversation.findFirst({
+          where: {
+            id: conversation.id,
+            workspaceId: access.workspaceId,
+            ...('assignedMemberId' in ownership
+              ? { contact: { ownerMemberId: ownership.assignedMemberId } }
+              : {}),
+          },
+          select: { contact: { select: { manualSalesStatus: true } } },
+        });
+        if (!current || current.contact?.manualSalesStatus === 'DO_NOT_CONTACT')
+          throw new ForbiddenException(
+            'Do not contact or ownership changed: review this client before sending',
+          );
+        if (approval)
+          await this.copilot!.assertCanSend(
+            userId,
+            conversationId,
+            text,
+            approval,
+          );
+        const replyToTelegramMessageId = await resolveManualReply(
+          this.prisma,
+          handle,
+          conversation,
+          peer,
+          dto.replyToMessageId,
+        );
+        intent = await this.intents?.claim({
+          workspaceId: access.workspaceId,
+          conversationId: conversation.id,
+          mtprotoAccountId: conversation.mtprotoAccountId,
+          userId,
+          key,
+          text,
+          replyToMessageId: dto.replyToMessageId,
+          ...approval,
+        });
         return handle.sendText({
+          ...(replyToTelegramMessageId ? { replyToTelegramMessageId } : {}),
           telegramUserId: peer.telegramUserId,
           telegramAccessHash: peer.telegramAccessHash,
           text,
@@ -133,6 +246,17 @@ export class TelegramCrmManualSendService {
     };
     try {
       transactionResult = await this.prisma.$transaction(async (tx) => {
+        await tx.$queryRaw(
+          Prisma.sql`SELECT id FROM "TelegramCrmConversation" WHERE id=${conversation.id} AND "workspaceId"=${access.workspaceId} FOR UPDATE`,
+        );
+        const tombstone = await tx.telegramCrmDeletedMessage.findUnique({
+          where: {
+            mtprotoAccountId_telegramMessageId: {
+              mtprotoAccountId: conversation.mtprotoAccountId,
+              telegramMessageId: sent.telegramMessageId,
+            },
+          },
+        });
         const replayInside = await tx.telegramCrmMessage.findUnique({
           where: {
             conversationId_clientIdempotencyKey: {
@@ -143,7 +267,7 @@ export class TelegramCrmManualSendService {
           select: crmManualMessageSelect,
         });
         if (replayInside) {
-          if (replayInside.text !== text) {
+          if (!this.matchesReplay(replayInside, text, dto.replyToMessageId)) {
             throw new ConflictException(
               'Idempotency key was used for different text',
             );
@@ -168,16 +292,27 @@ export class TelegramCrmManualSendService {
             'Telegram message is already attributed to another origin',
           );
         }
+        const deletedAt = echo?.deletedAt ?? (tombstone ? new Date() : null);
+        const receiptMetadata = {
+          ...approval,
+          manualRequestHash: manualTextHash(text),
+          requestReplyToMessageId: dto.replyToMessageId ?? null,
+        };
+        const metadata = deletedAt
+          ? receiptMetadata
+          : { ...sent.contentMetadata, ...receiptMetadata, telegramText: true };
         const stored = echo
           ? await tx.telegramCrmMessage.update({
               where: { id: echo.id },
               data: {
+                contentMetadata: metadata,
                 origin: TelegramCrmMessageOrigin.MANUAL,
                 direction: TelegramCrmMessageDirection.OUTBOUND,
                 sentByMemberId: access.memberId,
                 clientIdempotencyKey: key,
                 telegramMessageIdNumeric: sent.telegramMessageId,
-                text,
+                deletedAt,
+                text: deletedAt ? null : sent.text,
                 sentAt: sent.sentAt,
                 deliveryState: TelegramCrmDeliveryState.SENT,
               },
@@ -192,41 +327,48 @@ export class TelegramCrmManualSendService {
                 telegramMessageIdNumeric: sent.telegramMessageId,
                 clientIdempotencyKey: key,
                 direction: TelegramCrmMessageDirection.OUTBOUND,
+                contentMetadata: metadata,
                 origin: TelegramCrmMessageOrigin.MANUAL,
                 sentByMemberId: access.memberId,
-                text,
+                deletedAt,
+                text: deletedAt ? null : sent.text,
                 sentAt: sent.sentAt,
                 deliveryState: TelegramCrmDeliveryState.SENT,
               },
               select: crmManualMessageSelect,
             });
-        await tx.telegramCrmConversation.update({
-          where: { id: conversation.id },
-          data: {
-            lastMessageAt: sent.sentAt,
-            lastOutboundAt: sent.sentAt,
-            ...(!echo ? { outboundMessageCount: { increment: 1 } } : {}),
-            lastMeaningfulSyncAt: new Date(),
-          },
-        });
-        if (conversation.contactId) {
-          await tx.telegramAdvertiser.update({
-            where: { id: conversation.contactId },
-            data: {
-              lastContactAt: sent.sentAt,
-              lastOutboundAt: sent.sentAt,
-            },
+        if (!deletedAt)
+          await advanceCrmManualSendCompact(tx, {
+            workspaceId: access.workspaceId,
+            conversationId: conversation.id,
+            contactId: conversation.contactId,
+            sentAt: sent.sentAt,
+            increment: !echo,
           });
-        }
         return { row: stored, replay: false };
       });
     } catch (error) {
       if (!isPrismaUniqueConflict(error)) throw error;
-      const replayAfterRace = await this.findReplay(conversation.id, key, text);
+      const replayAfterRace = await this.findReplay(
+        conversation.id,
+        key,
+        text,
+        dto.replyToMessageId,
+      );
       if (!replayAfterRace) throw error;
       transactionResult = { row: replayAfterRace, replay: true };
     }
+    if (approval)
+      await this.copilot!.markSent(
+        userId,
+        conversationId,
+        approval,
+        transactionResult.row.id,
+        access.workspaceId,
+      );
     const message = mapCrmManualMessage(transactionResult.row);
+    if (intent)
+      await this.intents!.confirmed(access.workspaceId, intent, message.id);
     if (transactionResult.replay) {
       return { message, idempotentReplay: true };
     }
@@ -271,7 +413,29 @@ export class TelegramCrmManualSendService {
     return { message, idempotentReplay: false };
   }
 
-  private async findReplay(conversationId: string, key: string, text: string) {
+  private matchesReplay(
+    row: CrmManualMessageRow,
+    text: string,
+    replyToMessageId?: string,
+  ) {
+    const meta = row.contentMetadata as {
+      manualRequestHash?: string;
+      requestReplyToMessageId?: string | null;
+    } | null;
+    return (
+      (meta?.manualRequestHash
+        ? meta.manualRequestHash === manualTextHash(text)
+        : row.text === text) &&
+      (meta?.requestReplyToMessageId ?? null) === (replyToMessageId ?? null)
+    );
+  }
+
+  private async findReplay(
+    conversationId: string,
+    key: string,
+    text: string,
+    replyToMessageId?: string,
+  ) {
     const existing = await this.prisma.telegramCrmMessage.findUnique({
       where: {
         conversationId_clientIdempotencyKey: {
@@ -281,7 +445,7 @@ export class TelegramCrmManualSendService {
       },
       select: crmManualMessageSelect,
     });
-    if (existing && existing.text !== text) {
+    if (existing && !this.matchesReplay(existing, text, replyToMessageId)) {
       throw new ConflictException(
         'Idempotency key was used for different text',
       );

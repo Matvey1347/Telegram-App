@@ -12,7 +12,9 @@ const DEFAULT_WORKSPACE_NAME = 'Default Workspace';
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) throw new Error('DATABASE_URL is not defined');
 
-const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: databaseUrl }) });
+const prisma = new PrismaClient({
+  adapter: new PrismaPg({ connectionString: databaseUrl }),
+});
 
 async function main() {
   const email = process.env.ADMIN_EMAIL?.toLowerCase().trim();
@@ -20,7 +22,9 @@ async function main() {
   const name = process.env.ADMIN_NAME?.trim();
 
   if (!email || !password || !name) {
-    console.log('Skipping admin seed: ADMIN_EMAIL/ADMIN_PASSWORD/ADMIN_NAME not provided.');
+    console.log(
+      'Skipping admin seed: ADMIN_EMAIL/ADMIN_PASSWORD/ADMIN_NAME not provided.',
+    );
     return;
   }
 
@@ -75,7 +79,9 @@ async function main() {
     });
 
     await tx.workspaceMember.upsert({
-      where: { workspaceId_userId: { workspaceId: workspace.id, userId: adminUserId } },
+      where: {
+        workspaceId_userId: { workspaceId: workspace.id, userId: adminUserId },
+      },
       update: { role: 'owner' },
       create: { workspaceId: workspace.id, userId: adminUserId, role: 'owner' },
     });

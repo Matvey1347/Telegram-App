@@ -1,0 +1,12 @@
+HEAD baseline: 5 errors, 5 warnings
+@typescript-eslint/no-explicit-any :: .map((child: any, idx: number) => {
+@typescript-eslint/no-explicit-any :: .map((node: any) =>
+@typescript-eslint/no-explicit-any :: props.onChange({ target: { name: props.name, value: next } } as any);
+react-hooks/set-state-in-effect :: useEffect(() => setMounted(true), []);
+react-hooks/set-state-in-effect :: setHost(element);
+current: 5 errors, 5 warnings
+@typescript-eslint/no-explicit-any :: .map((child: any, idx: number) => {
+@typescript-eslint/no-explicit-any :: .map((node: any) =>
+@typescript-eslint/no-explicit-any :: props.onChange({ target: { name: props.name, value: next } } as any);
+react-hooks/set-state-in-effect :: useEffect(() => setMounted(true), []);
+react-hooks/set-state-in-effect :: setHost(element);

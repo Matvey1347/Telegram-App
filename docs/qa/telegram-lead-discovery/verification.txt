@@ -1,0 +1,38 @@
+Prompt №7 verification — local, 2026-11-01 Europe/Warsaw
+No live Telegram collection, paid AI, send/join or production migration.
+
+API focused command and result
+> jest "--runInBand" "lead-discovery|telegram-lead|operations/ai|telegram-crm-runtime-manager|telegram-crm-mtproto.adapter|telegram-crm-contact-merge|telegram-user-account-removal|scheduled-task-executor|response-cache.interceptor|telegram-crm-inbox-conversations"
+Test Suites: 27 passed, 27 total
+Tests:       254 passed, 254 total
+Time:        3.81 s
+Ran all test suites matching lead-discovery|telegram-lead|operations/ai|telegram-crm-runtime-manager|telegram-crm-mtproto.adapter|telegram-crm-contact-merge|telegram-user-account-removal|scheduled-task-executor|response-cache.interceptor|telegram-crm-inbox-conversations.
+
+API typecheck — five unchanged baseline errors
+src/domains/telegram/telegram-bots/core/system-bot-branding-startup.service.ts(49,16): error TS2322: Type '{ workspaceId: string; kind: "SYSTEM"; environment: string; }' is not assignable to type 'TelegramConfiguredBotAvatarWorkspaceIdKindEnvironmentCompoundUniqueInput'.
+src/domains/telegram/telegram-bots/core/system-bot-branding-startup.service.ts(56,18): error TS2322: Type '{ workspaceId: string; kind: "SYSTEM"; environment: string; }' is not assignable to type 'TelegramConfiguredBotAvatarWorkspaceIdKindEnvironmentCompoundUniqueInput'.
+src/domains/telegram/telegram-bots/core/system-bot-branding-startup.service.ts(57,9): error TS2322: Type '{ username: string; image: Uint8Array<ArrayBuffer>; mimeType: string; profileAssetHash: string; workspaceId: string; kind: "SYSTEM"; environment: string; }' is not assignable to type '(Without<TelegramConfiguredBotAvatarCreateInput, TelegramConfiguredBotAvatarUncheckedCreateInput> & TelegramConfiguredBotAvatarUncheckedCreateInput) | (Without<...> & TelegramConfiguredBotAvatarCreateInput)'.
+src/domains/telegram/telegram-user-accounts/telegram-user-accounts.service.ts(855,7): error TS18046: 'existingChannels' is of type 'unknown'.
+src/domains/telegram/telegram-user-accounts/telegram-user-accounts.service.ts(877,9): error TS18046: 'existingChannels' is of type 'unknown'.
+
+API build — five unchanged baseline errors
+ERROR in ./src/domains/telegram/telegram-bots/core/system-bot-branding-startup.service.ts:49:16
+ERROR in ./src/domains/telegram/telegram-bots/core/system-bot-branding-startup.service.ts:56:18
+ERROR in ./src/domains/telegram/telegram-bots/core/system-bot-branding-startup.service.ts:57:9
+ERROR in ./src/domains/telegram/telegram-user-accounts/telegram-user-accounts.service.ts:855:7
+ERROR in ./src/domains/telegram/telegram-user-accounts/telegram-user-accounts.service.ts:877:9
+webpack 5.106.0 compiled with 5 errors in 7452 ms
+
+Scoped API ESLint: passed (65 changed API TypeScript files; full command file set is in changed-files.txt).
+Shared typecheck/build: passed. Prisma validate/generate: passed, no apply.
+Prisma validation retains an existing unrelated SetNull/required-field warning.
+Web final typecheck: passed; frontend build passed.
+Frontend focused: 8 files /74 tests passed. Select/consumer regression:8 files /70 tests passed.
+Frontend scoped lint and i18n passed. Full lint remains142 errors/168 warnings.
+Full web tests:352 passed/96 failed files,1748 passed/32 failed tests,2 existing icon mock errors; no newly failing names versus Prompt6.
+Full API tests: exited139 before Jest summary;13 unrelated failing files reported, not a passing full run.
+Architecture: policy16/16; normal22 inherited violations (baseline23), strict28. No threshold raised.
+git diff --check and owned untracked text whitespace: passed.
+Browser:6 widths, synthetic intercepted APIs,0 console errors/0 provider/0 Telegram send or join calls.
+
+Final Turing read-only review: cleared; independent14 focused suites/111 tests passed (overlaps combined suite).

@@ -1,0 +1,110 @@
+{
+  "checks": [
+    {
+      "scenario": "no AI analysis or account enumeration on page open",
+      "pass": true
+    },
+    {
+      "scenario": "sources responsive",
+      "width": 1440,
+      "overflow": false
+    },
+    {
+      "scenario": "sources responsive",
+      "width": 1024,
+      "overflow": false
+    },
+    {
+      "scenario": "sources responsive",
+      "width": 768,
+      "overflow": false
+    },
+    {
+      "scenario": "sources responsive",
+      "width": 390,
+      "overflow": false
+    },
+    {
+      "scenario": "sources responsive",
+      "width": 360,
+      "overflow": false
+    },
+    {
+      "scenario": "sources responsive",
+      "width": 320,
+      "overflow": false
+    },
+    {
+      "scenario": "source modal responsive",
+      "pass": true
+    },
+    {
+      "scenario": "preview does not commit or join",
+      "pass": true
+    },
+    {
+      "scenario": "feed open performs no AI analysis",
+      "pass": true
+    },
+    {
+      "scenario": "analysis is one explicitly requested bounded action",
+      "pass": true
+    },
+    {
+      "scenario": "candidate modal responsive",
+      "pass": true
+    },
+    {
+      "scenario": "manual merge accessible without alias suggestions",
+      "pass": true
+    },
+    {
+      "scenario": "candidate close restores focus",
+      "pass": true
+    },
+    {
+      "scenario": "Inbox AI Leads uses candidates rather than synthetic conversations",
+      "pass": true
+    },
+    {
+      "scenario": "no Telegram messages or channel joins",
+      "pass": true
+    }
+  ],
+  "errors": [],
+  "requests": [
+    "GET /auth/me",
+    "GET /workspaces",
+    "GET /account/me",
+    "POST /telegram/system-bot/connection/workspace",
+    "GET /telegram-crm/lead-discovery/config",
+    "POST /telegram/system-bot/connection/workspace",
+    "GET /operations/notifications/events/stream",
+    "GET /operations/notifications/unread-count",
+    "GET /telegram-crm/lead-discovery/sources?limit=50",
+    "GET /operations/notifications/events/stream",
+    "POST /telegram-crm/lead-discovery/sources/import/preview",
+    "GET /telegram-crm/lead-discovery/feed?limit=50",
+    "POST /telegram-crm/lead-discovery/analyze",
+    "GET /telegram-crm/lead-discovery/feed?limit=50",
+    "GET /telegram-crm/lead-discovery/candidates?limit=50",
+    "GET /telegram-crm/lead-discovery/candidates/candidate-qa",
+    "GET /telegram-crm/lead-discovery/candidates?limit=10",
+    "GET /telegram-crm/lead-discovery/candidates/candidate-qa",
+    "POST /telegram/system-bot/connection/workspace",
+    "GET /operations/notifications/events/stream",
+    "GET /operations/notifications/unread-count",
+    "GET /telegram-crm/inbox/conversations?filter=ALL&limit=50",
+    "GET /telegram-crm/events/stream",
+    "GET /telegram-crm/unread",
+    "POST /telegram/system-bot/connection/workspace",
+    "GET /operations/notifications/events/stream",
+    "GET /telegram-crm/events/stream",
+    "GET /telegram-crm/lead-discovery/config",
+    "GET /telegram-crm/lead-discovery/candidates?limit=50"
+  ],
+  "allApisIntercepted": true,
+  "providerCalls": 0,
+  "telegramSends": 0,
+  "channelJoins": 0
+}

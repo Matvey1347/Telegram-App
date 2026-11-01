@@ -97,7 +97,7 @@ export class TelegramWorkspaceFullSyncService {
       const notify = (
         item: Omit<
           TelegramWorkspaceSyncProgressItem,
-          "channelId" | "channelTitle" | "successful" | "failed" | "skipped"
+          'channelId' | 'channelTitle' | 'successful' | 'failed' | 'skipped'
         >,
       ) =>
         input.onProgress?.(

@@ -25,6 +25,7 @@ export * from "./types/telegram-channel-export";
 export * from "./types/telegram-user-account-login";
 export * from "./types/telegram-crm";
 export * from "./types/telegram-crm-inbox";
+export * from "./types/telegram-crm-inbox-conversations";
 export * from "./types/telegram-crm-runtime";
 export * from "./types/telegram-ad-sales";
 export * from "./types/telegram-ad-sales-analytics";
@@ -49,3 +50,16 @@ export * from "./pagination";
 export * from "./permissions";
 export * from "./i18n/locales";
 export * from "./i18n/contracts";
+
+export * from "./types/telegram-crm-sales-workflow";
+
+export * from "./types/ai-configuration";
+export * from "./types/ai-usage";
+export * from './types/telegram-crm-copilot';
+export * from './types/telegram-lead-discovery';
+export * from './types/telegram-lead-discovery-input';
+export * from './types/telegram-lead-qualification';
+export * from './instagram-profile';
+export * from './types/crm-instagram-contacts';
+
+export * from "./types/telegram-chat-actions";

@@ -1,0 +1,22 @@
+Prompt 10 — final local command evidence, 2026-11-01 Europe/Warsaw
+
+PASS: Focused API: 23 suites /212 tests.
+Command: pnpm --filter api test -- --runInBand 'telegram-crm-(manual-send|manual-reply|reaction-reconcile|message-batch-writer|message-store|runtime-manager|recovery|chat-|inbox-conversations|notification-delivery-policy)|telegram-crm-mtproto|scheduled-task-executor|response-cache.interceptor|crm-chat-rollout'
+Log: /tmp/crm-chat-actions-api-scoped-final.log
+
+PASS: Focused frontend: 10 files /80 tests. Logs /tmp/ada-chat-actions-regression.log; typecheck, production build and scoped lint passed (/tmp/ada-chat-actions-typecheck.log, /tmp/ada-chat-actions-build.log; agent's final scoped lint gate).
+PASS: Independent Turing read-only: 14 API suites /130 tests;2 web files /35 tests (overlapping focused subsets). Logs /tmp/turing-chat-review-final-tests.log, /tmp/turing-chat-review-web-final.log. No unresolved known production P1/P2 at reviewed final code.
+PASS: Prisma validate and pnpm db:generate. /tmp/crm-chat-actions-prisma-validate.log, /tmp/crm-chat-actions-prisma-generate.log. Existing unrelated SetNull warning retained; no migration applied.
+PASS: Shared typecheck and build. /tmp/crm-chat-actions-shared-typecheck.log, /tmp/crm-chat-actions-shared-build.log.
+PASS: All stage-changed API paths scoped lint exit0; /tmp/crm-chat-actions-api-lint-final.log empty.
+PASS: Browser mock QA 18/18 checks, six widths,13 screenshots, zero page errors; browser-report.json. Physical iPhone not tested. No real Telegram/provider sends.
+PASS: git diff --check; no new handwritten production file >500 lines. Existing runtime manager shrank from542 to540; no allowance increased.
+
+BASELINE BLOCKED: API typecheck/build: exactly five inherited errors in System Bot branding49/56/57, Telegram Accounts855/877. Logs /tmp/crm-chat-actions-api-typecheck-final.log, /tmp/crm-chat-actions-api-build-final.log. Unrelated modules preserved.
+BROADER API/CRM: 100 suites:98 passed/2 failed;840 tests:837 passed/3 failed. Remaining failures in unchanged telegram-crm-dialog-batch-writer.service.spec.ts (two missing settings mock cases) and telegram-crm-contact-sales-summary.spec.ts (one stale expected projection). /tmp/crm-chat-actions-api-broad-final.log. Baseline hash comparison confirms these tests and production paths were not changed in stage10.
+FULL API: attempted;15 failing files reported before existing development-connection-drain code process.exit(0) prevented a final Jest total. No full-suite pass claim. /tmp/crm-chat-actions-api-full.log.
+ARCHITECTURE:16/16 policy checks;22 normal /28 strict inherited violations (same baseline counts). /tmp/crm-chat-actions-architecture-baseline.log, /tmp/crm-chat-actions-architecture-final.log, /tmp/crm-chat-actions-architecture-strict.log.
+FULL WEB: not rerun in stage10; prior stage's full-test/lint failures remain documented. Current scoped tests/typecheck/build/lint passed.
+
+No live Telegram messages/media/voice, paid AI calls, migration application, final release or Bot Support runtime. Existing localhost server reused and untouched; browser closed. No task-owned server started.
+Durable report: README.md and ../../plans/telegram-chat-actions.md. Exact stage10 delta: changed-files.txt, comparing before hashes rather than attributing whole uncommitted worktree to this stage.

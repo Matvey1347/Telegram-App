@@ -13,6 +13,10 @@ describe('TelegramCrmInternalNotificationProjector', () => {
     const snapshot = {
       contact: jest.fn().mockReturnValue(contact),
       recipient: jest.fn().mockReturnValue({ id: 'member-1' }),
+      preferences: () => ({
+        crmNotificationsEnabled: true,
+        crmFollowUpEnabled: true,
+      }),
     };
     const recipients = { load: jest.fn().mockResolvedValue(snapshot) };
     const store = {
@@ -26,7 +30,7 @@ describe('TelegramCrmInternalNotificationProjector', () => {
       | ((tx: unknown, facts: readonly Record<string, unknown>[]) => unknown)
       | null = null;
     const resolution = {
-      register: jest.fn((resolver) => {
+      register: jest.fn((resolver: NonNullable<typeof dueResolver>) => {
         dueResolver = resolver;
         return jest.fn();
       }),
@@ -110,7 +114,20 @@ describe('TelegramCrmInternalNotificationProjector', () => {
 
   it('re-resolves the current owner/Deal fallback before due publication', async () => {
     const { projector, dueResolver } = setup();
+    const dueAt = new Date(Date.now() - 60_000);
     const tx = {
+      telegramAdvertiserTask: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'task-1',
+            advertiserId: 'contact-1',
+            dueAt,
+            remindAt: null,
+            snoozedUntil: null,
+          },
+        ]),
+      },
+      $executeRaw: jest.fn(),
       operationsNotification: {
         updateMany: jest.fn(),
         deleteMany: jest.fn(),
@@ -125,18 +142,106 @@ describe('TelegramCrmInternalNotificationProjector', () => {
         recipientMemberId: 'member-old',
         visibilityMemberId: 'member-old',
         visibilityResourceKey: 'crm-contact:contact-1',
+        sourceKey: `task:task-1:due:${dueAt.toISOString()}`,
+        metadata: { taskId: 'task-1' },
+        deliverAt: dueAt,
       },
     ]);
-    expect(tx.operationsNotification.updateMany).toHaveBeenCalledWith({
+    expect(tx.$executeRaw).toHaveBeenCalledTimes(1);
+    expect(tx.operationsNotification.deleteMany).not.toHaveBeenCalled();
+  });
+});
+
+describe('Inbox follow-up notification destinations', () => {
+  const dueAt = new Date('2030-01-01T10:00:00Z');
+  function setup() {
+    const notifications = {
+      cancelPending: jest.fn(),
+      insertMany: jest.fn().mockResolvedValue([]),
+    };
+    const recipients = {
+      load: jest.fn().mockResolvedValue({
+        contact: () => ({
+          id: 'client-a',
+          displayName: 'Client',
+          ownerMemberId: 'member-a',
+        }),
+        recipient: () => ({ id: 'member-a' }),
+      }),
+    };
+    const tx = {
+      telegramCrmConversation: {
+        findFirst: jest.fn().mockResolvedValue({ id: 'conversation-a' }),
+      },
+    };
+    const service = new TelegramCrmInternalNotificationProjector(
+      recipients as never,
+      notifications as never,
+      {} as never,
+      {} as never,
+    );
+    const task = {
+      id: 'task-a',
+      workspaceId: 'workspace-a',
+      advertiserId: 'client-a',
+      title: 'Follow up',
+      status: TelegramAdvertiserTaskStatus.OPEN,
+      dueAt,
+      remindAt: null,
+      snoozedUntil: null,
+      metadata: { conversationId: 'conversation-a' },
+    };
+    return { service, notifications, tx, task };
+  }
+  it('targets the exact current client conversation and workspace', async () => {
+    const { service, notifications, tx, task } = setup();
+    await service.refreshTask(tx as never, task);
+    expect(tx.telegramCrmConversation.findFirst).toHaveBeenCalledWith({
       where: {
-        id: 'notification-1',
-        workspaceId: 'workspace-1',
-        publishedAt: { not: null },
+        id: 'conversation-a',
+        workspaceId: 'workspace-a',
+        contactId: 'client-a',
+        state: 'ACTIVE',
       },
-      data: {
-        recipientMemberId: 'member-1',
-        visibilityMemberId: 'member-1',
-      },
+      select: { id: true },
     });
+    expect(notifications.insertMany).toHaveBeenCalledWith(tx, [
+      expect.objectContaining({
+        targetUrl:
+          '/ad-sales/inbox?conversationId=conversation-a&workspaceId=workspace-a',
+        metadata: expect.objectContaining({
+          conversationId: 'conversation-a',
+        }) as unknown,
+      }),
+    ]);
+  });
+  it('uses the client fallback if the originating conversation is no longer accessible', async () => {
+    const { service, notifications, tx, task } = setup();
+    tx.telegramCrmConversation.findFirst.mockResolvedValue(null);
+    await service.refreshTask(tx as never, task);
+    expect(notifications.insertMany).toHaveBeenCalledWith(tx, [
+      expect.objectContaining({
+        targetUrl: '/ad-sales/clients/client-a?workspaceId=workspace-a',
+        metadata: expect.objectContaining({
+          conversationId: 'conversation-a',
+        }) as unknown,
+      }),
+    ]);
+  });
+  it('routes an Instagram-only follow-up to the authorized client without a conversation', async () => {
+    const { service, notifications, tx, task } = setup();
+    const manualTask: Parameters<
+      TelegramCrmInternalNotificationProjector['refreshTask']
+    >[1] = {
+      ...task,
+      metadata: { origin: 'MANUAL_INSTAGRAM', channel: 'INSTAGRAM' },
+    };
+    await service.refreshTask(tx as never, manualTask);
+    expect(notifications.insertMany).toHaveBeenCalledWith(tx, [
+      expect.objectContaining({
+        targetUrl: '/ad-sales/clients/client-a?workspaceId=workspace-a',
+      }),
+    ]);
+    expect(tx.telegramCrmConversation.findFirst).not.toHaveBeenCalled();
   });
 });

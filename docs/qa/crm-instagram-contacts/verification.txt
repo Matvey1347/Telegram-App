@@ -1,0 +1,24 @@
+Prompt 9 — final local verification, 2026-11-01 Europe/Warsaw
+
+PASS: Focused API Jest: 36 suites, 447 tests.
+Command: pnpm --filter api test -- --runInBand 'instagram|manual-retention|manual-contacts|manual-activity|manual-follow-up|lead-discovery|telegram-crm-copilot|telegram-crm-contact-merge|telegram-ad-sales-crm-tasks|crm-contact-methods|internal-notification-projector|scheduled-task-executor|response-cache.interceptor|follow-up-delivery'
+PASS: Focused web CRM regression: 29 files, 220 tests, including 18 manual workflow tests.
+PASS: Prisma validate and generate. No migration applied. Existing unrelated SetNull warning remains.
+PASS: Shared typecheck and build; web typecheck and production build; i18n.
+PASS: Feature-only API lint (excluding existing Sales facade); scoped frontend lint.
+PASS: Browser mock QA: 17 checks, six widths, 19 screenshots, zero console errors, zero feature idle writes/provider/Instagram/send calls. Existing app-shell network activity is recorded separately.
+PASS: git diff --check. No new production file exceeds 500 lines.
+
+BLOCKED BY BASELINE: API typecheck/build: five existing errors, System Bot branding lines 49/56/57 and Telegram Accounts lines 855/877. No unrelated repair attempted.
+BASELINE DEBT: Sales facade lint: 575 errors/84 warnings. Facade shrank 5746 to 5707 lines.
+BASELINE DEBT: Full web lint: 142 errors/168 warnings.
+FULL WEB: 354 passed/96 failed files; 1785 passed/31 failed tests. One additional outside-slice MutualPromotionPostImport timeout versus stage 8; isolated suite passes 5/5. See README.
+FULL API: Attempted; 15 outside-slice failing files reported before existing development-connection-drain test process.exit(0) prevented final Jest totals. Exit zero is not full-suite success.
+ARCHITECTURE: 16/16 policy checks; 22 normal and 28 strict inherited violations, unchanged counts. No allowance increased.
+
+Read-only review: Grace reuse mapping; Parnas/Knuth structural/cost preflight; Turing integration review with 8 suites/60 tests and 3 suites/14 follow-on tests (overlapping). No unresolved production P1/P2 in that reviewed implementation. Root subsequently verified equal-date Waiting consistency and older-report no-op compact writes in the final 447-test run. Worker final turns hit usage limits; no claim of a later independent review.
+
+No production migration, release, real Instagram authentication/message/profile lookup or paid AI call. Public official Meta documentation was researched read-only. Existing localhost server was reused and left untouched; browser closed, no task-owned dev server started.
+
+Durable details: README.md, browser-report.json, screenshots/, changed-files.txt, ../../plans/crm-instagram-contacts.md.
+Temporary command logs: /tmp/crm-instagram-api-focused-final.log, /tmp/crm-instagram-api-typecheck-final.log, /tmp/crm-instagram-api-build-final.log, /tmp/crm-instagram-api-full-tests.log, /tmp/crm-instagram-api-feature-lint-final.log, /tmp/crm-instagram-web-typecheck-final.log, /tmp/ada-instagram-crm-regression.log, /tmp/ada-instagram-build.log, /tmp/ada-instagram-fulltest.log, /tmp/ada-instagram-fulllint.log, /tmp/crm-instagram-architecture-final.log, /tmp/crm-instagram-architecture-final-strict.log.

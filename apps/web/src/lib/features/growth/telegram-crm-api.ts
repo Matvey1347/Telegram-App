@@ -1,4 +1,5 @@
 import type {
+  CrmCopilotSendApproval,
   CrmAccountCapabilities,
   CrmAnalyticsSummary,
   CrmAccountSyncState,
@@ -257,7 +258,7 @@ export const telegramCrmApi = {
     ).data,
   sendManualMessage: async (
     conversationId: string,
-    payload: { text: string; clientIdempotencyKey: string },
+    payload: { text: string; clientIdempotencyKey: string; replyToMessageId?: string } & Partial<CrmCopilotSendApproval>,
   ) =>
     (
       await api.post<CrmManualMessageResult>(
@@ -265,20 +266,25 @@ export const telegramCrmApi = {
         payload,
       )
     ).data,
-  markConversationRead: async (conversationId: string) =>
+  getManualSendReceipt: async (conversationId: string, clientIdempotencyKey: string) =>
+    (await api.get<CrmManualMessageResult | null>(`/telegram-crm/conversations/${conversationId}/manual-send-receipt`, { params: { clientIdempotencyKey } })).data,
+  markConversationRead: async (conversationId: string, maxTelegramMessageId?: number) =>
     (
       await api.post<CrmConversationReadResult>(
         `/telegram-crm/conversations/${conversationId}/read`,
+        maxTelegramMessageId === undefined ? undefined : { maxTelegramMessageId },
+        { feedback: { mode: "managed" } } as Parameters<typeof api.post>[2],
       )
     ).data,
   importHistory: async (
     conversationId: string,
-    payload: { beforeTelegramMessageId?: number; limit?: number },
+    payload: { beforeTelegramMessageId?: number; limit?: number; recent?: boolean },
   ) =>
     (
       await api.post<CrmHistoryImportResult>(
         `/telegram-crm/conversations/${conversationId}/history`,
         payload,
+        { feedback: { mode: "managed" } } as Parameters<typeof api.post>[2],
       )
     ).data,
   getUnread: async (signal?: AbortSignal) =>

@@ -1,0 +1,107 @@
+{
+  "date": "2026-10-31",
+  "checks": [
+    {
+      "scenario": "lazy initial details",
+      "purchaseRequests": 0,
+      "catalogRequests": 0
+    },
+    {
+      "scenario": "responsive client details",
+      "width": 1440,
+      "overflow": false,
+      "fullscreenDialog": false
+    },
+    {
+      "scenario": "responsive client details",
+      "width": 1024,
+      "overflow": false,
+      "fullscreenDialog": false
+    },
+    {
+      "scenario": "responsive client details",
+      "width": 390,
+      "overflow": false,
+      "fullscreenDialog": true
+    },
+    {
+      "scenario": "responsive client details",
+      "width": 320,
+      "overflow": false,
+      "fullscreenDialog": true
+    },
+    {
+      "scenario": "purchase context",
+      "separateCurrencies": true,
+      "channels": 1,
+      "historicalCaveat": true
+    },
+    {
+      "scenario": "calendar in native top layer",
+      "contained": true,
+      "insideReminderFocusBoundary": true
+    },
+    {
+      "scenario": "calendar Escape keeps reminder form",
+      "calendarClosed": true,
+      "reminderFormVisible": true,
+      "focusReturned": true
+    },
+    {
+      "scenario": "keyboard-sized follow-up form",
+      "insideModal": true,
+      "overflow": false
+    },
+    {
+      "scenario": "explicit follow-up reschedule",
+      "sent": true
+    },
+    {
+      "scenario": "desktop context menu",
+      "visible": true
+    }
+  ],
+  "errors": [],
+  "mutations": [
+    {
+      "path": "/telegram-crm/conversations/dialog-qa/sales-workflow",
+      "method": "PATCH",
+      "body": {
+        "manualStatus": "HUMAN_REVIEW"
+      }
+    },
+    {
+      "path": "/telegram-crm/conversations/dialog-qa/follow-up/task-qa",
+      "method": "PATCH",
+      "body": {
+        "action": "RESCHEDULE",
+        "at": "2026-10-29T11:00:00.000Z"
+      }
+    }
+  ],
+  "requests": [
+    "GET /auth/me",
+    "GET /workspaces",
+    "GET /account/me",
+    "POST /telegram/system-bot/connection/workspace",
+    "GET /telegram-crm/conversations/dialog-qa/sales-workflow",
+    "GET /telegram-crm/conversations/dialog-qa",
+    "GET /telegram-crm/inbox/conversations",
+    "GET /telegram-crm/events/stream",
+    "GET /telegram-crm/unread",
+    "GET /operations/notifications/events/stream",
+    "GET /operations/notifications/unread-count",
+    "GET /telegram-user-accounts",
+    "GET /telegram-crm/conversations/dialog-qa/messages",
+    "GET /telegram-crm/contacts/client-qa",
+    "POST /telegram/system-bot/connection/workspace",
+    "GET /operations/notifications/events/stream",
+    "GET /telegram-crm/events/stream",
+    "GET /telegram-crm/contacts/client-qa/purchases",
+    "GET /telegram-crm/package-sales-context",
+    "PATCH /telegram-crm/conversations/dialog-qa/sales-workflow",
+    "PATCH /telegram-crm/conversations/dialog-qa/follow-up/task-qa"
+  ],
+  "realApiRequests": 0,
+  "realTelegramSends": 0
+}

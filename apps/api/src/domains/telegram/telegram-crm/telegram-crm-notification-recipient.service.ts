@@ -15,6 +15,28 @@ type ContactFact = Prisma.TelegramAdvertiserGetPayload<{
   select: typeof contactSelect;
 }>;
 
+const recipientSelect = {
+  ...operationsNotificationMemberSelect,
+  operationsNotificationPreference: {
+    select: {
+      crmNotificationsEnabled: true,
+      crmIncomingMessagesEnabled: true,
+      crmMessagePreviewEnabled: true,
+      crmFollowUpEnabled: true,
+      crmAiLeadsEnabled: true,
+    },
+  },
+} satisfies Prisma.WorkspaceMemberSelect;
+type RecipientMember = OperationsNotificationMember & {
+  operationsNotificationPreference?: {
+    crmNotificationsEnabled: boolean;
+    crmIncomingMessagesEnabled: boolean;
+    crmMessagePreviewEnabled: boolean;
+    crmFollowUpEnabled?: boolean;
+    crmAiLeadsEnabled?: boolean;
+  } | null;
+};
+
 const ACTIVE_DEAL_STATUSES = [
   TelegramAdSaleStatus.RESERVED,
   TelegramAdSaleStatus.CONFIRMED,
@@ -29,6 +51,7 @@ const contactSelect = {
   sales: {
     where: { status: { in: ACTIVE_DEAL_STATUSES } },
     orderBy: [{ createdAt: 'desc' as const }, { id: 'asc' as const }],
+    take: 1,
     select: { id: true, status: true, assignedMemberId: true },
   },
   tasks: {
@@ -47,6 +70,8 @@ const contactSelect = {
       },
     },
     select: { dueAt: true },
+    orderBy: [{ dueAt: 'asc' as const }, { id: 'asc' as const }],
+    take: 1,
   },
 } satisfies Prisma.TelegramAdvertiserSelect;
 
@@ -81,7 +106,7 @@ export class TelegramCrmNotificationRecipientService {
       tx.workspaceMember.findMany({
         where: { workspaceId },
         orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-        select: operationsNotificationMemberSelect,
+        select: recipientSelect,
       }),
     ]);
     return new TelegramCrmRecipientSnapshot(
@@ -94,11 +119,11 @@ export class TelegramCrmNotificationRecipientService {
 
 export class TelegramCrmRecipientSnapshot {
   private readonly contacts: Map<string, ContactFact>;
-  private readonly members: Map<string, OperationsNotificationMember>;
+  private readonly members: Map<string, RecipientMember>;
 
   constructor(
     contacts: ContactFact[],
-    members: OperationsNotificationMember[],
+    members: RecipientMember[],
     private readonly permissions: OperationsNotificationPermissionService,
   ) {
     this.contacts = new Map(contacts.map((item) => [item.id, item]));
@@ -134,7 +159,38 @@ export class TelegramCrmRecipientSnapshot {
     );
   }
 
-  priority(contact: ContactFact | null, now: Date) {
+  incomingEnabled(member: RecipientMember) {
+    const preferences = member.operationsNotificationPreference;
+    return (
+      (preferences?.crmNotificationsEnabled ?? true) &&
+      (preferences?.crmIncomingMessagesEnabled ?? false)
+    );
+  }
+
+  preferences(member: RecipientMember) {
+    const preference = member.operationsNotificationPreference;
+    return {
+      crmNotificationsEnabled: preference?.crmNotificationsEnabled ?? true,
+      crmIncomingMessagesEnabled:
+        preference?.crmIncomingMessagesEnabled ?? false,
+      crmMessagePreviewEnabled: preference?.crmMessagePreviewEnabled ?? false,
+      crmFollowUpEnabled: preference?.crmFollowUpEnabled ?? true,
+      crmAiLeadsEnabled: preference?.crmAiLeadsEnabled ?? false,
+    };
+  }
+
+  previewEnabled(member: RecipientMember) {
+    return (
+      member.operationsNotificationPreference?.crmMessagePreviewEnabled ?? false
+    );
+  }
+
+  priority(
+    contact: ContactFact | null,
+    now: Date,
+    awaitingClientReply = false,
+  ) {
+    if (awaitingClientReply) return 'HIGH' as const;
     if (!contact) return 'LOW' as const;
     if (
       contact.sales.length > 0 ||

@@ -3,6 +3,8 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { overlayPortalHost } from "./overlay-portal-host";
+import { useDismissiblePopover } from "@/hooks/use-dismissible-popover";
 import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 import { uiCopy, type UiLocale } from "@/lib/ui-i18n";
 import { useOptionalI18n } from "@/providers/i18n-provider";
@@ -14,11 +16,13 @@ function useFixedPopoverPosition(
   estimatedHeight: number,
 ) {
   const [style, setStyle] = useState<React.CSSProperties | null>(null);
+  const [portalHost, setPortalHost] = useState<HTMLElement | null>(null);
   useLayoutEffect(() => {
     if (!open) return;
     const recalculate = () => {
       const root = rootRef.current;
       if (!root) return;
+      setPortalHost(overlayPortalHost(root));
       const rect = root.getBoundingClientRect();
       const padding = 8;
       const gap = 4;
@@ -50,7 +54,7 @@ function useFixedPopoverPosition(
       window.removeEventListener("scroll", recalculate, true);
     };
   }, [estimatedHeight, open, rootRef, widthLimit]);
-  return style;
+  return { style, portalHost };
 }
 
 export function DateInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
@@ -70,7 +74,7 @@ export function DateInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
   );
   const rootRef = useRef<HTMLDivElement | null>(null);
   const popoverRef = useRef<HTMLDivElement | null>(null);
-  const popoverStyle = useFixedPopoverPosition(open, rootRef, 300, 340);
+  const { style: popoverStyle, portalHost } = useFixedPopoverPosition(open, rootRef, 300, 340);
 
   useEffect(() => {
     if (props.value !== undefined) setValue(String(props.value || ""));
@@ -81,20 +85,7 @@ export function DateInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
     new Date(initialDate.getFullYear(), initialDate.getMonth(), 1),
   );
 
-  useEffect(() => {
-    const onDocClick = (event: MouseEvent) => {
-      if (!rootRef.current) return;
-      const target = event.target as Node;
-      if (
-        !rootRef.current.contains(target) &&
-        !popoverRef.current?.contains(target)
-      ) {
-        setOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", onDocClick);
-    return () => document.removeEventListener("mousedown", onDocClick);
-  }, []);
+  useDismissiblePopover({ open, onDismiss: () => setOpen(false), triggerRef: rootRef, contentRef: popoverRef });
 
   const commit = (next: string) => {
     setValue(next);
@@ -246,7 +237,7 @@ export function DateInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
                 </button>
               </div>
             </div>,
-            document.body,
+            portalHost ?? document.body,
           )
         : null}
     </div>
@@ -322,7 +313,7 @@ export function DateRangeInput({
   const rootRef = useRef<HTMLDivElement | null>(null);
   const popoverRef = useRef<HTMLDivElement | null>(null);
   const [open, setOpen] = useState(false);
-  const popoverStyle = useFixedPopoverPosition(open, rootRef, 320, 360);
+  const { style: popoverStyle, portalHost } = useFixedPopoverPosition(open, rootRef, 320, 360);
   const [cursor, setCursor] = useState(() => {
     const base = from || to;
     const date = base ? new Date(`${base}T00:00:00`) : new Date();
@@ -330,20 +321,7 @@ export function DateRangeInput({
   });
   const [selectingEnd, setSelectingEnd] = useState(Boolean(from && !to));
 
-  useEffect(() => {
-    const onDocClick = (event: MouseEvent) => {
-      if (!rootRef.current) return;
-      const target = event.target as Node;
-      if (
-        !rootRef.current.contains(target) &&
-        !popoverRef.current?.contains(target)
-      ) {
-        setOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", onDocClick);
-    return () => document.removeEventListener("mousedown", onDocClick);
-  }, []);
+  useDismissiblePopover({ open, onDismiss: () => setOpen(false), triggerRef: rootRef, contentRef: popoverRef });
 
   const start = from && to && from > to ? to : from;
   const end = from && to && from > to ? from : to;
@@ -477,7 +455,7 @@ export function DateRangeInput({
                 </button>
               </div>
             </div>,
-            document.body,
+            portalHost ?? document.body,
           )
         : null}
     </div>

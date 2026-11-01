@@ -83,10 +83,6 @@ export function findCanonicalAdvertiser(
   return advertiser.findFirst({
     where: { workspaceId: input.workspaceId, OR: identities },
     select: { id: true },
-    orderBy: [
-      { totalSalesCount: 'desc' },
-      { createdAt: 'asc' },
-      { id: 'asc' },
-    ],
+    orderBy: [{ totalSalesCount: 'desc' }, { createdAt: 'asc' }, { id: 'asc' }],
   });
 }

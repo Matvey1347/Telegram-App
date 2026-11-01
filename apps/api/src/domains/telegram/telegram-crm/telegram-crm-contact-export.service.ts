@@ -1,5 +1,8 @@
 import { Injectable } from '@nestjs/common';
-import type { CrmContactExport, CrmContactSegment } from '@telegram-system/shared';
+import type {
+  CrmContactExport,
+  CrmContactSegment,
+} from '@telegram-system/shared';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { WorkspaceAuthorizationService } from '../../workspace/workspace-authorization/workspace-authorization.service';

@@ -95,14 +95,15 @@ export class TelegramCrmContactCommandService {
       },
       select: crmTagSelect,
     });
-    const requestedFolderTags = await this.prisma.telegramAdvertiserTag.findMany({
-      where: {
-        workspaceId: contact.workspaceId,
-        id: { in: tagIds },
-        systemKey: { startsWith: TELEGRAM_FOLDER_TAG_PREFIX },
-      },
-      select: crmTagSelect,
-    });
+    const requestedFolderTags =
+      await this.prisma.telegramAdvertiserTag.findMany({
+        where: {
+          workspaceId: contact.workspaceId,
+          id: { in: tagIds },
+          systemKey: { startsWith: TELEGRAM_FOLDER_TAG_PREFIX },
+        },
+        select: crmTagSelect,
+      });
     await this.syncTelegramFolderMemberships({
       workspaceId: contact.workspaceId,
       contactId: contact.id,
@@ -159,18 +160,23 @@ export class TelegramCrmContactCommandService {
     if (!this.runtime) return;
     const current = new Set(input.current.map((tag) => tag.id));
     const requested = new Set(input.requested.map((tag) => tag.id));
-    const changes = [...new Map([...input.current, ...input.requested].map((tag) => [tag.id, tag])).values()]
-      .flatMap((tag) => {
-        const parsed = this.telegramFolderKey(tag.systemKey);
-        if (!parsed || current.has(tag.id) === requested.has(tag.id)) return [];
-        return [{ ...parsed, included: requested.has(tag.id) }];
-      });
+    const changes = [
+      ...new Map(
+        [...input.current, ...input.requested].map((tag) => [tag.id, tag]),
+      ).values(),
+    ].flatMap((tag) => {
+      const parsed = this.telegramFolderKey(tag.systemKey);
+      if (!parsed || current.has(tag.id) === requested.has(tag.id)) return [];
+      return [{ ...parsed, included: requested.has(tag.id) }];
+    });
     if (!changes.length) return;
     const conversations = await this.prisma.telegramCrmConversation.findMany({
       where: {
         workspaceId: input.workspaceId,
         contactId: input.contactId,
-        mtprotoAccountId: { in: [...new Set(changes.map((change) => change.accountId))] },
+        mtprotoAccountId: {
+          in: [...new Set(changes.map((change) => change.accountId))],
+        },
       },
       select: {
         mtprotoAccountId: true,
@@ -206,9 +212,7 @@ export class TelegramCrmContactCommandService {
 
   private telegramFolderKey(systemKey: string | null) {
     const match = systemKey?.match(/^TELEGRAM_FOLDER:([^:]+):(\d+)$/);
-    return match
-      ? { accountId: match[1], folderId: Number(match[2]) }
-      : null;
+    return match ? { accountId: match[1], folderId: Number(match[2]) } : null;
   }
 
   async create(userId: string, dto: CreateCrmContactDto) {
@@ -220,13 +224,16 @@ export class TelegramCrmContactCommandService {
       dto.ownerMemberId,
     );
     const telegramUsername = this.username(dto.telegramUsername);
-    const existing = await findCanonicalAdvertiser(this.prisma.telegramAdvertiser, {
-      workspaceId: access.workspaceId,
-      username: telegramUsername,
-      phone: dto.phone?.trim() || null,
-      email: dto.email?.trim().toLowerCase() || null,
-      displayName: dto.displayName,
-    });
+    const existing = await findCanonicalAdvertiser(
+      this.prisma.telegramAdvertiser,
+      {
+        workspaceId: access.workspaceId,
+        username: telegramUsername,
+        phone: dto.phone?.trim() || null,
+        email: dto.email?.trim().toLowerCase() || null,
+        displayName: dto.displayName,
+      },
+    );
     if (existing) {
       const row = await this.prisma.telegramAdvertiser.findUniqueOrThrow({
         where: { id: existing.id },
@@ -249,8 +256,7 @@ export class TelegramCrmContactCommandService {
         ownerMemberId,
         createdByUserId: userId,
         nextContactAt: dto.nextContactAt ? new Date(dto.nextContactAt) : null,
-        archivedAt:
-          null,
+        archivedAt: null,
         ...(telegramUsername
           ? {
               contacts: {
@@ -275,7 +281,10 @@ export class TelegramCrmContactCommandService {
     const existing = await this.requireWritableContact(userId, contactId);
     if (dto.avatarIconId) {
       const icon = await this.prisma.icon.findFirst({
-        where: { id: dto.avatarIconId, OR: [{ workspaceId: existing.workspaceId }, { workspaceId: null }] },
+        where: {
+          id: dto.avatarIconId,
+          OR: [{ workspaceId: existing.workspaceId }, { workspaceId: null }],
+        },
         select: { id: true },
       });
       if (!icon) throw new NotFoundException('Avatar icon not found');
@@ -317,8 +326,7 @@ export class TelegramCrmContactCommandService {
         ? {}
         : {
             stage: dto.stage,
-            archivedAt:
-              null,
+            archivedAt: null,
           }),
       ...(dto.ownerMemberId === undefined
         ? {}
@@ -332,7 +340,11 @@ export class TelegramCrmContactCommandService {
           }),
       ...(dto.avatarIconId === undefined
         ? {}
-        : { avatarIcon: dto.avatarIconId ? { connect: { id: dto.avatarIconId } } : { disconnect: true } }),
+        : {
+            avatarIcon: dto.avatarIconId
+              ? { connect: { id: dto.avatarIconId } }
+              : { disconnect: true },
+          }),
       ...(dto.nextContactAt === undefined
         ? {}
         : {

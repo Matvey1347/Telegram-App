@@ -9,16 +9,14 @@ describe('UpdateMeDto locale preference', () => {
   });
 
   it('rejects unsupported locale before persistence', () => {
-    const errors = validateSync(
-      plainToInstance(UpdateMeDto, { locale: 'de' }),
-    );
+    const errors = validateSync(plainToInstance(UpdateMeDto, { locale: 'de' }));
     expect(errors[0]?.property).toBe('locale');
   });
 
   it('requires a supported locale on the narrow preference endpoint', () => {
-    expect(validateSync(plainToInstance(UpdateLocaleDto, {}))[0]?.property).toBe(
-      'locale',
-    );
+    expect(
+      validateSync(plainToInstance(UpdateLocaleDto, {}))[0]?.property,
+    ).toBe('locale');
     expect(
       validateSync(plainToInstance(UpdateLocaleDto, { locale: 'ru' })),
     ).toEqual([]);

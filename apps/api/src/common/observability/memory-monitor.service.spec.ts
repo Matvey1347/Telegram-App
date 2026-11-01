@@ -185,7 +185,8 @@ describe('MemoryMonitorService', () => {
 
       expect(intervalSpy).not.toHaveBeenCalled();
     } finally {
-      if (sendDescriptor) Object.defineProperty(process, 'send', sendDescriptor);
+      if (sendDescriptor)
+        Object.defineProperty(process, 'send', sendDescriptor);
       else delete (process as { send?: unknown }).send;
       intervalSpy.mockRestore();
     }

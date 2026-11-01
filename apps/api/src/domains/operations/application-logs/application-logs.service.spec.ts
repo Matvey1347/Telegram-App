@@ -26,8 +26,13 @@ describe('ApplicationLogsService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     requireWorkspaceRole.mockResolvedValue({ workspaceId: 'ws_1' });
-    resolveWorkspaceMembershipForUser.mockResolvedValue({ workspaceId: 'ws_1' });
-    service = new ApplicationLogsService(repository as any, workspaceService as any);
+    resolveWorkspaceMembershipForUser.mockResolvedValue({
+      workspaceId: 'ws_1',
+    });
+    service = new ApplicationLogsService(
+      repository as any,
+      workspaceService as any,
+    );
   });
 
   afterEach(() => jest.useRealTimers());
@@ -74,7 +79,9 @@ describe('ApplicationLogsService', () => {
     await service.list('user_1', {
       endpoint: '/api/application-logs',
       search: 'runtime',
-      cursor: Buffer.from('2026-07-18T10:00:00.000Z::log_123').toString('base64url'),
+      cursor: Buffer.from('2026-07-18T10:00:00.000Z::log_123').toString(
+        'base64url',
+      ),
     });
 
     expect(findMany).toHaveBeenCalledWith(

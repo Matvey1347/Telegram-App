@@ -70,18 +70,21 @@ function renderGroup(
   state: 'scheduled' | 'published',
   timezone: string,
 ) {
-  const timing = placements.map((placement) => placementTiming(placement, state));
+  const timing = placements.map((placement) =>
+    placementTiming(placement, state),
+  );
   const shared = timing.every((value) =>
     sameTiming(value, timing[0], timezone),
   );
-  const heading =
-    `<b>Пост «${escapeHtml(title)}»:</b>`;
-  const common = shared && timing[0]?.publishedOrScheduledAt
+  const heading = `<b>Пост «${escapeHtml(title)}»:</b>`;
+  const common =
+    shared && timing[0]?.publishedOrScheduledAt
       ? timingLines(timing[0], timezone)
       : null;
-  const channelHeading = state === 'published'
-    ? '<b>✅ Опубліковано в каналах:</b>'
-    : '<b>🗓️ Заплановано в каналах:</b>';
+  const channelHeading =
+    state === 'published'
+      ? '<b>✅ Опубліковано в каналах:</b>'
+      : '<b>🗓️ Заплановано в каналах:</b>';
   return [
     heading,
     ...(common ?? []),
@@ -114,7 +117,9 @@ function line(
       : [];
   return [
     `${channelPresentation(channel)}${postLinks.length ? ` — ${postLinks.join(', ')}` : ''}`,
-    ...(timing ? timingLines(timing, timezone).map((value) => `   ${value}`) : []),
+    ...(timing
+      ? timingLines(timing, timezone).map((value) => `   ${value}`)
+      : []),
   ]
     .filter(Boolean)
     .join('\n');

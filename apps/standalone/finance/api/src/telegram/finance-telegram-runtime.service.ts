@@ -5,6 +5,7 @@ import { dirname, join, parse } from 'node:path';
 import { FinanceRuntimeConfig } from '../config/finance-runtime-config';
 import { FinancePrismaService } from '../prisma/finance-prisma.service';
 import { FinancePrimaryBotService } from './finance-primary-bot.service';
+import { FinanceTelegramWebhookService } from './finance-telegram-webhook.service';
 import {
   FinanceTelegramBotApiClient,
   type FinanceTelegramWebhookInfo,
@@ -20,9 +21,13 @@ export class FinanceTelegramRuntimeService implements OnModuleInit {
     private readonly primaryBot: FinancePrimaryBotService,
     private readonly api: FinanceTelegramBotApiClient,
     private readonly prisma: FinancePrismaService,
+    private readonly webhook: FinanceTelegramWebhookService,
   ) {}
 
   async onModuleInit() {
+    // Do not take ownership of the bot while the Finance API cannot process
+    // its updates. The former webhook owner must keep receiving messages.
+    if (!this.webhook.canProcessUpdates()) return;
     const selected = this.config.selectedBot;
     const webhookUrl = this.webhookUrl();
     if (!selected || !webhookUrl) return;

@@ -1,0 +1,99 @@
+{
+  "checks": [
+    {
+      "scenario": "zero AI work on selected chat",
+      "pass": true
+    },
+    {
+      "scenario": "context is lazy on draft open",
+      "pass": true
+    },
+    {
+      "scenario": "responsive Copilot",
+      "width": 1440,
+      "overflow": false
+    },
+    {
+      "scenario": "responsive Copilot",
+      "width": 1024,
+      "overflow": false
+    },
+    {
+      "scenario": "responsive Copilot",
+      "width": 768,
+      "overflow": false
+    },
+    {
+      "scenario": "responsive Copilot",
+      "width": 390,
+      "overflow": false
+    },
+    {
+      "scenario": "responsive Copilot",
+      "width": 360,
+      "overflow": false
+    },
+    {
+      "scenario": "responsive Copilot",
+      "width": 320,
+      "overflow": false
+    },
+    {
+      "scenario": "mobile details Escape restores focus",
+      "pass": true
+    },
+    {
+      "scenario": "keyboard-sized composer visible",
+      "pass": true,
+      "sendBox": {
+        "x": 287.21875,
+        "y": 471,
+        "width": 89.78125,
+        "height": 36
+      }
+    },
+    {
+      "scenario": "insertion does not overwrite composer silently",
+      "pass": true
+    },
+    {
+      "scenario": "editing requires new approval",
+      "pass": true
+    },
+    {
+      "scenario": "no automatic Telegram send",
+      "pass": true
+    },
+    {
+      "scenario": "no generation without explicit basis",
+      "pass": true
+    }
+  ],
+  "errors": [],
+  "requests": [
+    "GET /auth/me",
+    "GET /workspaces",
+    "GET /account/me",
+    "POST /telegram/system-bot/connection/workspace",
+    "GET /telegram-crm/conversations/dialog-qa/sales-workflow",
+    "GET /telegram-crm/conversations/dialog-qa",
+    "GET /telegram-crm/inbox/conversations?filter=ALL&limit=50",
+    "GET /telegram-crm/events/stream",
+    "GET /telegram-crm/unread",
+    "GET /operations/notifications/events/stream",
+    "GET /operations/notifications/unread-count",
+    "GET /telegram-user-accounts",
+    "GET /telegram-crm/conversations/dialog-qa/messages?pageSize=50",
+    "POST /telegram/system-bot/connection/workspace",
+    "GET /operations/notifications/events/stream",
+    "GET /telegram-crm/events/stream",
+    "GET /telegram-crm/conversations/dialog-qa/copilot",
+    "GET /operations/notifications/events/stream",
+    "GET /telegram-crm/events/stream",
+    "GET /telegram-crm/conversations/dialog-qa/copilot/context?productIds=&includeNotes=false",
+    "PATCH /telegram-crm/conversations/dialog-qa/copilot/drafts/qa-draft"
+  ],
+  "allApisIntercepted": true,
+  "providerCalls": 0,
+  "telegramSends": 0
+}

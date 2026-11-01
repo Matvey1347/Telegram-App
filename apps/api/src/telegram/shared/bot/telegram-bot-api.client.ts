@@ -133,7 +133,10 @@ export class TelegramBotApiClient {
     const response = await fetch(imageUrl, {
       signal: AbortSignal.timeout(15_000),
     });
-    if (!response.ok || !response.headers.get('content-type')?.startsWith('image/')) {
+    if (
+      !response.ok ||
+      !response.headers.get('content-type')?.startsWith('image/')
+    ) {
       return null;
     }
     const bytes = Buffer.from(await response.arrayBuffer());

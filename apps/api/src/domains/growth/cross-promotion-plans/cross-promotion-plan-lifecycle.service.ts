@@ -94,7 +94,9 @@ export class CrossPromotionPlanLifecycleService {
           managedPost.status === 'PUBLISHED' &&
           managedPost.telegramRemoteStatus !== 'AUTO_DELETED',
       );
-      const allPublished = Boolean(stored.length) && managedPosts.length === stored.length &&
+      const allPublished =
+        Boolean(stored.length) &&
+        managedPosts.length === stored.length &&
         managedPosts.every((managedPost) => managedPost.status === 'PUBLISHED');
       if (allPublished && !plan.botPublicationConfirmedAt) {
         const claim = await this.prisma.crossPromotionPlan.updateMany({
@@ -114,14 +116,16 @@ export class CrossPromotionPlanLifecycleService {
                 (storedPlacement?.publicationId == null ||
                   placement.publicationId === storedPlacement.publicationId),
             );
-            if (configuredIndex >= 0) usedConfiguredPlacements.add(configuredIndex);
+            if (configuredIndex >= 0)
+              usedConfiguredPlacements.add(configuredIndex);
             const configuredPlacement =
               configuredIndex >= 0 ? configured[configuredIndex] : undefined;
             return {
               telegramChannelId: managedPost.telegramChannelId,
               telegramMessageUrls: managedPost.telegramMessageUrls,
               publicationId:
-                storedPlacement?.publicationId ?? configuredPlacement?.publicationId,
+                storedPlacement?.publicationId ??
+                configuredPlacement?.publicationId,
               scheduledAt: configuredPlacement?.scheduledAt,
               publishedAt: managedPost.publishedAt,
               deleteAt: configuredPlacement?.deleteAt,

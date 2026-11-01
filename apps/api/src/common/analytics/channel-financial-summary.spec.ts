@@ -60,7 +60,9 @@ describe('channel-financial-summary', () => {
   it('uses inclusive Good and Stop boundaries with an implicit Normal interval', () => {
     const thresholds = { targetCpa: 30, stopCpaFrom: 50 };
     expect(resolveChannelKpiStatus({ avgCpa: 30, ...thresholds })).toBe('good');
-    expect(resolveChannelKpiStatus({ avgCpa: 31, ...thresholds })).toBe('acceptable');
+    expect(resolveChannelKpiStatus({ avgCpa: 31, ...thresholds })).toBe(
+      'acceptable',
+    );
     expect(resolveChannelKpiStatus({ avgCpa: 50, ...thresholds })).toBe('bad');
   });
 

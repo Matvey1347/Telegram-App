@@ -17,7 +17,9 @@ export type PricingCalculationResult = {
   warnings: string[];
 };
 
-export function calculatePricing(input: PricingCalculationInput): PricingCalculationResult {
+export function calculatePricing(
+  input: PricingCalculationInput,
+): PricingCalculationResult {
   const warnings: string[] = [];
   const expectedViews = decimal(Math.max(0, input.expectedViews));
   const thousand = decimal(1000);

@@ -1,416 +1,196 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState, type ReactNode } from "react";
+import type { CrmConversationListItem, CrmMessageListItem } from "@telegram-system/shared";
+import { ChatThread } from "@/components/chat/chat-thread";
+import { chatDetailsAreMobile, useChatDetailsMobile } from "@/components/chat/use-chat-details-mobile";
+import { Button } from "@/components/ui/primitives";
+import { crmChatCapabilities, toChatMessage } from "./crm-chat-adapter";
 import {
-  useInfiniteQuery,
-  useMutation,
-  useQueryClient,
-} from "@tanstack/react-query";
-import type {
-  CrmConversationListItem,
-  CrmMessageListItem,
-} from "@telegram-system/shared";
-import { formatDateTime } from "@/lib/date-format";
-import { Button, EmptyState } from "@/components/ui/primitives";
-import { Copy, MoreVertical } from "lucide-react";
-import { TelegramTextEditor } from "@/components/features/telegram/telegram/telegram-text-editor";
-import { telegramCrmApi } from "@/lib/features/growth/telegram-crm-api";
-import {
-  appendCrmMessage,
-  reconcileCrmConversationUnread,
-  reconcileCrmMessage,
-  markOptimisticCrmMessageFailed,
-  telegramCrmKeys,
-} from "@/lib/features/growth/telegram-crm-query";
+  CrmMessageComposer,
+  type CrmMessageComposerHandle,
+} from "./crm-message-composer";
+import { useCrmThread } from "./use-crm-thread";
+import { useCrmAutoRead } from "./use-crm-auto-read";
+import { CrmCopilot, type CrmCopilotHandle } from "./copilot/crm-copilot";
+import { messageAiApproval } from "./crm-composer-draft";
+import { CrmMessageActionDialog, type MessageActionSelection } from "./crm-message-action-dialog";
+import { CrmChatMediaControls } from "./crm-chat-media-controls";
+import { useCrmChatActions } from "./use-crm-chat-actions";
+import type { ChatMessage } from "@/components/chat/types";
 import { crmText } from "./crm-copy";
 
-const MESSAGE_PAGE_SIZE = 50;
-const INITIAL_HISTORY_IMPORT_SIZE = MESSAGE_PAGE_SIZE + 1;
-
-function optimisticMessage(
-  conversation: CrmConversationListItem,
-  text: string,
-  clientIdempotencyKey: string,
-): CrmMessageListItem {
-  const sentAt = new Date().toISOString();
-  return {
-    id: `optimistic:${clientIdempotencyKey}`,
-    workspaceId: conversation.workspaceId,
-    conversationId: conversation.id,
-    telegramMessageId: `pending:${clientIdempotencyKey}`,
-    telegramMessageIdNumeric: null,
-    clientIdempotencyKey,
-    mtprotoAccountId: conversation.mtprotoAccountId,
-    direction: "OUTBOUND",
-    origin: "MANUAL",
-    sentByMemberId: null,
-    text,
-    contentMetadata: null,
-    sentAt,
-    editedAt: null,
-    readState: "UNKNOWN",
-    deliveryState: "PENDING",
-    createdAt: sentAt,
-    account: conversation.account,
-    sentByMember: null,
-  };
-}
-
-function MessageRow({
-  message,
-  onRetry,
-  actionsOpen,
-  onActionsOpenChange,
-}: {
-  message: CrmMessageListItem;
-  onRetry?: () => void;
-  actionsOpen: boolean;
-  onActionsOpenChange: (open: boolean) => void;
-}) {
-  const [copied, setCopied] = useState(false);
-  const outbound = message.direction === "OUTBOUND";
-  const deliveryProblem =
-    message.deliveryState === "FAILED" || message.deliveryState === "PENDING"
-      ? message.deliveryState
-      : null;
-  return (
-    <li className={`flex ${outbound ? "justify-end" : "justify-start"}`}>
-      <div className="group relative max-w-[88%]">
-        <div
-          className={`rounded-xl border px-3 py-2 ${outbound ? "border-teal-800 bg-teal-950/45" : "border-neutral-800 bg-neutral-900"}`}
-        >
-        <p className="whitespace-pre-wrap break-words text-sm text-neutral-100">
-          {message.text || "Unsupported Telegram message"}
-        </p>
-        <div className="mt-1 flex items-center justify-end gap-2 text-[10px] text-neutral-500">
-          <span>{formatDateTime(message.sentAt)}</span>
-          {message.editedAt ? <span>Edited</span> : null}
-          {deliveryProblem ? <span>{deliveryProblem}</span> : null}
-        </div>
-        {onRetry ? (
-          <Button className="mt-2" variant="secondary" onClick={onRetry}>
-            Retry
-          </Button>
-        ) : null}
-        </div>
-        {outbound ? (
-          <button
-            type="button"
-            aria-label="Message actions"
-            aria-expanded={actionsOpen}
-            onClick={() => onActionsOpenChange(!actionsOpen)}
-            className="absolute -right-10 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-lg text-neutral-500 opacity-0 transition-all hover:bg-neutral-800 hover:text-neutral-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300 group-hover:opacity-100"
-          >
-            <MoreVertical size={18} aria-hidden />
-          </button>
-        ) : null}
-        {actionsOpen && outbound ? (
-          <div className="absolute right-0 top-full z-10 mt-2 flex min-w-36 gap-1 rounded-xl border border-neutral-700 bg-neutral-950 p-1.5 shadow-2xl">
-            <button
-              type="button"
-              className="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs text-neutral-200 hover:bg-neutral-800"
-              onClick={async (event) => {
-                event.stopPropagation();
-                await navigator.clipboard.writeText(message.text ?? "");
-                setCopied(true);
-                window.setTimeout(() => setCopied(false), 1500);
-                onActionsOpenChange(false);
-              }}
-            >
-              <Copy size={13} /> {copied ? "Copied" : "Copy"}
-            </button>
-          </div>
-        ) : null}
-      </div>
-    </li>
-  );
-}
-
-export function CrmMessageThread({
-  conversation,
-  canSendManual,
-  sendDisabledReason,
-}: {
+type ThreadProps = {
   conversation: CrmConversationListItem;
   canSendManual: boolean;
   sendDisabledReason?: string;
-}) {
-  const queryClient = useQueryClient();
-  const messageListRef = useRef<HTMLOListElement>(null);
-  const threadRef = useRef<HTMLElement>(null);
-  const initialScrollFor = useRef<string | null>(null);
-  const [text, setText] = useState("");
-  const [actionsMessageId, setActionsMessageId] = useState<string | null>(null);
-  const [atHistoryBoundary, setAtHistoryBoundary] = useState(false);
-  const [telegramHistoryExhausted, setTelegramHistoryExhausted] = useState(
-    conversation.historyExhausted,
+  detailsOpen?: boolean;
+  header?: ReactNode;
+};
+
+/** Keyed session prevents state from following a rapid conversation switch. */
+export function CrmMessageThread(props: ThreadProps) {
+  return (
+    <CrmThreadSession
+      key={`${props.conversation.workspaceId}:${props.conversation.id}`}
+      {...props}
+    />
   );
-  const [failed, setFailed] = useState<{ body: string; key: string } | null>(
-    null,
-  );
-  const query = useInfiniteQuery({
-    queryKey: telegramCrmKeys.messagesInfinite(conversation.id),
-    queryFn: ({ pageParam, signal }) =>
-      telegramCrmApi.listMessages(
-        conversation.id,
-        pageParam,
-        MESSAGE_PAGE_SIZE,
-        signal,
-      ),
-    initialPageParam: null as string | null,
-    getNextPageParam: (page) => (page.hasMore ? page.nextCursor : undefined),
-    // Live events and mutations reconcile this cache. Keep a recently opened
-    // thread in memory instead of repeating the same Neon read on every mount.
-    staleTime: 60_000,
-  });
-  const messages = useMemo(
-    () =>
-      (query.data?.pages.flatMap((page) => page.items) ?? [])
-        .slice()
-        .sort((a, b) => a.sentAt.localeCompare(b.sentAt)),
-    [query.data],
-  );
-  const history = useMutation({
-    mutationFn: () =>
-      telegramCrmApi.importHistory(conversation.id, {
-        limit: INITIAL_HISTORY_IMPORT_SIZE,
-      }),
-    onSuccess: async (result) => {
-      setTelegramHistoryExhausted(result.exhausted);
-      await queryClient.invalidateQueries({
-        queryKey: telegramCrmKeys.messagesInfinite(conversation.id),
-      });
-      await queryClient.invalidateQueries({
-        queryKey: telegramCrmKeys.conversationDetail(conversation.id),
-      });
-    },
-  });
-  useEffect(() => {
-    if (!messages.length || initialScrollFor.current === conversation.id)
-      return;
-    initialScrollFor.current = conversation.id;
-    requestAnimationFrame(() => {
-      const list = messageListRef.current;
-      if (list) {
-        list.scrollTop = list.scrollHeight;
-        setAtHistoryBoundary(list.scrollTop <= 8);
-      }
-    });
-  }, [conversation.id, messages.length]);
-  useEffect(() => {
-    setActionsMessageId(null);
-  }, [conversation.id]);
-  useEffect(() => {
-    const closeOnOutside = (event: MouseEvent) => {
-      if (!threadRef.current?.contains(event.target as Node))
-        setActionsMessageId(null);
-    };
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setActionsMessageId(null);
-    };
-    document.addEventListener("mousedown", closeOnOutside);
-    document.addEventListener("keydown", closeOnEscape);
-    return () => {
-      document.removeEventListener("mousedown", closeOnOutside);
-      document.removeEventListener("keydown", closeOnEscape);
-    };
+}
+
+function CrmThreadSession({
+  conversation,
+  canSendManual,
+  sendDisabledReason,
+  detailsOpen = false,
+  header,
+}: ThreadProps) {
+  const thread = useCrmThread(conversation);
+  const messages = thread.messages;
+  const originals = useMemo(() => {
+    const index = new Map<number | string, CrmMessageListItem>();
+    for (const message of messages) { index.set(message.id, message); if (message.telegramMessageIdNumeric != null) index.set(message.telegramMessageIdNumeric, message); }
+    return index;
+  }, [messages]);
+  const copilot = useRef<CrmCopilotHandle>(null);
+  const composer = useRef<CrmMessageComposerHandle>(null);
+  const chat = useCrmChatActions(conversation.id, canSendManual);
+  const [reply, setReply] = useState<ChatMessage | null>(null);
+  const [selection, setSelection] = useState<MessageActionSelection | null>(null);
+  const mobileDetails = useChatDetailsMobile();
+  const [nearBottom, setNearBottom] = useState(false);
+  const [visibleMessageIds, setVisibleMessageIds] = useState<string[]>([]);
+  const onNearBottomChange = useCallback((bottom: boolean, ids: string[]) => {
+    setNearBottom(bottom);
+    setVisibleMessageIds(ids);
   }, []);
-  const markRead = useMutation({
-    mutationFn: () => telegramCrmApi.markConversationRead(conversation.id),
-    onSuccess: () => {
-      reconcileCrmConversationUnread(
-        queryClient,
-        conversation.id,
-        conversation.contactId,
-        0,
-        conversation.unreadCount,
-      );
-      void queryClient.invalidateQueries({
-        queryKey: telegramCrmKeys.unread(),
-      });
-    },
+  const latestVisibleId = useMemo(() => visibleMessageIds.reduce<number | null>((latest, id) => {
+    const numeric = originals.get(id)?.telegramMessageIdNumeric;
+    return numeric != null && (latest === null || numeric > latest) ? numeric : latest;
+  }, null), [visibleMessageIds, originals]);
+  useCrmAutoRead({
+    enabled: !(detailsOpen && (mobileDetails || chatDetailsAreMobile())) && !selection && thread.query.isSuccess && !thread.query.isFetching && !thread.query.error && thread.refreshRecent.isSuccess && !thread.refreshRecent.isPending && !thread.refreshRecent.error,
+    nearBottom,
+    unreadCount: conversation.unreadCount,
+    latestVisibleId,
+    pending: thread.markRead.isPending,
+    failed: Boolean(thread.markRead.error),
+    markRead: thread.markRead.mutate,
   });
-  const send = useMutation({
-    mutationFn: ({ body, key }: { body: string; key: string }) =>
-      telegramCrmApi.sendManualMessage(conversation.id, {
-        text: body,
-        clientIdempotencyKey: key,
-      }),
-    onMutate: ({ body, key }) => {
-      appendCrmMessage(
-        queryClient,
-        conversation.id,
-        optimisticMessage(conversation, body, key),
-      );
-    },
-    onSuccess: (result) => {
-      setFailed(null);
-      reconcileCrmMessage(queryClient, conversation.id, {
-        ...result.message,
-        account: conversation.account,
-      });
-    },
-    onError: (_error, variables) => {
-      markOptimisticCrmMessageFailed(
-        queryClient,
-        conversation.id,
-        variables.key,
-      );
-      setFailed(variables);
-    },
-  });
-  const submit = () => {
-    const body = text.trim();
-    if (!body || send.isPending) return;
-    const key = crypto.randomUUID();
-    setText("");
-    send.mutate({ body, key });
-  };
-  const loadOlder = async () => {
-    const list = messageListRef.current;
-    const previousHeight = list?.scrollHeight ?? 0;
-    if (query.hasNextPage) await query.fetchNextPage();
-    else if (!telegramHistoryExhausted) await history.mutateAsync();
-    requestAnimationFrame(() => {
-      if (list) list.scrollTop += list.scrollHeight - previousHeight;
-      setAtHistoryBoundary(false);
-    });
+  const capabilities = crmChatCapabilities(canSendManual && !chat.blocked && !thread.unknownSend, chat.capabilities);
+  const selectAction = (kind: MessageActionSelection["kind"], model: ChatMessage) => {
+    const message = thread.messages.find((item) => item.id === model.id);
+    if (message) setSelection({ kind, message });
   };
   return (
-    <section ref={threadRef} className="flex h-full min-h-0 flex-col">
-      {(query.isSuccess && conversation.unreadCount > 0) || markRead.error ? (
-        <div className="mb-2 flex flex-wrap items-center justify-end gap-2">
-          {query.isSuccess && conversation.unreadCount > 0 ? (
-            <Button
-              variant="secondary"
-              disabled={markRead.isPending}
-              onClick={() => markRead.mutate()}
-            >
-              {markRead.isPending ? "Marking…" : "Mark read"}
-            </Button>
+    <ChatThread
+      threadId={conversation.id}
+      onNearBottomChange={onNearBottomChange}
+      messages={thread.messages.map((message) => toChatMessage(message, originals, conversation.lastReadOutboxTelegramMessageId))}
+      actions={{ onReply: setReply, onEdit: (message) => selectAction("EDIT", message), onDelete: (message) => selectAction("DELETE", message), onReact: (message) => selectAction("REACTION", message), onForward: (message) => selectAction("FORWARD", message) }}
+      capabilities={capabilities}
+      header={
+        <>
+          {header}
+          {thread.refreshRecent.isPending ? <p role="status" className="mt-1 text-xs text-neutral-400">Синхронизация сообщений…</p> : null}
+          {thread.refreshRecent.error ? <div role="alert" className="mt-1 flex flex-wrap items-center gap-2 text-xs text-rose-300"><span>Не удалось обновить сообщения из Telegram.</span><Button variant="secondary" disabled={thread.importHistory.isPending} onClick={() => thread.refreshRecent.mutate()}>Повторить синхронизацию</Button></div> : null}
+          {conversation.unreadCount > 0 ? (
+            <div className="mt-1 flex justify-end">
+              <Button
+                variant="secondary"
+                disabled={thread.markRead.isPending}
+                onClick={() => thread.markRead.mutate(undefined)}
+              >
+                {thread.markRead.isPending ? "Marking…" : "Mark read"}
+              </Button>
+            </div>
           ) : null}
-          {markRead.error ? (
-            <span className="text-xs text-rose-300">
+          {thread.markRead.error ? (
+            <p role="alert" className="text-xs text-rose-300">
               Could not mark this conversation read. Try again.
-            </span>
+            </p>
           ) : null}
-        </div>
-      ) : null}
-      <div className="relative min-h-0 flex-1">
-        {query.isLoading ? (
-          <div className="flex h-full items-center justify-center">
-            <p className="text-center text-sm text-neutral-500">
-              {crmText("states.loadingConversation")}
-            </p>
-          </div>
-        ) : null}
-        {query.error ? (
-          <div className="flex h-full flex-col items-center justify-center text-center">
-            <p className="mb-2 text-sm text-rose-300">
-              Conversation could not be loaded.
-            </p>
-            <Button variant="secondary" onClick={() => query.refetch()}>
-              Retry
-            </Button>
-          </div>
-        ) : null}
-        {history.isPending ? (
-          <div className="flex h-full items-center justify-center">
-            <p className="text-center text-sm text-neutral-500">
-              Loading Telegram history…
-            </p>
-          </div>
-        ) : null}
-        {history.error ? (
-          <div className="flex h-full flex-col items-center justify-center text-center">
-            <p className="mb-2 text-sm text-rose-300">
-              Telegram history could not be loaded.
-            </p>
-            <Button
-              variant="secondary"
-              onClick={() => {
-                history.mutate();
-              }}
-            >
-              Retry
-            </Button>
-          </div>
-        ) : null}
-        {!query.isLoading &&
-        !query.error &&
-        !history.isPending &&
-        !history.error &&
-        !messages.length ? (
-          <div className="h-full">
-            <EmptyState text={crmText("states.emptyConversation")} />
-          </div>
-        ) : null}
-        {messages.length ? (
-          <>
-            {atHistoryBoundary &&
-            (query.hasNextPage || !telegramHistoryExhausted) ? (
-              <div className="absolute left-1/2 top-2 z-10 -translate-x-1/2">
-                <Button
-                  variant="secondary"
-                  disabled={query.isFetchingNextPage || history.isPending}
-                  onClick={loadOlder}
-                >
-                  {query.isFetchingNextPage || history.isPending
-                    ? "Loading…"
-                    : "Load older"}
-                </Button>
-              </div>
-            ) : null}
-            <ol
-              ref={messageListRef}
-              onScroll={(event) =>
-                setAtHistoryBoundary(event.currentTarget.scrollTop <= 8)
-              }
-              className="h-full space-y-2 overflow-y-auto pr-1 pt-2"
-            >
-              {messages.map((message) => (
-                <MessageRow
-                  key={message.id}
-                  message={message}
-                  onRetry={
-                    failed?.key === message.clientIdempotencyKey
-                      ? () => send.mutate(failed)
-                      : undefined
-                  }
-                  actionsOpen={actionsMessageId === message.id}
-                  onActionsOpenChange={(open) =>
-                    setActionsMessageId(open ? message.id : null)
-                  }
-                />
-              ))}
-            </ol>
-          </>
-        ) : null}
-      </div>
-      {canSendManual ? (
-        <div className="mt-3 shrink-0 border-t border-neutral-800 bg-neutral-950 pt-3">
-          <TelegramTextEditor
-            value={text}
-            onChange={setText}
-            disabled={send.isPending}
-            rows={3}
-            singleRowToolbar
-            placeholder="Write a message…"
-            characterCountLabel={(count) => `${count} characters`}
-            enableCustomEmoji
+        </>
+      }
+      loading={thread.query.isLoading}
+      error={Boolean(thread.query.error)}
+      onRetry={() => void thread.query.refetch()}
+      emptyText={crmText("states.emptyConversation")}
+      hasOlder={thread.hasOlder}
+      loadingOlder={
+        thread.query.isFetchingNextPage || thread.importHistory.isPending || thread.refreshRecent.isPending
+      }
+      onLoadOlder={() => void thread.loadOlder()}
+      retryMessage={(message) => {
+        const failed = thread.messages.find((item) => item.id === message.id);
+        if (failed?.clientIdempotencyKey && failed.text) {
+          const key = failed.clientIdempotencyKey;
+          const draftSession = composer.current;
+          void thread
+            .sendText(
+              failed.text,
+              key,
+              messageAiApproval(failed.contentMetadata),
+              typeof failed.contentMetadata?.replyToMessageId === "string" ? failed.contentMetadata.replyToMessageId : undefined,
+            )
+            .then((sent) => {
+              if (sent) draftSession?.clearSent(key);
+            });
+        }
+      }}
+      composer={
+        <>
+          {selection ? <CrmMessageActionDialog key={`${selection.kind}:${selection.message.id}`} selection={selection} accountId={conversation.mtprotoAccountId} capabilities={chat.capabilities} pending={chat.pending} blocked={chat.blocked} onExecute={chat.execute} onClose={() => setSelection(null)} /> : null}
+          {chat.receipt ? <div role={chat.receipt.status === "CONFIRMED" ? "status" : "alert"} className="flex flex-wrap items-center gap-2 border-t border-neutral-800 px-3 py-2 text-xs">
+            <span>{chat.receipt.status === "UNKNOWN" ? "Result unknown. Do not repeat the operation; check its result." : chat.receipt.status === "FAILED" ? `Operation failed: ${chat.receipt.errorCode ?? "Telegram rejected the action"}` : "Telegram confirmed the operation."}</span>
+            {chat.receipt.status === "UNKNOWN" ? <Button variant="secondary" disabled={chat.pending} onClick={() => void chat.check()}>Check result</Button> : <Button variant="secondary" onClick={chat.dismiss}>Dismiss</Button>}
+          </div> : null}
+          {thread.unknownSend ? <div role="alert" className="flex flex-wrap items-center gap-2 px-3 py-2 text-xs text-amber-300"><span>Send result is unknown. Do not resend the text. A missing receipt does not prove that Telegram rejected it.</span><Button variant="secondary" disabled={thread.checkSend.isPending} onClick={() => {
+            const key = thread.send.variables?.key;
+            void thread.checkSend.mutateAsync().then((result) => { if (result && key) composer.current?.clearSent(key); }).catch(() => undefined);
+          }}>Check send result</Button><Button variant="secondary" disabled={thread.refreshRecent.isPending} onClick={() => void thread.refreshRecent.mutateAsync().catch(() => undefined)}>Refresh Telegram history</Button></div> : null}
+          {reply ? <div className="flex items-center gap-2 border-t border-blue-800 px-3 py-2 text-xs text-blue-200"><span className="min-w-0 flex-1 truncate">Reply: {reply.text || "Attachment"}</span><Button variant="secondary" onClick={() => setReply(null)} disabled={thread.send.isPending}>Cancel reply</Button></div> : null}
+          {thread.importHistory.error ? (
+            <div role="alert" className="px-3 py-2 text-xs text-rose-300">
+              Telegram history could not be loaded. Use Load older to retry.
+            </div>
+          ) : null}
+          <CrmCopilot
+            ref={copilot}
+            workspaceId={conversation.workspaceId}
+            conversationId={conversation.id}
+            contactId={conversation.contactId}
+            canSend={canSendManual}
+            onInsert={(draft) => composer.current?.insertApproved(draft)}
           />
-          <div className="mt-2 flex justify-end">
-            <Button disabled={!text.trim() || send.isPending} onClick={submit}>
-              {send.isPending ? "Sending…" : "Send"}
-            </Button>
-          </div>
-        </div>
-      ) : (
-        <p className="mt-3 border-t border-neutral-800 pt-3 text-xs text-neutral-500">
-          {sendDisabledReason ||
-            "You do not have permission to send manual CRM messages."}
-        </p>
-      )}
-    </section>
+          {canSendManual ? (
+            <CrmMessageComposer
+              ref={composer}
+              workspaceId={conversation.workspaceId}
+              conversationId={conversation.id}
+              disabled={!thread.query.isSuccess || chat.blocked || thread.unknownSend}
+              sending={thread.send.isPending}
+              onSend={async (text, key, ai) => {
+                const sent = await thread.sendText(text, key, ai, reply?.id);
+                if (sent) setReply(null);
+                return sent;
+              }}
+              extraControls={<CrmChatMediaControls capabilities={chat.capabilities} disabled={chat.blocked || thread.send.isPending || thread.unknownSend || !thread.query.isSuccess} onUpload={async (body, signal) => {
+                if (reply) body.set("replyToMessageId", reply.id);
+                const sent = await chat.upload(body, signal);
+                if (sent) setReply(null);
+                return sent;
+              }} />}
+              onReviewAiEdit={(id, text) => copilot.current?.review(id, text)}
+            />
+          ) : (
+            <p className="shrink-0 border-t border-neutral-800 p-3 text-xs text-neutral-400">
+              {sendDisabledReason ||
+                "You do not have permission to send manual CRM messages."}
+            </p>
+          )}
+        </>
+      }
+    />
   );
 }

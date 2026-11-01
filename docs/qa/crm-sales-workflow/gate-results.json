@@ -1,0 +1,78 @@
+{
+  "apiFocused": {
+    "suites": 33,
+    "tests": 271,
+    "passed": true
+  },
+  "webFocused": {
+    "suites": 20,
+    "tests": 158,
+    "passed": true
+  },
+  "apiTypecheck": {
+    "passed": false,
+    "errors": 5,
+    "outsideTaskFiles": [
+      "apps/api/src/domains/telegram/telegram-bots/core/system-bot-branding-startup.service.ts",
+      "apps/api/src/domains/telegram/telegram-user-accounts/telegram-user-accounts.service.ts"
+    ]
+  },
+  "apiBuild": {
+    "passed": false,
+    "sameOutsideTaskErrors": true
+  },
+  "webTypecheck": {
+    "passed": true
+  },
+  "webBuild": {
+    "passed": true
+  },
+  "sharedTypecheckBuild": {
+    "passed": true
+  },
+  "i18n": {
+    "passed": true,
+    "canonicalKeys": 1347
+  },
+  "apiScopedLint": {
+    "errors": 0,
+    "files": 33
+  },
+  "webFeatureHelperScopedLint": {
+    "errors": 0
+  },
+  "webTouchedPrimitivesLint": {
+    "errors": 5,
+    "warnings": 5,
+    "unchangedVersusHEAD": true
+  },
+  "fullWebTests": {
+    "failedFiles": 96,
+    "passedFiles": 345,
+    "failedTests": 32,
+    "passedTests": 1679,
+    "unhandledErrors": 2
+  },
+  "fullApiTests": {
+    "completedSummary": false,
+    "preexistingFailedSuitesPrinted": 14,
+    "interruptedByDevelopmentDrainProcessExit": true
+  },
+  "architecture": {
+    "policyTestsPassed": 16,
+    "sourceErrors": 23,
+    "preflightSourceErrors": 20,
+    "newTaskViolations": 0
+  },
+  "architectureStrict": {
+    "policyTestsPassed": 16,
+    "sourceErrors": 28,
+    "preflightSourceErrors": 26,
+    "newTaskViolations": 0
+  },
+  "diffCheck": {
+    "passed": true
+  },
+  "realExternalCalls": 0,
+  "productionMigrationsApplied": false
+}

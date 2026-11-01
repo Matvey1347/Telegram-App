@@ -1,3 +1,12 @@
+import { TelegramCrmLegacyAuthorizationService } from '../telegram-crm/telegram-crm-legacy-authorization.service';
+import {
+  addCrmContactMethod,
+  updateCrmContactMethod,
+} from './telegram-ad-sales-crm-contact-methods';
+import {
+  instagramIdentity,
+  mapLegacyContactMethod,
+} from '../telegram-crm/telegram-crm-instagram-identity.service';
 import {
   BadRequestException,
   ConflictException,
@@ -192,7 +201,6 @@ function allocateLegacyFreePayment(
       100,
   }));
 }
-
 @Injectable()
 export class TelegramAdSalesService {
   private readonly pricingReader: TelegramAdSalesPricingReader;
@@ -222,6 +230,8 @@ export class TelegramAdSalesService {
     private readonly notificationProjector?: TelegramCrmInternalNotificationProjector,
     @Optional()
     private readonly purchaseFolderSync?: TelegramCrmPurchaseFolderSyncService,
+    @Optional()
+    private readonly crmAuthorization?: TelegramCrmLegacyAuthorizationService,
   ) {
     this.pricingReader = new TelegramAdSalesPricingReader(prisma);
     this.inventoryReader = new TelegramAdSalesInventoryReader(
@@ -242,7 +252,6 @@ export class TelegramAdSalesService {
         hydrateManagedTelegramPosts(this.prisma, workspaceId, sales),
     );
   }
-
   private availabilityCacheKey(params: {
     workspaceId: string;
     channelIds: string[];
@@ -264,17 +273,14 @@ export class TelegramAdSalesService {
       params.cacheBust ?? 'cached',
     ].join(':');
   }
-
   private invalidateAvailabilityCache(workspaceId: string) {
     this.responseCache.clearByPrefix(
       `telegram-ad-sales:availability:${workspaceId}:`,
     );
   }
-
   private async workspace(userId: string) {
     return this.workspaceService.resolveWorkspaceIdForUser(userId);
   }
-
   private async findWorkspaceChannel(workspaceId: string, channelId: string) {
     const channel = await this.prisma.telegramChannel.findFirst({
       where: { id: channelId, workspaceId },
@@ -285,7 +291,6 @@ export class TelegramAdSalesService {
     if (!channel) throw new NotFoundException('Telegram channel not found');
     return channel;
   }
-
   private async findWorkspaceNetwork(workspaceId: string, networkId: string) {
     const network = await this.prisma.telegramChannelNetwork.findFirst({
       where: { id: networkId, workspaceId },
@@ -295,7 +300,6 @@ export class TelegramAdSalesService {
       throw new NotFoundException('Telegram channel network not found');
     return network;
   }
-
   private async findSale(workspaceId: string, id: string) {
     const sale = await this.prisma.telegramAdSale.findFirst({
       where: { id, workspaceId },
@@ -479,15 +483,15 @@ export class TelegramAdSalesService {
     if (type === TelegramAdvertiserContactType.WEBSITE) {
       return this.normalizeWebsite(value);
     }
+    if (type === TelegramAdvertiserContactType.INSTAGRAM)
+      return instagramIdentity(value ?? '').username;
     return value?.trim() || null;
   }
 
   private mapAdvertiserContact(contact: any) {
-    return {
-      ...contact,
-      createdAt: contact.createdAt.toISOString(),
-      updatedAt: contact.updatedAt.toISOString(),
-    };
+    return mapLegacyContactMethod(
+      contact as Parameters<typeof mapLegacyContactMethod>[0],
+    );
   }
 
   private mapAdvertiserActivity(activity: any) {
@@ -997,7 +1001,16 @@ export class TelegramAdSalesService {
     const shouldCreate =
       'createAdvertiser' in dto ? dto.createAdvertiser : false;
     if (!shouldCreate) return null;
-    const existing = await findCanonicalAdvertiser(this.prisma.telegramAdvertiser, { workspaceId, username: this.normalizeTelegramUsername(dto.advertiserTelegram), phone: this.normalizePhone(dto.advertiserContact), email: this.normalizeEmail(dto.advertiserContact), displayName: dto.advertiserName });
+    const existing = await findCanonicalAdvertiser(
+      this.prisma.telegramAdvertiser,
+      {
+        workspaceId,
+        username: this.normalizeTelegramUsername(dto.advertiserTelegram),
+        phone: this.normalizePhone(dto.advertiserContact),
+        email: this.normalizeEmail(dto.advertiserContact),
+        displayName: dto.advertiserName,
+      },
+    );
     if (existing) {
       await this.linkAdvertiserToMatchingCrmPeer(
         workspaceId,
@@ -2914,9 +2927,7 @@ export class TelegramAdSalesService {
             : {
                 stage,
                 archivedAt:
-                  stage === TelegramCrmContactStage.ANOTHER
-                    ? new Date()
-                    : null,
+                  stage === TelegramCrmContactStage.ANOTHER ? new Date() : null,
               }),
           ...(dto.ownerMemberId === undefined
             ? {}
@@ -3005,39 +3016,18 @@ export class TelegramAdSalesService {
   ) {
     const workspaceId = await this.workspace(userId);
     await this.getAdvertiser(workspaceId, advertiserId);
-    const normalizedValue = this.normalizeContactValue(dto.type, dto.value);
-    if (!normalizedValue)
-      throw new BadRequestException('Contact value is required');
-    const contact = await this.prisma.$transaction(async (tx) => {
-      if (dto.isPrimary) {
-        await tx.telegramAdvertiserContact.updateMany({
-          where: { workspaceId, advertiserId },
-          data: { isPrimary: false },
-        });
-      }
-      return tx.telegramAdvertiserContact.create({
-        data: {
-          workspaceId,
-          advertiserId,
-          type: dto.type,
-          value: dto.value.trim(),
-          normalizedValue,
-          label: dto.label?.trim() || null,
-          isPrimary: dto.isPrimary ?? false,
-          isVerified: dto.isVerified ?? false,
-        },
-      });
-    });
-    await this.createAdvertiserActivity(workspaceId, advertiserId, {
-      type: TelegramAdvertiserActivityType.CONTACT_ADDED,
-      title: `Contact added: ${dto.type}`,
-      actorUserId: userId,
-      metadata: {
-        contactId: contact.id,
-        type: dto.type,
-      } as Prisma.InputJsonValue,
-    });
-    return this.mapAdvertiserContact(contact);
+    return addCrmContactMethod(
+      {
+        prisma: this.prisma,
+        workspaceId,
+        advertiserId,
+        userId,
+        authorize: () =>
+          this.crmAuthorization?.requireEditContact(userId, advertiserId),
+        normalize: (type, value) => this.normalizeContactValue(type, value),
+      },
+      dto,
+    );
   }
 
   async updateAdvertiserContact(
@@ -3048,40 +3038,19 @@ export class TelegramAdSalesService {
   ) {
     const workspaceId = await this.workspace(userId);
     await this.getAdvertiser(workspaceId, advertiserId);
-    const existing = await this.prisma.telegramAdvertiserContact.findFirst({
-      where: { id: contactId, workspaceId, advertiserId },
-    });
-    if (!existing)
-      throw new NotFoundException('Telegram advertiser contact not found');
-    const nextType = dto.type ?? existing.type;
-    const nextValue = dto.value ?? existing.value;
-    const normalizedValue = this.normalizeContactValue(nextType, nextValue);
-    if (!normalizedValue)
-      throw new BadRequestException('Contact value is required');
-    const contact = await this.prisma.$transaction(async (tx) => {
-      if (dto.isPrimary) {
-        await tx.telegramAdvertiserContact.updateMany({
-          where: { workspaceId, advertiserId },
-          data: { isPrimary: false },
-        });
-      }
-      return tx.telegramAdvertiserContact.update({
-        where: { id: contactId },
-        data: {
-          type: nextType,
-          value: nextValue.trim(),
-          normalizedValue,
-          ...(dto.label === undefined
-            ? {}
-            : { label: dto.label?.trim() || null }),
-          ...(dto.isPrimary === undefined ? {} : { isPrimary: dto.isPrimary }),
-          ...(dto.isVerified === undefined
-            ? {}
-            : { isVerified: dto.isVerified }),
-        },
-      });
-    });
-    return this.mapAdvertiserContact(contact);
+    return updateCrmContactMethod(
+      {
+        prisma: this.prisma,
+        workspaceId,
+        advertiserId,
+        userId,
+        authorize: () =>
+          this.crmAuthorization?.requireEditContact(userId, advertiserId),
+        normalize: (type, value) => this.normalizeContactValue(type, value),
+      },
+      contactId,
+      dto,
+    );
   }
 
   async deleteAdvertiserContact(
@@ -4042,13 +4011,15 @@ export class TelegramAdSalesService {
     }
     const managedPostScheduleIsOutOfSync =
       placement.managedPost?.status === TelegramManagedPostStatus.SCHEDULED &&
-      placement.managedPost.scheduledAt?.getTime() !== nextScheduledAt.getTime();
+      placement.managedPost.scheduledAt?.getTime() !==
+        nextScheduledAt.getTime();
     const reschedulesManagedPost =
       dto.scheduledAt !== undefined &&
       (nextScheduledAt.getTime() !== placement.scheduledAt.getTime() ||
         managedPostScheduleIsOutOfSync) &&
       (placement.status === TelegramAdPlacementStatus.SCHEDULED ||
-        placement.managedPost?.status === TelegramManagedPostStatus.SCHEDULED) &&
+        placement.managedPost?.status ===
+          TelegramManagedPostStatus.SCHEDULED) &&
       Boolean(placement.managedPostId);
     if (reschedulesManagedPost) {
       await this.telegramManagedPostPublicationService.scheduleManagedPost(
@@ -4571,9 +4542,9 @@ export class TelegramAdSalesService {
       throw new NotFoundException('Telegram ad sale placement not found');
     const managedPostDeleteAfterHours = placement.isPermanentSnapshot
       ? null
-      : ([24, 48, 72] as const).find(
+      : (([24, 48, 72] as const).find(
           (hours) => hours === placement.deleteAfterHoursSnapshot,
-        ) ?? null;
+        ) ?? null);
     const advertiseGroup =
       await this.telegramPostGroupsService.ensureAdvertiseSystemGroup(
         workspaceId,
@@ -5160,10 +5131,7 @@ export class TelegramAdSalesService {
             workspaceId,
             telegramAdSaleId: saleId,
             status: {
-              in: [
-                ...cancellableStatuses,
-                TelegramAdPlacementStatus.CANCELLED,
-              ],
+              in: [...cancellableStatuses, TelegramAdPlacementStatus.CANCELLED],
             },
           },
           data: {

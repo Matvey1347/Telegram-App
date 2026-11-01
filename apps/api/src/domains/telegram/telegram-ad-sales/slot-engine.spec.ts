@@ -38,7 +38,11 @@ describe('buildAvailabilitySlots', () => {
   it('marks manual-only policies correctly', () => {
     const result = buildAvailabilitySlots({
       ...base,
-      policy: { ...base.policy, slotStrategy: 'MANUAL', allowManualSlots: true },
+      policy: {
+        ...base.policy,
+        slotStrategy: 'MANUAL',
+        allowManualSlots: true,
+      },
       organicTimes: [],
       organicScheduledAt: [],
       placements: [],
@@ -62,7 +66,9 @@ describe('buildAvailabilitySlots', () => {
       ],
     });
 
-    expect(['RESERVED', 'BLOCKED_BY_POLICY', 'SOLD']).toContain(result[0].state);
+    expect(['RESERVED', 'BLOCKED_BY_POLICY', 'SOLD']).toContain(
+      result[0].state,
+    );
   });
 
   it('keeps existing past placements sold instead of marking them as unused past slots', () => {

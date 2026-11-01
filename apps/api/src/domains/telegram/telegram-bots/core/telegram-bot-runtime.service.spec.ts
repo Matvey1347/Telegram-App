@@ -105,8 +105,7 @@ describe('TelegramBotRuntimeService environment isolation', () => {
   const executionContext = new TelegramBotRuntimeExecutionContext();
   let service: TelegramBotRuntimeService;
   const originalBase = process.env.API_PUBLIC_URL;
-  const originalLocalControlSecret =
-    process.env.LOCAL_DEV_BOTS_CONTROL_SECRET;
+  const originalLocalControlSecret = process.env.LOCAL_DEV_BOTS_CONTROL_SECRET;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -134,8 +133,7 @@ describe('TelegramBotRuntimeService environment isolation', () => {
     else process.env.API_PUBLIC_URL = originalBase;
     if (originalLocalControlSecret === undefined)
       delete process.env.LOCAL_DEV_BOTS_CONTROL_SECRET;
-    else
-      process.env.LOCAL_DEV_BOTS_CONTROL_SECRET = originalLocalControlSecret;
+    else process.env.LOCAL_DEV_BOTS_CONTROL_SECRET = originalLocalControlSecret;
   });
 
   it('does no workspace runtime work in an ordinary development process', async () => {

@@ -10,14 +10,23 @@ export function ActionMenu({
   trigger,
   triggerClassName,
   menuClassName,
+  open: controlledOpen,
+  onOpenChange,
 }: {
   label: string;
   children: ReactNode;
   trigger?: ReactNode;
   triggerClassName?: string;
   menuClassName?: string;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const [localOpen, setLocalOpen] = useState(false);
+  const open = controlledOpen ?? localOpen;
+  const setOpen = (next: boolean) => {
+    if (controlledOpen === undefined) setLocalOpen(next);
+    onOpenChange?.(next);
+  };
   const root = useRef<HTMLDivElement>(null);
   useDismissiblePopover({
     open,
@@ -33,7 +42,7 @@ export function ActionMenu({
         aria-haspopup="menu"
         aria-expanded={open}
         title={label}
-        onClick={() => setOpen((value) => !value)}
+        onClick={() => setOpen(!open)}
         className={triggerClassName ?? "inline-flex h-10 w-10 items-center justify-center rounded-lg text-neutral-400 transition hover:bg-neutral-800 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"}
       >
         {trigger ?? <MoreVertical size={19} aria-hidden="true" />}

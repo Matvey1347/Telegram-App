@@ -33,7 +33,9 @@ describe('MutualPromotionLifecycleService', () => {
   });
 
   it('confirms a native publication as soon as reconciliation observes every delivery', async () => {
-    const confirmation = { sendPublishedOnce: jest.fn().mockResolvedValue(undefined) };
+    const confirmation = {
+      sendPublishedOnce: jest.fn().mockResolvedValue(undefined),
+    };
     const now = new Date('2026-09-07T12:00:05.000Z');
     const prisma = {
       mutualPromotionPostDelivery: {
@@ -63,16 +65,20 @@ describe('MutualPromotionLifecycleService', () => {
       data: { status: 'PUBLISHED', publishedAt: now, lastError: null },
     });
     expect(confirmation.sendPublishedOnce).toHaveBeenCalledTimes(1);
-    expect(confirmation.sendPublishedOnce).toHaveBeenCalledWith('folder-post-1');
+    expect(confirmation.sendPublishedOnce).toHaveBeenCalledWith(
+      'folder-post-1',
+    );
   });
 
   it('does not send a duplicate confirmation when another worker claimed the delivery', async () => {
     const confirmation = { sendPublishedOnce: jest.fn() };
     const prisma = {
       mutualPromotionPostDelivery: {
-        findMany: jest.fn().mockResolvedValue([
-          { id: 'delivery-1', folderPostId: 'folder-post-1' },
-        ]),
+        findMany: jest
+          .fn()
+          .mockResolvedValue([
+            { id: 'delivery-1', folderPostId: 'folder-post-1' },
+          ]),
         updateMany: jest.fn().mockResolvedValue({ count: 0 }),
       },
     };

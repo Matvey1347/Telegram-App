@@ -3,6 +3,8 @@ import { isPersistedQuery, isWorkspaceScopedQuery } from "./query-provider";
 
 describe("workspace query isolation", () => {
   it.each([
+    "lead-discovery",
+    "crm-manual",
     "ad-campaign-admission-view-analytics",
     "campaign-invite-link-history",
     "telegram-bots",
@@ -32,6 +34,10 @@ describe("workspace query isolation", () => {
     },
   );
 
+  it("never persists private Lead Discovery evidence in browser query storage", () => { expect(isPersistedQuery(["lead-discovery","workspace-one","feed"])).toBe(false); });
+
+  it("never persists manual communication history",()=>{expect(isPersistedQuery(["crm-manual","workspace-one","workflow","contact"])).toBe(false);});
+
   it("never persists the workspace notification cache", () => {
     expect(isPersistedQuery(["operations-notifications", "workspace-1"])).toBe(
       false,
@@ -45,4 +51,11 @@ describe("workspace query isolation", () => {
   ])("persists %s within its selected workspace cache", (root) => {
     expect(isPersistedQuery([root, "list"])).toBe(true);
   });
+  it("includes workspace AI reads in shared workspace cancellation and refresh without persisting prompts", () => {
+    expect(isWorkspaceScopedQuery(["operations", "ai", "workspace-one", "configuration"])).toBe(true);
+    expect(isWorkspaceScopedQuery(["operations", "ai", "workspace-one", "analytics", "usage"])).toBe(true);
+    expect(isWorkspaceScopedQuery(["operations", "unrelated-global"])).toBe(false);
+    expect(isPersistedQuery(["operations", "ai", "workspace-one", "configuration"])).toBe(false);
+  });
+
 });

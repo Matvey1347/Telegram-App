@@ -1,10 +1,20 @@
-import { Body, Controller, Param, Post, UseGuards } from '@nestjs/common';
+import { TelegramCrmManualSendIntentService } from './telegram-crm-manual-send-intent.service';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { CurrentUser } from '../../../common/current-user.decorator';
 import type { JwtUser } from '../../../common/current-user.decorator';
 import { JwtAuthGuard } from '../../../common/jwt-auth.guard';
 import { TelegramCrmHistoryService } from './telegram-crm-history.service';
 import {
   ImportCrmHistoryDto,
+  MarkCrmConversationReadDto,
   SendCrmManualMessageDto,
 } from './telegram-crm-inbox.dto';
 import { TelegramCrmInitialSyncService } from './telegram-crm-initial-sync.service';
@@ -19,6 +29,7 @@ export class TelegramCrmRuntimeController {
     private readonly history: TelegramCrmHistoryService,
     private readonly sends: TelegramCrmManualSendService,
     private readonly reads: TelegramCrmReadService,
+    private readonly intents: TelegramCrmManualSendIntentService,
   ) {}
 
   @Post('accounts/:accountId/initial-sync')
@@ -38,9 +49,22 @@ export class TelegramCrmRuntimeController {
     return this.sends.send(user.sub, id, dto);
   }
 
+  @Get('conversations/:id/manual-send-receipt')
+  receipt(
+    @CurrentUser() user: JwtUser,
+    @Param('id') id: string,
+    @Query('clientIdempotencyKey') key: string,
+  ) {
+    return this.intents.lookup(user.sub, id, key);
+  }
+
   @Post('conversations/:id/read')
-  markRead(@CurrentUser() user: JwtUser, @Param('id') id: string) {
-    return this.reads.markRead(user.sub, id);
+  markRead(
+    @CurrentUser() user: JwtUser,
+    @Param('id') id: string,
+    @Body() dto?: MarkCrmConversationReadDto,
+  ) {
+    return this.reads.markRead(user.sub, id, dto?.maxTelegramMessageId);
   }
 
   @Post('conversations/:id/history')

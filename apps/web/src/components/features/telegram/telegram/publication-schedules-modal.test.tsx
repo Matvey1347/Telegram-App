@@ -141,18 +141,18 @@ describe("PublicationSchedulesModal", () => {
       "bg-red-600",
     );
     await user.click(
-      screen.getByRole("button", { name: "📝 Regular publication" }),
+      screen.getByRole("button", { name: "Slot 1 type" }),
     );
     expect(
-      screen.getAllByRole("button", { name: "📝 Regular publication" }),
-    ).toHaveLength(2);
+      screen.getAllByRole("option", { name: "📝 Regular publication" }),
+    ).toHaveLength(1);
     expect(
-      screen.getByRole("button", {
+      screen.getByRole("option", {
         name: "📣 Advertising / mutual promotion",
       }),
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "🤝 Mutual promotion" }),
+      screen.queryByRole("option", { name: "🤝 Mutual promotion" }),
     ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Back" }),
@@ -161,7 +161,7 @@ describe("PublicationSchedulesModal", () => {
       screen.queryByRole("button", { name: "Close" }),
     ).not.toBeInTheDocument();
     await user.click(
-      screen.getByRole("button", {
+      screen.getByRole("option", {
         name: "📣 Advertising / mutual promotion",
       }),
     );

@@ -35,11 +35,31 @@ export class ApplicationLogsQueryDto {
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(200) limit?: number;
   @IsOptional() @IsDateString() dateFrom?: string;
   @IsOptional() @IsDateString() dateTo?: string;
-  @IsOptional() @Transform(({ value }) => toArray(value)) @IsArray() @IsIn(LOG_LEVELS, { each: true }) levels?: string[];
-  @IsOptional() @Transform(({ value }) => toArray(value)) @IsArray() @IsIn(LOG_KINDS, { each: true }) kinds?: string[];
-  @IsOptional() @Transform(({ value }) => toArray(value)) @IsArray() @IsString({ each: true }) sources?: string[];
-  @IsOptional() @Transform(({ value }) => toArray(value)) @IsArray() @IsString({ each: true }) events?: string[];
-  @IsOptional() @Transform(({ value }) => toArray(value)) @IsArray() @IsIn(METHODS, { each: true }) methods?: string[];
+  @IsOptional()
+  @Transform(({ value }) => toArray(value))
+  @IsArray()
+  @IsIn(LOG_LEVELS, { each: true })
+  levels?: string[];
+  @IsOptional()
+  @Transform(({ value }) => toArray(value))
+  @IsArray()
+  @IsIn(LOG_KINDS, { each: true })
+  kinds?: string[];
+  @IsOptional()
+  @Transform(({ value }) => toArray(value))
+  @IsArray()
+  @IsString({ each: true })
+  sources?: string[];
+  @IsOptional()
+  @Transform(({ value }) => toArray(value))
+  @IsArray()
+  @IsString({ each: true })
+  events?: string[];
+  @IsOptional()
+  @Transform(({ value }) => toArray(value))
+  @IsArray()
+  @IsIn(METHODS, { each: true })
+  methods?: string[];
   @IsOptional() @IsString() endpoint?: string;
   @IsOptional() @Type(() => Number) @IsInt() statusCode?: number;
   @IsOptional() @Type(() => Number) @IsInt() statusCodeFrom?: number;

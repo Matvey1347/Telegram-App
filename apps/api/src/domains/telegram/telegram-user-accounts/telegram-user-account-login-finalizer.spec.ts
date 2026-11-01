@@ -111,7 +111,11 @@ describe('TelegramUserAccountLoginFinalizer', () => {
         },
         $transaction: jest.fn((operation) => operation({})),
       } as never,
-      { encrypt: jest.fn().mockReturnValue({ encrypted: 'session', iv: 'iv', authTag: 'tag' }) } as never,
+      {
+        encrypt: jest
+          .fn()
+          .mockReturnValue({ encrypted: 'session', iv: 'iv', authTag: 'tag' }),
+      } as never,
       { dismissBySourceKey } as never,
       { invalidate } as never,
     );

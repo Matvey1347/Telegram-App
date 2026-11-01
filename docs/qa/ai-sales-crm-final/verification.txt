@@ -1,0 +1,34 @@
+Stage11 final local verification — 2026-11-01 Europe/Warsaw
+Decision: NO-GO for production. No production deployment/migration, real customer message/live source capture or paid AI request.
+
+PASSED — focused API on default Node24.18.0: 138 suites /1083 tests.
+Command: pnpm --filter api test -- --runInBand 'telegram-crm|lead-discovery|ai-|workspace-authorization|notification|system-bot-branding-startup|telegram-user-accounts|development-connection-drain|response-cache.interceptor'
+Log: /tmp/crm-final-api-focused-sequential.log
+
+FAILED (trustworthy summary) — final full API under installed Node22.22.2 using unchanged pnpm script: 504 passed/13 failed suites;3300 passed/23 failed tests;517 suites/3323 tests;exit1.
+Command: pnpm --filter api test -- --runInBand --json --outputFile=/tmp/crm-final-api-results-node22-pnpm.json
+The child process PATH selected /Users/someoneinteresting/.nvm/versions/node/v22.22.2/bin only for this invocation. Global node/production/.nvmrc were not changed.
+Log: /tmp/crm-final-api-full-node22-pnpm.log; machine failure inventory api-failures.json.
+Node24.18.0 produced complete earlier red summaries but some later full attempts crashed SIGSEGV in native V8 GC without summary. These are not counted as passes; see runtime-diagnostics.json. Exact pinned .nvmrc20.19.0 was subsequently verified using an official checksum-verified temporary runtime: same504/13 suites and3300/23 tests; API typecheck/build and web build passed. Logs /tmp/crm-final-node20-{api-full,api-typecheck,api-build,web-build}.log; results /tmp/crm-final-api-results-node20.json. Temporary runtime removed, global configuration unchanged. Node20 is EOL (https://nodejs.org/en/about/previous-releases); supported-runtime alignment remains a release prerequisite. A direct Jest diagnostic invocation bypassed pnpm's module-resolution shim; two reflect-metadata failures in that diagnostic are superseded by the proper pnpm invocation, not hidden as application success.
+
+PASSED — focused web:55 files/409 tests (/tmp/ada-final-web-focused.log), plus Clients custom-selector regression1/1 (/tmp/crm-final-clients-fixture.log).
+FAILED — corrected full web:357 passed/19 failed files;1809 passed/29 failed tests;376 files/1838 tests;exit1. /tmp/crm-final-web-fulltest.log.
+75 backend suites incorrectly collected by jsdom were excluded from Vitest and actually executed by API Jest; runner-ownership.json proves all75 remain covered. No tests deleted.
+PASSED — web typecheck /tmp/crm-final-web-typecheck.log; production build /tmp/ada-final-web-build.log.
+PASSED — shared typecheck/build /tmp/crm-final-shared-typecheck.log, /tmp/crm-final-shared-build.log.
+PASSED — API typecheck /tmp/crm-final-api-typecheck.log and final Nest build /tmp/crm-final-api-build-sequential.log; five original TS errors gone.
+PASSED — pnpm db:generate /tmp/crm-final-prisma-generate.log; Prisma validate /tmp/crm-final-prisma-validate.log. Existing unrelated SetNull warning remains.
+PASSED — scoped changed API paths excluding pre-existing Accounts production debt /tmp/crm-final-api-scoped-lint.log; final stream-only delta /tmp/crm-final-stream-lint.log; changed web paths /tmp/crm-final-web-scoped-lint.log.
+EXPLICIT LEGACY EXCEPTION — Accounts production file31errors/9warnings, no new scoped debt; file985→984 lines. /tmp/linus-release-lint.log.
+FAILED — full web lint142errors/168warnings /tmp/ada-final-web-fulllint.log.
+FAILED — normal/strict architecture:16/16 policy tests pass,22normal/28strict inherited violations, no raised allowance. /tmp/crm-final-architecture-normal.log, /tmp/crm-final-architecture-strict.log.
+PASSED — offline harnesses48Copilot/60qualification scenarios: node scripts/ai-sales-copilot-benchmark.mjs; node scripts/ai-lead-qualification-benchmark.mjs; logs /tmp/crm-final-{copilot,qualification}-offline.log. Six harness guard tests /tmp/crm-final-benchmarks-tests.log.
+PASSED — migration script3guard tests; safe local PostgreSQL17 representative forward196migrations including9new, zero Prisma drift, actualconstraint/catalog/cascade/preservedlegacy probes. Artifacts migrations/README.md andreport.json.
+BLOCKED — trulyemptyclean migration chain fails historical20260814000001 hardcodedWorkspace precondition SQLSTATE23503; no production/historySQL modified. Production-like snapshot compatibility NOT RUN.
+PASSED — browser mock QA35/35,6widths,25screenshots,0pageerrors; browser-report.json. Synthetic cost values; physicaliPhone=false. Root visually inspected expandedCopilot390x520 andUsage320.
+PASSED — independent Turing12suites81tests plus finalstream2suites11tests (overlapping subsets); /tmp/turing-release-focused.log, /tmp/turing-release-stream-final.log; no unresolved known new productionP1/P2 at inspected finalcode.
+PASSED — git diff --check, stage before-hash manifest, no new production god file or raised architecture baseline.
+
+NOT RUN / REQUIRES MANUAL QA — real Telegram/Push/iPhone, paid model access/receipts/quality, sanitized target migration/restore, representative SQL/EXPLAIN/p50/p95/locks/storage/pool/RailwayCPU/RSS/socket/egress. Local mocks and migration probes do not establish production readiness.
+Remaining runtime P2: final-account stop leaves shared30s lease renewal until shutdown; drain/restart mitigation, serialized lifecycle fix still needed. Retention/recovery/sourceanalytics/SSEfanout require a tightly bounded measured pilot.
+Owned disposable PostgreSQL server was stopped/removed; browsers closed; no task-owned API/web dev server started, existinglocalhost left untouched.

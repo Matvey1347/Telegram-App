@@ -64,7 +64,10 @@ export class TelegramCrmController {
   // Keep this outside `contacts/:id`: some running Nest/Express route tables
   // resolve the dynamic contact path before a later-added static child path.
   @Get('contact-export')
-  exportContacts(@CurrentUser() user: JwtUser, @Query() query: CrmContactsQueryDto) {
+  exportContacts(
+    @CurrentUser() user: JwtUser,
+    @Query() query: CrmContactsQueryDto,
+  ) {
     return this.contactExport.export(user.sub, query.segment);
   }
 

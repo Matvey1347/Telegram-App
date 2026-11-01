@@ -34,8 +34,10 @@ Finance record IDs, monetary values, and subscription semantics remain stable.
 
 Run `pnpm --filter finance-api migration:plan` before any extraction work. It
 opens read-only transactions against the root Nexeloq `.env` database and the
-Finance product `.env.local` database, proves they are distinct, inventories
-Finance-related tables and reports destination schema incompatibilities. It
+Finance product `.env.local` database, compares their configured URLs, reports
+their database names, inventories Finance-related tables and reports destination
+schema incompatibilities. Verify the database identities independently before
+any extraction: different URLs alone do not prove different databases. It
 does not read credentials into output, copy rows, create tables, or change
 either database.
 

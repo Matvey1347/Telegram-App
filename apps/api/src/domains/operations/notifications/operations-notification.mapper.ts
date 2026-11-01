@@ -56,8 +56,7 @@ function notificationPresentation(
       kind: 'telegram-account',
       accountId: value.accountId,
       label: value.accountLabel,
-      avatarUrl:
-        typeof value.avatarUrl === 'string' ? value.avatarUrl : null,
+      avatarUrl: typeof value.avatarUrl === 'string' ? value.avatarUrl : null,
     };
   }
   if (

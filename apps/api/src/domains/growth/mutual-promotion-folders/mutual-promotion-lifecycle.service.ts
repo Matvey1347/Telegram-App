@@ -287,7 +287,9 @@ export class MutualPromotionLifecycleService {
         // confirmed that the message is published yet. Let identity
         // reconciliation promote the managed post first; otherwise VP can
         // report a publication (and lack its link) before Telegram publishes.
-        throw new Error('Telegram native scheduled post is awaiting publication confirmation');
+        throw new Error(
+          'Telegram native scheduled post is awaiting publication confirmation',
+        );
       }
       await this.prisma.mutualPromotionPostDelivery.update({
         where: { id: delivery.id },

@@ -5,7 +5,9 @@ export type WorkspaceMemberAvatarSource = {
   [key: string]: unknown;
 };
 
-export function withWorkspaceMemberAvatar(member: WorkspaceMemberAvatarSource | null | undefined) {
+export function withWorkspaceMemberAvatar(
+  member: WorkspaceMemberAvatarSource | null | undefined,
+) {
   if (!member) return member;
   return {
     ...member,

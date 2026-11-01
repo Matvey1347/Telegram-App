@@ -27,6 +27,7 @@ import { MemberSelect } from "@/components/features/workspace/member-select";
 import { IconPicker } from "@/components/icons/icon-picker";
 import { CrmChatWindow } from "./crm-chat-window";
 import type { CrmContactChatPreview } from "./crm-contact-chat-preview";
+import { LeadContactPreparations } from "./leads/lead-contact-preparations";
 import { CrmContactDeals } from "./crm-contact-deals";
 import { CrmContactInfoForm } from "./crm-contact-info-form";
 import { CrmContactChannels } from "./crm-contact-channels";
@@ -98,8 +99,7 @@ function CrmContactDetailActionModal({
   const detail = useQuery({
     queryKey: telegramCrmKeys.contactDetail(contactId),
     queryFn: ({ signal }) => telegramCrmApi.getContact(contactId, signal),
-    enabled:
-      !initialContact || (action !== "tags" && action !== "reminder"),
+    enabled: !initialContact || (action !== "tags" && action !== "reminder"),
     retry: false,
   });
   const me = useQuery({
@@ -147,12 +147,16 @@ function CrmContactDetailActionModal({
       await queryClient.invalidateQueries({
         queryKey: telegramCrmKeys.contactDetail(contactId),
       });
-      await queryClient.invalidateQueries({ queryKey: telegramCrmKeys.contactLists() });
+      await queryClient.invalidateQueries({
+        queryKey: telegramCrmKeys.contactLists(),
+      });
     },
   });
   // The list already contains every field needed by Contact info. Render it
   // immediately and let the detail request refresh richer relationships behind it.
-  const contact = detail.data ?? (initialContact ? detailFromListItem(initialContact) : undefined);
+  const contact =
+    detail.data ??
+    (initialContact ? detailFromListItem(initialContact) : undefined);
   const headerContact = contact ?? initialContact;
   const currentMemberId = members.data?.find(
     (member) => member.isCurrentUser,
@@ -160,7 +164,8 @@ function CrmContactDetailActionModal({
   const canEdit = Boolean(
     headerContact &&
     (permissions.canEditAll ||
-      (permissions.canEditOwn && currentMemberId === headerContact.ownerMemberId)),
+      (permissions.canEditOwn &&
+        currentMemberId === headerContact.ownerMemberId)),
   );
   return (
     <Modal
@@ -186,7 +191,9 @@ function CrmContactDetailActionModal({
         )
       }
     >
-      {detail.isLoading && !initialContact ? <LoadingState text="Loading contact…" /> : null}
+      {detail.isLoading && !initialContact ? (
+        <LoadingState text="Loading contact…" />
+      ) : null}
       {detail.error || (!detail.isLoading && !contact && !initialContact) ? (
         <div>
           <EmptyState text="Contact could not be loaded." />
@@ -203,7 +210,9 @@ function CrmContactDetailActionModal({
       {action === "reminder" && initialContact ? (
         <CrmContactTasks contact={initialContact} canEdit={canEdit} />
       ) : null}
-      {contact && action !== "tags" && !(action === "reminder" && initialContact) ? (
+      {contact &&
+      action !== "tags" &&
+      !(action === "reminder" && initialContact) ? (
         <ContactActionContent
           action={action}
           contact={contact}
@@ -268,7 +277,9 @@ function ContactActionContent({
               buttonLabel="Contact avatar"
               onChange={(value) => setAvatarIconId(value || "")}
             />
-            <span className="text-xs text-neutral-400">Custom contact avatar</span>
+            <span className="text-xs text-neutral-400">
+              Custom contact avatar
+            </span>
           </div>
           {canEditAll ? (
             <MemberSelect
@@ -288,6 +299,7 @@ function ContactActionContent({
           ) : null}
         </div>
       ) : null}
+      <LeadContactPreparations contactId={contact.id} />
       <CrmContactChannels
         contactId={contact.id}
         canEdit={canEdit}
@@ -335,7 +347,8 @@ function contactAvatarUrl(
     | Pick<CrmContactListItem, "telegramUsername" | "peer">,
 ) {
   const username = contact.telegramUsername?.replace(/^@+/, "");
-  const photoUrl = "peers" in contact ? contact.peers[0]?.photoUrl : contact.peer?.photoUrl;
+  const photoUrl =
+    "peers" in contact ? contact.peers[0]?.photoUrl : contact.peer?.photoUrl;
   return (
     photoUrl ??
     (username ? `https://t.me/i/userpic/320/${username}.jpg` : undefined)

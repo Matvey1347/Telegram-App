@@ -50,6 +50,31 @@ describe('WorkspaceAuthorizationService', () => {
     expect(requestContext.set).toHaveBeenCalledTimes(1);
   });
 
+  it('refreshes an external-work boundary and fails closed after membership revocation', async () => {
+    const { service, findFirst } = setup({
+      permissionKeys: ['adSales.crm.view'],
+    });
+    await expect(service.can('user-1', 'adSales.crm.view')).resolves.toBe(true);
+    findFirst.mockResolvedValueOnce(null);
+    await expect(service.refresh('user-1')).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
+    await expect(
+      service.require('user-1', 'adSales.crm.view'),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(findFirst).toHaveBeenCalledTimes(2);
+  });
+
+  it('reuses the newly loaded graph after an explicit refresh', async () => {
+    const { service, findFirst } = setup({
+      permissionKeys: ['adSales.crm.view'],
+    });
+    await service.context('user-1');
+    await service.refresh('user-1');
+    await service.require('user-1', 'adSales.crm.view');
+    expect(findFirst).toHaveBeenCalledTimes(2);
+  });
+
   it('rejects none access and permits view access', async () => {
     const { service } = setup({ permissionKeys: ['finance.view'] });
     await expect(
@@ -84,11 +109,7 @@ describe('WorkspaceAuthorizationService', () => {
       service.require('user-1', 'adSales.crm.view'),
     ).resolves.toBeDefined();
     await expect(
-      service.scope(
-        'user-1',
-        'adSales.crm.viewOwn',
-        'adSales.crm.viewAny',
-      ),
+      service.scope('user-1', 'adSales.crm.viewOwn', 'adSales.crm.viewAny'),
     ).resolves.toEqual({ assignedMemberId: 'member-1' });
   });
 

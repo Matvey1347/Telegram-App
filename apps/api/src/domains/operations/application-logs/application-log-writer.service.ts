@@ -48,8 +48,7 @@ export class ApplicationLogWriterService implements OnModuleDestroy {
   private nextStorageProbeAt = 0;
   private destroying = false;
   private readonly batchSize = APPLICATION_LOGGING_CONFIG.batchSize;
-  private readonly flushIntervalMs =
-    APPLICATION_LOGGING_CONFIG.flushIntervalMs;
+  private readonly flushIntervalMs = APPLICATION_LOGGING_CONFIG.flushIntervalMs;
   private readonly maxQueueSize = Math.max(this.batchSize * 10, 500);
 
   constructor(private readonly prisma: PrismaService) {}

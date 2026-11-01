@@ -118,4 +118,97 @@ describe('TelegramCrmHistoryService', () => {
     expect(runtime.withAccountHandle).not.toHaveBeenCalled();
     expect(batchStore.importHistory).not.toHaveBeenCalled();
   });
+  it('honors an explicit older cursor even when legacy history is marked exhausted', async () => {
+    const handle = {
+      getHistory: jest.fn().mockResolvedValue({
+        messages: [],
+        nextBeforeTelegramMessageId: 399,
+        exhausted: false,
+      }),
+    };
+    const store = {
+      importHistory: jest.fn().mockResolvedValue({ imported: 0 }),
+    };
+    const service = new TelegramCrmHistoryService(
+      {
+        telegramCrmConversation: {
+          findFirst: jest
+            .fn()
+            .mockResolvedValue({ ...conversation, historyExhausted: true }),
+        },
+      } as never,
+      {
+        require: jest.fn().mockResolvedValue({ workspaceId: 'workspace-1' }),
+        requireOwnOrAny: jest.fn(),
+      } as never,
+      {
+        withAccountHandle: jest.fn(
+          async (
+            _w: string,
+            _a: string,
+            _p: string,
+            operation: (value: typeof handle) => Promise<unknown>,
+          ) => operation(handle),
+        ),
+      } as never,
+      store as never,
+    );
+    expect(
+      await service.import('user-1', conversation.id, {
+        beforeTelegramMessageId: 450,
+      }),
+    ).toMatchObject({ nextBeforeTelegramMessageId: 399, exhausted: false });
+    expect(handle.getHistory).toHaveBeenCalledWith(
+      expect.objectContaining({ beforeTelegramMessageId: 450 }),
+    );
+    expect(store.importHistory).toHaveBeenCalledWith(
+      expect.not.objectContaining({ preserveHistoryCursor: true }),
+    );
+  });
+  it('refreshes the latest page even after older history is exhausted without moving its cursor', async () => {
+    const handle = {
+      getHistory: jest.fn().mockResolvedValue({
+        messages: [],
+        nextBeforeTelegramMessageId: 900,
+        exhausted: false,
+      }),
+    };
+    const store = {
+      importHistory: jest.fn().mockResolvedValue({ imported: 0 }),
+    };
+    const service = new TelegramCrmHistoryService(
+      {
+        telegramCrmConversation: {
+          findFirst: jest
+            .fn()
+            .mockResolvedValue({ ...conversation, historyExhausted: true }),
+        },
+      } as never,
+      {
+        require: jest.fn().mockResolvedValue({ workspaceId: 'workspace-1' }),
+        requireOwnOrAny: jest.fn(),
+      } as never,
+      {
+        withAccountHandle: jest.fn(
+          async (
+            _w: string,
+            _a: string,
+            _p: string,
+            operation: (value: typeof handle) => Promise<unknown>,
+          ) => operation(handle),
+        ),
+      } as never,
+      store as never,
+    );
+    await service.import('user-1', conversation.id, {
+      recent: true,
+      limit: 100,
+    });
+    expect(handle.getHistory).toHaveBeenCalledWith(
+      expect.objectContaining({ beforeTelegramMessageId: null, limit: 100 }),
+    );
+    expect(store.importHistory).toHaveBeenCalledWith(
+      expect.objectContaining({ preserveHistoryCursor: true }),
+    );
+  });
 });

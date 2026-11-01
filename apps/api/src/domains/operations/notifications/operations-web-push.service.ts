@@ -2,160 +2,275 @@ import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import webPush from 'web-push';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { mapOperationsNotification } from './operations-notification.mapper';
 import { OperationsWebPushConfigService } from './operations-web-push-config.service';
-import { OPERATIONS_PUSH_MAX_ACTIVE_DEVICES } from './operations-notification-policy';
+import { OperationsNotificationPermissionService } from './operations-notification-permission.service';
+import { OperationsNotificationDeliveryPolicyService } from './operations-notification-delivery-policy.service';
+import {
+  OPERATIONS_PUSH_CONCURRENCY,
+  OPERATIONS_PUSH_MAX_GROUPS,
+  OPERATIONS_PUSH_MAX_QUEUE_AGE_MS,
+  OPERATIONS_PUSH_QUEUE_LIMIT,
+  OPERATIONS_PUSH_TIMEOUT_MS,
+  OPERATIONS_PUSH_TTL_SECONDS,
+  pushPayload,
+  pushPreferenceAllows,
+  pushRecipientSelect,
+  type OperationsPushRow,
+} from './operations-web-push-policy';
+import {
+  OperationsWebPushFreshness,
+  type OperationsQueuedPush,
+} from './operations-web-push-freshness';
 
-const FANOUT_CONCURRENCY = 8;
+export type OperationsPushDispatchResult = {
+  attempted: number;
+  delivered: number;
+  failed: number;
+  skipped: number;
+};
+
+type PushRow = OperationsPushRow;
+type Delivery = {
+  row: PushRow;
+  queuedAt: number;
+  subscription: PushRow['recipient']['user']['operationsPushSubscriptions'][number];
+};
 
 @Injectable()
 export class OperationsWebPushService {
   private activeDeliveries = 0;
+  private reservedDeliveries = 0;
   private readonly deliveryWaiters: Array<() => void> = [];
+  private readonly freshness: OperationsWebPushFreshness;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: OperationsWebPushConfigService,
+    private readonly permissions: OperationsNotificationPermissionService,
+    private readonly policies: OperationsNotificationDeliveryPolicyService,
   ) {
+    this.freshness = new OperationsWebPushFreshness(
+      prisma,
+      permissions,
+      policies,
+    );
     const value = config.get();
-    if (value.enabled) {
+    if (value.enabled)
       webPush.setVapidDetails(value.subject, value.publicKey, value.privateKey);
-    }
   }
 
-  async dispatch(notificationIds: readonly string[]) {
-    if (!notificationIds.length || !this.config.get().enabled) return;
-    const candidates = await this.prisma.operationsNotification.findMany({
-      where: {
-        id: { in: [...new Set(notificationIds)] },
-        publishedAt: { not: null },
-        pushAttemptedAt: null,
-        recipient: {
-          operationsNotificationPreference: { webPushEnabled: true },
-        },
-      },
-      include: {
-        recipient: { select: { userId: true } },
-      },
-    });
-    if (!candidates.length) return;
-    const userIds = [
-      ...new Set(candidates.map((item) => item.recipient.userId)),
-    ];
-    const subscriptions = await this.prisma.operationsPushSubscription.findMany(
-      {
-        where: { userId: { in: userIds }, active: true },
-        orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],
-        select: {
-          id: true,
-          userId: true,
-          endpoint: true,
-          p256dh: true,
-          auth: true,
-        },
-      },
+  async dispatch(
+    notificationIds: readonly string[],
+  ): Promise<OperationsPushDispatchResult> {
+    const ids = [...new Set(notificationIds)];
+    const result = {
+      attempted: 0,
+      delivered: 0,
+      failed: 0,
+      skipped: ids.length,
+    };
+    if (!ids.length || !this.config.get().enabled) return result;
+    const deliveries = await this.prepare(
+      ids.slice(0, OPERATIONS_PUSH_MAX_GROUPS),
     );
-    const byUser = new Map<string, typeof subscriptions>();
-    for (const subscription of subscriptions) {
-      const values = byUser.get(subscription.userId) ?? [];
-      if (values.length < OPERATIONS_PUSH_MAX_ACTIVE_DEVICES) {
-        values.push(subscription);
-      }
-      byUser.set(subscription.userId, values);
-    }
-    const deliverable = candidates.filter(
-      (item) => (byUser.get(item.recipient.userId)?.length ?? 0) > 0,
-    );
-    if (!deliverable.length) return;
-    const claimed = await this.prisma.$queryRaw<Array<{ id: string }>>(
-      Prisma.sql`
-        UPDATE "OperationsNotification"
-        SET "pushAttemptedAt" = NOW()
-        WHERE "id" IN (${Prisma.join(deliverable.map((item) => item.id))})
-          AND "pushAttemptedAt" IS NULL
-        RETURNING "id"
-      `,
-    );
-    const claimedIds = new Set(claimed.map((item) => item.id));
-    const ready = deliverable.filter((item) => claimedIds.has(item.id));
-    if (!ready.length) return;
-    const deliveries = ready.flatMap((row) =>
-      (byUser.get(row.recipient.userId) ?? []).map((subscription) => ({
-        row,
-        subscription,
-      })),
-    );
-    const staleSubscriptionIds = new Set<string>();
-    await this.runBounded(deliveries, FANOUT_CONCURRENCY, async (delivery) => {
-      await this.withDeliveryPermit(async () => {
-        const notification = mapOperationsNotification(delivery.row);
-        try {
-          await webPush.sendNotification(
-            {
-              endpoint: delivery.subscription.endpoint,
-              keys: {
-                p256dh: delivery.subscription.p256dh,
-                auth: delivery.subscription.auth,
-              },
-            },
-            JSON.stringify({
-              id: notification.id,
-              title: 'New CRM activity',
-              body: 'Open Nexeloq to review the update.',
-              targetUrl: notification.targetUrl,
-            }),
-          );
-        } catch (error) {
-          const status = this.statusCode(error);
-          if (status === 404 || status === 410) {
-            staleSubscriptionIds.add(delivery.subscription.id);
-          }
+    const stale = new Set<string>();
+    const attemptedGroups = new Set<string>();
+    let validationFailed = false;
+    let validationError: unknown;
+    await this.runBounded(deliveries, async (ticket) => {
+      const { queuedAt, subscriptionId } = ticket;
+      let started = false;
+      await this.acquireDeliveryPermit();
+      try {
+        if (
+          Date.now() - queuedAt >= OPERATIONS_PUSH_MAX_QUEUE_AGE_MS ||
+          stale.has(subscriptionId)
+        )
+          return;
+        const current = await this.freshness.read(ticket);
+        if (
+          !current ||
+          Date.now() - queuedAt >= OPERATIONS_PUSH_MAX_QUEUE_AGE_MS ||
+          stale.has(subscriptionId)
+        )
+          return;
+        const { row, subscription } = current;
+        const payload = pushPayload(
+          row,
+          row.recipient.operationsNotificationPreference,
+        );
+        attemptedGroups.add(row.id);
+        result.attempted += 1;
+        started = true;
+        await webPush.sendNotification(
+          {
+            endpoint: subscription.endpoint,
+            keys: { p256dh: subscription.p256dh, auth: subscription.auth },
+          },
+          payload,
+          {
+            TTL: OPERATIONS_PUSH_TTL_SECONDS,
+            timeout: OPERATIONS_PUSH_TIMEOUT_MS,
+            urgency: row.priority === 'HIGH' ? 'high' : 'normal',
+          },
+        );
+        result.delivered += 1;
+      } catch (error) {
+        if (!started) {
+          validationFailed = true;
+          validationError ??= error;
+          return;
         }
-      });
+        result.failed += 1;
+        const status = this.statusCode(error);
+        if (status === 404 || status === 410) stale.add(subscriptionId);
+      } finally {
+        this.reservedDeliveries -= 1;
+        this.releaseDeliveryPermit();
+      }
     });
-    if (staleSubscriptionIds.size) {
+    if (stale.size)
       await this.prisma.operationsPushSubscription.updateMany({
-        where: { id: { in: [...staleSubscriptionIds] }, active: true },
+        where: { id: { in: [...stale] }, active: true },
         data: { active: false, disabledAt: new Date() },
       });
+    result.skipped -= attemptedGroups.size;
+    if (validationFailed) throw validationError;
+    return result;
+  }
+
+  private async prepare(ids: readonly string[]) {
+    const reserved: Delivery[] = [];
+    let held = 0;
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const now = new Date();
+        const candidates = await tx.operationsNotification.findMany({
+          where: {
+            id: { in: [...ids] },
+            publishedAt: { not: null, lte: now },
+            readAt: null,
+            expiresAt: { gt: now },
+            pushAttemptedAt: null,
+            recipient: {
+              operationsNotificationPreference: { webPushEnabled: true },
+            },
+          },
+          include: { recipient: { select: pushRecipientSelect } },
+          take: OPERATIONS_PUSH_MAX_GROUPS,
+        });
+        const permitted = candidates.filter(
+          (row) =>
+            row.recipient.workspaceId === row.workspaceId &&
+            this.permissions.canAccess(row.recipient, row) &&
+            pushPreferenceAllows(
+              row.type,
+              row.recipient.operationsNotificationPreference,
+            ),
+        );
+        const allowed = await this.policies.filter(tx, permitted);
+        const deliverable = permitted.filter((row) => {
+          if (!allowed.has(row.id)) return false;
+          const unique = new Map(
+            row.recipient.user.operationsPushSubscriptions.map(
+              (subscription) => [subscription.id, subscription],
+            ),
+          );
+          const subscriptions = [...unique.values()];
+          if (
+            !subscriptions.length ||
+            this.reservedDeliveries + subscriptions.length >
+              OPERATIONS_PUSH_QUEUE_LIMIT
+          )
+            return false;
+          this.reservedDeliveries += subscriptions.length;
+          held += subscriptions.length;
+          const queuedAt = Date.now();
+          reserved.push(
+            ...subscriptions.map((subscription) => ({
+              row,
+              subscription,
+              queuedAt,
+            })),
+          );
+          return true;
+        });
+        if (!deliverable.length) return [];
+        const claimedAt = new Date();
+        const claimed = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+          UPDATE "OperationsNotification" AS notification SET "pushAttemptedAt" = ${claimedAt}
+          FROM (VALUES ${Prisma.join(
+            deliverable.map(
+              (row) => Prisma.sql`(
+            CAST(${row.id} AS TEXT), CAST(${row.workspaceId} AS TEXT),
+            CAST(${row.recipientMemberId} AS TEXT), CAST(${row.createdAt} AS TIMESTAMPTZ)
+          )`,
+            ),
+          )}) AS incoming("id", "workspaceId", "memberId", "createdAt")
+          WHERE notification."id" = incoming."id" AND notification."workspaceId" = incoming."workspaceId"
+            AND notification."recipientMemberId" = incoming."memberId" AND notification."createdAt" = incoming."createdAt"
+            AND notification."pushAttemptedAt" IS NULL AND notification."readAt" IS NULL
+            AND notification."publishedAt" IS NOT NULL AND notification."publishedAt" <= NOW()
+            AND notification."expiresAt" > NOW()
+            AND EXISTS (SELECT 1 FROM "OperationsNotificationPreference" AS preference
+              WHERE preference."workspaceId" = notification."workspaceId" AND preference."memberId" = notification."recipientMemberId"
+                AND preference."webPushEnabled" = TRUE
+                AND (LEFT(notification."type"::text, 4) <> 'CRM_' OR preference."crmNotificationsEnabled" = TRUE)
+                AND (notification."type" <> 'CRM_MESSAGE_RECEIVED'::"OperationsNotificationType" OR preference."crmIncomingMessagesEnabled" = TRUE)
+                AND (notification."type" <> 'CRM_FOLLOW_UP_DUE'::"OperationsNotificationType" OR preference."crmFollowUpEnabled" = TRUE)
+                AND (notification."type" <> 'CRM_AI_LEAD_QUALIFIED'::"OperationsNotificationType" OR preference."crmAiLeadsEnabled" = TRUE))
+          RETURNING notification."id"
+        `);
+        const claimedIds = new Set(claimed.map((row) => row.id));
+        const ready = reserved.filter(({ row }) => claimedIds.has(row.id));
+        this.reservedDeliveries -= reserved.length - ready.length;
+        held = ready.length;
+        return ready.map(
+          ({ row, subscription, queuedAt }): OperationsQueuedPush => ({
+            notificationId: row.id,
+            workspaceId: row.workspaceId,
+            recipientMemberId: row.recipientMemberId,
+            subscriptionId: subscription.id,
+            claimedAt,
+            queuedAt,
+          }),
+        );
+      });
+    } catch (error) {
+      this.reservedDeliveries -= held;
+      throw error;
     }
   }
 
   private statusCode(error: unknown) {
-    if (!error || typeof error !== 'object' || !('statusCode' in error)) {
-      return null;
-    }
-    return typeof error.statusCode === 'number' ? error.statusCode : null;
+    return error &&
+      typeof error === 'object' &&
+      'statusCode' in error &&
+      typeof error.statusCode === 'number'
+      ? error.statusCode
+      : null;
   }
 
   private async runBounded<T>(
     items: readonly T[],
-    concurrency: number,
     work: (item: T) => Promise<void>,
   ) {
     let cursor = 0;
     await Promise.all(
-      Array.from({ length: Math.min(concurrency, items.length) }, async () => {
-        while (cursor < items.length) {
-          const index = cursor;
-          cursor += 1;
-          await work(items[index]);
-        }
-      }),
+      Array.from(
+        { length: Math.min(OPERATIONS_PUSH_CONCURRENCY, items.length) },
+        async () => {
+          while (cursor < items.length) {
+            const index = cursor++;
+            await work(items[index]);
+          }
+        },
+      ),
     );
   }
 
-  private async withDeliveryPermit(work: () => Promise<void>) {
-    await this.acquireDeliveryPermit();
-    try {
-      await work();
-    } finally {
-      this.releaseDeliveryPermit();
-    }
-  }
-
   private acquireDeliveryPermit() {
-    if (this.activeDeliveries < FANOUT_CONCURRENCY) {
+    if (this.activeDeliveries < OPERATIONS_PUSH_CONCURRENCY) {
       this.activeDeliveries += 1;
       return Promise.resolve();
     }

@@ -174,7 +174,7 @@ export class TelegramChannelTrafficAttributionService {
       now,
       undefined,
     );
-    let preview = aggregateTrafficAttributionPreviews(
+    const preview = aggregateTrafficAttributionPreviews(
       [...previews.values()],
       prepared.currency,
       new Date(now.getTime() - windowDays * 24 * 60 * 60 * 1000),

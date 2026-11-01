@@ -1,0 +1,73 @@
+{
+  "checks": [
+    {
+      "scenario": "configuration remains lazy",
+      "pass": true
+    },
+    {
+      "scenario": "dashboard responsive",
+      "width": 1440,
+      "overflow": false
+    },
+    {
+      "scenario": "dashboard responsive",
+      "width": 1024,
+      "overflow": false
+    },
+    {
+      "scenario": "dashboard responsive",
+      "width": 768,
+      "overflow": false
+    },
+    {
+      "scenario": "dashboard responsive",
+      "width": 390,
+      "overflow": false
+    },
+    {
+      "scenario": "dashboard responsive",
+      "width": 360,
+      "overflow": false
+    },
+    {
+      "scenario": "dashboard responsive",
+      "width": 320,
+      "overflow": false
+    },
+    {
+      "scenario": "held operations discoverable across all dates",
+      "pass": true
+    },
+    {
+      "scenario": "reconciliation requires explicit verification",
+      "pass": true
+    },
+    {
+      "scenario": "configuration responsive",
+      "width": 320,
+      "overflow": false
+    },
+    {
+      "scenario": "no AI execution endpoint",
+      "pass": true
+    }
+  ],
+  "errors": [],
+  "requests": [
+    "GET /auth/me",
+    "GET /operations/ai/operations?workspaceId=qa-workspace&limit=25",
+    "GET /workspaces",
+    "GET /account/me",
+    "POST /telegram/system-bot/connection/workspace",
+    "GET /operations/ai/usage?workspaceId=qa-workspace",
+    "GET /operations/notifications/events/stream",
+    "GET /operations/notifications/unread-count",
+    "POST /telegram/system-bot/connection/workspace",
+    "GET /operations/notifications/events/stream",
+    "GET /operations/notifications/events/stream",
+    "GET /operations/ai/operations?workspaceId=qa-workspace&unresolved=true&limit=25",
+    "GET /operations/ai/config"
+  ],
+  "allApisIntercepted": true,
+  "providerCalls": 0
+}

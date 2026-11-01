@@ -19,7 +19,11 @@ import {
   TelegramPublicationScheduleAssignmentInputDto,
   TelegramPublicationScheduleInputDto,
 } from './telegram-publication-schedules.dto';
-import { publicationScheduleOccurrenceAt, publicationScheduleTimeForDisplay, publicationScheduleTimeForStorage } from './telegram-publication-schedule-times';
+import {
+  publicationScheduleOccurrenceAt,
+  publicationScheduleTimeForDisplay,
+  publicationScheduleTimeForStorage,
+} from './telegram-publication-schedule-times';
 
 const scheduleInclude = {
   icon: true,
@@ -366,7 +370,11 @@ export class TelegramPublicationSchedulesService {
     ) {
       for (const slot of slots) {
         const localDate = this.localDateParts(cursor, timezone);
-        const scheduledAt = publicationScheduleOccurrenceAt(localDate, slot.time, timezone);
+        const scheduledAt = publicationScheduleOccurrenceAt(
+          localDate,
+          slot.time,
+          timezone,
+        );
         if (scheduledAt >= from && scheduledAt < to) {
           const reservation = reservationByScheduledAt.get(
             scheduledAt.toISOString(),
@@ -520,7 +528,11 @@ export class TelegramPublicationSchedulesService {
     ) {
       const localDate = this.localDateParts(cursor, timezone);
       for (const slot of uniqueSlots.values()) {
-        const scheduledAt = publicationScheduleOccurrenceAt(localDate, slot.time, timezone);
+        const scheduledAt = publicationScheduleOccurrenceAt(
+          localDate,
+          slot.time,
+          timezone,
+        );
         if (scheduledAt < from || scheduledAt >= to) continue;
         const times = timesBySlot.get(slot.id) ?? [];
         times.push(scheduledAt.toISOString());
@@ -614,7 +626,11 @@ export class TelegramPublicationSchedulesService {
       const localDate = this.localDateParts(cursor, timezone);
       for (const slot of schedule.slots) {
         if (!selectedSlotIds.has(slot.id)) continue;
-        const scheduledAt = publicationScheduleOccurrenceAt(localDate, slot.time, timezone);
+        const scheduledAt = publicationScheduleOccurrenceAt(
+          localDate,
+          slot.time,
+          timezone,
+        );
         if (scheduledAt < from || scheduledAt >= to) continue;
         calendarRows.push({
           slotId: slot.id,

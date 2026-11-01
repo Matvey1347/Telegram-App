@@ -154,15 +154,15 @@ export class TelegramManagedPostEditTransportService {
           ? post.scheduledAt || undefined
           : undefined,
       );
-    const mediaItems = params.nextMediaItems ?? normalizeTelegramPostMediaItems(
-      post.mediaItems,
-      post.imageUrls,
-    );
+    const mediaItems =
+      params.nextMediaItems ??
+      normalizeTelegramPostMediaItems(post.mediaItems, post.imageUrls);
     const currentMediaItems = normalizeTelegramPostMediaItems(
       post.mediaItems,
       post.imageUrls,
     );
-    const mediaChanged = JSON.stringify(mediaItems) !== JSON.stringify(currentMediaItems);
+    const mediaChanged =
+      JSON.stringify(mediaItems) !== JSON.stringify(currentMediaItems);
     if (
       mediaChanged &&
       (mediaItems.length !== currentMediaItems.length ||
@@ -464,19 +464,21 @@ export class TelegramManagedPostEditTransportService {
     // an eligible Premium editor after the keyboard update, just as delivery
     // does.  MTProto edits message text/caption only, so the Bot-owned inline
     // keyboard remains intact.
-    await this.telegramManagedPostPremiumEmojiRepairService.restoreCustomEmojiAfterBotDelivery({
-      text: resolvedText,
-      workspaceId,
-      channelId,
-      channel,
-      sources,
-      messageIds: effectiveMessageIds,
-      imageCount: mediaItems.length,
-      publishMode: rendered.publishMode,
-      captionHtml: rendered.captionHtml,
-      followupHtmlParts: rendered.followupHtmlParts,
-      textHtmlParts: rendered.textHtmlParts,
-    });
+    await this.telegramManagedPostPremiumEmojiRepairService.restoreCustomEmojiAfterBotDelivery(
+      {
+        text: resolvedText,
+        workspaceId,
+        channelId,
+        channel,
+        sources,
+        messageIds: effectiveMessageIds,
+        imageCount: mediaItems.length,
+        publishMode: rendered.publishMode,
+        captionHtml: rendered.captionHtml,
+        followupHtmlParts: rendered.followupHtmlParts,
+        textHtmlParts: rendered.textHtmlParts,
+      },
+    );
 
     return {
       sourceId: source.sourceId,

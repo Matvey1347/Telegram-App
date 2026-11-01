@@ -1,3 +1,5 @@
+const containing = (value: Record<string, unknown>): unknown =>
+  expect.objectContaining(value);
 import { Prisma } from '@prisma/client';
 import { TelegramCrmMessageStoreService } from './telegram-crm-message-store.service';
 
@@ -27,6 +29,10 @@ const message = {
 describe('TelegramCrmMessageStoreService', () => {
   it('stores TELEGRAM_SYNC history with no invented Member attribution', async () => {
     const tx = {
+      $queryRaw: jest.fn().mockResolvedValue([]),
+      telegramCrmDeletedMessage: {
+        findUnique: jest.fn().mockResolvedValue(null),
+      },
       telegramCrmConversation: {
         findFirst: jest.fn().mockResolvedValue({
           id: 'conversation-1',
@@ -52,8 +58,8 @@ describe('TelegramCrmMessageStoreService', () => {
     await service.store(input);
 
     expect(tx.telegramCrmMessage.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
+      containing({
+        data: containing({
           origin: 'TELEGRAM_SYNC',
           sentByMemberId: null,
         }),
@@ -77,5 +83,23 @@ describe('TelegramCrmMessageStoreService', () => {
       id: 'message-1',
       telegramMessageId: '42',
     });
+  });
+  it('rejects a legacy store attempt after an account deletion tombstone without creating a message', async () => {
+    const tx = {
+      $queryRaw: jest.fn(),
+      telegramCrmConversation: {
+        findFirst: jest.fn().mockResolvedValue({ id: 'conversation-1' }),
+      },
+      telegramCrmDeletedMessage: {
+        findUnique: jest.fn().mockResolvedValue({ telegramMessageId: 42 }),
+      },
+      telegramCrmMessage: { create: jest.fn() },
+    };
+    const service = new TelegramCrmMessageStoreService({
+      $transaction: jest.fn((fn: (value: typeof tx) => unknown) => fn(tx)),
+    } as never);
+    await expect(service.store(input)).rejects.toThrow('CHAT_MESSAGE_DELETED');
+    expect(tx.$queryRaw).toHaveBeenCalledTimes(1);
+    expect(tx.telegramCrmMessage.create).not.toHaveBeenCalled();
   });
 });

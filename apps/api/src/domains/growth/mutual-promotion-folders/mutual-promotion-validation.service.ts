@@ -136,9 +136,7 @@ export class MutualPromotionValidationService {
             row.folder.endsAt > input.startsAt,
         )
       ) {
-        throw new BadRequestException(
-          'Invite link overlaps another folder',
-        );
+        throw new BadRequestException('Invite link overlaps another folder');
       }
     }
   }

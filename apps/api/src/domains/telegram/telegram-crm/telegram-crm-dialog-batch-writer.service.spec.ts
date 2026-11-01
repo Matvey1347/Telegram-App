@@ -46,6 +46,9 @@ describe('TelegramCrmDialogBatchWriter', () => {
       },
     };
     const tx = {
+      telegramAdCrmWorkspaceSettings: {
+        findUnique: jest.fn().mockResolvedValue({ importTagIds: [] }),
+      },
       telegramCrmPeer: {
         findMany: jest
           .fn()
@@ -55,15 +58,13 @@ describe('TelegramCrmDialogBatchWriter', () => {
         update: jest.fn(),
       },
       telegramAdvertiser: {
-        findMany: jest
-          .fn()
-          .mockResolvedValue([
-            {
-              id: 'contact-existing',
-              telegramUsername: null,
-              phone: '+380667828277',
-            },
-          ]),
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'contact-existing',
+            telegramUsername: null,
+            phone: '+380667828277',
+          },
+        ]),
         createMany: jest.fn(),
       },
       telegramCrmConversation: {
@@ -116,6 +117,9 @@ describe('TelegramCrmDialogBatchWriter', () => {
 
   it('reuses one workspace Peer across accounts, keeps exact unread, and never auto-creates a Contact', async () => {
     const tx = {
+      telegramAdCrmWorkspaceSettings: {
+        findUnique: jest.fn().mockResolvedValue({ importTagIds: [] }),
+      },
       telegramCrmPeer: {
         findMany: jest
           .fn()

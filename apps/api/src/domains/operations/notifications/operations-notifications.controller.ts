@@ -26,6 +26,7 @@ import {
 import { OperationsNotificationEventHub } from './operations-notification-event-hub.service';
 import { OperationsNotificationsService } from './operations-notifications.service';
 import { OperationsNotificationPermissionService } from './operations-notification-permission.service';
+import { OperationsNotificationTestService } from './operations-notification-test.service';
 
 @UseGuards(JwtAuthGuard)
 @Controller('operations/notifications')
@@ -35,6 +36,7 @@ export class OperationsNotificationsController {
     private readonly authorization: WorkspaceAuthorizationService,
     private readonly events: OperationsNotificationEventHub,
     private readonly permissions: OperationsNotificationPermissionService,
+    private readonly tests: OperationsNotificationTestService,
   ) {}
 
   @Get()
@@ -78,7 +80,7 @@ export class OperationsNotificationsController {
     @CurrentUser() user: JwtUser,
     @Body() dto: UpdateNotificationPreferencesDto,
   ) {
-    return this.service.updatePreferences(user.sub, dto.webPushEnabled);
+    return this.service.updatePreferences(user.sub, dto);
   }
 
   @Get('push/config')
@@ -92,6 +94,11 @@ export class OperationsNotificationsController {
     @Body() dto: OperationsPushSubscriptionDto,
   ) {
     return this.service.subscribe(user.sub, dto);
+  }
+
+  @Post('push/test')
+  testPush(@CurrentUser() user: JwtUser) {
+    return this.tests.send(user.sub);
   }
 
   @Delete('push/subscriptions')

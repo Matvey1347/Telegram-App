@@ -20,8 +20,8 @@ export class TelegramChannelWorkbookWriter {
     requestedSections?: TelegramChannelExportSection[],
   ) {
     const selectedSections = new Set(
-      (requestedSections || TELEGRAM_CHANNEL_EXPORT_SECTIONS).filter((section) =>
-        TELEGRAM_CHANNEL_EXPORT_SECTIONS.includes(section),
+      (requestedSections || TELEGRAM_CHANNEL_EXPORT_SECTIONS).filter(
+        (section) => TELEGRAM_CHANNEL_EXPORT_SECTIONS.includes(section),
       ),
     );
     const {
@@ -399,7 +399,11 @@ export class TelegramChannelWorkbookWriter {
         { header: 'Subscribers at end', key: 'subscribersAtEnd' },
         { header: 'Invite joined at start', key: 'inviteJoinedAtStart' },
         { header: 'Invite joined at end', key: 'inviteJoinedAtEnd' },
-        { header: 'Expense transaction ID', key: 'expenseTransactionId', width: 30 },
+        {
+          header: 'Expense transaction ID',
+          key: 'expenseTransactionId',
+          width: 30,
+        },
         { header: 'Created at', key: 'createdAt', width: 22 },
       ],
       mutualPromotionParticipants.map((participant: any) => ({
@@ -454,12 +458,17 @@ export class TelegramChannelWorkbookWriter {
         { header: 'Tags', key: 'tags', width: 36 },
         { header: 'Total sales', key: 'totalSalesCount' },
         { header: 'Completed sales', key: 'completedSalesCount' },
-        { header: 'Total revenue (primary)', key: 'totalRevenueInPrimaryCurrency' },
+        {
+          header: 'Total revenue (primary)',
+          key: 'totalRevenueInPrimaryCurrency',
+        },
         { header: 'Created at', key: 'createdAt', width: 22 },
       ],
       [...advertisers.values()].map((advertiser) => ({
         ...advertiser,
-        tags: advertiser.tags.map((assignment: any) => assignment.tag.name).join(', '),
+        tags: advertiser.tags
+          .map((assignment: any) => assignment.tag.name)
+          .join(', '),
       })),
     );
     this.sheets.addTableSheet(
@@ -483,7 +492,8 @@ export class TelegramChannelWorkbookWriter {
         title: sale.title || sale.advertiserName,
         advertiserName: sale.advertiser?.displayName || sale.advertiserName,
         channelAmount: sale.placements.reduce(
-          (total: number, placement: any) => total + Number(placement.agreedPrice || 0),
+          (total: number, placement: any) =>
+            total + Number(placement.agreedPrice || 0),
           0,
         ),
       })),
@@ -504,13 +514,15 @@ export class TelegramChannelWorkbookWriter {
         { header: 'Reactions final', key: 'actualReactionsFinal' },
         { header: 'Managed post status', key: 'managedPostStatus' },
       ],
-      adSales.flatMap((sale: any) => sale.placements.map((placement: any) => ({
-        ...placement,
-        dealTitle: sale.title || sale.advertiserName,
-        clientName: sale.advertiser?.displayName || sale.advertiserName,
-        telegramMessageId: placement.telegramPost?.telegramMessageId,
-        managedPostStatus: placement.managedPost?.status,
-      }))),
+      adSales.flatMap((sale: any) =>
+        sale.placements.map((placement: any) => ({
+          ...placement,
+          dealTitle: sale.title || sale.advertiserName,
+          clientName: sale.advertiser?.displayName || sale.advertiserName,
+          telegramMessageId: placement.telegramPost?.telegramMessageId,
+          managedPostStatus: placement.managedPost?.status,
+        })),
+      ),
     );
     this.sheets.addTableSheet(
       workbook,
@@ -527,17 +539,20 @@ export class TelegramChannelWorkbookWriter {
         { header: 'Transaction ID', key: 'transactionId', width: 30 },
         { header: 'Notes', key: 'notes', width: 60 },
       ],
-      adSales.flatMap((sale: any) => sale.payments.map((payment: any) => ({
-        ...payment,
-        dealTitle: sale.title || sale.advertiserName,
-        clientName: sale.advertiser?.displayName || sale.advertiserName,
-        channelAllocation: payment.allocations.reduce(
-          (total: number, allocation: any) => total + Number(allocation.amount || 0),
-          0,
-        ),
-        accountName: payment.account?.name,
-        transactionId: payment.transaction?.id,
-      }))),
+      adSales.flatMap((sale: any) =>
+        sale.payments.map((payment: any) => ({
+          ...payment,
+          dealTitle: sale.title || sale.advertiserName,
+          clientName: sale.advertiser?.displayName || sale.advertiserName,
+          channelAllocation: payment.allocations.reduce(
+            (total: number, allocation: any) =>
+              total + Number(allocation.amount || 0),
+            0,
+          ),
+          accountName: payment.account?.name,
+          transactionId: payment.transaction?.id,
+        })),
+      ),
     );
     this.sheets.addTableSheet(
       workbook,
@@ -586,12 +601,23 @@ export class TelegramChannelWorkbookWriter {
       })),
     );
     const sheetsBySection: Record<TelegramChannelExportSection, string[]> = {
-      channel_profile: ['Overview', 'Channel Settings', 'Data Sources', 'Source Access', 'Admin Links'],
+      channel_profile: [
+        'Overview',
+        'Channel Settings',
+        'Data Sources',
+        'Source Access',
+        'Admin Links',
+      ],
       ads: ['Creatives', 'Campaigns', 'Mutual Promotions'],
       crm: ['CRM Clients', 'CRM Deals', 'CRM Placement Posts', 'CRM Payments'],
       finance: ['Finance Transactions'],
       channel_stats: ['Calculated Metrics', 'Posts', 'Post Metric Snapshots'],
-      channel_dynamics: ['Daily Stats', 'Stats Points', 'Stats Snapshots', 'Audience Snapshots'],
+      channel_dynamics: [
+        'Daily Stats',
+        'Stats Points',
+        'Stats Snapshots',
+        'Audience Snapshots',
+      ],
       traffic_attribution: ['Invite Links', 'Invite Link History'],
     };
     for (const section of TELEGRAM_CHANNEL_EXPORT_SECTIONS) {

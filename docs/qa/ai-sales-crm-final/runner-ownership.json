@@ -1,0 +1,307 @@
+{
+  "webConfig": "products/*/web/**/*.{test,spec}.{ts,tsx}",
+  "excludedBackendSuites": 75,
+  "allExecutedByApiJest": true,
+  "evidence": [
+    {
+      "file": "products/finance/api/ai/finance-ai-analytics.service.spec.ts",
+      "apiJestStatus": "passed"
+    },
+    {
+      "file": "products/finance/api/ai/finance-ai-config.service.spec.ts",
+      "apiJestStatus": "passed"
+    },
+    {
+      "file": "products/finance/api/ai/finance-ai-json-stream.spec.ts",
+      "apiJestStatus": "passed"
+    },
+    {
+      "file": "products/finance/api/ai/finance-ai-responses.client.spec.ts",
+      "apiJestStatus": "passed"
+    },
+    {
+      "file": "products/finance/api/ai/finance-ai.provider.spec.ts",
+      "apiJestStatus": "passed"
+    },
+    {
+      "file": "products/finance/api/analytics/finance-analytics.service.spec.ts",
+      "apiJestStatus": "passed"
+    },
+    {
+      "file": "products/finance/api/assets/finance-asset-idempotency.spec.ts",
+      "apiJestStatus": "passed"
+    },
+    {
+      "file": "products/finance/api/assets/finance-asset-summary.service.spec.ts",
+      "apiJestStatus": "passed"
+    },
+    {
+      "file": "products/finance/api/billing/finance-billing.service.spec.ts",
+      "apiJestStatus": "passed"
+    },
+    {
+      "file": "products/finance/api/billing/finance-consumer-billing.controller.spec.ts",
+      "apiJestStatus": "passed"
+    },
+    {
+      "file": "products/finance/api/billing/finance-entitlement-reservation.spec.ts",
+      "apiJestStatus": "passed"
+    },
+    {
+      "file": "products/finance/api/billing/finance-entitlement.service.spec.ts",
+      "apiJestStatus": "passed"
+    },
+    {
+      "file": "products/finance/api/branding/finance-bot-branding.service.spec.ts",
+      "apiJestStatus": "passed"
+    },
+    {
+      "file": "products/finance/api/catalog/finance-core.service.spec.ts",
+      "apiJestStatus": "passed"
+    },
+    {
+      "file": "products/finance/api/catalog/finance-custom-icon.service.spec.ts",
+      "apiJestStatus": "passed"
+    },
+    {
+      "file": "products/finance/api/catalog/finance-obligation-archive-guards.spec.ts",
+      "apiJestStatus": "passed"
+    },
+    {
+      "file": "products/finance/api/catalog/finance-portability.spec.ts",
+      "apiJestStatus": "passed"
+    },
+    {
+      "file": "products/finance/api/chat-flows/finance-chat-flow-presenter.service.spec.ts",
+      "apiJestStatus": "passed"
+    },
+    {
+      "file": "products/finance/api/chat-flows/finance-chat-flow.service.spec.ts",
+      "apiJestStatus": "passed"
+    },
+    {
+      "file": "products/finance/api/chat-flows/finance-proposal.service.spec.ts",
+      "apiJestStatus": "passed"
+    },
+    {
+      "file": "products/finance/api/http/finance-auth.controller.spec.ts",
+      "apiJestStatus": "passed"
+    },
+    {
+      "file": "products/finance/api/http/finance-browser-context.service.spec.ts",
+      "apiJestStatus": "passed"
+    },
+    {
+      "file": "products/finance/api/http/finance-consumer-request.service.spec.ts",
+      "apiJestStatus": "passed"
+    },
+    {
+      "file": "products/finance/api/http/finance-local-development.service.spec.ts",
+      "apiJestStatus": "passed"
+    },
+    {
+      "file": "products/finance/api/http/finance.dto.spec.ts",
+      "apiJestStatus": "passed"
+    },
+    {
+      "file": "products/finance/api/i18n/finance-chat-i18n.spec.ts",
+      "apiJestStatus": "passed"
+    },
+    {
+      "file": "products/finance/api/identity/finance-consumer-runtime-environment.service.spec.ts",
+      "apiJestStatus": "passed"
+    },
+    {
+      "file": "products/finance/api/identity/finance-consumer-session.service.spec.ts",
+      "apiJestStatus": "passed"
+    },
+    {
+      "file": "products/finance/api/identity/finance-consumer-transfer.service.spec.ts",
+      "apiJestStatus": "passed"
+    },
+    {
+      "file": "products/finance/api/identity/finance-context.service.spec.ts",
+      "apiJestStatus": "passed"
+    },
+    {
+      "file": "products/finance/api/investments/finance-investment-cash-flow.service.spec.ts",
+      "apiJestStatus": "passed"
+    },
+    {
+      "file": "products/finance/api/investments/finance-investment-read.service.spec.ts",
+      "apiJestStatus": "passed"
+    },
+    {
+      "file": "products/finance/api/investments/finance-investment-valuation.service.spec.ts",
+      "apiJestStatus": "passed"
+    },
+    {
+      "file": "products/finance/api/investments/finance-investment-view.spec.ts",
+      "apiJestStatus": "passed"
+    },
+    {
+      "file": "products/finance/api/investments/finance-investment.dto.spec.ts",
+      "apiJestStatus": "passed"
+    },
+    {
+      "file": "products/finance/api/investments/finance-investment.service.spec.ts",
+      "apiJestStatus": "passed"
+    },
+    {
+      "file": "products/finance/api/ledger/finance-balance-summary.spec.ts",
+      "apiJestStatus": "passed"
+    },
+    {
+      "file": "products/finance/api/ledger/finance-history-date-range.spec.ts",
+      "apiJestStatus": "passed"
+    },
+    {
+      "file": "products/finance/api/ledger/finance-investment-transaction-mutation.spec.ts",
+      "apiJestStatus": "passed"
+    },
+    {
+      "file": "products/finance/api/ledger/finance-ledger.service.spec.ts",
+      "apiJestStatus": "failed"
+    },
+    {
+      "file": "products/finance/api/ledger/finance-transaction-view.spec.ts",
+      "apiJestStatus": "passed"
+    },
+    {
+      "file": "products/finance/api/obligations/debts/finance-debt.service.spec.ts",
+      "apiJestStatus": "passed"
+    },
+    {
+      "file": "products/finance/api/obligations/finance-obligation-date.spec.ts",
+      "apiJestStatus": "passed"
+    },
+    {
+      "file": "products/finance/api/obligations/regular-payments/finance-regular-payment-confirmation.service.spec.ts",
+      "apiJestStatus": "passed"
+    },
+    {
+      "file": "products/finance/api/obligations/regular-payments/finance-regular-payment-delivery.service.spec.ts",
+      "apiJestStatus": "passed"
+    },
+    {
+      "file": "products/finance/api/obligations/regular-payments/finance-regular-payment.service.spec.ts",
+      "apiJestStatus": "passed"
+    },
+    {
+      "file": "products/finance/api/planning/finance-limit.service.spec.ts",
+      "apiJestStatus": "passed"
+    },
+    {
+      "file": "products/finance/api/planning/finance-reminder-delivery.service.spec.ts",
+      "apiJestStatus": "passed"
+    },
+    {
+      "file": "products/finance/api/planning/finance-smart-limits.spec.ts",
+      "apiJestStatus": "passed"
+    },
+    {
+      "file": "products/finance/api/portability/finance-import-asset-writer.spec.ts",
+      "apiJestStatus": "passed"
+    },
+    {
+      "file": "products/finance/api/portability/finance-import-normalizer.spec.ts",
+      "apiJestStatus": "passed"
+    },
+    {
+      "file": "products/finance/api/portability/finance-import-obligation-writer.spec.ts",
+      "apiJestStatus": "passed"
+    },
+    {
+      "file": "products/finance/api/portability/finance-import-rates.spec.ts",
+      "apiJestStatus": "failed"
+    },
+    {
+      "file": "products/finance/api/portability/finance-import-replace.spec.ts",
+      "apiJestStatus": "passed"
+    },
+    {
+      "file": "products/finance/api/portability/finance-import-validator.spec.ts",
+      "apiJestStatus": "passed"
+    },
+    {
+      "file": "products/finance/api/portability/finance-import.service.spec.ts",
+      "apiJestStatus": "passed"
+    },
+    {
+      "file": "products/finance/api/portability/finance-portability-history.spec.ts",
+      "apiJestStatus": "passed"
+    },
+    {
+      "file": "products/finance/api/savings/finance-savings-goal.service.spec.ts",
+      "apiJestStatus": "passed"
+    },
+    {
+      "file": "products/finance/api/savings/finance-savings-rules.spec.ts",
+      "apiJestStatus": "passed"
+    },
+    {
+      "file": "products/finance/api/savings/finance-savings-view.spec.ts",
+      "apiJestStatus": "passed"
+    },
+    {
+      "file": "products/finance/api/savings/finance-savings.service.spec.ts",
+      "apiJestStatus": "passed"
+    },
+    {
+      "file": "products/finance/api/telegram-presentation/finance-telegram-menu.spec.ts",
+      "apiJestStatus": "passed"
+    },
+    {
+      "file": "products/finance/api/transfers/finance-transfer.service.spec.ts",
+      "apiJestStatus": "passed"
+    },
+    {
+      "file": "products/finance/api/ultimate/finance-assistant-entry.service.spec.ts",
+      "apiJestStatus": "passed"
+    },
+    {
+      "file": "products/finance/api/ultimate/finance-ultimate.controller.spec.ts",
+      "apiJestStatus": "passed"
+    },
+    {
+      "file": "products/finance/api/ultimate/finance-ultimate.service.spec.ts",
+      "apiJestStatus": "passed"
+    },
+    {
+      "file": "products/finance/bot/finance-bot-browser-login.spec.ts",
+      "apiJestStatus": "passed"
+    },
+    {
+      "file": "products/finance/bot/finance-bot-chat-responder.service.spec.ts",
+      "apiJestStatus": "passed"
+    },
+    {
+      "file": "products/finance/bot/finance-bot-flow-callback.spec.ts",
+      "apiJestStatus": "passed"
+    },
+    {
+      "file": "products/finance/bot/finance-bot-flow-messenger.spec.ts",
+      "apiJestStatus": "passed"
+    },
+    {
+      "file": "products/finance/bot/finance-bot-icon-input.service.spec.ts",
+      "apiJestStatus": "passed"
+    },
+    {
+      "file": "products/finance/bot/finance-bot-navigation.spec.ts",
+      "apiJestStatus": "passed"
+    },
+    {
+      "file": "products/finance/bot/finance-bot.service.spec.ts",
+      "apiJestStatus": "passed"
+    },
+    {
+      "file": "products/finance/bot/finance-obligation-telegram.presenter.spec.ts",
+      "apiJestStatus": "passed"
+    },
+    {
+      "file": "products/finance/bot/finance-regular-payment-callback.handler.spec.ts",
+      "apiJestStatus": "passed"
+    }
+  ]
+}

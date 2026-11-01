@@ -1,3 +1,8 @@
+import { TelegramCrmChatReceipts } from '../../telegram/telegram-crm/telegram-crm-chat-receipts.service';
+import { TelegramCrmManualRetentionService } from '../../telegram/telegram-crm/telegram-crm-manual-retention.service';
+import { TelegramLeadRetentionService } from '../../telegram/telegram-crm/lead-discovery/lead-retention.service';
+import { TelegramCrmAiDraftRetentionService } from '../../telegram/telegram-crm/telegram-crm-ai-draft-retention.service';
+import { AiUsageRetentionService } from '../ai/ai-usage-retention.service';
 import { ApplicationLogsService } from '../application-logs/application-logs.service';
 import { CurrenciesService } from '../../finance/currencies/currencies.service';
 import { TelegramAdSalesService } from '../../telegram/telegram-ad-sales/telegram-ad-sales.service';
@@ -26,6 +31,20 @@ describe('scheduled task registry executors', () => {
         systemBotUpdateLogs: 4,
       }),
     };
+    const leadRetention = {
+      cleanup: jest.fn().mockResolvedValue({
+        observations: 9,
+        candidates: 10,
+        qualifications: 11,
+        drafts: 12,
+      }),
+    };
+    const draftRetention = { cleanup: jest.fn().mockResolvedValue(8) };
+    const aiRetention = {
+      cleanup: jest
+        .fn()
+        .mockResolvedValue({ operations: 5, daily: 6, budgetPeriods: 7 }),
+    };
     const managedPosts = {
       reconcileAllDueManagedPosts: jest.fn().mockResolvedValue({
         checked: 3,
@@ -42,7 +61,9 @@ describe('scheduled task registry executors', () => {
       }),
     };
     const placementLifecycle = {
-      reconcilePublishedPlacements: jest.fn().mockResolvedValue({ reconciled: 1 }),
+      reconcilePublishedPlacements: jest
+        .fn()
+        .mockResolvedValue({ reconciled: 1 }),
     };
     const mutualPromotion = {
       processDueActions: jest.fn().mockResolvedValue({
@@ -68,6 +89,14 @@ describe('scheduled task registry executors', () => {
     const services = new Map<unknown, unknown>([
       [TelegramWorkspaceFullSyncService, fullSync],
       [OperationalHistoryRetentionService, retention],
+      [AiUsageRetentionService, aiRetention],
+      [TelegramCrmAiDraftRetentionService, draftRetention],
+      [TelegramLeadRetentionService, leadRetention],
+      [TelegramCrmChatReceipts, { cleanup: jest.fn().mockResolvedValue(4) }],
+      [
+        TelegramCrmManualRetentionService,
+        { cleanup: jest.fn().mockResolvedValue(13) },
+      ],
       [CurrenciesService, {}],
       [TelegramAdSalesService, {}],
       [ApplicationLogsService, {}],
@@ -88,6 +117,9 @@ describe('scheduled task registry executors', () => {
       executor,
       fullSync,
       retention,
+      aiRetention,
+      draftRetention,
+      leadRetention,
       managedPosts,
       placementLifecycle,
       crmSync,
@@ -108,7 +140,7 @@ describe('scheduled task registry executors', () => {
       actor: { type: 'SCHEDULED_TASK' },
     });
     expect(result).toMatchObject({
-      summary: expect.stringContaining('2 successful'),
+      summary: expect.stringContaining('2 successful') as unknown,
     });
   });
 
@@ -121,17 +153,27 @@ describe('scheduled task registry executors', () => {
     });
     expect(crmSync.runWorkspace).toHaveBeenCalledWith('workspace-1');
     expect(result).toMatchObject({
-      summary: expect.stringContaining('2 MTProto CRM sources'),
+      summary: expect.stringContaining('2 MTProto CRM sources') as unknown,
     });
   });
 
   it('reconciles only the bounded due managed-post queue', async () => {
-    const { executor, managedPosts, placementLifecycle, mutualPromotion, directPromotion } = setup();
+    const {
+      executor,
+      managedPosts,
+      placementLifecycle,
+      mutualPromotion,
+      directPromotion,
+    } = setup();
     const result =
       await executor.executors['telegram.managed_posts.reconcile_due']();
     expect(managedPosts.reconcileAllDueManagedPosts).toHaveBeenCalledTimes(1);
-    expect(placementLifecycle.reconcilePublishedPlacements).toHaveBeenCalledTimes(1);
-    expect(mutualPromotion.reconcilePublishedDeliveries).toHaveBeenCalledTimes(1);
+    expect(
+      placementLifecycle.reconcilePublishedPlacements,
+    ).toHaveBeenCalledTimes(1);
+    expect(mutualPromotion.reconcilePublishedDeliveries).toHaveBeenCalledTimes(
+      1,
+    );
     expect(directPromotion.processDueActions).toHaveBeenCalledTimes(1);
     expect(result.summary).toContain('verified 2');
     expect(result.summary).toContain('Published 1 locally scheduled');
@@ -142,7 +184,8 @@ describe('scheduled task registry executors', () => {
   });
 
   it('does not query promotion lifecycles when reconciliation observed no publication', async () => {
-    const { executor, managedPosts, mutualPromotion, directPromotion } = setup();
+    const { executor, managedPosts, mutualPromotion, directPromotion } =
+      setup();
     managedPosts.reconcileAllDueManagedPosts.mockResolvedValue({
       checked: 1,
       verified: 0,
@@ -173,10 +216,19 @@ describe('scheduled task registry executors', () => {
   });
 
   it('reports every operational retention result', async () => {
-    const { executor, retention } = setup();
+    const { executor, retention, aiRetention, draftRetention } = setup();
     const result = await executor.executors['operational_history.cleanup']();
     expect(retention.cleanup).toHaveBeenCalledTimes(1);
     expect(result.summary).toContain('3 task runs');
+    expect(aiRetention.cleanup).toHaveBeenCalledTimes(1);
+    expect(draftRetention.cleanup).toHaveBeenCalledTimes(1);
+    expect(result.summary).toContain('8 expired CRM AI drafts');
+    expect(result.summary).toContain(
+      '9 lead observations and 10 transient candidates',
+    );
+    expect(result.summary).toContain(
+      '5 operations, 6 daily counters, and 7 budget periods',
+    );
   });
 
   it('registers the required workspace and maintenance definitions', () => {

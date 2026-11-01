@@ -446,8 +446,7 @@ export class AdCampaignListReadService {
         }
       >();
       for (const entry of entries) {
-        const snapshotsForEntry =
-          snapshotsByLink.get(entry.inviteLinkId) ?? [];
+        const snapshotsForEntry = snapshotsByLink.get(entry.inviteLinkId) ?? [];
         const current = channels.get(entry.channelId) ?? {
           telegramChannelId: entry.channelId,
           title: entry.channelTitle,

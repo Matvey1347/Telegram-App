@@ -166,7 +166,7 @@ describe('AdCampaignsService.remove', () => {
     jest.spyOn(service, 'findOne').mockResolvedValue({
       id: 'campaign-1',
       workspaceId: 'workspace-1',
-    } as never);
+    });
 
     await expect(service.remove('user-1', 'campaign-1')).resolves.toEqual({
       id: 'campaign-1',
@@ -198,7 +198,7 @@ describe('AdCampaignsService.remove', () => {
     jest.spyOn(service, 'findOne').mockResolvedValue({
       id: 'campaign-1',
       workspaceId: 'workspace-1',
-    } as never);
+    });
 
     await expect(service.remove('user-1', 'campaign-1')).rejects.toThrow(
       'db failure',
@@ -382,9 +382,7 @@ describe('AdCampaignsService campaign creation without a cost', () => {
     const syncExpense = jest
       .spyOn(service as any, 'syncExpenseTransaction')
       .mockResolvedValue(undefined);
-    jest
-      .spyOn(service, 'findOne')
-      .mockResolvedValue({ id: 'campaign-1' } as never);
+    jest.spyOn(service, 'findOne').mockResolvedValue({ id: 'campaign-1' });
 
     await expect(
       service.create('user-1', { telegramChannelId: 'channel-1' }),

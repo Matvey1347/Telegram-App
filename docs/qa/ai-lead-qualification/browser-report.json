@@ -1,0 +1,157 @@
+{
+  "checks": [
+    {
+      "scenario": "queue open has no detail, catalog, qualification or generation request",
+      "pass": true
+    },
+    {
+      "scenario": "queue responsive",
+      "width": 1440,
+      "overflow": false
+    },
+    {
+      "scenario": "queue responsive",
+      "width": 1024,
+      "overflow": false
+    },
+    {
+      "scenario": "queue responsive",
+      "width": 768,
+      "overflow": false
+    },
+    {
+      "scenario": "queue responsive",
+      "width": 390,
+      "overflow": false
+    },
+    {
+      "scenario": "queue responsive",
+      "width": 360,
+      "overflow": false
+    },
+    {
+      "scenario": "queue responsive",
+      "width": 320,
+      "overflow": false
+    },
+    {
+      "scenario": "details open never calls AI",
+      "pass": true
+    },
+    {
+      "scenario": "candidate details responsive",
+      "width": 1440,
+      "overflow": false
+    },
+    {
+      "scenario": "candidate details responsive",
+      "width": 1024,
+      "overflow": false
+    },
+    {
+      "scenario": "candidate details responsive",
+      "width": 768,
+      "overflow": false
+    },
+    {
+      "scenario": "candidate details responsive",
+      "width": 390,
+      "overflow": false
+    },
+    {
+      "scenario": "candidate details responsive",
+      "width": 360,
+      "overflow": false
+    },
+    {
+      "scenario": "candidate details responsive",
+      "width": 320,
+      "overflow": false
+    },
+    {
+      "scenario": "qualification is one explicit action, draft remains separate",
+      "pass": true
+    },
+    {
+      "scenario": "typing has no server writes and requires save before approval",
+      "pass": true
+    },
+    {
+      "scenario": "stale draft copy is disabled",
+      "pass": true
+    },
+    {
+      "scenario": "high risk requires separate acknowledgement and note",
+      "pass": true
+    },
+    {
+      "scenario": "high risk decision is usable after explicit review",
+      "pass": true
+    },
+    {
+      "scenario": "denied actions disabled",
+      "pass": true
+    },
+    {
+      "scenario": "mobile back returns focus to candidate",
+      "pass": true
+    },
+    {
+      "scenario": "bulk decision waits for confirmation",
+      "pass": true
+    },
+    {
+      "scenario": "Inbox candidate queue creates no conversation",
+      "pass": true
+    },
+    {
+      "scenario": "no Telegram send, joins or automatic bulk AI",
+      "pass": true
+    }
+  ],
+  "errors": [],
+  "requests": [
+    "GET /auth/me",
+    "GET /workspaces",
+    "GET /account/me",
+    "POST /telegram/system-bot/connection/workspace",
+    "GET /telegram-crm/lead-discovery/config",
+    "POST /telegram/system-bot/connection/workspace",
+    "GET /operations/notifications/events/stream",
+    "GET /operations/notifications/unread-count",
+    "GET /telegram-crm/lead-discovery/sources?limit=50",
+    "GET /telegram-crm/lead-discovery/preparation/queue?limit=50",
+    "GET /telegram-crm/lead-discovery/candidates/candidate-qa",
+    "GET /telegram-crm/lead-discovery/candidates/candidate-qa/preparation",
+    "GET /operations/notifications/events/stream",
+    "POST /telegram-crm/lead-discovery/candidates/candidate-qa/qualify",
+    "PATCH /telegram-crm/lead-discovery/candidates/candidate-qa/qualification-decision",
+    "GET /telegram-crm/lead-discovery/candidates/candidate-qa",
+    "GET /telegram-crm/lead-discovery/candidates/candidate-qa/preparation",
+    "GET /operations/notifications/events/stream",
+    "POST /telegram-crm/lead-discovery/candidates/candidate-qa/drafts",
+    "PATCH /telegram-crm/lead-discovery/candidates/candidate-qa/drafts/draft-qa",
+    "PATCH /telegram-crm/lead-discovery/candidates/candidate-qa/drafts/draft-qa",
+    "GET /operations/notifications/events/stream",
+    "GET /telegram-crm/lead-discovery/candidates/candidate-qa/preparation",
+    "GET /telegram-crm/lead-discovery/candidates/candidate-qa/preparation",
+    "GET /telegram-crm/lead-discovery/candidates/candidate-qa/preparation",
+    "GET /telegram-crm/lead-discovery/candidates/candidate-qa/preparation",
+    "GET /telegram-crm/lead-discovery/candidates/candidate-qa/preparation",
+    "POST /telegram/system-bot/connection/workspace",
+    "GET /operations/notifications/events/stream",
+    "GET /operations/notifications/unread-count",
+    "GET /telegram-crm/inbox/conversations?filter=ALL&limit=50",
+    "GET /telegram-crm/events/stream",
+    "GET /telegram-crm/unread",
+    "POST /telegram/system-bot/connection/workspace",
+    "GET /operations/notifications/events/stream",
+    "GET /telegram-crm/events/stream",
+    "GET /telegram-crm/lead-discovery/config",
+    "GET /telegram-crm/lead-discovery/preparation/queue?limit=50"
+  ],
+  "allApisIntercepted": true,
+  "providerCalls": 0,
+  "telegramSends": 0,
+  "channelJoins": 0
+}

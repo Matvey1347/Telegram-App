@@ -1,5 +1,6 @@
 import { Type } from 'class-transformer';
 import {
+  IsBoolean,
   IsIn,
   IsInt,
   IsOptional,
@@ -7,6 +8,7 @@ import {
   Max,
   MaxLength,
   Min,
+  ValidateIf,
 } from 'class-validator';
 import {
   CRM_CONVERSATION_STATES,
@@ -37,7 +39,31 @@ export class MergeCrmContactsDto {
   sourceContactId!: string;
 }
 
+/** Omitted for a manual read; automatic reads must use the displayed watermark. */
+export class MarkCrmConversationReadDto {
+  @ValidateIf((_object, value: unknown) => value !== undefined)
+  @IsInt()
+  @Min(1)
+  @Max(2_147_483_647)
+  maxTelegramMessageId?: number;
+}
+
 export class SendCrmManualMessageDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  replyToMessageId?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  aiDraftId?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  aiDraftRevision?: number;
+
   @IsString()
   @MaxLength(4096)
   text!: string;
@@ -48,6 +74,10 @@ export class SendCrmManualMessageDto {
 }
 
 export class ImportCrmHistoryDto {
+  @IsOptional()
+  @IsBoolean()
+  recent?: boolean;
+
   @IsOptional()
   @Type(() => Number)
   @IsInt()

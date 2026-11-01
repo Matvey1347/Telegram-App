@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   members: vi.fn(),
   listSalesPage: vi.fn(),
   listChannels: vi.fn(),
+  leadPreparations: vi.fn(),
   push: vi.fn(),
 }));
 
@@ -34,6 +35,14 @@ vi.mock("@/lib/features/growth/telegram-crm-api", () => ({
 
 vi.mock("@/lib/api", () => ({
   authApi: { me: mocks.me },
+  iconsApi: {
+    get: vi.fn(),
+    list: vi.fn().mockResolvedValue([]),
+    createEmoji: vi.fn(),
+    createCustom: vi.fn(),
+    createTemporaryImage: vi.fn(),
+    upload: vi.fn(),
+  },
   workspaceMembersApi: { select: mocks.members },
   telegramAdSalesApi: {
     getAdvertiser: vi.fn().mockResolvedValue({ contacts: [] }),
@@ -43,6 +52,10 @@ vi.mock("@/lib/api", () => ({
     deleteSale: vi.fn(),
   },
   telegramChannelsApi: { select: mocks.listChannels },
+}));
+
+vi.mock("@/lib/features/growth/lead-preparation-api", () => ({
+  leadPreparationApi: { contact: mocks.leadPreparations },
 }));
 
 vi.mock("./crm-conversations", () => ({
@@ -120,6 +133,9 @@ function renderModal(action: CrmContactAction = "info") {
 
 describe("CrmContactActionModal", () => {
   beforeEach(() => {
+    mocks.leadPreparations
+      .mockReset()
+      .mockResolvedValue({ items: [], nextCursor: null, hasMore: false });
     mocks.getContact.mockReset().mockResolvedValue(contact);
     mocks.getChatContext.mockReset().mockResolvedValue(contact);
     mocks.listConversations.mockReset().mockResolvedValue({
@@ -156,6 +172,20 @@ describe("CrmContactActionModal", () => {
       },
     });
     mocks.listChannels.mockReset().mockResolvedValue([]);
+  });
+
+  it("opens Discovery acquisition evidence explicitly without a per-card fetch", async () => {
+    renderModal();
+    const open = await screen.findByRole("button", {
+      name: "AI-discovered sources and prepared offers",
+    });
+    expect(mocks.leadPreparations).not.toHaveBeenCalled();
+    fireEvent.click(open);
+    await screen.findByText("No linked Discovery evidence.");
+    expect(mocks.leadPreparations).toHaveBeenCalledWith(
+      "contact-1",
+      expect.any(AbortSignal),
+    );
   });
 
   it("opens one focused client function without a nested tab bar", async () => {

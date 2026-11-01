@@ -1,0 +1,65 @@
+{
+  "checks": [
+    {
+      "width": 1440,
+      "overflow": false,
+      "dialogs": 0
+    },
+    {
+      "width": 1024,
+      "overflow": false,
+      "dialogs": 0
+    },
+    {
+      "width": 768,
+      "overflow": false,
+      "dialogs": 1
+    },
+    {
+      "width": 390,
+      "overflow": false,
+      "dialogs": 1
+    },
+    {
+      "width": 320,
+      "overflow": false,
+      "dialogs": 1
+    },
+    {
+      "scenario": "keyboard-sized visual viewport",
+      "composerVisible": true
+    },
+    {
+      "scenario": "draft restoration after browser Back",
+      "restored": true
+    },
+    {
+      "scenario": "browser Back from details",
+      "threadVisible": true
+    },
+    {
+      "scenario": "unsupported CRM commands hidden",
+      "replyHidden": true
+    }
+  ],
+  "errors": [],
+  "requests": [
+    "GET /auth/me",
+    "GET /workspaces",
+    "GET /account/me",
+    "POST /telegram/system-bot/connection/workspace",
+    "GET /telegram-crm/inbox/conversations",
+    "GET /telegram-crm/events/stream",
+    "GET /telegram-crm/unread",
+    "GET /operations/notifications/unread-count",
+    "POST /telegram/system-bot/connection/workspace",
+    "GET /telegram-crm/events/stream",
+    "GET /telegram-crm/conversations/dialog-qa",
+    "GET /telegram-user-accounts",
+    "GET /telegram-crm/conversations/dialog-qa/messages",
+    "GET /telegram-crm/contacts/client-qa"
+  ],
+  "fixtureOnly": true,
+  "realTelegramSends": 0,
+  "note": "Real local web components; every browser API request intercepted with fixtures. Existing System Bot workspace POSTs are mocked. No database/Telegram requests forwarded."
+}

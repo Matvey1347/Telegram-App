@@ -4,10 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import type {
-  CrmMessageListItem,
-  CrmMessagesCursorPage,
-} from '@telegram-system/shared';
+import type { CrmMessagesCursorPage } from '@telegram-system/shared';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { WorkspaceAuthorizationService } from '../../workspace/workspace-authorization/workspace-authorization.service';
 import { CrmMessagesQueryDto } from './telegram-crm.dto';
@@ -19,9 +16,6 @@ const crmMessageListSelect = {
   ...crmMessageSelect,
 } satisfies Prisma.TelegramCrmMessageSelect;
 
-type MessageListRow = Prisma.TelegramCrmMessageGetPayload<{
-  select: typeof crmMessageListSelect;
-}>;
 type MessageCursor = { sentAt: Date; id: string };
 
 @Injectable()
@@ -30,6 +24,38 @@ export class TelegramCrmMessageReadService {
     private readonly prisma: PrismaService,
     private readonly authorization: WorkspaceAuthorizationService,
   ) {}
+
+  /** Copilot consumes only text fields, never potentially heavy media metadata. */
+  async forCopilot(userId: string, conversationId: string) {
+    const access = await this.authorization.require(userId, 'adSales.crm.view');
+    const ownership = await this.authorization.scope(
+      userId,
+      'adSales.crm.viewOwn',
+      'adSales.crm.viewAny',
+    );
+    return this.prisma.telegramCrmMessage.findMany({
+      where: {
+        deletedAt: null,
+        workspaceId: access.workspaceId,
+        conversationId,
+        conversation: {
+          workspaceId: access.workspaceId,
+          ...('assignedMemberId' in ownership
+            ? { contact: { ownerMemberId: ownership.assignedMemberId } }
+            : {}),
+        },
+      },
+      select: {
+        id: true,
+        text: true,
+        direction: true,
+        sentAt: true,
+        editedAt: true,
+      },
+      orderBy: [{ sentAt: 'desc' }, { id: 'desc' }],
+      take: 20,
+    });
+  }
 
   async list(
     userId: string,

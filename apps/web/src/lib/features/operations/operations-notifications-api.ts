@@ -1,10 +1,12 @@
 import type {
   OperationsNotificationPage,
   OperationsNotificationPreferences,
+  OperationsNotificationPreferencesPatch,
   OperationsNotificationPushConfig,
   OperationsNotificationRealtimeEvent,
   OperationsNotificationUnreadCount,
   OperationsPushSubscriptionInput,
+  OperationsNotificationTestResult,
 } from "@telegram-system/shared";
 import { api } from "@/lib/api";
 
@@ -51,13 +53,15 @@ export const operationsNotificationsApi = {
         { signal },
       )
     ).data,
-  updatePreferences: async (webPushEnabled: boolean) =>
+  updatePreferences: async (preferences: boolean | OperationsNotificationPreferencesPatch) =>
     (
       await api.patch<OperationsNotificationPreferences>(
         `${BASE_PATH}/preferences`,
-        { webPushEnabled },
+        typeof preferences === "boolean" ? { webPushEnabled: preferences } : preferences,
       )
     ).data,
+  testPush: async () =>
+    (await api.post<OperationsNotificationTestResult>(`${BASE_PATH}/push/test`, {})).data,
   pushConfig: async (signal?: AbortSignal) =>
     (
       await api.get<OperationsNotificationPushConfig>(

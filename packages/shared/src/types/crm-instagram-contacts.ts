@@ -1,0 +1,14 @@
+import type { CrmContact, CrmMemberSummary } from './telegram-crm';
+import type { CrmManualSalesStatus, CrmSalesAttentionStatus, CrmFollowUpSummary } from './telegram-crm-sales-workflow';
+export type CrmInstagramMethod = { id: string; value: string; username: string; profileUrl: string; state: 'ACTIVE' | 'STALE'; isPrimary: boolean; ownershipConfirmed: boolean; ownershipConfirmedAt: string | null; profileVerification: 'UNVERIFIED' };
+export type CrmInstagramMethodInput = { value: string; ownershipConfirmed: boolean; state?: 'ACTIVE' | 'STALE'; isPrimary?: boolean };
+export const CRM_MANUAL_INSTAGRAM_ACTIONS = ['CONTACTED','WAITING_FOR_REPLY','REPLIED','INTERESTED','CLOSED','DO_NOT_CONTACT','RESET_STATUS','OFFER_SENT'] as const;
+export type CrmManualInstagramAction = typeof CRM_MANUAL_INSTAGRAM_ACTIONS[number];
+export type CrmManualActivityInput = { operationId: string; action: CrmManualInstagramAction; occurredAt?: string; note?: string; candidateId?: string; draftId?: string; draftRevision?: number };
+export type CrmManualActivity = { id: string; kind: 'MANUAL_ACTIVITY'; channel: 'INSTAGRAM'; action: CrmManualInstagramAction; occurredAt: string; actorUserId: string | null; actorMemberId: string | null; note: string | null; candidateId: string | null; draftId: string | null; reportedManually: true };
+export type CrmManualInstagramWorkflow = { contactId: string; channel: 'INSTAGRAM'; canEdit: boolean; methods: CrmInstagramMethod[]; manualStatus: CrmManualSalesStatus | null; attentionStatus: CrmSalesAttentionStatus | null; lastContactedAt: string | null; lastRepliedAt: string | null; nextFollowUp: CrmFollowUpSummary | null; nextContactAt: string | null; commercialOutreachAllowed: boolean; outreachBlockedReason: string | null; activities: CrmManualActivity[]; nextCursor: string | null; hasMore: boolean };
+export type CrmManualContactListItem = Pick<CrmContact,'id'|'workspaceId'|'displayName'|'companyName'|'source'|'ownerMemberId'|'archivedAt'> & { methods: CrmInstagramMethod[]; lastContactedAt: string | null; lastRepliedAt: string | null; nextContactAt: string | null; manualStatus: CrmManualSalesStatus | null; attentionStatus: CrmSalesAttentionStatus | null; ownerMember: CrmMemberSummary | null };
+export type CrmManualContactsPage = { items: CrmManualContactListItem[]; nextCursor: string | null; hasMore: boolean };
+export type CrmManualContactsFilter = { cursor?: string; limit?: number; search?: string; status?: 'ALL' | 'WAITING_FOR_CLIENT' | 'FOLLOW_UP_DUE' | 'NEEDS_REPLY' | 'INTERESTED' | 'CLOSED' | 'DO_NOT_CONTACT' | 'STALE' };
+export type CrmManualFollowUpInput = { operationId: string; at: string; title?: string };
+export type CrmManualContactCreateInput = { displayName: string; instagramValue: string; ownershipConfirmed: boolean; ownerMemberId?: string | null; source?: string };

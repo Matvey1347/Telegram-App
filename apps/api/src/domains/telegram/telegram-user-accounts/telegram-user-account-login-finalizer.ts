@@ -93,7 +93,10 @@ export class TelegramUserAccountLoginFinalizer {
           sourceKey: `telegram-account:${account.id}:reauth-required`,
         }),
       );
-      this.notificationPublisher.invalidate(account.workspaceId, recipientMemberIds);
+      this.notificationPublisher.invalidate(
+        account.workspaceId,
+        recipientMemberIds,
+      );
     }
     return this.prisma.telegramUserAccountIntegration.findFirstOrThrow({
       where: { id: account.id, workspaceId: account.workspaceId },

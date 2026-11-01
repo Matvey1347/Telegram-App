@@ -1,0 +1,61 @@
+{
+  "defaultRuntime": "Node 24.18.0",
+  "repositoryNvmrc": "20.19.0",
+  "repositoryEngine": ">=20.19.0",
+  "availableAlternateRuntime": "Node 22.22.2",
+  "node24FullSuiteFailure": {
+    "signal": "SIGSEGV",
+    "exception": "EXC_BAD_ACCESS / KERN_INVALID_ADDRESS",
+    "faultingThread": 0,
+    "topFrames": [
+      "v8::internal::ClearStaleLeftTrimmedPointerVisitor::VisitRootPointers",
+      "v8::internal::InternalFrame::Iterate",
+      "v8::internal::Isolate::Iterate",
+      "v8::internal::ScavengerCollector::CollectGarbage"
+    ]
+  },
+  "diagnosticSource": "Local macOS crash report; personal process metadata omitted",
+  "rootCause": "Not established; native V8 GC frame is an observation, not proof of application-code root cause",
+  "productionRuntimeChanged": false,
+  "alternateInvocationNote": "Direct Jest bypassed pnpm shim NODE_PATH and exposed two reflect-metadata resolution errors; final alternate run uses unchanged pnpm test script under selected Node22 PATH.",
+  "alternateFinalRun": {
+    "node": "22.22.2",
+    "script": "pnpm --filter api test -- --runInBand --json",
+    "exitCode": 1,
+    "passedSuites": 504,
+    "failedSuites": 13,
+    "passedTests": 3300,
+    "failedTests": 23,
+    "trustworthySummary": true
+  },
+  "pinnedRuntimeVerification": {
+    "runtime": "v20.19.0",
+    "archive": "https://nodejs.org/dist/v20.19.0/node-v20.19.0-darwin-arm64.tar.gz",
+    "sha256": "c016cd1975a264a29dc1b07c6fbe60d5df0a0c2beb4113c0450e3d998d1a0d9c",
+    "checksumVerified": true,
+    "results": [
+      {
+        "gate": "api-full",
+        "exitCode": 1,
+        "log": "/tmp/crm-final-node20-api-full.log"
+      },
+      {
+        "gate": "api-typecheck",
+        "exitCode": 0,
+        "log": "/tmp/crm-final-node20-api-typecheck.log"
+      },
+      {
+        "gate": "api-build",
+        "exitCode": 0,
+        "log": "/tmp/crm-final-node20-api-build.log"
+      },
+      {
+        "gate": "web-build",
+        "exitCode": 0,
+        "log": "/tmp/crm-final-node20-web-build.log"
+      }
+    ],
+    "temporaryRuntimeRemoved": true
+  },
+  "lifecycle": "Node20 EOL per official release schedule checked2026-11-01; compatibility test is not a production recommendation"
+}

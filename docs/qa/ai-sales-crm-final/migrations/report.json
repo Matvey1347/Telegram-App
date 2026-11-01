@@ -1,0 +1,51 @@
+{
+  "startedAt": "2026-11-01T06:15:45.652Z",
+  "postgresBin": "/opt/homebrew/opt/postgresql@17/bin",
+  "network": "Unix socket only; listen_addresses empty",
+  "target": "new disposable local cluster",
+  "productionDatabaseAccessed": false,
+  "clusterStarted": true,
+  "clusterStopped": true,
+  "stages": {
+    "clean": {
+      "exitCode": 1,
+      "log": "clean-deploy.log"
+    },
+    "forwardBootstrap": {
+      "exitCode": 0,
+      "log": "forward-bootstrap.log"
+    },
+    "forwardSyntheticFixture": {
+      "exitCode": 0,
+      "log": "forward-synthetic-fixture.log"
+    },
+    "forwardBaseline": {
+      "exitCode": 0,
+      "log": "forward-baseline.log"
+    },
+    "representativeFixture": {
+      "exitCode": 0,
+      "log": "representative-fixture.log"
+    },
+    "forward": {
+      "exitCode": 0,
+      "log": "forward-deploy.log"
+    },
+    "forwardDrift": {
+      "exitCode": 0,
+      "log": "forward-drift.log"
+    },
+    "forwardCatalog": {
+      "exitCode": 0,
+      "log": "forward-catalog.log"
+    },
+    "forwardConstraintProbes": {
+      "exitCode": 0,
+      "log": "constraint-probes.log"
+    }
+  },
+  "representativeExistingData": "Synthetic existing Workspace, disabled account, advertiser and legacy OTHER Instagram method; no production snapshot or personal data",
+  "existingProductionCompatibility": "NOT EXECUTED: synthetic predecessor/fixture validation is not a production snapshot or existing-data compatibility proof",
+  "finishedAt": "2026-11-01T06:15:51.119Z",
+  "status": "BLOCKED"
+}

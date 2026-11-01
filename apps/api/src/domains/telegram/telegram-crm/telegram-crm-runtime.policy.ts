@@ -34,6 +34,7 @@ export type TelegramCrmManagedAccount = {
   flushing: boolean;
   recovering: boolean;
   recoveryRequested: boolean;
+  folderFence?: Promise<void>;
 };
 
 export function sameCrmRuntimeSession(

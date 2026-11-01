@@ -9,7 +9,7 @@ export default defineConfig({
     css: false,
     include: [
       "src/**/*.{test,spec}.{ts,tsx}",
-      "../../products/**/*.{test,spec}.{ts,tsx}",
+      "../../products/*/web/**/*.{test,spec}.{ts,tsx}",
     ],
   },
   resolve: {

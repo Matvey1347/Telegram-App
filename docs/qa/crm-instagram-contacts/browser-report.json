@@ -1,0 +1,596 @@
+{
+  "checks": [
+    {
+      "scenario": "idle page has no writes",
+      "pass": true
+    },
+    {
+      "scenario": "contact 320px",
+      "pass": true
+    },
+    {
+      "scenario": "contact 360px",
+      "pass": true
+    },
+    {
+      "scenario": "contact 390px",
+      "pass": true
+    },
+    {
+      "scenario": "contact 768px",
+      "pass": true
+    },
+    {
+      "scenario": "contact 1024px",
+      "pass": true
+    },
+    {
+      "scenario": "contact 1440px",
+      "pass": true
+    },
+    {
+      "scenario": "typing does not persist",
+      "pass": true
+    },
+    {
+      "scenario": "HTTP retry reuses operation receipt",
+      "pass": true
+    },
+    {
+      "scenario": "follow-up does not require Telegram peer",
+      "pass": true
+    },
+    {
+      "scenario": "DNC disables commercial action",
+      "pass": true
+    },
+    {
+      "scenario": "stale profile has no external link",
+      "pass": true
+    },
+    {
+      "scenario": "view-only shows no editing action",
+      "pass": true
+    },
+    {
+      "scenario": "short keyboard viewport focus and scroll",
+      "pass": true
+    },
+    {
+      "scenario": "mobile list back",
+      "pass": true
+    },
+    {
+      "scenario": "unsafe profile cannot be created",
+      "pass": true
+    },
+    {
+      "scenario": "no provider, Instagram, automatic AI, fake conversation or send",
+      "pass": true
+    }
+  ],
+  "errors": [],
+  "externalRequests": [
+    "https://telegram.org/js/telegram-web-app.js?63",
+    "https://telegram.org/js/telegram-web-app.js?63",
+    "https://telegram.org/js/telegram-web-app.js?63",
+    "https://telegram.org/js/telegram-web-app.js?63",
+    "https://telegram.org/js/telegram-web-app.js?63",
+    "https://telegram.org/js/telegram-web-app.js?63"
+  ],
+  "allApisIntercepted": true,
+  "requests": [
+    {
+      "method": "GET",
+      "path": "/auth/me",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/telegram-user-accounts",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/workspaces",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/account/me",
+      "body": null
+    },
+    {
+      "method": "POST",
+      "path": "/telegram/system-bot/connection/workspace",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/telegram-crm/manual-contacts",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/telegram-crm/events/stream",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/telegram-crm/unread",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/notifications/events/stream",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/notifications/unread-count",
+      "body": null
+    },
+    {
+      "method": "POST",
+      "path": "/telegram/system-bot/connection/workspace",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/notifications/events/stream",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/telegram-crm/events/stream",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/notifications/unread-count",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/telegram-crm/manual-contacts/client-qa/workflow",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/telegram-crm/unread",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/notifications/events/stream",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/telegram-crm/events/stream",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/notifications/unread-count",
+      "body": null
+    },
+    {
+      "method": "POST",
+      "path": "/telegram-crm/manual-contacts/client-qa/activities",
+      "body": {
+        "action": "CONTACTED",
+        "note": "Manual outreach based on reviewed public advertising material.",
+        "operationId": "2026-11-01:e6ffba18-e521-4c51-9197-73ed1019d785"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/telegram-crm/manual-contacts/client-qa/activities",
+      "body": {
+        "action": "CONTACTED",
+        "note": "Manual outreach based on reviewed public advertising material.",
+        "operationId": "2026-11-01:e6ffba18-e521-4c51-9197-73ed1019d785"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/telegram-crm/manual-contacts",
+      "body": null
+    },
+    {
+      "method": "POST",
+      "path": "/telegram-crm/manual-contacts/client-qa/follow-up",
+      "body": {
+        "operationId": "2026-11-01:2f1e99c7-26b2-4cb7-ae24-a8c5ada32d00",
+        "at": "2026-11-01T06:44:00.000Z",
+        "title": "Contact the client"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/telegram-crm/manual-contacts",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/telegram-crm/unread",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/telegram-crm/events/stream",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/telegram-crm/unread",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/notifications/events/stream",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/notifications/unread-count",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/telegram-crm/events/stream",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/telegram-crm/unread",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/telegram-crm/events/stream",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/telegram-crm/unread",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/telegram-crm/events/stream",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/telegram-crm/unread",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/telegram-crm/events/stream",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/telegram-crm/unread",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/notifications/events/stream",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/notifications/unread-count",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/telegram-crm/events/stream",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/telegram-crm/unread",
+      "body": null
+    },
+    {
+      "method": "PATCH",
+      "path": "/telegram-crm/manual-contacts/client-qa/follow-up/task-qa",
+      "body": {
+        "action": "COMPLETE"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/telegram-crm/manual-contacts",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/telegram-user-accounts",
+      "body": null
+    },
+    {
+      "method": "POST",
+      "path": "/telegram/system-bot/connection/workspace",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/notifications/events/stream",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/notifications/unread-count",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/telegram-crm/manual-contacts",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/telegram-crm/events/stream",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/telegram-crm/unread",
+      "body": null
+    },
+    {
+      "method": "POST",
+      "path": "/telegram/system-bot/connection/workspace",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/notifications/events/stream",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/telegram-crm/events/stream",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/notifications/unread-count",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/telegram-crm/manual-contacts/client-qa/workflow",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/telegram-user-accounts",
+      "body": null
+    },
+    {
+      "method": "POST",
+      "path": "/telegram/system-bot/connection/workspace",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/notifications/events/stream",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/notifications/unread-count",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/telegram-crm/manual-contacts",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/telegram-crm/events/stream",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/telegram-crm/unread",
+      "body": null
+    },
+    {
+      "method": "POST",
+      "path": "/telegram/system-bot/connection/workspace",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/notifications/events/stream",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/telegram-crm/events/stream",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/notifications/unread-count",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/telegram-crm/manual-contacts/client-qa/workflow",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/telegram-user-accounts",
+      "body": null
+    },
+    {
+      "method": "POST",
+      "path": "/telegram/system-bot/connection/workspace",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/notifications/events/stream",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/notifications/unread-count",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/telegram-crm/manual-contacts",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/telegram-crm/events/stream",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/telegram-crm/unread",
+      "body": null
+    },
+    {
+      "method": "POST",
+      "path": "/telegram/system-bot/connection/workspace",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/notifications/events/stream",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/telegram-crm/events/stream",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/notifications/unread-count",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/telegram-crm/manual-contacts/client-qa/workflow",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/telegram-user-accounts",
+      "body": null
+    },
+    {
+      "method": "POST",
+      "path": "/telegram/system-bot/connection/workspace",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/notifications/events/stream",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/notifications/unread-count",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/telegram-crm/manual-contacts",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/telegram-crm/events/stream",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/telegram-crm/unread",
+      "body": null
+    },
+    {
+      "method": "POST",
+      "path": "/telegram/system-bot/connection/workspace",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/notifications/events/stream",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/telegram-crm/events/stream",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/notifications/unread-count",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/telegram-crm/manual-contacts/client-qa/workflow",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/telegram-crm/unread",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/telegram-user-accounts",
+      "body": null
+    },
+    {
+      "method": "POST",
+      "path": "/telegram/system-bot/connection/workspace",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/notifications/events/stream",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/notifications/unread-count",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/telegram-crm/manual-contacts",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/telegram-crm/events/stream",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/telegram-crm/unread",
+      "body": null
+    }
+  ],
+  "providerCalls": 0,
+  "instagramCalls": 0,
+  "telegramSends": 0
+}
