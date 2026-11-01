@@ -149,3 +149,10 @@ export function trustedProxyHops(
   }
   return isProductionEnvironment(environment) ? 1 : 0;
 }
+
+/** Designate one API host as the owner of shared CRM Telegram sessions. */
+export function crmRuntimeEnabled(
+  environment: DeploymentEnvironment = process.env,
+) {
+  return environment.CRM_RUNTIME_ENABLED?.trim().toLowerCase() !== 'false';
+}
