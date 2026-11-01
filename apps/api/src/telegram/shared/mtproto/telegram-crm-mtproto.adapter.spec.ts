@@ -404,3 +404,133 @@ describe('TelegramCrmMtprotoAdapter', () => {
     await handle.close();
   });
 });
+
+describe('CRM difference intentionally excluded Telegram users', () => {
+  it.each(['bot', 'self', 'deleted', 'support', 'service'] as const)(
+    'does not let %s traffic poison recovery, while retaining incomplete and unknown legitimate peers',
+    async (kind) => {
+      const excludedId = kind === 'service' ? 777000 : 88;
+      const privateMessage = (id: number) =>
+        new Api.Message({
+          id,
+          peerId: new Api.PeerUser({ userId: id as never }),
+          message: 'Incoming private message',
+          date: 1,
+        });
+      const difference = new Api.updates.Difference({
+        newMessages: [excludedId, 42, 51, 52, 53].map(privateMessage),
+        newEncryptedMessages: [],
+        chats: [],
+        users: [
+          new Api.User({
+            id: excludedId as never,
+            accessHash: 880 as never,
+            ...(kind === 'service' ? {} : { [kind]: true }),
+          }),
+          new Api.User({ id: 42 as never, accessHash: 420 as never }),
+          new Api.User({ id: 52 as never, firstName: 'Partial user' }),
+          new Api.UserEmpty({ id: 53 as never }),
+        ],
+        otherUpdates: [
+          new Api.UpdateEditMessage({
+            message: privateMessage(excludedId),
+            pts: 19,
+            ptsCount: 1,
+          }),
+          new Api.UpdateReadHistoryInbox({
+            peer: new Api.PeerUser({ userId: excludedId as never }),
+            maxId: 100,
+            stillUnreadCount: 0,
+            pts: 20,
+            ptsCount: 1,
+          }),
+          new Api.UpdateUserName({
+            userId: excludedId as never,
+            firstName: 'Changed',
+            lastName: '',
+            usernames: [],
+          }),
+          new Api.UpdateDeleteMessages({
+            messages: [91],
+            pts: 21,
+            ptsCount: 1,
+          }),
+        ],
+        state: new Api.updates.State({
+          pts: 21,
+          qts: 0,
+          date: 2,
+          seq: 3,
+          unreadCount: 0,
+        }),
+      });
+      let rawHandler: ((raw: unknown) => void) | undefined;
+      const client = {
+        invoke: jest.fn().mockResolvedValue(difference),
+        addEventHandler: jest.fn((handler: (raw: unknown) => void) => {
+          rawHandler = handler;
+        }),
+        removeEventHandler: jest.fn(),
+      };
+      jest
+        .mocked(createTelegramMtprotoSession)
+        .mockResolvedValue(client as never);
+      const handle = await new TelegramCrmMtprotoAdapter().open({
+        apiId: '1',
+        apiHash: 'hash',
+        session: 'session',
+      });
+      const result = await handle.getDifference({
+        pts: 10,
+        qts: 0,
+        date: 1,
+        seq: 1,
+      });
+      expect(result.checkpoint).toEqual({ pts: 21, qts: 0, date: 2, seq: 3 });
+      expect(result.peers.map((peer) => peer.telegramUserId)).toEqual(['42']);
+      expect(
+        result.updates.flatMap((update) =>
+          update.type === 'message.new' ? [update.message.telegramUserId] : [],
+        ),
+      ).toEqual(['42', '51', '52', '53']);
+      expect(result.updates).toHaveLength(5);
+      expect(result.updates.at(-1)).toMatchObject({
+        type: 'message.deleted',
+        telegramMessageIds: [91],
+      });
+      const received = jest.fn();
+      const detach = handle.onUpdate(received);
+      rawHandler?.(
+        new Api.UpdateUserName({
+          userId: excludedId as never,
+          firstName: 'Another change',
+          lastName: '',
+          usernames: [],
+        }),
+      );
+      rawHandler?.(
+        new Api.UpdateNewMessage({
+          message: privateMessage(excludedId),
+          pts: 22,
+          ptsCount: 1,
+        }),
+      );
+      expect(received).not.toHaveBeenCalled();
+      rawHandler?.(
+        new Api.UpdateNewMessage({
+          message: privateMessage(51),
+          pts: 23,
+          ptsCount: 1,
+        }),
+      );
+      expect(received).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'message.new',
+          message: expect.objectContaining({ telegramUserId: '51' }) as unknown,
+        }),
+      );
+      detach();
+      await handle.close();
+    },
+  );
+});

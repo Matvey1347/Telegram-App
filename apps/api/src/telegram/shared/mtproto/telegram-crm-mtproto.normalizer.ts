@@ -12,7 +12,11 @@ import {
   crmMessageReactions,
 } from './telegram-crm-message-metadata';
 
-const TELEGRAM_SERVICE_USER_ID = '777000';
+import {
+  filterCrmPrivatePeerUpdates,
+  isCrmExcludedTelegramUser,
+  rememberCrmExcludedTelegramUsers,
+} from './telegram-crm-private-peer-policy';
 
 export type TelegramCrmDialogCursor = {
   offsetDate: number;
@@ -61,11 +65,7 @@ export function parseTelegramCrmPeer(
   const telegramUserId = telegramLongString(user.id);
   if (
     !telegramUserId ||
-    telegramUserId === TELEGRAM_SERVICE_USER_ID ||
-    user.bot ||
-    user.self ||
-    user.deleted ||
-    user.support ||
+    isCrmExcludedTelegramUser(user) ||
     user.accessHash == null
   ) {
     return null;
@@ -198,7 +198,18 @@ export function normalizeTelegramCrmUpdate(
   return null;
 }
 
-export function normalizeTelegramCrmRaw(raw: unknown) {
+export function normalizeTelegramCrmRaw(
+  raw: unknown,
+  excluded = new Set<string>(),
+) {
+  const current =
+    raw instanceof Api.Updates || raw instanceof Api.UpdatesCombined
+      ? rememberCrmExcludedTelegramUsers(raw.users, excluded)
+      : excluded;
+  return filterCrmPrivatePeerUpdates(normalizeCrmRawUpdates(raw), current);
+}
+
+function normalizeCrmRawUpdates(raw: unknown) {
   if (raw instanceof Api.UpdatesTooLong) {
     return [
       { type: 'sync.gap', reason: 'UPDATES_TOO_LONG' },

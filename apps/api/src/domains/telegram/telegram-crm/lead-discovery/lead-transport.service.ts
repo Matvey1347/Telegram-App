@@ -250,6 +250,9 @@ export class TelegramLeadTransportService {
           'LEAD_EXISTING_LIVE_ACCOUNT_REQUIRED',
           'LEAD_CHANNEL_TRANSPORT_UNAVAILABLE',
           'LEAD_PROCESSING_NOT_APPROVED',
+          'LEAD_TELEGRAM_RATE_LIMITED',
+          'LEAD_TELEGRAM_CAPACITY',
+          'LEAD_TELEGRAM_TIMEOUT',
         ].includes(reason)
       )
         throw new ConflictException(reason);
@@ -257,6 +260,9 @@ export class TelegramLeadTransportService {
         'LEAD_CHANNEL_MEMBERSHIP_REQUIRED',
         'LEAD_BROADCAST_CHANNEL_REQUIRED',
         'LEAD_CHANNEL_REFERENCE_INVALID',
+        'LEAD_INVITE_INVALID',
+        'LEAD_CHANNEL_NOT_FOUND',
+        'LEAD_CHANNEL_ACCESS_DENIED',
       ].includes(reason)
         ? reason
         : 'LEAD_ACCESS_VALIDATION_FAILED';

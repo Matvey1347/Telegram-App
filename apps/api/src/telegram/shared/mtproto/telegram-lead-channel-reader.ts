@@ -1,3 +1,4 @@
+import { getTelegramFloodWaitSeconds } from './telegram-session-errors';
 import { TelegramLeadReadLimiter } from './telegram-lead-read-limiter';
 import { BadRequestException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
@@ -32,7 +33,24 @@ export class TelegramLeadChannelReader implements TelegramLeadChannelHandle {
     return this.limiter.run(() => this.readList(input));
   }
   resolve(reference: string) {
-    return this.limiter.run(() => this.readResolve(reference));
+    return this.limiter.run(async () => {
+      try {
+        return await this.readResolve(reference);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : '';
+        const safeCode = /\bINVITE_HASH_(?:EXPIRED|INVALID)\b/.test(message)
+          ? 'LEAD_INVITE_INVALID'
+          : /\bUSERNAME_(?:NOT_OCCUPIED|INVALID)\b/.test(message)
+            ? 'LEAD_CHANNEL_NOT_FOUND'
+            : /\bCHANNEL_PRIVATE\b/.test(message)
+              ? 'LEAD_CHANNEL_ACCESS_DENIED'
+              : getTelegramFloodWaitSeconds(error) !== null
+                ? 'LEAD_TELEGRAM_RATE_LIMITED'
+                : null;
+        if (safeCode) throw new BadRequestException(safeCode);
+        throw error;
+      }
+    });
   }
   history(
     channelId: string,

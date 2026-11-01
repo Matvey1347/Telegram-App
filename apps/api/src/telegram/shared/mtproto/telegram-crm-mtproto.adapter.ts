@@ -1,4 +1,8 @@
 import { parseCrmOutgoingText } from './telegram-crm-chat-text';
+import {
+  filterCrmPrivatePeerUpdates,
+  rememberCrmExcludedTelegramUsers,
+} from './telegram-crm-private-peer-policy';
 import { TelegramCrmChatActionTransport } from './telegram-crm-chat-actions';
 import { TelegramCrmDialogFolders } from './telegram-crm-dialog-folders';
 import { TelegramLeadChannelReader } from './telegram-lead-channel-reader';
@@ -33,6 +37,7 @@ import {
 
 class GramJsTelegramCrmHandle implements TelegramCrmMtprotoHandle {
   private closePromise?: Promise<void>;
+  private readonly excludedUsers = new Set<string>();
   private readonly dialogFolders: TelegramCrmDialogFolders;
   readonly leadDiscovery: TelegramLeadChannelReader;
   readonly chatActions: TelegramCrmChatActionTransport;
@@ -326,7 +331,14 @@ class GramJsTelegramCrmHandle implements TelegramCrmMtprotoHandle {
     const otherUpdates = result.otherUpdates
       .map((update) => normalizeTelegramCrmUpdate(update))
       .filter((update): update is TelegramCrmMtprotoUpdate => Boolean(update));
-    const updates = [...newMessages, ...otherUpdates];
+    const excluded = rememberCrmExcludedTelegramUsers(
+      result.users,
+      this.excludedUsers,
+    );
+    const updates = filterCrmPrivatePeerUpdates(
+      [...newMessages, ...otherUpdates],
+      excluded,
+    );
     const privateUserIds = new Set(
       updates.flatMap((update) => {
         if (update.type === 'message.new' || update.type === 'message.edited') {
@@ -360,7 +372,8 @@ class GramJsTelegramCrmHandle implements TelegramCrmMtprotoHandle {
     onError?: (error: Error) => void,
   ) {
     const rawHandler = (raw: unknown) => {
-      for (const update of normalizeTelegramCrmRaw(raw)) handler(update);
+      for (const update of normalizeTelegramCrmRaw(raw, this.excludedUsers))
+        handler(update);
     };
     if (onError) {
       this.client.onError = (error) => {

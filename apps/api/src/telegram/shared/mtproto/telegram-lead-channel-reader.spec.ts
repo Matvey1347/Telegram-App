@@ -1,4 +1,5 @@
 import { Api } from 'telegram';
+import { FloodWaitError } from 'telegram/errors';
 import { TelegramLeadChannelReader } from './telegram-lead-channel-reader';
 import {
   normalizeTelegramLeadRaw,
@@ -70,6 +71,32 @@ describe('shared live-handle channel read transport (mocked Telegram only)', () 
     expect(client.invoke).toHaveBeenCalledTimes(1);
     expect(client.getEntity).not.toHaveBeenCalled();
   });
+  it('maps a real GramJS flood-wait error without reporting source access lost', async () => {
+    const { client, reader } = setup();
+    client.getEntity.mockRejectedValue(new FloodWaitError({ capture: 30 }));
+    await expect(reader.resolve('@synthetic_source')).rejects.toThrow(
+      'LEAD_TELEGRAM_RATE_LIMITED',
+    );
+    expect(client.getEntity).toHaveBeenCalledTimes(1);
+  });
+  it.each([
+    ['INVITE_HASH_EXPIRED', 'LEAD_INVITE_INVALID'],
+    ['USERNAME_NOT_OCCUPIED', 'LEAD_CHANNEL_NOT_FOUND'],
+    ['CHANNEL_PRIVATE', 'LEAD_CHANNEL_ACCESS_DENIED'],
+    ['FLOOD_WAIT_30', 'LEAD_TELEGRAM_RATE_LIMITED'],
+  ])(
+    'maps %s to a safe source reason without leaking references',
+    async (telegramError, safeCode) => {
+      const { client, reader } = setup();
+      client.getEntity.mockRejectedValue(
+        new Error(`${telegramError}: private-reference`),
+      );
+      await expect(reader.resolve('@synthetic_source')).rejects.toThrow(
+        safeCode,
+      );
+      expect(client.invoke).not.toHaveBeenCalled();
+    },
+  );
   it('isolates broadcast messages from private CRM events and carries edit/delete pts', () => {
     expect(
       parseTelegramLeadPost(

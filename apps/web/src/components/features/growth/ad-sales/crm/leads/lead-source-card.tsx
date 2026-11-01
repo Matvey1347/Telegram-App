@@ -11,11 +11,13 @@ import { displayLeadDate, leadSafeUrl } from "./lead-utils";
 import { LeadSourceSettings } from "./lead-source-settings";
 
 function sourceState(source: LeadSourceView) {
-  if (!source.accountId || !source.channelId) return { label: "Не подключён", detail: "Требуется подключение Telegram и проверка доступа." };
   if (source.lastErrorCode === "LEAD_CHANNEL_MEMBERSHIP_REQUIRED") return { label: "Нет подписки", detail: "Для этого приватного канала подключённый Telegram-аккаунт должен быть участником." };
   if (source.lastErrorCode === "LEAD_BROADCAST_CHANNEL_REQUIRED") return { label: "Не канал", detail: "Эта ссылка ведёт в чат или группу. Поиск настроен на публикации каналов." };
+  if (source.lastErrorCode === "LEAD_INVITE_INVALID") return { label: "Ссылка недействительна", detail: "Приглашение истекло или было отозвано. Нужна действующая ссылка на канал." };
+  if (source.lastErrorCode === "LEAD_CHANNEL_NOT_FOUND") return { label: "Канал не найден", detail: "Telegram не нашёл канал: его адрес мог измениться." };
   if (source.monitoringState === "ACCESS_LOST") return { label: "Нет доступа", detail: "Telegram не разрешает читать этот канал. Проверьте подписку аккаунта." };
   if (source.lastErrorCode === "LEAD_RESOLVED_CHANNEL_NOT_APPROVED") return { label: "Ожидает подключения", detail: "Доступ найден; требуется завершить настройку источника." };
+  if (!source.accountId || !source.channelId) return { label: "Не подключён", detail: "Требуется подключение Telegram и проверка доступа." };
   if (source.monitoringState === "DISABLED") return { label: "Отключён", detail: "Поиск в этом источнике выключен." };
   if (source.accessType === "PUBLIC_CHANNEL") return { label: "Проверка вручную", detail: "Аккаунт не подписан. Кнопка «Обновить» проверяет последние публикации." };
   if (source.monitoringState === "ACTIVE") return { label: "Активен", detail: "Новые публикации поступают из Telegram автоматически." };

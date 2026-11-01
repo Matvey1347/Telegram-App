@@ -108,7 +108,7 @@ describe("Lead Discovery operational UI", () => {
   });
   it("explains membership and public manual scanning instead of showing an opaque paused code", async () => {
     vi.mocked(leadDiscoveryApi.sources).mockResolvedValue({ items: [
-      { ...sourceFixture(1), monitoringState: "ACCESS_LOST", lastErrorCode: "LEAD_CHANNEL_MEMBERSHIP_REQUIRED" },
+      { ...sourceFixture(1), channelId: null, monitoringState: "ACCESS_LOST", lastErrorCode: "LEAD_CHANNEL_MEMBERSHIP_REQUIRED" },
       { ...sourceFixture(2), monitoringState: "PAUSED", accessType: "PUBLIC_CHANNEL" },
     ], hasMore: false, nextCursor: null });
     mount(<LeadSources workspace="workspace-one" config={leadConfig}/>);
