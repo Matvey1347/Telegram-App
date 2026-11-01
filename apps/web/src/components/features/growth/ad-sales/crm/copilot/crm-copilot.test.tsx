@@ -255,6 +255,62 @@ describe("compact one-click CRM suggestions", () => {
       original,
     );
   });
+  it("explains pricing review while keeping the text editable and requiring explicit approval", async () => {
+    vi.mocked(crmCopilotApi.suggest).mockResolvedValue({
+      ...copilotDraft,
+      status: "REVIEW_REQUIRED",
+      text: "Пакет по ранее названной сумме.",
+      warnings: ["UNVERIFIED_FINANCIAL_ASSERTION"],
+    });
+    const { insert } = mount();
+    generate();
+    const editor = await screen.findByRole("textbox", {
+      name: "AI suggested message",
+    });
+    expect(
+      await screen.findByText(/Проверьте цену и условия/),
+    ).toHaveTextContent("неподтверждённые суммы нужно убрать или уточнить");
+    expect(editor).not.toBeDisabled();
+    fireEvent.change(editor, {
+      target: { value: "Уточню актуальные условия полного пакета." },
+    });
+    expect(crmCopilotApi.update).not.toHaveBeenCalled();
+    expect(insert).not.toHaveBeenCalled();
+    expect(
+      screen.queryByText("UNVERIFIED_FINANCIAL_ASSERTION"),
+    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Использовать" }));
+    await waitFor(() =>
+      expect(insert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: "APPROVED",
+          text: "Уточню актуальные условия полного пакета.",
+        }),
+      ),
+    );
+  });
+  it("adopts an existing operation returned by the server race fence for recovery", async () => {
+    vi.mocked(crmCopilotApi.suggest).mockResolvedValue({
+      ...copilotDraft,
+      status: "UNKNOWN",
+      text: "",
+      canEdit: false,
+    });
+    const { wrapper } = setup();
+    const { result } = renderHook(
+      () => useCrmCopilot("workspace-one", "chat-one", "client-one"),
+      { wrapper },
+    );
+    await act(async () => {
+      await result.current.generate();
+    });
+    await act(async () => {
+      await result.current.generate(true);
+    });
+    expect(vi.mocked(crmCopilotApi.suggest).mock.calls[1][1].operationId).toBe(
+      copilotDraft.operationId,
+    );
+  });
   it("isolates workspace/conversation draft caches", () => {
     expect(copilotKeys.drafts("one", "chat")).not.toEqual(
       copilotKeys.drafts("two", "chat"),

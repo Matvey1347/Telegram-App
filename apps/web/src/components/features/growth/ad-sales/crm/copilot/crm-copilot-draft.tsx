@@ -31,6 +31,11 @@ export function CrmCopilotDraftEditor({
   const [text, setText] = useState(initialText ?? draft.text);
   const [using, setUsing] = useState(false);
   const stale = contextChanged || draft.status === "STALE";
+  const reviewRequired =
+    draft.status === "REVIEW_REQUIRED" ||
+    draft.warnings.some((warning) =>
+      /PRICE|PRICING|FINANCIAL|ASSERTION|CLAIM/.test(warning),
+    );
   const blocked =
     !draft.canEdit ||
     !["READY", "REVIEW_REQUIRED", "APPROVED", "STALE"].includes(draft.status);
@@ -56,6 +61,12 @@ export function CrmCopilotDraftEditor({
         onChange={(event) => setText(event.target.value)}
         className="max-h-36 resize-y text-sm"
       />
+      {reviewRequired ? (
+        <p role="status" className="text-xs text-amber-200">
+          Проверьте цену и условия в тексте: неподтверждённые суммы нужно убрать
+          или уточнить.
+        </p>
+      ) : null}
       {stale ? (
         <p role="status" className="text-xs text-amber-200">
           Переписка или условия изменились. Сгенерируйте новый ответ.

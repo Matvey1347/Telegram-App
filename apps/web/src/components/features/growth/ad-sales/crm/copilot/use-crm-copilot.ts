@@ -82,6 +82,9 @@ export function useCrmCopilot(
       return { result, started };
     },
     onSuccess: async ({ result, started }) => {
+      // The server may return an existing pending operation instead of claiming a new one.
+      lastOperation.current = result.operationId;
+      setCanRetry(true);
       const stale = started !== epoch.current;
       setChanged(stale);
       await patchCopilotDraft(
