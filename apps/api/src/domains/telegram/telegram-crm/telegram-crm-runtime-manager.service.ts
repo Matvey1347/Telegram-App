@@ -1,3 +1,4 @@
+import { crmRuntimeEnabled } from '../../../config/deployment-config';
 import {
   ConflictException,
   Injectable,
@@ -49,6 +50,7 @@ export class TelegramCrmRuntimeManager
   private readonly accounts = new Map<string, ManagedAccount>();
   private notifierSubscription?: Subscription;
   private runtimeHeldByAnotherInstance = false;
+  private readonly runtimeEnabled = crmRuntimeEnabled();
   private shuttingDown = false;
   private totalQueued = 0;
 
@@ -68,6 +70,10 @@ export class TelegramCrmRuntimeManager
   ) {}
 
   async onApplicationBootstrap() {
+    if (!this.runtimeEnabled) {
+      this.runtimeHeldByAnotherInstance = true;
+      return;
+    }
     const accounts = await this.sessions.startupAccounts(
       CRM_RUNTIME_POLICY.startupAccountLimit + 1,
     );
@@ -138,7 +144,7 @@ export class TelegramCrmRuntimeManager
   }
 
   private async reconcile(accountId: string, workspaceId?: string) {
-    if (this.shuttingDown) return;
+    if (this.shuttingDown || !this.runtimeEnabled) return;
     const account = await this.sessions.find(accountId, workspaceId);
     if (!account || !this.sessions.isLiveEligible(account)) {
       await this.stop(accountId);
