@@ -27,6 +27,7 @@ type CrmRealtimeBase = {
 };
 
 export type CrmRealtimeEvent =
+  | (CrmRealtimeBase & { type: "folders.updated"; ownerMemberId: null })
   | (CrmRealtimeBase & {
       type: "message.deleted";
       conversationId: string;

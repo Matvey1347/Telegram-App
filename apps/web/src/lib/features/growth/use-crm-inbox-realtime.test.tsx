@@ -75,6 +75,32 @@ describe("CRM realtime integration", () => {
     await act(async () => { await vi.advanceTimersByTimeAsync(500); });
     expect(listCrmInboxConversations).toHaveBeenCalledOnce();
   });
+  it("coalesces folder counts across message/read bursts and reconciles sync completion", async () => {
+    const { client } = setup();
+    const invalidation = vi.spyOn(client, "invalidateQueries");
+    const read = { type: "readChanged", workspaceId: "workspace-a", occurredAt: message.sentAt, conversationId: row.id, contactId: null, ownerMemberId: null, unreadCount: 0 } as CrmRealtimeEvent;
+    act(() => { handlers.onEvent(event()); handlers.onEvent(read); handlers.onEvent(read); handlers.onEvent(event({ workspaceId: "foreign" })); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(250); });
+    const folderCalls = () => invalidation.mock.calls.filter(([filter]) => JSON.stringify(filter?.queryKey) === JSON.stringify(telegramCrmKeys.inboxFolders()));
+    expect(folderCalls()).toHaveLength(1);
+    act(() => handlers.onEvent({ type: "sync.progress", workspaceId: "workspace-a", occurredAt: message.sentAt, accountId: "account", ownerMemberId: "owner", phase: "COMPLETED", scannedDialogs: 1, importedPeers: 1, importedConversations: 1, importedMessages: 0, current: 1, total: 1 }));
+    await act(async () => { await vi.advanceTimersByTimeAsync(250); });
+    expect(folderCalls()).toHaveLength(2);
+    act(() => handlers.onEvent({ type: "folders.updated", workspaceId: "workspace-a", occurredAt: message.sentAt, ownerMemberId: null }));
+    await act(async () => { await vi.advanceTimersByTimeAsync(250); });
+    expect(folderCalls()).toHaveLength(3);
+  });
+  it("refetches an active folder after reconnect so removed members are not retained", async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const key = telegramCrmKeys.inboxConversationsList({ filter: "ALL", folderId: "folder-a" });
+    client.setQueryData<CrmInboxData>(key, { pages: [{ items: [row], nextCursor: null, hasMore: false }], pageParams: [null] });
+    client.setQueryData(telegramCrmKeys.unread(), { total: 2, inbox: 2, contacts: 0 });
+    const wrapper = ({ children }: PropsWithChildren) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+    renderHook(() => { useQuery({ queryKey: key, queryFn: () => Promise.resolve({ pages: [{ items: [], nextCursor: null, hasMore: false }], pageParams: [null] }), staleTime: Infinity }); useQuery({ queryKey: telegramCrmKeys.unread(), queryFn: () => Promise.resolve({ total: 4, inbox: 4, contacts: 0 }), staleTime: Infinity }); return useCrmInboxRealtime("workspace-a", true); }, { wrapper });
+    await act(async () => { handlers.onReconnect?.(); await vi.advanceTimersByTimeAsync(0); });
+    expect(client.getQueryData<CrmInboxData>(key)?.pages[0].items).toEqual([]);
+    expect(client.getQueryData(telegramCrmKeys.unread())).toEqual({ total: 4, inbox: 4, contacts: 0 });
+  });
   it("patches edits/reactions without advancing unread, timestamps or attention", () => {
     const { client, key } = setup();
     const original = { ...row, lastMessage: message, attentionStatus: "NEEDS_REPLY" as const };

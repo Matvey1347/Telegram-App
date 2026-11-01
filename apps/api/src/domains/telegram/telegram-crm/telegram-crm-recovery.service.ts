@@ -1,5 +1,6 @@
+import { TelegramCrmFolderRefreshService } from './telegram-crm-folder-refresh.service';
 import { reconcileCrmReactionHints } from './telegram-crm-reaction-reconcile';
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
 import type {
   TelegramCrmMtprotoCheckpoint,
@@ -27,6 +28,8 @@ export class TelegramCrmRecoveryService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly batchStore: TelegramCrmBatchStoreService,
+    @Optional()
+    private readonly folderRefresh?: TelegramCrmFolderRefreshService,
   ) {}
 
   async recover(input: {
@@ -34,8 +37,23 @@ export class TelegramCrmRecoveryService {
     handle: TelegramCrmMtprotoHandle;
     captureQueue: () => TelegramCrmMtprotoUpdate[];
     isCurrent?: () => boolean;
+    onNewConversations?: (userIds?: string[], version?: number) => void;
   }): Promise<TelegramCrmRecoveryResult> {
     await this.acquire();
+    let folderRefreshNeeded = false;
+    const newPeerIds = new Set<string>();
+    let forceFull = false;
+    let folderVersion: number | undefined;
+    let markedPeerCount = 0;
+    const beforeImport = async (ids: string[]) => {
+      ids.forEach((id) => newPeerIds.add(id));
+      if (newPeerIds.size > markedPeerCount && this.folderRefresh) {
+        const dirty = await this.folderRefresh.markDirty(input.account, true);
+        folderVersion = dirty.version;
+        markedPeerCount = newPeerIds.size;
+        if (!dirty.targeted) forceFull = true;
+      }
+    };
     try {
       if (input.isCurrent && !input.isCurrent()) return { outcome: 'STOPPED' };
       const syncState =
@@ -48,7 +66,14 @@ export class TelegramCrmRecoveryService {
         : await input.handle.getState();
       if (!syncState?.incrementalCheckpoint) {
         const captured = input.captureQueue();
-        await this.ensureUpdatePeers(input.account, input.handle, captured);
+        (
+          await this.ensureUpdatePeers(
+            input.account,
+            input.handle,
+            captured,
+            beforeImport,
+          )
+        ).forEach((id) => newPeerIds.add(id));
         for (
           let index = 0;
           index < captured.length || index === 0;
@@ -75,7 +100,21 @@ export class TelegramCrmRecoveryService {
         }
       }
       for (let slice = 0; slice < MAX_RECOVERY_SLICES; slice += 1) {
+        if (input.isCurrent && !input.isCurrent())
+          return { outcome: 'STOPPED' };
         const difference = await input.handle.getDifference(from);
+        if (
+          difference.updates.some(
+            (update) =>
+              update.type === 'folders.changed' &&
+              (!update.telegramUserIds || update.telegramUserIds.length > 0),
+          )
+        ) {
+          folderRefreshNeeded = true;
+          forceFull = true;
+          folderVersion = (await this.folderRefresh?.markDirty(input.account))
+            ?.version;
+        }
         if (difference.tooLong) {
           await this.markReimportRequired(
             input.account,
@@ -86,7 +125,29 @@ export class TelegramCrmRecoveryService {
           return { outcome: 'STOPPED' };
         }
         if (difference.peers.length) {
-          await this.batchStore.importDialogs({
+          if (this.folderRefresh) {
+            const known = await this.prisma.telegramCrmConversation.findMany({
+              where: {
+                workspaceId: input.account.workspaceId,
+                mtprotoAccountId: input.account.id,
+                peer: {
+                  telegramUserId: {
+                    in: difference.peers.map((peer) => peer.telegramUserId),
+                  },
+                },
+              },
+              select: { peer: { select: { telegramUserId: true } } },
+            });
+            const knownIds = new Set(
+              known.map((row) => row.peer.telegramUserId),
+            );
+            await beforeImport(
+              difference.peers
+                .filter((peer) => !knownIds.has(peer.telegramUserId))
+                .map((peer) => peer.telegramUserId),
+            );
+          }
+          const imported = await this.batchStore.importDialogs({
             workspaceId: input.account.workspaceId,
             accountId: input.account.id,
             dialogs: difference.peers.map((peer) => ({
@@ -97,12 +158,21 @@ export class TelegramCrmRecoveryService {
             })),
             preserveUnread: true,
           });
+          if (imported.importedConversations > 0)
+            difference.peers.forEach((peer) =>
+              newPeerIds.add(peer.telegramUserId),
+            );
         }
-        await this.ensureUpdatePeers(
-          input.account,
-          input.handle,
-          difference.updates,
-        );
+        (
+          await this.ensureUpdatePeers(
+            input.account,
+            input.handle,
+            difference.updates,
+            beforeImport,
+          )
+        ).forEach((id) => newPeerIds.add(id));
+        if (input.isCurrent && !input.isCurrent())
+          return { outcome: 'STOPPED' };
         const stored = await this.batchStore.applyUpdates({
           workspaceId: input.account.workspaceId,
           accountId: input.account.id,
@@ -126,6 +196,12 @@ export class TelegramCrmRecoveryService {
       return { outcome: 'RETRY' };
     } finally {
       this.release();
+      if (input.isCurrent && !input.isCurrent())
+        this.folderRefresh?.abandonTargeted(input.account.id);
+      if (folderRefreshNeeded || forceFull)
+        input.onNewConversations?.(undefined, folderVersion);
+      else if (newPeerIds.size)
+        input.onNewConversations?.([...newPeerIds], folderVersion);
     }
   }
 
@@ -197,6 +273,7 @@ export class TelegramCrmRecoveryService {
     account: CrmRuntimeAccount,
     handle: TelegramCrmMtprotoHandle,
     updates: TelegramCrmMtprotoUpdate[],
+    beforeImport: (ids: string[]) => Promise<void>,
   ) {
     const userIds = [
       ...new Set(
@@ -207,7 +284,7 @@ export class TelegramCrmRecoveryService {
         ),
       ),
     ];
-    if (!userIds.length) return;
+    if (!userIds.length) return [];
     const known = await this.prisma.telegramCrmConversation.findMany({
       where: {
         workspaceId: account.workspaceId,
@@ -234,8 +311,9 @@ export class TelegramCrmRecoveryService {
         )),
       );
     }
-    if (!peers.length) return;
-    await this.batchStore.importDialogs({
+    if (!peers.length) return [];
+    await beforeImport(peers.map((peer) => peer.telegramUserId));
+    const imported = await this.batchStore.importDialogs({
       workspaceId: account.workspaceId,
       accountId: account.id,
       dialogs: peers.map((peer) => ({
@@ -246,6 +324,9 @@ export class TelegramCrmRecoveryService {
       })),
       preserveUnread: true,
     });
+    return imported.importedConversations > 0
+      ? peers.map((peer) => peer.telegramUserId)
+      : [];
   }
 
   private parseCheckpoint(value: string) {

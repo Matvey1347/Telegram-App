@@ -5,7 +5,7 @@ import type {
   CrmConversationListItem,
   CrmMessageListItem,
 } from "@telegram-system/shared";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { crmChatActionsApi } from "@/lib/features/growth/crm-chat-actions-api";
 import { telegramCrmApi } from "@/lib/features/growth/telegram-crm-api";
 import { authApi, telegramChannelsApi } from "@/lib/api";
@@ -53,9 +53,12 @@ const onlyMessage = {
   sentByMember: null,
 } as CrmMessageListItem;
 
+afterEach(() => vi.unstubAllGlobals());
+
 describe("CrmMessageThread header", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    vi.spyOn(document, "hasFocus").mockReturnValue(true);
     localStorage.clear();
     vi.spyOn(crmChatActionsApi, "capabilities").mockResolvedValue({ canReply: false, canEdit: false, canDelete: false, canDeleteForEveryone: false, canReact: false, canForward: false, canUpload: false, canSendVoice: false, maxUploadBytes: 10485760, voiceMimeTypes: [], reactionEmoji: [] });
     vi.spyOn(authApi, "me").mockResolvedValue({ user: {}, workspace: { id: "workspace-1" } } as never);
@@ -90,14 +93,99 @@ describe("CrmMessageThread header", () => {
   });
 
   it("shows an automatic reconciliation failure with a retry while retaining saved messages", async () => {
+    vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({ top: 0, bottom: 100, left: 0, right: 100, width: 100, height: 100, x: 0, y: 0, toJSON: () => ({}) } as DOMRect);
     vi.spyOn(telegramCrmApi, "importHistory").mockRejectedValue({ response: { status: 409, data: { message: "Telegram CRM runtime is active in another application instance. Retry shortly." } } });
     vi.mocked(telegramCrmApi.listMessages).mockResolvedValue({ items: [onlyMessage], nextCursor: null, hasMore: false });
     const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
-    render(<QueryClientProvider client={client}><CrmMessageThread conversation={conversation} canSendManual={false} /></QueryClientProvider>);
+    const markRead = vi.spyOn(telegramCrmApi, "markConversationRead");
+    render(<QueryClientProvider client={client}><CrmMessageThread conversation={{ ...conversation, unreadCount: 1 }} canSendManual={false} /></QueryClientProvider>);
     expect(await screen.findByRole("alert")).toHaveTextContent("Не удалось обновить сообщения из Telegram");
     expect(screen.getByText("Only saved message")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Повторить синхронизацию" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Refresh recent messages" })).not.toBeInTheDocument();
+    expect(markRead).not.toHaveBeenCalled();
+  });
+
+  it("marks a visible message read only after recent Telegram history succeeds", async () => {
+    vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({ top: 0, bottom: 100, left: 0, right: 100, width: 100, height: 100, x: 0, y: 0, toJSON: () => ({}) } as DOMRect);
+    vi.mocked(telegramCrmApi.listMessages).mockResolvedValue({ items: [onlyMessage], nextCursor: null, hasMore: false });
+    let resolveHistory!: (value: Awaited<ReturnType<typeof telegramCrmApi.importHistory>>) => void;
+    vi.mocked(telegramCrmApi.importHistory).mockReturnValueOnce(new Promise((resolve) => { resolveHistory = resolve; }));
+    const markRead = vi.spyOn(telegramCrmApi, "markConversationRead").mockResolvedValue({ conversationId: conversation.id, lastReadInboxTelegramMessageId: 1, readMessageCount: 1, unreadCount: 0 });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+    render(<QueryClientProvider client={client}><CrmMessageThread conversation={{ ...conversation, unreadCount: 1 }} canSendManual={false} /></QueryClientProvider>);
+    await screen.findByText("Only saved message");
+    await waitFor(() => expect(telegramCrmApi.importHistory).toHaveBeenCalled());
+    expect(markRead).not.toHaveBeenCalled();
+    await act(async () => resolveHistory({ conversationId: conversation.id, imported: 0, scanned: 0, nextBeforeTelegramMessageId: null, exhausted: true }));
+    await waitFor(() => expect(markRead).toHaveBeenCalledExactlyOnceWith(conversation.id, 1));
+  });
+
+  it("waits while the client details panel covers the chat and resumes when it closes", async () => {
+    vi.stubGlobal("matchMedia", () => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() }));
+    vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({ top: 0, bottom: 100, left: 0, right: 100, width: 100, height: 100, x: 0, y: 0, toJSON: () => ({}) } as DOMRect);
+    vi.mocked(telegramCrmApi.listMessages).mockResolvedValue({ items: [onlyMessage], nextCursor: null, hasMore: false });
+    const markRead = vi.spyOn(telegramCrmApi, "markConversationRead").mockResolvedValue({ conversationId: conversation.id, lastReadInboxTelegramMessageId: 1, readMessageCount: 1, unreadCount: 0 });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+    const tree = (detailsOpen: boolean) => <QueryClientProvider client={client}><CrmMessageThread conversation={{ ...conversation, unreadCount: 1 }} canSendManual={false} detailsOpen={detailsOpen} /></QueryClientProvider>;
+    const view = render(tree(true));
+    await screen.findByText("Only saved message");
+    await waitFor(() => expect(telegramCrmApi.importHistory).toHaveBeenCalled());
+    expect(markRead).not.toHaveBeenCalled();
+    view.rerender(tree(false));
+    await waitFor(() => expect(markRead).toHaveBeenCalledExactlyOnceWith(conversation.id, 1));
+  });
+
+  it("marks the visible chat read while desktop client details are open inline", async () => {
+    vi.stubGlobal("matchMedia", () => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() }));
+    vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({ top: 0, bottom: 100, left: 0, right: 100, width: 100, height: 100, x: 0, y: 0, toJSON: () => ({}) } as DOMRect);
+    vi.mocked(telegramCrmApi.listMessages).mockResolvedValue({ items: [onlyMessage], nextCursor: null, hasMore: false });
+    const markRead = vi.spyOn(telegramCrmApi, "markConversationRead").mockResolvedValue({ conversationId: conversation.id, lastReadInboxTelegramMessageId: 1, readMessageCount: 1, unreadCount: 0 });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+    render(<QueryClientProvider client={client}><CrmMessageThread conversation={{ ...conversation, unreadCount: 1 }} canSendManual={false} detailsOpen /></QueryClientProvider>);
+    await waitFor(() => expect(markRead).toHaveBeenCalledExactlyOnceWith(conversation.id, 1));
+  });
+
+  it("resumes reading if the open mobile details panel becomes a desktop sidebar", async () => {
+    let mobile = true;
+    const listeners = new Set<() => void>();
+    vi.stubGlobal("matchMedia", () => ({ get matches() { return mobile; }, addEventListener: (_: string, callback: () => void) => listeners.add(callback), removeEventListener: (_: string, callback: () => void) => listeners.delete(callback) }));
+    vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({ top: 0, bottom: 100, left: 0, right: 100, width: 100, height: 100, x: 0, y: 0, toJSON: () => ({}) } as DOMRect);
+    vi.mocked(telegramCrmApi.listMessages).mockResolvedValue({ items: [onlyMessage], nextCursor: null, hasMore: false });
+    const markRead = vi.spyOn(telegramCrmApi, "markConversationRead").mockResolvedValue({ conversationId: conversation.id, lastReadInboxTelegramMessageId: 1, readMessageCount: 1, unreadCount: 0 });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+    render(<QueryClientProvider client={client}><CrmMessageThread conversation={{ ...conversation, unreadCount: 1 }} canSendManual={false} detailsOpen /></QueryClientProvider>);
+    await screen.findByText("Only saved message");
+    await waitFor(() => expect(telegramCrmApi.importHistory).toHaveBeenCalled());
+    expect(markRead).not.toHaveBeenCalled();
+    act(() => { mobile = false; listeners.forEach((callback) => callback()); });
+    await waitFor(() => expect(markRead).toHaveBeenCalledExactlyOnceWith(conversation.id, 1));
+  });
+
+  it.each([
+    ["Expand editor", "Done"],
+    ["Quick replies", "Close dialog"],
+  ])("waits while %s is open and resumes on close", async (openLabel, closeLabel) => {
+    vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({ top: 0, bottom: 100, left: 0, right: 100, width: 100, height: 100, x: 0, y: 0, toJSON: () => ({}) } as DOMRect);
+    vi.mocked(telegramCrmApi.listMessages).mockResolvedValue({ items: [onlyMessage], nextCursor: null, hasMore: false });
+    const markRead = vi.spyOn(telegramCrmApi, "markConversationRead").mockResolvedValue({ conversationId: conversation.id, lastReadInboxTelegramMessageId: 1, readMessageCount: 1, unreadCount: 0 });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+    const tree = (unreadCount: number) => <QueryClientProvider client={client}><TestI18nProvider><CrmMessageThread conversation={{ ...conversation, unreadCount }} canSendManual /></TestI18nProvider></QueryClientProvider>;
+    const view = render(tree(0));
+    await screen.findByText("Only saved message");
+    await waitFor(() => expect(telegramCrmApi.importHistory).toHaveBeenCalled());
+    await userEvent.click(screen.getByRole("button", { name: openLabel }));
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    view.rerender(tree(1));
+    expect(markRead).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("button", { name: closeLabel }));
+    await waitFor(() => expect(markRead).toHaveBeenCalledExactlyOnceWith(conversation.id, 1));
   });
 
   it("reserves the message viewport while the conversation is loading", () => {

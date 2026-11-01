@@ -31,6 +31,20 @@ const row = (id: string, lastMessageAt: Date | null = time, linked = true) => ({
   lastOutboundAt: null,
   unreadCount: 2,
   readState: 'UNREAD',
+  folderMemberships: [] as Array<{
+    workspaceId: string;
+    mtprotoAccountId: string;
+    folder: {
+      id: string;
+      workspaceId: string;
+      mtprotoAccountId: string;
+      name: string;
+      color: string | null;
+      emojiPresentation: null;
+      excludeRead: boolean;
+      isActive: boolean;
+    };
+  }>,
   contact: linked
     ? {
         id: `contact-${id}`,
@@ -88,10 +102,13 @@ function setup(rows: ReturnType<typeof row>[] = [], own = false) {
     .fn<Promise<ReturnType<typeof row>[]>, [InboxQuery]>()
     .mockResolvedValue(rows);
   const prisma = {
-    telegramAdvertiserTag: {
+    telegramCrmFolder: {
       findFirst: jest
         .fn()
-        .mockResolvedValue({ systemKey: 'TELEGRAM_FOLDER:account-current:9' }),
+        .mockResolvedValue({
+          mtprotoAccountId: 'account-current',
+          excludeRead: false,
+        }),
     },
     telegramCrmConversation: {
       findMany,
@@ -110,7 +127,7 @@ function setup(rows: ReturnType<typeof row>[] = [], own = false) {
       authorization as never,
     ),
     findMany,
-    folderLookup: prisma.telegramAdvertiserTag.findFirst,
+    folderLookup: prisma.telegramCrmFolder.findFirst,
     authorization,
     outboundField,
   };
@@ -156,34 +173,44 @@ describe('TelegramCrmInboxConversationsService', () => {
     });
   });
 
-  it('returns only the folders belonging to the conversation account', async () => {
-    const item = row('client');
-    item.contact!.tags = [
+  it('returns account-scoped canonical folders on unlinked chats without relying on contact tags', async () => {
+    const item = row('client', time, false);
+    const folder = {
+      workspaceId: 'workspace-current',
+      mtprotoAccountId: 'account-current',
+      id: 'our-folder',
+      name: 'VIP',
+      color: null,
+      emojiPresentation: null,
+      excludeRead: true,
+      isActive: true,
+    };
+    item.folderMemberships = [
       {
         workspaceId: 'workspace-current',
-        tag: {
-          workspaceId: 'workspace-current',
-          id: 'our-folder',
-          name: 'VIP',
-          color: null,
-          systemKey: 'TELEGRAM_FOLDER:account-current:9',
-        },
+        mtprotoAccountId: 'account-current',
+        folder,
       },
       {
         workspaceId: 'workspace-current',
-        tag: {
-          workspaceId: 'workspace-current',
+        mtprotoAccountId: 'account-other',
+        folder: {
+          ...folder,
           id: 'other-account',
-          name: 'Other account',
-          color: null,
-          systemKey: 'TELEGRAM_FOLDER:account-other:9',
+          mtprotoAccountId: 'account-other',
         },
       },
     ];
     const { service } = setup([item]);
     const result = await service.list('user-current', {});
     expect(result.items[0].folders).toEqual([
-      { id: 'our-folder', name: 'VIP', color: null },
+      {
+        id: 'our-folder',
+        name: 'VIP',
+        color: null,
+        emojiPresentation: null,
+        excludeRead: true,
+      },
     ]);
   });
 
@@ -192,12 +219,38 @@ describe('TelegramCrmInboxConversationsService', () => {
     await service.list('user-current', { folderId: 'folder-one' });
     expect(findMany.mock.calls[0][0].where.AND).toContainEqual({
       mtprotoAccountId: 'account-current',
-      contact: {
-        tags: {
-          some: { workspaceId: 'workspace-current', tagId: 'folder-one' },
+      folderMemberships: {
+        some: {
+          workspaceId: 'workspace-current',
+          mtprotoAccountId: 'account-current',
+          folderId: 'folder-one',
         },
       },
     });
+  });
+
+  it('applies an unread-only folder against the current unread count while preserving base chips', async () => {
+    const h = setup();
+    h.folderLookup.mockResolvedValueOnce({
+      mtprotoAccountId: 'account-current',
+      excludeRead: true,
+    });
+    await h.service.list('user-current', {
+      folderId: 'unread-folder',
+      filter: 'ALL',
+    });
+    expect(h.findMany.mock.calls[0][0].where.AND).toContainEqual(
+      expect.objectContaining({
+        unreadCount: { gt: 0 },
+        folderMemberships: {
+          some: {
+            workspaceId: 'workspace-current',
+            mtprotoAccountId: 'account-current',
+            folderId: 'unread-folder',
+          },
+        },
+      }),
+    );
   });
 
   it('does not expose or query a folder outside the current workspace', async () => {
@@ -210,9 +263,9 @@ describe('TelegramCrmInboxConversationsService', () => {
       where: {
         workspaceId: 'workspace-current',
         id: 'foreign-folder',
-        systemKey: { startsWith: 'TELEGRAM_FOLDER:' },
+        isActive: true,
       },
-      select: { systemKey: true },
+      select: { mtprotoAccountId: true, excludeRead: true },
     });
     expect(findMany).not.toHaveBeenCalled();
   });

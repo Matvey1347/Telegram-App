@@ -1,3 +1,4 @@
+import { readCrmPeerDialogs } from './telegram-crm-peer-dialogs';
 import { parseCrmOutgoingText } from './telegram-crm-chat-text';
 import {
   filterCrmPrivatePeerUpdates,
@@ -48,6 +49,10 @@ class GramJsTelegramCrmHandle implements TelegramCrmMtprotoHandle {
     this.leadDiscovery = new TelegramLeadChannelReader(client);
   }
 
+  listPrivatePeerDialogs(peers: Parameters<typeof readCrmPeerDialogs>[2]) {
+    return readCrmPeerDialogs(this.client, this.dialogFolders, peers);
+  }
+
   async listPrivateDialogs({
     cursor,
     limit = 100,
@@ -72,7 +77,7 @@ class GramJsTelegramCrmHandle implements TelegramCrmMtprotoHandle {
           : undefined,
     });
     const loadedFolderFilters =
-      await this.dialogFolders.getDialogFolderFilters();
+      await this.dialogFolders.getDialogFolderFilters(!cursor);
     const dialogs: TelegramCrmMtprotoDialog[] = [];
     for (const dialog of rows) {
       const entity = dialog.entity;
@@ -87,6 +92,11 @@ class GramJsTelegramCrmHandle implements TelegramCrmMtprotoHandle {
         telegramDialogId: telegramLongString(dialog.id),
         unreadCount: Math.max(0, dialog.unreadCount || 0),
         lastMessage,
+        folderMembershipIds: loadedFolderFilters
+          .filter((filter) =>
+            this.dialogFolders.matchesFolder(filter, dialog, entity, true),
+          )
+          .map((filter) => filter.folder.id),
         folderIds: loadedFolderFilters
           .filter((filter) =>
             this.dialogFolders.matchesFolder(filter, dialog, entity),

@@ -1,3 +1,4 @@
+import { TelegramCrmFolderRefreshService } from './telegram-crm-folder-refresh.service';
 import { crmRuntimeEnabled } from '../../../config/deployment-config';
 import { reconcileCrmReactionHints } from './telegram-crm-reaction-reconcile';
 import { withCrmAccountHandle } from './telegram-crm-runtime-operations';
@@ -49,6 +50,7 @@ export class TelegramCrmRuntimeManager
   implements OnApplicationBootstrap, OnApplicationShutdown
 {
   private readonly logger = new Logger(TelegramCrmRuntimeManager.name);
+  private readonly folderFences = new Map<string, Promise<void>>();
   private readonly accounts = new Map<string, ManagedAccount>();
   private notifierSubscription?: Subscription;
   private runtimeHeldByAnotherInstance = false;
@@ -72,6 +74,8 @@ export class TelegramCrmRuntimeManager
     @Optional()
     private readonly runtimeLease?: TelegramCrmRuntimeLeaseService,
     @Optional() private readonly leadEvents?: TelegramLeadTransportEvents,
+    @Optional()
+    private readonly folderRefresh?: TelegramCrmFolderRefreshService,
   ) {}
 
   async onApplicationBootstrap() {
@@ -110,15 +114,27 @@ export class TelegramCrmRuntimeManager
   async withAccountHandle<T>(
     workspaceId: string,
     accountId: string,
-    purpose: 'sync' | 'send',
+    purpose: 'sync' | 'send' | 'folder-sync',
     operation: (handle: TelegramCrmMtprotoHandle) => Promise<T>,
   ) {
     await this.ensureRuntimeOwnership();
     return withCrmAccountHandle({
       workspaceId,
       accountId,
-      purpose,
-      operation,
+      purpose: purpose === 'folder-sync' ? 'sync' : purpose,
+      operation: (handle) => {
+        const managed = this.accounts.get(accountId);
+        if (
+          managed?.handle === handle &&
+          this.folderRefresh?.needsRetry(accountId)
+        )
+          this.refreshFolders(managed);
+        return purpose === 'folder-sync' && this.folderRefresh
+          ? this.folderRefresh.withAccountScan(accountId, () =>
+              operation(handle),
+            )
+          : operation(handle);
+      },
       blocked: this.runtimeHeldByAnotherInstance || this.shuttingDown,
       sessions: this.sessions,
       adapter: this.adapter,
@@ -168,6 +184,7 @@ export class TelegramCrmRuntimeManager
       !this.sessions.isLiveEligible(current)
     )
       throw new ConflictException('LEAD_EXISTING_LIVE_ACCOUNT_REQUIRED');
+    if (this.folderRefresh?.needsRetry(accountId)) this.refreshFolders(managed);
     return operation(managed.handle);
   }
 
@@ -317,7 +334,18 @@ export class TelegramCrmRuntimeManager
         await handle.close();
         return;
       }
+      const priorFolderFence = this.folderFences.get(managed.account.id);
+      try {
+        await priorFolderFence;
+      } catch (error) {
+        if (this.folderFences.get(managed.account.id) === priorFolderFence)
+          this.folderFences.delete(managed.account.id);
+        await handle.close();
+        throw error;
+      }
+      await this.folderRefresh?.waitForMarkers?.(managed.account.id);
       managed.handle = handle;
+      managed.folderFence = priorFolderFence;
       const detachPrivate = handle.onUpdate(
         (update) => this.enqueue(managed, update),
         (error) => void this.connectionFailed(managed, error),
@@ -337,6 +365,18 @@ export class TelegramCrmRuntimeManager
         this.leadEvents?.emit({ ...identity, type: 'disconnected' });
       };
       this.leadEvents?.emit({ ...identity, type: 'connected' });
+      void this.folderRefresh
+        ?.resumePending(
+          managed.account,
+          handle,
+          () =>
+            this.accounts.get(managed.account.id) === managed &&
+            managed.handle === handle &&
+            managed.generation === generation &&
+            !managed.abort.signal.aborted,
+          managed.abort.signal,
+        )
+        .catch(() => undefined);
       await this.recover(managed);
     } catch (error) {
       if (managed.abort.signal.aborted || this.shuttingDown) return;
@@ -361,6 +401,31 @@ export class TelegramCrmRuntimeManager
     }
   }
 
+  private refreshFolders(
+    managed: ManagedAccount,
+    userIds?: string[],
+    version?: number,
+  ) {
+    const handle = managed.handle;
+    const generation = managed.generation;
+    if (!handle) this.folderRefresh?.abandonTargeted(managed.account.id);
+    if (handle)
+      void this.folderRefresh
+        ?.request(
+          managed.account,
+          handle,
+          () =>
+            this.accounts.get(managed.account.id) === managed &&
+            managed.handle === handle &&
+            managed.generation === generation &&
+            !managed.abort.signal.aborted,
+          managed.abort.signal,
+          userIds,
+          version,
+        )
+        .catch(() => undefined);
+  }
+
   private enqueue(managed: ManagedAccount, update: TelegramCrmMtprotoUpdate) {
     if (!managed.handle || this.accounts.get(managed.account.id) !== managed)
       return;
@@ -374,6 +439,49 @@ export class TelegramCrmRuntimeManager
       return;
     }
     if (sequence) managed.lastPts = sequence.pts;
+    if (update.type === 'folders.changed') {
+      if (!update.telegramUserIds || update.telegramUserIds.length) {
+        const ids = update.telegramUserIds;
+        const originHandle = managed.handle;
+        const originGeneration = managed.generation;
+        managed.folderFence = (
+          this.folderFences.get(managed.account.id) ??
+          managed.folderFence ??
+          Promise.resolve()
+        ).then(async () => {
+          const dirty = await this.folderRefresh?.markDirty(
+            managed.account,
+            Boolean(ids),
+          );
+          if (
+            managed.handle !== originHandle ||
+            managed.generation !== originGeneration ||
+            this.accounts.get(managed.account.id) !== managed
+          ) {
+            this.folderRefresh?.abandonTargeted(managed.account.id);
+            return;
+          }
+          this.refreshFolders(
+            managed,
+            dirty?.targeted ? ids : undefined,
+            dirty?.version,
+          );
+        });
+        this.folderFences.set(managed.account.id, managed.folderFence);
+        const folderFence = managed.folderFence;
+        void folderFence.then(
+          () => {
+            if (this.folderFences.get(managed.account.id) === folderFence)
+              this.folderFences.delete(managed.account.id);
+          },
+          () => undefined,
+        );
+        void managed.folderFence.catch((error: unknown) =>
+          this.connectionFailed(managed, error),
+        );
+      }
+      return;
+    }
     if (
       managed.queue.length >= CRM_RUNTIME_POLICY.updateQueueLimit ||
       this.totalQueued >= CRM_RUNTIME_POLICY.globalQueueLimit
@@ -408,6 +516,7 @@ export class TelegramCrmRuntimeManager
     managed.flushing = true;
     let recoveryNeeded = false;
     try {
+      await managed.folderFence;
       const processedPts = updates.reduce((value, update) => {
         const sequence = 'sequence' in update ? update.sequence : undefined;
         return sequence ? Math.max(value, sequence.pts) : value;
@@ -461,9 +570,12 @@ export class TelegramCrmRuntimeManager
       ) {
         return;
       }
+      await managed.folderFence;
       const result = await this.recoveryService.recover({
         account: managed.account,
         handle: managed.handle,
+        onNewConversations: (userIds, version) =>
+          this.refreshFolders(managed, userIds, version),
         captureQueue: () => {
           if (managed.flushTimer) clearTimeout(managed.flushTimer);
           managed.flushTimer = undefined;
@@ -480,6 +592,8 @@ export class TelegramCrmRuntimeManager
         managed.checkpoint = result.checkpoint;
         managed.lastPts = result.checkpoint.pts;
         managed.retryAttempt = 0;
+        if (this.folderRefresh?.needsRetry(managed.account.id))
+          this.refreshFolders(managed);
       } else {
         await closeCrmTransport(managed);
         if (result.outcome === 'RETRY') this.scheduleRetry(managed);

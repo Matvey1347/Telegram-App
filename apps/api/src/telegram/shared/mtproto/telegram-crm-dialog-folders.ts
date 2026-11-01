@@ -96,7 +96,8 @@ export class TelegramCrmDialogFolders {
     this.folderFilters = undefined;
   }
 
-  getDialogFolderFilters() {
+  getDialogFolderFilters(refresh = false) {
+    if (refresh) this.folderFilters = undefined;
     return (this.folderFilters ??= this.loadDialogFolderFilters());
   }
 
@@ -132,6 +133,30 @@ export class TelegramCrmDialogFolders {
             title,
             emoticon: filter.emoticon ?? null,
             color: filter.color ?? null,
+            excludeRead:
+              filter instanceof Api.DialogFilter && Boolean(filter.excludeRead),
+            emojiPresentation: (() => {
+              const entity =
+                filter.title instanceof Api.TextWithEntities
+                  ? filter.title.entities.find(
+                      (value) =>
+                        value instanceof Api.MessageEntityCustomEmoji &&
+                        value.offset === 0,
+                    )
+                  : undefined;
+              if (entity instanceof Api.MessageEntityCustomEmoji)
+                return {
+                  type: 'unicode' as const,
+                  value: title.slice(
+                    entity.offset,
+                    entity.offset + entity.length,
+                  ),
+                  telegramCustomEmojiId: entity.documentId.toString(),
+                };
+              return filter.emoticon
+                ? { type: 'unicode' as const, value: filter.emoticon }
+                : null;
+            })(),
           },
           includeUserIds,
           excludeUserIds,
@@ -156,6 +181,7 @@ export class TelegramCrmDialogFolders {
     filter: CrmDialogFolderFilter,
     dialog: { unreadCount?: number; archived?: boolean; dialog?: Api.Dialog },
     entity: Api.User,
+    ignoreRead = false,
   ) {
     const telegramUserId = telegramLongString(entity.id);
     if (filter.excludeUserIds.has(telegramUserId)) return false;
@@ -165,7 +191,7 @@ export class TelegramCrmDialogFolders {
       (filter.nonContacts && !entity.contact && !entity.bot) ||
       (filter.bots && Boolean(entity.bot));
     if (!explicitlyIncluded && !categoryIncluded) return false;
-    if (filter.excludeRead && !dialog.unreadCount) return false;
+    if (!ignoreRead && filter.excludeRead && !dialog.unreadCount) return false;
     if (filter.excludeArchived && Boolean(dialog.archived)) return false;
     if (filter.excludeMuted && isMutedDialog(dialog.dialog)) return false;
     return true;

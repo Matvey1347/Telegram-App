@@ -13,7 +13,7 @@ import { CrmSalesControls } from "./crm-sales-controls";
 import { useCrmSalesCopy } from "./crm-sales-copy";
 import { CrmMessageThread } from "./crm-message-thread";
 
-export function CrmInboxConversation({ conversationId, peerId, canSendManual, onBack, onOpenDetails, displayName, photoUrl, workflowMenuOpen, onWorkflowMenuOpenChange }: {
+export function CrmInboxConversation({ conversationId, peerId, canSendManual, onBack, onOpenDetails, displayName, photoUrl, workflowMenuOpen, onWorkflowMenuOpenChange, detailsOpen }: {
   conversationId: string;
   peerId: string | null;
   canSendManual: boolean;
@@ -23,6 +23,7 @@ export function CrmInboxConversation({ conversationId, peerId, canSendManual, on
   photoUrl?: string | null;
   workflowMenuOpen?: boolean;
   onWorkflowMenuOpenChange?: (open: boolean) => void;
+  detailsOpen?: boolean;
 }) {
   const t = useCrmSalesCopy();
   const workflow = useCrmSalesWorkflow(conversationId);
@@ -48,7 +49,7 @@ export function CrmInboxConversation({ conversationId, peerId, canSendManual, on
   </div>;
   if (query.error || !selected) return <div className="flex h-full min-h-0 flex-col"><div className="p-2">{back}</div><div role="alert" className="m-auto p-5 text-center"><p className="mb-3 text-sm text-rose-300">This conversation could not be loaded.</p><Button onClick={() => void query.refetch()}>Retry</Button></div></div>;
   if (peerId && selected.telegramCrmPeerId !== peerId) return <div className="p-4">{back}<p role="alert" className="mt-4 text-sm text-amber-300">This link no longer matches the selected Telegram contact.</p></div>;
-  return <CrmMessageThread conversation={selected} canSendManual={canSend} sendDisabledReason={disabledReason}
+  return <CrmMessageThread conversation={selected} canSendManual={canSend} sendDisabledReason={disabledReason} detailsOpen={detailsOpen}
     header={<div className="flex min-w-0 items-center gap-2">
       {back}<IconAvatar label={name} size="md" className="!rounded-full" icon={selected.peer.photoUrl ? { type: "image", id: selected.peer.id, url: selected.peer.photoUrl, name } : null} />
       <div className="min-w-0 flex-1"><h2 className="truncate text-sm font-semibold text-white">{name}</h2><p className="truncate text-xs text-neutral-400">Telegram · {selected.account.username ? `@${selected.account.username}` : selected.account.label}</p></div>

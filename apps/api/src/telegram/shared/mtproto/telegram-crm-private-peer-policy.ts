@@ -40,13 +40,24 @@ export function filterCrmPrivatePeerUpdates(
   updates: TelegramCrmMtprotoUpdate[],
   excluded: ReadonlySet<string>,
 ) {
-  return updates.filter((update) => {
-    const id =
-      update.type === 'message.new' || update.type === 'message.edited'
-        ? update.message.telegramUserId
-        : 'telegramUserId' in update
-          ? update.telegramUserId
-          : null;
-    return !id || (id !== TELEGRAM_SERVICE_USER_ID && !excluded.has(id));
-  });
+  return updates
+    .map((update) =>
+      update.type === 'folders.changed' && update.telegramUserIds
+        ? {
+            ...update,
+            telegramUserIds: update.telegramUserIds.filter(
+              (id) => id !== TELEGRAM_SERVICE_USER_ID && !excluded.has(id),
+            ),
+          }
+        : update,
+    )
+    .filter((update) => {
+      const id =
+        update.type === 'message.new' || update.type === 'message.edited'
+          ? update.message.telegramUserId
+          : 'telegramUserId' in update
+            ? update.telegramUserId
+            : null;
+      return !id || (id !== TELEGRAM_SERVICE_USER_ID && !excluded.has(id));
+    });
 }

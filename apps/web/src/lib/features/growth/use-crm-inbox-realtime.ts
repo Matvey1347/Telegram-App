@@ -14,11 +14,22 @@ export function useCrmInboxRealtime(workspaceId: string | undefined, active: boo
   const client = useQueryClient();
   const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const refreshController = useRef<AbortController | null>(null);
+  const folderTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => {
     if (refreshTimer.current) clearTimeout(refreshTimer.current);
     refreshTimer.current = null;
     refreshController.current?.abort();
-  }, [workspaceId]);
+    if (folderTimer.current) clearTimeout(folderTimer.current);
+    folderTimer.current = null;
+  }, [workspaceId, active]);
+
+  const reconcileFolders = () => {
+    if (folderTimer.current) return;
+    folderTimer.current = setTimeout(() => {
+      folderTimer.current = null;
+      void client.invalidateQueries({ queryKey: telegramCrmKeys.inboxFolders(), exact: true, refetchType: "active" });
+    }, 250);
+  };
 
   const reconcileLists = () => {
     if (refreshTimer.current) return;
@@ -38,11 +49,27 @@ export function useCrmInboxRealtime(workspaceId: string | undefined, active: boo
     }, 250);
   };
 
+  const reconcileVisibleLists = () => {
+    const activeFolder = client.getQueryCache().findAll({ queryKey: telegramCrmKeys.inboxConversations(), type: "active" })
+      .some((query) => Boolean((query.queryKey[2] as CrmInboxConversationParams | undefined)?.folderId));
+    if (!activeFolder) return reconcileLists();
+    void client.invalidateQueries({ queryKey: telegramCrmKeys.unread(), refetchType: "active" });
+    // A folder sync can remove rows as well as add them. Refetch loaded
+    // pages rather than merging a new head with now-obsolete members.
+    void client.invalidateQueries({ queryKey: telegramCrmKeys.inboxConversations(), refetchType: "active",
+      predicate: (query) => Boolean((query.queryKey[2] as CrmInboxConversationParams | undefined)?.folderId) });
+  };
+
   return useTelegramCrmRealtime({
     scopeKey: workspaceId,
     active: active && Boolean(workspaceId),
     onEvent: (event: CrmRealtimeEvent) => {
       if (event.workspaceId !== workspaceId) return;
+      if (event.type === "message.received" || event.type === "message.deleted" || event.type === "readChanged" ||
+          event.type === "conversation.unreadChanged" || event.type === "inbox.updated" || event.type === "contact.updated" ||
+          event.type === "folders.updated" ||
+          (event.type === "sync.progress" && (event.phase === "COMPLETED" || event.phase === "FAILED"))) reconcileFolders();
+      if (event.type === "folders.updated" || (event.type === "sync.progress" && (event.phase === "COMPLETED" || event.phase === "FAILED"))) reconcileVisibleLists();
       if (event.type === "message.received" || event.type === "message.sent" || event.type === "message.updated") {
         // Only patch existing history; an unopened thread still fetches its first cursor page.
         reconcileCrmMessage(client, event.conversationId, event.message);
@@ -95,7 +122,8 @@ export function useCrmInboxRealtime(workspaceId: string | undefined, active: boo
       }
     },
     onReconnect: () => {
-      reconcileLists();
+      reconcileVisibleLists();
+      reconcileFolders();
       void client.invalidateQueries({ queryKey: telegramCrmKeys.salesWorkflows(), refetchType: "active" });
       void client.invalidateQueries({ queryKey: telegramCrmKeys.messages(), refetchType: "active" });
     },

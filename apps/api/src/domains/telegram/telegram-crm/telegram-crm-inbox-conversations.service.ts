@@ -5,9 +5,11 @@ import type {
   CrmInboxConversationItem,
   CrmInboxConversationsPage,
   CrmInboxFilter,
+  ResolvedEmoji,
 } from '@telegram-system/shared';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { WorkspaceAuthorizationService } from '../../workspace/workspace-authorization/workspace-authorization.service';
+import { crmFolderSelect } from './telegram-crm-folder-sync';
 import { CrmInboxConversationsQueryDto } from './telegram-crm-inbox-conversations.dto';
 import {
   crmAccountSummarySelect,
@@ -37,21 +39,14 @@ const inboxSelect = {
       nextContactAt: true,
       manualSalesStatus: true,
       archivedAt: true,
-      tags: {
-        where: { tag: { systemKey: { startsWith: 'TELEGRAM_FOLDER:' } } },
-        select: {
-          workspaceId: true,
-          tag: {
-            select: {
-              id: true,
-              name: true,
-              color: true,
-              systemKey: true,
-              workspaceId: true,
-            },
-          },
-        },
-      },
+    },
+  },
+  folderMemberships: {
+    where: { folder: { isActive: true } },
+    select: {
+      workspaceId: true,
+      mtprotoAccountId: true,
+      folder: { select: crmFolderSelect },
     },
   },
   peer: { select: crmPeerSummarySelect },
@@ -98,23 +93,23 @@ export class TelegramCrmInboxConversationsService {
     ];
     if (cursor) and.push(this.cursorWhere(cursor));
     if (query.folderId) {
-      const folder = await this.prisma.telegramAdvertiserTag.findFirst({
+      const folder = await this.prisma.telegramCrmFolder.findFirst({
         where: {
           id: query.folderId,
           workspaceId: access.workspaceId,
-          systemKey: { startsWith: 'TELEGRAM_FOLDER:' },
+          isActive: true,
         },
-        select: { systemKey: true },
+        select: { mtprotoAccountId: true, excludeRead: true },
       });
-      const accountId = folder?.systemKey?.match(
-        /^TELEGRAM_FOLDER:([^:]+):\d+$/,
-      )?.[1];
-      if (!accountId) return { items: [], nextCursor: null, hasMore: false };
+      if (!folder) return { items: [], nextCursor: null, hasMore: false };
       and.push({
-        mtprotoAccountId: accountId,
-        contact: {
-          tags: {
-            some: { workspaceId: access.workspaceId, tagId: query.folderId },
+        mtprotoAccountId: folder.mtprotoAccountId,
+        ...(folder.excludeRead ? { unreadCount: { gt: 0 } } : {}),
+        folderMemberships: {
+          some: {
+            workspaceId: access.workspaceId,
+            mtprotoAccountId: folder.mtprotoAccountId,
+            folderId: query.folderId,
           },
         },
       });
@@ -256,12 +251,24 @@ export class TelegramCrmInboxConversationsService {
             nextContactAt: row.contact.nextContactAt?.toISOString() ?? null,
           }
         : null,
-      folders: (row.contact?.tags ?? []).flatMap(({ tag, workspaceId }) =>
-        workspaceId === row.workspaceId &&
-        tag.workspaceId === row.workspaceId &&
-        tag.systemKey?.startsWith(`TELEGRAM_FOLDER:${row.mtprotoAccountId}:`)
-          ? [{ id: tag.id, name: tag.name, color: tag.color }]
-          : [],
+      folders: (row.folderMemberships ?? []).flatMap(
+        ({ folder, workspaceId, mtprotoAccountId }) =>
+          workspaceId === row.workspaceId &&
+          folder.workspaceId === row.workspaceId &&
+          mtprotoAccountId === row.mtprotoAccountId &&
+          folder.mtprotoAccountId === row.mtprotoAccountId &&
+          folder.isActive
+            ? [
+                {
+                  id: folder.id,
+                  name: folder.name,
+                  color: folder.color,
+                  emojiPresentation:
+                    folder.emojiPresentation as ResolvedEmoji | null,
+                  excludeRead: folder.excludeRead,
+                },
+              ]
+            : [],
       ),
       peer: mapCrmPeerSummary(row.peer),
       account: mapCrmAccountSummary(row.mtprotoAccount),

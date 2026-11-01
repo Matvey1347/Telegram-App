@@ -36,6 +36,18 @@ describe("compact inbox cache", () => {
     expect(findInboxConversation(client, "dialog-a")?.unreadCount).toBe(0);
     expect(findInboxConversation(client, "another-dialog")).toBeUndefined();
   });
+  it("removes and restores conversations in unread-only Telegram folders as their unread state changes", () => {
+    const client = new QueryClient();
+    const all = telegramCrmKeys.inboxConversationsList({ filter: "ALL" });
+    const folder = telegramCrmKeys.inboxConversationsList({ filter: "ALL", folderId: "folder-a" });
+    const row = { ...item(), folders: [{ id: "folder-a", name: "Unread folder", color: null, excludeRead: true }] };
+    for (const key of [all, folder]) client.setQueryData<CrmInboxData>(key, { pages: [{ items: [row], nextCursor: null, hasMore: false }], pageParams: [null] });
+    patchInboxConversation(client, row.id, { unreadCount: 0, readState: "READ" });
+    expect(client.getQueryData<CrmInboxData>(folder)?.pages[0].items).toEqual([]);
+    expect(client.getQueryData<CrmInboxData>(all)?.pages[0].items[0].folders).toEqual(row.folders);
+    patchInboxConversation(client, row.id, { unreadCount: 1, readState: "UNREAD" });
+    expect(client.getQueryData<CrmInboxData>(folder)?.pages[0].items.map((entry) => entry.id)).toEqual([row.id]);
+  });
   it("does not replace the latest preview with an older edit", () => {
     const client = new QueryClient(); seed(client); patchInboxMessage(client, message);
     patchInboxMessage(client, { ...message, id: "older", text: "Old edit", sentAt: "2026-10-19T12:00:00.000Z" });

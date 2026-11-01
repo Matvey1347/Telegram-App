@@ -1089,6 +1089,7 @@ model Workspace {
   telegramAdvertiserAutomationExecutions TelegramAdvertiserAutomationExecution[]
   telegramCrmPeers                       TelegramCrmPeer[]
   telegramCrmConversations               TelegramCrmConversation[]
+  telegramCrmFolders                     TelegramCrmFolder[]
   telegramCrmMessages                    TelegramCrmMessage[]
   telegramCrmAccountSyncStates           TelegramCrmAccountSyncState[]
   telegramAdPlacementAdvertiserResults   TelegramAdPlacementAdvertiserResult[]
@@ -1186,6 +1187,7 @@ model TelegramUserAccountIntegration {
   profileUser              User?                            @relation("UserProfileTelegramAccount")
   channelAdminLinks        TelegramChannelAdminLink[]
   crmConversations         TelegramCrmConversation[]
+  crmFolders               TelegramCrmFolder[]
   leadSources              TelegramLeadSource[]
   crmSyncState             TelegramCrmAccountSyncState?
   crmDefaultSenderSettings TelegramAdCrmWorkspaceSettings[] @relation("TelegramCrmDefaultSenderAccount")
@@ -2738,6 +2740,7 @@ model TelegramCrmConversation {
   mtprotoAccount TelegramUserAccountIntegration @relation(fields: [mtprotoAccountId, workspaceId], references: [id, workspaceId], onDelete: Restrict, map: "TelegramCrmConversation_account_workspace_fkey")
   messages       TelegramCrmMessage[]
   aiDrafts       TelegramCrmAiDraft[]
+  folderMemberships TelegramCrmConversationFolder[]
 
   @@unique([workspaceId, telegramCrmPeerId, mtprotoAccountId], map: "TelegramCrmConversation_workspaceId_peer_account_key")
   @@unique([id, workspaceId], map: "TelegramCrmConversation_id_workspaceId_key")
@@ -2746,6 +2749,40 @@ model TelegramCrmConversation {
   @@index([workspaceId, contactId, lastMessageAt, id], map: "TelegramCrmConversation_workspace_contact_lastMessage_id_idx")
   @@index([workspaceId, mtprotoAccountId, lastMessageAt, id], map: "TelegramCrmConversation_workspace_account_lastMessage_id_idx")
   @@index([workspaceId, contactId, state, lastMessageAt, id], map: "TelegramCrmConversation_workspace_contact_state_last_idx")
+}
+
+// Account-scoped Telegram folder definitions are independent of CRM contact tags.
+model TelegramCrmFolder {
+  id String @id @default(cuid())
+  workspaceId String
+  mtprotoAccountId String
+  telegramFolderId Int
+  name String
+  color String?
+  emojiPresentation Json?
+  excludeRead Boolean @default(false)
+  isActive Boolean @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  account TelegramUserAccountIntegration @relation(fields: [mtprotoAccountId, workspaceId], references: [id, workspaceId], onDelete: Cascade, map: "TelegramCrmFolder_account_workspace_fkey")
+  memberships TelegramCrmConversationFolder[]
+  @@unique([workspaceId, mtprotoAccountId, telegramFolderId], map: "TelegramCrmFolder_workspace_account_native_key")
+  @@unique([id, workspaceId, mtprotoAccountId], map: "TelegramCrmFolder_id_workspace_account_key")
+  @@index([workspaceId, isActive, mtprotoAccountId], map: "TelegramCrmFolder_workspace_active_account_idx")
+}
+
+model TelegramCrmConversationFolder {
+  conversationId String
+  folderId String
+  workspaceId String
+  mtprotoAccountId String
+  createdAt DateTime @default(now())
+  conversation TelegramCrmConversation @relation(fields: [conversationId, workspaceId, mtprotoAccountId], references: [id, workspaceId, mtprotoAccountId], onDelete: Cascade, map: "CrmConversationFolder_conversation_scope_fkey")
+  folder TelegramCrmFolder @relation(fields: [folderId, workspaceId, mtprotoAccountId], references: [id, workspaceId, mtprotoAccountId], onDelete: Cascade, map: "CrmConversationFolder_folder_scope_fkey")
+  @@id([conversationId, folderId])
+  @@index([workspaceId, folderId, conversationId], map: "TelegramCrmConversationFolder_workspace_folder_idx")
+  @@index([workspaceId, mtprotoAccountId, conversationId], map: "TelegramCrmConversationFolder_workspace_account_idx")
 }
 
 model TelegramCrmMessage {
@@ -2785,6 +2822,8 @@ model TelegramCrmAccountSyncState {
   initialImportStatus   TelegramCrmInitialImportStatus @default(NOT_STARTED)
   initialImportCursor   String?
   incrementalCheckpoint String?
+  folderRefreshVersion Int @default(0)
+  folderReconciledVersion Int @default(0)
   recoveryCheckpoint    String?
   status                TelegramCrmSyncStatus          @default(IDLE)
   lastErrorCode         String?

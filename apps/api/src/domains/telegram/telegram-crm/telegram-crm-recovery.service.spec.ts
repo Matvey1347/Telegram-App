@@ -28,7 +28,7 @@ describe('TelegramCrmRecoveryService', () => {
     };
     const batchStore = {
       applyUpdates: jest.fn().mockResolvedValue({ needsRecovery: false }),
-      importDialogs: jest.fn(),
+      importDialogs: jest.fn().mockResolvedValue({ importedConversations: 0 }),
     };
     const handle = {
       getState: jest.fn().mockResolvedValue(checkpoint),
@@ -79,7 +79,7 @@ describe('TelegramCrmRecoveryService', () => {
     };
     const batchStore = {
       applyUpdates: jest.fn(),
-      importDialogs: jest.fn().mockResolvedValue(undefined),
+      importDialogs: jest.fn().mockResolvedValue({ importedConversations: 0 }),
     };
     const handle = {
       getDifference: jest.fn().mockResolvedValue({
@@ -193,7 +193,9 @@ describe('CRM difference peer recovery', () => {
           input.dialogs.forEach((dialog) =>
             known.add(dialog.peer.telegramUserId),
           );
-          return Promise.resolve(undefined);
+          return Promise.resolve({
+            importedConversations: input.dialogs.length,
+          });
         },
       ),
       applyUpdates: jest.fn((input: { updates: TelegramCrmMtprotoUpdate[] }) =>
@@ -294,4 +296,112 @@ describe('CRM difference peer recovery', () => {
     expect(h.prisma.telegramCrmAccountSyncState.upsert).not.toHaveBeenCalled();
     expect(h.state.incrementalCheckpoint).toBe(JSON.stringify(checkpoint));
   });
+});
+
+it('marks new-peer folder work before import/checkpoint and does not rewrite unchanged later slices', async () => {
+  const order: string[] = [];
+  const folderRefresh = {
+    markDirty: jest.fn(async () => {
+      order.push('dirty');
+      return { targeted: true, version: 1 };
+    }),
+  };
+  const prisma = {
+    telegramCrmAccountSyncState: {
+      findUnique: jest
+        .fn()
+        .mockResolvedValue({
+          incrementalCheckpoint: JSON.stringify(checkpoint),
+        }),
+    },
+    telegramCrmConversation: { findMany: jest.fn().mockResolvedValue([]) },
+  };
+  const store = {
+    importDialogs: jest.fn(async () => {
+      order.push('import');
+      return { importedConversations: 1 };
+    }),
+    applyUpdates: jest.fn(async () => {
+      order.push('checkpoint');
+      return { needsRecovery: false };
+    }),
+  };
+  const peer = {
+    telegramUserId: '42',
+    telegramAccessHash: '420',
+    username: null,
+    firstName: null,
+    lastName: null,
+    photoUrl: null,
+  };
+  const difference = {
+    updates: [],
+    peers: [],
+    checkpoint,
+    final: false,
+    tooLong: false,
+  };
+  const handle = {
+    getDifference: jest
+      .fn()
+      .mockResolvedValueOnce({ ...difference, peers: [peer] })
+      .mockResolvedValueOnce(difference)
+      .mockResolvedValueOnce({ ...difference, final: true }),
+  };
+  const callback = jest.fn();
+  await new TelegramCrmRecoveryService(
+    prisma as never,
+    store as never,
+    folderRefresh as never,
+  ).recover({
+    account,
+    handle: handle as never,
+    captureQueue: () => [],
+    onNewConversations: callback,
+  });
+  expect(folderRefresh.markDirty).toHaveBeenCalledTimes(1);
+  expect(order).toEqual([
+    'dirty',
+    'import',
+    'checkpoint',
+    'checkpoint',
+    'checkpoint',
+  ]);
+  expect(callback).toHaveBeenCalledWith(['42'], 1);
+});
+
+it('does not advance a folder-change checkpoint when the durable marker write fails', async () => {
+  const store = { applyUpdates: jest.fn() };
+  const prisma = {
+    telegramCrmAccountSyncState: {
+      findUnique: jest
+        .fn()
+        .mockResolvedValue({
+          incrementalCheckpoint: JSON.stringify(checkpoint),
+        }),
+    },
+  };
+  const handle = {
+    getDifference: jest
+      .fn()
+      .mockResolvedValue({
+        updates: [{ type: 'folders.changed' }],
+        peers: [],
+        checkpoint,
+        final: true,
+        tooLong: false,
+      }),
+  };
+  const folderRefresh = {
+    markDirty: jest.fn().mockRejectedValue(new Error('database offline')),
+    abandonTargeted: jest.fn(),
+  };
+  await expect(
+    new TelegramCrmRecoveryService(
+      prisma as never,
+      store as never,
+      folderRefresh as never,
+    ).recover({ account, handle: handle as never, captureQueue: () => [] }),
+  ).rejects.toThrow('database offline');
+  expect(store.applyUpdates).not.toHaveBeenCalled();
 });

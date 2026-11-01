@@ -1,3 +1,5 @@
+import { TelegramCrmFolderRefreshService } from './telegram-crm-folder-refresh.service';
+import { TelegramCrmInboxFoldersService } from './telegram-crm-inbox-folders.service';
 import { TelegramCrmStreamAccessService } from './telegram-crm-stream-access.service';
 import { TelegramCrmManualSendIntentService } from './telegram-crm-manual-send-intent.service';
 import { TelegramCrmChatAccess } from './telegram-crm-chat-access.service';
@@ -185,6 +187,8 @@ import { TelegramCrmRuntimeLeaseService } from './telegram-crm-runtime-lease.ser
     TelegramCrmInboxCommandService,
     TelegramCrmInboxReadService,
     TelegramCrmInboxConversationsService,
+    TelegramCrmInboxFoldersService,
+    TelegramCrmFolderRefreshService,
     TelegramCrmInitialSyncService,
     TelegramCrmManualSendService,
     TelegramCrmMessageBatchWriter,

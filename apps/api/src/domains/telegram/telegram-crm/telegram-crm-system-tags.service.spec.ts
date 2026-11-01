@@ -294,3 +294,51 @@ describe('TelegramCrmSystemTagsService', () => {
     ).not.toHaveBeenCalled();
   });
 });
+
+it('retains a legacy tag name on workspace collision while allowing canonical folder import to continue', async () => {
+  const prisma = {
+    telegramAdvertiserTag: {
+      findMany: jest
+        .fn()
+        .mockResolvedValueOnce([
+          {
+            id: 'old',
+            systemKey: 'TELEGRAM_FOLDER:a:9',
+            name: 'Old name',
+            color: '#000000',
+            position: 9,
+          },
+          {
+            id: 'unrelated',
+            systemKey: null,
+            name: 'Customers',
+            color: null,
+            position: 0,
+          },
+        ])
+        .mockResolvedValueOnce([
+          { id: 'old', systemKey: 'TELEGRAM_FOLDER:a:9' },
+        ]),
+      createMany: jest.fn(),
+      updateMany: jest.fn(),
+    },
+  };
+  await new TelegramCrmSystemTagsService(
+    prisma as never,
+  ).syncTelegramFolderTags(
+    {
+      workspaceId: 'w',
+      accountId: 'a',
+      folders: [{ id: 9, title: 'Customers', emoticon: null, color: 3 }],
+      dialogs: [],
+      contactIdByTelegramUserId: new Map(),
+    },
+    prisma as never,
+  );
+  expect(prisma.telegramAdvertiserTag.updateMany).toHaveBeenCalledWith(
+    expect.objectContaining({
+      where: { workspaceId: 'w', systemKey: 'TELEGRAM_FOLDER:a:9' },
+      data: expect.objectContaining({ name: 'Old name' }),
+    }),
+  );
+});

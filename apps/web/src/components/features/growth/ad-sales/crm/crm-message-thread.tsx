@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useMemo, useRef, useState, type ReactNode } from "react";
 import type { CrmConversationListItem, CrmMessageListItem } from "@telegram-system/shared";
 import { ChatThread } from "@/components/chat/chat-thread";
+import { chatDetailsAreMobile, useChatDetailsMobile } from "@/components/chat/use-chat-details-mobile";
 import { Button } from "@/components/ui/primitives";
 import { crmChatCapabilities, toChatMessage } from "./crm-chat-adapter";
 import {
@@ -10,6 +11,7 @@ import {
   type CrmMessageComposerHandle,
 } from "./crm-message-composer";
 import { useCrmThread } from "./use-crm-thread";
+import { useCrmAutoRead } from "./use-crm-auto-read";
 import { CrmCopilot, type CrmCopilotHandle } from "./copilot/crm-copilot";
 import { messageAiApproval } from "./crm-composer-draft";
 import { CrmMessageActionDialog, type MessageActionSelection } from "./crm-message-action-dialog";
@@ -22,6 +24,7 @@ type ThreadProps = {
   conversation: CrmConversationListItem;
   canSendManual: boolean;
   sendDisabledReason?: string;
+  detailsOpen?: boolean;
   header?: ReactNode;
 };
 
@@ -39,6 +42,7 @@ function CrmThreadSession({
   conversation,
   canSendManual,
   sendDisabledReason,
+  detailsOpen = false,
   header,
 }: ThreadProps) {
   const thread = useCrmThread(conversation);
@@ -53,6 +57,26 @@ function CrmThreadSession({
   const chat = useCrmChatActions(conversation.id, canSendManual);
   const [reply, setReply] = useState<ChatMessage | null>(null);
   const [selection, setSelection] = useState<MessageActionSelection | null>(null);
+  const mobileDetails = useChatDetailsMobile();
+  const [nearBottom, setNearBottom] = useState(false);
+  const [visibleMessageIds, setVisibleMessageIds] = useState<string[]>([]);
+  const onNearBottomChange = useCallback((bottom: boolean, ids: string[]) => {
+    setNearBottom(bottom);
+    setVisibleMessageIds(ids);
+  }, []);
+  const latestVisibleId = useMemo(() => visibleMessageIds.reduce<number | null>((latest, id) => {
+    const numeric = originals.get(id)?.telegramMessageIdNumeric;
+    return numeric != null && (latest === null || numeric > latest) ? numeric : latest;
+  }, null), [visibleMessageIds, originals]);
+  useCrmAutoRead({
+    enabled: !(detailsOpen && (mobileDetails || chatDetailsAreMobile())) && !selection && thread.query.isSuccess && !thread.query.isFetching && !thread.query.error && thread.refreshRecent.isSuccess && !thread.refreshRecent.isPending && !thread.refreshRecent.error,
+    nearBottom,
+    unreadCount: conversation.unreadCount,
+    latestVisibleId,
+    pending: thread.markRead.isPending,
+    failed: Boolean(thread.markRead.error),
+    markRead: thread.markRead.mutate,
+  });
   const capabilities = crmChatCapabilities(canSendManual && !chat.blocked && !thread.unknownSend, chat.capabilities);
   const selectAction = (kind: MessageActionSelection["kind"], model: ChatMessage) => {
     const message = thread.messages.find((item) => item.id === model.id);
@@ -61,6 +85,7 @@ function CrmThreadSession({
   return (
     <ChatThread
       threadId={conversation.id}
+      onNearBottomChange={onNearBottomChange}
       messages={thread.messages.map((message) => toChatMessage(message, originals, conversation.lastReadOutboxTelegramMessageId))}
       actions={{ onReply: setReply, onEdit: (message) => selectAction("EDIT", message), onDelete: (message) => selectAction("DELETE", message), onReact: (message) => selectAction("REACTION", message), onForward: (message) => selectAction("FORWARD", message) }}
       capabilities={capabilities}
@@ -74,7 +99,7 @@ function CrmThreadSession({
               <Button
                 variant="secondary"
                 disabled={thread.markRead.isPending}
-                onClick={() => thread.markRead.mutate()}
+                onClick={() => thread.markRead.mutate(undefined)}
               >
                 {thread.markRead.isPending ? "Marking…" : "Mark read"}
               </Button>

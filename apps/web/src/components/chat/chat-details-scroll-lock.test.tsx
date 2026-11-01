@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Modal } from "@/components/ui/modal";
 import { ChatDetailsPanel } from "./chat-details-panel";
-import { acquireBodyScrollLock } from "@/lib/body-scroll-lock";
+import { acquireBodyScrollLock, hasBodyScrollLock, subscribeBodyScrollLock } from "@/lib/body-scroll-lock";
 
 const originalShowModal = Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, "showModal");
 const originalClose = Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, "close");
@@ -19,16 +19,26 @@ describe("nested chat overlay scroll locks", () => {
     document.body.style.overflow = "auto";
     const view = render(<ChatDetailsPanel title="Customer" onClose={() => undefined}><Modal open title="Follow-up" onClose={() => undefined}><button>First action</button><button>Last action</button></Modal></ChatDetailsPanel>);
     expect(document.body.style.overflow).toBe("hidden");
+    expect(hasBodyScrollLock()).toBe(true);
     expect(document.querySelector("dialog[open]")).toContainElement(document.querySelector('[data-app-modal="true"]'));
     const last = screen.getByRole("button", { name: "Last action" });
     last.focus(); fireEvent.keyDown(last, { key: "Tab" });
     expect(screen.getByRole("button", { name: "Close dialog" })).toHaveFocus();
     view.unmount(); expect(document.body.style.overflow).toBe("auto");
+    expect(hasBodyScrollLock()).toBe(false);
   });
   it("releases each lock once and retains the remaining owner's lock regardless of release order", () => {
     document.body.style.overflow = "clip";
+    const transitions = vi.fn();
+    const unsubscribe = subscribeBodyScrollLock(transitions);
     const outer = acquireBodyScrollLock(); const inner = acquireBodyScrollLock();
+    expect(hasBodyScrollLock()).toBe(true);
+    expect(transitions).toHaveBeenCalledTimes(1);
     outer(); outer(); expect(document.body.style.overflow).toBe("hidden");
+    expect(transitions).toHaveBeenCalledTimes(1);
     inner(); expect(document.body.style.overflow).toBe("clip");
+    expect(hasBodyScrollLock()).toBe(false);
+    expect(transitions).toHaveBeenCalledTimes(2);
+    unsubscribe();
   });
 });

@@ -249,6 +249,7 @@ describe('TelegramCrmMtprotoAdapter', () => {
       emoticon: '🤝',
       color: 3,
       contacts: true,
+      excludeRead: true,
       pinnedPeers: [],
       includePeers: [],
       excludePeers: [],
@@ -280,9 +281,22 @@ describe('TelegramCrmMtprotoAdapter', () => {
     await expect(
       handle.listPrivateDialogs({ limit: 100 }),
     ).resolves.toMatchObject({
-      folders: [{ id: 9, title: 'Customers', emoticon: '🤝', color: 3 }],
-      dialogs: [expect.objectContaining({ folderIds: [9] })],
+      folders: [
+        {
+          id: 9,
+          title: 'Customers',
+          emoticon: '🤝',
+          color: 3,
+          excludeRead: true,
+          emojiPresentation: { type: 'unicode', value: '🤝' },
+        },
+      ],
+      dialogs: [
+        expect.objectContaining({ folderIds: [], folderMembershipIds: [9] }),
+      ],
     });
+    await handle.listPrivateDialogs({ limit: 100 });
+    expect(client.invoke).toHaveBeenCalledTimes(2);
   });
 
   it('fails the import instead of silently omitting Telegram folder tags', async () => {

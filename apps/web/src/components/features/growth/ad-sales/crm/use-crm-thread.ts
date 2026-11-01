@@ -119,7 +119,7 @@ export function useCrmThread(conversation: CrmConversationListItem) {
     refreshRecentMutate();
   }, [query.isSuccess, refreshRecentMutate]);
   const markRead = useMutation({
-    mutationFn: () => telegramCrmApi.markConversationRead(conversation.id),
+    mutationFn: (maxTelegramMessageId?: number) => telegramCrmApi.markConversationRead(conversation.id, maxTelegramMessageId),
     onSuccess: (result) => {
       reconcileCrmConversationUnread(
         client,
@@ -133,6 +133,7 @@ export function useCrmThread(conversation: CrmConversationListItem) {
         readState: result.unreadCount ? "UNREAD" : "READ",
       });
       void client.invalidateQueries({ queryKey: telegramCrmKeys.unread() });
+      void client.invalidateQueries({ queryKey: telegramCrmKeys.inboxFolders(), exact: true, refetchType: "active" });
     },
   });
   const send = useMutation({

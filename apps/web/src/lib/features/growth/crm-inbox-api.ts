@@ -1,4 +1,4 @@
-import type { CrmInboxConversationsPage, CrmInboxFilter } from "@telegram-system/shared";
+import type { CrmInboxConversationsPage, CrmInboxFilter, CrmInboxFoldersResult } from "@telegram-system/shared";
 import { api } from "@/lib/api";
 
 export type CrmInboxConversationParams = {
@@ -7,6 +7,10 @@ export type CrmInboxConversationParams = {
   folderId?: string;
   limit?: number;
 };
+
+export async function listCrmInboxFolders(signal?: AbortSignal) {
+  return (await api.get<CrmInboxFoldersResult>("/telegram-crm/inbox/folders", { signal })).data;
+}
 
 export async function listCrmInboxConversations(
   params: CrmInboxConversationParams,

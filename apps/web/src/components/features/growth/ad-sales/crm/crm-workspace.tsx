@@ -218,6 +218,7 @@ export function CrmWorkspace({
       {surface.kind === "inbox" ? (
         hasCrmView ? (
           <CrmInbox
+            key={me.data.workspace.id}
             canManage={permissions.canEditAll}
             canSendManual={permissions.canSendManual}
             canViewSales={canViewSales}

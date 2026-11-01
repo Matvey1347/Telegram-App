@@ -133,6 +133,37 @@ export function telegramCrmCheckpoint(state: {
 export function normalizeTelegramCrmUpdate(
   update: Api.TypeUpdate,
 ): TelegramCrmMtprotoUpdate | null {
+  if (update instanceof Api.UpdateNotifySettings) {
+    if (update.peer instanceof Api.NotifyUsers)
+      return { type: 'folders.changed' };
+    if (
+      update.peer instanceof Api.NotifyPeer &&
+      update.peer.peer instanceof Api.PeerUser
+    )
+      return {
+        type: 'folders.changed',
+        telegramUserIds: [telegramLongString(update.peer.peer.userId)],
+      };
+    return null;
+  }
+  if (update instanceof Api.UpdateFolderPeers) {
+    const telegramUserIds = update.folderPeers.flatMap((folder) =>
+      folder.peer instanceof Api.PeerUser
+        ? [telegramLongString(folder.peer.userId)]
+        : [],
+    );
+    return {
+      type: 'folders.changed',
+      telegramUserIds,
+      sequence: { pts: update.pts, ptsCount: update.ptsCount },
+    };
+  }
+  if (
+    update instanceof Api.UpdateDialogFilter ||
+    update instanceof Api.UpdateDialogFilters ||
+    update instanceof Api.UpdateDialogFilterOrder
+  )
+    return { type: 'folders.changed' };
   if (
     update instanceof Api.UpdateNewMessage ||
     update instanceof Api.UpdateEditMessage

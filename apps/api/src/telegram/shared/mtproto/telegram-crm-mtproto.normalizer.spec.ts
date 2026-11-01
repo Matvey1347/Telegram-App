@@ -118,3 +118,63 @@ describe('CRM live peer eligibility metadata', () => {
     expect(normalizeTelegramCrmRaw(message(51), excluded)).toHaveLength(1);
   });
 });
+
+it.each([
+  new Api.UpdateDialogFilters(),
+  new Api.UpdateDialogFilter({ id: 9 }),
+  new Api.UpdateDialogFilterOrder({ order: [9, 3] }),
+  new Api.UpdateFolderPeers({
+    folderPeers: [
+      new Api.FolderPeer({
+        peer: new Api.PeerUser({ userId: 42 as never }),
+        folderId: 1,
+      }),
+    ],
+    pts: 1,
+    ptsCount: 0,
+  }),
+  new Api.UpdateNotifySettings({
+    peer: new Api.NotifyUsers(),
+    notifySettings: new Api.PeerNotifySettings({}),
+  }),
+])(
+  'turns Telegram folder and rule changes into account metadata refresh signals',
+  (update) => {
+    expect(normalizeTelegramCrmRaw(update)).toEqual([
+      update instanceof Api.UpdateFolderPeers
+        ? {
+            type: 'folders.changed',
+            telegramUserIds: ['42'],
+            sequence: { pts: 1, ptsCount: 0 },
+          }
+        : { type: 'folders.changed' },
+    ]);
+  },
+);
+
+it('ignores channel-only notification and archive changes', () => {
+  const channel = new Api.PeerChannel({ channelId: 42 as never });
+  expect(
+    normalizeTelegramCrmRaw(
+      new Api.UpdateNotifySettings({
+        peer: new Api.NotifyPeer({ peer: channel }),
+        notifySettings: new Api.PeerNotifySettings({}),
+      }),
+    ),
+  ).toEqual([]);
+  expect(
+    normalizeTelegramCrmRaw(
+      new Api.UpdateFolderPeers({
+        folderPeers: [new Api.FolderPeer({ peer: channel, folderId: 1 })],
+        pts: 1,
+        ptsCount: 0,
+      }),
+    ),
+  ).toEqual([
+    {
+      type: 'folders.changed',
+      telegramUserIds: [],
+      sequence: { pts: 1, ptsCount: 0 },
+    },
+  ]);
+});

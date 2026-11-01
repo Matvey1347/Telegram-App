@@ -25,6 +25,73 @@ const mockBotSupportAdapter = {
 afterEach(() => vi.restoreAllMocks());
 
 describe("shared Chat UI adapters", () => {
+  it("reports whether the viewer is at the bottom of message history", () => {
+    const onNearBottomChange = vi.fn();
+    render(<ChatThread messages={[mockBotSupportAdapter.message]} capabilities={crmCapabilities} onNearBottomChange={onNearBottomChange} />);
+    expect(onNearBottomChange).toHaveBeenLastCalledWith(true, []);
+    const history = screen.getByRole("region", { name: "Message history" });
+    Object.defineProperties(history, { scrollHeight: { value: 1000 }, clientHeight: { value: 300 }, scrollTop: { value: 200, writable: true } });
+    fireEvent.scroll(history);
+    expect(onNearBottomChange).toHaveBeenLastCalledWith(false, []);
+    history.scrollTop = 700;
+    fireEvent.scroll(history);
+    expect(onNearBottomChange).toHaveBeenLastCalledWith(true, []);
+  });
+
+  it("reports only message rows actually visible in a near-bottom viewport", () => {
+    const onNearBottomChange = vi.fn();
+    render(<ChatThread messages={[mockBotSupportAdapter.message, { ...mockBotSupportAdapter.message, id: "below-viewport" }]} capabilities={crmCapabilities} onNearBottomChange={onNearBottomChange} />);
+    const history = screen.getByRole("region", { name: "Message history" });
+    const rows = history.querySelectorAll<HTMLElement>("[data-message-id]");
+    const rect = (top: number, bottom: number) => ({ top, bottom, height: bottom - top, left: 0, right: 100, width: 100, x: 0, y: top, toJSON: () => ({}) }) as DOMRect;
+    vi.spyOn(history, "getBoundingClientRect").mockReturnValue(rect(0, 300));
+    vi.spyOn(rows[0].querySelector("article")!, "getBoundingClientRect").mockReturnValue(rect(100, 150));
+    vi.spyOn(rows[1].querySelector("article")!, "getBoundingClientRect").mockReturnValue(rect(310, 350));
+    Object.defineProperties(history, { scrollHeight: { value: 1000 }, clientHeight: { value: 300 }, scrollTop: { value: 650, writable: true } });
+    fireEvent.scroll(history);
+    expect(onNearBottomChange).toHaveBeenLastCalledWith(true, ["support-message"]);
+  });
+
+  it("checks the actual short bubble against occlusion and clips geometry to the browser viewport", () => {
+    const onNearBottomChange = vi.fn();
+    render(<ChatThread messages={[mockBotSupportAdapter.message]} capabilities={crmCapabilities} onNearBottomChange={onNearBottomChange} />);
+    const history = screen.getByRole("region", { name: "Message history" });
+    const row = history.querySelector<HTMLElement>("[data-message-id]")!;
+    const bubble = row.querySelector<HTMLElement>("article")!;
+    const rect = (left: number, top: number, right: number, bottom: number) => ({ left, top, right, bottom, width: right - left, height: bottom - top, x: left, y: top, toJSON: () => ({}) }) as DOMRect;
+    vi.spyOn(history, "getBoundingClientRect").mockReturnValue(rect(0, 0, 400, 300));
+    vi.spyOn(row, "getBoundingClientRect").mockReturnValue(rect(0, 100, 400, 150));
+    vi.spyOn(bubble, "getBoundingClientRect").mockReturnValue(rect(10, 100, 90, 150));
+    Object.defineProperties(history, { scrollHeight: { value: 1000 }, clientHeight: { value: 300 }, scrollTop: { value: 700, writable: true } });
+    const previous = Object.getOwnPropertyDescriptor(document, "elementFromPoint");
+    const hitTest = vi.fn(() => bubble);
+    Object.defineProperty(document, "elementFromPoint", { configurable: true, value: hitTest });
+    try {
+      fireEvent.scroll(history);
+      expect(hitTest).toHaveBeenCalledWith(50, 125);
+      expect(onNearBottomChange).toHaveBeenLastCalledWith(true, ["support-message"]);
+      hitTest.mockReturnValue(document.body);
+      fireEvent.scroll(history);
+      expect(onNearBottomChange).toHaveBeenLastCalledWith(true, []);
+      vi.spyOn(bubble, "getBoundingClientRect").mockReturnValue(rect(-200, -150, -100, -50));
+      fireEvent.scroll(history);
+      expect(onNearBottomChange).toHaveBeenLastCalledWith(true, []);
+    } finally {
+      if (previous) Object.defineProperty(document, "elementFromPoint", previous);
+      else Reflect.deleteProperty(document, "elementFromPoint");
+    }
+  });
+
+  it("reports a newly rendered visible message even when the viewer remains at the bottom", () => {
+    const bounds = { top: 0, bottom: 100, left: 0, right: 100, width: 100, height: 100, x: 0, y: 0, toJSON: () => ({}) } as DOMRect;
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue(bounds);
+    const onNearBottomChange = vi.fn();
+    const view = render(<ChatThread messages={[mockBotSupportAdapter.message]} capabilities={crmCapabilities} onNearBottomChange={onNearBottomChange} />);
+    expect(onNearBottomChange).toHaveBeenLastCalledWith(true, ["support-message"]);
+    view.rerender(<ChatThread messages={[mockBotSupportAdapter.message, { ...mockBotSupportAdapter.message, id: "new-message" }]} capabilities={crmCapabilities} onNearBottomChange={onNearBottomChange} />);
+    expect(onNearBottomChange).toHaveBeenLastCalledWith(true, ["new-message", "support-message"]);
+  });
+
   it("uses the same thread for Support with reply but no edit or CRM formatting", async () => {
     const reply = vi.fn();
     render(<ChatThread header={mockBotSupportAdapter.conversation.title} messages={[mockBotSupportAdapter.message]} capabilities={mockBotSupportAdapter.capabilities} actions={{ onReply: reply, onEdit: vi.fn(), onDelete: vi.fn(), onReact: vi.fn() }} />);

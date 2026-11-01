@@ -8,6 +8,7 @@ import {
   Max,
   MaxLength,
   Min,
+  ValidateIf,
 } from 'class-validator';
 import {
   CRM_CONVERSATION_STATES,
@@ -36,6 +37,15 @@ export class SetCrmInboxStateDto {
 export class MergeCrmContactsDto {
   @IsString()
   sourceContactId!: string;
+}
+
+/** Omitted for a manual read; automatic reads must use the displayed watermark. */
+export class MarkCrmConversationReadDto {
+  @ValidateIf((_object, value: unknown) => value !== undefined)
+  @IsInt()
+  @Min(1)
+  @Max(2_147_483_647)
+  maxTelegramMessageId?: number;
 }
 
 export class SendCrmManualMessageDto {

@@ -32,6 +32,14 @@ beforeEach(() => {
 });
 
 describe("CRM history reconciliation", () => {
+  it("refreshes folder unread counts after a successful mark-read without waiting for SSE", async () => {
+    const markRead = vi.spyOn(telegramCrmApi, "markConversationRead").mockResolvedValue({ conversationId: conversation.id, lastReadInboxTelegramMessageId: 99, readMessageCount: 2, unreadCount: 0 });
+    const { client, result } = setup();
+    const invalidate = vi.spyOn(client, "invalidateQueries");
+    await act(async () => { await result.current.markRead.mutateAsync(99); });
+    expect(markRead).toHaveBeenCalledWith(conversation.id, 99);
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: telegramCrmKeys.inboxFolders(), exact: true, refetchType: "active" });
+  });
   it("reconciles the latest page once on opening and repairs legacy exhausted state", async () => {
     vi.mocked(telegramCrmApi.importHistory).mockResolvedValue({ conversationId: conversation.id, imported: 0, scanned: 100, nextBeforeTelegramMessageId: 101, exhausted: false });
     const { result, rerender } = setup();

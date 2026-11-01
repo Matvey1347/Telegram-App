@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { Fragment, useCallback, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/primitives";
 import { MessageBubble } from "./message-bubble";
 import type { ChatCapabilities, ChatMessage, ChatMessageActions } from "./types";
@@ -20,6 +20,7 @@ export function ChatThread({
   loadingOlder = false,
   emptyText = "No messages yet.",
   threadId,
+  onNearBottomChange,
 }: {
   header?: ReactNode;
   composer?: ReactNode;
@@ -35,14 +36,51 @@ export function ChatThread({
   loadingOlder?: boolean;
   emptyText?: string;
   threadId?: string;
+  onNearBottomChange?: (nearBottom: boolean, visibleMessageIds: string[]) => void;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [activeActionsId, setActiveActionsId] = useState<string | null>(null);
   const nearBottomRef = useRef(true);
+  const reportedNearBottomRef = useRef<string | undefined>(undefined);
+  const reportNearBottom = useCallback((nearBottom: boolean, element: HTMLDivElement | null) => {
+    nearBottomRef.current = nearBottom;
+    if (!onNearBottomChange) return;
+    const visible: string[] = [];
+    if (nearBottom && element) {
+      const viewport = element.getBoundingClientRect();
+      const left = Math.max(0, viewport.left);
+      const right = Math.min(window.innerWidth, viewport.right);
+      const top = Math.max(0, viewport.top);
+      const bottom = Math.min(window.innerHeight, viewport.bottom);
+      if (right > left && bottom > top) {
+        const nodes = element.querySelectorAll<HTMLElement>("[data-message-id]");
+        for (let index = nodes.length - 1; index >= 0; index--) {
+          const node = nodes[index];
+          const bubble = node.querySelector<HTMLElement>("article") ?? node;
+          const bounds = bubble.getBoundingClientRect();
+          if (visible.length && bounds.bottom <= top) break;
+          const bubbleLeft = Math.max(left, bounds.left);
+          const bubbleRight = Math.min(right, bounds.right);
+          const bubbleTop = Math.max(top, bounds.top);
+          const bubbleBottom = Math.min(bottom, bounds.bottom);
+          if (bubbleRight <= bubbleLeft || bubbleBottom <= bubbleTop) continue;
+          const hit = typeof document.elementFromPoint === "function"
+            ? document.elementFromPoint((bubbleLeft + bubbleRight) / 2, (bubbleTop + bubbleBottom) / 2)
+            : bubble;
+          if (hit && (hit === bubble || bubble.contains(hit)) && node.dataset.messageId)
+            visible.push(node.dataset.messageId);
+        }
+      }
+    }
+    const signature = JSON.stringify([nearBottom, visible]);
+    if (reportedNearBottomRef.current === signature) return;
+    reportedNearBottomRef.current = signature;
+    onNearBottomChange(nearBottom, visible);
+  }, [onNearBottomChange]);
   const previousRef = useRef({ threadId, firstId: "", lastId: "", height: 0 });
   useLayoutEffect(() => {
     const element = scrollRef.current;
-    if (!element || !messages.length) return;
+    if (!element || !messages.length) { reportNearBottom(false, element); return; }
     const previous = previousRef.current;
     const firstId = messages[0].id;
     const last = messages[messages.length - 1];
@@ -53,7 +91,8 @@ export function ChatThread({
       element.scrollTop += Math.max(0, element.scrollHeight - previous.height);
     }
     previousRef.current = { threadId, firstId, lastId: last.id, height: element.scrollHeight };
-  }, [messages, threadId]);
+    reportNearBottom(element.scrollHeight - element.scrollTop - element.clientHeight < 80, element);
+  }, [messages, threadId, reportNearBottom]);
 
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
@@ -65,7 +104,7 @@ export function ChatThread({
         tabIndex={0}
         onScroll={(event) => {
           const element = event.currentTarget;
-          nearBottomRef.current = element.scrollHeight - element.scrollTop - element.clientHeight < 80;
+          reportNearBottom(element.scrollHeight - element.scrollTop - element.clientHeight < 80, element);
         }}
         className="app-scrollbar min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain px-3 py-4 md:px-5"
       >

@@ -1,17 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { X } from "lucide-react";
 import styles from "./chat.module.css";
 import { OverlayPortalContext } from "@/components/ui/overlay-portal-context";
 import { acquireBodyScrollLock } from "@/lib/body-scroll-lock";
-
-const mobileQuery = "(max-width: 768px)";
-const subscribe = (onChange: () => void) => {
-  const query = window.matchMedia(mobileQuery);
-  query.addEventListener("change", onChange);
-  return () => query.removeEventListener("change", onChange);
-};
+import { useChatDetailsMobile } from "./use-chat-details-mobile";
 
 /** Desktop is an inline panel. Mobile uses the browser's modal focus boundary. */
 export function ChatDetailsPanel({ title, onClose, children }: {
@@ -19,7 +13,7 @@ export function ChatDetailsPanel({ title, onClose, children }: {
   onClose: () => void;
   children: ReactNode;
 }) {
-  const isMobile = useSyncExternalStore(subscribe, () => window.matchMedia(mobileQuery).matches, () => false);
+  const isMobile = useChatDetailsMobile();
   const titleId = useId();
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [portalContainer, setPortalContainer] = useState<HTMLDialogElement | null>(null);

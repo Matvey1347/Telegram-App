@@ -23,7 +23,7 @@ export function toChatConversation(item: CrmInboxConversationItem, t?: Translati
   const attention = item.attentionStatus !== undefined ? item.attentionStatus : deriveCrmSalesAttention({ state: item.state, archivedAt: item.contact?.archivedAt, manualStatus: item.contact?.manualSalesStatus, nextContactAt: item.contact?.nextContactAt ?? null, lastInboundAt: item.lastInboundAt, lastOutboundAt: item.lastOutboundAt });
   return { id: item.id, title: crmConversationTitle(item), subtitle: `Telegram · ${item.account.username ? `@${item.account.username}` : item.account.label}`,
     preview: item.lastMessage?.origin === "MANUAL" ? telegramPreviewPlainText(item.lastMessage.text ?? "") : item.lastMessage?.text ?? "No messages yet",
-    lastActivityAt: item.lastMessageAt ?? undefined, unreadCount: item.unreadCount, folders: item.folders,
+    lastActivityAt: item.lastMessageAt ?? undefined, unreadCount: item.unreadCount, folders: item.folders?.filter((folder) => !folder.excludeRead || item.unreadCount > 0),
     status: item.state === "ARCHIVED" ? "Archived" : t ? salesStatusLabel(attention, t) : attention?.replaceAll("_", " ") ?? "New contact",
     avatarPresentation: item.peer.photoUrl ? { type: "image", id: item.peer.id, url: item.peer.photoUrl, name: crmConversationTitle(item) } : null };
 }

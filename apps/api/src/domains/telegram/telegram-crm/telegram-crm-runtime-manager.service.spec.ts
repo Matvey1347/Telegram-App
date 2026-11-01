@@ -617,3 +617,161 @@ describe('TelegramCrmRuntimeManager', () => {
     await manager.onApplicationShutdown();
   });
 });
+
+it('serializes only folder-sync while ordinary history/read proceeds without send permission', async () => {
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const sessions = {
+    requireForSync: jest.fn().mockResolvedValue({ credentials: {} }),
+    requireForSend: jest.fn(),
+  };
+  const handle = { close: jest.fn() };
+  const folderRefresh = {
+    needsRetry: jest.fn().mockReturnValue(false),
+    withAccountScan: jest.fn(async (_accountId, operation) => {
+      await gate;
+      return operation();
+    }),
+  };
+  const manager = new TelegramCrmRuntimeManager(
+    {} as never,
+    sessions as never,
+    {} as never,
+    {} as never,
+    new TelegramAccountRuntimeNotifier(),
+    {} as never,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    folderRefresh as never,
+  );
+  (manager as unknown as { accounts: Map<string, unknown> }).accounts.set(
+    account.id,
+    { account, handle },
+  );
+  const initial = manager.withAccountHandle(
+    account.workspaceId,
+    account.id,
+    'folder-sync',
+    async () => 'initial',
+  );
+  expect(
+    await manager.withAccountHandle(
+      account.workspaceId,
+      account.id,
+      'sync',
+      async () => 'history',
+    ),
+  ).toBe('history');
+  expect(sessions.requireForSend).not.toHaveBeenCalled();
+  release();
+  expect(await initial).toBe('initial');
+  expect(folderRefresh.withAccountScan).toHaveBeenCalledTimes(1);
+});
+
+it('waits an old generation marker write before checking durable pending state or advancing recovery', async () => {
+  let finishWrite!: () => void;
+  const fence = new Promise<void>((resolve) => {
+    finishWrite = resolve;
+  });
+  const sessions = {
+    startupAccounts: jest.fn().mockResolvedValue([account]),
+    credentials: jest.fn().mockReturnValue({}),
+  };
+  const handle = {
+    onUpdate: jest.fn().mockReturnValue(jest.fn()),
+    close: jest.fn().mockResolvedValue(undefined),
+  };
+  const recovery = {
+    recover: jest.fn().mockResolvedValue({
+      outcome: 'SUCCESS',
+      checkpoint: { pts: 1, qts: 0, date: 1, seq: 1 },
+    }),
+  };
+  const folderRefresh = {
+    resumePending: jest.fn().mockResolvedValue(undefined),
+    needsRetry: jest.fn().mockReturnValue(false),
+  };
+  const manager = new TelegramCrmRuntimeManager(
+    { telegramUserAccountIntegration: { updateMany: jest.fn() } } as never,
+    sessions as never,
+    { open: jest.fn().mockResolvedValue(handle) } as never,
+    {} as never,
+    new TelegramAccountRuntimeNotifier(),
+    recovery as never,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    folderRefresh as never,
+  );
+  (
+    manager as unknown as { folderFences: Map<string, Promise<void>> }
+  ).folderFences.set(account.id, fence);
+  const startup = manager.onApplicationBootstrap();
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+  expect(recovery.recover).not.toHaveBeenCalled();
+  expect(folderRefresh.resumePending).not.toHaveBeenCalled();
+  finishWrite();
+  await startup;
+  expect(folderRefresh.resumePending).toHaveBeenCalledTimes(1);
+  expect(recovery.recover).toHaveBeenCalledTimes(1);
+  await manager.onApplicationShutdown();
+});
+
+it('abandons targeted scope when the originating handle disappears after its durable marker commits', async () => {
+  let commit!: (value: { targeted: boolean; version: number }) => void;
+  const folderRefresh = {
+    markDirty: jest.fn().mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          commit = resolve;
+        }),
+    ),
+    abandonTargeted: jest.fn(),
+    request: jest.fn(),
+  };
+  const manager = new TelegramCrmRuntimeManager(
+    {} as never,
+    {} as never,
+    {} as never,
+    {} as never,
+    new TelegramAccountRuntimeNotifier(),
+    {} as never,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    folderRefresh as never,
+  );
+  const managed = {
+    account,
+    handle: {},
+    generation: 1,
+    abort: new AbortController(),
+    lastPts: 1,
+  };
+  const internal = manager as unknown as {
+    accounts: Map<string, unknown>;
+    enqueue: (managed: unknown, update: TelegramCrmMtprotoUpdate) => void;
+  };
+  internal.accounts.set(account.id, managed);
+  internal.enqueue(managed, {
+    type: 'folders.changed',
+    telegramUserIds: ['42'],
+  });
+  await Promise.resolve();
+  await Promise.resolve();
+  managed.generation += 1;
+  commit({ targeted: true, version: 1 });
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+  expect(folderRefresh.abandonTargeted).toHaveBeenCalledWith(account.id);
+  expect(folderRefresh.request).not.toHaveBeenCalled();
+});

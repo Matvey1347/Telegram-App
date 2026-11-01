@@ -268,10 +268,12 @@ export const telegramCrmApi = {
     ).data,
   getManualSendReceipt: async (conversationId: string, clientIdempotencyKey: string) =>
     (await api.get<CrmManualMessageResult | null>(`/telegram-crm/conversations/${conversationId}/manual-send-receipt`, { params: { clientIdempotencyKey } })).data,
-  markConversationRead: async (conversationId: string) =>
+  markConversationRead: async (conversationId: string, maxTelegramMessageId?: number) =>
     (
       await api.post<CrmConversationReadResult>(
         `/telegram-crm/conversations/${conversationId}/read`,
+        maxTelegramMessageId === undefined ? undefined : { maxTelegramMessageId },
+        { feedback: { mode: "managed" } } as Parameters<typeof api.post>[2],
       )
     ).data,
   importHistory: async (

@@ -39,6 +39,7 @@ export const telegramCrmKeys = {
     ["telegram-crm", "contacts", "chat-context", contactId] as const,
   inboxLists: () => ["telegram-crm", "inbox", "list"] as const,
   inboxConversations: () => ["telegram-crm", "inbox-conversations"] as const,
+  inboxFolders: () => ["telegram-crm", "inbox-folders"] as const,
   inboxConversationsList: (params: CrmInboxConversationParams) =>
     ["telegram-crm", "inbox-conversations", params] as const,
   inboxList: (params: CrmInboxParams) =>

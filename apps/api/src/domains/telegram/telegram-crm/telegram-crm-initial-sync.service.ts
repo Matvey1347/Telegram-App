@@ -197,7 +197,7 @@ export class TelegramCrmInitialSyncService {
       await this.runtime.withAccountHandle(
         workspaceId,
         accountId,
-        'sync',
+        'folder-sync',
         async (handle) => {
           while (
             scannedDialogs < MAX_SCANNED_DIALOGS &&

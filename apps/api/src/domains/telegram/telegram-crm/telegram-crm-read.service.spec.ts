@@ -1,4 +1,8 @@
 import { TelegramCrmReadService } from './telegram-crm-read.service';
+import { plainToInstance } from 'class-transformer';
+import { validate } from 'class-validator';
+import { MarkCrmConversationReadDto } from './telegram-crm-inbox.dto';
+import { ValidationPipe } from '@nestjs/common';
 
 function setup() {
   const conversation = {
@@ -79,6 +83,113 @@ function setup() {
 }
 
 describe('explicit CRM read watermark', () => {
+  it('caps the Telegram read at a rendered message even if a newer message already exists', async () => {
+    const { service, prisma, conversation, handle, tx } = setup();
+    // A later inbound message was committed before the request reached the API.
+    prisma.telegramCrmConversation.findFirst.mockImplementation(
+      (query: {
+        select: {
+          messages: { where: { telegramMessageIdNumeric: { lte?: number } } };
+        };
+      }) => {
+        const limit = query.select.messages.where.telegramMessageIdNumeric.lte;
+        const ids = [101, 99, 90].filter(
+          (id) => limit === undefined || id <= limit,
+        );
+        return Promise.resolve({
+          ...conversation,
+          messages: ids
+            .slice(0, 1)
+            .map((id) => ({ telegramMessageIdNumeric: id })),
+        });
+      },
+    );
+    tx.telegramCrmMessage.count.mockResolvedValue(1);
+    const result = await service.markRead('user-a', 'conversation-a', 99);
+    expect(handle.markRead).toHaveBeenCalledWith(
+      expect.objectContaining({ maxTelegramMessageId: 99 }),
+    );
+    expect(tx.telegramCrmMessage.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          telegramMessageIdNumeric: { lte: 99 },
+        }) as unknown,
+      }),
+    );
+    expect(tx.telegramCrmMessage.count).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          OR: [
+            { telegramMessageIdNumeric: { gt: 99 } },
+            { telegramMessageIdNumeric: null },
+          ],
+        }) as unknown,
+      }),
+    );
+    expect(result.unreadCount).toBe(1);
+    expect(result.lastReadInboxTelegramMessageId).toBe(99);
+  });
+  it('fails safely if no message in this conversation exists at or below the viewed watermark', async () => {
+    const { service, prisma, conversation, runtime, tx } = setup();
+    prisma.telegramCrmConversation.findFirst.mockResolvedValue({
+      ...conversation,
+      messages: [],
+    });
+    await expect(
+      service.markRead('user-a', 'conversation-a', 5),
+    ).rejects.toThrow('Viewed Telegram message not found');
+    expect(runtime.withAccountHandle).not.toHaveBeenCalled();
+    expect(tx.telegramCrmMessage.updateMany).not.toHaveBeenCalled();
+  });
+  it.each([0, -1, 1.5, 2_147_483_648, null, '99'])(
+    'rejects invalid explicit read watermark %s without invoking Telegram',
+    async (watermark) => {
+      const { service, runtime } = setup();
+      const dto = plainToInstance(MarkCrmConversationReadDto, {
+        maxTelegramMessageId: watermark,
+      });
+      expect(await validate(dto)).not.toHaveLength(0);
+      await expect(
+        service.markRead('user-a', 'conversation-a', watermark as number),
+      ).rejects.toThrow('Invalid Telegram read watermark');
+      expect(runtime.withAccountHandle).not.toHaveBeenCalled();
+    },
+  );
+  it('accepts an omitted watermark for existing manual clients', async () => {
+    expect(
+      await validate(plainToInstance(MarkCrmConversationReadDto, {})),
+    ).toHaveLength(0);
+  });
+  it('treats an absent body as manual and rejects null through the actual validation pipeline', async () => {
+    const pipe = new ValidationPipe({
+      whitelist: true,
+      transform: true,
+      forbidNonWhitelisted: true,
+    });
+    const metadata = {
+      type: 'body' as const,
+      metatype: MarkCrmConversationReadDto,
+    };
+    await expect(pipe.transform(undefined, metadata)).resolves.toEqual(
+      expect.objectContaining({}),
+    );
+    await expect(
+      pipe.transform({ maxTelegramMessageId: null }, metadata),
+    ).rejects.toThrow();
+  });
+  it('does not read a conversation outside the authorized workspace', async () => {
+    const { service, prisma, runtime } = setup();
+    prisma.telegramCrmConversation.findFirst.mockResolvedValue(null);
+    await expect(
+      service.markRead('user-a', 'foreign-conversation', 99),
+    ).rejects.toThrow('CRM Conversation not found');
+    expect(prisma.telegramCrmConversation.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'foreign-conversation', workspaceId: 'workspace-a' },
+      }),
+    );
+    expect(runtime.withAccountHandle).not.toHaveBeenCalled();
+  });
   it('uses the highest Telegram id including outbound, but marks only inbound rows', async () => {
     const { service, handle, tx, events, notifications, publisher } = setup();
     await expect(service.markRead('user-a', 'conversation-a')).resolves.toEqual(

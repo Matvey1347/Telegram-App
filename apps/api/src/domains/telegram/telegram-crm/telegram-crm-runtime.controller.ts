@@ -14,6 +14,7 @@ import { JwtAuthGuard } from '../../../common/jwt-auth.guard';
 import { TelegramCrmHistoryService } from './telegram-crm-history.service';
 import {
   ImportCrmHistoryDto,
+  MarkCrmConversationReadDto,
   SendCrmManualMessageDto,
 } from './telegram-crm-inbox.dto';
 import { TelegramCrmInitialSyncService } from './telegram-crm-initial-sync.service';
@@ -58,8 +59,12 @@ export class TelegramCrmRuntimeController {
   }
 
   @Post('conversations/:id/read')
-  markRead(@CurrentUser() user: JwtUser, @Param('id') id: string) {
-    return this.reads.markRead(user.sub, id);
+  markRead(
+    @CurrentUser() user: JwtUser,
+    @Param('id') id: string,
+    @Body() dto?: MarkCrmConversationReadDto,
+  ) {
+    return this.reads.markRead(user.sub, id, dto?.maxTelegramMessageId);
   }
 
   @Post('conversations/:id/history')

@@ -1,3 +1,4 @@
+import { acquirePostgresTransactionLock } from '../../../prisma/postgres-advisory-lock';
 import { Injectable } from '@nestjs/common';
 import {
   Prisma,
@@ -58,7 +59,7 @@ const telegramFolderColors: Record<number, string> = {
   6: '#ec4899',
 };
 
-function telegramFolderTagDefinition(
+export function telegramFolderTagDefinition(
   accountId: string,
   folder: TelegramCrmMtprotoDialogFolder,
 ) {
@@ -139,6 +140,11 @@ export class TelegramCrmSystemTagsService {
     db: DbClient = this.prisma,
   ) {
     if (!input.folders) return;
+    if ('$executeRaw' in db)
+      await acquirePostgresTransactionLock(
+        db,
+        `crm-folder-tags:${input.workspaceId}`,
+      );
     const definitions = input.folders.map((folder) =>
       telegramFolderTagDefinition(input.accountId, folder),
     );
@@ -147,7 +153,12 @@ export class TelegramCrmSystemTagsService {
       ? await db.telegramAdvertiserTag.findMany({
           where: {
             workspaceId: input.workspaceId,
-            systemKey: { in: systemKeys },
+            OR: [
+              { systemKey: { in: systemKeys } },
+              {
+                name: { in: definitions.map((definition) => definition.name) },
+              },
+            ],
           },
           select: {
             id: true,
@@ -173,7 +184,19 @@ export class TelegramCrmSystemTagsService {
         skipDuplicates: true,
       });
     }
-    const changed = definitions.filter((definition) => {
+    const names = new Map(existing.map((tag) => [tag.name, tag.systemKey]));
+    const safeDefinitions = definitions.map((definition) => {
+      const current = existingByKey.get(definition.systemKey);
+      if (
+        current &&
+        names.has(definition.name) &&
+        names.get(definition.name) !== definition.systemKey
+      )
+        return { ...definition, name: current.name };
+      names.set(definition.name, definition.systemKey);
+      return definition;
+    });
+    const changed = safeDefinitions.filter((definition) => {
       const current = existingByKey.get(definition.systemKey);
       return (
         current &&

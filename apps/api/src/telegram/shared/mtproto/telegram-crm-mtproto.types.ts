@@ -1,3 +1,4 @@
+import type { ResolvedEmoji } from '@telegram-system/shared';
 import type { TelegramLeadChannelHandle } from './telegram-lead-channel.types';
 
 export type TelegramCrmMtprotoCredentials = {
@@ -33,6 +34,8 @@ export type TelegramCrmMtprotoDialog = {
   unreadCount: number;
   lastMessage: TelegramCrmMtprotoMessage | null;
   folderIds?: number[];
+  /** Base membership retains excludeRead matches; current unread is evaluated in CRM reads. */
+  folderMembershipIds?: number[];
 };
 
 export type TelegramCrmMtprotoDialogFolder = {
@@ -40,6 +43,8 @@ export type TelegramCrmMtprotoDialogFolder = {
   title: string;
   emoticon: string | null;
   color: number | null;
+  excludeRead?: boolean;
+  emojiPresentation?: ResolvedEmoji | null;
 };
 
 export type TelegramCrmMtprotoDialogPage = {
@@ -125,6 +130,11 @@ export type TelegramCrmChatActions = {
 
 export type TelegramCrmMtprotoUpdate =
   | {
+      type: 'folders.changed';
+      telegramUserIds?: string[];
+      sequence?: { pts: number; ptsCount: number };
+    }
+  | {
       type: 'message.deleted';
       telegramMessageIds: number[];
       /** Hydrated by the domain before commit, never guessed from local unread flags. */
@@ -173,6 +183,9 @@ export interface TelegramCrmMtprotoHandle {
     cursor?: string | null;
     limit?: number;
   }): Promise<TelegramCrmMtprotoDialogPage>;
+  listPrivatePeerDialogs?(
+    peers: TelegramCrmChatPeer[],
+  ): Promise<Pick<TelegramCrmMtprotoDialogPage, 'dialogs' | 'folders'>>;
   setDialogFolderMembership(input: {
     folderId: number;
     telegramUserId: string;

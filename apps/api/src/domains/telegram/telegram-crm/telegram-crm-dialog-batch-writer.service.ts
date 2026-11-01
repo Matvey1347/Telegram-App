@@ -1,3 +1,4 @@
+import { syncCrmDialogFolders } from './telegram-crm-folder-sync';
 import { Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { Prisma, TelegramCrmReadState } from '@prisma/client';
@@ -366,6 +367,16 @@ export class TelegramCrmDialogBatchWriter {
             conversation.telegramCrmPeerId,
             conversation,
           ]),
+        );
+        await syncCrmDialogFolders(
+          tx,
+          context,
+          new Map(
+            peers.map((peer) => [
+              peer.telegramUserId,
+              conversationByPeerId.get(peer.id)!.id,
+            ]),
+          ),
         );
         const changedConversations = context.dialogs.flatMap((dialog) => {
           const peer = peerByTelegramId.get(dialog.peer.telegramUserId)!;

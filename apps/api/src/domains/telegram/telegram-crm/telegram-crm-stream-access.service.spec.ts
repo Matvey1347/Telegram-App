@@ -32,6 +32,22 @@ function setup() {
   };
 }
 describe('fresh stream authorization', () => {
+  it('delivers generic folder invalidation to scoped viewers without leaking across workspaces', async () => {
+    const f = setup();
+    const folders: CrmRealtimeEvent = {
+      type: 'folders.updated',
+      workspaceId: 'ws',
+      ownerMemberId: null,
+      occurredAt: new Date().toISOString(),
+    };
+    expect(
+      await f.service.visible('user', 'ws', [
+        folders,
+        { ...folders, workspaceId: 'other' },
+      ]),
+    ).toEqual([folders]);
+    expect(f.prisma.telegramCrmConversation.findMany).not.toHaveBeenCalled();
+  });
   it('uses current conversation owner after reassignment, not owner copied into old event', async () => {
     const f = setup();
     expect(await f.service.visible('user', 'ws', [event])).toEqual([]);

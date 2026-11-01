@@ -36,7 +36,15 @@ export class TelegramCrmReadService {
   async markRead(
     userId: string,
     conversationId: string,
+    maxTelegramMessageId?: number,
   ): Promise<CrmConversationReadResult> {
+    if (
+      maxTelegramMessageId !== undefined &&
+      (!Number.isInteger(maxTelegramMessageId) ||
+        maxTelegramMessageId < 1 ||
+        maxTelegramMessageId > 2_147_483_647)
+    )
+      throw new BadRequestException('Invalid Telegram read watermark');
     const access = await this.authorization.require(userId, 'adSales.crm.view');
     const conversation = await this.prisma.telegramCrmConversation.findFirst({
       where: { id: conversationId, workspaceId: access.workspaceId },
@@ -52,7 +60,12 @@ export class TelegramCrmReadService {
         messages: {
           where: {
             deletedAt: null,
-            telegramMessageIdNumeric: { not: null },
+            telegramMessageIdNumeric: {
+              not: null,
+              ...(maxTelegramMessageId !== undefined
+                ? { lte: maxTelegramMessageId }
+                : {}),
+            },
           },
           orderBy: { telegramMessageIdNumeric: 'desc' },
           take: 1,
@@ -70,6 +83,8 @@ export class TelegramCrmReadService {
     );
     const maxId = conversation.messages[0]?.telegramMessageIdNumeric ?? null;
     if (maxId == null) {
+      if (maxTelegramMessageId !== undefined)
+        throw new BadRequestException('Viewed Telegram message not found');
       if (conversation.unreadCount > 0) {
         throw new BadRequestException(
           'Import current Telegram history before marking this Conversation read',

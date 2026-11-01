@@ -69,6 +69,7 @@ export class TelegramCrmStreamAccessService {
       !('assignedMemberId' in scope) || owner === scope.assignedMemberId;
     return events.filter((event) => {
       if (event.workspaceId !== workspaceId) return false;
+      if (event.type === 'folders.updated') return true;
       if ('conversationId' in event)
         return (
           byConversation.has(event.conversationId) &&

@@ -5,6 +5,7 @@ import {
 } from '../../../common/current-user.decorator';
 import { JwtAuthGuard } from '../../../common/jwt-auth.guard';
 import { CrmInboxConversationsQueryDto } from './telegram-crm-inbox-conversations.dto';
+import { TelegramCrmInboxFoldersService } from './telegram-crm-inbox-folders.service';
 import { TelegramCrmInboxConversationsService } from './telegram-crm-inbox-conversations.service';
 
 @UseGuards(JwtAuthGuard)
@@ -12,7 +13,13 @@ import { TelegramCrmInboxConversationsService } from './telegram-crm-inbox-conve
 export class TelegramCrmInboxConversationsController {
   constructor(
     private readonly conversations: TelegramCrmInboxConversationsService,
+    private readonly folders: TelegramCrmInboxFoldersService,
   ) {}
+
+  @Get('folders')
+  listFolders(@CurrentUser() user: JwtUser) {
+    return this.folders.list(user.sub);
+  }
 
   @Get('conversations')
   list(
