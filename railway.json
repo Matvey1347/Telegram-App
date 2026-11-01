@@ -5,7 +5,6 @@
     "builder": "RAILPACK"
   },
   "deploy": {
-    "preDeployCommand": "pnpm --filter api run db:deploy:safe",
     "startCommand": "node scripts/start-railway.mjs",
     "healthcheckPath": "/api/health",
     "restartPolicyType": "ON_FAILURE",
