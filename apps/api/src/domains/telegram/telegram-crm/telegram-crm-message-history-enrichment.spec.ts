@@ -7,7 +7,7 @@ import {
 
 const sentAt = new Date('2026-10-01T12:00:00.000Z');
 const context = { workspaceId: 'workspace', accountId: 'account' };
-function fixture() {
+function fixture(count = 1) {
   const current: CrmMessageRow = {
     id: 'stored-message',
     workspaceId: context.workspaceId,
@@ -33,24 +33,66 @@ function fixture() {
     deliveryState: 'SENT',
     createdAt: sentAt,
   };
+  const rows = Array.from({ length: count }, (_, index) =>
+    index === 0
+      ? current
+      : {
+          ...current,
+          id: `stored-message-${index}`,
+          telegramMessageId: String(501 + index),
+          telegramMessageIdNumeric: 501 + index,
+        },
+  );
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  const casLosers = new Set<string>();
   const tx = {
-    $queryRaw: jest.fn().mockResolvedValue([]),
+    $queryRaw: jest.fn((query: Prisma.Sql) => {
+      if (!query.sql.includes('UPDATE "TelegramCrmMessage"'))
+        return Promise.resolve([]);
+      const values = query.values;
+      const updated: Array<{ id: string }> = [];
+      for (let offset = 0; offset < values.length - 2; offset += 5) {
+        const [id, expectedEditedAt, text, editedAt, metadata] = values.slice(
+          offset,
+          offset + 5,
+        );
+        const row = byId.get(String(id));
+        if (
+          !row ||
+          row.deletedAt ||
+          casLosers.has(row.id) ||
+          (row.editedAt?.getTime() ?? null) !==
+            (expectedEditedAt instanceof Date
+              ? expectedEditedAt.getTime()
+              : null)
+        )
+          continue;
+        if (
+          values.at(-2) !== row.workspaceId ||
+          values.at(-1) !== row.mtprotoAccountId
+        )
+          continue;
+        row.text = text as string | null;
+        row.editedAt = editedAt as Date | null;
+        row.contentMetadata = JSON.parse(String(metadata)) as Prisma.JsonObject;
+        updated.push({ id: row.id });
+      }
+      return Promise.resolve(updated);
+    }),
     $executeRaw: jest.fn(),
     telegramCrmDeletedMessage: { findMany: jest.fn().mockResolvedValue([]) },
     telegramCrmMessage: {
-      findMany: jest.fn(() => Promise.resolve([{ ...current }])),
-      createManyAndReturn: jest.fn().mockResolvedValue([]),
-      updateMany: jest.fn(
-        ({
-          data,
-        }: {
-          data: Pick<CrmMessageRow, 'text' | 'editedAt' | 'contentMetadata'>;
-        }) => {
-          Object.assign(current, data);
-          return Promise.resolve({ count: 1 });
-        },
+      findMany: jest.fn((query: { where?: { id?: { in?: string[] } } }) =>
+        Promise.resolve(
+          rows
+            .filter(
+              (row) =>
+                !query.where?.id?.in || query.where.id.in.includes(row.id),
+            )
+            .map((row) => ({ ...row })),
+        ),
       ),
-      findUniqueOrThrow: jest.fn(() => Promise.resolve({ ...current })),
+      createManyAndReturn: jest.fn().mockResolvedValue([]),
     },
   };
   const events = { emit: jest.fn() };
@@ -69,7 +111,11 @@ function fixture() {
       contentMetadata,
     },
   });
-  return { current, tx, events, writer, history };
+  const writes = () =>
+    tx.$queryRaw.mock.calls.filter(([query]) =>
+      query.sql.includes('UPDATE "TelegramCrmMessage"'),
+    );
+  return { current, rows, casLosers, tx, events, writer, history, writes };
 }
 
 describe('Authoritative CRM history enrichment', () => {
@@ -101,7 +147,7 @@ describe('Authoritative CRM history enrichment', () => {
       expect(
         await h.writer.store(h.tx as never, context, [incoming], 'history'),
       ).toMatchObject({ edited: 0 });
-      expect(h.tx.telegramCrmMessage.updateMany).toHaveBeenCalledTimes(1);
+      expect(h.writes()).toHaveLength(1);
     },
   );
   it.each([
@@ -162,7 +208,7 @@ describe('Authoritative CRM history enrichment', () => {
         'history',
       );
       expect(repeat).toMatchObject({ created: [], edited: 0, inputs: [] });
-      expect(h.tx.telegramCrmMessage.updateMany).toHaveBeenCalledTimes(1);
+      expect(h.writes()).toHaveLength(1);
     },
   );
 
@@ -184,7 +230,7 @@ describe('Authoritative CRM history enrichment', () => {
         'history',
       );
       expect(result).toMatchObject({ created: [], edited: 0 });
-      expect(h.tx.telegramCrmMessage.updateMany).not.toHaveBeenCalled();
+      expect(h.writes()).toHaveLength(0);
       expect(h.current.text).toBe('Newer authoritative text');
     },
   );
@@ -198,6 +244,61 @@ describe('Authoritative CRM history enrichment', () => {
       'live',
     );
     expect(result.edited).toBe(0);
-    expect(h.tx.telegramCrmMessage.updateMany).not.toHaveBeenCalled();
+    expect(h.writes()).toHaveLength(0);
+  });
+  it('enriches 100 existing messages in one scoped bulk write and one read, then repeats without writes', async () => {
+    const h = fixture(100);
+    const messages = h.rows.map((row) => {
+      const incoming = h.history({
+        mediaType: 'MessageMediaPhoto',
+        media: { kind: 'image' },
+      });
+      incoming.message.telegramMessageId = row.telegramMessageIdNumeric!;
+      return incoming;
+    });
+    const result = await h.writer.store(
+      h.tx as never,
+      context,
+      messages,
+      'history',
+    );
+    expect(result).toMatchObject({ created: [], edited: 100 });
+    expect(h.tx.$queryRaw).toHaveBeenCalledTimes(2); // conversation lock + one UPDATE
+    expect(h.tx.telegramCrmMessage.findMany).toHaveBeenCalledTimes(2); // preflight + authoritative results
+    const sql = h.writes()[0][0].sql;
+    expect(sql).toContain('message."workspaceId" =');
+    expect(sql).toContain('message."mtprotoAccountId" =');
+    expect(sql).toContain('message."deletedAt" IS NULL');
+    expect(sql).toContain('IS NOT DISTINCT FROM incoming."expectedEditedAt"');
+    expect(
+      await h.writer.store(h.tx as never, context, messages, 'history'),
+    ).toMatchObject({ edited: 0, inputs: [] });
+    expect(h.writes()).toHaveLength(1);
+  });
+  it('returns only bulk CAS winners while skipping stale, deleted and tombstoned messages', async () => {
+    const h = fixture(5);
+    h.rows[1].editedAt = new Date('2026-10-02T12:00:00.000Z');
+    h.rows[2].deletedAt = new Date('2026-10-02T12:00:00.000Z');
+    h.tx.telegramCrmDeletedMessage.findMany.mockResolvedValue([
+      { telegramMessageId: 504 },
+    ]);
+    h.casLosers.add(h.rows[4].id);
+    const messages = h.rows.map((row) => {
+      const incoming = h.history({ mediaType: 'MessageMediaPhoto' });
+      incoming.message.telegramMessageId = row.telegramMessageIdNumeric!;
+      return incoming;
+    });
+    const result = await h.writer.store(
+      h.tx as never,
+      context,
+      messages,
+      'history',
+    );
+    expect(result.edited).toBe(1);
+    expect(result.editedMessages?.map((row) => row.id)).toEqual([h.current.id]);
+    expect(
+      result.inputs.map((input) => input.message.telegramMessageId),
+    ).toEqual([501]);
+    expect(h.rows[4].contentMetadata).not.toHaveProperty('mediaType');
   });
 });

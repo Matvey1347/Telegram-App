@@ -18,10 +18,15 @@ export async function applyCrmMessageEdits(
   inputs: CrmMessageBatchInput[],
   existingByKey: Map<string, Existing>,
   mode: CrmMessageBatchMode,
+  context: { workspaceId: string; accountId: string },
 ) {
-  let edited = 0;
-  const editedMessages: MessageRow[] = [];
-  const editedInputs: CrmMessageBatchInput[] = [];
+  const changes: Array<{
+    input: CrmMessageBatchInput;
+    current: Existing;
+    text: string | null;
+    editedAt: Date | null;
+    metadata: Prisma.InputJsonObject;
+  }> = [];
   for (const input of inputs) {
     const current = existingByKey.get(
       `${input.conversation.id}:${input.message.telegramMessageId}`,
@@ -60,22 +65,54 @@ export async function applyCrmMessageEdits(
       isDeepStrictEqual(previousMetadata, nextMetadata)
     )
       continue;
-    const applied = await tx.telegramCrmMessage.updateMany({
-      where: { id: current.id, deletedAt: null, editedAt: current.editedAt },
-      data: {
-        text: nextText,
-        editedAt: nextEditedAt,
-        contentMetadata: nextMetadata,
-      },
+    changes.push({
+      input,
+      current,
+      text: nextText,
+      editedAt: nextEditedAt,
+      metadata: nextMetadata,
     });
-    if (!applied.count) continue;
-    const updated = await tx.telegramCrmMessage.findUniqueOrThrow({
-      where: { id: current.id },
-      select: crmMessageSelect,
-    });
-    editedMessages.push(updated);
-    edited += 1;
-    editedInputs.push(input);
   }
-  return { edited, editedMessages, editedInputs };
+  const updatedIds: string[] = [];
+  // One bounded UPDATE per page, rather than two remote DB round trips per row.
+  for (let offset = 0; offset < changes.length; offset += 100) {
+    const page = changes.slice(offset, offset + 100);
+    const updated = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+      UPDATE "TelegramCrmMessage" AS message
+      SET "text" = incoming."text", "editedAt" = incoming."editedAt", "contentMetadata" = incoming."metadata"
+      FROM (VALUES ${Prisma.join(
+        page.map(
+          (change) => Prisma.sql`(
+        CAST(${change.current.id} AS TEXT), CAST(${change.current.editedAt} AS TIMESTAMP(3)),
+        CAST(${change.text} AS TEXT), CAST(${change.editedAt} AS TIMESTAMP(3)), CAST(${JSON.stringify(change.metadata)} AS JSONB)
+      )`,
+        ),
+      )}) AS incoming("id", "expectedEditedAt", "text", "editedAt", "metadata")
+      WHERE message."id" = incoming."id"
+        AND message."workspaceId" = ${context.workspaceId}
+        AND message."mtprotoAccountId" = ${context.accountId}
+        AND message."deletedAt" IS NULL
+        AND message."editedAt" IS NOT DISTINCT FROM incoming."expectedEditedAt"
+      RETURNING message."id"
+    `);
+    updatedIds.push(...updated.map((row) => row.id));
+  }
+  const winners = new Set(updatedIds);
+  const editedMessages = updatedIds.length
+    ? await tx.telegramCrmMessage.findMany({
+        where: {
+          workspaceId: context.workspaceId,
+          mtprotoAccountId: context.accountId,
+          id: { in: updatedIds },
+        },
+        select: crmMessageSelect,
+      })
+    : [];
+  return {
+    edited: updatedIds.length,
+    editedMessages,
+    editedInputs: changes
+      .filter((change) => winners.has(change.current.id))
+      .map((change) => change.input),
+  };
 }

@@ -163,6 +163,7 @@ export class TelegramCrmMessageBatchWriter {
       inputs,
       existingByKey,
       mode,
+      context,
     );
     const newInputs = insertedInputs.filter(
       (input) => !input.edited && !input.metadataOnly,

@@ -13,6 +13,15 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null;
 const callArgument = (mock: { mock: { calls: unknown[][] } }): unknown =>
   mock.mock.calls[0]?.[0];
+const editQueries = (mock: { mock: { calls: unknown[][] } }) =>
+  mock.mock.calls.flatMap(([query]) =>
+    isRecord(query) &&
+    typeof query.sql === 'string' &&
+    query.sql.includes('UPDATE "TelegramCrmMessage"') &&
+    Array.isArray(query.values)
+      ? [{ sql: query.sql, values: query.values as unknown[] }]
+      : [],
+  );
 
 const sentAt = new Date('2026-08-31T10:00:00.000Z');
 const input = (
@@ -221,19 +230,29 @@ describe('TelegramCrmMessageBatchWriter', () => {
   it('updates an edited Telegram message without inserting a duplicate and emits its authoritative content', async () => {
     const editedAt = new Date('2026-08-31T11:00:00.000Z');
     const tx = {
-      $queryRaw: jest.fn().mockResolvedValue([]),
+      $queryRaw: jest.fn().mockResolvedValue([{ id: row.id }]),
       telegramCrmDeletedMessage: { findMany: jest.fn().mockResolvedValue([]) },
       $executeRaw: jest.fn().mockResolvedValue(1),
       telegramCrmMessage: {
-        findMany: jest.fn().mockResolvedValue([
-          {
-            id: 'message-1',
-            conversationId: 'conversation-1',
-            telegramMessageId: '501',
-            text: 'Old',
-            editedAt: null,
-          },
-        ]),
+        findMany: jest
+          .fn()
+          .mockResolvedValueOnce([
+            {
+              id: 'message-1',
+              conversationId: 'conversation-1',
+              telegramMessageId: '501',
+              text: 'Old',
+              editedAt: null,
+            },
+          ])
+          .mockResolvedValue([
+            {
+              ...row,
+              text: 'Edited',
+              editedAt,
+              contentMetadata: { telegramText: true },
+            },
+          ]),
         createManyAndReturn: jest.fn(),
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
         findUniqueOrThrow: jest
@@ -255,14 +274,19 @@ describe('TelegramCrmMessageBatchWriter', () => {
 
     expect(stored).toMatchObject({ created: [], edited: 1 });
     expect(tx.telegramCrmMessage.createManyAndReturn).not.toHaveBeenCalled();
-    expect(tx.telegramCrmMessage.updateMany).toHaveBeenCalledWith({
-      where: { id: 'message-1', deletedAt: null, editedAt: null },
-      data: {
-        text: 'Edited',
-        editedAt,
-        contentMetadata: { telegramText: true },
-      },
-    });
+    expect(editQueries(tx.$queryRaw)).toEqual([
+      containing({
+        values: [
+          row.id,
+          null,
+          'Edited',
+          editedAt,
+          JSON.stringify({ telegramText: true }),
+          context.workspaceId,
+          context.accountId,
+        ],
+      }),
+    ]);
     expect(tx.telegramCrmConversation.update).not.toHaveBeenCalled();
     expect(events.emit).toHaveBeenCalledWith(
       containing({ type: 'inbox.updated', peerId: 'peer-1' }),
@@ -279,7 +303,7 @@ describe('TelegramCrmMessageBatchWriter', () => {
         }),
       }),
     );
-    expect(tx.telegramCrmMessage.findMany).toHaveBeenCalledTimes(1);
+    expect(tx.telegramCrmMessage.findMany).toHaveBeenCalledTimes(2);
     expect(events.emit).not.toHaveBeenCalledWith(
       containing({ type: 'conversation.unreadChanged' }),
     );
@@ -427,7 +451,7 @@ describe('TelegramCrmMessageBatchWriter', () => {
 describe('Chat action event ordering regressions', () => {
   const fixture = (existing: unknown[] = [], tombstones: unknown[] = []) => {
     const tx = {
-      $queryRaw: jest.fn().mockResolvedValue([]),
+      $queryRaw: jest.fn().mockResolvedValue([{ id: row.id }]),
       $executeRaw: jest.fn(),
       telegramCrmDeletedMessage: {
         findMany: jest.fn().mockResolvedValue(tombstones),
@@ -512,7 +536,7 @@ describe('Chat action event ordering regressions', () => {
       'live',
     );
     expect(stored.edited).toBe(0);
-    expect(f.tx.telegramCrmMessage.updateMany).not.toHaveBeenCalled();
+    expect(editQueries(f.tx.$queryRaw)).toEqual([]);
   });
   it('unchanged entity snapshots do not write despite JSON key ordering', async () => {
     const f = fixture([
@@ -533,7 +557,7 @@ describe('Chat action event ordering regressions', () => {
       'live',
     );
     expect(stored.edited).toBe(0);
-    expect(f.tx.telegramCrmMessage.updateMany).not.toHaveBeenCalled();
+    expect(editQueries(f.tx.$queryRaw)).toEqual([]);
   });
   it('entity-only edits persist without changing compact message/unread facts', async () => {
     const f = fixture([{ ...row, contentMetadata: { telegramText: true } }]);
@@ -555,13 +579,10 @@ describe('Chat action event ordering regressions', () => {
     );
     expect(stored.edited).toBe(1);
     expect(f.tx.$executeRaw).not.toHaveBeenCalled();
-    expect(f.tx.telegramCrmMessage.updateMany).toHaveBeenCalledWith(
-      containing({
-        data: containing({
-          contentMetadata: containing({
-            entities: [{ type: 'bold', offset: 0, length: 5 }],
-          }),
-        }),
+    expect(editQueries(f.tx.$queryRaw)[0].values).toContain(
+      JSON.stringify({
+        entities: [{ type: 'bold', offset: 0, length: 5 }],
+        telegramText: true,
       }),
     );
   });
@@ -582,12 +603,8 @@ describe('Chat action event ordering regressions', () => {
       [input({ edited: true })],
       'live',
     );
-    expect(f.tx.telegramCrmMessage.updateMany).toHaveBeenCalledWith(
-      containing({
-        data: containing({
-          contentMetadata: { manualRequestHash: 'receipt', telegramText: true },
-        }),
-      }),
+    expect(editQueries(f.tx.$queryRaw)[0].values).toContain(
+      JSON.stringify({ manualRequestHash: 'receipt', telegramText: true }),
     );
   });
 });
