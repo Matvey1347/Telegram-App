@@ -279,7 +279,12 @@ export class TelegramLeadSourceService {
     )
       throw new BadRequestException('LEAD_PROCESSING_REFERENCE_INVALID');
     if (input.accountId) await this.policy.account(userId, input.accountId);
-    const next = { ...source, ...input };
+    // DTO instances can own optional fields with undefined values. They must not
+    // erase the persisted account/grant while authorizing a status-only patch.
+    const definedInput = Object.fromEntries(
+      Object.entries(input).filter(([, value]) => value !== undefined),
+    ) as LeadSourcePatch;
+    const next = { ...source, ...definedInput };
     const changedOwn =
       input.allowOwnChannel !== undefined &&
       input.allowOwnChannel !== source.allowOwnChannel;

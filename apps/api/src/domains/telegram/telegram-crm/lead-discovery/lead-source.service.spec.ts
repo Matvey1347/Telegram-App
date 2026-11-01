@@ -6,6 +6,7 @@ import { TelegramLeadPolicy } from './lead-policy.service';
 import { TelegramLeadReadService } from './lead-read.service';
 import { TelegramLeadSourceService } from './lead-source.service';
 import { leadSource } from './lead.spec-fixtures';
+import { LeadSourcePatchDto } from './lead-source.dto';
 function fixture() {
   const source = leadSource({ monitoringState: 'PAUSED' }),
     existing: Array<{ normalizedKey: string; channelId?: string | null }> = [];
@@ -67,6 +68,31 @@ function fixture() {
   return { service, source, existing, tx, prisma, policy, read, events, input };
 }
 describe('Lead source registry and idempotent import', () => {
+  it('activates a verified source from a status-only DTO without erasing persisted grant fields', async () => {
+    const h = fixture();
+    h.source.accessType = 'SUBSCRIBED_CHANNEL';
+    h.source.lastErrorCode = null;
+    h.policy.assertProcessing.mockImplementation(
+      (candidate: typeof h.source) => {
+        if (
+          candidate.accountId !== h.source.accountId ||
+          candidate.processingReference !== h.source.processingReference ||
+          candidate.allowOwnChannel !== h.source.allowOwnChannel
+        )
+          throw new Error('LEAD_PROCESSING_NOT_APPROVED');
+      },
+    );
+    const input = Object.assign(new LeadSourcePatchDto(), {
+      monitoringState: 'ACTIVE' as const,
+      accountId: undefined,
+      processingReference: undefined,
+      allowOwnChannel: undefined,
+    });
+    await h.service.patch('manager', 'source', input);
+    expect(h.source.monitoringState).toBe('ACTIVE');
+    expect(h.source.accountId).toBe('account');
+    expect(h.events.refresh).toHaveBeenCalledTimes(1);
+  });
   it('imports100paused registry records in one batch without joins or one query per source', async () => {
     const h = fixture(),
       items = Array.from({ length: 100 }, (_, index) => h.input(index));
