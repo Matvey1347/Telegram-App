@@ -395,7 +395,7 @@ describe('TelegramChannelsService importManagedPosts', () => {
     const onProgress = jest.fn();
     const publish = jest
       .spyOn(service as any, 'publishManagedPost')
-      .mockRejectedValueOnce(new Error('Telegram rejected the image') as never)
+      .mockRejectedValueOnce(new Error('Telegram rejected the image'))
       .mockImplementationOnce(
         async (...args: unknown[]) =>
           ({

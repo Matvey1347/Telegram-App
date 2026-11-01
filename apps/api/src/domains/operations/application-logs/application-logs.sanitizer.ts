@@ -46,8 +46,8 @@ export function sanitizeLogValue(
   }
 
   if (typeof value === 'object') {
-    if (seen.has(value as object)) return '[Circular]';
-    seen.add(value as object);
+    if (seen.has(value)) return '[Circular]';
+    seen.add(value);
 
     if (Array.isArray(value)) {
       return value
@@ -55,7 +55,10 @@ export function sanitizeLogValue(
         .map((item) => sanitizeLogValue(item, depth + 1, seen));
     }
 
-    const decimalLike = value as { toJSON?: () => unknown; toString?: () => string };
+    const decimalLike = value as {
+      toJSON?: () => unknown;
+      toString?: () => string;
+    };
     if (
       value?.constructor?.name === 'Decimal' ||
       value?.constructor?.name === 'Integer'

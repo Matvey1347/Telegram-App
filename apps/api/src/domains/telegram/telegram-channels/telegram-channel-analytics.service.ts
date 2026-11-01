@@ -16,9 +16,8 @@ export class TelegramChannelAnalyticsService {
   private telegramChannelSyncScopeColumnsAvailable: boolean | null = null;
   private telegramInviteLinkRequestedCountColumnAvailable: boolean | null =
     null;
-  private ensureTelegramInviteLinkRequestedCountColumnPromise:
-    | Promise<boolean>
-    | null = null;
+  private ensureTelegramInviteLinkRequestedCountColumnPromise: Promise<boolean> | null =
+    null;
   private ensureTelegramChannelSyncScopeColumnsPromise: Promise<void> | null =
     null;
 
@@ -272,9 +271,7 @@ export class TelegramChannelAnalyticsService {
           Number(post.manualOwnViews || 0),
       ),
     );
-    const rawReactions = posts.map((post) =>
-      Number(post.reactionsCount || 0),
-    );
+    const rawReactions = posts.map((post) => Number(post.reactionsCount || 0));
     const adjustedReactions = posts.map((post) =>
       Math.max(
         0,
@@ -322,7 +319,10 @@ export class TelegramChannelAnalyticsService {
     let dataQuality: DataQuality = classified.dataQuality;
     let dataQualityReason = classified.reason;
     let hasExternalTrafficAnomaly = classified.hasExternalTrafficAnomaly;
-    if (subscriberBaseQuality === 'polluted' || subscriberBaseQuality === 'suspicious') {
+    if (
+      subscriberBaseQuality === 'polluted' ||
+      subscriberBaseQuality === 'suspicious'
+    ) {
       dataQuality = maxDataQuality(dataQuality, 'suspicious');
       dataQualityReason = 'subscriber_base_polluted';
     }
@@ -339,9 +339,7 @@ export class TelegramChannelAnalyticsService {
     const viewRate = cappedViewRate;
     const organicActiveSubscribersEstimate = 0;
     const paidActiveSubscribersEstimate =
-      activeSubscribersEstimate == null
-        ? null
-        : activeSubscribersEstimate;
+      activeSubscribersEstimate == null ? null : activeSubscribersEstimate;
 
     return {
       subscribersCount,
@@ -428,7 +426,9 @@ export class TelegramChannelAnalyticsService {
       );
     const summary = summaries.get(channelId);
     if (!summary) {
-      throw new NotFoundException('Telegram channel financial summary not found');
+      throw new NotFoundException(
+        'Telegram channel financial summary not found',
+      );
     }
     return summary;
   }

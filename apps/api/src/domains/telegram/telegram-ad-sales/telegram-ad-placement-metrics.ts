@@ -73,9 +73,10 @@ export async function reconcileTelegramAdPlacementMetrics(
   const finalViews =
     telegramPost.viewsCount ?? snapshots.at(-1)?.viewsCount ?? null;
   const actualViewsFinal = finalViews == null ? null : Math.max(0, finalViews);
-  const actualReactionsFinal = telegramPost.reactionsCount == null
-    ? null
-    : Math.max(0, telegramPost.reactionsCount);
+  const actualReactionsFinal =
+    telegramPost.reactionsCount == null
+      ? null
+      : Math.max(0, telegramPost.reactionsCount);
   return {
     actualViews24h: withinHours(26)?.viewsCount ?? null,
     actualViews48h: withinHours(50)?.viewsCount ?? null,

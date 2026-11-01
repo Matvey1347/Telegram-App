@@ -60,7 +60,10 @@ export class ConfiguredBotAnalyticsService {
     const cached = await this.cachedSystemBotAvatar(workspaceId, environment);
     if (cached?.username === runtime.username) {
       return cached.image
-        ? { bytes: Buffer.from(cached.image), contentType: cached.mimeType || 'image/jpeg' }
+        ? {
+            bytes: Buffer.from(cached.image),
+            contentType: cached.mimeType || 'image/jpeg',
+          }
         : null;
     }
 
@@ -72,13 +75,17 @@ export class ConfiguredBotAnalyticsService {
     this.assertSystemBotWorkspace(workspaceId);
     const runtimes = (['LOCAL', 'PRODUCTION'] as const)
       .map((environment) => this.systemBotRuntime(environment))
-      .filter((runtime): runtime is NonNullable<typeof runtime> => Boolean(runtime));
+      .filter((runtime): runtime is NonNullable<typeof runtime> =>
+        Boolean(runtime),
+      );
     await Promise.all(
       runtimes.map((runtime) =>
         this.refreshSystemBotAvatarForWorkspace(workspaceId, runtime),
       ),
     );
-    return { refreshedEnvironments: runtimes.map((runtime) => runtime.environment) };
+    return {
+      refreshedEnvironments: runtimes.map((runtime) => runtime.environment),
+    };
   }
 
   async updateSystemBotProfile(
@@ -105,9 +112,11 @@ export class ConfiguredBotAnalyticsService {
     if (input.name !== undefined && !name) {
       throw new BadRequestException('Bot name cannot be empty');
     }
-    if (!name && !hasDescription) throw new BadRequestException('A name or description is required');
+    if (!name && !hasDescription)
+      throw new BadRequestException('A name or description is required');
     if (name) await this.botApi.setMyName(runtime.token, name);
-    if (hasDescription) await this.botApi.setMyDescription(runtime.token, description || '');
+    if (hasDescription)
+      await this.botApi.setMyDescription(runtime.token, description || '');
 
     await this.saveSystemBotProfile(workspaceId, runtime, {
       name,
@@ -118,7 +127,9 @@ export class ConfiguredBotAnalyticsService {
 
   private async refreshSystemBotAvatarForWorkspace(
     workspaceId: string,
-    runtime: NonNullable<ReturnType<ConfiguredBotAnalyticsService['systemBotRuntime']>>,
+    runtime: NonNullable<
+      ReturnType<ConfiguredBotAnalyticsService['systemBotRuntime']>
+    >,
   ) {
     const bot = await this.botApi.getMe(runtime.token);
     const photos = await this.botApi.getUserProfilePhotos(
@@ -228,22 +239,38 @@ export class ConfiguredBotAnalyticsService {
 
   async refreshFinanceBotAvatars(userId: string) {
     const workspaceId = await this.workspace.resolveWorkspaceIdForUser(userId);
-    if (this.configuredWorkspaceId('FINANCE_BOT_DASHBOARD_WORKSPACE_ID') !== workspaceId) {
-      throw new BadRequestException('Finance bot analytics is not available in this workspace');
+    if (
+      this.configuredWorkspaceId('FINANCE_BOT_DASHBOARD_WORKSPACE_ID') !==
+      workspaceId
+    ) {
+      throw new BadRequestException(
+        'Finance bot analytics is not available in this workspace',
+      );
     }
     const settings = this.financeAnalyticsSettings();
-    if (!settings) throw new ServiceUnavailableException('Finance bot analytics is not configured');
+    if (!settings)
+      throw new ServiceUnavailableException(
+        'Finance bot analytics is not configured',
+      );
     try {
-      const response = await fetch(new URL('/api/admin/analytics/avatars/refresh', settings.url), {
-        method: 'POST',
-        headers: this.financeAnalyticsHeaders(settings.token, workspaceId),
-        signal: AbortSignal.timeout(15_000),
-      });
-      if (!response.ok) throw new ServiceUnavailableException('Finance bot profile refresh is unavailable');
+      const response = await fetch(
+        new URL('/api/admin/analytics/avatars/refresh', settings.url),
+        {
+          method: 'POST',
+          headers: this.financeAnalyticsHeaders(settings.token, workspaceId),
+          signal: AbortSignal.timeout(15_000),
+        },
+      );
+      if (!response.ok)
+        throw new ServiceUnavailableException(
+          'Finance bot profile refresh is unavailable',
+        );
       return response.json();
     } catch (error) {
       if (error instanceof ServiceUnavailableException) throw error;
-      throw new ServiceUnavailableException('Finance bot profile refresh is unavailable');
+      throw new ServiceUnavailableException(
+        'Finance bot profile refresh is unavailable',
+      );
     }
   }
 
@@ -252,28 +279,50 @@ export class ConfiguredBotAnalyticsService {
     environment: Environment,
     input: { name?: string; description?: string },
   ) {
-    const workspaceId = await this.workspace.requireWorkspaceRole(userId, [WorkspaceRole.owner, WorkspaceRole.admin]).then((membership) => membership.workspaceId);
-    if (this.configuredWorkspaceId('FINANCE_BOT_DASHBOARD_WORKSPACE_ID') !== workspaceId) {
-      throw new BadRequestException('Finance bot analytics is not available in this workspace');
+    const workspaceId = await this.workspace
+      .requireWorkspaceRole(userId, [WorkspaceRole.owner, WorkspaceRole.admin])
+      .then((membership) => membership.workspaceId);
+    if (
+      this.configuredWorkspaceId('FINANCE_BOT_DASHBOARD_WORKSPACE_ID') !==
+      workspaceId
+    ) {
+      throw new BadRequestException(
+        'Finance bot analytics is not available in this workspace',
+      );
     }
     const settings = this.financeAnalyticsSettings();
-    if (!settings) throw new ServiceUnavailableException('Finance bot analytics is not configured');
+    if (!settings)
+      throw new ServiceUnavailableException(
+        'Finance bot analytics is not configured',
+      );
     const form = new FormData();
     if (input.name !== undefined) form.set('name', input.name);
-    if (input.description !== undefined) form.set('description', input.description);
+    if (input.description !== undefined)
+      form.set('description', input.description);
     form.set('confirmTelegramUpdate', 'true');
     try {
-      const response = await fetch(new URL(`/api/admin/analytics/bots/${environment}/profile`, settings.url), {
-        method: 'PATCH',
-        headers: this.financeAnalyticsHeaders(settings.token, workspaceId),
-        body: form,
-        signal: AbortSignal.timeout(20_000),
-      });
-      if (!response.ok) throw new ServiceUnavailableException('Finance bot update is unavailable');
+      const response = await fetch(
+        new URL(
+          `/api/admin/analytics/bots/${environment}/profile`,
+          settings.url,
+        ),
+        {
+          method: 'PATCH',
+          headers: this.financeAnalyticsHeaders(settings.token, workspaceId),
+          body: form,
+          signal: AbortSignal.timeout(20_000),
+        },
+      );
+      if (!response.ok)
+        throw new ServiceUnavailableException(
+          'Finance bot update is unavailable',
+        );
       return this.overview(userId);
     } catch (error) {
       if (error instanceof ServiceUnavailableException) throw error;
-      throw new ServiceUnavailableException('Finance bot update is unavailable');
+      throw new ServiceUnavailableException(
+        'Finance bot update is unavailable',
+      );
     }
   }
 
@@ -331,18 +380,27 @@ export class ConfiguredBotAnalyticsService {
           const legacy = legacyMetrics.get(
             `${bot.environment}:${bot.username?.trim().replace(/^@/, '').toLowerCase() ?? ''}`,
           );
-          const financeIcon = bot.environment === 'LOCAL' ? '/brand/groshly-dev-icon.png' : '/brand/groshly-icon.png';
+          const financeIcon =
+            bot.environment === 'LOCAL'
+              ? '/brand/groshly-dev-icon.png'
+              : '/brand/groshly-icon.png';
           return {
-          ...bot,
-          // Consumer Finance is being moved to its own host. Until a runtime
-          // has been migrated, its users still belong to the retained platform
-          // record; use that real read-model instead of displaying a false 0.
-          registeredUsers: Math.max(bot.registeredUsers, legacy?.registeredUsers ?? 0),
-          profiles: Math.max(bot.profiles, legacy?.profiles ?? 0),
-          managementBotId: legacy?.botId ?? null,
-          faviconUrl: financeIcon,
-          faviconLightUrl: bot.environment === 'LOCAL' ? '/brand/groshly-dev-dark-icon.png' : '/brand/groshly-dark-icon.png',
-          avatarUrl: financeIcon,
+            ...bot,
+            // Consumer Finance is being moved to its own host. Until a runtime
+            // has been migrated, its users still belong to the retained platform
+            // record; use that real read-model instead of displaying a false 0.
+            registeredUsers: Math.max(
+              bot.registeredUsers,
+              legacy?.registeredUsers ?? 0,
+            ),
+            profiles: Math.max(bot.profiles, legacy?.profiles ?? 0),
+            managementBotId: legacy?.botId ?? null,
+            faviconUrl: financeIcon,
+            faviconLightUrl:
+              bot.environment === 'LOCAL'
+                ? '/brand/groshly-dev-dark-icon.png'
+                : '/brand/groshly-dark-icon.png',
+            avatarUrl: financeIcon,
           };
         }),
       };
@@ -376,7 +434,10 @@ export class ConfiguredBotAnalyticsService {
     >();
     for (const bot of bots) {
       for (const runtime of bot.runtimeInstances) {
-        const username = runtime.username?.trim().replace(/^@/, '').toLowerCase();
+        const username = runtime.username
+          ?.trim()
+          .replace(/^@/, '')
+          .toLowerCase();
         if (!username) continue;
         metrics.set(`${runtime.environment}:${username}`, {
           botId: bot.id,
@@ -424,17 +485,18 @@ export class ConfiguredBotAnalyticsService {
           avatar.username === runtime.username,
       );
       return {
-          environment: runtime.environment,
-          username: runtime.username,
-          // Profile data is refreshed only by the explicit Refresh action.
-          // Ordinary dashboard navigation must not call Telegram.
-          name: cachedAvatar?.displayName || runtime.username,
-          description: cachedAvatar?.description || null,
-          avatarUrl: runtime.environment === 'LOCAL'
+        environment: runtime.environment,
+        username: runtime.username,
+        // Profile data is refreshed only by the explicit Refresh action.
+        // Ordinary dashboard navigation must not call Telegram.
+        name: cachedAvatar?.displayName || runtime.username,
+        description: cachedAvatar?.description || null,
+        avatarUrl:
+          runtime.environment === 'LOCAL'
             ? '/brand/telegram-system-dev.png'
             : '/brand/telegram-system.png',
-          configured: true,
-          selected: selected === runtime.environment,
+        configured: true,
+        selected: selected === runtime.environment,
       };
     });
   }
@@ -501,7 +563,9 @@ export class ConfiguredBotAnalyticsService {
 
   private async saveSystemBotAvatar(
     workspaceId: string,
-    runtime: NonNullable<ReturnType<ConfiguredBotAnalyticsService['systemBotRuntime']>>,
+    runtime: NonNullable<
+      ReturnType<ConfiguredBotAnalyticsService['systemBotRuntime']>
+    >,
     avatar: { bytes: Buffer; contentType: string } | null,
   ) {
     try {
@@ -535,7 +599,9 @@ export class ConfiguredBotAnalyticsService {
 
   private async saveSystemBotProfile(
     workspaceId: string,
-    runtime: NonNullable<ReturnType<ConfiguredBotAnalyticsService['systemBotRuntime']>>,
+    runtime: NonNullable<
+      ReturnType<ConfiguredBotAnalyticsService['systemBotRuntime']>
+    >,
     profile: {
       name?: string;
       description?: string;
@@ -560,7 +626,9 @@ export class ConfiguredBotAnalyticsService {
         },
         update: {
           ...(profile.name ? { displayName: profile.name } : {}),
-          ...(profile.description !== undefined ? { description: profile.description } : {}),
+          ...(profile.description !== undefined
+            ? { description: profile.description }
+            : {}),
         },
       });
     } catch (error) {

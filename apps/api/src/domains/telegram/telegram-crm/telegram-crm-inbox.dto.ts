@@ -1,5 +1,6 @@
 import { Type } from 'class-transformer';
 import {
+  IsBoolean,
   IsIn,
   IsInt,
   IsOptional,
@@ -38,6 +39,21 @@ export class MergeCrmContactsDto {
 }
 
 export class SendCrmManualMessageDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  replyToMessageId?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  aiDraftId?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  aiDraftRevision?: number;
+
   @IsString()
   @MaxLength(4096)
   text!: string;
@@ -48,6 +64,10 @@ export class SendCrmManualMessageDto {
 }
 
 export class ImportCrmHistoryDto {
+  @IsOptional()
+  @IsBoolean()
+  recent?: boolean;
+
   @IsOptional()
   @Type(() => Number)
   @IsInt()

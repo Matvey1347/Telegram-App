@@ -46,6 +46,8 @@ const PERSISTED_QUERY_KEYS = [
 ] as const;
 
 const workspaceScopedQueryKeys = new Set<string>([
+  "crm-manual",
+  "lead-discovery",
   "account-me",
   "workspace-selected",
   "workspace-members",
@@ -193,5 +195,6 @@ export function QueryProvider({ children }: PropsWithChildren) {
 
 export function isWorkspaceScopedQuery(queryKey: readonly unknown[]) {
   const [root] = queryKey;
-  return typeof root === "string" && workspaceScopedQueryKeys.has(root);
+  return (root === "operations" && queryKey[1] === "ai") ||
+    (typeof root === "string" && workspaceScopedQueryKeys.has(root));
 }

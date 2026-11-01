@@ -1,3 +1,4 @@
+import { reconcileCrmReactionHints } from './telegram-crm-reaction-reconcile';
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
 import type {
@@ -58,7 +59,12 @@ export class TelegramCrmRecoveryService {
           const baseline = await this.batchStore.applyUpdates({
             workspaceId: input.account.workspaceId,
             accountId: input.account.id,
-            updates: chunk,
+            updates: await reconcileCrmReactionHints(
+              this.prisma,
+              input.account,
+              input.handle,
+              chunk,
+            ),
             checkpoint: finalChunk ? from : undefined,
           });
           if (baseline.needsRecovery) {
@@ -95,7 +101,12 @@ export class TelegramCrmRecoveryService {
         const stored = await this.batchStore.applyUpdates({
           workspaceId: input.account.workspaceId,
           accountId: input.account.id,
-          updates: difference.updates,
+          updates: await reconcileCrmReactionHints(
+            this.prisma,
+            input.account,
+            input.handle,
+            difference.updates,
+          ),
           checkpoint: difference.checkpoint,
         });
         if (stored.needsRecovery) {

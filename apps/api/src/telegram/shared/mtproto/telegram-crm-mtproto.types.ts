@@ -1,3 +1,5 @@
+import type { TelegramLeadChannelHandle } from './telegram-lead-channel.types';
+
 export type TelegramCrmMtprotoCredentials = {
   apiId: string;
   apiHash: string;
@@ -62,7 +64,79 @@ export type TelegramCrmMtprotoCheckpoint = {
   seq: number;
 };
 
+export type TelegramCrmChatPeer = {
+  telegramUserId: string;
+  telegramAccessHash: string;
+};
+
+export type TelegramCrmChatReadState = {
+  pts: number;
+  topMessageId: number;
+  unreadCount: number;
+  readInboxMaxId: number;
+};
+
+export type TelegramCrmChatActions = {
+  getReadState?: (
+    input: TelegramCrmChatPeer,
+  ) => Promise<TelegramCrmChatReadState>;
+  getMessage(
+    input: TelegramCrmChatPeer & { telegramMessageId: number },
+  ): Promise<TelegramCrmMtprotoMessage | null>;
+  editText(
+    input: TelegramCrmChatPeer & { telegramMessageId: number; text: string },
+  ): Promise<TelegramCrmMtprotoMessage>;
+  deleteMessages(
+    input: TelegramCrmChatPeer & {
+      telegramMessageIds: number[];
+      revoke: boolean;
+    },
+  ): Promise<{ confirmed: true }>;
+  setReaction(
+    input: TelegramCrmChatPeer & {
+      telegramMessageId: number;
+      emoji: string | null;
+    },
+  ): Promise<TelegramCrmMtprotoMessage>;
+  forwardMessage(input: {
+    origin: TelegramCrmChatPeer;
+    destination: TelegramCrmChatPeer;
+    telegramMessageId: number;
+    randomId: bigint;
+  }): Promise<TelegramCrmMtprotoMessage>;
+  sendMedia(
+    input: TelegramCrmChatPeer & {
+      data: Buffer;
+      fileName: string;
+      mimeType: string;
+      kind: 'IMAGE' | 'FILE' | 'VOICE';
+      caption?: string;
+      randomId: bigint;
+      replyToTelegramMessageId?: number;
+    },
+  ): Promise<TelegramCrmMtprotoMessage>;
+  downloadMedia(
+    input: TelegramCrmChatPeer & {
+      telegramMessageId: number;
+      maxBytes: number;
+    },
+  ): Promise<{ data: Buffer; fileName: string; mimeType: string }>;
+};
+
 export type TelegramCrmMtprotoUpdate =
+  | {
+      type: 'message.deleted';
+      telegramMessageIds: number[];
+      /** Hydrated by the domain before commit, never guessed from local unread flags. */
+      readStates?: Array<TelegramCrmChatReadState & { telegramUserId: string }>;
+      sequence?: { pts: number; ptsCount: number };
+    }
+  | {
+      type: 'message.reactions';
+      telegramUserId: string;
+      telegramMessageId: number;
+      reactions: Array<{ emoji: string; count: number; chosen: boolean }>;
+    }
   | {
       type: 'message.new' | 'message.edited';
       message: TelegramCrmMtprotoMessage;
@@ -93,6 +167,8 @@ export type TelegramCrmMtprotoDifference = {
 };
 
 export interface TelegramCrmMtprotoHandle {
+  readonly leadDiscovery?: TelegramLeadChannelHandle;
+  readonly chatActions?: TelegramCrmChatActions;
   listPrivateDialogs(input: {
     cursor?: string | null;
     limit?: number;
@@ -121,6 +197,7 @@ export interface TelegramCrmMtprotoHandle {
     telegramAccessHash: string;
     text: string;
     randomId: bigint;
+    replyToTelegramMessageId?: number;
   }): Promise<TelegramCrmMtprotoMessage>;
   markRead(input: {
     telegramUserId: string;

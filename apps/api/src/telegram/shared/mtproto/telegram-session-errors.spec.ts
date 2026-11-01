@@ -12,7 +12,7 @@ describe('Telegram session errors', () => {
     ).toBe(true);
   });
 
-  it('retains Telegram\'s original revoked-session code for diagnostics', () => {
+  it("retains Telegram's original revoked-session code for diagnostics", () => {
     expect(
       telegramRevokedSessionErrorCode({
         errorMessage: '406: AUTH_KEY_DUPLICATED',

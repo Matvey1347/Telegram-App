@@ -12,8 +12,10 @@ const migrationSql = fs.readFileSync(
 describe('Simple Finance runtime retirement migration', () => {
   it('retires only legacy Simple Finance integrations without deleting retained data', () => {
     expect(migrationSql).toContain('UPDATE "TelegramBotIntegration"');
-    expect(migrationSql).toContain("'SIMPLE_FINANCE'::\"TelegramBotApplicationType\"");
-    expect(migrationSql).toContain("'NONE'::\"TelegramBotApplicationType\"");
+    expect(migrationSql).toContain(
+      '\'SIMPLE_FINANCE\'::"TelegramBotApplicationType"',
+    );
+    expect(migrationSql).toContain('\'NONE\'::"TelegramBotApplicationType"');
     expect(migrationSql).not.toMatch(/^\s*(?:DROP|DELETE)\b/im);
     expect(migrationSql).not.toContain('"SimpleFinanceProfile"');
     expect(migrationSql).not.toContain('"SimpleFinanceAccount"');

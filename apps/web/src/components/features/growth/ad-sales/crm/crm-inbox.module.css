@@ -1,0 +1,16 @@
+.inbox {
+  height: var(--inbox-height, calc(100dvh - 15rem));
+  min-height: 0;
+  min-width: 0;
+}
+@media (max-width: 768px) {
+  .inbox[data-selected="true"] {
+    position: fixed;
+    z-index: 40;
+    top: var(--inbox-top, 0);
+    left: 0;
+    width: 100%;
+    padding-top: env(safe-area-inset-top);
+    background: var(--canvas);
+  }
+}

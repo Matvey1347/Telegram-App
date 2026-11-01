@@ -106,6 +106,36 @@ export function canonicalTelegramInviteLink(inviteHash: string) {
   return `https://t.me/+${normalized}`;
 }
 
+/** Exact invite URL only; parsing never joins a chat. */
+export function parseTelegramInviteReference(value: string) {
+  try {
+    const url = new URL(value.trim());
+    if (
+      !['https:', 'http:'].includes(url.protocol) ||
+      !['t.me', 'telegram.me'].includes(
+        url.hostname.toLowerCase().replace(/^www\./, ''),
+      ) ||
+      url.username ||
+      url.password ||
+      url.port ||
+      url.search ||
+      url.hash
+    )
+      return null;
+    const match = /^\/(?:\+|joinchat\/)([A-Za-z0-9_-]{1,128})\/?$/.exec(
+      url.pathname,
+    );
+    return match
+      ? {
+          inviteHash: match[1],
+          inviteLink: canonicalTelegramInviteLink(match[1]),
+        }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 function parseInviteHashFromUrl(input: string) {
   const tgJoinMatch = input.match(/tg:\/\/join\?invite=([A-Za-z0-9_-]+)/i);
   if (tgJoinMatch?.[1]) {

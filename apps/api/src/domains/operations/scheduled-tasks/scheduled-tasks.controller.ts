@@ -8,7 +8,10 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { CurrentUser, type JwtUser } from '../../../common/current-user.decorator';
+import {
+  CurrentUser,
+  type JwtUser,
+} from '../../../common/current-user.decorator';
 import { JwtAuthGuard } from '../../../common/jwt-auth.guard';
 import { WorkspaceService } from '../../../common/workspace.service';
 import { UpdateScheduledTaskDto } from './dto';

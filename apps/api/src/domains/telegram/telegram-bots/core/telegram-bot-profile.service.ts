@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { TelegramBotRuntimeEnvironment } from '@prisma/client';
 import sharp from 'sharp';
 import { TokenEncryptionService } from '../../../../common/security/token-encryption.service';
@@ -15,7 +19,10 @@ export class TelegramBotProfileService {
     private readonly botApi: TelegramBotApiClient,
   ) {}
 
-  async sync(botIntegrationId: string, environment: TelegramBotRuntimeEnvironment) {
+  async sync(
+    botIntegrationId: string,
+    environment: TelegramBotRuntimeEnvironment,
+  ) {
     const runtime = await this.runtime(botIntegrationId, environment);
     const token = this.token(runtime);
     const [name, photos] = await Promise.all([
@@ -25,12 +32,20 @@ export class TelegramBotProfileService {
     const largest = photos.photos?.[0]?.at(-1);
     const data: Record<string, unknown> = {};
     const currentName = name.name?.trim();
-    if (currentName && currentName !== runtime.firstName) data.firstName = currentName;
+    if (currentName && currentName !== runtime.firstName)
+      data.firstName = currentName;
     if (largest?.file_id) {
       if (largest.file_id !== runtime.avatarTelegramFileId) {
         const file = await this.botApi.getFile(token, largest.file_id);
-        if (!file.file_path) throw new BadRequestException('Telegram bot avatar file is unavailable');
-        const downloaded = await this.botApi.downloadFile(token, file.file_path, MAX_AVATAR_BYTES);
+        if (!file.file_path)
+          throw new BadRequestException(
+            'Telegram bot avatar file is unavailable',
+          );
+        const downloaded = await this.botApi.downloadFile(
+          token,
+          file.file_path,
+          MAX_AVATAR_BYTES,
+        );
         Object.assign(data, {
           avatarImage: Uint8Array.from(downloaded.bytes),
           avatarMimeType: downloaded.contentType,
@@ -95,9 +110,14 @@ export class TelegramBotProfileService {
   async avatar(runtimeId: string) {
     const runtime = await this.prisma.telegramBotRuntimeInstance.findUnique({
       where: { id: runtimeId },
-      select: { avatarImage: true, avatarMimeType: true, avatarUpdatedAt: true },
+      select: {
+        avatarImage: true,
+        avatarMimeType: true,
+        avatarUpdatedAt: true,
+      },
     });
-    if (!runtime?.avatarImage) throw new NotFoundException('Bot avatar not found');
+    if (!runtime?.avatarImage)
+      throw new NotFoundException('Bot avatar not found');
     return {
       bytes: Buffer.from(runtime.avatarImage),
       contentType: runtime.avatarMimeType || 'image/jpeg',
@@ -110,9 +130,12 @@ export class TelegramBotProfileService {
     environment: TelegramBotRuntimeEnvironment,
   ) {
     const runtime = await this.prisma.telegramBotRuntimeInstance.findUnique({
-      where: { botIntegrationId_environment: { botIntegrationId, environment } },
+      where: {
+        botIntegrationId_environment: { botIntegrationId, environment },
+      },
     });
-    if (!runtime?.botId) throw new NotFoundException('Telegram bot runtime not found');
+    if (!runtime?.botId)
+      throw new NotFoundException('Telegram bot runtime not found');
     return runtime;
   }
 

@@ -43,5 +43,6 @@ export function resolveAdSalesSurface(
       conversationId: decodeURIComponent(contactConversation[2]),
     };
   }
-  return { kind: "contacts" };
+  const client = pathname.match(/^\/ad-sales\/(?:contacts|clients)\/([^/]+)$/);
+  return { kind: "contacts", ...(client ? {contactId:decodeURIComponent(client[1])} : {}) };
 }

@@ -140,9 +140,9 @@ describe('WorkspaceMembersService create identity', () => {
     expect(result.temporaryPassword).toEqual(expect.any(String));
     expect(result.temporaryPassword).toHaveLength(16);
     const passwordHash = tx.user.update.mock.calls[0]?.[0]?.data.passwordHash;
-    expect(
-      await bcrypt.compare(result.temporaryPassword!, passwordHash),
-    ).toBe(true);
+    expect(await bcrypt.compare(result.temporaryPassword!, passwordHash)).toBe(
+      true,
+    );
   });
 
   it('does not let a workspace invitation replace an existing account password', async () => {

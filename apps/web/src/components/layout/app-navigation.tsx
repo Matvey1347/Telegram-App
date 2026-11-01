@@ -97,7 +97,7 @@ const groups: readonly NavigationGroup[] = [
         label: "navigation.crm",
         href: "/ad-sales",
         icon: workspaceFeatureIcons["adSales.sales"],
-        featureIds: ["adSales.crm", "adSales.sales"],
+        featureIds: ["adSales.crm", "adSales.sales", "adSales.leads"],
       },
       {
         label: "navigation.ads",
@@ -186,12 +186,23 @@ export function AppNavigation({
   const visibleGroups = groups
     .map((group) => ({
       ...group,
-      children: group.children.filter(
-        (item) =>
-          featureAllowed(item) &&
-          permissionAllowed(item) &&
-          (!item.adminOnly || canViewAdmin),
-      ),
+      children: group.children
+        .filter(
+          (item) =>
+            featureAllowed(item) &&
+            permissionAllowed(item) &&
+            (!item.adminOnly || canViewAdmin),
+        )
+        .map((item) =>
+          item.href === "/ad-sales" &&
+          effectiveFeatureIds &&
+          !effectiveFeatureIds.some(
+            (id) => id === "adSales.crm" || id === "adSales.sales",
+          ) &&
+          effectiveFeatureIds.includes("adSales.leads")
+            ? { ...item, href: "/ad-sales/leads" }
+            : item,
+        ),
     }))
     .filter((group) => group.children.length > 0);
   const visibleItemCount =

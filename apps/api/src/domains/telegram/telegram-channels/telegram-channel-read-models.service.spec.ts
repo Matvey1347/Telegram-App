@@ -103,12 +103,10 @@ describe('TelegramChannelReadModelsService', () => {
         findInviteLinksWithRequestedCountFallback: findLinks,
       } as never,
       {
-        findOne: jest
-          .fn()
-          .mockResolvedValue({
-            publicInviteLinkId: 'default-link',
-            defaultInviteLinkId: 'default-link',
-          }),
+        findOne: jest.fn().mockResolvedValue({
+          publicInviteLinkId: 'default-link',
+          defaultInviteLinkId: 'default-link',
+        }),
       } as never,
     );
 

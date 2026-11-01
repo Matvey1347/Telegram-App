@@ -8,6 +8,9 @@ export type OperationsNotificationDueFact = {
   recipientMemberId: string;
   visibilityMemberId: string | null;
   visibilityResourceKey: string | null;
+  sourceKey?: string;
+  metadata?: Prisma.JsonValue;
+  deliverAt?: Date;
 };
 
 type Resolver = (

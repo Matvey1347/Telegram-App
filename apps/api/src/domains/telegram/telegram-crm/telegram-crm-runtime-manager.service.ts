@@ -1,3 +1,12 @@
+import { crmRuntimeEnabled } from '../../../config/deployment-config';
+import { reconcileCrmReactionHints } from './telegram-crm-reaction-reconcile';
+import { withCrmAccountHandle } from './telegram-crm-runtime-operations';
+import { TelegramLeadTransportEvents } from '@api/telegram/shared/mtproto/telegram-lead-transport-events';
+import {
+  notifyCrmReauthentication,
+  reconcileCrmRevokedNotifications,
+  waitForCrmStartupBudget,
+} from './telegram-crm-runtime-notifications';
 import {
   ConflictException,
   Injectable,
@@ -6,12 +15,7 @@ import {
   OnApplicationShutdown,
   Optional,
 } from '@nestjs/common';
-import {
-  OperationsNotificationPriority,
-  OperationsNotificationType,
-  TelegramUserAccountStatus,
-  WorkspaceRole,
-} from '@prisma/client';
+import { TelegramUserAccountStatus } from '@prisma/client';
 import type { Subscription } from 'rxjs';
 import { TelegramAccountRuntimeNotifier } from '../../../common/telegram-account-runtime-notifier.service';
 import { PrismaService } from '../../../prisma/prisma.service';
@@ -25,7 +29,6 @@ import {
   telegramRevokedSessionErrorCode,
 } from '@api/telegram/shared/mtproto/telegram-session-errors';
 import {
-  crmRuntimeAccountSelect,
   type CrmRuntimeAccount,
   TelegramCrmAccountSessionService,
 } from './telegram-crm-account-session.service';
@@ -49,6 +52,9 @@ export class TelegramCrmRuntimeManager
   private readonly accounts = new Map<string, ManagedAccount>();
   private notifierSubscription?: Subscription;
   private runtimeHeldByAnotherInstance = false;
+  private readonly runtimeEnabled = crmRuntimeEnabled();
+  private reacquiring?: Promise<boolean>;
+  private startupLeaseDenied = false;
   private shuttingDown = false;
   private totalQueued = 0;
 
@@ -65,9 +71,14 @@ export class TelegramCrmRuntimeManager
     private readonly notificationPublisher?: OperationsNotificationPublisherService,
     @Optional()
     private readonly runtimeLease?: TelegramCrmRuntimeLeaseService,
+    @Optional() private readonly leadEvents?: TelegramLeadTransportEvents,
   ) {}
 
   async onApplicationBootstrap() {
+    if (!this.runtimeEnabled) {
+      this.runtimeHeldByAnotherInstance = true;
+      return;
+    }
     const accounts = await this.sessions.startupAccounts(
       CRM_RUNTIME_POLICY.startupAccountLimit + 1,
     );
@@ -76,22 +87,20 @@ export class TelegramCrmRuntimeManager
         `CRM runtime account safety limit exceeded (${CRM_RUNTIME_POLICY.startupAccountLimit})`,
       );
     }
-    if (accounts.length && !(await this.acquireRuntimeLease())) return;
-    this.notifierSubscription = this.notifier.stream.subscribe((change) => {
-      void this.reconcile(change.accountId, change.workspaceId);
-    });
+    if (accounts.length && !(await this.acquireRuntimeLease())) {
+      this.startupLeaseDenied = true;
+      return;
+    }
+    this.subscribeToAccountChanges();
     const startupConnections = this.connectStartupAccounts(accounts);
     await this.reconcileRevokedAccountNotifications();
-    // A reachable HTTP API is more important than eagerly restoring every
-    // optional live MTProto transport. Keep the bounded connection work in the
-    // background once the short readiness budget is exhausted; failures still
-    // use the normal retry path below.
-    await this.waitForStartupBudget(startupConnections);
+    await waitForCrmStartupBudget(startupConnections);
   }
 
   async onApplicationShutdown() {
     this.shuttingDown = true;
     this.notifierSubscription?.unsubscribe();
+    await this.reacquiring?.catch(() => false);
     await Promise.all(
       [...this.accounts.keys()].map((accountId) => this.stop(accountId)),
     );
@@ -104,27 +113,55 @@ export class TelegramCrmRuntimeManager
     purpose: 'sync' | 'send',
     operation: (handle: TelegramCrmMtprotoHandle) => Promise<T>,
   ) {
-    if (this.runtimeHeldByAnotherInstance) {
-      throw new ConflictException(
-        'Telegram CRM runtime is active in another application instance. Retry shortly.',
-      );
+    if (this.reacquiring) await this.reacquiring;
+    else if (
+      this.runtimeEnabled &&
+      this.runtimeHeldByAnotherInstance &&
+      this.startupLeaseDenied &&
+      !this.shuttingDown
+    ) {
+      this.reacquiring = this.recoverRuntimeOwnership().finally(() => {
+        this.reacquiring = undefined;
+      });
+      await this.reacquiring;
     }
-    const resolved =
-      purpose === 'sync'
-        ? await this.sessions.requireForSync(workspaceId, accountId)
-        : await this.sessions.requireForSend(workspaceId, accountId);
+    return withCrmAccountHandle({
+      workspaceId,
+      accountId,
+      purpose,
+      operation,
+      blocked: this.runtimeHeldByAnotherInstance || this.shuttingDown,
+      sessions: this.sessions,
+      adapter: this.adapter,
+      getManaged: (id) => this.accounts.get(id),
+    });
+  }
+
+  liveAccountIds(workspaceId: string) {
+    return [...this.accounts.values()]
+      .filter(
+        (item) =>
+          item.account.workspaceId === workspaceId &&
+          item.handle?.leadDiscovery,
+      )
+      .map((item) => item.account.id);
+  }
+  async withLiveAccountHandle<T>(
+    workspaceId: string,
+    accountId: string,
+    operation: (handle: TelegramCrmMtprotoHandle) => Promise<T>,
+  ): Promise<T> {
     const managed = this.accounts.get(accountId);
-    if (managed?.connecting) await managed.connecting;
-    if (managed?.handle) return operation(managed.handle);
-    // A failed live-update transport may be waiting for its bounded backoff.
-    // Manual work must not turn that expected state into HTTP 500: use an
-    // isolated handle now and leave the live runtime's retry schedule intact.
-    const handle = await this.adapter.open(resolved.credentials);
-    try {
-      return await operation(handle);
-    } finally {
-      await handle.close();
-    }
+    const current = await this.sessions.find(accountId, workspaceId);
+    if (
+      this.runtimeHeldByAnotherInstance ||
+      !managed?.handle?.leadDiscovery ||
+      managed.account.workspaceId !== workspaceId ||
+      !current ||
+      !this.sessions.isLiveEligible(current)
+    )
+      throw new ConflictException('LEAD_EXISTING_LIVE_ACCOUNT_REQUIRED');
+    return operation(managed.handle);
   }
 
   async requestRecovery(accountId: string) {
@@ -138,7 +175,7 @@ export class TelegramCrmRuntimeManager
   }
 
   private async reconcile(accountId: string, workspaceId?: string) {
-    if (this.shuttingDown) return;
+    if (this.shuttingDown || !this.runtimeEnabled) return;
     const account = await this.sessions.find(accountId, workspaceId);
     if (!account || !this.sessions.isLiveEligible(account)) {
       await this.stop(accountId);
@@ -168,8 +205,39 @@ export class TelegramCrmRuntimeManager
       );
       return false;
     }
+    this.runtimeHeldByAnotherInstance = false;
     this.runtimeLease.startRenewing(() => void this.handleRuntimeLeaseLost());
     return true;
+  }
+
+  private async recoverRuntimeOwnership() {
+    if (!(await this.acquireRuntimeLease())) return false;
+    try {
+      if (this.shuttingDown) return false;
+      const accounts = await this.sessions.startupAccounts(
+        CRM_RUNTIME_POLICY.startupAccountLimit + 1,
+      );
+      if (accounts.length > CRM_RUNTIME_POLICY.startupAccountLimit)
+        throw new Error('CRM runtime account safety limit exceeded');
+      this.subscribeToAccountChanges();
+      await this.connectStartupAccounts(accounts);
+      this.startupLeaseDenied = false;
+      return true;
+    } catch (error) {
+      this.runtimeHeldByAnotherInstance = true;
+      await Promise.all(
+        [...this.accounts.keys()].map((accountId) => this.stop(accountId)),
+      );
+      await this.runtimeLease?.release();
+      throw error;
+    }
+  }
+
+  private subscribeToAccountChanges() {
+    if (this.notifierSubscription && !this.notifierSubscription.closed) return;
+    this.notifierSubscription = this.notifier.stream.subscribe((change) => {
+      void this.reconcile(change.accountId, change.workspaceId);
+    });
   }
 
   private async handleRuntimeLeaseLost() {
@@ -243,10 +311,25 @@ export class TelegramCrmRuntimeManager
         return;
       }
       managed.handle = handle;
-      managed.detach = handle.onUpdate(
+      const detachPrivate = handle.onUpdate(
         (update) => this.enqueue(managed, update),
         (error) => void this.connectionFailed(managed, error),
       );
+      const identity = {
+        workspaceId: managed.account.workspaceId,
+        accountId: managed.account.id,
+      };
+      const detachLead = this.leadEvents?.enabled
+        ? handle.leadDiscovery?.onEvent((event) =>
+            this.leadEvents?.emit({ ...identity, type: 'channel', event }),
+          )
+        : undefined;
+      managed.detach = () => {
+        detachPrivate();
+        detachLead?.();
+        this.leadEvents?.emit({ ...identity, type: 'disconnected' });
+      };
+      this.leadEvents?.emit({ ...identity, type: 'connected' });
       await this.recover(managed);
     } catch (error) {
       if (managed.abort.signal.aborted || this.shuttingDown) return;
@@ -268,22 +351,6 @@ export class TelegramCrmRuntimeManager
           .slice(index, index + CRM_RUNTIME_POLICY.connectConcurrency)
           .map((account) => this.start(account)),
       );
-    }
-  }
-
-  private async waitForStartupBudget(startupConnections: Promise<void>) {
-    let budgetTimer: NodeJS.Timeout | undefined;
-    const budgetExpired = new Promise<void>((resolve) => {
-      budgetTimer = setTimeout(
-        resolve,
-        CRM_RUNTIME_POLICY.startupHttpReadyBudgetMs,
-      );
-      budgetTimer.unref?.();
-    });
-    try {
-      await Promise.race([startupConnections, budgetExpired]);
-    } finally {
-      if (budgetTimer) clearTimeout(budgetTimer);
     }
   }
 
@@ -344,7 +411,12 @@ export class TelegramCrmRuntimeManager
       const result = await this.batchStore.applyUpdates({
         workspaceId: managed.account.workspaceId,
         accountId: managed.account.id,
-        updates,
+        updates: await reconcileCrmReactionHints(
+          this.prisma,
+          managed.account,
+          managed.handle,
+          updates,
+        ),
         checkpoint: processedCheckpoint,
       });
       if (!result.needsRecovery && processedCheckpoint) {
@@ -431,17 +503,18 @@ export class TelegramCrmRuntimeManager
       this.logger.warn(
         `Telegram MTProto session revoked for account=${managed.account.id}: ${telegramErrorCode}`,
       );
-      const transition = await this.prisma.telegramUserAccountIntegration.updateMany({
-        where: {
-          id: managed.account.id,
-          workspaceId: managed.account.workspaceId,
-          status: TelegramUserAccountStatus.connected,
-        },
-        data: {
-          status: TelegramUserAccountStatus.error,
-          lastErrorMessage: `Telegram session was revoked (${telegramErrorCode})`,
-        },
-      });
+      const transition =
+        await this.prisma.telegramUserAccountIntegration.updateMany({
+          where: {
+            id: managed.account.id,
+            workspaceId: managed.account.workspaceId,
+            status: TelegramUserAccountStatus.connected,
+          },
+          data: {
+            status: TelegramUserAccountStatus.error,
+            lastErrorMessage: `Telegram session was revoked (${telegramErrorCode})`,
+          },
+        });
       if (transition.count) {
         await this.notifyReauthenticationRequired(managed.account);
       }
@@ -471,77 +544,21 @@ export class TelegramCrmRuntimeManager
     this.scheduleRetry(managed);
   }
 
-  private async notifyReauthenticationRequired(account: CrmRuntimeAccount) {
-    if (!this.notifications || !this.notificationPublisher) return;
-    const creator = account.createdByUserId
-      ? await this.prisma.workspaceMember.findFirst({
-          where: {
-            workspaceId: account.workspaceId,
-            userId: account.createdByUserId,
-          },
-          select: { id: true },
-        })
-      : null;
-    const owner =
-      account.assignedMemberId || creator
-        ? null
-        : await this.prisma.workspaceMember.findFirst({
-            where: { workspaceId: account.workspaceId, role: WorkspaceRole.owner },
-            orderBy: { createdAt: 'asc' },
-            select: { id: true },
-          });
-    const recipientMemberId = account.assignedMemberId ?? creator?.id ?? owner?.id;
-    if (!recipientMemberId) return;
-
-    try {
-      const notificationIds = await this.prisma.$transaction((tx) =>
-        this.notifications!.upsertMany(tx, [
-          {
-            workspaceId: account.workspaceId,
-            recipientMemberId,
-            type: OperationsNotificationType.TELEGRAM_ACCOUNT_REAUTH_REQUIRED,
-            priority: OperationsNotificationPriority.HIGH,
-            sourceKey: `telegram-account:${account.id}:reauth-required`,
-            copyKey: 'telegram.notification.accountReauthRequired',
-            title: 'Telegram account disconnected',
-            body: `${account.label} needs to be reconnected via QR.`,
-            metadata: {
-              presentationKind: 'telegram-account',
-              accountId: account.id,
-              accountLabel: account.label,
-              avatarUrl: account.photoUrl ?? null,
-              action: 'qr-login',
-            },
-            targetUrl: '/telegram-channels?tab=accounts&accountTab=mtproto',
-          },
-        ]),
-      );
-      await this.notificationPublisher.publish(notificationIds.map(({ id }) => id));
-    } catch {
-      // The account transition is already durable; a notification failure must
-      // not restart the revoked MTProto session or cause a retry loop.
-    }
+  private notifyReauthenticationRequired(account: CrmRuntimeAccount) {
+    return notifyCrmReauthentication(
+      this.prisma,
+      this.notifications,
+      this.notificationPublisher,
+      account,
+    );
   }
-
-  /**
-   * One bounded startup repair for sessions revoked before notification
-   * projection existed. It is not a timer or recurring database scan; the
-   * notification source key makes a restart idempotent.
-   */
-  private async reconcileRevokedAccountNotifications() {
-    if (!this.notifications || !this.notificationPublisher) return;
-    const accounts = await this.prisma.telegramUserAccountIntegration.findMany({
-      where: {
-        status: TelegramUserAccountStatus.error,
-        lastErrorMessage: { contains: 'session was revoked', mode: 'insensitive' },
-      },
-      select: crmRuntimeAccountSelect,
-      take: 100,
-      orderBy: { updatedAt: 'desc' },
-    });
-    for (const account of accounts) {
-      await this.notifyReauthenticationRequired(account);
-    }
+  private reconcileRevokedAccountNotifications() {
+    return reconcileCrmRevokedNotifications(
+      this.prisma,
+      this.notifications,
+      this.notificationPublisher,
+      (account) => this.notifyReauthenticationRequired(account),
+    );
   }
 
   private scheduleRetry(managed: ManagedAccount) {

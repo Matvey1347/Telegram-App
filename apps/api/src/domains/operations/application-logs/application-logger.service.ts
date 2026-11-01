@@ -59,9 +59,7 @@ function normalizeMinimumLevel(
   return fallback;
 }
 
-export function applicationLogMinimumLevel(
-  environment?: NodeJS.ProcessEnv,
-) {
+export function applicationLogMinimumLevel(environment?: NodeJS.ProcessEnv) {
   const environmentName = environment
     ? configuredRuntimeEnvironmentName(environment)
     : configuredRuntimeEnvironmentName();

@@ -207,7 +207,7 @@ describe('TelegramCrmRuntimeManager', () => {
     const manager = new TelegramCrmRuntimeManager(
       {} as never,
       sessions as never,
-      adapter as never,
+      adapter,
       {} as never,
       new TelegramAccountRuntimeNotifier(),
       {} as never,
@@ -232,6 +232,89 @@ describe('TelegramCrmRuntimeManager', () => {
     expect(lease.release).toHaveBeenCalledTimes(1);
   });
 
+  it('reacquires after a startup lease conflict and shares the recovered handle across concurrent requests', async () => {
+    const handle = {
+      onUpdate: jest.fn().mockReturnValue(jest.fn()),
+      close: jest.fn(),
+    };
+    const sessions = {
+      startupAccounts: jest.fn().mockResolvedValue([account]),
+      requireForSync: jest.fn().mockResolvedValue({ credentials: {} }),
+      credentials: jest
+        .fn()
+        .mockReturnValue({ apiId: '1', apiHash: 'hash', session: 'session' }),
+    };
+    const adapter = { open: jest.fn().mockResolvedValue(handle) };
+    const lease = {
+      acquire: jest.fn().mockResolvedValueOnce(false).mockResolvedValue(true),
+      startRenewing: jest.fn(),
+      release: jest.fn(),
+    };
+    const manager = new TelegramCrmRuntimeManager(
+      { telegramUserAccountIntegration: { updateMany: jest.fn() } } as never,
+      sessions as never,
+      adapter,
+      {} as never,
+      new TelegramAccountRuntimeNotifier(),
+      {
+        recover: jest.fn().mockResolvedValue({
+          outcome: 'SUCCESS',
+          checkpoint: { pts: 1, qts: 0, date: 2, seq: 3 },
+        }),
+      } as never,
+      undefined,
+      undefined,
+      lease as never,
+    );
+    await manager.onApplicationBootstrap();
+    const results = await Promise.all(
+      [1, 2].map(() =>
+        manager.withAccountHandle(
+          account.workspaceId,
+          account.id,
+          'sync',
+          (current) => Promise.resolve(current),
+        ),
+      ),
+    );
+    expect(results).toEqual([handle, handle]);
+    expect(lease.acquire).toHaveBeenCalledTimes(2);
+    expect(adapter.open).toHaveBeenCalledTimes(1);
+    await manager.onApplicationShutdown();
+  });
+
+  it('does not start CRM runtime in an explicitly disabled compatibility host', async () => {
+    const previous = process.env.CRM_RUNTIME_ENABLED;
+    process.env.CRM_RUNTIME_ENABLED = 'false';
+    try {
+      const sessions = { startupAccounts: jest.fn() };
+      const lease = { acquire: jest.fn(), release: jest.fn() };
+      const manager = new TelegramCrmRuntimeManager(
+        {} as never,
+        sessions as never,
+        {} as never,
+        {} as never,
+        new TelegramAccountRuntimeNotifier(),
+        {} as never,
+        undefined,
+        undefined,
+        lease as never,
+      );
+      await manager.onApplicationBootstrap();
+      expect(sessions.startupAccounts).not.toHaveBeenCalled();
+      expect(lease.acquire).not.toHaveBeenCalled();
+      await expect(
+        manager.withAccountHandle(account.workspaceId, account.id, 'sync', () =>
+          Promise.resolve(undefined),
+        ),
+      ).rejects.toThrow('another application instance');
+      await manager.onApplicationShutdown();
+    } finally {
+      if (previous === undefined) delete process.env.CRM_RUNTIME_ENABLED;
+      else process.env.CRM_RUNTIME_ENABLED = previous;
+    }
+  });
+
   it('does not delay HTTP bootstrap when an MTProto connection stalls', async () => {
     jest.useFakeTimers();
     const sessions = {
@@ -252,7 +335,7 @@ describe('TelegramCrmRuntimeManager', () => {
     const manager = new TelegramCrmRuntimeManager(
       { telegramUserAccountIntegration: { updateMany: jest.fn() } } as never,
       sessions as never,
-      adapter as never,
+      adapter,
       {} as never,
       new TelegramAccountRuntimeNotifier(),
       {} as never,
@@ -482,7 +565,7 @@ describe('TelegramCrmRuntimeManager', () => {
     const manager = new TelegramCrmRuntimeManager(
       { telegramUserAccountIntegration: { updateMany: jest.fn() } } as never,
       sessions as never,
-      adapter as never,
+      adapter,
       {} as never,
       new TelegramAccountRuntimeNotifier(),
       {} as never,

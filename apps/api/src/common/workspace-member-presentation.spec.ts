@@ -2,12 +2,22 @@ import { withWorkspaceMemberAvatar } from './workspace-member-presentation';
 
 describe('withWorkspaceMemberAvatar', () => {
   it('adds resolved image avatar data to nested finance members', () => {
-    expect(withWorkspaceMemberAvatar({
+    expect(
+      withWorkspaceMemberAvatar({
+        id: 'member-1',
+        avatarIcon: {
+          id: 'icon-1',
+          type: 'image',
+          name: 'Avatar',
+          imageUrl: 'https://cdn.example/avatar.jpg',
+        },
+      }),
+    ).toMatchObject({
       id: 'member-1',
-      avatarIcon: { id: 'icon-1', type: 'image', name: 'Avatar', imageUrl: 'https://cdn.example/avatar.jpg' },
-    })).toMatchObject({
-      id: 'member-1',
-      avatarPresentation: { type: 'image', url: 'https://cdn.example/avatar.jpg' },
+      avatarPresentation: {
+        type: 'image',
+        url: 'https://cdn.example/avatar.jpg',
+      },
     });
   });
 

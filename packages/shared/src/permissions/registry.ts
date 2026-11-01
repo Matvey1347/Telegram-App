@@ -133,6 +133,15 @@ export const WORKSPACE_FEATURE_REGISTRY = [
     ],
   }),
   feature({
+    id: "adSales.leads",
+    capabilities: ["view", "manage"],
+    i18nNamespaces: ["common", "navigation", "ad-sales/common"],
+    extra: [
+      { capability: "review", sensitivity: "sensitive" },
+      { capability: "analyze", sensitivity: "sensitive" },
+    ],
+  }),
+  feature({
     id: "advertising",
     navigation: ["adCampaigns"],
     search: ["adCampaigns", "promos", "adSources"],
@@ -171,6 +180,9 @@ export const WORKSPACE_FEATURE_REGISTRY = [
     search: ["scheduledTasks"],
     extra: [
       { capability: "notifications", sensitivity: "standard" },
+      { capability: "viewAiUsage", sensitivity: "sensitive" },
+      { capability: "manageAi", sensitivity: "sensitive" },
+      { capability: "executeAi", sensitivity: "sensitive" },
       { capability: "restoreTrash", sensitivity: "sensitive" },
       { capability: "viewSystemLogs", sensitivity: "sensitive" },
     ],

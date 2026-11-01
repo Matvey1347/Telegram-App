@@ -1,0 +1,28 @@
+import type { AiOperationView } from './ai-usage';
+import type { CrmCopilotLanguage, CrmCopilotTone, CrmCopilotOutput, CrmCopilotStatus } from './telegram-crm-copilot';
+import type { CrmPackageSalesContext } from './telegram-crm-sales-workflow';
+export const LEAD_WORKFLOW_STATES = ['NEW','NEEDS_REVIEW','QUALIFIED','LOW_RELEVANCE','SUSPICIOUS','REJECTED','LINKED'] as const;
+export type LeadWorkflowState = typeof LEAD_WORKFLOW_STATES[number];
+export type LeadQualificationRisk = 'RISK_LOW' | 'RISK_MEDIUM' | 'RISK_HIGH' | 'RISK_UNKNOWN';
+export type LeadQualificationEvidence = { observationId: string; quote: string; reason: string };
+export type LeadQualificationOutput = {
+  relevance: 'HIGH' | 'MEDIUM' | 'LOW' | 'UNKNOWN';
+  thematicFit: 'HIGH' | 'MEDIUM' | 'LOW' | 'UNKNOWN';
+  advertiserIdentity: 'CONFIRMED' | 'AMBIGUOUS' | 'AGENCY' | 'DESTINATION' | 'UNKNOWN';
+  evidenceQuality: 'STRONG' | 'PARTIAL' | 'INSUFFICIENT';
+  recommendedOffer: string;
+  reasons: LeadQualificationEvidence[];
+  riskSignals: Array<LeadQualificationEvidence & { code: 'GUARANTEED_RETURNS' | 'FINANCIAL_GUARANTEE' | 'CONTRADICTION' | 'SUSPICIOUS_LINK' | 'OPAQUE_OFFER' | 'PROHIBITED_CATEGORY' | 'INSUFFICIENT_DATA'; level: LeadQualificationRisk }>;
+  missingFacts: string[];
+};
+export type LeadScorePolicy = { version: string; weights: { relevance: number; thematicFit: number; confirmedContact: number; commercialOffer: number; evidence: number; freshness: number; repeatedEvidence: number }; highRiskPenalty: number; mediumRiskPenalty: number; qualifiedThreshold: number; highPriorityThreshold: number };
+export type LeadQualificationScore = { status: 'SCORED' | 'INSUFFICIENT_EVIDENCE'; relevance: number | null; evidenceQuality: number | null; riskLevel: LeadQualificationRisk; overall: number | null; priority: 'HIGH' | 'NORMAL' | 'LOW' | 'INSUFFICIENT_EVIDENCE'; recommendation: 'QUALIFIED' | 'LOW_RELEVANCE' | 'NEEDS_REVIEW' | 'SUSPICIOUS'; factors: Array<{ key: string; earned: number; maximum: number; explanation: string }> };
+export type LeadQualificationView = { id: string; candidateId: string; operationId: string; status: 'GENERATING' | 'READY' | 'FAILED' | 'UNKNOWN' | 'STALE' | 'EXPIRED'; contextVersion: string; policyVersion: string; output: LeadQualificationOutput | null; score: LeadQualificationScore | null; createdAt: string; expiresAt: string; operation: AiOperationView | null };
+export type LeadCandidateDraftView = { id: string; candidateId: string; authorUserId: string; operationId: string; category: 'SALES_FIRST_DRAFT'; status: CrmCopilotStatus; text: string; tone: CrmCopilotTone; language: CrmCopilotLanguage; output: CrmCopilotOutput | null; warnings: string[]; evidenceIds: string[]; contextVersion: string; revision: number; approvedAt: string | null; createdAt: string; expiresAt: string; operation: AiOperationView | null; canEdit: boolean; canCopy: boolean };
+export type LeadPreparationSummary = { workflowState: LeadWorkflowState; qualification: Pick<LeadQualificationView,'id'|'status'|'score'|'policyVersion'> | null; hasApprovedDraft: boolean };
+export type LeadPreparationView = { candidateId: string; workflowState: LeadWorkflowState; policy: LeadScorePolicy; enabled: boolean; blockedReason: string | null; canQualify: boolean; canGenerateDraft: boolean; canReview: boolean; qualification: LeadQualificationView | null; drafts: LeadCandidateDraftView[]; products: CrmPackageSalesContext['products']; riskAcknowledgedAt: string | null; qualificationDecision: string | null };
+export type LeadQualificationInput = { operationId: string; productIds: string[] };
+export type LeadCandidateDraftInput = LeadQualificationInput & { tone: CrmCopilotTone; language: CrmCopilotLanguage };
+export type LeadQualificationDecisionInput = { revision: number; qualificationId: string; contextVersion: string; decision: 'QUALIFIED' | 'LOW_RELEVANCE' | 'NEEDS_REVIEW'; acknowledgeHighRisk: boolean; note?: string };
+export type LeadCandidateDraftPatch = { revision: number; action: 'SAVE' | 'APPROVE' | 'DISCARD'; text?: string };
+export type LeadPreparationQueueInput = { workflow?: LeadWorkflowState | 'HIGH_PRIORITY'; cursor?: string; limit?: number; search?: string };

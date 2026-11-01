@@ -321,8 +321,7 @@ export class TelegramChannelsController {
   ) {
     return this.streamBulkAction(
       res,
-      (onProgress) =>
-        this.service.syncManagedPosts(user.sub, id, onProgress as never),
+      (onProgress) => this.service.syncManagedPosts(user.sub, id, onProgress),
       'telegram_channel.managed_posts_sync_stream',
     );
   }
@@ -396,13 +395,7 @@ export class TelegramChannelsController {
     return this.streamBulkAction(
       res,
       (onProgress, signal) =>
-        this.service.importManagedPosts(
-          user.sub,
-          id,
-          dto,
-          onProgress as never,
-          signal,
-        ),
+        this.service.importManagedPosts(user.sub, id, dto, onProgress, signal),
       'telegram_channel.managed_posts_import_stream',
     );
   }
@@ -660,8 +653,7 @@ export class TelegramChannelsController {
   ) {
     return this.streamBulkAction(
       res,
-      (onProgress) =>
-        this.service.syncNow(user.sub, id, dto, onProgress as never),
+      (onProgress) => this.service.syncNow(user.sub, id, dto, onProgress),
       'telegram_channel.sync_now_stream',
     );
   }

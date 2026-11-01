@@ -166,10 +166,12 @@ export type CrmContactPaymentSummary = {
 };
 
 export type CrmContactChannelSummary = {
+  instagram?: import('./crm-instagram-contacts').CrmInstagramMethod;
   id: string;
   type:
     | "TELEGRAM_USERNAME"
     | "TELEGRAM_USER_ID"
+    | "INSTAGRAM"
     | "PHONE"
     | "EMAIL"
     | "WEBSITE"
@@ -390,6 +392,7 @@ export type CrmMessage = {
   contentMetadata: Record<string, unknown> | null;
   sentAt: string;
   editedAt: string | null;
+  deletedAt?: string | null;
   readState: CrmReadState;
   deliveryState: CrmDeliveryState;
   createdAt: string;

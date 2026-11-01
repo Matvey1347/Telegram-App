@@ -74,4 +74,24 @@ describe('TelegramCrmRecipientSnapshot', () => {
       ),
     ).toBe('HIGH');
   });
+
+  it('defaults incoming/preview off while preserving master/follow-up and never reroutes an opted-out owner', () => {
+    const chosen = member('owner-contact');
+    const snapshot = new TelegramCrmRecipientSnapshot(
+      [contact] as never,
+      [chosen, member('workspace-owner', 'owner')] as never,
+      permissions as never,
+    );
+    const recipient = snapshot.recipient(snapshot.contact(contact.id))!;
+    expect(snapshot.preferences(recipient)).toEqual({
+      crmNotificationsEnabled: true,
+      crmIncomingMessagesEnabled: false,
+      crmFollowUpEnabled: true,
+      crmAiLeadsEnabled: false,
+      crmMessagePreviewEnabled: false,
+    });
+    expect(snapshot.incomingEnabled(recipient)).toBe(false);
+    expect(recipient.id).toBe(chosen.id);
+    expect(snapshot.priority(null, new Date(), true)).toBe('HIGH');
+  });
 });

@@ -1,0 +1,120 @@
+import type {
+  LeadCandidateView,
+  LeadDiscoveryConfig,
+  LeadObservationView,
+  LeadSourceView,
+} from "@telegram-system/shared";
+export const leadConfig: LeadDiscoveryConfig = {
+  enabled: true,
+  canManage: true,
+  canReview: true,
+  canAnalyze: true,
+  maxSources: 100,
+  maxPostsPerDay: 1000,
+  maxSourceImport: 100,
+  maxMaterialBatch: 20,
+};
+export function sourceFixture(
+  n = 1,
+  workspace = "workspace-one",
+): LeadSourceView {
+  return {
+    id: `source-${n}`,
+    workspaceId: workspace,
+    type: "TELEGRAM_CHANNEL",
+    normalizedKey: `tg:source_${n}`,
+    channelId: String(100 + n),
+    username: `source_${n}`,
+    title: `Evidence source ${n}`,
+    url: `https://t.me/source_${n}`,
+    accountId: "live-account",
+    accessType: "ACCOUNT",
+    addedVia: "MANUAL",
+    processingReference: "policy:reviewed",
+    allowOwnChannel: false,
+    monitoringState: "ACTIVE",
+    status: "INSUFFICIENT_COVERAGE",
+    createdAt: "2026-10-31T10:00:00Z",
+    lastObservedAt: "2026-10-31T11:00:00Z",
+    lastAdAt: null,
+    coverageFrom: "2026-10-31T10:00:00Z",
+    coverageTo: "2026-10-31T11:00:00Z",
+    coverageState: "GAPPED",
+    lastErrorCode: null,
+    metrics: {
+      observedPosts: 3,
+      advertisements: 1,
+      uniqueCandidates: 1,
+      confirmedContacts: 0,
+      confirmedLeads: 0,
+      qualifiedLeads: 0,
+      rejectedCandidates: 0,
+      rejectedMaterials: 0,
+    },
+    priority: null,
+    priorityStatus: "INSUFFICIENT_DATA",
+  };
+}
+export function observationFixture(n = 1): LeadObservationView {
+  return {
+    id: `observation-${n}`,
+    sourceId: `source-${n}`,
+    sourceTitle: `Evidence source ${n}`,
+    externalMessageId: String(n),
+    messageUrl: `https://t.me/source_${n}/${n}`,
+    publishedAt: "2026-10-31T10:00:00Z",
+    observedAt: "2026-10-31T11:00:00Z",
+    expiresAt: "2027-01-29T10:00:00Z",
+    text: `Public business offer ${n}`,
+    links: [],
+    contentHash: `hash-${n}`,
+    originalStatus: "OBSERVED",
+    processingStatus: "PENDING",
+    classificationVersion: null,
+    classification: null,
+    extraction: null,
+    candidateId: null,
+    reviewStatus: "PENDING",
+    classificationOperation: null,
+    extractionOperation: null,
+  };
+}
+export function candidateFixture(
+  n = 1,
+  workspace = "workspace-one",
+): LeadCandidateView {
+  return {
+    id: `candidate-${n}`,
+    workspaceId: workspace,
+    title: `Advertiser project ${n}`,
+    niche: "Education",
+    offerType: "Course",
+    contacts: [
+      {
+        type: "TELEGRAM",
+        value: `business_${n}`,
+        role: "SALES_CONTACT",
+        evidence: "Explicit sales contact in permitted post",
+        confirmed: false,
+      },
+    ],
+    riskStatus: "NEEDS_REVIEW",
+    risks: ["Identity needs confirmation"],
+    reviewStatus: "PENDING",
+    contactId: null,
+    revision: 1,
+    createdAt: "2026-10-31T10:00:00Z",
+    expiresAt: "2027-01-29T10:00:00Z",
+    sources: [
+      {
+        id: `source-${n}`,
+        title: `Evidence source ${n}`,
+        url: `https://t.me/source_${n}`,
+      },
+    ],
+    observations: [observationFixture(n)],
+    hasMoreObservations: false,
+    aliases: [],
+    reviewHistory: [],
+  };
+}

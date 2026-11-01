@@ -59,6 +59,7 @@ export function LoginForm() {
         resolveWorkspacePath(
           consumeAuthReturnTo(getAuthRedirectParam()),
           result.workspace.access,
+          result.workspace.id,
         ),
       );
     } catch (caught) {

@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -67,9 +68,12 @@ export class TelegramCrmContactMergeService {
           description: true,
           source: true,
           stage: true,
+          manualSalesStatus: true,
           archivedAt: true,
           ownerMemberId: true,
           lastContactAt: true,
+          manualInstagramContactAt: true,
+          manualInstagramReplyAt: true,
           lastInboundAt: true,
           lastOutboundAt: true,
           lastPurchaseAt: true,
@@ -90,6 +94,19 @@ export class TelegramCrmContactMergeService {
       const source = contacts.find((contact) => contact.id === sourceContactId);
       if (!target || !source)
         throw new NotFoundException('CRM Contact not found');
+
+      // Ownership and role grants may change while this transaction waits for locks.
+      const scope = await this.authorization.refreshEditScope(userId);
+      if (
+        scope.workspaceId !== workspaceId ||
+        (scope.ownerMemberId &&
+          (target.ownerMemberId !== scope.ownerMemberId ||
+            source.ownerMemberId !== scope.ownerMemberId))
+      ) {
+        throw new ForbiddenException(
+          'CRM merge ownership or permissions changed',
+        );
+      }
 
       const targetTags = await tx.telegramAdvertiserTagAssignment.findMany({
         where: { workspaceId, advertiserId: targetContactId },
@@ -124,6 +141,13 @@ export class TelegramCrmContactMergeService {
       await move(
         'conversations',
         tx.telegramCrmConversation.updateMany({
+          where: { workspaceId, contactId: sourceContactId },
+          data: { contactId: targetContactId },
+        }),
+      );
+      await move(
+        'leadCandidates',
+        tx.telegramLeadCandidate.updateMany({
           where: { workspaceId, contactId: sourceContactId },
           data: { contactId: targetContactId },
         }),
@@ -190,7 +214,20 @@ export class TelegramCrmContactMergeService {
           website: target.website ?? source.website,
           description: target.description ?? source.description,
           source: target.source ?? source.source,
+          manualSalesStatus:
+            target.manualSalesStatus === 'DO_NOT_CONTACT' ||
+            source.manualSalesStatus === 'DO_NOT_CONTACT'
+              ? 'DO_NOT_CONTACT'
+              : (target.manualSalesStatus ?? source.manualSalesStatus ?? null),
           lastContactAt: latest(target.lastContactAt, source.lastContactAt),
+          manualInstagramContactAt: latest(
+            target.manualInstagramContactAt,
+            source.manualInstagramContactAt,
+          ),
+          manualInstagramReplyAt: latest(
+            target.manualInstagramReplyAt,
+            source.manualInstagramReplyAt,
+          ),
           lastInboundAt: latest(target.lastInboundAt, source.lastInboundAt),
           lastOutboundAt: latest(target.lastOutboundAt, source.lastOutboundAt),
           lastPurchaseAt: latest(target.lastPurchaseAt, source.lastPurchaseAt),
@@ -240,6 +277,7 @@ export class TelegramCrmContactMergeService {
             sourceContactId,
             source: {
               displayName: source.displayName,
+              manualSalesStatus: source.manualSalesStatus ?? null,
               companyName: source.companyName,
               telegramUsername: source.telegramUsername,
               phone: source.phone,

@@ -8,6 +8,7 @@ const navigation = vi.hoisted(() => ({ pathname: "/ad-sales" }));
 
 vi.mock("next/navigation", () => ({
   usePathname: () => navigation.pathname,
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 describe("CrmNavigation", () => {
@@ -23,7 +24,7 @@ describe("CrmNavigation", () => {
     expect(screen.getByRole("link", { name: "Clients" }).className).toContain(
       "after:bg-blue-500",
     );
-    expect(screen.queryByRole("link", { name: /Inbox/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Inbox 3/ })).toHaveAttribute("href", "/ad-sales/inbox");
     expect(screen.queryByRole("link", { name: "All contacts" })).toBeNull();
     expect(screen.queryByText("Follow-up")).toBeNull();
     expect(screen.getByRole("link", { name: "Analytics" })).toBeTruthy();

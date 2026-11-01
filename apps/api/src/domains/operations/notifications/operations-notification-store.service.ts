@@ -95,8 +95,21 @@ export class OperationsNotificationStoreService {
         "deliverAt" = EXCLUDED."deliverAt",
         "publishedAt" = EXCLUDED."publishedAt",
         "expiresAt" = EXCLUDED."expiresAt",
-        "pushAttemptedAt" = NULL,
+        "pushAttemptedAt" = CASE
+          WHEN EXCLUDED."type" = 'CRM_MESSAGE_RECEIVED'::"OperationsNotificationType"
+            AND "OperationsNotification"."pushAttemptedAt" > EXCLUDED."publishedAt" - INTERVAL '30 seconds'
+          THEN "OperationsNotification"."pushAttemptedAt"
+          ELSE NULL
+        END,
         "createdAt" = EXCLUDED."createdAt"
+      WHERE EXCLUDED."type" <> 'CRM_MESSAGE_RECEIVED'::"OperationsNotificationType"
+        OR (
+          COALESCE(EXCLUDED."metadata"::jsonb->>'messageSentAt', ''),
+          COALESCE((EXCLUDED."metadata"::jsonb->>'telegramMessageId')::bigint, 0)
+        ) > (
+          COALESCE("OperationsNotification"."metadata"::jsonb->>'messageSentAt', ''),
+          COALESCE(("OperationsNotification"."metadata"::jsonb->>'telegramMessageId')::bigint, 0)
+        )
       RETURNING "id"
     `);
   }

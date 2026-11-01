@@ -277,6 +277,13 @@ enum TelegramCrmContactStage {
   ANOTHER
 }
 
+enum TelegramCrmManualSalesStatus {
+  INTERESTED
+  CLOSED
+  DO_NOT_CONTACT
+  HUMAN_REVIEW
+}
+
 enum TelegramCrmConversationState {
   ACTIVE
   IGNORED
@@ -323,6 +330,7 @@ enum TelegramCrmSyncStatus {
 }
 
 enum TelegramAdvertiserContactType {
+  INSTAGRAM
   TELEGRAM_USERNAME
   TELEGRAM_USER_ID
   PHONE
@@ -404,6 +412,8 @@ enum OperationsNotificationType {
   CRM_FOLLOW_UP_DUE
   CRM_PLACEMENT_FAILURE
   TELEGRAM_ACCOUNT_REAUTH_REQUIRED
+  CRM_AI_LEAD_QUALIFIED
+  SYSTEM_TEST
 }
 
 enum OperationsNotificationPriority {
@@ -1113,6 +1123,19 @@ model Workspace {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  aiConfiguration AiWorkspaceConfig?
+  aiCategories AiCategoryConfig[]
+  aiOperations AiOperation[]
+  crmAiDrafts TelegramCrmAiDraft[]
+  leadSources TelegramLeadSource[]
+  leadCandidates TelegramLeadCandidate[]
+  leadObservations TelegramLeadObservation[]
+  aiBudgetPeriods AiBudgetPeriod[]
+  aiUsageDays AiUsageDaily[]
+
+  leadQualifications TelegramLeadQualification[]
+  leadCandidateDrafts TelegramLeadCandidateDraft[]
+
 }
 
 model TelegramUserAccountIntegration {
@@ -1163,11 +1186,15 @@ model TelegramUserAccountIntegration {
   profileUser              User?                            @relation("UserProfileTelegramAccount")
   channelAdminLinks        TelegramChannelAdminLink[]
   crmConversations         TelegramCrmConversation[]
+  leadSources              TelegramLeadSource[]
   crmSyncState             TelegramCrmAccountSyncState?
   crmDefaultSenderSettings TelegramAdCrmWorkspaceSettings[] @relation("TelegramCrmDefaultSenderAccount")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  crmChatOperations TelegramCrmChatOperation[]
+  crmDeletedMessages TelegramCrmDeletedMessage[]
 
   @@unique([id, workspaceId])
   @@index([workspaceId, assignedMemberId])
@@ -1353,11 +1380,16 @@ model OperationsPushSubscription {
 }
 
 model OperationsNotificationPreference {
-  workspaceId    String
-  memberId       String
-  webPushEnabled Boolean  @default(false)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  workspaceId                String
+  memberId                   String
+  webPushEnabled             Boolean  @default(false)
+  crmNotificationsEnabled    Boolean  @default(true)
+  crmIncomingMessagesEnabled Boolean  @default(false)
+  crmFollowUpEnabled         Boolean  @default(true)
+  crmAiLeadsEnabled          Boolean  @default(false)
+  crmMessagePreviewEnabled   Boolean  @default(false)
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
 
   workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   member    WorkspaceMember @relation(fields: [memberId, workspaceId], references: [id, workspaceId], onDelete: Cascade, map: "OperationsNotificationPreference_member_workspace_fkey")
@@ -2312,9 +2344,11 @@ model TelegramAdSale {
   @@index([workspaceId, sellerMemberId])
   @@index([workspaceId, status, createdAt])
   @@index([workspaceId, assignedMemberId])
-  @@index([workspaceId, advertiserId, createdAt])
+  @@index([workspaceId, advertiserId, createdAt, id], map: "TelegramAdSale_workspace_advertiser_created_id_idx")
   @@index([workspaceId, crmDealStage, createdAt])
   @@index([sourceTaskId])
+  @@index([workspaceId, sourceAdvertiserActivityId])
+
 }
 
 /// A user-owned, workspace-scoped snapshot of the new-sale form. Kept separate
@@ -2415,9 +2449,12 @@ model TelegramAdvertiser {
   description                        String?
   source                             String?
   stage                              TelegramCrmContactStage        @default(NEW)
+  manualSalesStatus                  TelegramCrmManualSalesStatus?
   ownerMemberId                      String?
   avatarIconId                       String?
   createdByUserId                    String?
+  manualInstagramContactAt DateTime?
+  manualInstagramReplyAt DateTime?
   lastContactAt                      DateTime?
   lastInboundAt                      DateTime?
   lastOutboundAt                     DateTime?
@@ -2451,6 +2488,7 @@ model TelegramAdvertiser {
   crmPeers             TelegramCrmPeer[]
   crmConversations     TelegramCrmConversation[]
   crossPromotionPlans  CrossPromotionPlan[]
+  discoveryCandidates TelegramLeadCandidate[]
 
   @@unique([id, workspaceId])
   @@index([workspaceId, stage, updatedAt, id])
@@ -2470,6 +2508,9 @@ model TelegramAdvertiserContact {
   label           String?
   isPrimary       Boolean                       @default(false)
   isVerified      Boolean                       @default(false)
+  identityState String @default("ACTIVE") @db.VarChar(20)
+  ownershipConfirmedAt DateTime?
+  ownershipConfirmedByUserId String?
   createdAt       DateTime                      @default(now())
   updatedAt       DateTime                      @updatedAt
 
@@ -2516,6 +2557,8 @@ model TelegramAdvertiserTagAssignment {
 }
 
 model TelegramAdvertiserActivity {
+  operationId String? @db.VarChar(100)
+  requestFingerprint String? @db.VarChar(64)
   id            String                         @id @default(cuid())
   workspaceId   String
   advertiserId  String
@@ -2542,9 +2585,13 @@ model TelegramAdvertiserActivity {
 
   @@index([workspaceId, advertiserId, occurredAt], map: "TelegramAdvertiserActivity_workspaceId_advertiserId_occurredAt_")
   @@index([workspaceId, type, occurredAt])
+  // Partial Instagram activity-retention index is SQL-owned in 20261101120100_crm_instagram_manual_contacts.
+  @@unique([workspaceId, operationId])
 }
 
 model TelegramAdvertiserTask {
+  manualOperationId String? @db.VarChar(100)
+  manualRequestFingerprint String? @db.VarChar(64)
   id               String                         @id @default(cuid())
   workspaceId      String
   advertiserId     String
@@ -2580,8 +2627,10 @@ model TelegramAdvertiserTask {
   automationExecutions TelegramAdvertiserAutomationExecution[]
 
   @@index([workspaceId, assignedMemberId, status, dueAt], map: "TelegramAdvertiserTask_workspaceId_assignedMemberId_status_dueA")
+  // Partial effective-reminder expression index is SQL-owned in 20261031110000_crm_sales_workflow.
   @@index([workspaceId, advertiserId, dueAt])
   @@index([workspaceId, status, dueAt])
+  @@unique([workspaceId, manualOperationId])
 }
 
 model TelegramAdCrmMemberSettings {
@@ -2669,6 +2718,8 @@ model TelegramCrmConversation {
   lastOutboundAt                  DateTime?
   inboundMessageCount             Int                          @default(0)
   outboundMessageCount            Int                          @default(0)
+  unreadSnapshotPts Int?
+  unreadSnapshotTopMessageId       Int?
   unreadCount                     Int                          @default(0)
   readState                       TelegramCrmReadState         @default(UNKNOWN)
   lastReadTelegramMessageId       String?
@@ -2686,6 +2737,7 @@ model TelegramCrmConversation {
   contact        TelegramAdvertiser?            @relation(fields: [contactId, workspaceId], references: [id, workspaceId], onDelete: Restrict, map: "TelegramCrmConversation_contact_workspace_fkey")
   mtprotoAccount TelegramUserAccountIntegration @relation(fields: [mtprotoAccountId, workspaceId], references: [id, workspaceId], onDelete: Restrict, map: "TelegramCrmConversation_account_workspace_fkey")
   messages       TelegramCrmMessage[]
+  aiDrafts       TelegramCrmAiDraft[]
 
   @@unique([workspaceId, telegramCrmPeerId, mtprotoAccountId], map: "TelegramCrmConversation_workspaceId_peer_account_key")
   @@unique([id, workspaceId], map: "TelegramCrmConversation_id_workspaceId_key")
@@ -2710,6 +2762,7 @@ model TelegramCrmMessage {
   text                     String?
   contentMetadata          Json?
   sentAt                   DateTime
+  deletedAt                DateTime?
   editedAt                 DateTime?
   readState                TelegramCrmReadState        @default(UNKNOWN)
   deliveryState            TelegramCrmDeliveryState    @default(UNKNOWN)
@@ -2721,6 +2774,7 @@ model TelegramCrmMessage {
 
   @@unique([conversationId, telegramMessageId], map: "TelegramCrmMessage_conversation_telegramMessage_key")
   @@unique([conversationId, clientIdempotencyKey], map: "TelegramCrmMessage_conversation_clientIdempotency_key")
+  @@index([workspaceId, mtprotoAccountId, telegramMessageIdNumeric], map: "TelegramCrmMessage_workspace_account_numeric_idx")
   @@index([conversationId, sentAt, id], map: "TelegramCrmMessage_conversation_sentAt_id_idx")
   @@index([conversationId, direction, telegramMessageIdNumeric], map: "TelegramCrmMessage_conversation_direction_numeric_idx")
 }
@@ -5843,4 +5897,363 @@ model Icon {
   @@index([workspaceId, name, type])
   @@index([workspaceId, type])
   @@index([createdByUserId])
+}
+
+
+/// Internal Operations AI. Consumer Finance AI tables remain a separate product contract.
+model AiWorkspaceConfig {
+  workspaceId String @id
+  enabled Boolean @default(false)
+  automaticEnabled Boolean @default(false)
+  dailyBudget Decimal? @db.Decimal(24, 12)
+  monthlyBudget Decimal? @db.Decimal(24, 12)
+  maxRequestCost Decimal? @db.Decimal(24, 12)
+  warningPercent Int @default(80)
+  updatedAt DateTime @updatedAt
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+model AiCategoryConfig {
+  id String @id @default(cuid())
+  workspaceId String
+  category String @db.VarChar(64)
+  modelId String @db.VarChar(100)
+  enabled Boolean @default(false)
+  automaticEnabled Boolean @default(false)
+  maxInputTokens Int
+  maxOutputTokens Int
+  timeoutMs Int
+  concurrencyLimit Int
+  dailyBudget Decimal? @db.Decimal(24, 12)
+  monthlyBudget Decimal? @db.Decimal(24, 12)
+  maxRequestCost Decimal? @db.Decimal(24, 12)
+  version Int @default(1)
+  updatedAt DateTime @updatedAt
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  @@unique([workspaceId, category])
+}
+
+model AiOperation {
+  id String @id @default(cuid())
+  workspaceId String
+  operationId String @db.VarChar(100)
+  actorUserId String
+  category String @db.VarChar(64)
+  provider String @db.VarChar(32)
+  model String @db.VarChar(100)
+  providerModel String? @db.VarChar(100)
+  mode String @db.VarChar(16)
+  fingerprint String @db.VarChar(64)
+  status String @db.VarChar(24)
+  pricingStatus String @db.VarChar(24)
+  reservedCost Decimal @db.Decimal(24, 12)
+  actualCost Decimal? @db.Decimal(24, 12)
+  currency String @default("USD") @db.VarChar(3)
+  inputTokens Int?
+  outputTokens Int?
+  cachedInputTokens Int?
+  cacheWriteTokens Int?
+  reasoningTokens Int?
+  totalTokens Int?
+  durationMs Int?
+  errorCategory String? @db.VarChar(64)
+  providerRequestId String? @db.VarChar(200)
+  businessObjectId String? @db.VarChar(100)
+  configurationSnapshot Json
+  pricingSnapshot Json
+  pricingVersion String?
+  pricingEffectiveAt DateTime?
+  reconciliationReference String? @db.VarChar(120)
+  reconciledByUserId String?
+  deadlineAt DateTime
+  expiresAt DateTime
+  finishedAt DateTime?
+  createdAt DateTime @default(now())
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  @@unique([workspaceId, operationId])
+  @@index([workspaceId, createdAt, id])
+  @@index([workspaceId, category, createdAt, id])
+  @@index([workspaceId, status, deadlineAt])
+  @@index([expiresAt, id])
+}
+
+model AiBudgetPeriod {
+  id String @id @default(cuid())
+  workspaceId String
+  scope String @db.VarChar(64)
+  period String @db.VarChar(8)
+  periodStart DateTime
+  periodEnd DateTime
+  spent Decimal @default(0) @db.Decimal(24, 12)
+  reserved Decimal @default(0) @db.Decimal(24, 12)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  @@unique([workspaceId, scope, period, periodStart])
+  @@index([periodEnd, id])
+}
+
+/// Bounded daily counters avoid re-reading every operation on each dashboard open.
+model AiUsageDaily {
+  id String @id @default(cuid())
+  workspaceId String
+  day DateTime @db.Date
+  category String @db.VarChar(64)
+  provider String @db.VarChar(32)
+  model String @db.VarChar(100)
+  status String @db.VarChar(24)
+  requests Int @default(0)
+  errors Int @default(0)
+  pricedRequests Int @default(0)
+  unpricedRequests Int @default(0)
+  unknownUsageRequests Int @default(0)
+  knownCost Decimal @default(0) @db.Decimal(24, 12)
+  inputTokens BigInt @default(0)
+  outputTokens BigInt @default(0)
+  cachedInputTokens BigInt @default(0)
+  cacheWriteTokens BigInt @default(0)
+  reasoningTokens BigInt @default(0)
+  totalTokens BigInt @default(0)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  @@unique([workspaceId, day, category, provider, model, status], map: "AiUsageDaily_dimensions_key")
+  @@index([workspaceId, day])
+  @@index([day, id])
+}
+
+// CRM-owned transient generated content, intentionally separate from AI usage telemetry.
+model TelegramCrmAiDraft {
+  id                 String   @id @default(cuid())
+  workspaceId        String
+  conversationId     String
+  contactId          String
+  authorUserId       String
+  operationId        String   @db.VarChar(100)
+  category           String   @db.VarChar(80)
+  tone               String   @db.VarChar(30)
+  language           String   @db.VarChar(10)
+  status             String   @default("GENERATING") @db.VarChar(30)
+  text               String   @default("") @db.VarChar(4096)
+  output             Json?
+  facts              Json
+  missingFacts       Json
+  warnings           Json
+  contextVersion     String   @db.VarChar(80)
+  requestFingerprint String   @db.VarChar(64)
+  requestSnapshot    Json
+  revision           Int      @default(1)
+  approvedTextHash   String?  @db.VarChar(64)
+  approvedAt         DateTime?
+  operationDbId      String?
+  sentMessageId      String?
+  createdAt          DateTime @default(now())
+  expiresAt          DateTime
+
+  workspace    Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  conversation TelegramCrmConversation @relation(fields: [conversationId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+
+  @@unique([workspaceId, operationId])
+  @@index([workspaceId, conversationId, authorUserId, createdAt, id])
+  @@index([expiresAt, id])
+}
+
+// Lead sources are independent of campaign AdvertisingSource and managed TelegramChannel.
+model TelegramLeadSource {
+  id                      String @id @default(cuid())
+  workspaceId             String
+  type                    String @db.VarChar(40)
+  normalizedKey           String @db.VarChar(200)
+  channelId               String? @db.VarChar(40)
+  username                String? @db.VarChar(100)
+  title                   String @db.VarChar(300)
+  url                     String? @db.VarChar(500)
+  accountId               String?
+  accessType              String @default("UNVERIFIED") @db.VarChar(40)
+  addedVia                String @default("MANUAL") @db.VarChar(40)
+  processingReference     String @db.VarChar(100)
+  allowOwnChannel         Boolean @default(false)
+  monitoringState         String @default("PAUSED") @db.VarChar(30)
+  monitoringActorUserId   String
+  lastObservedAt          DateTime?
+  lastAdAt                DateTime?
+  checkpointMessageId     Int?
+  channelPts              Int?
+  coverageFrom            DateTime?
+  coverageTo              DateTime?
+  coverageState           String @default("UNPROVEN") @db.VarChar(40)
+  lastErrorCode           String? @db.VarChar(80)
+  lastErrorAt             DateTime?
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+  workspace               Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  observations            TelegramLeadObservation[]
+  account                 TelegramUserAccountIntegration? @relation(fields: [accountId, workspaceId], references: [id, workspaceId], onDelete: Restrict)
+  @@unique([id, workspaceId])
+  @@unique([workspaceId, normalizedKey])
+  @@unique([workspaceId, channelId])
+  @@index([workspaceId, createdAt, id])
+  @@index([monitoringState, accountId, workspaceId])
+}
+
+model TelegramLeadCandidate {
+  id                  String @id @default(cuid())
+  workspaceId         String
+  identityKey         String? @db.VarChar(200)
+  title               String @db.VarChar(300)
+  niche               String @default("") @db.VarChar(300)
+  offerType           String @default("") @db.VarChar(300)
+  sourceIds           Json @default("[]")
+  contacts            Json
+  riskStatus          String @default("NEEDS_REVIEW") @db.VarChar(30)
+  risks               Json
+  reviewStatus        String @default("PENDING") @db.VarChar(30)
+  reviewHistory       Json
+  contactId           String?
+  mergedIntoId        String?
+  qualificationDecision String? @db.VarChar(30)
+  qualificationContextVersion String? @db.VarChar(64)
+  qualificationReviewedAt DateTime?
+  qualificationReviewerUserId String?
+  riskAcknowledgedAt DateTime?
+  revision            Int @default(1)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  expiresAt           DateTime
+  workspace           Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  contact             TelegramAdvertiser? @relation(fields: [contactId, workspaceId], references: [id, workspaceId], onDelete: Restrict)
+  observations        TelegramLeadObservation[]
+  qualifications      TelegramLeadQualification[]
+  preparedDrafts      TelegramLeadCandidateDraft[]
+  @@unique([id, workspaceId])
+  @@unique([workspaceId, identityKey])
+  @@index([workspaceId, reviewStatus, createdAt, id])
+  @@index([expiresAt, id])
+  @@index([workspaceId, contactId])
+  @@index([workspaceId, mergedIntoId])
+}
+
+// Single permitted text/evidence copy. No media blobs or prompt duplication.
+model TelegramLeadObservation {
+  id                         String @id @default(cuid())
+  workspaceId                String
+  sourceId                   String
+  candidateId                String?
+  externalMessageId          String @db.VarChar(120)
+  messageUrl                 String? @db.VarChar(500)
+  publishedAt                DateTime
+  observedAt                 DateTime
+  editedAt                   DateTime?
+  expiresAt                  DateTime
+  text                       String @db.VarChar(4096)
+  links                      Json
+  contentHash                String @db.VarChar(64)
+  originalStatus             String @default("OBSERVED") @db.VarChar(30)
+  processingStatus           String @default("PENDING") @db.VarChar(40)
+  reviewStatus               String @default("PENDING") @db.VarChar(30)
+  classificationVersion      String? @db.VarChar(80)
+  extractionVersion          String? @db.VarChar(80)
+  classification             Json?
+  extraction                 Json?
+  classificationOperationId  String? @db.VarChar(100)
+  extractionOperationId      String? @db.VarChar(100)
+  classificationOperationDbId String?
+  extractionOperationDbId    String?
+  processingStartedAt        DateTime?
+  source                     TelegramLeadSource @relation(fields: [sourceId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  candidate                  TelegramLeadCandidate? @relation(fields: [candidateId, workspaceId], references: [id, workspaceId], onDelete: Restrict)
+  workspace                  Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  @@unique([workspaceId, sourceId, externalMessageId])
+  @@index([workspaceId, observedAt, id])
+  @@index([workspaceId, sourceId, publishedAt, id])
+  @@index([workspaceId, candidateId, observedAt, id])
+  @@index([expiresAt, id])
+}
+
+// Versioned business result; paid receipts remain in Operations AI ledger.
+model TelegramLeadQualification {
+  id String @id @default(cuid())
+  workspaceId String
+  candidateId String
+  authorUserId String
+  operationId String @db.VarChar(100)
+  operationDbId String?
+  contextVersion String @db.VarChar(64)
+  policyVersion String @db.VarChar(80)
+  requestSnapshot Json
+  status String @default("GENERATING") @db.VarChar(30)
+  output Json?
+  score Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  expiresAt DateTime
+  workspace Workspace @relation(fields:[workspaceId], references:[id], onDelete:Cascade)
+  candidate TelegramLeadCandidate @relation(fields:[candidateId,workspaceId], references:[id,workspaceId], onDelete:Cascade)
+  @@unique([workspaceId,operationId])
+  @@index([workspaceId,candidateId,contextVersion,createdAt])
+  @@index([expiresAt,id])
+}
+
+model TelegramLeadCandidateDraft {
+  id String @id @default(cuid())
+  workspaceId String
+  candidateId String
+  authorUserId String
+  operationId String @db.VarChar(100)
+  operationDbId String?
+  category String @default("SALES_FIRST_DRAFT") @db.VarChar(40)
+  requestFingerprint String @db.VarChar(64)
+  contextVersion String @db.VarChar(64)
+  requestSnapshot Json
+  evidenceRefs Json
+  status String @default("GENERATING") @db.VarChar(30)
+  tone String @db.VarChar(30)
+  language String @db.VarChar(10)
+  text String @default("") @db.VarChar(3000)
+  output Json?
+  warnings Json
+  revision Int @default(1)
+  approvedAt DateTime?
+  approvalHash String? @db.VarChar(64)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  expiresAt DateTime
+  workspace Workspace @relation(fields:[workspaceId], references:[id], onDelete:Cascade)
+  candidate TelegramLeadCandidate @relation(fields:[candidateId,workspaceId], references:[id,workspaceId], onDelete:Cascade)
+  @@unique([workspaceId,operationId])
+  @@index([workspaceId,candidateId,authorUserId,createdAt,id])
+  @@index([workspaceId,candidateId,requestFingerprint])
+  @@index([expiresAt,id])
+}
+
+// Resolved non-TEXT receipts retained 30 days; UNKNOWN/TEXT follow account policy.
+// UNKNOWN target claims are serialized by a SQL-owned partial unique index.
+model TelegramCrmChatOperation {
+  id                 String   @id @default(cuid())
+  workspaceId        String
+  operationId        String
+  actorUserId        String
+  conversationId     String
+  mtprotoAccountId   String
+  targetMessageId    String?
+  kind               String
+  requestFingerprint String
+  status             String   @default("UNKNOWN")
+  request            Json
+  result             Json?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  account TelegramUserAccountIntegration @relation(fields: [mtprotoAccountId, workspaceId], references: [id, workspaceId], onDelete: Cascade, map: "TelegramCrmChatOperation_account_workspace_fkey")
+
+  @@index([mtprotoAccountId])
+  @@unique([workspaceId, operationId])
+  @@index([createdAt, id])
+}
+
+// Body-free deletion identities prevent delayed history/update resurrection.
+model TelegramCrmDeletedMessage {
+  mtprotoAccountId   String
+  telegramMessageId  Int
+  workspaceId        String
+  createdAt          DateTime @default(now())
+  account TelegramUserAccountIntegration @relation(fields: [mtprotoAccountId], references: [id], onDelete: Cascade)
+  @@id([mtprotoAccountId, telegramMessageId])
+  @@index([workspaceId, mtprotoAccountId])
 }

@@ -64,6 +64,7 @@ export const LOCAL_PRODUCTS = {
         args: ["--filter", "api", "dev"],
         env: {
           API_PORT: "4001",
+          CRM_RUNTIME_ENABLED: "false",
           FRONTEND_URL: "http://localhost:3001",
           TELEGRAM_SYSTEM_BOT_ENVIRONMENT: "",
           TELEGRAM_BOT_RUNTIME_ENVIRONMENT: "",

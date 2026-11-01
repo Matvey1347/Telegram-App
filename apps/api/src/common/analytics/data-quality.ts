@@ -43,7 +43,10 @@ export function calculateEffectiveSubscribers(input: {
   manualSubscriberBaseQuality?: string | null;
 }) {
   const totalSubscribers = input.totalSubscribers;
-  const knownFakeSubscribersCount = Math.max(0, input.knownFakeSubscribersCount || 0);
+  const knownFakeSubscribersCount = Math.max(
+    0,
+    input.knownFakeSubscribersCount || 0,
+  );
   const effectiveSubscribers =
     totalSubscribers == null
       ? null

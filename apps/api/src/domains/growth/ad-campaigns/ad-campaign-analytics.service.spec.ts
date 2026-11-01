@@ -32,9 +32,11 @@ describe('AdCampaignAnalyticsService', () => {
     const prisma = {
       adCampaign: {
         findFirst: jest.fn().mockResolvedValue(campaign),
-        update: jest.fn().mockImplementation(({ data }) =>
-          Promise.resolve({ ...campaign, ...data }),
-        ),
+        update: jest
+          .fn()
+          .mockImplementation(({ data }) =>
+            Promise.resolve({ ...campaign, ...data }),
+          ),
       },
     };
     const conversion = { convertCurrency: jest.fn() };

@@ -132,9 +132,7 @@ export class TelegramUserAccountQrLoginService {
       session: result.session,
       profile: result.profile,
     });
-    const connectedAccount = this.accountView(
-      row as unknown as Record<string, unknown>,
-    );
+    const connectedAccount = this.accountView(row);
     await onProgress({ type: 'connected', account: connectedAccount });
     await syncAfterConnect();
     return {

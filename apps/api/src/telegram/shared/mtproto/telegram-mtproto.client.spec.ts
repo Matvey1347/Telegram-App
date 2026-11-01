@@ -734,12 +734,12 @@ describe('TelegramMtprotoClient import resolution', () => {
       accessHash: '1000' as any,
       firstName: 'Owner',
       username: 'owner_admin',
-    } as unknown as any);
+    });
     const otherAdmin = new Api.User({
       id: '200' as any,
       firstName: 'Sasha',
       username: 'sasha_admin',
-    } as unknown as any);
+    });
     const progress: string[] = [];
 
     fakeClient.getEntity.mockResolvedValue(channel);
@@ -851,7 +851,7 @@ describe('TelegramMtprotoClient import resolution', () => {
       accessHash: '1000' as any,
       firstName: 'Owner',
       username: 'owner_admin',
-    } as unknown as any);
+    });
 
     fakeClient.getEntity.mockResolvedValue(channel);
     fakeClient.getMe.mockResolvedValue(selfUser);
@@ -949,18 +949,18 @@ describe('TelegramMtprotoClient import resolution', () => {
       accessHash: '1000' as any,
       firstName: 'Owner',
       username: 'owner_admin',
-    } as unknown as any);
+    });
     const incompleteAdmin = new Api.User({
       id: '200' as any,
       firstName: 'Sasha',
       username: 'sasha_admin',
-    } as unknown as any);
+    });
     const adminFromDirectory = new Api.User({
       id: '200' as any,
       accessHash: '2000' as any,
       firstName: 'Sasha',
       username: 'sasha_admin',
-    } as unknown as any);
+    });
 
     fakeClient.getEntity.mockResolvedValue(channel);
     fakeClient.getMe.mockResolvedValue(selfUser);
@@ -1068,11 +1068,11 @@ describe('TelegramMtprotoClient import resolution', () => {
 
   it('builds InputUser directly from a GramJS Integer accessHash without getInputEntity fallback', async () => {
     const adminUser = new Api.User({
-      id: returnBigInt('821695725') as any,
-      accessHash: returnBigInt('9876543210987654321') as any,
+      id: returnBigInt('821695725'),
+      accessHash: returnBigInt('9876543210987654321'),
       firstName: 'Sasha',
       username: 'sasha_admin',
-    } as unknown as any);
+    });
 
     const inputUser = await (client as any).resolveInviteAdminInputUser({
       client: fakeClient,
@@ -1101,19 +1101,19 @@ describe('TelegramMtprotoClient import resolution', () => {
       firstName: 'Owner',
       username: 'owner_admin',
       self: true,
-    } as unknown as any);
+    });
     const adminFromInvites = new Api.User({
-      id: returnBigInt('821695725') as any,
-      accessHash: returnBigInt('9876543210987654321') as any,
+      id: returnBigInt('821695725'),
+      accessHash: returnBigInt('9876543210987654321'),
       firstName: 'Sasha',
       username: 'sasha_admin',
-    } as unknown as any);
+    });
     const minAdminFromDirectory = new Api.User({
-      id: returnBigInt('821695725') as any,
+      id: returnBigInt('821695725'),
       min: true,
       firstName: 'Sasha',
       username: 'sasha_admin',
-    } as unknown as any);
+    });
 
     fakeClient.getEntity.mockResolvedValue(channel);
     fakeClient.getMe.mockResolvedValue(selfUser);
@@ -1196,12 +1196,12 @@ describe('TelegramMtprotoClient import resolution', () => {
       accessHash: '1000' as any,
       firstName: 'Owner',
       username: 'owner_admin',
-    } as unknown as any);
+    });
     const otherAdmin = new Api.User({
       id: '200' as any,
       firstName: 'Sasha',
       username: 'sasha_admin',
-    } as unknown as any);
+    });
 
     fakeClient.getEntity.mockResolvedValue(channel);
     fakeClient.getMe.mockResolvedValue(selfUser);
@@ -1366,9 +1366,7 @@ describe('TelegramMtprotoClient media batches', () => {
         return Buffer.from(`image-${message.id}`);
       }),
     };
-    jest
-      .spyOn(service as any, 'createClient')
-      .mockResolvedValue(telegram as never);
+    jest.spyOn(service as any, 'createClient').mockResolvedValue(telegram);
     const close = jest
       .spyOn(service as any, 'closeClient')
       .mockResolvedValue(undefined);

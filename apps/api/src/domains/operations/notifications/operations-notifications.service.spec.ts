@@ -1,3 +1,4 @@
+import type { Prisma } from '@prisma/client';
 import { OperationsNotificationsService } from './operations-notifications.service';
 
 describe('OperationsNotificationsService', () => {
@@ -11,7 +12,7 @@ describe('OperationsNotificationsService', () => {
         'adSales.crm.viewOwn',
       ]),
     };
-    const prisma: any = {
+    const prisma = {
       $executeRaw: jest.fn(),
       $transaction: jest.fn(),
       operationsNotification: {
@@ -33,8 +34,8 @@ describe('OperationsNotificationsService', () => {
         updateMany: jest.fn(),
       },
     };
-    prisma.$transaction.mockImplementation(
-      async (work: (tx: unknown) => unknown) => work(prisma),
+    prisma.$transaction.mockImplementation((work: (tx: unknown) => unknown) =>
+      Promise.resolve(work(prisma)),
     );
     const authorization = { require: jest.fn().mockResolvedValue(access) };
     const pushConfig = {
@@ -64,22 +65,27 @@ describe('OperationsNotificationsService', () => {
         where: expect.objectContaining({
           workspaceId: 'workspace-1',
           recipientMemberId: 'member-1',
-          type: { not: 'CRM_MESSAGE_RECEIVED' },
-          AND: expect.any(Array),
-        }),
+          AND: expect.any(Array) as unknown,
+        }) as unknown,
         take: 51,
       }),
     );
   });
 
-  it('hides legacy incoming Telegram-message notifications from the list and unread badge', async () => {
+  it('applies current per-type preferences to the unread badge without a separate preference query', async () => {
     const { service, prisma } = setup();
     await service.unreadCount('user-1');
-    expect(prisma.operationsNotification.count).toHaveBeenCalledWith({
-      where: expect.objectContaining({
-        type: { not: 'CRM_MESSAGE_RECEIVED' },
-      }),
-    });
+    const where = (
+      (prisma.operationsNotification.count.mock.calls[0] as unknown[])[0] as {
+        where: Prisma.OperationsNotificationWhereInput;
+      }
+    ).where;
+    expect(where.type).toBeUndefined();
+    expect(JSON.stringify(where.AND)).toContain('crmIncomingMessagesEnabled');
+    expect(JSON.stringify(where.AND)).toContain('crmFollowUpEnabled');
+    expect(
+      prisma.operationsNotificationPreference.findUnique,
+    ).not.toHaveBeenCalled();
   });
 
   it('does not write an absent preference when requested value is already false', async () => {
@@ -88,6 +94,11 @@ describe('OperationsNotificationsService', () => {
       webPushEnabled: false,
       pushConfigured: false,
       activeSubscriptionCount: 0,
+      crmNotificationsEnabled: true,
+      crmIncomingMessagesEnabled: false,
+      crmFollowUpEnabled: true,
+      crmAiLeadsEnabled: false,
+      crmMessagePreviewEnabled: false,
     });
     expect(
       prisma.operationsNotificationPreference.upsert,
@@ -143,7 +154,11 @@ describe('OperationsNotificationsService', () => {
       'user-1',
       Array.from({ length: 75 }, (_, index) => `notification-${index}`),
     );
-    const call = prisma.operationsNotification.updateMany.mock.calls[0][0];
+    const call = (
+      prisma.operationsNotification.updateMany.mock.calls[0] as unknown[]
+    )[0] as {
+      where: { id: { in: string[] } };
+    };
     expect(call.where.id.in).toHaveLength(50);
     expect(call.where).toMatchObject({
       workspaceId: 'workspace-1',

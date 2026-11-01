@@ -61,8 +61,8 @@ describe('ad campaign server list query', () => {
       const query = buildAdCampaignPageIdQuery('workspace-1', { sort }, 0, 50);
       const sql = query.strings.join('?');
 
-    expect(sql).toContain('COALESCE(');
-    expect(sql).toContain('NULLIF(');
+      expect(sql).toContain('COALESCE(');
+      expect(sql).toContain('NULLIF(');
       expect(sql.match(/SELECT SUM\(link\."joinedCount"\)/gu)).toHaveLength(1);
       expect(sql).toContain(`campaign."id" ${direction}`);
     },

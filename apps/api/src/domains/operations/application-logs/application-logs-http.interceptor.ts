@@ -47,11 +47,7 @@ export class ApplicationLogsHttpInterceptor implements NestInterceptor {
           // Failed responses remain operational evidence. Normal successful
           // completions go to the console/provider logger unless explicitly
           // enabled, avoiding one PostgreSQL write per HTTP request.
-          if (
-            statusCode < 400 &&
-            !persistSuccessfulRequest &&
-            !isSlow
-          ) {
+          if (statusCode < 400 && !persistSuccessfulRequest && !isSlow) {
             return;
           }
           const level =

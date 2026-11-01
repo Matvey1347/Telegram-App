@@ -32,9 +32,15 @@ describe('renderPublicationConfirmation', () => {
     expect(text).toContain('💌 <b>Листівки Привітання щодня</b>');
     expect(text).not.toContain('💝');
     expect(text).toContain('https://t.me/public');
-    expect(text).toContain('📅 Дата — <b>29.09</b>; 🕒 Час — <b>19:10</b>\n🗑️ Формат — <b>Автовидалення через 48 годин</b>');
-    expect(text.indexOf('Пост «Тестовий пост»')).toBeLessThan(text.indexOf('Дата —'));
-    expect(text.indexOf('Формат —')).toBeLessThan(text.indexOf('Опубліковано в каналах:'));
+    expect(text).toContain(
+      '📅 Дата — <b>29.09</b>; 🕒 Час — <b>19:10</b>\n🗑️ Формат — <b>Автовидалення через 48 годин</b>',
+    );
+    expect(text.indexOf('Пост «Тестовий пост»')).toBeLessThan(
+      text.indexOf('Дата —'),
+    );
+    expect(text.indexOf('Формат —')).toBeLessThan(
+      text.indexOf('Опубліковано в каналах:'),
+    );
     expect(text).toContain('<b>✅ Опубліковано в каналах:</b>');
     expect(text).toContain('📅 Дата — <b>29.09</b>; 🕒 Час — <b>19:10</b>');
     expect(text).toContain('🗑️ Формат — <b>Автовидалення через 48 годин</b>');
@@ -87,20 +93,28 @@ describe('renderPublicationConfirmation', () => {
         },
         {
           title: 'Другий пост',
-          placements: [{
-            ...shared,
-            scheduledAt: '2026-10-22T15:10:54.000Z',
-            telegramChannelId: secondChannel.id,
-          }],
+          placements: [
+            {
+              ...shared,
+              scheduledAt: '2026-10-22T15:10:54.000Z',
+              telegramChannelId: secondChannel.id,
+            },
+          ],
         },
       ],
     });
 
     expect(text.match(/Дата —/g)).toHaveLength(2);
     expect(text.match(/Формат —/g)).toHaveLength(2);
-    expect(text).toContain('📅 Дата — <b>22.10</b>; 🕒 Час — <b>18:10</b>\n🗑️ Формат — <b>2/48</b>');
-    expect(text.indexOf('Пост «Перший пост»')).toBeLessThan(text.indexOf('Дата —'));
-    expect(text.indexOf('Пост «Другий пост»')).toBeLessThan(text.lastIndexOf('Дата —'));
+    expect(text).toContain(
+      '📅 Дата — <b>22.10</b>; 🕒 Час — <b>18:10</b>\n🗑️ Формат — <b>2/48</b>',
+    );
+    expect(text.indexOf('Пост «Перший пост»')).toBeLessThan(
+      text.indexOf('Дата —'),
+    );
+    expect(text.indexOf('Пост «Другий пост»')).toBeLessThan(
+      text.lastIndexOf('Дата —'),
+    );
     expect(text).toContain('Другий пост');
   });
 });

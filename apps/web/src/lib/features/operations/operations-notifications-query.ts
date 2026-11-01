@@ -18,32 +18,29 @@ export function patchCreatedNotification(
   workspaceId: string,
   notification: OperationsNotificationItem,
 ) {
-  if (notification.workspaceId !== workspaceId) return;
+  if (notification.workspaceId !== workspaceId) return false;
   const listKey = operationsNotificationKeys.list(workspaceId);
   const currentList = queryClient.getQueryData<NotificationPages>(listKey);
-  if (
-    currentList?.pages.some((page) =>
-      page.items.some((item) => item.id === notification.id),
-    )
-  ) {
-    return;
-  }
-  if (!notification.readAt) {
-    queryClient.setQueryData<OperationsNotificationUnreadCount>(
+  const existing = currentList?.pages.flatMap((page) => page.items).find((item) => item.id === notification.id);
+  if (existing?.createdAt && notification.createdAt && existing.createdAt > notification.createdAt) return false;
+  const completeList = Boolean(currentList?.pages.length && !currentList.pages.at(-1)?.nextCursor);
+  const countKnown = Boolean(existing) || completeList;
+  if (countKnown) {
+    const delta = (notification.readAt ? 0 : 1) - (existing && !existing.readAt ? 1 : 0);
+    if (delta) queryClient.setQueryData<OperationsNotificationUnreadCount>(
       operationsNotificationKeys.unread(workspaceId),
-      (current) => ({ unread: (current?.unread ?? 0) + 1 }),
+      (current) => current ? { unread: Math.max(0, current.unread + delta) } : current,
     );
   }
-  if (!currentList) return;
   queryClient.setQueryData<NotificationPages>(listKey, (current) => {
-    if (!current) return current;
-    const [first, ...rest] = current.pages;
-    if (!first) return current;
-    return {
-      ...current,
-      pages: [{ ...first, items: [notification, ...first.items] }, ...rest],
-    };
+    if (!current?.pages.length) return current;
+    return { ...current, pages: current.pages.map((page, index) => ({
+      ...page, items: [...(index === 0 ? [notification] : []), ...page.items.filter((item) => item.id !== notification.id)],
+    })) };
   });
+  // A closed/partially loaded panel cannot prove whether a grouped row is new.
+  // Reconcile only the small badge count, rather than guessing or refetching Inbox.
+  return !countKnown;
 }
 
 export function optimisticallyMarkNotificationsRead(

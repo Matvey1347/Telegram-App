@@ -1,16 +1,22 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, Optional } from '@nestjs/common';
 import {
   Prisma,
-  TelegramAdvertiserActivityType,
   TelegramAdvertiserTaskPriority,
-  TelegramAdvertiserTaskStatus,
+  type TelegramAdvertiserTask,
 } from '@prisma/client';
 import {
   createPaginatedResponse,
   normalizePagination,
 } from '../../../common/pagination/pagination.utils';
+import { WorkspaceAuthorizationService } from '../../workspace/workspace-authorization/workspace-authorization.service';
 import { WorkspaceService } from '../../../common/workspace.service';
+import {
+  manualFingerprint,
+  requireNewManualOperation,
+} from '../telegram-crm/telegram-crm-manual-operation';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { ResponseCacheService } from '../../../common/response-cache.service';
+import { TelegramCrmEventHub } from '../telegram-crm/telegram-crm-event-hub.service';
 import { TelegramCrmInternalNotificationProjector } from '../telegram-crm/telegram-crm-internal-notification-projector.service';
 import {
   CompleteTelegramAdvertiserTaskDto,
@@ -19,6 +25,16 @@ import {
   TelegramAdvertiserTasksQueryDto,
   UpdateTelegramAdvertiserTaskDto,
 } from './dto';
+import { crmTaskChanges } from './telegram-ad-sales-crm-task-changes';
+import {
+  mapCrmTask,
+  syncCrmContactReminder,
+} from './telegram-ad-sales-crm-task-schedule';
+import {
+  lockCrmTask,
+  lockCrmTaskContact,
+  validateCrmTaskLinks,
+} from './telegram-ad-sales-crm-task-validation';
 
 @Injectable()
 export class TelegramAdSalesCrmTasksService {
@@ -26,6 +42,9 @@ export class TelegramAdSalesCrmTasksService {
     private readonly prisma: PrismaService,
     private readonly workspaces: WorkspaceService,
     private readonly notifications: TelegramCrmInternalNotificationProjector,
+    @Optional() private readonly events?: TelegramCrmEventHub,
+    @Optional() private readonly cache?: ResponseCacheService,
+    @Optional() private readonly authorization?: WorkspaceAuthorizationService,
   ) {}
 
   async list(
@@ -55,7 +74,7 @@ export class TelegramAdSalesCrmTasksService {
       this.prisma.telegramAdvertiserTask.count({ where }),
     ]);
     return createPaginatedResponse(
-      items.map((item) => this.map(item)),
+      items.map(mapCrmTask),
       totalItems,
       pagination,
     );
@@ -65,14 +84,65 @@ export class TelegramAdSalesCrmTasksService {
     userId: string,
     advertiserId: string,
     dto: CreateTelegramAdvertiserTaskDto,
+    manualOperationId?: string,
   ) {
     const workspaceId = await this.workspace(userId);
+    let changed = false;
+    let invalidatedRecipients: string[] = [];
     const task = await this.prisma.$transaction(async (tx) => {
-      await this.requireContact(tx, workspaceId, advertiserId);
+      if (manualOperationId)
+        await tx.$queryRaw(
+          Prisma.sql`SELECT pg_advisory_xact_lock(hashtextextended(${workspaceId + ':' + manualOperationId}, 0))`,
+        );
+      const contact = await lockCrmTaskContact(tx, workspaceId, advertiserId);
+      await this.requireEdit(userId, contact.ownerMemberId);
+      const manualRequestFingerprint = manualOperationId
+        ? manualFingerprint(userId, advertiserId, dto)
+        : null;
+      if (manualOperationId) {
+        const receipt = await tx.telegramAdvertiserTask.findUnique({
+          where: {
+            workspaceId_manualOperationId: { workspaceId, manualOperationId },
+          },
+        });
+        if (receipt) {
+          if (receipt.manualRequestFingerprint !== manualRequestFingerprint)
+            throw new ConflictException('MANUAL_OPERATION_CONFLICT');
+          return receipt;
+        }
+        requireNewManualOperation(manualOperationId);
+      }
+      await validateCrmTaskLinks(tx, workspaceId, advertiserId, dto);
+      // An exact repeat from Inbox must not create another occurrence or audit row.
+      if (
+        dto.type === 'FOLLOW_UP' &&
+        typeof dto.metadata?.conversationId === 'string'
+      ) {
+        const current = await tx.telegramAdvertiserTask.findFirst({
+          where: {
+            workspaceId,
+            advertiserId,
+            type: 'FOLLOW_UP',
+            status: { in: ['OPEN', 'IN_PROGRESS'] },
+            assignedMemberId: dto.assignedMemberId,
+            title: dto.title.trim(),
+            dueAt: new Date(dto.dueAt),
+            remindAt: dto.remindAt ? new Date(dto.remindAt) : null,
+            snoozedUntil: null,
+            metadata: {
+              path: ['conversationId'],
+              equals: dto.metadata.conversationId,
+            },
+          },
+        });
+        if (current) return current;
+      }
       const created = await tx.telegramAdvertiserTask.create({
         data: {
           workspaceId,
           advertiserId,
+          manualOperationId: manualOperationId ?? null,
+          manualRequestFingerprint,
           saleId: dto.saleId ?? null,
           placementId: dto.placementId ?? null,
           assignedMemberId: dto.assignedMemberId,
@@ -89,12 +159,12 @@ export class TelegramAdSalesCrmTasksService {
         },
       });
       await this.activity(tx, created, userId, 'FOLLOW_UP_CREATED');
-      await this.notifications.refreshTask(tx, created);
-      await this.syncContactReminder(tx, workspaceId, created.advertiserId);
+      invalidatedRecipients = await this.refresh(tx, created, false);
+      changed = true;
       return created;
     });
-    this.notifications.dueWorkChanged();
-    return this.map(task);
+    if (changed) await this.afterChange(task, invalidatedRecipients);
+    return mapCrmTask(task);
   }
 
   async update(
@@ -103,49 +173,50 @@ export class TelegramAdSalesCrmTasksService {
     dto: UpdateTelegramAdvertiserTaskDto,
   ) {
     const workspaceId = await this.workspace(userId);
-    const changedSchedule =
-      dto.dueAt !== undefined ||
-      dto.remindAt !== undefined ||
-      dto.snoozedUntil !== undefined ||
-      dto.status !== undefined ||
-      dto.title !== undefined ||
-      dto.priority !== undefined;
+    let changed = false;
+    let invalidatedRecipients: string[] = [];
     const task = await this.prisma.$transaction(async (tx) => {
-      const existing = await this.requireTask(tx, workspaceId, taskId);
+      const { task: existing, ownerMemberId } = await lockCrmTask(
+        tx,
+        workspaceId,
+        taskId,
+      );
+      await this.requireEdit(userId, ownerMemberId);
+      const reopening = dto.status === 'OPEN' || dto.status === 'IN_PROGRESS';
+      if (
+        !reopening &&
+        existing.status !== 'OPEN' &&
+        existing.status !== 'IN_PROGRESS' &&
+        (dto.dueAt !== undefined ||
+          dto.remindAt !== undefined ||
+          dto.snoozedUntil !== undefined ||
+          (dto.status !== undefined && dto.status !== existing.status))
+      )
+        throw new ConflictException(
+          'A finished reminder must be explicitly reopened before changing its schedule',
+        );
+      const data = crmTaskChanges(existing, dto);
+      if (!Object.keys(data).length) return existing;
+      const remainsOpen =
+        (dto.status ?? existing.status) === 'OPEN' ||
+        (dto.status ?? existing.status) === 'IN_PROGRESS';
+      if (remainsOpen || dto.assignedMemberId !== undefined)
+        await validateCrmTaskLinks(tx, workspaceId, existing.advertiserId, {
+          ...existing,
+          ...(!remainsOpen ? { metadata: undefined } : {}),
+          status: dto.status ?? existing.status,
+          assignedMemberId: dto.assignedMemberId ?? existing.assignedMemberId,
+        });
       const updated = await tx.telegramAdvertiserTask.update({
-        where: { id: taskId },
-        data: {
-          ...(dto.assignedMemberId === undefined
-            ? {}
-            : { assignedMemberId: dto.assignedMemberId }),
-          ...(dto.status === undefined ? {} : { status: dto.status }),
-          ...(dto.priority === undefined ? {} : { priority: dto.priority }),
-          ...(dto.title === undefined ? {} : { title: dto.title.trim() }),
-          ...(dto.description === undefined
-            ? {}
-            : { description: dto.description?.trim() || null }),
-          ...(dto.dueAt === undefined
-            ? {}
-            : { dueAt: dto.dueAt ? new Date(dto.dueAt) : existing.dueAt }),
-          ...(dto.remindAt === undefined
-            ? {}
-            : { remindAt: dto.remindAt ? new Date(dto.remindAt) : null }),
-          ...(dto.snoozedUntil === undefined
-            ? {}
-            : {
-                snoozedUntil: dto.snoozedUntil
-                  ? new Date(dto.snoozedUntil)
-                  : null,
-              }),
-        },
+        where: { id: taskId, workspaceId },
+        data,
       });
-      if (changedSchedule) await this.notifications.refreshTask(tx, updated);
-      if (changedSchedule)
-        await this.syncContactReminder(tx, workspaceId, updated.advertiserId);
+      invalidatedRecipients = await this.refresh(tx, updated);
+      changed = true;
       return updated;
     });
-    if (changedSchedule) this.notifications.dueWorkChanged();
-    return this.map(task);
+    if (changed) await this.afterChange(task, invalidatedRecipients);
+    return mapCrmTask(task);
   }
 
   async complete(
@@ -153,41 +224,12 @@ export class TelegramAdSalesCrmTasksService {
     taskId: string,
     dto: CompleteTelegramAdvertiserTaskDto,
   ) {
-    const workspaceId = await this.workspace(userId);
-    const task = await this.prisma.$transaction(async (tx) => {
-      const existing = await this.requireTask(tx, workspaceId, taskId);
-      const updated = await tx.telegramAdvertiserTask.update({
-        where: { id: taskId },
-        data: {
-          status: TelegramAdvertiserTaskStatus.COMPLETED,
-          completedAt: existing.completedAt ?? new Date(),
-          completionNote: dto.completionNote?.trim() || null,
-        },
-      });
-      const activity = await tx.telegramAdvertiserActivity.findFirst({
-        where: {
-          workspaceId,
-          advertiserId: updated.advertiserId,
-          taskId,
-          type: TelegramAdvertiserActivityType.FOLLOW_UP_COMPLETED,
-        },
-        select: { id: true },
-      });
-      if (!activity) {
-        await this.activity(
-          tx,
-          updated,
-          userId,
-          'FOLLOW_UP_COMPLETED',
-          dto.completionNote?.trim() || null,
-        );
-      }
-      await this.notifications.refreshTask(tx, updated);
-      await this.syncContactReminder(tx, workspaceId, updated.advertiserId);
-      return updated;
-    });
-    this.notifications.dueWorkChanged();
-    return this.map(task);
+    return this.finish(
+      userId,
+      taskId,
+      'COMPLETED',
+      dto.completionNote?.trim() || null,
+    );
   }
 
   snooze(userId: string, taskId: string, dto: UpdateTelegramAdvertiserTaskDto) {
@@ -199,72 +241,90 @@ export class TelegramAdSalesCrmTasksService {
     taskId: string,
     dto: SkipTelegramAdvertiserTaskDto,
   ) {
+    return this.finish(userId, taskId, 'SKIPPED', dto.reason?.trim() || null);
+  }
+
+  private async finish(
+    userId: string,
+    taskId: string,
+    status: 'COMPLETED' | 'SKIPPED',
+    note: string | null,
+  ) {
     const workspaceId = await this.workspace(userId);
+    let changed = false;
+    let invalidatedRecipients: string[] = [];
     const task = await this.prisma.$transaction(async (tx) => {
-      await this.requireTask(tx, workspaceId, taskId);
+      const { task: existing, ownerMemberId } = await lockCrmTask(
+        tx,
+        workspaceId,
+        taskId,
+      );
+      await this.requireEdit(userId, ownerMemberId);
+      if (existing.status === status) return existing;
+      if (existing.status !== 'OPEN' && existing.status !== 'IN_PROGRESS')
+        throw new ConflictException(
+          'Only an open reminder can be completed or skipped',
+        );
       const updated = await tx.telegramAdvertiserTask.update({
-        where: { id: taskId },
+        where: { id: taskId, workspaceId },
         data: {
-          status: TelegramAdvertiserTaskStatus.SKIPPED,
-          skippedAt: new Date(),
-          completionNote: dto.reason?.trim() || null,
+          status,
+          ...(status === 'COMPLETED'
+            ? { completedAt: new Date() }
+            : { skippedAt: new Date() }),
+          completionNote: note,
         },
       });
       await this.activity(
         tx,
         updated,
         userId,
-        'FOLLOW_UP_SKIPPED',
-        dto.reason?.trim() || null,
+        status === 'COMPLETED' ? 'FOLLOW_UP_COMPLETED' : 'FOLLOW_UP_SKIPPED',
+        note,
       );
-      await this.notifications.refreshTask(tx, updated);
-      await this.syncContactReminder(tx, workspaceId, updated.advertiserId);
+      invalidatedRecipients = await this.refresh(tx, updated);
+      changed = true;
       return updated;
     });
-    this.notifications.dueWorkChanged();
-    return this.map(task);
+    if (changed) await this.afterChange(task, invalidatedRecipients);
+    return mapCrmTask(task);
+  }
+
+  private async requireEdit(userId: string, ownerMemberId: string | null) {
+    await this.authorization?.requireOwnOrAny(
+      userId,
+      { assignedMemberId: ownerMemberId },
+      'adSales.crm.viewOwn',
+      'adSales.crm.viewAny',
+    );
+    await this.authorization?.requireOwnOrAny(
+      userId,
+      { assignedMemberId: ownerMemberId },
+      'adSales.crm.editOwn',
+      'adSales.crm.editAny',
+    );
   }
 
   private workspace(userId: string) {
     return this.workspaces.resolveWorkspaceIdForUser(userId);
   }
 
-  private async requireContact(
+  private async refresh(
     tx: Prisma.TransactionClient,
-    workspaceId: string,
-    id: string,
+    task: TelegramAdvertiserTask,
+    dismissPublished = true,
   ) {
-    const contact = await tx.telegramAdvertiser.findFirst({
-      where: { id, workspaceId },
-      select: { id: true },
-    });
-    if (!contact) throw new NotFoundException('Telegram advertiser not found');
-  }
-
-  private async requireTask(
-    tx: Prisma.TransactionClient,
-    workspaceId: string,
-    id: string,
-  ) {
-    const task = await tx.telegramAdvertiserTask.findFirst({
-      where: { id, workspaceId },
-    });
-    if (!task) {
-      throw new NotFoundException('Telegram advertiser task not found');
-    }
-    return task;
+    const recipients = dismissPublished
+      ? await this.notifications.dismissPublishedTask(tx, task)
+      : [];
+    await this.notifications.refreshTask(tx, task);
+    await syncCrmContactReminder(tx, task.workspaceId, task.advertiserId);
+    return recipients;
   }
 
   private activity(
     tx: Prisma.TransactionClient,
-    task: {
-      id: string;
-      workspaceId: string;
-      advertiserId: string;
-      saleId: string | null;
-      placementId: string | null;
-      title: string;
-    },
+    task: TelegramAdvertiserTask,
     userId: string,
     type: 'FOLLOW_UP_CREATED' | 'FOLLOW_UP_COMPLETED' | 'FOLLOW_UP_SKIPPED',
     description?: string | null,
@@ -285,43 +345,39 @@ export class TelegramAdSalesCrmTasksService {
     });
   }
 
-  /** Keeps the compact CRM card aware of the next open reminder without a
-   * per-card task query. This runs only when a task is changed. */
-  private async syncContactReminder(
-    tx: Prisma.TransactionClient,
-    workspaceId: string,
-    advertiserId: string,
+  private async afterChange(
+    task: TelegramAdvertiserTask,
+    invalidatedRecipients: string[],
   ) {
-    const next = await tx.telegramAdvertiserTask.findFirst({
-      where: {
-        workspaceId,
-        advertiserId,
-        status: {
-          in: [
-            TelegramAdvertiserTaskStatus.OPEN,
-            TelegramAdvertiserTaskStatus.IN_PROGRESS,
-          ],
-        },
+    this.notifications.invalidateVisibility(
+      task.workspaceId,
+      invalidatedRecipients,
+    );
+    this.notifications.dueWorkChanged();
+    this.cache?.clearWorkspacePath(task.workspaceId, '/telegram-crm/contacts');
+    this.cache?.clearWorkspacePath(
+      task.workspaceId,
+      '/telegram-crm/conversations',
+    );
+    if (!this.events) return;
+    const contact = await this.prisma.telegramAdvertiser.findFirst({
+      where: { id: task.advertiserId, workspaceId: task.workspaceId },
+      select: {
+        ownerMemberId: true,
+        nextContactAt: true,
+        manualSalesStatus: true,
+        archivedAt: true,
       },
-      orderBy: [{ dueAt: 'asc' }, { id: 'asc' }],
-      select: { dueAt: true },
     });
-    await tx.telegramAdvertiser.update({
-      where: { id: advertiserId },
-      data: { nextContactAt: next?.dueAt ?? null },
+    this.events.emit({
+      type: 'contact.updated',
+      workspaceId: task.workspaceId,
+      occurredAt: new Date().toISOString(),
+      contactId: task.advertiserId,
+      ownerMemberId: contact?.ownerMemberId ?? null,
+      nextContactAt: contact?.nextContactAt?.toISOString() ?? null,
+      manualSalesStatus: contact?.manualSalesStatus ?? null,
+      archivedAt: contact?.archivedAt?.toISOString() ?? null,
     });
-  }
-
-  private map(task: any) {
-    return {
-      ...task,
-      dueAt: task.dueAt.toISOString(),
-      remindAt: task.remindAt?.toISOString() ?? null,
-      completedAt: task.completedAt?.toISOString() ?? null,
-      skippedAt: task.skippedAt?.toISOString() ?? null,
-      snoozedUntil: task.snoozedUntil?.toISOString() ?? null,
-      createdAt: task.createdAt.toISOString(),
-      updatedAt: task.updatedAt.toISOString(),
-    };
   }
 }

@@ -1,7 +1,7 @@
 import type {
   ResolvedTelegramEntity,
   TelegramTitleCandidate,
-} from "@api/telegram/shared/imports/telegram-import.helpers";
+} from '@api/telegram/shared/imports/telegram-import.helpers';
 
 let sequence = 0;
 
@@ -14,11 +14,13 @@ export function resetTelegramTestBuilders() {
   sequence = 0;
 }
 
-export function buildWorkspace(overrides: Partial<{
-  id: string;
-  name: string;
-}> = {}) {
-  const id = overrides.id || nextId("workspace");
+export function buildWorkspace(
+  overrides: Partial<{
+    id: string;
+    name: string;
+  }> = {},
+) {
+  const id = overrides.id || nextId('workspace');
   return {
     id,
     name: overrides.name || `Workspace ${id}`,
@@ -34,28 +36,30 @@ export function buildTelegramChannel(
     telegramChatId: string;
     inviteLink: string | null;
     accessMode:
-      | "PUBLIC"
-      | "PRIVATE"
-      | "PRIVATE_INVITE"
-      | "PRIVATE_JOIN_REQUEST"
-      | "UNKNOWN";
+      | 'PUBLIC'
+      | 'PRIVATE'
+      | 'PRIVATE_INVITE'
+      | 'PRIVATE_JOIN_REQUEST'
+      | 'UNKNOWN';
     requiresJoinRequest: boolean;
     telegramAccessHash: string | null;
   }> = {},
 ) {
   const numeric = String(10_000 + sequence + 1);
   return {
-    id: overrides.id || nextId("channel"),
-    workspaceId: overrides.workspaceId || nextId("workspace"),
+    id: overrides.id || nextId('channel'),
+    workspaceId: overrides.workspaceId || nextId('workspace'),
     title: overrides.title || `Telegram Channel ${numeric}`,
     username:
-      overrides.username === undefined ? `channel_${numeric}` : overrides.username,
+      overrides.username === undefined
+        ? `channel_${numeric}`
+        : overrides.username,
     telegramChatId: overrides.telegramChatId || numeric,
     inviteLink:
       overrides.inviteLink === undefined
         ? `https://t.me/+invite_${numeric}`
         : overrides.inviteLink,
-    accessMode: overrides.accessMode || "PUBLIC",
+    accessMode: overrides.accessMode || 'PUBLIC',
     requiresJoinRequest: overrides.requiresJoinRequest ?? false,
     telegramAccessHash:
       overrides.telegramAccessHash === undefined
@@ -78,25 +82,37 @@ export function buildTelegramUserAccount(
     sessionAuthTag: string | null;
   }> = {},
 ) {
-  const id = overrides.id || nextId("tg-account");
+  const id = overrides.id || nextId('tg-account');
   return {
     id,
-    workspaceId: overrides.workspaceId || nextId("workspace"),
+    workspaceId: overrides.workspaceId || nextId('workspace'),
     label: overrides.label || `MTProto ${id}`,
     apiId: overrides.apiId || `${20_000 + sequence}`,
-    apiHashEncrypted: "enc",
-    apiHashIv: "iv",
-    apiHashAuthTag: "tag",
+    apiHashEncrypted: 'enc',
+    apiHashIv: 'iv',
+    apiHashAuthTag: 'tag',
     username:
-      overrides.username === undefined ? `account_${sequence}` : overrides.username,
-    firstName: overrides.firstName === undefined ? `User ${sequence}` : overrides.firstName,
+      overrides.username === undefined
+        ? `account_${sequence}`
+        : overrides.username,
+    firstName:
+      overrides.firstName === undefined
+        ? `User ${sequence}`
+        : overrides.firstName,
     phoneMasked:
-      overrides.phoneMasked === undefined ? `+100000${sequence}` : overrides.phoneMasked,
+      overrides.phoneMasked === undefined
+        ? `+100000${sequence}`
+        : overrides.phoneMasked,
     sessionEncrypted:
-      overrides.sessionEncrypted === undefined ? "session" : overrides.sessionEncrypted,
-    sessionIv: overrides.sessionIv === undefined ? "session-iv" : overrides.sessionIv,
+      overrides.sessionEncrypted === undefined
+        ? 'session'
+        : overrides.sessionEncrypted,
+    sessionIv:
+      overrides.sessionIv === undefined ? 'session-iv' : overrides.sessionIv,
     sessionAuthTag:
-      overrides.sessionAuthTag === undefined ? "session-tag" : overrides.sessionAuthTag,
+      overrides.sessionAuthTag === undefined
+        ? 'session-tag'
+        : overrides.sessionAuthTag,
   };
 }
 
@@ -125,15 +141,21 @@ export function buildResolvedTelegramEntity(
 ): ResolvedTelegramEntity {
   const numeric = String(30_000 + sequence + 1);
   return {
-    kind: overrides.kind || "channel",
+    kind: overrides.kind || 'channel',
     telegramChatId: overrides.telegramChatId || numeric,
     title: overrides.title || `Resolved Channel ${numeric}`,
     username:
-      overrides.username === undefined ? `resolved_${numeric}` : overrides.username,
+      overrides.username === undefined
+        ? `resolved_${numeric}`
+        : overrides.username,
     description:
-      overrides.description === undefined ? `Description ${numeric}` : overrides.description,
+      overrides.description === undefined
+        ? `Description ${numeric}`
+        : overrides.description,
     participantsCount:
-      overrides.participantsCount === undefined ? 100 + sequence : overrides.participantsCount,
+      overrides.participantsCount === undefined
+        ? 100 + sequence
+        : overrides.participantsCount,
     pendingJoinRequestsCount:
       overrides.pendingJoinRequestsCount === undefined
         ? 0
@@ -151,7 +173,7 @@ export function buildResolvedTelegramEntity(
         ? `https://t.me/+resolved_${numeric}`
         : overrides.inviteLink,
     joinedByInvite: overrides.joinedByInvite ?? false,
-    accessMode: overrides.accessMode || "PUBLIC",
+    accessMode: overrides.accessMode || 'PUBLIC',
     requiresJoinRequest: overrides.requiresJoinRequest ?? false,
   };
 }
@@ -161,12 +183,14 @@ export function buildTelegramTitleCandidate<T = unknown>(
 ) {
   const numeric = String(40_000 + sequence + 1);
   return {
-    entity: (overrides.entity ?? ({ id: numeric } as T)) as T,
+    entity: overrides.entity ?? ({ id: numeric } as T),
     entityId: overrides.entityId || numeric,
-    kind: overrides.kind || "channel",
+    kind: overrides.kind || 'channel',
     title: overrides.title || `Candidate ${numeric}`,
     username:
-      overrides.username === undefined ? `candidate_${numeric}` : overrides.username,
-    source: overrides.source || "dialogs",
+      overrides.username === undefined
+        ? `candidate_${numeric}`
+        : overrides.username,
+    source: overrides.source || 'dialogs',
   } satisfies TelegramTitleCandidate<T>;
 }

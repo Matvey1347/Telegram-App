@@ -7,7 +7,10 @@ export class TelegramBotRuntimeAvatarController {
   constructor(private readonly profiles: TelegramBotProfileService) {}
 
   @Get(':runtimeId')
-  async avatar(@Param('runtimeId') runtimeId: string, @Res() response: Response) {
+  async avatar(
+    @Param('runtimeId') runtimeId: string,
+    @Res() response: Response,
+  ) {
     const avatar = await this.profiles.avatar(runtimeId);
     response.setHeader('Content-Type', avatar.contentType);
     response.setHeader('Cache-Control', 'public, max-age=31536000, immutable');

@@ -90,23 +90,94 @@ export class BotBillingAnalyticsService {
   }
 
   async aiUsage(workspaceId: string, botIntegrationId: string) {
-    const periodStart = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1));
-    const where = { workspaceId, botIntegrationId, createdAt: { gte: periodStart }, status: { not: 'PENDING' } };
+    const periodStart = new Date(
+      Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1),
+    );
+    const where = {
+      workspaceId,
+      botIntegrationId,
+      createdAt: { gte: periodStart },
+      status: { not: 'PENDING' },
+    };
     const [summary, models, users] = await Promise.all([
-      this.prisma.aiUsageEvent.aggregate({ where, _count: { _all: true, estimatedCostMicros: true }, _sum: { inputTokens: true, cachedInputTokens: true, outputTokens: true, estimatedCostMicros: true } }),
-      this.prisma.aiUsageEvent.groupBy({ by: ['model'], where, _count: { _all: true }, _sum: { inputTokens: true, outputTokens: true, estimatedCostMicros: true }, orderBy: { _sum: { estimatedCostMicros: 'desc' } } }),
-      this.prisma.aiUsageEvent.groupBy({ by: ['telegramBotUserId'], where: { ...where, telegramBotUserId: { not: null } }, _count: { _all: true }, _sum: { estimatedCostMicros: true }, orderBy: { _sum: { estimatedCostMicros: 'desc' } }, take: 100 }),
+      this.prisma.aiUsageEvent.aggregate({
+        where,
+        _count: { _all: true, estimatedCostMicros: true },
+        _sum: {
+          inputTokens: true,
+          cachedInputTokens: true,
+          outputTokens: true,
+          estimatedCostMicros: true,
+        },
+      }),
+      this.prisma.aiUsageEvent.groupBy({
+        by: ['model'],
+        where,
+        _count: { _all: true },
+        _sum: {
+          inputTokens: true,
+          outputTokens: true,
+          estimatedCostMicros: true,
+        },
+        orderBy: { _sum: { estimatedCostMicros: 'desc' } },
+      }),
+      this.prisma.aiUsageEvent.groupBy({
+        by: ['telegramBotUserId'],
+        where: { ...where, telegramBotUserId: { not: null } },
+        _count: { _all: true },
+        _sum: { estimatedCostMicros: true },
+        orderBy: { _sum: { estimatedCostMicros: 'desc' } },
+        take: 100,
+      }),
     ]);
-    const userIds = users.flatMap((row) => row.telegramBotUserId ? [row.telegramBotUserId] : []);
-    const identities = userIds.length ? await this.prisma.telegramBotUser.findMany({ where: { id: { in: userIds }, workspaceId, botIntegrationId }, select: { id: true, telegramUserId: true, username: true, firstName: true } }) : [];
+    const userIds = users.flatMap((row) =>
+      row.telegramBotUserId ? [row.telegramBotUserId] : [],
+    );
+    const identities = userIds.length
+      ? await this.prisma.telegramBotUser.findMany({
+          where: { id: { in: userIds }, workspaceId, botIntegrationId },
+          select: {
+            id: true,
+            telegramUserId: true,
+            username: true,
+            firstName: true,
+          },
+        })
+      : [];
     const identityById = new Map(identities.map((user) => [user.id, user]));
     return {
-      periodStart: periodStart.toISOString(), requests: summary._count._all,
-      inputTokens: summary._sum.inputTokens || 0, cachedInputTokens: summary._sum.cachedInputTokens || 0,
-      outputTokens: summary._sum.outputTokens || 0, estimatedCostMicros: summary._sum.estimatedCostMicros || 0,
-      unpricedRequests: summary._count._all - summary._count.estimatedCostMicros,
-      byModel: models.map((row) => ({ model: row.model, requests: row._count._all, inputTokens: row._sum.inputTokens || 0, outputTokens: row._sum.outputTokens || 0, estimatedCostMicros: row._sum.estimatedCostMicros ?? null })),
-      byUser: users.flatMap((row) => { const identity = row.telegramBotUserId ? identityById.get(row.telegramBotUserId) : null; return identity ? [{ telegramBotUserId: identity.id, telegramUserId: identity.telegramUserId, username: identity.username, firstName: identity.firstName, requests: row._count._all, estimatedCostMicros: row._sum.estimatedCostMicros ?? null }] : []; }),
+      periodStart: periodStart.toISOString(),
+      requests: summary._count._all,
+      inputTokens: summary._sum.inputTokens || 0,
+      cachedInputTokens: summary._sum.cachedInputTokens || 0,
+      outputTokens: summary._sum.outputTokens || 0,
+      estimatedCostMicros: summary._sum.estimatedCostMicros || 0,
+      unpricedRequests:
+        summary._count._all - summary._count.estimatedCostMicros,
+      byModel: models.map((row) => ({
+        model: row.model,
+        requests: row._count._all,
+        inputTokens: row._sum.inputTokens || 0,
+        outputTokens: row._sum.outputTokens || 0,
+        estimatedCostMicros: row._sum.estimatedCostMicros ?? null,
+      })),
+      byUser: users.flatMap((row) => {
+        const identity = row.telegramBotUserId
+          ? identityById.get(row.telegramBotUserId)
+          : null;
+        return identity
+          ? [
+              {
+                telegramBotUserId: identity.id,
+                telegramUserId: identity.telegramUserId,
+                username: identity.username,
+                firstName: identity.firstName,
+                requests: row._count._all,
+                estimatedCostMicros: row._sum.estimatedCostMicros ?? null,
+              },
+            ]
+          : [];
+      }),
     };
   }
 
@@ -115,7 +186,10 @@ export class BotBillingAnalyticsService {
       string,
       Pick<
         BotBillingAnalyticsView,
-        'registeredUsers' | 'paidUsers' | 'activeSubscriptions' | 'failedPayments'
+        | 'registeredUsers'
+        | 'paidUsers'
+        | 'activeSubscriptions'
+        | 'failedPayments'
       >
     >();
     if (!runtimeIds.length) return summaries;

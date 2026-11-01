@@ -163,42 +163,44 @@ export class DashboardService {
           (investment.movementType === 'WITHDRAWAL' ? -1 : 1),
       0,
     );
-    const investmentBreakdownForPeriod = ['EXTERNAL', 'SALARY', 'REINVESTMENT'].map(
-      (origin) => {
-        const rows = valuedPeriodInvestments.filter(
-          (investment) => investment.origin === origin,
-        );
-        return {
-          origin,
-          amount: rows.reduce(
-            (sum, investment) =>
-              sum +
-              dec(investment.amountInPrimaryCurrency) *
-                (investment.movementType === 'WITHDRAWAL' ? -1 : 1),
-            0,
-          ),
-          movements: rows.map((investment) => ({
-            id: investment.id,
-            date: investment.date.toISOString(),
-            amountInPrimaryCurrency:
-              dec(investment.amountInPrimaryCurrency) *
+    const investmentBreakdownForPeriod = [
+      'EXTERNAL',
+      'SALARY',
+      'REINVESTMENT',
+    ].map((origin) => {
+      const rows = valuedPeriodInvestments.filter(
+        (investment) => investment.origin === origin,
+      );
+      return {
+        origin,
+        amount: rows.reduce(
+          (sum, investment) =>
+            sum +
+            dec(investment.amountInPrimaryCurrency) *
               (investment.movementType === 'WITHDRAWAL' ? -1 : 1),
-            amount: dec(investment.amount),
-            currency: investment.currency,
-            movementType: investment.movementType,
-            notes: investment.notes,
-              member: {
-                id: investment.workspaceMember.id,
-                name: investment.workspaceMember.user.name,
-                avatarPresentation: iconToResolvedEmoji(
-                  investment.workspaceMember.avatarIcon,
-                ),
-            },
-            account: investment.account,
-          })),
-        };
-      },
-    );
+          0,
+        ),
+        movements: rows.map((investment) => ({
+          id: investment.id,
+          date: investment.date.toISOString(),
+          amountInPrimaryCurrency:
+            dec(investment.amountInPrimaryCurrency) *
+            (investment.movementType === 'WITHDRAWAL' ? -1 : 1),
+          amount: dec(investment.amount),
+          currency: investment.currency,
+          movementType: investment.movementType,
+          notes: investment.notes,
+          member: {
+            id: investment.workspaceMember.id,
+            name: investment.workspaceMember.user.name,
+            avatarPresentation: iconToResolvedEmoji(
+              investment.workspaceMember.avatarIcon,
+            ),
+          },
+          account: investment.account,
+        })),
+      };
+    });
     const remainingToBreakEven = Math.max(
       0,
       totalInvestedPrimary - operatingProfitAllTime,

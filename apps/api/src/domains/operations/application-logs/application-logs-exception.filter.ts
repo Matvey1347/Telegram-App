@@ -92,7 +92,7 @@ export class ApplicationLogsExceptionFilter implements ExceptionFilter {
       stack: exception instanceof Error ? exception.stack || null : null,
       metadata:
         typeof payload === 'object' && payload != null
-          ? (sanitizeLogMetadata(payload) as Record<string, unknown>)
+          ? sanitizeLogMetadata(payload)
           : null,
     });
 
@@ -109,9 +109,7 @@ export class ApplicationLogsExceptionFilter implements ExceptionFilter {
                 ? exception.name
                 : 'Request Failed',
       message: payloadMessage,
-      ...(typeof payload === 'object' &&
-      payload != null &&
-      'details' in (payload as object)
+      ...(typeof payload === 'object' && payload != null && 'details' in payload
         ? { details: (payload as any).details }
         : {}),
       code,

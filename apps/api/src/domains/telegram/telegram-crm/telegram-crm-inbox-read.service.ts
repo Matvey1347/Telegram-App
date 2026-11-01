@@ -32,6 +32,7 @@ const inboxConversationSelect = {
   readState: true,
   mtprotoAccount: { select: crmAccountSummarySelect },
   messages: {
+    where: { deletedAt: null },
     orderBy: [{ sentAt: 'desc' as const }, { id: 'desc' as const }],
     take: 1,
     select: crmMessagePreviewSelect,

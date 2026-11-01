@@ -1,3 +1,4 @@
+import type { CrmManualSalesStatus } from "./telegram-crm-sales-workflow";
 import type {
   CrmConversation,
   CrmMessageWithAttribution,
@@ -27,7 +28,17 @@ type CrmRealtimeBase = {
 
 export type CrmRealtimeEvent =
   | (CrmRealtimeBase & {
-      type: "message.received" | "message.sent";
+      type: "message.deleted";
+      conversationId: string;
+      contactId: string | null;
+      ownerMemberId: string | null;
+      messageIds: string[];
+      unreadCount: number;
+      lastMessage?: CrmMessageWithAttribution | null;
+      lastMessageAt: string | null;
+    })
+  | (CrmRealtimeBase & {
+      type: "message.received" | "message.sent" | "message.updated";
       conversationId: string;
       contactId: string | null;
       ownerMemberId: string | null;
@@ -44,6 +55,9 @@ export type CrmRealtimeEvent =
       type: "contact.updated";
       contactId: string;
       ownerMemberId: string | null;
+      manualSalesStatus?: CrmManualSalesStatus | null;
+      nextContactAt?: string | null;
+      archivedAt?: string | null;
     })
   | (CrmRealtimeBase & {
       type: "inbox.updated";

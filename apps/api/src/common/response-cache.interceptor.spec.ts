@@ -46,7 +46,7 @@ describe('ResponseCacheInterceptor', () => {
     );
   });
 
-  it('uses the short server cache for paginated CRM contact lists', async () => {
+  it('keeps permission-sensitive CRM contact lists out of the server cache', async () => {
     const getOrSet = jest.fn(
       (_key: string, _ttl: number, load: () => Promise<unknown>) => load(),
     );
@@ -69,11 +69,7 @@ describe('ResponseCacheInterceptor', () => {
       ),
     );
 
-    expect(getOrSet).toHaveBeenCalledWith(
-      'api:user-1:ws-1:GET:/telegram-crm/contacts?page=1&pageSize=12&stage=CUSTOMER',
-      30_000,
-      expect.any(Function),
-    );
+    expect(getOrSet).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -81,6 +77,27 @@ describe('ResponseCacheInterceptor', () => {
     '/api/telegram-crm/conversations/conversation-1/messages?pageSize=50',
     '/telegram-crm/conversations?contactId=contact-1',
     '/telegram-crm/unread',
+    '/telegram-ad-sales/advertisers/client/activities',
+    '/api/telegram-ad-sales/advertisers/client',
+    '/telegram-ad-sales?page=1',
+    '/telegram-crm/manual-contacts',
+    '/api/telegram-crm/manual-contacts/client/workflow',
+    '/telegram-crm/contacts/client/chat-context',
+    '/telegram-crm/contacts',
+    '/telegram-crm/inbox',
+    '/telegram-crm/conversations/conversation-1/sales-workflow',
+    '/telegram-crm/contacts/contact-1/purchases?limit=20',
+    '/api/telegram-crm/package-sales-context?limit=20',
+    '/telegram-crm/inbox/conversations?filter=ALL&limit=50',
+    '/api/telegram-crm/inbox/conversations?filter=UNREAD',
+    '/telegram-crm/conversations/conversation-1/copilot',
+    '/api/telegram-crm/conversations/conversation-1/copilot/context?productIds=product-1',
+    '/telegram-crm/lead-discovery/sources',
+    '/api/telegram-crm/lead-discovery/candidates?reviewStatus=PENDING',
+    '/telegram-crm/lead-discovery/config',
+    '/operations/ai/config',
+    '/api/operations/ai/usage?scope=SALES',
+    '/operations/ai/operations?limit=25',
     '/operations/notifications?limit=20',
     '/operations/notifications/unread-count',
     '/api/operations/notifications/unread-count',

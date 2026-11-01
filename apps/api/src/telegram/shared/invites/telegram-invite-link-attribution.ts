@@ -43,7 +43,10 @@ export function buildInviteLinkAttributionMaps(params: {
 
   for (const integration of params.integrations) {
     if (!integration.assignedMemberId) continue;
-    if (integration.telegramUserId && !memberByTelegramUserId.has(integration.telegramUserId)) {
+    if (
+      integration.telegramUserId &&
+      !memberByTelegramUserId.has(integration.telegramUserId)
+    ) {
       memberByTelegramUserId.set(
         integration.telegramUserId,
         integration.assignedMemberId,
@@ -66,7 +69,9 @@ export function attributeInviteLinkCreator(
   snapshot: InviteLinkCreatorSnapshot,
   maps: ReturnType<typeof buildInviteLinkAttributionMaps>,
 ): InviteLinkAttributionResult {
-  const normalizedUsername = normalizeTelegramUsername(snapshot.creatorUsername);
+  const normalizedUsername = normalizeTelegramUsername(
+    snapshot.creatorUsername,
+  );
 
   if (
     snapshot.creatorTelegramUserId &&
@@ -75,18 +80,19 @@ export function attributeInviteLinkCreator(
     return {
       creatorMemberId:
         maps.memberByTelegramUserId.get(snapshot.creatorTelegramUserId) ?? null,
-      creatorMatchSource:
-        TelegramInviteLinkCreatorMatchSource.TELEGRAM_USER_ID,
+      creatorMatchSource: TelegramInviteLinkCreatorMatchSource.TELEGRAM_USER_ID,
       creatorUsername: normalizedUsername,
     };
   }
 
-  if (normalizedUsername && maps.memberByMtprotoUsername.has(normalizedUsername)) {
+  if (
+    normalizedUsername &&
+    maps.memberByMtprotoUsername.has(normalizedUsername)
+  ) {
     return {
       creatorMemberId:
         maps.memberByMtprotoUsername.get(normalizedUsername) ?? null,
-      creatorMatchSource:
-        TelegramInviteLinkCreatorMatchSource.MTPROTO_USERNAME,
+      creatorMatchSource: TelegramInviteLinkCreatorMatchSource.MTPROTO_USERNAME,
       creatorUsername: normalizedUsername,
     };
   }
@@ -94,8 +100,7 @@ export function attributeInviteLinkCreator(
   if (normalizedUsername && maps.memberByUsername.has(normalizedUsername)) {
     return {
       creatorMemberId: maps.memberByUsername.get(normalizedUsername) ?? null,
-      creatorMatchSource:
-        TelegramInviteLinkCreatorMatchSource.MEMBER_USERNAME,
+      creatorMatchSource: TelegramInviteLinkCreatorMatchSource.MEMBER_USERNAME,
       creatorUsername: normalizedUsername,
     };
   }

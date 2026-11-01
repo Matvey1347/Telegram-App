@@ -56,7 +56,6 @@ export class ResponseCacheInterceptor implements NestInterceptor {
 
   private ttl(url: string) {
     if (url.includes('/global-search')) return 7_000;
-    if (/^\/(?:api\/)?telegram-crm\/contacts(?:\?|$)/.test(url)) return 30_000;
     if (url.includes('/dashboard/')) return 45_000;
     if (url === '/auth/me' || url.startsWith('/auth/me?')) return 5 * 60_000;
     if (url === '/account/me' || url.startsWith('/account/me?'))
@@ -110,9 +109,8 @@ export class ResponseCacheInterceptor implements NestInterceptor {
     if (url.includes('/health')) return true;
     if (this.isAuthMutation(url)) return true;
     if (
-      /^\/(?:api\/)?telegram-crm\/(?:conversations(?:\?|\/|$)|unread(?:\?|$)|events(?:\?|\/|$))/.test(
-        url,
-      ) ||
+      /^\/(?:api\/)?(?:telegram-crm|telegram-ad-sales)(?:\?|\/|$)/.test(url) ||
+      /^\/(?:api\/)?operations\/ai(?:\?|\/|$)/.test(url) ||
       /^\/(?:api\/)?operations\/notifications(?:\?|\/|$)/.test(url)
     ) {
       return true;

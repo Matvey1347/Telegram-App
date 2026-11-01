@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma, type CurrencyDisplayMode } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { WorkspaceService } from '../../../common/workspace.service';
@@ -60,11 +64,16 @@ export class CurrenciesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly workspaceService: WorkspaceService,
-    private readonly authorization: WorkspaceAuthorizationService = financeAuthorizationTestFallback(workspaceService),
+    private readonly authorization: WorkspaceAuthorizationService = financeAuthorizationTestFallback(
+      workspaceService,
+    ),
   ) {}
 
   async getSettings(userId: string) {
-    const { workspaceId } = await this.authorization.require(userId, 'finance.view');
+    const { workspaceId } = await this.authorization.require(
+      userId,
+      'finance.view',
+    );
     const [workspace] = await this.prisma.$queryRaw<
       WorkspaceCurrencySettingsRow[]
     >`
@@ -85,7 +94,10 @@ export class CurrenciesService {
   }
 
   async updateSettings(userId: string, dto: UpdateCurrencySettingsDto) {
-    const access = await this.authorization.require(userId, 'finance.manageCurrencies');
+    const access = await this.authorization.require(
+      userId,
+      'finance.manageCurrencies',
+    );
     if (dto.primaryCurrency === dto.secondaryCurrency) {
       throw new BadRequestException(
         'Primary and secondary currencies must be different',
@@ -138,9 +150,7 @@ export class CurrenciesService {
   }
 
   async syncSystemRates() {
-    const response = await fetch(
-      'https://open.er-api.com/v6/latest/EUR',
-    );
+    const response = await fetch('https://open.er-api.com/v6/latest/EUR');
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
     const payload = (await response.json()) as {
@@ -182,5 +192,4 @@ export class CurrenciesService {
 
     return rows.length;
   }
-
 }

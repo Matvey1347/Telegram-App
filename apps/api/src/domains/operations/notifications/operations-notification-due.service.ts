@@ -50,6 +50,9 @@ export class OperationsNotificationDueService {
           anyPermissionKey: true,
           visibilityMemberId: true,
           visibilityResourceKey: true,
+          sourceKey: true,
+          metadata: true,
+          deliverAt: true,
           recipient: { select: operationsNotificationMemberSelect },
         },
       });
@@ -67,6 +70,9 @@ export class OperationsNotificationDueService {
             anyPermissionKey: true,
             visibilityMemberId: true,
             visibilityResourceKey: true,
+            sourceKey: true,
+            metadata: true,
+            deliverAt: true,
             recipient: { select: operationsNotificationMemberSelect },
           },
         });

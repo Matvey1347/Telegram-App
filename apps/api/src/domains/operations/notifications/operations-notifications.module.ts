@@ -9,11 +9,17 @@ import { OperationsNotificationsService } from './operations-notifications.servi
 import { OperationsWebPushConfigService } from './operations-web-push-config.service';
 import { OperationsWebPushService } from './operations-web-push.service';
 import { OperationsNotificationDueResolutionService } from './operations-notification-due-resolution.service';
+import { OperationsNotificationDeliveryPolicyService } from './operations-notification-delivery-policy.service';
+import { OperationsNotificationPreferencesService } from './operations-notification-preferences.service';
+import { OperationsNotificationTestService } from './operations-notification-test.service';
 
 @Module({
   controllers: [OperationsNotificationsController],
   providers: [
     OperationsNotificationDueService,
+    OperationsNotificationDeliveryPolicyService,
+    OperationsNotificationPreferencesService,
+    OperationsNotificationTestService,
     OperationsNotificationDueResolutionService,
     OperationsNotificationEventHub,
     OperationsNotificationPermissionService,
@@ -24,6 +30,8 @@ import { OperationsNotificationDueResolutionService } from './operations-notific
     OperationsWebPushService,
   ],
   exports: [
+    OperationsNotificationDeliveryPolicyService,
+    OperationsWebPushService,
     OperationsNotificationDueService,
     OperationsNotificationDueResolutionService,
     OperationsNotificationPermissionService,

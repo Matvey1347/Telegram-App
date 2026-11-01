@@ -1,3 +1,7 @@
+import { parseCrmOutgoingText } from './telegram-crm-chat-text';
+import { TelegramCrmChatActionTransport } from './telegram-crm-chat-actions';
+import { TelegramCrmDialogFolders } from './telegram-crm-dialog-folders';
+import { TelegramLeadChannelReader } from './telegram-lead-channel-reader';
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { Api, TelegramClient } from 'telegram';
 import { returnBigInt } from 'telegram/Helpers';
@@ -9,7 +13,6 @@ import type {
   TelegramCrmMtprotoCheckpoint,
   TelegramCrmMtprotoCredentials,
   TelegramCrmMtprotoDialog,
-  TelegramCrmMtprotoDialogFolder,
   TelegramCrmMtprotoDifference,
   TelegramCrmMtprotoHandle,
   TelegramCrmMtprotoMessage,
@@ -27,43 +30,18 @@ import {
   telegramCrmCheckpoint,
   telegramLongString,
 } from '@api/telegram/shared/mtproto/telegram-crm-mtproto.normalizer';
-import { telegramMarkupToHtml } from '@api/telegram/shared/markup/telegram-markup';
-import { parseTelegramHtml } from '@api/telegram/shared/markup/telegram-html-parser';
-
-type CrmDialogFolderFilter = {
-  folder: TelegramCrmMtprotoDialogFolder;
-  includeUserIds: Set<string>;
-  excludeUserIds: Set<string>;
-  contacts: boolean;
-  nonContacts: boolean;
-  bots: boolean;
-  excludeMuted: boolean;
-  excludeRead: boolean;
-  excludeArchived: boolean;
-};
-
-function inputPeerUserIds(peers: Api.TypeInputPeer[]) {
-  return new Set(
-    peers.flatMap((peer) =>
-      peer instanceof Api.InputPeerUser
-        ? [telegramLongString(peer.userId)]
-        : [],
-    ),
-  );
-}
-
-function isMutedDialog(dialog?: Api.Dialog) {
-  if (!dialog || !(dialog.notifySettings instanceof Api.PeerNotifySettings)) {
-    return false;
-  }
-  return Number(dialog.notifySettings.muteUntil ?? 0) > Date.now() / 1_000;
-}
 
 class GramJsTelegramCrmHandle implements TelegramCrmMtprotoHandle {
   private closePromise?: Promise<void>;
-  private folderFilters?: Promise<CrmDialogFolderFilter[]>;
+  private readonly dialogFolders: TelegramCrmDialogFolders;
+  readonly leadDiscovery: TelegramLeadChannelReader;
+  readonly chatActions: TelegramCrmChatActionTransport;
 
-  constructor(private readonly client: TelegramClient) {}
+  constructor(private readonly client: TelegramClient) {
+    this.chatActions = new TelegramCrmChatActionTransport(client);
+    this.dialogFolders = new TelegramCrmDialogFolders(client);
+    this.leadDiscovery = new TelegramLeadChannelReader(client);
+  }
 
   async listPrivateDialogs({
     cursor,
@@ -88,7 +66,8 @@ class GramJsTelegramCrmHandle implements TelegramCrmMtprotoHandle {
             })
           : undefined,
     });
-    const loadedFolderFilters = await this.getDialogFolderFilters();
+    const loadedFolderFilters =
+      await this.dialogFolders.getDialogFolderFilters();
     const dialogs: TelegramCrmMtprotoDialog[] = [];
     for (const dialog of rows) {
       const entity = dialog.entity;
@@ -104,7 +83,9 @@ class GramJsTelegramCrmHandle implements TelegramCrmMtprotoHandle {
         unreadCount: Math.max(0, dialog.unreadCount || 0),
         lastMessage,
         folderIds: loadedFolderFilters
-          .filter((filter) => this.matchesFolder(filter, dialog, entity))
+          .filter((filter) =>
+            this.dialogFolders.matchesFolder(filter, dialog, entity),
+          )
           .map((filter) => filter.folder.id),
       });
     }
@@ -137,138 +118,10 @@ class GramJsTelegramCrmHandle implements TelegramCrmMtprotoHandle {
     };
   }
 
-  async setDialogFolderMembership(input: {
-    folderId: number;
-    telegramUserId: string;
-    telegramAccessHash: string;
-    included: boolean;
-  }) {
-    const response = await this.client.invoke(
-      new Api.messages.GetDialogFilters(),
-    );
-    if (!(response instanceof Api.messages.DialogFilters)) {
-      throw new Error('Telegram did not return the account folder filters');
-    }
-    const filter = response.filters.find(
-      (item): item is Api.DialogFilter =>
-        item instanceof Api.DialogFilter && Number(item.id) === input.folderId,
-    );
-    if (!filter) {
-      throw new BadRequestException('Telegram folder is no longer available');
-    }
-    const peer = new Api.InputPeerUser({
-      userId: returnBigInt(input.telegramUserId),
-      accessHash: returnBigInt(input.telegramAccessHash),
-    });
-    const withoutPeer = (peers: Api.TypeInputPeer[]) =>
-      peers.filter(
-        (item) =>
-          !(item instanceof Api.InputPeerUser) ||
-          telegramLongString(item.userId) !== input.telegramUserId,
-      );
-    const includePeers = withoutPeer(filter.includePeers);
-    const excludePeers = withoutPeer(filter.excludePeers);
-    if (input.included) includePeers.push(peer);
-    else excludePeers.push(peer);
-    await this.client.invoke(
-      new Api.messages.UpdateDialogFilter({
-        id: input.folderId,
-        filter: new Api.DialogFilter({
-          id: filter.id,
-          title: filter.title,
-          emoticon: filter.emoticon,
-          color: filter.color,
-          pinnedPeers: filter.pinnedPeers,
-          includePeers,
-          excludePeers,
-          contacts: filter.contacts,
-          nonContacts: filter.nonContacts,
-          groups: filter.groups,
-          broadcasts: filter.broadcasts,
-          bots: filter.bots,
-          excludeMuted: filter.excludeMuted,
-          excludeRead: filter.excludeRead,
-          excludeArchived: filter.excludeArchived,
-          titleNoanimate: filter.titleNoanimate,
-        }),
-      }),
-    );
-    this.folderFilters = undefined;
-  }
-
-  private getDialogFolderFilters() {
-    return (this.folderFilters ??= this.loadDialogFolderFilters());
-  }
-
-  private async loadDialogFolderFilters(): Promise<CrmDialogFolderFilter[]> {
-    const response = await this.client.invoke(
-      new Api.messages.GetDialogFilters(),
-    );
-    if (!(response instanceof Api.messages.DialogFilters)) {
-      throw new Error('Telegram did not return the account folder filters');
-    }
-    return response.filters.flatMap((filter) => {
-      if (
-        !(filter instanceof Api.DialogFilter) &&
-        !(filter instanceof Api.DialogFilterChatlist)
-      ) {
-        return [];
-      }
-      const title =
-        filter.title instanceof Api.TextWithEntities ? filter.title.text : '';
-      if (!title.trim()) return [];
-      const includeUserIds = inputPeerUserIds([
-        ...filter.pinnedPeers,
-        ...filter.includePeers,
-      ]);
-      const excludeUserIds =
-        filter instanceof Api.DialogFilter
-          ? inputPeerUserIds(filter.excludePeers)
-          : new Set<string>();
-      return [
-        {
-          folder: {
-            id: Number(filter.id),
-            title,
-            emoticon: filter.emoticon ?? null,
-            color: filter.color ?? null,
-          },
-          includeUserIds,
-          excludeUserIds,
-          contacts:
-            filter instanceof Api.DialogFilter && Boolean(filter.contacts),
-          nonContacts:
-            filter instanceof Api.DialogFilter && Boolean(filter.nonContacts),
-          bots: filter instanceof Api.DialogFilter && Boolean(filter.bots),
-          excludeMuted:
-            filter instanceof Api.DialogFilter && Boolean(filter.excludeMuted),
-          excludeRead:
-            filter instanceof Api.DialogFilter && Boolean(filter.excludeRead),
-          excludeArchived:
-            filter instanceof Api.DialogFilter &&
-            Boolean(filter.excludeArchived),
-        },
-      ];
-    });
-  }
-
-  private matchesFolder(
-    filter: CrmDialogFolderFilter,
-    dialog: { unreadCount?: number; archived?: boolean; dialog?: Api.Dialog },
-    entity: Api.User,
+  setDialogFolderMembership(
+    input: Parameters<TelegramCrmDialogFolders['setDialogFolderMembership']>[0],
   ) {
-    const telegramUserId = telegramLongString(entity.id);
-    if (filter.excludeUserIds.has(telegramUserId)) return false;
-    const explicitlyIncluded = filter.includeUserIds.has(telegramUserId);
-    const categoryIncluded =
-      (filter.contacts && Boolean(entity.contact)) ||
-      (filter.nonContacts && !entity.contact && !entity.bot) ||
-      (filter.bots && Boolean(entity.bot));
-    if (!explicitlyIncluded && !categoryIncluded) return false;
-    if (filter.excludeRead && !dialog.unreadCount) return false;
-    if (filter.excludeArchived && Boolean(dialog.archived)) return false;
-    if (filter.excludeMuted && isMutedDialog(dialog.dialog)) return false;
-    return true;
+    return this.dialogFolders.setDialogFolderMembership(input);
   }
 
   async getHistory(input: {
@@ -286,13 +139,23 @@ class GramJsTelegramCrmHandle implements TelegramCrmMtprotoHandle {
     const messages = rows
       .map((row) => parseTelegramCrmMessage(row as Api.TypeMessage))
       .filter((row): row is TelegramCrmMtprotoMessage => Boolean(row));
+    const exhausted = rows.length < limit;
+    const cursor = Math.min(
+      ...rows
+        .map((row) => row.id)
+        .filter((id) => Number.isSafeInteger(id) && id > 0),
+    );
+    if (
+      !exhausted &&
+      (!Number.isFinite(cursor) ||
+        (input.beforeTelegramMessageId &&
+          cursor >= input.beforeTelegramMessageId))
+    )
+      throw new BadRequestException('CRM_HISTORY_CURSOR_UNAVAILABLE');
     return {
       messages,
-      exhausted: rows.length < limit,
-      nextBeforeTelegramMessageId:
-        rows.length < limit || !messages.length
-          ? null
-          : Math.min(...messages.map((message) => message.telegramMessageId)),
+      exhausted,
+      nextBeforeTelegramMessageId: exhausted ? null : cursor,
     };
   }
 
@@ -361,15 +224,31 @@ class GramJsTelegramCrmHandle implements TelegramCrmMtprotoHandle {
     telegramAccessHash: string;
     text: string;
     randomId: bigint;
+    replyToTelegramMessageId?: number;
   }) {
-    const [message, entities] = parseTelegramHtml(
-      telegramMarkupToHtml(input.text),
-    );
+    const [message, entities] = parseCrmOutgoingText(input.text);
+    if (!message.trim() || message.length > 4096)
+      throw new BadRequestException('INVALID_MESSAGE_LENGTH');
+    if (
+      input.replyToTelegramMessageId &&
+      !(await this.chatActions.getMessage({
+        ...input,
+        telegramMessageId: input.replyToTelegramMessageId,
+      }))
+    )
+      throw new BadRequestException('REPLY_MESSAGE_UNAVAILABLE');
     const result = await this.client.invoke(
       new Api.messages.SendMessage({
         peer: this.inputPeer(input.telegramUserId, input.telegramAccessHash),
         message,
         entities,
+        ...(input.replyToTelegramMessageId
+          ? {
+              replyTo: new Api.InputReplyToMessage({
+                replyToMsgId: input.replyToTelegramMessageId,
+              }),
+            }
+          : {}),
         randomId: returnBigInt(input.randomId),
         noWebpage: false,
         silent: false,

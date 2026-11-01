@@ -1,8 +1,18 @@
 import type { CrmTagSummary } from "@telegram-system/shared";
+import type { CSSProperties } from "react";
 import { Send } from "lucide-react";
 import { IconAvatar } from "@/components/icons/icon-avatar";
 
 const normalizeEmoji = (value: string) => value.replace(/\uFE0F/g, "");
+
+export function isCrmContactTag(tag: CrmTagSummary) {
+  return !tag.systemKey?.startsWith("CHANNEL:") && !tag.systemKey?.startsWith("NETWORK:");
+}
+
+export function crmTagColorStyle(tag: CrmTagSummary): CSSProperties {
+  const color = tag.color ?? "#737373";
+  return { borderColor: `${color}80`, backgroundColor: `${color}22`, color };
+}
 
 export function crmTagDisplayName(tag: CrmTagSummary) {
   if (!tag.emojiPresentation || tag.emojiPresentation.type !== "unicode") {

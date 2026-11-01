@@ -178,7 +178,10 @@ function adPlacementFormatLabel(placement: {
   deleteAfterHoursSnapshot: number | null;
   isPermanentSnapshot: boolean;
 }) {
-  if (placement.isPermanentSnapshot || placement.deleteAfterHoursSnapshot == null) {
+  if (
+    placement.isPermanentSnapshot ||
+    placement.deleteAfterHoursSnapshot == null
+  ) {
     return 'Без автовидалення';
   }
   return `Автовидалення через ${placement.deleteAfterHoursSnapshot} годин`;

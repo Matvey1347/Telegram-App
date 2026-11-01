@@ -28,8 +28,29 @@ export class MarkVisibleNotificationsDto {
 }
 
 export class UpdateNotificationPreferencesDto {
+  @IsOptional()
   @IsBoolean()
-  webPushEnabled!: boolean;
+  webPushEnabled?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  crmNotificationsEnabled?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  crmIncomingMessagesEnabled?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  crmFollowUpEnabled?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  crmAiLeadsEnabled?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  crmMessagePreviewEnabled?: boolean;
 }
 
 class OperationsPushKeysDto {

@@ -61,3 +61,58 @@ describe('TelegramUserAccountRemovalService', () => {
     });
   });
 });
+
+it('detaches Discovery sources atomically before account deletion while preserving evidence', async () => {
+  const updateMany = jest.fn().mockResolvedValue({ count: 2 });
+  const remove = jest
+    .fn()
+    .mockResolvedValue({ id: 'account-reviewed', label: 'Reviewed account' });
+  const tx = {
+    telegramLeadSource: { updateMany },
+    telegramUserAccountIntegration: { delete: remove },
+    telegramChannelAdminLink: { deleteMany: jest.fn() },
+    telegramChannelSourceAccess: { deleteMany: jest.fn() },
+    telegramChannelDataSource: { deleteMany: jest.fn() },
+  };
+  const prisma = {
+    telegramUserAccountIntegration: {
+      findFirst: jest.fn().mockResolvedValue({ id: 'account-reviewed' }),
+    },
+    telegramCrmConversation: { findFirst: jest.fn().mockResolvedValue(null) },
+    telegramAdCrmWorkspaceSettings: {
+      findFirst: jest.fn().mockResolvedValue(null),
+    },
+    $transaction: jest.fn((work: (value: typeof tx) => Promise<unknown>) =>
+      work(tx),
+    ),
+  };
+  const notifier = { wake: jest.fn() };
+  const service = new TelegramUserAccountRemovalService(
+    prisma as never,
+    {
+      resolveWorkspaceIdForUser: jest
+        .fn()
+        .mockResolvedValue('selected-workspace'),
+    } as never,
+    notifier as never,
+  );
+  await service.remove('operator', 'account-reviewed');
+  expect(updateMany).toHaveBeenCalledWith({
+    where: { workspaceId: 'selected-workspace', accountId: 'account-reviewed' },
+    data: {
+      accountId: null,
+      monitoringState: 'ACCESS_LOST',
+      coverageState: 'GAPPED',
+      coverageFrom: null,
+      lastErrorCode: 'ACCOUNT_REMOVED',
+    },
+  });
+  expect(updateMany.mock.invocationCallOrder[0]).toBeLessThan(
+    remove.mock.invocationCallOrder[0],
+  );
+  expect(notifier.wake).toHaveBeenCalledWith({
+    workspaceId: 'selected-workspace',
+    accountId: 'account-reviewed',
+    reason: 'removed',
+  });
+});

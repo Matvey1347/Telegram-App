@@ -1,5 +1,11 @@
 import Link from "next/link";
-import { ArrowUpRight, CalendarClock, ShieldCheck, Trash2 } from "lucide-react";
+import {
+  ArrowUpRight,
+  CalendarClock,
+  ShieldCheck,
+  Trash2,
+  ChartNoAxesCombined,
+} from "lucide-react";
 import type { EffectiveWorkspaceAccess } from "@telegram-system/shared";
 
 type WorkspaceToolsProps = {
@@ -8,6 +14,13 @@ type WorkspaceToolsProps = {
 };
 
 const tools = [
+  {
+    key: "ai",
+    href: "/settings/ai-usage",
+    title: "AI Usage",
+    description: "Review AI costs, usage and execution limits.",
+    icon: ChartNoAxesCombined,
+  },
   {
     key: "roles",
     href: "/roles",
@@ -38,11 +51,20 @@ export function WorkspaceTools({ role, access }: WorkspaceToolsProps) {
   const features = new Set(access?.featureIds ?? []);
   const canUseOperations = access ? features.has("operations") : legacyAdmin;
   const visibleTools = tools.filter((tool) => {
+    if (tool.key === "ai")
+      return (
+        isOwner ||
+        permissions.has("operations.viewAiUsage") ||
+        permissions.has("operations.manageAi")
+      );
     if (tool.key === "roles") {
       return isOwner || permissions.has("members.assignRoles") || legacyAdmin;
     }
     if (tool.key === "trash") {
-      return canUseOperations && (isOwner || permissions.has("operations.restoreTrash") || legacyAdmin);
+      return (
+        canUseOperations &&
+        (isOwner || permissions.has("operations.restoreTrash") || legacyAdmin)
+      );
     }
     return canUseOperations;
   });
@@ -51,7 +73,10 @@ export function WorkspaceTools({ role, access }: WorkspaceToolsProps) {
   return (
     <section aria-labelledby="workspace-tools-title">
       <div className="mb-3">
-        <h2 id="workspace-tools-title" className="text-lg font-semibold text-white">
+        <h2
+          id="workspace-tools-title"
+          className="text-lg font-semibold text-white"
+        >
           Workspace tools
         </h2>
         <p className="mt-1 text-sm text-neutral-400">

@@ -1,5 +1,8 @@
 import { Controller, Get, Query, UseGuards } from '@nestjs/common';
-import { CurrentUser, type JwtUser } from '../../../common/current-user.decorator';
+import {
+  CurrentUser,
+  type JwtUser,
+} from '../../../common/current-user.decorator';
 import { JwtAuthGuard } from '../../../common/jwt-auth.guard';
 import { GlobalSearchService } from './global-search.service';
 

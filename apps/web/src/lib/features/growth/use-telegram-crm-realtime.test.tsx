@@ -29,6 +29,17 @@ describe("useTelegramCrmRealtime", () => {
 
   afterEach(() => setVisibility("visible"));
 
+  it("reconciles on the first successful stream handshake", async () => {
+    const onReconnect = vi.fn();
+    renderHook(() => useTelegramCrmRealtime({
+      active: true,
+      onEvent: vi.fn(),
+      onReconnect,
+    }));
+
+    await waitFor(() => expect(onReconnect).toHaveBeenCalledTimes(1));
+  });
+
   it("releases a hidden tab stream and reconciles after becoming visible", async () => {
     const onReconnect = vi.fn();
     renderHook(() =>
@@ -47,7 +58,7 @@ describe("useTelegramCrmRealtime", () => {
 
     act(() => setVisibility("visible"));
     await waitFor(() => expect(fetchCrmEventStream).toHaveBeenCalledTimes(2));
-    expect(onReconnect).toHaveBeenCalledTimes(1);
+    expect(onReconnect).toHaveBeenCalledTimes(2);
   });
 
   it("does not open a stream while the tab starts hidden", async () => {
@@ -58,6 +69,17 @@ describe("useTelegramCrmRealtime", () => {
 
     await act(() => Promise.resolve());
     expect(fetchCrmEventStream).not.toHaveBeenCalled();
+  });
+
+  it("closes the previous workspace stream before opening the next scope", async () => {
+    const { rerender } = renderHook(({ workspaceId }) => useTelegramCrmRealtime({
+      active: true, scopeKey: workspaceId, onEvent: vi.fn(),
+    }), { initialProps: { workspaceId: "workspace-a" } });
+    const first = vi.mocked(fetchCrmEventStream).mock.calls[0][0].signal;
+    rerender({ workspaceId: "workspace-b" });
+    expect(first.aborted).toBe(true);
+    await waitFor(() => expect(fetchCrmEventStream).toHaveBeenCalledTimes(2));
+    expect(vi.mocked(fetchCrmEventStream).mock.calls[1][0].signal.aborted).toBe(false);
   });
 
   it("reconciles when the initial handshake was aborted while hiding", async () => {

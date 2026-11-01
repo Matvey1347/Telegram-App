@@ -18,7 +18,13 @@ import { randomUUID } from 'crypto';
 import { WorkspaceService } from '../../../common/workspace.service';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { zonedDateTimeToUtc } from '../telegram-ad-sales/domain/timezone';
-import { managedPostNotFound, postGroupNotFound, telegramChannelNotFound, telegramPostsBadRequest, telegramPostsNotFound } from './telegram-posts.errors';
+import {
+  managedPostNotFound,
+  postGroupNotFound,
+  telegramChannelNotFound,
+  telegramPostsBadRequest,
+  telegramPostsNotFound,
+} from './telegram-posts.errors';
 import {
   CreatePostPlannerFormatDto,
   CreatePostPlannerSlotDto,
@@ -81,7 +87,10 @@ export class TelegramPostCalendarPlannerService {
     try {
       new Intl.DateTimeFormat('en-US', { timeZone: timezone }).format();
     } catch {
-      throw telegramPostsBadRequest('TELEGRAM_POST_INVALID_TIMEZONE', 'Planner timezone is invalid');
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_INVALID_TIMEZONE',
+        'Planner timezone is invalid',
+      );
     }
   }
 
@@ -101,7 +110,11 @@ export class TelegramPostCalendarPlannerService {
   ) {
     const { workspaceId } = await this.channelContext(userId, channelId);
     const name = dto.name.trim();
-    if (!name) throw telegramPostsBadRequest('TELEGRAM_POST_TITLE_REQUIRED', 'Format name is required');
+    if (!name)
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_TITLE_REQUIRED',
+        'Format name is required',
+      );
     const created = await this.prisma.telegramPostPlannerFormat.create({
       data: {
         workspaceId,
@@ -125,7 +138,10 @@ export class TelegramPostCalendarPlannerService {
     const { workspaceId } = await this.channelContext(userId, channelId);
     await this.requireFormat(workspaceId, channelId, formatId);
     if (dto.name !== undefined && !dto.name.trim()) {
-      throw telegramPostsBadRequest('TELEGRAM_POST_TITLE_REQUIRED', 'Format name is required');
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_TITLE_REQUIRED',
+        'Format name is required',
+      );
     }
     const updated = await this.prisma.telegramPostPlannerFormat.update({
       where: { id: formatId },
@@ -211,7 +227,11 @@ export class TelegramPostCalendarPlannerService {
     const existing = await this.prisma.telegramPostPlannerSlot.findFirst({
       where: { id: slotId, workspaceId, telegramChannelId: channelId },
     });
-    if (!existing) throw telegramPostsNotFound('TELEGRAM_POST_PLANNER_SLOT_NOT_FOUND', 'Planner slot not found');
+    if (!existing)
+      throw telegramPostsNotFound(
+        'TELEGRAM_POST_PLANNER_SLOT_NOT_FOUND',
+        'Planner slot not found',
+      );
     const timezone = dto.timezone?.trim();
     if (timezone) this.assertTimezone(timezone);
     const postGroupIds =
@@ -246,7 +266,11 @@ export class TelegramPostCalendarPlannerService {
     const slot = await this.prisma.telegramPostPlannerSlot.findFirst({
       where: { id: slotId, workspaceId, telegramChannelId: channelId },
     });
-    if (!slot) throw telegramPostsNotFound('TELEGRAM_POST_PLANNER_SLOT_NOT_FOUND', 'Planner slot not found');
+    if (!slot)
+      throw telegramPostsNotFound(
+        'TELEGRAM_POST_PLANNER_SLOT_NOT_FOUND',
+        'Planner slot not found',
+      );
     const deleted = await this.prisma.telegramPostPlannerSlot.delete({
       where: { id: slotId },
     });
@@ -335,7 +359,10 @@ export class TelegramPostCalendarPlannerService {
       dto,
     );
     if (!preview.assignments.length) {
-      throw telegramPostsBadRequest('TELEGRAM_POST_PLANNER_NO_ASSIGNMENTS', 'Planner produced no assignments');
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_PLANNER_NO_ASSIGNMENTS',
+        'Planner produced no assignments',
+      );
     }
     const plannerRunId = randomUUID();
     const schedule =
@@ -405,7 +432,10 @@ export class TelegramPostCalendarPlannerService {
       timezone,
     );
     if (dayEnd.getTime() <= Date.now()) {
-      throw telegramPostsBadRequest('TELEGRAM_POST_SCHEDULE_IN_PAST', 'Only future planner days can be rerolled');
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_SCHEDULE_IN_PAST',
+        'Only future planner days can be rerolled',
+      );
     }
     const autoPosts = await this.prisma.telegramManagedPost.findMany({
       where: {
@@ -448,10 +478,18 @@ export class TelegramPostCalendarPlannerService {
     this.assertTimezone(timezone);
     const from = plannerDateKeyFromInput(dto.from, timezone);
     const to = plannerDateKeyFromInput(dto.to, timezone);
-    if (to < from) throw telegramPostsBadRequest('TELEGRAM_POST_PLANNER_RANGE_INVALID', 'Planner range is invalid');
+    if (to < from)
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_PLANNER_RANGE_INVALID',
+        'Planner range is invalid',
+      );
     const dateKeys = plannerDateKeys(from, to);
     if (dateKeys.length > 62) {
-      throw telegramPostsBadRequest('TELEGRAM_POST_PLANNER_RANGE_INVALID', 'Planner range is limited to 62 days', { maxDays: 62 });
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_PLANNER_RANGE_INVALID',
+        'Planner range is limited to 62 days',
+        { maxDays: 62 },
+      );
     }
     const requestedGroupIds = await this.validatedPostGroupIds(
       workspaceId,
@@ -463,7 +501,10 @@ export class TelegramPostCalendarPlannerService {
       .filter(([, weight]) => weight > 0)
       .map(([formatId]) => formatId);
     if (formatWeights.size && !weightedFormatIds.length) {
-      throw telegramPostsBadRequest('TELEGRAM_POST_PLANNER_NO_ASSIGNMENTS', 'At least one planner format frequency must be enabled');
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_PLANNER_NO_ASSIGNMENTS',
+        'At least one planner format frequency must be enabled',
+      );
     }
     const formatIdInput = dto.formatIds?.length
       ? dto.formatIds
@@ -472,7 +513,10 @@ export class TelegramPostCalendarPlannerService {
       await this.validatedFormatIds(workspaceId, channelId, formatIdInput)
     ).filter((formatId) => (formatWeights.get(formatId) ?? 100) > 0);
     if (formatIdInput.length && !requestedFormatIds.length) {
-      throw telegramPostsBadRequest('TELEGRAM_POST_PLANNER_NO_ASSIGNMENTS', 'At least one planner format frequency must be enabled');
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_PLANNER_NO_ASSIGNMENTS',
+        'At least one planner format frequency must be enabled',
+      );
     }
     const slots = await this.loadMatchingSlots(
       workspaceId,
@@ -588,7 +632,11 @@ export class TelegramPostCalendarPlannerService {
       where: { id: formatId, workspaceId, telegramChannelId: channelId },
       select: { id: true },
     });
-    if (!format) throw telegramPostsNotFound('TELEGRAM_POST_PLANNER_FORMAT_NOT_FOUND', 'Planner format not found');
+    if (!format)
+      throw telegramPostsNotFound(
+        'TELEGRAM_POST_PLANNER_FORMAT_NOT_FOUND',
+        'Planner format not found',
+      );
   }
 
   private async validatedFormatId(
@@ -615,7 +663,10 @@ export class TelegramPostCalendarPlannerService {
       where: { id: { in: unique }, workspaceId, telegramChannelId: channelId },
     });
     if (count !== unique.length) {
-      throw telegramPostsNotFound('TELEGRAM_POST_PLANNER_FORMAT_NOT_FOUND', 'One or more planner formats were not found');
+      throw telegramPostsNotFound(
+        'TELEGRAM_POST_PLANNER_FORMAT_NOT_FOUND',
+        'One or more planner formats were not found',
+      );
     }
     return unique;
   }
@@ -627,10 +678,16 @@ export class TelegramPostCalendarPlannerService {
       const trimmedFormatId = formatId.trim();
       const weight = Number(rawWeight);
       if (!trimmedFormatId || !Number.isFinite(weight)) {
-        throw telegramPostsBadRequest('TELEGRAM_POST_INVALID_SCHEDULE', 'Planner format frequency is invalid');
+        throw telegramPostsBadRequest(
+          'TELEGRAM_POST_INVALID_SCHEDULE',
+          'Planner format frequency is invalid',
+        );
       }
       if (weight < 0 || weight > 100) {
-        throw telegramPostsBadRequest('TELEGRAM_POST_INVALID_SCHEDULE', 'Planner format frequency must be between 0 and 100');
+        throw telegramPostsBadRequest(
+          'TELEGRAM_POST_INVALID_SCHEDULE',
+          'Planner format frequency must be between 0 and 100',
+        );
       }
       normalized.set(trimmedFormatId, weight);
     }

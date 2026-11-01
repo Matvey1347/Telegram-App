@@ -88,4 +88,26 @@ describe("operations notification cache", () => {
         ?.pages[0]?.items[0]?.readAt,
     ).toBeNull();
   });
+
+  it("updates the existing conversation group without incrementing its unread badge twice", () => {
+    const client = new QueryClient();
+    client.setQueryData(operationsNotificationKeys.unread("workspace-1"), { unread: 1 });
+    client.setQueryData<InfiniteData<OperationsNotificationPage>>(operationsNotificationKeys.list("workspace-1"), {
+      pages: [{ items: [{ ...notification("group"), body: "First", createdAt: "2026-10-31T08:00:00Z" }], nextCursor: null }], pageParams: [null],
+    });
+    const updated = { ...notification("group"), body: "Five new messages", createdAt: "2026-10-31T08:01:00Z" };
+    expect(patchCreatedNotification(client, "workspace-1", updated)).toBe(false);
+    patchCreatedNotification(client, "workspace-1", updated);
+    expect(client.getQueryData(operationsNotificationKeys.unread("workspace-1"))).toEqual({ unread: 1 });
+    expect(client.getQueryData<InfiniteData<OperationsNotificationPage>>(operationsNotificationKeys.list("workspace-1"))?.pages[0].items).toEqual([updated]);
+  });
+
+  it("requests a narrow count reconciliation instead of guessing when the panel has not loaded", () => {
+    const client = new QueryClient();
+    client.setQueryData(operationsNotificationKeys.unread("workspace-1"), { unread: 5 });
+    expect(patchCreatedNotification(client, "workspace-1", notification("unknown-group"))).toBe(true);
+    expect(client.getQueryData(operationsNotificationKeys.unread("workspace-1"))).toEqual({ unread: 5 });
+    expect(client.getQueryData(operationsNotificationKeys.list("workspace-1"))).toBeUndefined();
+    expect(patchCreatedNotification(client, "foreign-workspace", notification("unknown-group"))).toBe(false);
+  });
 });

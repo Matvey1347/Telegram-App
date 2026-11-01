@@ -246,9 +246,7 @@ describe('TelegramAdSalesCrmAdvertisersService', () => {
   ] as const)(
     'returns %s from the current placement lifecycle',
     async (expectedStatus, placement) => {
-      jest
-        .useFakeTimers()
-        .setSystemTime(new Date('2026-08-27T12:00:00.000Z'));
+      jest.useFakeTimers().setSystemTime(new Date('2026-08-27T12:00:00.000Z'));
       const { service, prisma } = createService();
       prisma.telegramAdCrmWorkspaceSettings.findUnique.mockResolvedValue(null);
       prisma.telegramAdvertiser.findMany.mockReturnValue('advertisers-query');
@@ -674,7 +672,9 @@ describe('TelegramAdSalesCrmAdvertisersService', () => {
     await service.listCrmAdvertisers('user-1', { page: 1, pageSize: 25 });
 
     expect(prisma.telegramAdvertiser.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: expect.objectContaining({ ownerMemberId: 'member-1' }) }),
+      expect.objectContaining({
+        where: expect.objectContaining({ ownerMemberId: 'member-1' }),
+      }),
     );
     expect(prisma.telegramAdvertiser.count).toHaveBeenCalledWith({
       where: expect.objectContaining({ ownerMemberId: 'member-1' }),

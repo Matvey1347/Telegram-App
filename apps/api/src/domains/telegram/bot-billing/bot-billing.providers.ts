@@ -1,4 +1,7 @@
-import type { BotBillingInterval, BotBillingProviderCapabilities } from '@telegram-system/shared';
+import type {
+  BotBillingInterval,
+  BotBillingProviderCapabilities,
+} from '@telegram-system/shared';
 
 export const BILLING_PROVIDER_CAPABILITIES: Record<
   'STRIPE' | 'TELEGRAM_STARS',
@@ -28,6 +31,7 @@ export function supportsBillingPrice(input: {
   const capabilities = BILLING_PROVIDER_CAPABILITIES[input.provider];
   return (
     capabilities.intervals.includes(input.interval) &&
-    (!capabilities.currencies || capabilities.currencies.includes(input.currency))
+    (!capabilities.currencies ||
+      capabilities.currencies.includes(input.currency))
   );
 }

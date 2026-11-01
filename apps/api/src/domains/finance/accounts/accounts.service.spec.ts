@@ -17,7 +17,11 @@ describe('AccountsService', () => {
   const workspaceService = { resolveWorkspaceIdForUser: jest.fn() };
   const conversion = { convertCurrency: jest.fn(), getRate: jest.fn() };
   const categories = { ensureSystemCategories: jest.fn() };
-  const authorization = { require: jest.fn(), can: jest.fn(), requireOwnOrAny: jest.fn() };
+  const authorization = {
+    require: jest.fn(),
+    can: jest.fn(),
+    requireOwnOrAny: jest.fn(),
+  };
   let service: AccountsService;
 
   beforeEach(() => {
@@ -96,7 +100,10 @@ describe('AccountsService', () => {
       id: 'account-1',
       workspaceId: 'workspace-1',
     });
-    prisma.account.update.mockResolvedValue({ id: 'account-1', isActive: false });
+    prisma.account.update.mockResolvedValue({
+      id: 'account-1',
+      isActive: false,
+    });
 
     await service.remove('user-1', 'account-1');
 
@@ -129,8 +136,8 @@ describe('AccountsService', () => {
       },
       investment: { create: jest.fn().mockResolvedValue({}) },
     };
-    prisma.$transaction.mockImplementation((callback: (client: typeof tx) => unknown) =>
-      callback(tx),
+    prisma.$transaction.mockImplementation(
+      (callback: (client: typeof tx) => unknown) => callback(tx),
     );
 
     await service.update('user-1', 'account-1', { initialBalance: 250 });

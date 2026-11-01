@@ -58,6 +58,17 @@ export class TelegramUserAccountRemovalService {
           sourceType: TelegramSourceType.MTPROTO,
         },
       });
+      // Preserve permitted discovery evidence while removing the account binding.
+      await tx.telegramLeadSource.updateMany({
+        where: { workspaceId, accountId },
+        data: {
+          accountId: null,
+          monitoringState: 'ACCESS_LOST',
+          coverageState: 'GAPPED',
+          coverageFrom: null,
+          lastErrorCode: 'ACCOUNT_REMOVED',
+        },
+      });
       return tx.telegramUserAccountIntegration.delete({
         where: { id: accountId },
       });

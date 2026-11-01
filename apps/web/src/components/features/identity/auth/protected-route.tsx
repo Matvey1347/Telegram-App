@@ -17,7 +17,9 @@ import { useOptionalI18n } from "@/providers/i18n-provider";
 import {
   resolveWorkspacePath,
   workspacePathIsAllowed,
+  notificationWorkspaceDestination,
 } from "@/lib/features/workspace/workspace-route-access";
+import { NotificationNavigationCoordinator } from "@/providers/notification-navigation-coordinator";
 
 export function ProtectedRoute({ children }: PropsWithChildren) {
   const pathname = usePathname();
@@ -42,7 +44,9 @@ export function ProtectedRoute({ children }: PropsWithChildren) {
   const [mounted, setMounted] = useState(false);
   const hasShownConnectionAlertRef = useRef(false);
   const hasConnectionIssue = Boolean(token && isApiNetworkError(error));
-  const hasWorkspaceRouteAccess = workspacePathIsAllowed(
+  const destinationWorkspace = typeof window === "undefined" ? null : notificationWorkspaceDestination(`${pathname}${window.location.search}`);
+  const pendingWorkspaceDestination = Boolean(destinationWorkspace && destinationWorkspace !== workspace?.id);
+  const hasWorkspaceRouteAccess = pendingWorkspaceDestination || workspacePathIsAllowed(
     pathname,
     workspace?.access,
   );
@@ -72,7 +76,7 @@ export function ProtectedRoute({ children }: PropsWithChildren) {
     if (isAuthPage) {
       if (isEntryAuthPage && !isLoading && token && isAuthenticated) {
         const requestedPath = consumeAuthReturnTo(getAuthRedirectParam());
-        router.replace(resolveWorkspacePath(requestedPath, workspace?.access));
+        router.replace(resolveWorkspacePath(requestedPath, workspace?.access, workspace?.id));
       }
       return;
     }
@@ -112,6 +116,7 @@ export function ProtectedRoute({ children }: PropsWithChildren) {
     hasConnectionIssue,
     hasWorkspaceRouteAccess,
     workspace?.access,
+    workspace?.id,
   ]);
 
   // Public auth pages must be present in the very first client render. Token
@@ -126,14 +131,14 @@ export function ProtectedRoute({ children }: PropsWithChildren) {
   }
 
   if (hasConnectionIssue && token) {
-    return <>{children}</>;
+    return pendingWorkspaceDestination ? <NotificationNavigationCoordinator>{children}</NotificationNavigationCoordinator> : <>{children}</>;
   }
 
   if (isLoading || !token || !isAuthenticated || !hasWorkspaceRouteAccess) {
     return <FullScreenLoader label={loadingLabel} />;
   }
 
-  return <>{children}</>;
+  return pendingWorkspaceDestination ? <NotificationNavigationCoordinator>{children}</NotificationNavigationCoordinator> : <>{children}</>;
 }
 
 function FullScreenLoader({ label }: { label: string }) {

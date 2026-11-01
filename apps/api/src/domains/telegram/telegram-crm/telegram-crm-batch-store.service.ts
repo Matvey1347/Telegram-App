@@ -1,4 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import { TelegramCrmChatStore } from './telegram-crm-chat-store.service';
+import {
+  applyCrmLiveDeletions,
+  reconcileCrmDeletionSnapshots,
+} from './telegram-crm-chat-live-deletions';
+import { Injectable, Optional } from '@nestjs/common';
 import {
   Prisma,
   TelegramCrmMessageDirection,
@@ -29,6 +34,7 @@ export class TelegramCrmBatchStoreService {
     private readonly prisma: PrismaService,
     private readonly dialogs: TelegramCrmDialogBatchWriter,
     private readonly messages: TelegramCrmMessageBatchWriter,
+    @Optional() private readonly chatStore?: TelegramCrmChatStore,
   ) {}
 
   importDialogs(
@@ -56,6 +62,7 @@ export class TelegramCrmBatchStoreService {
       return { changed: 0, needsRecovery: true };
     }
     const result = await this.prisma.$transaction(async (tx) => {
+      const deleted = await applyCrmLiveDeletions(tx, context);
       const userIds = [
         ...new Set(
           context.updates.flatMap((update) =>
@@ -152,6 +159,7 @@ export class TelegramCrmBatchStoreService {
         messageInputs,
         'live',
       );
+      await reconcileCrmDeletionSnapshots(tx, context.updates, deleted);
       const readEvents = [] as Array<{
         conversationId: string;
         peerId: string;
@@ -159,6 +167,7 @@ export class TelegramCrmBatchStoreService {
         ownerMemberId: string | null;
         unreadCount: number;
         unreadChanged: boolean;
+        inbox: boolean;
       }>;
       const changedPeers = new Map<
         string,
@@ -254,13 +263,36 @@ export class TelegramCrmBatchStoreService {
           ownerMemberId: conversation.contact?.ownerMemberId ?? null,
           unreadCount,
           unreadChanged: inbox && unreadCount !== conversation.unreadCount,
+          inbox,
         });
+      }
+      if (
+        stored.inputs.some(
+          (input) => !input.edited && input.message.direction === 'INBOUND',
+        )
+      ) {
+        const currentUnread = await tx.telegramCrmConversation.findMany({
+          where: {
+            workspaceId: context.workspaceId,
+            mtprotoAccountId: context.accountId,
+            id: {
+              in: [
+                ...new Set(stored.inputs.map((input) => input.conversation.id)),
+              ],
+            },
+          },
+          select: { id: true, unreadCount: true },
+        });
+        for (const input of stored.inputs)
+          input.conversation.unreadCountOverride = currentUnread.find(
+            (row) => row.id === input.conversation.id,
+          )?.unreadCount;
       }
       if (!unresolved) {
         await this.advanceCheckpoint(tx, context, context.checkpoint);
       }
       const readNotificationStates = readEvents
-        .filter((event) => event.unreadChanged)
+        .filter((event) => event.inbox)
         .map((event) => ({
           conversationId: event.conversationId,
           contactId: event.contactId,
@@ -274,12 +306,15 @@ export class TelegramCrmBatchStoreService {
         );
       return {
         stored,
+        deleted,
         readEvents,
         changedPeers: [...changedPeers.values()],
         unresolved,
         invalidatedNotificationMemberIds,
       };
     });
+    for (const deletion of result.deleted)
+      this.chatStore?.publishDeletion(deletion.conversation, deletion.result);
     this.messages.emitAfterCommit(context.workspaceId, result.stored, 'live');
     this.messages.emitReadsAfterCommit(context.workspaceId, result.readEvents);
     this.messages.emitPeerMetadataAfterCommit(
@@ -305,6 +340,7 @@ export class TelegramCrmBatchStoreService {
       messages: TelegramCrmMtprotoMessage[];
       nextBeforeTelegramMessageId: number | null;
       exhausted: boolean;
+      preserveHistoryCursor?: boolean;
     },
   ) {
     const result = await this.prisma.$transaction(async (tx) => {
@@ -317,6 +353,7 @@ export class TelegramCrmBatchStoreService {
         })),
         'history',
       );
+      if (input.preserveHistoryCursor) return stored;
       const conversation = await tx.telegramCrmConversation.findUnique({
         where: { id: input.conversation.id },
         select: {
@@ -348,6 +385,7 @@ export class TelegramCrmBatchStoreService {
       }
       return stored;
     });
+    this.messages.emitAfterCommit(input.workspaceId, result, 'history');
     return { imported: result.created.length, edited: result.edited };
   }
 

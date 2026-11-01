@@ -36,7 +36,8 @@ export async function configureFinanceProductionRuntime(
     environment: active.environment,
     status: active.runtimeStatus,
     username: active.username,
-    webhookConfigured: active.webhookStatus === TelegramBotWebhookStatus.CONFIGURED,
+    webhookConfigured:
+      active.webhookStatus === TelegramBotWebhookStatus.CONFIGURED,
   };
 }
 

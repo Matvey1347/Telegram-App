@@ -25,7 +25,6 @@ import { TelegramAdSalesPlacementOptionsService } from './telegram-ad-sales-plac
 import { TelegramAdvertiserCheckoutResolverService } from './telegram-advertiser-checkout-resolver.service';
 import { TelegramCrmModule } from '../telegram-crm/telegram-crm.module';
 import { TelegramAdSalesLegacyCrmService } from './telegram-ad-sales-legacy-crm.service';
-import { TelegramAdSalesCrmTasksService } from './telegram-ad-sales-crm-tasks.service';
 import { TelegramAdSalePaymentDeletionService } from './telegram-ad-sale-payment-deletion.service';
 import { TelegramAdSalesWorkspaceSettingsService } from './telegram-ad-sales-workspace-settings.service';
 import { TelegramSystemBotModule } from '../telegram-system-bot/telegram-system-bot.module';
@@ -69,7 +68,6 @@ import { TelegramAdSalesDraftsController } from './telegram-ad-sales-drafts.cont
     TelegramAdSalesPlacementOptionsService,
     TelegramAdvertiserCheckoutResolverService,
     TelegramBotApiClient,
-    TelegramAdSalesCrmTasksService,
     TelegramAdSaleBotNotificationService,
     TelegramAdSalesDraftsService,
   ],

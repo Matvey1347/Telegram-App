@@ -61,8 +61,9 @@ export class TelegramChannelAiPlanningContextService {
 
   formatSlots(context: Awaited<ReturnType<this['read']>>) {
     if (!context.schedule) return ['[] — no publication schedule is assigned'];
-    return context.schedule.slots.map((slot) =>
-      `- slot_id: ${slot.id} — ${slot.title} — type: ${slot.kind} — every day at: ${publicationScheduleTimeForDisplay(slot.time)} — timezone: ${context.schedule!.timezone}`,
+    return context.schedule.slots.map(
+      (slot) =>
+        `- slot_id: ${slot.id} — ${slot.title} — type: ${slot.kind} — every day at: ${publicationScheduleTimeForDisplay(slot.time)} — timezone: ${context.schedule!.timezone}`,
     );
   }
 

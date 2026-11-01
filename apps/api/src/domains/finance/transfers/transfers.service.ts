@@ -134,7 +134,8 @@ export class TransfersService {
     if (
       (await this.authorization.can(userId, 'finance.editOwn')) &&
       !(await this.authorization.can(userId, 'finance.editAny'))
-    ) where.assignedMemberId = access.memberId;
+    )
+      where.assignedMemberId = access.memberId;
     const pagination = normalizePagination(query);
     const orderDirection = query.sort === 'date_asc' ? 'asc' : 'desc';
     const [transfers, totalItems] = await this.prisma.$transaction([
@@ -183,7 +184,12 @@ export class TransfersService {
     });
     if (!row) throw new NotFoundException('Transfer not found');
     if (await this.authorization.can(userId, 'finance.editOwn'))
-      await this.authorization.requireOwnOrAny(userId, row, 'finance.editOwn', 'finance.editAny');
+      await this.authorization.requireOwnOrAny(
+        userId,
+        row,
+        'finance.editOwn',
+        'finance.editAny',
+      );
     const [transfer] = await this.withLosses(workspaceId, [row]);
     return transfer;
   }
@@ -243,7 +249,12 @@ export class TransfersService {
       where: { id, workspaceId, deletedAt: null },
     });
     if (!existing) throw new NotFoundException('Transfer not found');
-    await this.authorization.requireOwnOrAny(userId, existing, 'finance.editOwn', 'finance.editAny');
+    await this.authorization.requireOwnOrAny(
+      userId,
+      existing,
+      'finance.editOwn',
+      'finance.editAny',
+    );
     const assignedMemberId =
       dto.assignedMemberId === undefined
         ? undefined
@@ -305,7 +316,12 @@ export class TransfersService {
       where: { id, workspaceId, deletedAt: null },
     });
     if (!existing) throw new NotFoundException('Transfer not found');
-    await this.authorization.requireOwnOrAny(userId, existing, 'finance.deleteOwn', 'finance.deleteAny');
+    await this.authorization.requireOwnOrAny(
+      userId,
+      existing,
+      'finance.deleteOwn',
+      'finance.deleteAny',
+    );
     return this.prisma.transfer.update({
       where: { id },
       data: { deletedAt: new Date() },

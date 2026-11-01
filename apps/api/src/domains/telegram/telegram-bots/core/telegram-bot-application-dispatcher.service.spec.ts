@@ -7,8 +7,16 @@ describe('TelegramBotApplicationDispatcherService interaction feedback', () => {
   it('does not put Finance behind the temporary Loading round trip', async () => {
     const finance = { handle: jest.fn().mockResolvedValue(undefined) };
     const loading = { show: jest.fn(), remove: jest.fn() };
-    const service = new TelegramBotApplicationDispatcherService(finance as never, logger as never, loading as never);
-    await expect(service.dispatch({ bot: { applicationType: TelegramBotApplicationType.FINANCE } } as never)).resolves.toEqual({ handled: true });
+    const service = new TelegramBotApplicationDispatcherService(
+      finance,
+      logger as never,
+      loading as never,
+    );
+    await expect(
+      service.dispatch({
+        bot: { applicationType: TelegramBotApplicationType.FINANCE },
+      } as never),
+    ).resolves.toEqual({ handled: true });
     expect(loading.show).not.toHaveBeenCalled();
     expect(loading.remove).toHaveBeenCalledWith(null);
   });
@@ -17,7 +25,7 @@ describe('TelegramBotApplicationDispatcherService interaction feedback', () => {
     const finance = { handle: jest.fn() };
     const loading = { remove: jest.fn() };
     const service = new TelegramBotApplicationDispatcherService(
-      finance as never,
+      finance,
       logger as never,
       loading as never,
     );

@@ -16,6 +16,7 @@ export const crmMessageSelect = {
   contentMetadata: true,
   sentAt: true,
   editedAt: true,
+  deletedAt: true,
   readState: true,
   deliveryState: true,
   createdAt: true,
@@ -34,6 +35,7 @@ export function mapCrmMessage(row: CrmMessageRow): CrmMessage {
       !Array.isArray(row.contentMetadata)
         ? row.contentMetadata
         : null,
+    deletedAt: row.deletedAt?.toISOString() ?? null,
     sentAt: row.sentAt.toISOString(),
     editedAt: row.editedAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),

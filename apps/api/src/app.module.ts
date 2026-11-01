@@ -1,3 +1,4 @@
+import { AiModule } from './domains/operations/ai/ai.module';
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
@@ -85,6 +86,7 @@ import { TelegramChannelMessageTemplatesModule } from './domains/telegram/telegr
     TelegramAdSalesModule,
     TelegramCrmModule,
     OperationsNotificationsModule,
+    AiModule,
     MemberFinanceModule,
     ScheduledTasksModule,
     TelegramSystemBotModule,

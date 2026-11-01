@@ -8,11 +8,9 @@ describe('AccountService locale preference', () => {
     const workspaceService = {
       resolveWorkspaceMembershipForUser: jest.fn(),
     } as any;
-    const service = new AccountService(
-      prisma,
-      workspaceService,
-      { reattributeWorkspaceInviteLinks: jest.fn() } as any,
-    );
+    const service = new AccountService(prisma, workspaceService, {
+      reattributeWorkspaceInviteLinks: jest.fn(),
+    } as any);
 
     await expect(service.updateLocale('user-1', 'ru')).resolves.toEqual({
       locale: 'ru',
@@ -65,11 +63,9 @@ describe('AccountService locale preference', () => {
         .fn()
         .mockResolvedValue(membership),
     } as any;
-    const service = new AccountService(
-      prisma,
-      workspaceService,
-      { reattributeWorkspaceInviteLinks: jest.fn() } as any,
-    );
+    const service = new AccountService(prisma, workspaceService, {
+      reattributeWorkspaceInviteLinks: jest.fn(),
+    } as any);
 
     await expect(service.updateMe('user-1', { locale: 'ru' })).resolves.toEqual(
       expect.objectContaining({ locale: 'ru' }),

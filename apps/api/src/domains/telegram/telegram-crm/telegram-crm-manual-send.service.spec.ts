@@ -1,4 +1,6 @@
-import { ConflictException } from '@nestjs/common';
+const containing = (value: Record<string, unknown>): unknown =>
+  expect.objectContaining(value);
+import { ConflictException, ForbiddenException } from '@nestjs/common';
 import {
   Prisma,
   TelegramCrmDeliveryState,
@@ -50,11 +52,13 @@ const conversation = {
 
 describe('TelegramCrmManualSendService', () => {
   const authorization = {
+    refresh: jest.fn().mockResolvedValue({}),
     require: jest.fn().mockResolvedValue({
       workspaceId: 'workspace-1',
       memberId: 'member-1',
     }),
     requireOwnOrAny: jest.fn().mockResolvedValue(undefined),
+    scope: jest.fn().mockResolvedValue({}),
   };
 
   beforeEach(() => jest.clearAllMocks());
@@ -82,6 +86,11 @@ describe('TelegramCrmManualSendService', () => {
       ),
     };
     const transaction = {
+      $queryRaw: jest.fn().mockResolvedValue([]),
+      telegramCrmDeletedMessage: {
+        findUnique: jest.fn().mockResolvedValue(null),
+      },
+      $executeRaw: jest.fn(),
       telegramCrmMessage: {
         findUnique: jest
           .fn()
@@ -99,6 +108,9 @@ describe('TelegramCrmManualSendService', () => {
       telegramAdvertiser: { update: jest.fn() },
     };
     const prisma = {
+      telegramAdvertiser: {
+        findFirst: jest.fn().mockResolvedValue({ manualSalesStatus: null }),
+      },
       telegramCrmConversation: {
         findFirst: jest.fn().mockResolvedValue({
           ...conversation,
@@ -168,8 +180,16 @@ describe('TelegramCrmManualSendService', () => {
     if (!isRecord(createCall) || !isRecord(createCall.data)) {
       throw new Error('Expected a typed Message create call');
     }
+    const compactQueries = transaction.$executeRaw.mock.calls.map(
+      (args: unknown[]) => args[0] as Prisma.Sql,
+    );
+    expect(compactQueries).toHaveLength(2);
+    expect(compactQueries[0].sql).toContain('GREATEST("lastMessageAt",');
+    expect(compactQueries[0].sql).not.toContain('"lastInboundAt" =');
+    expect(compactQueries[0].values).toContain('workspace-1');
+    expect(compactQueries[1].sql).toContain('GREATEST("lastContactAt",');
     expect(events.emit).toHaveBeenCalledWith(
-      expect.objectContaining({ type: 'message.sent' }),
+      containing({ type: 'message.sent' }),
     );
     expect(responseCache.clearWorkspacePath).toHaveBeenCalledWith(
       'workspace-1',
@@ -184,6 +204,9 @@ describe('TelegramCrmManualSendService', () => {
   it('replays the same client key without making a second Telegram call', async () => {
     const runtime = { withAccountHandle: jest.fn() };
     const prisma = {
+      telegramAdvertiser: {
+        findFirst: jest.fn().mockResolvedValue({ manualSalesStatus: null }),
+      },
       telegramCrmConversation: {
         findFirst: jest.fn().mockResolvedValue(conversation),
       },
@@ -206,6 +229,87 @@ describe('TelegramCrmManualSendService', () => {
     ).resolves.toMatchObject({ idempotentReplay: true });
     expect(runtime.withAccountHandle).not.toHaveBeenCalled();
   });
+
+  it.each([
+    '**Package pricing**',
+    '__Welcome__',
+    '[Statistics](https://example.com/report)',
+  ])(
+    'replays a lost response for formatted body %s without another protocol send',
+    async (body) => {
+      const stored = { ...messageRow, text: body };
+      const handle = {
+        sendText: jest
+          .fn()
+          .mockResolvedValue({ telegramMessageId: 501, sentAt }),
+      };
+      const runtime = {
+        withAccountHandle: jest.fn(
+          async (
+            _workspaceId: string,
+            _accountId: string,
+            _purpose: string,
+            operation: (value: typeof handle) => Promise<unknown>,
+          ) => operation(handle),
+        ),
+      };
+      const tx = {
+        $queryRaw: jest.fn().mockResolvedValue([]),
+        telegramCrmDeletedMessage: {
+          findUnique: jest.fn().mockResolvedValue(null),
+        },
+        $executeRaw: jest.fn(),
+        telegramCrmMessage: {
+          findUnique: jest.fn().mockResolvedValue(null),
+          create: jest.fn().mockResolvedValue(stored),
+        },
+        telegramCrmConversation: { update: jest.fn() },
+      };
+      const prisma = {
+        telegramCrmConversation: {
+          findFirst: jest.fn().mockResolvedValue(conversation),
+        },
+        telegramCrmMessage: {
+          findUnique: jest
+            .fn()
+            .mockResolvedValueOnce(null)
+            .mockResolvedValue(stored),
+        },
+        $transaction: jest.fn(
+          async (operation: (transaction: typeof tx) => Promise<unknown>) =>
+            operation(tx),
+        ),
+      };
+      const events = { emit: jest.fn() };
+      const service = new TelegramCrmManualSendService(
+        prisma as never,
+        authorization as never,
+        runtime as never,
+        events as never,
+      );
+      const request = {
+        text: ` ${body} `,
+        clientIdempotencyKey: messageRow.clientIdempotencyKey,
+      };
+
+      // The first response is lost after Telegram and the database accepted it.
+      await service.send('user-1', conversation.id, request);
+      const replay = await service.send('user-1', conversation.id, request);
+
+      expect(replay).toMatchObject({
+        idempotentReplay: true,
+        message: { id: stored.id, text: body },
+      });
+      expect(handle.sendText).toHaveBeenCalledTimes(1);
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+      expect(
+        events.emit.mock.calls.filter(
+          ([event]: unknown[]) =>
+            isRecord(event) && event.type === 'message.sent',
+        ),
+      ).toHaveLength(1);
+    },
+  );
 
   it('promotes a simultaneous TELEGRAM_SYNC echo to MANUAL attribution', async () => {
     const handle = {
@@ -230,6 +334,11 @@ describe('TelegramCrmManualSendService', () => {
       ),
     };
     const transaction = {
+      $queryRaw: jest.fn().mockResolvedValue([]),
+      telegramCrmDeletedMessage: {
+        findUnique: jest.fn().mockResolvedValue(null),
+      },
+      $executeRaw: jest.fn(),
       telegramCrmMessage: {
         findUnique: jest
           .fn()
@@ -247,6 +356,9 @@ describe('TelegramCrmManualSendService', () => {
       telegramAdvertiser: { update: jest.fn() },
     };
     const prisma = {
+      telegramAdvertiser: {
+        findFirst: jest.fn().mockResolvedValue({ manualSalesStatus: null }),
+      },
       telegramCrmConversation: {
         findFirst: jest.fn().mockResolvedValue(conversation),
       },
@@ -304,7 +416,8 @@ describe('TelegramCrmManualSendService', () => {
     ).rejects.toBeInstanceOf(ConflictException);
   });
 
-  it('converges on the stored Message when concurrent requests race on the unique key', async () => {
+  it('converges on formatted stored content when concurrent requests race on the unique key', async () => {
+    const body = '**Hello**';
     const handle = {
       sendText: jest.fn().mockResolvedValue({
         telegramMessageId: 501,
@@ -327,6 +440,9 @@ describe('TelegramCrmManualSendService', () => {
       ),
     };
     const prisma = {
+      telegramAdvertiser: {
+        findFirst: jest.fn().mockResolvedValue({ manualSalesStatus: null }),
+      },
       telegramCrmConversation: {
         findFirst: jest.fn().mockResolvedValue(conversation),
       },
@@ -334,7 +450,7 @@ describe('TelegramCrmManualSendService', () => {
         findUnique: jest
           .fn()
           .mockResolvedValueOnce(null)
-          .mockResolvedValueOnce(messageRow),
+          .mockResolvedValueOnce({ ...messageRow, text: body }),
       },
       $transaction: jest.fn().mockRejectedValue(
         new Prisma.PrismaClientKnownRequestError('unique race', {
@@ -353,11 +469,363 @@ describe('TelegramCrmManualSendService', () => {
 
     await expect(
       service.send('user-1', 'conversation-1', {
-        text: 'Hello',
+        text: body,
         clientIdempotencyKey: 'client-key-1',
       }),
     ).resolves.toMatchObject({ idempotentReplay: true });
     expect(handle.sendText).toHaveBeenCalledTimes(1);
     expect(events.emit).not.toHaveBeenCalled();
+  });
+});
+
+describe('manual commercial DNC protection', () => {
+  const authorization = {
+    refresh: jest.fn().mockResolvedValue({}),
+    require: jest
+      .fn()
+      .mockResolvedValue({ workspaceId: 'workspace-a', memberId: 'member-a' }),
+    requireOwnOrAny: jest.fn(),
+    scope: jest.fn().mockResolvedValue({}),
+  };
+  it('blocks a DNC client before creating a protocol handle', async () => {
+    const runtime = { withAccountHandle: jest.fn() };
+    const prisma = {
+      telegramCrmConversation: {
+        findFirst: jest.fn().mockResolvedValue({
+          ...conversation,
+          contactId: 'client-a',
+          contact: {
+            ownerMemberId: 'member-a',
+            manualSalesStatus: 'DO_NOT_CONTACT',
+          },
+        }),
+      },
+      telegramCrmMessage: { findUnique: jest.fn().mockResolvedValue(null) },
+    };
+    const service = new TelegramCrmManualSendService(
+      prisma as never,
+      authorization as never,
+      runtime as never,
+      { emit: jest.fn() } as never,
+    );
+    await expect(
+      service.send('user-a', conversation.id, {
+        text: 'Offer',
+        clientIdempotencyKey: 'new-key',
+      }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(runtime.withAccountHandle).not.toHaveBeenCalled();
+  });
+  it('rechecks DNC after awaiting account capacity and before the actual send', async () => {
+    const handle = { sendText: jest.fn() };
+    const runtime = {
+      withAccountHandle: jest.fn(
+        (
+          _workspace: string,
+          _account: string,
+          _purpose: string,
+          operation: (value: typeof handle) => Promise<unknown>,
+        ) => operation(handle),
+      ),
+    };
+    const prisma = {
+      telegramCrmConversation: {
+        findFirst: jest
+          .fn()
+          .mockResolvedValueOnce({
+            ...conversation,
+            contactId: 'client-a',
+            contact: { ownerMemberId: 'member-a', manualSalesStatus: null },
+          })
+          .mockResolvedValue({
+            ...conversation,
+            contactId: 'client-a',
+            contact: {
+              ownerMemberId: 'member-a',
+              manualSalesStatus: 'DO_NOT_CONTACT',
+            },
+          }),
+      },
+      telegramCrmMessage: { findUnique: jest.fn().mockResolvedValue(null) },
+      telegramAdvertiser: {
+        findFirst: jest
+          .fn()
+          .mockResolvedValue({ manualSalesStatus: 'DO_NOT_CONTACT' }),
+      },
+    };
+    const service = new TelegramCrmManualSendService(
+      prisma as never,
+      authorization as never,
+      runtime as never,
+      { emit: jest.fn() } as never,
+    );
+    await expect(
+      service.send('user-a', conversation.id, {
+        text: 'Offer',
+        clientIdempotencyKey: 'new-key',
+      }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(handle.sendText).not.toHaveBeenCalled();
+  });
+});
+
+describe('queued manual send current client protection', () => {
+  it.each([null, 'client-before'])(
+    'blocks a newly linked DNC client after handle wait (previous link %s)',
+    async (previousContactId) => {
+      let release!: () => void;
+      let entered!: () => void;
+      const wait = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const started = new Promise<void>((resolve) => {
+        entered = resolve;
+      });
+      const handle = { sendText: jest.fn() };
+      const runtime = {
+        withAccountHandle: jest.fn(
+          async (
+            _workspace: string,
+            _account: string,
+            _purpose: string,
+            operation: (value: typeof handle) => Promise<unknown>,
+          ) => {
+            entered();
+            await wait;
+            return operation(handle);
+          },
+        ),
+      };
+      const findFirst = jest
+        .fn()
+        .mockResolvedValueOnce({
+          ...conversation,
+          contactId: previousContactId,
+          contact: previousContactId
+            ? { ownerMemberId: 'member-a', manualSalesStatus: null }
+            : null,
+        })
+        .mockResolvedValue({
+          contact: { manualSalesStatus: 'DO_NOT_CONTACT' },
+        });
+      const authorization = {
+        refresh: jest.fn().mockResolvedValue({}),
+        require: jest.fn().mockResolvedValue({
+          workspaceId: 'workspace-a',
+          memberId: 'member-a',
+        }),
+        requireOwnOrAny: jest.fn(),
+        scope: jest.fn().mockResolvedValue({}),
+      };
+      const prisma = {
+        telegramCrmConversation: { findFirst },
+        telegramCrmMessage: { findUnique: jest.fn().mockResolvedValue(null) },
+      };
+      const service = new TelegramCrmManualSendService(
+        prisma as never,
+        authorization as never,
+        runtime as never,
+        { emit: jest.fn() } as never,
+      );
+      const pending = service.send('user-a', conversation.id, {
+        text: 'Offer',
+        clientIdempotencyKey: 'queued-key',
+      });
+      await started;
+      release();
+      await expect(pending).rejects.toBeInstanceOf(ForbiddenException);
+      expect(handle.sendText).not.toHaveBeenCalled();
+      expect(findFirst).toHaveBeenCalledTimes(2);
+      expect(findFirst).toHaveBeenLastCalledWith({
+        where: { id: conversation.id, workspaceId: 'workspace-a' },
+        select: { contact: { select: { manualSalesStatus: true } } },
+      });
+    },
+  );
+  it('applies the current own-only scope to the fresh conversation query before send', async () => {
+    const handle = { sendText: jest.fn() };
+    const runtime = {
+      withAccountHandle: jest.fn(
+        (
+          _workspace: string,
+          _account: string,
+          _purpose: string,
+          operation: (value: typeof handle) => Promise<unknown>,
+        ) => operation(handle),
+      ),
+    };
+    const findFirst = jest
+      .fn()
+      .mockResolvedValueOnce(conversation)
+      .mockResolvedValue(null);
+    const authorization = {
+      refresh: jest.fn().mockResolvedValue({}),
+      require: jest.fn().mockResolvedValue({
+        workspaceId: 'workspace-a',
+        memberId: 'member-a',
+      }),
+      requireOwnOrAny: jest.fn(),
+      scope: jest.fn().mockResolvedValue({ assignedMemberId: 'member-a' }),
+    };
+    const service = new TelegramCrmManualSendService(
+      {
+        telegramCrmConversation: { findFirst },
+        telegramCrmMessage: { findUnique: jest.fn().mockResolvedValue(null) },
+      } as never,
+      authorization as never,
+      runtime as never,
+      { emit: jest.fn() } as never,
+    );
+    await expect(
+      service.send('user-a', conversation.id, {
+        text: 'Offer',
+        clientIdempotencyKey: 'queued-key',
+      }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(findFirst).toHaveBeenLastCalledWith({
+      where: {
+        id: conversation.id,
+        workspaceId: 'workspace-a',
+        contact: { ownerMemberId: 'member-a' },
+      },
+      select: { contact: { select: { manualSalesStatus: true } } },
+    });
+    expect(handle.sendText).not.toHaveBeenCalled();
+  });
+  it('keeps a send deleted when its deletion reaches the account before HTTP persistence', async () => {
+    const handle = {
+      sendText: jest.fn().mockResolvedValue({
+        telegramMessageId: 501,
+        telegramUserId: '42',
+        text: 'Hello',
+        sentAt,
+        contentMetadata: null,
+      }),
+    };
+    const runtime = {
+      withAccountHandle: jest.fn(
+        async (
+          _workspace: string,
+          _account: string,
+          _purpose: string,
+          operation: (h: typeof handle) => Promise<unknown>,
+        ) => operation(handle),
+      ),
+    };
+    const tx = {
+      $queryRaw: jest.fn().mockResolvedValue([]),
+      $executeRaw: jest.fn(),
+      telegramCrmDeletedMessage: {
+        findUnique: jest.fn().mockResolvedValue({ telegramMessageId: 501 }),
+      },
+      telegramCrmMessage: {
+        findUnique: jest.fn().mockResolvedValue(null),
+        create: jest
+          .fn()
+          .mockImplementation(({ data }: { data: Record<string, unknown> }) =>
+            Promise.resolve({
+              ...messageRow,
+              ...data,
+              sentByMember: null,
+            }),
+          ),
+      },
+      telegramCrmConversation: { update: jest.fn() },
+      telegramAdvertiser: { updateMany: jest.fn() },
+    };
+    const prisma = {
+      telegramCrmConversation: {
+        findFirst: jest.fn().mockResolvedValue(conversation),
+      },
+      telegramCrmMessage: { findUnique: jest.fn().mockResolvedValue(null) },
+      $transaction: jest.fn(async (fn: (t: typeof tx) => Promise<unknown>) =>
+        fn(tx),
+      ),
+    };
+    const auth = {
+      refresh: jest.fn().mockResolvedValue({}),
+      require: jest.fn().mockResolvedValue({
+        workspaceId: 'workspace-1',
+        memberId: 'member-1',
+      }),
+      requireOwnOrAny: jest.fn(),
+      scope: jest.fn().mockResolvedValue({}),
+    };
+    const service = new TelegramCrmManualSendService(
+      prisma as never,
+      auth as never,
+      runtime as never,
+      { emit: jest.fn() } as never,
+    );
+    const result = await service.send('user', 'conversation-1', {
+      text: 'Hello',
+      clientIdempotencyKey: 'stable',
+    });
+    expect(result.message.deletedAt).toBeTruthy();
+    expect(result.message.text).toBeNull();
+    expect(tx.telegramCrmMessage.create).toHaveBeenCalledWith(
+      containing({
+        data: containing({
+          deletedAt: expect.any(Date) as unknown,
+          text: null,
+          contentMetadata: containing({
+            manualRequestHash: expect.any(String) as unknown,
+          }),
+        }),
+      }),
+    );
+    expect(tx.$executeRaw).not.toHaveBeenCalled();
+    expect(tx.telegramCrmConversation.update).not.toHaveBeenCalled();
+  });
+});
+
+describe('manual send permission revocation during session wait', () => {
+  it('refreshes send permission and rejects a revoked actor before send or durable intent', async () => {
+    const access = { workspaceId: 'workspace-1', memberId: 'member-1' };
+    const auth = {
+      refresh: jest.fn(),
+      require: jest
+        .fn()
+        .mockResolvedValueOnce(access)
+        .mockRejectedValueOnce(new ForbiddenException('revoked')),
+      requireOwnOrAny: jest.fn(),
+      scope: jest.fn(),
+    };
+    const handle = { sendText: jest.fn() };
+    const runtime = {
+      withAccountHandle: jest.fn(
+        (
+          _workspace: string,
+          _account: string,
+          _purpose: string,
+          operation: (value: typeof handle) => Promise<unknown>,
+        ) => operation(handle),
+      ),
+    };
+    const prisma = {
+      telegramCrmConversation: {
+        findFirst: jest.fn().mockResolvedValue(conversation),
+      },
+      telegramCrmMessage: { findUnique: jest.fn().mockResolvedValue(null) },
+    };
+    const intents = { claim: jest.fn() };
+    const service = new TelegramCrmManualSendService(
+      prisma as never,
+      auth as never,
+      runtime as never,
+      { emit: jest.fn() } as never,
+      undefined,
+      undefined,
+      intents as never,
+    );
+    await expect(
+      service.send('user', 'conversation-1', {
+        text: 'Hello',
+        clientIdempotencyKey: 'new-key',
+      }),
+    ).rejects.toThrow('revoked');
+    expect(auth.refresh).toHaveBeenCalledWith('user');
+    expect(handle.sendText).not.toHaveBeenCalled();
+    expect(intents.claim).not.toHaveBeenCalled();
   });
 });

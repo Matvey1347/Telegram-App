@@ -13,6 +13,7 @@ import {
 export type StoredCrmMessageBatch = {
   created: CrmMessageRow[];
   edited: number;
+  editedMessages?: CrmMessageRow[];
   inputs: CrmMessageBatchInput[];
   notificationIds?: string[];
 };
@@ -72,6 +73,19 @@ export class TelegramCrmMessageAfterCommitPublisher {
       stored.inputs.map((input) => [input.conversation.id, input]),
     );
     if (mode === 'live') {
+      for (const row of stored.editedMessages ?? []) {
+        const message = mapCrmMessage(row);
+        const input = inputByConversation.get(message.conversationId);
+        this.events.emit({
+          type: 'message.updated',
+          workspaceId,
+          occurredAt: new Date().toISOString(),
+          conversationId: message.conversationId,
+          contactId: input?.conversation.contactId ?? null,
+          ownerMemberId: input?.conversation.contact?.ownerMemberId ?? null,
+          message: { ...message, sentByMember: null },
+        });
+      }
       for (const row of stored.created) {
         const message = mapCrmMessage(row);
         const input = inputByConversation.get(message.conversationId);
@@ -105,7 +119,9 @@ export class TelegramCrmMessageAfterCommitPublisher {
             conversationId: input.conversation.id,
             contactId: input.conversation.contactId,
             ownerMemberId: input.conversation.contact?.ownerMemberId ?? null,
-            unreadCount: (input.conversation.unreadCount ?? 0) + inboundCount,
+            unreadCount:
+              input.conversation.unreadCountOverride ??
+              (input.conversation.unreadCount ?? 0) + inboundCount,
           });
         }
       }

@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import userEvent from "@testing-library/user-event";
 import { AdSalesClientsPanel } from "./ad-sales-clients-panel";
 
 const { listCrmAdvertisers } = vi.hoisted(() => ({
@@ -66,7 +67,8 @@ describe("AdSalesClientsPanel", () => {
     expect(screen.getByText("Lifecycle")).toBeTruthy();
     expect(screen.getByText("Archive")).toBeTruthy();
 
-    fireEvent.change(sortSelect, { target: { value: "NAME" } });
+    await userEvent.click(sortSelect);
+    await userEvent.click(screen.getByRole("button", { name: "Name" }));
     fireEvent.click(sortButton);
     await waitFor(() =>
       expect(listCrmAdvertisers).toHaveBeenLastCalledWith(

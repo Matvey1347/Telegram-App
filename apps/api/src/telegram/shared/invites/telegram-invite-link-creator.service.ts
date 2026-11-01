@@ -80,7 +80,9 @@ export class TelegramInviteLinkCreatorService {
             ? invite.title
             : params.title,
         telegramCreatorUserId: creatorTelegramUserId,
-        creatorUsername: creator ? normalizeTelegramUsername(creator.username) : null,
+        creatorUsername: creator
+          ? normalizeTelegramUsername(creator.username)
+          : null,
         creatorFirstName: creator?.firstName || null,
         creatorLastName: creator?.lastName || null,
         creatorPhotoUrl: creator

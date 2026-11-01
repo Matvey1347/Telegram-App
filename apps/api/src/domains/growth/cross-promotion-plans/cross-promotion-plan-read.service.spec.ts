@@ -49,7 +49,9 @@ describe('CrossPromotionPlanReadService', () => {
       updatedAt: new Date('2020-01-01T08:00:00.000Z'),
     } as Record<string, unknown>;
 
-    expect((await service.shape('workspace-1', plan as never)).status).toBe('SCHEDULED');
+    expect((await service.shape('workspace-1', plan as never)).status).toBe(
+      'SCHEDULED',
+    );
     expect(
       (
         await service.shape('workspace-1', {
@@ -59,9 +61,13 @@ describe('CrossPromotionPlanReadService', () => {
       ).status,
     ).toBe('SCHEDULED');
     managedPosts[0].telegramMessageIds.push('42');
-    expect((await service.shape('workspace-1', plan as never)).status).toBe('ACTIVE');
+    expect((await service.shape('workspace-1', plan as never)).status).toBe(
+      'ACTIVE',
+    );
     managedPosts[0].telegramRemoteStatus = 'AUTO_DELETED';
-    expect((await service.shape('workspace-1', plan as never)).status).toBe('SCHEDULED');
+    expect((await service.shape('workspace-1', plan as never)).status).toBe(
+      'SCHEDULED',
+    );
   });
 
   it('does not show stale message views before a future placement starts', async () => {
@@ -107,11 +113,16 @@ describe('CrossPromotionPlanReadService', () => {
       partnerChannelIds: [],
       targets: [],
       publicationPost: {
-        title: '', text: '', imageUrls: [], buttonRows: [],
-        publisherPlacements: [{
-          telegramChannelId: 'channel-1',
-          scheduledAt: '2099-01-01T10:00:00.000Z',
-        }],
+        title: '',
+        text: '',
+        imageUrls: [],
+        buttonRows: [],
+        publisherPlacements: [
+          {
+            telegramChannelId: 'channel-1',
+            scheduledAt: '2099-01-01T10:00:00.000Z',
+          },
+        ],
       },
       scheduledAt: new Date('2099-01-01T10:00:00.000Z'),
       trackingEndsAt: null,

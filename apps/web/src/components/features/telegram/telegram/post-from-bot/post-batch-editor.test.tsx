@@ -323,7 +323,7 @@ describe("PostBatchEditor", () => {
     fireEvent.click(
       commonFormat.getByRole("button", { name: "Mixed / default" }),
     );
-    fireEvent.click(screen.getByRole("button", { name: "3/72" }));
+    fireEvent.click(screen.getByRole("option", { name: "3/72" }));
     fireEvent.click(screen.getByRole("button", { name: "Save and dispatch" }));
 
     await waitFor(() => expect(onDispatch).toHaveBeenCalledOnce());

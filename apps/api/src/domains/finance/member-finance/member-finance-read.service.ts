@@ -187,7 +187,8 @@ export class MemberFinanceReadService {
       if (!distribution?.periodStart || !distribution.periodEnd) return [];
       const periodStart = new Date(distribution.periodStart);
       const periodEnd = new Date(distribution.periodEnd);
-      return Number.isNaN(periodStart.getTime()) || Number.isNaN(periodEnd.getTime())
+      return Number.isNaN(periodStart.getTime()) ||
+        Number.isNaN(periodEnd.getTime())
         ? []
         : [{ periodStart, periodEnd }];
     });
@@ -271,7 +272,8 @@ export class MemberFinanceReadService {
       );
       for (const allocation of allocations) {
         get(allocation.memberId).investorEarnings += allocation.amount;
-        const entries = automaticReinvestmentsByMember.get(allocation.memberId) ?? [];
+        const entries =
+          automaticReinvestmentsByMember.get(allocation.memberId) ?? [];
         entries.push({
           id: `reinvestment:${transaction.id}`,
           date: transaction.date,
@@ -398,27 +400,27 @@ export class MemberFinanceReadService {
       ...rows.payments
         .filter((payment) => payment.sale.sellerMemberId === memberId)
         .map((payment) => ({
-        id: `commission:${payment.id}`,
-        type: 'COMMISSION_EARNED',
-        date: payment.paidAt.toISOString(),
-        amount: salesCommission(
-          Number(payment.amountInPrimaryCurrency),
-          Number(payment.sale.sellerCommissionRate),
-        ),
-        title: payment.sale.title || payment.sale.advertiserName,
-      })),
+          id: `commission:${payment.id}`,
+          type: 'COMMISSION_EARNED',
+          date: payment.paidAt.toISOString(),
+          amount: salesCommission(
+            Number(payment.amountInPrimaryCurrency),
+            Number(payment.sale.sellerCommissionRate),
+          ),
+          title: payment.sale.title || payment.sale.advertiserName,
+        })),
       ...rows.settlements
         .filter((settlement) => settlement.workspaceMemberId === memberId)
         .map((settlement) => ({
-        id: `settlement:${settlement.id}`,
-        type:
-          settlement.type === MemberCompensationSettlementType.PAYOUT
-            ? 'SALARY_PAID'
-            : 'SALARY_INVESTED',
-        date: settlement.date.toISOString(),
-        amount: Number(settlement.amountInPrimaryCurrency),
-        title: settlement.notes,
-      })),
+          id: `settlement:${settlement.id}`,
+          type:
+            settlement.type === MemberCompensationSettlementType.PAYOUT
+              ? 'SALARY_PAID'
+              : 'SALARY_INVESTED',
+          date: settlement.date.toISOString(),
+          amount: Number(settlement.amountInPrimaryCurrency),
+          title: settlement.notes,
+        })),
       ...rows.investments
         .filter(
           (investment) =>

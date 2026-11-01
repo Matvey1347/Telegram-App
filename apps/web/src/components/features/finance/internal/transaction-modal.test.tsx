@@ -139,9 +139,9 @@ describe("internal transaction modal category fields", () => {
     renderModal();
 
     await user.click(screen.getByRole("button", { name: "Expense" }));
-    await user.click(await screen.findByRole("button", { name: "Income" }));
+    await user.click(await screen.findByRole("option", { name: "Income" }));
     await user.click(screen.getByRole("button", { name: "Select category" }));
-    await user.click(await screen.findByRole("button", { name: /Investment/ }));
+    await user.click(await screen.findByRole("option", { name: /Investment/ }));
 
     expect(screen.getByText("Investor")).toBeInTheDocument();
     expect(primaryFieldLabels()).toEqual([
@@ -176,7 +176,7 @@ describe("internal transaction modal category fields", () => {
 
     await user.click(screen.getByRole("button", { name: "Select category" }));
     await user.click(
-      await screen.findByRole("button", { name: /Buy Channels/ }),
+      await screen.findByRole("option", { name: /Buy Channels/ }),
     );
     expect(primaryFieldLabels()).toEqual([
       "Type",
@@ -192,7 +192,7 @@ describe("internal transaction modal category fields", () => {
     ).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /Buy Channels/ }));
-    await user.click(await screen.findByRole("button", { name: /Operations/ }));
+    await user.click(await screen.findByRole("option", { name: /Operations/ }));
     await waitFor(() =>
       expect(primaryFieldLabels()).toEqual([
         "Type",
@@ -210,7 +210,7 @@ describe("internal transaction modal category fields", () => {
 
     await user.click(screen.getByRole("button", { name: "Select category" }));
     await user.click(
-      await screen.findByRole("button", { name: /Buy Channels/ }),
+      await screen.findByRole("option", { name: /Buy Channels/ }),
     );
     await user.click(screen.getByRole("button", { name: "Save" }));
 
@@ -238,7 +238,7 @@ describe("internal transaction modal category fields", () => {
 
     await user.click(screen.getByRole("button", { name: "Select category" }));
     await user.click(
-      await screen.findByRole("button", { name: /Advertising/ }),
+      await screen.findByRole("option", { name: /Advertising/ }),
     );
 
     expect(transactionCategoryPurpose(categories[4])).toBe(
@@ -261,7 +261,7 @@ describe("internal transaction modal category fields", () => {
     const user = userEvent.setup();
     renderModal();
     await user.click(screen.getByRole("button", { name: "Select category" }));
-    await user.click(await screen.findByRole("button", { name: /Salaries/ }));
+    await user.click(await screen.findByRole("option", { name: /Salaries/ }));
     expect(transactionCategoryPurpose(categories.at(-1))).toBe("salary");
     expect(
       within(screen.getByTestId("transaction-primary-fields")).getByText(
@@ -292,7 +292,7 @@ describe("internal transaction modal category fields", () => {
     ).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /Advertising/ }));
     expect(
-      await screen.findByRole("button", { name: /Operations/ }),
+      await screen.findByRole("option", { name: /Operations/ }),
     ).toBeInTheDocument();
   });
 

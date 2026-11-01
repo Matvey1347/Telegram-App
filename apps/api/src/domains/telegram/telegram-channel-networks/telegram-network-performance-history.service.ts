@@ -35,12 +35,17 @@ export class TelegramNetworkPerformanceHistoryService {
       select: { primaryCurrency: true },
     });
     if (!ids.length) {
-      return emptyHistory(range, periodDays, workspace?.primaryCurrency ?? 'USD');
+      return emptyHistory(
+        range,
+        periodDays,
+        workspace?.primaryCurrency ?? 'USD',
+      );
     }
     const visibleFrom = startOfUtcDay(
       periodDays == null ? new Date(0) : subtractUtcDays(now, periodDays - 1),
     );
-    const queryFrom = range === '1d' ? subtractUtcDays(visibleFrom, 1) : visibleFrom;
+    const queryFrom =
+      range === '1d' ? subtractUtcDays(visibleFrom, 1) : visibleFrom;
     const [audienceRows, postRows] = await Promise.all([
       this.prisma.$queryRaw<AudienceRow[]>(Prisma.sql`
         WITH latest_daily AS (
@@ -126,36 +131,44 @@ function aggregatePoints(
   from: Date,
   now: Date,
 ): TelegramChannelPerformanceHistoryPoint[] {
-  const audienceByDay = new Map(audienceRows.map((row) => [dayKey(row.date), row]));
+  const audienceByDay = new Map(
+    audienceRows.map((row) => [dayKey(row.date), row]),
+  );
   const postsByDay = new Map(postRows.map((row) => [dayKey(row.date), row]));
   const days = new Set<string>([...audienceByDay.keys(), ...postsByDay.keys()]);
   days.add(dayKey(from));
   days.add(dayKey(now));
-  return [...days]
-    .sort()
-    .map((day) => {
-      const audience = audienceByDay.get(day);
-      const posts = postsByDay.get(day);
-      return {
-        date: `${day}T00:00:00.000Z`,
-        subscribers: audience?.subscribers == null ? null : Number(audience.subscribers),
-        averageViews: posts?.averageViews == null ? null : round(Number(posts.averageViews), 1),
-        averageReactions:
-          posts?.averageReactions == null ? null : round(Number(posts.averageReactions), 1),
-        postsPublished: posts?.postsPublished ?? null,
-        invested: 0,
-        revenue: 0,
-        paybackPercent: null,
-        adsLeft: null,
-      };
-    });
+  return [...days].sort().map((day) => {
+    const audience = audienceByDay.get(day);
+    const posts = postsByDay.get(day);
+    return {
+      date: `${day}T00:00:00.000Z`,
+      subscribers:
+        audience?.subscribers == null ? null : Number(audience.subscribers),
+      averageViews:
+        posts?.averageViews == null
+          ? null
+          : round(Number(posts.averageViews), 1),
+      averageReactions:
+        posts?.averageReactions == null
+          ? null
+          : round(Number(posts.averageReactions), 1),
+      postsPublished: posts?.postsPublished ?? null,
+      invested: 0,
+      revenue: 0,
+      paybackPercent: null,
+      adsLeft: null,
+    };
+  });
 }
 
 function previousDayComparison(
   points: TelegramChannelPerformanceHistoryPoint[],
   visibleFrom: Date,
 ): TelegramChannelPerformanceHistory['comparisonPoint'] {
-  const point = points.filter((item) => new Date(item.date) < visibleFrom).at(-1);
+  const point = points
+    .filter((item) => new Date(item.date) < visibleFrom)
+    .at(-1);
   if (!point) return null;
   return {
     date: point.date,
@@ -174,7 +187,11 @@ function emptyHistory(
 }
 
 function normalizeRange(value: TelegramChannelPerformanceHistoryRange) {
-  return value === '1d' || value === '7d' || value === '30d' || value === '90d' || value === 'all'
+  return value === '1d' ||
+    value === '7d' ||
+    value === '30d' ||
+    value === '90d' ||
+    value === 'all'
     ? value
     : DEFAULT_RANGE;
 }

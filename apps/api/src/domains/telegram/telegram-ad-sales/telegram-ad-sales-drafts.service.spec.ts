@@ -26,7 +26,10 @@ describe('TelegramAdSalesDraftsService', () => {
     prisma.telegramAdSaleDraft.findFirst.mockResolvedValue(null);
     prisma.telegramAdSaleDraft.create.mockResolvedValue({ id: 'draft-1' });
     await expect(
-      service.create('user-1', { title: 'Client', payload: { placements: [] } }),
+      service.create('user-1', {
+        title: 'Client',
+        payload: { placements: [] },
+      }),
     ).resolves.toEqual({ id: 'draft-1' });
     expect(prisma.telegramAdSaleDraft.create).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -77,8 +80,8 @@ describe('TelegramAdSalesDraftsService', () => {
 
   it('rejects deletion of a draft outside the current user workspace', async () => {
     prisma.telegramAdSaleDraft.deleteMany.mockResolvedValue({ count: 0 });
-    await expect(service.delete('user-1', 'other-draft')).rejects.toBeInstanceOf(
-      NotFoundException,
-    );
+    await expect(
+      service.delete('user-1', 'other-draft'),
+    ).rejects.toBeInstanceOf(NotFoundException);
   });
 });

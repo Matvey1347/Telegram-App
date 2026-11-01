@@ -488,6 +488,7 @@ if (withFinanceApi) {
       ...financeEnvironment,
       ...financeLocalBotRuntimeEnvironment(),
       ...localBotPublicEnvironment(publicUrl),
+      CRM_RUNTIME_ENABLED: "false",
     });
     start(
       "Finance analytics API",

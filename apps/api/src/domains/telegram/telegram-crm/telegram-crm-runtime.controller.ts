@@ -1,4 +1,13 @@
-import { Body, Controller, Param, Post, UseGuards } from '@nestjs/common';
+import { TelegramCrmManualSendIntentService } from './telegram-crm-manual-send-intent.service';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { CurrentUser } from '../../../common/current-user.decorator';
 import type { JwtUser } from '../../../common/current-user.decorator';
 import { JwtAuthGuard } from '../../../common/jwt-auth.guard';
@@ -19,6 +28,7 @@ export class TelegramCrmRuntimeController {
     private readonly history: TelegramCrmHistoryService,
     private readonly sends: TelegramCrmManualSendService,
     private readonly reads: TelegramCrmReadService,
+    private readonly intents: TelegramCrmManualSendIntentService,
   ) {}
 
   @Post('accounts/:accountId/initial-sync')
@@ -36,6 +46,15 @@ export class TelegramCrmRuntimeController {
     @Body() dto: SendCrmManualMessageDto,
   ) {
     return this.sends.send(user.sub, id, dto);
+  }
+
+  @Get('conversations/:id/manual-send-receipt')
+  receipt(
+    @CurrentUser() user: JwtUser,
+    @Param('id') id: string,
+    @Query('clientIdempotencyKey') key: string,
+  ) {
+    return this.intents.lookup(user.sub, id, key);
   }
 
   @Post('conversations/:id/read')

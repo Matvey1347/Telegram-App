@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { timingSafeEqual } from 'node:crypto';
 import type { Prisma } from '../generated/prisma';
 import { FinanceRuntimeConfig } from '../config/finance-runtime-config';
@@ -26,8 +26,18 @@ export class FinanceTelegramWebhookService {
       throw new BadRequestException('Telegram update_id is required');
     }
 
+    // This host currently has no Finance command/callback dispatcher. A 2xx
+    // response would make Telegram drop an update that nobody processed.
+    if (!this.canProcessUpdates()) {
+      throw new ServiceUnavailableException('Finance Telegram update handling is unavailable');
+    }
+
     const financeBot = await this.primaryBot.resolve();
     return claimAndAccept(this.prisma.financeWebhookUpdate, financeBot.id, update);
+  }
+
+  canProcessUpdates(): boolean {
+    return false;
   }
 
   private assertSecret(candidate: string | undefined) {

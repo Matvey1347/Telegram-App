@@ -5,7 +5,11 @@ import { TelegramCustomEmojiService } from './telegram-custom-emoji.service';
 import { TelegramCustomEmojiStorageService } from './telegram-custom-emoji-storage.service';
 @Module({
   controllers: [TelegramCustomEmojiController],
-  providers: [TelegramCustomEmojiService, TelegramCustomEmojiStorageService, TelegramMtprotoClient],
+  providers: [
+    TelegramCustomEmojiService,
+    TelegramCustomEmojiStorageService,
+    TelegramMtprotoClient,
+  ],
   exports: [TelegramCustomEmojiService],
 })
 export class TelegramCustomEmojiModule {}

@@ -7,6 +7,11 @@ import type {
   TelegramCrmMtprotoUpdate,
 } from '@api/telegram/shared/mtproto/telegram-crm-mtproto.types';
 
+import {
+  crmMessageMetadata,
+  crmMessageReactions,
+} from './telegram-crm-message-metadata';
+
 const TELEGRAM_SERVICE_USER_ID = '777000';
 
 export type TelegramCrmDialogCursor = {
@@ -46,7 +51,7 @@ export function parseTelegramCrmMessage(
     text: value.message || null,
     sentAt: new Date(value.date * 1_000),
     editedAt: value.editDate ? new Date(value.editDate * 1_000) : null,
-    contentMetadata: value.media ? { mediaType: value.media.className } : null,
+    contentMetadata: crmMessageMetadata(value),
   };
 }
 
@@ -163,6 +168,24 @@ export function normalizeTelegramCrmUpdate(
       sequence: { pts: update.pts, ptsCount: update.ptsCount },
     };
   }
+  if (update instanceof Api.UpdateDeleteMessages) {
+    return {
+      type: 'message.deleted',
+      telegramMessageIds: update.messages,
+      sequence: { pts: update.pts, ptsCount: update.ptsCount },
+    };
+  }
+  if (update instanceof Api.UpdateMessageReactions) {
+    const telegramUserId = peerUserId(update.peer);
+    return telegramUserId
+      ? {
+          type: 'message.reactions',
+          telegramUserId,
+          telegramMessageId: update.msgId,
+          reactions: crmMessageReactions(update.reactions),
+        }
+      : null;
+  }
   if (update instanceof Api.UpdateUserName) {
     return {
       type: 'peer.metadata',
@@ -192,7 +215,22 @@ export function normalizeTelegramCrmRaw(raw: unknown) {
           text: raw.message || null,
           sentAt: new Date(raw.date * 1_000),
           editedAt: null,
-          contentMetadata: null,
+          contentMetadata: (() => {
+            const metadata = crmMessageMetadata(
+              new Api.Message({
+                id: raw.id,
+                peerId: new Api.PeerUser({ userId: raw.userId }),
+                message: raw.message,
+                date: raw.date,
+                out: raw.out,
+                entities: raw.entities,
+                replyTo: raw.replyTo,
+                fwdFrom: raw.fwdFrom,
+                viaBotId: raw.viaBotId,
+              }),
+            );
+            return metadata;
+          })(),
         },
         sequence: { pts: raw.pts, ptsCount: raw.ptsCount },
       },
@@ -230,7 +268,7 @@ export function extractTelegramCrmSentMessage(
   for (const update of updates) {
     if (update instanceof Api.UpdateNewMessage) {
       const message = parseTelegramCrmMessage(update.message);
-      if (message) return message;
+      if (message?.telegramUserId === telegramUserId) return message;
     }
   }
   return null;

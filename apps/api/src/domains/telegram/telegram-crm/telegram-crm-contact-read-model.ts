@@ -1,4 +1,8 @@
 import {
+  instagramMethodSelect,
+  mapInstagramMethod,
+} from './telegram-crm-instagram-identity.service';
+import {
   Prisma,
   TelegramAdvertiserTaskStatus,
   TelegramCrmConversationState,
@@ -59,7 +63,7 @@ export const crmContactListSelect = {
   contacts: {
     orderBy: [{ isPrimary: 'desc' as const }, { createdAt: 'asc' as const }],
     take: 8,
-    select: { id: true, type: true, value: true, label: true, isPrimary: true },
+    select: { ...instagramMethodSelect, type: true, label: true },
   },
   sales: {
     where: ACTIVE_DEAL_WHERE,
@@ -108,7 +112,7 @@ export const crmContactDetailSelect = {
   contacts: {
     orderBy: [{ isPrimary: 'desc' as const }, { createdAt: 'asc' as const }],
     take: 20,
-    select: { id: true, type: true, value: true, label: true, isPrimary: true },
+    select: { ...instagramMethodSelect, type: true, label: true },
   },
   crmConversations: {
     where: { state: TelegramCrmConversationState.ACTIVE },
@@ -218,6 +222,9 @@ export function mapCrmContactListItem(
     ownerMember: mapCrmMemberSummary(row.ownerMember),
     peer: row.crmPeers[0] ? mapCrmPeerSummary(row.crmPeers[0]) : null,
     contactChannels: row.contacts.map((contact) => ({
+      ...(contact.type === 'INSTAGRAM'
+        ? { instagram: mapInstagramMethod(contact) }
+        : {}),
       id: contact.id,
       type: contact.type,
       value: contact.value,
@@ -280,6 +287,9 @@ export function mapCrmContactDetail(
     ),
     tags: row.tags.map(({ tag }) => mapCrmTag(tag)),
     contactChannels: row.contacts.map((contact) => ({
+      ...(contact.type === 'INSTAGRAM'
+        ? { instagram: mapInstagramMethod(contact) }
+        : {}),
       id: contact.id,
       type: contact.type,
       value: contact.value,

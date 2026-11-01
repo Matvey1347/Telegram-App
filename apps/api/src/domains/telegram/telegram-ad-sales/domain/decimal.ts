@@ -10,6 +10,8 @@ export function decimalOrNull(
   return value == null ? null : decimal(value);
 }
 
-export function decimalToString(value: Prisma.Decimal.Value | null | undefined) {
+export function decimalToString(
+  value: Prisma.Decimal.Value | null | undefined,
+) {
   return value == null ? null : decimal(value).toFixed();
 }

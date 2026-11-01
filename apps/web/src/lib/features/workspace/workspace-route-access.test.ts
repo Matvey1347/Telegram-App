@@ -6,6 +6,18 @@ import {
 } from "./workspace-route-access";
 
 describe("workspace route access", () => {
+  it("allows leads-only roles into Discovery without granting CRM client or sales access", () => {
+    const access = { featureIds: ["adSales.leads"] };
+    expect(workspaceLandingPath(access)).toBe("/ad-sales/leads");
+    expect(workspacePathIsAllowed("/ad-sales/leads", access)).toBe(true);
+    expect(workspacePathIsAllowed("/ad-sales/clients", access)).toBe(false);
+    expect(
+      workspacePathIsAllowed("/ad-sales/leads", {
+        featureIds: ["adSales.crm"],
+      }),
+    ).toBe(false);
+  });
+
   const contentManagerAccess = { featureIds: ["posts"] };
 
   it("uses publications as the landing page for a posts-only member", () => {
@@ -51,5 +63,23 @@ describe("workspace route access", () => {
     expect(
       workspacePathIsAllowed("/settings", { featureIds: ["members"] }),
     ).toBe(true);
+  });
+  it("preserves a notification for another workspace until its membership can be checked", () => {
+    const destination =
+      "/ad-sales/inbox?conversationId=conversation-target&workspaceId=workspace-target";
+    expect(
+      resolveWorkspacePath(
+        destination,
+        contentManagerAccess,
+        "workspace-current",
+      ),
+    ).toBe(destination);
+    expect(
+      resolveWorkspacePath(
+        destination,
+        contentManagerAccess,
+        "workspace-target",
+      ),
+    ).toBe("/telegram-posts");
   });
 });

@@ -22,7 +22,9 @@ export class TelegramBotIntegrationViewService {
   ): Promise<TelegramBotIntegrationView> {
     const resolvedApplications =
       applications ||
-      (await this.applicationRegistry.optionsForWorkspace(String(row.workspaceId)));
+      (await this.applicationRegistry.optionsForWorkspace(
+        String(row.workspaceId),
+      ));
     const resolvedApplicationSummary =
       applicationSummary === undefined
         ? await this.applicationSummaryForRow(row)
@@ -55,7 +57,9 @@ export class TelegramBotIntegrationViewService {
   }
 
   financeApplicationSummary(
-    summaries: Awaited<ReturnType<BotBillingAnalyticsService['summariesForRuntimes']>>,
+    summaries: Awaited<
+      ReturnType<BotBillingAnalyticsService['summariesForRuntimes']>
+    >,
     runtimes: Array<{ id: string; environment: 'LOCAL' | 'PRODUCTION' }>,
   ): TelegramBotIntegrationView['applicationSummary'] {
     // Finance users belong to the logical bot, not to one runtime. Tokens,
@@ -65,7 +69,8 @@ export class TelegramBotIntegrationViewService {
       (total, summary) => ({
         registeredUsers: total.registeredUsers + summary.registeredUsers,
         paidUsers: total.paidUsers + summary.paidUsers,
-        activeSubscriptions: total.activeSubscriptions + summary.activeSubscriptions,
+        activeSubscriptions:
+          total.activeSubscriptions + summary.activeSubscriptions,
         failedPayments: total.failedPayments + summary.failedPayments,
       }),
       {
@@ -77,21 +82,32 @@ export class TelegramBotIntegrationViewService {
     );
     return {
       applicationType: 'FINANCE',
-      finance: Object.fromEntries(runtimes.map((runtime) => {
-        return [runtime.environment, {
-          ...shared,
-        }];
-      })),
+      finance: Object.fromEntries(
+        runtimes.map((runtime) => {
+          return [
+            runtime.environment,
+            {
+              ...shared,
+            },
+          ];
+        }),
+      ),
     };
   }
 
   private async applicationSummaryForRow(row: Record<string, unknown>) {
     if (row.applicationType !== TelegramBotApplicationType.FINANCE) return null;
     const runtimes = Array.isArray(row.runtimeInstances)
-      ? row.runtimeInstances as Array<{ id: string; environment: 'LOCAL' | 'PRODUCTION' }>
+      ? (row.runtimeInstances as Array<{
+          id: string;
+          environment: 'LOCAL' | 'PRODUCTION';
+        }>)
       : [];
     return this.financeApplicationSummary(
-      await this.financeSummaryForRuntimes(String(row.workspaceId), runtimes.map((runtime) => runtime.id)),
+      await this.financeSummaryForRuntimes(
+        String(row.workspaceId),
+        runtimes.map((runtime) => runtime.id),
+      ),
       runtimes,
     );
   }
@@ -112,7 +128,9 @@ export class TelegramBotIntegrationViewService {
     return value.map((runtime: Record<string, unknown>) => ({
       id: String(runtime.id),
       environment: runtime.environment as 'LOCAL' | 'PRODUCTION',
-      isProcessOwner: this.runtimeEnvironment.owns(runtime.environment as never),
+      isProcessOwner: this.runtimeEnvironment.owns(
+        runtime.environment as never,
+      ),
       botTokenMasked: String(runtime.botTokenMasked),
       tokenState: 'SAVED' as const,
       botId: (runtime.botId as string | null) || null,
@@ -147,7 +165,9 @@ export class TelegramBotIntegrationViewService {
   }
 
   private webAppStatus(value: unknown) {
-    return value === 'AVAILABLE' || value === 'ERROR' || value === 'NOT_CONFIGURED'
+    return value === 'AVAILABLE' ||
+      value === 'ERROR' ||
+      value === 'NOT_CONFIGURED'
       ? value
       : ('UNKNOWN' as const);
   }
@@ -160,7 +180,9 @@ export class TelegramBotIntegrationViewService {
   }
 
   private miniAppStatus(value: unknown) {
-    return value === 'CONFIGURED' || value === 'ERROR' || value === 'NOT_CONFIGURED'
+    return value === 'CONFIGURED' ||
+      value === 'ERROR' ||
+      value === 'NOT_CONFIGURED'
       ? value
       : ('UNKNOWN' as const);
   }

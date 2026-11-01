@@ -5,8 +5,9 @@ import { AlertTriangle, ArrowUpRight, BellRing } from "lucide-react";
 import Link from "next/link";
 import { formatDateTime } from "@/lib/date-format";
 import { TelegramEntityAvatar } from "@/components/features/telegram/telegram/telegram-entity-avatar";
+import { useI18n } from "@/providers/i18n-provider";
 
-const TYPE_LABELS: Record<OperationsNotificationItem["type"], string> = {
+const TYPE_LABELS: Partial<Record<OperationsNotificationItem["type"], string>> = {
   CRM_MESSAGE_RECEIVED: "Message received",
   CRM_FOLLOW_UP_DUE: "Follow-up due",
   CRM_PLACEMENT_FAILURE: "Placement failure",
@@ -20,6 +21,8 @@ export function NotificationRow({
   notification: OperationsNotificationItem;
   onOpen: (notification: OperationsNotificationItem) => void;
 }) {
+  const typeLabel = notification.type === "CRM_AI_LEAD_QUALIFIED" || notification.type === "SYSTEM_TEST"
+    ? <NewNotificationTypeLabel type={notification.type} /> : TYPE_LABELS[notification.type];
   const unread = !notification.readAt;
   const lowPriority = notification.priority === "LOW";
   const critical = notification.type === "TELEGRAM_ACCOUNT_REAUTH_REQUIRED";
@@ -92,7 +95,7 @@ export function NotificationRow({
                 Low priority
               </span>
             ) : null}
-            <span>{TYPE_LABELS[notification.type]}</span>
+            <span>{typeLabel}</span>
           </span>
           <span className="mt-1 flex items-start gap-2">
             {unread ? (
@@ -131,4 +134,9 @@ export function NotificationRow({
       </div>
     </Link>
   );
+}
+
+function NewNotificationTypeLabel({ type }: { type: "CRM_AI_LEAD_QUALIFIED" | "SYSTEM_TEST" }) {
+  const { t } = useI18n();
+  return <>{t(type === "SYSTEM_TEST" ? "notifications.types.pushTest" : "notifications.types.aiLeadQualified")}</>;
 }

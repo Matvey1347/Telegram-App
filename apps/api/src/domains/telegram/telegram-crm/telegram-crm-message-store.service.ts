@@ -37,6 +37,21 @@ export class TelegramCrmMessageStoreService {
             'Message Conversation and account do not match',
           );
         }
+        await tx.$queryRaw(
+          Prisma.sql`SELECT id FROM "TelegramCrmConversation" WHERE id=${input.conversationId} AND "workspaceId"=${input.workspaceId} AND "mtprotoAccountId"=${input.mtprotoAccountId} FOR UPDATE`,
+        );
+        const deleted =
+          input.telegramMessageId && /^\d+$/.test(input.telegramMessageId)
+            ? await tx.telegramCrmDeletedMessage.findUnique({
+                where: {
+                  mtprotoAccountId_telegramMessageId: {
+                    mtprotoAccountId: input.mtprotoAccountId,
+                    telegramMessageId: Number(input.telegramMessageId),
+                  },
+                },
+              })
+            : null;
+        if (deleted) throw new BadRequestException('CHAT_MESSAGE_DELETED');
         await this.requireMember(tx, input.workspaceId, input.sentByMemberId);
         const sentAt = new Date(input.sentAt);
         const created = await tx.telegramCrmMessage.create({

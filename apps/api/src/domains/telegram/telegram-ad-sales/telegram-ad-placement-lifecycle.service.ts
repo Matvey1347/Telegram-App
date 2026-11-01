@@ -72,8 +72,16 @@ export class TelegramAdPlacementLifecycleService {
     if (reconciled) {
       notifyScheduledTaskDueWorkChanged('telegram_ad_sales.due_deletions');
       const botConfirmation = this.botConfirmation;
-      await Promise.allSettled((botConfirmation ? [...new Set(placements.map((placement) => placement.telegramAdSaleId))] : [])
-        .map((saleId) => botConfirmation!.sendPublishedOnce(saleId)));
+      await Promise.allSettled(
+        (botConfirmation
+          ? [
+              ...new Set(
+                placements.map((placement) => placement.telegramAdSaleId),
+              ),
+            ]
+          : []
+        ).map((saleId) => botConfirmation!.sendPublishedOnce(saleId)),
+      );
     }
     return { reconciled };
   }

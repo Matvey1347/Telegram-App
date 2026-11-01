@@ -4,8 +4,14 @@ import { TransactionsService } from './transactions.service';
 describe('TransactionsService channel advertising revenue', () => {
   const makeService = () => {
     const prisma = {
-      workspace: { findUnique: jest.fn().mockResolvedValue({ primaryCurrency: 'USD' }) },
-      account: { findFirst: jest.fn().mockResolvedValue({ id: 'account-1', currency: 'USD' }) },
+      workspace: {
+        findUnique: jest.fn().mockResolvedValue({ primaryCurrency: 'USD' }),
+      },
+      account: {
+        findFirst: jest
+          .fn()
+          .mockResolvedValue({ id: 'account-1', currency: 'USD' }),
+      },
       transactionCategory: {
         findFirst: jest.fn(),
       },
@@ -31,7 +37,9 @@ describe('TransactionsService channel advertising revenue', () => {
       $queryRaw: jest.fn().mockResolvedValue([]),
       $executeRaw: jest.fn(),
       $executeRawUnsafe: jest.fn(),
-      $transaction: jest.fn().mockImplementation(async (callback) => callback(prisma)),
+      $transaction: jest
+        .fn()
+        .mockImplementation(async (callback) => callback(prisma)),
     };
     const workspaceService = {
       resolveAssignedMemberId: jest.fn().mockResolvedValue({

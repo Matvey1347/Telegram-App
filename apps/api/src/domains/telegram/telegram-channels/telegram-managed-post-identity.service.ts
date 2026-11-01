@@ -729,7 +729,9 @@ export class TelegramManagedPostIdentityService {
           scheduledAt: null,
           publishedAt,
           deleteAt: post.deleteAfterHours
-            ? new Date(publishedAt.getTime() + post.deleteAfterHours * 3_600_000)
+            ? new Date(
+                publishedAt.getTime() + post.deleteAfterHours * 3_600_000,
+              )
             : null,
           telegramIdVerificationStatus:
             TelegramManagedPostIdVerificationStatus.VERIFIED,

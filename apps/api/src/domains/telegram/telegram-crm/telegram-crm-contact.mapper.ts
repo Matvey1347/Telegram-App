@@ -43,7 +43,9 @@ export const crmContactSelect = {
   stage: true,
   ownerMemberId: true,
   avatarIconId: true,
-  avatarIcon: { select: { id: true, type: true, name: true, emoji: true, imageUrl: true } },
+  avatarIcon: {
+    select: { id: true, type: true, name: true, emoji: true, imageUrl: true },
+  },
   lastContactAt: true,
   lastInboundAt: true,
   lastOutboundAt: true,

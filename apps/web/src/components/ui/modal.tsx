@@ -2,9 +2,13 @@
 
 import { X } from "lucide-react";
 import { createPortal } from "react-dom";
+import { OverlayPortalContext } from "./overlay-portal-context";
+import { overlayPortalHost } from "./overlay-portal-host";
+import { acquireBodyScrollLock } from "@/lib/body-scroll-lock";
 import {
   type PropsWithChildren,
   type ReactNode,
+  useContext,
   useEffect,
   useId,
   useRef,
@@ -14,8 +18,6 @@ import { useOptionalI18n } from "@/providers/i18n-provider";
 import { featureModalIconForTitle } from "./feature-modal-icons";
 
 const subscribeToClientRuntime = () => () => undefined;
-let openModalCount = 0;
-let bodyOverflowBeforeModalLock = "";
 
 export function Modal({
   open,
@@ -46,12 +48,13 @@ export function Modal({
   const dialogRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
   const titleId = useId();
-  const isClient = useSyncExternalStore(
+  const nativeContainer = useContext(OverlayPortalContext);
+  const detectedPortalTarget = useSyncExternalStore<HTMLElement | null>(
     subscribeToClientRuntime,
-    () => true,
-    () => false,
+    overlayPortalHost,
+    () => null,
   );
-  const portalTarget = isClient ? document.body : null;
+  const portalTarget = nativeContainer ?? detectedPortalTarget;
   const resolvedTitleIcon = titleIcon ?? featureModalIconForTitle(title);
 
   useEffect(() => {
@@ -60,10 +63,7 @@ export function Modal({
 
   useEffect(() => {
     if (!open) return;
-    if (openModalCount === 0)
-      bodyOverflowBeforeModalLock = document.body.style.overflow;
-    openModalCount += 1;
-    document.body.style.overflow = "hidden";
+    const unlockScroll = acquireBodyScrollLock();
     const previousFocus = document.activeElement as HTMLElement | null;
     const dialog = dialogRef.current;
     const selector =
@@ -107,12 +107,10 @@ export function Modal({
     return () => {
       window.cancelAnimationFrame(frame);
       document.removeEventListener("keydown", onKeyDown);
-      openModalCount = Math.max(0, openModalCount - 1);
-      if (openModalCount === 0)
-        document.body.style.overflow = bodyOverflowBeforeModalLock;
+      unlockScroll();
       if (previousFocus?.isConnected) previousFocus.focus();
     };
-  }, [open]);
+  }, [open, portalTarget]);
 
   if (!open || !portalTarget) return null;
   return createPortal(

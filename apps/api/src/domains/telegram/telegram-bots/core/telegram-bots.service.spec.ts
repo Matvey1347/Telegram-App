@@ -28,9 +28,11 @@ function setup() {
       findFirst: jest.fn().mockResolvedValue(logicalBot),
       findMany: jest.fn().mockResolvedValue([logicalBot]),
       create: jest.fn().mockResolvedValue({ id: 'bot-1' }),
-      update: jest.fn().mockImplementation(({ data }) =>
-        Promise.resolve({ ...logicalBot, ...data }),
-      ),
+      update: jest
+        .fn()
+        .mockImplementation(({ data }) =>
+          Promise.resolve({ ...logicalBot, ...data }),
+        ),
       delete: jest.fn(),
       deleteMany: jest.fn(),
     },
@@ -78,7 +80,10 @@ function setup() {
   const service = new TelegramBotsService(
     prisma as never,
     workspaces as never,
-    { channelsForSource: jest.fn(), normalizeBotPermissions: jest.fn() } as never,
+    {
+      channelsForSource: jest.fn(),
+      normalizeBotPermissions: jest.fn(),
+    } as never,
     { getChatMember: jest.fn() } as never,
     applications as never,
     runtime as never,
@@ -149,7 +154,9 @@ describe('TelegramBotsService runtime instances', () => {
     expect(runtime.forgetRuntime).toHaveBeenCalledWith('runtime-prod');
     expect(runtime.forgetRuntime).toHaveBeenCalledWith('runtime-local');
     expect(prisma.telegramBotIntegration.deleteMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 'bot-1', workspaceId: 'workspace-1' } }),
+      expect.objectContaining({
+        where: { id: 'bot-1', workspaceId: 'workspace-1' },
+      }),
     );
   });
 

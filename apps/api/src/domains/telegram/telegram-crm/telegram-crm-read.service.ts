@@ -5,6 +5,7 @@ import {
   Optional,
 } from '@nestjs/common';
 import {
+  Prisma,
   TelegramCrmMessageDirection,
   TelegramCrmReadState,
 } from '@prisma/client';
@@ -50,6 +51,7 @@ export class TelegramCrmReadService {
         contact: { select: { ownerMemberId: true } },
         messages: {
           where: {
+            deletedAt: null,
             telegramMessageIdNumeric: { not: null },
           },
           orderBy: { telegramMessageIdNumeric: 'desc' },
@@ -73,24 +75,31 @@ export class TelegramCrmReadService {
           'Import current Telegram history before marking this Conversation read',
         );
       }
-      const invalidatedNotificationMemberIds = this.notificationProjector
-        ? await this.prisma.$transaction((tx) =>
-            this.notificationProjector!.reconcileConversationGroups(
-              tx,
-              access.workspaceId,
-              [
-                {
-                  conversationId,
-                  contactId: conversation.contactId,
-                  unreadCount: 0,
-                },
-              ],
-            ),
-          )
-        : [];
+      const current = await this.prisma.$transaction(async (tx) => {
+        const state = await this.lockState(
+          tx,
+          access.workspaceId,
+          conversationId,
+        );
+        const invalidated =
+          state.unreadCount === 0 && this.notificationProjector
+            ? await this.notificationProjector.reconcileConversationGroups(
+                tx,
+                access.workspaceId,
+                [
+                  {
+                    conversationId,
+                    contactId: conversation.contactId,
+                    unreadCount: 0,
+                  },
+                ],
+              )
+            : [];
+        return { ...state, invalidated };
+      });
       this.notificationPublisher?.invalidate(
         access.workspaceId,
-        invalidatedNotificationMemberIds,
+        current.invalidated,
       );
       this.responseCache?.clearWorkspacePath(
         access.workspaceId,
@@ -104,10 +113,9 @@ export class TelegramCrmReadService {
       }
       return {
         conversationId,
-        lastReadInboxTelegramMessageId:
-          conversation.lastReadInboxTelegramMessageId,
+        lastReadInboxTelegramMessageId: current.lastReadInboxTelegramMessageId,
         readMessageCount: 0,
-        unreadCount: 0,
+        unreadCount: current.unreadCount,
       };
     }
     if (
@@ -158,19 +166,43 @@ export class TelegramCrmReadService {
         },
         data: { readState: TelegramCrmReadState.READ },
       });
+      // Serialize compact state after marking only the viewed watermark. A new
+      // message committed during the Telegram call must remain unread.
+      const current = await this.lockState(
+        tx,
+        access.workspaceId,
+        conversationId,
+      );
+      const unreadCount = await tx.telegramCrmMessage.count({
+        where: {
+          workspaceId: access.workspaceId,
+          conversationId,
+          direction: TelegramCrmMessageDirection.INBOUND,
+          readState: TelegramCrmReadState.UNREAD,
+          OR: [
+            { telegramMessageIdNumeric: { gt: maxId } },
+            { telegramMessageIdNumeric: null },
+          ],
+        },
+      });
+      const watermark = Math.max(
+        current.lastReadInboxTelegramMessageId ?? 0,
+        maxId,
+      );
       const changed =
-        conversation.lastReadInboxTelegramMessageId == null ||
-        conversation.lastReadInboxTelegramMessageId < maxId ||
-        conversation.unreadCount !== 0;
+        current.lastReadInboxTelegramMessageId !== watermark ||
+        current.unreadCount !== unreadCount;
       if (changed) {
         await tx.telegramCrmConversation.update({
-          where: { id: conversationId },
+          where: { id: conversationId, workspaceId: access.workspaceId },
           data: {
-            lastReadInboxTelegramMessageId: maxId,
-            lastReadTelegramMessageId: String(maxId),
+            lastReadInboxTelegramMessageId: watermark,
+            lastReadTelegramMessageId: String(watermark),
             lastReadAt: new Date(),
-            unreadCount: 0,
-            readState: TelegramCrmReadState.READ,
+            unreadCount,
+            readState: unreadCount
+              ? TelegramCrmReadState.UNREAD
+              : TelegramCrmReadState.READ,
           },
         });
       }
@@ -182,7 +214,7 @@ export class TelegramCrmReadService {
               {
                 conversationId,
                 contactId: conversation.contactId,
-                unreadCount: 0,
+                unreadCount,
               },
             ],
           )
@@ -190,7 +222,9 @@ export class TelegramCrmReadService {
       return {
         count: messages.count,
         changed,
-        unreadChanged: conversation.unreadCount !== 0,
+        unreadChanged: current.unreadCount !== unreadCount,
+        unreadCount,
+        watermark,
         invalidatedNotificationMemberIds,
       };
     });
@@ -214,7 +248,7 @@ export class TelegramCrmReadService {
         conversationId,
         contactId: conversation.contactId,
         ownerMemberId: conversation.contact?.ownerMemberId ?? null,
-        unreadCount: 0,
+        unreadCount: result.unreadCount,
       });
       if (result.unreadChanged) {
         this.events.emit({
@@ -224,7 +258,7 @@ export class TelegramCrmReadService {
           conversationId,
           contactId: conversation.contactId,
           ownerMemberId: conversation.contact?.ownerMemberId ?? null,
-          unreadCount: 0,
+          unreadCount: result.unreadCount,
         });
       }
       if (!conversation.contactId) {
@@ -241,9 +275,28 @@ export class TelegramCrmReadService {
     }
     return {
       conversationId,
-      lastReadInboxTelegramMessageId: maxId,
+      lastReadInboxTelegramMessageId: result.watermark,
       readMessageCount: result.count,
-      unreadCount: 0,
+      unreadCount: result.unreadCount,
     };
+  }
+  private async lockState(
+    tx: Prisma.TransactionClient,
+    workspaceId: string,
+    conversationId: string,
+  ) {
+    const rows = await tx.$queryRaw<
+      Array<{
+        unreadCount: number;
+        lastReadInboxTelegramMessageId: number | null;
+      }>
+    >(Prisma.sql`
+      SELECT "unreadCount", "lastReadInboxTelegramMessageId"
+      FROM "TelegramCrmConversation"
+      WHERE "id" = ${conversationId} AND "workspaceId" = ${workspaceId}
+      FOR UPDATE
+    `);
+    if (!rows[0]) throw new NotFoundException('CRM Conversation not found');
+    return rows[0];
   }
 }

@@ -53,22 +53,40 @@ describe('mapOperationsNotification', () => {
   it('exposes the connected MTProto account avatar without a frontend join', () => {
     const timestamp = new Date('2026-09-06T10:00:00.000Z');
     const result = mapOperationsNotification({
-      id: 'notification-1', workspaceId: 'workspace-1', recipientMemberId: 'member-1',
+      id: 'notification-1',
+      workspaceId: 'workspace-1',
+      recipientMemberId: 'member-1',
       type: OperationsNotificationType.TELEGRAM_ACCOUNT_REAUTH_REQUIRED,
       priority: OperationsNotificationPriority.HIGH,
       sourceKey: 'telegram-account:account-1:reauth-required',
       copyKey: 'telegram.notification.accountReauthRequired',
-      title: 'Telegram account disconnected', body: '@tealist needs to be reconnected via QR.',
-      metadata: { presentationKind: 'telegram-account', accountId: 'account-1', accountLabel: '@tealist', avatarUrl: 'https://cdn.example/avatar.jpg' },
+      title: 'Telegram account disconnected',
+      body: '@tealist needs to be reconnected via QR.',
+      metadata: {
+        presentationKind: 'telegram-account',
+        accountId: 'account-1',
+        accountLabel: '@tealist',
+        avatarUrl: 'https://cdn.example/avatar.jpg',
+      },
       targetUrl: '/telegram-channels?tab=accounts&accountTab=mtproto',
-      requiredPermissionKey: null, ownPermissionKey: null, anyPermissionKey: null,
-      visibilityMemberId: null, visibilityResourceKey: null,
-      readAt: null, deliverAt: timestamp, publishedAt: timestamp,
-      expiresAt: new Date('2026-12-06T10:00:00.000Z'), pushAttemptedAt: null, createdAt: timestamp,
+      requiredPermissionKey: null,
+      ownPermissionKey: null,
+      anyPermissionKey: null,
+      visibilityMemberId: null,
+      visibilityResourceKey: null,
+      readAt: null,
+      deliverAt: timestamp,
+      publishedAt: timestamp,
+      expiresAt: new Date('2026-12-06T10:00:00.000Z'),
+      pushAttemptedAt: null,
+      createdAt: timestamp,
     });
 
     expect(result.presentation).toEqual({
-      kind: 'telegram-account', accountId: 'account-1', label: '@tealist', avatarUrl: 'https://cdn.example/avatar.jpg',
+      kind: 'telegram-account',
+      accountId: 'account-1',
+      label: '@tealist',
+      avatarUrl: 'https://cdn.example/avatar.jpg',
     });
   });
 });

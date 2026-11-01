@@ -300,10 +300,7 @@ describe("CrmContactCard", () => {
 
     const activeTelegram = screen.getByTitle("Active contact: Telegram");
     expect(activeTelegram).toHaveAttribute("href", "https://t.me/ada");
-    expect(screen.getByTitle("Contact: Instagram")).toHaveAttribute(
-      "href",
-      "https://instagram.com/ada",
-    );
+    expect(screen.getByTitle("Legacy unverified · Contact: Instagram")).not.toHaveAttribute("href");
   });
 
   it("opens purchased channels in the same compact popover pattern as deal members", () => {

@@ -11,7 +11,10 @@ import { PrismaService } from '../../../prisma/prisma.service';
 import { normalizeTelegramPostMediaItems } from '@telegram-system/shared';
 import { TelegramBotApiClient } from '@api/telegram/shared/bot/telegram-bot-api.client';
 import { parseTelegramHtml } from '@api/telegram/shared/markup/telegram-html-parser';
-import { normalizeTelegramPostButtonRows, toTelegramBotInlineKeyboard } from '@api/telegram/shared/markup/telegram-inline-keyboard';
+import {
+  normalizeTelegramPostButtonRows,
+  toTelegramBotInlineKeyboard,
+} from '@api/telegram/shared/markup/telegram-inline-keyboard';
 import {
   requiresNativeTelegramRichMessage,
   telegramHtmlToMtprotoHtml,
@@ -22,18 +25,35 @@ import {
   TELEGRAM_PRODUCTION_SYSTEM_BOT_SOURCE_ID,
   TelegramSourceAccessService,
 } from '@api/telegram/shared/imports/telegram-source-access.service';
-import { isRevokedTelegramSessionError, REVOKED_TELEGRAM_SESSION_MESSAGE } from '@api/telegram/shared/mtproto/telegram-session-errors';
+import {
+  isRevokedTelegramSessionError,
+  REVOKED_TELEGRAM_SESSION_MESSAGE,
+} from '@api/telegram/shared/mtproto/telegram-session-errors';
 import { notifyScheduledTaskDueWorkChanged } from '../../../common/scheduled-task-wake-notifier';
-import { telegramPostsBadRequest, telegramPostsNotFound } from './telegram-posts.errors';
-import { managedPostRequiresBotApi, selectManagedPostPublishingSource } from './managed-post-publishing-source';
+import {
+  telegramPostsBadRequest,
+  telegramPostsNotFound,
+} from './telegram-posts.errors';
+import {
+  managedPostRequiresBotApi,
+  selectManagedPostPublishingSource,
+} from './managed-post-publishing-source';
 import { TelegramChannelAccessService } from './telegram-channel-access.service';
-import { BotMessageEntity, TELEGRAM_CAPTION_LIMIT, TELEGRAM_TEXT_MESSAGE_LIMIT } from './telegram-channels.internal';
+import {
+  BotMessageEntity,
+  TELEGRAM_CAPTION_LIMIT,
+  TELEGRAM_TEXT_MESSAGE_LIMIT,
+} from './telegram-channels.internal';
 import { TelegramManagedPostPresentationService } from './telegram-managed-post-presentation.service';
 import { TelegramManagedPostMediaStorageService } from './telegram-managed-post-media-storage.service';
 import { TelegramManagedPostPremiumEmojiRepairService } from './telegram-managed-post-premium-emoji-repair.service';
 import { TelegramManagedPostRevisionStore } from './telegram-managed-post-revision.store';
 import { TelegramPostGroupsService } from './telegram-post-groups.service';
-import { deliverTelegramManagedPostViaBot, includeReplyMarkupInBotDelivery, type TelegramBotDeliveryOperation } from './telegram-managed-post-bot-delivery';
+import {
+  deliverTelegramManagedPostViaBot,
+  includeReplyMarkupInBotDelivery,
+  type TelegramBotDeliveryOperation,
+} from './telegram-managed-post-bot-delivery';
 import { telegramBotMediaDelivery } from './telegram-managed-post-media-delivery';
 
 @Injectable()
@@ -106,15 +126,23 @@ export class TelegramManagedPostPublisherService {
     ]);
     if (!foundPost || !channel)
       throw telegramPostsNotFound(
-        !foundPost ? 'TELEGRAM_MANAGED_POST_NOT_FOUND' : 'TELEGRAM_CHANNEL_NOT_FOUND',
+        !foundPost
+          ? 'TELEGRAM_MANAGED_POST_NOT_FOUND'
+          : 'TELEGRAM_CHANNEL_NOT_FOUND',
         'Post or channel not found',
       );
     const { _count, ...postRecord } = foundPost;
     let post = postRecord;
-    let mediaItems = normalizeTelegramPostMediaItems(post.mediaItems, post.imageUrls);
+    let mediaItems = normalizeTelegramPostMediaItems(
+      post.mediaItems,
+      post.imageUrls,
+    );
     let sources = initialSources;
     if (!post.text?.trim() && !mediaItems.length)
-      throw telegramPostsBadRequest('TELEGRAM_POST_CONTENT_REQUIRED', 'Text or at least one image is required');
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_CONTENT_REQUIRED',
+        'Text or at least one image is required',
+      );
     await this.telegramManagedPostRevisionStore.createManagedPostRevision(
       this.prisma,
       post,
@@ -123,9 +151,14 @@ export class TelegramManagedPostPublisherService {
     );
     const buttonRows = normalizeTelegramPostButtonRows(post.buttonRows);
     if (requireTelegramNativeSchedule && buttonRows.length) {
-      throw telegramPostsBadRequest('TELEGRAM_POST_NOT_SCHEDULED', 'Posts with inline buttons must use local scheduled delivery');
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_NOT_SCHEDULED',
+        'Posts with inline buttons must use local scheduled delivery',
+      );
     }
-    const requiresRichMessage = requiresNativeTelegramRichMessage(post.text || '');
+    const requiresRichMessage = requiresNativeTelegramRichMessage(
+      post.text || '',
+    );
     const requiresBotApi = requireTelegramNativeSchedule
       ? false
       : managedPostRequiresBotApi({
@@ -134,17 +167,28 @@ export class TelegramManagedPostPublisherService {
         });
     const preferredBotSourceId = undefined;
     let source = selectManagedPostPublishingSource(sources, {
-      existingScheduledSourceId: scheduleAt && post.status === 'SCHEDULED' ? post.sourceId : null,
+      existingScheduledSourceId:
+        scheduleAt && post.status === 'SCHEDULED' ? post.sourceId : null,
       requiresBotApi,
       preferredBotSourceId,
     });
     if (requiresBotApi && !source) {
       await (preferredBotSourceId
-        ? this.telegramChannelAccessService.refreshProductionBotPublishingAccess(workspaceId, channel)
-        : this.telegramChannelAccessService.refreshSystemBotPublishingAccess(workspaceId, channel));
-      sources = await this.sourceAccessService.sourcesForChannel(workspaceId, channelId);
+        ? this.telegramChannelAccessService.refreshProductionBotPublishingAccess(
+            workspaceId,
+            channel,
+          )
+        : this.telegramChannelAccessService.refreshSystemBotPublishingAccess(
+            workspaceId,
+            channel,
+          ));
+      sources = await this.sourceAccessService.sourcesForChannel(
+        workspaceId,
+        channelId,
+      );
       source = selectManagedPostPublishingSource(sources, {
-        existingScheduledSourceId: scheduleAt && post.status === 'SCHEDULED' ? post.sourceId : null,
+        existingScheduledSourceId:
+          scheduleAt && post.status === 'SCHEDULED' ? post.sourceId : null,
         requiresBotApi: true,
         preferredBotSourceId,
       });
@@ -160,12 +204,15 @@ export class TelegramManagedPostPublisherService {
       );
     }
     if (
-      (post.status === TelegramManagedPostStatus.FAILED || post.status === TelegramManagedPostStatus.PUBLISHING) &&
+      (post.status === TelegramManagedPostStatus.FAILED ||
+        post.status === TelegramManagedPostStatus.PUBLISHING) &&
       post.telegramMessageIds.length
     ) {
       const journaledSource = sources.find(
         (candidate) =>
-          candidate.sourceType === TelegramSourceType.BOT && candidate.sourceId === post.sourceId && candidate.permissions.canPostMessages,
+          candidate.sourceType === TelegramSourceType.BOT &&
+          candidate.sourceId === post.sourceId &&
+          candidate.permissions.canPostMessages,
       );
       if (!journaledSource) {
         throw telegramPostsBadRequest(
@@ -176,9 +223,16 @@ export class TelegramManagedPostPublisherService {
       source = journaledSource;
     }
     if (!source) {
-      throw telegramPostsBadRequest('TELEGRAM_POST_PUBLISH_SOURCE_UNAVAILABLE', 'No connected source has posting permission');
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_PUBLISH_SOURCE_UNAVAILABLE',
+        'No connected source has posting permission',
+      );
     }
-    if (requireTelegramNativeSchedule && (source.sourceType !== TelegramSourceType.MTPROTO || !source.permissions.canDeleteMessages)) {
+    if (
+      requireTelegramNativeSchedule &&
+      (source.sourceType !== TelegramSourceType.MTPROTO ||
+        !source.permissions.canDeleteMessages)
+    ) {
       throw telegramPostsBadRequest(
         'TELEGRAM_POST_PUBLISH_SOURCE_UNAVAILABLE',
         'A connected Telegram user account with publishing and deletion permission is required to add this post to Telegram Scheduled Messages and remove it when the folder ends',
@@ -217,30 +271,46 @@ export class TelegramManagedPostPublisherService {
           sourceId: source.sourceId,
           lastError: null,
           lastTelegramSyncedAt: new Date(),
-          lastTelegramSyncNote: 'Scheduled locally for Bot API delivery; no Telegram scheduled message exists yet.',
+          lastTelegramSyncNote:
+            'Scheduled locally for Bot API delivery; no Telegram scheduled message exists yet.',
         },
         include: this.managedPostInclude,
       });
       return this.notifyManagedPostSchedulePersisted(scheduled, scheduleAt);
     }
-    const channelReference = this.telegramChannelAccessService.mtprotoChannelReference(channel);
+    const channelReference =
+      this.telegramChannelAccessService.mtprotoChannelReference(channel);
     if (!channelReference.telegramChatId && !channelReference.username)
-      throw telegramPostsBadRequest('TELEGRAM_POST_TELEGRAM_REFERENCE_MISSING', 'Channel has no Telegram reference');
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_TELEGRAM_REFERENCE_MISSING',
+        'Channel has no Telegram reference',
+      );
     let previousScheduledMessageCancelled = false;
     try {
       const mediaItemsBeforeStorage = mediaItems;
-      const persistMediaUrls = this.telegramManagedPostMediaStorageService.persistMediaUrls;
+      const persistMediaUrls =
+        this.telegramManagedPostMediaStorageService.persistMediaUrls;
       const storedMedia = persistMediaUrls
-        ? persistMediaUrls.call(this.telegramManagedPostMediaStorageService, mediaItems, post.imageUrls)
+        ? persistMediaUrls.call(
+            this.telegramManagedPostMediaStorageService,
+            mediaItems,
+            post.imageUrls,
+          )
         : {
-            imageUrls: await this.telegramManagedPostMediaStorageService.persistImageUrls(post.imageUrls),
+            imageUrls:
+              await this.telegramManagedPostMediaStorageService.persistImageUrls(
+                post.imageUrls,
+              ),
             mediaItems,
           };
       mediaItems = storedMedia.mediaItems;
       if (
-        JSON.stringify(mediaItemsBeforeStorage) !== JSON.stringify(mediaItems) ||
+        JSON.stringify(mediaItemsBeforeStorage) !==
+          JSON.stringify(mediaItems) ||
         storedMedia.imageUrls.length !== post.imageUrls.length ||
-        storedMedia.imageUrls.some((url, index) => url !== post.imageUrls[index])
+        storedMedia.imageUrls.some(
+          (url, index) => url !== post.imageUrls[index],
+        )
       ) {
         post = await this.prisma.telegramManagedPost.update({
           where: { id: post.id },
@@ -250,17 +320,36 @@ export class TelegramManagedPostPublisherService {
           },
         });
       }
-      const resolvedText = await this.telegramManagedPostPresentationService.resolveInternalPostLinksForPublish(
-        workspaceId,
-        post.id,
-        post.text || '',
-        scheduleAt,
+      const resolvedText =
+        await this.telegramManagedPostPresentationService.resolveInternalPostLinksForPublish(
+          workspaceId,
+          post.id,
+          post.text || '',
+          scheduleAt,
+        );
+      const [resolvedPlainText] = parseTelegramHtml(
+        telegramMarkupToHtml(resolvedText),
       );
-      const [resolvedPlainText] = parseTelegramHtml(telegramMarkupToHtml(resolvedText));
-      if (source.sourceType === TelegramSourceType.MTPROTO && mediaItems.length > 0 && resolvedPlainText.length > TELEGRAM_CAPTION_LIMIT) {
-        const account = await this.telegramChannelAccessService.connectedAccount(workspaceId, channelId, source.sourceId);
-        if (this.telegramChannelAccessService.isCapabilityStale(account.premiumCheckedAt)) {
-          const refreshedAccount = await this.telegramChannelAccessService.refreshMtprotoAccountCapabilities(account);
+      if (
+        source.sourceType === TelegramSourceType.MTPROTO &&
+        mediaItems.length > 0 &&
+        resolvedPlainText.length > TELEGRAM_CAPTION_LIMIT
+      ) {
+        const account =
+          await this.telegramChannelAccessService.connectedAccount(
+            workspaceId,
+            channelId,
+            source.sourceId,
+          );
+        if (
+          this.telegramChannelAccessService.isCapabilityStale(
+            account.premiumCheckedAt,
+          )
+        ) {
+          const refreshedAccount =
+            await this.telegramChannelAccessService.refreshMtprotoAccountCapabilities(
+              account,
+            );
           (
             source as {
               isPremium?: boolean;
@@ -283,25 +372,50 @@ export class TelegramManagedPostPublisherService {
               premiumCheckedAt?: Date | null;
             }
           ).messageLengthMax = refreshedAccount.messageLengthMax;
-          (source as { premiumCheckedAt?: Date | null }).premiumCheckedAt = refreshedAccount.premiumCheckedAt;
+          (source as { premiumCheckedAt?: Date | null }).premiumCheckedAt =
+            refreshedAccount.premiumCheckedAt;
         }
       }
       const renderLimits =
         source.sourceType === TelegramSourceType.MTPROTO
           ? {
-              captionLengthMax: (source as { captionLengthMax?: number | null }).captionLengthMax ?? TELEGRAM_CAPTION_LIMIT,
-              messageLengthMax: (source as { messageLengthMax?: number | null }).messageLengthMax ?? TELEGRAM_TEXT_MESSAGE_LIMIT,
+              captionLengthMax:
+                (source as { captionLengthMax?: number | null })
+                  .captionLengthMax ?? TELEGRAM_CAPTION_LIMIT,
+              messageLengthMax:
+                (source as { messageLengthMax?: number | null })
+                  .messageLengthMax ?? TELEGRAM_TEXT_MESSAGE_LIMIT,
             }
           : {
               captionLengthMax: TELEGRAM_CAPTION_LIMIT,
               messageLengthMax: TELEGRAM_TEXT_MESSAGE_LIMIT,
             };
-      const { html, richHtml, captionHtml, followupHtmlParts, textHtmlParts, publishMode } =
-        this.telegramManagedPostPresentationService.renderManagedPostText(resolvedText, mediaItems, renderLimits, longTextMode);
+      const {
+        html,
+        richHtml,
+        captionHtml,
+        followupHtmlParts,
+        textHtmlParts,
+        publishMode,
+      } = this.telegramManagedPostPresentationService.renderManagedPostText(
+        resolvedText,
+        mediaItems,
+        renderLimits,
+        longTextMode,
+      );
       let ids: string[];
       if (source.sourceType === TelegramSourceType.MTPROTO) {
-        const account = await this.telegramChannelAccessService.connectedAccount(workspaceId, channelId, source.sourceId);
-        if (scheduleAt && post.status === 'SCHEDULED' && post.telegramScheduledMessageIds.length) {
+        const account =
+          await this.telegramChannelAccessService.connectedAccount(
+            workspaceId,
+            channelId,
+            source.sourceId,
+          );
+        if (
+          scheduleAt &&
+          post.status === 'SCHEDULED' &&
+          post.telegramScheduledMessageIds.length
+        ) {
           await this.mtprotoClient.deleteScheduledPost({
             ...this.telegramChannelAccessService.accountCredentials(account),
             channel: channelReference,
@@ -321,10 +435,16 @@ export class TelegramManagedPostPublisherService {
           scheduleAt,
         });
       } else {
-        const token = await this.telegramChannelAccessService.botTokenForSource(workspaceId, source.sourceId);
+        const token = await this.telegramChannelAccessService.botTokenForSource(
+          workspaceId,
+          source.sourceId,
+        );
         const chatId = this.telegramChannelAccessService.botChatId(channel);
         if (!chatId) {
-          throw telegramPostsBadRequest('TELEGRAM_POST_TELEGRAM_REFERENCE_MISSING', 'Channel has no Telegram chat id');
+          throw telegramPostsBadRequest(
+            'TELEGRAM_POST_TELEGRAM_REFERENCE_MISSING',
+            'Channel has no Telegram chat id',
+          );
         }
         const call = <T>(method: string, body: Record<string, unknown>) =>
           this.botApiClient.call<T>(token, method, {
@@ -332,11 +452,17 @@ export class TelegramManagedPostPublisherService {
             ...body,
           });
         const toBotFormattedText = (html: string) => {
-          const [text, entities] = parseTelegramHtml(telegramHtmlToMtprotoHtml(html));
+          const [text, entities] = parseTelegramHtml(
+            telegramHtmlToMtprotoHtml(html),
+          );
           return {
             text,
             entities: entities
-              .map((entity) => this.telegramManagedPostPresentationService.toBotMessageEntity(entity))
+              .map((entity) =>
+                this.telegramManagedPostPresentationService.toBotMessageEntity(
+                  entity,
+                ),
+              )
               .filter((entity): entity is BotMessageEntity => Boolean(entity)),
           };
         };
@@ -352,7 +478,9 @@ export class TelegramManagedPostPublisherService {
               rich_message: { html: richHtml },
             },
             expectedMessageCount: 1,
-            messageIds: (result) => [String((result as { message_id: number }).message_id)],
+            messageIds: (result) => [
+              String((result as { message_id: number }).message_id),
+            ],
           });
         } else if (mediaItems.length) {
           const caption = toBotFormattedText(captionHtml);
@@ -368,7 +496,9 @@ export class TelegramManagedPostPublisherService {
             ...delivery,
             messageIds: (result) =>
               delivery.method === 'sendMediaGroup'
-                ? (result as Array<{ message_id: number }>).map((message) => String(message.message_id))
+                ? (result as Array<{ message_id: number }>).map((message) =>
+                    String(message.message_id),
+                  )
                 : [String((result as { message_id: number }).message_id)],
           });
           for (const followupHtml of followupHtmlParts) {
@@ -380,7 +510,9 @@ export class TelegramManagedPostPublisherService {
                 entities: followup.entities,
               },
               expectedMessageCount: 1,
-              messageIds: (result) => [String((result as { message_id: number }).message_id)],
+              messageIds: (result) => [
+                String((result as { message_id: number }).message_id),
+              ],
             });
           }
         } else {
@@ -390,12 +522,15 @@ export class TelegramManagedPostPublisherService {
               method: 'sendMessage',
               body: { text: message.text, entities: message.entities },
               expectedMessageCount: 1,
-              messageIds: (result) => [String((result as { message_id: number }).message_id)],
+              messageIds: (result) => [
+                String((result as { message_id: number }).message_id),
+              ],
             });
           }
         }
         const journaledMessageIds =
-          post.status === TelegramManagedPostStatus.FAILED || post.status === TelegramManagedPostStatus.PUBLISHING
+          post.status === TelegramManagedPostStatus.FAILED ||
+          post.status === TelegramManagedPostStatus.PUBLISHING
             ? post.telegramMessageIds
             : [];
         const replyMarkupIncludedOnSend =
@@ -403,7 +538,10 @@ export class TelegramManagedPostPublisherService {
           includeReplyMarkupInBotDelivery(operations, inlineKeyboard);
         const finalOperationAlreadyJournaled =
           journaledMessageIds.length >=
-          operations.reduce((count, operation) => count + operation.expectedMessageCount, 0);
+          operations.reduce(
+            (count, operation) => count + operation.expectedMessageCount,
+            0,
+          );
         ids = await deliverTelegramManagedPostViaBot({
           operations,
           journaledMessageIds,
@@ -419,7 +557,8 @@ export class TelegramManagedPostPublisherService {
               },
             });
           },
-          ...(buttonRows.length && (!replyMarkupIncludedOnSend || finalOperationAlreadyJournaled)
+          ...(buttonRows.length &&
+          (!replyMarkupIncludedOnSend || finalOperationAlreadyJournaled)
             ? {
                 applyReplyMarkup: async (lastMessageId: string) => {
                   await this.botApiClient.editMessageReplyMarkup(token, {
@@ -431,19 +570,21 @@ export class TelegramManagedPostPublisherService {
               }
             : {}),
         });
-        await this.telegramManagedPostPremiumEmojiRepairService.restoreCustomEmojiAfterBotDelivery({
-          text: post.text,
-          workspaceId,
-          channelId,
-          channel,
-          sources,
-          messageIds: ids,
-          imageCount: mediaItems.length,
-          publishMode,
-          captionHtml,
-          followupHtmlParts,
-          textHtmlParts,
-        });
+        await this.telegramManagedPostPremiumEmojiRepairService.restoreCustomEmojiAfterBotDelivery(
+          {
+            text: post.text,
+            workspaceId,
+            channelId,
+            channel,
+            sources,
+            messageIds: ids,
+            imageCount: mediaItems.length,
+            publishMode,
+            captionHtml,
+            followupHtmlParts,
+            textHtmlParts,
+          },
+        );
       }
       if (!ids.length) {
         throw telegramPostsBadRequest(
@@ -453,13 +594,21 @@ export class TelegramManagedPostPublisherService {
             : 'Telegram did not confirm the published post.',
         );
       }
-      const publishedUrls = scheduleAt ? [] : this.telegramChannelAccessService.telegramMessageUrlsForPost(channel, ids, mediaItems.length);
+      const publishedUrls = scheduleAt
+        ? []
+        : this.telegramChannelAccessService.telegramMessageUrlsForPost(
+            channel,
+            ids,
+            mediaItems.length,
+          );
       const published = await this.prisma.$transaction(async (tx) => {
         const updated = await tx.telegramManagedPost.update({
           where: { id: post.id },
           data: {
             status: scheduleAt ? 'SCHEDULED' : 'PUBLISHED',
-            telegramRemoteStatus: scheduleAt ? TelegramManagedPostRemoteStatus.SCHEDULED : TelegramManagedPostRemoteStatus.PUBLISHED,
+            telegramRemoteStatus: scheduleAt
+              ? TelegramManagedPostRemoteStatus.SCHEDULED
+              : TelegramManagedPostRemoteStatus.PUBLISHED,
             scheduledAt: scheduleAt ?? null,
             scheduleMode: scheduleAt ? 'TELEGRAM_NATIVE' : null,
             publishedAt: scheduleAt ? null : new Date(),
@@ -479,7 +628,9 @@ export class TelegramManagedPostPublisherService {
             sourceType: source.sourceType,
             sourceId: source.sourceId,
             sourceWasPremium:
-              source.sourceType === TelegramSourceType.MTPROTO ? Boolean((source as { isPremium?: boolean | null }).isPremium) : false,
+              source.sourceType === TelegramSourceType.MTPROTO
+                ? Boolean((source as { isPremium?: boolean | null }).isPremium)
+                : false,
             captionLengthMaxUsed: renderLimits.captionLengthMax,
             messageLengthMaxUsed: renderLimits.messageLengthMax,
             publishMode,
@@ -490,25 +641,41 @@ export class TelegramManagedPostPublisherService {
           include: this.managedPostInclude,
         });
         if (post.groupId) {
-          await this.telegramPostGroupsService.normalizePostGroupNumbering(tx, post.groupId);
+          await this.telegramPostGroupsService.normalizePostGroupNumbering(
+            tx,
+            post.groupId,
+          );
         }
         const canonical = await tx.telegramManagedPost.findUnique({
           where: { id: updated.id },
           include: this.managedPostInclude,
         });
-        if (!canonical) throw telegramPostsNotFound('TELEGRAM_MANAGED_POST_NOT_FOUND', 'Managed post not found');
+        if (!canonical)
+          throw telegramPostsNotFound(
+            'TELEGRAM_MANAGED_POST_NOT_FOUND',
+            'Managed post not found',
+          );
         return canonical;
       });
-      return this.notifyManagedPostSchedulePersisted(published, scheduleAt, (_count?.adSalePlacements ?? 0) > 0, Boolean(post.deleteAfterHours));
+      return this.notifyManagedPostSchedulePersisted(
+        published,
+        scheduleAt,
+        (_count?.adSalePlacements ?? 0) > 0,
+        Boolean(post.deleteAfterHours),
+      );
     } catch (error) {
-      const rawMessage = error instanceof Error ? error.message : 'Telegram publish failed';
+      const rawMessage =
+        error instanceof Error ? error.message : 'Telegram publish failed';
       const publicMessage = /MEDIA_INVALID/i.test(rawMessage)
         ? 'Telegram rejected one of the images. Remove it, upload it again, and retry.'
         : isRevokedTelegramSessionError(error)
           ? REVOKED_TELEGRAM_SESSION_MESSAGE
           : rawMessage;
       await this.prisma.$transaction(async (tx) => {
-        if (source.sourceType === TelegramSourceType.MTPROTO && isRevokedTelegramSessionError(error)) {
+        if (
+          source.sourceType === TelegramSourceType.MTPROTO &&
+          isRevokedTelegramSessionError(error)
+        ) {
           await tx.telegramUserAccountIntegration.updateMany({
             where: {
               id: source.sourceId,
@@ -530,21 +697,34 @@ export class TelegramManagedPostPublisherService {
               ? TelegramManagedPostRemoteStatus.MISSING
               : TelegramManagedPostRemoteStatus.UNKNOWN,
             lastError: publicMessage,
-            telegramScheduledMessageIds: previousScheduledMessageCancelled ? [] : undefined,
+            telegramScheduledMessageIds: previousScheduledMessageCancelled
+              ? []
+              : undefined,
             sourceType: previousScheduledMessageCancelled ? null : undefined,
             sourceId: previousScheduledMessageCancelled ? null : undefined,
           },
         });
         if (post.groupId) {
-          await this.telegramPostGroupsService.normalizePostGroupNumbering(tx, post.groupId);
+          await this.telegramPostGroupsService.normalizePostGroupNumbering(
+            tx,
+            post.groupId,
+          );
         }
       });
       if (error instanceof BadRequestException) throw error;
-      throw telegramPostsBadRequest('TELEGRAM_POST_PUBLISH_FAILED', publicMessage);
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_PUBLISH_FAILED',
+        publicMessage,
+      );
     }
   }
 
-  public notifyManagedPostSchedulePersisted<T>(persisted: T, scheduleAt?: Date, hasAdSalePlacement = false, hasAutoDelete = false) {
+  public notifyManagedPostSchedulePersisted<T>(
+    persisted: T,
+    scheduleAt?: Date,
+    hasAdSalePlacement = false,
+    hasAutoDelete = false,
+  ) {
     if (scheduleAt || hasAutoDelete) {
       notifyScheduledTaskDueWorkChanged('telegram.managed_posts.reconcile_due');
     } else if (hasAdSalePlacement) {

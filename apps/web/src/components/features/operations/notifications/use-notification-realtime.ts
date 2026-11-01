@@ -32,16 +32,26 @@ export function useNotificationRealtime({
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
     let attempt = 0;
     let controller: AbortController | null = null;
+    let countTimer: ReturnType<typeof setTimeout> | null = null;
+    const reconcileCount = () => {
+      if (countTimer) return;
+      countTimer = setTimeout(() => {
+        countTimer = null;
+        if (!stopped) void queryClient.invalidateQueries({ queryKey: operationsNotificationKeys.unread(workspaceId), exact: true });
+      }, 1_000);
+    };
 
     const connect = () => {
       if (stopped) return;
       const shouldReconcileOnOpen = streamAttemptedRef.current;
       streamAttemptedRef.current = true;
       const currentController = new AbortController();
+      const startedAt = Date.now();
       controller = currentController;
       void fetchOperationsNotificationStream({
         signal: currentController.signal,
         onEvent: (event) => {
+          if (stopped || event.workspaceId !== workspaceId) return;
           if (event.type === "notifications.invalidated") {
             if (panelOpenRef.current) {
               void queryClient.invalidateQueries({
@@ -54,20 +64,14 @@ export function useNotificationRealtime({
                 exact: true,
               });
             }
-            void queryClient.invalidateQueries({
-              queryKey: operationsNotificationKeys.unread(workspaceId),
-              exact: true,
-            });
+            reconcileCount();
             return;
           }
-          patchCreatedNotification(
-            queryClient,
-            workspaceId,
-            event.notification,
-          );
+          void queryClient.cancelQueries({ queryKey: operationsNotificationKeys.unread(workspaceId), exact: true }).then(() => {
+            if (!stopped && patchCreatedNotification(queryClient, workspaceId, event.notification)) reconcileCount();
+          });
         },
         onOpen: () => {
-          attempt = 0;
           if (shouldReconcileOnOpen) {
             void queryClient.invalidateQueries({
               queryKey: operationsNotificationKeys.list(workspaceId),
@@ -84,6 +88,7 @@ export function useNotificationRealtime({
         .finally(() => {
           if (controller === currentController) controller = null;
           if (stopped || currentController.signal.aborted) return;
+          if (Date.now() - startedAt >= 30_000) attempt = 0;
           attempt += 1;
           if (attempt > MAX_RECONNECT_ATTEMPTS) return;
           const delay = Math.min(30_000, 1_000 * 2 ** (attempt - 1));
@@ -96,6 +101,7 @@ export function useNotificationRealtime({
       stopped = true;
       controller?.abort();
       if (retryTimer) clearTimeout(retryTimer);
+      if (countTimer) clearTimeout(countTimer);
     };
   }, [documentVisible, enabled, queryClient, workspaceId]);
 }

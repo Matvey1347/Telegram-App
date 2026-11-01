@@ -241,4 +241,21 @@ describe("ProtectedRoute", () => {
       );
     });
   });
+  it("preserves an expired notification destination through login even when the old workspace has no CRM", async () => {
+    const destination = "/ad-sales/inbox?conversationId=target-conversation&workspaceId=target-workspace";
+    vi.mocked(usePathname).mockReturnValue("/ad-sales/inbox");
+    window.history.replaceState({}, "", destination);
+    useAuthMock.mockReturnValue({ token: null, isTokenReady: true, isAuthResolved: true, isLoading: false, isAuthenticated: false, error: null });
+    const first = renderWithProviders(<ProtectedRoute><div>Private conversation</div></ProtectedRoute>);
+    await waitFor(() => expect(navigationMocks.replace).toHaveBeenCalledWith(`/login?redirect=${encodeURIComponent(destination)}`));
+    expect(screen.queryByText("Private conversation")).not.toBeInTheDocument();
+    first.unmount(); navigationMocks.replace.mockClear();
+    vi.mocked(usePathname).mockReturnValue("/login");
+    window.history.replaceState({}, "", `/login?redirect=${encodeURIComponent(destination)}`);
+    useAuthMock.mockReturnValue({ token: "restored-session", isTokenReady: true, isAuthResolved: true, isLoading: false, isAuthenticated: true, error: null,
+      workspace: { id: "old-workspace", access: { featureIds: ["posts"] } } });
+    renderWithProviders(<ProtectedRoute><div>Login page</div></ProtectedRoute>);
+    await waitFor(() => expect(navigationMocks.replace).toHaveBeenCalledWith(destination));
+  });
+
 });

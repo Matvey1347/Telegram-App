@@ -139,8 +139,14 @@ export class DueTaskSchedule {
   }
 
   private async nextManagedPostDueAt(now: Date) {
-    const [local, ready, autoDelete, futureIdentity, unverifiedBackoff, missingBackoff] =
-      await Promise.all([
+    const [
+      local,
+      ready,
+      autoDelete,
+      futureIdentity,
+      unverifiedBackoff,
+      missingBackoff,
+    ] = await Promise.all([
       this.prisma.telegramManagedPost.findFirst({
         where: {
           scheduleMode: 'LOCAL',
@@ -346,7 +352,6 @@ export class DueTaskSchedule {
       backedOffAt,
     ]);
   }
-
 }
 
 function earliest(values: Array<Date | null | undefined>) {

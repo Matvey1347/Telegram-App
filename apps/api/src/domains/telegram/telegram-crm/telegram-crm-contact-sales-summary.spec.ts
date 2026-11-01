@@ -1,3 +1,5 @@
+const containing = (value: Record<string, unknown>): unknown =>
+  expect.objectContaining(value);
 import { Prisma } from '@prisma/client';
 import {
   isUnassignedCrmContact,
@@ -58,6 +60,9 @@ describe('loadCrmContactSalesSummaries', () => {
     );
 
     expect(result.get('contact-artur')).toEqual({
+      purchaseAudience: null,
+      purchaseAudienceIcon: null,
+      purchasedChannels: [],
       totalSalesCount: 1,
       paidSalesCount: 1,
       completedSalesCount: 1,
@@ -116,13 +121,13 @@ describe('loadCrmContactSalesSummaries', () => {
     );
 
     expect(result.get('contact-1')?.dealMembers).toEqual([
-      expect.objectContaining({ id: 'member-1', name: 'First' }),
-      expect.objectContaining({ id: 'member-2', name: 'Second' }),
+      containing({ id: 'member-1', name: 'First' }),
+      containing({ id: 'member-2', name: 'Second' }),
     ]);
     expect(findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({ workspaceId: 'workspace-1' }),
-        select: expect.objectContaining({ assignedMember: expect.any(Object) }),
+      containing({
+        where: containing({ workspaceId: 'workspace-1' }),
+        select: containing({ assignedMember: expect.any(Object) as unknown }),
       }),
     );
   });

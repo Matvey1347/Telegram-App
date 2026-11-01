@@ -264,7 +264,7 @@ export class TelegramMtprotoClient {
         typeof (candidate as { link?: unknown }).link === 'string' &&
         String((candidate as { link?: unknown }).link || '').trim()
       ) {
-        return candidate as ExportedInvitePayload;
+        return candidate;
       }
     }
 
@@ -373,8 +373,8 @@ export class TelegramMtprotoClient {
         accessHashType: typeof (preferred as { accessHash?: unknown })
           .accessHash,
         accessHashCtor:
-          ((preferred as { accessHash?: { constructor?: { name?: string } } })
-            .accessHash?.constructor?.name as string | undefined) ?? null,
+          (preferred as { accessHash?: { constructor?: { name?: string } } })
+            .accessHash?.constructor?.name ?? null,
       });
     }
   }
@@ -466,7 +466,7 @@ export class TelegramMtprotoClient {
     client: TelegramClient,
     fallbackUser?: Api.User | null,
   ): Promise<TelegramAccountProfile> {
-    const meRaw = fallbackUser ?? ((await client.getMe()) as Api.User);
+    const meRaw = fallbackUser ?? (await client.getMe());
     const me = (await this.getSelfUserWithDetails(client, meRaw)) || meRaw;
     const isPremium = Boolean(me.premium);
     const fallbackCaptionLengthMax = isPremium
@@ -1129,7 +1129,7 @@ export class TelegramMtprotoClient {
       : [];
     return [...chats, ...users].filter((entity) =>
       this.isImportableTelegramEntity(entity),
-    ) as ImportableTelegramEntity[];
+    );
   }
 
   private dedupeTitleCandidates(
@@ -1253,9 +1253,7 @@ export class TelegramMtprotoClient {
     if (ref == null) return null;
     try {
       const entity = await client.getEntity(ref as never);
-      return this.isImportableTelegramEntity(entity)
-        ? (entity as ImportableTelegramEntity)
-        : null;
+      return this.isImportableTelegramEntity(entity) ? entity : null;
     } catch {
       return null;
     }
@@ -1303,7 +1301,7 @@ export class TelegramMtprotoClient {
               null,
             inviteLink: described.inviteLink || channel.inviteLink || null,
             accessMode:
-              (described.accessMode as TelegramChannelAccessMode | undefined) ||
+              described.accessMode ||
               this.inferAccessMode({
                 username: described.username,
                 inviteLink: described.inviteLink || channel.inviteLink || null,
@@ -1339,7 +1337,7 @@ export class TelegramMtprotoClient {
               null,
             inviteLink: described.inviteLink || channel.inviteLink || null,
             accessMode:
-              (described.accessMode as TelegramChannelAccessMode | undefined) ||
+              described.accessMode ||
               this.inferAccessMode({
                 username: described.username,
                 inviteLink: described.inviteLink || channel.inviteLink || null,
@@ -1377,9 +1375,7 @@ export class TelegramMtprotoClient {
                 null,
               inviteLink: described.inviteLink || channel.inviteLink || null,
               accessMode:
-                (described.accessMode as
-                  | TelegramChannelAccessMode
-                  | undefined) ||
+                described.accessMode ||
                 this.inferAccessMode({
                   username: described.username,
                   inviteLink:
@@ -1426,7 +1422,7 @@ export class TelegramMtprotoClient {
             ...resolved,
             telegramAccessHash: resolved.telegramAccessHash || null,
             accessMode:
-              (resolved.accessMode as TelegramChannelAccessMode | undefined) ||
+              resolved.accessMode ||
               this.inferAccessMode({
                 username: resolved.username,
                 inviteLink: resolved.inviteLink || channel.inviteLink || null,
@@ -1948,7 +1944,7 @@ export class TelegramMtprotoClient {
           forwardsCount: number;
         }
       >();
-      for (const post of posts as any[]) {
+      for (const post of posts) {
         if (!post?.date) continue;
         const day = new Date(post.date);
         const date = new Date(day.getFullYear(), day.getMonth(), day.getDate())
@@ -2404,7 +2400,7 @@ export class TelegramMtprotoClient {
           permanent: Boolean(resolvedInvite?.permanent),
           revoked: Boolean(resolvedInvite?.revoked),
         });
-        await params.onInviteLinkLoaded?.(links[links.length - 1]!);
+        await params.onInviteLinkLoaded?.(links[links.length - 1]);
       }
       if (stoppedByCutoff && pageSortedNewToOld) break;
 
@@ -2438,11 +2434,11 @@ export class TelegramMtprotoClient {
     const channelTelegramId = this.entityIdToString(entity) || 'unknown';
     const selfUser = await this.getSelfUserWithDetails(
       client,
-      (await this.withTimeout(
+      await this.withTimeout(
         client.getMe(),
         this.telegramResolveTimeoutMs,
         'Telegram self lookup',
-      )) as Api.User,
+      ),
     );
     const connectedTelegramUserId = selfUser ? String(selfUser.id) : null;
     await onProgress?.({
@@ -2557,8 +2553,8 @@ export class TelegramMtprotoClient {
           accessHashType: typeof (adminUser as { accessHash?: unknown })
             .accessHash,
           accessHashCtor:
-            ((adminUser as { accessHash?: { constructor?: { name?: string } } })
-              .accessHash?.constructor?.name as string | undefined) ?? null,
+            (adminUser as { accessHash?: { constructor?: { name?: string } } })
+              .accessHash?.constructor?.name ?? null,
           expectedActiveLinks: counts.active,
           expectedRevokedLinks: counts.revoked,
         });
@@ -2990,7 +2986,7 @@ export class TelegramMtprotoClient {
         }
         if (reachedBeforePeriod || importers.length < limit) return count;
 
-        const last = importers[importers.length - 1]!;
+        const last = importers[importers.length - 1];
         const lastUserId = this.toBigInt(last.userId)?.toString();
         const lastUser = (response.users ?? []).find(
           (user): user is Api.User =>
@@ -3052,7 +3048,7 @@ export class TelegramMtprotoClient {
           hash: 0,
         }),
       );
-      const set = result.set as any;
+      const set = result.set;
       // A post may reference one emoji from a huge pack. Only download that
       // document; GetStickerSet above is used for pack metadata.
       const sourceDocuments = requestedDocuments ?? result.documents ?? [];
@@ -3363,7 +3359,7 @@ export class TelegramMtprotoClient {
         (await client.getInputEntity(params.channelRef as string));
       await client.invoke(
         new Api.channels.DeleteMessages({
-          channel: peer as unknown as Api.TypeInputChannel,
+          channel: peer,
           id: params.messageIds.map(Number).filter(Number.isFinite),
         }),
       );
@@ -3436,7 +3432,7 @@ export class TelegramMtprotoClient {
         published: (published as any[])
           .filter((message) => message?.id && message?.date)
           .map((message) => serialize(message, false)),
-        recentPublished: (recentPublished as any[])
+        recentPublished: recentPublished
           .filter((message) => message?.id && message?.date)
           .map((message) => serialize(message, false)),
         scheduled: (scheduled as any[])
@@ -3556,7 +3552,7 @@ export class TelegramMtprotoClient {
                   : 0,
             });
 
-      return (messages as any[])
+      return messages
         .filter((message) => message?.id && message?.date)
         .map((message) => {
           const postDate = this.toTelegramDate(message.date);

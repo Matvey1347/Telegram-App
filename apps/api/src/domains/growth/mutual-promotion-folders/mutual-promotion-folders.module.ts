@@ -17,7 +17,11 @@ import { TelegramSystemBotModule } from '../../telegram/telegram-system-bot/tele
 import { MutualPromotionBotNotificationService } from './mutual-promotion-bot-notification.service';
 
 @Module({
-  imports: [FinanceCategoriesModule, TelegramChannelsModule, forwardRef(() => TelegramSystemBotModule)],
+  imports: [
+    FinanceCategoriesModule,
+    TelegramChannelsModule,
+    forwardRef(() => TelegramSystemBotModule),
+  ],
   controllers: [MutualPromotionFoldersController],
   providers: [
     MutualPromotionActivationService,

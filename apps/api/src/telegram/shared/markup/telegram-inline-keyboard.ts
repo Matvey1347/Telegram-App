@@ -34,12 +34,16 @@ export function normalizeTelegramButtonUrl(value: string) {
 }
 
 /** Converts persisted JSON to the stable API representation; legacy null means no buttons. */
-export function normalizeTelegramPostButtonRows(value: unknown): TelegramPostButtonRows {
+export function normalizeTelegramPostButtonRows(
+  value: unknown,
+): TelegramPostButtonRows {
   if (!Array.isArray(value)) return [];
   return value.flatMap((row) => {
     const rawButtons = Array.isArray(row)
       ? row
-      : row && typeof row === 'object' && Array.isArray((row as { buttons?: unknown }).buttons)
+      : row &&
+          typeof row === 'object' &&
+          Array.isArray((row as { buttons?: unknown }).buttons)
         ? (row as { buttons: unknown[] }).buttons
         : [];
     const buttons = rawButtons.flatMap((button) => {
@@ -49,7 +53,8 @@ export function normalizeTelegramPostButtonRows(value: unknown): TelegramPostBut
         typeof candidate.text !== 'string' ||
         typeof candidate.url !== 'string' ||
         !styles.includes(candidate.style as TelegramPostButtonStyle)
-      ) return [];
+      )
+        return [];
       const iconCustomEmojiId =
         typeof candidate.iconCustomEmojiId === 'string' &&
         /^\d+$/.test(candidate.iconCustomEmojiId)
@@ -69,7 +74,9 @@ export function normalizeTelegramPostButtonRows(value: unknown): TelegramPostBut
 }
 
 /** Bot API URL keyboard. `default` must be omitted, while supported colored styles are explicit. */
-export function toTelegramBotInlineKeyboard(rows: TelegramPostButtonRows): TelegramBotInlineKeyboard | undefined {
+export function toTelegramBotInlineKeyboard(
+  rows: TelegramPostButtonRows,
+): TelegramBotInlineKeyboard | undefined {
   if (!rows.length) return undefined;
   return {
     inline_keyboard: rows.map((row) =>

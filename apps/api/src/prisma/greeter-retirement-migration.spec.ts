@@ -15,11 +15,19 @@ describe('Greeter runtime retirement migration', () => {
       /UPDATE "TelegramBotDelivery" AS "delivery"[\s\S]*?;/,
     )?.[0];
     expect(deliveryUpdate).toBeDefined();
-    expect(deliveryUpdate).toContain("'PENDING'::\"TelegramBotDeliveryStatus\"");
-    expect(deliveryUpdate).toContain("'PROCESSING'::\"TelegramBotDeliveryStatus\"");
-    expect(deliveryUpdate).toContain("'RETRY'::\"TelegramBotDeliveryStatus\"");
-    expect(deliveryUpdate).toContain("'CANCELLED'::\"TelegramBotDeliveryStatus\"");
-    expect(deliveryUpdate).toContain("'GREETER'::\"TelegramBotApplicationType\"");
+    expect(deliveryUpdate).toContain(
+      '\'PENDING\'::"TelegramBotDeliveryStatus"',
+    );
+    expect(deliveryUpdate).toContain(
+      '\'PROCESSING\'::"TelegramBotDeliveryStatus"',
+    );
+    expect(deliveryUpdate).toContain('\'RETRY\'::"TelegramBotDeliveryStatus"');
+    expect(deliveryUpdate).toContain(
+      '\'CANCELLED\'::"TelegramBotDeliveryStatus"',
+    );
+    expect(deliveryUpdate).toContain(
+      '\'GREETER\'::"TelegramBotApplicationType"',
+    );
     expect(deliveryUpdate).toContain('"GreeterSequenceStepExecution"');
     expect(deliveryUpdate).toContain('"GreeterBroadcastRecipient"');
     expect(deliveryUpdate).toContain('"GreeterJoinRequest"');
@@ -28,7 +36,7 @@ describe('Greeter runtime retirement migration', () => {
 
   it('retires integrations and disarms every removed task without deleting audit rows', () => {
     expect(migrationSql).toContain('UPDATE "TelegramBotIntegration"');
-    expect(migrationSql).toContain("'NONE'::\"TelegramBotApplicationType\"");
+    expect(migrationSql).toContain('\'NONE\'::"TelegramBotApplicationType"');
     expect(migrationSql).toContain('UPDATE "ScheduledTaskConfig"');
     expect(migrationSql).toContain("'greeter.expire_pending'");
     expect(migrationSql).toContain("'greeter.broadcasts.dispatch'");

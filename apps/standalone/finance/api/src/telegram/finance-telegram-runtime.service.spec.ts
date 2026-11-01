@@ -17,6 +17,7 @@ const production = {
 describe('FinanceTelegramRuntimeService', () => {
   const api = { getWebhookInfo: jest.fn(), setWebhook: jest.fn(), setMyProfilePhoto: jest.fn() };
   const primaryBot = { resolve: jest.fn() };
+  const webhook = { canProcessUpdates: jest.fn() };
   const prisma = { financeBot: { update: jest.fn() } };
   const config: { selectedBot: typeof local | typeof production; apiPublicUrl?: string } = {
     selectedBot: local,
@@ -31,8 +32,9 @@ describe('FinanceTelegramRuntimeService', () => {
     config.apiPublicUrl = 'https://api.groshly.nexeloq.com';
     api.getWebhookInfo.mockResolvedValue({ url: 'https://other.example/webhook' });
     api.setWebhook.mockResolvedValue(undefined);
+    webhook.canProcessUpdates.mockReturnValue(true);
     primaryBot.resolve.mockResolvedValue({ id: 'finance-bot-1' });
-    service = new FinanceTelegramRuntimeService(config as never, primaryBot as never, api as never, prisma as never);
+    service = new FinanceTelegramRuntimeService(config as never, primaryBot as never, api as never, prisma as never, webhook as never);
   });
 
   afterEach(() => jest.restoreAllMocks());
@@ -47,6 +49,17 @@ describe('FinanceTelegramRuntimeService', () => {
       local.webhookSecret,
     );
     expect(api.setWebhook).not.toHaveBeenCalledWith('production-token', expect.anything(), expect.anything());
+  });
+
+  it('does not contact Telegram while this host cannot process updates', async () => {
+    webhook.canProcessUpdates.mockReturnValue(false);
+
+    await service.onModuleInit();
+
+    expect(api.getWebhookInfo).not.toHaveBeenCalled();
+    expect(api.setWebhook).not.toHaveBeenCalled();
+    expect(api.setMyProfilePhoto).not.toHaveBeenCalled();
+    expect(primaryBot.resolve).not.toHaveBeenCalled();
   });
 
   it('uses only the selected PRODUCTION token', async () => {

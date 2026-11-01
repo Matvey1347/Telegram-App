@@ -98,4 +98,16 @@ describe("operationsNotificationsApi", () => {
       expect.objectContaining({ type: "notifications.invalidated" }),
     ]);
   });
+
+  it("patches only explicit CRM preferences and posts a test only when requested", async () => {
+    const authoritative = { webPushEnabled: true, crmIncomingMessagesEnabled: true, crmMessagePreviewEnabled: false };
+    patch.mockResolvedValue({ data: authoritative });
+    await expect(operationsNotificationsApi.updatePreferences({ crmIncomingMessagesEnabled: true })).resolves.toEqual(authoritative);
+    expect(patch).toHaveBeenCalledWith("/operations/notifications/preferences", { crmIncomingMessagesEnabled: true });
+    expect(post).not.toHaveBeenCalled();
+    const result = { status: "sent", attempted: 2, delivered: 2, failed: 0, skipped: 0 };
+    post.mockResolvedValue({ data: result });
+    await expect(operationsNotificationsApi.testPush()).resolves.toEqual(result);
+    expect(post).toHaveBeenCalledWith("/operations/notifications/push/test", {});
+  });
 });

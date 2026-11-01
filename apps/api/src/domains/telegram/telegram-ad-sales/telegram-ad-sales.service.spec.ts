@@ -939,9 +939,9 @@ describe('TelegramAdSalesService', () => {
   it('reuses the existing client when a Telegram username is submitted again', async () => {
     const { service, prisma } = createService();
     const existing = { id: 'advertiser-a20', telegramUsername: 'a20_admin' };
-    jest.spyOn(service as any, 'mapAdvertiser').mockImplementation(
-      (advertiser: unknown) => advertiser,
-    );
+    jest
+      .spyOn(service as any, 'mapAdvertiser')
+      .mockImplementation((advertiser: unknown) => advertiser);
     prisma.telegramAdvertiser.findFirst.mockResolvedValue(existing);
     prisma.telegramAdvertiser.findUniqueOrThrow.mockResolvedValue(existing);
 
@@ -1481,7 +1481,7 @@ describe('TelegramAdSalesService', () => {
       ],
     });
     jest.spyOn(service as any, 'getSaleDetails').mockResolvedValue(sale);
-    jest.spyOn(service, 'getSale').mockResolvedValue(sale as never);
+    jest.spyOn(service, 'getSale').mockResolvedValue(sale);
     telegramChannelAccessService.checkProductionBotPublishingAccess.mockResolvedValue(
       { canPublishWithInlineButtons: true },
     );
@@ -1541,7 +1541,7 @@ describe('TelegramAdSalesService', () => {
       ],
     });
     jest.spyOn(service as any, 'getSaleDetails').mockResolvedValue(sale);
-    jest.spyOn(service, 'getSale').mockResolvedValue(sale as never);
+    jest.spyOn(service, 'getSale').mockResolvedValue(sale);
 
     const onProgress = jest.fn();
     await service.cancelSalePublications('user-1', 'sale-1', onProgress);

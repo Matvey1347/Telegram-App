@@ -33,7 +33,7 @@ describe('HistoricalExchangeRateService', () => {
     expect(
       calls[0][0].data.find((row) => row.targetCurrency === 'UAH'),
     ).toEqual({
-        baseCurrency: 'EUR',
+      baseCurrency: 'EUR',
       targetCurrency: 'UAH',
       rate: 48.5,
       date: new Date('2026-09-14T00:00:00.000Z'),
@@ -176,7 +176,7 @@ describe('HistoricalExchangeRateService', () => {
     expect(
       calls[0][0].data.find((row) => row.source === 'bank.gov.ua'),
     ).toEqual({
-        baseCurrency: 'EUR',
+      baseCurrency: 'EUR',
       targetCurrency: 'UAH',
       rate: 50.321,
       date: new Date('2026-04-07T00:00:00.000Z'),

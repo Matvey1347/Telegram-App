@@ -1,26 +1,42 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { normalizeInstagramProfile } from "@telegram-system/shared";
 import { Plus } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/layout/app-shell";
 import { PageTabHead } from "@/components/layout/page-tab-head";
-import { Button, CustomSelect, FormField, Input, LoadingState, Modal, PageHeader, Textarea } from "@/components/ui/primitives";
+import {
+  Button,
+  CustomSelect,
+  FormField,
+  Input,
+  LoadingState,
+  Modal,
+  PageHeader,
+  Textarea,
+} from "@/components/ui/primitives";
 import { telegramCrmKeys } from "@/lib/features/growth/telegram-crm-query";
+import Link from "next/link";
+import { ManualContacts } from "./manual/manual-contacts";
 import { CrmContactList } from "./crm-contact-list";
 import { CrmAccountSyncPanel } from "./crm-account-sync-panel";
 import { CrmInbox } from "./crm-inbox";
 import { CrmNavigation } from "./crm-navigation";
 import type { AdSalesSurface } from "./crm-routes";
-import { authApi, telegramAdSalesApi } from "@/lib/api";
-import { authKeys } from "@/lib/query-keys";
+import { accountApi, authApi, telegramAdSalesApi } from "@/lib/api";
+import { accountKeys, authKeys } from "@/lib/query-keys";
 import { crmPermissions } from "./crm-permissions";
 import { telegramCrmApi } from "@/lib/features/growth/telegram-crm-api";
-import { CrmContactChannelMark, type CrmContactChannelName } from "./crm-contact-channel-mark";
+import {
+  CrmContactChannelMark,
+  type CrmContactChannelName,
+} from "./crm-contact-channel-mark";
 import { MemberSelect } from "@/components/features/workspace/member-select";
 import { CrmAnalytics } from "./crm-analytics";
 import { CrmAdSaleLauncher } from "./crm-ad-sale-launcher";
+import { useCrmInboxRealtime } from "@/lib/features/growth/use-crm-inbox-realtime";
 
 export function CrmWorkspace({
   surface,
@@ -28,7 +44,9 @@ export function CrmWorkspace({
   surface: Exclude<AdSalesSurface, { kind: "legacy" }>;
 }) {
   const router = useRouter();
+  const manualMode = useSearchParams().get("manual") === "1";
   const queryClient = useQueryClient();
+  const [manualContactOpen, setManualContactOpen] = useState(surface.kind === "contacts" && !!surface.contactId);
   const [addingClient, setAddingClient] = useState(false);
   const [addingSale, setAddingSale] = useState(false);
   const [clientForm, setClientForm] = useState({
@@ -39,7 +57,8 @@ export function CrmWorkspace({
     website: "",
     description: "",
   });
-  const [newChannelName, setNewChannelName] = useState<CrmContactChannelName>("Telegram");
+  const [newChannelName, setNewChannelName] =
+    useState<CrmContactChannelName>("Telegram");
   const [newChannelValue, setNewChannelValue] = useState("");
   const [ownerMemberId, setOwnerMemberId] = useState("");
   const me = useQuery({
@@ -50,14 +69,22 @@ export function CrmWorkspace({
   const permissions = crmPermissions(me.data?.workspace.access);
   const hasCrmView = permissions.canViewOwn || permissions.canViewAll;
   const canViewSales = permissions.canViewSales;
+  const account = useQuery({
+    queryKey: accountKeys.me(),
+    queryFn: accountApi.me,
+    enabled: hasCrmView && permissions.canEditOwn,
+    staleTime: 5 * 60_000,
+  });
+  useCrmInboxRealtime(me.data?.workspace.id, hasCrmView);
   const unread = useQuery({
     queryKey: telegramCrmKeys.unread(),
     queryFn: ({ signal }) => telegramCrmApi.getUnread(signal),
     enabled: hasCrmView,
   });
   const createClient = useMutation({
-    mutationFn: () =>
-      telegramCrmApi.createContact({
+    mutationFn: () => {
+      if(newChannelName === "Instagram" && newChannelValue.trim()) normalizeInstagramProfile(newChannelValue);
+      return telegramCrmApi.createContact({
         displayName: clientForm.displayName.trim(),
         telegramUsername:
           clientForm.telegramUsername.trim() ||
@@ -66,38 +93,53 @@ export function CrmWorkspace({
         email: clientForm.email.trim() || null,
         website: clientForm.website.trim() || null,
         description: clientForm.description.trim() || null,
-        ...(permissions.canEditAll && ownerMemberId
-          ? { ownerMemberId }
-          : {}),
-      }),
+        ...(permissions.canEditAll && ownerMemberId ? { ownerMemberId } : {}),
+      });
+    },
     onSuccess: async (contact) => {
       if (newChannelValue.trim() && newChannelName !== "Telegram") {
         await telegramAdSalesApi.addAdvertiserContact(contact.id, {
           label: newChannelName,
           value: newChannelValue.trim(),
-          type: "OTHER",
+          type: newChannelName === "Instagram" ? "INSTAGRAM" : "OTHER",
           isPrimary: true,
         });
       }
-      setClientForm({ displayName: "", telegramUsername: "", phone: "", email: "", website: "", description: "" });
+      setClientForm({
+        displayName: "",
+        telegramUsername: "",
+        phone: "",
+        email: "",
+        website: "",
+        description: "",
+      });
       setNewChannelName("Telegram");
       setNewChannelValue("");
       setOwnerMemberId("");
       setAddingClient(false);
-      await queryClient.invalidateQueries({ queryKey: telegramCrmKeys.contactLists() });
+      await queryClient.invalidateQueries({
+        queryKey: telegramCrmKeys.contactLists(),
+      });
     },
   });
   useEffect(() => {
     if (me.isSuccess && !hasCrmView && canViewSales)
       router.replace("/ad-sales/sales");
   }, [canViewSales, hasCrmView, me.isSuccess, router]);
-  const title = surface.kind === "inbox" ? "CRM inbox" : surface.kind === "analytics" ? "CRM analytics" : "CRM contacts";
+  const title =
+    surface.kind === "inbox"
+      ? "CRM inbox"
+      : surface.kind === "analytics"
+        ? "CRM analytics"
+        : "CRM contacts";
   const subtitle =
     surface.kind === "inbox"
-      ? "Unclassified Telegram conversations awaiting a deliberate action."
+      ? "Telegram conversations, clients and follow-up."
       : surface.kind === "analytics"
         ? "Client growth, buyers, conversion, and average order value."
-      : "Customer relationships and account-specific Telegram conversations.";
+        : manualMode
+          ? "Instagram profiles, manual communication and follow-up."
+          : "Customer relationships and account-specific Telegram conversations.";
   if (!me.data)
     return (
       <AppShell>
@@ -115,41 +157,72 @@ export function CrmWorkspace({
   return (
     <AppShell>
       <PageTabHead title="CRM" emoji="💬" color="#0f766e" />
-      <PageHeader
-        title={title}
-        subtitle={`${subtitle}${unread.data?.total ? ` ${unread.data.total} unread.` : ""}`}
-        action={
-          <div className="flex flex-wrap gap-2">
-            {surface.kind === "contacts" ? (
-              <CrmAccountSyncPanel canEdit={permissions.canEditAll} />
-            ) : null}
-            {surface.kind === "contacts" && (permissions.canEditOwn || permissions.canEditAll) ? (
-              <Button className="h-11" onClick={() => setAddingClient(true)}>
-                <Plus size={18} /> Add client
-              </Button>
-            ) : null}
-            <Button className="h-11" onClick={() => setAddingSale(true)}>
-              <Plus size={18} /> Sell ad
-            </Button>
-          </div>
+      <div
+        className={
+          manualMode && manualContactOpen ? "hidden lg:block" : undefined
         }
-      />
-      <CrmNavigation
-        canViewInbox={permissions.canViewAll}
-        canViewSales={canViewSales}
-        inboxUnread={unread.data?.inbox}
-      />
-      {surface.kind === "contacts" ? (
+      >
+        <PageHeader
+          title={title}
+          subtitle={`${subtitle}${unread.data?.total ? ` ${unread.data.total} unread.` : ""}`}
+          action={
+            <div className="flex flex-wrap gap-2">
+              {surface.kind === "contacts" ? (
+                <Link
+                  className="inline-flex min-h-11 items-center text-sm text-blue-300"
+                  href={
+                    manualMode
+                      ? "/ad-sales/clients"
+                      : "/ad-sales/clients?manual=1"
+                  }
+                >
+                  {manualMode ? "All clients" : "Manual Instagram"}
+                </Link>
+              ) : null}
+              {surface.kind === "contacts" ? (
+                <CrmAccountSyncPanel canEdit={permissions.canEditAll} />
+              ) : null}
+              {surface.kind === "contacts" &&
+              (permissions.canEditOwn || permissions.canEditAll) ? (
+                <Button className="h-11" onClick={() => setAddingClient(true)}>
+                  <Plus size={18} /> Add client
+                </Button>
+              ) : null}
+              <Button className="h-11" onClick={() => setAddingSale(true)}>
+                <Plus size={18} /> Sell ad
+              </Button>
+            </div>
+          }
+        />
+        <CrmNavigation
+          canViewInbox={hasCrmView}
+          canViewSales={canViewSales}
+          inboxUnread={unread.data?.inbox}
+        />
+      </div>
+      {surface.kind === "contacts" && manualMode ? (
+        <ManualContacts
+          key={me.data.workspace.id}
+          onContactOpenChange={setManualContactOpen}
+          workspace={me.data.workspace.id}
+          canCreate={permissions.canEditOwn || permissions.canEditAll}
+          initialContactId={surface.contactId}
+        />
+      ) : null}
+      {surface.kind === "contacts" && !manualMode ? (
         <CrmContactList
           initialContactId={surface.contactId}
           initialConversationId={surface.conversationId}
         />
       ) : null}
       {surface.kind === "inbox" ? (
-        permissions.canViewAll ? (
+        hasCrmView ? (
           <CrmInbox
             canManage={permissions.canEditAll}
             canSendManual={permissions.canSendManual}
+            canViewSales={canViewSales}
+            canEditOwn={permissions.canEditOwn}
+            currentMemberId={account.data?.workspaceMemberId}
             conversationId={surface.conversationId}
             peerId={surface.peerId}
           />
@@ -164,7 +237,12 @@ export function CrmWorkspace({
         open={addingSale}
         onClose={() => setAddingSale(false)}
       />
-      <Modal open={addingClient} onClose={() => setAddingClient(false)} title="Add client" size="md">
+      <Modal
+        open={addingClient}
+        onClose={() => setAddingClient(false)}
+        title="Add client"
+        size="md"
+      >
         <form
           className="space-y-3"
           onSubmit={(event) => {
@@ -187,50 +265,148 @@ export function CrmWorkspace({
             ) : null}
             <div className="sm:col-span-2">
               <div className="mb-1">
-                <h3 className="text-sm font-semibold text-white">Contact channels</h3>
-                <p className="text-xs text-neutral-500">Choose the first place where you contact this client. It becomes active.</p>
+                <h3 className="text-sm font-semibold text-white">
+                  Contact channels
+                </h3>
+                <p className="text-xs text-neutral-500">
+                  Choose the first place where you contact this client. It
+                  becomes active.
+                </p>
               </div>
               <div className="grid gap-2 sm:grid-cols-[180px_minmax(0,1fr)]">
                 <CustomSelect
                   value={newChannelName}
-                  onChange={(value) => setNewChannelName(value as CrmContactChannelName)}
+                  onChange={(value) =>
+                    setNewChannelName(value as CrmContactChannelName)
+                  }
                   ariaLabel="Contact channel"
                   searchable={false}
-                  options={(["Telegram", "Instagram", "WhatsApp", "Threads"] as CrmContactChannelName[]).map((channel) => ({
+                  options={(
+                    [
+                      "Telegram",
+                      "Instagram",
+                      "WhatsApp",
+                      "Threads",
+                    ] as CrmContactChannelName[]
+                  ).map((channel) => ({
                     value: channel,
                     label: channel,
-                    icon: <CrmContactChannelMark channel={channel} className="h-5 w-5" />,
+                    icon: (
+                      <CrmContactChannelMark
+                        channel={channel}
+                        className="h-5 w-5"
+                      />
+                    ),
                   }))}
                 />
-                <Input aria-label="Contact channel link" placeholder="Profile link or username" value={newChannelValue} onChange={(event) => setNewChannelValue(event.target.value)} />
+                <Input
+                  aria-label="Contact channel link"
+                  placeholder="Profile link or username"
+                  value={newChannelValue}
+                  onChange={(event) => setNewChannelValue(event.target.value)}
+                />
               </div>
             </div>
             <FormField label="Name" required>
-              <Input autoFocus required aria-label="Client name" value={clientForm.displayName} onChange={(event) => setClientForm((current) => ({ ...current, displayName: event.target.value }))} />
+              <Input
+                autoFocus
+                required
+                aria-label="Client name"
+                value={clientForm.displayName}
+                onChange={(event) =>
+                  setClientForm((current) => ({
+                    ...current,
+                    displayName: event.target.value,
+                  }))
+                }
+              />
             </FormField>
             <FormField label="Telegram username">
-              <Input aria-label="Telegram username" placeholder="username" value={clientForm.telegramUsername} onChange={(event) => setClientForm((current) => ({ ...current, telegramUsername: event.target.value }))} />
+              <Input
+                aria-label="Telegram username"
+                placeholder="username"
+                value={clientForm.telegramUsername}
+                onChange={(event) =>
+                  setClientForm((current) => ({
+                    ...current,
+                    telegramUsername: event.target.value,
+                  }))
+                }
+              />
             </FormField>
             <FormField label="Phone">
-              <Input aria-label="Phone" value={clientForm.phone} onChange={(event) => setClientForm((current) => ({ ...current, phone: event.target.value }))} />
+              <Input
+                aria-label="Phone"
+                value={clientForm.phone}
+                onChange={(event) =>
+                  setClientForm((current) => ({
+                    ...current,
+                    phone: event.target.value,
+                  }))
+                }
+              />
             </FormField>
             <FormField label="Email">
-              <Input aria-label="Email" type="email" value={clientForm.email} onChange={(event) => setClientForm((current) => ({ ...current, email: event.target.value }))} />
+              <Input
+                aria-label="Email"
+                type="email"
+                value={clientForm.email}
+                onChange={(event) =>
+                  setClientForm((current) => ({
+                    ...current,
+                    email: event.target.value,
+                  }))
+                }
+              />
             </FormField>
             <div className="sm:col-span-2">
               <FormField label="Website">
-                <Input aria-label="Website" value={clientForm.website} onChange={(event) => setClientForm((current) => ({ ...current, website: event.target.value }))} />
+                <Input
+                  aria-label="Website"
+                  value={clientForm.website}
+                  onChange={(event) =>
+                    setClientForm((current) => ({
+                      ...current,
+                      website: event.target.value,
+                    }))
+                  }
+                />
               </FormField>
             </div>
             <div className="sm:col-span-2">
               <FormField label="Description">
-                <Textarea aria-label="Description" rows={3} value={clientForm.description} onChange={(event) => setClientForm((current) => ({ ...current, description: event.target.value }))} />
+                <Textarea
+                  aria-label="Description"
+                  rows={3}
+                  value={clientForm.description}
+                  onChange={(event) =>
+                    setClientForm((current) => ({
+                      ...current,
+                      description: event.target.value,
+                    }))
+                  }
+                />
               </FormField>
             </div>
           </div>
-          <p className="text-xs text-neutral-500">Tags and reminders can be added after creation.</p>
-          {createClient.error ? <p className="text-sm text-rose-300">Client could not be created.</p> : null}
-          <div className="flex justify-end"><Button type="submit" disabled={createClient.isPending || !clientForm.displayName.trim()}>{createClient.isPending ? "Adding…" : "Add client"}</Button></div>
+          <p className="text-xs text-neutral-500">
+            Tags and reminders can be added after creation.
+          </p>
+          {createClient.error ? (
+            <p className="text-sm text-rose-300">
+              Client could not be created.
+            </p>
+          ) : null}
+          <div className="flex justify-end">
+            <Button
+              type="submit"
+              disabled={
+                createClient.isPending || !clientForm.displayName.trim()
+              }
+            >
+              {createClient.isPending ? "Adding…" : "Add client"}
+            </Button>
+          </div>
         </form>
       </Modal>
     </AppShell>

@@ -62,7 +62,9 @@ describe('TelegramAdSaleBotNotificationService', () => {
     const text = notifications.sendToWorkspaceUser.mock.calls[0][0].text;
     expect(text).toContain('🧪 <b>Test</b>');
     expect(text).toContain('Формат — <b>Автовидалення через 48 годин</b>');
-    expect(text).toContain('📅 Дата — <b>01.10</b>; 🕒 Час — <b>13:00</b>\n🗑️ Формат — <b>Автовидалення через 48 годин</b>');
+    expect(text).toContain(
+      '📅 Дата — <b>01.10</b>; 🕒 Час — <b>13:00</b>\n🗑️ Формат — <b>Автовидалення через 48 годин</b>',
+    );
     expect(prisma.telegramAdSale.update).toHaveBeenCalledWith({
       where: { id: 'sale-1' },
       data: { scheduledBotConfirmationSentAt: expect.any(Date) },
@@ -108,7 +110,9 @@ describe('TelegramAdSaleBotNotificationService', () => {
     expect(text).toContain('✅ <b>Пости опубліковано</b>');
     expect(text).toContain('https://t.me/test_channel/42');
     expect(text).toContain('— <a href="https://t.me/test_channel/42">Пост</a>');
-    expect(text).toContain('📅 Дата — <b>01.10</b>; 🕒 Час — <b>13:00</b>\n🗑️ Формат — <b>Автовидалення через 48 годин</b>');
+    expect(text).toContain(
+      '📅 Дата — <b>01.10</b>; 🕒 Час — <b>13:00</b>\n🗑️ Формат — <b>Автовидалення через 48 годин</b>',
+    );
     expect(prisma.telegramAdSale.update).toHaveBeenCalledWith({
       where: { id: 'sale-1' },
       data: { publishedBotConfirmationSentAt: expect.any(Date) },
@@ -127,7 +131,9 @@ describe('TelegramAdSaleBotNotificationService', () => {
         plannedDeleteAt: null,
       })),
     };
-    const notifications = { sendToWorkspaceUser: jest.fn().mockResolvedValue({ status: 'SENT' }) };
+    const notifications = {
+      sendToWorkspaceUser: jest.fn().mockResolvedValue({ status: 'SENT' }),
+    };
     const service = new TelegramAdSaleBotNotificationService(
       {
         telegramAdSale: {
@@ -135,7 +141,9 @@ describe('TelegramAdSaleBotNotificationService', () => {
           update: jest.fn().mockResolvedValue({}),
         },
       } as never,
-      { resolveWorkspaceIdForUser: jest.fn().mockResolvedValue('workspace-1') } as never,
+      {
+        resolveWorkspaceIdForUser: jest.fn().mockResolvedValue('workspace-1'),
+      } as never,
       notifications as never,
     );
 
@@ -180,8 +188,14 @@ describe('TelegramAdSaleBotNotificationService', () => {
     };
     const service = new TelegramAdSaleBotNotificationService(
       prisma as never,
-      { resolveWorkspaceIdForUser: jest.fn().mockResolvedValue('workspace-1') } as never,
-      { sendToWorkspaceUser: jest.fn().mockResolvedValue({ status: 'NOT_CONNECTED' }) } as never,
+      {
+        resolveWorkspaceIdForUser: jest.fn().mockResolvedValue('workspace-1'),
+      } as never,
+      {
+        sendToWorkspaceUser: jest
+          .fn()
+          .mockResolvedValue({ status: 'NOT_CONNECTED' }),
+      } as never,
     );
 
     await service.sendScheduledOnce('user-1', 'sale-1');

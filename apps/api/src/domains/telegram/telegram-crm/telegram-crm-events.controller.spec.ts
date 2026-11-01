@@ -1,3 +1,4 @@
+import { TelegramCrmStreamAccessService } from './telegram-crm-stream-access.service';
 import { TelegramCrmEventHub } from './telegram-crm-event-hub.service';
 import { TelegramCrmEventsController } from './telegram-crm-events.controller';
 
@@ -11,7 +12,7 @@ const event = (
         type,
         workspaceId,
         occurredAt: '2026-08-31T10:00:00.000Z',
-        contactId: 'contact-1',
+        contactId: ownerMemberId === 'member-2' ? 'other-contact' : 'contact-1',
         ownerMemberId,
       } as const)
     : ({
@@ -33,6 +34,21 @@ describe('TelegramCrmEventsController', () => {
         scope: jest.fn().mockResolvedValue({ assignedMemberId: 'member-1' }),
       } as never,
       hub,
+      new TelegramCrmStreamAccessService(
+        {
+          telegramAdvertiser: {
+            findMany: jest.fn().mockResolvedValue([
+              { id: 'contact-1', ownerMemberId: 'member-1' },
+              { id: 'other-contact', ownerMemberId: 'member-2' },
+            ]),
+          },
+        } as never,
+        {
+          refresh: jest.fn(),
+          require: jest.fn().mockResolvedValue({ workspaceId: 'workspace-1' }),
+          scope: jest.fn().mockResolvedValue({ assignedMemberId: 'member-1' }),
+        } as never,
+      ),
     );
     const received: unknown[] = [];
     const stream = await controller.stream({ sub: 'user-1' } as never);
@@ -44,6 +60,7 @@ describe('TelegramCrmEventsController', () => {
     hub.emit(event('workspace-1', 'contact.updated', 'member-1'));
 
     const visibleEvent = event('workspace-1', 'contact.updated', 'member-1');
+    await new Promise<void>((resolve) => setImmediate(resolve));
     expect(received).toEqual([{ type: 'contact.updated', data: visibleEvent }]);
     subscription.unsubscribe();
   });
@@ -56,12 +73,19 @@ describe('TelegramCrmEventsController', () => {
         scope: jest.fn().mockResolvedValue({}),
       } as never,
       hub,
+      {
+        visible: jest.fn(
+          (_user: string, _workspace: string, events: unknown[]) =>
+            Promise.resolve(events),
+        ),
+      } as never,
     );
     const received: unknown[] = [];
     const stream = await controller.stream({ sub: 'user-1' } as never);
     const subscription = stream.subscribe((value) => received.push(value));
     hub.emit(event('workspace-1', 'inbox.updated', null));
 
+    await new Promise<void>((resolve) => setImmediate(resolve));
     expect(received).toHaveLength(1);
     subscription.unsubscribe();
   });

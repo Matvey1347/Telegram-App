@@ -372,9 +372,7 @@ export class TelegramManagedPostHistoryService {
           title: dto.title?.trim(),
           text: dto.text,
           imageUrls: nextMedia?.imageUrls,
-          mediaItems: nextMedia?.mediaItems as unknown as
-            | Prisma.InputJsonValue
-            | undefined,
+          mediaItems: nextMedia?.mediaItems,
           buttonRows: dto.buttonRows === undefined ? undefined : nextButtonRows,
           scheduleMode: convertsNativeScheduleToLocal ? 'LOCAL' : undefined,
           telegramRemoteStatus: convertsNativeScheduleToLocal

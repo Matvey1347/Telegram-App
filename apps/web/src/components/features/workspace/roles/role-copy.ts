@@ -26,6 +26,7 @@ const FEATURE_COPY: Record<string, { label: string; description: string }> = {
     label: "CRM",
     description: "Advertisers, tasks and automation",
   },
+  "adSales.leads": { label: "Lead Discovery", description: "Permitted source monitoring, evidence and human lead review" },
   advertising: {
     label: "Advertising",
     description: "Campaigns, promos and sources",
@@ -50,6 +51,8 @@ const FEATURE_COPY: Record<string, { label: string; description: string }> = {
 
 const CAPABILITY_COPY: Record<string, string> = {
   view: "View",
+  review: "Review candidates and evidence",
+  analyze: "Run budget-controlled AI analysis",
   create: "Create",
   editOwn: "Edit own",
   editAny: "Edit all",

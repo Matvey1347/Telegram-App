@@ -388,8 +388,7 @@ export class TelegramAdSalesPricingReader {
     }
     const pricing = calculatePricing({
       expectedViews: expectedViews.expectedViews,
-      pricingMode:
-        pricingMode,
+      pricingMode: pricingMode,
       targetCpm,
       minimumCpm: overrides?.minimumCpm ?? targetCpm,
       fixedPrice: overrides?.fixedPrice ?? product?.defaultFixedPrice ?? 0,

@@ -56,26 +56,26 @@ describe('TelegramChannelBookingReadService', () => {
     const recentWindowStart = new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000);
 
     expect(findMany).toHaveBeenCalledWith({
-        where: {
-          workspaceId: 'workspace-1',
-          telegramChannelId: { in: ['channel-1'] },
-          adSalePlacements: { none: {} },
-          AND: [
-            {
-              OR: [
-                { group: { is: null } },
-                { group: { is: { systemKey: null } } },
-                {
-                  group: {
-                    is: {
-                      systemKey: { notIn: ['ADVERTISE', 'MUTUAL_PROMOTION'] },
-                    },
+      where: {
+        workspaceId: 'workspace-1',
+        telegramChannelId: { in: ['channel-1'] },
+        adSalePlacements: { none: {} },
+        AND: [
+          {
+            OR: [
+              { group: { is: null } },
+              { group: { is: { systemKey: null } } },
+              {
+                group: {
+                  is: {
+                    systemKey: { notIn: ['ADVERTISE', 'MUTUAL_PROMOTION'] },
                   },
                 },
-              ],
-            },
-          ],
-          OR: [
+              },
+            ],
+          },
+        ],
+        OR: [
           {
             status: TelegramManagedPostStatus.SCHEDULED,
             scheduledAt: { gt: recentWindowStart, lte: horizon },

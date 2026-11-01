@@ -15,6 +15,7 @@ import {
   UserRound,
   X,
 } from "lucide-react";
+import { safeContactUrl, safeInstagramProfile } from "./manual/safe-contact-url";
 import { IconAvatar } from "@/components/icons/icon-avatar";
 import { TelegramEntityAvatar } from "@/components/features/telegram/telegram/telegram-entity-avatar";
 import {
@@ -394,7 +395,7 @@ function ContactChannelsStatus({ contact }: { contact: CrmContactListItem }) {
               href={channelHref(channel)}
               target="_blank"
               rel="noreferrer"
-              title={`${channel.isPrimary ? "Active contact: " : "Contact: "}${name}`}
+              title={`${channel.type === "OTHER" && name === "Instagram" ? "Legacy unverified · " : ""}${channel.isPrimary ? "Active contact: " : "Contact: "}${name}`}
               className={`inline-flex rounded-full p-0.5 transition-opacity hover:opacity-100 ${channel.isPrimary ? "opacity-100" : "opacity-40"}`}
             >
               <CrmContactChannelMark channel={name} className="h-4 w-4" />
@@ -422,15 +423,16 @@ function ContactChannelsStatus({ contact }: { contact: CrmContactListItem }) {
 function channelName(channel: CrmContactListItem["contactChannels"][number]): CrmContactChannelName {
   if (channel.type === "TELEGRAM_USERNAME" || channel.type === "TELEGRAM_USER_ID") return "Telegram";
   const label = channel.label?.toLowerCase();
-  if (label === "instagram") return "Instagram";
+  if (channel.type === "INSTAGRAM" || label === "instagram") return "Instagram";
   if (label === "whatsapp") return "WhatsApp";
   if (label === "threads") return "Threads";
   return "Other";
 }
 
 function channelHref(channel: CrmContactListItem["contactChannels"][number]) {
-  if (channel.type === "TELEGRAM_USERNAME") return `https://t.me/${channel.value.replace(/^@+/, "")}`;
-  return /^https?:\/\//i.test(channel.value) ? channel.value : `https://${channel.value}`;
+  if(channel.type === "INSTAGRAM" && channel.instagram) return safeInstagramProfile(channel.instagram);
+  if(channel.type === "OTHER" && channel.label?.toLowerCase() === "instagram") return undefined;
+  return safeContactUrl(channel.type,channel.value);
 }
 
 function Metric({ label, value }: { label: string; value: ReactNode }) {

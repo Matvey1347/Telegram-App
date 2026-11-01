@@ -1,0 +1,78 @@
+import type { AiOperationView } from './ai-usage';
+import type { CrmPackageSalesContext } from './telegram-crm-sales-workflow';
+
+export const CRM_COPILOT_CATEGORIES = ['SALES_FIRST_DRAFT', 'SALES_REPLY_SUGGESTION', 'SALES_FOLLOW_UP', 'SALES_CONVERSATION_ANALYSIS'] as const;
+export type CrmCopilotCategory = typeof CRM_COPILOT_CATEGORIES[number];
+export const CRM_COPILOT_TONES = ['NATURAL', 'CONSULTATIVE', 'DIRECT'] as const;
+export type CrmCopilotTone = typeof CRM_COPILOT_TONES[number];
+export type CrmCopilotLanguage = 'AUTO' | 'uk' | 'ru' | 'en';
+export const CRM_COPILOT_ACTIONS = ['REPLY', 'CLARIFY', 'PROVIDE_VERIFIED_STATISTICS', 'PREPARE_PACKAGE', 'WAIT', 'SCHEDULE_FOLLOW_UP', 'MANAGER_REVIEW', 'CLOSE', 'NONE'] as const;
+export type CrmCopilotAction = typeof CRM_COPILOT_ACTIONS[number];
+export type CrmCopilotFact = { id: string; kind: 'CLIENT' | 'MESSAGE' | 'PURCHASE' | 'PRODUCT' | 'WORKFLOW' | 'NOTE'; text: string };
+/** Structured model output; usedFacts contains references, never self-attested facts. */
+export type CrmCopilotOutput = {
+  suggestedMessage: string;
+  reasoningSummary: string;
+  recommendedAction: CrmCopilotAction;
+  customerIntent: string;
+  confidence: number;
+  usedFacts: string[];
+  missingFacts: string[];
+  warnings: string[];
+  requiresHumanReview: boolean;
+  language: 'uk' | 'ru' | 'en';
+  tone: CrmCopilotTone;
+  contextVersion: string;
+};
+export type CrmCopilotGenerateInput = {
+  operationId: string;
+  category: CrmCopilotCategory;
+  tone: CrmCopilotTone;
+  language: CrmCopilotLanguage;
+  productIds: string[];
+  includeNotes: boolean;
+  processingBasis: 'DOCUMENTED_CONSENT' | 'APPROVED_BUSINESS_PROCESSING';
+  processingReference: string;
+  sourceAcknowledged: boolean;
+};
+export type CrmCopilotStatus = 'GENERATING' | 'READY' | 'APPROVED' | 'SENT' | 'DISCARDED' | 'UNKNOWN' | 'FAILED' | 'STALE' | 'REVIEW_REQUIRED' | 'EXPIRED';
+export type CrmCopilotDraft = {
+  id: string;
+  workspaceId: string;
+  conversationId: string;
+  contactId: string;
+  authorUserId: string;
+  operationId: string;
+  category: CrmCopilotCategory;
+  tone: CrmCopilotTone;
+  status: CrmCopilotStatus;
+  text: string;
+  output: CrmCopilotOutput | null;
+  facts: CrmCopilotFact[];
+  missingFacts: string[];
+  warnings: string[];
+  contextVersion: string;
+  revision: number;
+  createdAt: string;
+  expiresAt: string;
+  approvedAt: string | null;
+  operation: AiOperationView | null;
+  canEdit: boolean;
+};
+export type CrmCopilotContextView = {
+  conversationId: string;
+  contactId: string | null;
+  contactName: string;
+  processingEnabled: boolean;
+  processingReference: string | null;
+  canGenerate: boolean;
+  blockedReason: string | null;
+  facts: CrmCopilotFact[];
+  missingFacts: string[];
+  warnings: string[];
+  contextVersion: string;
+  products: CrmPackageSalesContext['products'];
+};
+export type CrmCopilotDrafts = { items: CrmCopilotDraft[] };
+export type CrmCopilotDraftPatch = { revision: number; action: 'SAVE' | 'APPROVE' | 'DISCARD'; text?: string };
+export type CrmCopilotSendApproval = { aiDraftId: string; aiDraftRevision: number };

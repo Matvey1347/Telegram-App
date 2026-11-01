@@ -553,7 +553,7 @@ export class CrossPromotionPlansService {
         placementPostIds: [
           ...placements.filter((item) => item.publicationId !== publicationId),
           ...replacements,
-        ] as unknown as Prisma.InputJsonValue,
+        ],
         status,
         lastError: null,
       },
@@ -624,7 +624,7 @@ export class CrossPromotionPlansService {
               placement.telegramChannelId !== channelId,
           ),
           replacement,
-        ] as unknown as Prisma.InputJsonValue,
+        ],
         status,
         lastError: null,
       },
@@ -974,14 +974,11 @@ export class CrossPromotionPlansService {
             ...target.partnerChannelIds,
             ...source.partnerChannelIds,
           ]),
-          targets: combinedTargets as unknown as Prisma.InputJsonValue,
-          publicationPost: combinedPost as unknown as Prisma.InputJsonValue,
-          placementPostIds:
-            combinedPlacements as unknown as Prisma.InputJsonValue,
-          baselineTargetCounters:
-            combinedBaselines as unknown as Prisma.InputJsonValue,
-          baselinePublisherSubscribers:
-            combinedSubscribers as unknown as Prisma.InputJsonValue,
+          targets: combinedTargets,
+          publicationPost: combinedPost,
+          placementPostIds: combinedPlacements,
+          baselineTargetCounters: combinedBaselines,
+          baselinePublisherSubscribers: combinedSubscribers,
           scheduledAt: new Date(
             Math.min(
               target.scheduledAt.getTime(),

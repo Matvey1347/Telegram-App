@@ -155,3 +155,48 @@ describe("useNotificationRealtime", () => {
     });
   });
 });
+
+describe("notification bursts and bounded reconnect", () => {
+  beforeEach(() => { vi.clearAllMocks(); setVisibility("visible"); });
+  afterEach(() => { vi.useRealTimers(); setVisibility("visible"); });
+  it("coalesces 100 unknown group events into one small badge refresh without refetching Inbox", async () => {
+    vi.useFakeTimers();
+    vi.mocked(fetchOperationsNotificationStream).mockImplementation(pendingStream as typeof fetchOperationsNotificationStream);
+    const client = new QueryClient(); const invalidate = vi.spyOn(client, "invalidateQueries");
+    const wrapper = ({ children }: PropsWithChildren) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+    const hook = renderHook(() => useNotificationRealtime({ workspaceId: "workspace-a", enabled: true, panelOpen: false }), { wrapper });
+    const onEvent = vi.mocked(fetchOperationsNotificationStream).mock.calls[0][0].onEvent;
+    await act(async () => {
+      for (let i = 0; i < 100; i += 1) onEvent({ type: "notification.created", workspaceId: "workspace-a", recipientMemberId: "member-a", occurredAt: "now",
+        notification: { id: `group-${i}`, workspaceId: "workspace-a", readAt: null } as never });
+      await Promise.resolve();
+    });
+    expect(invalidate).not.toHaveBeenCalled();
+    await act(() => vi.advanceTimersByTimeAsync(1000));
+    expect(invalidate).toHaveBeenCalledTimes(1);
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["operations-notifications", "workspace-a", "unread"], exact: true });
+    hook.unmount();
+  });
+  it("ignores foreign workspace events and aborts the old stream on workspace switch", async () => {
+    vi.mocked(fetchOperationsNotificationStream).mockImplementation(pendingStream as typeof fetchOperationsNotificationStream);
+    const client = new QueryClient(); const invalidate = vi.spyOn(client, "invalidateQueries");
+    const wrapper = ({ children }: PropsWithChildren) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+    const hook = renderHook(({ workspaceId }) => useNotificationRealtime({ workspaceId, enabled: true, panelOpen: false }), { wrapper, initialProps: { workspaceId: "workspace-a" } });
+    const first = vi.mocked(fetchOperationsNotificationStream).mock.calls[0][0];
+    act(() => first.onEvent({ type: "notifications.invalidated", workspaceId: "foreign", recipientMemberId: "member-x", occurredAt: "now" }));
+    expect(invalidate).not.toHaveBeenCalled();
+    hook.rerender({ workspaceId: "workspace-b" }); expect(first.signal.aborted).toBe(true);
+  });
+  it("stops repeated immediately closed handshakes after six reconnect attempts", async () => {
+    vi.useFakeTimers();
+    vi.mocked(fetchOperationsNotificationStream).mockImplementation(async ({ onOpen }) => { onOpen?.(); });
+    const client = new QueryClient();
+    const wrapper = ({ children }: PropsWithChildren) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+    const hook = renderHook(() => useNotificationRealtime({ workspaceId: "workspace-a", enabled: true, panelOpen: false }), { wrapper });
+    await act(() => vi.advanceTimersByTimeAsync(120_000));
+    expect(fetchOperationsNotificationStream).toHaveBeenCalledTimes(7);
+    await act(() => vi.advanceTimersByTimeAsync(120_000));
+    expect(fetchOperationsNotificationStream).toHaveBeenCalledTimes(7);
+    hook.unmount();
+  });
+});

@@ -1,4 +1,5 @@
 import type {
+  CrmCopilotSendApproval,
   CrmAccountCapabilities,
   CrmAnalyticsSummary,
   CrmAccountSyncState,
@@ -257,7 +258,7 @@ export const telegramCrmApi = {
     ).data,
   sendManualMessage: async (
     conversationId: string,
-    payload: { text: string; clientIdempotencyKey: string },
+    payload: { text: string; clientIdempotencyKey: string; replyToMessageId?: string } & Partial<CrmCopilotSendApproval>,
   ) =>
     (
       await api.post<CrmManualMessageResult>(
@@ -265,6 +266,8 @@ export const telegramCrmApi = {
         payload,
       )
     ).data,
+  getManualSendReceipt: async (conversationId: string, clientIdempotencyKey: string) =>
+    (await api.get<CrmManualMessageResult | null>(`/telegram-crm/conversations/${conversationId}/manual-send-receipt`, { params: { clientIdempotencyKey } })).data,
   markConversationRead: async (conversationId: string) =>
     (
       await api.post<CrmConversationReadResult>(
@@ -273,7 +276,7 @@ export const telegramCrmApi = {
     ).data,
   importHistory: async (
     conversationId: string,
-    payload: { beforeTelegramMessageId?: number; limit?: number },
+    payload: { beforeTelegramMessageId?: number; limit?: number; recent?: boolean },
   ) =>
     (
       await api.post<CrmHistoryImportResult>(

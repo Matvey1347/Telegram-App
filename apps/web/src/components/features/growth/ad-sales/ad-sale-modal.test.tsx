@@ -563,12 +563,12 @@ describe("AdSaleModal", () => {
     expect(screen.getByText(/· 18:30 · 1\/24/)).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Format for all" }));
-    fireEvent.click(await screen.findByRole("button", { name: "2/48" }));
+    fireEvent.click(await screen.findByRole("option", { name: "2/48" }));
 
     await screen.findByText(/2\/48 · 250 UAH/);
 
     fireEvent.click(screen.getByRole("button", { name: "Format for all" }));
-    expect(screen.getAllByRole("button", { name: "2/48" })).toHaveLength(1);
+    expect(screen.getAllByRole("option", { name: "2/48" })).toHaveLength(1);
   });
 
   it("uses one converted quote for both totals of a single placement", async () => {
@@ -614,7 +614,7 @@ describe("AdSaleModal", () => {
       target: { value: "18:30" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Format for all" }));
-    fireEvent.click(await screen.findByRole("button", { name: "2/48" }));
+    fireEvent.click(await screen.findByRole("option", { name: "2/48" }));
 
     fireEvent.click(screen.getAllByRole("button", { name: "10.08.2099" })[0]);
     fireEvent.click(screen.getAllByRole("button", { name: "11" })[0]);
@@ -708,7 +708,7 @@ describe("AdSaleModal", () => {
     );
     expect(onLoadPublishedPosts).toHaveBeenCalledTimes(1);
 
-    const postOption = await screen.findByRole("button", {
+    const postOption = await screen.findByRole("option", {
       name: /17:00 · Published campaign post/,
     });
     fireEvent.click(postOption);

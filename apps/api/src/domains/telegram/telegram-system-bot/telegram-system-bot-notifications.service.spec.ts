@@ -4,16 +4,14 @@ describe('TelegramSystemBotNotificationsService', () => {
   it('routes by persisted subscription membership, not current workspace', async () => {
     const prisma = {
       telegramSystemBotTaskSubscription: {
-        findMany: jest
-          .fn()
-          .mockResolvedValue([
-            {
-              connection: {
-                telegramChatId: '44',
-                user: { locale: 'en' },
-              },
+        findMany: jest.fn().mockResolvedValue([
+          {
+            connection: {
+              telegramChatId: '44',
+              user: { locale: 'en' },
             },
-          ]),
+          },
+        ]),
       },
       workspace: {
         findUnique: jest.fn().mockResolvedValue({ name: 'Business' }),

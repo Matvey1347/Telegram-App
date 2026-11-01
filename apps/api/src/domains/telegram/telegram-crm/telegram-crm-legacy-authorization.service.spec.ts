@@ -11,6 +11,7 @@ function createService(
     workspaceMember: { findFirst: jest.fn() },
   };
   const authorization = {
+    refresh: jest.fn().mockResolvedValue(undefined),
     require: jest.fn().mockResolvedValue({ workspaceId: 'workspace-1' }),
     scope: jest.fn().mockResolvedValue(ownership),
   };
@@ -98,5 +99,24 @@ describe('TelegramCrmLegacyAuthorizationService', () => {
         advertiser: { ownerMemberId: 'member-1' },
       },
     });
+  });
+  it('refreshes current role grants before returning a scope for locked mutations', async () => {
+    const { service, authorization } = createService({
+      assignedMemberId: 'member-1',
+    });
+    await expect(service.refreshEditScope('user-1')).resolves.toEqual({
+      workspaceId: 'workspace-1',
+      ownerMemberId: 'member-1',
+    });
+    expect(authorization.refresh).toHaveBeenCalledWith('user-1');
+    expect(authorization.refresh.mock.invocationCallOrder[0]).toBeLessThan(
+      authorization.require.mock.invocationCallOrder[0],
+    );
+    authorization.refresh.mockRejectedValue(
+      new ForbiddenException('membership revoked'),
+    );
+    await expect(service.refreshEditScope('user-1')).rejects.toThrow(
+      'membership revoked',
+    );
   });
 });

@@ -12,7 +12,9 @@ describe('TelegramBotIdentityService', () => {
   beforeEach(() => jest.clearAllMocks());
 
   it('rejects a bot already connected to the workspace', async () => {
-    prisma.telegramBotRuntimeInstance.findFirst.mockResolvedValue({ id: 'bot-1' });
+    prisma.telegramBotRuntimeInstance.findFirst.mockResolvedValue({
+      id: 'bot-1',
+    });
 
     await expect(
       service.ensureAvailable('workspace-1', '123'),

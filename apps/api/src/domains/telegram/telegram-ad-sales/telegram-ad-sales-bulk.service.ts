@@ -205,7 +205,6 @@ export class TelegramAdSalesBulkService {
       }
     });
 
-
     this.responseCache.clearByPrefix(
       `telegram-ad-sales:availability:${workspaceId}:`,
     );
@@ -481,9 +480,9 @@ export class TelegramAdSalesBulkService {
       const contactIsEmail = Boolean(normalizedEmail?.includes('@'));
       const existing = await findCanonicalAdvertiser(tx.telegramAdvertiser, {
         workspaceId,
-        username: advertiser.advertiserTelegram
-          ?.replace(/^@+/, '')
-          .toLowerCase() ?? null,
+        username:
+          advertiser.advertiserTelegram?.replace(/^@+/, '').toLowerCase() ??
+          null,
         phone: normalizedPhone,
         email: normalizedEmail,
         displayName: advertiser.advertiserName,
@@ -526,9 +525,9 @@ export class TelegramAdSalesBulkService {
           tx.telegramAdvertiser,
           {
             workspaceId,
-            username: advertiser.advertiserTelegram
-              ?.replace(/^@+/, '')
-              .toLowerCase() ?? null,
+            username:
+              advertiser.advertiserTelegram?.replace(/^@+/, '').toLowerCase() ??
+              null,
             phone: normalizedPhone,
             email: normalizedEmail,
             displayName: advertiser.advertiserName,

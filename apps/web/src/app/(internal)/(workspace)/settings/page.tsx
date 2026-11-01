@@ -17,6 +17,7 @@ import { accountApi, authApi, workspacesApi } from "@/lib/api";
 import { WorkspaceMembersSection } from "@/components/features/workspace/workspace-members-section";
 import { WorkspaceTools } from "@/components/features/workspace/workspace-tools";
 import { WorkspaceAdSalesDefaults } from "@/components/features/workspace/workspace-ad-sales-defaults";
+import { NotificationSettingsSection } from "@/components/features/operations/notifications/notification-settings-section";
 
 export default function SettingsPage() {
   const qc = useQueryClient();
@@ -86,6 +87,7 @@ export default function SettingsPage() {
       />
       {me.isLoading ? <LoadingState /> : null}
       <div className="space-y-4">
+        {me.data?.workspace.id ? <NotificationSettingsSection workspaceId={me.data.workspace.id} /> : null}
         <WorkspaceTools
           role={me.data?.workspace.role}
           access={me.data?.workspace.access}

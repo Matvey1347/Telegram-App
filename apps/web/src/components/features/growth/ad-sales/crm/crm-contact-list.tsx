@@ -52,6 +52,8 @@ import {
   CrmTagEmoji,
   CrmTelegramFolderBadge,
   crmTagDisplayName,
+  crmTagColorStyle,
+  isCrmContactTag,
 } from "./crm-tag-presentation";
 
 export { CrmContactCard } from "./crm-contact-card";
@@ -67,6 +69,7 @@ export function CrmContactList({
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const [deepInfoOpen,setDeepInfoOpen] = useState(!!initialContactId && !initialConversationId);
   const [search, setSearch] = useState("");
   const deferredSearch = useDeferredValue(search.trim());
   const [page, setPage] = useState(1);
@@ -80,7 +83,7 @@ export function CrmContactList({
     action: CrmContactAction;
   } | null>(null);
   const persistedContactId =
-    searchParams.get("crmContact") ?? initialContactId ?? null;
+    searchParams.get("crmContact") ?? (initialConversationId ? initialContactId : null) ?? null;
   const [openChatIds, setOpenChatIds] = useState<string[]>(() => {
     const stored =
       searchParams.get("crmChats")?.split(",").filter(Boolean) ?? [];
@@ -312,11 +315,13 @@ export function CrmContactList({
               setTagIds(value);
               setPage(1);
             }}
-            options={(query.data?.availableTags ?? []).map((facet) => {
+            options={(query.data?.availableTags ?? []).filter(isCrmContactTag).map((facet) => {
               return {
                 value: facet.id,
                 label: `${crmTagDisplayName(facet)} (${facet.contactCount})`,
                 selectedLabel: crmTagDisplayName(facet),
+                badgeClassName: "rounded-full border px-1.5 py-0.5",
+                badgeStyle: crmTagColorStyle(facet),
                 icon: (
                   <span className="inline-flex items-center gap-1">
                     <span
@@ -414,6 +419,7 @@ export function CrmContactList({
           />
         </div>
       ) : null}
+      {deepInfoOpen && initialContactId ? <CrmContactActionModal contactId={initialContactId} action="info" onClose={()=>setDeepInfoOpen(false)}/> : null}
       {localSelectedAction ? (
         <CrmContactActionModal
           contactId={localSelectedAction.contact.id}
