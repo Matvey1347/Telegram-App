@@ -185,6 +185,11 @@ export class TelegramCrmSystemTagsService {
       });
     }
     const names = new Map(existing.map((tag) => [tag.name, tag.systemKey]));
+    // Newly inserted definitions also own their names before existing tags rename.
+    for (const definition of missing) {
+      if (!names.has(definition.name))
+        names.set(definition.name, definition.systemKey);
+    }
     const safeDefinitions = definitions.map((definition) => {
       const current = existingByKey.get(definition.systemKey);
       if (
