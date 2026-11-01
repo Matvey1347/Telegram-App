@@ -282,6 +282,7 @@ export const telegramCrmApi = {
       await api.post<CrmHistoryImportResult>(
         `/telegram-crm/conversations/${conversationId}/history`,
         payload,
+        { feedback: { mode: "managed" } } as Parameters<typeof api.post>[2],
       )
     ).data,
   getUnread: async (signal?: AbortSignal) =>
