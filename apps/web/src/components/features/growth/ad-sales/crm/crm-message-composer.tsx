@@ -2,6 +2,7 @@
 import { useCopilotText } from "./copilot/copilot-copy";
 
 import { forwardRef, useImperativeHandle, useState, type ReactNode } from "react";
+import { Maximize2 } from "lucide-react";
 import { MessageComposer } from "@/components/chat/message-composer";
 import { TelegramTextEditor } from "@/components/features/telegram/telegram/telegram-text-editor";
 import { ModalDraftPicker } from "@/components/ui/modal-draft-picker";
@@ -170,7 +171,7 @@ export const CrmMessageComposer = forwardRef<
         >
           <div className="flex items-end gap-2 rounded-lg border border-neutral-700 bg-neutral-900 p-2">
             <textarea aria-label="Message text" value={value.text} onChange={(event) => updateText(event.target.value)} disabled={sending || disabled} rows={2} placeholder="Write a message…" className="min-w-0 flex-1 resize-none bg-transparent px-2 py-1 text-sm leading-6 text-white outline-none placeholder:text-neutral-500" />
-            <button type="button" onClick={() => setEditorOpen(true)} disabled={sending || disabled} className="min-h-10 shrink-0 rounded-md px-2 text-xs text-blue-300 hover:bg-neutral-800">Expand editor</button>
+            <button type="button" onClick={() => setEditorOpen(true)} disabled={sending || disabled} aria-label="Expand editor" title="Expand editor" className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md text-blue-300 hover:bg-neutral-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"><Maximize2 size={17} aria-hidden /></button>
           </div>
           <Modal open={editorOpen} onClose={() => setEditorOpen(false)} title="Edit message" size="xl">
             <TelegramTextEditor value={value.text} onChange={updateText} disabled={sending || disabled} rows={8} placeholder="Write a message…" characterCountLabel={(count) => `${count} / 4096`} enableCustomEmoji />

@@ -140,10 +140,25 @@ describe('internal AI fixed Responses provider (mocked only)', () => {
       'https://api.openai.com/v1/responses/input_tokens',
       'https://api.openai.com/v1/responses',
     ]);
-    const bodies = fetchMock.mock.calls.map(([, init]) =>
-      JSON.parse(init.body),
+    const bodies = fetchMock.mock.calls.map(
+      ([, init]) => JSON.parse(init.body) as Record<string, unknown>,
     );
-    expect(bodies[0]).toEqual(bodies[1]);
+    expect(bodies[0]).toEqual({
+      model: bodies[1].model,
+      input: bodies[1].input,
+      instructions: bodies[1].instructions,
+      tools: bodies[1].tools,
+      reasoning: bodies[1].reasoning,
+      text: bodies[1].text,
+      truncation: bodies[1].truncation,
+    });
+    for (const key of [
+      'store',
+      'background',
+      'service_tier',
+      'max_output_tokens',
+    ])
+      expect(bodies[0]).not.toHaveProperty(key);
     expect(bodies[1]).toMatchObject({
       store: false,
       background: false,
@@ -153,6 +168,32 @@ describe('internal AI fixed Responses provider (mocked only)', () => {
       instructions: 'Trusted server policy',
     });
   });
+  it.each([
+    [400, 'TOKEN_COUNT_REQUEST_INVALID'],
+    [401, 'TOKEN_COUNT_AUTHENTICATION_FAILED'],
+    [403, 'TOKEN_COUNT_AUTHENTICATION_FAILED'],
+    [404, 'TOKEN_COUNT_MODEL_UNAVAILABLE'],
+    [429, 'TOKEN_COUNT_RATE_LIMITED'],
+    [503, 'TOKEN_COUNT_UNAVAILABLE'],
+  ])(
+    'reports safe token-count failure %s without attempting generation',
+    async (status, errorCategory) => {
+      fetchMock.mockResolvedValue(
+        response({ error: { message: 'private provider detail' } }, status),
+      );
+      const outcome = await new AiProvider(deployment as any, registry).execute(
+        'text',
+        config,
+      );
+      expect(outcome).toMatchObject({
+        errorCategory,
+        generationStarted: false,
+        usage: null,
+      });
+      expect(JSON.stringify(outcome)).not.toContain('private provider detail');
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    },
+  );
   it('refuses input over exact token cap before generation', async () => {
     fetchMock.mockResolvedValue(response({ input_tokens: 8001 }));
     expect(
@@ -196,7 +237,7 @@ describe('internal AI fixed Responses provider (mocked only)', () => {
     expect(result).toMatchObject({
       generationStarted: true,
       usage: null,
-      errorCategory: 'PROVIDER_FAILED',
+      errorCategory: 'PROVIDER_UNAVAILABLE',
     });
     expect(JSON.stringify(result)).not.toContain('server-secret');
   });

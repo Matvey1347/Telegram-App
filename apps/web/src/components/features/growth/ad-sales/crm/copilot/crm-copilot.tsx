@@ -1,16 +1,24 @@
 "use client";
-import { useCopilotText } from "./copilot-copy";
 import { forwardRef, useImperativeHandle, useState } from "react";
+import { RotateCw, Sparkles, X } from "lucide-react";
 import type { CrmCopilotDraft } from "@telegram-system/shared";
-import { Button, Select } from "@/components/ui/primitives";
-import {
-  CrmCopilotOptions,
-  initialCopilotOptions,
-} from "./crm-copilot-options";
-import { CrmCopilotDetails } from "./crm-copilot-details";
+import { Button } from "@/components/ui/primitives";
 import { CrmCopilotDraftEditor } from "./crm-copilot-draft";
 import { useCrmCopilot } from "./use-crm-copilot";
+
 export type CrmCopilotHandle = { review: (id: string, text: string) => void };
+function failureMessage(draft: CrmCopilotDraft) {
+  const warnings = draft.warnings.join(" ");
+  if (/POLICY|PERMISSION|ACCESS|PROCESSING/.test(warnings))
+    return "ИИ недоступен: проверьте доступ к этому workspace и клиенту.";
+  if (/BUDGET|LIMIT/.test(warnings))
+    return "Достигнут лимит ИИ. Подробности — в статистике AI Usage.";
+  if (/AUTH|KEY/.test(warnings))
+    return "Не удалось подключиться к ИИ. Администратору нужно проверить ключ сервиса.";
+  if (/RATE/.test(warnings))
+    return "Сервис ИИ занят. Попробуйте сгенерировать ответ немного позже.";
+  return "Не удалось сгенерировать ответ. Можно повторить запрос новой кнопкой генерации.";
+}
 export const CrmCopilot = forwardRef<
   CrmCopilotHandle,
   {
@@ -24,245 +32,162 @@ export const CrmCopilot = forwardRef<
   { workspaceId, conversationId, contactId, canSend, onInsert },
   ref,
 ) {
-  const t = useCopilotText();
   const copilot = useCrmCopilot(workspaceId, conversationId, contactId);
-  const [options, setOptions] = useState(initialCopilotOptions);
-  const { details, setDetails } = copilot;
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [reviewText, setReviewText] = useState<string | undefined>();
+  const [review, setReview] = useState<{ id: string; text: string } | null>(
+    null,
+  );
   useImperativeHandle(ref, () => ({
     review: (id, text) => {
+      setReview({ id, text });
       copilot.setOpen(true);
-      setSelectedId(id);
-      setReviewText(text);
     },
   }));
   const items = copilot.drafts.data?.items ?? [];
-  const selected = selectedId
-    ? items.find((v) => v.id === selectedId)
+  const selected = review
+    ? items.find((item) => item.id === review.id)
     : items[0];
-  const input = {
-    ...options,
-    processingReference: copilot.context.data?.processingReference ?? "",
-    sourceAcknowledged: Boolean(copilot.context.data?.processingReference),
-    productIds: copilot.productIds,
-    includeNotes: copilot.includeNotes,
+  const ready =
+    selected &&
+    ["READY", "REVIEW_REQUIRED", "APPROVED", "STALE"].includes(
+      selected.status,
+    ) &&
+    !!selected.text;
+  const uncertain =
+    selected && ["UNKNOWN", "GENERATING"].includes(selected.status);
+  const generate = () => {
+    setReview(null);
+    void copilot.generate();
   };
-  const eligible =
-    !!copilot.context.data?.canGenerate &&
-    Boolean(copilot.context.data?.processingReference);
+  const recoveryRequired = Boolean(uncertain || copilot.generation.isError);
+  const checkGeneration = () => {
+    copilot.setOpen(true);
+    if (copilot.generation.isError && copilot.canRetry)
+      void copilot.generate(true);
+    else void copilot.drafts.refetch();
+  };
   return (
     <section
       aria-label="AI Sales Copilot"
-      className="flex min-h-0 shrink flex-col overflow-hidden border-t border-neutral-700 bg-blue-950/20 px-3 py-1.5"
+      className="min-h-0 shrink overflow-hidden border-t border-neutral-800 bg-blue-950/10 px-3 py-2"
     >
-      <div className="flex shrink-0 items-center justify-between gap-2">
-        <button
-          type="button"
-          className="min-h-10 text-sm font-semibold text-blue-200"
-          aria-expanded={copilot.open}
-          onClick={() => { if (!copilot.open) copilot.setPrepared(true); copilot.setOpen(!copilot.open); }}
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          variant="secondary"
+          disabled={
+            !canSend ||
+            copilot.generation.isPending ||
+            copilot.update.isPending ||
+            (recoveryRequired && copilot.drafts.isFetching)
+          }
+          onClick={recoveryRequired ? checkGeneration : generate}
+          className="!min-h-9 text-xs"
         >
-          ✦ AI Sales Copilot {copilot.open ? "−" : "+"}
-        </button>
-        <span className="text-xs text-neutral-400">
-          {t("Human approval only")}
-        </span>
+          <Sparkles size={15} aria-hidden />
+          {copilot.generation.isPending
+            ? "Генерирую ответ…"
+            : recoveryRequired
+              ? "Проверить генерацию"
+              : "Сгенерировать ответ"}
+        </Button>
+        {!copilot.open ? (
+          <span className="text-xs text-neutral-500">
+            {recoveryRequired
+              ? "Результат предыдущего запроса ещё не подтверждён"
+              : "ИИ учитывает переписку и клиента"}
+          </span>
+        ) : (
+          <button
+            type="button"
+            aria-label="Скрыть ответ ИИ"
+            title="Скрыть ответ ИИ"
+            className="ml-auto inline-flex h-9 w-9 items-center justify-center rounded text-neutral-400 hover:bg-neutral-800 focus-visible:ring-2 focus-visible:ring-blue-500"
+            onClick={() => copilot.setOpen(false)}
+          >
+            <X size={16} />
+          </button>
+        )}
       </div>
       {copilot.open ? (
-        <div className="min-h-0 max-h-[30dvh] shrink space-y-3 overflow-y-auto overscroll-contain pb-3 pr-1">
-          <p className="text-xs text-neutral-400">
-            {t(
-              "AI never sends messages or changes CRM status. Manual chat stays available.",
-            )}
-          </p>
-          {copilot.drafts.isLoading ? (
-            <p role="status">{t("Loading AI drafts…")}</p>
-          ) : copilot.drafts.isError ? (
-            <p role="alert" className="text-xs text-amber-200">
-              AI drafts are unavailable. Manual messages still work.{" "}
-              <button
-                className="text-blue-300"
-                onClick={() => void copilot.drafts.refetch()}
-              >
-                {t("Retry drafts")}
-              </button>
-            </p>
-          ) : !items.length ? (
-            <p className="text-xs text-neutral-400">
-              {t("No saved AI drafts. Prepare context to create a suggestion.")}
+        <div className="mt-2 max-h-[24dvh] space-y-2 overflow-y-auto overscroll-contain">
+          {copilot.generation.isPending ? (
+            <p role="status" className="text-xs text-neutral-400">
+              Готовлю персональный ответ по контексту…
             </p>
           ) : null}
-          {items.length > 1 ? (
-            <Select
-              aria-label="Saved AI draft"
-              value={selected?.id ?? ""}
-              onChange={(e) => {
-                setSelectedId(e.target.value);
-                setReviewText(undefined);
-              }}
-            >
-              {items.map((v) => (
-                <option key={v.id} value={v.id}>
-                  {v.category.replace("SALES_", "")} · {v.status} ·{" "}
-                  {new Date(v.createdAt).toLocaleTimeString()}
-                </option>
-              ))}
-            </Select>
-          ) : null}
-          {selectedId && !selected && !copilot.drafts.isLoading ? (
-            <p role="alert" className="text-xs text-amber-200">
-              {t(
-                "This saved AI draft is unavailable or expired. Keep the text for review; it cannot be reapproved here.",
-              )}
-            </p>
-          ) : null}
-          {selected ? (
+          {!copilot.generation.isPending && ready ? (
             <CrmCopilotDraftEditor
-              key={`${selected.id}:${selected.revision}:${reviewText ?? ""}`}
+              key={`${selected.id}:${selected.revision}:${review?.text ?? ""}`}
               draft={selected}
-              initialText={reviewText}
+              initialText={review?.text}
+              pending={copilot.update.isPending}
               contextChanged={copilot.changed}
               canSend={canSend}
-              pending={copilot.update.isPending}
-              onInsert={onInsert}
               onPatch={async (draft, action, text) => {
                 const result = await copilot.patch(draft, action, text);
-                if (result) setReviewText(undefined);
+                if (result) setReview(null);
                 return result;
               }}
+              onInsert={onInsert}
             />
+          ) : null}
+          {!copilot.generation.isPending && selected?.status === "FAILED" ? (
+            <p role="alert" className="text-xs text-amber-200">
+              {failureMessage(selected)}
+            </p>
+          ) : null}
+          {!copilot.generation.isPending && selected?.status === "DISCARDED" ? (
+            <p role="status" className="text-xs text-neutral-400">
+              Учтём эту оценку при следующей генерации.
+            </p>
+          ) : null}
+          {!copilot.generation.isPending && uncertain ? (
+            <div role="status" className="space-y-2 text-xs text-amber-200">
+              <p>
+                Ответ ещё готовится или его результат не подтверждён. Проверьте
+                сохранённый результат перед новой генерацией.
+              </p>
+              <Button
+                variant="secondary"
+                onClick={() => void copilot.drafts.refetch()}
+                disabled={copilot.drafts.isFetching}
+              >
+                Проверить результат
+              </Button>
+            </div>
+          ) : null}
+          {copilot.generation.isError ? (
+            <div role="alert" className="space-y-2 text-xs text-amber-200">
+              <p>
+                Не удалось получить результат запроса. Сначала проверьте его,
+                чтобы не оплачивать повторную генерацию.
+              </p>
+              <Button
+                variant="secondary"
+                disabled={copilot.generation.isPending || !copilot.canRetry}
+                onClick={() => void copilot.generate(true)}
+              >
+                <RotateCw size={14} aria-hidden />
+                Проверить запрос
+              </Button>
+            </div>
           ) : null}
           {copilot.update.isError ? (
             <p role="alert" className="text-xs text-amber-200">
-              {t(
-                "Draft could not be updated. Check current permissions, context and prices, then retry.",
-              )}
+              Не удалось использовать ответ. Возможно, изменились переписка,
+              условия или права доступа.
             </p>
           ) : null}
-          <button type="button" className="text-xs text-neutral-400 hover:text-neutral-200" onClick={() => setDetails(!details)}>{details ? "Скрыть подробности" : "Подробности"}</button>
-          {details ? (
-            <CrmCopilotDetails
-              draft={selected}
-              context={copilot.context.data}
-              onClose={() => setDetails(false)}
-            />
+          {copilot.drafts.isError && !selected ? (
+            <p role="alert" className="text-xs text-amber-200">
+              Не удалось загрузить сохранённые ответы. Обычная переписка
+              доступна.
+            </p>
           ) : null}
-          {copilot.prepared && !details ? (
-            <div className="space-y-3 border-t border-neutral-700 pt-3">
-              {copilot.context.isLoading ? (
-                <p role="status">{t("Loading bounded context…")}</p>
-              ) : copilot.context.isError ? (
-                <p role="alert">
-                  Context is unavailable.{" "}
-                  <button
-                    className="text-blue-300"
-                    onClick={() => void copilot.context.refetch()}
-                  >
-                    {t("Retry context")}
-                  </button>
-                </p>
-              ) : null}
-              {copilot.context.data &&
-              !copilot.context.data.processingEnabled ? (
-                <p role="status" className="text-xs text-amber-200">
-                  ИИ недоступен для этого workspace. Обратитесь к администратору.
-                </p>
-              ) : null}
-              {copilot.context.data?.blockedReason ? (
-                <p role="status" className="text-xs text-amber-200">
-                  Generation unavailable: {copilot.context.data.blockedReason}
-                </p>
-              ) : null}
-              <details className="rounded-lg border border-neutral-700 px-3 py-2">
-                <summary className="cursor-pointer text-sm text-neutral-300">Настройки генерации</summary>
-              <CrmCopilotOptions
-                value={options}
-                onChange={setOptions}
-                context={copilot.context.data}
-                choices={[
-                  ...new Map(
-                    [
-                      ...(copilot.catalog.data?.pages.flatMap(
-                        (p) => p.products,
-                      ) ?? []),
-                      ...(copilot.context.data?.products ?? []),
-                    ].map((p) => [p.id, p]),
-                  ).values(),
-                ]}
-                products={copilot.productIds}
-                onProducts={copilot.setProductIds}
-                notes={copilot.includeNotes}
-                onNotes={copilot.setIncludeNotes}
-                disabled={copilot.generation.isPending}
-              />
-              {copilot.catalog.hasNextPage ? (
-                <Button
-                  variant="secondary"
-                  disabled={copilot.catalog.isFetchingNextPage}
-                  onClick={() => void copilot.catalog.fetchNextPage()}
-                >
-                  Load more products
-                </Button>
-              ) : null}
-              {copilot.catalog.isError ? (
-                <p role="alert" className="text-xs text-amber-200">
-                  Product choices could not be loaded.{" "}
-                  <button onClick={() => void copilot.catalog.refetch()}>
-                    Retry products
-                  </button>
-                </p>
-              ) : null}
-              </details>
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  disabled={
-                    !eligible ||
-                    copilot.generation.isPending ||
-                    copilot.update.isPending
-                  }
-                  onClick={() => {
-                    setSelectedId(null);
-                    setReviewText(undefined);
-                    void copilot.generate(input);
-                  }}
-                >
-                  {copilot.generation.isPending
-                    ? "Generating…"
-                    : selected
-                      ? "Regenerate suggestion"
-                      : "Generate suggestion"}
-                </Button>
-                {copilot.generation.isPending ? (
-                  <Button variant="secondary" onClick={copilot.cancel}>
-                    {t("Stop waiting")}
-                  </Button>
-                ) : null}
-                {copilot.generation.isError && copilot.canRetry ? (
-                  <Button
-                    variant="secondary"
-                    disabled={copilot.generation.isPending}
-                    onClick={() => void copilot.generate(input, true)}
-                  >
-                    {t("Check same operation")}
-                  </Button>
-                ) : null}
-              </div>
-              {copilot.generation.isPending || copilot.generation.isError ? (
-                <p className="text-xs text-amber-200">
-                  {t(
-                    "Generation may continue and incur cost; reopen Copilot to recover. No automatic retry.",
-                  )}
-                </p>
-              ) : null}
-              {copilot.generation.isError ? (
-                <p role="alert" className="text-xs text-amber-200">
-                  {t(
-                    "Generation outcome is uncertain or unavailable. No automatic paid retry occurs. Check the same operation, or explicitly request a new suggestion. Manual chat remains available.",
-                  )}
-                </p>
-              ) : null}
-            </div>
+          {review && !selected && !copilot.drafts.isLoading ? (
+            <p role="alert" className="text-xs text-amber-200">
+              Этот ответ недоступен или устарел. Сохраните ваш текст и
+              сгенерируйте новый вариант.
+            </p>
           ) : null}
         </div>
       ) : null}

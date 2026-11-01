@@ -25,7 +25,7 @@ export function CrmInboxPurchases({ contactId, conversationId, workspaceId }: { 
   if (sales.error) return <div role="alert" className="space-y-2"><p>{t("crmSales.purchaseError")}</p><Button variant="secondary" onClick={() => void sales.refetch()}>{t("crmSales.retry")}</Button></div>;
   const returnTo = `/ad-sales/inbox?${new URLSearchParams({ conversationId, workspaceId, details: "1" })}`;
   return <div className="space-y-3">
-    {summary ? <div className="rounded-lg border border-neutral-700 bg-neutral-900 p-3">
+    {summary && summary.dealCount > 1 ? <div className="rounded-lg border border-neutral-700 bg-neutral-900 p-3">
       <div className="flex items-center gap-2 text-xs text-neutral-400"><CircleDollarSign size={15} aria-hidden />{t("crmSales.purchases")}</div>
       <div className="mt-1 flex flex-wrap items-baseline gap-1.5 font-semibold text-neutral-100"><span>{summary.dealCount} ·</span><CrmContactRevenue amounts={summary.receivedByCurrency} /></div>
       {summary.lastPurchaseAt ? <p className="mt-1 text-xs text-neutral-500">{t("crmSales.lastPurchase")}: {formatDateTime(summary.lastPurchaseAt)}</p> : null}

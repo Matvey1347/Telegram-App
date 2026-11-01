@@ -6,7 +6,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { crmSalesWorkflowApi } from "@/lib/features/growth/crm-sales-workflow-api";
 import { telegramCrmApi } from "@/lib/features/growth/telegram-crm-api";
 import { CrmInboxDetails } from "./crm-inbox-details";
-import { CrmContactNotes } from "./crm-contact-notes";
 
 vi.mock("@/lib/features/growth/crm-sales-workflow-api", () => ({ crmSalesWorkflowApi: { purchases: vi.fn(), packages: vi.fn() } }));
 vi.mock("./crm-sales-controls", () => ({ CrmSalesControls: () => <p>Workflow controls</p> }));
@@ -41,10 +40,23 @@ beforeEach(() => {
   vi.restoreAllMocks();
   vi.clearAllMocks();
   vi.spyOn(telegramCrmApi, "getContact").mockResolvedValue(contact);
+  vi.spyOn(telegramCrmApi, "getChatContext").mockResolvedValue(contact);
   vi.mocked(crmSalesWorkflowApi.purchases).mockResolvedValue({ items: [], summary: null, nextCursor: null, hasMore: false } as never);
 });
 
 describe("CRM inbox details permissions", () => {
+  it("renders contact link, notes and independent purchases before compact identity resolves", async () => {
+    vi.mocked(telegramCrmApi.getChatContext).mockImplementation(() => new Promise(() => undefined));
+    renderDetails({ canManage: true, canViewSales: true });
+    expect(screen.getByRole("link", { name: "@saved_customer" })).toHaveAttribute("href", "https://t.me/saved_customer");
+    expect(screen.getByRole("button", { name: "Add test note" })).not.toBeDisabled();
+    expect(screen.getByText("Workflow controls")).toBeInTheDocument();
+    expect(await screen.findByText("No linked sales recorded.")).toBeInTheDocument();
+    expect(crmSalesWorkflowApi.purchases).toHaveBeenCalledTimes(1);
+    expect(telegramCrmApi.getContact).not.toHaveBeenCalled();
+    expect(screen.queryByText(/Open client profile/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Packages|Пакеты/ })).not.toBeInTheDocument();
+  });
   it.each([
     { label: "own-edit permission and matching owner", canManage: false, canEditOwn: true, currentMemberId: "owner-a", editable: true },
     { label: "own-edit permission and foreign owner", canManage: false, canEditOwn: true, currentMemberId: "another-member", editable: false },
@@ -54,13 +66,12 @@ describe("CRM inbox details permissions", () => {
   ])("passes correct note permissions for $label", async ({ editable, ...permissions }) => {
     renderDetails(permissions);
     await screen.findByText(contact.displayName);
-    expect(CrmContactNotes).not.toHaveBeenCalled();
-    await userEvent.click(screen.getByText("Дополнительно"));
-    await userEvent.click(screen.getByRole("button", { name: "Notes & activity" }));
+
     const noteButton = screen.getByRole("button", { name: "Add test note" });
     if (editable) expect(noteButton).not.toBeDisabled();
     else expect(noteButton).toBeDisabled();
-    expect(telegramCrmApi.getContact).toHaveBeenCalledWith(contact.id, expect.any(AbortSignal));
+    expect(telegramCrmApi.getChatContext).toHaveBeenCalledWith(contact.id, expect.any(AbortSignal));
+    expect(telegramCrmApi.getContact).not.toHaveBeenCalled();
   });
 
   it("hides sales summaries and never queries purchases without sales permission", async () => {
@@ -69,8 +80,6 @@ describe("CRM inbox details permissions", () => {
     expect(screen.queryByRole("heading", { name: "Purchases" })).not.toBeInTheDocument();
     expect(screen.queryByText("Paid: 2500 UAH")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Purchase history & packages" })).not.toBeInTheDocument();
-    await userEvent.click(screen.getByText("Дополнительно"));
-    await userEvent.click(screen.getByRole("button", { name: "Notes & activity" }));
     expect(crmSalesWorkflowApi.purchases).not.toHaveBeenCalled();
   });
 
@@ -83,6 +92,6 @@ describe("CRM inbox details permissions", () => {
     await userEvent.click(screen.getByRole("button", { name: "Retry" }));
     expect(await screen.findByText("No linked sales recorded.")).toBeInTheDocument();
     expect(crmSalesWorkflowApi.purchases).toHaveBeenCalledWith(contact.id, null, expect.any(AbortSignal));
-    expect(CrmContactNotes).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Add test note" })).toBeInTheDocument();
   });
 });

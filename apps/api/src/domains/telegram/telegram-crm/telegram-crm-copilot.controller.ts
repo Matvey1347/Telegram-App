@@ -22,6 +22,7 @@ import {
   CrmCopilotContextQueryDto,
   CrmCopilotGenerateDto,
   CrmCopilotPatchDto,
+  CrmCopilotSuggestDto,
 } from './telegram-crm-copilot.dto';
 import { persistedCopilotFacts } from './telegram-crm-copilot-policy';
 @UseGuards(JwtAuthGuard)
@@ -77,6 +78,27 @@ export class TelegramCrmCopilotController {
         input,
         controller.signal,
       );
+    } finally {
+      request.removeListener('aborted', abort);
+      response?.removeListener('close', abort);
+    }
+  }
+  @Post('suggest') async suggest(
+    @CurrentUser() user: JwtUser,
+    @Param('id') id: string,
+    @Body() input: CrmCopilotSuggestDto,
+    @Req() request: Request,
+  ) {
+    const controller = new AbortController();
+    const response = request.res;
+    const abort = () => {
+      if (!response?.writableEnded) controller.abort();
+    };
+    request.once('aborted', abort);
+    response?.once('close', abort);
+    if (request.aborted) controller.abort();
+    try {
+      return await this.service.suggest(user.sub, id, input, controller.signal);
     } finally {
       request.removeListener('aborted', abort);
       response?.removeListener('close', abort);

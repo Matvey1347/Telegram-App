@@ -4,6 +4,7 @@ import type {
   CrmCopilotDraftPatch,
   CrmCopilotDrafts,
   CrmCopilotGenerateInput,
+  CrmCopilotSuggestInput,
 } from "@telegram-system/shared";
 import { api } from "@/lib/api";
 const path = (id: string) =>
@@ -30,6 +31,8 @@ export const crmCopilotApi = {
   ) =>
     (await api.post<CrmCopilotDraft>(`${path(id)}/generate`, body, { signal }))
       .data,
+  suggest: async (id: string, body: CrmCopilotSuggestInput, signal?: AbortSignal) =>
+    (await api.post<CrmCopilotDraft>(`${path(id)}/suggest`, body, { signal, feedback: { mode: "managed" } } as Parameters<typeof api.post>[2])).data,
   update: async (id: string, draftId: string, body: CrmCopilotDraftPatch) =>
     (
       await api.patch<CrmCopilotDraft>(

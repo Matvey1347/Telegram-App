@@ -1,12 +1,12 @@
 "use client";
-import { useCopilotText } from "./copilot-copy";
 import { useState } from "react";
+import { Check, ThumbsDown } from "lucide-react";
 import type {
   CrmCopilotDraft,
   CrmCopilotDraftPatch,
 } from "@telegram-system/shared";
 import { Button, Textarea } from "@/components/ui/primitives";
-import { aiMoney } from "@/components/features/operations/ai/ai-format";
+
 export function CrmCopilotDraftEditor({
   draft,
   initialText,
@@ -22,126 +22,67 @@ export function CrmCopilotDraftEditor({
     draft: CrmCopilotDraft,
     action: CrmCopilotDraftPatch["action"],
     text?: string,
-  ) => Promise<unknown>;
+  ) => Promise<CrmCopilotDraft | undefined>;
   onInsert: (draft: CrmCopilotDraft) => void;
   pending: boolean;
   contextChanged: boolean;
   canSend: boolean;
 }) {
-  const t = useCopilotText();
   const [text, setText] = useState(initialText ?? draft.text);
-  const changed = text !== draft.text;
-  const blocked = [
-    "GENERATING",
-    "UNKNOWN",
-    "FAILED",
-    "DISCARDED",
-    "EXPIRED",
-    "SENT",
-  ].includes(draft.status);
+  const [using, setUsing] = useState(false);
+  const stale = contextChanged || draft.status === "STALE";
+  const blocked =
+    !draft.canEdit ||
+    !["READY", "REVIEW_REQUIRED", "APPROVED", "STALE"].includes(draft.status);
+  const handleUseText = async () => {
+    if (using || pending || blocked || stale || !canSend || !text.trim())
+      return;
+    setUsing(true);
+    try {
+      const approved = await onPatch(draft, "APPROVE", text.trim());
+      if (approved?.status === "APPROVED") onInsert(approved);
+    } finally {
+      setUsing(false);
+    }
+  };
   return (
     <div className="space-y-2">
-      <div className="flex flex-wrap justify-between gap-2 text-xs">
-        <span>
-          {draft.status} · revision {draft.revision}
-        </span>
-        <span>
-          {aiMoney(draft.operation?.actualCost ?? null)} ·{" "}
-          {draft.operation?.pricingStatus ?? "UNKNOWN"}
-        </span>
-      </div>
-      <label className="block text-xs text-neutral-300">
-        {t("Suggested message")}
-        <Textarea
-          aria-label="AI suggested message"
-          className="mt-1"
-          rows={3}
-          maxLength={4096}
-          value={text}
-          disabled={pending || !draft.canEdit || blocked}
-          onChange={(e) => setText(e.target.value)}
-        />
-      </label>
-      {["UNKNOWN", "GENERATING"].includes(draft.status) ? (
+      <Textarea
+        aria-label="AI suggested message"
+        rows={3}
+        maxLength={3000}
+        value={text}
+        disabled={pending || using || blocked}
+        onChange={(event) => setText(event.target.value)}
+        className="max-h-36 resize-y text-sm"
+      />
+      {stale ? (
         <p role="status" className="text-xs text-amber-200">
-          {t(
-            "Generation outcome is uncertain or still running. Reopen drafts to check saved state; a new suggestion is a new explicitly paid operation.",
-          )}
+          Переписка или условия изменились. Сгенерируйте новый ответ.
         </p>
       ) : null}
-      {draft.output?.reasoningSummary ? (
-        <p className="text-xs text-neutral-400">
-          {draft.output.reasoningSummary}
-        </p>
-      ) : null}
-      {draft.output?.requiresHumanReview ? (
-        <p className="text-xs text-amber-200">
-          {t("Human review required. Verify every claim before approval.")}
-        </p>
-      ) : null}
-      {draft.warnings.length ? (
-        <ul className="list-inside list-disc text-xs text-amber-200">
-          {draft.warnings.map((v, i) => (
-            <li key={i}>{v}</li>
-          ))}
-        </ul>
-      ) : null}
-      {contextChanged || ["STALE", "REVIEW_REQUIRED"].includes(draft.status) ? (
-        <p role="status" className="text-xs text-amber-200">
-          {t(
-            "Context, status or prices may have changed. Save and obtain fresh approval before sending.",
-          )}
-        </p>
-      ) : null}
-      {changed ? (
-        <p className="text-xs text-amber-200">
-          {t("Edited text must be saved and approved again.")}
-        </p>
-      ) : null}
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <Button
-          variant="secondary"
           disabled={
-            pending || blocked || !draft.canEdit || !changed || !text.trim()
+            !canSend || pending || using || blocked || stale || !text.trim()
           }
-          onClick={() => void onPatch(draft, "SAVE", text)}
+          onClick={() => void handleUseText()}
         >
-          {t("Save edited draft")}
+          <Check size={15} aria-hidden />
+          {using ? "Подготовка…" : "Использовать"}
         </Button>
         <Button
           variant="secondary"
-          disabled={
-            pending || blocked || !draft.canEdit || changed || !text.trim()
-          }
-          onClick={() => void onPatch(draft, "APPROVE")}
-        >
-          {t("Approve reviewed text")}
-        </Button>
-        <Button
-          disabled={
-            !canSend ||
-            pending ||
-            changed ||
-            contextChanged ||
-            draft.status !== "APPROVED"
-          }
-          onClick={() => onInsert(draft)}
-        >
-          {t("Insert approved text")}
-        </Button>
-        <Button
-          variant="secondary"
-          disabled={pending || blocked || !draft.canEdit}
+          disabled={pending || using || blocked}
           onClick={() => void onPatch(draft, "DISCARD")}
         >
-          {t("Discard")}
+          <ThumbsDown size={15} aria-hidden />
+          Не подходит
         </Button>
+        <span className="text-xs text-neutral-500">
+          Текст можно изменить. Отправка — вашей кнопкой Send.
+        </span>
       </div>
-      <p className="text-xs text-neutral-400">
-        {t(
-          "Insertion does not send. Review the composer, then use the existing Send button.",
-        )}
-      </p>
     </div>
   );
 }

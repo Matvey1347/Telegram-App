@@ -3,7 +3,7 @@ import { useLeadText } from "./lead-copy";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "@/components/layout/app-shell";
-import { Button, PageHeader } from "@/components/ui/primitives";
+import { PageHeader } from "@/components/ui/primitives";
 import { authApi } from "@/lib/api";
 import { authKeys } from "@/lib/query-keys";
 import { leadDiscoveryApi } from "@/lib/features/growth/lead-discovery-api";
@@ -19,7 +19,8 @@ import { LeadCandidates } from "./lead-candidates";
 import { LeadQueryState } from "./lead-query-state";
 export function LeadDiscoveryPage() {
   const t = useLeadText();
-  const [tab, setTab] = useState<"sources" | "feed" | "review">("sources");
+  const [feedOpen, setFeedOpen] = useState(false);
+  const [reviewOpen, setReviewOpen] = useState(false);
   const me = useQuery({
     queryKey: authKeys.me(),
     queryFn: authApi.me,
@@ -40,7 +41,7 @@ export function LeadDiscoveryPage() {
         <PageHeader
           title={t("Lead Discovery")}
           subtitle={t(
-            "Permitted sources → advertisement evidence → human review → existing CRM.",
+            "Ваши каналы: подключение, новые публикации и найденные рекламодатели.",
           )}
         />
         {me.isLoading ? (
@@ -60,49 +61,15 @@ export function LeadDiscoveryPage() {
                 {!config.data.enabled ? <div role="status" className="rounded-lg border border-amber-900/60 bg-amber-950/20 p-4 text-sm text-amber-100">
                   Search is currently disabled. Add your sources to prepare the list; collection and analysis require the deployment and workspace permissions to be enabled.
                 </div> : null}
-                <div
-                  role="tablist"
-                  aria-label="Lead Discovery sections"
-                  className="flex flex-wrap gap-2"
-                >
-                  {(["sources", "feed", "review"] as const).map((v) => (
-                    <Button
-                      className="max-w-full !whitespace-normal"
-                      key={v}
-                      role="tab"
-                      aria-selected={tab === v}
-                      variant={tab === v ? "primary" : "secondary"}
-                      onClick={() => setTab(v)}
-                    >
-                      {
-                        {
-                          sources: t("Sources"),
-                          feed: t("Advertisement feed"),
-                          review: t("Review queue"),
-                        }[v]
-                      }
-                    </Button>
-                  ))}
-                </div>
-                {tab === "sources" ? (
-                  <LeadSources
-                    key={workspace}
-                    workspace={workspace}
-                    config={config.data}
-                  />
-                ) : tab === "feed" ? (
-                  <LeadFeed
-                    key={workspace}
-                    workspace={workspace}
-                    config={config.data}
-                  />
-                ) : (
-                  <LeadCandidates
-                    key={workspace}
-                    workspace={workspace}
-                    canReview={config.data.canReview}
-                  />
-                )}
+                <LeadSources key={workspace} workspace={workspace} config={config.data} />
+                <details className="rounded-xl border border-neutral-800 px-3 py-2" onToggle={(event) => setFeedOpen(event.currentTarget.open)}>
+                  <summary className="cursor-pointer text-sm text-neutral-300">Найденные рекламные публикации</summary>
+                  {feedOpen ? <div className="mt-3"><LeadFeed key={workspace} workspace={workspace} config={config.data}/></div> : null}
+                </details>
+                <details className="rounded-xl border border-neutral-800 px-3 py-2" onToggle={(event) => setReviewOpen(event.currentTarget.open)}>
+                  <summary className="cursor-pointer text-sm text-neutral-300">Кандидаты для проверки</summary>
+                  {reviewOpen ? <div className="mt-3"><LeadCandidates key={workspace} workspace={workspace} canReview={config.data.canReview}/></div> : null}
+                </details>
               </>
             ) : null}
           </>

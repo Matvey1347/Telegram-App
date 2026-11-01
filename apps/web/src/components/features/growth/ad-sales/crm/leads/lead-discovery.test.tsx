@@ -71,10 +71,7 @@ describe("Lead Discovery operational UI", () => {
   });
   it("opens sources without AI calls, account enumeration or feed reads", async () => {
     mount(<LeadDiscoveryPage />);
-    expect(await screen.findByRole("tab", { name: "Sources" })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
+    expect(screen.queryByRole("tablist", { name: "Lead Discovery sections" })).toBeNull();
     await screen.findByText("Evidence source 1");
     expect(leadDiscoveryApi.analyze).not.toHaveBeenCalled();
     expect(leadDiscoveryApi.accounts).not.toHaveBeenCalled();
@@ -83,11 +80,9 @@ describe("Lead Discovery operational UI", () => {
   it("shows distinct coverage and metrics without inventing a no-ads window or qualification", async () => {
     mount(<LeadSources workspace="workspace-one" config={leadConfig} />);
     await screen.findByText("Evidence source 1");
-    expect(screen.getByText("INSUFFICIENT_COVERAGE")).toBeTruthy();
-    expect(screen.getByText("Coverage: GAPPED")).toBeTruthy();
-    expect(
-      screen.getByText("Qualified leads").nextElementSibling,
-    ).toHaveTextContent("0");
+    expect(screen.getByText("Активен")).toBeTruthy();
+    expect(screen.getByText(/3 публикаций · 1 рекламных · 1 кандидатов/)).toBeTruthy();
+    expect(screen.queryByText("Coverage: GAPPED")).toBeNull();
     expect(screen.queryByText(/^NO_ADS_30D$/)).toBeNull();
   });
   it("disables management controls for read-only users", async () => {
@@ -102,6 +97,14 @@ describe("Lead Discovery operational UI", () => {
     expect(
       screen.queryByRole("button", { name: "Validate access" }),
     ).toBeNull();
+  });
+  it("explains disconnected sources without pretending they are active", async () => {
+    vi.mocked(leadDiscoveryApi.sources).mockResolvedValue({ items: [{ ...sourceFixture(), accountId: null, channelId: null, monitoringState: "PAUSED" }], hasMore: false, nextCursor: null });
+    mount(<LeadSources workspace="workspace-one" config={leadConfig}/>);
+    await screen.findByText("Не подключён");
+    expect(screen.getByRole("button", { name: "Обновить" })).toBeDisabled();
+    expect(screen.getByText("Требуется подключение Telegram и проверка доступа.")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Scan up to 50 posts" })).toBeNull();
   });
   it("loads source cursors while keeping status and search filters", async () => {
     vi.mocked(leadDiscoveryApi.sources)

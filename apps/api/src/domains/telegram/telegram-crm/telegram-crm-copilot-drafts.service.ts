@@ -17,6 +17,8 @@ import { TelegramCrmCopilotContextService } from './telegram-crm-copilot-context
 
 export type CopilotSnapshot = CrmCopilotGenerateInput & {
   identityVersion: string;
+  preset?: 'WORKSPACE_NEXT_MESSAGE';
+  feedbackBefore?: string;
 };
 @Injectable()
 export class TelegramCrmCopilotDraftsService {

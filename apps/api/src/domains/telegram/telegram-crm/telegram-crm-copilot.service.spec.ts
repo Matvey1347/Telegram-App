@@ -127,7 +127,15 @@ function fixture() {
             ) ?? null,
           ),
       ),
-      findFirst: jest.fn(() => Promise.resolve(rows[0] ?? null)),
+      findFirst: jest.fn((query: { where?: { status?: { in: string[] } } }) =>
+        Promise.resolve(
+          rows.find(
+            (row) =>
+              !query.where?.status ||
+              query.where.status.in.includes(row.status),
+          ) ?? null,
+        ),
+      ),
       count: jest.fn(() => Promise.resolve(rows.length)),
       create,
       update,
@@ -146,7 +154,13 @@ function fixture() {
   };
   const builder = {
     access: jest.fn().mockResolvedValue({ workspaceId: 'ws' }),
-    build: jest.fn(() => Promise.resolve(context)),
+    suggestionOptions: jest.fn().mockResolvedValue({
+      includeNotes: true,
+      processingReference: 'policy:workspace',
+    }),
+    build: jest
+      .fn<Promise<CopilotContext>, [string, string, unknown]>()
+      .mockResolvedValue(context),
     refreshAccess: jest.fn().mockResolvedValue(undefined),
   };
   const gateway = {
@@ -180,6 +194,67 @@ function fixture() {
 }
 
 describe('CRM Copilot explicit generation and draft lifecycle', () => {
+  it('generates a server-owned next-reply preset and replays the same operation without another paid call', async () => {
+    const h = fixture();
+    const input = { operationId: h.options().operationId };
+    const draft = await h.service.suggest('author', 'conversation', input);
+    expect(draft.status).toBe('READY');
+    expect(h.rows[0].requestSnapshot).toMatchObject({
+      category: 'SALES_REPLY_SUGGESTION',
+      tone: 'NATURAL',
+      language: 'AUTO',
+      productIds: [],
+      includeNotes: true,
+      processingReference: 'policy:workspace',
+      preset: 'WORKSPACE_NEXT_MESSAGE',
+      feedbackBefore: expect.any(String) as unknown,
+    });
+    await h.service.suggest('author', 'conversation', input);
+    expect(h.gateway.execute).toHaveBeenCalledTimes(1);
+    const before = (h.rows[0].requestSnapshot as { feedbackBefore?: string })
+      .feedbackBefore;
+    for (const call of h.builder.build.mock.calls)
+      expect(call[2]).toMatchObject({ feedbackBefore: before });
+  });
+  it('fences a new paid operation while an earlier suggestion outcome is unknown', async () => {
+    const h = fixture();
+    h.gateway.execute.mockResolvedValue({
+      operation: { id: 'pending-provider', status: 'UNKNOWN' },
+      replayed: false,
+    });
+    const first = await h.service.suggest('author', 'conversation', {
+      operationId: h.options().operationId,
+    });
+    expect(first.status).toBe('UNKNOWN');
+    const second = await h.service.suggest('author', 'conversation', {
+      operationId: h.options().operationId,
+    });
+    expect(second.id).toBe(first.id);
+    expect(second.operationId).toBe(first.operationId);
+    expect(h.rows).toHaveLength(1);
+    expect(h.gateway.execute).toHaveBeenCalledTimes(1);
+  });
+  it('returns an actionable pre-generation provider error instead of an empty generic failure', async () => {
+    const h = fixture();
+    h.gateway.execute.mockResolvedValue({
+      operation: {
+        id: 'failed',
+        status: 'FAILED',
+        errorCategory: 'TOKEN_COUNT_AUTHENTICATION_FAILED',
+      },
+      replayed: false,
+    });
+    const draft = await h.service.suggest('author', 'conversation', {
+      operationId: h.options().operationId,
+    });
+    expect(draft).toMatchObject({
+      status: 'FAILED',
+      text: '',
+      warnings: ['AI_TOKEN_COUNT_AUTHENTICATION_FAILED'],
+    });
+    expect(h.gateway.execute).toHaveBeenCalledTimes(1);
+  });
+
   it('claims concurrent same-ID generation once, restores saved text and keeps source outside persistence', async () => {
     const h = fixture(),
       input = h.options();

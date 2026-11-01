@@ -10,22 +10,11 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { crmCopilotApi } from "@/lib/features/growth/crm-copilot-api";
-import { crmSalesWorkflowApi } from "@/lib/features/growth/crm-sales-workflow-api";
 import { copilotKeys } from "@/lib/features/growth/crm-copilot-query";
 import { telegramCrmKeys } from "@/lib/features/growth/telegram-crm-query";
 import { CrmCopilot } from "./crm-copilot";
 import { useCrmCopilot } from "./use-crm-copilot";
-import { copilotContext, copilotDraft } from "./copilot-fixtures.test-support";
-const input = {
-  category: "SALES_REPLY_SUGGESTION" as const,
-  tone: "NATURAL" as const,
-  language: "AUTO" as const,
-  productIds: [],
-  includeNotes: false,
-  processingBasis: "APPROVED_BUSINESS_PROCESSING" as const,
-  processingReference: "policy:approved",
-  sourceAcknowledged: true,
-};
+import { copilotDraft } from "./copilot-fixtures.test-support";
 const setup = () => {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -40,34 +29,23 @@ const setup = () => {
 beforeEach(() => {
   vi.restoreAllMocks();
   vi.spyOn(crmCopilotApi, "list").mockResolvedValue({ items: [] });
-  vi.spyOn(crmCopilotApi, "context").mockResolvedValue(copilotContext);
-  vi.spyOn(crmCopilotApi, "generate").mockResolvedValue(copilotDraft);
-  let saved = { ...copilotDraft };
-  vi.spyOn(crmCopilotApi, "update").mockImplementation(
-    async (_chat, _id, body) => {
-      saved = {
-        ...saved,
-        text: body.text ?? saved.text,
-        revision: body.revision + 1,
-        status:
-          body.action === "APPROVE"
-            ? "APPROVED"
-            : body.action === "DISCARD"
-              ? "DISCARDED"
-              : "READY",
-      };
-      return saved;
-    },
+  vi.spyOn(crmCopilotApi, "context").mockRejectedValue(
+    new Error("No client preparation needed"),
   );
-  vi.spyOn(crmSalesWorkflowApi, "packages").mockResolvedValue({
-    asOf: "2026-10-31",
-    products: [],
-    networks: [],
-    networksTruncated: false,
-    discountPolicy: "MANAGER_APPROVAL_REQUIRED",
-    nextCursor: null,
-    hasMore: false,
-  });
+  vi.spyOn(crmCopilotApi, "suggest").mockResolvedValue(copilotDraft);
+  vi.spyOn(crmCopilotApi, "update").mockImplementation(
+    async (_chat, _id, body) => ({
+      ...copilotDraft,
+      text: body.text ?? copilotDraft.text,
+      revision: body.revision + 1,
+      status:
+        body.action === "APPROVE"
+          ? "APPROVED"
+          : body.action === "DISCARD"
+            ? "DISCARDED"
+            : "READY",
+    }),
+  );
 });
 function mount() {
   const { wrapper, client } = setup();
@@ -87,259 +65,199 @@ function mount() {
     client,
   };
 }
-async function open() {
-  fireEvent.click(screen.getByRole("button", { name: /AI Sales Copilot/ }));
-  await screen.findByText(
-    "No saved AI drafts. Prepare context to create a suggestion.",
-  );
-}
-async function prepare() {
-  fireEvent.click(screen.getByText("Настройки генерации"));
-  await screen.findByRole("button", { name: "Copilot operation" });
-}
-describe("opt-in CRM Copilot", () => {
-  it("keeps a generation result stale when incoming context changes in flight", async () => {
-    let complete!: (value: typeof copilotDraft) => void;
-    vi.mocked(crmCopilotApi.generate).mockImplementation(
+const generate = () =>
+  fireEvent.click(screen.getByRole("button", { name: "Сгенерировать ответ" }));
+describe("compact one-click CRM suggestions", () => {
+  it("does no AI reads or generation merely on chat selection", () => {
+    mount();
+    expect(crmCopilotApi.list).not.toHaveBeenCalled();
+    expect(crmCopilotApi.context).not.toHaveBeenCalled();
+    expect(crmCopilotApi.suggest).not.toHaveBeenCalled();
+    expect(screen.queryByText("Настройки генерации")).not.toBeInTheDocument();
+  });
+  it("generates a personalized draft with one click and no local setup", async () => {
+    mount();
+    generate();
+    expect(
+      await screen.findByRole("textbox", { name: "AI suggested message" }),
+    ).toHaveValue(copilotDraft.text);
+    expect(crmCopilotApi.suggest).toHaveBeenCalledWith(
+      "chat-one",
+      {
+        operationId: expect.stringMatching(/^\d{4}-\d{2}-\d{2}:[a-f0-9-]{36}$/),
+      },
+      expect.any(AbortSignal),
+    );
+    expect(crmCopilotApi.context).not.toHaveBeenCalled();
+    expect(
+      screen.queryByText(
+        /revision|NO_SELECTED_VERIFIED_PRODUCTS|Настройки генерации/,
+      ),
+    ).not.toBeInTheDocument();
+  });
+  it("approves the reviewed edited text and inserts it without sending", async () => {
+    const { insert } = mount();
+    generate();
+    fireEvent.change(
+      await screen.findByRole("textbox", { name: "AI suggested message" }),
+      { target: { value: "Уточню актуальні умови." } },
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Использовать" }));
+    await waitFor(() =>
+      expect(insert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: "APPROVED",
+          revision: 2,
+          text: "Уточню актуальні умови.",
+        }),
+      ),
+    );
+    expect(crmCopilotApi.update).toHaveBeenCalledWith("chat-one", "draft-one", {
+      revision: 1,
+      action: "APPROVE",
+      text: "Уточню актуальні умови.",
+    });
+  });
+  it("persists negative feedback and closes the large text editor", async () => {
+    mount();
+    generate();
+    await screen.findByRole("textbox", { name: "AI suggested message" });
+    fireEvent.click(screen.getByRole("button", { name: "Не подходит" }));
+    expect(await screen.findByText(/Учтём эту оценку/)).toBeInTheDocument();
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+    expect(crmCopilotApi.update).toHaveBeenCalledWith("chat-one", "draft-one", {
+      revision: 1,
+      action: "DISCARD",
+    });
+  });
+  it("turns FAILED into an actionable error rather than an empty editor", async () => {
+    vi.mocked(crmCopilotApi.suggest).mockResolvedValue({
+      ...copilotDraft,
+      status: "FAILED",
+      text: "",
+      canEdit: false,
+      output: null,
+      warnings: ["PROVIDER_AUTH_FAILED"],
+    });
+    mount();
+    generate();
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "проверить ключ сервиса",
+    );
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+    expect(screen.queryByText("PROVIDER_AUTH_FAILED")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Сгенерировать ответ" }),
+    ).not.toBeDisabled();
+  });
+  it("never inserts an answer if current authorization or facts reject approval", async () => {
+    vi.mocked(crmCopilotApi.update).mockRejectedValue(
+      new Error("COPILOT_CONTEXT_STALE"),
+    );
+    const { insert } = mount();
+    generate();
+    await screen.findByRole("textbox", { name: "AI suggested message" });
+    fireEvent.click(screen.getByRole("button", { name: "Использовать" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "изменились переписка",
+    );
+    expect(insert).not.toHaveBeenCalled();
+  });
+  it("keeps generation stale when messages change during the provider call", async () => {
+    let finish!: (value: typeof copilotDraft) => void;
+    vi.mocked(crmCopilotApi.suggest).mockImplementation(
       () =>
-        new Promise((done) => {
-          complete = done;
+        new Promise((resolve) => {
+          finish = resolve;
         }),
     );
-    const { wrapper, client } = setup();
-    const { result } = renderHook(
-      () => useCrmCopilot("workspace-one", "chat-one", "client-one"),
-      { wrapper },
-    );
-    act(() => {
-      result.current.setOpen(true);
-      result.current.setPrepared(true);
-    });
-    await waitFor(() => expect(result.current.context.isSuccess).toBe(true));
-    let request!: Promise<void>;
-    act(() => {
-      request = result.current.generate(input);
-    });
-    await waitFor(() =>
-      expect(crmCopilotApi.generate).toHaveBeenCalledTimes(1),
-    );
+    const { client } = mount();
+    generate();
+    await waitFor(() => expect(crmCopilotApi.suggest).toHaveBeenCalledTimes(1));
     act(() =>
       client.setQueryData(telegramCrmKeys.messagesInfinite("chat-one"), {
         pages: [],
       }),
     );
-    await act(async () => {
-      complete(copilotDraft);
-      await request;
-    });
+    await act(async () => finish(copilotDraft));
     expect(
-      client.getQueryData(copilotKeys.drafts("workspace-one", "chat-one")),
-    ).toMatchObject({ items: [{ status: "STALE" }] });
+      await screen.findByText(/Переписка или условия изменились/),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Использовать" })).toBeDisabled();
   });
-
-  it("rechecks persisted draft freshness on every explicit reopen without generating", async () => {
-    mount();
-    await open();
-    fireEvent.click(screen.getByRole("button", { name: /AI Sales Copilot/ }));
-    fireEvent.click(screen.getByRole("button", { name: /AI Sales Copilot/ }));
-    await waitFor(() => expect(crmCopilotApi.list).toHaveBeenCalledTimes(2));
-    expect(crmCopilotApi.generate).not.toHaveBeenCalled();
-  });
-
-  it("does no AI read or generation on chat selection", () => {
-    mount();
-    expect(crmCopilotApi.list).not.toHaveBeenCalled();
-    expect(crmCopilotApi.context).not.toHaveBeenCalled();
-    expect(crmCopilotApi.generate).not.toHaveBeenCalled();
-    expect(crmSalesWorkflowApi.packages).not.toHaveBeenCalled();
-  });
-  it("opens only bounded drafts; prepares context and catalog only on explicit request", async () => {
-    mount();
-    await open();
-    expect(crmCopilotApi.list).toHaveBeenCalledTimes(1);
-    await waitFor(() => expect(crmCopilotApi.context).toHaveBeenCalledTimes(1));
-    await prepare();
-    expect(crmSalesWorkflowApi.packages).toHaveBeenCalledTimes(1);
-    expect(crmCopilotApi.generate).not.toHaveBeenCalled();
-  });
-  it("uses the workspace processing grant without per-chat setup", async () => {
-    mount();
-    await open();
-    await prepare();
-    await waitFor(() =>
-      expect(
-        screen.getByRole("button", { name: "Generate suggestion" }),
-      ).not.toBeDisabled(),
-    );
-    fireEvent.click(screen.getByRole("button", { name: "Generate suggestion" }));
-    await waitFor(() => expect(crmCopilotApi.generate).toHaveBeenCalledWith(
-      "chat-one",
-      expect.objectContaining({ processingReference: "policy:approved", sourceAcknowledged: true }),
-      expect.anything(),
-    ));
-  });
-  it("explains the default-deny server privacy policy", async () => {
-    vi.mocked(crmCopilotApi.context).mockResolvedValue({
-      ...copilotContext,
-      processingEnabled: false,
-      processingReference: null,
-      canGenerate: false,
-      blockedReason: "PRIVACY_POLICY_DISABLED",
-    });
-    mount();
-    await open();
-    await prepare();
-    expect(
-      await screen.findByText(
-        /ИИ недоступен для этого workspace/,
-      ),
-    ).toBeTruthy();
-    expect(
-      screen.getByRole("button", { name: "Generate suggestion" }),
-    ).toBeDisabled();
-    expect(screen.queryByText(/INTERNAL_AI_SALES_PROCESSING_GRANTS=/)).toBeNull();
-  });
-  it("shows a safe access failure without hiding the manual composer elsewhere", async () => {
-    vi.mocked(crmCopilotApi.list).mockRejectedValue(
-      new Error("private-provider-body"),
-    );
-    mount();
-    fireEvent.click(screen.getByRole("button", { name: /AI Sales Copilot/ }));
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Manual messages still work",
-    );
-    expect(screen.queryByText("private-provider-body")).toBeNull();
-  });
-  it("requires explicit save and approval before insertion; never sends", async () => {
-    vi.mocked(crmCopilotApi.list).mockResolvedValue({ items: [copilotDraft] });
-    const { insert } = mount();
-    fireEvent.click(screen.getByRole("button", { name: /AI Sales Copilot/ }));
-    const edit = await screen.findByRole("textbox", {
-      name: "AI suggested message",
-    });
-    fireEvent.change(edit, { target: { value: "Уточню актуальні умови." } });
-    expect(
-      screen.getByRole("button", { name: "Approve reviewed text" }),
-    ).toBeDisabled();
-    fireEvent.click(screen.getByRole("button", { name: "Save edited draft" }));
-    await waitFor(() =>
-      expect(crmCopilotApi.update).toHaveBeenCalledWith(
-        "chat-one",
-        "draft-one",
-        { revision: 1, action: "SAVE", text: "Уточню актуальні умови." },
-      ),
-    );
-    await waitFor(() =>
-      expect(
-        screen.getByRole("button", { name: "Approve reviewed text" }),
-      ).not.toBeDisabled(),
-    );
-    fireEvent.click(
-      screen.getByRole("button", { name: "Approve reviewed text" }),
-    );
-    await waitFor(() =>
-      expect(
-        screen.getByRole("button", { name: "Insert approved text" }),
-      ).not.toBeDisabled(),
-    );
-    expect(insert).not.toHaveBeenCalled();
-    fireEvent.click(
-      screen.getByRole("button", { name: "Insert approved text" }),
-    );
-    expect(insert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        status: "APPROVED",
-        revision: 3,
-        text: "Уточню актуальні умови.",
-      }),
-    );
-  });
-  it("shows unknown generation cost and never invents zero", async () => {
-    vi.mocked(crmCopilotApi.list).mockResolvedValue({ items: [copilotDraft] });
-    mount();
-    fireEvent.click(screen.getByRole("button", { name: /AI Sales Copilot/ }));
-    expect(await screen.findByText("Unknown · UNKNOWN")).toBeTruthy();
-  });
-  it("marks a cached draft stale when selected conversation context changes while open", async () => {
-    vi.mocked(crmCopilotApi.list).mockResolvedValue({ items: [copilotDraft] });
-    const { client } = mount();
-    fireEvent.click(screen.getByRole("button", { name: /AI Sales Copilot/ }));
-    await screen.findByRole("textbox", { name: "AI suggested message" });
-    act(() =>
-      client.setQueryData(telegramCrmKeys.salesWorkflow("chat-one"), {
-        manualStatus: "DO_NOT_CONTACT",
-      }),
-    );
-    expect(
-      await screen.findByText(/Context, status or prices may have changed/),
-    ).toBeTruthy();
-    expect(crmCopilotApi.generate).not.toHaveBeenCalled();
-  });
-  it("isolates workspace/conversation keys and selected context options", () => {
-    expect(copilotKeys.drafts("one", "chat")).not.toEqual(
-      copilotKeys.drafts("two", "chat"),
-    );
-    expect(copilotKeys.context("one", "chat", ["p"], false)).not.toEqual(
-      copilotKeys.context("one", "chat", [], true),
-    );
-  });
-  it("prevents double-tap generation and uses one dated operation ID", async () => {
-    let done!: (value: typeof copilotDraft) => void;
-    vi.mocked(crmCopilotApi.generate).mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          done = resolve;
-        }),
-    );
-    const { wrapper } = setup();
-    const { result } = renderHook(
-      () => useCrmCopilot("workspace-one", "chat-one", "client-one"),
-      { wrapper },
-    );
-    act(() => {
-      result.current.setOpen(true);
-      result.current.setPrepared(true);
-    });
-    await waitFor(() => expect(result.current.context.isSuccess).toBe(true));
-    let pending!: Promise<void>;
-    act(() => {
-      pending = result.current.generate(input);
-      void result.current.generate(input);
-    });
-    await waitFor(() =>
-      expect(crmCopilotApi.generate).toHaveBeenCalledTimes(1),
-    );
-    expect(
-      vi.mocked(crmCopilotApi.generate).mock.calls[0][1].operationId,
-    ).toMatch(/^\d{4}-\d{2}-\d{2}:[a-f0-9-]{36}$/);
-    await act(async () => {
-      done(copilotDraft);
-      await pending;
-    });
-  });
-  it("checks an uncertain operation using the same ID instead of hidden paid retry", async () => {
-    vi.mocked(crmCopilotApi.generate)
-      .mockRejectedValueOnce(new Error("timeout"))
+  it("guards double taps and checks uncertainty with the same operation ID", async () => {
+    vi.mocked(crmCopilotApi.suggest)
+      .mockRejectedValueOnce(new Error("Timeout"))
       .mockResolvedValue(copilotDraft);
     const { wrapper } = setup();
     const { result } = renderHook(
       () => useCrmCopilot("workspace-one", "chat-one", "client-one"),
       { wrapper },
     );
-    act(() => {
-      result.current.setOpen(true);
-      result.current.setPrepared(true);
-    });
-    await waitFor(() => expect(result.current.context.isSuccess).toBe(true));
     await act(async () => {
-      await result.current.generate(input);
+      const request = result.current.generate();
+      void result.current.generate();
+      await request;
     });
-    expect(crmCopilotApi.generate).toHaveBeenCalledTimes(1);
+    expect(crmCopilotApi.suggest).toHaveBeenCalledTimes(1);
     await act(async () => {
-      await result.current.generate(input, true);
+      await result.current.generate(true);
     });
-    expect(vi.mocked(crmCopilotApi.generate).mock.calls[1][1].operationId).toBe(
-      vi.mocked(crmCopilotApi.generate).mock.calls[0][1].operationId,
+    expect(vi.mocked(crmCopilotApi.suggest).mock.calls[0][1]).toEqual(
+      vi.mocked(crmCopilotApi.suggest).mock.calls[1][1],
+    );
+  });
+  it.each(["UNKNOWN", "GENERATING"] as const)(
+    "closing a saved %s result keeps the main action read-only",
+    async (status) => {
+      const unresolved = {
+        ...copilotDraft,
+        status,
+        text: "",
+        canEdit: false,
+        output: null,
+      };
+      vi.mocked(crmCopilotApi.suggest).mockResolvedValue(unresolved);
+      vi.mocked(crmCopilotApi.list).mockResolvedValue({ items: [unresolved] });
+      mount();
+      generate();
+      await screen.findByText(/Ответ ещё готовится/);
+      fireEvent.click(screen.getByRole("button", { name: "Скрыть ответ ИИ" }));
+      expect(
+        screen.getByText(/Результат предыдущего запроса/),
+      ).toBeInTheDocument();
+      fireEvent.click(
+        screen.getByRole("button", { name: "Проверить генерацию" }),
+      );
+      await screen.findByText(/Ответ ещё готовится/);
+      expect(crmCopilotApi.suggest).toHaveBeenCalledTimes(1);
+      expect(crmCopilotApi.list).toHaveBeenCalledTimes(2);
+    },
+  );
+  it("closing a transport failure preserves the same-operation recovery action", async () => {
+    vi.mocked(crmCopilotApi.suggest)
+      .mockRejectedValueOnce(new Error("Connection lost"))
+      .mockResolvedValue(copilotDraft);
+    mount();
+    generate();
+    await screen.findByText(/Не удалось получить результат запроса/);
+    const original = vi.mocked(crmCopilotApi.suggest).mock.calls[0][1]
+      .operationId;
+    fireEvent.click(screen.getByRole("button", { name: "Скрыть ответ ИИ" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Проверить генерацию" }),
+    );
+    expect(
+      await screen.findByRole("textbox", { name: "AI suggested message" }),
+    ).toHaveValue(copilotDraft.text);
+    expect(crmCopilotApi.suggest).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(crmCopilotApi.suggest).mock.calls[1][1].operationId).toBe(
+      original,
+    );
+  });
+  it("isolates workspace/conversation draft caches", () => {
+    expect(copilotKeys.drafts("one", "chat")).not.toEqual(
+      copilotKeys.drafts("two", "chat"),
     );
   });
 });

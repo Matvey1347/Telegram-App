@@ -15,7 +15,7 @@ export function CrmContactNotes({
   contact,
   canEdit,
 }: {
-  contact: CrmContactDetail;
+  contact: Pick<CrmContactDetail, "id">;
   canEdit: boolean;
 }) {
   const queryClient = useQueryClient();

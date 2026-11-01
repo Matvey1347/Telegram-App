@@ -6,6 +6,17 @@ import type {
 import type { CrmRuntimeAccount } from './telegram-crm-account-session.service';
 import { TelegramCrmRuntimeManager } from './telegram-crm-runtime-manager.service';
 
+// Runtime behavior is tested as the owner, independent of a developer's relay environment.
+jest.mock('../../../config/deployment-config', () => ({
+  ...jest.requireActual('../../../config/deployment-config'),
+  crmRuntimeEnabled: () =>
+    jest.requireActual('../../../config/deployment-config').crmRuntimeEnabled({
+      ...process.env,
+      CRM_RUNTIME_PROXY_URL: undefined,
+      CRM_RUNTIME_OWNER_API_PORT: undefined,
+    }),
+}));
+
 const callArgument = (mock: { mock: { calls: unknown[][] } }): unknown =>
   mock.mock.calls[0]?.[0];
 

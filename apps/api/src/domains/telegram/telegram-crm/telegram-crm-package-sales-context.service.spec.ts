@@ -217,3 +217,57 @@ describe('CRM current package sales context', () => {
     expect(prisma.telegramAdProduct.findMany).not.toHaveBeenCalled();
   });
 });
+
+describe('CRM one-click workspace catalog', () => {
+  it('reads one bounded catalog and one compact network summary for 100 channels', async () => {
+    const h = setup(
+      Array.from({ length: 101 }, (_, index) => product(`product-${index}`)),
+      [],
+    );
+    h.prisma.telegramChannelNetwork.findMany.mockResolvedValue(
+      Array.from({ length: 11 }, (_, index) => ({
+        id: `network-${index}`,
+        name: 'Network',
+        updatedAt: stamp,
+        _count: { channels: 100 },
+      })) as never,
+    );
+    const catalog = await h.service.forWorkspaceCopilot('user-a');
+    expect(catalog.products).toHaveLength(100);
+    expect(catalog.products[0]).toMatchObject({
+      fixedPrice: '100.1',
+      currency: 'UAH',
+      quoteRequired: false,
+    });
+    expect(catalog.networks).toHaveLength(10);
+    expect(catalog.networks[0].channelCount).toBe(100);
+    expect(catalog.truncated).toBe(true);
+    expect(h.prisma.telegramAdProduct.findMany).toHaveBeenCalledTimes(1);
+    expect(h.prisma.telegramChannelNetwork.findMany).toHaveBeenCalledTimes(1);
+    expect(h.prisma.telegramAdProduct.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        take: 101,
+        where: expect.objectContaining({
+          workspaceId: 'workspace-a',
+          isActive: true,
+          telegramChannel: {
+            workspaceId: 'workspace-a',
+            isActive: true,
+            adminLinks: { some: {} },
+          },
+        }) as unknown,
+      }),
+    );
+  });
+  it('does not enumerate products when Sales permission is absent', async () => {
+    const h = setup();
+    h.auth.require
+      .mockResolvedValueOnce({ workspaceId: 'workspace-a' })
+      .mockRejectedValueOnce(new ForbiddenException());
+    await expect(
+      h.service.forWorkspaceCopilot('user-a'),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(h.prisma.telegramAdProduct.findMany).not.toHaveBeenCalled();
+    expect(h.prisma.telegramChannelNetwork.findMany).not.toHaveBeenCalled();
+  });
+});

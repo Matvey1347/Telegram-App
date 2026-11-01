@@ -243,25 +243,17 @@ describe("AI usage safeguards", () => {
       }),
     );
   });
-  it("keeps CRM analytics lazy until opened and cached when reopened", async () => {
+  it("shows monthly CRM costs, tokens and requests immediately without an expand button", async () => {
     mocks.usage.mockResolvedValue({
-      summary: {
-        selected: {
-          knownCost: "0",
-          unpricedRequests: 0,
-          unknownUsageRequests: 0,
-          requests: 0,
-        },
-      },
-      byFeature: [],
+      summary: { selected: { knownCost: "4.25", unpricedRequests: 0, unknownUsageRequests: 0, requests: 12, totalTokens: "10000" } },
+      pendingRequests: 0, byFeature: [],
     });
     wrap(<CrmAiUsage />);
-    const button = await screen.findByRole("button", { name: "AI Usage +" });
-    expect(mocks.usage).not.toHaveBeenCalled();
-    fireEvent.click(button);
-    await screen.findByText("This month · $0.00 · 0 requests");
-    fireEvent.click(screen.getByRole("button", { name: "AI Usage −" }));
-    fireEvent.click(screen.getByRole("button", { name: "AI Usage +" }));
+    await screen.findByText("$4.25");
+    expect(screen.getByText("10 000 токенов")).toBeTruthy();
+    expect(screen.getByText("12 запросов")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Статистика →" })).toHaveAttribute("href", "/settings/ai-usage");
+    expect(screen.queryByRole("button", { name: /AI Usage/ })).toBeNull();
     expect(mocks.usage).toHaveBeenCalledTimes(1);
   });
   it("reconciles authoritative configuration without another config GET", async () => {

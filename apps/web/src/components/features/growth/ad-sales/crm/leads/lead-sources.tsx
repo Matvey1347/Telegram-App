@@ -1,7 +1,7 @@
 "use client";
 import { useLeadText } from "./lead-copy";
 import { useState } from "react";
-import { useInfiniteQuery, useMutation } from "@tanstack/react-query";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import type {
   LeadDiscoveryConfig,
   LeadSourceListFilter,
@@ -12,10 +12,8 @@ import {
   leadKeys,
   leadQueryPolicy,
 } from "@/lib/features/growth/lead-discovery-query";
-import { downloadLeadExport } from "./lead-utils";
 import { LeadSourceCard } from "./lead-source-card";
 import { LeadSourceForm } from "./lead-source-form";
-import { LeadSourceImport } from "./lead-source-import";
 import { LeadQueryState } from "./lead-query-state";
 export function LeadSources({
   workspace,
@@ -28,7 +26,6 @@ export function LeadSources({
   const [filter, setFilter] = useState<LeadSourceListFilter>({ limit: 50 });
   const [status, setStatus] = useState("");
   const [add, setAdd] = useState(false);
-  const [batch, setBatch] = useState(false);
   const query = useInfiniteQuery({
     queryKey: leadKeys.sources(workspace, filter),
     queryFn: ({ pageParam, signal }) =>
@@ -37,11 +34,6 @@ export function LeadSources({
     getNextPageParam: (p) =>
       p.hasMore ? (p.nextCursor ?? undefined) : undefined,
     ...leadQueryPolicy,
-  });
-  const exportFile = useMutation({
-    mutationFn: leadDiscoveryApi.exportSources,
-    onSuccess: downloadLeadExport,
-    retry: false,
   });
   const items = query.data?.pages.flatMap((p) => p.items) ?? [];
   return (
@@ -60,34 +52,7 @@ export function LeadSources({
         ) : null}
       </div>
       <details className="rounded-lg border border-neutral-800 px-3 py-2">
-        <summary className="cursor-pointer text-sm text-neutral-300">Source options</summary>
-        <div className="mt-3 flex flex-wrap gap-2">
-          {config.canManage ? <Button variant="secondary" onClick={() => setBatch(true)}>{t("Import source list")}</Button> : null}
-        <Button
-          className="max-w-full !whitespace-normal"
-          variant="secondary"
-          disabled={exportFile.isPending}
-          onClick={() => exportFile.mutate("csv")}
-        >
-          {t("Export CSV")}
-        </Button>
-        <Button
-          className="max-w-full !whitespace-normal"
-          variant="secondary"
-          disabled={exportFile.isPending}
-          onClick={() => exportFile.mutate("xlsx")}
-        >
-          {t("Export XLSX")}
-        </Button>
-      </div>
-      {exportFile.isError ? (
-        <p role="alert">{t("Export failed. Retry with current access.")}</p>
-      ) : null}
-      {exportFile.data?.truncated ? (
-        <p role="status" className="text-amber-200">
-          {t("Export contains the first 1,000 sources only.")}
-        </p>
-      ) : null}
+        <summary className="cursor-pointer text-sm text-neutral-300">Найти источник</summary>
       <form
         className="flex flex-wrap items-end gap-3"
         onSubmit={(e) => {
@@ -144,7 +109,7 @@ export function LeadSources({
         empty={query.isSuccess && !items.length}
         onRetry={() => void query.refetch()}
       />
-      <div className="grid min-w-0 gap-3 xl:grid-cols-2">
+      <div className="grid min-w-0 gap-2 lg:grid-cols-2">
         {items.map((v) => (
           <LeadSourceCard
             key={v.id}
@@ -167,12 +132,7 @@ export function LeadSources({
       {add ? (
         <LeadSourceForm workspace={workspace} onClose={() => setAdd(false)} />
       ) : null}
-      {batch ? (
-        <LeadSourceImport
-          workspace={workspace}
-          onClose={() => setBatch(false)}
-        />
-      ) : null}
+
     </section>
   );
 }

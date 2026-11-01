@@ -16,6 +16,11 @@ import { TelegramCrmMessageReadService } from './telegram-crm-message-read.servi
 import { TelegramCrmSalesWorkflowService } from './telegram-crm-sales-workflow.service';
 import { TelegramCrmPackageSalesContextService } from './telegram-crm-package-sales-context.service';
 import { TelegramCrmPurchaseContextService } from './telegram-crm-purchase-context.service';
+import {
+  workspaceCatalogFacts,
+  workspaceContextProducts,
+  type CopilotPreset,
+} from './telegram-crm-copilot-workspace-context';
 
 export const copilotHash = (value: unknown) =>
   createHash('sha256').update(JSON.stringify(value)).digest('hex');
@@ -92,6 +97,29 @@ export class TelegramCrmCopilotContextService {
     if (!row) throw new NotFoundException('CRM conversation not found');
     return row;
   }
+  async suggestionOptions(userId: string, conversationId: string) {
+    const row = await this.access(userId, conversationId);
+    const grants = this.config.get<unknown>(
+      'INTERNAL_AI_SALES_PROCESSING_GRANTS',
+    );
+    const withNotes = this.processingEnabled()
+      ? copilotProcessingReference(grants, row.workspaceId, row.contactId, true)
+      : null;
+    return {
+      includeNotes: withNotes !== null,
+      processingReference:
+        withNotes ??
+        (this.processingEnabled()
+          ? copilotProcessingReference(
+              grants,
+              row.workspaceId,
+              row.contactId,
+              false,
+            )
+          : null) ??
+        '',
+    };
+  }
   async build(
     userId: string,
     conversationId: string,
@@ -99,7 +127,7 @@ export class TelegramCrmCopilotContextService {
       productIds: string[];
       includeNotes: boolean;
       processingReference?: string;
-    },
+    } & CopilotPreset,
   ): Promise<CopilotContext> {
     if (
       options.productIds.length > 5 ||
@@ -173,12 +201,24 @@ export class TelegramCrmCopilotContextService {
     );
     // Blocked contexts never load the sensitive history/catalog/notes subtree.
     const canLoad = !blockedReason && Boolean(row.contactId);
-    const [messages, products, purchases, notes] = canLoad
+    const [messages, catalog, purchases, notes, feedback] = canLoad
       ? await Promise.all([
           this.messages.forCopilot(userId, conversationId),
-          options.productIds.length
-            ? this.packages.forCopilot(userId, options.productIds)
-            : Promise.resolve([]),
+          options.preset === 'WORKSPACE_NEXT_MESSAGE'
+            ? this.packages.forWorkspaceCopilot(userId)
+            : options.productIds.length
+              ? this.packages
+                  .forCopilot(userId, options.productIds)
+                  .then((products) => ({
+                    products,
+                    networks: [],
+                    truncated: false,
+                  }))
+              : Promise.resolve({
+                  products: [],
+                  networks: [],
+                  truncated: false,
+                }),
           row.contactId &&
           (await this.authorization.can(userId, 'adSales.sales.view'))
             ? this.purchases.forCopilot(userId, row.contactId)
@@ -200,8 +240,27 @@ export class TelegramCrmCopilotContextService {
                 take: 3,
               })
             : Promise.resolve([]),
+          options.preset === 'WORKSPACE_NEXT_MESSAGE' && options.feedbackBefore
+            ? this.prisma.telegramCrmAiDraft.findMany({
+                where: {
+                  workspaceId: row.workspaceId,
+                  conversationId,
+                  authorUserId: userId,
+                  status: { in: ['APPROVED', 'SENT', 'DISCARDED'] },
+                  text: { not: '' },
+                  createdAt: { lt: new Date(options.feedbackBefore) },
+                  expiresAt: { gt: new Date() },
+                },
+                select: { id: true, text: true, status: true, revision: true },
+                orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+                take: 3,
+              })
+            : Promise.resolve([]),
         ])
-      : [[], [], [], []];
+      : [[], { products: [], networks: [], truncated: false }, [], [], []];
+    const products = options.preset
+      ? workspaceContextProducts(catalog.products)
+      : catalog.products;
     for (const message of messages.slice().reverse())
       add(
         `message:${message.id}`,
@@ -224,8 +283,25 @@ export class TelegramCrmCopilotContextService {
           currency: purchase.settlementCurrency,
         }),
       );
-    for (const product of products)
-      add(`product:${product.id}`, 'PRODUCT', JSON.stringify(product));
+    if (options.preset === 'WORKSPACE_NEXT_MESSAGE')
+      facts.push(...workspaceCatalogFacts(catalog));
+    else
+      for (const product of products)
+        add(`product:${product.id}`, 'PRODUCT', JSON.stringify(product));
+    for (const item of feedback)
+      add(
+        `feedback:${item.id}:${item.revision}`,
+        'NOTE',
+        JSON.stringify({
+          purpose: 'STYLE_FEEDBACK_ONLY_NOT_CUSTOMER_FACTS',
+          outcome:
+            item.status === 'DISCARDED'
+              ? 'AVOID_THIS_REPLY'
+              : 'MANAGER_ACCEPTED_REPLY',
+          text: bounded(item.text, 500),
+        }),
+      );
+    if (catalog.truncated) warnings.push('WORKSPACE_CATALOG_TRUNCATED');
     for (const note of notes)
       add(
         `note:${note.id}`,
@@ -237,10 +313,15 @@ export class TelegramCrmCopilotContextService {
         }),
       );
     if (!messages.length) missingFacts.push('MESSAGE_HISTORY_UNAVAILABLE');
-    if (!products.length) missingFacts.push('NO_SELECTED_VERIFIED_PRODUCTS');
+    if (!products.length)
+      missingFacts.push(
+        options.preset
+          ? 'NO_VERIFIED_WORKSPACE_PRODUCTS'
+          : 'NO_SELECTED_VERIFIED_PRODUCTS',
+      );
     if (products.some((product) => product.quoteRequired))
       missingFacts.push('PACKAGE_PRICE_REQUIRES_MANAGER_QUOTE');
-    if (products.length !== options.productIds.length)
+    if (!options.preset && products.length !== options.productIds.length)
       warnings.push('SELECTED_PRODUCT_UNAVAILABLE');
     const recentRefusal = messages.some(
       (message) =>
@@ -258,6 +339,7 @@ export class TelegramCrmCopilotContextService {
       identityVersion,
       facts,
       products,
+      networks: catalog.networks,
       followUpAllowed,
     });
     const result = {
@@ -277,7 +359,11 @@ export class TelegramCrmCopilotContextService {
       identityVersion,
       followUpAllowed,
     };
-    if (Buffer.byteLength(JSON.stringify(result), 'utf8') > 24 * 1024)
+    if (
+      Buffer.byteLength(JSON.stringify(result), 'utf8') >
+        (options.preset ? 128 : 24) * 1024 ||
+      Buffer.byteLength(JSON.stringify(facts), 'utf8') > 32 * 1024
+    )
       throw new BadRequestException('COPILOT_CONTEXT_LIMIT');
     return result;
   }

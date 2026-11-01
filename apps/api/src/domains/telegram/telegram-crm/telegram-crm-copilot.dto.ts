@@ -56,6 +56,11 @@ export class CrmCopilotGenerateDto {
   processingReference!: string;
   @IsBoolean() sourceAcknowledged!: boolean;
 }
+export class CrmCopilotSuggestDto {
+  @IsString()
+  @Matches(/^\d{4}-\d{2}-\d{2}:[0-9a-f-]{36}$/i)
+  operationId!: string;
+}
 export class CrmCopilotPatchDto {
   @Type(() => Number) @IsInt() @Min(1) revision!: number;
   @IsIn(['SAVE', 'APPROVE', 'DISCARD']) action!: 'SAVE' | 'APPROVE' | 'DISCARD';

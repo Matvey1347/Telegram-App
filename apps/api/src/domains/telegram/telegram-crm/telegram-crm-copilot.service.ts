@@ -10,6 +10,7 @@ import {
   CRM_COPILOT_TONES,
   type CrmCopilotGenerateInput,
   type CrmCopilotDraftPatch,
+  type CrmCopilotSuggestInput,
 } from '@telegram-system/shared';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { acquirePostgresTransactionLock } from '../../../prisma/postgres-advisory-lock';
@@ -29,6 +30,7 @@ import {
   validateCopilotOutput,
   copilotTextWarnings,
 } from './telegram-crm-copilot-policy';
+import type { CopilotPreset } from './telegram-crm-copilot-workspace-context';
 
 @Injectable()
 export class TelegramCrmCopilotService {
@@ -38,10 +40,34 @@ export class TelegramCrmCopilotService {
     private readonly drafts: TelegramCrmCopilotDraftsService,
     private readonly gateway: AiGateway,
   ) {}
+  async suggest(
+    userId: string,
+    conversationId: string,
+    input: CrmCopilotSuggestInput,
+    signal?: AbortSignal,
+  ) {
+    const policy = await this.context.suggestionOptions(userId, conversationId);
+    return this.generate(
+      userId,
+      conversationId,
+      {
+        operationId: input.operationId,
+        category: 'SALES_REPLY_SUGGESTION',
+        tone: 'NATURAL',
+        language: 'AUTO',
+        productIds: [],
+        ...policy,
+        processingBasis: 'APPROVED_BUSINESS_PROCESSING',
+        sourceAcknowledged: Boolean(policy.processingReference),
+        preset: 'WORKSPACE_NEXT_MESSAGE',
+      },
+      signal,
+    );
+  }
   async generate(
     userId: string,
     conversationId: string,
-    input: CrmCopilotGenerateInput,
+    input: CrmCopilotGenerateInput & CopilotPreset,
     signal?: AbortSignal,
   ) {
     if (
@@ -56,6 +82,11 @@ export class TelegramCrmCopilotService {
     )
       throw new BadRequestException('COPILOT_INPUT_INVALID');
     const access = await this.context.access(userId, conversationId);
+    if (input.preset)
+      input = {
+        ...input,
+        feedbackBefore: input.feedbackBefore ?? new Date().toISOString(),
+      };
     const fingerprint = copilotHash([
       conversationId,
       userId,
@@ -68,6 +99,7 @@ export class TelegramCrmCopilotService {
       input.processingBasis,
       input.processingReference,
       input.sourceAcknowledged,
+      ...(input.preset ? [input.preset] : []),
     ]);
     const replay = await this.drafts.replay(
       access.workspaceId,
@@ -109,6 +141,20 @@ export class TelegramCrmCopilotService {
         if (existing.requestFingerprint !== fingerprint)
           throw new ConflictException('COPILOT_OPERATION_CONFLICT');
         return { draft: existing, created: false };
+      }
+      // Reopening the UI or racing another click must not buy a second reply
+      // while the first provider outcome is still unresolved.
+      if (input.preset) {
+        const pending = await tx.telegramCrmAiDraft.findFirst({
+          where: {
+            workspaceId: context.workspaceId,
+            conversationId,
+            authorUserId: userId,
+            status: { in: ['GENERATING', 'UNKNOWN'] },
+          },
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        });
+        if (pending) return { draft: pending, created: false };
       }
       const retained = await tx.telegramCrmAiDraft.count({
         where: {
@@ -254,7 +300,13 @@ export class TelegramCrmCopilotService {
               missingFacts: output.missingFacts,
               warnings: output.warnings,
             }
-          : { warnings: ['GENERATION_OUTPUT_UNAVAILABLE_NO_AUTOMATIC_RETRY'] }),
+          : {
+              warnings: [
+                response.operation.errorCategory
+                  ? `AI_${response.operation.errorCategory}`
+                  : 'GENERATION_OUTPUT_UNAVAILABLE_NO_AUTOMATIC_RETRY',
+              ],
+            }),
       },
     });
     return this.drafts.view(saved);

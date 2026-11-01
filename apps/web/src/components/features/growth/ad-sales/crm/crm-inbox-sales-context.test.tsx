@@ -22,6 +22,14 @@ function mount(children: React.ReactNode) {
 beforeEach(() => { vi.clearAllMocks(); vi.mocked(crmSalesWorkflowApi.purchases).mockResolvedValue(first); });
 
 describe("lazy sales context", () => {
+  it("does not repeat the purchase amount in a summary for one linked sale", async () => {
+    vi.mocked(crmSalesWorkflowApi.purchases).mockResolvedValue({ ...first, summary: { ...first.summary!, dealCount: 1 }, nextCursor: null, hasMore: false });
+    mount(<CrmInboxPurchases contactId="client-a" conversationId="thread-a" workspaceId="workspace-b" />);
+    await screen.findByRole("link", { name: /Seven-channel package/ });
+    expect(screen.getAllByText("50 USD")).toHaveLength(1);
+    expect(screen.queryByText("45,000 USD")).not.toBeInTheDocument();
+    expect(screen.queryByText("1 ·")).not.toBeInTheDocument();
+  });
   it("renders a compact summary and linked deals and loads only the next cursor", async () => {
     vi.mocked(crmSalesWorkflowApi.purchases).mockResolvedValueOnce(first).mockResolvedValueOnce({ summary: null, items: [{ ...sale, id: "sale-older", title: "Older sale" }], nextCursor: null, hasMore: false });
     mount(<CrmInboxPurchases contactId="client-a" conversationId="thread-a" workspaceId="workspace-b" />);

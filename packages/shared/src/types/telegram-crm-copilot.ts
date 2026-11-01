@@ -35,6 +35,8 @@ export type CrmCopilotGenerateInput = {
   processingReference: string;
   sourceAcknowledged: boolean;
 };
+/** One explicitly requested next reply; policy, catalog and context are server-owned. */
+export type CrmCopilotSuggestInput = { operationId: string };
 export type CrmCopilotStatus = 'GENERATING' | 'READY' | 'APPROVED' | 'SENT' | 'DISCARDED' | 'UNKNOWN' | 'FAILED' | 'STALE' | 'REVIEW_REQUIRED' | 'EXPIRED';
 export type CrmCopilotDraft = {
   id: string;

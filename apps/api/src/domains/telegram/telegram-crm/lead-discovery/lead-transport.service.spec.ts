@@ -187,6 +187,16 @@ describe('Lead reuse of already-live channel transport', () => {
     );
     expect(JSON.stringify(data)).not.toContain('99999');
   });
+  it('exposes only the resolved identity for an approved metadata-only bootstrap without reading content', async () => {
+    const h = fixture();
+    h.source.channelId = null;
+    h.policy.granted.mockImplementation((_source: unknown, _mode: unknown, metadata?: boolean) => metadata === true);
+    await expect(h.service.validate('manager', 'source')).rejects.toMatchObject({
+      response: { message: 'LEAD_RESOLVED_CHANNEL_NOT_APPROVED', details: { resolvedChannelId: h.channel.channelId } },
+    });
+    expect(h.transport.history).not.toHaveBeenCalled();
+    expect(h.prisma.telegramLeadSource.updateMany).not.toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ channelId: h.channel.channelId }) }));
+  });
   it('requires channel-ID-specific processing approval after resolution and reports canonical duplicates safely', async () => {
     const h = fixture();
     h.policy.granted.mockImplementation(

@@ -72,28 +72,61 @@ export class TelegramCrmPackageSalesContextService {
       orderBy: { id: 'asc' },
       take: 5,
     });
-    return rows.map((product) => ({
-      id: product.id,
-      name: product.name,
-      channel: {
-        id: product.telegramChannel.id,
-        title: product.telegramChannel.title,
-      },
-      pricingMode: product.defaultPricingMode,
-      fixedPrice: product.defaultFixedPrice?.toFixed() ?? null,
-      cpm: product.defaultCpm?.toFixed() ?? null,
-      minimumPrice: product.minimumPrice?.toFixed() ?? null,
-      currency: product.currency,
-      quoteRequired:
-        product.defaultPricingMode !== 'FIXED' ||
-        product.defaultFixedPrice === null,
-      topDurationMinutes: product.topDurationMinutes,
-      feedDurationHours: product.feedDurationHours,
-      deleteAfterHours: product.deleteAfterHours,
-      isPermanent: product.isPermanent,
-      updatedAt: product.updatedAt.toISOString(),
-      constraints: product.telegramChannel.adSchedulePolicy,
-    }));
+    return rows.map(mapCopilotProduct);
+  }
+
+  /** One bounded catalog read and one compact network read, never per-channel queries. */
+  async forWorkspaceCopilot(userId: string) {
+    const access = await this.authorization.require(userId, 'adSales.crm.view');
+    await this.authorization.require(userId, 'adSales.sales.view');
+    const [rows, networks] = await Promise.all([
+      this.prisma.telegramAdProduct.findMany({
+        where: {
+          workspaceId: access.workspaceId,
+          isActive: true,
+          telegramChannel: {
+            workspaceId: access.workspaceId,
+            ...eligibleChannel,
+          },
+        },
+        select: productSelect,
+        orderBy: { id: 'asc' },
+        take: 101,
+      }),
+      this.prisma.telegramChannelNetwork.findMany({
+        where: {
+          workspaceId: access.workspaceId,
+          channels: {
+            some: {},
+            every: {
+              workspaceId: access.workspaceId,
+              telegramChannel: {
+                workspaceId: access.workspaceId,
+                ...eligibleChannel,
+              },
+            },
+          },
+        },
+        select: {
+          id: true,
+          name: true,
+          updatedAt: true,
+          _count: { select: { channels: true } },
+        },
+        orderBy: { id: 'asc' },
+        take: 11,
+      }),
+    ]);
+    return {
+      products: rows.slice(0, 100).map(mapCopilotProduct),
+      networks: networks.slice(0, 10).map((row) => ({
+        id: row.id,
+        name: row.name,
+        channelCount: row._count.channels,
+        updatedAt: row.updatedAt.toISOString(),
+      })),
+      truncated: rows.length > 100 || networks.length > 10,
+    };
   }
 
   async list(
@@ -192,4 +225,31 @@ export class TelegramCrmPackageSalesContextService {
           : null,
     };
   }
+}
+
+function mapCopilotProduct(
+  product: Prisma.TelegramAdProductGetPayload<{ select: typeof productSelect }>,
+) {
+  return {
+    id: product.id,
+    name: product.name,
+    channel: {
+      id: product.telegramChannel.id,
+      title: product.telegramChannel.title,
+    },
+    pricingMode: product.defaultPricingMode,
+    fixedPrice: product.defaultFixedPrice?.toFixed() ?? null,
+    cpm: product.defaultCpm?.toFixed() ?? null,
+    minimumPrice: product.minimumPrice?.toFixed() ?? null,
+    currency: product.currency,
+    quoteRequired:
+      product.defaultPricingMode !== 'FIXED' ||
+      product.defaultFixedPrice === null,
+    topDurationMinutes: product.topDurationMinutes,
+    feedDurationHours: product.feedDurationHours,
+    deleteAfterHours: product.deleteAfterHours,
+    isPermanent: product.isPermanent,
+    updatedAt: product.updatedAt.toISOString(),
+    constraints: product.telegramChannel.adSchedulePolicy,
+  };
 }

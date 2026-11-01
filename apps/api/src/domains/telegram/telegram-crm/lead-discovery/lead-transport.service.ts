@@ -127,18 +127,23 @@ export class TelegramLeadTransportService {
       );
       if (source.channelId && channel.channelId !== source.channelId)
         throw new ConflictException('LEAD_SOURCE_IDENTITY_CHANGED');
+      await this.policy.refresh(userId);
+      await this.policy.access(userId, 'manage');
+      const current = await this.policy.source(userId, id, 'manage');
+      if (current.updatedAt.getTime() !== source.updatedAt.getTime())
+        throw new ConflictException('LEAD_SOURCE_CHANGED');
+      if (!this.policy.granted(current, 'ingest', true))
+        throw new ConflictException('LEAD_PROCESSING_NOT_APPROVED');
       if (
         !this.policy.granted(
           { ...source, channelId: channel.channelId },
           'ingest',
         )
       )
-        throw new ConflictException('LEAD_RESOLVED_CHANNEL_NOT_APPROVED');
-      await this.policy.refresh(userId);
-      await this.policy.access(userId, 'manage');
-      const current = await this.policy.source(userId, id, 'manage');
-      if (current.updatedAt.getTime() !== source.updatedAt.getTime())
-        throw new ConflictException('LEAD_SOURCE_CHANGED');
+        throw new ConflictException({
+          message: 'LEAD_RESOLVED_CHANNEL_NOT_APPROVED',
+          ...(!source.channelId ? { details: { resolvedChannelId: channel.channelId } } : {}),
+        });
       const own = await this.prisma.telegramChannel.findFirst({
         where: {
           workspaceId: source.workspaceId,

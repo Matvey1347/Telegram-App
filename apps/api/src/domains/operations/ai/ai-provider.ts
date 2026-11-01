@@ -79,10 +79,19 @@ export class AiProvider {
       };
       const counted = await this.post(
         '/input_tokens',
-        payload,
+        {
+          model: payload.model,
+          input: payload.input,
+          ...(instructions ? { instructions } : {}),
+          tools: payload.tools,
+          text: payload.text,
+          reasoning: payload.reasoning,
+          truncation: payload.truncation,
+        },
         controller.signal,
       );
-      if (!counted.ok) return empty('TOKEN_COUNT_FAILED');
+      if (!counted.ok)
+        return empty(`TOKEN_COUNT_${this.failure(counted.status)}`);
       if (
         typeof counted.body.input_tokens !== 'number' ||
         !Number.isSafeInteger(counted.body.input_tokens) ||
@@ -101,8 +110,13 @@ export class AiProvider {
         providerModel: safeIdentifier(response.body.model, 100),
         providerRequestId: response.requestId,
       };
-      if (!response.ok || response.body.status !== 'completed')
-        return { ...metadata, errorCategory: 'PROVIDER_FAILED' };
+      if (!response.ok)
+        return {
+          ...metadata,
+          errorCategory: `PROVIDER_${this.failure(response.status)}`,
+        };
+      if (response.body.status !== 'completed')
+        return { ...metadata, errorCategory: 'PROVIDER_INCOMPLETE' };
       const output = response.body.output;
       const content = Array.isArray(output)
         ? output.flatMap((entry: unknown) => {
@@ -138,6 +152,13 @@ export class AiProvider {
       clearTimeout(timer);
       callerSignal?.removeEventListener('abort', abort);
     }
+  }
+  private failure(status: number) {
+    if (status === 401 || status === 403) return 'AUTHENTICATION_FAILED';
+    if (status === 429) return 'RATE_LIMITED';
+    if (status === 400 || status === 422) return 'REQUEST_INVALID';
+    if (status === 404) return 'MODEL_UNAVAILABLE';
+    return 'UNAVAILABLE';
   }
   private async post(suffix: string, body: unknown, signal: AbortSignal) {
     const response = await fetch(
@@ -181,6 +202,7 @@ export class AiProvider {
     }
     return {
       ok: response.ok,
+      status: response.status,
       body: parsed,
       requestId: safeIdentifier(response.headers.get('x-request-id'), 200),
     };
