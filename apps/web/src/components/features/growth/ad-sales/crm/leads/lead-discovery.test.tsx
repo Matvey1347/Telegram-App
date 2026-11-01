@@ -106,6 +106,17 @@ describe("Lead Discovery operational UI", () => {
     expect(screen.getByText("Требуется подключение Telegram и проверка доступа.")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Scan up to 50 posts" })).toBeNull();
   });
+  it("explains membership and public manual scanning instead of showing an opaque paused code", async () => {
+    vi.mocked(leadDiscoveryApi.sources).mockResolvedValue({ items: [
+      { ...sourceFixture(1), monitoringState: "ACCESS_LOST", lastErrorCode: "LEAD_CHANNEL_MEMBERSHIP_REQUIRED" },
+      { ...sourceFixture(2), monitoringState: "PAUSED", accessType: "PUBLIC_CHANNEL" },
+    ], hasMore: false, nextCursor: null });
+    mount(<LeadSources workspace="workspace-one" config={leadConfig}/>);
+    await screen.findByText("Нет подписки");
+    expect(screen.getByText("Проверка вручную")).toBeTruthy();
+    expect(screen.getByText(/Для этого приватного канала/)).toBeTruthy();
+    expect(screen.queryByText("LEAD_CHANNEL_MEMBERSHIP_REQUIRED")).toBeNull();
+  });
   it("loads source cursors while keeping status and search filters", async () => {
     vi.mocked(leadDiscoveryApi.sources)
       .mockResolvedValueOnce({

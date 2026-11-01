@@ -12,6 +12,8 @@ import { LeadSourceSettings } from "./lead-source-settings";
 
 function sourceState(source: LeadSourceView) {
   if (!source.accountId || !source.channelId) return { label: "Не подключён", detail: "Требуется подключение Telegram и проверка доступа." };
+  if (source.lastErrorCode === "LEAD_CHANNEL_MEMBERSHIP_REQUIRED") return { label: "Нет подписки", detail: "Для этого приватного канала подключённый Telegram-аккаунт должен быть участником." };
+  if (source.lastErrorCode === "LEAD_BROADCAST_CHANNEL_REQUIRED") return { label: "Не канал", detail: "Эта ссылка ведёт в чат или группу. Поиск настроен на публикации каналов." };
   if (source.monitoringState === "ACCESS_LOST") return { label: "Нет доступа", detail: "Telegram не разрешает читать этот канал. Проверьте подписку аккаунта." };
   if (source.lastErrorCode === "LEAD_RESOLVED_CHANNEL_NOT_APPROVED") return { label: "Ожидает подключения", detail: "Доступ найден; требуется завершить настройку источника." };
   if (source.monitoringState === "DISABLED") return { label: "Отключён", detail: "Поиск в этом источнике выключен." };

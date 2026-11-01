@@ -98,6 +98,11 @@ export class TelegramCrmRecoveryService {
             preserveUnread: true,
           });
         }
+        await this.ensureUpdatePeers(
+          input.account,
+          input.handle,
+          difference.updates,
+        );
         const stored = await this.batchStore.applyUpdates({
           workspaceId: input.account.workspaceId,
           accountId: input.account.id,

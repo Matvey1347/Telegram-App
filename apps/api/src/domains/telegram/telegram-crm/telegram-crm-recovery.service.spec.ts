@@ -144,3 +144,154 @@ describe('TelegramCrmRecoveryService', () => {
     ).not.toHaveBeenCalled();
   });
 });
+
+describe('CRM difference peer recovery', () => {
+  function setup(failResolution = false) {
+    const known = new Set(['1000']);
+    const updates: TelegramCrmMtprotoUpdate[] = Array.from(
+      { length: 12 },
+      (_, index) => ({
+        type: 'message.new',
+        message: {
+          telegramMessageId: index + 1,
+          telegramUserId: String(1000 + index),
+          direction: 'INBOUND',
+          text: 'A private incoming message',
+          sentAt: new Date(),
+          editedAt: null,
+          contentMetadata: null,
+        },
+      }),
+    );
+    updates.push(updates[0]);
+    const peer = (id: string) => ({
+      telegramUserId: id,
+      telegramAccessHash: `access-${id}`,
+      username: null,
+      firstName: 'Client',
+      lastName: null,
+      photoUrl: null,
+    });
+    const next = { ...checkpoint, pts: checkpoint.pts + updates.length };
+    const state = { incrementalCheckpoint: JSON.stringify(checkpoint) };
+    const prisma = {
+      telegramCrmAccountSyncState: {
+        findUnique: jest.fn().mockResolvedValue(state),
+        upsert: jest.fn(),
+      },
+      telegramCrmConversation: {
+        findMany: jest.fn(() =>
+          Promise.resolve(
+            [...known].map((id) => ({ peer: { telegramUserId: id } })),
+          ),
+        ),
+      },
+    };
+    const batchStore = {
+      importDialogs: jest.fn(
+        (input: { dialogs: Array<{ peer: { telegramUserId: string } }> }) => {
+          input.dialogs.forEach((dialog) =>
+            known.add(dialog.peer.telegramUserId),
+          );
+          return Promise.resolve(undefined);
+        },
+      ),
+      applyUpdates: jest.fn((input: { updates: TelegramCrmMtprotoUpdate[] }) =>
+        Promise.resolve({
+          needsRecovery: input.updates.some(
+            (update) =>
+              update.type === 'message.new' &&
+              !known.has(update.message.telegramUserId),
+          ),
+        }),
+      ),
+    };
+    let active = 0,
+      maximumActive = 0;
+    const handle = {
+      getDifference: jest.fn().mockResolvedValue({
+        updates,
+        peers: [peer('1001')],
+        checkpoint: next,
+        final: true,
+        tooLong: false,
+      }),
+      resolvePrivatePeer: jest.fn(
+        async ({ telegramUserId }: { telegramUserId: string }) => {
+          active += 1;
+          maximumActive = Math.max(active, maximumActive);
+          try {
+            await new Promise<void>((resolve) => setImmediate(resolve));
+            if (failResolution) throw new Error('USER_ID_INVALID');
+            return peer(telegramUserId);
+          } finally {
+            active -= 1;
+          }
+        },
+      ),
+    };
+    const service = new TelegramCrmRecoveryService(
+      prisma as never,
+      batchStore as never,
+    );
+    return {
+      service,
+      prisma,
+      batchStore,
+      handle,
+      next,
+      state,
+      maximum: () => maximumActive,
+    };
+  }
+
+  it('resolves missing difference peers before applying updates, sharing supplied entities and bounding RPC concurrency', async () => {
+    const h = setup();
+    await expect(
+      h.service.recover({
+        account,
+        handle: h.handle as never,
+        captureQueue: () => [],
+      }),
+    ).resolves.toEqual({ outcome: 'SUCCESS', checkpoint: h.next });
+    expect(h.handle.resolvePrivatePeer).toHaveBeenCalledTimes(10);
+    expect(h.maximum()).toBe(5);
+    expect(h.batchStore.applyUpdates).toHaveBeenCalledTimes(1);
+    expect(h.batchStore.applyUpdates).toHaveBeenCalledWith(
+      expect.objectContaining({
+        checkpoint: h.next,
+        updates: expect.any(Array) as unknown,
+      }),
+    );
+    expect(h.prisma.telegramCrmConversation.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          workspaceId: 'workspace-1',
+          mtprotoAccountId: 'account-1',
+        }) as unknown,
+      }),
+    );
+    expect(h.handle.resolvePrivatePeer).not.toHaveBeenCalledWith({
+      telegramUserId: '1000',
+    });
+    expect(h.handle.resolvePrivatePeer).not.toHaveBeenCalledWith({
+      telegramUserId: '1001',
+    });
+  });
+
+  it('keeps the prior checkpoint and skips apply when missing peer resolution fails', async () => {
+    const h = setup(true);
+    await expect(
+      h.service.recover({
+        account,
+        handle: h.handle as never,
+        captureQueue: () => [],
+      }),
+    ).rejects.toThrow('USER_ID_INVALID');
+    expect(h.handle.resolvePrivatePeer).toHaveBeenCalledTimes(5);
+    expect(h.maximum()).toBeLessThanOrEqual(5);
+    expect(h.batchStore.applyUpdates).not.toHaveBeenCalled();
+    expect(h.prisma.telegramCrmAccountSyncState.upsert).not.toHaveBeenCalled();
+    expect(h.state.incrementalCheckpoint).toBe(JSON.stringify(checkpoint));
+  });
+});

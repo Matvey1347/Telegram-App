@@ -8,13 +8,19 @@ import { TelegramCrmRuntimeManager } from './telegram-crm-runtime-manager.servic
 
 // Runtime behavior is tested as the owner, independent of a developer's relay environment.
 jest.mock('../../../config/deployment-config', () => ({
-  ...jest.requireActual('../../../config/deployment-config'),
+  ...jest.requireActual<typeof import('../../../config/deployment-config')>(
+    '../../../config/deployment-config',
+  ),
   crmRuntimeEnabled: () =>
-    jest.requireActual('../../../config/deployment-config').crmRuntimeEnabled({
-      ...process.env,
-      CRM_RUNTIME_PROXY_URL: undefined,
-      CRM_RUNTIME_OWNER_API_PORT: undefined,
-    }),
+    jest
+      .requireActual<
+        typeof import('../../../config/deployment-config')
+      >('../../../config/deployment-config')
+      .crmRuntimeEnabled({
+        ...process.env,
+        CRM_RUNTIME_PROXY_URL: undefined,
+        CRM_RUNTIME_OWNER_API_PORT: undefined,
+      }),
 }));
 
 const callArgument = (mock: { mock: { calls: unknown[][] } }): unknown =>
@@ -232,67 +238,76 @@ describe('TelegramCrmRuntimeManager', () => {
     expect(lease.acquire).toHaveBeenCalledTimes(1);
     expect(adapter.open).not.toHaveBeenCalled();
     await expect(
-      manager.withAccountHandle(
-        account.workspaceId,
-        account.id,
-        'sync',
-        async () => undefined,
+      manager.withAccountHandle(account.workspaceId, account.id, 'sync', () =>
+        Promise.resolve(undefined),
       ),
     ).rejects.toThrow('active in another application instance');
     await manager.onApplicationShutdown();
     expect(lease.release).toHaveBeenCalledTimes(1);
   });
 
-  it('reacquires after a startup lease conflict and shares the recovered handle across concurrent requests', async () => {
-    const handle = {
-      onUpdate: jest.fn().mockReturnValue(jest.fn()),
-      close: jest.fn(),
-    };
-    const sessions = {
-      startupAccounts: jest.fn().mockResolvedValue([account]),
-      requireForSync: jest.fn().mockResolvedValue({ credentials: {} }),
-      credentials: jest
-        .fn()
-        .mockReturnValue({ apiId: '1', apiHash: 'hash', session: 'session' }),
-    };
-    const adapter = { open: jest.fn().mockResolvedValue(handle) };
-    const lease = {
-      acquire: jest.fn().mockResolvedValueOnce(false).mockResolvedValue(true),
-      startRenewing: jest.fn(),
-      release: jest.fn(),
-    };
-    const manager = new TelegramCrmRuntimeManager(
-      { telegramUserAccountIntegration: { updateMany: jest.fn() } } as never,
-      sessions as never,
-      adapter,
-      {} as never,
-      new TelegramAccountRuntimeNotifier(),
-      {
-        recover: jest.fn().mockResolvedValue({
-          outcome: 'SUCCESS',
-          checkpoint: { pts: 1, qts: 0, date: 2, seq: 3 },
-        }),
-      } as never,
-      undefined,
-      undefined,
-      lease as never,
-    );
-    await manager.onApplicationBootstrap();
-    const results = await Promise.all(
-      [1, 2].map(() =>
-        manager.withAccountHandle(
-          account.workspaceId,
-          account.id,
-          'sync',
-          (current) => Promise.resolve(current),
+  it.each(['inbox', 'lead', 'mixed'] as const)(
+    'reacquires after a startup lease conflict for first %s request and shares the recovered handle across concurrent requests',
+    async (first) => {
+      const handle = {
+        onUpdate: jest.fn().mockReturnValue(jest.fn()),
+        close: jest.fn(),
+        leadDiscovery: {},
+      };
+      const sessions = {
+        startupAccounts: jest.fn().mockResolvedValue([account]),
+        requireForSync: jest.fn().mockResolvedValue({ credentials: {} }),
+        find: jest.fn().mockResolvedValue(account),
+        isLiveEligible: jest.fn().mockReturnValue(true),
+        credentials: jest
+          .fn()
+          .mockReturnValue({ apiId: '1', apiHash: 'hash', session: 'session' }),
+      };
+      const adapter = { open: jest.fn().mockResolvedValue(handle) };
+      const lease = {
+        acquire: jest.fn().mockResolvedValueOnce(false).mockResolvedValue(true),
+        startRenewing: jest.fn(),
+        release: jest.fn(),
+      };
+      const manager = new TelegramCrmRuntimeManager(
+        { telegramUserAccountIntegration: { updateMany: jest.fn() } } as never,
+        sessions as never,
+        adapter,
+        {} as never,
+        new TelegramAccountRuntimeNotifier(),
+        {
+          recover: jest.fn().mockResolvedValue({
+            outcome: 'SUCCESS',
+            checkpoint: { pts: 1, qts: 0, date: 2, seq: 3 },
+          }),
+        } as never,
+        undefined,
+        undefined,
+        lease as never,
+      );
+      await manager.onApplicationBootstrap();
+      const results = await Promise.all(
+        [1, 2].map((index) =>
+          first === 'lead' || (first === 'mixed' && index === 1)
+            ? manager.withLiveAccountHandle(
+                account.workspaceId,
+                account.id,
+                (current) => Promise.resolve(current),
+              )
+            : manager.withAccountHandle(
+                account.workspaceId,
+                account.id,
+                'sync',
+                (current) => Promise.resolve(current),
+              ),
         ),
-      ),
-    );
-    expect(results).toEqual([handle, handle]);
-    expect(lease.acquire).toHaveBeenCalledTimes(2);
-    expect(adapter.open).toHaveBeenCalledTimes(1);
-    await manager.onApplicationShutdown();
-  });
+      );
+      expect(results).toEqual([handle, handle]);
+      expect(lease.acquire).toHaveBeenCalledTimes(2);
+      expect(adapter.open).toHaveBeenCalledTimes(1);
+      await manager.onApplicationShutdown();
+    },
+  );
 
   it('does not start CRM runtime in an explicitly disabled compatibility host', async () => {
     const previous = process.env.CRM_RUNTIME_ENABLED;
@@ -444,7 +459,9 @@ describe('TelegramCrmRuntimeManager', () => {
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
         findMany: jest.fn().mockResolvedValue([]),
       },
-      $transaction: jest.fn((operation) => operation({})),
+      $transaction: jest.fn(
+        (operation: (tx: Record<string, never>) => unknown) => operation({}),
+      ),
     };
     const recovery = {
       recover: jest.fn().mockResolvedValue({
@@ -588,9 +605,9 @@ describe('TelegramCrmRuntimeManager', () => {
         account.workspaceId,
         account.id,
         'sync',
-        async (handle) => {
+        (handle) => {
           expect(handle).toBe(isolatedHandle);
-          return 'synchronized';
+          return Promise.resolve('synchronized');
         },
       ),
     ).resolves.toBe('synchronized');

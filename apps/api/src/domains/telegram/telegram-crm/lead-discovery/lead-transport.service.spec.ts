@@ -187,15 +187,64 @@ describe('Lead reuse of already-live channel transport', () => {
     );
     expect(JSON.stringify(data)).not.toContain('99999');
   });
+  it('keeps runtime recovery failures distinct from source access and performs no source write', async () => {
+    const h = fixture();
+    h.transport.resolve.mockRejectedValue(
+      new Error('LEAD_EXISTING_LIVE_ACCOUNT_REQUIRED'),
+    );
+    await expect(h.service.validate('manager', 'source')).rejects.toThrow(
+      'LEAD_EXISTING_LIVE_ACCOUNT_REQUIRED',
+    );
+    expect(h.prisma.telegramLeadSource.updateMany).not.toHaveBeenCalled();
+  });
+  it('explains missing private-channel membership without exposing provider details', async () => {
+    const h = fixture();
+    h.transport.resolve.mockRejectedValue(
+      new Error('LEAD_CHANNEL_MEMBERSHIP_REQUIRED'),
+    );
+    await expect(h.service.validate('manager', 'source')).rejects.toThrow(
+      'LEAD_CHANNEL_MEMBERSHIP_REQUIRED',
+    );
+    expect(firstArgument(h.prisma.telegramLeadSource.updateMany)).toMatchObject(
+      {
+        data: {
+          lastErrorCode: 'LEAD_CHANNEL_MEMBERSHIP_REQUIRED',
+          monitoringState: 'ACCESS_LOST',
+        },
+      },
+    );
+  });
+  it('does not expose resolved metadata if its exact source grant expired during resolution', async () => {
+    const h = fixture();
+    h.source.channelId = null;
+    h.policy.granted.mockReturnValueOnce(true).mockReturnValue(false);
+    await expect(h.service.validate('manager', 'source')).rejects.toMatchObject(
+      { response: { message: 'LEAD_PROCESSING_NOT_APPROVED' } },
+    );
+    expect(h.prisma.telegramLeadSource.updateMany).not.toHaveBeenCalled();
+  });
   it('exposes only the resolved identity for an approved metadata-only bootstrap without reading content', async () => {
     const h = fixture();
     h.source.channelId = null;
-    h.policy.granted.mockImplementation((_source: unknown, _mode: unknown, metadata?: boolean) => metadata === true);
-    await expect(h.service.validate('manager', 'source')).rejects.toMatchObject({
-      response: { message: 'LEAD_RESOLVED_CHANNEL_NOT_APPROVED', details: { resolvedChannelId: h.channel.channelId } },
-    });
+    h.policy.granted.mockImplementation(
+      (_source: unknown, _mode: unknown, metadata?: boolean) =>
+        metadata === true,
+    );
+    await expect(h.service.validate('manager', 'source')).rejects.toMatchObject(
+      {
+        response: {
+          message: 'LEAD_RESOLVED_CHANNEL_NOT_APPROVED',
+          details: { resolvedChannelId: h.channel.channelId },
+        },
+      },
+    );
     expect(h.transport.history).not.toHaveBeenCalled();
-    expect(h.prisma.telegramLeadSource.updateMany).not.toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ channelId: h.channel.channelId }) }));
+    const mutation: unknown = firstArgument(
+      h.prisma.telegramLeadSource.updateMany,
+    );
+    expect(JSON.stringify(mutation)).not.toContain(
+      JSON.stringify({ channelId: h.channel.channelId }).slice(1, -1),
+    );
   });
   it('requires channel-ID-specific processing approval after resolution and reports canonical duplicates safely', async () => {
     const h = fixture();

@@ -142,7 +142,9 @@ export class TelegramLeadTransportService {
       )
         throw new ConflictException({
           message: 'LEAD_RESOLVED_CHANNEL_NOT_APPROVED',
-          ...(!source.channelId ? { details: { resolvedChannelId: channel.channelId } } : {}),
+          ...(!source.channelId
+            ? { details: { resolvedChannelId: channel.channelId } }
+            : {}),
         });
       const own = await this.prisma.telegramChannel.findFirst({
         where: {
@@ -242,6 +244,22 @@ export class TelegramLeadTransportService {
         error.code === 'P2002'
       )
         throw new ConflictException('LEAD_SOURCE_CANONICAL_DUPLICATE');
+      const reason = error instanceof Error ? error.message : '';
+      if (
+        [
+          'LEAD_EXISTING_LIVE_ACCOUNT_REQUIRED',
+          'LEAD_CHANNEL_TRANSPORT_UNAVAILABLE',
+          'LEAD_PROCESSING_NOT_APPROVED',
+        ].includes(reason)
+      )
+        throw new ConflictException(reason);
+      const safeCode = [
+        'LEAD_CHANNEL_MEMBERSHIP_REQUIRED',
+        'LEAD_BROADCAST_CHANNEL_REQUIRED',
+        'LEAD_CHANNEL_REFERENCE_INVALID',
+      ].includes(reason)
+        ? reason
+        : 'LEAD_ACCESS_VALIDATION_FAILED';
       await this.prisma.telegramLeadSource.updateMany({
         where: {
           id,
@@ -249,13 +267,10 @@ export class TelegramLeadTransportService {
           updatedAt: source.updatedAt,
           ...leadTransportSnapshot(source),
           allowOwnChannel: source.allowOwnChannel,
-          OR: [
-            { lastErrorCode: null },
-            { lastErrorCode: { not: 'LEAD_ACCESS_VALIDATION_FAILED' } },
-          ],
+          OR: [{ lastErrorCode: null }, { lastErrorCode: { not: safeCode } }],
         },
         data: {
-          lastErrorCode: 'LEAD_ACCESS_VALIDATION_FAILED',
+          lastErrorCode: safeCode,
           lastErrorAt: new Date(),
           monitoringState: 'ACCESS_LOST',
           coverageState: 'GAPPED',
@@ -263,7 +278,7 @@ export class TelegramLeadTransportService {
         },
       });
       this.events.refresh(source.workspaceId);
-      throw new ConflictException('LEAD_ACCESS_VALIDATION_FAILED');
+      throw new ConflictException(safeCode);
     }
   }
   async scan(

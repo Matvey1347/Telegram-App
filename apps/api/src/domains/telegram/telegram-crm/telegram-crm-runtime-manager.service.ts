@@ -113,6 +113,20 @@ export class TelegramCrmRuntimeManager
     purpose: 'sync' | 'send',
     operation: (handle: TelegramCrmMtprotoHandle) => Promise<T>,
   ) {
+    await this.ensureRuntimeOwnership();
+    return withCrmAccountHandle({
+      workspaceId,
+      accountId,
+      purpose,
+      operation,
+      blocked: this.runtimeHeldByAnotherInstance || this.shuttingDown,
+      sessions: this.sessions,
+      adapter: this.adapter,
+      getManaged: (id) => this.accounts.get(id),
+    });
+  }
+
+  private async ensureRuntimeOwnership() {
     if (this.reacquiring) await this.reacquiring;
     else if (
       this.runtimeEnabled &&
@@ -125,16 +139,6 @@ export class TelegramCrmRuntimeManager
       });
       await this.reacquiring;
     }
-    return withCrmAccountHandle({
-      workspaceId,
-      accountId,
-      purpose,
-      operation,
-      blocked: this.runtimeHeldByAnotherInstance || this.shuttingDown,
-      sessions: this.sessions,
-      adapter: this.adapter,
-      getManaged: (id) => this.accounts.get(id),
-    });
   }
 
   liveAccountIds(workspaceId: string) {
@@ -151,10 +155,13 @@ export class TelegramCrmRuntimeManager
     accountId: string,
     operation: (handle: TelegramCrmMtprotoHandle) => Promise<T>,
   ): Promise<T> {
+    await this.ensureRuntimeOwnership();
     const managed = this.accounts.get(accountId);
+    await managed?.connecting;
     const current = await this.sessions.find(accountId, workspaceId);
     if (
       this.runtimeHeldByAnotherInstance ||
+      this.shuttingDown ||
       !managed?.handle?.leadDiscovery ||
       managed.account.workspaceId !== workspaceId ||
       !current ||
