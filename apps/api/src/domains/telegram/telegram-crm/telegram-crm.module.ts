@@ -29,11 +29,17 @@ import { TelegramLeadSourceService } from './lead-discovery/lead-source.service'
 import { TelegramLeadReadService } from './lead-discovery/lead-read.service';
 import { TelegramLeadIngestService } from './lead-discovery/lead-ingest.service';
 import { TelegramLeadTransportService } from './lead-discovery/lead-transport.service';
+import { TelegramLeadMetadataDiagnostics } from './lead-discovery/lead-metadata-diagnostics.service';
+import { TelegramLeadMediaPilotService } from './lead-discovery/lead-media-pilot.service';
 import { TelegramLeadAnalysisService } from './lead-discovery/lead-analysis.service';
 import { TelegramLeadCandidateService } from './lead-discovery/lead-candidate.service';
 import { TelegramLeadCrmLinker } from './lead-discovery/lead-crm-linker.service';
 import { TelegramLeadExportService } from './lead-discovery/lead-export.service';
 import { TelegramLeadMonitorService } from './lead-discovery/lead-monitor.service';
+import { TelegramLeadHistoryJobService } from './lead-discovery/lead-history-job.service';
+import { TelegramLeadHistoryWorker } from './lead-discovery/lead-history-worker.service';
+import { TelegramLeadAnalysisExecutor } from './lead-discovery/lead-analysis-executor.service';
+import { TelegramLeadReconciliationService } from './lead-discovery/lead-reconciliation.service';
 import { TelegramLeadRetentionService } from './lead-discovery/lead-retention.service';
 import { AiModule } from '../../operations/ai/ai.module';
 import { TelegramCrmCopilotController } from './telegram-crm-copilot.controller';
@@ -143,11 +149,17 @@ import { TelegramCrmRuntimeLeaseService } from './telegram-crm-runtime-lease.ser
     TelegramLeadReadService,
     TelegramLeadIngestService,
     TelegramLeadTransportService,
+    TelegramLeadMetadataDiagnostics,
+    TelegramLeadMediaPilotService,
     TelegramLeadAnalysisService,
     TelegramLeadCandidateService,
     TelegramLeadCrmLinker,
     TelegramLeadExportService,
     TelegramLeadMonitorService,
+    TelegramLeadHistoryJobService,
+    TelegramLeadHistoryWorker,
+    TelegramLeadAnalysisExecutor,
+    TelegramLeadReconciliationService,
     TelegramLeadRetentionService,
 
     TelegramCrmCopilotService,

@@ -2187,3 +2187,8 @@ Release decision remains **NO-GO**: focused API138 suites/1083 tests and web55 f
 - Mapped the prior account-specific contact-tag limitation and introduced workspace/account-isolated conversation membership, complete server unread aggregates and a compact folder rail with a global Unread filter.
 - Folder membership uses existing Telegram runtime and event-driven reconciliation. Reads carry the actually visible message watermark; hidden tabs, unfocused windows, older-history views and modal overlays do not automatically mark messages read.
 - A disposable PostgreSQL migration and aggregate fixture verifies account/workspace isolation, overlap, unlinked chats and cascade. [QA and runtime costs](../qa/ai-sales-crm-final/telegram-folders.md) records limits, rollout and manual checks.
+
+## 2026-11-01 Lead Discovery autopilot — in progress
+
+- Grace, Knuth and Parnas mapped the actual leased Telegram transport, event monitor, manual-only AI admission, source grants and repository size/cost baseline. Autonomous AI must use existing AUTOMATIC budget gates and unknown-receipt fencing.
+- Added a conservative standalone prefilter, reciprocal-evidence checks and an offline aggregate benchmark; neither is integrated into a running automatic pipeline. The supplied 2,700-post text export lacks source metadata and independent human labels. Quality and production rollout remain **NOT VERIFIED / NO-GO**. See [plan](../plans/lead-discovery-autopilot.md) and [QA](../qa/lead-discovery-autopilot/README.md).

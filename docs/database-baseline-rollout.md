@@ -49,6 +49,15 @@ migration remains a hard failure.
 Fresh databases do not require the flag: `pnpm db:deploy:safe` detects the
 missing migration table and applies the baseline normally.
 
+Railway's `preDeployCommand`, CI, and the development runner use this safe
+workflow. Running `prisma migrate deploy` directly on a completely empty
+database is not a supported bootstrap path: the historical
+`20260814000001_enable_finance_for_business_workspace` data migration assumes
+an existing workspace. Do not edit an applied historical migration to repair
+bootstrap. Verify migration status and the safe workflow's schema check after
+deployment. An application rollback must retain the additive schema unless a
+separately reviewed data migration provides a compatible rollback.
+
 PostgreSQL truncates identifiers longer than 63 bytes. The Prisma schema maps
 all surviving long legacy index and constraint names to their actual stored
 names, so both a fresh baseline and a reconciled database expose the same

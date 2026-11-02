@@ -33,6 +33,25 @@ function harness() {
     buckets = new Map<string, any>();
   const tx: any = {
     $executeRaw: jest.fn(),
+    $queryRaw: jest.fn(async () => [
+      {
+        count: BigInt(
+          operations.filter(
+            (o) =>
+              o.configurationSnapshot?.promptVersion === 'lead-media-vision-v1',
+          ).length,
+        ),
+        committed: operations
+          .filter(
+            (o) =>
+              o.configurationSnapshot?.promptVersion === 'lead-media-vision-v1',
+          )
+          .reduce(
+            (sum, o) => sum.add(o.actualCost ?? o.reservedCost),
+            decimal('0'),
+          ),
+      },
+    ]),
     aiWorkspaceConfig: { findUnique: jest.fn(async () => workspace) },
     aiCategoryConfig: { findUnique: jest.fn(async () => config) },
     aiOperation: {
@@ -116,7 +135,10 @@ function harness() {
         return row;
       }),
     },
-    aiUsageDaily: { upsert: jest.fn(async () => ({})) },
+    aiUsageDaily: {
+      upsert: jest.fn(async () => ({})),
+      update: jest.fn(async () => ({})),
+    },
   };
   let tail = Promise.resolve();
   const prisma: any = {
@@ -156,6 +178,43 @@ function harness() {
 }
 
 describe('AI locked admission and settlement', () => {
+  it('blocks a 31st media operation even when budget remains', async () => {
+    const h = harness();
+    h.tx.$queryRaw.mockResolvedValue([
+      { count: BigInt(30), committed: decimal('0.10') },
+    ]);
+    await expect(
+      h.admission.admit({
+        ...h.request(),
+        businessObjectId: 'item',
+        durableVersion: 'lead-media-vision-v1',
+        mediaPilotSourceId: 'source',
+        image: { mime: 'image/jpeg', data: Buffer.from([255, 216, 255, 1]) },
+      }),
+    ).rejects.toThrow('AI_MEDIA_PILOT_BUDGET_EXHAUSTED');
+    expect(h.operations).toHaveLength(0);
+  });
+  it('reserves once for a vision payload and rejects changed image bytes on replay', async () => {
+    const h = harness();
+    const request: AiExecutionRequest = {
+      ...h.request(),
+      businessObjectId: 'observation',
+      durableVersion: 'lead-media-vision-v1',
+      mediaPilotSourceId: 'source',
+      image: { mime: 'image/jpeg', data: Buffer.from([255, 216, 255, 10, 11]) },
+    };
+    const first = await h.admission.admit(request);
+    const repeated = await h.admission.admit(request);
+    expect([first.replayed, repeated.replayed]).toEqual([false, true]);
+    expect(h.operations).toHaveLength(1);
+    expect(JSON.stringify(h.operations)).not.toContain('255,216,255,10,11');
+    await expect(
+      h.admission.admit({
+        ...request,
+        image: { mime: 'image/jpeg', data: Buffer.from([255, 216, 255, 12]) },
+      }),
+    ).rejects.toThrow('AI_OPERATION_CONFLICT');
+  });
   it('serializes duplicate IDs and rejects changed payload without persisting content', async () => {
     const h = harness(),
       request = h.request();
@@ -287,7 +346,8 @@ describe('AI locked admission and settlement', () => {
         (b) => b.reserved.eq(0) && b.spent.eq('0.002'),
       ),
     ).toBe(true);
-    expect(h.tx.aiUsageDaily.upsert).toHaveBeenCalledTimes(3);
+    expect(h.tx.aiUsageDaily.upsert).toHaveBeenCalledTimes(2);
+    expect(h.tx.aiUsageDaily.update).toHaveBeenCalledTimes(1);
     await expect(
       h.settlement.reconcile('admin', unknown.id, {
         actualCost: '0',

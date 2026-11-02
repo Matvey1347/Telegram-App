@@ -9,6 +9,7 @@ import { leadDiscoveryApi } from "@/lib/features/growth/lead-discovery-api";
 import { invalidateLeadResults, leadKeys, patchLeadEntity } from "@/lib/features/growth/lead-discovery-query";
 import { displayLeadDate, leadSafeUrl } from "./lead-utils";
 import { LeadSourceSettings } from "./lead-source-settings";
+import { LeadHistoryPanel } from "./lead-history-panel";
 
 function sourceState(source: LeadSourceView) {
   if (source.lastErrorCode === "LEAD_CHANNEL_MEMBERSHIP_REQUIRED") return { label: "Нет подписки", detail: "Для этого приватного канала подключённый Telegram-аккаунт должен быть участником." };
@@ -27,6 +28,7 @@ function sourceState(source: LeadSourceView) {
 export function LeadSourceCard({ source, canManage, enabled }: { source: LeadSourceView; canManage: boolean; enabled: boolean }) {
   const client = useQueryClient();
   const [settings, setSettings] = useState(false);
+  const [history, setHistory] = useState(false);
   const state = sourceState(source);
   const connected = Boolean(source.accountId && source.channelId);
   const mutation = useMutation({
@@ -54,6 +56,7 @@ export function LeadSourceCard({ source, canManage, enabled }: { source: LeadSou
     <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
       <span className="mr-auto text-neutral-500">Последняя публикация: {displayLeadDate(source.lastObservedAt)}</span>
       {canManage ? <>
+        <Button variant="secondary" disabled={!enabled || !connected} onClick={() => setHistory(!history)} aria-expanded={history} className="!min-h-8 !px-3 !py-1 !text-xs">История за 90 дней</Button>
         <Button variant="secondary" disabled={!enabled || !connected || mutation.isPending} onClick={() => mutation.mutate("scan")} className="!min-h-8 !px-3 !py-1 !text-xs">{mutation.isPending ? "Проверяем…" : "Обновить"}</Button>
         <ActionMenu label={`Действия источника ${source.title}`} triggerClassName="inline-flex h-8 w-8 items-center justify-center rounded-lg text-neutral-400 hover:bg-neutral-800" menuClassName="absolute right-0 top-9 z-40 w-64 rounded-lg border border-neutral-700 bg-neutral-950 p-1.5 shadow-xl">
           <ActionMenuItem icon={<ShieldCheck size={14}/>} disabled={!enabled || mutation.isPending || !source.accountId} onClick={() => mutation.mutate("validate")}>Проверить доступ</ActionMenuItem>
@@ -64,6 +67,7 @@ export function LeadSourceCard({ source, canManage, enabled }: { source: LeadSou
     </div>
     {mutation.isError ? <p role="alert" className="mt-2 text-xs text-amber-200">Не удалось обновить источник. Проверьте доступ аккаунта к каналу и повторите.</p> : null}
     {mutation.data && !("id" in mutation.data) ? <p role="status" className="mt-2 text-xs text-neutral-400">Проверено {mutation.data.received} · Новых или обновлённых {mutation.data.changed}</p> : null}
+    {history ? <LeadHistoryPanel workspace={source.workspaceId} sourceId={source.id} enabled={enabled && connected} canManage={canManage} /> : null}
     {settings ? <LeadSourceSettings source={source} onClose={() => setSettings(false)}/> : null}
   </article>;
 }

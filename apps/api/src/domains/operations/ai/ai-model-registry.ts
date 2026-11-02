@@ -2,6 +2,7 @@ import { AI_LEAD_QUALIFICATION_SCHEMA } from './ai-lead-qualification-schema';
 import {
   AI_LEAD_CLASSIFICATION_SCHEMA,
   AI_LEAD_EXTRACTION_SCHEMA,
+  AI_LEAD_MEDIA_SCHEMA,
 } from './ai-lead-output-schema';
 import { Injectable } from '@nestjs/common';
 import type { AiCategoryConfig } from '@prisma/client';
@@ -70,6 +71,9 @@ const SCHEMAS: Record<
 
 @Injectable()
 export class AiModelRegistry {
+  private readonly mediaValidator = new Ajv({ strict: true }).compile(
+    AI_LEAD_MEDIA_SCHEMA,
+  );
   private readonly validators = new Map(
     AI_CATEGORIES.map((category) => [
       category,
@@ -83,13 +87,26 @@ export class AiModelRegistry {
     const value = PRICES.find((p) => p.modelId === modelId);
     return value && { ...value };
   }
-  schema(category: AiCategory) {
+  schema(category: AiCategory, media = false) {
+    if (media) {
+      if (category !== 'LEAD_AD_CLASSIFICATION')
+        throw new Error('AI_MEDIA_CATEGORY_INVALID');
+      return {
+        id: 'lead_media_vision_v1',
+        jsonSchema: structuredClone(AI_LEAD_MEDIA_SCHEMA),
+      };
+    }
     return {
       id: `${category.toLowerCase()}_${category === 'LEAD_AD_CLASSIFICATION' ? 'discovery_evidence_v2' : category === 'LEAD_QUALIFICATION' ? 'qualification_v1' : category.startsWith('SALES_') ? 'copilot_v1' : ['LEAD_AD_CLASSIFICATION', 'LEAD_CONTACT_EXTRACTION'].includes(category) ? 'discovery_v1' : 'infra_v1'}`,
       jsonSchema: structuredClone(SCHEMAS[category]),
     };
   }
-  validate(category: AiCategory, value: unknown): boolean {
+  validate(category: AiCategory, value: unknown, media = false): boolean {
+    if (media)
+      return (
+        category === 'LEAD_AD_CLASSIFICATION' &&
+        this.mediaValidator(value) === true
+      );
     return this.validators.get(category)?.(value) === true;
   }
   category(category: AiCategory): AiCategoryConfiguration {

@@ -126,7 +126,7 @@ export function normalizeLeadContact(
       const position = text.indexOf(contact.value),
         before = text.slice(Math.max(0, position - 100), position);
       if (
-        !/(?:пишіть|пишiть|напишіть|пишите|контакт(?:и|ы)?|замовлення|заказ|sales contact|contact us|write to|message us)[^@\n]{0,60}$/iu.test(
+        !/(?:пишіть|пишiть|напишіть|пишите|контакт(?:и|ы)?|замовлення|замовити|заказать|заказ|співпрац[іяі]|сотрудничеств[оа]|реклам[а-яіїєґ]*|sales contact|contact us|write to|message us)[^@\n]{0,60}$/iu.test(
           before,
         )
       )
@@ -147,13 +147,17 @@ export function normalizeLeadContact(
         before = text.slice(Math.max(0, position - 100), position);
       if (
         ['ADVERTISER', 'SALES_CONTACT'].includes(role) &&
-        !/(?:пишіть|напишіть|пишите|контакт(?:и|ы)?|замовлення|заказ|sales contact|contact us|write to|message us)[^\n]{0,60}$/iu.test(
+        !/(?:пишіть|напишіть|пишите|контакт(?:и|ы)?|замовлення|замовити|заказать|заказ|співпрац[іяі]|сотрудничеств[оа]|реклам[а-яіїєґ]*|sales contact|contact us|write to|message us)[^\n]{0,60}$/iu.test(
           before,
         )
       )
         role = 'ADVERTISED_DESTINATION';
       value = profile.profileUrl.replace(/\/$/, '');
-    } else value = url.toString().replace(/\/$/, '');
+    } else {
+      value = url.toString().replace(/\/$/, '');
+      if (['ADVERTISER', 'SALES_CONTACT'].includes(role))
+        role = 'ADVERTISED_DESTINATION';
+    }
   } else if (
     !/^(?:[A-Za-z0-9_.+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}|\+\d[\d ()-]{6,20})$/.test(
       value,

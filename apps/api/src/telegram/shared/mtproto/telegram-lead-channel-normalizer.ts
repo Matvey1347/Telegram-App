@@ -4,6 +4,7 @@ import type {
   TelegramLeadPost,
 } from './telegram-lead-channel.types';
 import { telegramLongString } from './telegram-crm-mtproto.normalizer';
+import { telegramLeadPostMetadata } from './telegram-lead-post-metadata';
 
 export function parseTelegramLeadPost(
   message: unknown,
@@ -28,6 +29,7 @@ export function parseTelegramLeadPost(
     text: message.message ?? '',
     publishedAt: new Date(message.date * 1000),
     editedAt: message.editDate ? new Date(message.editDate * 1000) : null,
+    metadata: telegramLeadPostMetadata(message),
   };
 }
 export function normalizeTelegramLeadRaw(

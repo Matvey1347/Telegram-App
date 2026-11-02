@@ -78,6 +78,15 @@ profiles:
 See [Finance setup](docs/setup/FINANCE_SETUP.md) for the port map, local
 commands and separate Railway/Neon requirements.
 
+For infrastructure investigation, check existing Railway CLI login and connected
+Vercel access before requesting authentication. Use
+`npx --yes @railway/cli login` for Railway; do not store its API token in the
+project environment. A
+Neon database URL provides database access but is not a Neon management API
+credential. Verify access with a read-only operation and never print or commit
+credentials. Access does not authorize database copies, production migrations,
+deployments or restarts; obtain explicit approval for each operation.
+
 Runtime profile keys are intentionally limited to secrets, deployment topology,
 and operational switches that may legitimately differ between deployments:
 

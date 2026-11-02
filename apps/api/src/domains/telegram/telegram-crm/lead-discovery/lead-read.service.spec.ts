@@ -209,6 +209,7 @@ describe('Lead bounded source and material read models', () => {
     };
     const prisma = {
         aiOperation: { findMany: jest.fn().mockResolvedValue([receipt]) },
+        telegramLeadPromotion: { findMany: jest.fn().mockResolvedValue([]) },
       },
       policy = {};
     const service = new TelegramLeadReadService(

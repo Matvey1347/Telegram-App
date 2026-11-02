@@ -18,6 +18,7 @@ const source = (index = 1): WatchedLeadSource => ({
   channelId: String(index),
   monitoringActorUserId: 'operator',
   processingReference: 'policy:reviewed-source',
+  bindingRevision: 0,
 });
 const result = {
   received: 1,
@@ -52,7 +53,15 @@ function setup(enabled = true, count = 1, live = false) {
       Promise.resolve(token === TelegramLeadIngestService ? ingest : transport),
     ),
   };
-  const config = { get: jest.fn().mockReturnValue(enabled ? 'true' : 'false') };
+  const config = {
+    get: jest.fn((key: string): string | undefined =>
+      key === 'INTERNAL_LEAD_DISCOVERY_ENABLED'
+        ? enabled
+          ? 'true'
+          : 'false'
+        : undefined,
+    ),
+  };
   const events = new TelegramLeadTransportEvents();
   const service = new TelegramLeadMonitorService(
     prisma as never,
@@ -71,6 +80,7 @@ function setup(enabled = true, count = 1, live = false) {
     transport,
     events,
     moduleRef,
+    config,
   };
 }
 const newPost = (events: TelegramLeadTransportEvents, id: number) =>
@@ -92,6 +102,21 @@ const newPost = (events: TelegramLeadTransportEvents, id: number) =>
     },
   });
 describe('event-only bounded Discovery monitoring', () => {
+  it('does not subscribe or reload sources during manual acceptance', async () => {
+    const h = setup();
+    h.config.get.mockImplementation((key: string) =>
+      key === 'INTERNAL_LEAD_DISCOVERY_ENABLED'
+        ? 'true'
+        : key === 'INTERNAL_LEAD_DISCOVERY_RECOVERY_MODE'
+          ? 'manual'
+          : undefined,
+    );
+    await h.service.onApplicationBootstrap();
+    newPost(h.events, 1);
+    expect(h.prisma.telegramLeadSource.findMany).not.toHaveBeenCalled();
+    expect(h.ingest.ingestBatch).not.toHaveBeenCalled();
+    h.service.onApplicationShutdown();
+  });
   beforeEach(() => jest.useFakeTimers());
   afterEach(() => {
     jest.useRealTimers();
@@ -295,6 +320,7 @@ describe('monotonic in-memory coverage uncertainty', () => {
                   channelId: '1',
                   processingReference: 'policy:reviewed-source',
                   monitoringActorUserId: 'operator',
+                  bindingRevision: 0,
                   OR: [{ coverageTo: null }, { coverageTo: { lte: markedAt } }],
                 },
               ],

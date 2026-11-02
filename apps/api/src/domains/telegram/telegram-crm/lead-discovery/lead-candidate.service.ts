@@ -13,10 +13,12 @@ import type {
 import { ResponseCacheService } from '../../../../common/response-cache.service';
 import { PrismaService } from '../../../../prisma/prisma.service';
 import { acquirePostgresTransactionLock } from '../../../../prisma/postgres-advisory-lock';
+import type { LeadAnalysisClaim } from './lead-analysis-claim';
 import { TelegramLeadCrmLinker } from './lead-crm-linker.service';
 import { TelegramLeadPolicy } from './lead-policy.service';
 import { TelegramLeadReadService } from './lead-read.service';
-import { normalizeLeadContact, strongLeadIdentity } from './lead-normalization';
+import type { LeadTransportSnapshot } from './lead-transport-snapshot';
+import { createLeadMaterialCandidate } from './lead-material-candidate';
 @Injectable()
 export class TelegramLeadCandidateService {
   constructor(
@@ -47,117 +49,29 @@ export class TelegramLeadCandidateService {
     input: { title: string; contacts: LeadContact[] },
     expectedHash?: string,
     mode: 'ingest' | 'ai' = 'ingest',
+    requireActive = false,
+    expectedSource?: LeadTransportSnapshot,
+    claim?: LeadAnalysisClaim,
+    provisionalDestination?: string,
+    publicProfile?: { channelId: string; username: string; about: string },
+    unresolvedProject = false,
   ) {
-    if (
-      !input.title?.trim() ||
-      input.title.length > 300 ||
-      !Array.isArray(input.contacts) ||
-      input.contacts.length > 12
-    )
-      throw new BadRequestException('LEAD_CANDIDATE_INVALID');
-    return this.prisma.$transaction(async (tx) => {
-      await acquirePostgresTransactionLock(tx, `lead-discovery:${workspaceId}`);
-      const observation = await tx.telegramLeadObservation.findFirst({
-        where: { id: observationId, workspaceId },
-        include: { source: true },
-      });
-      if (
-        !observation ||
-        observation.expiresAt <= new Date() ||
-        observation.reviewStatus === 'REJECTED' ||
-        observation.originalStatus !== 'OBSERVED' ||
-        (expectedHash && observation.contentHash !== expectedHash)
-      )
-        throw new ConflictException('LEAD_MATERIAL_NOT_ELIGIBLE');
-      this.policy.assertProcessing(observation.source, mode, false);
-      if (observation.candidateId) return observation.candidateId;
-      const contacts = input.contacts.map((contact) =>
-        normalizeLeadContact(contact, observation.text),
-      );
-      const identityKey = strongLeadIdentity(contacts);
-      let candidate = identityKey
-        ? await tx.telegramLeadCandidate.findUnique({
-            where: { workspaceId_identityKey: { workspaceId, identityKey } },
-          })
-        : null;
-      for (
-        let depth = 0;
-        candidate?.reviewStatus === 'MERGED' && candidate.mergedIntoId;
-        depth++
-      ) {
-        if (depth >= 10) throw new ConflictException('LEAD_ALIAS_CHAIN_LIMIT');
-        candidate = await tx.telegramLeadCandidate.findFirst({
-          where: { id: candidate.mergedIntoId, workspaceId },
-        });
-      }
-      const classification = observation.classification as {
-        niche?: unknown;
-        offerType?: unknown;
-        risks?: unknown[];
-      } | null;
-      if (!candidate)
-        candidate = await tx.telegramLeadCandidate.create({
-          data: {
-            workspaceId,
-            title: input.title.trim(),
-            identityKey,
-            sourceIds: [observation.sourceId],
-            contacts: contacts,
-            niche:
-              typeof classification?.niche === 'string'
-                ? classification.niche.slice(0, 300)
-                : '',
-            offerType:
-              typeof classification?.offerType === 'string'
-                ? classification.offerType.slice(0, 300)
-                : '',
-            risks: [
-              'UNVERIFIED_BUSINESS_IDENTITY',
-              ...(Array.isArray(classification?.risks)
-                ? classification.risks
-                    .filter(
-                      (value): value is string => typeof value === 'string',
-                    )
-                    .slice(0, 9)
-                : []),
-            ],
-            riskStatus: 'NEEDS_REVIEW',
-            reviewStatus: 'PENDING',
-            reviewHistory: [],
-            expiresAt: new Date(Date.now() + 90 * 86400000),
-          },
-        });
-      const sourceIds = Array.isArray(candidate.sourceIds)
-        ? candidate.sourceIds.filter(
-            (id): id is string => typeof id === 'string',
-          )
-        : [];
-      const expiresAt = new Date(
-        Math.max(
-          candidate.expiresAt.getTime(),
-          observation.expiresAt.getTime(),
-        ),
-      );
-      if (
-        !sourceIds.includes(observation.sourceId) ||
-        expiresAt > candidate.expiresAt
-      )
-        await tx.telegramLeadCandidate.update({
-          where: { id: candidate.id },
-          data: {
-            sourceIds: [...new Set([...sourceIds, observation.sourceId])].slice(
-              0,
-              1000,
-            ),
-            expiresAt,
-          },
-        });
-      await tx.telegramLeadObservation.update({
-        where: { id: observation.id },
-        data: { candidateId: candidate.id },
-      });
-      return candidate.id;
-    });
+    return createLeadMaterialCandidate(
+      this.prisma,
+      this.policy,
+      workspaceId,
+      userId,
+      observationId,
+      input,
+      expectedHash,
+      mode,
+      requireActive,
+      expectedSource,
+      claim,
+      provisionalDestination,
+      publicProfile,
+      unresolvedProject,
+    );
   }
   async reviewObservation(
     userId: string,

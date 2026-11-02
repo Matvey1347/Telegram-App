@@ -41,6 +41,15 @@ export class AiUsageRetentionService {
         SELECT "id" FROM "AiBudgetPeriod" WHERE "periodEnd" < ${cutoff} AND "reserved" = 0
         ORDER BY "periodEnd", "id" LIMIT ${AI_RETENTION_BATCH_SIZE} FOR UPDATE SKIP LOCKED
       ) DELETE FROM "AiBudgetPeriod" WHERE "id" IN (SELECT "id" FROM expired) AND "reserved" = 0`);
+    // UNKNOWN financial receipts survive, but their bounded output does not outlive
+    // the operation retention window. Resolved receipts already cascade on delete.
+    await this.prisma.$executeRaw(Prisma.sql`
+      WITH expired AS (
+        SELECT r."operationDbId" FROM "AiOperationResult" r
+        JOIN "AiOperation" o ON o.id=r."operationDbId"
+        WHERE o."expiresAt" < ${now}
+        ORDER BY o."expiresAt", o.id LIMIT ${AI_RETENTION_BATCH_SIZE} FOR UPDATE OF r SKIP LOCKED
+      ) DELETE FROM "AiOperationResult" WHERE "operationDbId" IN (SELECT "operationDbId" FROM expired)`);
     return { operations, daily, budgetPeriods };
   }
 }

@@ -1,3 +1,5 @@
+import { isLeadManualRecovery } from './lead-recovery-mode';
+import { extractLeadTargetEvidence } from './lead-advertised-targets';
 import {
   LeadMonitorProof,
   persistLeadGaps,
@@ -8,6 +10,7 @@ import {
   Injectable,
   HttpException,
   Logger,
+  Optional,
   OnApplicationBootstrap,
   OnApplicationShutdown,
 } from '@nestjs/common';
@@ -23,6 +26,7 @@ import {
   TelegramLeadIngestService,
   type LeadIngestEvent,
 } from './lead-ingest.service';
+import { TelegramLeadAnalysisExecutor } from './lead-analysis-executor.service';
 import { TelegramLeadTransportService } from './lead-transport.service';
 import { TelegramCrmRuntimeManager } from '../telegram-crm-runtime-manager.service';
 
@@ -59,10 +63,14 @@ export class TelegramLeadMonitorService
     private readonly events: TelegramLeadTransportEvents,
     private readonly moduleRef: ModuleRef,
     private readonly runtime: TelegramCrmRuntimeManager,
+    @Optional() private readonly executor?: TelegramLeadAnalysisExecutor,
   ) {}
 
   async onApplicationBootstrap() {
-    if (this.config.get<string>('INTERNAL_LEAD_DISCOVERY_ENABLED') !== 'true')
+    if (
+      this.config.get<string>('INTERNAL_LEAD_DISCOVERY_ENABLED') !== 'true' ||
+      isLeadManualRecovery(this.config)
+    )
       return;
     this.subscription = this.events.stream.subscribe((event) =>
       this.receive(event),
@@ -112,6 +120,7 @@ export class TelegramLeadMonitorService
         channelId: true,
         monitoringActorUserId: true,
         processingReference: true,
+        bindingRevision: true,
       },
       orderBy: { id: 'asc' },
       take: 10_001,
@@ -124,28 +133,19 @@ export class TelegramLeadMonitorService
       return;
     }
     const previous = new Set(
-      this.sources.map(
-        (source) =>
-          `${source.id}:${source.accountId}:${source.channelId}:${source.processingReference}:${source.monitoringActorUserId}`,
-      ),
+      this.sources.map((source) => `${source.id}:${source.bindingRevision}`),
     );
     this.sources = rows;
     this.proof.retain(new Set(rows.map((source) => source.id)));
     const unverified = rows.filter(
-      (source) =>
-        !previous.has(
-          `${source.id}:${source.accountId}:${source.channelId}:${source.processingReference}:${source.monitoringActorUserId}`,
-        ),
+      (source) => !previous.has(`${source.id}:${source.bindingRevision}`),
     );
     for (const source of unverified) this.markGap(source);
     if (unverified.length) await persistLeadGaps(this.prisma, unverified);
     const accounts = new Map(
       rows
         .filter(
-          (source) =>
-            !previous.has(
-              `${source.id}:${source.accountId}:${source.channelId}:${source.processingReference}:${source.monitoringActorUserId}`,
-            ),
+          (source) => !previous.has(`${source.id}:${source.bindingRevision}`),
         )
         .map((source) => [`${source.workspaceId}:${source.accountId}`, source]),
     );
@@ -226,6 +226,31 @@ export class TelegramLeadMonitorService
           },
           pts: update.pts,
           ptsCount: update.ptsCount,
+          textMetadataComplete:
+            update.post.metadata?.textComplete === undefined
+              ? undefined
+              : update.post.metadata.textComplete &&
+                update.post.text.normalize('NFC').length <= 4096 &&
+                extractLeadTargetEvidence(
+                  update.post.text,
+                  update.post.metadata,
+                ).length < 60,
+          mediaPresent: update.post.metadata?.hasMedia,
+          metadataComplete: Boolean(
+            update.post.metadata?.complete &&
+            extractLeadTargetEvidence(update.post.text, update.post.metadata)
+              .length < 60,
+          ),
+          metadataTextOnly: Boolean(
+            update.post.metadata?.complete &&
+            !update.post.metadata.entityUrls.length &&
+            !update.post.metadata.inlineButtonUrls.length &&
+            !update.post.metadata.hasForwardMetadata &&
+            !update.post.metadata.hasMedia,
+          ),
+          targetEvidence: update.post.metadata
+            ? extractLeadTargetEvidence(update.post.text, update.post.metadata)
+            : undefined,
           editedAt: update.post.editedAt ?? undefined,
         });
     }
@@ -237,6 +262,7 @@ export class TelegramLeadMonitorService
       channelId: source.channelId,
       processingReference: source.processingReference,
       monitoringActorUserId: source.monitoringActorUserId,
+      bindingRevision: source.bindingRevision,
     };
     if (this.uncertain.has(source.id)) event.gap = true;
     const key = `${source.id}:${event.material.externalMessageId}`;
@@ -312,6 +338,24 @@ export class TelegramLeadMonitorService
             source.workspaceId,
             group.map((item) => item.event),
           );
+          if (this.executor) {
+            const enabled = await this.prisma.telegramLeadAutoConfig.findMany({
+              where: {
+                workspaceId: source.workspaceId,
+                enabled: true,
+                sourceId: {
+                  in: [...new Set(group.map((item) => item.source.id))],
+                },
+              },
+              select: { sourceId: true },
+            });
+            for (const item of enabled)
+              this.executor.wake({
+                userId: source.monitoringActorUserId,
+                workspaceId: source.workspaceId,
+                sourceId: item.sourceId,
+              });
+          }
           if (result.gap || result.filtered)
             for (const item of group) this.markGap(item.source);
           if (result.blockedSourceIds?.length)

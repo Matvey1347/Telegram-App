@@ -10,6 +10,7 @@ import {
 } from './ai-pricing';
 import { AiLocalConcurrency } from './ai-local-concurrency';
 import { AiProvider } from './ai-provider';
+import { operationFingerprint } from './ai-admission.service';
 
 const registry = new AiModelRegistry();
 const usage = {
@@ -41,6 +42,34 @@ const response = (body: unknown, status = 200) =>
   });
 
 describe('internal AI registry, pricing and limits', () => {
+  it('binds the operation fingerprint to the image bytes without storing the image', () => {
+    const base = {
+      category: 'LEAD_AD_CLASSIFICATION' as const,
+      mode: 'MANUAL' as const,
+      input: 'caption',
+      operationId: 'unused',
+      userId: 'user',
+      workspaceId: 'workspace',
+      businessObjectId: 'observation',
+      durableVersion: 'lead-media-vision-v1',
+    };
+    const first = operationFingerprint({
+      ...base,
+      image: { mime: 'image/jpeg', data: Buffer.from([255, 216, 255, 1]) },
+    });
+    expect(
+      operationFingerprint({
+        ...base,
+        image: { mime: 'image/jpeg', data: Buffer.from([255, 216, 255, 1]) },
+      }),
+    ).toBe(first);
+    expect(
+      operationFingerprint({
+        ...base,
+        image: { mime: 'image/jpeg', data: Buffer.from([255, 216, 255, 2]) },
+      }),
+    ).not.toBe(first);
+  });
   it('selects efficient classification and isolated support contracts with disabled defaults', () => {
     expect(registry.category('LEAD_AD_CLASSIFICATION').modelId).toBe(
       'gpt-6-luna',
@@ -167,6 +196,55 @@ describe('internal AI fixed Responses provider (mocked only)', () => {
       reasoning: { effort: 'none' },
       instructions: 'Trusted server policy',
     });
+  });
+  it('counts a bounded image before a structured vision result and rejects unsupported models', async () => {
+    const provider = new AiProvider(deployment as any, registry);
+    const image = {
+      mime: 'image/jpeg' as const,
+      data: Buffer.from([255, 216, 255, 1]),
+    };
+    const vision = {
+      classification: 'ADVERTISEMENT',
+      projectName: 'Image project',
+      contacts: ['@image_contact'],
+      evidence: 'Offer and contact on image',
+      confidence: 0.9,
+    };
+    fetchMock
+      .mockResolvedValueOnce(response({ input_tokens: 100 }))
+      .mockResolvedValueOnce(
+        response({
+          ...completed,
+          model: 'gpt-5.4-mini-2026-03-17',
+          output: [
+            {
+              content: [{ type: 'output_text', text: JSON.stringify(vision) }],
+            },
+          ],
+        }),
+      );
+    const result = await provider.execute(
+      'caption',
+      { ...config, modelId: 'gpt-5.4-mini-2026-03-17' },
+      undefined,
+      undefined,
+      image,
+    );
+    expect(result.result).toEqual(vision);
+    const bodies = fetchMock.mock.calls.map(([, init]) =>
+      JSON.parse(init.body),
+    );
+    expect(bodies[0].input).toEqual(bodies[1].input);
+    expect(bodies[1].input[0].content[1]).toMatchObject({
+      type: 'input_image',
+      detail: 'high',
+    });
+    fetchMock.mockClear();
+    expect(
+      (await provider.execute('caption', config, undefined, undefined, image))
+        .errorCategory,
+    ).toBe('VISION_MODEL_UNSUPPORTED');
+    expect(fetchMock).not.toHaveBeenCalled();
   });
   it.each([
     [400, 'TOKEN_COUNT_REQUEST_INVALID'],

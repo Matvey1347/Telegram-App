@@ -24,6 +24,7 @@ export const leadKeys = {
   mergeChoices: (w: string, c: string, q: string) =>
     ["lead-discovery", w, "merge-choices", c, q] as const,
   config: (w: string) => ["lead-discovery", w, "config"] as const,
+  history: (w: string, source: string) => ["lead-discovery", w, "history", source] as const,
   accounts: (w: string) => ["lead-discovery", w, "accounts"] as const,
   channels: (w: string, a: string) =>
     ["lead-discovery", w, "channels", a] as const,

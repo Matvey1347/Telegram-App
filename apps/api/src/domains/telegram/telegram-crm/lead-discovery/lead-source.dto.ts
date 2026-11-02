@@ -68,6 +68,14 @@ export class LeadScanDto {
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(50) limit?: number;
   @IsOptional() @IsInt() @Min(1) beforeId?: number;
 }
+export class LeadMetadataDiagnosticsDto {
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(2147483647)
+  beforeId?: number;
+}
 export class LeadExportDto {
   @IsIn(['csv', 'xlsx']) format!: 'csv' | 'xlsx';
 }

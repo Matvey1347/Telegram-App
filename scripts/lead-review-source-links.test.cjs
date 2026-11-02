@@ -1,0 +1,3 @@
+const {test}=require('node:test');const assert=require('node:assert/strict');const {validUrl,cell}=require('./lead-review-source-links.cjs');
+test('accepts only matching source and message id',()=>{const source={username:'knownchannel',channelId:'-10012345'};assert.ok(validUrl('https://t.me/knownchannel/42',source,'42'));assert.ok(validUrl('https://t.me/c/12345/42',source,'42'));for(const s of ['https://t.me/othername/42','https://t.me/knownchannel/43','https://t.me/+secret','https://t.me/c/999/42','https://t.me/knownchannel/42?token=secret','http://t.me/knownchannel/42'])assert.equal(validUrl(s,source,'42'),null)});
+test('CSV cell protection',()=>assert.equal(cell('=1+1'),`"'=1+1"`));

@@ -22,7 +22,7 @@ const safeIdentifier = (value: unknown, max: number) =>
     ? value
     : null;
 
-/** Fixed text-only Responses transport. No retries, startup discovery or product imports. */
+/** Bounded Responses transport. No retries, startup discovery or product imports. */
 @Injectable()
 export class AiProvider {
   constructor(
@@ -34,6 +34,7 @@ export class AiProvider {
     config: AiCategoryConfiguration,
     callerSignal?: AbortSignal,
     instructions?: string,
+    image?: { mime: 'image/jpeg'; data: Buffer },
   ): Promise<AiProviderOutcome> {
     let generationStarted = false;
     const controller = new AbortController();
@@ -56,10 +57,30 @@ export class AiProvider {
         256 * 1024
       )
         return empty('INPUT_TOO_LARGE');
-      const schema = this.registry.schema(config.category);
+      if (
+        image &&
+        (config.category !== 'LEAD_AD_CLASSIFICATION' ||
+          config.modelId !== 'gpt-5.4-mini-2026-03-17')
+      )
+        return empty('VISION_MODEL_UNSUPPORTED');
+      const schema = this.registry.schema(config.category, Boolean(image));
       const payload = {
         model: config.modelId,
-        input,
+        input: image
+          ? [
+              {
+                role: 'user',
+                content: [
+                  { type: 'input_text', text: input },
+                  {
+                    type: 'input_image',
+                    image_url: `data:${image.mime};base64,${image.data.toString('base64')}`,
+                    detail: 'high',
+                  },
+                ],
+              },
+            ]
+          : input,
         ...(instructions ? { instructions } : {}),
         store: false,
         background: false,
@@ -137,7 +158,7 @@ export class AiProvider {
       } catch {
         return { ...metadata, errorCategory: 'OUTPUT_INVALID_JSON' };
       }
-      if (!this.registry.validate(config.category, result))
+      if (!this.registry.validate(config.category, result, Boolean(image)))
         return { ...metadata, errorCategory: 'OUTPUT_SCHEMA_INVALID' };
       return { ...metadata, result, errorCategory: null };
     } catch {

@@ -84,6 +84,9 @@ function fixture() {
     telegramLeadSource: {
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
+    telegramLeadHistoryJob: {
+      findFirst: jest.fn().mockResolvedValue({ id: 'job' }),
+    },
   };
   const policy = {
       access: jest.fn().mockResolvedValue({ workspaceId: 'workspace' }),
@@ -320,6 +323,70 @@ describe('Lead reuse of already-live channel transport', () => {
     });
     expect(h.transport.history).toHaveBeenCalledTimes(1);
     expect(h.ingest.ingest).toHaveBeenCalledTimes(1);
+  });
+  it('limits history ingestion to the requested cutoff and detects an entirely old page', async () => {
+    const h = fixture();
+    const now = new Date();
+    const old = new Date(now.getTime() - 91 * 86400000);
+    const cutoffAt = new Date(now.getTime() - 90 * 86400000);
+    const make = (date: Date, id: number) => ({
+      channelId: '12345',
+      messageId: id,
+      text: 'Text',
+      publishedAt: date,
+      editedAt: null,
+    });
+    h.transport.history.mockResolvedValueOnce({
+      items: [make(now, 2), make(old, 1)],
+      hasMore: true,
+      nextBeforeId: 1,
+    });
+    const first = await h.service.scan('manager', 'source', {
+      cutoffAt,
+      historyLeaseToken: 'token',
+    });
+    expect(first.reachedCutoff).toBe(false);
+    expect(h.ingest.ingest).toHaveBeenCalledWith(
+      'manager',
+      'source',
+      [expect.objectContaining({ externalMessageId: '2' })],
+      expect.objectContaining({ historyLeaseToken: 'token' }),
+    );
+    h.transport.history.mockResolvedValueOnce({
+      items: [make(old, 1)],
+      hasMore: true,
+      nextBeforeId: 1,
+    });
+    const second = await h.service.scan('manager', 'source', { cutoffAt });
+    expect(second.reachedCutoff).toBe(true);
+    expect(h.ingest.ingest).toHaveBeenCalledTimes(1);
+  });
+  it('rechecks source access after an empty history page before completing it', async () => {
+    const h = fixture();
+    h.transport.history.mockResolvedValue({
+      items: [],
+      hasMore: false,
+      nextBeforeId: null,
+    });
+    h.policy.source
+      .mockResolvedValueOnce(h.source)
+      .mockRejectedValueOnce(new Error('SOURCE_REVOKED'));
+    await expect(
+      h.service.scan('manager', 'source', { cutoffAt: new Date() }),
+    ).rejects.toThrow('SOURCE_REVOKED');
+    expect(h.ingest.ingest).not.toHaveBeenCalled();
+  });
+  it('rejects an empty history page after the job lease expires', async () => {
+    const h = fixture();
+    h.transport.history.mockResolvedValue({
+      items: [],
+      hasMore: false,
+      nextBeforeId: null,
+    });
+    h.prisma.telegramLeadHistoryJob.findFirst.mockResolvedValue(null);
+    await expect(
+      h.service.scan('manager', 'source', { historyLeaseToken: 'old-token' }),
+    ).rejects.toThrow('LEAD_HISTORY_LEASE_LOST');
   });
   it('delegates even empty final recovery to locked atomic ingestion and never writes its own stale checkpoint', async () => {
     const h = fixture();
