@@ -1,11 +1,17 @@
 import { ResponseCacheService } from '../../../../common/response-cache.service';
+import { ForbiddenException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
-import { Prisma, type TelegramLeadCandidate } from '@prisma/client';
+import {
+  Prisma,
+  type TelegramLeadCandidate,
+  type TelegramLeadSource,
+} from '@prisma/client';
 import { PrismaService } from '../../../../prisma/prisma.service';
 import { TelegramLeadPolicy } from './lead-policy.service';
 import { TelegramLeadReadService } from './lead-read.service';
 import { TelegramLeadCandidateService } from './lead-candidate.service';
 import { TelegramLeadCrmLinker } from './lead-crm-linker.service';
+import { leadTransportSnapshot } from './lead-transport-snapshot';
 import {
   leadCandidate,
   leadObservation,
@@ -33,6 +39,7 @@ function fixture(
     },
   );
   const tx = {
+    $queryRaw: jest.fn().mockResolvedValue([{ id: 'source' }]),
     $executeRaw: jest.fn((query: Prisma.Sql) =>
       Promise.resolve(query.sql ? 1 : 0),
     ),
@@ -123,6 +130,61 @@ function fixture(
   };
 }
 describe('Lead provisional identity grouping and human review', () => {
+  it('locks and rechecks source state in the candidate transaction for automatic analysis', async () => {
+    const h = fixture();
+    h.source.monitoringState = 'PAUSED';
+    h.policy.assertProcessing.mockImplementation(
+      (source: TelegramLeadSource, _mode: string, active: boolean) => {
+        if (active && source.monitoringState !== 'ACTIVE')
+          throw new ForbiddenException('LEAD_PROCESSING_NOT_APPROVED');
+      },
+    );
+    await expect(
+      h.service.materialCandidate(
+        'workspace',
+        'manager',
+        'observation',
+        h.input,
+        h.observation.contentHash,
+        'ai',
+        true,
+        leadTransportSnapshot(h.source),
+      ),
+    ).rejects.toThrow('LEAD_PROCESSING_NOT_APPROVED');
+    expect(h.tx.$queryRaw).toHaveBeenCalledTimes(1);
+    expect(h.tx.telegramLeadCandidate.create).not.toHaveBeenCalled();
+    expect(h.tx.telegramLeadObservation.update).not.toHaveBeenCalled();
+  });
+  it('does not create a candidate after the queue claim is lost', async () => {
+    const h = fixture();
+    h.tx.$queryRaw
+      .mockResolvedValueOnce([{ id: 'source' }])
+      .mockResolvedValueOnce([]);
+    await expect(
+      h.service.materialCandidate(
+        'workspace',
+        'manager',
+        'observation',
+        h.input,
+        h.observation.contentHash,
+        'ai',
+        true,
+        leadTransportSnapshot(h.source),
+        {
+          id: 'queue',
+          workspaceId: 'workspace',
+          sourceId: 'source',
+          observationId: 'observation',
+          contentHash: h.observation.contentHash,
+          bindingRevision: h.source.bindingRevision,
+          actorUserId: 'manager',
+          claimToken: 'old-token',
+        },
+      ),
+    ).rejects.toThrow('LEAD_CLAIM_LOST');
+    expect(h.tx.telegramLeadCandidate.create).not.toHaveBeenCalled();
+    expect(h.tx.telegramLeadObservation.update).not.toHaveBeenCalled();
+  });
   it('creates only a provisional literal-contact candidate and attaches evidence without creating CRM', async () => {
     const h = fixture();
     const id = await h.service.materialCandidate(
@@ -173,6 +235,33 @@ describe('Lead provisional identity grouping and human review', () => {
     expect(target.expiresAt.getTime()).toBe(h.observation.expiresAt.getTime());
     expect(target.reviewStatus).toBe('REJECTED');
     expect(target.sourceIds).toEqual(['old-source', 'source']);
+  });
+  it('groups identical contactless creatives while requiring a literal project', async () => {
+    const h = fixture();
+    h.observation.text = 'Project Alpha is offering a course';
+    const input = { title: 'Project Alpha', contacts: [] };
+    const first = await h.service.materialCandidate(
+      'workspace',
+      'manager',
+      'observation',
+      input,
+    );
+    h.observation.candidateId = null;
+    const second = await h.service.materialCandidate(
+      'workspace',
+      'manager',
+      'observation',
+      input,
+    );
+    expect(second).toBe(first);
+    expect(h.tx.telegramLeadCandidate.create).toHaveBeenCalledTimes(1);
+    h.observation.candidateId = null;
+    await expect(
+      h.service.materialCandidate('workspace', 'manager', 'observation', {
+        title: 'Invented project',
+        contacts: [],
+      }),
+    ).rejects.toThrow('LEAD_PROJECT_NAME_NOT_LITERAL');
   });
   it('does not group unrelated same-name/destination-only materials by title', async () => {
     const h = fixture([

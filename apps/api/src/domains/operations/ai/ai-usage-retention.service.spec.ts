@@ -17,12 +17,12 @@ describe('AI usage retention', () => {
     await expect(
       service.cleanup(new Date('2026-10-31T12:00:00Z')),
     ).resolves.toEqual({ operations: 7, daily: 8, budgetPeriods: 9 });
-    expect(execute).toHaveBeenCalledTimes(3);
+    expect(execute).toHaveBeenCalledTimes(4);
     const queries = (execute.mock.calls as [Prisma.Sql][]).map(
       (call) => call[0],
     );
     for (const query of queries) {
-      expect(query.sql).toMatch(/LIMIT \? FOR UPDATE(?: OF d)? SKIP LOCKED/);
+      expect(query.sql).toMatch(/LIMIT \? FOR UPDATE(?: OF [dr])? SKIP LOCKED/);
       expect(query.values).toContain(AI_RETENTION_BATCH_SIZE);
       expect(AI_RETENTION_BATCH_SIZE).toBe(20_000);
       expect(query.sql).not.toContain('UPDATE "AiBudgetPeriod"');
@@ -31,6 +31,8 @@ describe('AI usage retention', () => {
     expect(queries[0].sql).not.toContain("'UNKNOWN'");
     expect(queries[0].sql).not.toContain("'RUNNING'");
     expect(queries[2].sql).toContain('AND "reserved" = 0');
+    expect(queries[3].sql).toContain('DELETE FROM "AiOperationResult"');
+    expect(queries[3].sql).not.toContain("'UNKNOWN'");
     // Reconciliation retracts the original UNKNOWN cube row before writing the
     // settled one, so its dimensions must survive even after 90 days.
     expect(queries[1].sql).toContain('AND NOT EXISTS');

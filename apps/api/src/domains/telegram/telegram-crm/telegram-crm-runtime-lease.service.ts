@@ -7,7 +7,7 @@ import { ScheduledTaskLockService } from '../../operations/scheduled-tasks/sched
 // once. This one shared lease makes the CRM live runtime single-instance while
 // preserving failover after a bounded expiry.
 const LEASE_KEY = 'telegram-crm-runtime';
-const LEASE_TTL_MS = 90_000;
+export const CRM_RUNTIME_LEASE_TTL_MS = 90_000;
 const LEASE_RENEWAL_MS = 30_000;
 
 @Injectable()
@@ -25,7 +25,7 @@ export class TelegramCrmRuntimeLeaseService {
       taskKey: LEASE_KEY,
       workspaceId: null,
       ownerId: this.ownerId,
-      ttlMs: LEASE_TTL_MS,
+      ttlMs: CRM_RUNTIME_LEASE_TTL_MS,
     });
     this.ownsLease = acquired;
     return acquired;
@@ -53,7 +53,7 @@ export class TelegramCrmRuntimeLeaseService {
       const renewal = await this.locks.renew(
         LEASE_KEY,
         this.ownerId,
-        LEASE_TTL_MS,
+        CRM_RUNTIME_LEASE_TTL_MS,
       );
       if (renewal.count === 1) return;
     } catch {

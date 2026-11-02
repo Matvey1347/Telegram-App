@@ -18,6 +18,7 @@ const source = (index = 1): WatchedLeadSource => ({
   channelId: String(index),
   monitoringActorUserId: 'operator',
   processingReference: 'policy:reviewed-source',
+  bindingRevision: 0,
 });
 const result = {
   received: 1,
@@ -295,6 +296,7 @@ describe('monotonic in-memory coverage uncertainty', () => {
                   channelId: '1',
                   processingReference: 'policy:reviewed-source',
                   monitoringActorUserId: 'operator',
+                  bindingRevision: 0,
                   OR: [{ coverageTo: null }, { coverageTo: { lte: markedAt } }],
                 },
               ],

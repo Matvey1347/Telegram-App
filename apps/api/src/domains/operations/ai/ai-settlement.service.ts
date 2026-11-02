@@ -19,7 +19,11 @@ export class AiSettlementService {
     private readonly prisma: PrismaService,
     private readonly authorization: WorkspaceAuthorizationService,
   ) {}
-  async settle(operation: AiOperation, outcome: AiProviderOutcome) {
+  async settle(
+    operation: AiOperation,
+    outcome: AiProviderOutcome,
+    durableVersion?: string,
+  ) {
     return this.prisma.$transaction(async (tx) => {
       await acquirePostgresTransactionLock(
         tx,
@@ -29,6 +33,28 @@ export class AiSettlementService {
         where: { id: operation.id },
       });
       if (fresh.status !== 'RUNNING') return fresh;
+      let durableOutput: Prisma.InputJsonValue | undefined;
+      let outputUnavailable = false;
+      if (
+        durableVersion &&
+        !outcome.errorCategory &&
+        outcome.generationStarted
+      ) {
+        try {
+          const encoded = JSON.stringify(outcome.result);
+          if (
+            !encoded ||
+            Buffer.byteLength(encoded, 'utf8') > 64 * 1024 ||
+            outcome.result === null ||
+            typeof outcome.result !== 'object' ||
+            Array.isArray(outcome.result)
+          )
+            outputUnavailable = true;
+          else durableOutput = JSON.parse(encoded) as Prisma.InputJsonValue;
+        } catch {
+          outputUnavailable = true;
+        }
+      }
       const price = fresh.pricingSnapshot as unknown as AiPrice;
       const modelCompatible = outcome.providerModel === fresh.model;
       const actualCost =
@@ -36,9 +62,13 @@ export class AiSettlementService {
           ? priceUsage(price, outcome.usage)
           : null;
       const knownNotSent = !outcome.generationStarted;
-      const resolved = actualCost !== null || knownNotSent;
+      const notSentWithoutError = Boolean(
+        durableVersion && knownNotSent && !outcome.errorCategory,
+      );
+      const resolved =
+        !outputUnavailable && (actualCost !== null || knownNotSent);
       const status = resolved
-        ? outcome.errorCategory
+        ? outcome.errorCategory || notSentWithoutError
           ? 'FAILED'
           : 'SUCCEEDED'
         : 'UNKNOWN';
@@ -49,6 +79,14 @@ export class AiSettlementService {
           : outcome.usage
             ? 'UNPRICED'
             : 'UNKNOWN';
+      if (durableOutput !== undefined)
+        await tx.aiOperationResult.create({
+          data: {
+            operationDbId: fresh.id,
+            version: durableVersion!,
+            output: durableOutput,
+          },
+        });
       // Uncertain outcomes retain the full reservation until explicit reconciliation.
       if (resolved) await settleAiBuckets(tx, fresh, actualCost);
       const updated = await tx.aiOperation.update({
@@ -61,7 +99,11 @@ export class AiSettlementService {
           providerModel: outcome.providerModel,
           providerRequestId: outcome.providerRequestId,
           errorCategory:
-            outcome.errorCategory ??
+            (outputUnavailable
+              ? 'RESULT_UNAVAILABLE'
+              : notSentWithoutError
+                ? 'PROVIDER_NOT_DISPATCHED'
+                : outcome.errorCategory) ??
             (!modelCompatible
               ? 'PROVIDER_MODEL_MISMATCH'
               : !outcome.usage
@@ -76,6 +118,18 @@ export class AiSettlementService {
       await writeAiRollup(tx, updated);
       return updated;
     });
+  }
+  async readDurableResult(operation: AiOperation, version: string) {
+    if (
+      !['SUCCEEDED', 'RECONCILED'].includes(operation.status) ||
+      (operation.status === 'RECONCILED' &&
+        operation.providerModel !== operation.model)
+    )
+      return undefined;
+    const row = await this.prisma.aiOperationResult.findUnique({
+      where: { operationDbId: operation.id },
+    });
+    return row?.version === version ? row.output : undefined;
   }
   async reconcile(
     userId: string,

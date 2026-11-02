@@ -1,0 +1,20 @@
+{
+  "ruleVersion": "lead-prefilter-v1",
+  "posts": 2700,
+  "sources": 9,
+  "counts": {
+    "NEEDS_METADATA": 2700
+  },
+  "splits": {
+    "source-holdout": 677,
+    "dev": 1619,
+    "test": 404
+  },
+  "inputs": "Text export; canonical identities, Telegram entities, forward and media metadata unavailable.",
+  "groundTruth": "NOT_AVAILABLE",
+  "adRecall": null,
+  "adPrecision": null,
+  "safeSkipFalseNegatives": null,
+  "llmCallsAvoidedMeasured": null,
+  "note": "Offline routing counts are not ad/VP accuracy and no AI calls were performed."
+}

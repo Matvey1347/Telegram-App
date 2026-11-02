@@ -1,4 +1,8 @@
-import { leadTransportSnapshot } from './lead-transport-snapshot';
+import { extractLeadTargetEvidence } from './lead-advertised-targets';
+import {
+  leadTransportMatches,
+  leadTransportSnapshot,
+} from './lead-transport-snapshot';
 import { Prisma } from '@prisma/client';
 import {
   BadRequestException,
@@ -290,7 +294,12 @@ export class TelegramLeadTransportService {
   async scan(
     userId: string,
     id: string,
-    input: { limit?: number; beforeId?: number },
+    input: {
+      limit?: number;
+      beforeId?: number;
+      cutoffAt?: Date;
+      historyLeaseToken?: string;
+    },
   ) {
     const source = await this.policy.source(userId, id, 'manage');
     this.policy.assertProcessing(source, 'ingest', false);
@@ -312,18 +321,86 @@ export class TelegramLeadTransportService {
       },
     );
     await this.policy.refresh(userId);
-    const items = page.items.map((post) => ({
-      externalMessageId: String(post.messageId),
-      text: post.text,
-      publishedAt: post.publishedAt.toISOString(),
-      messageUrl: source.username
-        ? `https://t.me/${source.username}/${post.messageId}`
-        : `https://t.me/c/${source.channelId}/${post.messageId}`,
-    }));
+    const current = await this.policy.source(userId, id, 'manage');
+    this.policy.assertProcessing(current, 'ingest', false);
+    if (!leadTransportMatches(current, leadTransportSnapshot(source, true)))
+      throw new ConflictException('LEAD_HISTORY_SOURCE_CHANGED');
+    if (input.historyLeaseToken) {
+      const lease = await this.prisma.telegramLeadHistoryJob.findFirst({
+        where: {
+          workspaceId: source.workspaceId,
+          sourceId: id,
+          leaseToken: input.historyLeaseToken,
+          leaseUntil: { gt: new Date() },
+          status: { in: ['RUNNING', 'PAUSING'] },
+        },
+        select: { id: true },
+      });
+      if (!lease) throw new ConflictException('LEAD_HISTORY_LEASE_LOST');
+    }
+    const reachedCutoff = Boolean(
+      input.cutoffAt &&
+      page.items.length &&
+      page.items.every((post) => post.publishedAt < input.cutoffAt!),
+    );
+    const items = page.items
+      .filter((post) => !input.cutoffAt || post.publishedAt >= input.cutoffAt)
+      .map((post) => ({
+        externalMessageId: String(post.messageId),
+        text: post.text,
+        publishedAt: post.publishedAt.toISOString(),
+        messageUrl: source.username
+          ? `https://t.me/${source.username}/${post.messageId}`
+          : `https://t.me/c/${source.channelId}/${post.messageId}`,
+      }));
+    const targetEvidence = Object.fromEntries(
+      page.items
+        .filter((post) => post.metadata)
+        .map((post) => [
+          String(post.messageId),
+          extractLeadTargetEvidence(post.text, post.metadata),
+        ]),
+    );
     const result = items.length
       ? await this.ingest.ingest(userId, id, items, {
           expectedTransport: leadTransportSnapshot(source, true),
           rpcStartedAt,
+          historyLeaseToken: input.historyLeaseToken,
+          postTargetEvidence: targetEvidence,
+          postTextMetadataComplete: Object.fromEntries(
+            page.items
+              .filter((post) => post.metadata?.textComplete !== undefined)
+              .map((post) => [
+                String(post.messageId),
+                post.metadata!.textComplete === true &&
+                  post.text.normalize('NFC').length <= 4096 &&
+                  (targetEvidence[String(post.messageId)]?.length ?? 0) < 60,
+              ]),
+          ),
+          postMediaPresent: Object.fromEntries(
+            page.items
+              .filter((post) => post.metadata)
+              .map((post) => [String(post.messageId), post.metadata!.hasMedia]),
+          ),
+          postMetadataComplete: Object.fromEntries(
+            page.items.map((post) => [
+              String(post.messageId),
+              post.metadata?.complete === true &&
+                (targetEvidence[String(post.messageId)]?.length ?? 0) < 60,
+            ]),
+          ),
+          postMetadataTextOnly: Object.fromEntries(
+            page.items.map((post) => [
+              String(post.messageId),
+              Boolean(
+                post.metadata?.complete &&
+                !post.metadata.entityUrls.length &&
+                !post.metadata.inlineButtonUrls.length &&
+                !post.metadata.hasForwardMetadata &&
+                !post.metadata.hasMedia,
+              ),
+            ]),
+          ),
           editedMessageDates: Object.fromEntries(
             page.items
               .filter((post) => post.editedAt)
@@ -334,10 +411,22 @@ export class TelegramLeadTransportService {
           ),
         })
       : { received: 0, changed: 0, unchanged: 0, filtered: 0, gap: false };
+    const after = input.historyLeaseToken
+      ? await this.policy.source(userId, id, 'manage')
+      : null;
+    if (after) {
+      this.policy.assertProcessing(after, 'ingest', false);
+      if (!leadTransportMatches(after, leadTransportSnapshot(source)))
+        throw new ConflictException('LEAD_HISTORY_SOURCE_CHANGED');
+    }
     return {
       ...result,
       hasMore: page.hasMore,
       nextBeforeId: page.nextBeforeId,
+      reachedCutoff,
+      ...(after
+        ? { historySourceSnapshot: leadTransportSnapshot(after, true) }
+        : {}),
     };
   }
   async recover(userId: string, id: string) {

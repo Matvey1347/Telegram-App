@@ -1,0 +1,10 @@
+{
+  "ruleVersion": "lead-reciprocity-v1",
+  "status": "NOT_VERIFIED",
+  "groundTruthPairs": 0,
+  "syntheticPositivePairs": 1,
+  "syntheticNegativePairs": 7,
+  "vpRecall": null,
+  "vpPrecision": null,
+  "reason": "No independently reviewed reciprocal source evidence exists in the supplied text-only export. Synthetic tests check the rule boundary, not real-world quality."
+}

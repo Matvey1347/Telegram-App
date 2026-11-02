@@ -1,3 +1,4 @@
+import { loadLeadPromotionViews } from './lead-promotion-read';
 import { TelegramLeadPreparationContext } from './lead-preparation-context.service';
 import {
   leadIdentityUnverified,
@@ -202,6 +203,12 @@ export class TelegramLeadReadService {
       );
       return found ? mapAiOperationView(found) : null;
     };
+    const promotions = await loadLeadPromotionViews(
+      this.prisma,
+      this.policy,
+      rows[0].workspaceId,
+      rows.map((row) => row.id),
+    );
     return rows.map((row) => ({
       id: row.id,
       sourceId: row.sourceId,
@@ -228,9 +235,15 @@ export class TelegramLeadReadService {
         Date.now() - row.processingStartedAt.getTime() > 120000
           ? 'UNKNOWN'
           : row.processingStatus,
+      promotion: promotions.get(row.id) ?? null,
       classificationVersion: row.classificationVersion,
       classification:
         row.classification as unknown as LeadObservationView['classification'],
+      targetEvidence:
+        leadReferenceUnavailable(row.source) ||
+        !Array.isArray(row.targetEvidence)
+          ? []
+          : (row.targetEvidence as unknown as LeadObservationView['targetEvidence']),
       extraction:
         row.extraction as unknown as LeadObservationView['extraction'],
       candidateId: row.candidateId,

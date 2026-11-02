@@ -40,15 +40,20 @@ export async function writeAiRollup(
     reasoningTokens: BigInt(operation.reasoningTokens ?? 0) * BigInt(direction),
     totalTokens: BigInt(operation.totalTokens ?? 0) * BigInt(direction),
   };
+  const where = { workspaceId_day_category_provider_model_status: dimensions };
+  const update = Object.fromEntries(
+    Object.entries(counters).map(([key, value]) => [key, { increment: value }]),
+  );
+  // PostgreSQL validates the INSERT side of an upsert before resolving its
+  // conflict. A negative create therefore violates the nonnegative checks.
+  if (direction === -1) {
+    await tx.aiUsageDaily.update({ where, data: update });
+    return;
+  }
   await tx.aiUsageDaily.upsert({
-    where: { workspaceId_day_category_provider_model_status: dimensions },
+    where,
     create: { ...dimensions, ...counters },
-    update: Object.fromEntries(
-      Object.entries(counters).map(([key, value]) => [
-        key,
-        { increment: value },
-      ]),
-    ),
+    update,
   });
 }
 

@@ -15,7 +15,7 @@ function fixture(
   const tx = {
     $queryRaw: jest.fn((sql: Prisma.Sql) => {
       void sql;
-      return Promise.resolve([]);
+      return Promise.resolve([] as Array<{ id: string }>);
     }),
     telegramChannel: { findMany: jest.fn().mockResolvedValue([]) },
     $executeRaw: jest.fn((sql: Prisma.Sql) => Promise.resolve(sql.sql ? 1 : 0)),
@@ -59,6 +59,82 @@ function fixture(
   return { tx, database, policy, service, event };
 }
 describe('Lead bounded conditional ingestion', () => {
+  it('finishes AI actor authorization before acquiring the ingestion transaction', async () => {
+    const h = fixture([leadSource({ monitoringActorUserId: 'manager' })]);
+    let transactionOpen = false;
+    Object.assign(h.database, {
+      telegramLeadAutoConfig: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            sourceId: 'source',
+            source: leadSource({ monitoringActorUserId: 'manager' }),
+          },
+        ]),
+      },
+    });
+    Object.assign(h.policy, {
+      granted: jest.fn().mockReturnValue(true),
+      refresh: jest.fn().mockImplementation(() => {
+        expect(transactionOpen).toBe(false);
+        return Promise.resolve();
+      }),
+    });
+    h.database.$transaction.mockImplementation(async (operation) => {
+      transactionOpen = true;
+      try {
+        return await operation(h.tx);
+      } finally {
+        transactionOpen = false;
+      }
+    });
+    await h.service.ingestBatch('manager', 'workspace', [h.event()]);
+    expect(
+      (h.policy as unknown as { refresh: jest.Mock }).refresh,
+    ).toHaveBeenCalledTimes(1);
+  });
+  it('rejects a stale history lease inside the write transaction before inserting material', async () => {
+    const h = fixture();
+    await expect(
+      h.service.ingestBatch(
+        'manager',
+        'workspace',
+        [h.event()],
+        false,
+        undefined,
+        { sourceId: 'source', token: 'expired-token' },
+      ),
+    ).rejects.toThrow('LEAD_HISTORY_LEASE_LOST');
+    expect(
+      h.tx.$executeRaw.mock.calls.some(([query]) =>
+        query.sql.includes('INSERT INTO "TelegramLeadObservation"'),
+      ),
+    ).toBe(false);
+    const query = h.tx.$queryRaw.mock.calls.find(([sql]) =>
+      sql.sql.includes('TelegramLeadHistoryJob'),
+    )?.[0];
+    expect(query?.sql).toContain('FOR UPDATE');
+    expect(query?.values).toContain('expired-token');
+  });
+  it('accepts a current history lease and processes the page under the same transaction', async () => {
+    const h = fixture();
+    h.tx.$queryRaw.mockImplementation((sql: Prisma.Sql) =>
+      Promise.resolve(
+        sql.sql.includes('TelegramLeadHistoryJob')
+          ? [{ id: 'current-job' }]
+          : [],
+      ),
+    );
+    await expect(
+      h.service.ingestBatch(
+        'manager',
+        'workspace',
+        [h.event()],
+        false,
+        undefined,
+        { sourceId: 'source', token: 'current-token' },
+      ),
+    ).resolves.toMatchObject({ changed: 1 });
+  });
   it('batches100mixedsources into one source read, one dedup read and two bulk writes', async () => {
     const h = fixture(
       Array.from({ length: 100 }, (_, index) =>
@@ -140,6 +216,18 @@ describe('Lead bounded conditional ingestion', () => {
       await h.service.ingestBatch('manager', 'workspace', [h.event()]),
     ).toMatchObject({ changed: 1, filtered: 0 });
   });
+  it('retains media-only posts for media review without inventing text', async () => {
+    const h = fixture();
+    const event = {
+      ...h.event(),
+      material: { ...h.event().material, text: '' },
+      mediaPresent: true,
+      textMetadataComplete: true,
+    };
+    expect(
+      await h.service.ingestBatch('manager', 'workspace', [event]),
+    ).toMatchObject({ changed: 1, filtered: 0 });
+  });
   it('blocks wrong workspace, source gates, daily quota overflow and mismatched message URLs', async () => {
     const h = fixture();
     await expect(
@@ -196,6 +284,57 @@ describe('Lead bounded conditional ingestion', () => {
       ]),
     ).toMatchObject({ changed: 0, filtered: 1 });
   });
+  it('distinguishes changed historical content from a lost source fence', async () => {
+    const h = fixture([leadSource()], [leadObservation()]);
+    h.tx.$queryRaw.mockImplementation((sql: Prisma.Sql) =>
+      Promise.resolve(
+        sql.sql.includes('TelegramLeadHistoryJob') ? [{ id: 'job' }] : [],
+      ),
+    );
+    const event = { ...h.event(), pts: undefined, ptsCount: undefined };
+    expect(
+      await h.service.ingestBatch(
+        'manager',
+        'workspace',
+        [event],
+        false,
+        undefined,
+        { sourceId: 'source', token: 'current' },
+      ),
+    ).toMatchObject({ changed: 1, gap: true, historyFenceLost: false });
+  });
+  it('does not advance historical pages after a newer observation wins during an RPC', async () => {
+    const h = fixture(
+      [leadSource()],
+      [
+        leadObservation({
+          observedAt: new Date('2026-01-02T00:00:00Z'),
+          editedAt: null,
+        }),
+      ],
+    );
+    h.tx.$queryRaw.mockImplementation((sql: Prisma.Sql) =>
+      Promise.resolve(
+        sql.sql.includes('TelegramLeadHistoryJob') ? [{ id: 'job' }] : [],
+      ),
+    );
+    const event = {
+      ...h.event(),
+      pts: undefined,
+      ptsCount: undefined,
+      rpcStartedAt: new Date('2026-01-01T00:00:00Z'),
+    };
+    expect(
+      await h.service.ingestBatch(
+        'manager',
+        'workspace',
+        [event],
+        false,
+        undefined,
+        { sourceId: 'source', token: 'current' },
+      ),
+    ).toMatchObject({ changed: 0, gap: true, historyFenceLost: true });
+  });
   it('does not resurrect a deleted post from a delayed older edit', async () => {
     const h = fixture(
       [leadSource({ channelPts: 110, checkpointMessageId: 1 })],
@@ -226,6 +365,7 @@ describe('Lead bounded conditional ingestion', () => {
       channelId: 'other-channel',
       processingReference: 'policy:old',
       monitoringActorUserId: 'manager',
+      bindingRevision: 0,
     };
     const result = await changed.service.ingestBatch('manager', 'workspace', [
       event,
@@ -253,6 +393,7 @@ describe('Lead bounded conditional ingestion', () => {
       channelId: original.channelId,
       processingReference: original.processingReference,
       monitoringActorUserId: original.monitoringActorUserId,
+      bindingRevision: original.bindingRevision,
     };
     const pending = h.service.ingestBatch('manager', 'workspace', [event]);
     await Promise.resolve();

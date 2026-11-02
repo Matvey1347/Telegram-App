@@ -5,6 +5,7 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { createHash } from 'node:crypto';
+import { Prisma } from '@prisma/client';
 import type {
   AiCategory,
   AiCategoryConfiguration,
@@ -22,10 +23,18 @@ export type AiExecutionRequest = {
   operationId: string;
   mode: 'MANUAL' | 'AUTOMATIC';
   input: string;
+  /** Server-only, transient image; never persisted in operation records. */
+  image?: { mime: 'image/jpeg'; data: Buffer };
+  /** Restricts this experimental manual media batch to one approved source. */
+  mediaPilotSourceId?: string;
   /** Trusted server instructions; never populated from a client override. */
   instructions?: string;
   businessObjectId?: string;
+  /** Opt-in bounded result persistence for explicitly supported business categories. */
+  durableVersion?: string;
   signal?: AbortSignal;
+  /** Server-only authorization performed within the admission transaction. */
+  admissionGuard?: (tx: Prisma.TransactionClient) => Promise<void>;
 };
 export const operationFingerprint = (request: AiExecutionRequest) =>
   createHash('sha256')
@@ -35,7 +44,17 @@ export const operationFingerprint = (request: AiExecutionRequest) =>
         request.mode,
         request.input,
         request.businessObjectId ?? null,
+        ...(request.image
+          ? [
+              request.image.mime,
+              createHash('sha256').update(request.image.data).digest('hex'),
+            ]
+          : []),
+        ...(request.mediaPilotSourceId ? [request.mediaPilotSourceId] : []),
         ...(request.instructions !== undefined ? [request.instructions] : []),
+        ...(request.durableVersion !== undefined
+          ? [request.durableVersion]
+          : []),
       ]),
     )
     .digest('hex');
@@ -47,6 +66,35 @@ export class AiAdmissionService {
     private readonly registry: AiModelRegistry,
     private readonly deployment: AiDeploymentConfig,
   ) {}
+  /** Read-only replay can never create an operation or dispatch a provider. */
+  async replay(request: AiExecutionRequest) {
+    if (
+      !request.durableVersion ||
+      !request.businessObjectId ||
+      !['LEAD_AD_CLASSIFICATION', 'LEAD_CONTACT_EXTRACTION'].includes(
+        request.category,
+      )
+    )
+      throw new BadRequestException('AI_REPLAY_INVALID');
+    const operation = await this.prisma.aiOperation.findUnique({
+      where: {
+        workspaceId_operationId: {
+          workspaceId: request.workspaceId,
+          operationId: request.operationId,
+        },
+      },
+    });
+    if (
+      !operation ||
+      operation.actorUserId !== request.userId ||
+      operation.category !== request.category ||
+      operation.businessObjectId !== request.businessObjectId ||
+      operation.fingerprint !== operationFingerprint(request) ||
+      operation.expiresAt <= new Date()
+    )
+      throw new ConflictException('AI_REPLAY_UNAVAILABLE');
+    return operation;
+  }
   async admit(request: AiExecutionRequest) {
     const now = new Date();
     if (
@@ -57,7 +105,29 @@ export class AiAdmissionService {
       Buffer.byteLength(request.input, 'utf8') +
         Buffer.byteLength(request.instructions ?? '', 'utf8') >
         256 * 1024 ||
-      !['MANUAL', 'AUTOMATIC'].includes(request.mode)
+      (request.image !== undefined &&
+        (request.category !== 'LEAD_AD_CLASSIFICATION' ||
+          request.durableVersion !== 'lead-media-vision-v1' ||
+          request.image.mime !== 'image/jpeg' ||
+          !Buffer.isBuffer(request.image.data) ||
+          request.image.data.length < 3 ||
+          request.image.data.length > 5 * 1024 * 1024 ||
+          !request.image.data
+            .subarray(0, 3)
+            .equals(Buffer.from([0xff, 0xd8, 0xff])))) ||
+      (request.durableVersion === 'lead-media-vision-v1' && !request.image) ||
+      (request.image !== undefined &&
+        (request.mode !== 'MANUAL' ||
+          !request.mediaPilotSourceId ||
+          request.mediaPilotSourceId.length > 100)) ||
+      (request.mediaPilotSourceId !== undefined && !request.image) ||
+      !['MANUAL', 'AUTOMATIC'].includes(request.mode) ||
+      (request.durableVersion !== undefined &&
+        (!/^[A-Za-z0-9_.-]{1,80}$/.test(request.durableVersion) ||
+          !request.businessObjectId ||
+          !['LEAD_AD_CLASSIFICATION', 'LEAD_CONTACT_EXTRACTION'].includes(
+            request.category,
+          )))
     )
       throw new BadRequestException('AI_REQUEST_INVALID');
     const fingerprint = operationFingerprint(request);
@@ -75,6 +145,8 @@ export class AiAdmissionService {
         },
       });
       if (existing) {
+        if (request.durableVersion && existing.actorUserId !== request.userId)
+          throw new ConflictException('AI_OPERATION_CONFLICT');
         if (existing.fingerprint !== fingerprint)
           throw new ConflictException('AI_OPERATION_CONFLICT');
         if (existing.expiresAt <= now)
@@ -86,6 +158,7 @@ export class AiAdmissionService {
             existing.configurationSnapshot as unknown as AiCategoryConfiguration,
         };
       }
+      if (request.admissionGuard) await request.admissionGuard(tx);
       if (request.operationId.slice(0, 10) !== now.toISOString().slice(0, 10))
         throw new BadRequestException('AI_OPERATION_DATE_INVALID');
       const [workspace, persisted] = await Promise.all([
@@ -101,7 +174,15 @@ export class AiAdmissionService {
           },
         }),
       ]);
-      const config = this.registry.resolve(request.category, persisted);
+      const configured = this.registry.resolve(request.category, persisted);
+      const config = request.image
+        ? {
+            ...configured,
+            schemaId: this.registry.schema(request.category, true).id,
+            promptVersion: 'lead-media-vision-v1',
+            mediaPilotSourceId: request.mediaPilotSourceId,
+          }
+        : configured;
       if (
         !this.deployment.enabled ||
         !this.deployment.configured ||
@@ -141,6 +222,25 @@ export class AiAdmissionService {
         config.maxInputTokens,
         config.maxOutputTokens,
       );
+      if (request.image) {
+        // The existing workspace advisory lock also fences settlement and concurrent admissions.
+        // Uncertain and still-running operations retain their entire reservation.
+        const [pilot] = await tx.$queryRaw<
+          Array<{ count: bigint; committed: Prisma.Decimal }>
+        >(Prisma.sql`
+          SELECT count(*)::bigint AS count,
+            COALESCE(SUM(CASE WHEN status IN ('RUNNING', 'UNKNOWN') OR "actualCost" IS NULL
+              THEN "reservedCost" ELSE "actualCost" END), 0) AS committed
+          FROM "AiOperation"
+          WHERE "workspaceId" = ${request.workspaceId}
+            AND "configurationSnapshot"->>'promptVersion' = 'lead-media-vision-v1'
+            AND "configurationSnapshot"->>'mediaPilotSourceId' = ${request.mediaPilotSourceId}`);
+        if (
+          Number(pilot.count) >= 30 ||
+          pilot.committed.add(reservedCost).gt(1)
+        )
+          throw new ConflictException('AI_MEDIA_PILOT_BUDGET_EXHAUSTED');
+      }
       if (
         reservedCost.gt(workspace.maxRequestCost) ||
         (config.maxRequestCost && reservedCost.gt(config.maxRequestCost))
