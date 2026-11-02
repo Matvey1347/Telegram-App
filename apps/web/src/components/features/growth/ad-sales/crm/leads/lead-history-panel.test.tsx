@@ -47,7 +47,7 @@ function mount() {
   });
   render(
     <QueryClientProvider client={client}>
-      <LeadSourceCard source={sourceFixture()} canManage enabled />
+      <table><tbody><LeadSourceCard source={sourceFixture()} canManage enabled /></tbody></table>
     </QueryClientProvider>,
   );
   return client;

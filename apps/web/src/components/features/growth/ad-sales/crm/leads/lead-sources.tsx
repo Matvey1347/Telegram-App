@@ -1,5 +1,4 @@
 "use client";
-import { useLeadText } from "./lead-copy";
 import { useState } from "react";
 import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type {
@@ -13,7 +12,8 @@ import {
   leadQueryPolicy,
   invalidateLeadResults,
 } from "@/lib/features/growth/lead-discovery-query";
-import { LeadSourceCard } from "./lead-source-card";
+import { useOptionalI18n } from "@/providers/i18n-provider";
+import { LeadSourceCard, sourceState } from "./lead-source-card";
 import { LeadSourceForm } from "./lead-source-form";
 import { LeadQueryState } from "./lead-query-state";
 export function LeadSources({
@@ -23,21 +23,32 @@ export function LeadSources({
   workspace: string;
   config: LeadDiscoveryConfig;
 }) {
-  const t = useLeadText();
   const client = useQueryClient();
+  const ru = useOptionalI18n()?.locale !== "en";
   const [filter, setFilter] = useState<LeadSourceListFilter>({ limit: 50 });
   const [status, setStatus] = useState("");
   const [add, setAdd] = useState(false);
   const query = useInfiniteQuery({
     queryKey: leadKeys.sources(workspace, filter),
-    queryFn: ({ pageParam, signal }) =>
-      leadDiscoveryApi.sources({ ...filter, cursor: pageParam }, signal),
+    queryFn: async ({ signal }) => {
+      const items = [] as import("@telegram-system/shared").LeadSourceView[];
+      let cursor: string | undefined;
+      const seen = new Set<string>();
+      do {
+        const page = await leadDiscoveryApi.sources({ ...filter, cursor }, signal);
+        items.push(...page.items);
+        if (!page.hasMore) break;
+        if (!page.nextCursor || seen.has(page.nextCursor) || items.length >= config.maxSources) throw new Error("Invalid source cursor");
+        seen.add(page.nextCursor);
+        cursor = page.nextCursor;
+      } while (true);
+      return { items, hasMore: false, nextCursor: null };
+    },
     initialPageParam: undefined as string | undefined,
-    getNextPageParam: (p) =>
-      p.hasMore ? (p.nextCursor ?? undefined) : undefined,
+    getNextPageParam: () => undefined,
     ...leadQueryPolicy,
   });
-  const items = query.data?.pages.flatMap((p) => p.items) ?? [];
+  const items = (query.data?.pages.flatMap((page) => page.items) ?? []).filter((item) => !status || (status === "ACTIVE" ? sourceState(item).label === "Активен" : sourceState(item).label !== "Активен"));
   const refreshAll = useMutation({
     retry: false,
     mutationFn: async () => {
@@ -71,7 +82,7 @@ export function LeadSources({
               className="max-w-full !whitespace-normal"
               onClick={() => setAdd(true)}
             >
-              {t("Add source")}
+              {ru ? "Добавить источник" : "Add source"}
             </Button>
             <Button variant="secondary" disabled={!config.enabled || refreshAll.isPending} onClick={() => refreshAll.mutate()}>
               {refreshAll.isPending ? "Обновляем каналы…" : "Обновить все каналы"}
@@ -82,84 +93,30 @@ export function LeadSources({
       </div>
       {refreshAll.data ? <p role="status" className="text-xs text-neutral-400">Обновлено: {refreshAll.data.updated} · Ошибок: {refreshAll.data.failed} · Пропущено: {refreshAll.data.skipped}. Обновление загружает публикации; анализ рекламы запускается отдельно ниже.</p> : null}
       {refreshAll.isError ? <p role="alert" className="text-xs text-amber-200">Не удалось получить список всех каналов. Повторите обновление.</p> : null}
-      <details className="rounded-lg border border-neutral-800 px-3 py-2">
-        <summary className="cursor-pointer text-sm text-neutral-300">Найти источник</summary>
-      <form
-        className="flex flex-wrap items-end gap-3"
-        onSubmit={(e) => {
-          e.preventDefault();
-          const f = new FormData(e.currentTarget);
-          setFilter({
-            limit: 50,
-            search: String(f.get("search") ?? "") || undefined,
-            status: status || undefined,
-          });
-        }}
-      >
-        <FormField label={t("Search sources")}>
-          <Input
-            name="search"
-            aria-label={t("Search sources")}
-            maxLength={100}
-            placeholder={t("Source name or identifier")}
-          />
+      <form className="flex flex-wrap items-end gap-3" onSubmit={(e) => {
+        e.preventDefault();
+        const f = new FormData(e.currentTarget);
+        setFilter({ limit: 50, search: String(f.get("search") ?? "") || undefined });
+      }}>
+        <FormField label={ru ? "Поиск источников" : "Search sources"}>
+          <Input name="search" maxLength={100} aria-label={ru ? "Поиск источников" : "Search sources"} placeholder={ru ? "Название канала" : "Channel name"} />
         </FormField>
-        <FormField label={t("Source status")}>
-          <Select
-            name="status"
-            aria-label={t("Source status")}
-            value={status}
-            onChange={(e) => setStatus(e.target.value)}
-          >
-            <option value="">{t("All statuses")}</option>
-            {[
-              "ACTIVE",
-              "LOW_YIELD",
-              "NO_ADS_30D",
-              "INSUFFICIENT_COVERAGE",
-              "PAUSED",
-              "ACCESS_LOST",
-              "DISABLED",
-            ].map((v) => (
-              <option key={v}>{v}</option>
-            ))}
+        <FormField label={ru ? "Статус" : "Status"}>
+          <Select aria-label={ru ? "Статус источника" : "Source status"} value={status} onChange={(e) => setStatus(e.target.value)}>
+            <option value="">{ru ? "Все статусы" : "All statuses"}</option>
+            <option value="ACTIVE" className="text-emerald-400" data-icon-emoji="🟢">{ru ? "Активные" : "Active"}</option>
+            <option value="INACTIVE" className="text-amber-300" data-icon-emoji="🟠">{ru ? "Неактивные" : "Inactive"}</option>
           </Select>
         </FormField>
-        <Button
-          className="max-w-full !whitespace-normal"
-          type="submit"
-          variant="secondary"
-        >
-          {t("Apply source filters")}
-        </Button>
+        <Button type="submit" variant="secondary">{ru ? "Найти" : "Search"}</Button>
       </form>
-      </details>
       <LeadQueryState
         loading={query.isLoading}
         error={query.isError}
         empty={query.isSuccess && !items.length}
         onRetry={() => void query.refetch()}
       />
-      <div className="grid min-w-0 gap-2 lg:grid-cols-2">
-        {items.map((v) => (
-          <LeadSourceCard
-            key={v.id}
-            source={v}
-            canManage={config.canManage}
-            enabled={config.enabled}
-          />
-        ))}
-      </div>
-      {query.hasNextPage ? (
-        <Button
-          className="max-w-full !whitespace-normal"
-          variant="secondary"
-          disabled={query.isFetchingNextPage}
-          onClick={() => void query.fetchNextPage()}
-        >
-          {t("Load more sources")}
-        </Button>
-      ) : null}
+      {items.length ? <div className="overflow-x-auto rounded-xl border border-neutral-800"><table className="w-full min-w-[980px] text-left"><thead className="bg-neutral-900/80 text-xs text-neutral-400"><tr>{(ru ? ["Канал", "Тематика", "Публикации", "Реклама", "Кандидаты", "Статус", "Обновлён", "Действия"] : ["Channel", "Topic", "Posts", "Ads", "Candidates", "Status", "Updated", "Actions"]).map((label) => <th key={label} scope="col" className="whitespace-nowrap px-4 py-3 font-medium">{label}</th>)}</tr></thead><tbody>{items.map((source) => <LeadSourceCard key={source.id} source={source} canManage={config.canManage} enabled={config.enabled} />)}</tbody></table></div> : null}
       {add ? (
         <LeadSourceForm workspace={workspace} onClose={() => setAdd(false)} />
       ) : null}

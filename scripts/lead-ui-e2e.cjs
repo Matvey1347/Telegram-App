@@ -221,6 +221,7 @@ const changes = [];
       .first()
       .waitFor({ state: "visible", timeout: 15000 });
   await page.goto(`${base}/ad-sales/leads`, { waitUntil: "domcontentloaded" });
+  await page.getByRole("tab", { name: "Candidates" }).click();
   await page.getByRole("button", { name: "Business project" }).waitFor();
   console.log("PASS list");
   await page.getByLabel("Search candidates").fill("Business project");
@@ -279,6 +280,7 @@ const changes = [];
   console.log("PASS empty");
   mode = "error";
   await page.reload();
+  await page.getByRole("tab", { name: "Candidates" }).click();
   await visible("Lead Discovery could not be loaded");
   console.log("PASS API error");
   mode = "denied";

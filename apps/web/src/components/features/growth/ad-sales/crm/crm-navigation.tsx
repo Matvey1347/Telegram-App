@@ -1,5 +1,6 @@
 "use client";
 
+import { useOptionalI18n } from "@/providers/i18n-provider";
 import { useLeadText } from "./leads/lead-copy";
 import Link from "next/link";
 import { CrmAiUsage } from "@/components/features/operations/ai/crm-ai-usage";
@@ -37,6 +38,8 @@ export function CrmNavigation({
   inboxUnread?: number;
 }) {
   const t = useLeadText();
+  const ru = useOptionalI18n()?.locale === "ru";
+  const navRu = { "nav.contacts": "Клиенты", "nav.deals": "Сделки", "nav.calendar": "Календарь", "nav.analytics": "Аналитика" } as const;
   const pathname = usePathname();
   const me = useQuery({
     queryKey: authKeys.me(),
@@ -56,7 +59,7 @@ export function CrmNavigation({
       className="mb-5 overflow-hidden rounded-[18px] border border-neutral-800 bg-[#111111]"
     >
       <div className="flex overflow-x-auto px-2">
-        {(canViewInbox ?? (permissions.canViewOwn || permissions.canViewAll)) ? <Link href="/ad-sales/inbox" className={linkClass(pathname === "/ad-sales/inbox")}><Inbox size={16} /><span>Inbox</span>{inboxUnread ? <span className="rounded-full bg-blue-500/20 px-1.5 text-xs text-blue-200">{inboxUnread}</span> : null}</Link> : null}
+        {(canViewInbox ?? (permissions.canViewOwn || permissions.canViewAll)) ? <Link href="/ad-sales/inbox" className={linkClass(pathname === "/ad-sales/inbox")}><Inbox size={16} /><span>{ru ? "Входящие" : "Inbox"}</span>{inboxUnread ? <span className="rounded-full bg-blue-500/20 px-1.5 text-xs text-blue-200">{inboxUnread}</span> : null}</Link> : null}
         {leadAccess(me.data?.workspace.access).view ? <Link href="/ad-sales/leads" className={linkClass(pathname.startsWith("/ad-sales/leads"))}><Radar size={16}/><span>{t("Lead Discovery")}</span></Link> : null}
         {primary
           .filter(
@@ -71,7 +74,7 @@ export function CrmNavigation({
             return (
               <Link key={href} href={href} className={linkClass(active)}>
                 <Icon size={16} />
-                <span>{crmText(copyKey)}</span>
+                <span>{ru ? navRu[copyKey] : crmText(copyKey)}</span>
               </Link>
             );
           })}

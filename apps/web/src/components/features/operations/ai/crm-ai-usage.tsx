@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { useOptionalI18n } from "@/providers/i18n-provider";
 import { useQuery } from "@tanstack/react-query";
 import { authApi } from "@/lib/api";
 import { authKeys } from "@/lib/query-keys";
@@ -9,6 +10,7 @@ import { aiCost, aiNumber, aiPermissions } from "./ai-format";
 
 /** One workspace summary shared by Inbox and Discovery; refreshes after AI operations. */
 export function CrmAiUsage() {
+  const ru = useOptionalI18n()?.locale === "ru";
   const me = useQuery({ queryKey: authKeys.me(), queryFn: authApi.me, staleTime: 300_000 });
   const workspaceId = me.data?.workspace.id ?? "";
   const today = new Date().toISOString().slice(0, 10);
@@ -21,7 +23,7 @@ export function CrmAiUsage() {
   if (!allowed) return null;
   const totals = usage.data?.summary.selected;
   return <div className="flex min-h-10 flex-wrap items-center gap-x-3 gap-y-1 border-t border-neutral-800 px-4 py-2 text-xs text-neutral-400" aria-label="AI Usage">
-    <span className="font-medium text-neutral-200">AI Usage</span>
+    <span className="font-medium text-neutral-200">{ru ? "Расходы AI" : "AI Usage"}</span>
     {usage.isLoading ? <span role="status">Загрузка расходов…</span> : usage.isError ? <span role="alert">Расходы недоступны <button className="text-blue-300" onClick={() => void usage.refetch()}>Повторить</button></span> : totals ? <>
       <span className="font-medium tabular-nums text-neutral-200" title="Расходы за текущий месяц">{aiCost(totals)}</span>
       <span className="tabular-nums">{aiNumber(totals.totalTokens)} токенов</span>

@@ -1,17 +1,20 @@
 "use client";
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Pause, Play, Settings2, ShieldCheck } from "lucide-react";
+import { Pause, Play, Settings2, ShieldCheck, FileText, Megaphone, Users, CircleCheck, CirclePause, CircleOff, CircleAlert } from "lucide-react";
 import type { LeadSourceView } from "@telegram-system/shared";
+import { Fragment } from "react";
+import { IconAvatar } from "@/components/icons/icon-avatar";
+import { useOptionalI18n } from "@/providers/i18n-provider";
 import { Button } from "@/components/ui/primitives";
 import { ActionMenu, ActionMenuItem } from "@/components/ui/action-menu";
 import { leadDiscoveryApi } from "@/lib/features/growth/lead-discovery-api";
 import { invalidateLeadResults, leadKeys, patchLeadEntity } from "@/lib/features/growth/lead-discovery-query";
-import { displayLeadDate, leadSafeUrl } from "./lead-utils";
+import { leadSafeUrl } from "./lead-utils";
 import { LeadSourceSettings } from "./lead-source-settings";
 import { LeadHistoryPanel } from "./lead-history-panel";
 
-function sourceState(source: LeadSourceView) {
+export function sourceState(source: LeadSourceView) {
   if (source.lastErrorCode === "LEAD_CHANNEL_MEMBERSHIP_REQUIRED") return { label: "Нет подписки", detail: "Для этого приватного канала подключённый Telegram-аккаунт должен быть участником." };
   if (source.lastErrorCode === "LEAD_BROADCAST_CHANNEL_REQUIRED") return { label: "Не канал", detail: "Эта ссылка ведёт в чат или группу. Поиск настроен на публикации каналов." };
   if (source.lastErrorCode === "LEAD_INVITE_INVALID") return { label: "Ссылка недействительна", detail: "Приглашение истекло или было отозвано. Нужна действующая ссылка на канал." };
@@ -30,6 +33,11 @@ export function LeadSourceCard({ source, canManage, enabled }: { source: LeadSou
   const [settings, setSettings] = useState(false);
   const [history, setHistory] = useState(false);
   const state = sourceState(source);
+  const ru = useOptionalI18n()?.locale !== "en";
+  const parts = source.title.split(" · ");
+  const channelName = parts.length > 1 ? parts[parts.length - 1] : source.title;
+  const topic = parts.length > 1 ? parts.slice(0, -1).join(" · ") : "—";
+  const StatusIcon = state.label === "Активен" ? CircleCheck : source.monitoringState === "PAUSED" ? CirclePause : source.monitoringState === "ACCESS_LOST" ? CircleAlert : CircleOff;
   const connected = Boolean(source.accountId && source.channelId);
   const mutation = useMutation({
     mutationFn: async (action: "scan" | "validate" | "toggle") => {
@@ -44,30 +52,28 @@ export function LeadSourceCard({ source, canManage, enabled }: { source: LeadSou
     retry: false,
   });
   const url = leadSafeUrl(source.url);
-  return <article className="min-w-0 rounded-xl border border-neutral-800 bg-neutral-900/50 px-3 py-3">
-    <div className="flex items-start justify-between gap-3">
-      <div className="min-w-0 flex-1">
-        <h3 className="truncate text-sm font-medium" title={source.title}>{url ? <a href={url} target="_blank" rel="noreferrer" className="hover:text-blue-300">{source.title}</a> : source.title}</h3>
-        <p className="mt-1 text-xs text-neutral-400">{source.metrics.observedPosts} публикаций · {source.metrics.advertisements} рекламных · {source.metrics.uniqueCandidates} кандидатов</p>
-      </div>
-      <span className={`shrink-0 rounded px-2 py-1 text-xs ${source.monitoringState === "ACTIVE" ? "bg-emerald-950 text-emerald-300" : "bg-neutral-800 text-neutral-300"}`}>{state.label}</span>
-    </div>
-    <p className="mt-2 text-xs text-neutral-400">{state.detail}</p>
-    <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-      <span className="mr-auto text-neutral-500">Последняя публикация: {displayLeadDate(source.lastObservedAt)}</span>
-      {canManage ? <>
-        <Button variant="secondary" disabled={!enabled || !connected} onClick={() => setHistory(!history)} aria-expanded={history} className="!min-h-8 !px-3 !py-1 !text-xs">История за 90 дней</Button>
-        <Button variant="secondary" disabled={!enabled || !connected || mutation.isPending} onClick={() => mutation.mutate("scan")} className="!min-h-8 !px-3 !py-1 !text-xs">{mutation.isPending ? "Проверяем…" : "Обновить"}</Button>
-        <ActionMenu label={`Действия источника ${source.title}`} triggerClassName="inline-flex h-8 w-8 items-center justify-center rounded-lg text-neutral-400 hover:bg-neutral-800" menuClassName="absolute right-0 top-9 z-40 w-64 rounded-lg border border-neutral-700 bg-neutral-950 p-1.5 shadow-xl">
-          <ActionMenuItem icon={<ShieldCheck size={14}/>} disabled={!enabled || mutation.isPending || !source.accountId} onClick={() => mutation.mutate("validate")}>Проверить доступ</ActionMenuItem>
-          {connected && source.accessType !== "PUBLIC_CHANNEL" ? <ActionMenuItem disabled={!enabled || mutation.isPending} icon={source.monitoringState === "ACTIVE" ? <Pause size={14}/> : <Play size={14}/>} onClick={() => mutation.mutate("toggle")}>{source.monitoringState === "ACTIVE" ? "Приостановить" : "Продолжить мониторинг"}</ActionMenuItem> : null}
-          <ActionMenuItem icon={<Settings2 size={14}/>} onClick={() => setSettings(true)}>Настройки подключения</ActionMenuItem>
+  return <Fragment><tr className="border-b border-neutral-800/80 last:border-0 hover:bg-neutral-900/60">
+    <td className="px-4 py-3"><div className="flex min-w-0 items-center gap-3"><IconAvatar label={channelName} size="sm" decorative /><div className="min-w-0"><h3 className="max-w-72 truncate text-sm font-medium" title={channelName}>{url ? <a href={url} target="_blank" rel="noreferrer" className="hover:text-blue-300">{channelName}</a> : channelName}</h3>{source.username ? <span className="text-xs text-neutral-500">@{source.username}</span> : null}</div></div></td>
+    <td className="px-4 py-3 text-sm text-neutral-300">{topic}</td>
+    <td className="px-4 py-3"><span className="inline-flex items-center gap-2 text-sm text-neutral-200" title={ru ? "Публикации" : "Posts"}><FileText size={16} className="text-neutral-500" />{source.metrics.observedPosts}</span></td>
+    <td className="px-4 py-3"><span className="inline-flex items-center gap-2 text-sm text-neutral-200" title={ru ? "Рекламные публикации" : "Advertisements"}><Megaphone size={16} className="text-amber-400" />{source.metrics.advertisements}</span></td>
+    <td className="px-4 py-3"><span className="inline-flex items-center gap-2 text-sm text-neutral-200" title={ru ? "Кандидаты" : "Candidates"}><Users size={16} className="text-blue-400" />{source.metrics.uniqueCandidates}</span></td>
+    <td className="px-4 py-3"><span title={state.detail} className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-xs ${state.label === "Активен" ? "bg-emerald-950 text-emerald-300" : source.monitoringState === "ACCESS_LOST" ? "bg-rose-950 text-rose-300" : "bg-neutral-800 text-neutral-300"}`}><StatusIcon size={14}/>{ru ? state.label : source.monitoringState === "ACTIVE" ? "Active" : source.monitoringState === "PAUSED" ? "Paused" : source.monitoringState === "ACCESS_LOST" ? "No access" : "Inactive"}</span></td>
+    <td className="whitespace-nowrap px-4 py-3 text-xs text-neutral-400">{source.lastObservedAt ? new Date(source.lastObservedAt).toLocaleString(ru ? "ru-RU" : "en-US") : "—"}</td>
+    <td className="px-4 py-3"><div className="flex items-center justify-end gap-1">{canManage ? <>
+        <Button variant="secondary" disabled={!enabled || !connected} onClick={() => setHistory(!history)} aria-expanded={history} className="!min-h-8 !px-2 !py-1 !text-xs">{ru ? "История" : "History"}<span className="sr-only"> {ru ? "за 90 дней" : "90 days"}</span></Button>
+        <Button variant="secondary" disabled={!enabled || !connected || mutation.isPending} onClick={() => mutation.mutate("scan")} className="!min-h-8 !px-2 !py-1 !text-xs">{mutation.isPending ? (ru ? "Проверяем…" : "Checking…") : (ru ? "Обновить" : "Refresh")}</Button>
+        <ActionMenu label={`${ru ? "Действия источника" : "Source actions"} ${source.title}`} triggerClassName="inline-flex h-8 w-8 items-center justify-center rounded-lg text-neutral-400 hover:bg-neutral-800" menuClassName="absolute right-0 top-9 z-40 w-64 rounded-lg border border-neutral-700 bg-neutral-950 p-1.5 shadow-xl">
+          <ActionMenuItem icon={<ShieldCheck size={14}/>} disabled={!enabled || mutation.isPending || !source.accountId} onClick={() => mutation.mutate("validate")}>{ru ? "Проверить доступ" : "Check access"}</ActionMenuItem>
+          {connected && source.accessType !== "PUBLIC_CHANNEL" ? <ActionMenuItem disabled={!enabled || mutation.isPending} icon={source.monitoringState === "ACTIVE" ? <Pause size={14}/> : <Play size={14}/>} onClick={() => mutation.mutate("toggle")}>{source.monitoringState === "ACTIVE" ? (ru ? "Приостановить" : "Pause") : (ru ? "Продолжить мониторинг" : "Resume monitoring")}</ActionMenuItem> : null}
+          <ActionMenuItem icon={<Settings2 size={14}/>} onClick={() => setSettings(true)}>{ru ? "Настройки подключения" : "Connection settings"}</ActionMenuItem>
         </ActionMenu>
-      </> : null}
-    </div>
+      </> : null}</div></td></tr>
+    {(mutation.isError || (mutation.data && !("id" in mutation.data)) || history) ? <tr><td colSpan={8} className="px-4 py-3">
     {mutation.isError ? <p role="alert" className="mt-2 text-xs text-amber-200">Не удалось обновить источник. Проверьте доступ аккаунта к каналу и повторите.</p> : null}
     {mutation.data && !("id" in mutation.data) ? <p role="status" className="mt-2 text-xs text-neutral-400">Проверено {mutation.data.received} · Новых или обновлённых {mutation.data.changed}</p> : null}
     {history ? <LeadHistoryPanel workspace={source.workspaceId} sourceId={source.id} enabled={enabled && connected} canManage={canManage} /> : null}
+    </td></tr> : null}
     {settings ? <LeadSourceSettings source={source} onClose={() => setSettings(false)}/> : null}
-  </article>;
+  </Fragment>;
 }
