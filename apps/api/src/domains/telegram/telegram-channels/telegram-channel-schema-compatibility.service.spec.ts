@@ -1,6 +1,33 @@
 import { TelegramChannelSchemaCompatibilityService } from './telegram-channel-schema-compatibility.service';
 
 describe('TelegramChannelSchemaCompatibilityService', () => {
+  it('checks import storage read-only and caches the result', async () => {
+    const prisma = {
+      $queryRaw: jest.fn().mockResolvedValue([{ available: true }]),
+      $executeRawUnsafe: jest.fn(),
+    };
+    const service = new TelegramChannelSchemaCompatibilityService(
+      prisma as never,
+    );
+    await service.ensureTelegramChannelImportPolicyColumnsAvailable();
+    await service.ensureTelegramChannelImportPolicyColumnsAvailable();
+    expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
+    expect(prisma.$executeRawUnsafe).not.toHaveBeenCalled();
+  });
+
+  it('requires a migration when import storage is missing and never repairs it at runtime', async () => {
+    const prisma = {
+      $queryRaw: jest.fn().mockResolvedValue([{ available: false }]),
+      $executeRawUnsafe: jest.fn(),
+    };
+    const service = new TelegramChannelSchemaCompatibilityService(
+      prisma as never,
+    );
+    await expect(
+      service.ensureTelegramChannelImportPolicyColumnsAvailable(),
+    ).rejects.toThrow('TELEGRAM_CHANNEL_IMPORT_SCHEMA_MIGRATION_REQUIRED');
+    expect(prisma.$executeRawUnsafe).not.toHaveBeenCalled();
+  });
   it('does not request an exclusive PostGroup lock when the migrated schema is present', async () => {
     const prisma = {
       $queryRaw: jest.fn().mockResolvedValue([
