@@ -10,6 +10,7 @@ import { PrismaService } from '../../../../prisma/prisma.service';
 const zeroMetrics = (): LeadSourceMetrics => ({
   observedPosts: 0,
   advertisements: 0,
+  mutualPromotions: 0,
   uniqueCandidates: 0,
   confirmedContacts: 0,
   confirmedLeads: 0,
@@ -46,6 +47,7 @@ export async function loadLeadSourceMetrics(
       SELECT "sourceId",COUNT(*)::int AS "observedPosts",
         COUNT(*) FILTER(WHERE (ad_class IS NULL OR ad_class NOT IN ('ADVERTISEMENT','MUTUAL_PROMOTION','ORGANIC_CONTENT') OR "processingStatus" IN ('UNKNOWN','FAILED','CLASSIFYING','EXTRACTING')) AND "effectiveAt">=(NOW() AT TIME ZONE 'UTC')-INTERVAL '30 days')::int AS "pendingPosts",
         COUNT(*) FILTER(WHERE ad_class='ADVERTISEMENT')::int AS advertisements,
+        COUNT(*) FILTER(WHERE ad_class='MUTUAL_PROMOTION')::int AS "mutualPromotions",
         COUNT(*) FILTER(WHERE ad_class='ADVERTISEMENT' AND "effectiveAt">=(NOW() AT TIME ZONE 'UTC')-INTERVAL '30 days')::int AS "recentAds",
         MAX("effectiveAt") FILTER(WHERE ad_class='ADVERTISEMENT') AS "observedLastAdAt",
         COUNT(*) FILTER(WHERE "reviewStatus"='REJECTED')::int AS "rejectedMaterials"
@@ -132,6 +134,7 @@ export function mapLeadSource(
     metrics: {
       observedPosts: metrics.observedPosts,
       advertisements: metrics.advertisements,
+      mutualPromotions: metrics.mutualPromotions ?? 0,
       uniqueCandidates: metrics.uniqueCandidates,
       confirmedContacts: metrics.confirmedContacts,
       confirmedLeads: metrics.confirmedLeads,

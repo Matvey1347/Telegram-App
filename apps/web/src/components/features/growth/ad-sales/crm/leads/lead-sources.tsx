@@ -55,6 +55,7 @@ export function LeadSources({
     { label: ru ? "Канал" : "Channel" }, { label: ru ? "Тематика" : "Topic" },
     { label: ru ? "Публикации" : "Posts", key: "observedPosts" as const },
     { label: ru ? "Реклама" : "Ads", key: "advertisements" as const },
+    { label: ru ? "Взаимопиар" : "Mutual promotion" },
     { label: ru ? "Кандидаты" : "Candidates", key: "uniqueCandidates" as const },
     { label: ru ? "Статус" : "Status" }, { label: ru ? "Обновлён" : "Updated" }, { label: ru ? "Действия" : "Actions" },
   ];

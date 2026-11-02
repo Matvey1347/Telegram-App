@@ -92,6 +92,7 @@ export type LeadExtraction = {
 export type LeadSourceMetrics = {
   observedPosts: number;
   advertisements: number;
+  mutualPromotions?: number;
   uniqueCandidates: number;
   confirmedContacts: number;
   confirmedLeads: number;

@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Pause, Play, Settings2, ShieldCheck, FileText, Megaphone, Users, Brain, Sparkles, Tag } from "lucide-react";
+import { Pause, Play, Settings2, ShieldCheck, FileText, Megaphone, Users, Brain, Sparkles, Tag, Repeat2, Info } from "lucide-react";
 import type { LeadSourceView } from "@telegram-system/shared";
 import { Fragment } from "react";
 import { IconAvatar } from "@/components/icons/icon-avatar";
@@ -58,10 +58,11 @@ export function LeadSourceCard({ source, canManage, enabled }: { source: LeadSou
   });
   const url = leadSafeUrl(source.url);
   return <Fragment><tr className="border-b border-neutral-800/80 last:border-0 hover:bg-neutral-900/60">
-    <td className="px-4 py-3"><div className="flex min-w-0 items-center gap-3"><IconAvatar icon={avatar} label={channelName} size="sm" className="!rounded-full" decorative /><div className="min-w-0"><h3 className="max-w-72 truncate text-sm font-medium" title={channelName}>{url ? <a href={url} target="_blank" rel="noreferrer" className="hover:text-blue-300">{channelName}</a> : channelName}</h3>{source.username ? <span className="text-xs text-neutral-500">@{source.username}</span> : null}</div></div></td>
-    <td className="px-4 py-3 text-sm"><span className="inline-flex items-center gap-1.5 rounded-md bg-blue-950/60 px-2 py-1 text-blue-300"><TopicIcon size={14} aria-hidden="true" /><span>{topicParts[0]}{topicParts.length > 1 ? <span className="ml-1 text-xs text-blue-300/75">· {topicParts.slice(1).join(" · ")}</span> : null}</span></span></td>
+    <td className="px-4 py-3"><div className="flex min-w-0 items-center gap-3"><IconAvatar icon={avatar} label={channelName} size="sm" className="!rounded-full" decorative /><div className="min-w-0"><h3 className="max-w-72 truncate text-sm font-medium" title={channelName}>{url ? <a href={url} target="_blank" rel="noreferrer" className="hover:text-blue-300">{channelName}</a> : channelName}</h3>{source.username ? <span className="text-xs text-neutral-500">@{source.username}</span> : null}{source.coverageFrom ? <span className="block text-xs text-neutral-500">{ru ? "Публикации с" : "Posts from"} {new Date(source.coverageFrom).toLocaleDateString(ru ? "ru-RU" : "en-US")}</span> : null}</div></div></td>
+    <td className="px-4 py-3 text-sm"><span className="inline-flex items-center gap-1.5 rounded-md bg-blue-950/60 px-2 py-1 text-blue-300"><TopicIcon size={14} aria-hidden="true" /><span>{topicParts[0]}</span>{topicParts.length > 1 ? <span tabIndex={0} title={topicParts.slice(1).join(" · ")} aria-label={topicParts.slice(1).join(" · ")}><Info size={14} /></span> : null}</span></td>
     <td className="px-4 py-3"><span className="inline-flex items-center gap-2 text-sm text-neutral-200" title={ru ? "Публикации" : "Posts"}><FileText size={16} className="text-neutral-500" />{source.metrics.observedPosts}</span></td>
     <td className="px-4 py-3"><span className="inline-flex items-center gap-2 text-sm text-neutral-200" title={ru ? "Рекламные публикации" : "Advertisements"}><Megaphone size={16} className="text-amber-400" />{source.metrics.advertisements}</span></td>
+    <td className="px-4 py-3"><span className="inline-flex items-center gap-2 text-sm text-neutral-200" title={ru ? "Взаимопиар" : "Mutual promotion"}><Repeat2 size={16} className="text-violet-400" />{source.metrics.mutualPromotions ?? "—"}</span></td>
     <td className="px-4 py-3"><span className="inline-flex items-center gap-2 text-sm text-neutral-200" title={ru ? "Кандидаты" : "Candidates"}><Users size={16} className="text-blue-400" />{source.metrics.uniqueCandidates}</span></td>
     <td className="px-4 py-3"><span title={state.detail}><LeadSourceStatus active={state.label === "Активен"}>{ru ? state.label : state.label === "Активен" ? "Active" : source.monitoringState === "PAUSED" ? "Paused" : source.monitoringState === "ACCESS_LOST" ? "No access" : "Inactive"}</LeadSourceStatus></span></td>
     <td className="whitespace-nowrap px-4 py-3 text-xs text-neutral-400">{source.lastObservedAt ? new Date(source.lastObservedAt).toLocaleString(ru ? "ru-RU" : "en-US") : "—"}</td>
@@ -74,7 +75,7 @@ export function LeadSourceCard({ source, canManage, enabled }: { source: LeadSou
           <ActionMenuItem icon={<Settings2 size={14}/>} onClick={() => setSettings(true)}>{ru ? "Настройки подключения" : "Connection settings"}</ActionMenuItem>
         </ActionMenu>
       </> : null}</div></td></tr>
-    {(mutation.isError || (mutation.data && !("id" in mutation.data)) || history) ? <tr><td colSpan={8} className="px-4 py-3">
+    {(mutation.isError || (mutation.data && !("id" in mutation.data)) || history) ? <tr><td colSpan={9} className="px-4 py-3">
     {mutation.isError ? <p role="alert" className="mt-2 text-xs text-amber-200">Не удалось обновить источник. Проверьте доступ аккаунта к каналу и повторите.</p> : null}
     {mutation.data && !("id" in mutation.data) ? <p role="status" className="mt-2 text-xs text-neutral-400">Проверено {mutation.data.received} · Новых или обновлённых {mutation.data.changed}</p> : null}
     {history ? <LeadHistoryPanel workspace={source.workspaceId} sourceId={source.id} enabled={enabled && connected} canManage={canManage} /> : null}

@@ -22,6 +22,11 @@ const metrics = {
   rejectedMaterials: 0,
 };
 describe('Lead bounded source and material read models', () => {
+  it('exposes mutual promotions separately from advertisements', () => {
+    const view = mapLeadSource(leadSource(), { ...metrics, advertisements: 2, mutualPromotions: 3 });
+    expect(view.metrics.advertisements).toBe(2);
+    expect(view.metrics.mutualPromotions).toBe(3);
+  });
   it('never reports no ads from connection age, gaps, stale checkpoints or UNKNOWN backlog', () => {
     const now = new Date(),
       source = leadSource({
