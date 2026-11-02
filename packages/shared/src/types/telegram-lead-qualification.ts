@@ -25,4 +25,6 @@ export type LeadQualificationInput = { operationId: string; productIds: string[]
 export type LeadCandidateDraftInput = LeadQualificationInput & { tone: CrmCopilotTone; language: CrmCopilotLanguage };
 export type LeadQualificationDecisionInput = { revision: number; qualificationId: string; contextVersion: string; decision: 'QUALIFIED' | 'LOW_RELEVANCE' | 'NEEDS_REVIEW'; acknowledgeHighRisk: boolean; note?: string };
 export type LeadCandidateDraftPatch = { revision: number; action: 'SAVE' | 'APPROVE' | 'DISCARD'; text?: string };
-export type LeadPreparationQueueInput = { workflow?: LeadWorkflowState | 'HIGH_PRIORITY'; cursor?: string; limit?: number; search?: string };
+export const LEAD_CONTACT_CATEGORIES = ['BUSINESS_CONTACT_FOUND','CONTACT_POINT_ONLY','CONTACT_NOT_FOUND','TARGET_UNRESOLVED'] as const;
+export type LeadContactCategory = typeof LEAD_CONTACT_CATEGORIES[number];
+export type LeadPreparationQueueInput = { workflow?: LeadWorkflowState | 'HIGH_PRIORITY'; contactCategory?: LeadContactCategory; cursor?: string; limit?: number; search?: string };

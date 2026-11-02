@@ -171,6 +171,7 @@ export type LeadObservationView = {
   originalStatus: "OBSERVED" | "DELETED" | "ACCESS_LOST" | "UNKNOWN";
   processingStatus: string;
   classificationVersion: string | null;
+  prefilterDecision?: 'LIKELY_AD' | 'LIKELY_VP' | 'UNKNOWN' | null;
   classification: LeadClassification | null;
   targetEvidence?: LeadTargetEvidence[];
   promotion?: LeadPromotionView | null;
@@ -202,6 +203,7 @@ export type LeadCandidateView = {
   reviewHistory: Array<{ at: string; action: string; actorUserId: string }>;
 };
 export type LeadPage<T> = {
+  total?: number;
   items: T[];
   hasMore: boolean;
   nextCursor: string | null;

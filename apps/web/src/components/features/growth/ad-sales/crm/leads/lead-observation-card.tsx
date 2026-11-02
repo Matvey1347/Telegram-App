@@ -80,7 +80,8 @@ export function LeadObservationCard({
         ) : null}
       </div>
       <div className="mt-3 flex flex-wrap gap-2 text-xs">
-        <span>{c?.classification ?? "UNKNOWN"}</span>
+        <span>Предварительно: {observation.prefilterDecision === "LIKELY_AD" ? "Вероятная реклама" : observation.prefilterDecision === "LIKELY_VP" ? "Вероятный взаимопиар" : observation.prefilterDecision === "UNKNOWN" ? "Не определено" : "Нет сохранённого результата"}</span>
+        <span>AI-вердикт: {c?.classification ?? "не получен"}</span>
         <span>Review: {observation.reviewStatus}</span>
         <span>Original: {observation.originalStatus}</span>
         <span>
@@ -88,7 +89,7 @@ export function LeadObservationCard({
             ? `Confidence ${Math.round(c.confidence * 100)}%`
             : "Not classified"}
         </span>
-        <span>{observation.processingStatus}</span>
+        <span>Обработка: {observation.processingStatus}</span>
       </div>
       <p className="mt-3 whitespace-pre-wrap break-words text-sm text-neutral-200">
         {observation.text}

@@ -44,6 +44,7 @@ const observationInclude = {
       url: true,
       monitoringState: true,
       lastErrorCode: true,
+      bindingRevision: true,
     },
   },
 } satisfies Prisma.TelegramLeadObservationInclude;
@@ -203,6 +204,37 @@ export class TelegramLeadReadService {
       );
       return found ? mapAiOperationView(found) : null;
     };
+    const decisions = await this.prisma.telegramLeadAnalysisQueue.findMany({
+      where: {
+        workspaceId: rows[0].workspaceId,
+        prefilterDecision: { in: ['LIKELY_AD', 'LIKELY_VP', 'UNKNOWN'] },
+        OR: rows.map((row) => ({
+          observationId: row.id,
+          sourceId: row.sourceId,
+          contentHash: row.contentHash,
+          bindingRevision: row.source.bindingRevision,
+        })),
+      },
+      select: { observationId: true, prefilterDecision: true },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    });
+    const decisionByObservation = new Map<
+      string,
+      'LIKELY_AD' | 'LIKELY_VP' | 'UNKNOWN'
+    >();
+    for (const decision of decisions) {
+      if (
+        !decisionByObservation.has(decision.observationId) &&
+        ['LIKELY_AD', 'LIKELY_VP', 'UNKNOWN'].includes(
+          decision.prefilterDecision ?? '',
+        )
+      ) {
+        decisionByObservation.set(
+          decision.observationId,
+          decision.prefilterDecision as 'LIKELY_AD' | 'LIKELY_VP' | 'UNKNOWN',
+        );
+      }
+    }
     const promotions = await loadLeadPromotionViews(
       this.prisma,
       this.policy,
@@ -237,6 +269,7 @@ export class TelegramLeadReadService {
           : row.processingStatus,
       promotion: promotions.get(row.id) ?? null,
       classificationVersion: row.classificationVersion,
+      prefilterDecision: decisionByObservation.get(row.id) ?? null,
       classification:
         row.classification as unknown as LeadObservationView['classification'],
       targetEvidence:

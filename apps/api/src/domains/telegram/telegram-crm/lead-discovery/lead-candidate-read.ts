@@ -65,6 +65,7 @@ export async function loadLeadCandidate(
               url: true,
               monitoringState: true,
               lastErrorCode: true,
+              bindingRevision: true,
             },
           },
         },

@@ -330,18 +330,19 @@ describe("lead discovery contact workflow", () => {
     expect(screen.getAllByRole("link", { name: "Открыть публичную ссылку" }).some((link) => link.getAttribute("href") === "https://t.me/ads_contact")).toBe(true);
     expect(screen.getAllByText("Открыть источник контакта")).toHaveLength(2);
   });
-  it("filters loaded candidates by contact category without fetching details", async () => {
+  it("requests server-side contact category filtering without fetching details", async () => {
     const business = candidateFixture(1);
     business.contacts[0].purpose = "CONTACT_FOR_ADS";
     const point = candidateFixture(2);
     point.contacts = [{ type: "TELEGRAM", value: "@sample_bot", role: "ADVERTISED_DESTINATION", evidence: "button" }];
-    vi.spyOn(leadPreparationApi, "queue").mockResolvedValue({ items: [business, point], hasMore: false, nextCursor: null });
+    vi.spyOn(leadPreparationApi, "queue").mockImplementation(async (params) => ({ items: params.contactCategory ? [point] : [business, point], hasMore: false, nextCursor: null, total: params.contactCategory ? 1 : 2 }));
     mount(<LeadCandidates workspace="workspace-one" canReview />);
     await screen.findByRole("button", { name: business.title });
-    fireEvent.click(screen.getByLabelText("Категория контакта (среди загруженных)"));
+    fireEvent.click(screen.getByLabelText("Категория контакта"));
     fireEvent.click(screen.getByRole("option", { name: "Только ссылка на проект" }));
-    expect(screen.queryByRole("button", { name: business.title })).toBeNull();
-    expect(screen.getByRole("button", { name: point.title })).toBeTruthy();
+    await waitFor(() => expect(screen.queryByRole("button", { name: business.title })).toBeNull());
+    expect(leadPreparationApi.queue).toHaveBeenCalledWith(expect.objectContaining({ contactCategory: "CONTACT_POINT_ONLY" }), expect.any(AbortSignal));
+    expect(await screen.findByRole("button", { name: point.title })).toBeTruthy();
     expect(leadDiscoveryApi.candidate).not.toHaveBeenCalled();
   });
 });

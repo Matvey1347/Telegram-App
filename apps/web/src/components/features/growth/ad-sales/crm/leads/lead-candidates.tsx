@@ -52,7 +52,6 @@ export function LeadCandidates({
   const [filter, setFilter] = useState<LeadPreparationQueueInput>({
     limit: 50,
   });
-  const [category, setCategory] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
   const [limitError, setLimitError] = useState(false);
   const [details, setDetails] = useState<string | null>(null);
@@ -72,7 +71,6 @@ export function LeadCandidates({
     ...leadQueryPolicy,
   });
   const items = query.data?.pages.flatMap((p) => p.items) ?? [];
-  const visibleItems = category ? items.filter((item) => candidateContactCategory(item) === category) : items;
   const detail = useQuery({
     queryKey: leadKeys.candidate(workspace, details ?? ""),
     queryFn: ({ signal }) => leadDiscoveryApi.candidate(details!, signal),
@@ -188,8 +186,8 @@ export function LeadCandidates({
             </Button>
           </form>
         ) : null}
-        <FormField label="Категория контакта (среди загруженных)">
-          <Select aria-label="Категория контакта (среди загруженных)" value={category} onChange={(event) => setCategory(event.target.value)}>
+        <FormField label="Категория контакта">
+          <Select aria-label="Категория контакта" value={filter.contactCategory ?? ""} onChange={(event) => { setFilter({ ...filter, contactCategory: (event.target.value || undefined) as LeadPreparationQueueInput["contactCategory"] }); setSelected([]); }}>
             <option value="">Все категории</option>
             <option value="BUSINESS_CONTACT_FOUND">Бизнес-контакт найден</option>
             <option value="CONTACT_POINT_ONLY">Только ссылка на проект</option>
@@ -239,8 +237,8 @@ export function LeadCandidates({
             empty={query.isSuccess && !items.length}
             onRetry={() => void query.refetch()}
           />
-          {query.isSuccess && items.length > 0 && visibleItems.length === 0 ? <p className="text-sm text-neutral-400">Среди загруженных кандидатов нет совпадений. При наличии загрузите остальные.</p> : null}
-          {visibleItems.map((v) => (
+          {query.isSuccess ? <p className="text-xs text-neutral-400">Найдено: {query.data?.pages[0]?.total ?? items.length}</p> : null}
+          {items.map((v) => (
             <Card
               key={v.id}
               className={

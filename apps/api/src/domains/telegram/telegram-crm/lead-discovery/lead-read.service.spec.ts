@@ -210,6 +210,13 @@ describe('Lead bounded source and material read models', () => {
     const prisma = {
         aiOperation: { findMany: jest.fn().mockResolvedValue([receipt]) },
         telegramLeadPromotion: { findMany: jest.fn().mockResolvedValue([]) },
+        telegramLeadAnalysisQueue: {
+          findMany: jest
+            .fn()
+            .mockResolvedValue([
+              { observationId: observation.id, prefilterDecision: 'LIKELY_AD' },
+            ]),
+        },
       },
       policy = {};
     const service = new TelegramLeadReadService(
@@ -225,6 +232,7 @@ describe('Lead bounded source and material read models', () => {
           url: null,
           monitoringState: 'ACCESS_LOST',
           lastErrorCode: null,
+          bindingRevision: 0,
         },
       },
       {
@@ -237,11 +245,13 @@ describe('Lead bounded source and material read models', () => {
           url: null,
           monitoringState: 'ACCESS_LOST',
           lastErrorCode: null,
+          bindingRevision: 0,
         },
       },
     ]);
     expect(views[0]).toMatchObject({
       originalStatus: 'ACCESS_LOST',
+      prefilterDecision: 'LIKELY_AD',
       processingStatus: 'UNKNOWN',
       classificationOperation: { id: 'ledger', reservedCost: '0.001000000000' },
     });
