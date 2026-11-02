@@ -152,6 +152,19 @@ const page = (
   },
 });
 describe('bounded history collection worker', () => {
+  it('does not wake a source outside the configured allowlist', () => {
+    const h = fixture();
+    h.config.get.mockImplementation((key: string) =>
+      key === 'INTERNAL_LEAD_DISCOVERY_ENABLED'
+        ? 'true'
+        : key === 'INTERNAL_LEAD_DISCOVERY_SOURCE_ALLOWLIST'
+          ? 'permitted'
+          : undefined,
+    );
+    h.worker.wake('workspace', 'other');
+    expect(h.jobs.findUnique).not.toHaveBeenCalled();
+    h.worker.onApplicationShutdown();
+  });
   it('keeps history recovery idle during manual acceptance', async () => {
     const h = fixture();
     h.config.get.mockImplementation((key: string) =>

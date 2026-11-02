@@ -1,4 +1,7 @@
-import { isLeadManualRecovery } from './lead-recovery-mode';
+import {
+  isLeadManualRecovery,
+  leadRecoverySourceAllowed,
+} from './lead-recovery-mode';
 import {
   Injectable,
   Logger,
@@ -81,7 +84,8 @@ export class TelegramLeadHistoryWorker
     if (
       this.stopped ||
       this.config.get<string>('INTERNAL_LEAD_DISCOVERY_ENABLED') !== 'true' ||
-      isLeadManualRecovery(this.config)
+      isLeadManualRecovery(this.config) ||
+      !leadRecoverySourceAllowed(this.config, sourceId)
     )
       return;
     const id = { workspaceId, sourceId },

@@ -1,4 +1,7 @@
-import { isLeadManualRecovery } from './lead-recovery-mode';
+import {
+  isLeadManualRecovery,
+  leadRecoverySources,
+} from './lead-recovery-mode';
 import { extractLeadTargetEvidence } from './lead-advertised-targets';
 import {
   LeadMonitorProof,
@@ -108,6 +111,9 @@ export class TelegramLeadMonitorService
   private async loadSources() {
     const rows = await this.prisma.telegramLeadSource.findMany({
       where: {
+        ...(leadRecoverySources(this.config)
+          ? { id: { in: leadRecoverySources(this.config) } }
+          : {}),
         monitoringState: 'ACTIVE',
         type: 'TELEGRAM_CHANNEL',
         accountId: { not: null },

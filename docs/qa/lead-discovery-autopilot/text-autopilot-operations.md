@@ -6,7 +6,10 @@ existing MTProto runtime. Keep this mode until the enabled sources and their
 workspace grants have been reviewed. Other CRM work remains independent.
 
 `normal` enables existing bounded event-driven monitoring and queue recovery.
-On startup it recovers *all* enabled sources, not just one: before switching,
+Set `INTERNAL_LEAD_DISCOVERY_SOURCE_ALLOWLIST` to a comma-separated list of
+authorized source IDs before restarting to limit automatic monitoring, history
+and analysis to those sources. An absent allowlist allows all enabled sources;
+an empty or invalid allowlist fails closed. Before switching,
 inspect each enabled source, actor, binding, grants, queue and AI category
 settings. A source may be resumed only with its processing authorization.
 Disabled automatic AI categories send text-inconclusive observations to review;

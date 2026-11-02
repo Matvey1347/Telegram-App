@@ -14,6 +14,29 @@ jest.mock('./lead-analysis-claim', () => ({
 jest.mock('./lead-analysis-routing', () => ({ routeLeadAnalysis: jest.fn() }));
 
 describe('lead executor automatic AI gate', () => {
+  it('does not start an automatic drain outside the source allowlist', () => {
+    const prisma = { telegramLeadAutoConfig: { findMany: jest.fn() } };
+    const config = {
+      get: (key: string) =>
+        key === 'INTERNAL_LEAD_DISCOVERY_ENABLED'
+          ? 'true'
+          : key === 'INTERNAL_LEAD_DISCOVERY_SOURCE_ALLOWLIST'
+            ? 'permitted'
+            : undefined,
+    };
+    const executor = new TelegramLeadAnalysisExecutor(
+      prisma as unknown as PrismaService,
+      {} as ModuleRef,
+      config as unknown as ConfigService,
+    );
+    executor.wake({
+      workspaceId: 'workspace',
+      sourceId: 'other',
+      userId: 'actor',
+    });
+    expect(prisma.telegramLeadAutoConfig.findMany).not.toHaveBeenCalled();
+    executor.onApplicationShutdown();
+  });
   it('sends an unverified positive text result to review without AI', async () => {
     const analyzeAutomatically = jest.fn();
     const executor = new TelegramLeadAnalysisExecutor(

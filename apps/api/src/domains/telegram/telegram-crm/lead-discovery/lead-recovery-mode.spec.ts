@@ -1,4 +1,8 @@
-import { isLeadManualRecovery } from './lead-recovery-mode';
+import {
+  isLeadManualRecovery,
+  leadRecoverySources,
+  leadRecoverySourceAllowed,
+} from './lead-recovery-mode';
 describe('lead recovery mode', () => {
   it.each([undefined, '', 'normal'])(
     'retains ordinary recovery for %s',
@@ -29,5 +33,22 @@ describe('lead recovery mode', () => {
             : undefined,
     };
     expect(isLeadManualRecovery(railway as never)).toBe(false);
+  });
+  it('limits automatic recovery to explicitly configured source ids', () => {
+    const config = {
+      get: (key: string) =>
+        key === 'INTERNAL_LEAD_DISCOVERY_SOURCE_ALLOWLIST'
+          ? 'source-a,source-b'
+          : undefined,
+    };
+    expect(leadRecoverySources(config as never)).toEqual([
+      'source-a',
+      'source-b',
+    ]);
+    expect(leadRecoverySourceAllowed(config as never, 'source-a')).toBe(true);
+    expect(leadRecoverySourceAllowed(config as never, 'source-c')).toBe(false);
+    expect(() => leadRecoverySources({ get: () => '' } as never)).toThrow(
+      'LEAD_SOURCE_ALLOWLIST_INVALID',
+    );
   });
 });

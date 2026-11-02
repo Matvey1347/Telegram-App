@@ -298,6 +298,35 @@ const url = process.env.LEAD_ACCEPTANCE_TEST_DATABASE_URL;
             where: { id: 'queue-ai-unknown' },
           }),
         ).toEqual(beforeRunning);
+        const scope = {
+          get: (key: string) =>
+            key === 'INTERNAL_LEAD_DISCOVERY_ENABLED'
+              ? 'true'
+              : key === 'INTERNAL_LEAD_DISCOVERY_SOURCE_ALLOWLIST'
+                ? 'acceptance-source'
+                : undefined,
+        };
+        const scoped = new TelegramLeadAnalysisExecutor(
+          db,
+          {} as never,
+          scope as never,
+        );
+        const drain = jest.fn().mockResolvedValue(false);
+        Object.defineProperty(scoped, 'runSource', { value: drain });
+        await scoped.onApplicationBootstrap();
+        await new Promise<void>((resolve) => setImmediate(resolve));
+        expect(drain).toHaveBeenCalledTimes(1);
+        expect(drain).toHaveBeenCalledWith({
+          workspaceId,
+          sourceId: 'acceptance-source',
+          userId: actor,
+        });
+        expect(
+          await prisma.telegramLeadAnalysisQueue.findUniqueOrThrow({
+            where: { id: 'queue-other-work' },
+          }),
+        ).toEqual(beforeOther);
+        scoped.onApplicationShutdown();
         executor.onApplicationShutdown();
       } finally {
         await prisma.$disconnect();

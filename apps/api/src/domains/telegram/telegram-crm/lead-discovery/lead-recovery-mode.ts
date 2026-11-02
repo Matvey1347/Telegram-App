@@ -18,3 +18,26 @@ export function isLeadManualRecovery(config: ConfigService): boolean {
   }
   return false;
 }
+
+/** Optional deployment-scoped restriction; absent means the existing behaviour. */
+export function leadRecoverySources(
+  config: ConfigService,
+): string[] | undefined {
+  const value = config.get<string>('INTERNAL_LEAD_DISCOVERY_SOURCE_ALLOWLIST');
+  if (value === undefined) return undefined;
+  const ids = value.split(',').map((id) => id.trim());
+  if (
+    !ids.length ||
+    ids.length > 30 ||
+    ids.some((id) => !/^[a-z0-9_-]{1,100}$/i.test(id))
+  )
+    throw new Error('LEAD_SOURCE_ALLOWLIST_INVALID');
+  return [...new Set(ids)];
+}
+
+export function leadRecoverySourceAllowed(
+  config: ConfigService,
+  sourceId: string,
+): boolean {
+  return leadRecoverySources(config)?.includes(sourceId) ?? true;
+}

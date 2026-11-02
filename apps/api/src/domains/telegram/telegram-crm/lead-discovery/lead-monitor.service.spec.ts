@@ -102,6 +102,23 @@ const newPost = (events: TelegramLeadTransportEvents, id: number) =>
     },
   });
 describe('event-only bounded Discovery monitoring', () => {
+  it('restricts the monitored registry to configured source ids', async () => {
+    const h = setup();
+    h.config.get.mockImplementation((key: string) =>
+      key === 'INTERNAL_LEAD_DISCOVERY_ENABLED'
+        ? 'true'
+        : key === 'INTERNAL_LEAD_DISCOVERY_SOURCE_ALLOWLIST'
+          ? 'source-1'
+          : undefined,
+    );
+    await h.service.onApplicationBootstrap();
+    expect(h.prisma.telegramLeadSource.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: { in: ['source-1'] } }),
+      }),
+    );
+    h.service.onApplicationShutdown();
+  });
   it('does not subscribe or reload sources during manual acceptance', async () => {
     const h = setup();
     h.config.get.mockImplementation((key: string) =>
