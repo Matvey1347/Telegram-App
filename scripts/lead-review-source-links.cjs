@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /** Enrich the offline review sample using stored workspace-scoped message URLs only. */
 const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto'),{execFileSync}=require('node:child_process');
-const root=path.resolve('research/telegram-ad-filter'),workspace='cmptsyujx0001flritxdrq84b';
+const root=path.resolve('research/telegram-ad-filter'),workspace=process.env.LEAD_REVIEW_WORKSPACE_ID;
 const {sourceInputs}=require(path.join(root,'export-original.cjs'));
 const {Client}=require(require.resolve('pg',{paths:[path.resolve('apps/api')]}));
 require(require.resolve('dotenv',{paths:[path.resolve('apps/api')]})).config({path:'.env',quiet:true});
@@ -16,6 +16,7 @@ function validUrl(raw,source,messageId){
 }
 const cell=value=>{let s=String(value??'');if(/^[\s\u0000-\u001f]*[=+@\-]/u.test(s))s="'"+s;return `"${s.replace(/"/g,'""')}"`};
 async function main(){
+ if(!workspace)throw Error('LEAD_REVIEW_WORKSPACE_ID is required');
  const v2=path.join(root,'review-sample-v2'),out=path.join(root,'review-sample-v3');
  const groups=['dev','holdout'].map(name=>({name,rows:fs.readFileSync(path.join(v2,`review-${name}.jsonl`),'utf8').split(/\r?\n/u).filter(Boolean).map(JSON.parse)}));
  fs.mkdirSync(out,{recursive:true,mode:0o700});const actual=fs.realpathSync(out),rel=path.relative(fs.realpathSync(root),actual);if(!rel||rel.startsWith('..')||rel.startsWith('/'))throw Error('Invalid output directory');
