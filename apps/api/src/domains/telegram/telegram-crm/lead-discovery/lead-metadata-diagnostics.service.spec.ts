@@ -5,7 +5,10 @@ function fixture() {
   const source = leadSource();
   const policy = {
     prisma: {
-      telegramLeadObservation: { findFirst: jest.fn() },
+      telegramLeadObservation: {
+        findFirst: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([]),
+      },
       telegramLeadHistoryJob: {
         findUnique: jest.fn().mockResolvedValue({
           cutoffAt: new Date('2026-08-01T00:00:00Z'),
@@ -171,6 +174,12 @@ describe('metadata diagnostics', () => {
       mediaTypes: { PHOTO: 1 },
       hasMore: true,
       nextBeforeId: 123,
+      historyCoverage: {
+        eligible: 0,
+        matched: 0,
+        filtered: 0,
+        reachedCutoff: false,
+      },
     });
     expect(JSON.stringify(result)).not.toContain('private content');
     expect(h.history).toHaveBeenCalledWith(
@@ -182,6 +191,47 @@ describe('metadata diagnostics', () => {
       'ingest',
       false,
     );
+  });
+  it('compares eligible in-window message identities without exposing contents or writes', async () => {
+    const h = fixture();
+    h.history.mockResolvedValueOnce({
+      items: [
+        {
+          messageId: 17,
+          publishedAt: new Date('2026-08-02T00:00:00Z'),
+          text: 'private',
+          metadata: { complete: true, incompleteReasons: [], mediaType: null },
+        },
+        {
+          messageId: 18,
+          publishedAt: new Date('2026-08-02T00:00:00Z'),
+          text: 'missing',
+          metadata: { complete: true, incompleteReasons: [], mediaType: null },
+        },
+        {
+          messageId: 19,
+          publishedAt: new Date('2026-07-31T00:00:00Z'),
+          text: 'old',
+          metadata: { complete: true, incompleteReasons: [], mediaType: null },
+        },
+      ] as never,
+      hasMore: false,
+      nextBeforeId: null as never,
+    });
+    h.policy.prisma.telegramLeadObservation.findMany.mockResolvedValueOnce([
+      { externalMessageId: '17' },
+    ]);
+    const result = await h.service.sample('manager', 'source');
+    expect(result.historyCoverage).toEqual({
+      eligible: 2,
+      matched: 1,
+      filtered: 0,
+      reachedCutoff: true,
+    });
+    expect(JSON.stringify(result)).not.toContain('private');
+    expect(
+      h.policy.prisma.telegramLeadObservation.findMany,
+    ).toHaveBeenCalledTimes(1);
   });
   it('rejects changed bindings after the Telegram read', async () => {
     const h = fixture();

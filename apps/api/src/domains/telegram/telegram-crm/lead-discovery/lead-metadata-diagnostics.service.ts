@@ -156,6 +156,33 @@ export class TelegramLeadMetadataDiagnostics {
     this.policy.assertProcessing(current, 'ingest', false);
     if (!leadTransportMatches(current, leadTransportSnapshot(source)))
       throw new ConflictException('LEAD_HISTORY_SOURCE_CHANGED');
+    const job = await this.policy.prisma.telegramLeadHistoryJob.findUnique({
+      where: {
+        sourceId_workspaceId: { sourceId, workspaceId: source.workspaceId },
+      },
+      select: { cutoffAt: true },
+    });
+    const inWindow = job
+      ? page.items.filter((post) => post.publishedAt >= job.cutoffAt)
+      : [];
+    const eligible = inWindow.filter(
+      (post) =>
+        /[\p{L}\p{N}]/u.test(post.text) || post.metadata?.hasMedia === true,
+    );
+    const stored = eligible.length
+      ? await this.policy.prisma.telegramLeadObservation.findMany({
+          where: {
+            workspaceId: source.workspaceId,
+            sourceId,
+            originalStatus: 'OBSERVED',
+            externalMessageId: {
+              in: eligible.map((post) => String(post.messageId)),
+            },
+          },
+          select: { externalMessageId: true },
+        })
+      : [];
+    const storedIds = new Set(stored.map((row) => row.externalMessageId));
     const reasons: Record<string, number> = {};
     const entityTypes: Record<string, number> = {};
     const mediaTypes: Record<string, number> = {};
@@ -182,6 +209,18 @@ export class TelegramLeadMetadataDiagnostics {
       mediaTypes,
       hasMore: page.hasMore,
       nextBeforeId: page.nextBeforeId,
+      historyCoverage: job
+        ? {
+            eligible: eligible.length,
+            matched: eligible.filter((post) =>
+              storedIds.has(String(post.messageId)),
+            ).length,
+            filtered: inWindow.length - eligible.length,
+            reachedCutoff: page.items.some(
+              (post) => post.publishedAt < job.cutoffAt,
+            ),
+          }
+        : null,
     };
   }
 }
