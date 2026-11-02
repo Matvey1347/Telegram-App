@@ -38,6 +38,7 @@ export function LeadSourceCard({ source, canManage, enabled }: { source: LeadSou
   const parts = source.title.split(" · ");
   const channelName = parts.length > 1 ? parts[parts.length - 1] : source.title;
   const topic = parts.length > 1 ? parts.slice(0, -1).join(" · ") : "—";
+  const topicParts = topic.split(" · ");
   const TopicIcon = /псих|psych/i.test(topic) ? Brain : /(?:^|\s)(?:ии|ai|ші)(?:\s|$)/i.test(topic) ? Sparkles : Tag;
   const avatar = source.username && /^[a-z][a-z0-9_]{3,31}$/i.test(source.username)
     ? { type: "image" as const, id: source.username, url: `https://t.me/i/userpic/320/${source.username}.jpg` }
@@ -58,7 +59,7 @@ export function LeadSourceCard({ source, canManage, enabled }: { source: LeadSou
   const url = leadSafeUrl(source.url);
   return <Fragment><tr className="border-b border-neutral-800/80 last:border-0 hover:bg-neutral-900/60">
     <td className="px-4 py-3"><div className="flex min-w-0 items-center gap-3"><IconAvatar icon={avatar} label={channelName} size="sm" className="!rounded-full" decorative /><div className="min-w-0"><h3 className="max-w-72 truncate text-sm font-medium" title={channelName}>{url ? <a href={url} target="_blank" rel="noreferrer" className="hover:text-blue-300">{channelName}</a> : channelName}</h3>{source.username ? <span className="text-xs text-neutral-500">@{source.username}</span> : null}</div></div></td>
-    <td className="px-4 py-3 text-sm"><span className="inline-flex items-center gap-1.5 rounded-md bg-blue-950/60 px-2 py-1 text-blue-300"><TopicIcon size={14} aria-hidden="true" />{topic}</span></td>
+    <td className="px-4 py-3 text-sm"><span className="inline-flex items-center gap-1.5 rounded-md bg-blue-950/60 px-2 py-1 text-blue-300"><TopicIcon size={14} aria-hidden="true" /><span>{topicParts[0]}{topicParts.length > 1 ? <span className="ml-1 text-xs text-blue-300/75">· {topicParts.slice(1).join(" · ")}</span> : null}</span></span></td>
     <td className="px-4 py-3"><span className="inline-flex items-center gap-2 text-sm text-neutral-200" title={ru ? "Публикации" : "Posts"}><FileText size={16} className="text-neutral-500" />{source.metrics.observedPosts}</span></td>
     <td className="px-4 py-3"><span className="inline-flex items-center gap-2 text-sm text-neutral-200" title={ru ? "Рекламные публикации" : "Advertisements"}><Megaphone size={16} className="text-amber-400" />{source.metrics.advertisements}</span></td>
     <td className="px-4 py-3"><span className="inline-flex items-center gap-2 text-sm text-neutral-200" title={ru ? "Кандидаты" : "Candidates"}><Users size={16} className="text-blue-400" />{source.metrics.uniqueCandidates}</span></td>

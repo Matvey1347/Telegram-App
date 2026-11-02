@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
 import { leadDiscoveryApi } from "@/lib/features/growth/lead-discovery-api";
@@ -8,7 +8,7 @@ import { leadConfig, sourceFixture } from "./lead-fixtures.test-support";
 describe("source table", () => {
   it("shows compact source details and filters all fetched pages by monitoring state", async () => {
     const active = { ...sourceFixture(1), username: "example_channel", title: "Тема · Канал", metrics: { ...sourceFixture().metrics, observedPosts: 12, uniqueCandidates: 3 } };
-    const paused = { ...sourceFixture(2), username: "../invalid", monitoringState: "PAUSED" as const };
+    const paused = { ...sourceFixture(2), username: "../invalid", monitoringState: "PAUSED" as const, metrics: { ...sourceFixture().metrics, observedPosts: 25, advertisements: 4, uniqueCandidates: 1 } };
     const query = vi.spyOn(leadDiscoveryApi, "sources").mockImplementation(async ({ cursor }) => cursor ? {items: [paused], hasMore: false, nextCursor: null} : {items: [active], hasMore: true, nextCursor: "next"});
     const client = new QueryClient({ defaultOptions: { queries: {retry:false} } });
     render(<QueryClientProvider client={client}><LeadSources workspace="workspace-one" config={leadConfig} /></QueryClientProvider>);
@@ -19,10 +19,35 @@ describe("source table", () => {
     expect(document.querySelector('img[src="https://t.me/i/userpic/320/example_channel.jpg"]')).toBeTruthy();
     expect(document.querySelectorAll('img[src*="invalid"]')).toHaveLength(0);
     expect(query).toHaveBeenCalledTimes(2);
+    const rows = () => screen.getAllByRole("row").slice(1);
+    fireEvent.click(screen.getByRole("button", { name: "Публикации" }));
+    expect(within(rows()[0]).getByRole("heading", { name: "Evidence source 2" })).toBeTruthy();
+    expect(screen.getByRole("columnheader", {name: "Публикации"}).getAttribute("aria-sort")).toBe("descending");
+    fireEvent.click(screen.getByRole("button", { name: "Публикации" }));
+    expect(within(rows()[0]).getByRole("heading", { name: "Канал" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Реклама" }));
+    expect(within(rows()[0]).getByRole("heading", { name: "Evidence source 2" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Кандидаты" }));
+    expect(within(rows()[0]).getByRole("heading", { name: "Канал" })).toBeTruthy();
     fireEvent.click(screen.getByLabelText("Статус источника"));
     fireEvent.click(screen.getByRole("button", {name:/Неактивные/}));
     await waitFor(() => expect(screen.queryByRole("heading", {name:"Канал"})).toBeNull());
     expect(screen.getByRole("heading", {name:"Evidence source 2"})).toBeTruthy();
+    query.mockRestore();
+  });
+  it("refreshes connected sources across pages and reports failures and skipped sources", async () => {
+    const first = sourceFixture(1);
+    const second = sourceFixture(2);
+    const disabled = { ...sourceFixture(3), monitoringState: "DISABLED" as const };
+    const query = vi.spyOn(leadDiscoveryApi, "sources").mockImplementation(async ({ cursor }) => cursor ? { items: [second, disabled], hasMore: false, nextCursor: null } : { items: [first], hasMore: true, nextCursor: "next" });
+    const scan = vi.spyOn(leadDiscoveryApi, "scan").mockResolvedValueOnce({ received: 1, changed: 1, unchanged: 0, filtered: 0, gap: false, hasMore: false, nextBeforeId: null }).mockRejectedValueOnce(new Error("access denied"));
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(<QueryClientProvider client={client}><LeadSources workspace="workspace-one" config={leadConfig} /></QueryClientProvider>);
+    await screen.findByRole("heading", { name: first.title });
+    fireEvent.click(screen.getByRole("button", { name: "Обновить все каналы" }));
+    expect(await screen.findByRole("status")).toHaveTextContent("Обновлено: 1 · Ошибок: 1 · Пропущено: 1");
+    expect(scan.mock.calls.map(([id]) => id)).toEqual([first.id, second.id]);
+    scan.mockRestore();
     query.mockRestore();
   });
 });
