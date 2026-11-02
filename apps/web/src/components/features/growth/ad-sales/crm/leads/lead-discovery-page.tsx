@@ -15,7 +15,6 @@ import {
 } from "@/lib/features/growth/lead-discovery-query";
 import { CrmNavigation } from "../crm-navigation";
 import { LeadSources } from "./lead-sources";
-import { LeadFeed } from "./lead-feed";
 import { LeadCandidates } from "./lead-candidates";
 import { LeadQueryState } from "./lead-query-state";
 import { LeadSourceForm } from "./lead-source-form";
@@ -23,7 +22,6 @@ import { Button } from "@/components/ui/primitives";
 export function LeadDiscoveryPage() {
   const t = useLeadText();
   const ru = useOptionalI18n()?.locale === "ru";
-  const [feedOpen, setFeedOpen] = useState(false);
   const [tab, setTab] = useState<"sources" | "candidates">("sources");
   const [addSource, setAddSource] = useState(false);
   const me = useQuery({
@@ -70,10 +68,6 @@ export function LeadDiscoveryPage() {
                 {addSource ? <LeadSourceForm workspace={workspace} onClose={() => setAddSource(false)} /> : null}
                 {tab === "sources" ? <LeadSources key={workspace} workspace={workspace} config={config.data} /> : <>
                   <LeadCandidates key={workspace} workspace={workspace} canReview={config.data.canReview}/>
-                  <details className="rounded-xl border border-neutral-800 px-3 py-2" onToggle={(event) => setFeedOpen(event.currentTarget.open)}>
-                    <summary className="cursor-pointer text-sm text-neutral-300">{t("Advertisement feed")}</summary>
-                    {feedOpen ? <div className="mt-3"><LeadFeed key={workspace} workspace={workspace} config={config.data}/></div> : null}
-                  </details>
                 </>}
               </>
             ) : null}

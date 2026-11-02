@@ -67,22 +67,24 @@ export function LeadCandidateContent({
   candidate: c,
   canReview,
   onReload,
+  simplified = false,
 }: {
   candidate: LeadCandidateView;
   canReview: boolean;
   onReload: () => void;
+  simplified?: boolean;
 }) {
   const t = useLeadText();
   const workspace = c.workspaceId;
   return (
-    <div className="grid min-w-0 gap-4 xl:grid-cols-2">
+    <div className={simplified ? "min-w-0" : "grid min-w-0 gap-4 xl:grid-cols-2"}>
       <div className="min-w-0 space-y-4">
         {" "}
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-sm">
+          {!simplified ? <p className="text-sm">
             {c.niche || "Unknown niche"} · {c.offerType || "Unknown offer"} ·{" "}
             {c.reviewStatus} · {c.riskStatus}
-          </p>
+          </p> : null}
           <Button
             className="max-w-full !whitespace-normal"
             variant="secondary"
@@ -91,10 +93,10 @@ export function LeadCandidateContent({
             {t("Reload details")}
           </Button>
         </div>
-        <p className="text-xs text-neutral-400">
+        {!simplified ? <p className="text-xs text-neutral-400">
           Retained until {displayLeadDate(c.expiresAt)} · Revision {c.revision}
-        </p>
-        {c.risks.length ? (
+        </p> : null}
+        {!simplified && c.risks.length ? (
           <ul className="list-inside list-disc text-sm text-amber-200">
             {c.risks.map((v, i) => (
               <li key={i}>{v}</li>
@@ -122,7 +124,7 @@ export function LeadCandidateContent({
         </section>
         <section className="space-y-3">
           <h3 className="font-semibold">{t("Public business contacts")}</h3>
-          <p className="text-sm text-blue-200">{contactCategoryLabel[candidateContactCategory(c)]} · {candidateContactCategory(c)}</p>
+          {!simplified ? <p className="text-sm text-blue-200">{contactCategoryLabel[candidateContactCategory(c)]} · {candidateContactCategory(c)}</p> : null}
           {c.contacts.length ? (
             c.contacts.map((v, i) => (
               <div className="break-words text-sm" key={i}>
@@ -171,7 +173,7 @@ export function LeadCandidateContent({
             </p>
           ) : null}
         </section>
-        <section className="space-y-2">
+        {!simplified ? <section className="space-y-2">
           <h3 className="font-semibold">{t("Review history")}</h3>
           {c.reviewHistory.length ? (
             c.reviewHistory.map((v, i) => (
@@ -184,9 +186,9 @@ export function LeadCandidateContent({
               {t("No review action yet.")}
             </p>
           )}
-        </section>
+        </section> : null}
       </div>
-      <LeadPreparation key={`${c.id}:${c.revision}`} candidate={c} />
+      {!simplified ? <LeadPreparation key={`${c.id}:${c.revision}`} candidate={c} /> : null}
     </div>
   );
 }

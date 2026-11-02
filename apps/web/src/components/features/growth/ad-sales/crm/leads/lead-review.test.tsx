@@ -87,7 +87,7 @@ describe("candidate human review and CRM boundaries", () => {
       expect.any(AbortSignal),
     );
     expect(screen.getByText("All linked sources")).toBeTruthy();
-    expect(screen.getByText("Review history")).toBeTruthy();
+    expect(screen.getByText("Advertisement evidence")).toBeTruthy();
   });
   it("keeps read-only review controls hidden while preserving evidence", async () => {
     mount(
@@ -264,34 +264,12 @@ describe("candidate human review and CRM boundaries", () => {
       ),
     );
   });
-  it("limits bulk review to twenty explicit candidates", async () => {
-    vi.mocked(leadPreparationApi.queue).mockResolvedValue({
-      items: Array.from({ length: 21 }, (_, i) => candidateFixture(i + 1)),
-      hasMore: false,
-      nextCursor: null,
-    });
+  it("shows a compact list without bulk selection", async () => {
     mount(<LeadCandidates workspace="workspace-one" canReview />);
-    await screen.findByRole("button", { name: "Advertiser project 21" });
-    for (let n = 1; n <= 21; n++)
-      fireEvent.click(
-        screen.getByRole("checkbox", {
-          name: `Select candidate Advertiser project ${n}`,
-        }),
-      );
-    expect(screen.getByRole("alert")).toHaveTextContent("no more than 20");
-    fireEvent.click(
-      screen.getByRole("button", { name: "Approve selected (20/20)" }),
-    );
-    expect(leadDiscoveryApi.reviewCandidates).not.toHaveBeenCalled();
-    fireEvent.click(
-      screen.getByRole("button", { name: "Confirm selected review" }),
-    );
-    await waitFor(() =>
-      expect(leadDiscoveryApi.reviewCandidates).toHaveBeenCalledWith(
-        Array.from({ length: 20 }, (_, i) => `candidate-${i + 1}`),
-        "APPROVE",
-      ),
-    );
+    await screen.findByRole("button", { name: "Advertiser project 1" });
+    expect(screen.queryByRole("checkbox", { name: /Select candidate/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Approve selected/ })).toBeNull();
+    expect(screen.getByText(/Evidence source 1/)).toBeTruthy();
   });
   it("keeps a recoverable stale-revision failure instead of pretending approval succeeded", async () => {
     vi.mocked(leadDiscoveryApi.reviewCandidate).mockRejectedValue(
@@ -330,19 +308,12 @@ describe("lead discovery contact workflow", () => {
     expect(screen.getAllByRole("link", { name: "Открыть публичную ссылку" }).some((link) => link.getAttribute("href") === "https://t.me/ads_contact")).toBe(true);
     expect(screen.getAllByText("Открыть источник контакта")).toHaveLength(2);
   });
-  it("requests server-side contact category filtering without fetching details", async () => {
-    const business = candidateFixture(1);
-    business.contacts[0].purpose = "CONTACT_FOR_ADS";
-    const point = candidateFixture(2);
-    point.contacts = [{ type: "TELEGRAM", value: "@sample_bot", role: "ADVERTISED_DESTINATION", evidence: "button" }];
-    vi.spyOn(leadPreparationApi, "queue").mockImplementation(async (params) => ({ items: params.contactCategory ? [point] : [business, point], hasMore: false, nextCursor: null, total: params.contactCategory ? 1 : 2 }));
+  it("searches candidates on the server without fetching details", async () => {
     mount(<LeadCandidates workspace="workspace-one" canReview />);
-    await screen.findByRole("button", { name: business.title });
-    fireEvent.click(screen.getByLabelText("Категория контакта"));
-    fireEvent.click(screen.getByRole("option", { name: "Только ссылка на проект" }));
-    await waitFor(() => expect(screen.queryByRole("button", { name: business.title })).toBeNull());
-    expect(leadPreparationApi.queue).toHaveBeenCalledWith(expect.objectContaining({ contactCategory: "CONTACT_POINT_ONLY" }), expect.any(AbortSignal));
-    expect(await screen.findByRole("button", { name: point.title })).toBeTruthy();
+    await screen.findByRole("button", { name: "Advertiser project 1" });
+    fireEvent.change(screen.getByLabelText("Search candidates"), { target: { value: "project" } });
+    fireEvent.submit(screen.getByLabelText("Search candidates").closest("form")!);
+    await waitFor(() => expect(leadPreparationApi.queue).toHaveBeenCalledWith(expect.objectContaining({ search: "project" }), expect.any(AbortSignal)));
     expect(leadDiscoveryApi.candidate).not.toHaveBeenCalled();
   });
 });

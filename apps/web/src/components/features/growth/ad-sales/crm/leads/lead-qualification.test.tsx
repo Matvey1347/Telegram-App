@@ -77,21 +77,19 @@ describe("candidate qualification and approved preparation", () => {
     fireEvent.click(
       await screen.findByRole("button", { name: "Advertiser project 1" }),
     );
-    await screen.findByRole("heading", {
-      name: "Qualification and first offer",
-    });
-    expect(leadPreparationApi.get).toHaveBeenCalledTimes(1);
+    await screen.findByRole("heading", { name: "Advertiser project 1" });
+    expect(leadPreparationApi.get).not.toHaveBeenCalled();
     expect(leadPreparationApi.qualify).not.toHaveBeenCalled();
     expect(leadPreparationApi.generate).not.toHaveBeenCalled();
     expect(leadPreparationApi.products).not.toHaveBeenCalled();
   });
   it("requests a workflow filter on the server before pagination", async () => {
     mount(<LeadCandidates workspace="workspace-one" canReview />);
-    fireEvent.click(screen.getByText("Lead workflow filters"));
-    fireEvent.click(screen.getByRole("button", { name: "HIGH_PRIORITY" }));
+    fireEvent.click(screen.getByLabelText("Workflow"));
+    fireEvent.click(screen.getByRole("option", { name: "NEW" }));
     await waitFor(() =>
       expect(leadPreparationApi.queue).toHaveBeenLastCalledWith(
-        { limit: 50, workflow: "HIGH_PRIORITY", cursor: undefined },
+        { limit: 50, workflow: "NEW", cursor: undefined },
         expect.any(AbortSignal),
       ),
     );
