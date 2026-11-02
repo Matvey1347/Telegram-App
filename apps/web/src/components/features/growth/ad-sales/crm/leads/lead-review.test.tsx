@@ -315,3 +315,33 @@ describe("candidate human review and CRM boundaries", () => {
     ).toBeDisabled();
   });
 });
+
+describe("lead discovery contact workflow", () => {
+  it("shows an unconfirmed public advertising contact and its evidence without claiming ownership", async () => {
+    const candidate = candidateFixture();
+    candidate.contacts = [
+      { type: "TELEGRAM", value: "@public_channel", role: "ADVERTISED_DESTINATION", evidence: "button", evidenceUrl: "https://t.me/source_1/1" },
+      { type: "TELEGRAM", value: "@ads_contact", role: "SALES_CONTACT", purpose: "CONTACT_FOR_ADS", evidence: "public profile", evidenceUrl: "https://t.me/public_channel", evidenceSource: "PUBLIC_PROFILE", confirmed: false },
+    ];
+    vi.spyOn(leadDiscoveryApi, "candidate").mockResolvedValue(candidate);
+    mount(<LeadCandidateDetails workspace="workspace-one" id={candidate.id} canReview onClose={() => {}} />);
+    expect(await screen.findByText(/Контакт для рекламы · @ads_contact · Требует ручной проверки/)).toBeTruthy();
+    expect(screen.getByText(/Ссылка на проект, не бизнес-контакт/)).toBeTruthy();
+    expect(screen.getAllByRole("link", { name: "Открыть публичную ссылку" }).some((link) => link.getAttribute("href") === "https://t.me/ads_contact")).toBe(true);
+    expect(screen.getAllByText("Открыть источник контакта")).toHaveLength(2);
+  });
+  it("filters loaded candidates by contact category without fetching details", async () => {
+    const business = candidateFixture(1);
+    business.contacts[0].purpose = "CONTACT_FOR_ADS";
+    const point = candidateFixture(2);
+    point.contacts = [{ type: "TELEGRAM", value: "@sample_bot", role: "ADVERTISED_DESTINATION", evidence: "button" }];
+    vi.spyOn(leadPreparationApi, "queue").mockResolvedValue({ items: [business, point], hasMore: false, nextCursor: null });
+    mount(<LeadCandidates workspace="workspace-one" canReview />);
+    await screen.findByRole("button", { name: business.title });
+    fireEvent.click(screen.getByLabelText("Категория контакта (среди загруженных)"));
+    fireEvent.click(screen.getByRole("option", { name: "Только ссылка на проект" }));
+    expect(screen.queryByRole("button", { name: business.title })).toBeNull();
+    expect(screen.getByRole("button", { name: point.title })).toBeTruthy();
+    expect(leadDiscoveryApi.candidate).not.toHaveBeenCalled();
+  });
+});

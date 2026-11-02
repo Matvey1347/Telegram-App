@@ -20,7 +20,6 @@ import { LeadQueryState } from "./lead-query-state";
 export function LeadDiscoveryPage() {
   const t = useLeadText();
   const [feedOpen, setFeedOpen] = useState(false);
-  const [reviewOpen, setReviewOpen] = useState(false);
   const me = useQuery({
     queryKey: authKeys.me(),
     queryFn: authApi.me,
@@ -66,10 +65,10 @@ export function LeadDiscoveryPage() {
                   <summary className="cursor-pointer text-sm text-neutral-300">Публикации и анализ рекламы</summary>
                   {feedOpen ? <div className="mt-3"><LeadFeed key={workspace} workspace={workspace} config={config.data}/></div> : null}
                 </details>
-                <details className="rounded-xl border border-neutral-800 px-3 py-2" onToggle={(event) => setReviewOpen(event.currentTarget.open)}>
-                  <summary className="cursor-pointer text-sm text-neutral-300">Кандидаты для проверки</summary>
-                  {reviewOpen ? <div className="mt-3"><LeadCandidates key={workspace} workspace={workspace} canReview={config.data.canReview}/></div> : null}
-                </details>
+                <section className="rounded-xl border border-neutral-800 p-3" aria-label="Кандидаты для проверки">
+                  <h2 className="mb-3 font-semibold">Кандидаты для проверки</h2>
+                  <LeadCandidates key={workspace} workspace={workspace} canReview={config.data.canReview}/>
+                </section>
               </>
             ) : null}
           </>

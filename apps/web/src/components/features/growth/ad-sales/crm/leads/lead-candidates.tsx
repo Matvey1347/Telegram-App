@@ -22,6 +22,7 @@ import {
   leadQueryPolicy,
   patchLeadEntity,
 } from "@/lib/features/growth/lead-discovery-query";
+import { candidateContactCategory, contactCategoryLabel, contactDescription, isBusinessContact } from "./lead-candidate-presentation";
 import { LeadCandidateContent } from "./lead-candidate-details";
 import { LeadQueryState } from "./lead-query-state";
 import { useQualificationText } from "./qualification-copy";
@@ -51,6 +52,7 @@ export function LeadCandidates({
   const [filter, setFilter] = useState<LeadPreparationQueueInput>({
     limit: 50,
   });
+  const [category, setCategory] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
   const [limitError, setLimitError] = useState(false);
   const [details, setDetails] = useState<string | null>(null);
@@ -70,6 +72,7 @@ export function LeadCandidates({
     ...leadQueryPolicy,
   });
   const items = query.data?.pages.flatMap((p) => p.items) ?? [];
+  const visibleItems = category ? items.filter((item) => candidateContactCategory(item) === category) : items;
   const detail = useQuery({
     queryKey: leadKeys.candidate(workspace, details ?? ""),
     queryFn: ({ signal }) => leadDiscoveryApi.candidate(details!, signal),
@@ -185,6 +188,15 @@ export function LeadCandidates({
             </Button>
           </form>
         ) : null}
+        <FormField label="Категория контакта (среди загруженных)">
+          <Select aria-label="Категория контакта (среди загруженных)" value={category} onChange={(event) => setCategory(event.target.value)}>
+            <option value="">Все категории</option>
+            <option value="BUSINESS_CONTACT_FOUND">Бизнес-контакт найден</option>
+            <option value="CONTACT_POINT_ONLY">Только ссылка на проект</option>
+            <option value="CONTACT_NOT_FOUND">Контакт не найден</option>
+            <option value="TARGET_UNRESOLVED">Проект не установлен</option>
+          </Select>
+        </FormField>
         {canReview && !compact ? (
           <div className="flex flex-wrap gap-2">
             <Button
@@ -227,7 +239,8 @@ export function LeadCandidates({
             empty={query.isSuccess && !items.length}
             onRetry={() => void query.refetch()}
           />
-          {items.map((v) => (
+          {query.isSuccess && items.length > 0 && visibleItems.length === 0 ? <p className="text-sm text-neutral-400">Среди загруженных кандидатов нет совпадений. При наличии загрузите остальные.</p> : null}
+          {visibleItems.map((v) => (
             <Card
               key={v.id}
               className={
@@ -257,11 +270,11 @@ export function LeadCandidates({
                 {v.sources.map((s) => s.title).join(" · ") ||
                   t("Evidence not linked")}
               </p>
-              {v.contacts.find((c) => c.confirmed) ? (
-                <p className="mt-2 break-all text-xs">
-                  {v.contacts.find((c) => c.confirmed)?.value}
-                </p>
-              ) : null}
+              <p className="mt-2 text-xs text-blue-200">{contactCategoryLabel[candidateContactCategory(v)]} · {candidateContactCategory(v)}</p>
+              <p className="mt-1 break-words text-xs text-neutral-300">
+                {v.contacts.find(isBusinessContact) ? `${contactDescription(v.contacts.find(isBusinessContact)!)}: ${v.contacts.find(isBusinessContact)!.value} · требует проверки` : "Публичный бизнес-контакт не найден"}
+              </p>
+              <p className="mt-1 text-xs text-neutral-400">Проверка: {v.reviewStatus}</p>
               {v.preparation?.qualification?.score ? (
                 <dl className="mt-3 grid grid-cols-2 gap-2 text-xs">
                   <div>

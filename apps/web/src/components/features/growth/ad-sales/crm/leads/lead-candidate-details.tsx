@@ -12,8 +12,8 @@ import {
 import {
   displayLeadDate,
   leadSafeUrl,
-  leadBusinessContactUrl,
 } from "./lead-utils";
+import { candidateContactCategory, contactCategoryLabel, contactDescription, publicLeadUrl } from "./lead-candidate-presentation";
 import { LeadObservationCard } from "./lead-observation-card";
 import { LeadCandidateActions } from "./lead-candidate-actions";
 import { LeadQueryState } from "./lead-query-state";
@@ -122,22 +122,23 @@ export function LeadCandidateContent({
         </section>
         <section className="space-y-3">
           <h3 className="font-semibold">{t("Public business contacts")}</h3>
+          <p className="text-sm text-blue-200">{contactCategoryLabel[candidateContactCategory(c)]} · {candidateContactCategory(c)}</p>
           {c.contacts.length ? (
             c.contacts.map((v, i) => (
               <div className="break-words text-sm" key={i}>
                 <p>
-                  {v.type} · {v.value} · {v.role} ·{" "}
-                  {v.confirmed ? "Human confirmed" : "Unconfirmed"}
+                  {contactDescription(v)} · {v.value} · {v.confirmed ? "Подтверждено человеком" : "Требует ручной проверки"}
                 </p>
-                <p className="text-xs text-neutral-400">{v.evidence}</p>
-                {leadBusinessContactUrl(v) ? (
+                <p className="text-xs text-neutral-400">Основание: {v.evidence} {v.evidenceSource ? `· ${v.evidenceSource}` : ""}</p>
+                {leadSafeUrl(v.evidenceUrl ?? null) ? <a className="text-xs text-blue-300" href={leadSafeUrl(v.evidenceUrl ?? null)} target="_blank" rel="noreferrer">Открыть источник контакта</a> : null}
+                {publicLeadUrl(v) ? (
                   <a
                     className="inline-flex min-h-10 items-center text-blue-300"
-                    href={leadBusinessContactUrl(v)}
+                    href={publicLeadUrl(v)}
                     target="_blank"
                     rel="noreferrer"
                   >
-                    {t("Open business reference manually")}
+                    Открыть публичную ссылку
                   </a>
                 ) : null}
               </div>
