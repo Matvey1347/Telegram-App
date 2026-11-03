@@ -27,4 +27,4 @@ export type LeadQualificationDecisionInput = { revision: number; qualificationId
 export type LeadCandidateDraftPatch = { revision: number; action: 'SAVE' | 'APPROVE' | 'DISCARD'; text?: string };
 export const LEAD_CONTACT_CATEGORIES = ['BUSINESS_CONTACT_FOUND','CONTACT_POINT_ONLY','CONTACT_NOT_FOUND','TARGET_UNRESOLVED'] as const;
 export type LeadContactCategory = typeof LEAD_CONTACT_CATEGORIES[number];
-export type LeadPreparationQueueInput = { workflow?: LeadWorkflowState | 'HIGH_PRIORITY'; contactCategory?: LeadContactCategory; cursor?: string; limit?: number; search?: string };
+export type LeadPreparationQueueInput = { workflow?: LeadWorkflowState | 'HIGH_PRIORITY'; contactCategory?: LeadContactCategory; cursor?: string; limit?: number; page?: number; search?: string; sourceId?: string; sortDirection?: 'asc' | 'desc' };

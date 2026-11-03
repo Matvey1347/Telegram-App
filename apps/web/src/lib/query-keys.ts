@@ -22,6 +22,7 @@ export const currencyKeys = {
 
 export const accountKeys = {
   me: () => ["account-me"] as const,
+  shell: () => ["account-shell"] as const,
   accounts: () => ["accounts"] as const,
   transactions: () => ["transactions"] as const,
 };
@@ -58,6 +59,7 @@ export const telegramChannelKeys = {
   root: ["telegram-channels"] as const,
   // Purpose-built read models deliberately have separate key families.
   lists: () => ["telegram-channels", "list"] as const,
+  cardLists: () => ["telegram-channels", "lifecycle-list"] as const,
   list: (archived?: boolean, owned?: boolean) =>
     ["telegram-channels", "list", archived ?? "all", owned ?? "all"] as const,
   lifecycleList: (lifecycle: "active" | "test" | "archive", owned?: boolean) =>
@@ -219,6 +221,8 @@ export const telegramPublicationScheduleKeys = {
       channelId,
       range,
     ] as const,
+  occurrencesRoot: () =>
+    [...telegramPublicationScheduleKeys.all(), "occurrences"] as const,
   occurrencesByChannels: (
     channelIds: string[],
     range: { from: string; to: string },
@@ -229,13 +233,11 @@ export const telegramPublicationScheduleKeys = {
       [...channelIds].sort(),
       range,
     ] as const,
+  occurrencesByChannelsRoot: () =>
+    [...telegramPublicationScheduleKeys.all(), "occurrences-by-channels"] as const,
+  calendarRoot: () => [...telegramPublicationScheduleKeys.all(), "calendar"] as const,
   calendar: (scheduleId: string, range: { from: string; to: string }) =>
-    [
-      ...telegramPublicationScheduleKeys.all(),
-      "calendar",
-      scheduleId,
-      range,
-    ] as const,
+    [...telegramPublicationScheduleKeys.calendarRoot(), scheduleId, range] as const,
 };
 
 export const telegramContentHypothesisKeys = {
@@ -257,7 +259,6 @@ export const telegramAccountKeys = {
 export const adCampaignKeys = {
   root: ["ad-campaigns"] as const,
   list: () => ["ad-campaigns"] as const,
-  performance: () => ["ad-campaigns-performance"] as const,
   admissionViewAnalytics: (campaignId?: string) =>
     ["ad-campaign-admission-view-analytics", campaignId] as const,
   inviteLinkHistory: (campaignId?: string) =>
@@ -291,6 +292,7 @@ export const mutualPromotionFolderKeys = {
 
 export const networkKeys = {
   list: () => ["telegram-channel-networks"] as const,
+  options: () => ["telegram-channel-networks", "options"] as const,
   detail: (networkId: string) =>
     ["telegram-channel-network", networkId] as const,
 };
@@ -353,4 +355,8 @@ export const botBillingKeys = {
   providers: (botId: string) => ["bot-billing", botId, "providers"] as const,
   financeAi: (botId: string) => ["bot-billing", botId, "finance-ai"] as const,
   workspaceFinanceAi: () => ["bot-billing", "workspace", "finance-ai"] as const,
+};
+
+export const channelReminderKeys = {
+  settings: () => ["telegram-channel-reminders", "settings"] as const,
 };

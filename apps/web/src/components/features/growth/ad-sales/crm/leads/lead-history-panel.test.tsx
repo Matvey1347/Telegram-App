@@ -9,6 +9,10 @@ import { leadDiscoveryApi } from "@/lib/features/growth/lead-discovery-api";
 import { LeadSourceCard } from "./lead-source-card";
 import { sourceFixture } from "./lead-fixtures.test-support";
 
+vi.mock("@/providers/toast-provider", () => ({
+  useAppToast: () => ({ setProgress: vi.fn(), pushToast: vi.fn() }),
+}));
+
 const job = (status: LeadHistoryJob["status"]): LeadHistoryJob => ({
   sourceId: "source-1",
   status,

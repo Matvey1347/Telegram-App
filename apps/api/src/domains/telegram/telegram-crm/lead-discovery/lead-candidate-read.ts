@@ -19,7 +19,7 @@ async function sourceSummaries(
   prisma: PrismaService,
   workspaceId: string,
   rows: TelegramLeadCandidate[],
-): Promise<Array<{ id: string; title: string; url: string | null }>> {
+): Promise<Array<{ id: string; title: string; url: string | null; username: string | null }>> {
   const ids = [...new Set(rows.flatMap((row) => sourceIds(row)))].slice(
     0,
     1000,
@@ -32,6 +32,7 @@ async function sourceSummaries(
             id: true,
             title: true,
             url: true,
+            username: true,
             monitoringState: true,
             lastErrorCode: true,
           },

@@ -14,6 +14,7 @@ import { IconAvatar } from "@/components/icons/icon-avatar";
 import { Button, Modal } from "@/components/ui/primitives";
 import { telegramChannelsApi } from "@/lib/api";
 import { telegramPostKeys } from "@/lib/query-keys";
+import { invalidateManagedPostScheduleReads } from "./managed-post-cache";
 import { useAppToast } from "@/providers/toast-provider";
 import { useI18n } from "@/providers/i18n-provider";
 import { telegramManagedPostStatusKey } from "@/lib/features/telegram/telegram-posts-i18n";
@@ -212,9 +213,7 @@ export function ChannelReimportDeleteModal({
         queryClient.invalidateQueries({
           queryKey: telegramPostKeys.managedLists(channelId),
         }),
-        queryClient.invalidateQueries({
-          queryKey: telegramPostKeys.managedCalendar(channelId),
-        }),
+        invalidateManagedPostScheduleReads(queryClient, channelId),
         queryClient.invalidateQueries({
           queryKey: telegramPostKeys.postGroups(channelId),
         }),

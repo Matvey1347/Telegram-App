@@ -3,6 +3,7 @@ import { TelegramChannelsModule } from '../telegram-channels/telegram-channels.m
 import { TelegramChannelNetworksController } from './telegram-channel-networks.controller';
 import { TelegramChannelNetworksService } from './telegram-channel-networks.service';
 import { TelegramNetworkPerformanceHistoryService } from './telegram-network-performance-history.service';
+import { TelegramChannelNetworkOptionsService } from './telegram-channel-network-options.service';
 
 @Module({
   imports: [TelegramChannelsModule],
@@ -10,6 +11,7 @@ import { TelegramNetworkPerformanceHistoryService } from './telegram-network-per
   providers: [
     TelegramChannelNetworksService,
     TelegramNetworkPerformanceHistoryService,
+    TelegramChannelNetworkOptionsService,
   ],
 })
 export class TelegramChannelNetworksModule {}

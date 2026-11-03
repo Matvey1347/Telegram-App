@@ -7,6 +7,7 @@ import {
   Patch,
   Post,
   Query,
+  Res,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -14,6 +15,9 @@ import {
   type JwtUser,
 } from '../../../../common/current-user.decorator';
 import { JwtAuthGuard } from '../../../../common/jwt-auth.guard';
+import type { Response } from 'express';
+import { StreamResponseService } from '../../../../common/stream/stream-response.service';
+import { TelegramLeadRefreshService } from './lead-refresh.service';
 import { TelegramLeadPolicy } from './lead-policy.service';
 import { TelegramLeadSourceService } from './lead-source.service';
 import { TelegramLeadReadService } from './lead-read.service';
@@ -51,6 +55,8 @@ import {
 export class TelegramLeadDiscoveryController {
   constructor(
     private readonly policy: TelegramLeadPolicy,
+    private readonly refreshService: TelegramLeadRefreshService,
+    private readonly streamResponse: StreamResponseService,
     private readonly sources: TelegramLeadSourceService,
     private readonly read: TelegramLeadReadService,
     private readonly transport: TelegramLeadTransportService,
@@ -118,6 +124,29 @@ export class TelegramLeadDiscoveryController {
     @Param('id') id: string,
   ) {
     return this.transport.validate(user.sub, id);
+  }
+  @Post('sources/refresh-stream') async refreshStream(
+    @CurrentUser() user: JwtUser,
+    @Res() response: Response,
+  ) {
+    await this.policy.access(user.sub, 'manage');
+    return this.streamResponse.stream(response, {
+      eventPrefix: 'lead_discovery.refresh',
+      persistLifecycleLogs: false,
+      action: (progress, signal) => this.refreshService.run(user.sub, progress, signal),
+    });
+  }
+  @Post('sources/:id/refresh-stream') async refreshSourceStream(
+    @CurrentUser() user: JwtUser,
+    @Param('id') id: string,
+    @Res() response: Response,
+  ) {
+    await this.policy.source(user.sub, id, 'manage');
+    return this.streamResponse.stream(response, {
+      eventPrefix: 'lead_discovery.refresh_source',
+      persistLifecycleLogs: false,
+      action: (progress, signal) => this.refreshService.run(user.sub, progress, signal, id),
+    });
   }
   @Post('sources/:id/scan') scan(
     @CurrentUser() user: JwtUser,

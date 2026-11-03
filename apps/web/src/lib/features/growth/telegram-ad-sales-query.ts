@@ -10,8 +10,10 @@ import type { PaginatedResponse } from "../../api-types";
 import {
   accountKeys,
   dashboardKeys,
+  networkKeys,
   telegramChannelKeys,
   telegramPostKeys,
+  telegramPublicationScheduleKeys,
 } from "../../query-keys";
 import { telegramCrmKeys } from "./telegram-crm-query";
 
@@ -23,6 +25,14 @@ type AdSalesListParams = {
   search?: string;
   [key: string]: unknown;
 };
+
+export function shouldLoadAdSalesWorkspaceTimezone(
+  tab: string,
+  adSaleModalOpen: boolean,
+  saleSelected: boolean,
+) {
+  return tab === "calendar" || adSaleModalOpen || saleSelected;
+}
 
 export const telegramAdSalesKeys = {
   drafts: () => ["telegram-ad-sales", "drafts"] as const,
@@ -221,6 +231,7 @@ export type TelegramAdSalesDerivedEffects = {
   dashboard?: boolean;
   managedPosts?: boolean;
   channelSummaries?: boolean;
+  publicationCalendar?: boolean;
   crmContacts?: boolean;
   channelIds?: string[];
 };
@@ -265,16 +276,28 @@ export async function invalidateTelegramAdSalesDerivedQueries(
       ? [accountKeys.transactions(), accountKeys.accounts()]
       : []),
     ...(effects.managedPosts
-      ? channelIds.flatMap((channelId) => [
-          telegramPostKeys.managedCalendar(channelId),
-          telegramPostKeys.managedLists(channelId),
-        ])
+      ? [
+          ...channelIds.flatMap((channelId) => [
+            telegramPostKeys.managedCalendar(channelId),
+            telegramPostKeys.managedLists(channelId),
+          ]),
+          telegramPublicationScheduleKeys.occurrencesRoot(),
+          telegramPublicationScheduleKeys.occurrencesByChannelsRoot(),
+        ]
       : []),
     ...(effects.channelSummaries
-      ? channelIds.flatMap((channelId) => [
-          telegramChannelKeys.financialSummary(channelId),
-          telegramChannelKeys.analytics(channelId),
-        ])
+      ? [
+          telegramChannelKeys.lists(),
+          telegramChannelKeys.cardLists(),
+          networkKeys.list(),
+          ...channelIds.flatMap((channelId) => [
+            telegramChannelKeys.financialSummary(channelId),
+            telegramChannelKeys.analytics(channelId),
+          ]),
+        ]
+      : []),
+    ...(effects.publicationCalendar
+      ? [telegramPublicationScheduleKeys.calendarRoot()]
       : []),
     ...(effects.crmContacts ? [telegramCrmKeys.contactLists()] : []),
   ];

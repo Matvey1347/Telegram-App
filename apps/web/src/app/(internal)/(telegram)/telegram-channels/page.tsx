@@ -1,6 +1,7 @@
 "use client";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CircleHelp, ImagePlus, X } from "lucide-react";
@@ -16,20 +17,13 @@ import {
   syncSelectionFromChannel,
 } from "@/components/features/telegram/telegram/channel-sync-scope-modal";
 import { telegramChannelAccessLabel } from "@/components/features/telegram/telegram/channel-access-badge";
-import { MtprotoAccountsPanel } from "@/components/features/telegram/telegram/telegram-account-panels";
 import { TelegramEntityAvatar } from "@/components/features/telegram/telegram/telegram-entity-avatar";
-import { TelegramTextEditor } from "@/components/features/telegram/telegram/telegram-text-editor";
-import { TelegramChannelMessageTemplatesModal } from "@/components/features/telegram/telegram/telegram-channel-message-templates-modal";
 import { TelegramChannelsHeaderActions } from "@/components/features/telegram/telegram/telegram-channels-header-actions";
-import {
-  TelegramChannelExportModal,
-  type TelegramChannelExportSelection,
-} from "@/components/features/telegram/telegram/telegram-channel-export-modal";
+import type { TelegramChannelExportSelection } from "@/components/features/telegram/telegram/telegram-channel-export-modal";
 import {
   TelegramNetworkCards,
   TelegramPeopleCards,
 } from "@/components/features/telegram/telegram/telegram-overview-cards";
-import { IconPicker } from "@/components/icons/icon-picker";
 import { MoneyStack } from "@/components/ui/money-stack";
 import { MemberBadge } from "@/components/features/workspace/member-badge";
 import { MemberSelect } from "@/components/features/workspace/member-select";
@@ -106,6 +100,32 @@ import {
   downloadTelegramChannelExport,
   safeTelegramChannelExportName,
 } from "@/components/features/telegram/telegram/telegram-channel-export";
+
+const IconPicker = dynamic(
+  () => import("@/components/icons/icon-picker").then((module) => module.IconPicker),
+  { loading: () => null },
+);
+const MtprotoAccountsPanel = dynamic(
+  () =>
+    import("@/components/features/telegram/telegram/telegram-account-panels").then(
+      (module) => module.MtprotoAccountsPanel,
+    ),
+  { loading: () => null },
+);
+const TelegramChannelExportModal = dynamic(
+  () =>
+    import("@/components/features/telegram/telegram/telegram-channel-export-modal").then(
+      (module) => module.TelegramChannelExportModal,
+    ),
+  { loading: () => null },
+);
+const TelegramChannelMessageTemplatesModal = dynamic(
+  () =>
+    import("@/components/features/telegram/telegram/telegram-channel-message-templates-modal").then(
+      (module) => module.TelegramChannelMessageTemplatesModal,
+    ),
+  { loading: () => null },
+);
 
 const TELEGRAM_TAB_STORAGE_KEY = "telegram-channels:last-tab";
 function requestErrorMessage(error: unknown, fallback: string) {
@@ -1160,6 +1180,9 @@ export default function TelegramChannelsPage() {
     ],
     queryFn: () =>
       telegramChannelsApi.listWithCounts(lifecycleTab, channelFilter === "own"),
+    // Channel cards combine several analytical read models. Keep their result
+    // for a day and let domain mutations invalidate it when relevant data changes.
+    staleTime: 24 * 60 * 60_000,
     enabled:
       tab === "channels" ||
       networkFormOpen ||
@@ -1182,11 +1205,9 @@ export default function TelegramChannelsPage() {
     queryKey: networkKeys.list(),
     queryFn: telegramChannelNetworksApi.list,
     enabled: tab === "networks" || messageTemplatesOpen || exportOpen,
-    // Audience/request counters are operational data. Do not rehydrate a
-    // four-minute-old persisted Network card after the user opens this tab.
-    // This is a single read on entry, not polling.
-    staleTime: 0,
-    refetchOnMount: "always",
+    // Network cards aggregate channel finance and traffic. Refresh on the
+    // daily boundary or when a relevant mutation invalidates this key.
+    staleTime: 24 * 60 * 60_000,
   });
   const { data: currencySettings } = useQuery({
     queryKey: ["currency-settings"],
@@ -1739,7 +1760,7 @@ export default function TelegramChannelsPage() {
         onSubmit={(input) => importMutation.mutate({ input, mode: "import" })}
         isSubmitting={importMutation.isPending}
       />
-      <TelegramChannelExportModal
+      {exportOpen ? <TelegramChannelExportModal
         open={exportOpen}
         channels={channels || []}
         networks={networks}
@@ -1747,7 +1768,7 @@ export default function TelegramChannelsPage() {
         isSubmitting={exporting}
         onClose={() => setExportOpen(false)}
         onSubmit={handleExport}
-      />
+      /> : null}
       {messageTemplatesOpen ? (
         <TelegramChannelMessageTemplatesModal
           channels={channels || []}

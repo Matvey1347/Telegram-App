@@ -98,6 +98,22 @@ describe("AccountWorkspace", () => {
     expect(screen.queryByText("Telegram identity")).not.toBeInTheDocument();
   });
 
+  it("loads the workspace Telegram account catalog only when account mode is selected", async () => {
+    vi.mocked(accountApi.me).mockResolvedValue({
+      ...me,
+      assignedTelegramUserAccounts: [],
+    });
+    renderAccount();
+
+    await screen.findByText("Telegram identity");
+    expect(telegramUserAccountsApi.list).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Connected account" }));
+    await waitFor(() =>
+      expect(telegramUserAccountsApi.list).toHaveBeenCalledTimes(1),
+    );
+  });
+
   it("renders the complete profile workflow in Russian", async () => {
     renderAccount("ru");
 

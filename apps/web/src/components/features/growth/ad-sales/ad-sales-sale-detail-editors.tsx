@@ -19,10 +19,14 @@ import {
 import type { Account } from "@/lib/api";
 import { LifecycleCountdown } from "@/components/ui/lifecycle-countdown";
 import { accountDisplayName } from "@/lib/features/finance/account-display";
-import { toNumber } from "@/lib/features/growth/telegram-ad-sales";
 import { buildTelegramPostsUrl } from "@/lib/features/telegram/telegram-posts-url";
 import { placementTimer } from "./ad-placement-lifecycle";
 import { CurrencyAmountInput } from "@/components/ui/currency-amount-input";
+import { AdSalePlacementBotActions } from "./ad-sale-placement-bot-actions";
+import {
+  PlacementPostComposer,
+  type PlacementManagedPostDraft,
+} from "./placement-post/placement-post-composer";
 
 export type PlacementDraft = {
   id: string;
@@ -96,16 +100,20 @@ export function PlacementEditor(props: {
   syncPayment: boolean;
   onSync: (v: boolean) => void;
   onChange: (p: Partial<PlacementDraft>) => void;
-  onAttachPost: (post: {
-    telegramPostUrl?: string;
-    telegramPostId?: string;
-  }) => Promise<void>;
   onLoadPosts: () => Promise<PlacementPostOption[]>;
-  onSave: () => Promise<void>;
+  onSave: (
+    draft?: PlacementManagedPostDraft,
+    attachment?: { telegramPostUrl?: string; telegramPostId?: string },
+  ) => Promise<void>;
   saving: boolean;
   error: string;
+  workspaceId?: string | null;
+  systemBotUsername?: string | null;
+  systemBotConnected?: boolean;
 }) {
-  const [postEditorOpen, setPostEditorOpen] = useState(false);
+  const [postEditorOpen, setPostEditorOpen] = useState(
+    () => !props.placement.managedPostId && !props.draft.telegramPostId,
+  );
   const [postUrl, setPostUrl] = useState("");
   const [postSaving, setPostSaving] = useState(false);
   const [postError, setPostError] = useState("");
@@ -115,6 +123,19 @@ export function PlacementEditor(props: {
   const [postInputMode, setPostInputMode] = useState<"select" | "link">(
     "select",
   );
+  const [managedPostDraft, setManagedPostDraft] =
+    useState<PlacementManagedPostDraft | null>(() =>
+      props.placement.managedPost
+        ? {
+            title: props.placement.managedPost.title,
+            text: props.placement.managedPost.text ?? "",
+            imageUrls: props.placement.managedPost.imageUrls ?? [],
+            mediaItems: props.placement.managedPost.mediaItems,
+            buttonRows: props.placement.managedPost.buttonRows ?? [],
+          }
+        : null,
+    );
+  const [creatingPost, setCreatingPost] = useState(Boolean(managedPostDraft));
   const hasLinkedPost = Boolean(
     props.placement.managedPostId || props.draft.telegramPostId,
   );
@@ -130,9 +151,12 @@ export function PlacementEditor(props: {
     props.placement.managedPost?.telegramMessageUrls[0] ??
     null;
 
-  const openPostEditor = async () => {
-    setPostEditorOpen((open) => !open);
-    if (postEditorOpen || postOptions.length) return;
+  const openPostEditor = async (mode: "select" | "link") => {
+    setCreatingPost(false);
+    setPostEditorOpen(true);
+    setPostInputMode(mode);
+    setPostError("");
+    if (mode !== "select" || postOptions.length || postOptionsLoading) return;
     setPostOptionsLoading(true);
     setPostError("");
     try {
@@ -147,8 +171,16 @@ export function PlacementEditor(props: {
   };
 
   const saveChanges = async () => {
+    if (creatingPost) {
+      if (!managedPostDraft) {
+        setPostError("Choose Write by hand or import a post from the bot.");
+        return;
+      }
+      await props.onSave(managedPostDraft);
+      return;
+    }
     if (!postEditorOpen) {
-      await props.onSave();
+      await props.onSave(managedPostDraft ?? undefined);
       return;
     }
     const payload =
@@ -166,8 +198,7 @@ export function PlacementEditor(props: {
     setPostSaving(true);
     setPostError("");
     try {
-      await props.onAttachPost(payload);
-      await props.onSave();
+      await props.onSave(undefined, payload);
       setPostUrl("");
       setSelectedPostId("");
       setPostEditorOpen(false);
@@ -225,22 +256,7 @@ export function PlacementEditor(props: {
               inputMode="decimal"
               onChange={(e) => props.onChange({ agreedPrice: e.target.value })}
             />
-            <p className="mt-1.5 text-xs text-neutral-500">
-              Recommended {props.draft.recommendedPrice} {props.currency} ·
-              minimum {props.draft.minimumPrice} {props.currency}
-            </p>
           </FormField>
-          {toNumber(props.draft.agreedPrice) <
-          toNumber(props.draft.minimumPrice) ? (
-            <FormField label="Reason for price below minimum">
-              <Input
-                value={props.draft.manualPriceReason}
-                onChange={(e) =>
-                  props.onChange({ manualPriceReason: e.target.value })
-                }
-              />
-            </FormField>
-          ) : null}
         </div>
       </section>
       <section className="border-y border-neutral-800 py-4 sm:rounded-xl sm:border sm:bg-neutral-950/45 sm:p-4">
@@ -293,36 +309,122 @@ export function PlacementEditor(props: {
               ) : null}
             </div>
           </div>
-          <Button variant="secondary" onClick={() => void openPostEditor()}>
-            {postEditorOpen
-              ? "Cancel"
-              : hasLinkedPost
-                ? "Change post"
-                : "Add post"}
-          </Button>
+          {hasLinkedPost ? (
+            <Button
+              variant="secondary"
+              onClick={() => void openPostEditor("select")}
+            >
+              Change post
+            </Button>
+          ) : null}
         </div>
-        {postEditorOpen ? (
-          <div className="mt-4 space-y-3 border-t border-neutral-800 pt-4">
-            <div className="inline-grid grid-cols-2 rounded-md border border-neutral-700 bg-neutral-950 p-px">
-              {(["select", "link"] as const).map((mode) => (
-                <button
-                  key={mode}
-                  type="button"
-                  aria-pressed={postInputMode === mode}
-                  onClick={() => {
-                    setPostInputMode(mode);
+        <div
+          className="mt-4 inline-grid grid-cols-3 rounded-md border border-neutral-700 bg-neutral-950 p-px"
+          role="tablist"
+          aria-label="Advertising post options"
+        >
+          {(["select", "link", "create"] as const).map((mode) => {
+            const selected =
+              mode === "create"
+                ? creatingPost
+                : !creatingPost && postInputMode === mode;
+            const label =
+              mode === "select"
+                ? "Select post"
+                : mode === "link"
+                  ? "Paste link"
+                  : "Create new post";
+            return (
+              <button
+                key={mode}
+                type="button"
+                role="tab"
+                aria-selected={selected}
+                onClick={() => {
+                  if (mode === "create") {
+                    setCreatingPost(true);
+                    setPostEditorOpen(false);
                     setPostError("");
-                  }}
-                  className={`h-8 rounded-[5px] px-3 text-xs font-medium transition ${
-                    postInputMode === mode
-                      ? "bg-blue-600 text-white shadow-sm"
-                      : "text-neutral-400 hover:bg-neutral-800 hover:text-white"
-                  }`}
-                >
-                  {mode === "select" ? "Select post" : "Paste link"}
-                </button>
-              ))}
+                  } else {
+                    void openPostEditor(mode);
+                  }
+                }}
+                className={`h-8 rounded-[5px] px-3 text-xs font-medium transition ${
+                  selected
+                    ? "bg-blue-600 text-white shadow-sm"
+                    : "text-neutral-400 hover:bg-neutral-800 hover:text-white"
+                }`}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
+        {creatingPost ? (
+          <div className="mt-4 rounded-lg border border-neutral-800 bg-neutral-950/40 p-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() =>
+                  setManagedPostDraft(
+                    (current) =>
+                      current ?? {
+                        title: "Advertising post",
+                        text: "",
+                        imageUrls: [],
+                        buttonRows: [],
+                      },
+                  )
+                }
+              >
+                {managedPostDraft ? "Continue writing" : "Write by hand"}
+              </Button>
+              <AdSalePlacementBotActions
+                placementKey={props.placement.id}
+                channelTitle={props.channelName}
+                workspaceId={props.workspaceId}
+                systemBotUsername={props.systemBotUsername}
+                systemBotConnected={props.systemBotConnected}
+                draft={managedPostDraft}
+                onImported={(draft) => {
+                  setManagedPostDraft(draft);
+                  setCreatingPost(true);
+                  setPostEditorOpen(false);
+                  setPostError("");
+                }}
+              />
             </div>
+          </div>
+        ) : null}
+        {postError ? (
+          <p className="mt-3 text-sm text-rose-300" role="alert">
+            {postError}
+          </p>
+        ) : null}
+        {creatingPost && managedPostDraft ? (
+          <div className="mt-4">
+            <PlacementPostComposer
+              channelTitle={props.channelName}
+              channelPhotoUrl={props.channelPhotoUrl}
+              draft={managedPostDraft}
+              publishedPosts={[]}
+              postsLoading={false}
+              canCreate
+              autoCreate={false}
+              lockToDraft
+              onLoadPublishedPosts={() => undefined}
+              onChange={(next) => {
+                if (next.draft) {
+                  setManagedPostDraft(next.draft);
+                  setCreatingPost(true);
+                }
+              }}
+            />
+          </div>
+        ) : null}
+        {postEditorOpen && !creatingPost ? (
+          <div className="mt-4 space-y-3 border-t border-neutral-800 pt-4">
             {postInputMode === "select" ? (
               <FormField label="Published post">
                 <Select
@@ -356,9 +458,6 @@ export function PlacementEditor(props: {
                 />
               </FormField>
             )}
-            {postError ? (
-              <p className="text-sm text-rose-300">{postError}</p>
-            ) : null}
           </div>
         ) : null}
       </section>

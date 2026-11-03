@@ -122,6 +122,7 @@ describe("ChannelSettingsModal", () => {
     const client = new QueryClient({
       defaultOptions: { queries: { retry: false } },
     });
+    const invalidateQueries = vi.spyOn(client, "invalidateQueries");
     render(
       <QueryClientProvider client={client}>
         <ChannelSettingsModal
@@ -155,6 +156,12 @@ describe("ChannelSettingsModal", () => {
         message: "Your changes were saved successfully.",
       }),
     );
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ["telegram-publication-schedules"],
+    });
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ["telegram-channel-networks"],
+    });
   });
 
   it("groups channel configuration into icon-labelled tabs and shows the channel avatar", async () => {
@@ -177,6 +184,7 @@ describe("ChannelSettingsModal", () => {
               presentationIconId: "icon-1",
               tgStatUrl: "https://tgstat.com/channel/test",
               defaultInviteLinkId: "invite-1",
+              publicInviteLinkId: "invite-public",
               botInviteLinkId: "invite-bot",
               broadcastInviteLinkId: "invite-broadcast",
               audienceTransferInviteLinkId: "invite-transfer",

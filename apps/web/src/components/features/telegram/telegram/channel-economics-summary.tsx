@@ -32,6 +32,14 @@ function money(value: unknown, currency: string, digits = 0) {
   return `${formatted} ${currency}`;
 }
 
+function compactMoney(value: unknown, currency: string) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || Math.abs(parsed) < 10_000) {
+    return money(value, currency);
+  }
+  return `${number(parsed / 1_000, 1)}K ${currency}`;
+}
+
 function moneyOrDash(value: unknown, currency: string, digits = 0) {
   const parsed = Number(value);
   return value == null || !Number.isFinite(parsed) || parsed === 0
@@ -196,7 +204,7 @@ export function ChannelEconomicsSummary({
             />
             <Metric
               label="Earned"
-              value={moneyOrDash(economics?.revenue, currency)}
+              value={economics?.revenue == null ? "—" : compactMoney(economics.revenue, currency)}
               tone="text-emerald-300"
               compact={compact}
             />
@@ -344,7 +352,7 @@ function SpendMetric({
             aria-label="Show spend breakdown"
             title={money(total, currency)}
           >
-            {money(total, currency)}
+            {compactMoney(total, currency)}
           </button>
         </Tooltip>
       </div>

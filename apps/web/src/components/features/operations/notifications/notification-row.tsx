@@ -21,7 +21,7 @@ export function NotificationRow({
   notification: OperationsNotificationItem;
   onOpen: (notification: OperationsNotificationItem) => void;
 }) {
-  const typeLabel = notification.type === "CRM_AI_LEAD_QUALIFIED" || notification.type === "SYSTEM_TEST"
+  const typeLabel = notification.type === "CRM_AI_LEAD_QUALIFIED" || notification.type === "SYSTEM_TEST" || notification.type === "CHANNEL_POSTS_REMINDER"
     ? <NewNotificationTypeLabel type={notification.type} /> : TYPE_LABELS[notification.type];
   const unread = !notification.readAt;
   const lowPriority = notification.priority === "LOW";
@@ -136,7 +136,7 @@ export function NotificationRow({
   );
 }
 
-function NewNotificationTypeLabel({ type }: { type: "CRM_AI_LEAD_QUALIFIED" | "SYSTEM_TEST" }) {
+function NewNotificationTypeLabel({ type }: { type: "CRM_AI_LEAD_QUALIFIED" | "SYSTEM_TEST" | "CHANNEL_POSTS_REMINDER" }) {
   const { t } = useI18n();
-  return <>{t(type === "SYSTEM_TEST" ? "notifications.types.pushTest" : "notifications.types.aiLeadQualified")}</>;
+  return <>{t(type === "CHANNEL_POSTS_REMINDER" ? "channelReminders.notificationType" : type === "SYSTEM_TEST" ? "notifications.types.pushTest" : "notifications.types.aiLeadQualified")}</>;
 }

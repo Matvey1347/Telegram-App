@@ -165,6 +165,33 @@ describe('TelegramSystemBotWorkflowStore', () => {
     });
   });
 
+  it('finds only a recent completed single import from the scoped context', async () => {
+    const { prisma, store } = setup();
+    prisma.telegramSystemBotWorkflow.findFirst.mockResolvedValue({
+      id: 'workflow-1',
+    });
+    const since = new Date('2026-11-03T14:00:00.000Z');
+
+    await store.latestCompletedWebsitePostImport(
+      scope,
+      'Ad sale · Channel',
+      since,
+    );
+
+    expect(prisma.telegramSystemBotWorkflow.findFirst).toHaveBeenCalledWith({
+      where: {
+        ...scope,
+        kind: TelegramSystemBotWorkflowKind.WEBSITE_POST_IMPORT,
+        postImportMode: 'SINGLE',
+        status: TelegramSystemBotWorkflowStatus.COMPLETED,
+        completedAt: { gte: since },
+        payload: { path: ['context'], equals: 'Ad sale · Channel' },
+      },
+      orderBy: [{ completedAt: 'desc' }, { id: 'desc' }],
+      select: { id: true },
+    });
+  });
+
   it('rejects a stale version without overwriting workflow state', async () => {
     const { prisma, store } = setup();
     prisma.telegramSystemBotWorkflow.updateMany.mockResolvedValue({ count: 0 });

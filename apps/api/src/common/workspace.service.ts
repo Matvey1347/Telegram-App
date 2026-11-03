@@ -125,7 +125,23 @@ export class WorkspaceService {
   }
 
   async resolveWorkspaceIdForUser(userId: string): Promise<string> {
-    const membership = await this.resolveWorkspaceMembershipForUser(userId);
+    const selectedWorkspaceId = this.selectedWorkspaceId();
+    const membership = await this.prisma.workspaceMember.findFirst({
+      where: {
+        userId,
+        ...(selectedWorkspaceId ? { workspaceId: selectedWorkspaceId } : {}),
+      },
+      ...(selectedWorkspaceId
+        ? {}
+        : { orderBy: { createdAt: 'asc' as const } }),
+      select: { workspaceId: true },
+    });
+    if (!membership) {
+      if (selectedWorkspaceId) {
+        throw new ForbiddenException('Access denied for this workspace');
+      }
+      throw new NotFoundException('User is not a member of any workspace');
+    }
     this.requestContext.set({
       userId,
       workspaceId: membership.workspaceId,

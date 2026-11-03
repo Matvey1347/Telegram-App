@@ -6,6 +6,7 @@ import type {
   TelegramAccountFilter,
   TelegramChannelsTab,
 } from "./telegram-channels-route-state";
+import { ChannelReminderAction } from "./channel-reminder-action";
 import { PublicationSchedulesAction } from "./publication-schedules-action";
 
 export function TelegramChannelsHeaderActions({
@@ -39,6 +40,7 @@ export function TelegramChannelsHeaderActions({
   return (
     <div className="flex flex-wrap justify-end gap-2">
       <PublicationSchedulesAction />
+      <ChannelReminderAction />
       <Button
         type="button"
         onClick={onOpenTemplates}

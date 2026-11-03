@@ -2,6 +2,14 @@ import { describe, expect, it, vi } from 'vitest';
 import { createWorkspaceApi } from './workspace-api';
 
 describe('workspace auth api', () => {
+  it('loads compact application shell identity data', async () => {
+    const get = vi.fn().mockResolvedValue({ data: { id: 'user-1', workspaceMemberId: 'member-1' } });
+    const client = createWorkspaceApi({ api: { get } as never, crud: vi.fn() as never, silentFeedbackConfig: {}, withFeedback: (config) => config });
+
+    await expect(client.accountApi.shell()).resolves.toEqual({ id: 'user-1', workspaceMemberId: 'member-1' });
+    expect(get).toHaveBeenCalledWith('/account/shell');
+  });
+
   it('posts forgot and reset password payloads to the auth contract', async () => {
     const post = vi.fn().mockResolvedValue({ data: { success: true } });
     const client = createWorkspaceApi({ api: { post } as never, crud: vi.fn() as never, silentFeedbackConfig: {}, withFeedback: (config) => config });

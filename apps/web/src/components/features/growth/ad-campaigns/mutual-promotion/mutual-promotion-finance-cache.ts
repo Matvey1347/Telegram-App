@@ -19,6 +19,7 @@ export async function reconcileMutualPromotionFolder(
       queryKey: [...mutualPromotionFolderKeys.all, "list"],
     }),
     queryClient.invalidateQueries({ queryKey: telegramChannelKeys.lists() }),
+    queryClient.invalidateQueries({ queryKey: telegramChannelKeys.cardLists() }),
     queryClient.invalidateQueries({
       queryKey: telegramChannelKeys.trafficAttributions(),
     }),

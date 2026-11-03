@@ -43,6 +43,9 @@ function harness() {
     summariesForChannels: jest.fn().mockResolvedValue(new Map()),
     detailForChannels: jest.fn(),
   };
+  const audienceTrendRead = {
+    summariesForChannels: jest.fn().mockResolvedValue(new Map()),
+  };
   const networkPerformanceHistory = { history: jest.fn() };
   const service = new TelegramChannelNetworksService(
     prisma as never,
@@ -50,7 +53,7 @@ function harness() {
       resolveWorkspaceIdForUser: jest.fn().mockResolvedValue('workspace-1'),
     } as never,
     financialRead as never,
-    { summariesForChannels: jest.fn().mockResolvedValue(new Map()) } as never,
+    audienceTrendRead as never,
     traffic as never,
     networkPerformanceHistory as never,
   );
@@ -61,6 +64,7 @@ function harness() {
     financialRead,
     preparedBuild,
     traffic,
+    audienceTrendRead,
     networkPerformanceHistory,
   };
 }
@@ -88,6 +92,7 @@ describe('TelegramChannelNetworksService icons', () => {
       'workspace-1',
       ['channel-a', 'channel-b'],
       'network-1',
+      expect.objectContaining({ windowDays: 30, now: expect.any(Date) }),
     );
   });
 
@@ -231,7 +236,7 @@ describe('TelegramChannelNetworksService icons', () => {
 });
 
 describe('TelegramChannelNetworksService system All network', () => {
-  it('places All first and counts it in paginated workspace results', async () => {
+  it('omits the empty system network from paginated workspace results', async () => {
     const test = harness();
 
     const result = await test.service.list('user-1', {
@@ -239,25 +244,21 @@ describe('TelegramChannelNetworksService system All network', () => {
       pageSize: 10,
     });
 
-    expect(result.items).toHaveLength(1);
-    expect(result.items[0]).toMatchObject({
-      id: SYSTEM_ALL_NETWORK_ID,
-      isSystem: true,
-    });
+    expect(result.items).toHaveLength(0);
     expect(result.pagination).toMatchObject({
-      totalItems: 1,
-      totalPages: 1,
+      totalItems: 0,
+      totalPages: 0,
       hasNextPage: false,
     });
     expect(test.prisma.telegramChannelNetwork.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { workspaceId: 'workspace-1' },
+        where: expect.objectContaining({ workspaceId: 'workspace-1' }),
         skip: 0,
         take: 9,
       }),
     );
     expect(test.prisma.telegramChannelNetwork.count).toHaveBeenCalledWith({
-      where: { workspaceId: 'workspace-1' },
+      where: expect.objectContaining({ workspaceId: 'workspace-1' }),
     });
     expect(test.prisma.$transaction).not.toHaveBeenCalled();
   });
@@ -353,6 +354,7 @@ describe('TelegramChannelNetworksService system All network', () => {
         pendingJoinRequestsCount: 302,
       },
     });
+    expect(result.channelSummaries).toHaveLength(1);
     expect(test.prisma.telegramChannel.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {
@@ -518,6 +520,7 @@ describe('TelegramChannelNetworksService financial source batching', () => {
       channels: [{ id: 'active-usd' }],
       summary: { channelsCount: 1, totalSubscribers: 10 },
     });
+    expect(result.items[0]).not.toHaveProperty('channelSummaries');
     expect(result.items[1]).toMatchObject({
       id: 'custom-network',
       channels: [
@@ -527,8 +530,11 @@ describe('TelegramChannelNetworksService financial source batching', () => {
       ],
       summary: { channelsCount: 3, totalSubscribers: 60 },
     });
+    expect(result.items[1]).not.toHaveProperty('channelSummaries');
     expect(test.prisma.telegramChannelNetwork.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { workspaceId: 'workspace-1' } }),
+      expect.objectContaining({
+        where: expect.objectContaining({ workspaceId: 'workspace-1' }),
+      }),
     );
   });
 
@@ -579,5 +585,36 @@ describe('TelegramChannelNetworksService financial source batching', () => {
     expect(
       test.financialRead.buildChannelFinancialSummaryPreview,
     ).not.toHaveBeenCalled();
+  });
+
+  it('starts financial preparation and audience trends concurrently', async () => {
+    const test = harness();
+    let releasePreparation!: (
+      value: { build: typeof test.preparedBuild },
+    ) => void;
+    let preparationStarted!: () => void;
+    const started = new Promise<void>((resolve) => {
+      preparationStarted = resolve;
+    });
+    test.financialRead.prepareChannelFinancialSummaryPreview.mockImplementation(
+      () => {
+        preparationStarted();
+        return new Promise((resolve) => {
+          releasePreparation = resolve;
+        }) as never;
+      },
+    );
+
+    const result = test.service.list('user-1', { page: 1, pageSize: 10 });
+    await started;
+
+    expect(test.audienceTrendRead.summariesForChannels).toHaveBeenCalledWith(
+      'workspace-1',
+      [],
+      30,
+      expect.any(Date),
+    );
+    releasePreparation({ build: test.preparedBuild });
+    await expect(result).resolves.toMatchObject({ items: [] });
   });
 });

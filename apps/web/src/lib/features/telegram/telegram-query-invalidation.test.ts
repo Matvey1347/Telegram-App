@@ -1,10 +1,13 @@
 import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
-import { telegramAccountKeys, telegramChannelKeys } from "@/lib/query-keys";
+import { dashboardKeys, networkKeys, telegramAccountKeys, telegramChannelKeys, telegramPostKeys, telegramPublicationScheduleKeys } from "@/lib/query-keys";
 import type { TelegramUserAccount } from "@/lib/api-types/telegram/telegram-sources";
 import type { TelegramChannel } from "@/lib/api-types/telegram/telegram-channels";
 import { telegramMessageTemplateKeys } from "./telegram-channel-message-templates-api";
 import {
+  invalidateTelegramChannelQueries,
+  invalidateTelegramChannelCardSummaries,
+  invalidateTelegramPostMetricReads,
   reconcileTelegramChannelSettings,
   reconcileTelegramQrLoginSuccess,
 } from "./telegram-query-invalidation";
@@ -31,6 +34,7 @@ describe("reconcileTelegramQrLoginSuccess", () => {
       telegramChannelKeys.publishingCapabilities(),
       telegramChannelKeys.analyticsSources(),
       telegramChannelKeys.list(false, true),
+      telegramChannelKeys.select(),
     ];
     derivedKeys.forEach((key) => client.setQueryData(key, { ready: true }));
     client.setQueryData(telegramAccountKeys.bots(), [{ id: "bot-1" }]);
@@ -80,6 +84,8 @@ describe("reconcileTelegramChannelSettings", () => {
     const second = telegramMessageTemplateKeys.source(["channel-2"]);
     client.setQueryData(first, { channels: [] });
     client.setQueryData(second, { channels: [] });
+    client.setQueryData(telegramChannelKeys.select(), []);
+    client.setQueryData(networkKeys.list(), []);
 
     await reconcileTelegramChannelSettings(client, {
       id: "channel-1",
@@ -89,5 +95,101 @@ describe("reconcileTelegramChannelSettings", () => {
 
     expect(client.getQueryState(first)?.isInvalidated).toBe(true);
     expect(client.getQueryState(second)?.isInvalidated).toBe(true);
+    expect(client.getQueryState(telegramChannelKeys.select())?.isInvalidated).toBe(true);
+    expect(client.getQueryState(networkKeys.list())?.isInvalidated).toBe(true);
+  });
+});
+
+describe("invalidateTelegramChannelQueries", () => {
+  it("marks the rendered lifecycle card cache stale after a channel publication", async () => {
+    const client = new QueryClient();
+    const dashboardKey = dashboardKeys.summary(
+      "month",
+      "2026-11-01",
+      "2026-11-30",
+    );
+    const singleChannelSlots = telegramPublicationScheduleKeys.occurrences(
+      "channel-1",
+      { from: "2026-11-03T00:00:00.000Z", to: "2027-01-04T00:00:00.000Z" },
+    );
+    const sharedChannelSlots = telegramPublicationScheduleKeys.occurrencesByChannels(
+      ["channel-1", "channel-2"],
+      { from: "2026-11-02T00:00:00.000Z", to: "2026-11-05T00:00:00.000Z" },
+    );
+    const cardsKey = [
+      ...telegramChannelKeys.lifecycleList("active", false),
+      "content-horizon-v2",
+    ] as const;
+    client.setQueryData(cardsKey, {
+      items: [{ id: "channel-1", totalSpend: 100 }],
+      counts: { active: 1, test: 0, archived: 0 },
+    });
+    client.setQueryData(telegramChannelKeys.select(), []);
+    client.setQueryData(networkKeys.list(), []);
+    client.setQueryData(dashboardKey, { activeSubscribersEstimate: 10 });
+    client.setQueryData(singleChannelSlots, []);
+    client.setQueryData(sharedChannelSlots, {});
+
+    await invalidateTelegramChannelQueries(client, "channel-1");
+
+    expect(client.getQueryState(cardsKey)?.isInvalidated).toBe(true);
+    expect(client.getQueryState(telegramChannelKeys.select())?.isInvalidated).toBe(true);
+    expect(client.getQueryState(networkKeys.list())?.isInvalidated).toBe(true);
+    expect(client.getQueryState(dashboardKey)?.isInvalidated).toBe(true);
+    expect(client.getQueryState(singleChannelSlots)?.isInvalidated).toBe(true);
+    expect(client.getQueryState(sharedChannelSlots)?.isInvalidated).toBe(true);
+  });
+});
+
+describe("invalidateTelegramChannelCardSummaries", () => {
+  it("refreshes only financial cards linked to a changed expense", async () => {
+    const client = new QueryClient();
+    const cardsKey = [
+      ...telegramChannelKeys.lifecycleList("active", false),
+      "content-horizon-v2",
+    ] as const;
+    const unrelatedChannelSummary = telegramChannelKeys.financialSummary("channel-2");
+    client.setQueryData(cardsKey, { items: [{ id: "channel-1", totalSpend: 10 }] });
+    client.setQueryData(networkKeys.list(), [{ id: "network-1", totalSpend: 10 }]);
+    client.setQueryData(telegramChannelKeys.financialSummary("channel-1"), { totalSpend: 10 });
+    client.setQueryData(unrelatedChannelSummary, { totalSpend: 20 });
+
+    await invalidateTelegramChannelCardSummaries(client, ["channel-1", "channel-1"]);
+
+    expect(client.getQueryState(cardsKey)?.isInvalidated).toBe(true);
+    expect(client.getQueryState(networkKeys.list())?.isInvalidated).toBe(true);
+    expect(
+      client.getQueryState(telegramChannelKeys.financialSummary("channel-1"))
+        ?.isInvalidated,
+    ).toBe(true);
+    expect(client.getQueryState(unrelatedChannelSummary)?.isInvalidated).toBe(false);
+  });
+});
+
+describe("invalidateTelegramPostMetricReads", () => {
+  it("invalidates the affected post and channel analytics without touching another channel", async () => {
+    const client = new QueryClient();
+    const affectedKeys = [
+      telegramPostKeys.channelPostsPage("channel-1", 1, 10, ""),
+      [...telegramChannelKeys.analytics("channel-1"), "2026-10-01", "2026-10-30"],
+      telegramChannelKeys.audience("channel-1"),
+      telegramChannelKeys.financialSummary("channel-1"),
+      telegramChannelKeys.audienceSnapshots("channel-1"),
+    ];
+    const unrelatedAnalytics = [
+      ...telegramChannelKeys.analytics("channel-2"),
+      "2026-10-01",
+      "2026-10-30",
+    ];
+    for (const key of [...affectedKeys, unrelatedAnalytics]) {
+      client.setQueryData(key, { ready: true });
+    }
+
+    await invalidateTelegramPostMetricReads(client, "channel-1");
+
+    for (const key of affectedKeys) {
+      expect(client.getQueryState(key)?.isInvalidated).toBe(true);
+    }
+    expect(client.getQueryState(unrelatedAnalytics)?.isInvalidated).toBe(false);
   });
 });

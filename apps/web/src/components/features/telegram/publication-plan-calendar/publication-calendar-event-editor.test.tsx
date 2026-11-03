@@ -1,7 +1,8 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { TelegramPublicationPlanCalendarEvent } from "@telegram-system/shared";
+import { telegramChannelNetworksApi } from "@/lib/api";
 import { PublicationCalendarEventEditor } from "./publication-calendar-event-editor";
 
 vi.mock(
@@ -34,7 +35,10 @@ vi.mock("@/lib/api", () => ({
     getSale: vi.fn().mockResolvedValue({ id: "sale-1", placements: [] }),
     listProductsByChannels: vi.fn().mockResolvedValue({}),
   },
-  telegramChannelNetworksApi: { list: vi.fn().mockResolvedValue([]) },
+  telegramChannelNetworksApi: {
+    list: vi.fn().mockResolvedValue([]),
+    listOptions: vi.fn().mockResolvedValue([]),
+  },
   telegramChannelsApi: { select: vi.fn().mockResolvedValue([]) },
 }));
 vi.mock("@/lib/features/growth/cross-promotion-plans-api", () => ({
@@ -74,6 +78,7 @@ describe("PublicationCalendarEventEditor", () => {
     });
 
     expect(await screen.findByText("Ad editor: sale-1")).toBeTruthy();
+    expect(telegramChannelNetworksApi.listOptions).not.toHaveBeenCalled();
   });
 
   it("opens the existing direct-exchange editor for a VP calendar event", async () => {
@@ -88,5 +93,9 @@ describe("PublicationCalendarEventEditor", () => {
     });
 
     expect(await screen.findByText("VP editor: vp-1")).toBeTruthy();
+    await waitFor(() =>
+      expect(telegramChannelNetworksApi.listOptions).toHaveBeenCalledTimes(1),
+    );
+    expect(telegramChannelNetworksApi.list).not.toHaveBeenCalled();
   });
 });

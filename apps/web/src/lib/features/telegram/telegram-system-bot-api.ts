@@ -88,6 +88,15 @@ export function createTelegramSystemBotApi(api: AxiosInstance) {
           workflowResultConfig(),
         )
       ).data,
+    recoverRecentPostImport: async (context: string) => {
+      const config = workflowResultConfig();
+      return (
+        await api.get<TelegramSystemBotPostImportResult | null>(
+          "/telegram/system-bot/post-imports/recover",
+          { ...config, params: { ...config.params, context } },
+        )
+      ).data;
+    },
     cancelPostImport: async (workflowId: string) =>
       (
         await api.delete<CancelTelegramSystemBotPostImportResult>(

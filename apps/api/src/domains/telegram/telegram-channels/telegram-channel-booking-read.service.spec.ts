@@ -112,6 +112,18 @@ describe('TelegramChannelBookingReadService', () => {
     });
   });
 
+  it('separately reports an empty today when tomorrow has posts', async () => {
+    const service = new TelegramChannelBookingReadService({
+      workspace: { findUnique: jest.fn().mockResolvedValue({ timezone: 'UTC' }) },
+      telegramManagedPost: {
+        findMany: jest.fn().mockResolvedValue([scheduledPost('channel-1', '2026-09-15T12:00:00Z')]),
+        groupBy: jest.fn().mockResolvedValue([]),
+      },
+    } as never);
+    const result = await service.summariesForChannels('workspace-1', ['channel-1'], new Date('2026-09-14T10:00:00Z'), new Map(), 32, true, false);
+    expect(result.get('channel-1')).toEqual(expect.objectContaining({ hasPostsToday: false, bookedThroughDate: '2026-09-15' }));
+  });
+
   it('reports today as booked-through when tomorrow is the first free day', async () => {
     const service = new TelegramChannelBookingReadService({
       workspace: {

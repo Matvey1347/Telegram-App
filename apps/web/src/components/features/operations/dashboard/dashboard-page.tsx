@@ -60,6 +60,9 @@ export function DashboardPage() {
     // displayed totals disagree, so this screen deliberately opts out of the
     // app-wide keepPreviousData default.
     placeholderData: () => undefined,
+    // Finance, campaign and channel mutations invalidate all period variants.
+    // Keep costly aggregates warm for route revisits inside the same session.
+    staleTime: 15 * 60_000,
   });
 
   return (

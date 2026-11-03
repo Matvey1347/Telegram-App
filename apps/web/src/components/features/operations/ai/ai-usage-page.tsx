@@ -1,6 +1,7 @@
 "use client";
 import { useAiText } from "./ai-copy";
 import { useState } from "react";
+import dynamic from "next/dynamic";
 import { useQuery } from "@tanstack/react-query";
 import type { AiUsageFilter } from "@telegram-system/shared";
 import { AppShell } from "@/components/layout/app-shell";
@@ -12,8 +13,11 @@ import { aiKeys, aiQueryPolicy } from "@/lib/features/operations/ai-query-keys";
 import { AiDashboard } from "./ai-dashboard";
 import { AiFilters } from "./ai-filters";
 import { AiOperations } from "./ai-operations";
-import { AiConfigurationPanel } from "./ai-configuration";
 import { aiPermissions } from "./ai-format";
+
+const AiConfigurationPanel = dynamic(() =>
+  import("./ai-configuration").then((module) => module.AiConfigurationPanel),
+);
 export function AiUsagePage() {
   const t = useAiText();
   const [tab, setTab] = useState<"usage" | "config">("usage");

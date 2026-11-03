@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -13,6 +13,12 @@ import {
   observationFixture,
   sourceFixture,
 } from "./lead-fixtures.test-support";
+vi.mock("@/providers/toast-provider", () => ({ useAppToast: () => ({ setProgress: vi.fn(), pushToast: vi.fn(), clearProgress: vi.fn() }) }));
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+  usePathname: () => "/ad-sales/leads",
+  useSearchParams: () => new URLSearchParams(),
+}));
 vi.mock("@/components/layout/app-shell", () => ({
   AppShell: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
@@ -81,7 +87,7 @@ describe("Lead Discovery operational UI", () => {
     mount(<LeadSources workspace="workspace-one" config={leadConfig} />);
     await screen.findByText("Evidence source 1");
     expect(screen.getByText("Активен")).toBeTruthy();
-    expect(screen.getByText(/3 публикаций · 1 рекламных · 1 кандидатов/)).toBeTruthy();
+    expect(screen.getByRole("row", { name: /Evidence source 1.*3 1.*1 Активен/ })).toBeTruthy();
     expect(screen.queryByText("Coverage: GAPPED")).toBeNull();
     expect(screen.queryByText(/^NO_ADS_30D$/)).toBeNull();
   });
@@ -89,12 +95,11 @@ describe("Lead Discovery operational UI", () => {
     vi.mocked(leadDiscoveryApi.sources).mockImplementation(async (params) => params.cursor === "next"
       ? { items: [sourceFixture(2), { ...sourceFixture(3), channelId: null }], hasMore: false, nextCursor: null }
       : { items: [sourceFixture()], hasMore: true, nextCursor: "next" });
-    vi.spyOn(leadDiscoveryApi, "scan").mockResolvedValueOnce({ received: 1, changed: 1 } as never).mockRejectedValueOnce(new Error("access lost"));
+    vi.spyOn(leadDiscoveryApi, "refreshSources").mockResolvedValue({ updated: 1, failed: 1, skipped: 1 });
     mount(<LeadSources workspace="workspace-one" config={leadConfig} />);
     fireEvent.click(await screen.findByRole("button", { name: "Обновить все каналы" }));
     expect(await screen.findByText(/Обновлено: 1 · Ошибок: 1 · Пропущено: 1/)).toBeTruthy();
-    expect(leadDiscoveryApi.scan).toHaveBeenCalledTimes(2);
-    expect(leadDiscoveryApi.scan).toHaveBeenNthCalledWith(2, "source-2");
+    expect(leadDiscoveryApi.refreshSources).toHaveBeenCalledTimes(1);
   });
   it("disables management controls for read-only users", async () => {
     mount(
@@ -114,7 +119,7 @@ describe("Lead Discovery operational UI", () => {
     mount(<LeadSources workspace="workspace-one" config={leadConfig}/>);
     await screen.findByText("Не подключён");
     expect(screen.getByRole("button", { name: "Обновить" })).toBeDisabled();
-    expect(screen.getByText("Требуется подключение Telegram и проверка доступа.")).toBeTruthy();
+    expect(screen.getByRole("row", { name: /Evidence source 1/ }).querySelectorAll("td")[6]?.querySelector("[title]")?.getAttribute("title")).toMatch(/Требуется подключение Telegram/);
     expect(screen.queryByRole("button", { name: "Scan up to 50 posts" })).toBeNull();
   });
   it("explains membership and public manual scanning instead of showing an opaque paused code", async () => {
@@ -125,7 +130,7 @@ describe("Lead Discovery operational UI", () => {
     mount(<LeadSources workspace="workspace-one" config={leadConfig}/>);
     await screen.findByText("Нет подписки");
     expect(screen.getByText("Проверка вручную")).toBeTruthy();
-    expect(screen.getByText(/Для этого приватного канала/)).toBeTruthy();
+    expect(screen.getByRole("row", { name: /Evidence source 1/ }).querySelectorAll("td")[6]?.querySelector("[title]")?.getAttribute("title")).toMatch(/должен быть участником/);
     expect(screen.queryByText("LEAD_CHANNEL_MEMBERSHIP_REQUIRED")).toBeNull();
   });
   it("loads source cursors while keeping status and search filters", async () => {
@@ -142,11 +147,11 @@ describe("Lead Discovery operational UI", () => {
       });
     mount(<LeadSources workspace="workspace-one" config={leadConfig} />);
     fireEvent.click(
-      await screen.findByRole("button", { name: "Load more sources" }),
+      (await within(await screen.findByRole("navigation")).findAllByRole("button"))[1],
     );
     await waitFor(() =>
       expect(leadDiscoveryApi.sources).toHaveBeenLastCalledWith(
-        { limit: 50, cursor: "next-source" },
+        { limit: 20, cursor: "next-source" },
         expect.any(AbortSignal),
       ),
     );
@@ -154,12 +159,12 @@ describe("Lead Discovery operational UI", () => {
   it("applies source search explicitly rather than refetching every keystroke", async () => {
     mount(<LeadSources workspace="workspace-one" config={leadConfig} />);
     await screen.findByText("Evidence source 1");
-    fireEvent.change(screen.getByRole("textbox", { name: "Search sources" }), {
+    fireEvent.change(screen.getByRole("textbox", { name: "Поиск источников" }), {
       target: { value: "Education" },
     });
     expect(leadDiscoveryApi.sources).toHaveBeenCalledTimes(1);
     fireEvent.click(
-      screen.getByRole("button", { name: "Apply source filters" }),
+      screen.getByRole("button", { name: "Найти" }),
     );
     await waitFor(() =>
       expect(leadDiscoveryApi.sources).toHaveBeenLastCalledWith(

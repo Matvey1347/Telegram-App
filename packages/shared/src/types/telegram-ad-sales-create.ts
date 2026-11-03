@@ -26,6 +26,7 @@ export type TelegramAdSaleCheckoutPlacement = {
     /** Sanitized imported Telegram HTML retained for the composer preview. */
     formattedHtml?: string;
     imageUrls: string[];
+    mediaItems?: unknown[];
     buttonRows: Array<
       Array<{
         text: string;
@@ -93,4 +94,59 @@ export type TelegramAdSaleCheckoutWorkflowResponse = {
     skipped: number;
   };
   failures: TelegramAdSaleCheckoutWorkflowFailure[];
+};
+
+export type TelegramAdSaleEditWorkflowPlacement = {
+  id: string;
+  scheduledAt: string;
+  timezone: string;
+  agreedPrice: number;
+  recommendedPrice?: number | null;
+  minimumPrice?: number | null;
+  currency: string;
+  manualPriceReason?: string | null;
+  telegramAdProductId?: string | null;
+  managedPostId?: string | null;
+  managedPostDraft?: TelegramAdSaleCheckoutPlacement["managedPostDraft"];
+  postAttachment?: { telegramPostId?: string; telegramPostUrl?: string };
+};
+
+export type TelegramAdSaleEditWorkflowPayment = {
+  id: string;
+  accountId: string;
+  amount: number;
+  currency: string;
+  paidAt: string;
+  notes?: string | null;
+  allocations: Array<{ placementId: string; amount: number }>;
+};
+
+export type TelegramAdSaleEditWorkflowRequest = {
+  sale?: {
+    origin?: string;
+    assignedMemberId?: string | null;
+    sellerMemberId?: string | null;
+    advertiserId?: string | null;
+    advertiserName?: string;
+    advertiserContact?: string | null;
+    advertiserTelegram?: string | null;
+    settlementCurrency?: string;
+  };
+  placements: TelegramAdSaleEditWorkflowPlacement[];
+  payments: TelegramAdSaleEditWorkflowPayment[];
+};
+
+export type TelegramAdSaleEditWorkflowProgress = {
+  operation:
+    | "UPDATE_SALE"
+    | "UPDATE_PLACEMENT"
+    | "CREATE_POST"
+    | "SCHEDULE_POST"
+    | "ATTACH_POST"
+    | "UPDATE_PAYMENT"
+    | "REFRESH";
+  message: string;
+  placementId?: string;
+  completed: string[];
+  remaining: string[];
 };

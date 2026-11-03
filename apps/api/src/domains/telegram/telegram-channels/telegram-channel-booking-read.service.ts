@@ -13,6 +13,7 @@ export type TelegramChannelBookingSummary = {
   lastScheduledAt: string | null;
   nextAvailableDate: string;
   bookedThroughDate: string | null;
+  hasPostsToday?: boolean;
 };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -97,12 +98,15 @@ export class TelegramChannelBookingReadService {
     channelIds: string[],
     now = new Date(),
     pendingJoinRequestsByChannel: ReadonlyMap<string, number> = new Map(),
+    lookaheadDays = BOOKING_LOOKAHEAD_DAYS,
+    includeToday = false,
+    includeDraftCounts = true,
   ) {
     if (!channelIds.length) {
       return new Map<string, TelegramChannelBookingSummary>();
     }
 
-    const horizon = new Date(now.getTime() + BOOKING_LOOKAHEAD_DAYS * DAY_MS);
+    const horizon = new Date(now.getTime() + lookaheadDays * DAY_MS);
     // Two days safely covers the current local calendar day across DST shifts;
     // rows are narrowed to the workspace's actual "today" key below.
     const recentWindowStart = new Date(now.getTime() - 2 * DAY_MS);
@@ -164,7 +168,7 @@ export class TelegramChannelBookingReadService {
         },
         orderBy: [{ scheduledAt: 'asc' }, { publishedAt: 'asc' }],
       }),
-      this.prisma.telegramManagedPost.groupBy({
+      includeDraftCounts ? this.prisma.telegramManagedPost.groupBy({
         by: ['telegramChannelId'],
         where: {
           workspaceId,
@@ -172,14 +176,14 @@ export class TelegramChannelBookingReadService {
           status: TelegramManagedPostStatus.DRAFT,
         },
         _count: { _all: true },
-      }),
+      }) : Promise.resolve([]),
     ]);
     const timezone = workspace?.timezone || 'UTC';
     const toDateKey = createDateKeyFormatter(timezone);
     const firstPlanningDate = addCalendarDays(toDateKey(now), 1);
     const postsByChannel = new Map<string, typeof posts>();
     const draftTotalByChannel = new Map(
-      draftCounts.map((row) => [row.telegramChannelId, row._count._all]),
+      draftCounts.map((row) => [row.telegramChannelId, row._count._all] as const),
     );
     for (const post of posts) {
       // Keep the semantic filter here as well. It protects the read model
@@ -225,8 +229,8 @@ export class TelegramChannelBookingReadService {
             post.scheduledAt ? [toDateKey(post.scheduledAt)] : [],
           ),
         );
-        let nextAvailableDate = firstPlanningDate;
-        for (let offset = 0; offset < BOOKING_LOOKAHEAD_DAYS; offset += 1) {
+        let nextAvailableDate = addCalendarDays(firstPlanningDate, lookaheadDays);
+        for (let offset = 0; offset < lookaheadDays; offset += 1) {
           const candidate = addCalendarDays(firstPlanningDate, offset);
           if (!occupiedDates.has(candidate)) {
             nextAvailableDate = candidate;
@@ -254,6 +258,7 @@ export class TelegramChannelBookingReadService {
             lastScheduledAt: lastScheduledAt?.toISOString() ?? null,
             nextAvailableDate,
             bookedThroughDate,
+            ...(includeToday ? { hasPostsToday: postsToday.length > 0 } : {}),
           },
         ];
       }),

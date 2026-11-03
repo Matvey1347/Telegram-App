@@ -231,7 +231,8 @@ export function PublicationSlotOptions({
             : item.state === "PAST"
               ? t("telegram.posts.schedules.past")
               : t("telegram.posts.schedules.available");
-        const accessibleLabel = `${item.time} · ${kindLabel} · ${item.title} · ${stateLabel}`;
+        const optionalLabel = item.kind === "CONTENT" && item.isOptional ? "Optional — can be skipped on some days" : null;
+        const accessibleLabel = `${item.time} · ${kindLabel} · ${item.title} · ${stateLabel}${optionalLabel ? ` · ${optionalLabel}` : ""}`;
         return (
           <button
             type="button"
@@ -252,6 +253,7 @@ export function PublicationSlotOptions({
             <span>{item.time}</span>
             <span aria-hidden="true">·</span>
             <span aria-hidden="true">{item.kind === "AD" ? "📣" : "📝"}</span>
+            {optionalLabel ? <span>Optional</span> : null}
             {!isSelected && item.state === "OCCUPIED" ? (
               <span aria-hidden="true">🔒</span>
             ) : null}

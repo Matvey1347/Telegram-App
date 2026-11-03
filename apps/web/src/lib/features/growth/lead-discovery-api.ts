@@ -24,7 +24,7 @@ import type {
   LeadPipelineProgress,
 } from "@telegram-system/shared";
 export type { LeadHistoryJob } from "@telegram-system/shared";
-import { api } from "@/lib/api";
+import { api, streamProgressAction } from "@/lib/api";
 const base = "/telegram-crm/lead-discovery";
 const id = (value: string) => encodeURIComponent(value);
 export const leadDiscoveryApi = {
@@ -67,6 +67,8 @@ export const leadDiscoveryApi = {
   validate: async (source: string) =>
     (await api.post<LeadSourceView>(`${base}/sources/${id(source)}/validate`))
       .data,
+  refreshSources: (onProgress: (item: { source: LeadSourceView; status: "updated" | "failed" | "skipped"; scanned: number; truncated: boolean }, current: number, total: number) => void, source?: string) =>
+    streamProgressAction<{ updated: number; failed: number; skipped: number }, { source: LeadSourceView; status: "updated" | "failed" | "skipped"; scanned: number; truncated: boolean }>(`${base}/sources/${source ? `${id(source)}/` : ""}refresh-stream`, {}, onProgress),
   scan: async (source: string, beforeId?: number) =>
     (
       await api.post<LeadScanResult>(`${base}/sources/${id(source)}/scan`, {

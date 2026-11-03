@@ -19,6 +19,7 @@ import type {
   TelegramBot,
   TelegramChannelNetwork,
   TelegramChannelNetworkDetail,
+  TelegramChannelNetworkOption,
   TelegramChannelNetworkSummary,
   TelegramSourceChannelAccess,
   TelegramUserAccount,
@@ -72,6 +73,10 @@ export function createTelegramSourcesApi({
       getAllPaginatedItems<TelegramChannelNetwork>(
         "/telegram-channel-networks",
       ),
+    listOptions: async () =>
+      (await api.get<TelegramChannelNetworkOption[]>(
+        "/telegram-channel-networks/options",
+      )).data,
     get: async (id: string) =>
       (
         await api.get<TelegramChannelNetworkDetail>(

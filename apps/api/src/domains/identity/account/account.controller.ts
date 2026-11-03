@@ -20,6 +20,11 @@ export class AccountController {
     return this.service.me(user.sub);
   }
 
+  @Get('shell')
+  shell(@CurrentUser() user: JwtUser) {
+    return this.service.shell(user.sub);
+  }
+
   @Patch('me')
   updateMe(@CurrentUser() user: JwtUser, @Body() dto: UpdateMeDto) {
     return this.service.updateMe(user.sub, dto);

@@ -4,7 +4,10 @@ import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { TelegramManagedPost } from "@/lib/api";
 import { telegramPostKeys } from "@/lib/query-keys";
-import { findManagedPostInPages } from "./managed-post-cache";
+import {
+  findManagedPostInPages,
+  invalidateManagedPostScheduleReads,
+} from "./managed-post-cache";
 
 const RETRY_DELAYS_MS = [0, 1_000, 2_000, 4_000, 8_000] as const;
 const MAX_TIMER_DELAY_MS = 2_147_483_647;
@@ -55,9 +58,7 @@ export function useManagedPostDueRefresh({
       const current = findManagedPostInPages(queryClient, channelId, postId);
       if (current && current.status !== "SCHEDULED" && current.status !== "PUBLISHING") {
         await Promise.all([
-          queryClient.invalidateQueries({
-            queryKey: telegramPostKeys.managedCalendar(channelId),
-          }),
+          invalidateManagedPostScheduleReads(queryClient, channelId),
           queryClient.invalidateQueries({
             queryKey: telegramPostKeys.linkTargets(channelId),
           }),

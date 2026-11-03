@@ -506,6 +506,7 @@ export type {
   TelegramChannelFinancialSummary,
   TelegramChannelImportPayload,
   TelegramChannelNetwork,
+  TelegramChannelNetworkOption,
   TelegramChannelNetworkChannelSummary,
   TelegramChannelNetworkDetail,
   TelegramChannelNetworkKpiStatus,

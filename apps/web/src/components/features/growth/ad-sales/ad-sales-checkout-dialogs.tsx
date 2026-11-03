@@ -70,7 +70,7 @@ export function AdSalesCheckoutDialogs({
     queryKey: telegramAdSalesKeys.drafts(),
     queryFn: telegramAdSalesApi.listDrafts,
     enabled: adSaleModalOpen,
-    staleTime: 0,
+    staleTime: 60_000,
   });
   return (
     <>

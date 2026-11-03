@@ -238,8 +238,9 @@ export function MutualPromotionFolderFormModal({
       channelIds.length > 0 &&
       Boolean(instants.endsAt) &&
       requestedInviteOptionsKey === inviteOptionsRequestKey,
+    // Reopening the editor can reuse its recent availability read. Registering
+    // a new link below explicitly refetches this query after the mutation.
     staleTime: 30_000,
-    refetchOnMount: "always",
   });
   const registerInviteLink = useMutation({
     mutationFn: ({ channelId, url }: { channelId: string; url: string }) =>

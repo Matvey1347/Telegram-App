@@ -62,7 +62,9 @@ export function AdSalePlacementBotActions({
         type="button"
         variant="secondary"
         className="h-8 px-3 text-xs"
-        disabled={!hasPlacementPostContent(draft) || flow.sendStatus === "working"}
+        disabled={
+          !hasPlacementPostContent(draft) || flow.sendStatus === "working"
+        }
         onClick={() => void flow.send()}
       >
         <Bot size={14} />
@@ -76,7 +78,9 @@ export function AdSalePlacementBotActions({
         type="button"
         variant="secondary"
         className="h-8 px-3 text-xs"
-        disabled={flow.importStatus === "working" || flow.importStatus === "waiting"}
+        disabled={
+          flow.importStatus === "working" || flow.importStatus === "waiting"
+        }
         onClick={() => void flow.startImport()}
       >
         {flow.importStatus === "working"

@@ -134,6 +134,13 @@ export class TelegramLeadReadService {
       orderBy: { id: 'desc' },
       take: limit + 1,
     });
+    const total = await this.prisma.telegramLeadSource.count({
+      where: {
+        workspaceId: access.workspaceId,
+        ...(filter.search ? { title: { contains: filter.search.slice(0, 100), mode: 'insensitive' } } : {}),
+        ...(filter.status && ['ACTIVE', 'PAUSED', 'DISABLED', 'ACCESS_LOST'].includes(filter.status) ? { monitoringState: filter.status } : {}),
+      },
+    });
     const page = rows.slice(0, limit),
       metrics = await this.metrics(
         access.workspaceId,
@@ -141,6 +148,7 @@ export class TelegramLeadReadService {
       );
     return {
       items: page.map((row) => this.mapSource(row, metrics.get(row.id))),
+      total,
       hasMore: rows.length > limit,
       nextCursor: rows.length > limit ? leadCursor(page.at(-1)!.id) : null,
     };

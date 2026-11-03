@@ -2,9 +2,12 @@ import type { QueryClient } from "@tanstack/react-query";
 import type { TelegramQrLoginAccount } from "@telegram-system/shared";
 import {
   adCampaignKeys,
+  dashboardKeys,
+  networkKeys,
   telegramAccountKeys,
   telegramChannelKeys,
   telegramPostKeys,
+  telegramPublicationScheduleKeys,
 } from "../../query-keys";
 import { patchTelegramChannelCaches } from "./telegram-channel-cache";
 import { telegramMessageTemplateKeys } from "./telegram-channel-message-templates-api";
@@ -57,6 +60,10 @@ export async function reconcileTelegramQrLoginSuccess(
       queryKey: telegramChannelKeys.analyticsSources(),
     }),
     queryClient.invalidateQueries({ queryKey: telegramChannelKeys.lists() }),
+    queryClient.invalidateQueries({
+      queryKey: telegramChannelKeys.cardLists(),
+    }),
+    queryClient.invalidateQueries({ queryKey: telegramChannelKeys.selects() }),
   ]);
 }
 
@@ -82,6 +89,8 @@ export async function reconcileTelegramChannelSettings(
     queryClient.invalidateQueries({
       queryKey: telegramMessageTemplateKeys.sources(),
     }),
+    queryClient.invalidateQueries({ queryKey: telegramChannelKeys.selects() }),
+    queryClient.invalidateQueries({ queryKey: networkKeys.list() }),
   ]);
 }
 
@@ -109,6 +118,11 @@ export async function invalidateTelegramAccessQueries(
       queryKey: telegramChannelKeys.analyticsSources(),
     }),
     queryClient.invalidateQueries({ queryKey: telegramChannelKeys.lists() }),
+    queryClient.invalidateQueries({
+      queryKey: telegramChannelKeys.cardLists(),
+    }),
+    queryClient.invalidateQueries({ queryKey: telegramChannelKeys.selects() }),
+    queryClient.invalidateQueries({ queryKey: networkKeys.list() }),
   ]);
 }
 
@@ -118,6 +132,12 @@ export async function invalidateTelegramChannelQueries(
 ) {
   await Promise.all([
     queryClient.invalidateQueries({ queryKey: telegramChannelKeys.lists() }),
+    queryClient.invalidateQueries({
+      queryKey: telegramChannelKeys.cardLists(),
+    }),
+    queryClient.invalidateQueries({ queryKey: dashboardKeys.summary() }),
+    queryClient.invalidateQueries({ queryKey: telegramChannelKeys.selects() }),
+    queryClient.invalidateQueries({ queryKey: networkKeys.list() }),
     queryClient.invalidateQueries({
       queryKey: telegramChannelKeys.detail(channelId),
     }),
@@ -152,15 +172,64 @@ export async function invalidateTelegramChannelQueries(
       queryKey: telegramPostKeys.managedCalendar(channelId),
     }),
     queryClient.invalidateQueries({
+      queryKey: telegramPublicationScheduleKeys.occurrencesRoot(),
+    }),
+    queryClient.invalidateQueries({
+      queryKey: telegramPublicationScheduleKeys.occurrencesByChannelsRoot(),
+    }),
+    queryClient.invalidateQueries({
       queryKey: telegramPostKeys.postGroups(channelId),
     }),
     queryClient.invalidateQueries({
       queryKey: telegramPostKeys.linkTargets(channelId),
     }),
     queryClient.invalidateQueries({ queryKey: adCampaignKeys.list() }),
-    queryClient.invalidateQueries({ queryKey: adCampaignKeys.performance() }),
     queryClient.invalidateQueries({
       queryKey: telegramChannelKeys.campaigns(channelId),
     }),
+  ]);
+}
+
+/** Refreshes only reads affected by a channel post-metrics correction. */
+export async function invalidateTelegramPostMetricReads(
+  queryClient: QueryClient,
+  channelId: string,
+) {
+  await Promise.all([
+    queryClient.invalidateQueries({
+      queryKey: telegramPostKeys.channelPosts(channelId),
+    }),
+    queryClient.invalidateQueries({
+      queryKey: telegramChannelKeys.analytics(channelId),
+    }),
+    queryClient.invalidateQueries({
+      queryKey: telegramChannelKeys.audience(channelId),
+    }),
+    queryClient.invalidateQueries({
+      queryKey: telegramChannelKeys.financialSummary(channelId),
+    }),
+    queryClient.invalidateQueries({
+      queryKey: telegramChannelKeys.audienceSnapshots(channelId),
+    }),
+  ]);
+}
+
+/** Invalidates only financial card summaries linked to the changed transaction. */
+export async function invalidateTelegramChannelCardSummaries(
+  queryClient: QueryClient,
+  channelIds: string[],
+) {
+  const uniqueChannelIds = [...new Set(channelIds.filter(Boolean))];
+  if (uniqueChannelIds.length === 0) return;
+  await Promise.all([
+    queryClient.invalidateQueries({
+      queryKey: telegramChannelKeys.cardLists(),
+    }),
+    queryClient.invalidateQueries({ queryKey: networkKeys.list() }),
+    ...uniqueChannelIds.map((channelId) =>
+      queryClient.invalidateQueries({
+        queryKey: telegramChannelKeys.financialSummary(channelId),
+      }),
+    ),
   ]);
 }

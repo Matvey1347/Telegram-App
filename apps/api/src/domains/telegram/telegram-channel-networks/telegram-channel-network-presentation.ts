@@ -173,6 +173,7 @@ export function presentChannelNetwork(
   network: ChannelNetworkInput,
   audiences: ChannelNetworkAudience[],
   financialSummaries: ReadonlyMap<string, Record<string, unknown>>,
+  options: { includeChannelSummaries?: boolean } = {},
 ) {
   const channels = network.channels.map((member) => member.telegramChannel);
   const channelSummaries = channels.map((channel, index) =>
@@ -212,6 +213,6 @@ export function presentChannelNetwork(
       activeSubscribersEstimate: channel.activeSubscribersEstimate,
     })),
     summary: aggregateChannelNetworkSummary(channelSummaries),
-    channelSummaries,
+    ...(options.includeChannelSummaries === false ? {} : { channelSummaries }),
   };
 }

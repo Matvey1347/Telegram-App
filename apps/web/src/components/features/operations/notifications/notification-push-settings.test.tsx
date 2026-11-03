@@ -32,13 +32,15 @@ function browserSubscription() {
   } as unknown as PushSubscription;
 }
 
-function renderSettings(locale: "en" | "ru" = "en") {
-  const client = new QueryClient({
+function renderSettings(
+  locale: "en" | "ru" = "en",
+  client = new QueryClient({
     defaultOptions: {
       queries: { retry: false },
       mutations: { retry: false },
     },
-  });
+  }),
+) {
   const tree = (workspaceId: string) => (
     <QueryClientProvider client={client}>
       <I18nProvider initialLocale={locale}><NotificationPushSettings workspaceId={workspaceId} /></I18nProvider>
@@ -94,6 +96,44 @@ describe("NotificationPushSettings", () => {
       activeSubscriptionCount: 0,
     });
     vi.spyOn(operationsNotificationsApi, "testPush").mockResolvedValue({ status: "sent", attempted: 2, delivered: 2, failed: 0, skipped: 0 });
+  });
+
+  it("updates personal channel reminder delivery independently", async () => {
+    const user = userEvent.setup();
+    renderSettings();
+    const telegram = await screen.findByRole("button", { name: "Telegram" });
+    await user.click(telegram);
+    await waitFor(() => expect(operationsNotificationsApi.updatePreferences).toHaveBeenCalledWith({ channelRemindersTelegramEnabled: true }));
+  });
+
+  it("reuses settings reads that are two minutes old when reopened", async () => {
+    const client = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    });
+    const preferences = {
+      webPushEnabled: false,
+      pushConfigured: true,
+      activeSubscriptionCount: 0,
+    } satisfies OperationsNotificationPreferences;
+    const updatedAt = Date.now() - 2 * 60_000;
+    client.setQueryData(
+      operationsNotificationKeys.preferences("workspace-1"),
+      preferences,
+      { updatedAt },
+    );
+    client.setQueryData(
+      operationsNotificationKeys.pushConfig("workspace-1"),
+      { enabled: true, publicKey: "AQ" },
+      { updatedAt },
+    );
+    renderSettings("en", client);
+
+    expect(await screen.findByRole("button", { name: "Turn on" })).toBeEnabled();
+    expect(operationsNotificationsApi.preferences).not.toHaveBeenCalled();
+    expect(operationsNotificationsApi.pushConfig).not.toHaveBeenCalled();
   });
 
   it("requests browser permission only after explicit Turn on", async () => {

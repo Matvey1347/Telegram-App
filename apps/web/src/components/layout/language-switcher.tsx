@@ -3,6 +3,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Check } from "lucide-react";
 import { accountApi, type AccountMe } from "@/lib/api";
+import type { AccountShell } from "@telegram-system/shared";
 import { useI18n } from "@/providers/i18n-provider";
 import type { TranslationKey } from "@/i18n/catalog";
 import { ActionMenu } from "@/components/ui/action-menu";
@@ -21,6 +22,9 @@ export function LanguageSwitcher() {
   const queryClient = useQueryClient();
   const patchCaches = (next: "en" | "ru") => {
       queryClient.setQueryData<AccountMe>(["account-me"], (account) =>
+        account ? { ...account, locale: next } : account,
+      );
+      queryClient.setQueryData<AccountShell>(["account-shell"], (account) =>
         account ? { ...account, locale: next } : account,
       );
       queryClient.setQueryData(["auth", "me"], (current: unknown) => {

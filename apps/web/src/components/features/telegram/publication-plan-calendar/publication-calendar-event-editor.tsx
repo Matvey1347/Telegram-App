@@ -70,19 +70,17 @@ export function PublicationCalendarEventEditor({
     queryKey: telegramChannelKeys.select(),
     queryFn: () => telegramChannelsApi.select(),
     enabled: Boolean(event),
-    staleTime: 60_000,
   });
   const networksQuery = useQuery({
-    queryKey: networkKeys.list(),
-    queryFn: telegramChannelNetworksApi.list,
+    queryKey: networkKeys.options(),
+    queryFn: telegramChannelNetworksApi.listOptions,
     enabled: isVp,
-    staleTime: 60_000,
+    staleTime: 24 * 60 * 60_000,
   });
   const plansQuery = useQuery({
     queryKey: crossPromotionPlanKeys.list("DIRECT_MUTUAL"),
     queryFn: () => crossPromotionPlansApi.list("DIRECT_MUTUAL"),
     enabled: isVp,
-    staleTime: 30_000,
   });
   const saleId = isAd ? (event?.adSaleId ?? null) : null;
   const saleQuery = useQuery({
@@ -95,19 +93,16 @@ export function PublicationCalendarEventEditor({
     queryKey: ["accounts"],
     queryFn: accountsApi.list,
     enabled: isAd,
-    staleTime: 60_000,
   });
   const { data: settings } = useQuery({
     queryKey: ["currency-settings"],
     queryFn: currenciesApi.getSettings,
     enabled: isAd,
-    staleTime: 5 * 60_000,
   });
   const { data: rates } = useQuery({
     queryKey: ["currency-rates-latest"],
     queryFn: currenciesApi.listLatestRates,
     enabled: isAd,
-    staleTime: 5 * 60_000,
   });
   const productChannelIds = useMemo(
     () =>
@@ -131,7 +126,7 @@ export function PublicationCalendarEventEditor({
   );
   const refreshCalendar = () =>
     queryClient.invalidateQueries({
-      queryKey: telegramPublicationScheduleKeys.all(),
+      queryKey: telegramPublicationScheduleKeys.calendarRoot(),
     });
   const refreshPlan = async () => {
     await Promise.all([
@@ -139,6 +134,9 @@ export function PublicationCalendarEventEditor({
         queryKey: crossPromotionPlanKeys.list("DIRECT_MUTUAL"),
       }),
       queryClient.invalidateQueries({ queryKey: telegramChannelKeys.lists() }),
+      queryClient.invalidateQueries({
+        queryKey: telegramChannelKeys.cardLists(),
+      }),
       refreshCalendar(),
     ]);
   };

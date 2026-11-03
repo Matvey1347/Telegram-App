@@ -1,11 +1,6 @@
 "use client";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import {
-  Bar, CartesianGrid, ComposedChart, Line, ResponsiveContainer,
-  Tooltip, XAxis, YAxis,
-} from "recharts";
-
 function toNumber(value: unknown) {
   const number = Number(value);
   return Number.isFinite(number) ? number : 0;
@@ -16,12 +11,12 @@ function toChartTimestamp(value: unknown) {
   const date = new Date(value as string | Date);
   return Number.isNaN(date.getTime()) ? null : date.getTime();
 }
-function formatLocalDate(value?: string | Date | number | null) {
+export function formatLocalDate(value?: string | Date | number | null) {
   if (value == null) return "-";
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? "-" : date.toLocaleDateString();
 }
-function formatLocalDateTime(value?: string | Date | number | null) {
+export function formatLocalDateTime(value?: string | Date | number | null) {
   if (value == null) return "-";
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? "-" : date.toLocaleString();
@@ -115,7 +110,7 @@ function toTelegramDateTime(value: unknown) {
     : date.getTime();
 }
 
-type TelegramGraphChartData = {
+export type TelegramGraphChartData = {
   rows: Array<Record<string, string | number> & { timestamp: number }>;
   series: Array<{ color: string; key: string; name: string; type: string }>;
 };
@@ -256,81 +251,4 @@ export function hasRenderableTelegramGraphItem<
 function normalizeTelegramColor(value: unknown, fallback: string) {
   const match = String(value || "").match(/#[0-9a-f]{6}/i);
   return match?.[0] || fallback;
-}
-
-export function MtprotoGraphChart({ chart }: { chart: TelegramGraphChartData }) {
-  return (
-    <div className="rounded-lg bg-slate-900/40 p-2">
-      <div className="h-64">
-        <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart
-            data={chart.rows}
-            margin={{ top: 8, right: 12, left: -16, bottom: 0 }}
-          >
-            <CartesianGrid stroke="#1e293b" strokeDasharray="4 4" />
-            <XAxis
-              dataKey="timestamp"
-              type="number"
-              domain={["dataMin", "dataMax"]}
-              tickFormatter={(value) => formatLocalDate(value)}
-              tick={{ fill: "#94a3b8", fontSize: 12 }}
-              minTickGap={24}
-            />
-            <YAxis tick={{ fill: "#94a3b8", fontSize: 12 }} width={42} />
-            <Tooltip
-              labelFormatter={(value) => formatLocalDateTime(value)}
-              contentStyle={{
-                background: "#020617",
-                border: "1px solid #334155",
-                borderRadius: 10,
-              }}
-              labelStyle={{ color: "#e2e8f0" }}
-            />
-            {chart.series.map((series) =>
-              series.type === "bar" ? (
-                <Bar
-                  key={series.key}
-                  dataKey={series.key}
-                  fill={series.color}
-                  name={series.name}
-                  stackId="telegram"
-                />
-              ) : (
-                <Line
-                  key={series.key}
-                  type={series.type === "step" ? "stepAfter" : "linear"}
-                  dataKey={series.key}
-                  stroke={series.color}
-                  strokeWidth={2}
-                  dot={false}
-                  name={series.name}
-                />
-              ),
-            )}
-          </ComposedChart>
-        </ResponsiveContainer>
-      </div>
-      <TelegramGraphLegend series={chart.series} />
-    </div>
-  );
-}
-
-function TelegramGraphLegend({
-  series,
-}: {
-  series: TelegramGraphChartData["series"];
-}) {
-  return (
-    <div className="mt-2 flex flex-wrap gap-2 px-1 pb-1">
-      {series.map((item) => (
-        <span
-          key={item.key}
-          className="rounded-md px-2.5 py-1 text-xs font-semibold text-white shadow-sm"
-          style={{ backgroundColor: item.color }}
-        >
-          {item.name}
-        </span>
-      ))}
-    </div>
-  );
 }

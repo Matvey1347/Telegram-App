@@ -69,3 +69,27 @@ describe("telegramUserAccountsApi.loginWithQr", () => {
     );
   });
 });
+
+describe("telegramChannelNetworksApi.listOptions", () => {
+  it("uses the compact network options endpoint", async () => {
+    const get = vi.fn().mockResolvedValue({ data: [{ id: "network-1" }] });
+    const api = createTelegramSourcesApi({
+      api: { get } as unknown as AxiosInstance,
+      crud: vi.fn(() => ({
+        list: vi.fn(),
+        get: vi.fn(),
+        create: vi.fn(),
+        update: vi.fn(),
+        remove: vi.fn(),
+      })),
+      getPaginated: vi.fn(),
+      getAllPaginatedItems: vi.fn(),
+      streamProgressAction: vi.fn(),
+    });
+
+    await expect(api.telegramChannelNetworksApi.listOptions()).resolves.toEqual(
+      [{ id: "network-1" }],
+    );
+    expect(get).toHaveBeenCalledWith("/telegram-channel-networks/options");
+  });
+});

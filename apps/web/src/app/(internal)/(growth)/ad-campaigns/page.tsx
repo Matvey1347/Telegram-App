@@ -3,6 +3,7 @@
 import type { MouseEventHandler, ReactNode } from "react";
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import dynamic from "next/dynamic";
 import {
   keepPreviousData,
   useMutation,
@@ -39,7 +40,11 @@ import {
   type TelegramInviteLink,
 } from "@/lib/api";
 import { currenciesApi } from "@/lib/api";
-import { adCampaignKeys, telegramChannelKeys } from "@/lib/query-keys";
+import {
+  adCampaignKeys,
+  networkKeys,
+  telegramChannelKeys,
+} from "@/lib/query-keys";
 import { MoneyStack } from "@/components/ui/money-stack";
 import { useAdCampaignMutations } from "@/components/features/growth/ad-campaigns/use-ad-campaign-mutations";
 import { useCampaignInviteLinkRefresh } from "@/components/features/growth/ad-campaigns/use-campaign-invite-link-refresh";
@@ -75,11 +80,6 @@ import {
   resolveAdsSection,
   type AdsSection,
 } from "@/components/features/growth/ad-campaigns/ads-section-tabs";
-import { MutualPromotionFoldersPage } from "@/components/features/growth/ad-campaigns/mutual-promotion/mutual-promotion-folders-page";
-import {
-  CrossPromotionPlansPage,
-  MutualPromotionModeTabs,
-} from "@/components/features/growth/ad-campaigns/cross-promotion-plans-page";
 import { adsSectionHeader } from "@/components/features/growth/ad-campaigns/ads-section-header";
 import { PromoCard } from "@/components/features/growth/ad-campaigns/promo-card";
 import { HypothesisFormModal } from "@/components/features/growth/ad-campaigns/hypothesis-form-modal";
@@ -94,6 +94,64 @@ function isOwnTelegramChannel(channel: any) {
   return Array.isArray(channel?.adminLinks) && channel.adminLinks.length > 0;
 }
 
+function AdCampaignSectionSkeleton() {
+  const searchParams = useSearchParams();
+  const section = resolveAdsSection(
+    searchParams.get("section"),
+    searchParams.get("view"),
+  );
+  const headerKey =
+    section === "mutual-promotion" && searchParams.get("mode") === "folders"
+      ? "mutual-folders"
+      : section;
+  const header = adsSectionHeader(headerKey);
+
+  return (
+    <AppShell>
+      <PageHeader title={header.title} subtitle={header.subtitle} />
+      <AdsSectionTabs value={section} />
+      <div
+        role="status"
+        aria-label="Loading promotion section"
+        aria-busy="true"
+        className="space-y-4"
+      >
+        <div className="h-10 w-full animate-pulse rounded-lg bg-neutral-900" />
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {Array.from({ length: 3 }, (_, index) => (
+            <div
+              key={index}
+              className="h-48 animate-pulse rounded-xl border border-neutral-800 bg-neutral-900/70"
+            />
+          ))}
+        </div>
+      </div>
+    </AppShell>
+  );
+}
+
+const LazyMutualPromotionFoldersPage = dynamic(
+  () =>
+    import("@/components/features/growth/ad-campaigns/mutual-promotion/mutual-promotion-folders-page").then(
+      (module) => module.MutualPromotionFoldersPage,
+    ),
+  { loading: () => <AdCampaignSectionSkeleton /> },
+);
+const LazyCrossPromotionPlansPage = dynamic(
+  () =>
+    import("@/components/features/growth/ad-campaigns/cross-promotion-plans-page").then(
+      (module) => module.CrossPromotionPlansPage,
+    ),
+  { loading: () => <AdCampaignSectionSkeleton /> },
+);
+const LazyMutualPromotionModeTabs = dynamic(
+  () =>
+    import("@/components/features/growth/ad-campaigns/cross-promotion-plans-page").then(
+      (module) => module.MutualPromotionModeTabs,
+    ),
+  { loading: () => null },
+);
+
 export default function AdsPage() {
   const searchParams = useSearchParams();
   const requestedSection = searchParams.get("section");
@@ -103,22 +161,25 @@ export default function AdsPage() {
   const mutualMode =
     searchParams.get("mode") === "folders" ? "folders" : "direct";
   return section === "mutual-promotion" && mutualMode === "folders" ? (
-    <MutualPromotionFoldersPage
+    <LazyMutualPromotionFoldersPage
       sectionTabs={
         <>
           {sectionTabs}
-          <MutualPromotionModeTabs mode="folders" />
+          <LazyMutualPromotionModeTabs mode="folders" />
         </>
       }
     />
   ) : section === "mutual-promotion" ? (
-    <CrossPromotionPlansPage
+    <LazyCrossPromotionPlansPage
       kind="DIRECT_MUTUAL"
       sectionTabs={sectionTabs}
-      mutualModeTabs={<MutualPromotionModeTabs mode="direct" />}
+      mutualModeTabs={<LazyMutualPromotionModeTabs mode="direct" />}
     />
   ) : section === "own-promotion" ? (
-    <CrossPromotionPlansPage kind="OWN_CHANNELS" sectionTabs={sectionTabs} />
+    <LazyCrossPromotionPlansPage
+      kind="OWN_CHANNELS"
+      sectionTabs={sectionTabs}
+    />
   ) : (
     <AdCampaignsPage sectionTabs={sectionTabs} topSection={section} />
   );
@@ -201,9 +262,8 @@ function AdCampaignsPage({
     queryFn: () => telegramChannelsApi.select(),
   });
   const { data: channelNetworks } = useQuery({
-    queryKey: ["telegram-channel-networks"],
+    queryKey: networkKeys.list(),
     queryFn: telegramChannelNetworksApi.list,
-    staleTime: 60_000,
   });
   const { data, isLoading, error } = useQuery({
     queryKey: [
@@ -231,16 +291,6 @@ function AdCampaignsPage({
         dateTo: dateTo || undefined,
         sort,
       }),
-    enabled: viewMode === "campaigns",
-  });
-  const { data: performance } = useQuery({
-    queryKey: ["ad-campaigns-performance", channelScopeFilter],
-    queryFn: () =>
-      adCampaignsApi.performanceSummary(
-        channelScopeFilter
-          ? { telegramChannelIds: channelScopeFilter }
-          : undefined,
-      ),
     enabled: viewMode === "campaigns",
   });
   const {
@@ -326,7 +376,6 @@ function AdCampaignsPage({
     }) => adCampaignsApi.updateAnalyticsInput(id, { excludeFromAnalytics }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["ad-campaigns"] });
-      qc.invalidateQueries({ queryKey: ["ad-campaigns-performance"] });
     },
     onError: (error) =>
       pushToast(
@@ -368,11 +417,11 @@ function AdCampaignsPage({
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: adCampaignKeys.list() });
       void qc.invalidateQueries({ queryKey: telegramChannelKeys.lists() });
+      void qc.invalidateQueries({ queryKey: telegramChannelKeys.cardLists() });
       void qc.invalidateQueries({
         queryKey: telegramChannelKeys.trafficAttributions(),
       });
       qc.invalidateQueries({ queryKey: ["ad-hypotheses"] });
-      qc.invalidateQueries({ queryKey: ["ad-campaigns-performance"] });
       pushToast(
         "Hypothesis analytics flag updated for all linked campaigns.",
         "success",

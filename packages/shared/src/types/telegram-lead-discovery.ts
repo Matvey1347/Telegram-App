@@ -196,8 +196,9 @@ export type LeadCandidateView = {
   contactId: string | null;
   revision: number;
   createdAt: string;
+  latestPublishedAt?: string | null;
   expiresAt: string;
-  sources: Array<{ id: string; title: string; url: string | null }>;
+  sources: Array<{ id: string; title: string; url: string | null; username?: string | null }>;
   observations: LeadObservationView[];
   hasMoreObservations: boolean;
   aliases: Array<{ id: string; title: string; reason: string }>;

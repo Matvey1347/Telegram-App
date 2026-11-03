@@ -13,7 +13,10 @@ import {
   telegramChannelsApi,
 } from "@/lib/api";
 import { telegramPostKeys } from "@/lib/query-keys";
-import { invalidateTelegramAdSalesDerivedQueries } from "@/lib/features/growth/telegram-ad-sales-query";
+import {
+  invalidateTelegramAdSalesDerivedQueries,
+  reconcileTelegramAdSaleCache,
+} from "@/lib/features/growth/telegram-ad-sales-query";
 import { useAppToast } from "@/providers/toast-provider";
 import { SaleDetailsModal } from "./ad-sales-sale-details-modal";
 
@@ -28,6 +31,9 @@ export function AdSalesSaleDetailsDialog({
   productsByChannelId,
   settings,
   rates,
+  systemBotConnected,
+  systemBotUsername,
+  systemBotWorkspaceId,
   queryClient,
   setPostEditorPlacement,
   setPostTitle,
@@ -43,6 +49,9 @@ export function AdSalesSaleDetailsDialog({
   productsByChannelId: Record<string, TelegramAdProduct[]>;
   settings: ComponentProps<typeof SaleDetailsModal>["settings"];
   rates: ComponentProps<typeof SaleDetailsModal>["rates"];
+  systemBotConnected?: boolean;
+  systemBotUsername?: string | null;
+  systemBotWorkspaceId?: string | null;
   queryClient: QueryClient;
   setPostEditorPlacement: Dispatch<SetStateAction<PostEditorPlacement | null>>;
   setPostTitle: Dispatch<SetStateAction<string>>;
@@ -65,6 +74,9 @@ export function AdSalesSaleDetailsDialog({
       productsByChannelId={productsByChannelId}
       settings={settings}
       rates={rates}
+      systemBotConnected={systemBotConnected}
+      systemBotUsername={systemBotUsername}
+      systemBotWorkspaceId={systemBotWorkspaceId}
       onCreatePayment={async (sale, payload) => {
         await telegramAdSalesApi.createPayment(sale.id, payload);
         await refreshSaleAfterMutation(
@@ -90,109 +102,95 @@ export function AdSalesSaleDetailsDialog({
         });
       }}
       onSave={async (sale, draft) => {
-        let feedbackStarted = false;
-        const silentAfterFirstMutation = () => {
-          const silent = feedbackStarted;
-          feedbackStarted = true;
-          return silent;
+        const currentBuyer =
+          sale.advertiserTelegramSnapshot ??
+          sale.advertiserTelegram ??
+          sale.advertiserContact ??
+          sale.advertiserNameSnapshot ??
+          sale.advertiserName ??
+          "";
+        const buyerChanged = draft.buyerContact !== currentBuyer;
+        const saleChanges = {
+          ...(draft.origin !== sale.origin ? { origin: draft.origin } : {}),
+          ...(draft.sellerMemberId !==
+          (sale.sellerMemberId ?? sale.assignedMemberId)
+            ? { sellerMemberId: draft.sellerMemberId }
+            : {}),
+          ...(buyerChanged
+            ? {
+                advertiserId: null,
+                advertiserName:
+                  draft.buyerContact.replace(/^@/, "") || "Advertiser",
+                advertiserContact: draft.buyerContact || null,
+                advertiserTelegram: draft.buyerContact.startsWith("@")
+                  ? draft.buyerContact
+                  : null,
+              }
+            : {}),
+          ...(draft.payments[0]?.currency &&
+          draft.payments[0].currency !== sale.settlementCurrency
+            ? { settlementCurrency: draft.payments[0].currency }
+            : {}),
         };
-        if (
-          draft.origin !== sale.origin ||
-          draft.assignedMemberId !== sale.assignedMemberId ||
-          draft.buyerContact !==
-            (sale.advertiserTelegramSnapshot ??
-              sale.advertiserTelegram ??
-              sale.advertiserContact ??
-              sale.advertiserNameSnapshot ??
-              sale.advertiserName ??
-              "")
-        ) {
-          const buyerChanged =
-            draft.buyerContact !==
-            (sale.advertiserTelegramSnapshot ??
-              sale.advertiserTelegram ??
-              sale.advertiserContact ??
-              sale.advertiserNameSnapshot ??
-              sale.advertiserName ??
-              "");
-          await telegramAdSalesApi.updateSale(
-            sale.id,
-            {
-              origin: draft.origin,
-              assignedMemberId: draft.assignedMemberId,
-              ...(buyerChanged
-                ? {
-                    advertiserId: null,
-                    advertiserName:
-                      draft.buyerContact.replace(/^@/, "") || "Advertiser",
-                    advertiserContact: draft.buyerContact || null,
-                    advertiserTelegram: draft.buyerContact.startsWith("@")
-                      ? draft.buyerContact
-                      : null,
-                  }
-                : {}),
-            },
-            silentAfterFirstMutation(),
-          );
-        }
-        const targetCurrency =
-          draft.payments[0]?.currency ?? sale.settlementCurrency;
-        if (targetCurrency !== sale.settlementCurrency) {
-          await telegramAdSalesApi.updateSale(
-            sale.id,
-            {
-              settlementCurrency: targetCurrency,
-            },
-            silentAfterFirstMutation(),
-          );
-        }
-        for (const placement of draft.placements) {
-          await telegramAdSalesApi.updatePlacement(
-            sale.id,
-            placement.id,
-            {
-              scheduledAt: placement.scheduledAt,
-              timezone: placement.timezone,
-              agreedPrice: placement.agreedPrice,
-              recommendedPrice: placement.recommendedPrice,
-              minimumPrice: placement.minimumPrice,
-              currency: placement.currency,
-              manualPriceReason: placement.manualPriceReason || null,
-              telegramAdProductId: placement.telegramAdProductId,
-              managedPostId: placement.managedPostId,
-            },
-            silentAfterFirstMutation(),
-          );
-        }
-        for (const payment of draft.payments) {
-          await telegramAdSalesApi.updatePayment(
-            sale.id,
-            payment.id,
-            {
-              accountId: payment.accountId,
-              amount: payment.amount,
-              currency: payment.currency,
-              paidAt: payment.paidAt,
-              notes: payment.notes || null,
-              allocations: payment.allocations,
-            },
-            silentAfterFirstMutation(),
-          );
-        }
-        const changedChannelIds = draft.placements
-          .map(
-            (draftPlacement) =>
-              sale.placements.find(
-                (placement) => placement.id === draftPlacement.id,
-              )?.telegramChannelId,
-          )
-          .filter((channelId): channelId is string => Boolean(channelId));
-        await refreshSaleAfterMutation(sale.id, changedChannelIds);
-        await invalidateTelegramAdSalesDerivedQueries(queryClient, {
-          finance: true,
-          dashboard: true,
-          analytics: true,
+        const operation = startOperation({
+          id: `ad-sale-edit:${sale.id}`,
+          title: "Saving deal changes",
+          message: "Sending changes to the server…",
+          current: 0,
+          total: 1,
         });
+        try {
+          const updatedSale = await telegramAdSalesApi.saveSaleWorkflow(
+            sale.id,
+            {
+              ...(Object.keys(saleChanges).length ? { sale: saleChanges } : {}),
+              placements: draft.placements,
+              payments: draft.payments,
+            },
+            (item, current, total) =>
+              operation.update({
+                message: item.message,
+                current,
+                total,
+                details: `${item.completed.length} completed: ${
+                  item.completed.length > 3
+                    ? `… ${item.completed.slice(-3).join(" · ")}`
+                    : item.completed.join(" · ")
+                }. ${
+                  item.remaining.length
+                    ? `Remaining: ${item.remaining.slice(0, 3).join(" · ")}${item.remaining.length > 3 ? ` · +${item.remaining.length - 3} more` : ""}`
+                    : "All steps complete."
+                }${item.placementId ? ` · Placement ${item.placementId}` : ""}`,
+              }),
+          );
+          reconcileTelegramAdSaleCache(queryClient, {
+            type: "update",
+            sale: updatedSale,
+          });
+          await invalidateTelegramAdSalesDerivedQueries(queryClient, {
+            availability: true,
+            analytics: true,
+            finance: true,
+            dashboard: true,
+            managedPosts: true,
+            channelSummaries: true,
+            publicationCalendar: true,
+            channelIds: updatedSale.placements.map(
+              (placement) => placement.telegramChannelId,
+            ),
+          });
+          operation.succeed({
+            title: "Deal changes saved",
+            message: "All placement, post, and payment changes are saved.",
+          });
+        } catch (error) {
+          operation.fail({
+            title: "Could not save deal changes",
+            message:
+              error instanceof Error ? error.message : "The save failed.",
+          });
+          throw error;
+        }
       }}
       onUpdateSharedPost={async (sale, draft) => {
         const linkedPlacements = sale.placements.filter(
@@ -345,15 +343,6 @@ export function AdSalesSaleDetailsDialog({
             `Post ${post.telegramMessageId}`,
           publishedAt: post.postDate,
         }));
-      }}
-      onAttachPost={async (sale, placement, post) => {
-        await telegramAdSalesApi.attachManagedPost(sale.id, placement.id, {
-          ...post,
-        });
-        await refreshSaleAfterMutation(
-          sale.id,
-          sale.placements.map((item) => item.telegramChannelId),
-        );
       }}
     />
   );

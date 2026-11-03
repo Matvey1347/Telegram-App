@@ -15,7 +15,11 @@ import {
   telegramChannelNetworksApi,
   telegramChannelsApi,
 } from "@/lib/api";
-import { networkKeys, telegramChannelKeys } from "@/lib/query-keys";
+import {
+  networkKeys,
+  telegramChannelKeys,
+  telegramPublicationScheduleKeys,
+} from "@/lib/query-keys";
 import {
   crossPromotionPlanKeys,
   crossPromotionPlansApi,
@@ -55,6 +59,10 @@ export function CrossPromotionPlansPage({
   const requestedPlanId = searchParams.get("planId");
   const openedPlanIdRef = useRef<string | null>(null);
   const qc = useQueryClient();
+  const refreshCalendar = () =>
+    qc.invalidateQueries({
+      queryKey: telegramPublicationScheduleKeys.calendarRoot(),
+    });
   const { startOperation } = useAppToast();
   const [open, setOpen] = useState(false);
   const [editingPlan, setEditingPlan] = useState<CrossPromotionPlan | null>(
@@ -80,12 +88,13 @@ export function CrossPromotionPlansPage({
   const channelsQuery = useQuery({
     queryKey: telegramChannelKeys.select(),
     queryFn: () => telegramChannelsApi.select(),
-    staleTime: 60_000,
+    enabled: open || Boolean(previewPromoId),
   });
   const networksQuery = useQuery({
-    queryKey: networkKeys.list(),
-    queryFn: telegramChannelNetworksApi.list,
-    staleTime: 60_000,
+    queryKey: networkKeys.options(),
+    queryFn: telegramChannelNetworksApi.listOptions,
+    enabled: open,
+    staleTime: 24 * 60 * 60_000,
   });
   const previewPromoQuery = useQuery({
     queryKey: ["promos", "preview", previewPromoId],
@@ -145,6 +154,8 @@ export function CrossPromotionPlansPage({
       await Promise.all([
         qc.invalidateQueries({ queryKey: crossPromotionPlanKeys.list(kind) }),
         qc.invalidateQueries({ queryKey: telegramChannelKeys.lists() }),
+        qc.invalidateQueries({ queryKey: telegramChannelKeys.cardLists() }),
+        refreshCalendar(),
         qc.invalidateQueries({
           queryKey: telegramChannelKeys.trafficAttributions(),
         }),
@@ -194,6 +205,7 @@ export function CrossPromotionPlansPage({
       );
       setEditingPlan(plan);
       setOpen(false);
+      void refreshCalendar();
     },
   });
   const replaceAndPublishNowMutation = useMutation({
@@ -231,6 +243,8 @@ export function CrossPromotionPlansPage({
       await Promise.all([
         qc.invalidateQueries({ queryKey: crossPromotionPlanKeys.list(kind) }),
         qc.invalidateQueries({ queryKey: telegramChannelKeys.lists() }),
+        qc.invalidateQueries({ queryKey: telegramChannelKeys.cardLists() }),
+        refreshCalendar(),
       ]);
       setOpen(false);
       setEditingPlan(null);
@@ -284,6 +298,8 @@ export function CrossPromotionPlansPage({
       await Promise.all([
         qc.invalidateQueries({ queryKey: crossPromotionPlanKeys.list(kind) }),
         qc.invalidateQueries({ queryKey: telegramChannelKeys.lists() }),
+        qc.invalidateQueries({ queryKey: telegramChannelKeys.cardLists() }),
+        refreshCalendar(),
       ]);
     },
   });
@@ -307,35 +323,61 @@ export function CrossPromotionPlansPage({
       await Promise.all([
         qc.invalidateQueries({ queryKey: crossPromotionPlanKeys.list(kind) }),
         qc.invalidateQueries({ queryKey: telegramChannelKeys.lists() }),
+        qc.invalidateQueries({ queryKey: telegramChannelKeys.cardLists() }),
+        refreshCalendar(),
       ]);
     },
   });
   const updatePublicationChannelMutation = useMutation({
-    mutationFn: ({ publicationId, channelId, payload }: {
-      publicationId: string; channelId: string; payload: CreateCrossPromotionPlanPayload;
+    mutationFn: ({
+      publicationId,
+      channelId,
+      payload,
+    }: {
+      publicationId: string;
+      channelId: string;
+      payload: CreateCrossPromotionPlanPayload;
     }) => {
       if (!editingPlan) throw new Error("Promotion is not available");
       return crossPromotionPlansApi.updatePublicationChannelSchedule(
-        editingPlan.id, publicationId, channelId, payload,
+        editingPlan.id,
+        publicationId,
+        channelId,
+        payload,
       );
     },
     onSuccess: async (plan) => {
       setEditingPlan(plan);
-      await qc.invalidateQueries({ queryKey: crossPromotionPlanKeys.list(kind) });
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: crossPromotionPlanKeys.list(kind) }),
+        refreshCalendar(),
+      ]);
     },
   });
   const replacePublicationChannelMutation = useMutation({
-    mutationFn: ({ publicationId, channelId, payload }: {
-      publicationId: string; channelId: string; payload: CreateCrossPromotionPlanPayload;
+    mutationFn: ({
+      publicationId,
+      channelId,
+      payload,
+    }: {
+      publicationId: string;
+      channelId: string;
+      payload: CreateCrossPromotionPlanPayload;
     }) => {
       if (!editingPlan) throw new Error("Promotion is not available");
       return crossPromotionPlansApi.replacePublicationChannelSchedule(
-        editingPlan.id, publicationId, channelId, payload,
+        editingPlan.id,
+        publicationId,
+        channelId,
+        payload,
       );
     },
     onSuccess: async (plan) => {
       setEditingPlan(plan);
-      await qc.invalidateQueries({ queryKey: crossPromotionPlanKeys.list(kind) });
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: crossPromotionPlanKeys.list(kind) }),
+        refreshCalendar(),
+      ]);
     },
   });
   const deleteMutation = useMutation({
@@ -347,6 +389,8 @@ export function CrossPromotionPlansPage({
       );
       void Promise.all([
         qc.invalidateQueries({ queryKey: telegramChannelKeys.lists() }),
+        qc.invalidateQueries({ queryKey: telegramChannelKeys.cardLists() }),
+        refreshCalendar(),
         qc.invalidateQueries({
           queryKey: telegramChannelKeys.trafficAttributions(),
         }),
@@ -381,9 +425,12 @@ export function CrossPromotionPlansPage({
       }
     },
     onSettled: async () => {
-      await qc.invalidateQueries({
-        queryKey: crossPromotionPlanKeys.list(kind),
-      });
+      await Promise.all([
+        qc.invalidateQueries({
+          queryKey: crossPromotionPlanKeys.list(kind),
+        }),
+        refreshCalendar(),
+      ]);
     },
   });
   const sendToBotMutation = useMutation({
@@ -397,6 +444,7 @@ export function CrossPromotionPlansPage({
       await Promise.all([
         qc.invalidateQueries({ queryKey: crossPromotionPlanKeys.list(kind) }),
         qc.invalidateQueries({ queryKey: telegramChannelKeys.lists() }),
+        qc.invalidateQueries({ queryKey: telegramChannelKeys.cardLists() }),
         qc.invalidateQueries({
           queryKey: telegramChannelKeys.trafficAttributions(),
         }),
@@ -491,9 +539,9 @@ export function CrossPromotionPlansPage({
           updateDetailsMutation.isPending ||
           replaceAndPublishNowMutation.isPending ||
           updatePublicationMutation.isPending ||
-          replacePublicationMutation.isPending
-          || updatePublicationChannelMutation.isPending
-          || replacePublicationChannelMutation.isPending
+          replacePublicationMutation.isPending ||
+          updatePublicationChannelMutation.isPending ||
+          replacePublicationChannelMutation.isPending
         }
         onClose={() => {
           setOpen(false);
@@ -509,11 +557,27 @@ export function CrossPromotionPlansPage({
         onReplacePublicationAndPublishNow={(publicationId, payload) =>
           replacePublicationMutation.mutateAsync({ publicationId, payload })
         }
-        onUpdatePublicationChannelSchedule={(publicationId, channelId, payload) =>
-          updatePublicationChannelMutation.mutateAsync({ publicationId, channelId, payload })
+        onUpdatePublicationChannelSchedule={(
+          publicationId,
+          channelId,
+          payload,
+        ) =>
+          updatePublicationChannelMutation.mutateAsync({
+            publicationId,
+            channelId,
+            payload,
+          })
         }
-        onReplacePublicationChannelSchedule={(publicationId, channelId, payload) =>
-          replacePublicationChannelMutation.mutateAsync({ publicationId, channelId, payload })
+        onReplacePublicationChannelSchedule={(
+          publicationId,
+          channelId,
+          payload,
+        ) =>
+          replacePublicationChannelMutation.mutateAsync({
+            publicationId,
+            channelId,
+            payload,
+          })
         }
         onSaveDraft={(draft, id) =>
           saveDraftMutation.mutateAsync({ draft, id })

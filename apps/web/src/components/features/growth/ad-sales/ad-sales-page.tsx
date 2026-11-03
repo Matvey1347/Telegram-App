@@ -12,7 +12,7 @@ import { Plus } from "lucide-react";
 import { formatDate } from "@/lib/date-format";
 import { type TelegramAdAvailabilitySlot } from "@telegram-system/shared";
 import { AppShell } from "@/components/layout/app-shell";
-import { telegramSystemBotKeys } from "@/lib/query-keys";
+import { networkKeys, telegramSystemBotKeys } from "@/lib/query-keys";
 import { PageTabHead } from "@/components/layout/page-tab-head";
 import { Button, PageHeader } from "@/components/ui/primitives";
 import { AdSaleModal } from "@/components/features/growth/ad-sales/ad-sale-modal";
@@ -58,6 +58,7 @@ import {
   invalidateTelegramAdSaleReads,
   invalidateTelegramAdSalesDerivedQueries,
   reconcileTelegramAdSaleCache,
+  shouldLoadAdSalesWorkspaceTimezone,
   telegramAdSalesKeys,
 } from "@/lib/features/growth/telegram-ad-sales-query";
 import {
@@ -101,8 +102,6 @@ function LegacyAdSalesPage() {
     from: string;
     to: string;
   } | null>(null);
-  const [calendarPreferencesReady, setCalendarPreferencesReady] =
-    useState(false);
   const [selectedNetworkId, setSelectedNetworkId] = useState("");
   const [selectedChannelIds, setSelectedChannelIds] = useState<string[]>([]);
   const [salesPage, setSalesPage] = useState(1);
@@ -188,17 +187,20 @@ function LegacyAdSalesPage() {
   const { data: settings } = useQuery({
     queryKey: ["currency-settings"],
     queryFn: currenciesApi.getSettings,
-    staleTime: 5 * 60 * 1000,
   });
   const { data: me } = useQuery({
     queryKey: ["auth", "me"],
     queryFn: authApi.me,
     staleTime: 5 * 60 * 1000,
+    enabled: shouldLoadAdSalesWorkspaceTimezone(
+      tab,
+      adSaleModalOpen,
+      Boolean(selectedSaleId),
+    ),
   });
   const { data: rates } = useQuery({
     queryKey: ["currency-rates-latest"],
     queryFn: currenciesApi.listLatestRates,
-    staleTime: 5 * 60 * 1000,
   });
   const {
     query: channelsQuery,
@@ -206,10 +208,9 @@ function LegacyAdSalesPage() {
     saleableChannels,
   } = useAdSalesChannels(tab !== "clients" || adSaleModalOpen);
   const networksQuery = useQuery({
-    queryKey: ["telegram-channel-networks"],
+    queryKey: networkKeys.list(),
     queryFn: telegramChannelNetworksApi.list,
     enabled: tab === "calendar" || adSaleModalOpen,
-    staleTime: 60 * 1000,
   });
   const networks = useMemo(
     () => networksQuery.data ?? [],
@@ -224,7 +225,7 @@ function LegacyAdSalesPage() {
   const systemBotConnectionQuery = useQuery({
     queryKey: telegramSystemBotKeys.connection(),
     queryFn: telegramSystemBotApi.connection,
-    enabled: adSaleModalOpen,
+    enabled: adSaleModalOpen || Boolean(selectedSaleId),
     staleTime: 60 * 1000,
     refetchOnWindowFocus: "always",
   });
@@ -235,13 +236,11 @@ function LegacyAdSalesPage() {
     enabled: tab === "calendar" || adSaleModalOpen,
     staleTime: 60 * 1000,
   });
-  useEffect(() => {
-    if (!preferencesQuery.isSuccess && !preferencesQuery.isError) return;
-    // Wait for the persisted range and channel selection before starting the
-    // expensive calendar read. This prevents a transient week request followed
-    // immediately by the saved month request on every page open.
-    setCalendarPreferencesReady(true);
-  }, [preferencesQuery.isError, preferencesQuery.isSuccess]);
+  // Wait for saved range/channel preferences before starting the expensive
+  // calendar read. Deriving readiness avoids an extra state update/render and
+  // prevents a transient default-range request on every page open.
+  const calendarPreferencesReady =
+    preferencesQuery.isSuccess || preferencesQuery.isError;
   const { mutate: savePreferences } = useMutation({
     mutationFn: (payload: Record<string, unknown>) =>
       telegramAdSalesApi.updatePreferences(payload),
@@ -266,6 +265,10 @@ function LegacyAdSalesPage() {
       ),
     enabled: tab === "sales",
     ...adSalesDataCacheOptions,
+    // Sale mutations reconcile or invalidate cached list pages. A longer
+    // in-session freshness window makes returning to Sales avoid a list GET
+    // while the active-page lifecycle refresh still handles due publications.
+    staleTime: 5 * 60 * 1000,
   });
   useAdSalesLifecycleRefresh({
     active: tab === "sales",
@@ -639,6 +642,7 @@ function LegacyAdSalesPage() {
         managedPosts: true,
         channelSummaries: true,
         crmContacts: true,
+        publicationCalendar: true,
         channelIds: reserved.placements.map(
           (placement) => placement.telegramChannelId,
         ),
@@ -715,6 +719,7 @@ function LegacyAdSalesPage() {
         dashboard: true,
         managedPosts: true,
         channelSummaries: true,
+        publicationCalendar: true,
         channelIds: reserved.placements.map(
           (placement) => placement.telegramChannelId,
         ),
@@ -891,6 +896,7 @@ function LegacyAdSalesPage() {
               availability: true,
               analytics: true,
               channelSummaries: true,
+              publicationCalendar: true,
               channelIds: result.channelIds,
             });
           }}
@@ -922,6 +928,9 @@ function LegacyAdSalesPage() {
         productsByChannelId={productsByChannelId}
         settings={settings}
         rates={rates}
+        systemBotConnected={systemBotConnectionQuery.data?.connected}
+        systemBotUsername={systemBotConnectionQuery.data?.botUsername}
+        systemBotWorkspaceId={systemBotConnectionQuery.data?.currentWorkspaceId}
         queryClient={queryClient}
         setPostEditorPlacement={setPostEditorPlacement}
         setPostTitle={setPostTitle}

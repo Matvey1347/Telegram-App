@@ -135,6 +135,27 @@ describe("telegramSystemBotApi subscriptions", () => {
     );
   });
 
+  it("recovers a recent import without replacing the website cache", async () => {
+    const get = vi.fn().mockResolvedValue({ data: { ready: true } });
+    const client = createTelegramSystemBotApi({
+      get,
+    } as unknown as AxiosInstance);
+
+    await expect(client.recoverRecentPostImport("Ad sale · Channel")).resolves.toEqual({
+      ready: true,
+    });
+    expect(get).toHaveBeenCalledWith(
+      "/telegram/system-bot/post-imports/recover",
+      expect.objectContaining({
+        headers: { "Cache-Control": "no-cache" },
+        params: expect.objectContaining({
+          context: "Ad sale · Channel",
+          _: expect.any(Number),
+        }),
+      }),
+    );
+  });
+
   it("cancels the exact canonical workflow", async () => {
     const del = vi.fn().mockResolvedValue({ data: { workflowId: "flow/1", mode: "single", status: "CANCELLED" } });
     const client = createTelegramSystemBotApi({ delete: del } as unknown as AxiosInstance);

@@ -4,6 +4,7 @@ import { TelegramLeadRetentionService } from '../../telegram/telegram-crm/lead-d
 import { TelegramCrmAiDraftRetentionService } from '../../telegram/telegram-crm/telegram-crm-ai-draft-retention.service';
 import { AiUsageRetentionService } from '../ai/ai-usage-retention.service';
 import { Injectable } from '@nestjs/common';
+import { TelegramChannelRemindersDueService } from '../../telegram/telegram-channels/telegram-channel-reminders-due.service';
 import { ModuleRef } from '@nestjs/core';
 import { ApplicationLogsService } from '../application-logs/application-logs.service';
 import { CurrenciesService } from '../../finance/currencies/currencies.service';
@@ -123,6 +124,11 @@ export class ScheduledTaskExecutorService {
         summary: `Processed ${result.processed} folder actions and ${direct.processed} direct-promotion deletions; completed ${result.completed + direct.completed}, retried ${result.retried + direct.retried}, failed ${result.failed}.`,
         details: { folders: result, direct },
       };
+    },
+    'telegram.channel_reminders.due': async () => {
+      const service = await this.moduleRef.resolve(TelegramChannelRemindersDueService, undefined, { strict: false });
+      const result = await service.processDueActions();
+      return { summary: `Processed ${result.processed} channel reminder assignments.` };
     },
     'telegram.post_batches.lifecycle': async () => {
       const result = await (

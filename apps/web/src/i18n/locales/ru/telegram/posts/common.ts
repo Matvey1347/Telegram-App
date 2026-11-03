@@ -134,6 +134,7 @@ const messages = {
     "Публикация уже находится в выбранном канале.",
   "telegramPosts.errors.groupAlreadyInTargetChannel":
     "Группа уже находится в выбранном канале.",
+  "telegramPosts.errors.imageUnavailable": "Не удалось загрузить изображение. Проверьте ссылку или загрузите изображение заново и повторите попытку.",
   "telegramPosts.errors.publishFailed":
     "Telegram не смог опубликовать эту публикацию.",
   "telegramPosts.errors.importRowInvalid":

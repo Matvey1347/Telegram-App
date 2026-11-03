@@ -50,6 +50,9 @@ export class LeadPreparedDraftPatchDto {
   @IsOptional() @IsString() @MaxLength(3000) text?: string;
 }
 export class LeadPreparationQueueDto {
+  @IsOptional() @IsString() @MaxLength(100) sourceId?: string;
+  @IsOptional() @IsIn(['asc', 'desc']) sortDirection?: 'asc' | 'desc';
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(100000) page?: number;
   @IsOptional()
   @IsIn(LEAD_CONTACT_CATEGORIES)
   contactCategory?: (typeof LEAD_CONTACT_CATEGORIES)[number];

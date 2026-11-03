@@ -218,7 +218,8 @@ export class OperationsWebPushService {
                 AND (LEFT(notification."type"::text, 4) <> 'CRM_' OR preference."crmNotificationsEnabled" = TRUE)
                 AND (notification."type" <> 'CRM_MESSAGE_RECEIVED'::"OperationsNotificationType" OR preference."crmIncomingMessagesEnabled" = TRUE)
                 AND (notification."type" <> 'CRM_FOLLOW_UP_DUE'::"OperationsNotificationType" OR preference."crmFollowUpEnabled" = TRUE)
-                AND (notification."type" <> 'CRM_AI_LEAD_QUALIFIED'::"OperationsNotificationType" OR preference."crmAiLeadsEnabled" = TRUE))
+                AND (notification."type" <> 'CRM_AI_LEAD_QUALIFIED'::"OperationsNotificationType" OR preference."crmAiLeadsEnabled" = TRUE)
+                AND (notification."type" <> 'CHANNEL_POSTS_REMINDER'::"OperationsNotificationType" OR preference."channelRemindersPushEnabled" = TRUE))
           RETURNING notification."id"
         `);
         const claimedIds = new Set(claimed.map((row) => row.id));

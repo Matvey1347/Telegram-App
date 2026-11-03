@@ -3,7 +3,7 @@
 import type { OperationsNotificationPage, OperationsNotificationPreferences, OperationsNotificationPreferencesPatch } from "@telegram-system/shared";
 import { useMutation, useQuery, useQueryClient, type InfiniteData } from "@tanstack/react-query";
 import { BellOff, BellRing, LoaderCircle } from "lucide-react";
-import { Button } from "@/components/ui/primitives";
+import { Button, ToggleRow } from "@/components/ui/primitives";
 import { operationsNotificationsApi } from "@/lib/features/operations/operations-notifications-api";
 import { operationsNotificationKeys } from "@/lib/query-keys";
 import { InstallAppButton } from "./install-app-button";
@@ -12,6 +12,8 @@ import { useBrowserPushSubscription } from "./use-browser-push-subscription";
 import { useNotificationSettingsCopy } from "./notification-settings-copy";
 
 export { pushSubscriptionInput } from "./use-browser-push-subscription";
+
+const NOTIFICATION_SETTINGS_STALE_TIME = 4 * 60_000;
 
 export function NotificationPushSettings({ workspaceId }: { workspaceId: string }) {
   return <PushSettingsSession key={workspaceId} workspaceId={workspaceId} />;
@@ -23,12 +25,12 @@ function PushSettingsSession({ workspaceId }: { workspaceId: string }) {
   const preferencesQuery = useQuery({
     queryKey: operationsNotificationKeys.preferences(workspaceId),
     queryFn: ({ signal }) => operationsNotificationsApi.preferences(signal),
-    staleTime: 60_000,
+    staleTime: NOTIFICATION_SETTINGS_STALE_TIME,
   });
   const configQuery = useQuery({
     queryKey: operationsNotificationKeys.pushConfig(workspaceId),
     queryFn: ({ signal }) => operationsNotificationsApi.pushConfig(signal),
-    staleTime: 60_000,
+    staleTime: NOTIFICATION_SETTINGS_STALE_TIME,
   });
   const reconcile = (value: OperationsNotificationPreferences) => {
     queryClient.setQueryData(operationsNotificationKeys.preferences(workspaceId), value);
@@ -65,6 +67,11 @@ function PushSettingsSession({ workspaceId }: { workspaceId: string }) {
   return (
     <div className="space-y-5">
       <NotificationCrmPreferences preferences={preferences} pending={pending} onChange={(patch) => preference.mutate(patch)} />
+      <section aria-label={t("notifications.settings.channelReminders")} className="space-y-3">
+        <div><h3 className="text-sm font-semibold text-white">{t("notifications.settings.channelReminders")}</h3><p className="mt-1 text-xs leading-5 text-neutral-400">{t("notifications.settings.channelRemindersDescription")}</p></div>
+        <ToggleRow checked={preferences.channelRemindersPushEnabled ?? false} disabled={pending} label={t("notifications.settings.channelRemindersPush")} description={t("notifications.settings.channelRemindersPushDescription")} onChange={(channelRemindersPushEnabled) => preference.mutate({ channelRemindersPushEnabled })} activeTone="blue" />
+        <ToggleRow checked={preferences.channelRemindersTelegramEnabled ?? false} disabled={pending} label={t("notifications.settings.channelRemindersTelegram")} description={t("notifications.settings.channelRemindersTelegramDescription")} onChange={(channelRemindersTelegramEnabled) => preference.mutate({ channelRemindersTelegramEnabled })} activeTone="blue" />
+      </section>
       {preference.error ? <p role="alert" className="text-xs text-rose-300">{t("notifications.settings.saveError")}</p> : null}
       <section className="rounded-lg border border-neutral-800 bg-neutral-900/40 p-4" aria-label={t("notifications.settings.browser")}>
         <div className="flex items-start gap-3">

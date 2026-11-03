@@ -70,8 +70,8 @@ export function CrmWorkspace({
   const hasCrmView = permissions.canViewOwn || permissions.canViewAll;
   const canViewSales = permissions.canViewSales;
   const account = useQuery({
-    queryKey: accountKeys.me(),
-    queryFn: accountApi.me,
+    queryKey: accountKeys.shell(),
+    queryFn: accountApi.shell,
     enabled: hasCrmView && permissions.canEditOwn,
     staleTime: 5 * 60_000,
   });

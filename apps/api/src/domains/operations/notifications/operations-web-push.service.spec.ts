@@ -2,7 +2,7 @@ import type { Prisma } from '@prisma/client';
 import webPush from 'web-push';
 import { OperationsWebPushService } from './operations-web-push.service';
 import { OperationsNotificationDeliveryPolicyService } from './operations-notification-delivery-policy.service';
-import { pushRecipientSelect, pushPayload } from './operations-web-push-policy';
+import { pushRecipientSelect, pushPayload, pushPreferenceAllows } from './operations-web-push-policy';
 import { OPERATIONS_PUSH_MAX_QUEUE_AGE_MS } from './operations-web-push-policy';
 
 jest.mock('web-push', () => ({
@@ -20,6 +20,7 @@ const preference = {
   crmFollowUpEnabled: true,
   crmAiLeadsEnabled: false,
   crmMessagePreviewEnabled: false,
+  channelRemindersPushEnabled: false,
 };
 const row = (id = 'notification-current', devices = 1): Row => ({
   id,
@@ -43,6 +44,7 @@ const row = (id = 'notification-current', devices = 1): Row => ({
   publishedAt: new Date(),
   expiresAt: new Date(Date.now() + 60_000),
   pushAttemptedAt: null,
+  channelReminderTelegramSentAt: null,
   createdAt: new Date(),
   recipient: {
     id: 'member-current',
@@ -154,6 +156,12 @@ describe('OperationsWebPushService', () => {
         },
       },
     });
+  });
+
+  it('requires the reminder-specific push opt-in as well as global push', () => {
+    expect(pushPreferenceAllows('CHANNEL_POSTS_REMINDER', preference)).toBe(false);
+    expect(pushPreferenceAllows('CHANNEL_POSTS_REMINDER', { ...preference, channelRemindersPushEnabled: true })).toBe(true);
+    expect(pushPreferenceAllows('CHANNEL_POSTS_REMINDER', { ...preference, webPushEnabled: false, channelRemindersPushEnabled: true })).toBe(false);
   });
 
   it('shows the bounded message preview only if currently enabled', async () => {

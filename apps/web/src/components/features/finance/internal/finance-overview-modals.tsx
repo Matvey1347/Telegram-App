@@ -26,8 +26,8 @@ export type AccountFormValues = { name: string; currency: string; initialBalance
 
 export function AccountModal({ open, initial, currencies, onClose, onSubmit }: { open: boolean; initial?: Account; currencies: string[]; onClose: () => void; onSubmit: (value: AccountFormValues) => void }) {
   const defaults = initial ? { name: initial.name, currency: initial.currency, initialBalance: Number(initial.initialBalance), iconId: initial.iconId, assignedMemberId: initial.assignedMemberId } : { name: "", currency: currencies[0] || "USD", initialBalance: 0, iconId: null, assignedMemberId: null };
-  const { register, handleSubmit, reset, watch, setValue, formState: { errors } } = useForm<AccountFormValues>({ defaultValues: defaults });
-  useEffect(() => { if (open) reset(defaults); }, [open, initial]); // eslint-disable-line react-hooks/exhaustive-deps
+  const { register, handleSubmit, reset, watch, setValue, formState: { errors, isDirty } } = useForm<AccountFormValues>({ defaultValues: defaults });
+  useEffect(() => { if (open && !isDirty) reset(defaults); }, [open, initial, currencies, isDirty]); // eslint-disable-line react-hooks/exhaustive-deps
   return <Modal open={open} onClose={onClose} title={initial ? "Edit account" : "Create account"} size="xs"><form className="space-y-3" onSubmit={handleSubmit(onSubmit)}>
     <IconPicker iconId={watch("iconId") ?? null} icon={initial?.iconPresentation} onChange={(iconId) => setValue("iconId", iconId)} />
     <FormField label="Name" required error={errors.name ? "Required field" : undefined}><Input {...register("name", { required: true })} /></FormField>

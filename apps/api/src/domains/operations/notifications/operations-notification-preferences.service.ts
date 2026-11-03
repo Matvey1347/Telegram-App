@@ -18,9 +18,13 @@ const preferenceSelect = {
   crmFollowUpEnabled: true,
   crmAiLeadsEnabled: true,
   crmMessagePreviewEnabled: true,
+  channelRemindersPushEnabled: true,
+  channelRemindersTelegramEnabled: true,
 } as const;
 const defaults = {
   webPushEnabled: false,
+  channelRemindersPushEnabled: false,
+  channelRemindersTelegramEnabled: false,
   ...CRM_NOTIFICATION_PREFERENCE_DEFAULTS,
 };
 

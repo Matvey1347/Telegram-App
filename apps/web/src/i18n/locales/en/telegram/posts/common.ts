@@ -128,6 +128,7 @@ const messages = {
   "telegramPosts.errors.groupAlreadyInTargetChannel":
     "This group is already in the selected channel.",
   "telegramPosts.errors.publishFailed": "Telegram could not publish this post.",
+  "telegramPosts.errors.imageUnavailable": "The image could not be downloaded. Check the image link or upload it again, then retry.",
   "telegramPosts.errors.importRowInvalid":
     "An import row contains invalid data.",
   "telegramPosts.errors.notEditable": "This post cannot be edited.",

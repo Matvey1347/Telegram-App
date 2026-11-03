@@ -392,6 +392,7 @@ export class TelegramChannelLifecycleService {
     });
 
     notifyScheduledTaskDueWorkChanged(`workspace-auto-sync:${workspaceId}`);
+    if (dto.assignedMemberId !== undefined) notifyScheduledTaskDueWorkChanged('telegram.channel_reminders.due');
     return this.telegramChannelCatalogService.findOne(userId, id);
   }
 
@@ -423,6 +424,7 @@ export class TelegramChannelLifecycleService {
       return { success: true };
     });
     notifyScheduledTaskDueWorkChanged(`workspace-auto-sync:${workspaceId}`);
+    notifyScheduledTaskDueWorkChanged('telegram.channel_reminders.due');
     return result;
   }
 
@@ -438,6 +440,7 @@ export class TelegramChannelLifecycleService {
     // with another archive operation or repeats after the channel is archived.
     if (!result.count)
       return this.telegramChannelCatalogService.findOne(userId, id);
+    notifyScheduledTaskDueWorkChanged('telegram.channel_reminders.due');
     return this.telegramChannelCatalogService.findOne(userId, id);
   }
 
@@ -452,6 +455,7 @@ export class TelegramChannelLifecycleService {
     // Same conditional mutation makes restore idempotent without a no-op write.
     if (!result.count)
       return this.telegramChannelCatalogService.findOne(userId, id);
+    notifyScheduledTaskDueWorkChanged('telegram.channel_reminders.due');
     return this.telegramChannelCatalogService.findOne(userId, id);
   }
 

@@ -15,25 +15,34 @@ vi.mock("./finance-overview-section", () => ({
   FinanceOverviewSection: () => <div>Logical bot overview</div>,
 }));
 vi.mock("./finance-subscribers-section", () => ({
-  FinanceSubscribersSection: () => <div>Logical bot users</div>,
+  FinanceSubscribersSection: () => <div>Lazy logical bot users section</div>,
 }));
 vi.mock("./finance-monetization-section", () => ({
-  FinanceMonetizationSection: () => <div>Monetization</div>,
+  FinanceMonetizationSection: () => <div>Lazy monetization section</div>,
 }));
 vi.mock("./finance-integrations-section", () => ({
-  FinanceIntegrationsSection: () => <div>Integrations</div>,
+  FinanceIntegrationsSection: () => <div>Lazy integrations section</div>,
 }));
 
 describe("FinanceBotAdmin", () => {
-  it("keeps analytics and users on one logical bot", () => {
+  it("loads each billing section only when selected", async () => {
     render(<FinanceBotAdmin botId="finance-bot" />);
 
     expect(
       screen.getByText("Logical bot overview"),
     ).toBeInTheDocument();
+    expect(screen.queryByText("Logical bot users")).toBeNull();
+    expect(screen.queryByText("Lazy monetization section")).toBeNull();
+    expect(screen.queryByText("Lazy integrations section")).toBeNull();
     expect(screen.queryByRole("tab")).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: /Users/ }));
-    expect(screen.getByText("Logical bot users")).toBeInTheDocument();
+    expect(await screen.findByText("Lazy logical bot users section")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Monetization/ }));
+    expect(await screen.findByText("Lazy monetization section")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Integrations/ }));
+    expect(await screen.findByText("Lazy integrations section")).toBeInTheDocument();
   });
 });

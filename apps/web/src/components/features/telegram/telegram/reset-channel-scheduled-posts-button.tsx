@@ -5,6 +5,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { RotateCcw } from "lucide-react";
 import { telegramChannelsApi } from "@/lib/api";
 import { telegramPostKeys } from "@/lib/query-keys";
+import { invalidateManagedPostScheduleReads } from "./managed-post-cache";
 import { Button, ConfirmDeleteModal } from "@/components/ui/primitives";
 import { useAppToast } from "@/providers/toast-provider";
 import { TelegramCardMenuAction } from "./telegram-card-actions-menu";
@@ -34,9 +35,7 @@ export function ResetChannelScheduledPostsButton({
         queryClient.invalidateQueries({
           queryKey: telegramPostKeys.managedLists(channelId),
         }),
-        queryClient.invalidateQueries({
-          queryKey: telegramPostKeys.managedCalendar(channelId),
-        }),
+        invalidateManagedPostScheduleReads(queryClient, channelId),
         queryClient.invalidateQueries({
           queryKey: telegramPostKeys.managedHistories(channelId),
         }),

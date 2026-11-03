@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { telegramChannelKeys } from "@/lib/query-keys";
 import {
   ChannelSyncScopeModal,
   DEFAULT_CHANNEL_SYNC_SELECTION,
@@ -217,12 +218,15 @@ describe("ChannelSyncScopeModal", () => {
       skippedCount: 0,
     });
     await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
-    expect(invalidateQueries).toHaveBeenCalledTimes(2);
+    expect(invalidateQueries).toHaveBeenCalledTimes(3);
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: ["telegram-channels", "list"],
     });
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: ["telegram-channel-traffic-attribution"],
+    });
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: telegramChannelKeys.cardLists(),
     });
     expect(pushToast).toHaveBeenCalledWith(
       "Synced 99/100 channels, 1 failed.",

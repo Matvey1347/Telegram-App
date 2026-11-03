@@ -128,6 +128,9 @@ export function ChannelSystemBotAccessModal({
       await queryClient.invalidateQueries({
         queryKey: telegramChannelKeys.lists(),
       });
+      await queryClient.invalidateQueries({
+        queryKey: telegramChannelKeys.cardLists(),
+      });
     },
   });
 

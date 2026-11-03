@@ -86,6 +86,31 @@ export class AccountService {
     };
   }
 
+  async shell(userId: string) {
+    const user = await this.prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        locale: true,
+        profileAvatarIcon: true,
+      },
+    });
+    const membership =
+      await this.workspaceService.resolveWorkspaceMembershipForUser(userId);
+    return {
+      id: user.id,
+      workspaceMemberId: membership.id,
+      email: user.email,
+      name: user.name,
+      locale: normalizeAppLocale(user.locale),
+      avatarPresentation: iconToResolvedEmoji(
+        user.profileAvatarIcon ?? membership.avatarIcon,
+      ),
+    };
+  }
+
   async me(userId: string) {
     const user = await this.prisma.user.findUniqueOrThrow({
       where: { id: userId },

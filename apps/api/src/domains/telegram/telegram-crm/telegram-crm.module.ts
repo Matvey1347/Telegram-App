@@ -28,6 +28,7 @@ import { TelegramLeadPolicy } from './lead-discovery/lead-policy.service';
 import { TelegramLeadSourceService } from './lead-discovery/lead-source.service';
 import { TelegramLeadReadService } from './lead-discovery/lead-read.service';
 import { TelegramLeadIngestService } from './lead-discovery/lead-ingest.service';
+import { TelegramLeadRefreshService } from './lead-discovery/lead-refresh.service';
 import { TelegramLeadTransportService } from './lead-discovery/lead-transport.service';
 import { TelegramLeadMetadataDiagnostics } from './lead-discovery/lead-metadata-diagnostics.service';
 import { TelegramLeadMediaPilotService } from './lead-discovery/lead-media-pilot.service';
@@ -149,6 +150,7 @@ import { TelegramCrmRuntimeLeaseService } from './telegram-crm-runtime-lease.ser
     TelegramLeadReadService,
     TelegramLeadIngestService,
     TelegramLeadTransportService,
+    TelegramLeadRefreshService,
     TelegramLeadMetadataDiagnostics,
     TelegramLeadMediaPilotService,
     TelegramLeadAnalysisService,

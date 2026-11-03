@@ -1,28 +1,18 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
+import { useState } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useForm } from "react-hook-form";
-import { Plus, Server, Trash2 } from "lucide-react";
-import type {
-  TelegramBotApplicationType,
-  TelegramBotRuntimeEnvironment,
-} from "@telegram-system/shared";
+import { Plus } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import {
   Button,
-  ConfirmDeleteModal,
-  CustomSelect,
-  FormField,
-  Input,
-  Modal,
   PageHeader,
-  Tooltip,
 } from "@/components/ui/primitives";
-import { runtimeAppPresentation } from "./runtime-app-presentation";
 import { QueryContentState } from "@/components/ui/query-content-state";
 import { telegramBotsApi, type TelegramBot } from "@/lib/api";
+import type { TelegramBotApplicationType, TelegramBotRuntimeEnvironment } from "@telegram-system/shared";
 import { telegramAccountKeys } from "@/lib/query-keys";
 import { invalidateTelegramAccessQueries } from "@/lib/features/telegram/telegram-query-invalidation";
 import {
@@ -31,9 +21,21 @@ import {
 } from "@/lib/features/telegram/telegram-bot-cache";
 import { useAppToast } from "@/providers/toast-provider";
 import { TelegramBotCard } from "./telegram-bot-card";
-import { RuntimeProfileModal } from "./runtime-profile-modal";
 import { ConfiguredBotCards } from "./configured-bot-cards";
 import { configuredBotsApi } from "@/lib/features/telegram/configured-bots-api";
+import {
+  type BotDeleteChoice,
+  type BotDeleteConfirmation,
+  type BotRuntimeConfig,
+} from "./telegram-bot-action-modals";
+
+const TelegramBotActionModalsLazy = dynamic(
+  () =>
+    import("./telegram-bot-action-modals").then(
+      (module) => module.TelegramBotActionModals,
+    ),
+  { loading: () => null },
+);
 
 function errorMessage(error: unknown, fallback: string) {
   const responseError = error as { response?: { data?: { message?: string } } };
@@ -49,23 +51,11 @@ export function TelegramBotsPage() {
   const qc = useQueryClient();
   const { pushToast } = useAppToast();
   const [createOpen, setCreateOpen] = useState(false);
-  const [deleteConfirmation, setDeleteConfirmation] = useState<{
-    bot: TelegramBot;
-    environment?: TelegramBotRuntimeEnvironment;
-  } | null>(null);
-  const [deleteChoice, setDeleteChoice] = useState<{
-    bot: TelegramBot;
-    environment: TelegramBotRuntimeEnvironment;
-  } | null>(null);
+  const [deleteConfirmation, setDeleteConfirmation] = useState<BotDeleteConfirmation | null>(null);
+  const [deleteChoice, setDeleteChoice] = useState<BotDeleteChoice | null>(null);
   const [switching, setSwitching] = useState<TelegramBot | null>(null);
-  const [runtimeConfig, setRuntimeConfig] = useState<{
-    bot: TelegramBot;
-    environment: TelegramBotRuntimeEnvironment;
-  } | null>(null);
-  const [profileConfig, setProfileConfig] = useState<{
-    bot: TelegramBot;
-    environment: TelegramBotRuntimeEnvironment;
-  } | null>(null);
+  const [runtimeConfig, setRuntimeConfig] = useState<BotRuntimeConfig | null>(null);
+  const [profileConfig, setProfileConfig] = useState<BotRuntimeConfig | null>(null);
   const botsQuery = useQuery({
     queryKey: telegramAccountKeys.bots(),
     queryFn: telegramBotsApi.list,
@@ -271,397 +261,70 @@ export function TelegramBotsPage() {
           </QueryContentState>
         </div>
       ) : null}
-      <CreateBotModal
-        open={createOpen}
-        saving={createMutation.isPending}
-        onClose={() => setCreateOpen(false)}
-        onSubmit={(values) => createMutation.mutate(values)}
-      />
-      <SwitchApplicationModal
-        bot={switching}
-        saving={switchMutation.isPending}
-        onClose={() => setSwitching(null)}
-        onSubmit={(applicationType) =>
-          switching &&
-          switchMutation.mutate({
-            botId: switching.id,
-            applicationType,
-          })
-        }
-      />
-      <RuntimeTokenModal
-        config={runtimeConfig}
-        saving={runtimeTokenMutation.isPending}
-        onClose={() => setRuntimeConfig(null)}
-        onSubmit={(botToken) => {
-          if (!runtimeConfig) return;
-          runtimeTokenMutation.mutate({
-            botId: runtimeConfig.bot.id,
-            environment: runtimeConfig.environment,
-            botToken,
-            exists: runtimeConfig.bot.runtimes.some(
-              (runtime) => runtime.environment === runtimeConfig.environment,
-            ),
-          });
-        }}
-      />
-      <RuntimeProfileModal
-        key={`${profileConfig?.bot.id || "none"}:${profileConfig?.environment || "none"}`}
-        config={profileConfig}
-        saving={profileMutation.isPending}
-        onClose={() => setProfileConfig(null)}
-        onSubmit={({ name }) => {
-          if (!profileConfig) return;
-          profileMutation.mutate({
-            botId: profileConfig.bot.id,
-            environment: profileConfig.environment,
-            name,
-          });
-        }}
-      />
-      <ConfirmDeleteModal
-        open={Boolean(deleteConfirmation)}
-        entityName={
-          deleteConfirmation?.environment || deleteConfirmation?.bot.label || ""
-        }
-        description={
-          deleteConfirmation?.environment
-            ? `This permanently removes the ${deleteConfirmation.environment.toLowerCase()} token and webhook state.`
-            : "This permanently removes every runtime and the bot configuration from this workspace."
-        }
-        onClose={() => setDeleteConfirmation(null)}
-        onConfirm={() =>
-          !deleteConfirmation
-            ? undefined
-            : deleteConfirmation.environment
-              ? removeRuntimeMutation.mutateAsync({
-                  botId: deleteConfirmation.bot.id,
-                  environment: deleteConfirmation.environment,
-                })
-              : deleteMutation.mutateAsync(deleteConfirmation.bot.id)
-        }
-        label={
-          deleteConfirmation?.environment ? "Delete runtime" : "Delete bot"
-        }
-      />
-      <RuntimeDeletionModal
-        choice={deleteChoice}
-        onClose={() => setDeleteChoice(null)}
-        onDeleteRuntime={(environment) => {
-          if (!deleteChoice) return;
-          setDeleteConfirmation({ bot: deleteChoice.bot, environment });
-          setDeleteChoice(null);
-        }}
-        onDeleteBot={() => {
-          if (!deleteChoice) return;
-          setDeleteConfirmation({ bot: deleteChoice.bot });
-          setDeleteChoice(null);
-        }}
-      />
-    </AppShell>
-  );
-}
-
-function RuntimeDeletionModal({
-  choice,
-  onClose,
-  onDeleteRuntime,
-  onDeleteBot,
-}: {
-  choice: {
-    bot: TelegramBot;
-    environment: TelegramBotRuntimeEnvironment;
-  } | null;
-  onClose: () => void;
-  onDeleteRuntime: (environment: TelegramBotRuntimeEnvironment) => void;
-  onDeleteBot: () => void;
-}) {
-  if (!choice) return null;
-  const local = choice.bot.runtimes.some(
-    (item) => item.environment === "LOCAL",
-  );
-  const production = choice.bot.runtimes.some(
-    (item) => item.environment === "PRODUCTION",
-  );
-  const selected = choice.environment === "LOCAL" ? "Local" : "Production";
-  return (
-    <Modal open onClose={onClose} title="Delete bot data">
-      <p className="text-sm text-neutral-300">
-        You selected <span className="font-medium text-white">{selected}</span>.
-        Runtime deletion removes its token and webhook state only.
-      </p>
-      <div className="mt-4 flex items-center gap-2">
-        <DeleteAction
-          label="Delete Local runtime"
-          disabled={!local}
-          onClick={() => onDeleteRuntime("LOCAL")}
-        >
-          <Server size={17} />
-        </DeleteAction>
-        <DeleteAction
-          label="Delete Production runtime"
-          disabled={!production}
-          onClick={() => onDeleteRuntime("PRODUCTION")}
-        >
-          <Server size={17} />
-        </DeleteAction>
-        <DeleteAction
-          label="Delete bot from system"
-          tone="danger"
-          disabled={false}
-          onClick={onDeleteBot}
-        >
-          <Trash2 size={17} />
-        </DeleteAction>
-      </div>
-      <div className="mt-4 flex justify-end">
-        <Button variant="secondary" onClick={onClose}>
-          Cancel
-        </Button>
-      </div>
-    </Modal>
-  );
-}
-
-function DeleteAction({
-  children,
-  label,
-  tone = "neutral",
-  disabled,
-  onClick,
-}: {
-  children: ReactNode;
-  label: string;
-  tone?: "neutral" | "danger";
-  disabled: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <Tooltip content={label}>
-      <button
-        type="button"
-        aria-label={label}
-        disabled={disabled}
-        onClick={onClick}
-        className={`inline-flex h-9 w-9 items-center justify-center rounded-lg border transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50 ${tone === "danger" ? "border-rose-800/80 bg-rose-950/30 text-rose-300 hover:bg-rose-950/60" : "border-neutral-700 bg-neutral-900 text-neutral-200 hover:bg-neutral-800"}`}
-      >
-        {children}
-      </button>
-    </Tooltip>
-  );
-}
-
-function CreateBotModal({
-  open,
-  saving,
-  onClose,
-  onSubmit,
-}: {
-  open: boolean;
-  saving: boolean;
-  onClose: () => void;
-  onSubmit: (values: { botToken: string }) => void;
-}) {
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-  } = useForm<{ botToken: string }>();
-  return (
-    <Modal open={open} onClose={onClose} title="Connect Telegram bot">
-      <form className="space-y-4" onSubmit={handleSubmit(onSubmit)}>
-        <FormField
-          label="Bot token"
-          required
-          error={errors.botToken ? "Required field" : undefined}
-        >
-          <Input
-            placeholder="123456:ABC..."
-            {...register("botToken", { required: true })}
-          />
-        </FormField>
-        <div className="flex justify-end gap-2">
-          <Button variant="secondary" type="button" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button type="submit" disabled={saving}>
-            {saving ? "Connecting" : "Connect"}
-          </Button>
-        </div>
-      </form>
-    </Modal>
-  );
-}
-
-function RuntimeTokenModal({
-  config,
-  saving,
-  onClose,
-  onSubmit,
-}: {
-  config: {
-    bot: TelegramBot;
-    environment: TelegramBotRuntimeEnvironment;
-  } | null;
-  saving: boolean;
-  onClose: () => void;
-  onSubmit: (botToken: string) => void;
-}) {
-  const [botToken, setBotToken] = useState("");
-  const exists = config?.bot.runtimes.some(
-    (runtime) => runtime.environment === config?.environment,
-  );
-  return (
-    <Modal
-      open={Boolean(config)}
-      onClose={onClose}
-      title={`${exists ? "Update" : "Connect"} ${config?.environment === "LOCAL" ? "local" : "production"} runtime`}
-    >
-      <form
-        className="space-y-4"
-        onSubmit={(event) => {
-          event.preventDefault();
-          onSubmit(botToken);
-        }}
-      >
-        <p className="text-sm text-neutral-400">
-          {config?.environment === "PRODUCTION"
-            ? "The production token is verified and saved here. It becomes active only after the production API is deployed with a public webhook URL."
-            : "The local token is verified and saved here. It activates automatically when this API has a reachable local webhook URL."}
-        </p>
-        <FormField label="BotFather token" required>
-          <Input
-            type="password"
-            value={botToken}
-            onChange={(event) => setBotToken(event.target.value)}
-            placeholder="123456:ABC..."
-            autoComplete="off"
-            required
-          />
-        </FormField>
-        <div className="flex justify-end gap-2">
-          <Button variant="secondary" type="button" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button type="submit" disabled={saving || !botToken.trim()}>
-            {saving ? "Verifying" : exists ? "Save token" : "Connect runtime"}
-          </Button>
-        </div>
-      </form>
-    </Modal>
-  );
-}
-
-function SwitchApplicationModal({
-  bot,
-  saving,
-  onClose,
-  onSubmit,
-}: {
-  bot: TelegramBot | null;
-  saving: boolean;
-  onClose: () => void;
-  onSubmit: (applicationType: TelegramBotApplicationType) => void;
-}) {
-  return (
-    <Modal open={Boolean(bot)} onClose={onClose} title="Change bot app">
-      {bot ? (
-        <SwitchApplicationForm
-          key={bot.id}
-          bot={bot}
-          saving={saving}
-          onClose={onClose}
-          onSubmit={onSubmit}
-        />
-      ) : null}
-    </Modal>
-  );
-}
-
-export function SwitchApplicationForm({
-  bot,
-  saving,
-  onClose,
-  onSubmit,
-}: {
-  bot: TelegramBot;
-  saving: boolean;
-  onClose: () => void;
-  onSubmit: (applicationType: TelegramBotApplicationType) => void;
-}) {
-  const [applicationType, setApplicationType] =
-    useState<TelegramBotApplicationType>(bot.applicationType);
-  const options = useMemo(
-    () =>
-      bot.applications
-        .filter((option) => option.eligible)
-        .map((option) => ({
-          value: option.type,
-          label: option.label,
-          iconEmoji: runtimeAppPresentation(option.type).emoji,
-          tone: "info" as const,
-        })),
-    [bot],
-  );
-
-  const selected = bot.applications.find(
-    (option) => option.type === applicationType,
-  );
-  const current = bot.applications.find(
-    (option) => option.type === bot.applicationType,
-  );
-  const unchanged = applicationType === bot.applicationType;
-  const disabled = !selected || unchanged || saving;
-  const impactText = unchanged
-    ? `${current?.label || "This app"} is currently active. Select a different runtime app to change the bot behavior.`
-    : applicationType === "NONE"
-      ? `This will stop ${current?.label || "the current runtime"} and remove its webhook. Saved configuration will remain available.`
-      : bot.applicationType === "NONE"
-        ? `This will enable ${selected?.label || "the selected app"}, configure its webhook, and update the bot commands.`
-        : `This will stop ${current?.label || "the current runtime"}, then enable ${selected?.label || "the selected app"}. The webhook and bot commands will be replaced.`;
-
-  return (
-    <form
-      className="space-y-4"
-      onSubmit={(event) => {
-        event.preventDefault();
-        onSubmit(applicationType);
-      }}
-    >
-      <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-100">
-        <p className="font-medium">You are changing what {bot.label} does.</p>
-        <p className="mt-1 text-amber-100/80">{impactText}</p>
-      </div>
-      <FormField label="Runtime app">
-        <CustomSelect
-          value={applicationType}
-          onChange={(value) =>
-            setApplicationType(value as TelegramBotApplicationType)
+      {createOpen || switching || runtimeConfig || profileConfig || deleteConfirmation || deleteChoice ? (
+        <TelegramBotActionModalsLazy
+          createOpen={createOpen}
+          createSaving={createMutation.isPending}
+          onCreateClose={() => setCreateOpen(false)}
+          onCreate={(values) => createMutation.mutate(values)}
+          switching={switching}
+          switchingSaving={switchMutation.isPending}
+          onSwitchClose={() => setSwitching(null)}
+          onSwitch={(applicationType) =>
+            switching &&
+            switchMutation.mutate({ botId: switching.id, applicationType })
           }
-          options={options}
-          searchable={false}
+          runtimeConfig={runtimeConfig}
+          runtimeSaving={runtimeTokenMutation.isPending}
+          onRuntimeClose={() => setRuntimeConfig(null)}
+          onRuntimeSave={(botToken) => {
+            if (!runtimeConfig) return;
+            runtimeTokenMutation.mutate({
+              botId: runtimeConfig.bot.id,
+              environment: runtimeConfig.environment,
+              botToken,
+              exists: runtimeConfig.bot.runtimes.some(
+                (runtime) => runtime.environment === runtimeConfig.environment,
+              ),
+            });
+          }}
+          profileConfig={profileConfig}
+          profileSaving={profileMutation.isPending}
+          onProfileClose={() => setProfileConfig(null)}
+          onProfileSave={({ name }) => {
+            if (!profileConfig) return;
+            profileMutation.mutate({
+              botId: profileConfig.bot.id,
+              environment: profileConfig.environment,
+              name,
+            });
+          }}
+          deleteConfirmation={deleteConfirmation}
+          onDeleteConfirmationClose={() => setDeleteConfirmation(null)}
+          onConfirmDelete={() =>
+            !deleteConfirmation
+              ? undefined
+              : deleteConfirmation.environment
+                ? removeRuntimeMutation.mutateAsync({
+                    botId: deleteConfirmation.bot.id,
+                    environment: deleteConfirmation.environment,
+                  })
+                : deleteMutation.mutateAsync(deleteConfirmation.bot.id)
+          }
+          deleteChoice={deleteChoice}
+          onDeleteChoiceClose={() => setDeleteChoice(null)}
+          onDeleteChoiceRuntime={(environment) => {
+            if (!deleteChoice) return;
+            setDeleteConfirmation({ bot: deleteChoice.bot, environment });
+            setDeleteChoice(null);
+          }}
+          onDeleteChoiceBot={() => {
+            if (!deleteChoice) return;
+            setDeleteConfirmation({ bot: deleteChoice.bot });
+            setDeleteChoice(null);
+          }}
         />
-      </FormField>
-      {selected?.unavailableReason ? (
-        <p className="text-sm text-amber-300">{selected.unavailableReason}</p>
       ) : null}
-      {unchanged ? (
-        <p className="text-sm text-neutral-400">
-          This app is already selected. Choose another app to make a change.
-        </p>
-      ) : null}
-      <div className="flex justify-end gap-2">
-        <Button variant="secondary" type="button" onClick={onClose}>
-          Cancel
-        </Button>
-        <Button type="submit" disabled={disabled}>
-          {saving
-            ? "Changing"
-            : applicationType === "NONE"
-              ? "Disable runtime"
-              : `Switch to ${selected?.label || "app"}`}
-        </Button>
-      </div>
-    </form>
+    </AppShell>
   );
 }

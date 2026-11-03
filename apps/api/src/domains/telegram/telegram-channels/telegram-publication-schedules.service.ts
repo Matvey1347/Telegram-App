@@ -3,6 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import type { TelegramPublicationSlotKind } from '@prisma/client';
 import type {
   TelegramPublicationPlanCalendar,
   TelegramPublicationPlanCalendarEvent,
@@ -55,7 +56,7 @@ export class TelegramPublicationSchedulesService {
       assignedChannelIds: row.channelAssignments.map(
         (assignment: { channelId: string }) => assignment.channelId,
       ),
-      slots: row.slots.map((slot: any) => ({
+      slots: [...row.slots].sort((a: any, b: any) => a.time.localeCompare(b.time) || a.position - b.position).map((slot: any) => ({
         id: slot.id,
         scheduleId: slot.scheduleId,
         title: slot.title,
@@ -63,6 +64,7 @@ export class TelegramPublicationSchedulesService {
         time: publicationScheduleTimeForDisplay(slot.time),
         position: slot.position,
         isActive: slot.isActive,
+        isOptional: slot.kind === 'CONTENT' && Boolean(slot.isOptional),
         iconPresentation: iconToResolvedEmoji(slot.icon),
       })),
       createdAt: row.createdAt.toISOString(),
@@ -105,6 +107,7 @@ export class TelegramPublicationSchedulesService {
       time: publicationScheduleTimeForStorage(slot.time),
       position: slot.position ?? index,
       isActive: slot.isActive ?? true,
+      isOptional: slot.kind === 'CONTENT' && (slot.isOptional ?? false),
       iconId: slot.iconId ?? null,
     }));
   }
@@ -144,6 +147,7 @@ export class TelegramPublicationSchedulesService {
               time: s.time,
               position: s.position,
               isActive: s.isActive,
+              isOptional: s.isOptional,
               iconId: s.iconId,
             })),
           },
@@ -198,6 +202,7 @@ export class TelegramPublicationSchedulesService {
           time: slot.time,
           position: slot.position,
           isActive: slot.isActive,
+          isOptional: slot.isOptional,
           iconId: slot.iconId,
         };
         if (slot.id)
@@ -325,6 +330,7 @@ export class TelegramPublicationSchedulesService {
       select: { timezone: true },
     });
     const timezone = workspace?.timezone || 'UTC';
+    const dateFormatter = this.localDateFormatter(timezone);
     const selected = new Set(assignment.selectedSlotIds);
     const slots = assignment.schedule.slots.filter(
       (s: any) =>
@@ -369,7 +375,7 @@ export class TelegramPublicationSchedulesService {
       cursor = new Date(cursor.getTime() + 86400000)
     ) {
       for (const slot of slots) {
-        const localDate = this.localDateParts(cursor, timezone);
+        const localDate = this.localDateParts(cursor, dateFormatter);
         const scheduledAt = publicationScheduleOccurrenceAt(
           localDate,
           slot.time,
@@ -384,6 +390,7 @@ export class TelegramPublicationSchedulesService {
             scheduledAt: scheduledAt.toISOString(),
             title: slot.title,
             kind: slot.kind,
+            isOptional: slot.kind === 'CONTENT' && Boolean(slot.isOptional),
             time: slot.time,
             timezone,
             state: reservation
@@ -447,6 +454,7 @@ export class TelegramPublicationSchedulesService {
                   kind: true,
                   time: true,
                   isActive: true,
+                  isOptional: true,
                 },
               },
             },
@@ -459,6 +467,7 @@ export class TelegramPublicationSchedulesService {
       }),
     ]);
     const timezone = workspace?.timezone || 'UTC';
+    const dateFormatter = this.localDateFormatter(timezone);
     const slotsByChannel = new Map(
       assignments.map((assignment) => {
         const selected = new Set(
@@ -526,7 +535,7 @@ export class TelegramPublicationSchedulesService {
       cursor <= to;
       cursor = new Date(cursor.getTime() + 86400000)
     ) {
-      const localDate = this.localDateParts(cursor, timezone);
+      const localDate = this.localDateParts(cursor, dateFormatter);
       for (const slot of uniqueSlots.values()) {
         const scheduledAt = publicationScheduleOccurrenceAt(
           localDate,
@@ -549,6 +558,7 @@ export class TelegramPublicationSchedulesService {
             scheduledAt,
             title: slot.title,
             kind: slot.kind,
+            isOptional: slot.kind === 'CONTENT' && Boolean(slot.isOptional),
             time: publicationScheduleTimeForDisplay(slot.time),
             timezone,
             state: reservation
@@ -579,17 +589,54 @@ export class TelegramPublicationSchedulesService {
       throw new BadRequestException(
         'Calendar range must be positive and no longer than 62 days',
       );
-    const [assignments, schedule] = await Promise.all([
-      this.prisma.telegramChannelPublicationScheduleAssignment.findMany({
-        where: { workspaceId, scheduleId: query.scheduleId },
-        select: {
-          channelId: true,
-          selectionMode: true,
-          selectedSlots: { select: { slotId: true } },
-        },
-      }),
-      this.prisma.telegramPublicationSchedule.findFirst({
-        where: { id: query.scheduleId, workspaceId },
+    let assignments: Array<{
+      channelId: string;
+      selectionMode: string;
+      selectedSlots: Array<{ slotId: string }>;
+    }>;
+    let schedule: {
+      id: string;
+      workspace: { timezone: string } | null;
+      slots: Array<{
+        id: string;
+        title: string;
+        kind: TelegramPublicationSlotKind;
+        time: string;
+      }>;
+    } | null;
+    if (query.scheduleId) {
+      [assignments, schedule] = await Promise.all([
+        this.prisma.telegramChannelPublicationScheduleAssignment.findMany({
+          where: { workspaceId, scheduleId: query.scheduleId },
+          select: {
+            channelId: true,
+            selectionMode: true,
+            selectedSlots: { select: { slotId: true } },
+          },
+        }),
+        this.prisma.telegramPublicationSchedule.findFirst({
+          where: { id: query.scheduleId, workspaceId },
+          select: {
+            id: true,
+            workspace: { select: { timezone: true } },
+            slots: {
+              where: { isActive: true, kind: 'AD' },
+              select: { id: true, title: true, kind: true, time: true },
+            },
+          },
+        }),
+      ]);
+    } else {
+      // Resolve the same default used by the calendar selector while reading
+      // the assignment and slot data in one request. This lets the initial
+      // calendar request run alongside the schedule-list request.
+      const defaultSchedule = await this.prisma.telegramPublicationSchedule.findFirst({
+        where: { workspaceId },
+        orderBy: [
+          { isDefault: 'desc' },
+          { channelAssignments: { _count: 'desc' } },
+          { createdAt: 'asc' },
+        ],
         select: {
           id: true,
           workspace: { select: { timezone: true } },
@@ -597,14 +644,37 @@ export class TelegramPublicationSchedulesService {
             where: { isActive: true, kind: 'AD' },
             select: { id: true, title: true, kind: true, time: true },
           },
+          channelAssignments: {
+            select: {
+              channelId: true,
+              selectionMode: true,
+              selectedSlots: { select: { slotId: true } },
+            },
+          },
         },
-      }),
-    ]);
+      });
+      schedule = defaultSchedule;
+      assignments = defaultSchedule?.channelAssignments ?? [];
+    }
     const channelIds = assignments.map((assignment) => assignment.channelId);
-    if (!schedule)
-      throw new NotFoundException('Publication schedule not found');
+    const channelIdSet = new Set(channelIds);
+    if (!schedule) {
+      if (query.scheduleId)
+        throw new NotFoundException('Publication schedule not found');
+      return {
+        scheduleId: null,
+        channelIds: [],
+        occurrencesByChannel: {},
+        events: [],
+      };
+    }
     if (!channelIds.length)
-      return { channelIds: [], occurrencesByChannel: {}, events: [] };
+      return {
+        scheduleId: schedule.id,
+        channelIds: [],
+        occurrencesByChannel: {},
+        events: [],
+      };
     const selectedSlotIds = new Set<string>();
     for (const assignment of assignments) {
       if (assignment.selectionMode === 'FULL') {
@@ -615,6 +685,7 @@ export class TelegramPublicationSchedulesService {
       }
     }
     const timezone = schedule.workspace?.timezone || 'UTC';
+    const dateFormatter = this.localDateFormatter(timezone);
     const calendarRows: TelegramPublicationSlotOccurrence[] = [];
     for (
       let cursor = new Date(
@@ -623,7 +694,7 @@ export class TelegramPublicationSchedulesService {
       cursor <= to;
       cursor = new Date(cursor.getTime() + 86400000)
     ) {
-      const localDate = this.localDateParts(cursor, timezone);
+      const localDate = this.localDateParts(cursor, dateFormatter);
       for (const slot of schedule.slots) {
         if (!selectedSlotIds.has(slot.id)) continue;
         const scheduledAt = publicationScheduleOccurrenceAt(
@@ -776,7 +847,7 @@ export class TelegramPublicationSchedulesService {
             !channelId ||
             !scheduledAt ||
             !Number.isFinite(scheduledAt.getTime()) ||
-            !channelIds.includes(channelId) ||
+            !channelIdSet.has(channelId) ||
             scheduledAt < from ||
             scheduledAt >= to
           )
@@ -858,6 +929,7 @@ export class TelegramPublicationSchedulesService {
       ).values(),
     ].sort((left, right) => left.scheduledAt.localeCompare(right.scheduledAt));
     return {
+      scheduleId: schedule.id,
       channelIds,
       occurrencesByChannel: channelIds[0]
         ? { [channelIds[0]]: calendarRows }
@@ -865,13 +937,16 @@ export class TelegramPublicationSchedulesService {
       events,
     };
   }
-  private localDateParts(date: Date, timezone: string) {
-    const parts = new Intl.DateTimeFormat('en-CA', {
+  private localDateFormatter(timezone: string) {
+    return new Intl.DateTimeFormat('en-CA', {
       timeZone: timezone,
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
-    }).formatToParts(date);
+    });
+  }
+  private localDateParts(date: Date, formatter: Intl.DateTimeFormat) {
+    const parts = formatter.formatToParts(date);
     const get = (type: string) =>
       Number(parts.find((p) => p.type === type)?.value);
     return { year: get('year'), month: get('month'), day: get('day') };

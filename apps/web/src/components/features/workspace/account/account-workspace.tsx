@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import { useForm, useWatch } from "react-hook-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { KeyRound, Send, UserRound } from "lucide-react";
-import { IconPicker } from "@/components/icons/icon-picker";
 import { AppShell } from "@/components/layout/app-shell";
 import {
   Button,
@@ -27,6 +27,10 @@ import {
 import { useI18n } from "@/providers/i18n-provider";
 import { localizedAccountError } from "@/lib/features/workspace/account-error";
 import { AccountMemberFinance } from "./account-member-finance";
+
+const IconPicker = dynamic(() =>
+  import("@/components/icons/icon-picker").then((module) => module.IconPicker),
+);
 
 type AccountTab = "profile" | "password";
 type IdentityMode = "username" | "account";
@@ -70,6 +74,7 @@ export function AccountWorkspace() {
   const telegramAccounts = useQuery({
     queryKey: telegramAccountKeys.accounts(),
     queryFn: telegramUserAccountsApi.list,
+    enabled: tab === "profile" && identityMode === "account",
   });
   const profileForm = useForm<ProfileValues>({
     values: {
@@ -126,6 +131,7 @@ export function AccountWorkspace() {
       queryClient.setQueryData(accountKeys.me(), updated);
       void Promise.all([
         queryClient.invalidateQueries({ queryKey: authKeys.me() }),
+        queryClient.invalidateQueries({ queryKey: accountKeys.shell() }),
         queryClient.invalidateQueries({ queryKey: memberKeys.members() }),
         queryClient.invalidateQueries({
           queryKey: telegramAccountKeys.accounts(),

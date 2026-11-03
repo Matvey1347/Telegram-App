@@ -16,6 +16,7 @@ import {
   currencyKeys,
   telegramChannelKeys,
 } from "@/lib/query-keys";
+import { invalidateTelegramChannelCardSummaries } from "@/lib/features/telegram/telegram-query-invalidation";
 import { financeOverviewQuery } from "@/lib/features/finance/finance-overview-query";
 import {
   accountsApi,
@@ -25,10 +26,8 @@ import {
   transfersApi,
   workspaceMembersApi,
   type Account,
-  type Transaction,
   type TransactionCategory,
   type TransactionType,
-  type Transfer,
 } from "@/lib/api";
 import {
   Button,
@@ -42,20 +41,15 @@ import {
 import { Pagination } from "@/components/ui/pagination";
 import { useAppToast } from "@/providers/toast-provider";
 import { patchFinanceAccountCache } from "@/lib/features/finance/account-cache";
+import { invalidateFinanceDashboardSummary } from "@/lib/features/finance/finance-dashboard-cache";
 import { FinanceActionMenu } from "./finance-action-menu";
 import { AccountPreview, CurrencyAmount } from "./finance-format";
-import {
-  AccountModal,
-  CategoryModal,
-  TransferModal,
-  type AccountFormValues,
-  type CategoryFormValues,
-  type TransferFormValues,
+import type {
+  AccountFormValues,
+  CategoryFormValues,
+  TransferFormValues,
 } from "./finance-overview-modals";
-import {
-  InternalTransactionModal,
-  type InternalTransactionValues,
-} from "./transaction-modal";
+import type { InternalTransactionValues } from "./transaction-modal";
 import {
   AccountCardsSkeleton,
   CategoryCardsSkeleton,
@@ -74,27 +68,24 @@ import {
   groupAccountsByOwner,
   type AccountScope,
 } from "./account-groups";
+import {
+  FinanceOverviewEditors,
+  type FinanceEditor,
+} from "./finance-overview-editors";
 import { FinanceTransactionFilterToolbar } from "./finance-transaction-filter-toolbar";
 import {
   useFinanceTransactionFilters,
   useResponsiveFinanceListPages,
 } from "./use-finance-transaction-filters";
 
-type Editor =
-  | { kind: "account"; item?: Account }
-  | { kind: "transaction"; item?: Transaction }
-  | { kind: "category"; item?: TransactionCategory }
-  | { kind: "transfer"; item?: Transfer }
-  | null;
-type Target = Exclude<Editor, null>;
 type PageState = FinancePageState;
 export function InternalFinanceOverview() {
   const qc = useQueryClient();
   const { startOperation } = useAppToast();
   const [period, setPeriod] = useState({ from: "", to: "" });
   const [categoryType, setCategoryType] = useState<TransactionType>("expense");
-  const [editor, setEditor] = useState<Editor>(null);
-  const [deleting, setDeleting] = useState<Target | null>(null);
+  const [editor, setEditor] = useState<FinanceEditor>(null);
+  const [deleting, setDeleting] = useState<Exclude<FinanceEditor, null> | null>(null);
   const [accountScope, setAccountScope] = useState<AccountScope>("mine");
   const [accountPage, setAccountPage] = useState<PageState>({
     page: 1,
@@ -112,6 +103,7 @@ export function InternalFinanceOverview() {
     page: 1,
     pageSize: 10,
   });
+  const [accountFilterFocused, setAccountFilterFocused] = useState(false);
   useResponsiveFinanceListPages(setTransactionPage, setTransferPage);
   const transactionFilters = useFinanceTransactionFilters(
     period,
@@ -134,6 +126,7 @@ export function InternalFinanceOverview() {
   const settings = useQuery({
     queryKey: currencyKeys.settings(),
     queryFn: currenciesApi.getSettings,
+    enabled: editor?.kind === "account",
   });
   const transactions = useQuery({
     queryKey: [...accountKeys.transactions(), "overview", transactionFilters.query],
@@ -145,19 +138,18 @@ export function InternalFinanceOverview() {
     queryFn: () => transfersApi.listPage(transferQuery),
     placeholderData: keepPreviousData,
   });
-  const expenses = useQuery({
-    queryKey: ["transaction-categories-admin", "expense"],
-    queryFn: () => transactionCategoriesApi.list("expense"),
+  const categoryList = useQuery({
+    queryKey: ["transaction-categories-admin", "overview"],
+    queryFn: transactionCategoriesApi.listAll,
   });
-  const incomes = useQuery({
-    queryKey: ["transaction-categories-admin", "income"],
-    queryFn: () => transactionCategoriesApi.list("income"),
-  });
-  const categories =
-    expenses.data && incomes.data
-      ? [...expenses.data, ...incomes.data]
-      : undefined;
-  const currentCategories = categoryType === "expense" ? expenses : incomes;
+  const categories = categoryList.data;
+  const currentCategories = {
+    data: categories?.filter((category) => category.type === categoryType),
+    isLoading: categoryList.isLoading,
+    isPlaceholderData: categoryList.isPlaceholderData,
+    error: categoryList.error,
+    isFetching: categoryList.isFetching,
+  };
   const pagedCategories =
     currentCategories.data?.slice(
       (categoryPage.page - 1) * categoryPage.pageSize,
@@ -166,6 +158,12 @@ export function InternalFinanceOverview() {
   const allAccounts = useQuery({
     queryKey: [...accountKeys.accounts(), "select"],
     queryFn: accountsApi.list,
+    // The full catalog is only needed for filters and account-bearing editors.
+    // Avoid loading it as part of the initial Overview screen.
+    enabled:
+      accountFilterFocused ||
+      editor?.kind === "transaction" ||
+      editor?.kind === "transfer",
   });
   const transactionMembers = useQuery({
     queryKey: ["workspace-members", "select"],
@@ -173,8 +171,8 @@ export function InternalFinanceOverview() {
     enabled: editor?.kind === "transaction",
   });
 
-  const save = useMutation<unknown, Error, { target: Target; value: unknown }>({
-    mutationFn: ({ target, value }: { target: Target; value: unknown }) => {
+  const save = useMutation<unknown, Error, { target: Exclude<FinanceEditor, null>; value: unknown }>({
+    mutationFn: ({ target, value }: { target: Exclude<FinanceEditor, null>; value: unknown }) => {
       if (target.kind === "account")
         return target.item
           ? accountsApi.update(target.item.id, value as Record<string, unknown>)
@@ -217,10 +215,12 @@ export function InternalFinanceOverview() {
           !openingInvestmentAdded
         ) {
           patchFinanceAccountCache(qc, updated);
+          await invalidateFinanceDashboardSummary(qc);
           return;
         }
         await Promise.all([
           qc.invalidateQueries({ queryKey: accountKeys.accounts() }),
+          invalidateFinanceDashboardSummary(qc),
           ...(openingInvestmentAdded
             ? [qc.invalidateQueries({ queryKey: accountKeys.transactions() })]
             : []),
@@ -240,11 +240,7 @@ export function InternalFinanceOverview() {
         ] as string[];
         await Promise.all([
           qc.invalidateQueries({ queryKey: telegramChannelKeys.lists() }),
-          ...affectedChannelIds.map((channelId) =>
-            qc.invalidateQueries({
-              queryKey: telegramChannelKeys.financialSummary(channelId),
-            }),
-          ),
+          invalidateTelegramChannelCardSummaries(qc, affectedChannelIds),
         ]);
       }
       if (variables.target.kind === "transfer")
@@ -253,16 +249,19 @@ export function InternalFinanceOverview() {
         await Promise.all([
           qc.invalidateQueries({ queryKey: accountKeys.accounts() }),
           qc.invalidateQueries({ queryKey: accountKeys.transactions() }),
+          invalidateFinanceDashboardSummary(qc),
         ]);
       } else if (variables.target.kind === "transfer") {
         await Promise.all([
           qc.invalidateQueries({ queryKey: accountKeys.accounts() }),
           qc.invalidateQueries({ queryKey: ["transfers"] }),
+          invalidateFinanceDashboardSummary(qc),
         ]);
       } else {
         await Promise.all([
           qc.invalidateQueries({ queryKey: ["transaction-categories-admin"] }),
           qc.invalidateQueries({ queryKey: accountKeys.transactions() }),
+          invalidateFinanceDashboardSummary(qc),
         ]);
         const category = saved as TransactionCategory;
         const categoryKey = ["transaction-categories-admin", category.type];
@@ -282,7 +281,7 @@ export function InternalFinanceOverview() {
     },
   });
   const remove = useMutation({
-    mutationFn: (target: Target) => {
+    mutationFn: (target: Exclude<FinanceEditor, null>) => {
       if (!target.item) return Promise.resolve();
       if (target.kind === "account") return accountsApi.remove(target.item.id);
       if (target.kind === "transaction")
@@ -299,16 +298,19 @@ export function InternalFinanceOverview() {
         await Promise.all([
           qc.invalidateQueries({ queryKey: accountKeys.accounts() }),
           qc.invalidateQueries({ queryKey: accountKeys.transactions() }),
+          invalidateFinanceDashboardSummary(qc),
         ]);
       } else if (target.kind === "transfer") {
         await Promise.all([
           qc.invalidateQueries({ queryKey: accountKeys.accounts() }),
           qc.invalidateQueries({ queryKey: ["transfers"] }),
+          invalidateFinanceDashboardSummary(qc),
         ]);
       } else {
         await Promise.all([
           qc.invalidateQueries({ queryKey: ["transaction-categories-admin"] }),
           qc.invalidateQueries({ queryKey: accountKeys.transactions() }),
+          invalidateFinanceDashboardSummary(qc),
         ]);
       }
     },
@@ -317,14 +319,20 @@ export function InternalFinanceOverview() {
     mutationFn: (accountId: string) =>
       accountsApi.update(accountId, { isActive: true }),
     onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: accountKeys.accounts() });
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: accountKeys.accounts() }),
+        invalidateFinanceDashboardSummary(qc),
+      ]);
     },
   });
   const archiveAccount = useMutation({
     mutationFn: (accountId: string) =>
       accountsApi.update(accountId, { isActive: false }),
     onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: accountKeys.accounts() });
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: accountKeys.accounts() }),
+        invalidateFinanceDashboardSummary(qc),
+      ]);
     },
   });
   const accountGroups = useMemo(
@@ -332,7 +340,7 @@ export function InternalFinanceOverview() {
     [accounts.data?.items],
   );
 
-  const submit = async (target: Target, value: unknown) => {
+  const submit = async (target: Exclude<FinanceEditor, null>, value: unknown) => {
     const operation = startOperation({
       id: `finance-save:${target.kind}:${Date.now()}`,
       title: "Saving",
@@ -526,7 +534,7 @@ export function InternalFinanceOverview() {
               />
             ) : null
           }
-          toolbar={<FinanceTransactionFilterToolbar accounts={allAccounts.data ?? accounts.data?.items ?? []} categories={categories ?? []} search={transactionFilters.search} accountId={transactionFilters.accountId} categoryId={transactionFilters.categoryId} onSearchChange={transactionFilters.setSearch} onAccountChange={transactionFilters.setAccountId} onCategoryChange={transactionFilters.setCategoryId} />}
+          toolbar={<FinanceTransactionFilterToolbar accounts={allAccounts.data ?? accounts.data?.items ?? []} categories={categories ?? []} search={transactionFilters.search} accountId={transactionFilters.accountId} categoryId={transactionFilters.categoryId} onSearchChange={transactionFilters.setSearch} onAccountChange={transactionFilters.setAccountId} onAccountFocus={() => setAccountFilterFocused(true)} onCategoryChange={transactionFilters.setCategoryId} />}
         >
           <div className="overflow-hidden rounded-xl border border-neutral-800">
             {transactions.data?.items.map((t) => (
@@ -637,50 +645,15 @@ export function InternalFinanceOverview() {
           </div>
         </Section>
       </div>
-      <AccountModal
-        open={editor?.kind === "account"}
-        initial={editor?.kind === "account" ? editor.item : undefined}
+      <FinanceOverviewEditors
+        editor={editor}
+        categoryType={categoryType}
         currencies={settings.data?.supportedCurrencies ?? ["USD"]}
-        onClose={() => setEditor(null)}
-        onSubmit={(value) =>
-          editor &&
-          void submit(editor, {
-            ...value,
-            currency: value.currency.toUpperCase(),
-            initialBalance: Number(value.initialBalance),
-          })
-        }
-      />
-      <InternalTransactionModal
-        open={editor?.kind === "transaction"}
-        title={
-          editor?.kind === "transaction" && editor.item
-            ? "Edit transaction"
-            : "Create transaction"
-        }
-        initial={editor?.kind === "transaction" ? editor.item : undefined}
         accounts={allAccounts.data ?? accounts.data?.items ?? []}
         categories={categories}
         members={transactionMembers.data ?? []}
         onClose={() => setEditor(null)}
-        onSubmit={(value) =>
-          editor &&
-          void submit(editor, { ...value, amount: Number(value.amount) })
-        }
-      />
-      <CategoryModal
-        open={editor?.kind === "category"}
-        initial={editor?.kind === "category" ? editor.item : undefined}
-        initialType={categoryType}
-        onClose={() => setEditor(null)}
-        onSubmit={(value) => editor && void submit(editor, value)}
-      />
-      <TransferModal
-        open={editor?.kind === "transfer"}
-        initial={editor?.kind === "transfer" ? editor.item : undefined}
-        accounts={allAccounts.data ?? accounts.data?.items ?? []}
-        onClose={() => setEditor(null)}
-        onSubmit={(value) => editor && void submit(editor, value)}
+        onSubmit={(target, value) => void submit(target, value)}
       />
       {save.error && (
         <div

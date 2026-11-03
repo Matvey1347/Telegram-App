@@ -6,11 +6,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { operationsNotificationsApi } from "@/lib/features/operations/operations-notifications-api";
 import { NotificationCenter } from "./notification-center";
 
+const mocks = vi.hoisted(() => ({ pushSettingsRender: vi.fn() }));
+
 vi.mock("./use-notification-realtime", () => ({
   useNotificationRealtime: vi.fn(),
 }));
 vi.mock("./notification-push-settings", () => ({
-  NotificationPushSettings: () => <div>Push settings</div>,
+  NotificationPushSettings: () => {
+    mocks.pushSettingsRender();
+    return <div>Push settings</div>;
+  },
 }));
 
 function item(
@@ -57,6 +62,7 @@ function renderCenter(compact = false) {
 describe("NotificationCenter", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    mocks.pushSettingsRender.mockClear();
     vi.spyOn(operationsNotificationsApi, "unreadCount").mockResolvedValue({
       unread: 101,
     });
@@ -77,6 +83,30 @@ describe("NotificationCenter", () => {
     expect(
       await screen.findByRole("button", { name: "Notifications, 101 unread" }),
     ).toHaveClass("h-8", "w-8");
+  });
+
+  it("loads panel rows and push settings only when their surfaces open", async () => {
+    const list = vi
+      .spyOn(operationsNotificationsApi, "list")
+      .mockResolvedValue({ items: [], nextCursor: null });
+    renderCenter();
+
+    const trigger = await screen.findByRole("button", {
+      name: "Notifications, 101 unread",
+    });
+    expect(list).not.toHaveBeenCalled();
+    expect(mocks.pushSettingsRender).not.toHaveBeenCalled();
+
+    await userEvent.click(trigger);
+    await screen.findByText(
+      "You’re all caught up. New CRM activity will appear here.",
+    );
+    expect(list).toHaveBeenCalledTimes(1);
+    expect(mocks.pushSettingsRender).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole("button", { name: "Push" }));
+    expect(await screen.findByText("Push settings")).toBeInTheDocument();
+    expect(mocks.pushSettingsRender).toHaveBeenCalled();
   });
 
   it("caps the accessible badge, labels priority/read state, and bounds pagination", async () => {
@@ -147,6 +177,38 @@ describe("NotificationCenter", () => {
         "You’re all caught up. New CRM activity will appear here.",
       ),
     ).toBeInTheDocument();
+  });
+
+  it("reuses a fresh notification page on reopen and reloads after invalidation", async () => {
+    const list = vi
+      .spyOn(operationsNotificationsApi, "list")
+      .mockResolvedValue({ items: [], nextCursor: null });
+    const client = renderCenter();
+    const trigger = await screen.findByRole("button", {
+      name: "Notifications, 101 unread",
+    });
+
+    await userEvent.click(trigger);
+    await screen.findByText(
+      "You’re all caught up. New CRM activity will appear here.",
+    );
+    await userEvent.keyboard("{Escape}");
+    await userEvent.click(trigger);
+    await screen.findByText(
+      "You’re all caught up. New CRM activity will appear here.",
+    );
+    expect(list).toHaveBeenCalledTimes(1);
+
+    await userEvent.keyboard("{Escape}");
+    await client.invalidateQueries({
+      queryKey: ["operations-notifications", "workspace-1", "list"],
+      exact: true,
+    });
+    await userEvent.click(trigger);
+    await screen.findByText(
+      "You’re all caught up. New CRM activity will appear here.",
+    );
+    await waitFor(() => expect(list).toHaveBeenCalledTimes(2));
   });
 
   it("renders a grouped CRM message with the client avatar and message count", async () => {

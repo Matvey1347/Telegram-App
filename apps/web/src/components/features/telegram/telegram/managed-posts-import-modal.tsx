@@ -11,6 +11,7 @@ import {
   type TelegramManagedPostsImportResult,
 } from "@/lib/api";
 import { telegramPostKeys } from "@/lib/query-keys";
+import { invalidateManagedPostScheduleReads } from "./managed-post-cache";
 import { useAppToast } from "@/providers/toast-provider";
 import { useI18n } from "@/providers/i18n-provider";
 import { safeApiErrorMessage } from "@/i18n/error-localization";
@@ -338,9 +339,7 @@ export function ManagedPostsImportModal({
         queryClient.invalidateQueries({
           queryKey: telegramPostKeys.managedLists(channelId),
         }),
-        queryClient.invalidateQueries({
-          queryKey: telegramPostKeys.managedCalendar(channelId),
-        }),
+        invalidateManagedPostScheduleReads(queryClient, channelId),
         queryClient.invalidateQueries({
           queryKey: telegramPostKeys.linkTargets(channelId),
         }),

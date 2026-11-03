@@ -414,6 +414,7 @@ enum OperationsNotificationType {
   TELEGRAM_ACCOUNT_REAUTH_REQUIRED
   CRM_AI_LEAD_QUALIFIED
   SYSTEM_TEST
+  CHANNEL_POSTS_REMINDER
 }
 
 enum OperationsNotificationPriority {
@@ -1017,6 +1018,8 @@ model Workspace {
   transactions                           Transaction[]
   transfers                              Transfer[]
   telegramChannels                       TelegramChannel[]
+  channelReminderTemplates TelegramChannelReminderTemplate[]
+  channelReminderAssignments TelegramChannelReminderAssignment[]
   telegramCustomEmojiPacks               TelegramCustomEmojiPack[]
   telegramBotIntegrations                TelegramBotIntegration[]
   telegramBotRuntimeInstances            TelegramBotRuntimeInstance[]
@@ -1353,6 +1356,7 @@ model OperationsNotification {
   publishedAt           DateTime?
   expiresAt             DateTime
   pushAttemptedAt       DateTime?
+  channelReminderTelegramSentAt DateTime?
   createdAt             DateTime                       @default(now())
 
   workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
@@ -1391,6 +1395,8 @@ model OperationsNotificationPreference {
   crmFollowUpEnabled         Boolean  @default(true)
   crmAiLeadsEnabled          Boolean  @default(false)
   crmMessagePreviewEnabled   Boolean  @default(false)
+  channelRemindersPushEnabled Boolean @default(false)
+  channelRemindersTelegramEnabled Boolean @default(false)
   createdAt                  DateTime @default(now())
   updatedAt                  DateTime @updatedAt
 
@@ -1759,6 +1765,7 @@ model TelegramChannel {
   adAnalyses                    TelegramChannelAdAnalysis[]
   timePosts                     TelegramChannelTimePost[]
   publicationScheduleAssignment TelegramChannelPublicationScheduleAssignment?
+  reminderAssignment TelegramChannelReminderAssignment?
   contentHypotheses             TelegramContentHypothesis[]
   adProducts                    TelegramAdProduct[]
   admissionBatches              AdCampaignAdmissionBatch[]
@@ -1851,6 +1858,35 @@ enum TelegramContentHypothesisStatus {
   ARCHIVED
 }
 
+model TelegramChannelReminderTemplate {
+  id String @id @default(cuid())
+  workspaceId String
+  name String
+  iconId String?
+  icon Icon? @relation("TelegramChannelReminderTemplateIcon", fields: [iconId], references: [id], onDelete: SetNull)
+  daysBefore Int[]
+  notifyEmpty Boolean @default(true)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  assignments TelegramChannelReminderAssignment[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([id, workspaceId])
+  @@index([workspaceId, createdAt])
+}
+
+model TelegramChannelReminderAssignment {
+  id String @id @default(cuid())
+  workspaceId String
+  channelId String @unique
+  templateId String
+  nextDueAt DateTime
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  channel TelegramChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  template TelegramChannelReminderTemplate @relation(fields: [templateId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  @@index([nextDueAt, id])
+  @@index([workspaceId, templateId])
+}
+
 model TelegramPublicationSchedule {
   id                 String                                         @id @default(cuid())
   workspaceId        String
@@ -1878,6 +1914,7 @@ model TelegramPublicationScheduleSlot {
   time         String                                           @db.VarChar(5)
   position     Int                                              @default(0)
   isActive     Boolean                                          @default(true)
+  isOptional   Boolean                                          @default(false)
   iconId       String?
   schedule     TelegramPublicationSchedule                      @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
   icon         Icon?                                            @relation("TelegramPublicationScheduleSlotIcon", fields: [iconId], references: [id], onDelete: SetNull)
@@ -2429,6 +2466,7 @@ model TelegramAdSalePlacement {
   @@unique([workspaceId, attachmentIdempotencyKey], map: "TelegramAdSalePlacement_workspaceId_attachmentIdempotencyKey_ke")
   @@index([workspaceId])
   @@index([telegramChannelId, scheduledAt])
+  @@index([workspaceId, telegramChannelId, scheduledAt], map: "TelegramAdSalePlacement_calendar_idx")
   @@index([telegramAdSaleId])
   @@index([status, scheduledAt])
   @@index([workspaceId, status, scheduledAt])
@@ -3644,6 +3682,7 @@ model CrossPromotionPlan {
   @@index([workspaceId, status, scheduledAt], map: "CrossPromotionPlan_workspace_status_date_idx")
   @@index([status, nextDueAt, id], map: "CrossPromotionPlan_due_idx")
   @@index([workspaceId, advertiserId, scheduledAt], map: "CrossPromotionPlan_workspace_advertiser_date_idx")
+  @@index([publisherChannelIds], type: Gin, map: "CrossPromotionPlan_publisher_channel_ids_gin_idx")
   @@index([targets], type: Gin, map: "CrossPromotionPlan_targets_gin_idx")
 }
 
@@ -4617,6 +4656,7 @@ model FinanceCategory {
 
   @@unique([profileId, type, key])
   @@index([profileId, parentId])
+  @@index([profileId, archivedAt])
 }
 
 model FinanceTransaction {
@@ -4662,6 +4702,7 @@ model FinanceTransaction {
   @@index([profileId, accountId, occurredAt])
   @@index([profileId, categoryId, occurredAt])
   @@index([profileId, merchantNormalized, occurredAt])
+  @@index([profileId, deletedAt])
 }
 
 // Receipt/products are detail of one ledger purchase, never separate ledger rows.
@@ -4725,6 +4766,7 @@ model FinanceTransfer {
   savingsMovements FinanceSavingsMovement[]
 
   @@index([profileId, occurredAt])
+  @@index([profileId, deletedAt])
 }
 
 model FinanceMerchantMapping {
@@ -5927,6 +5969,7 @@ model Icon {
   telegramAdvertiserAvatars        TelegramAdvertiser[]             @relation("TelegramAdvertiserAvatarIcon")
   telegramPublicationScheduleSlots TelegramPublicationScheduleSlot[] @relation("TelegramPublicationScheduleSlotIcon")
   telegramPublicationSchedules     TelegramPublicationSchedule[]     @relation("TelegramPublicationScheduleIcon")
+  telegramChannelReminderTemplates TelegramChannelReminderTemplate[] @relation("TelegramChannelReminderTemplateIcon")
   telegramContentHypotheses        TelegramContentHypothesis[]       @relation("TelegramContentHypothesisIcon")
   telegramPostBatchPosts           TelegramPostBatchPost[]           @relation("TelegramPostBatchPostIcon")
 

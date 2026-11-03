@@ -99,7 +99,7 @@ export function CrossPromotionPlacementSettings({
         slotRange,
       ),
     enabled: showAdSlots && channelIds.length > 0 && slotDates.length > 0,
-    staleTime: 30_000,
+    staleTime: 60_000,
   });
   const occurrencesByChannel: Record<
     string,

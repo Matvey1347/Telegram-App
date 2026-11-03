@@ -137,6 +137,20 @@ export class TelegramSystemBotPostImportService {
     };
   }
 
+  async recoverRecent(
+    scope: TelegramSystemBotPostFlowScope,
+    context: string,
+  ): Promise<TelegramSystemBotPostImportResult | null> {
+    const normalizedContext = context.trim().slice(0, 120);
+    if (!normalizedContext) return null;
+    const recent = await this.workflows.latestCompletedWebsitePostImport(
+      scope,
+      normalizedContext,
+      new Date(Date.now() - 30 * 60 * 1000),
+    );
+    return recent ? this.result(scope, recent.id) : null;
+  }
+
   async cancel(
     scope: TelegramSystemBotPostFlowScope,
     workflowId: string,

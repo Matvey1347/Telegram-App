@@ -356,7 +356,7 @@ describe("ChannelEconomicsSummary", () => {
     );
     vi.useRealTimers();
 
-    expect(screen.getByText("29.500 UAH")).toBeInTheDocument();
+    expect(screen.getByText("29.5K UAH")).toBeInTheDocument();
     expect(screen.queryByText("21.500 UAH remaining")).not.toBeInTheDocument();
     expect(screen.queryByText("Channel economics")).not.toBeInTheDocument();
     expect(screen.getByText("8.000 UAH")).toBeInTheDocument();

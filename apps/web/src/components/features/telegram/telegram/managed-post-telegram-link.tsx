@@ -19,7 +19,10 @@ import {
 } from "@/components/ui/primitives";
 import { telegramChannelsApi, type TelegramManagedPost } from "@/lib/api";
 import { telegramPostKeys } from "@/lib/query-keys";
-import { reconcileManagedPost } from "./managed-post-cache";
+import {
+  invalidateManagedPostScheduleReads,
+  reconcileManagedPost,
+} from "./managed-post-cache";
 import { useAppToast } from "@/providers/toast-provider";
 import { useI18n, type TranslationFunction } from "@/providers/i18n-provider";
 import { safeApiErrorMessage } from "@/i18n/error-localization";
@@ -154,9 +157,7 @@ export function ManagedPostTelegramLink({
   const applyPost = async (updated: TelegramManagedPost) => {
     reconcileManagedPost(queryClient, channelId, updated);
     await Promise.all([
-      queryClient.invalidateQueries({
-        queryKey: telegramPostKeys.managedCalendar(channelId),
-      }),
+      invalidateManagedPostScheduleReads(queryClient, channelId),
       queryClient.invalidateQueries({
         queryKey: telegramPostKeys.linkTargets(channelId),
       }),

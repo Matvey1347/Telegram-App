@@ -463,6 +463,7 @@ export class CreateTelegramAdSaleDto {
   @Matches(/^[A-Z]{3}$/)
   settlementCurrency!: string;
   @IsOptional() @IsString() assignedMemberId?: string | null;
+  @IsOptional() @IsString() sellerMemberId?: string | null;
   @IsOptional()
   @ValidateIf((_, value) => value !== null && value !== undefined)
   @IsDateString()
@@ -504,6 +505,7 @@ export class UpdateTelegramAdSaleDto {
   @Matches(/^[A-Z]{3}$/)
   settlementCurrency?: string;
   @IsOptional() @IsString() assignedMemberId?: string | null;
+  @IsOptional() @IsString() sellerMemberId?: string | null;
   @IsOptional()
   @ValidateIf((_, value) => value !== null && value !== undefined)
   @IsDateString()
@@ -642,6 +644,67 @@ export class CreateTelegramAdSaleCheckoutPlacementDto extends CreateTelegramAdSa
   @ValidateNested()
   @Type(() => CreatePlacementManagedPostDto)
   managedPostDraft?: CreatePlacementManagedPostDto | null;
+}
+
+export class TelegramAdSaleEditWorkflowPlacementDto {
+  @IsString() id!: string;
+  @IsDateString() scheduledAt!: string;
+  @IsString() timezone!: string;
+  @Type(() => Number) @IsNumber() @Min(0) agreedPrice!: number;
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) recommendedPrice?:
+    | number
+    | null;
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) minimumPrice?:
+    | number
+    | null;
+  @Transform(normalizeCurrency)
+  @IsString()
+  @Matches(/^[A-Z]{3}$/)
+  currency!: string;
+  @IsOptional() @IsString() manualPriceReason?: string | null;
+  @IsOptional() @IsString() telegramAdProductId?: string | null;
+  @IsOptional() @IsString() managedPostId?: string | null;
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => CreatePlacementManagedPostDto)
+  managedPostDraft?: CreatePlacementManagedPostDto | null;
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => AttachPlacementManagedPostDto)
+  postAttachment?: AttachPlacementManagedPostDto | null;
+}
+
+export class TelegramAdSaleEditWorkflowPaymentDto {
+  @IsString() id!: string;
+  @IsString() accountId!: string;
+  @Type(() => Number) @IsNumber() @Min(0) amount!: number;
+  @Transform(normalizeCurrency)
+  @IsString()
+  @Matches(/^[A-Z]{3}$/)
+  currency!: string;
+  @IsDateString() paidAt!: string;
+  @IsOptional() @IsString() notes?: string | null;
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CreateTelegramAdSalePaymentAllocationDto)
+  allocations!: CreateTelegramAdSalePaymentAllocationDto[];
+}
+
+export class TelegramAdSaleEditWorkflowDto {
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => UpdateTelegramAdSaleDto)
+  sale?: UpdateTelegramAdSaleDto;
+  @IsArray()
+  @ArrayMaxSize(100)
+  @ValidateNested({ each: true })
+  @Type(() => TelegramAdSaleEditWorkflowPlacementDto)
+  placements!: TelegramAdSaleEditWorkflowPlacementDto[];
+  @IsArray()
+  @ArrayMaxSize(100)
+  @ValidateNested({ each: true })
+  @Type(() => TelegramAdSaleEditWorkflowPaymentDto)
+  payments!: TelegramAdSaleEditWorkflowPaymentDto[];
 }
 
 export class TelegramAdSaleCheckoutPriceAllocationDto {

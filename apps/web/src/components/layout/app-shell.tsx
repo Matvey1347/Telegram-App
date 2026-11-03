@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { PropsWithChildren, useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -19,7 +20,6 @@ import {
 } from "@/providers/query-provider";
 import { useAppToast } from "@/providers/toast-provider";
 import { CustomSelect } from "@/components/ui/primitives";
-import { IconPicker } from "@/components/icons/icon-picker";
 import { IconAvatar } from "@/components/icons/icon-avatar";
 import { SystemBrandLogo } from "@/components/layout/system-brand-logo";
 import { AppNavigation } from "@/components/layout/app-navigation";
@@ -31,7 +31,13 @@ import { LanguageSwitcher } from "@/components/layout/language-switcher";
 import { AppPwaNavigation } from "@/components/layout/app-pwa-navigation";
 import pwaStyles from "@/components/layout/app-pwa-navigation.module.css";
 import { useI18n } from "@/providers/i18n-provider";
+import { accountKeys, workspaceKeys } from "@/lib/query-keys";
 import { ChevronRight, LogOut, Menu, Plus, X } from "lucide-react";
+
+const IconPicker = dynamic(
+  () => import("@/components/icons/icon-picker").then((module) => module.IconPicker),
+  { loading: () => null },
+);
 
 export function AppShell({ children }: PropsWithChildren) {
   const { locale, setLocale, t } = useI18n();
@@ -51,12 +57,12 @@ export function AppShell({ children }: PropsWithChildren) {
     return localStorage.getItem("selected-workspace-id") ?? "";
   });
   const { data: workspaces } = useQuery({
-    queryKey: ["workspaces"],
+    queryKey: workspaceKeys.workspaces(),
     queryFn: workspacesApi.list,
   });
   const { data: currentAccount } = useQuery({
-    queryKey: ["account-me"],
-    queryFn: accountApi.me,
+    queryKey: accountKeys.shell(),
+    queryFn: accountApi.shell,
   });
   useEffect(() => {
     if (currentAccount?.locale && currentAccount.locale !== locale) {
@@ -115,7 +121,7 @@ export function AppShell({ children }: PropsWithChildren) {
       qc.removeQueries({
         predicate: (query) => isWorkspaceScopedQuery(query.queryKey),
       });
-      qc.invalidateQueries({ queryKey: ["workspaces"] });
+      qc.invalidateQueries({ queryKey: workspaceKeys.workspaces() });
       qc.invalidateQueries({ queryKey: ["auth", "me"] });
     },
   });
@@ -191,7 +197,7 @@ export function AppShell({ children }: PropsWithChildren) {
     clearPersistedQueryCache();
     await resetWorkspaceQueries();
     await qc.resetQueries({ queryKey: ["auth", "me"] });
-    await qc.invalidateQueries({ queryKey: ["workspaces"] });
+    await qc.invalidateQueries({ queryKey: workspaceKeys.workspaces() });
   };
 
   const handleLogout = () => {

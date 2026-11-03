@@ -1,6 +1,6 @@
 import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
-import { telegramChannelKeys } from "@/lib/query-keys";
+import { networkKeys, telegramChannelKeys } from "@/lib/query-keys";
 import {
   patchTelegramChannelCaches,
   moveTelegramChannelBetweenLifecycleCaches,
@@ -19,6 +19,7 @@ describe("telegram channel cache helpers", () => {
   it("preserves the paginated read-model shape while patching list caches", () => {
     const client = new QueryClient();
     const key = telegramChannelKeys.list(false, true);
+    client.setQueryData(networkKeys.list(), []);
     client.setQueryData(key, {
       items: [channel],
       pagination: {
@@ -41,32 +42,42 @@ describe("telegram channel cache helpers", () => {
       items: [{ ...channel, autoSyncEnabled: false }],
       counts: { active: 1, test: 0, archived: 0 },
     });
+    expect(client.getQueryState(networkKeys.list())?.isInvalidated).toBe(false);
   });
 
   it("reconciles an entity in list and detail caches without fetching", () => {
     const client = new QueryClient();
     client.setQueryData(telegramChannelKeys.list(), [channel]);
     client.setQueryData(telegramChannelKeys.detail(channel.id), channel);
+    const selectKey = telegramChannelKeys.select();
+    client.setQueryData(selectKey, [{ id: channel.id, title: channel.title }]);
+    client.setQueryData(networkKeys.list(), []);
 
     patchTelegramChannelCaches(client, {
       id: channel.id,
-      autoSyncEnabled: false,
+      title: "Updated channel",
     });
 
     expect(client.getQueryData(telegramChannelKeys.list())).toEqual([
-      { ...channel, autoSyncEnabled: false },
+      { ...channel, title: "Updated channel" },
     ]);
     expect(client.getQueryData(telegramChannelKeys.detail(channel.id))).toEqual(
       {
         ...channel,
-        autoSyncEnabled: false,
+        title: "Updated channel",
       },
     );
+    expect(client.getQueryData(selectKey)).toEqual([
+      { id: channel.id, title: "Updated channel" },
+    ]);
   });
 
   it("inserts and removes deterministic collection items locally", () => {
     const client = new QueryClient();
     client.setQueryData(telegramChannelKeys.list(), [channel]);
+    client.setQueryData(networkKeys.list(), []);
+    const selectKey = telegramChannelKeys.select();
+    client.setQueryData(selectKey, [{ id: channel.id, title: channel.title }]);
     const created = { ...channel, id: "channel-2", title: "New channel" };
 
     prependTelegramChannelToCaches(client, created);
@@ -76,10 +87,13 @@ describe("telegram channel cache helpers", () => {
     expect(
       client.getQueryData(telegramChannelKeys.detail(channel.id)),
     ).toBeUndefined();
+    expect(client.getQueryState(selectKey)?.isInvalidated).toBe(true);
+    expect(client.getQueryState(networkKeys.list())?.isInvalidated).toBe(true);
   });
 
   it("moves an archived channel locally without invalidating either lifecycle list", () => {
     const client = new QueryClient();
+    client.setQueryData(networkKeys.list(), []);
     const list = (
       items: (typeof channel)[],
       active: number,
@@ -127,6 +141,7 @@ describe("telegram channel cache helpers", () => {
       items: [{ id: channel.id, archivedAt: "2026-08-21T00:00:00.000Z" }],
       counts: { active: 0, test: 0, archived: 1 },
     });
+    expect(client.getQueryState(networkKeys.list())?.isInvalidated).toBe(true);
   });
 
   it("moves a channel into the test list while keeping archive separate", () => {

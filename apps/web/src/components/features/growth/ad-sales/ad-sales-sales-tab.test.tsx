@@ -72,7 +72,8 @@ describe("SalesTab", () => {
       },
       settlementCurrency: "USD",
       origin: "REPEAT",
-      assignedMember: {
+      assignedMember: null,
+      sellerMember: {
         id: "member-1",
         name: "Matthew Kayden",
         email: "matthew@example.com",

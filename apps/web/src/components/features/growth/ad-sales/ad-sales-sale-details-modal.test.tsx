@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { SaleDetailsModal } from "./ad-sales-sale-details-modal";
@@ -31,6 +31,33 @@ vi.mock("./placement-post/placement-post-composer", () => ({
         }
       />
     </label>
+  ),
+}));
+
+vi.mock("./ad-sale-placement-bot-actions", () => ({
+  AdSalePlacementBotActions: ({
+    onImported,
+  }: {
+    onImported: (draft: {
+      title: string;
+      text: string;
+      imageUrls: string[];
+      buttonRows: [];
+    }) => void;
+  }) => (
+    <button
+      type="button"
+      onClick={() =>
+        onImported({
+          title: "Bot post",
+          text: "Captured content",
+          imageUrls: [],
+          buttonRows: [],
+        })
+      }
+    >
+      Send from bot
+    </button>
   ),
 }));
 
@@ -112,9 +139,7 @@ describe("SaleDetailsModal", () => {
     expect(screen.getByText("Edit placement")).toBeTruthy();
     expect(screen.queryByText("RESERVED")).toBeNull();
     expect(screen.getByRole("img", { name: "Psychology" })).toBeTruthy();
-    expect(
-      screen.getByText("Recommended 170.7 UAH · minimum 100 UAH"),
-    ).toBeTruthy();
+    expect(screen.queryByText(/Recommended .* · minimum /)).toBeNull();
     expect(screen.getByText("Managed post linked")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Change post" })).toBeTruthy();
     expect(
@@ -254,10 +279,11 @@ describe("SaleDetailsModal", () => {
     await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
     const savedPlacements = onSave.mock.calls[0][1].placements;
     expect(savedPlacements).toHaveLength(2);
-    expect(savedPlacements.map((placement: { scheduledAt: string }) => placement.scheduledAt)).toEqual([
-      "2026-08-25T17:30:00.000Z",
-      "2026-08-25T17:30:00.000Z",
-    ]);
+    expect(
+      savedPlacements.map(
+        (placement: { scheduledAt: string }) => placement.scheduledAt,
+      ),
+    ).toEqual(["2026-08-25T17:30:00.000Z", "2026-08-25T17:30:00.000Z"]);
   });
 
   it("confirms removal of a linked finance transaction so it can be registered later", async () => {
@@ -524,7 +550,7 @@ describe("SaleDetailsModal", () => {
     );
   });
 
-  it("uses an inline link field and says Add post when no post is linked", async () => {
+  it("offers select, paste, and create options for a placement post", async () => {
     const user = userEvent.setup();
     const onLoadPlacementPosts = vi.fn().mockResolvedValue([
       {
@@ -533,7 +559,6 @@ describe("SaleDetailsModal", () => {
         publishedAt: "2026-08-25T10:00:00.000Z",
       },
     ]);
-    const onAttachPost = vi.fn().mockResolvedValue(undefined);
     const onSave = vi.fn().mockResolvedValue(undefined);
     const sourceSale = sale as unknown as Record<string, unknown> & {
       placements: Array<Record<string, unknown>>;
@@ -558,36 +583,110 @@ describe("SaleDetailsModal", () => {
         rates={undefined}
         onSave={onSave}
         onAction={vi.fn()}
-        onAttachPost={onAttachPost}
         onLoadPlacementPosts={onLoadPlacementPosts}
       />,
     );
 
     await user.click(screen.getByRole("button", { name: /Psychology/ }));
-    await user.click(screen.getByRole("button", { name: "Add post" }));
-    expect(screen.getByRole("button", { name: "Cancel" })).toBeTruthy();
-
-    expect(screen.getByRole("button", { name: "Select post" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
+    const postOptions = within(
+      screen.getByLabelText("Advertising post options"),
     );
-    await user.click(screen.getByRole("button", { name: "Paste link" }));
+    expect(postOptions.getAllByRole("tab")).toHaveLength(3);
+    expect(postOptions.getByRole("tab", { name: "Select post" })).toBeTruthy();
+    expect(postOptions.getByRole("tab", { name: "Paste link" })).toBeTruthy();
+    expect(
+      postOptions.getByRole("tab", { name: "Create new post" }),
+    ).toBeTruthy();
+    expect(screen.queryByRole("tab", { name: "Select post" })).toBeTruthy();
+    expect(screen.queryByText("Restore last bot import")).toBeNull();
+    await user.click(postOptions.getByRole("tab", { name: "Select post" }));
+
+    expect(
+      postOptions.getByRole("tab", { name: "Select post" }),
+    ).toHaveAttribute("aria-selected", "true");
+    await user.click(postOptions.getByRole("tab", { name: "Paste link" }));
     await user.type(
       screen.getByPlaceholderText("https://t.me/channel/123"),
       "https://t.me/channel/42",
     );
     expect(screen.queryByText("Paste the Telegram post link")).toBeNull();
-    expect(screen.queryByRole("button", { name: "Add post" })).toBeNull();
     await user.click(screen.getByRole("button", { name: "Save changes" }));
     await waitFor(() => {
-      expect(onAttachPost).toHaveBeenCalledWith(
+      expect(onSave).toHaveBeenCalledWith(
         expect.anything(),
-        expect.anything(),
-        { telegramPostUrl: "https://t.me/channel/42" },
+        expect.objectContaining({
+          placements: expect.arrayContaining([
+            expect.objectContaining({
+              postAttachment: { telegramPostUrl: "https://t.me/channel/42" },
+            }),
+          ]),
+        }),
       );
-      expect(onSave).toHaveBeenCalledTimes(1);
     });
     expect(onLoadPlacementPosts).toHaveBeenCalledTimes(1);
+  });
+
+  it("saves the publication imported through the System Bot with placement changes", async () => {
+    const user = userEvent.setup();
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    const saleWithoutPost = {
+      ...(sale as unknown as Record<string, unknown>),
+      placements: (
+        sale as unknown as { placements: Array<Record<string, unknown>> }
+      ).placements.map((placement) => ({
+        ...placement,
+        managedPost: null,
+        managedPostId: null,
+        telegramPostId: null,
+      })),
+    } as never;
+    render(
+      <SaleDetailsModal
+        open
+        onClose={vi.fn()}
+        sale={saleWithoutPost}
+        accounts={[]}
+        channels={[{ id: "channel-1", title: "Psychology" } as never]}
+        productsByChannelId={{}}
+        settings={undefined}
+        rates={undefined}
+        onSave={onSave}
+        onAction={vi.fn()}
+        systemBotConnected
+        systemBotWorkspaceId="workspace-1"
+        systemBotUsername="test_bot"
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /Psychology/ }));
+    await user.click(
+      within(screen.getByLabelText("Advertising post options")).getByRole(
+        "tab",
+        { name: "Create new post" },
+      ),
+    );
+    expect(screen.getByRole("button", { name: "Write by hand" })).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Send from bot" }));
+    // The imported draft is the selected create flow; a stale/empty published
+    // post selector must not block saving it.
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          placements: [
+            expect.objectContaining({
+              id: "placement-1",
+              managedPostDraft: expect.objectContaining({
+                title: "Bot post",
+                text: "Captured content",
+              }),
+            }),
+          ],
+        }),
+      );
+    });
   });
 
   it("shows the scheduled post window and remaining lifecycle in the placement card", () => {

@@ -9,6 +9,11 @@ import { telegramCrmApi } from "@/lib/features/growth/telegram-crm-api";
 import { LeadCandidates } from "./lead-candidates";
 import { LeadCandidateDetails } from "./lead-candidate-details";
 import { candidateFixture } from "./lead-fixtures.test-support";
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+  usePathname: () => "/ad-sales/leads",
+  useSearchParams: () => new URLSearchParams(),
+}));
 function mount(node: ReactNode) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },

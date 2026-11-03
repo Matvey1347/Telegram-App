@@ -6,6 +6,7 @@ import type {
   CreateCrossPromotionPlanPayload,
   CrossPromotionPlan,
   CrossPromotionPlanKind,
+  TelegramChannelNetworkOption,
   TelegramAdProduct,
   TelegramSystemBotPostDraft,
 } from "@telegram-system/shared";
@@ -14,7 +15,6 @@ import {
   telegramSystemBotApi,
   type Promo,
   type TelegramChannel,
-  type TelegramChannelNetwork,
   type TelegramInviteLinkOption,
 } from "@/lib/api";
 import { zonedDateTimeToUtc } from "@/lib/features/growth/telegram-ad-sales";
@@ -71,7 +71,7 @@ export function CrossPromotionPlanModal({
   initial: CrossPromotionPlan | null;
   mode?: CrossPromotionModalMode;
   channels: TelegramChannel[];
-  networks: TelegramChannelNetwork[];
+  networks: TelegramChannelNetworkOption[];
   loading: boolean;
   saving: boolean;
   onClose: () => void;

@@ -33,10 +33,10 @@ export function useCampaignInviteLinkRefresh() {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: adCampaignKeys.list() }),
         queryClient.invalidateQueries({
-          queryKey: adCampaignKeys.performance(),
+          queryKey: telegramChannelKeys.lists(),
         }),
         queryClient.invalidateQueries({
-          queryKey: telegramChannelKeys.lists(),
+          queryKey: telegramChannelKeys.cardLists(),
         }),
       ]);
       const failed = result.failedLinks.length;

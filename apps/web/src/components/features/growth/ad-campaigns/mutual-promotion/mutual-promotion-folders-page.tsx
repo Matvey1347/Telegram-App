@@ -110,7 +110,6 @@ export function MutualPromotionFoldersPage({
     queryKey: telegramChannelKeys.select({ owned: true }),
     queryFn: () => telegramChannelsApi.select({ owned: true }),
     enabled: resourcesEnabled,
-    staleTime: 60_000,
   });
   const accountsQuery = useQuery({
     queryKey: accountKeys.accounts(),
@@ -282,6 +281,9 @@ export function MutualPromotionFoldersPage({
           queryKey: telegramChannelKeys.lists(),
         }),
         queryClient.invalidateQueries({
+          queryKey: telegramChannelKeys.cardLists(),
+        }),
+        queryClient.invalidateQueries({
           queryKey: telegramChannelKeys.trafficAttributions(),
         }),
         ...(deletedFolder?.participants.some(
@@ -433,11 +435,22 @@ export function MutualPromotionFoldersPage({
               onOpen={() => setSelectedFolderId(item.id)}
               onEdit={() => {
                 setSelectedFolderId(item.id);
-                void mutualPromotionFoldersApi.get(item.id).then((detail) => {
-                  setEditingFolder(detail);
-                  setSelectedFolderId(null);
-                  setFormOpen(true);
-                });
+                void queryClient
+                  .fetchQuery({
+                    queryKey: mutualPromotionFolderKeys.detail(item.id),
+                    queryFn: () => mutualPromotionFoldersApi.get(item.id),
+                    staleTime: 4 * 60_000,
+                  })
+                  .then((detail) => {
+                    setEditingFolder(detail);
+                    setSelectedFolderId(null);
+                    setFormOpen(true);
+                  })
+                  .catch(() => {
+                    // Keep the detail selection active so the existing error
+                    // state can offer a visible failure instead of swallowing
+                    // the failed edit request.
+                  });
               }}
               onRefreshInviteLinks={() =>
                 refreshInviteLinksMutation.mutate(item.id)

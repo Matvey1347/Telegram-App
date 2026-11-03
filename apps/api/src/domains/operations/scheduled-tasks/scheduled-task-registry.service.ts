@@ -219,6 +219,18 @@ export class ScheduledTaskRegistryService {
         execute: this.executor.executors['application_logs.cleanup'],
       },
       {
+        key: 'telegram.channel_reminders.due',
+        name: 'Channel post reminders',
+        description: 'Checks configured channel post coverage and delivers reminders.',
+        scope: 'SYSTEM_MAINTENANCE',
+        defaultSchedule: { frequency: 'INTERVAL', intervalMinutes: 60, timezone: 'Europe/Warsaw' },
+        scheduleEditable: false,
+        supportedFrequencies: ['INTERVAL'],
+        notificationSupported: false,
+        dueDriven: true,
+        execute: this.executor.executors['telegram.channel_reminders.due'],
+      },
+      {
         key: 'operations.notifications.publish_due',
         name: 'Notification publication and retention',
         description:

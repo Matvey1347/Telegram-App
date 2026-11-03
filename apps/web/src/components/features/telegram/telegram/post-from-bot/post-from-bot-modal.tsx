@@ -23,6 +23,7 @@ import {
   networkKeys,
 } from "@/lib/query-keys";
 import { telegramPostBatchesApi } from "@/lib/features/telegram/telegram-post-batches-api";
+import { invalidateManagedPostScheduleReads } from "../managed-post-cache";
 import { Button, LoadingState, Modal } from "@/components/ui/primitives";
 import { useI18n } from "@/providers/i18n-provider";
 import { PostBatchBrowser } from "./post-batch-browser";
@@ -186,9 +187,7 @@ export function PostFromBotModal({
           queryClient.invalidateQueries({
             queryKey: telegramPostKeys.managedLists(channelId),
           }),
-          queryClient.invalidateQueries({
-            queryKey: telegramPostKeys.managedCalendar(channelId),
-          }),
+          invalidateManagedPostScheduleReads(queryClient, channelId),
           queryClient.invalidateQueries({
             queryKey: telegramPostKeys.postGroups(channelId),
           }),

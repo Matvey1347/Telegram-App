@@ -35,6 +35,8 @@ import type {
   TelegramAdSaleCheckoutRequest,
   TelegramAdSaleCheckoutResponse,
   TelegramAdSaleCheckoutWorkflowResponse,
+  TelegramAdSaleEditWorkflowRequest,
+  TelegramAdSaleEditWorkflowProgress,
   TelegramAdSaleDraft,
   TelegramAdCrmAdvertiserSortBy,
   TelegramAdCrmSortDirection,
@@ -283,15 +285,35 @@ export function createTelegramAdSalesApi({
       (await api.get<TelegramAdSale>(`/telegram-ad-sales/${id}`)).data,
     listDrafts: async () =>
       (await api.get<TelegramAdSaleDraft[]>("/telegram-ad-sales/drafts")).data,
-    createDraft: async (payload: { title?: string | null; payload: Record<string, unknown> }) =>
-      (await api.post<TelegramAdSaleDraft>("/telegram-ad-sales/drafts", payload)).data,
-    updateDraft: async (id: string, payload: { title?: string | null; payload: Record<string, unknown> }) =>
-      (await api.patch<TelegramAdSaleDraft>(`/telegram-ad-sales/drafts/${id}`, payload)).data,
+    createDraft: async (payload: {
+      title?: string | null;
+      payload: Record<string, unknown>;
+    }) =>
+      (
+        await api.post<TelegramAdSaleDraft>(
+          "/telegram-ad-sales/drafts",
+          payload,
+        )
+      ).data,
+    updateDraft: async (
+      id: string,
+      payload: { title?: string | null; payload: Record<string, unknown> },
+    ) =>
+      (
+        await api.patch<TelegramAdSaleDraft>(
+          `/telegram-ad-sales/drafts/${id}`,
+          payload,
+        )
+      ).data,
     deleteDraft: async (id: string) => {
       await api.delete(`/telegram-ad-sales/drafts/${id}`);
     },
     previewBotNotification: async (id: string) =>
-      (await api.get<{ text: string }>(`/telegram-ad-sales/${id}/bot-notification-preview`)).data,
+      (
+        await api.get<{ text: string }>(
+          `/telegram-ad-sales/${id}/bot-notification-preview`,
+        )
+      ).data,
     sendToBot: async (id: string) =>
       (await api.post(`/telegram-ad-sales/${id}/send-to-bot`)).data,
     createSale: async (payload: Record<string, unknown>, silent = false) =>
@@ -325,6 +347,20 @@ export function createTelegramAdSalesApi({
         TelegramAdSaleCheckoutWorkflowResponse,
         { operation: string; message: string; placementId?: string }
       >("/telegram-ad-sales/checkout-workflow", payload, onProgress),
+    saveSaleWorkflow: async (
+      saleId: string,
+      payload: TelegramAdSaleEditWorkflowRequest,
+      onProgress: (
+        item: TelegramAdSaleEditWorkflowProgress,
+        current: number,
+        total: number,
+      ) => void,
+    ) =>
+      streamProgressAction<TelegramAdSale, TelegramAdSaleEditWorkflowProgress>(
+        `/telegram-ad-sales/${saleId}/edit-workflow`,
+        payload,
+        onProgress,
+      ),
     bulkCreate: async (
       payload: TelegramAdSalesBulkCreateRequest,
       silent = false,
@@ -637,11 +673,13 @@ export function createTelegramAdSalesApi({
       saleId: string,
       placementId: string,
       payload: Record<string, unknown>,
+      silent = false,
     ) =>
       (
         await api.post(
           `/telegram-ad-sales/${saleId}/placements/${placementId}/managed-post`,
           payload,
+          silent ? silentFeedbackConfig : undefined,
         )
       ).data,
     attachManagedPost: async (
@@ -671,11 +709,13 @@ export function createTelegramAdSalesApi({
       saleId: string,
       placementId: string,
       payload: Record<string, unknown>,
+      silent = false,
     ) =>
       (
         await api.post(
           `/telegram-ad-sales/${saleId}/placements/${placementId}/schedule`,
           payload,
+          silent ? silentFeedbackConfig : undefined,
         )
       ).data,
     scheduleSale: async (saleId: string, payload: Record<string, unknown>) =>
@@ -730,11 +770,7 @@ export function createTelegramAdSalesApi({
       streamProgressAction<
         TelegramAdSalePublicationDeletionResult,
         TelegramAdSalePublicationDeletionProgress
-      >(
-        `/telegram-ad-sales/${saleId}/cancel-publications`,
-        {},
-        onProgress,
-      ),
+      >(`/telegram-ad-sales/${saleId}/cancel-publications`, {}, onProgress),
     completePermanentPlacement: async (
       saleId: string,
       placementId: string,

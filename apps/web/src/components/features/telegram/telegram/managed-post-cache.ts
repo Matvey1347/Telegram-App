@@ -1,7 +1,28 @@
 import type { QueryClient, QueryKey } from "@tanstack/react-query";
 import type { PaginatedResponse } from "@telegram-system/shared";
 import type { TelegramManagedPost } from "@/lib/api";
-import { telegramPostKeys } from "@/lib/query-keys";
+import {
+  telegramPostKeys,
+  telegramPublicationScheduleKeys,
+} from "@/lib/query-keys";
+
+/** Refreshes read models whose slot occupancy changes when a managed post moves. */
+export async function invalidateManagedPostScheduleReads(
+  queryClient: QueryClient,
+  channelId: string,
+) {
+  await Promise.all([
+    queryClient.invalidateQueries({
+      queryKey: telegramPostKeys.managedCalendar(channelId),
+    }),
+    queryClient.invalidateQueries({
+      queryKey: telegramPublicationScheduleKeys.occurrencesRoot(),
+    }),
+    queryClient.invalidateQueries({
+      queryKey: telegramPublicationScheduleKeys.occurrencesByChannelsRoot(),
+    }),
+  ]);
+}
 
 /** Reconciles an authoritative managed-post mutation response without rereading the whole channel. */
 export function upsertManagedPostInCache(

@@ -459,6 +459,7 @@ export class TelegramChannelCatalogService {
         username: true,
         telegramChatId: true,
         photoUrl: true,
+        presentationIcon: true,
         currentSubscribersCount: true,
         ownViewsPerPost: true,
         isActive: true,
@@ -498,11 +499,14 @@ export class TelegramChannelCatalogService {
           isFallback: true,
         };
 
+        const { presentationIcon, ...channelData } = channel;
         return {
-          ...channel,
+          ...channelData,
           username: channel.username ?? undefined,
           telegramChatId: channel.telegramChatId ?? undefined,
           photoUrl: channel.photoUrl ?? undefined,
+          presentationIconPresentation: iconToResolvedEmoji(presentationIcon),
+          avatarPresentation: channel.photoUrl ? { type: 'image' as const, id: channel.id, url: channel.photoUrl, name: channel.title } : null,
           currentSubscribersCount: channel.currentSubscribersCount ?? undefined,
           timePosts: timePostsByChannel.get(channel.id) ?? [],
           canPostMessages: Boolean(publishingCapabilities.source),

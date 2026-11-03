@@ -4,10 +4,10 @@ export function leadCandidateSummary(
   row: TelegramLeadCandidate & {
     _count?: { observations: number };
     observations?: Array<{
-      source: { id: string; title: string; url: string | null };
+      source: { id: string; title: string; url: string | null; username?: string | null };
     }>;
   },
-  sources?: Array<{ id: string; title: string; url: string | null }>,
+  sources?: Array<{ id: string; title: string; url: string | null; username?: string | null }>,
 ): LeadCandidateView {
   return {
     id: row.id,

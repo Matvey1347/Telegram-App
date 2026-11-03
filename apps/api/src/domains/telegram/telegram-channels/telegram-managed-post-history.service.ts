@@ -402,7 +402,7 @@ export class TelegramManagedPostHistoryService {
                       dto.deleteAfterHours * 3_600_000,
                   )
                 : null,
-          lastError: null,
+          lastError: post.status === TelegramManagedPostStatus.FAILED ? undefined : null,
           telegramScheduledMessageIds: convertsNativeScheduleToLocal
             ? []
             : telegramEdit && 'telegramScheduledMessageIds' in telegramEdit

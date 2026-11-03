@@ -70,6 +70,7 @@ describe("ChannelAutoSyncToggle", () => {
     expect(mocks.patch).toHaveBeenLastCalledWith(
       {},
       { id: "channel-1", autoSyncEnabled: false },
+      { invalidateNetworks: true },
     );
   });
 

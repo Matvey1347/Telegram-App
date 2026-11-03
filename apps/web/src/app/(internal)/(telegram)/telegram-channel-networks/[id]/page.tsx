@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { useParams, useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { type ReactNode, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { AppShell } from "@/components/layout/app-shell";
 import { PageTabHead } from "@/components/layout/page-tab-head";
 import {
@@ -13,56 +14,25 @@ import {
   LoadingState,
   PageHeader,
 } from "@/components/ui/primitives";
-import {
-  telegramChannelNetworksApi,
-  telegramChannelsApi,
-  type TelegramChannelSelectOption as TelegramChannel,
-  type TelegramChannelNetworkChannelSummary,
-  type TelegramChannelNetworkKpiStatus,
-} from "@/lib/api";
+import { telegramChannelNetworksApi, telegramChannelsApi } from "@/lib/api";
 import { telegramChannelKeys } from "@/lib/query-keys";
 import { useAppToast } from "@/providers/toast-provider";
 import { NativeMoney } from "@/components/ui/native-money";
 import { TelegramNetworkEconomicsPanel } from "@/components/features/telegram/telegram/telegram-network-economics-panel";
-import { TelegramNetworkFormModal } from "@/components/features/telegram/telegram/telegram-network-form-modal";
 import { networkKeys } from "@/lib/query-keys";
-
-function toNumber(value: unknown) {
-  const parsed = Number(value ?? 0);
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function formatNumber(value: unknown, decimals = 0) {
-  if (value == null || !Number.isFinite(Number(value))) return "-";
-  return toNumber(value).toLocaleString(undefined, {
-    maximumFractionDigits: decimals,
-    minimumFractionDigits: decimals,
-  });
-}
-
-function formatPercent(value: unknown, decimals = 1) {
-  if (value == null || !Number.isFinite(Number(value))) return "-";
-  return `${formatNumber(value, decimals)}%`;
-}
-function kpiBadgeClass(status?: TelegramChannelNetworkKpiStatus) {
-  if (status === "good") return "border-emerald-700 text-emerald-200";
-  if (status === "acceptable") return "border-yellow-700 text-yellow-200";
-  if (status === "bad") return "border-rose-700 text-rose-200";
-  return "border-slate-700 text-slate-300";
-}
-
-function decisionText(status?: TelegramChannelNetworkKpiStatus) {
-  if (status === "good") return "Network performs well. Candidate for scaling.";
-  if (status === "acceptable")
-    return "Network is acceptable. Continue testing carefully.";
-  if (status === "bad")
-    return "Network has weak KPI. Do not scale before fixing traffic/source/content.";
-  return "Not enough data yet.";
-}
-
-function isOwnChannel(channel: TelegramChannel) {
-  return channel.canPostMessages;
-}
+import {
+  decisionText,
+  formatNumber,
+  formatPercent,
+  kpiBadgeClass,
+  NetworkMetricCard,
+  TelegramNetworkChannelsTable,
+} from "@/components/features/telegram/telegram/telegram-network-detail-presentation";
+const TelegramNetworkFormModal = dynamic(() =>
+  import("@/components/features/telegram/telegram/telegram-network-form-modal").then(
+    (module) => module.TelegramNetworkFormModal,
+  ),
+);
 
 export default function TelegramChannelNetworkDetailPage() {
   const params = useParams<{ id: string }>();
@@ -83,6 +53,7 @@ export default function TelegramChannelNetworkDetailPage() {
   const { data: channels = [] } = useQuery({
     queryKey: telegramChannelKeys.select(),
     queryFn: () => telegramChannelsApi.select(),
+    enabled: formOpen,
   });
   const updateMutation = useMutation({
     mutationFn: (payload: {
@@ -90,9 +61,9 @@ export default function TelegramChannelNetworkDetailPage() {
       description?: string | null;
       telegramChannelIds: string[];
     }) => telegramChannelNetworksApi.update(id, payload),
-    onSuccess: () => {
+    onSuccess: (updated) => {
+      queryClient.setQueryData(networkKeys.detail(id), updated);
       queryClient.invalidateQueries({ queryKey: networkKeys.list() });
-      queryClient.invalidateQueries({ queryKey: networkKeys.detail(id) });
       setFormOpen(false);
       pushToast("Network updated.", "success");
     },
@@ -108,7 +79,10 @@ export default function TelegramChannelNetworkDetailPage() {
   });
 
   const summary = network?.summary;
-  const ownChannels = useMemo(() => channels.filter(isOwnChannel), [channels]);
+  const ownChannels = useMemo(
+    () => channels.filter((channel) => channel.canPostMessages),
+    [channels],
+  );
 
   return (
     <AppShell>
@@ -157,23 +131,23 @@ export default function TelegramChannelNetworkDetailPage() {
       {summary ? (
         <>
           <section className="grid grid-cols-[repeat(auto-fit,minmax(min(220px,100%),1fr))] gap-4">
-            <MetricCard
+            <NetworkMetricCard
               title="Channels count"
               value={formatNumber(summary.channelsCount)}
             />
-            <MetricCard
+            <NetworkMetricCard
               title="Total subscribers"
               value={formatNumber(summary.totalSubscribers)}
             />
-            <MetricCard
+            <NetworkMetricCard
               title="Active subscribers"
               value={formatNumber(summary.activeSubscribersEstimate)}
             />
-            <MetricCard
+            <NetworkMetricCard
               title="View rate"
               value={formatPercent(summary.viewRate)}
             />
-            <MetricCard
+            <NetworkMetricCard
               title="Total ad spend"
               value={
                 <NativeMoney
@@ -182,7 +156,7 @@ export default function TelegramChannelNetworkDetailPage() {
                 />
               }
             />
-            <MetricCard
+            <NetworkMetricCard
               title="Avg CPA"
               value={
                 <NativeMoney
@@ -191,7 +165,7 @@ export default function TelegramChannelNetworkDetailPage() {
                 />
               }
             />
-            <MetricCard
+            <NetworkMetricCard
               title="Active CPA"
               value={
                 <NativeMoney
@@ -219,14 +193,16 @@ export default function TelegramChannelNetworkDetailPage() {
           <section className="mt-6">
             <h3 className="mb-3 text-lg font-semibold">Channels</h3>
             {network?.channelSummaries?.length ? (
-              <ChannelsTable channels={network.channelSummaries} />
+              <TelegramNetworkChannelsTable
+                channels={network.channelSummaries}
+              />
             ) : (
               <EmptyState text="No channels in this network." />
             )}
           </section>
         </>
       ) : null}
-      {formOpen ? (
+      {formOpen && network ? (
         <TelegramNetworkFormModal
           network={network ?? null}
           channels={ownChannels}
@@ -236,94 +212,5 @@ export default function TelegramChannelNetworkDetailPage() {
         />
       ) : null}
     </AppShell>
-  );
-}
-
-function MetricCard({ title, value }: { title: string; value: ReactNode }) {
-  return (
-    <EntityCard title={title} actions={null}>
-      <p className="text-2xl font-semibold">{value}</p>
-    </EntityCard>
-  );
-}
-
-function ChannelsTable({
-  channels,
-}: {
-  channels: TelegramChannelNetworkChannelSummary[];
-}) {
-  return (
-    <div className="table-scroll w-full rounded-lg border border-slate-700">
-      <table className="w-max min-w-[1120px] text-sm">
-        <thead className="bg-slate-900/60 text-slate-300">
-          <tr>
-            <th className="w-56 px-3 py-2 text-left">Channel</th>
-            <th className="w-40 px-3 py-2 text-left">Username</th>
-            <th className="w-28 px-3 py-2 text-right">Subscribers</th>
-            <th className="w-32 px-3 py-2 text-right">Active estimate</th>
-            <th className="w-36 px-3 py-2 text-right">Paid active estimate</th>
-            <th className="w-28 px-3 py-2 text-right">View rate</th>
-            <th className="w-28 px-3 py-2 text-right">Spend</th>
-            <th className="w-28 px-3 py-2 text-right">Avg CPA</th>
-            <th className="w-28 px-3 py-2 text-right">Active CPA</th>
-            <th className="w-28 px-3 py-2 text-left">KPI status</th>
-          </tr>
-        </thead>
-        <tbody>
-          {channels.map((channel) => (
-            <tr key={channel.channelId} className="border-t border-slate-800">
-              <td className="px-3 py-2">
-                <Link
-                  href={`/telegram/channels/${channel.channelId}`}
-                  className="block truncate text-blue-300 hover:underline"
-                >
-                  {channel.title || "-"}
-                </Link>
-              </td>
-              <td className="px-3 py-2 text-slate-300">
-                {channel.username ? `@${channel.username}` : "-"}
-              </td>
-              <td className="px-3 py-2 text-right">
-                {formatNumber(channel.subscribersCount)}
-              </td>
-              <td className="px-3 py-2 text-right">
-                {formatNumber(channel.activeSubscribersEstimate)}
-              </td>
-              <td className="px-3 py-2 text-right">
-                {formatNumber(channel.paidActiveSubscribersEstimate)}
-              </td>
-              <td className="px-3 py-2 text-right">
-                {formatPercent(channel.viewRate)}
-              </td>
-              <td className="px-3 py-2 text-right">
-                <NativeMoney
-                  amount={channel.totalAdSpend}
-                  currency={channel.currency}
-                />
-              </td>
-              <td className="px-3 py-2 text-right">
-                <NativeMoney
-                  amount={channel.avgCpa}
-                  currency={channel.currency}
-                />
-              </td>
-              <td className="px-3 py-2 text-right">
-                <NativeMoney
-                  amount={channel.activeCpa}
-                  currency={channel.currency}
-                />
-              </td>
-              <td className="px-3 py-2">
-                <span
-                  className={`inline-flex rounded border px-2 py-0.5 text-xs ${kpiBadgeClass(channel.kpiStatus)}`}
-                >
-                  {channel.kpiLabel || "-"}
-                </span>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
   );
 }

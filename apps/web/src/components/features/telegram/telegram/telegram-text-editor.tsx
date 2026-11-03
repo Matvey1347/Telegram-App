@@ -20,7 +20,7 @@ import { telegramPostLinkMarkup } from "./telegram-text-editor-format";
 import { useI18n } from "@/providers/i18n-provider";
 import { useAppToast } from "@/providers/toast-provider";
 
-type TelegramTextEditorProps = {
+export type TelegramTextEditorProps = {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;

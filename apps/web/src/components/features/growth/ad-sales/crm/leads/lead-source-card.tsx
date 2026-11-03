@@ -1,10 +1,12 @@
 "use client";
 import { useState } from "react";
+import dynamic from "next/dynamic";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Pause, Play, Settings2, ShieldCheck, FileText, Megaphone, Users, Brain, Sparkles, Tag, Repeat2, Info } from "lucide-react";
+import { Pause, Play, Settings2, ShieldCheck, FileText, Megaphone, Users, Brain, Sparkles, Tag, Repeat2, Info, History } from "lucide-react";
 import type { LeadSourceView } from "@telegram-system/shared";
 import { Fragment } from "react";
 import { IconAvatar } from "@/components/icons/icon-avatar";
+import { useAppToast } from "@/providers/toast-provider";
 import { useOptionalI18n } from "@/providers/i18n-provider";
 import { Button } from "@/components/ui/primitives";
 import { ActionMenu, ActionMenuItem } from "@/components/ui/action-menu";
@@ -12,8 +14,11 @@ import { leadDiscoveryApi } from "@/lib/features/growth/lead-discovery-api";
 import { invalidateLeadResults, leadKeys, patchLeadEntity } from "@/lib/features/growth/lead-discovery-query";
 import { leadSafeUrl } from "./lead-utils";
 import { LeadSourceSettings } from "./lead-source-settings";
-import { LeadHistoryPanel } from "./lead-history-panel";
 import { LeadSourceStatus } from "./lead-source-status";
+
+const LeadHistoryPanel = dynamic(() =>
+  import("./lead-history-panel").then((module) => module.LeadHistoryPanel),
+);
 
 export function sourceState(source: LeadSourceView) {
   if (source.lastErrorCode === "LEAD_CHANNEL_MEMBERSHIP_REQUIRED") return { label: "Нет подписки", detail: "Для этого приватного канала подключённый Telegram-аккаунт должен быть участником." };
@@ -31,8 +36,9 @@ export function sourceState(source: LeadSourceView) {
 
 export function LeadSourceCard({ source, canManage, enabled }: { source: LeadSourceView; canManage: boolean; enabled: boolean }) {
   const client = useQueryClient();
+  const { setProgress } = useAppToast();
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [settings, setSettings] = useState(false);
-  const [history, setHistory] = useState(false);
   const state = sourceState(source);
   const ru = useOptionalI18n()?.locale !== "en";
   const parts = source.title.split(" · ");
@@ -46,7 +52,22 @@ export function LeadSourceCard({ source, canManage, enabled }: { source: LeadSou
   const connected = Boolean(source.accountId && source.channelId);
   const mutation = useMutation({
     mutationFn: async (action: "scan" | "validate" | "toggle") => {
-      if (action === "scan") return leadDiscoveryApi.scan(source.id);
+      if (action === "scan") {
+        const id = `lead-refresh:${source.workspaceId}:${source.id}`;
+        setProgress({ id, title: "Обновление источника", message: source.title });
+        try {
+          const result = await leadDiscoveryApi.refreshSources((item, current, total) => {
+            void patchLeadEntity(client, leadKeys.sourcesRoot(source.workspaceId), item.source);
+            setProgress({ id, title: "Обновление источника", current, total, message: `${item.source.title}: проверено ${item.scanned} · реклама ${item.source.metrics.advertisements} · кандидаты ${item.source.metrics.uniqueCandidates}${item.truncated ? " (500+)" : ""}` });
+          }, source.id);
+          setProgress({ id, title: result.failed ? "Ошибка обновления" : "Обновление завершено", completed: true, successCount: result.updated, failedCount: result.failed, skippedCount: result.skipped });
+          if (result.failed || result.skipped) throw new Error("Source refresh failed");
+          return { received: 0, changed: 0 };
+        } catch (error) {
+          setProgress({ id, title: "Ошибка обновления", completed: true, failedCount: 1 });
+          throw error;
+        }
+      }
       if (action === "validate") return leadDiscoveryApi.validate(source.id);
       return leadDiscoveryApi.updateSource(source.id, { monitoringState: source.monitoringState === "ACTIVE" ? "PAUSED" : "ACTIVE" });
     },
@@ -67,7 +88,7 @@ export function LeadSourceCard({ source, canManage, enabled }: { source: LeadSou
     <td className="px-4 py-3"><span title={state.detail}><LeadSourceStatus active={state.label === "Активен"}>{ru ? state.label : state.label === "Активен" ? "Active" : source.monitoringState === "PAUSED" ? "Paused" : source.monitoringState === "ACCESS_LOST" ? "No access" : "Inactive"}</LeadSourceStatus></span></td>
     <td className="whitespace-nowrap px-4 py-3 text-xs text-neutral-400">{source.lastObservedAt ? new Date(source.lastObservedAt).toLocaleString(ru ? "ru-RU" : "en-US") : "—"}</td>
     <td className="px-4 py-3"><div className="flex items-center justify-end gap-1">{canManage ? <>
-        <Button disabled={!enabled || !connected} onClick={() => setHistory(!history)} aria-expanded={history} className="!min-h-8 !px-2 !py-1 !text-xs">{ru ? "История" : "History"}<span className="sr-only"> {ru ? "за 90 дней" : "90 days"}</span></Button>
+        <Button disabled={!enabled || !connected} onClick={() => setHistoryOpen((open) => !open)} aria-expanded={historyOpen} className="!min-h-8 !px-2 !py-1 !text-xs"><History size={14} />{ru ? "История" : "History"}<span className="sr-only"> {ru ? "за 90 дней" : "90 days"}</span></Button>
         <Button disabled={!enabled || !connected || mutation.isPending} onClick={() => mutation.mutate("scan")} className="!min-h-8 !px-2 !py-1 !text-xs">{mutation.isPending ? (ru ? "Проверяем…" : "Checking…") : (ru ? "Обновить" : "Refresh")}</Button>
         <ActionMenu label={`${ru ? "Действия источника" : "Source actions"} ${source.title}`} triggerClassName="inline-flex h-8 w-8 items-center justify-center rounded-lg text-neutral-400 hover:bg-neutral-800" menuClassName="absolute right-0 top-9 z-40 w-64 rounded-lg border border-neutral-700 bg-neutral-950 p-1.5 shadow-xl">
           <ActionMenuItem icon={<ShieldCheck size={14}/>} disabled={!enabled || mutation.isPending || !source.accountId} onClick={() => mutation.mutate("validate")}>{ru ? "Проверить доступ" : "Check access"}</ActionMenuItem>
@@ -75,10 +96,10 @@ export function LeadSourceCard({ source, canManage, enabled }: { source: LeadSou
           <ActionMenuItem icon={<Settings2 size={14}/>} onClick={() => setSettings(true)}>{ru ? "Настройки подключения" : "Connection settings"}</ActionMenuItem>
         </ActionMenu>
       </> : null}</div></td></tr>
-    {(mutation.isError || (mutation.data && !("id" in mutation.data)) || history) ? <tr><td colSpan={9} className="px-4 py-3">
+    {(mutation.isError || (mutation.data && !("id" in mutation.data)) || historyOpen) ? <tr><td colSpan={9} className="px-4 py-3">
     {mutation.isError ? <p role="alert" className="mt-2 text-xs text-amber-200">Не удалось обновить источник. Проверьте доступ аккаунта к каналу и повторите.</p> : null}
     {mutation.data && !("id" in mutation.data) ? <p role="status" className="mt-2 text-xs text-neutral-400">Проверено {mutation.data.received} · Новых или обновлённых {mutation.data.changed}</p> : null}
-    {history ? <LeadHistoryPanel workspace={source.workspaceId} sourceId={source.id} enabled={enabled && connected} canManage={canManage} /> : null}
+    {historyOpen ? <LeadHistoryPanel workspace={source.workspaceId} sourceId={source.id} enabled={enabled && connected} canManage={canManage} /> : null}
     </td></tr> : null}
     {settings ? <LeadSourceSettings source={source} onClose={() => setSettings(false)}/> : null}
   </Fragment>;

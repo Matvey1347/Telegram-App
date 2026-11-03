@@ -433,6 +433,21 @@ export class TelegramAdSalesService {
             ),
           }
         : null,
+      sellerMemberId: sale.sellerMemberId ?? null,
+      sellerMember: sale.sellerMember
+        ? {
+            id: sale.sellerMember.id,
+            name:
+              sale.sellerMember.user?.name ||
+              sale.sellerMember.telegramUsername ||
+              sale.sellerMember.user?.email ||
+              'Workspace member',
+            email: sale.sellerMember.user?.email ?? null,
+            avatarPresentation: iconToResolvedEmoji(
+              sale.sellerMember.avatarIcon,
+            ),
+          }
+        : null,
       reservedUntil: sale.reservedUntil?.toISOString() ?? null,
       createdAt: sale.createdAt.toISOString(),
       updatedAt: sale.updatedAt.toISOString(),
@@ -768,6 +783,22 @@ export class TelegramAdSalesService {
     return {
       advertiser: {
         include: telegramAdvertiserCompatibilityInclude,
+      },
+      sellerMember: {
+        select: {
+          id: true,
+          telegramUsername: true,
+          avatarIcon: {
+            select: {
+              id: true,
+              type: true,
+              name: true,
+              emoji: true,
+              imageUrl: true,
+            },
+          },
+          user: { select: { name: true, email: true } },
+        },
       },
       placements: {
         orderBy: { scheduledAt: 'asc' as const },
@@ -3548,10 +3579,19 @@ export class TelegramAdSalesService {
       dto,
       assignedMemberId,
     );
+    const sellerMemberId =
+      dto.sellerMemberId === undefined
+        ? assignedMemberId
+        : (
+            await this.workspaceService.resolveAssignedMemberId(
+              userId,
+              dto.sellerMemberId,
+            )
+          ).assignedMemberId;
     const commissionSnapshot = await resolveAdSaleCommissionSnapshot(
       this.prisma,
       workspaceId,
-      assignedMemberId,
+      sellerMemberId,
     );
     const sale = await this.prisma.telegramAdSale.create({
       data: {
@@ -3612,6 +3652,23 @@ export class TelegramAdSalesService {
               dto.assignedMemberId,
             )
           ).assignedMemberId;
+    const sellerMemberId =
+      dto.sellerMemberId === undefined
+        ? undefined
+        : (
+            await this.workspaceService.resolveAssignedMemberId(
+              userId,
+              dto.sellerMemberId,
+            )
+          ).assignedMemberId;
+    const commissionSnapshot =
+      sellerMemberId === undefined
+        ? undefined
+        : await resolveAdSaleCommissionSnapshot(
+            this.prisma,
+            workspaceId,
+            sellerMemberId,
+          );
     if (dto.status) {
       this.assertSaleTransition(existing.status, dto.status);
       if (
@@ -3675,6 +3732,7 @@ export class TelegramAdSalesService {
                 : null,
             }),
         ...(assignedMemberId === undefined ? {} : { assignedMemberId }),
+        ...(commissionSnapshot ?? {}),
         ...(dto.status === undefined ? {} : { status: dto.status }),
         ...(dto.crmDealStage === undefined
           ? {}
@@ -3986,29 +4044,6 @@ export class TelegramAdSalesService {
       dto.telegramAdProductId === undefined
         ? placement.isPermanentSnapshot
         : (product?.isPermanent ?? false);
-    const underMinimumPricingChanged =
-      !agreedPrice.eq(placement.agreedPrice) ||
-      !minimumPrice.eq(placement.minimumPrice);
-    if (
-      agreedPrice.lt(minimumPrice) &&
-      underMinimumPricingChanged &&
-      !(dto.manualPriceReason ?? placement.manualPriceReason)
-    ) {
-      this.logger.info({
-        level: 'warn',
-        event: 'telegram_ad_sales.price_below_minimum',
-        message: `Placement ${placementId} price below minimum`,
-        metadata: {
-          placementId,
-          saleId,
-        },
-      });
-      throw new BadRequestException({
-        code: 'UNDER_MINIMUM_PRICE',
-        message:
-          'manualPriceReason is required when agreedPrice is below minimumPrice',
-      });
-    }
     const managedPostScheduleIsOutOfSync =
       placement.managedPost?.status === TelegramManagedPostStatus.SCHEDULED &&
       placement.managedPost.scheduledAt?.getTime() !==
