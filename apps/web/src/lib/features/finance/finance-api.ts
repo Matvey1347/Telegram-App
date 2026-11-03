@@ -92,7 +92,11 @@ export function createFinanceApi({
     ...quietCrud<Account>("/accounts"),
     listPage: async (params?: PaginationParams & AccountQuery) =>
       getPaginated<Account>("/accounts", params),
-    list: async () => getAllPaginatedItems<Account>("/accounts"),
+    // Finance filters and transfer editors need the complete account catalog.
+    // Use the API's 100-row maximum so collecting it does not serialize a
+    // sequence of default 10-row requests on Finance Overview startup.
+    list: async () =>
+      getAllPaginatedItems<Account>("/accounts", { pageSize: 100 }),
   };
 
   const transactionsApi = {
@@ -139,6 +143,8 @@ export function createFinanceApi({
   const transactionCategoriesApi = {
     list: async (type: TransactionType) =>
       (await api.get<TransactionCategory[]>("/finance/categories", { params: { type } })).data,
+    listAll: async () =>
+      (await api.get<TransactionCategory[]>("/finance/categories")).data,
     statistics: async (type: TransactionType) =>
       (
         await api.get<FinanceCategoryStatisticsResponse>(

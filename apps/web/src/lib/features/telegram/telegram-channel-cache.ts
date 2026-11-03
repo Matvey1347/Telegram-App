@@ -2,8 +2,9 @@ import type { QueryClient } from "@tanstack/react-query";
 import type {
   TelegramChannel,
   TelegramChannelListResponse,
+  TelegramChannelSelectOption,
 } from "@/lib/api-types/telegram/telegram-channels";
-import { telegramChannelKeys } from "@/lib/query-keys";
+import { networkKeys, telegramChannelKeys } from "@/lib/query-keys";
 
 type ChannelPatch = Partial<TelegramChannel> & Pick<TelegramChannel, "id">;
 type ChannelListCache = TelegramChannel[] | TelegramChannelListResponse;
@@ -28,6 +29,7 @@ function updateCachedList(
 export function patchTelegramChannelCaches(
   queryClient: QueryClient,
   patch: ChannelPatch,
+  { invalidateNetworks = false }: { invalidateNetworks?: boolean } = {},
 ) {
   queryClient.setQueriesData<ChannelListCache>(
     { queryKey: telegramChannelKeys.lists() },
@@ -42,6 +44,17 @@ export function patchTelegramChannelCaches(
     telegramChannelKeys.detail(patch.id),
     (channel) => (channel ? mergeChannel(channel, patch) : channel),
   );
+  queryClient.setQueriesData<TelegramChannelSelectOption[]>(
+    { queryKey: telegramChannelKeys.selects() },
+    (channels) =>
+      channels?.map((channel) =>
+        channel.id === patch.id
+          ? { ...channel, ...(patch as Partial<TelegramChannelSelectOption>) }
+          : channel,
+      ),
+  );
+  if (invalidateNetworks)
+    void queryClient.invalidateQueries({ queryKey: networkKeys.list() });
 }
 
 export function prependTelegramChannelToCaches(
@@ -56,6 +69,10 @@ export function prependTelegramChannelToCaches(
         ...channels.filter((item) => item.id !== channel.id),
       ]),
   );
+  void queryClient.invalidateQueries({
+    queryKey: telegramChannelKeys.selects(),
+  });
+  void queryClient.invalidateQueries({ queryKey: networkKeys.list() });
 }
 
 export function removeTelegramChannelFromCaches(
@@ -73,6 +90,10 @@ export function removeTelegramChannelFromCaches(
     queryKey: telegramChannelKeys.detail(channelId),
     exact: true,
   });
+  void queryClient.invalidateQueries({
+    queryKey: telegramChannelKeys.selects(),
+  });
+  void queryClient.invalidateQueries({ queryKey: networkKeys.list() });
 }
 
 /**
@@ -131,12 +152,9 @@ export function moveTelegramChannelBetweenLifecycleCaches(
         totalItems: Math.max(0, current.pagination.totalItems + delta),
       },
       counts: {
-        active:
-          Math.max(0, current.counts.active + countDelta("active")),
-        test:
-          Math.max(0, current.counts.test + countDelta("test")),
-        archived:
-          Math.max(0, current.counts.archived + countDelta("archive")),
+        active: Math.max(0, current.counts.active + countDelta("active")),
+        test: Math.max(0, current.counts.test + countDelta("test")),
+        archived: Math.max(0, current.counts.archived + countDelta("archive")),
       },
     };
   };
@@ -155,6 +173,7 @@ export function moveTelegramChannelBetweenLifecycleCaches(
     telegramChannelKeys.detail(channel.id),
     channel,
   );
+  void queryClient.invalidateQueries({ queryKey: networkKeys.list() });
 }
 
 export function restoreTelegramChannelCacheSnapshots(

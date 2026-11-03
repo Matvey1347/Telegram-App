@@ -139,60 +139,23 @@ export class TelegramChannelSchemaCompatibilityService {
 
   async ensureTelegramChannelImportPolicyColumnsAvailable() {
     if (this.telegramChannelImportPolicyColumnsAvailable === true) return;
-    if (this.ensureTelegramChannelImportPolicyColumnsPromise) {
+    if (this.ensureTelegramChannelImportPolicyColumnsPromise)
       return this.ensureTelegramChannelImportPolicyColumnsPromise;
-    }
-    if (typeof this.prisma.$executeRawUnsafe !== 'function') {
-      this.telegramChannelImportPolicyColumnsAvailable = false;
-      return false;
-    }
     this.ensureTelegramChannelImportPolicyColumnsPromise = (async () => {
-      await this.prisma.$executeRawUnsafe(`
-          DO $$
-          BEGIN
-            IF NOT EXISTS (
-              SELECT 1
-              FROM pg_type
-              WHERE typname = 'TelegramChannelAcquisitionType'
-            ) THEN
-              CREATE TYPE "TelegramChannelAcquisitionType" AS ENUM ('CREATED', 'PURCHASED');
-            END IF;
-          END $$;
-        `);
-      await this.prisma.$executeRawUnsafe(`
-          ALTER TABLE "TelegramChannel"
-          ADD COLUMN IF NOT EXISTS "acquisitionType" "TelegramChannelAcquisitionType" NOT NULL DEFAULT 'CREATED',
-          ADD COLUMN IF NOT EXISTS "postsSyncFrom" TIMESTAMP(3),
-          ADD COLUMN IF NOT EXISTS "inviteLinksSyncFrom" TIMESTAMP(3),
-          ADD COLUMN IF NOT EXISTS "purchaseTransactionId" TEXT
-        `);
-      await this.prisma.$executeRawUnsafe(`
-          ALTER TABLE "TelegramInviteLink"
-          ADD COLUMN IF NOT EXISTS "telegramCreatedAt" TIMESTAMP(3)
-        `);
-      await this.prisma.$executeRawUnsafe(`
-          CREATE UNIQUE INDEX IF NOT EXISTS "TelegramChannel_purchaseTransactionId_key"
-          ON "TelegramChannel"("purchaseTransactionId")
-        `);
-      await this.prisma.$executeRawUnsafe(`
-          DO $$
-          BEGIN
-            IF NOT EXISTS (
-              SELECT 1
-              FROM pg_constraint
-              WHERE conname = 'TelegramChannel_purchaseTransactionId_fkey'
-            ) THEN
-              ALTER TABLE "TelegramChannel"
-              ADD CONSTRAINT "TelegramChannel_purchaseTransactionId_fkey"
-              FOREIGN KEY ("purchaseTransactionId") REFERENCES "Transaction"("id")
-              ON DELETE SET NULL ON UPDATE CASCADE;
-            END IF;
-          END $$;
-        `);
+      const rows = await this.prisma.$queryRaw<Array<{ available: boolean }>>`
+        SELECT (
+          SELECT count(*) = 5 FROM information_schema.columns
+          WHERE table_schema = current_schema() AND
+            ((table_name = 'TelegramChannel' AND column_name IN
+              ('acquisitionType', 'postsSyncFrom', 'inviteLinksSyncFrom', 'purchaseTransactionId'))
+             OR (table_name = 'TelegramInviteLink' AND column_name = 'telegramCreatedAt'))
+        ) AND to_regtype('"TelegramChannelAcquisitionType"') IS NOT NULL
+          AND to_regclass('"TelegramChannel_purchaseTransactionId_key"') IS NOT NULL
+          AND EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = to_regclass('"TelegramChannel"')
+            AND conname = 'TelegramChannel_purchaseTransactionId_fkey') AS available`;
+      if (!rows[0]?.available)
+        throw new Error('TELEGRAM_CHANNEL_IMPORT_SCHEMA_MIGRATION_REQUIRED');
       this.telegramChannelImportPolicyColumnsAvailable = true;
-      this.logger.warn(
-        'TelegramChannel import-policy columns were missing in the database and were created automatically for compatibility.',
-      );
     })();
     try {
       await this.ensureTelegramChannelImportPolicyColumnsPromise;

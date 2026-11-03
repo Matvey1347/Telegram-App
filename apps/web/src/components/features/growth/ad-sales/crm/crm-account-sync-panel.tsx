@@ -19,7 +19,7 @@ export function CrmAccountSyncPanel({ canEdit }: { canEdit: boolean }) {
   const accounts = useQuery({
     queryKey: telegramAccountKeys.accounts(),
     queryFn: telegramUserAccountsApi.list,
-    staleTime: 60_000,
+    staleTime: 24 * 60 * 60_000,
   });
   const connected = (accounts.data ?? []).filter(
     (account) => account.status === "connected",

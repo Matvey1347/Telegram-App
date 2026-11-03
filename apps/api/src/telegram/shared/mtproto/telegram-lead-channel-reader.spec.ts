@@ -31,6 +31,80 @@ const setup = () => {
   return { client, reader: new TelegramLeadChannelReader(client as never) };
 };
 describe('shared live-handle channel read transport (mocked Telegram only)', () => {
+  it('reads a public channel description without joining or reading messages', async () => {
+    const { client, reader } = setup();
+    const channel = new Api.Channel({
+      id: channelId as never,
+      accessHash: '202' as never,
+      title: 'Public',
+      username: 'public_channel',
+      broadcast: true,
+      photo: new Api.ChatPhotoEmpty(),
+      date: 1,
+    });
+    const full = Object.assign(
+      Object.create(Api.ChannelFull.prototype) as Api.ChannelFull,
+      { about: 'Реклама: @advertising_manager' },
+    );
+    client.getEntity.mockResolvedValue(channel);
+    client.invoke.mockResolvedValue({ fullChat: full });
+    await expect(reader.publicProfile('public_channel')).resolves.toEqual({
+      channelId,
+      username: 'public_channel',
+      about: 'Реклама: @advertising_manager',
+    });
+    expect(client.getMessages).not.toHaveBeenCalled();
+    channel.noforwards = true;
+    await expect(reader.publicProfile('public_channel')).rejects.toThrow(
+      'LEAD_PUBLIC_PROFILE_UNAVAILABLE',
+    );
+  });
+  it('reads at most the public pinned message without marking it read', async () => {
+    const { client, reader } = setup();
+    const channel = new Api.Channel({
+      id: channelId as never,
+      accessHash: '202' as never,
+      title: 'Public',
+      username: 'public_channel',
+      broadcast: true,
+      photo: new Api.ChatPhotoEmpty(),
+      date: 1,
+    });
+    const full = Object.assign(
+      Object.create(Api.ChannelFull.prototype) as Api.ChannelFull,
+      { about: '', pinnedMsgId: 7 },
+    );
+    client.getEntity.mockResolvedValue(channel);
+    client.invoke.mockResolvedValue({ fullChat: full });
+    client.getMessages.mockResolvedValue([post(7, 'Реклама: @ad_manager')]);
+    await expect(reader.publicProfile('public_channel')).resolves.toMatchObject(
+      { pinned: { id: 7, text: 'Реклама: @ad_manager' } },
+    );
+    expect(client.getMessages).toHaveBeenCalledWith(channel, { ids: [7] });
+  });
+  it('refuses protected or mismatched broadcast channels before reading a photo', async () => {
+    const { client, reader } = setup();
+    const channel = new Api.Channel({
+      id: channelId as never,
+      accessHash: '202' as never,
+      title: 'Protected',
+      broadcast: true,
+      noforwards: true,
+      photo: new Api.ChatPhotoEmpty(),
+      date: 1,
+    });
+    client.getEntity.mockResolvedValue(channel);
+    await expect(
+      reader.readPhoto(channelId, { messageId: 7, maxBytes: 100 }),
+    ).rejects.toThrow('LEAD_MEDIA_CHANNEL_PROTECTED');
+    expect(client.getMessages).not.toHaveBeenCalled();
+    channel.noforwards = false;
+    channel.id = '102' as never;
+    await expect(
+      reader.readPhoto(channelId, { messageId: 7, maxBytes: 100 }),
+    ).rejects.toThrow('LEAD_MEDIA_CHANNEL_ID_MISMATCH');
+    expect(client.getMessages).not.toHaveBeenCalled();
+  });
   it('does no startup/network work and never joins or opens a client', () => {
     const { client } = setup();
     expect(client.invoke).not.toHaveBeenCalled();

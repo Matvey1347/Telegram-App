@@ -1,9 +1,42 @@
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
 import { AccountModal, TransferModal } from "./finance-overview-modals";
 
 describe("Finance overview modal layout", () => {
+  it("applies loaded currencies without discarding account form edits", () => {
+    const props = {
+      open: true,
+      currencies: ["USD"],
+      onClose: vi.fn(),
+      onSubmit: vi.fn(),
+    };
+    const { rerender } = render(
+      <QueryClientProvider client={new QueryClient()}>
+        <AccountModal {...props} />
+      </QueryClientProvider>,
+    );
+
+    rerender(
+      <QueryClientProvider client={new QueryClient()}>
+        <AccountModal {...props} currencies={["EUR", "USD"]} />
+      </QueryClientProvider>,
+    );
+
+    expect(screen.getByRole("button", { name: /EUR/ })).toBeInTheDocument();
+    const name = document.querySelector<HTMLInputElement>('input[name="name"]');
+    expect(name).not.toBeNull();
+    fireEvent.change(name!, { target: { value: "Travel" } });
+    rerender(
+      <QueryClientProvider client={new QueryClient()}>
+        <AccountModal {...props} currencies={["GBP", "EUR", "USD"]} />
+      </QueryClientProvider>,
+    );
+
+    expect(name).toHaveValue("Travel");
+    expect(screen.getByRole("button", { name: /EUR/ })).toBeInTheDocument();
+  });
+
   it("allows an opening investment to be added while editing an account", () => {
     render(
       <QueryClientProvider client={new QueryClient()}>

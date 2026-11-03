@@ -60,7 +60,10 @@ export function CrmInbox({ canManage, canSendManual, canViewSales = false, canEd
     queryFn: ({ pageParam, signal }) => listCrmInboxConversations(params, pageParam, signal),
     initialPageParam: null as string | null,
     getNextPageParam: (page) => page.hasMore ? page.nextCursor : undefined,
-    staleTime: 60_000,
+    // Keep the workspace-scoped inbox immediately available during CRM tab
+    // navigation. The authenticated realtime stream reconciles active lists
+    // on every connect/reconnect, and Inbox data stays memory-only.
+    staleTime: 5 * 60_000,
     // A different folder/filter must never display the preceding list while loading.
     placeholderData: undefined,
     enabled: filter !== "AI_LEADS",

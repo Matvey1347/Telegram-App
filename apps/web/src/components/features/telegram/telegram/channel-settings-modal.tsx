@@ -19,6 +19,7 @@ import {
   telegramPublicationSchedulesApi,
 } from "@/lib/api";
 import {
+  networkKeys,
   telegramChannelKeys,
   telegramPublicationScheduleKeys,
 } from "@/lib/query-keys";
@@ -174,6 +175,10 @@ export function ChannelSettingsModal({
           queryKey: telegramChannelKeys.lists(),
         }),
         queryClient.invalidateQueries({
+          queryKey: telegramChannelKeys.cardLists(),
+        }),
+        queryClient.invalidateQueries({ queryKey: networkKeys.list() }),
+        queryClient.invalidateQueries({
           queryKey: telegramChannelKeys.detail(channel.id),
         }),
         queryClient.invalidateQueries({
@@ -182,6 +187,13 @@ export function ChannelSettingsModal({
         queryClient.invalidateQueries({
           queryKey: telegramPublicationScheduleKeys.assignment(channel.id),
         }),
+        ...(publicationScheduleDraft
+          ? [
+              queryClient.invalidateQueries({
+                queryKey: telegramPublicationScheduleKeys.all(),
+              }),
+            ]
+          : []),
       ]);
     },
   });

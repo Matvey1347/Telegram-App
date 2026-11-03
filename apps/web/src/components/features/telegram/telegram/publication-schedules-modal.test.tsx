@@ -57,6 +57,26 @@ beforeEach(() => {
 });
 
 describe("PublicationSchedulesModal", () => {
+  it("opens an existing cached schedule in chronological order", async () => {
+    const user = userEvent.setup();
+    mocks.list.mockResolvedValue([{
+      id: "schedule-order", name: "Order test", iconId: null, iconPresentation: null,
+      timezone: "Europe/Warsaw", isDefault: false, assignedChannelsCount: 0,
+      assignedChannelIds: [], createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z",
+      slots: [
+        { id: "first", title: "Second post", kind: "CONTENT", time: "12:10", position: 0, isActive: true },
+        { id: "later", title: "Third ad", kind: "AD", time: "18:10", position: 1, isActive: true },
+        { id: "middle", title: "Second ad", kind: "AD", time: "13:10", position: 2, isActive: true },
+      ],
+    }]);
+    renderModal();
+    await user.click(await screen.findByRole("button", { name: "Edit Order test" }));
+    expect(screen.getByLabelText("Slot 1 title")).toHaveValue("Second post");
+    expect(screen.getByLabelText("Slot 2 title")).toHaveValue("Second ad");
+    expect(screen.getByLabelText("Slot 2 time")).toHaveValue("13:10");
+    expect(screen.getByLabelText("Slot 3 title")).toHaveValue("Third ad");
+  });
+
   it("requires confirmation before deleting a schedule from its card", async () => {
     const user = userEvent.setup();
     mocks.list.mockResolvedValue([
@@ -90,6 +110,11 @@ describe("PublicationSchedulesModal", () => {
     const removeButton = await screen.findByRole("button", {
       name: "Delete Main plan",
     });
+    const editButton = screen.getByRole("button", { name: "Edit Main plan" });
+    for (const actionButton of [editButton, removeButton]) {
+      expect(actionButton).toHaveClass("h-8", "w-8");
+      expect(actionButton.querySelector("svg")).toHaveAttribute("width", "20");
+    }
     expect(screen.getByText(/🇺🇦 Europe\/Kyiv · 09:00/)).toBeInTheDocument();
     expect(removeButton).toHaveClass("bg-red-600");
     await user.click(removeButton);
@@ -176,7 +201,7 @@ describe("PublicationSchedulesModal", () => {
     expect(mocks.create).toHaveBeenCalledWith({
       name: "Main plan",
       iconId: "icon-1",
-      slots: [{ title: "Morning post", kind: "AD", time: "09:00" }],
+      slots: [{ title: "Morning post", kind: "AD", time: "09:00", position: 0, isOptional: false }],
     });
   });
 

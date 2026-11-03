@@ -17,7 +17,7 @@ import {
   ToggleRow,
 } from "@/components/ui/primitives";
 import { telegramAdSalesKeys } from "@/lib/features/growth/telegram-ad-sales-query";
-import { telegramChannelKeys } from "@/lib/query-keys";
+import { networkKeys, telegramChannelKeys } from "@/lib/query-keys";
 import { useAppToast } from "@/providers/toast-provider";
 import type { ChannelSettingsDraft } from "./channel-settings-draft";
 
@@ -168,9 +168,15 @@ export function ChannelEconomicsEditor({
         stopCpaFrom: normalCpa.trim() ? Number(normalCpa) : null,
       }),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: telegramChannelKeys.lists(),
-      });
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: telegramChannelKeys.lists(),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: telegramChannelKeys.cardLists(),
+        }),
+        queryClient.invalidateQueries({ queryKey: networkKeys.list() }),
+      ]);
       pushToast("Channel economics updated", "success");
       onClose();
     },

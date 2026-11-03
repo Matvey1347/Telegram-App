@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/layout/app-shell";
-import { IconPicker } from "@/components/icons/icon-picker";
 import {
   Button,
   Card,
@@ -14,10 +14,15 @@ import {
 } from "@/components/ui/primitives";
 import { TimezoneSelect } from "@/components/ui/timezone-select";
 import { accountApi, authApi, workspacesApi } from "@/lib/api";
+import { accountKeys, workspaceKeys } from "@/lib/query-keys";
 import { WorkspaceMembersSection } from "@/components/features/workspace/workspace-members-section";
 import { WorkspaceTools } from "@/components/features/workspace/workspace-tools";
 import { WorkspaceAdSalesDefaults } from "@/components/features/workspace/workspace-ad-sales-defaults";
 import { NotificationSettingsSection } from "@/components/features/operations/notifications/notification-settings-section";
+
+const IconPicker = dynamic(() =>
+  import("@/components/icons/icon-picker").then((module) => module.IconPicker),
+);
 
 export default function SettingsPage() {
   const qc = useQueryClient();
@@ -35,7 +40,7 @@ export default function SettingsPage() {
   const canManageWorkspace = hasFeature("workspace");
   const canViewMembers = hasFeature("members");
   const { data: workspaces } = useQuery({
-    queryKey: ["workspaces"],
+    queryKey: workspaceKeys.workspaces(),
     queryFn: workspacesApi.list,
     enabled: canManageWorkspace,
   });
@@ -45,7 +50,13 @@ export default function SettingsPage() {
   const [workspaceDeleteOpen, setWorkspaceDeleteOpen] = useState(false);
   const workspaceMutation = useMutation({
     mutationFn: accountApi.updateWorkspace,
-    onSuccess: () => me.refetch(),
+    onSuccess: async () => {
+      await Promise.all([
+        me.refetch(),
+        qc.invalidateQueries({ queryKey: accountKeys.shell() }),
+        qc.invalidateQueries({ queryKey: workspaceKeys.workspaces() }),
+      ]);
+    },
   });
   const deleteWorkspaceMutation = useMutation({
     mutationFn: workspacesApi.remove,
@@ -61,7 +72,7 @@ export default function SettingsPage() {
       }
       setWorkspaceDeleteOpen(false);
       await Promise.all([
-        qc.invalidateQueries({ queryKey: ["workspaces"] }),
+        qc.invalidateQueries({ queryKey: workspaceKeys.workspaces() }),
         qc.invalidateQueries({ queryKey: ["auth", "me"] }),
       ]);
       if (!remainingWorkspaceId && typeof window !== "undefined") {

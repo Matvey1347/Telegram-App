@@ -23,7 +23,12 @@ import {
   PageHeader,
 } from "@/components/ui/primitives";
 import { workspaceRolesApi } from "@/lib/features/workspace/workspace-roles-api";
-import { memberFinanceKeys, workspaceKeys } from "@/lib/query-keys";
+import {
+  memberFinanceKeys,
+  accountKeys,
+  telegramAccountKeys,
+  workspaceKeys,
+} from "@/lib/query-keys";
 
 import {
   WorkspaceMemberModal,
@@ -103,11 +108,12 @@ export function WorkspaceMembersSection({
   const { data: telegramAccounts } = useQuery({
     queryKey: ["telegram-user-accounts"],
     queryFn: telegramUserAccountsApi.list,
+    enabled: open || Boolean(editingMember),
   });
   const roles = useQuery({
     queryKey: workspaceKeys.roles(),
     queryFn: workspaceRolesApi.list,
-    enabled: canAdd,
+    enabled: canAdd && (open || Boolean(editingMember)),
   });
   const memberFinance = useQuery({
     queryKey: memberFinanceKeys.summaries(),
@@ -148,6 +154,8 @@ export function WorkspaceMembersSection({
     onSuccess: (res: WorkspaceMember & { temporaryPassword?: string }) => {
       setError("");
       qc.invalidateQueries({ queryKey: workspaceKeys.members() });
+      qc.invalidateQueries({ queryKey: telegramAccountKeys.accounts() });
+      qc.invalidateQueries({ queryKey: accountKeys.shell() });
       qc.invalidateQueries({ queryKey: workspaceKeys.roles() });
       setOpen(false);
       setTempPassword(res?.temporaryPassword || "");
@@ -175,7 +183,8 @@ export function WorkspaceMembersSection({
     onSuccess: () => {
       setError("");
       qc.invalidateQueries({ queryKey: workspaceKeys.members() });
-      qc.invalidateQueries({ queryKey: ["telegram-user-accounts"] });
+      qc.invalidateQueries({ queryKey: telegramAccountKeys.accounts() });
+      qc.invalidateQueries({ queryKey: accountKeys.shell() });
       qc.invalidateQueries({ queryKey: workspaceKeys.roles() });
       setEditingMember(null);
     },
@@ -188,6 +197,7 @@ export function WorkspaceMembersSection({
     onSuccess: () => {
       setError("");
       qc.invalidateQueries({ queryKey: workspaceKeys.members() });
+      qc.invalidateQueries({ queryKey: telegramAccountKeys.accounts() });
       qc.invalidateQueries({ queryKey: workspaceKeys.roles() });
     },
     onError: (error: unknown) =>

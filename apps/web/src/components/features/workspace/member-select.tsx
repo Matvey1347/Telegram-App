@@ -14,6 +14,7 @@ export function MemberSelect({
   defaultToCurrent = false,
   allowAssignOthers,
   disabled,
+  unassignedLabel = "Unassigned",
 }: {
   value?: string | null;
   onChange: (value: string) => void;
@@ -21,6 +22,7 @@ export function MemberSelect({
   defaultToCurrent?: boolean;
   allowAssignOthers?: boolean;
   disabled?: boolean;
+  unassignedLabel?: string;
 }) {
   const { workspace } = useAuth();
   const members = useQuery({
@@ -42,7 +44,7 @@ export function MemberSelect({
       disabled={disabled || members.isLoading || !canAssignOthers}
     >
       {includeAll && <option value="">All</option>}
-      {!includeAll && canAssignOthers && <option value="">Unassigned</option>}
+      {!includeAll && canAssignOthers && <option value="">{unassignedLabel}</option>}
       {members.data?.map((member) => (
         <option
           key={member.id}

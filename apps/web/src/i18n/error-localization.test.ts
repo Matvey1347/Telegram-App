@@ -6,6 +6,7 @@ function apiError(code: string, message: string, params?: Record<string, unknown
 }
 
 const translate = (key: string, values?: Record<string, unknown>) => ({
+  "telegramPosts.errors.imageUnavailable": "Не удалось загрузить изображение.",
   "telegramPosts.errors.postNotFound": "Публикация не найдена.",
   "telegramPosts.errors.batchLimitExceeded": `Лимит: ${values?.limit}`,
   "telegram.posts.error.generic": "Не удалось выполнить действие.",
@@ -15,6 +16,11 @@ describe("Telegram Posts API error localization", () => {
   it("maps a stable backend machine code to its canonical translation key", () => {
     expect(localizedApiErrorKey(apiError("TELEGRAM_MANAGED_POST_NOT_FOUND", "Post not found")))
       .toBe("telegramPosts.errors.postNotFound");
+  });
+
+  it("explains an unavailable publication image", () => {
+    expect(safeApiErrorMessage(apiError("TELEGRAM_POST_IMAGE_UNAVAILABLE", "Could not download image 1 (HTTP 404)"), "ru", translate, "Fallback"))
+      .toBe("Не удалось загрузить изображение.");
   });
 
   it("never exposes an unknown backend English message in Russian", () => {

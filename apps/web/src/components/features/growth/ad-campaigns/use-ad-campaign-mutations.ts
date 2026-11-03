@@ -16,6 +16,7 @@ function affectedKeys() {
     accountKeys.transactions(),
     dashboardKeys.summary(),
     telegramChannelKeys.lists(),
+    telegramChannelKeys.cardLists(),
     telegramChannelKeys.trafficAttributions(),
   ];
 }
@@ -46,9 +47,6 @@ export function useAdCampaignMutations() {
     mutationFn: (id: string) => adCampaignsApi.remove(id),
     onSuccess: () => {
       void invalidateAffected();
-      void queryClient.invalidateQueries({
-        queryKey: ["ad-campaigns-performance"],
-      });
       void queryClient.invalidateQueries({ queryKey: ["ad-hypotheses"] });
       void queryClient.invalidateQueries({ queryKey: ["promos"] });
     },

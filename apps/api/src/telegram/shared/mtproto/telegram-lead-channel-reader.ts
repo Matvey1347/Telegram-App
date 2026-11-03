@@ -14,6 +14,7 @@ import {
 } from './telegram-lead-channel-normalizer';
 import { telegramLongString } from './telegram-crm-mtproto.normalizer';
 import { parseTelegramInviteReference } from '../imports/telegram-import.helpers';
+import { readLeadPilotMedia } from './telegram-lead-pilot-media';
 
 type DialogCursor = {
   at: number;
@@ -21,7 +22,7 @@ type DialogCursor = {
   offsetDate: number;
   offsetPeer: Api.TypeInputPeer;
 };
-/** Read capabilities on the already-owned client. Never connects, joins or downloads media. */
+/** Read capabilities on the already-owned client. Never connects or joins. */
 export class TelegramLeadChannelReader implements TelegramLeadChannelHandle {
   private readonly limiter = new TelegramLeadReadLimiter();
   private readonly peers = new Map<string, Api.InputPeerChannel>();
@@ -31,6 +32,50 @@ export class TelegramLeadChannelReader implements TelegramLeadChannelHandle {
 
   list(input: { cursor?: string; limit?: number }) {
     return this.limiter.run(() => this.readList(input));
+  }
+  publicProfile(username: string) {
+    return this.limiter.run(async () => {
+      if (!/^[A-Za-z][A-Za-z0-9_]{3,31}$/.test(username))
+        throw new BadRequestException('LEAD_CHANNEL_REFERENCE_INVALID');
+      const entity = await this.client.getEntity(username);
+      if (
+        !(entity instanceof Api.Channel) ||
+        !entity.broadcast ||
+        entity.megagroup ||
+        entity.min ||
+        entity.noforwards ||
+        entity.username?.toLowerCase() !== username.toLowerCase()
+      )
+        throw new BadRequestException('LEAD_PUBLIC_PROFILE_UNAVAILABLE');
+      const full = await this.client.invoke(
+        new Api.channels.GetFullChannel({ channel: entity }),
+      );
+      if (!(full.fullChat instanceof Api.ChannelFull))
+        throw new BadRequestException('LEAD_PUBLIC_PROFILE_UNAVAILABLE');
+      let pinned: { id: number; text: string } | undefined;
+      if (full.fullChat.pinnedMsgId) {
+        try {
+          const messages = await this.client.getMessages(entity, {
+            ids: [full.fullChat.pinnedMsgId],
+          });
+          const message = messages[0];
+          if (
+            message instanceof Api.Message &&
+            !message.noforwards &&
+            message.message
+          )
+            pinned = { id: message.id, text: message.message.slice(0, 4096) };
+        } catch {
+          // A missing or inaccessible pin does not invalidate the description.
+        }
+      }
+      return {
+        channelId: telegramLongString(entity.id),
+        username: entity.username,
+        about: (full.fullChat.about ?? '').slice(0, 4096),
+        ...(pinned ? { pinned } : {}),
+      };
+    });
   }
   resolve(reference: string) {
     return this.limiter.run(async () => {
@@ -57,6 +102,33 @@ export class TelegramLeadChannelReader implements TelegramLeadChannelHandle {
     input: { beforeId?: number; limit?: number; reference?: string },
   ) {
     return this.limiter.run(() => this.readHistory(channelId, input));
+  }
+  readPhoto(
+    channelId: string,
+    input: { messageId: number; maxBytes: number; reference?: string },
+  ) {
+    return this.limiter.run(async () => {
+      const peer = await this.channel(channelId, input.reference);
+      const channel = await this.client.getEntity(peer);
+      if (!(channel instanceof Api.Channel))
+        throw new BadRequestException('LEAD_MEDIA_CHANNEL_TYPE_INVALID');
+      if (telegramLongString(channel.id) !== channelId)
+        throw new BadRequestException('LEAD_MEDIA_CHANNEL_ID_MISMATCH');
+      if (channel.min)
+        throw new BadRequestException('LEAD_MEDIA_CHANNEL_MINIMAL');
+      if (channel.noforwards)
+        throw new BadRequestException('LEAD_MEDIA_CHANNEL_PROTECTED');
+      if (channel.left)
+        throw new BadRequestException('LEAD_MEDIA_CHANNEL_NOT_JOINED');
+      if (!channel.broadcast)
+        throw new BadRequestException('LEAD_MEDIA_CHANNEL_NOT_BROADCAST');
+      return readLeadPilotMedia(
+        this.client,
+        peer,
+        input.messageId,
+        input.maxBytes,
+      );
+    });
   }
   recover(channelId: string, pts: number, reference?: string) {
     return this.limiter.run(() => this.readRecovery(channelId, pts, reference));

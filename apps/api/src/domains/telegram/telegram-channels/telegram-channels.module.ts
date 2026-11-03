@@ -1,4 +1,8 @@
 import { forwardRef, Module } from '@nestjs/common';
+import { OperationsNotificationsModule } from '../../operations/notifications/operations-notifications.module';
+import { TelegramChannelRemindersController } from './telegram-channel-reminders.controller';
+import { TelegramChannelRemindersService } from './telegram-channel-reminders.service';
+import { TelegramChannelRemindersDueService } from './telegram-channel-reminders-due.service';
 import { TelegramChannelsController } from './telegram-channels.controller';
 import {
   TelegramPublicationSchedulesController,
@@ -109,9 +113,10 @@ import { TelegramChannelTrafficAttributionReadService } from './telegram-channel
 import { TelegramChannelTrafficAttributionService } from './telegram-channel-traffic-attribution.service';
 
 @Module({
-  imports: [forwardRef(() => AdCampaignsModule)],
+  imports: [forwardRef(() => AdCampaignsModule), OperationsNotificationsModule],
   controllers: [
     TelegramChannelsController,
+    TelegramChannelRemindersController,
     TelegramPublicationSchedulesController,
     TelegramChannelPublicationScheduleController,
     TelegramContentHypothesesController,
@@ -126,6 +131,8 @@ import { TelegramChannelTrafficAttributionService } from './telegram-channel-tra
   ],
   providers: [
     TelegramChannelsService,
+    TelegramChannelRemindersService,
+    TelegramChannelRemindersDueService,
     TelegramPublicationSchedulesService,
     TelegramContentHypothesesService,
     TelegramUnifiedImportService,
@@ -220,6 +227,7 @@ import { TelegramChannelTrafficAttributionService } from './telegram-channel-tra
     TelegramPostBatchPublicationRunnerService,
   ],
   exports: [
+    TelegramChannelRemindersDueService,
     TelegramChannelsService,
     TelegramChannelAnalyticsService,
     TelegramChannelFinancialReadService,

@@ -28,6 +28,9 @@ export function TrashPage() {
   const query = useQuery({
     queryKey: ["trash", page, pageSize],
     queryFn: () => trashApi.list({ page, pageSize }),
+    // Trash is sensitive and stays out of persisted local storage, but a
+    // short in-memory window makes returning to this screen immediate.
+    staleTime: 5 * 60_000,
     placeholderData: keepPreviousData,
   });
   const restore = useMutation({

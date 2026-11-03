@@ -92,6 +92,8 @@ describe('OperationsNotificationsService', () => {
     const { service, prisma } = setup();
     await expect(service.updatePreferences('user-1', false)).resolves.toEqual({
       webPushEnabled: false,
+      channelRemindersPushEnabled: false,
+      channelRemindersTelegramEnabled: false,
       pushConfigured: false,
       activeSubscriptionCount: 0,
       crmNotificationsEnabled: true,

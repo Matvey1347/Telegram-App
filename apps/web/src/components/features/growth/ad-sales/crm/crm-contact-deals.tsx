@@ -10,7 +10,10 @@ import { useState } from "react";
 import type { CrmContactDetail } from "@telegram-system/shared";
 import { SalesTab } from "../ad-sales-sales-tab";
 import { telegramAdSalesApi, telegramChannelsApi } from "@/lib/api";
-import { telegramAdSalesKeys } from "@/lib/features/growth/telegram-ad-sales-query";
+import {
+  invalidateTelegramAdSalesDerivedQueries,
+  telegramAdSalesKeys,
+} from "@/lib/features/growth/telegram-ad-sales-query";
 import { telegramChannelKeys } from "@/lib/query-keys";
 
 export function CrmContactDeals({ contact }: { contact: CrmContactDetail }) {
@@ -33,7 +36,6 @@ export function CrmContactDeals({ contact }: { contact: CrmContactDetail }) {
   const channels = useQuery({
     queryKey: telegramChannelKeys.select(),
     queryFn: () => telegramChannelsApi.select(),
-    staleTime: 60_000,
   });
 
   return (
@@ -61,10 +63,19 @@ export function CrmContactDeals({ contact }: { contact: CrmContactDetail }) {
         router.push(`/ad-sales/sales?saleId=${encodeURIComponent(saleId)}`)
       }
       onDeleteSale={async (sale) => {
-        await telegramAdSalesApi.deleteSale(sale.id);
-        await queryClient.invalidateQueries({
-          queryKey: telegramAdSalesKeys.listRoot(),
-        });
+        const result = await telegramAdSalesApi.deleteSale(sale.id);
+        await Promise.all([
+          queryClient.invalidateQueries({
+            queryKey: telegramAdSalesKeys.listRoot(),
+          }),
+          invalidateTelegramAdSalesDerivedQueries(queryClient, {
+            availability: true,
+            analytics: true,
+            channelSummaries: true,
+            publicationCalendar: true,
+            channelIds: result.channelIds,
+          }),
+        ]);
       }}
       embedded
     />

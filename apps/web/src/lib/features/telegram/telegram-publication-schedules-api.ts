@@ -88,13 +88,13 @@ export function createTelegramPublicationSchedulesApi(
         )
       ).data,
     calendar: async (
-      scheduleId: string,
+      scheduleId: string | undefined,
       params: { from: string; to: string },
     ) =>
       (
         await api.get<TelegramPublicationPlanCalendar>(
           "/telegram-publication-schedules/calendar",
-          { params: { ...params, scheduleId } },
+          { params: scheduleId ? { ...params, scheduleId } : params },
         )
       ).data,
   };

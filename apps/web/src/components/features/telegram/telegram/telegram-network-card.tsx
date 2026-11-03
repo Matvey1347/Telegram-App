@@ -20,6 +20,7 @@ import type {
 } from "@/lib/api";
 import { IconAvatar } from "@/components/icons/icon-avatar";
 import { IconPicker } from "@/components/icons/icon-picker";
+import { Tooltip } from "@/components/ui/primitives";
 import { formatCompactMoney } from "@/lib/features/finance/money";
 import { TelegramChannelAvatarList } from "./telegram-channel-avatar-list";
 import {
@@ -57,6 +58,17 @@ function money(
         currency || settings?.primaryCurrency,
         settings?.currencyDisplayMode,
       );
+}
+
+function compactMoney(
+  amount: number | null | undefined,
+  currency: string | null | undefined,
+  settings?: CurrencySettings | null,
+) {
+  if (amount == null || Math.abs(amount) < 10_000) {
+    return money(amount, currency, settings);
+  }
+  return `${number(amount / 1_000, 1)}K ${currency || settings?.primaryCurrency || ""}`.trim();
 }
 
 function positiveAmount(value: unknown) {
@@ -269,7 +281,26 @@ export function TelegramNetworkCard({
       <div className="mt-3 grid grid-cols-4 gap-x-1.5">
         <Metric
           label="Spend"
-          value={money(economics?.invested, economicsCurrency, moneySettings)}
+          value={
+            <Tooltip
+              side="bottom"
+              align="left"
+              content={
+                <span className="grid min-w-44 gap-1.5">
+                  {positiveAmount(economics?.purchasePrice) > 0 ? (
+                    <span className="flex justify-between gap-4"><span className="text-neutral-400">Bought for</span><span>{money(economics?.purchasePrice, economicsCurrency, moneySettings)}</span></span>
+                  ) : null}
+                  {positiveAmount(economics?.adSpend) > 0 ? (
+                    <span className="flex justify-between gap-4"><span className="text-neutral-400">Ad spend</span><span>{money(economics?.adSpend, economicsCurrency, moneySettings)}</span></span>
+                  ) : null}
+                </span>
+              }
+            >
+              <button type="button" className="truncate text-left" aria-label="Show spend breakdown" title={money(economics?.invested, economicsCurrency, moneySettings)}>
+                {compactMoney(economics?.invested, economicsCurrency, moneySettings)}
+              </button>
+            </Tooltip>
+          }
           tone="text-rose-300"
           compact
         />
@@ -299,7 +330,7 @@ export function TelegramNetworkCard({
         />
         <Metric
           label="Earned"
-          value={money(economics?.revenue, economicsCurrency, moneySettings)}
+          value={compactMoney(economics?.revenue, economicsCurrency, moneySettings)}
           tone="text-emerald-300"
           compact
         />

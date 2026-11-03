@@ -16,10 +16,14 @@ export function TelegramChannelAvatarList({
   channels,
   ariaLabel,
   getHref,
+  maxVisible = 3,
+  countLabel,
 }: {
   channels: readonly ChannelSummary[];
   ariaLabel: string;
   getHref?: (channel: ChannelSummary) => string;
+  maxVisible?: number;
+  countLabel?: string;
 }) {
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -76,7 +80,7 @@ export function TelegramChannelAvatarList({
         onClick={() => setOpen((current) => !current)}
       >
         <span className="flex -space-x-2">
-          {channels.slice(0, 3).map((channel) => (
+          {channels.slice(0, Math.max(0, maxVisible)).map((channel) => (
             <span
               key={channel.id}
               className="rounded-full ring-2 ring-neutral-950"
@@ -91,7 +95,7 @@ export function TelegramChannelAvatarList({
           ))}
         </span>
         <span className="text-xs font-medium text-neutral-300">
-          {channels.length} {channels.length === 1 ? "channel" : "channels"}
+          {countLabel ?? `${channels.length} ${channels.length === 1 ? "channel" : "channels"}`}
         </span>
       </button>
       {open && typeof document !== "undefined"

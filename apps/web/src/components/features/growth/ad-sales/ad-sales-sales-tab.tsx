@@ -208,6 +208,7 @@ export function SalesTab(props: {
                   const linkedPosts = sale.placements.filter(
                     hasLinkedPlacementPost,
                   ).length;
+                  const soldBy = sale.sellerMember ?? sale.assignedMember;
                   const hasMultiplePlacementOutputs =
                     new Set(
                       sale.placements.map((item) => item.telegramChannelId),
@@ -248,24 +249,15 @@ export function SalesTab(props: {
                       <td className="px-4 py-3">
                         <div className="space-y-2">
                           <AdSaleOriginPreview origin={sale.origin} />
-                          {(sale.sellerMember ?? sale.assignedMember) ? (
+                          {soldBy ? (
                             <div className="flex items-center gap-2">
                               <IconAvatar
-                                icon={
-                                  (sale.sellerMember ?? sale.assignedMember)!
-                                    .avatarPresentation
-                                }
-                                label={
-                                  (sale.sellerMember ?? sale.assignedMember)!
-                                    .name
-                                }
+                                icon={soldBy.avatarPresentation}
+                                label={soldBy.name}
                                 size="xs"
                               />
                               <span className="max-w-40 truncate text-xs text-neutral-300">
-                                {
-                                  (sale.sellerMember ?? sale.assignedMember)!
-                                    .name
-                                }
+                                {soldBy.name}
                               </span>
                             </div>
                           ) : (

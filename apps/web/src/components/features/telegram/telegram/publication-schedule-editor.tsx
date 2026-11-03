@@ -11,6 +11,7 @@ import {
   Input,
   Select,
   TimeInput,
+  canonicalizeTimeInputValue,
 } from "@/components/ui/primitives";
 
 export const PUBLICATION_SLOT_KINDS: Array<{
@@ -20,6 +21,14 @@ export const PUBLICATION_SLOT_KINDS: Array<{
   { value: "CONTENT", label: "📝 Regular publication" },
   { value: "AD", label: "📣 Advertising / mutual promotion" },
 ];
+
+export function sortPublicationSlots<T extends { time: string }>(slots: readonly T[]): T[] {
+  return [...slots].sort((a, b) =>
+    (canonicalizeTimeInputValue(a.time) ?? "99:99").localeCompare(
+      canonicalizeTimeInputValue(b.time) ?? "99:99",
+    ),
+  );
+}
 
 export function PublicationScheduleEditor({
   draft,
@@ -67,7 +76,7 @@ export function PublicationScheduleEditor({
           <h3 className="font-semibold text-neutral-100">Daily publication slots</h3>
           <p className="text-xs text-neutral-500">
             The plan describes the busiest channel. Other channels can use only
-            the slots they need.
+            the slots they need. Optional regular slots can be skipped on some days.
           </p>
         </div>
         <Button
@@ -75,10 +84,10 @@ export function PublicationScheduleEditor({
           onClick={() =>
             onChange({
               ...draft,
-              slots: [
+              slots: sortPublicationSlots([
                 ...draft.slots,
-                { title: "New slot", kind: "CONTENT", time: "12:00" },
-              ],
+                { title: "New slot", kind: "CONTENT" as const, time: "12:00" },
+              ]),
             })
           }
         >
@@ -89,7 +98,7 @@ export function PublicationScheduleEditor({
         {draft.slots.map((slot, index) => (
           <div
             key={slot.id ?? index}
-            className="grid gap-2 rounded-lg border border-neutral-800 bg-neutral-950/50 p-3 sm:grid-cols-[minmax(0,1fr)_180px_120px_44px]"
+            className="grid gap-2 rounded-lg border border-neutral-800 bg-neutral-950/50 p-3 sm:grid-cols-[minmax(0,1fr)_180px_150px_120px_44px]"
           >
             <Input
               aria-label={`Slot ${index + 1} title`}
@@ -102,6 +111,7 @@ export function PublicationScheduleEditor({
               onChange={(event) =>
                 patchSlot(index, {
                   kind: event.target.value as TelegramPublicationSlotKind,
+                  isOptional: event.target.value === "CONTENT" ? slot.isOptional : false,
                 })
               }
             >
@@ -109,10 +119,20 @@ export function PublicationScheduleEditor({
                 <option key={kind.value} value={kind.value}>{kind.label}</option>
               ))}
             </Select>
+            {slot.kind === "CONTENT" ? <Select aria-label={`Slot ${index + 1} requirement`} value={slot.isOptional ? "optional" : "required"} onChange={(event) => patchSlot(index, { isOptional: event.target.value === "optional" })}>
+              <option value="required">Required</option>
+              <option value="optional">Optional</option>
+            </Select> : <span aria-hidden="true" />}
             <TimeInput
               aria-label={`Slot ${index + 1} time`}
               value={slot.time}
               onChange={(event) => patchSlot(index, { time: event.target.value })}
+              onBlur={(event) => {
+                const time = canonicalizeTimeInputValue(event.target.value);
+                if (!time) return;
+                const slots = draft.slots.map((item, i) => i === index ? { ...item, time } : item);
+                onChange({ ...draft, slots: sortPublicationSlots(slots) });
+              }}
             />
             <Button
               type="button"

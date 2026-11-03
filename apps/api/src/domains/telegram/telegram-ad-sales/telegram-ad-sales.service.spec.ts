@@ -689,6 +689,29 @@ describe('TelegramAdSalesService', () => {
     );
   });
 
+  it('updates seller attribution independently from deal assignment', async () => {
+    const { service, prisma } = createService();
+    const existing = makeSale({ assignedMemberId: null, sellerMemberId: null });
+    prisma.telegramAdSale.findFirst.mockResolvedValue(existing);
+    prisma.telegramAdSale.update.mockImplementation(({ data }: any) =>
+      Promise.resolve(makeSale({ ...existing, ...data })),
+    );
+
+    await service.updateSale('user-1', 'sale-1', {
+      sellerMemberId: 'member-1',
+    });
+
+    expect(prisma.telegramAdSale.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          sellerMemberId: 'member-1',
+          sellerCommissionEnabled: false,
+          sellerCommissionRate: 0,
+        }),
+      }),
+    );
+  });
+
   it.each(['dedicated endpoint', 'generic PATCH'] as const)(
     '%s cancellation does not invoke Telegram delivery',
     async (path) => {
@@ -1671,7 +1694,7 @@ describe('TelegramAdSalesService', () => {
     });
   });
 
-  it('requires manual reason when price is below minimum', async () => {
+  it('accepts an agreed price below the suggested minimum without a reason', async () => {
     const { service, prisma } = createService();
     prisma.telegramAdSalePlacement.findFirst.mockResolvedValue(
       makePlacement({
@@ -1680,12 +1703,25 @@ describe('TelegramAdSalesService', () => {
         manualPriceReason: null,
       }),
     );
+    prisma.telegramAdSalePlacement.update.mockResolvedValue(
+      makePlacement({ agreedPrice: decimal(90), minimumPrice: decimal(120) }),
+    );
 
-    await expect(
-      service.updatePlacement('user-1', 'sale-1', 'placement-1', {
-        agreedPrice: 90,
+    const result = await service.updatePlacement(
+      'user-1',
+      'sale-1',
+      'placement-1',
+      { agreedPrice: 90 },
+    );
+
+    expect(prisma.telegramAdSalePlacement.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ agreedPrice: decimal(90) }),
       }),
-    ).rejects.toBeInstanceOf(BadRequestException);
+    );
+    expect(result.warnings).toContainEqual(
+      expect.objectContaining({ code: 'UNDER_MINIMUM_PRICE' }),
+    );
   });
 
   it('allows unrelated edits on a legacy placement already below minimum', async () => {

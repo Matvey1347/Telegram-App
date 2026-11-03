@@ -19,6 +19,15 @@ describe('TelegramPublicationSchedulesService', () => {
 
   beforeEach(() => jest.clearAllMocks());
 
+  it('preserves optional content and clears the flag for advertising', () => {
+    const slots = (service as any).slotsForPersistence([
+      { title: 'Optional', kind: 'CONTENT', time: '12:00', isOptional: true },
+      { title: 'Ad', kind: 'AD', time: '13:00', isOptional: true },
+      { title: 'Existing', kind: 'CONTENT', time: '14:00' },
+    ], 'UTC');
+    expect(slots.map((slot: any) => slot.isOptional)).toEqual([true, false, false]);
+  });
+
   it('rejects SUBSET assignments without selected slots', async () => {
     prisma.telegramChannel.findFirst.mockResolvedValue({ id: 'channel-1' });
     prisma.telegramPublicationSchedule.findFirst.mockResolvedValue({
@@ -65,6 +74,7 @@ describe('TelegramPublicationSchedulesService', () => {
             time: '09:00',
             position: 0,
             isActive: true,
+            isOptional: true,
             iconPresentation: null,
           },
         ],
@@ -87,6 +97,7 @@ describe('TelegramPublicationSchedulesService', () => {
     expect(rows).toEqual([
       expect.objectContaining({
         slotId: 'morning',
+        isOptional: true,
         scheduledAt: '2026-10-24T07:00:00.000Z',
         state: 'OCCUPIED',
         postTitle: 'Already planned',
@@ -269,11 +280,71 @@ describe('TelegramPublicationSchedulesService', () => {
     ]);
     expect(prisma.telegramAdSalePlacement.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.not.objectContaining({ managedPostId: null }),
+        where: expect.objectContaining({
+          workspaceId: 'workspace-1',
+          telegramChannelId: { in: ['channel-1'] },
+          scheduledAt: {
+            gte: new Date('2026-10-24T00:00:00.000Z'),
+            lt: new Date('2026-10-25T00:00:00.000Z'),
+          },
+          status: { notIn: ['DRAFT', 'CANCELLED'] },
+        }),
       }),
     );
     expect(occurrencesSpy).not.toHaveBeenCalled();
     occurrencesSpy.mockRestore();
+  });
+
+  it('resolves the default calendar schedule without waiting for a schedule id', async () => {
+    prisma.telegramAdSalePlacement.findMany.mockResolvedValue([]);
+    prisma.crossPromotionPlan.findMany.mockResolvedValue([]);
+    prisma.telegramPublicationSchedule.findFirst.mockResolvedValue({
+      id: 'default-schedule',
+      workspace: { timezone: 'UTC' },
+      slots: [
+        { id: 'ad-1010', title: 'Ad slot', kind: 'AD', time: '10:10' },
+      ],
+      channelAssignments: [
+        {
+          channelId: 'channel-1',
+          selectionMode: 'FULL',
+          selectedSlots: [],
+        },
+      ],
+    });
+
+    const calendar = await service.calendar('user-1', {
+      from: '2026-10-24T00:00:00.000Z',
+      to: '2026-10-25T00:00:00.000Z',
+    });
+
+    expect(calendar).toMatchObject({
+      scheduleId: 'default-schedule',
+      channelIds: ['channel-1'],
+      occurrencesByChannel: {
+        'channel-1': [
+          expect.objectContaining({
+            slotId: 'ad-1010',
+            title: 'Ad slot',
+            time: '10:10',
+          }),
+        ],
+      },
+      events: [],
+    });
+    expect(prisma.telegramPublicationSchedule.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { workspaceId: 'workspace-1' },
+        orderBy: [
+          { isDefault: 'desc' },
+          { channelAssignments: { _count: 'desc' } },
+          { createdAt: 'asc' },
+        ],
+      }),
+    );
+    expect(
+      prisma.telegramChannelPublicationScheduleAssignment.findMany,
+    ).not.toHaveBeenCalled();
   });
 
   it('uses the future per-publisher VP placement instead of the plan anchor date', async () => {
@@ -325,6 +396,15 @@ describe('TelegramPublicationSchedulesService', () => {
         avatarUrl: 'https://example.com/partner.jpg',
       }),
     ]);
+    expect(prisma.crossPromotionPlan.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          workspaceId: 'workspace-1',
+          publisherChannelIds: { hasSome: ['channel-1'] },
+        }),
+        take: 250,
+      }),
+    );
   });
 
   it('shows a VP publication once at its earliest channel delivery', async () => {
@@ -359,6 +439,10 @@ describe('TelegramPublicationSchedulesService', () => {
                 {
                   telegramChannelId: 'channel-2',
                   scheduledAt: '2026-10-29T20:00:00.000Z',
+                },
+                {
+                  telegramChannelId: 'outside-workspace-channel',
+                  scheduledAt: '2026-10-29T17:00:00.000Z',
                 },
               ],
             },

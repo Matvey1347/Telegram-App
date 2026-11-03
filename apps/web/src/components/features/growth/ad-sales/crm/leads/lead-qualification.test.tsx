@@ -8,7 +8,10 @@ import {
   leadKeys,
   patchLeadPreparation,
 } from "@/lib/features/growth/lead-discovery-query";
-import { candidateFixture } from "./lead-fixtures.test-support";
+import {
+  candidateFixture,
+  sourceFixture,
+} from "./lead-fixtures.test-support";
 import {
   candidateDraftFixture,
   preparationFixture,
@@ -18,6 +21,11 @@ import { LeadCandidates } from "./lead-candidates";
 import { LeadPreparation } from "./lead-preparation";
 import { LeadContactPreparations } from "./lead-contact-preparations";
 import { authApi } from "@/lib/api";
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+  usePathname: () => "/ad-sales/leads",
+  useSearchParams: () => new URLSearchParams(),
+}));
 const candidate = () => ({
   ...candidateFixture(),
   reviewStatus: "APPROVED" as const,
@@ -37,6 +45,11 @@ beforeEach(() => {
   vi.restoreAllMocks();
   vi.spyOn(leadPreparationApi, "queue").mockResolvedValue({
     items: [candidate()],
+    hasMore: false,
+    nextCursor: null,
+  });
+  vi.spyOn(leadDiscoveryApi, "sources").mockResolvedValue({
+    items: [sourceFixture()],
     hasMore: false,
     nextCursor: null,
   });
@@ -74,24 +87,29 @@ beforeEach(() => {
 describe("candidate qualification and approved preparation", () => {
   it("opens no details, catalog or AI on queue load; selected detail is lazy", async () => {
     mount(<LeadCandidates workspace="workspace-one" canReview />);
-    fireEvent.click(
-      await screen.findByRole("button", { name: "Advertiser project 1" }),
-    );
-    await screen.findByRole("heading", {
-      name: "Qualification and first offer",
-    });
+    await screen.findByRole("button", { name: "Advertiser project 1" });
+    expect(leadPreparationApi.get).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Advertiser project 1" }));
+    await screen.findByRole("heading", { name: "Advertiser project 1" });
     expect(leadPreparationApi.get).toHaveBeenCalledTimes(1);
     expect(leadPreparationApi.qualify).not.toHaveBeenCalled();
     expect(leadPreparationApi.generate).not.toHaveBeenCalled();
     expect(leadPreparationApi.products).not.toHaveBeenCalled();
   });
-  it("requests a workflow filter on the server before pagination", async () => {
+  it("requests source filters on the server before page-based pagination", async () => {
     mount(<LeadCandidates workspace="workspace-one" canReview />);
-    fireEvent.click(screen.getByText("Lead workflow filters"));
-    fireEvent.click(screen.getByRole("button", { name: "HIGH_PRIORITY" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Choose source filter" }),
+    );
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Filter by source" }),
+    );
+    fireEvent.click(
+      await screen.findByRole("option", { name: "Evidence source 1" }),
+    );
     await waitFor(() =>
       expect(leadPreparationApi.queue).toHaveBeenLastCalledWith(
-        { limit: 50, workflow: "HIGH_PRIORITY", cursor: undefined },
+        { limit: 20, sourceId: "source-1", page: 1 },
         expect.any(AbortSignal),
       ),
     );

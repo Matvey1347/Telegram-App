@@ -27,12 +27,12 @@ const TRANSITION_BASELINE = new Map([
   ],
   [
     "apps/web/src/app/(internal)/(telegram)/telegram/channels/[id]/page.tsx",
-    3695,
+    3633,
   ],
   ["apps/web/src/app/(internal)/(telegram)/telegram-channels/page.tsx", 2413],
   [
     "apps/api/src/telegram/shared/mtproto/telegram-mtproto.client.ts",
-    3749,
+    3745,
   ],
   ["apps/web/src/components/features/growth/ad-sales/ad-sales-page.tsx", 948],
   ["apps/web/src/lib/api.ts", 742],
@@ -47,10 +47,6 @@ const TRANSITION_BASELINE = new Map([
     "apps/api/src/domains/telegram/telegram-user-accounts/telegram-user-accounts.service.ts",
     978,
   ],
-  [
-    "apps/web/src/components/features/telegram/telegram/telegram-account-panels.tsx",
-    954,
-  ],
   ["apps/web/src/components/icons/icon-picker.tsx", 1070],
   [
     "apps/api/src/domains/telegram/telegram-bots/core/telegram-bot-runtime.service.ts",
@@ -63,7 +59,7 @@ const TRANSITION_BASELINE = new Map([
   ],
   [
     "apps/web/src/app/(internal)/(telegram)/telegram-channel-networks/[id]/page.tsx",
-    330,
+    217,
   ],
   ["apps/web/src/app/(internal)/(growth)/ad-campaigns/[id]/page.tsx", 412],
 ]);

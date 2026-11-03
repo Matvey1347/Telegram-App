@@ -2,11 +2,33 @@ import { describe, expect, it, vi } from "vitest";
 import { QueryClient } from "@tanstack/react-query";
 import type { TelegramAdSale } from "@telegram-system/shared";
 import {
+  networkKeys,
+  telegramChannelKeys,
+  telegramPublicationScheduleKeys,
+} from "@/lib/query-keys";
+import {
   invalidateTelegramAdSalesDerivedQueries,
   invalidateTelegramAdSaleReads,
   reconcileTelegramAdSaleCache,
+  shouldLoadAdSalesWorkspaceTimezone,
   telegramAdSalesKeys,
 } from "./telegram-ad-sales-query";
+
+describe("Ad Sales workspace timezone query", () => {
+  it("loads timezone only for calendar, an open editor, or sale details", () => {
+    expect(shouldLoadAdSalesWorkspaceTimezone("sales", false, false)).toBe(
+      false,
+    );
+    expect(shouldLoadAdSalesWorkspaceTimezone("clients", false, false)).toBe(
+      false,
+    );
+    expect(shouldLoadAdSalesWorkspaceTimezone("calendar", false, false)).toBe(
+      true,
+    );
+    expect(shouldLoadAdSalesWorkspaceTimezone("sales", true, false)).toBe(true);
+    expect(shouldLoadAdSalesWorkspaceTimezone("sales", false, true)).toBe(true);
+  });
+});
 
 function sale(
   id: string,
@@ -164,6 +186,35 @@ describe("telegram-ad-sales derived invalidation", () => {
     ]);
   });
 
+  it("invalidates cached publication calendar events only for placement changes", async () => {
+    const invalidateQueries = vi.fn().mockResolvedValue(undefined);
+    await invalidateTelegramAdSalesDerivedQueries({ invalidateQueries } as never, {
+      publicationCalendar: true,
+    });
+
+    expect(invalidateQueries.mock.calls.map(([request]) => request.queryKey)).toEqual([
+      ["telegram-publication-schedules", "calendar"],
+    ]);
+  });
+
+  it("leaves publication schedule lists fresh while invalidating saved calendar ranges", async () => {
+    const client = new QueryClient();
+    const calendarKey = telegramPublicationScheduleKeys.calendar(
+      "plan-1",
+      { from: "2026-10-01T00:00:00.000Z", to: "2026-11-01T00:00:00.000Z" },
+    );
+    const schedulesKey = telegramPublicationScheduleKeys.lists("Europe/Warsaw");
+    client.setQueryData(calendarKey, { events: [] });
+    client.setQueryData(schedulesKey, [{ id: "plan-1" }]);
+
+    await invalidateTelegramAdSalesDerivedQueries(client, {
+      publicationCalendar: true,
+    });
+
+    expect(client.getQueryState(calendarKey)?.isInvalidated).toBe(true);
+    expect(client.getQueryState(schedulesKey)?.isInvalidated).toBe(false);
+  });
+
   it("adds finance, dashboard, channel and CRM effects only when requested", async () => {
     const invalidateQueries = vi.fn().mockResolvedValue(undefined);
     await invalidateTelegramAdSalesDerivedQueries({ invalidateQueries } as never, {
@@ -181,10 +232,37 @@ describe("telegram-ad-sales derived invalidation", () => {
       ["accounts"],
       ["telegram-managed-posts-calendar", "channel-1"],
       ["telegram-managed-posts", "channel-1", "list"],
+      ["telegram-publication-schedules", "occurrences"],
+      ["telegram-publication-schedules", "occurrences-by-channels"],
+      ["telegram-channels", "list"],
+      ["telegram-channels", "lifecycle-list"],
+      ["telegram-channel-networks"],
       ["telegram-channel-financial-summary", "channel-1"],
       ["telegram-channel-analytics", "channel-1"],
       ["telegram-crm", "contacts", "list"],
     ]);
+  });
+
+  it("invalidates mock channel and network cards after an ad sale changes", async () => {
+    const client = new QueryClient();
+    const channelCardsKey = [
+      ...telegramChannelKeys.lifecycleList("active", false),
+      "content-horizon-v2",
+    ] as const;
+    client.setQueryData(channelCardsKey, {
+      items: [{ id: "channel-1", earned: 100 }],
+    });
+    client.setQueryData(networkKeys.list(), [
+      { id: "network-1", earned: 100 },
+    ]);
+
+    await invalidateTelegramAdSalesDerivedQueries(client, {
+      channelSummaries: true,
+      channelIds: ["channel-1"],
+    });
+
+    expect(client.getQueryState(channelCardsKey)?.isInvalidated).toBe(true);
+    expect(client.getQueryState(networkKeys.list())?.isInvalidated).toBe(true);
   });
 });
 

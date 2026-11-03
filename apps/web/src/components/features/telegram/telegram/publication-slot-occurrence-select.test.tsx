@@ -63,6 +63,7 @@ describe("PublicationSlotOccurrenceSelect", () => {
       },
       {
         slotId: "later",
+        isOptional: true,
         scheduledAt: new Date(today.getTime() + 120_000).toISOString(),
         title: "Later",
         kind: "CONTENT",
@@ -105,6 +106,7 @@ describe("PublicationSlotOccurrenceSelect", () => {
       name: /23:42.*Regular publication/i,
     });
     expect(otherSlot).toHaveAttribute("aria-pressed", "false");
+    expect(otherSlot).toHaveAccessibleName(/Optional — can be skipped on some days/);
     expect(otherSlot.className).toContain("border-neutral-600");
     expect(availableSlot).toHaveTextContent("23:40·📝");
     const occupiedSlot = screen.getByRole("button", {

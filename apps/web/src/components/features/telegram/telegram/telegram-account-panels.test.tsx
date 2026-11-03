@@ -9,6 +9,7 @@ const {
   startLogin,
   syncDialogsWithProgress,
   importChannelsWithProgress,
+  listSourceChannels,
   setProgress,
   account,
 } = vi.hoisted(() => ({
@@ -17,6 +18,7 @@ const {
   startLogin: vi.fn(),
   syncDialogsWithProgress: vi.fn(),
   importChannelsWithProgress: vi.fn(),
+  listSourceChannels: vi.fn(),
   setProgress: vi.fn(),
   account: {
     id: "account-1",
@@ -52,7 +54,7 @@ vi.mock("@/lib/api", () => ({
   },
   telegramUserAccountsApi: {
     list: listAccounts,
-    channels: vi.fn().mockResolvedValue([]),
+    channels: listSourceChannels,
     loginWithQr,
     create: vi.fn(),
     remove: vi.fn(),
@@ -82,9 +84,35 @@ describe("MtprotoAccountsPanel QR recovery", () => {
     startLogin.mockReset();
     syncDialogsWithProgress.mockReset();
     importChannelsWithProgress.mockReset();
+    listSourceChannels.mockReset().mockResolvedValue([]);
     setProgress.mockReset();
     listAccounts.mockReset();
     listAccounts.mockResolvedValue([account]);
+  });
+
+  it("loads each account's source-channel list only when its access dialog opens", async () => {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    render(
+      <QueryClientProvider client={client}>
+        <MtprotoAccountsPanel createOpen={false} onCreateClose={vi.fn()} />
+      </QueryClientProvider>,
+    );
+
+    const accessButton = await screen.findByRole("button", {
+      name: /Channel access.*View channels/u,
+    });
+    expect(listSourceChannels).not.toHaveBeenCalled();
+
+    fireEvent.click(accessButton);
+
+    expect(
+      await screen.findByRole("dialog", { name: "Channel access" }),
+    ).toBeInTheDocument();
+    await waitFor(() => expect(listSourceChannels).toHaveBeenCalledTimes(1));
+    expect(listSourceChannels).toHaveBeenCalledWith("account-1");
+    expect(await screen.findByText("0 channels")).toBeInTheDocument();
   });
 
   it("offers QR login while the account is waiting for a phone code", async () => {
@@ -127,7 +155,7 @@ describe("MtprotoAccountsPanel QR recovery", () => {
     );
 
     fireEvent.click(
-      await screen.findByRole("button", { name: "Refresh via QR" }),
+      await screen.findByRole("button", { name: "Reconnect via QR" }),
     );
 
     expect(
@@ -158,7 +186,7 @@ describe("MtprotoAccountsPanel QR recovery", () => {
     );
 
     fireEvent.click(
-      await screen.findByRole("button", { name: "Refresh via QR" }),
+      await screen.findByRole("button", { name: "Reconnect via QR" }),
     );
 
     expect(
@@ -187,7 +215,7 @@ describe("MtprotoAccountsPanel QR recovery", () => {
       </QueryClientProvider>,
     );
     fireEvent.click(
-      await screen.findByRole("button", { name: "Refresh via QR" }),
+      await screen.findByRole("button", { name: "Reconnect via QR" }),
     );
     await waitFor(() => expect(loginWithQr).toHaveBeenCalledTimes(1));
 

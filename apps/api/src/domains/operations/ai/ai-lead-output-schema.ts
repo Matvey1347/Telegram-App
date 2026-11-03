@@ -62,3 +62,15 @@ export const AI_LEAD_EXTRACTION_SCHEMA = shape({
   },
   warnings: strings(10, 200),
 });
+
+/** Image-derived content is unverified and is always presented for manual review. */
+export const AI_LEAD_MEDIA_SCHEMA = shape({
+  classification: {
+    type: 'string',
+    enum: ['ADVERTISEMENT', 'ORGANIC', 'UNCERTAIN'],
+  },
+  projectName: text(300),
+  contacts: strings(12, 300),
+  evidence: text(500),
+  confidence: { type: 'number', minimum: 0, maximum: 1 },
+});

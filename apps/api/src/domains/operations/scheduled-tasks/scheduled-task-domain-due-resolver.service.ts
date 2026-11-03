@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { TelegramChannelRemindersDueService } from '../../telegram/telegram-channels/telegram-channel-reminders-due.service';
 import { ModuleRef } from '@nestjs/core';
 import { MutualPromotionLifecycleService } from '../../growth/mutual-promotion-folders/mutual-promotion-lifecycle.service';
 import { TelegramPostBatchLifecycleService } from '../../telegram/telegram-channels/telegram-post-batch-lifecycle.service';
@@ -9,6 +10,10 @@ export class ScheduledTaskDomainDueResolverService {
   constructor(private readonly moduleRef: ModuleRef) {}
 
   async nextDueAt(taskKey: string): Promise<Date | null | undefined> {
+    if (taskKey === 'telegram.channel_reminders.due') {
+      const service = await this.moduleRef.resolve(TelegramChannelRemindersDueService, undefined, { strict: false });
+      return service.nextDueAt();
+    }
     if (taskKey === 'telegram.post_batches.lifecycle') {
       const lifecycle =
         await this.moduleRef.resolve<TelegramPostBatchLifecycleService>(

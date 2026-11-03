@@ -12,7 +12,11 @@ import {
   Modal,
   Textarea,
 } from "@/components/ui/primitives";
-import { adCampaignKeys, telegramChannelKeys } from "@/lib/query-keys";
+import {
+  adCampaignKeys,
+  networkKeys,
+  telegramChannelKeys,
+} from "@/lib/query-keys";
 import { useAppToast } from "@/providers/toast-provider";
 import type { ChannelSettingsDraft } from "./channel-settings-draft";
 import { useTelegramInviteLinkOptions } from "@/lib/features/telegram/use-telegram-invite-link-options";
@@ -212,6 +216,10 @@ export function ChannelPresentationSettingsModal({
         queryClient.invalidateQueries({
           queryKey: telegramChannelKeys.lists(),
         }),
+        queryClient.invalidateQueries({
+          queryKey: telegramChannelKeys.cardLists(),
+        }),
+        queryClient.invalidateQueries({ queryKey: networkKeys.list() }),
         queryClient.invalidateQueries({
           queryKey: telegramChannelKeys.detail(channel.id),
         }),

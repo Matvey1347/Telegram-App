@@ -246,6 +246,84 @@ describe('TelegramCrmRuntimeManager', () => {
     expect(lease.release).toHaveBeenCalledTimes(1);
   });
 
+  it('retries a denied startup lease once after its expiry without a request', async () => {
+    jest.useFakeTimers();
+    const handle = {
+      onUpdate: jest.fn().mockReturnValue(jest.fn()),
+      close: jest.fn(),
+    };
+    const sessions = {
+      startupAccounts: jest.fn().mockResolvedValue([account]),
+      credentials: jest.fn().mockReturnValue({ apiId: '1', apiHash: 'hash', session: 'session' }),
+    };
+    const adapter = { open: jest.fn().mockResolvedValue(handle) };
+    const lease = {
+      acquire: jest.fn().mockResolvedValueOnce(false).mockResolvedValue(true),
+      startRenewing: jest.fn(),
+      release: jest.fn(),
+    };
+    const manager = new TelegramCrmRuntimeManager(
+      { telegramUserAccountIntegration: { updateMany: jest.fn() } } as never,
+      sessions as never,
+      adapter,
+      {} as never,
+      new TelegramAccountRuntimeNotifier(),
+      { recover: jest.fn().mockResolvedValue({ outcome: 'SUCCESS', checkpoint: { pts: 1, qts: 0, date: 2, seq: 3 } }) } as never,
+      undefined,
+      undefined,
+      lease as never,
+    );
+    await manager.onApplicationBootstrap();
+    await jest.advanceTimersByTimeAsync(90_999);
+    expect(adapter.open).not.toHaveBeenCalled();
+    await jest.advanceTimersByTimeAsync(1);
+    expect(lease.acquire).toHaveBeenCalledTimes(2);
+    expect(adapter.open).toHaveBeenCalledTimes(1);
+    await manager.onApplicationShutdown();
+  });
+
+  it('cancels the startup lease retry on shutdown', async () => {
+    jest.useFakeTimers();
+    const lease = { acquire: jest.fn().mockResolvedValue(false), release: jest.fn() };
+    const manager = new TelegramCrmRuntimeManager(
+      {} as never,
+      { startupAccounts: jest.fn().mockResolvedValue([account]) } as never,
+      { open: jest.fn() } as never,
+      {} as never,
+      new TelegramAccountRuntimeNotifier(),
+      {} as never,
+      undefined,
+      undefined,
+      lease as never,
+    );
+    await manager.onApplicationBootstrap();
+    await manager.onApplicationShutdown();
+    await jest.advanceTimersByTimeAsync(100_000);
+    expect(lease.acquire).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not poll or connect when the runtime lease remains owned', async () => {
+    jest.useFakeTimers();
+    const lease = { acquire: jest.fn().mockResolvedValue(false), release: jest.fn() };
+    const adapter = { open: jest.fn() };
+    const manager = new TelegramCrmRuntimeManager(
+      {} as never,
+      { startupAccounts: jest.fn().mockResolvedValue([account]) } as never,
+      adapter,
+      {} as never,
+      new TelegramAccountRuntimeNotifier(),
+      {} as never,
+      undefined,
+      undefined,
+      lease as never,
+    );
+    await manager.onApplicationBootstrap();
+    await jest.advanceTimersByTimeAsync(10 * 60_000);
+    expect(lease.acquire).toHaveBeenCalledTimes(2);
+    expect(adapter.open).not.toHaveBeenCalled();
+    await manager.onApplicationShutdown();
+  });
+
   it.each(['inbox', 'lead', 'mixed'] as const)(
     'reacquires after a startup lease conflict for first %s request and shares the recovered handle across concurrent requests',
     async (first) => {

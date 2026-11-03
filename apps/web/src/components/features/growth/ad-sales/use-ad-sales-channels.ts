@@ -9,7 +9,6 @@ export function useAdSalesChannels(enabled: boolean) {
     queryKey: telegramChannelKeys.select({ owned: true }),
     queryFn: () => telegramChannelsApi.select({ owned: true }),
     enabled,
-    staleTime: 60_000,
   });
   const channels = (query.data ?? []) as unknown as TelegramChannel[];
   const saleableChannels = (query.data?.filter(

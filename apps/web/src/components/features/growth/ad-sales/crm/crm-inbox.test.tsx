@@ -11,6 +11,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { authApi, telegramUserAccountsApi } from "@/lib/api";
 import { listCrmInboxConversations, listCrmInboxFolders } from "@/lib/features/growth/crm-inbox-api";
 import { telegramCrmApi } from "@/lib/features/growth/telegram-crm-api";
+import { telegramCrmKeys } from "@/lib/features/growth/telegram-crm-query";
 import { leadPreparationApi } from "@/lib/features/growth/lead-preparation-api";
 import { leadDiscoveryApi } from "@/lib/features/growth/lead-discovery-api";
 import { CrmInbox } from "./crm-inbox";
@@ -23,6 +24,7 @@ const navigation = vi.hoisted(() => ({
 }));
 vi.mock("next/navigation", () => ({
   useRouter: () => navigation,
+  usePathname: () => "/ad-sales/inbox",
   useSearchParams: () => new URLSearchParams(navigation.query),
 }));
 vi.mock("@/lib/api", () => ({
@@ -113,10 +115,10 @@ function renderInbox(
   conversationId: string | null = "conversation-exact",
   peerId: string | null = "peer-one",
   keepPrevious = false,
-) {
-  const client = new QueryClient({
+  client = new QueryClient({
     defaultOptions: { queries: { retry: false, ...(keepPrevious ? { placeholderData: keepPreviousData } : {}) }, mutations: { retry: false } },
-  });
+  }),
+) {
   const tree = (id: string | null, peer: string | null) => (
     <QueryClientProvider client={client}>
       <CrmInbox
@@ -241,6 +243,27 @@ describe("CrmInbox", () => {
     ).toBeInTheDocument();
   });
 
+  it("reuses a two-minute in-memory inbox list without another page request", async () => {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    const key = telegramCrmKeys.inboxConversationsList({
+      filter: "ALL",
+      search: undefined,
+      limit: 50,
+    });
+    client.setQueryData(
+      key,
+      { pages: [{ items: [listed("cached-chat", "Cached contact")], nextCursor: null, hasMore: false }], pageParams: [null] },
+      { updatedAt: Date.now() - 2 * 60_000 },
+    );
+
+    renderInbox(null, null, false, client);
+
+    expect(await screen.findByRole("option", { name: /Cached contact/ })).toBeInTheDocument();
+    expect(listCrmInboxConversations).not.toHaveBeenCalled();
+  });
+
   it.each(["ACTIVE", "ARCHIVED"] as const)(
     "allows authorized linked conversations in %s state",
     async (state) => {
@@ -336,9 +359,7 @@ describe("CrmInbox", () => {
     renderInbox(null, null);
     await userEvent.click(screen.getByRole("button", { name: "AI Leads" }));
     expect(
-      await screen.findByText(
-        "Review evidence, qualify explicitly, then prepare a first offer. No automatic generation, rejection or outreach.",
-      ),
+      await screen.findByText("No records match these filters."),
     ).toBeInTheDocument();
     await waitFor(() => expect(leadPreparationApi.queue).toHaveBeenCalled());
     expect(

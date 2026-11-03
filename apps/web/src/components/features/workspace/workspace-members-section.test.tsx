@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -76,6 +76,21 @@ describe("WorkspaceMembersSection", () => {
         iconPresentation: { type: "unicode", value: "👑" },
       },
     ] as never);
+  });
+
+  it("defers role and Telegram account catalogs until a member editor opens", async () => {
+    const user = userEvent.setup();
+    renderSection();
+    await screen.findByText("Alice");
+
+    expect(telegramUserAccountsApi.list).not.toHaveBeenCalled();
+    expect(workspaceRolesApi.list).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "Add Member" }));
+    await waitFor(() => {
+      expect(telegramUserAccountsApi.list).toHaveBeenCalledTimes(1);
+      expect(workspaceRolesApi.list).toHaveBeenCalledTimes(1);
+    });
   });
 
   it("uses channel-card padding and a responsive masonry layout", async () => {

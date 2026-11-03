@@ -23,6 +23,12 @@ export function telegramPostsNotFound(
   return notFound(code, message, params);
 }
 
+export function telegramPostPublishErrorCode(message: string): TelegramPostsErrorCode {
+  return /Could not download image \d+/.test(message)
+    ? 'TELEGRAM_POST_IMAGE_UNAVAILABLE'
+    : 'TELEGRAM_POST_PUBLISH_FAILED';
+}
+
 export const telegramChannelNotFound = () =>
   telegramPostsNotFound(
     'TELEGRAM_CHANNEL_NOT_FOUND',

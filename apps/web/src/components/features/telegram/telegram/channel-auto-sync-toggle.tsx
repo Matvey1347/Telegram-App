@@ -33,7 +33,9 @@ export function ChannelAutoSyncToggle({
     },
     onSuccess: (channel) => {
       // PATCH returns the authoritative server read model; do not GET the list.
-      patchTelegramChannelCaches(queryClient, channel);
+      patchTelegramChannelCaches(queryClient, channel, {
+        invalidateNetworks: true,
+      });
     },
     onError: (error: any, _autoSyncEnabled, context) => {
       if (context?.snapshots) {

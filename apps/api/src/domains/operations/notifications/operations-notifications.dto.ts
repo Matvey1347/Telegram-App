@@ -51,6 +51,14 @@ export class UpdateNotificationPreferencesDto {
   @IsOptional()
   @IsBoolean()
   crmMessagePreviewEnabled?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  channelRemindersPushEnabled?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  channelRemindersTelegramEnabled?: boolean;
 }
 
 class OperationsPushKeysDto {

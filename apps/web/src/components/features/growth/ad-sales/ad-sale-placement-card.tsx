@@ -9,12 +9,10 @@ import {
   FormField,
   Input,
   Select,
-  Textarea,
   TimeInput,
 } from "@/components/ui/primitives";
 import { TelegramEntityAvatar } from "@/components/features/telegram/telegram/telegram-entity-avatar";
 import {
-  buildUnderpricingSummary,
   channelLocalTime,
   isValidZonedDateTimeInput,
   zonedDateTimeToUtc,
@@ -70,11 +68,6 @@ export function AdSalePlacementCard({
   const [postOpen, setPostOpen] = useState(false);
   const [renderedAt] = useState(() => Date.now());
   const product = products.find((item) => item.id === placement.productId);
-  const priceSummary = buildUnderpricingSummary({
-    agreedPrice: placement.agreedPrice,
-    recommendedPrice: placement.recommendedPrice,
-    minimumPrice: placement.minimumPrice,
-  });
   const isPastPlacement =
     isValidZonedDateTimeInput(placement.date, placement.time) &&
     zonedDateTimeToUtc(
@@ -315,23 +308,6 @@ export function AdSalePlacementCard({
               </button>
             </div>
           ) : null}
-        </div>
-      ) : null}
-
-      {showPricing && priceSummary.isBelowMinimum ? (
-        <div className="mt-3">
-          <FormField label="Reason for low price" required>
-            <Textarea
-              rows={2}
-              value={placement.manualPriceReason}
-              onChange={(event) =>
-                update((item) => ({
-                  ...item,
-                  manualPriceReason: event.target.value,
-                }))
-              }
-            />
-          </FormField>
         </div>
       ) : null}
 

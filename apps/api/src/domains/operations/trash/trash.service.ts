@@ -48,53 +48,105 @@ export class TrashService {
 
   async list(userId: string, page = 1, pageSize = 25) {
     const workspaceId = await this.adminWorkspaceId(userId);
+    const safePage = Math.max(1, Math.floor(page) || 1);
+    const safePageSize = Math.min(100, Math.max(1, Math.floor(pageSize) || 25));
+    const take = safePage * safePageSize;
+    const cutoff = new Date(Date.now() - TRASH_RETENTION_DAYS * TRASH_DAY_MS);
     const profiles = { botIntegration: { workspaceId } };
     const [
       accounts,
+      accountCount,
       transactions,
+      transactionCount,
       categories,
+      categoryCount,
       transfers,
+      transferCount,
       botAccounts,
+      botAccountCount,
       botTransactions,
+      botTransactionCount,
       botCategories,
+      botCategoryCount,
       botTransfers,
+      botTransferCount,
     ] = await Promise.all([
       this.prisma.account.findMany({
-        where: { workspaceId, deletedAt: { not: null } },
+        where: { workspaceId, deletedAt: { gt: cutoff } },
         select: { id: true, name: true, deletedAt: true },
+        orderBy: { deletedAt: 'asc' },
+        take,
+      }),
+      this.prisma.account.count({
+        where: { workspaceId, deletedAt: { gt: cutoff } },
       }),
       this.prisma.transaction.findMany({
-        where: { workspaceId, deletedAt: { not: null } },
+        where: { workspaceId, deletedAt: { gt: cutoff } },
         select: {
           id: true,
           description: true,
           category: true,
           deletedAt: true,
         },
+        orderBy: { deletedAt: 'asc' },
+        take,
+      }),
+      this.prisma.transaction.count({
+        where: { workspaceId, deletedAt: { gt: cutoff } },
       }),
       this.prisma.transactionCategory.findMany({
-        where: { workspaceId, deletedAt: { not: null } },
+        where: { workspaceId, deletedAt: { gt: cutoff } },
         select: { id: true, name: true, deletedAt: true },
+        orderBy: { deletedAt: 'asc' },
+        take,
+      }),
+      this.prisma.transactionCategory.count({
+        where: { workspaceId, deletedAt: { gt: cutoff } },
       }),
       this.prisma.transfer.findMany({
-        where: { workspaceId, deletedAt: { not: null } },
+        where: { workspaceId, deletedAt: { gt: cutoff } },
         select: { id: true, description: true, deletedAt: true },
+        orderBy: { deletedAt: 'asc' },
+        take,
+      }),
+      this.prisma.transfer.count({
+        where: { workspaceId, deletedAt: { gt: cutoff } },
       }),
       this.prisma.financeAccount.findMany({
-        where: { profile: profiles, archivedAt: { not: null } },
+        where: { profile: profiles, archivedAt: { gt: cutoff } },
         select: { id: true, name: true, archivedAt: true },
+        orderBy: { archivedAt: 'asc' },
+        take,
+      }),
+      this.prisma.financeAccount.count({
+        where: { profile: profiles, archivedAt: { gt: cutoff } },
       }),
       this.prisma.financeTransaction.findMany({
-        where: { profile: profiles, deletedAt: { not: null } },
+        where: { profile: profiles, deletedAt: { gt: cutoff } },
         select: { id: true, description: true, deletedAt: true },
+        orderBy: { deletedAt: 'asc' },
+        take,
+      }),
+      this.prisma.financeTransaction.count({
+        where: { profile: profiles, deletedAt: { gt: cutoff } },
       }),
       this.prisma.financeCategory.findMany({
-        where: { profile: profiles, archivedAt: { not: null } },
+        where: { profile: profiles, archivedAt: { gt: cutoff } },
         select: { id: true, name: true, archivedAt: true },
+        orderBy: { archivedAt: 'asc' },
+        take,
+      }),
+      this.prisma.financeCategory.count({
+        where: { profile: profiles, archivedAt: { gt: cutoff } },
       }),
       this.prisma.financeTransfer.findMany({
-        where: { profile: profiles, deletedAt: { not: null } },
+        where: { profile: profiles, deletedAt: { gt: cutoff } },
         select: { id: true, description: true, deletedAt: true },
+        orderBy: { deletedAt: 'asc' },
+        take,
+      }),
+      this.prisma.financeTransfer.count({
+        where: { profile: profiles, deletedAt: { gt: cutoff } },
       }),
     ]);
     const rows: TrashRow[] = [
@@ -154,17 +206,23 @@ export class TrashService {
         product: 'Finance Bot' as const,
         deletedAt: row.deletedAt!,
       })),
-    ]
-      .filter((row) => this.expiresAt(row.deletedAt).getTime() > Date.now())
-      .sort(
-        (a, b) =>
-          this.expiresAt(a.deletedAt).getTime() -
-          this.expiresAt(b.deletedAt).getTime(),
-      );
-    const totalItems = rows.length;
-    const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+    ].sort(
+      (a, b) =>
+        this.expiresAt(a.deletedAt).getTime() -
+        this.expiresAt(b.deletedAt).getTime(),
+    );
+    const totalItems =
+      accountCount +
+      transactionCount +
+      categoryCount +
+      transferCount +
+      botAccountCount +
+      botTransactionCount +
+      botCategoryCount +
+      botTransferCount;
+    const totalPages = Math.max(1, Math.ceil(totalItems / safePageSize));
     const items = rows
-      .slice((page - 1) * pageSize, page * pageSize)
+      .slice((safePage - 1) * safePageSize, safePage * safePageSize)
       .map((row) => ({
         ...row,
         deletedAt: row.deletedAt.toISOString(),
@@ -174,12 +232,12 @@ export class TrashService {
     return {
       items,
       pagination: {
-        page,
-        pageSize,
+        page: safePage,
+        pageSize: safePageSize,
         totalItems,
         totalPages,
-        hasNextPage: page < totalPages,
-        hasPreviousPage: page > 1,
+        hasNextPage: safePage < totalPages,
+        hasPreviousPage: safePage > 1,
       },
     };
   }
@@ -187,7 +245,7 @@ export class TrashService {
   async restore(userId: string, kind: TrashKind, id: string) {
     const workspaceId = await this.adminWorkspaceId(userId);
     const cutoff = new Date(Date.now() - TRASH_RETENTION_DAYS * TRASH_DAY_MS);
-    const internalWhere = { id, workspaceId, deletedAt: { gte: cutoff } };
+    const internalWhere = { id, workspaceId, deletedAt: { gt: cutoff } };
     if (kind === 'account')
       return this.prisma.account.updateMany({
         where: internalWhere,
@@ -211,22 +269,22 @@ export class TrashService {
     const profile = { botIntegration: { workspaceId } };
     if (kind === 'finance_bot_account')
       return this.prisma.financeAccount.updateMany({
-        where: { id, profile, archivedAt: { gte: cutoff } },
+        where: { id, profile, archivedAt: { gt: cutoff } },
         data: { archivedAt: null },
       });
     if (kind === 'finance_bot_transaction')
       return this.prisma.financeTransaction.updateMany({
-        where: { id, profile, deletedAt: { gte: cutoff } },
+        where: { id, profile, deletedAt: { gt: cutoff } },
         data: { deletedAt: null },
       });
     if (kind === 'finance_bot_category')
       return this.prisma.financeCategory.updateMany({
-        where: { id, profile, archivedAt: { gte: cutoff } },
+        where: { id, profile, archivedAt: { gt: cutoff } },
         data: { archivedAt: null },
       });
     if (kind === 'finance_bot_transfer')
       return this.prisma.financeTransfer.updateMany({
-        where: { id, profile, deletedAt: { gte: cutoff } },
+        where: { id, profile, deletedAt: { gt: cutoff } },
         data: { deletedAt: null },
       });
     throw new BadRequestException('Unsupported trash item');

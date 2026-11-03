@@ -319,6 +319,9 @@ export function WorkspaceChannelSyncModal({
         queryKey: telegramChannelKeys.lists(),
       });
       await queryClient.invalidateQueries({
+        queryKey: telegramChannelKeys.cardLists(),
+      });
+      await queryClient.invalidateQueries({
         queryKey: telegramChannelKeys.trafficAttributions(),
       });
       pushToast(

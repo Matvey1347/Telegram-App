@@ -9,6 +9,11 @@ import { telegramCrmApi } from "@/lib/features/growth/telegram-crm-api";
 import { LeadCandidates } from "./lead-candidates";
 import { LeadCandidateDetails } from "./lead-candidate-details";
 import { candidateFixture } from "./lead-fixtures.test-support";
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+  usePathname: () => "/ad-sales/leads",
+  useSearchParams: () => new URLSearchParams(),
+}));
 function mount(node: ReactNode) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -87,7 +92,7 @@ describe("candidate human review and CRM boundaries", () => {
       expect.any(AbortSignal),
     );
     expect(screen.getByText("All linked sources")).toBeTruthy();
-    expect(screen.getByText("Review history")).toBeTruthy();
+    expect(screen.getByText("Advertisement evidence")).toBeTruthy();
   });
   it("keeps read-only review controls hidden while preserving evidence", async () => {
     mount(
@@ -264,34 +269,12 @@ describe("candidate human review and CRM boundaries", () => {
       ),
     );
   });
-  it("limits bulk review to twenty explicit candidates", async () => {
-    vi.mocked(leadPreparationApi.queue).mockResolvedValue({
-      items: Array.from({ length: 21 }, (_, i) => candidateFixture(i + 1)),
-      hasMore: false,
-      nextCursor: null,
-    });
+  it("shows a compact list without bulk selection", async () => {
     mount(<LeadCandidates workspace="workspace-one" canReview />);
-    await screen.findByRole("button", { name: "Advertiser project 21" });
-    for (let n = 1; n <= 21; n++)
-      fireEvent.click(
-        screen.getByRole("checkbox", {
-          name: `Select candidate Advertiser project ${n}`,
-        }),
-      );
-    expect(screen.getByRole("alert")).toHaveTextContent("no more than 20");
-    fireEvent.click(
-      screen.getByRole("button", { name: "Approve selected (20/20)" }),
-    );
-    expect(leadDiscoveryApi.reviewCandidates).not.toHaveBeenCalled();
-    fireEvent.click(
-      screen.getByRole("button", { name: "Confirm selected review" }),
-    );
-    await waitFor(() =>
-      expect(leadDiscoveryApi.reviewCandidates).toHaveBeenCalledWith(
-        Array.from({ length: 20 }, (_, i) => `candidate-${i + 1}`),
-        "APPROVE",
-      ),
-    );
+    await screen.findByRole("button", { name: "Advertiser project 1" });
+    expect(screen.queryByRole("checkbox", { name: /Select candidate/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Approve selected/ })).toBeNull();
+    expect(screen.getByText(/Evidence source 1/)).toBeTruthy();
   });
   it("keeps a recoverable stale-revision failure instead of pretending approval succeeded", async () => {
     vi.mocked(leadDiscoveryApi.reviewCandidate).mockRejectedValue(
@@ -313,5 +296,29 @@ describe("candidate human review and CRM boundaries", () => {
     expect(
       screen.getByRole("button", { name: "Create CRM client" }),
     ).toBeDisabled();
+  });
+});
+
+describe("lead discovery contact workflow", () => {
+  it("shows an unconfirmed public advertising contact and its evidence without claiming ownership", async () => {
+    const candidate = candidateFixture();
+    candidate.contacts = [
+      { type: "TELEGRAM", value: "@public_channel", role: "ADVERTISED_DESTINATION", evidence: "button", evidenceUrl: "https://t.me/source_1/1" },
+      { type: "TELEGRAM", value: "@ads_contact", role: "SALES_CONTACT", purpose: "CONTACT_FOR_ADS", evidence: "public profile", evidenceUrl: "https://t.me/public_channel", evidenceSource: "PUBLIC_PROFILE", confirmed: false },
+    ];
+    vi.spyOn(leadDiscoveryApi, "candidate").mockResolvedValue(candidate);
+    mount(<LeadCandidateDetails workspace="workspace-one" id={candidate.id} canReview onClose={() => {}} />);
+    expect(await screen.findByText(/Контакт для рекламы · @ads_contact · Требует ручной проверки/)).toBeTruthy();
+    expect(screen.getByText(/Ссылка на проект, не бизнес-контакт/)).toBeTruthy();
+    expect(screen.getAllByRole("link", { name: "Открыть публичную ссылку" }).some((link) => link.getAttribute("href") === "https://t.me/ads_contact")).toBe(true);
+    expect(screen.getAllByText("Открыть источник контакта")).toHaveLength(2);
+  });
+  it("searches candidates on the server without fetching details", async () => {
+    mount(<LeadCandidates workspace="workspace-one" canReview />);
+    await screen.findByRole("button", { name: "Advertiser project 1" });
+    fireEvent.change(screen.getByLabelText("Search candidates"), { target: { value: "project" } });
+    fireEvent.submit(screen.getByLabelText("Search candidates").closest("form")!);
+    await waitFor(() => expect(leadPreparationApi.queue).toHaveBeenCalledWith(expect.objectContaining({ search: "project" }), expect.any(AbortSignal)));
+    expect(leadDiscoveryApi.candidate).not.toHaveBeenCalled();
   });
 });

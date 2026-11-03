@@ -1,9 +1,10 @@
 "use client";
 import { useLeadText } from "./lead-copy";
 import { useState } from "react";
+import { Radio, Users } from "lucide-react";
+import { useOptionalI18n } from "@/providers/i18n-provider";
 import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "@/components/layout/app-shell";
-import { PageHeader } from "@/components/ui/primitives";
 import { authApi } from "@/lib/api";
 import { authKeys } from "@/lib/query-keys";
 import { leadDiscoveryApi } from "@/lib/features/growth/lead-discovery-api";
@@ -14,13 +15,15 @@ import {
 } from "@/lib/features/growth/lead-discovery-query";
 import { CrmNavigation } from "../crm-navigation";
 import { LeadSources } from "./lead-sources";
-import { LeadFeed } from "./lead-feed";
 import { LeadCandidates } from "./lead-candidates";
 import { LeadQueryState } from "./lead-query-state";
+import { LeadSourceForm } from "./lead-source-form";
+import { Button } from "@/components/ui/primitives";
 export function LeadDiscoveryPage() {
   const t = useLeadText();
-  const [feedOpen, setFeedOpen] = useState(false);
-  const [reviewOpen, setReviewOpen] = useState(false);
+  const ru = useOptionalI18n()?.locale === "ru";
+  const [tab, setTab] = useState<"sources" | "candidates">("sources");
+  const [addSource, setAddSource] = useState(false);
   const me = useQuery({
     queryKey: authKeys.me(),
     queryFn: authApi.me,
@@ -38,12 +41,6 @@ export function LeadDiscoveryPage() {
     <AppShell>
       <div className="min-w-0 space-y-4">
         <CrmNavigation />
-        <PageHeader
-          title={t("Lead Discovery")}
-          subtitle={t(
-            "Ваши каналы: подключение, новые публикации и найденные рекламодатели.",
-          )}
-        />
         {me.isLoading ? (
           <p role="status">{t("Loading workspace access…")}</p>
         ) : !access.view ? (
@@ -61,15 +58,17 @@ export function LeadDiscoveryPage() {
                 {!config.data.enabled ? <div role="status" className="rounded-lg border border-amber-900/60 bg-amber-950/20 p-4 text-sm text-amber-100">
                   Search is currently disabled. Add your sources to prepare the list; collection and analysis require the deployment and workspace permissions to be enabled.
                 </div> : null}
-                <LeadSources key={workspace} workspace={workspace} config={config.data} />
-                <details className="rounded-xl border border-neutral-800 px-3 py-2" onToggle={(event) => setFeedOpen(event.currentTarget.open)}>
-                  <summary className="cursor-pointer text-sm text-neutral-300">Публикации и анализ рекламы</summary>
-                  {feedOpen ? <div className="mt-3"><LeadFeed key={workspace} workspace={workspace} config={config.data}/></div> : null}
-                </details>
-                <details className="rounded-xl border border-neutral-800 px-3 py-2" onToggle={(event) => setReviewOpen(event.currentTarget.open)}>
-                  <summary className="cursor-pointer text-sm text-neutral-300">Кандидаты для проверки</summary>
-                  {reviewOpen ? <div className="mt-3"><LeadCandidates key={workspace} workspace={workspace} canReview={config.data.canReview}/></div> : null}
-                </details>
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-800">
+                  <div role="tablist" aria-label="Lead Discovery" className="flex gap-1">
+                    <button role="tab" aria-selected={tab === "sources"} onClick={() => setTab("sources")} className={`inline-flex min-h-11 items-center gap-2 border-b-2 px-4 text-sm font-medium ${tab === "sources" ? "border-blue-500 text-white" : "border-transparent text-neutral-400 hover:text-white"}`}><Radio size={16} aria-hidden="true" />{t("Sources")}</button>
+                    <button role="tab" aria-selected={tab === "candidates"} onClick={() => setTab("candidates")} className={`inline-flex min-h-11 items-center gap-2 border-b-2 px-4 text-sm font-medium ${tab === "candidates" ? "border-blue-500 text-white" : "border-transparent text-neutral-400 hover:text-white"}`}><Users size={16} aria-hidden="true" />{ru ? "Кандидаты" : "Candidates"}</button>
+                  </div>
+                  {tab === "sources" && config.data.canManage ? <Button type="button" onClick={() => setAddSource(true)}>{ru ? "Добавить источник" : "Add source"}</Button> : null}
+                </div>
+                {addSource ? <LeadSourceForm workspace={workspace} onClose={() => setAddSource(false)} /> : null}
+                {tab === "sources" ? <LeadSources key={workspace} workspace={workspace} config={config.data} /> : <>
+                  <LeadCandidates key={workspace} workspace={workspace} canReview={config.data.canReview}/>
+                </>}
               </>
             ) : null}
           </>

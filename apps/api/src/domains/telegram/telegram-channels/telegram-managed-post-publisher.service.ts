@@ -33,6 +33,7 @@ import { notifyScheduledTaskDueWorkChanged } from '../../../common/scheduled-tas
 import {
   telegramPostsBadRequest,
   telegramPostsNotFound,
+  telegramPostPublishErrorCode,
 } from './telegram-posts.errors';
 import {
   managedPostRequiresBotApi,
@@ -713,7 +714,7 @@ export class TelegramManagedPostPublisherService {
       });
       if (error instanceof BadRequestException) throw error;
       throw telegramPostsBadRequest(
-        'TELEGRAM_POST_PUBLISH_FAILED',
+        telegramPostPublishErrorCode(rawMessage),
         publicMessage,
       );
     }

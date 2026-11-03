@@ -205,6 +205,8 @@ export type TelegramChannelSelectOption = {
   username?: string;
   telegramChatId?: string;
   photoUrl?: string;
+  avatarPresentation?: import('@telegram-system/shared').ResolvedEmoji | null;
+  presentationIconPresentation?: import('@telegram-system/shared').ResolvedEmoji | null;
   currentSubscribersCount?: number;
   ownViewsPerPost?: number;
   isActive: boolean;

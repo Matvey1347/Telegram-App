@@ -1,3 +1,4 @@
+import { loadLeadPromotionViews } from './lead-promotion-read';
 import { TelegramLeadPreparationContext } from './lead-preparation-context.service';
 import {
   leadIdentityUnverified,
@@ -43,6 +44,7 @@ const observationInclude = {
       url: true,
       monitoringState: true,
       lastErrorCode: true,
+      bindingRevision: true,
     },
   },
 } satisfies Prisma.TelegramLeadObservationInclude;
@@ -132,6 +134,13 @@ export class TelegramLeadReadService {
       orderBy: { id: 'desc' },
       take: limit + 1,
     });
+    const total = await this.prisma.telegramLeadSource.count({
+      where: {
+        workspaceId: access.workspaceId,
+        ...(filter.search ? { title: { contains: filter.search.slice(0, 100), mode: 'insensitive' } } : {}),
+        ...(filter.status && ['ACTIVE', 'PAUSED', 'DISABLED', 'ACCESS_LOST'].includes(filter.status) ? { monitoringState: filter.status } : {}),
+      },
+    });
     const page = rows.slice(0, limit),
       metrics = await this.metrics(
         access.workspaceId,
@@ -139,6 +148,7 @@ export class TelegramLeadReadService {
       );
     return {
       items: page.map((row) => this.mapSource(row, metrics.get(row.id))),
+      total,
       hasMore: rows.length > limit,
       nextCursor: rows.length > limit ? leadCursor(page.at(-1)!.id) : null,
     };
@@ -202,6 +212,43 @@ export class TelegramLeadReadService {
       );
       return found ? mapAiOperationView(found) : null;
     };
+    const decisions = await this.prisma.telegramLeadAnalysisQueue.findMany({
+      where: {
+        workspaceId: rows[0].workspaceId,
+        prefilterDecision: { in: ['LIKELY_AD', 'LIKELY_VP', 'UNKNOWN'] },
+        OR: rows.map((row) => ({
+          observationId: row.id,
+          sourceId: row.sourceId,
+          contentHash: row.contentHash,
+          bindingRevision: row.source.bindingRevision,
+        })),
+      },
+      select: { observationId: true, prefilterDecision: true },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    });
+    const decisionByObservation = new Map<
+      string,
+      'LIKELY_AD' | 'LIKELY_VP' | 'UNKNOWN'
+    >();
+    for (const decision of decisions) {
+      if (
+        !decisionByObservation.has(decision.observationId) &&
+        ['LIKELY_AD', 'LIKELY_VP', 'UNKNOWN'].includes(
+          decision.prefilterDecision ?? '',
+        )
+      ) {
+        decisionByObservation.set(
+          decision.observationId,
+          decision.prefilterDecision as 'LIKELY_AD' | 'LIKELY_VP' | 'UNKNOWN',
+        );
+      }
+    }
+    const promotions = await loadLeadPromotionViews(
+      this.prisma,
+      this.policy,
+      rows[0].workspaceId,
+      rows.map((row) => row.id),
+    );
     return rows.map((row) => ({
       id: row.id,
       sourceId: row.sourceId,
@@ -228,9 +275,16 @@ export class TelegramLeadReadService {
         Date.now() - row.processingStartedAt.getTime() > 120000
           ? 'UNKNOWN'
           : row.processingStatus,
+      promotion: promotions.get(row.id) ?? null,
       classificationVersion: row.classificationVersion,
+      prefilterDecision: decisionByObservation.get(row.id) ?? null,
       classification:
         row.classification as unknown as LeadObservationView['classification'],
+      targetEvidence:
+        leadReferenceUnavailable(row.source) ||
+        !Array.isArray(row.targetEvidence)
+          ? []
+          : (row.targetEvidence as unknown as LeadObservationView['targetEvidence']),
       extraction:
         row.extraction as unknown as LeadObservationView['extraction'],
       candidateId: row.candidateId,

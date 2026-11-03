@@ -104,7 +104,7 @@ export function CrmConversations({
     enabled:
       newOpen ||
       Boolean(selectedConversationId) ||
-      Boolean(conversations.data?.items.length),
+      conversations.data?.items.length === 1,
   });
   const settings = useQuery({
     queryKey: telegramCrmKeys.settings(),

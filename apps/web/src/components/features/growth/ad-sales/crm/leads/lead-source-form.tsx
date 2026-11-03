@@ -81,12 +81,12 @@ export function LeadSourceForm({
         <FormField
           label={
             value.type === "MANUAL_IMPORT"
-              ? "Manual source label"
-              : "Username, Telegram link or supported identifier"
+              ? t("Manual source label")
+              : t("Username, Telegram link or supported identifier")
           }
         >
           <Input
-            aria-label="Source reference"
+            aria-label={t("Username, Telegram link or supported identifier")}
             value={value.reference}
             maxLength={value.type === "MANUAL_IMPORT" ? 100 : 200}
             onChange={(e) => setValue({ ...value, reference: e.target.value })}

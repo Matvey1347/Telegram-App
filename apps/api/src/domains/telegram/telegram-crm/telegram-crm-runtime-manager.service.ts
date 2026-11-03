@@ -43,7 +43,7 @@ import {
 } from './telegram-crm-runtime.policy';
 import { OperationsNotificationStoreService } from '../../operations/notifications/operations-notification-store.service';
 import { OperationsNotificationPublisherService } from '../../operations/notifications/operations-notification-publisher.service';
-import { TelegramCrmRuntimeLeaseService } from './telegram-crm-runtime-lease.service';
+import { CRM_RUNTIME_LEASE_TTL_MS, TelegramCrmRuntimeLeaseService } from './telegram-crm-runtime-lease.service';
 
 @Injectable()
 export class TelegramCrmRuntimeManager
@@ -57,6 +57,7 @@ export class TelegramCrmRuntimeManager
   private readonly runtimeEnabled = crmRuntimeEnabled();
   private reacquiring?: Promise<boolean>;
   private startupLeaseDenied = false;
+  private startupLeaseRetry?: NodeJS.Timeout;
   private shuttingDown = false;
   private totalQueued = 0;
 
@@ -93,6 +94,13 @@ export class TelegramCrmRuntimeManager
     }
     if (accounts.length && !(await this.acquireRuntimeLease())) {
       this.startupLeaseDenied = true;
+      this.startupLeaseRetry = setTimeout(() => {
+        this.startupLeaseRetry = undefined;
+        void this.ensureRuntimeOwnership().catch(() =>
+          this.logger.warn('Telegram CRM runtime startup recovery failed.'),
+        );
+      }, CRM_RUNTIME_LEASE_TTL_MS + 1_000);
+      this.startupLeaseRetry.unref?.();
       return;
     }
     this.subscribeToAccountChanges();
@@ -103,6 +111,8 @@ export class TelegramCrmRuntimeManager
 
   async onApplicationShutdown() {
     this.shuttingDown = true;
+    if (this.startupLeaseRetry) clearTimeout(this.startupLeaseRetry);
+    this.startupLeaseRetry = undefined;
     this.notifierSubscription?.unsubscribe();
     await this.reacquiring?.catch(() => false);
     await Promise.all(
@@ -246,6 +256,8 @@ export class TelegramCrmRuntimeManager
       this.subscribeToAccountChanges();
       await this.connectStartupAccounts(accounts);
       this.startupLeaseDenied = false;
+      if (this.startupLeaseRetry) clearTimeout(this.startupLeaseRetry);
+      this.startupLeaseRetry = undefined;
       return true;
     } catch (error) {
       this.runtimeHeldByAnotherInstance = true;

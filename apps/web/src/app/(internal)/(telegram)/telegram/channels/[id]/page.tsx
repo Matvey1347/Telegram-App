@@ -5,7 +5,6 @@ import {
   formatStatsPeriod,
   formatTelegramPercent,
   hasRenderableTelegramGraphItem,
-  MtprotoGraphChart,
   mtprotoGraphConfigs,
   normalizeStoredTelegramGraph,
   normalizeTelegramGraph,
@@ -20,6 +19,7 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
+import dynamic from "next/dynamic";
 import { useParams } from "next/navigation";
 import {
   keepPreviousData,
@@ -42,30 +42,17 @@ import {
   Smile,
   Trash2,
 } from "lucide-react";
-import {
-  Bar,
-  CartesianGrid,
-  ComposedChart,
-  Line,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
 import { AdCampaignsTable } from "@/components/features/growth/ad-campaigns/campaigns-table";
 import { TelegramChannelAdSalesSection } from "@/components/features/growth/ad-sales/telegram-channel-ad-sales-section";
 import { AppShell } from "@/components/layout/app-shell";
 import { PageTabHead } from "@/components/layout/page-tab-head";
-import { IconPicker } from "@/components/icons/icon-picker";
 import { ChannelPreview } from "@/components/features/telegram/telegram/channel-preview";
 import {
   ChannelAccessBadge,
   telegramChannelAccessLabel,
 } from "@/components/features/telegram/telegram/channel-access-badge";
 import { InviteLinksTable } from "@/components/features/telegram/telegram/invite-links-table";
-import { TelegramPostPreviewModal } from "@/components/features/telegram/telegram/post-preview-modal";
 import { TelegramSourceAvatar } from "@/components/features/telegram/telegram/telegram-source-avatar";
-import { ChannelSettingsModal } from "@/components/features/telegram/telegram/channel-settings-modal";
 import {
   ChannelSyncScopeModal,
   DEFAULT_CHANNEL_SYNC_SELECTION,
@@ -100,7 +87,6 @@ import {
   telegramChannelsApi,
   type ResolvedEmoji,
   type TelegramChannel,
-  type TelegramChannelAudienceSnapshot,
   type TelegramInviteLink,
   type TelegramChannelSyncNowPayload,
   type TelegramChannelSyncSelection,
@@ -115,9 +101,52 @@ import {
 } from "@/lib/query-keys";
 import {
   invalidateTelegramChannelQueries,
+  invalidateTelegramPostMetricReads,
   reconcileTelegramChannelSettings,
 } from "@/lib/features/telegram/telegram-query-invalidation";
 import { useAppToast } from "@/providers/toast-provider";
+
+const TelegramChannelAudienceChart = dynamic(
+  () =>
+    import(
+      "@/components/features/telegram/telegram/telegram-channel-graph-charts"
+    ).then((module) => module.TelegramChannelAudienceChart),
+  {
+    loading: () => (
+      <div className="h-64 animate-pulse rounded-lg bg-slate-900/40" />
+    ),
+  },
+);
+const MtprotoGraphChart = dynamic(
+  () =>
+    import(
+      "@/components/features/telegram/telegram/telegram-channel-graph-charts"
+    ).then((module) => module.MtprotoGraphChart),
+  {
+    loading: () => (
+      <div className="h-64 animate-pulse rounded-lg bg-slate-900/40" />
+    ),
+  },
+);
+const IconPicker = dynamic(
+  () =>
+    import("@/components/icons/icon-picker").then((module) => module.IconPicker),
+  { loading: () => null },
+);
+const ChannelSettingsModal = dynamic(
+  () =>
+    import("@/components/features/telegram/telegram/channel-settings-modal").then(
+      (module) => module.ChannelSettingsModal,
+    ),
+  { loading: () => null },
+);
+const TelegramPostPreviewModal = dynamic(
+  () =>
+    import("@/components/features/telegram/telegram/post-preview-modal").then(
+      (module) => module.TelegramPostPreviewModal,
+    ),
+  { loading: () => null },
+);
 
 function formatLocalDate(value?: string | Date | null) {
   if (!value) return "-";
@@ -127,28 +156,6 @@ function formatLocalDate(value?: string | Date | null) {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
-}
-
-function formatLocalDateTime(value?: string | Date | number | null) {
-  if (value == null) return "-";
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) return "-";
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  const hours = String(date.getHours()).padStart(2, "0");
-  const minutes = String(date.getMinutes()).padStart(2, "0");
-  return `${year}-${month}-${day} ${hours}:${minutes}`;
-}
-
-function toChartTimestamp(value: unknown) {
-  if (value == null) return null;
-  const numericValue = Number(value);
-  if (Number.isFinite(numericValue)) {
-    return numericValue > 100000000000 ? numericValue : numericValue * 1000;
-  }
-  const date = new Date(value as string | Date);
-  return Number.isNaN(date.getTime()) ? null : date.getTime();
 }
 
 function toNumber(value: unknown) {
@@ -343,6 +350,7 @@ export default function TelegramChannelAnalyticsPage() {
     ],
     queryFn: () =>
       getTelegramChannelAnalytics(id, rangeParams.from, rangeParams.to),
+    staleTime: 15 * 60_000,
   });
   const { data: channel, isLoading: isChannelLoading } = useQuery({
     queryKey: telegramChannelKeys.detail(id),
@@ -351,11 +359,13 @@ export default function TelegramChannelAnalyticsPage() {
   const { data: audience, isLoading: isAudienceLoading } = useQuery({
     queryKey: telegramChannelKeys.audience(id),
     queryFn: () => telegramChannelsApi.audience(id),
+    staleTime: 15 * 60_000,
   });
   const { data: financialSummary, isLoading: isFinancialSummaryLoading } =
     useQuery({
       queryKey: telegramChannelKeys.financialSummary(id),
       queryFn: () => telegramChannelsApi.financialSummary(id),
+      staleTime: 15 * 60_000,
     });
   const {
     data: audienceSnapshots = [],
@@ -408,6 +418,8 @@ export default function TelegramChannelAnalyticsPage() {
     enabled: openSections.inviteLinks,
     placeholderData: keepPreviousData,
   });
+  const canLoadCampaignAttribution =
+    openSections.campaigns && toNumber(data?.summary?.campaignsCount) > 0;
   const {
     data: campaignsData,
     isLoading: isCampaignsLoading,
@@ -427,7 +439,7 @@ export default function TelegramChannelAnalyticsPage() {
         pageSize: campaignsPagination.pageSize,
         search: campaignsSearch.trim() || undefined,
       }),
-    enabled: openSections.campaigns,
+    enabled: canLoadCampaignAttribution,
     placeholderData: keepPreviousData,
   });
   const showPostsLoading = isPostsLoading || isPostsPlaceholderData;
@@ -437,10 +449,12 @@ export default function TelegramChannelAnalyticsPage() {
   const { data: currencySettings } = useQuery({
     queryKey: currencyKeys.settings(),
     queryFn: currenciesApi.getSettings,
+    enabled: canLoadCampaignAttribution,
   });
   const { data: rates } = useQuery({
     queryKey: currencyKeys.latestRates(),
     queryFn: currenciesApi.listLatestRates,
+    enabled: canLoadCampaignAttribution,
   });
 
   useEffect(() => {
@@ -636,18 +650,7 @@ export default function TelegramChannelAnalyticsPage() {
       };
     }) => telegramChannelsApi.updatePostManualMetrics(id, postId, payload),
     onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: telegramPostKeys.channelPosts(id),
-      });
-      queryClient.invalidateQueries({
-        queryKey: telegramChannelKeys.audience(id),
-      });
-      queryClient.invalidateQueries({
-        queryKey: telegramChannelKeys.financialSummary(id),
-      });
-      queryClient.invalidateQueries({
-        queryKey: telegramChannelKeys.audienceSnapshots(id),
-      });
+      void invalidateTelegramPostMetricReads(queryClient, id);
       pushToast("Post correction saved.", "success");
     },
     onError: (error: any) =>
@@ -1169,7 +1172,7 @@ export default function TelegramChannelAnalyticsPage() {
               </SimplePanel>
             ) : null}
             {hasAudienceChart ? (
-              <AudienceSnapshotsPanel snapshots={audienceSnapshots} />
+              <TelegramChannelAudienceChart snapshots={audienceSnapshots} />
             ) : null}
             {mtprotoGraphs.map(({ key, title, chart }) => (
               <SimplePanel key={key} title={title}>
@@ -2522,73 +2525,6 @@ function KpiTarget({
   );
 }
 
-function AudienceSnapshotsPanel({
-  snapshots,
-}: {
-  snapshots: TelegramChannelAudienceSnapshot[];
-}) {
-  const chartRows = snapshots
-    .map((snapshot) => ({
-      timestamp: toChartTimestamp(snapshot.collectedAt),
-      subscribersCount: snapshot.subscribersCount ?? null,
-      activeSubscribersEstimate: snapshot.activeSubscribersEstimate ?? null,
-    }))
-    .filter(
-      (row) =>
-        row.timestamp != null &&
-        (row.subscribersCount != null || row.activeSubscribersEstimate != null),
-    );
-  if (!chartRows.length) return null;
-  return (
-    <SimplePanel title="Audience chart">
-      <div className="h-64 rounded-lg bg-slate-900/40 p-2">
-        <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart
-            data={chartRows}
-            margin={{ top: 8, right: 12, left: -12, bottom: 0 }}
-          >
-            <CartesianGrid stroke="#1e293b" strokeDasharray="4 4" />
-            <XAxis
-              dataKey="timestamp"
-              type="number"
-              domain={["dataMin", "dataMax"]}
-              tickFormatter={(value) => formatLocalDate(value)}
-              tick={{ fill: "#94a3b8", fontSize: 12 }}
-              minTickGap={24}
-            />
-            <YAxis tick={{ fill: "#94a3b8", fontSize: 12 }} width={48} />
-            <Tooltip
-              labelFormatter={(value) => formatLocalDateTime(value)}
-              contentStyle={{
-                background: "#020617",
-                border: "1px solid #334155",
-                borderRadius: 10,
-              }}
-              labelStyle={{ color: "#e2e8f0" }}
-            />
-            <Line
-              type="linear"
-              dataKey="subscribersCount"
-              stroke="#38bdf8"
-              strokeWidth={2}
-              dot={false}
-              name="Subscribers"
-            />
-            <Line
-              type="linear"
-              dataKey="activeSubscribersEstimate"
-              stroke="#22c55e"
-              strokeWidth={2}
-              dot={false}
-              name="Active estimate"
-            />
-          </ComposedChart>
-        </ResponsiveContainer>
-      </div>
-    </SimplePanel>
-  );
-}
-
 function kpiBadgeClass(status?: string) {
   if (status === "good") return "border-emerald-700 text-emerald-200";
   if (status === "acceptable") return "border-yellow-700 text-yellow-200";
@@ -3349,13 +3285,15 @@ function PostsTable({
           })}
         </div>
       </div>
-      <TelegramPostPreviewModal
-        open={Boolean(previewPost)}
-        onClose={() => setPreviewPost(null)}
-        channelTitle={channelTitle}
-        channelPhotoUrl={channelPhotoUrl}
-        post={previewPost}
-      />
+      {previewPost ? (
+        <TelegramPostPreviewModal
+          open={Boolean(previewPost)}
+          onClose={() => setPreviewPost(null)}
+          channelTitle={channelTitle}
+          channelPhotoUrl={channelPhotoUrl}
+          post={previewPost}
+        />
+      ) : null}
     </div>
   );
 }

@@ -47,7 +47,11 @@ vi.mock("@/providers/toast-provider", () => ({
   useAppToast: () => ({ setProgress: vi.fn() }),
 }));
 vi.mock("./mutual-promotion-folder-form-modal", () => ({
-  MutualPromotionFolderFormModal: () => null,
+  MutualPromotionFolderFormModal: ({
+    folder,
+  }: {
+    folder: { title: string } | null;
+  }) => (folder ? <div data-testid="folder-form">{folder.title}</div> : null),
 }));
 vi.mock("./mutual-promotion-invite-links-editor", () => ({
   MutualPromotionInviteLinksEditor: () => null,
@@ -207,6 +211,78 @@ describe("MutualPromotionFoldersPage", () => {
       "Draft folder",
     );
     expect(api.get).toHaveBeenLastCalledWith("draft");
+  });
+
+  it("shares the detail query when editing directly from a folder card", async () => {
+    const user = userEvent.setup();
+    const draft = folder("draft-edit", "Draft to edit", "DRAFT");
+    api.list.mockResolvedValue({
+      items: [draft],
+      pagination: {
+        page: 1,
+        pageSize: 100,
+        totalItems: 1,
+        totalPages: 1,
+        hasNextPage: false,
+        hasPreviousPage: false,
+      },
+    });
+    api.get.mockResolvedValue(draft);
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MutualPromotionFoldersPage />
+      </QueryClientProvider>,
+    );
+
+    await user.click(
+      await screen.findByRole("button", { name: "Actions for Draft to edit" }),
+    );
+    await user.click(screen.getByRole("menuitem", { name: "Edit folder" }));
+    await screen.findByTestId("folder-form");
+    expect(screen.getByTestId("folder-form")).toHaveTextContent("Draft to edit");
+
+    expect(api.get).toHaveBeenCalledTimes(1);
+    expect(api.get).toHaveBeenCalledWith("draft-edit");
+    queryClient.clear();
+  });
+
+  it("shows the existing folder error state when a direct edit read fails", async () => {
+    const user = userEvent.setup();
+    const draft = folder("draft-error", "Unavailable draft", "DRAFT");
+    api.list.mockResolvedValue({
+      items: [draft],
+      pagination: {
+        page: 1,
+        pageSize: 100,
+        totalItems: 1,
+        totalPages: 1,
+        hasNextPage: false,
+        hasPreviousPage: false,
+      },
+    });
+    api.get.mockRejectedValue(new Error("Folder was removed"));
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MutualPromotionFoldersPage />
+      </QueryClientProvider>,
+    );
+
+    await user.click(
+      await screen.findByRole("button", { name: "Actions for Unavailable draft" }),
+    );
+    await user.click(screen.getByRole("menuitem", { name: "Edit folder" }));
+
+    expect(await screen.findByText("Could not load this mutual-promotion folder.")).toBeVisible();
+    expect(api.get).toHaveBeenCalledTimes(1);
+    queryClient.clear();
   });
 
   it("renames a completed folder without opening the structural edit draft", async () => {

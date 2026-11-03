@@ -7,6 +7,7 @@ import {
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getDashboardSummary, type DashboardSummary } from "@/lib/api";
+import { dashboardKeys } from "@/lib/query-keys";
 import { DashboardOverview, DashboardPage } from "./dashboard-page";
 import { currentCalendarMonthPeriod } from "./dashboard-period";
 
@@ -51,6 +52,35 @@ describe("dashboard", () => {
       screen.getByRole("button", { name: "Current month" }),
     ).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "30d" })).toBeNull();
+  });
+
+  it("reuses a ten-minute current-month summary without another request", async () => {
+    const currentMonth = {
+      primaryCurrency: "UAH",
+      incomeForPeriod: 600,
+      expensesForPeriod: 100,
+      investedCapitalForPeriod: 50,
+      activeSubscribersEstimate: 300,
+      revenuePerActiveSubscriber: 2,
+    } as DashboardSummary;
+    const period = currentCalendarMonthPeriod();
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    client.setQueryData(
+      dashboardKeys.summary("month", period.dateFrom, period.dateTo),
+      currentMonth,
+      { updatedAt: Date.now() - 10 * 60_000 },
+    );
+
+    render(
+      <QueryClientProvider client={client}>
+        <DashboardPage />
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByText("2.00 UAH")).toBeInTheDocument();
+    expect(getSummaryMock).not.toHaveBeenCalled();
   });
 
   it("shows the dashboard skeleton while a newly selected period loads", async () => {
@@ -225,17 +255,9 @@ describe("dashboard", () => {
     expect(
       document.querySelector('[data-dashboard-breakdown-icon="Channels"]'),
     ).toHaveClass("bg-sky-500/15", "text-sky-300");
-    fireEvent.click(screen.getByRole("button", { name: /Expenses/ }));
-    expect(screen.getByText("Advertising")).toBeInTheDocument();
-    expect(screen.getByText("AI Tokens")).toBeInTheDocument();
-    expect(screen.getByText("Campaign payment")).toBeInTheDocument();
     expect(
-      screen.getByText("Ukraine Card", { exact: false }),
-    ).toBeInTheDocument();
-    expect(screen.getByText("-250.00 UAH")).toBeInTheDocument();
-    expect(screen.getByText("Balance correction")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /Investments/ }));
-    expect(screen.getByText("Founder investment")).toBeInTheDocument();
+      screen.queryByRole("button", { name: /Expenses/ }),
+    ).not.toBeInTheDocument();
   });
 
   it("explains why the key metric is unavailable without active subscribers", () => {

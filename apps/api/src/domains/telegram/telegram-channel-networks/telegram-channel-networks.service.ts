@@ -25,8 +25,9 @@ import {
 } from './telegram-channel-network-presentation';
 import { TelegramNetworkPerformanceHistoryService } from './telegram-network-performance-history.service';
 import type { TelegramChannelPerformanceHistoryRange } from '@telegram-system/shared';
+import { SYSTEM_ALL_NETWORK_ID } from './telegram-channel-network.constants';
 
-export const SYSTEM_ALL_NETWORK_ID = 'system-all';
+export { SYSTEM_ALL_NETWORK_ID } from './telegram-channel-network.constants';
 
 const SYSTEM_ALL_NETWORK_ICON = {
   type: 'image' as const,
@@ -151,23 +152,24 @@ export class TelegramChannelNetworksService {
       channels,
       channels[0]?.kpiCurrency ?? 'USD',
     );
-    const financialSummaries =
-      await this.financialReadService.buildChannelFinancialSummaryPreview(
+    const trendNow = new Date();
+    const ids = channels.map((channel: any) => channel.id);
+    const [financialSummaries, trends] = await Promise.all([
+      this.financialReadService.buildChannelFinancialSummaryPreview(
         network.workspaceId,
         channels.map((channel: any, index: number) => ({
           ...channel,
           audienceSnapshots: [audiences[index]],
         })),
         { targetCurrency: summaryCurrency },
-      );
-    const ids = channels.map((channel: any) => channel.id);
-    const trendNow = new Date();
-    const trends = await this.audienceTrendReadService.summariesForChannels(
-      network.workspaceId,
-      ids,
-      30,
-      trendNow,
-    );
+      ),
+      this.audienceTrendReadService.summariesForChannels(
+        network.workspaceId,
+        ids,
+        30,
+        trendNow,
+      ),
+    ]);
     const traffic = await this.trafficAttributionService.summariesForChannels(
       network.workspaceId,
       ids,
@@ -237,6 +239,7 @@ export class TelegramChannelNetworksService {
       },
       audiences,
       financialSummaries,
+      { includeChannelSummaries: false },
     );
   }
 
@@ -279,6 +282,7 @@ export class TelegramChannelNetworksService {
         TelegramChannelTrafficAttributionService['summariesForChannels']
       >
     >,
+    includeChannelSummaries = true,
   ) {
     const { workspace, excludedTelegramChannelIds, channels } = input;
     const audiences = channels.map(audienceFromChannel);
@@ -335,6 +339,7 @@ export class TelegramChannelNetworksService {
       },
       eligible.map(({ audience }) => audience),
       financialSummaries,
+      { includeChannelSummaries },
     );
   }
 
@@ -433,19 +438,20 @@ export class TelegramChannelNetworksService {
     for (const channel of systemInput?.channels ?? []) {
       channelsById.set(channel.id, channel);
     }
-    const financialPreparation =
-      await this.financialReadService.prepareChannelFinancialSummaryPreview(
-        workspaceId,
-        [...channelsById.values()],
-      );
     const channelIds = [...channelsById.keys()];
     const trendNow = new Date();
-    const trends = await this.audienceTrendReadService.summariesForChannels(
-      workspaceId,
-      channelIds,
-      30,
-      trendNow,
-    );
+    const [financialPreparation, trends] = await Promise.all([
+      this.financialReadService.prepareChannelFinancialSummaryPreview(
+        workspaceId,
+        [...channelsById.values()],
+      ),
+      this.audienceTrendReadService.summariesForChannels(
+        workspaceId,
+        channelIds,
+        30,
+        trendNow,
+      ),
+    ]);
     const traffic = await this.trafficAttributionService.summariesForChannels(
       workspaceId,
       channelIds,
@@ -463,6 +469,7 @@ export class TelegramChannelNetworksService {
             financialPreparation,
             trends,
             traffic,
+            false,
           )
         : null,
       Promise.all(

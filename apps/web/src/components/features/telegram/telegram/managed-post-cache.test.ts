@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { QueryClient } from "@tanstack/react-query";
 import type { TelegramManagedPost } from "@/lib/api";
-import { telegramPostKeys } from "@/lib/query-keys";
 import {
+  telegramPostKeys,
+  telegramPublicationScheduleKeys,
+} from "@/lib/query-keys";
+import {
+  invalidateManagedPostScheduleReads,
   reconcileManagedPost,
   upsertManagedPostInCache,
 } from "./managed-post-cache";
@@ -40,5 +44,36 @@ describe("upsertManagedPostInCache", () => {
     expect((queryClient.getQueryData(filteredKey) as ReturnType<typeof page>).items[0].title).toBe("New");
     expect((queryClient.getQueryData(otherKey) as ReturnType<typeof page>).items[0].title).toBe("Other");
     expect(queryClient.getQueryData(telegramPostKeys.managedDetail("channel", "1"))).toEqual(post("1", "New"));
+  });
+});
+
+describe("invalidateManagedPostScheduleReads", () => {
+  it("invalidates channel calendar and both slot availability query families", async () => {
+    const client = new QueryClient();
+    const managedCalendar = telegramPostKeys.managedCalendar("channel-1");
+    const singleChannelSlots = telegramPublicationScheduleKeys.occurrences(
+      "channel-1",
+      { from: "2026-11-03T00:00:00.000Z", to: "2027-01-04T00:00:00.000Z" },
+    );
+    const sharedSlots = telegramPublicationScheduleKeys.occurrencesByChannels(
+      ["channel-1", "channel-2"],
+      { from: "2026-11-02T00:00:00.000Z", to: "2026-11-05T00:00:00.000Z" },
+    );
+    const otherData = ["unrelated", "read"] as const;
+    for (const key of [
+      managedCalendar,
+      singleChannelSlots,
+      sharedSlots,
+      otherData,
+    ]) {
+      client.setQueryData(key, { ready: true });
+    }
+
+    await invalidateManagedPostScheduleReads(client, "channel-1");
+
+    expect(client.getQueryState(managedCalendar)?.isInvalidated).toBe(true);
+    expect(client.getQueryState(singleChannelSlots)?.isInvalidated).toBe(true);
+    expect(client.getQueryState(sharedSlots)?.isInvalidated).toBe(true);
+    expect(client.getQueryState(otherData)?.isInvalidated).toBe(false);
   });
 });

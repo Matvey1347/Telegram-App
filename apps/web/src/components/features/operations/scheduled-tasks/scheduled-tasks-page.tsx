@@ -3,6 +3,7 @@
 import { formatDateTime as formatDisplayDateTime } from "@/lib/date-format";
 
 import { useState } from "react";
+import dynamic from "next/dynamic";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { History, Pencil, Play, RefreshCw } from "lucide-react";
@@ -16,8 +17,18 @@ import {
   type UpdateScheduledTaskPayload,
 } from "@/lib/api";
 import { scheduledTaskKeys } from "@/lib/query-keys";
-import { EditTaskModal, HistoryModal } from "./scheduled-task-modals";
 import { TaskGroupNotificationSubscription } from "./task-notification-subscription";
+
+const EditTaskModal = dynamic(
+  () =>
+    import("./scheduled-task-modals").then((module) => module.EditTaskModal),
+  { loading: () => null },
+);
+const HistoryModal = dynamic(
+  () =>
+    import("./scheduled-task-modals").then((module) => module.HistoryModal),
+  { loading: () => null },
+);
 
 export function ScheduledTasksPage() {
   const queryClient = useQueryClient();
@@ -120,22 +131,24 @@ export function ScheduledTasksPage() {
           ) : null}
         </>
       </QueryContentState>
-      <EditTaskModal
-        task={editing}
-        saving={updateMutation.isPending}
-        onClose={() => setEditing(null)}
-        onSave={(payload) =>
-          editing
-            ? updateMutation.mutate({ taskKey: editing.key, payload })
-            : undefined
-        }
-      />
-      <HistoryModal
-        task={historyTask}
-        runs={historyQuery.data ?? []}
-        loading={historyQuery.isLoading}
-        onClose={() => setHistoryTask(null)}
-      />
+      {editing ? (
+        <EditTaskModal
+          task={editing}
+          saving={updateMutation.isPending}
+          onClose={() => setEditing(null)}
+          onSave={(payload) =>
+            updateMutation.mutate({ taskKey: editing.key, payload })
+          }
+        />
+      ) : null}
+      {historyTask ? (
+        <HistoryModal
+          task={historyTask}
+          runs={historyQuery.data ?? []}
+          loading={historyQuery.isLoading}
+          onClose={() => setHistoryTask(null)}
+        />
+      ) : null}
     </AppShell>
   );
 }

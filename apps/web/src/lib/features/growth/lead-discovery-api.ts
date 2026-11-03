@@ -20,8 +20,11 @@ import type {
   LeadIngestResult,
   LeadAnalysisResult,
   LeadExport,
+  LeadHistoryJob,
+  LeadPipelineProgress,
 } from "@telegram-system/shared";
-import { api } from "@/lib/api";
+export type { LeadHistoryJob } from "@telegram-system/shared";
+import { api, streamProgressAction } from "@/lib/api";
 const base = "/telegram-crm/lead-discovery";
 const id = (value: string) => encodeURIComponent(value);
 export const leadDiscoveryApi = {
@@ -64,12 +67,35 @@ export const leadDiscoveryApi = {
   validate: async (source: string) =>
     (await api.post<LeadSourceView>(`${base}/sources/${id(source)}/validate`))
       .data,
+  refreshSources: (onProgress: (item: { source: LeadSourceView; status: "updated" | "failed" | "skipped"; scanned: number; truncated: boolean }, current: number, total: number) => void, source?: string) =>
+    streamProgressAction<{ updated: number; failed: number; skipped: number }, { source: LeadSourceView; status: "updated" | "failed" | "skipped"; scanned: number; truncated: boolean }>(`${base}/sources/${source ? `${id(source)}/` : ""}refresh-stream`, {}, onProgress),
   scan: async (source: string, beforeId?: number) =>
     (
       await api.post<LeadScanResult>(`${base}/sources/${id(source)}/scan`, {
         limit: 50,
         beforeId,
       })
+    ).data,
+  historyJob: async (source: string, signal?: AbortSignal) =>
+    (
+      await api.get<LeadHistoryJob | null>(
+        `${base}/sources/${id(source)}/autopilot`,
+        { signal },
+      )
+    ).data,
+  pipelineProgress: async (source: string, signal?: AbortSignal) =>
+    (
+      await api.get<LeadPipelineProgress>(
+        `${base}/sources/${id(source)}/autopilot/progress`,
+        { signal },
+      )
+    ).data,
+  historyAction: async (source: string, action: "start" | "pause" | "resume") =>
+    (
+      await api.post<LeadHistoryJob | null>(
+        `${base}/sources/${id(source)}/autopilot/${action}`,
+        {},
+      )
     ).data,
   recover: async (source: string) =>
     (await api.post<LeadIngestResult>(`${base}/sources/${id(source)}/recover`))
@@ -89,10 +115,15 @@ export const leadDiscoveryApi = {
       })
     ).data,
   analyze: async (observationIds: string[]) =>
-    (await api.post<LeadAnalysisResult>(`${base}/analyze`, { observationIds }, {
-      feedback: { mode: "managed" },
-    } as Parameters<typeof api.post>[2]))
-      .data,
+    (
+      await api.post<LeadAnalysisResult>(
+        `${base}/analyze`,
+        { observationIds },
+        {
+          feedback: { mode: "managed" },
+        } as Parameters<typeof api.post>[2],
+      )
+    ).data,
   reviewObservation: async (
     observation: string,
     reviewStatus: "APPROVED" | "REJECTED",

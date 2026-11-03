@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { ActionMenu, ActionMenuItem } from "@/components/ui/action-menu";
 import { IconAvatar } from "@/components/icons/icon-avatar";
+import { QueryContentState } from "@/components/ui/query-content-state";
 import {
   Button,
   Card,
@@ -106,6 +107,9 @@ function RoleCapabilityBadges({
 
 export function RolesWorkspace() {
   const qc = useQueryClient();
+  const [assigning, setAssigning] = useState<WorkspaceRoleContract | null>(
+    null,
+  );
   const roles = useQuery({
     queryKey: workspaceKeys.roles(),
     queryFn: workspaceRolesApi.list,
@@ -117,11 +121,9 @@ export function RolesWorkspace() {
   const members = useQuery({
     queryKey: workspaceKeys.membersSelect(),
     queryFn: workspaceMembersApi.select,
+    enabled: Boolean(assigning),
   });
   const [editing, setEditing] = useState<WorkspaceRoleContract | "new" | null>(
-    null,
-  );
-  const [assigning, setAssigning] = useState<WorkspaceRoleContract | null>(
     null,
   );
   const [deleting, setDeleting] = useState<WorkspaceRoleContract | null>(null);
@@ -323,41 +325,50 @@ export function RolesWorkspace() {
         title={`Assign ${assigning?.name ?? "role"}`}
         size="sm"
       >
-        <div className="space-y-2">
-          {currentMembers?.map((member) => (
-            <label
-              key={member.id}
-              className="flex cursor-pointer items-center gap-3 rounded-lg border border-neutral-800 p-3 hover:bg-neutral-900"
-            >
-              <input
-                type="checkbox"
-                checked={memberIds.has(member.id)}
-                onChange={(event) =>
-                  setMemberIds((current) => {
-                    const next = new Set(current);
-                    if (event.target.checked) next.add(member.id);
-                    else next.delete(member.id);
-                    return next;
-                  })
-                }
-              />
-              <IconAvatar
-                icon={member.avatarPresentation}
-                label={member.user.name}
-                size="sm"
-                className="!h-9 !w-9 shrink-0 rounded-lg bg-neutral-950"
-              />
-              <span className="min-w-0">
-                <span className="block truncate text-sm text-white">
-                  {member.user.name}
+        <QueryContentState
+          isLoading={members.isLoading}
+          isError={members.isError}
+          isEmpty={!currentMembers?.length}
+          emptyText="No workspace members available."
+          errorText="Could not load workspace members."
+          onRetry={() => void members.refetch()}
+        >
+          <div className="space-y-2">
+            {currentMembers?.map((member) => (
+              <label
+                key={member.id}
+                className="flex cursor-pointer items-center gap-3 rounded-lg border border-neutral-800 p-3 hover:bg-neutral-900"
+              >
+                <input
+                  type="checkbox"
+                  checked={memberIds.has(member.id)}
+                  onChange={(event) =>
+                    setMemberIds((current) => {
+                      const next = new Set(current);
+                      if (event.target.checked) next.add(member.id);
+                      else next.delete(member.id);
+                      return next;
+                    })
+                  }
+                />
+                <IconAvatar
+                  icon={member.avatarPresentation}
+                  label={member.user.name}
+                  size="sm"
+                  className="!h-9 !w-9 shrink-0 rounded-lg bg-neutral-950"
+                />
+                <span className="min-w-0">
+                  <span className="block truncate text-sm text-white">
+                    {member.user.name}
+                  </span>
+                  <span className="block truncate text-xs text-neutral-500">
+                    {member.user.email}
+                  </span>
                 </span>
-                <span className="block truncate text-xs text-neutral-500">
-                  {member.user.email}
-                </span>
-              </span>
-            </label>
-          ))}
-        </div>
+              </label>
+            ))}
+          </div>
+        </QueryContentState>
         <p className="mt-3 text-xs text-neutral-500">
           Selected members will be moved from their current role. Existing
           assignments not selected stay unchanged.

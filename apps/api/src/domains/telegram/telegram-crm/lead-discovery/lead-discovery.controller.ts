@@ -1,11 +1,13 @@
 import {
   Body,
+  ForbiddenException,
   Controller,
   Get,
   Param,
   Patch,
   Post,
   Query,
+  Res,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -13,6 +15,9 @@ import {
   type JwtUser,
 } from '../../../../common/current-user.decorator';
 import { JwtAuthGuard } from '../../../../common/jwt-auth.guard';
+import type { Response } from 'express';
+import { StreamResponseService } from '../../../../common/stream/stream-response.service';
+import { TelegramLeadRefreshService } from './lead-refresh.service';
 import { TelegramLeadPolicy } from './lead-policy.service';
 import { TelegramLeadSourceService } from './lead-source.service';
 import { TelegramLeadReadService } from './lead-read.service';
@@ -21,17 +26,23 @@ import { TelegramLeadIngestService } from './lead-ingest.service';
 import { TelegramLeadAnalysisService } from './lead-analysis.service';
 import { TelegramLeadCandidateService } from './lead-candidate.service';
 import { TelegramLeadExportService } from './lead-export.service';
+import { TelegramLeadHistoryJobService } from './lead-history-job.service';
+import { TelegramLeadMetadataDiagnostics } from './lead-metadata-diagnostics.service';
+import { TelegramLeadMediaPilotService } from './lead-media-pilot.service';
+import { TelegramLeadAnalysisExecutor } from './lead-analysis-executor.service';
 import {
   LeadExportDto,
   LeadImportDto,
   LeadImportPreviewDto,
   LeadPageDto,
   LeadScanDto,
+  LeadMetadataDiagnosticsDto,
   LeadSourceInputDto,
   LeadSourcePatchDto,
 } from './lead-source.dto';
 import {
   LeadAnalyzeDto,
+  LeadMediaPilotDto,
   LeadBulkReviewDto,
   LeadCandidateReviewDto,
   LeadFeedDto,
@@ -44,6 +55,8 @@ import {
 export class TelegramLeadDiscoveryController {
   constructor(
     private readonly policy: TelegramLeadPolicy,
+    private readonly refreshService: TelegramLeadRefreshService,
+    private readonly streamResponse: StreamResponseService,
     private readonly sources: TelegramLeadSourceService,
     private readonly read: TelegramLeadReadService,
     private readonly transport: TelegramLeadTransportService,
@@ -51,6 +64,10 @@ export class TelegramLeadDiscoveryController {
     private readonly analysis: TelegramLeadAnalysisService,
     private readonly candidates: TelegramLeadCandidateService,
     private readonly exporter: TelegramLeadExportService,
+    private readonly historyJobs: TelegramLeadHistoryJobService,
+    private readonly metadataDiagnostics: TelegramLeadMetadataDiagnostics,
+    private readonly mediaPilot: TelegramLeadMediaPilotService,
+    private readonly executor: TelegramLeadAnalysisExecutor,
   ) {}
   @Get('config') config(@CurrentUser() user: JwtUser) {
     return this.policy.configuration(user.sub);
@@ -108,12 +125,119 @@ export class TelegramLeadDiscoveryController {
   ) {
     return this.transport.validate(user.sub, id);
   }
+  @Post('sources/refresh-stream') async refreshStream(
+    @CurrentUser() user: JwtUser,
+    @Res() response: Response,
+  ) {
+    await this.policy.access(user.sub, 'manage');
+    return this.streamResponse.stream(response, {
+      eventPrefix: 'lead_discovery.refresh',
+      persistLifecycleLogs: false,
+      action: (progress, signal) => this.refreshService.run(user.sub, progress, signal),
+    });
+  }
+  @Post('sources/:id/refresh-stream') async refreshSourceStream(
+    @CurrentUser() user: JwtUser,
+    @Param('id') id: string,
+    @Res() response: Response,
+  ) {
+    await this.policy.source(user.sub, id, 'manage');
+    return this.streamResponse.stream(response, {
+      eventPrefix: 'lead_discovery.refresh_source',
+      persistLifecycleLogs: false,
+      action: (progress, signal) => this.refreshService.run(user.sub, progress, signal, id),
+    });
+  }
   @Post('sources/:id/scan') scan(
     @CurrentUser() user: JwtUser,
     @Param('id') id: string,
     @Body() input: LeadScanDto,
   ) {
     return this.transport.scan(user.sub, id, input);
+  }
+  @Get('sources/:id/autopilot') historyStatus(
+    @CurrentUser() user: JwtUser,
+    @Param('id') id: string,
+  ) {
+    return this.historyJobs.status(user.sub, id);
+  }
+  @Get('sources/:id/metadata-diagnostics') metadataSummary(
+    @CurrentUser() user: JwtUser,
+    @Param('id') id: string,
+    @Query() input: LeadMetadataDiagnosticsDto,
+  ) {
+    return this.metadataDiagnostics.sample(user.sub, id, input.beforeId);
+  }
+  @Get('sources/:id/media-pilot/photo-check/:observationId')
+  checkMediaPilotPhoto(
+    @CurrentUser() user: JwtUser,
+    @Param('id') id: string,
+    @Param('observationId') observationId: string,
+  ) {
+    return this.metadataDiagnostics.checkPhoto(user.sub, id, observationId);
+  }
+  @Post('sources/:id/autopilot/refresh-metadata') refreshMetadata(
+    @CurrentUser() user: JwtUser,
+    @Param('id') id: string,
+    @Body() input: LeadScanDto,
+  ) {
+    return this.metadataDiagnostics.refresh(user.sub, id, input);
+  }
+  @Post('sources/:id/media-pilot') runMediaPilot(
+    @CurrentUser() user: JwtUser,
+    @Param('id') id: string,
+    @Body() input: LeadMediaPilotDto,
+  ) {
+    return this.mediaPilot.run(user.sub, id, input.observationIds);
+  }
+  @Get('sources/:id/media-pilot') mediaPilotResults(
+    @CurrentUser() user: JwtUser,
+    @Param('id') id: string,
+  ) {
+    return this.mediaPilot.results(user.sub, id);
+  }
+  @Post('sources/:id/text-first/resolve') async resolveSelectedText(
+    @CurrentUser() user: JwtUser,
+    @Param('id') id: string,
+    @Body() input: LeadMediaPilotDto,
+  ) {
+    const source = await this.policy.source(user.sub, id, 'analyze');
+    this.policy.assertProcessing(source, 'ingest', true);
+    this.policy.assertProcessing(source, 'ai', true);
+    if (source.monitoringActorUserId !== user.sub)
+      throw new ForbiddenException('LEAD_AUTOMATION_ACTOR_MISMATCH');
+    return this.executor.runSelected(
+      {
+        workspaceId: source.workspaceId,
+        sourceId: source.id,
+        userId: user.sub,
+      },
+      input.observationIds,
+    );
+  }
+  @Get('sources/:id/autopilot/progress') pipelineProgress(
+    @CurrentUser() user: JwtUser,
+    @Param('id') id: string,
+  ) {
+    return this.historyJobs.progress(user.sub, id);
+  }
+  @Post('sources/:id/autopilot/start') startHistory(
+    @CurrentUser() user: JwtUser,
+    @Param('id') id: string,
+  ) {
+    return this.historyJobs.start(user.sub, id);
+  }
+  @Post('sources/:id/autopilot/pause') pauseHistory(
+    @CurrentUser() user: JwtUser,
+    @Param('id') id: string,
+  ) {
+    return this.historyJobs.pause(user.sub, id);
+  }
+  @Post('sources/:id/autopilot/resume') resumeHistory(
+    @CurrentUser() user: JwtUser,
+    @Param('id') id: string,
+  ) {
+    return this.historyJobs.resume(user.sub, id);
   }
   @Post('sources/:id/recover') recover(
     @CurrentUser() user: JwtUser,

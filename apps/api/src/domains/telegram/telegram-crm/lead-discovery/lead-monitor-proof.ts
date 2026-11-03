@@ -8,6 +8,7 @@ export type WatchedLeadSource = {
   channelId: string | null;
   monitoringActorUserId: string;
   processingReference: string;
+  bindingRevision: number;
   gapMarkedAt?: Date;
 };
 /** Bounded ephemeral uncertainty markers; manual/automatic recovery share one proof boundary. */
@@ -105,6 +106,7 @@ export async function persistLeadGaps(
                 channelId: source.channelId,
                 processingReference: source.processingReference,
                 monitoringActorUserId: source.monitoringActorUserId,
+                bindingRevision: source.bindingRevision,
                 OR: [
                   { coverageTo: null },
                   { coverageTo: { lte: source.gapMarkedAt } },
@@ -147,6 +149,7 @@ export async function pauseIneligibleLeadSources(
             channelId: source.channelId,
             processingReference: source.processingReference,
             monitoringActorUserId: source.monitoringActorUserId,
+            bindingRevision: source.bindingRevision,
           })),
         },
         data: {

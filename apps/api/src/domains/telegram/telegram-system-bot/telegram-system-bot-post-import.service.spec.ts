@@ -87,6 +87,7 @@ function setup() {
     completeCapture: jest.fn(),
     expire: jest.fn(),
     websitePostImportMetadata: jest.fn(),
+    latestCompletedWebsitePostImport: jest.fn(),
     throwActiveImportConflict: jest.fn(() => {
       throw new Error('active import');
     }),
@@ -301,6 +302,46 @@ describe('TelegramSystemBotPostImportService', () => {
         }),
       ],
     });
+  });
+
+  it('recovers a recent completed single import for the same context', async () => {
+    const test = setup();
+    test.workflows.latestCompletedWebsitePostImport.mockResolvedValue({
+      id: 'workflow-1',
+    });
+    test.workflows.websitePostImportMetadata.mockResolvedValue({
+      id: 'workflow-1',
+      postImportMode: 'SINGLE',
+      status: TelegramSystemBotWorkflowStatus.COMPLETED,
+      version: 5,
+      expiresAt: new Date(),
+    });
+    test.workflows.get.mockResolvedValue(
+      workflow({
+        status: TelegramSystemBotWorkflowStatus.COMPLETED,
+        payload: { mode: 'single', context: 'Ad sale · Channel', contents: [captured] },
+      }),
+    );
+
+    await expect(
+      test.service.recoverRecent(scope, ' Ad sale · Channel '),
+    ).resolves.toMatchObject({
+      ready: true,
+      mode: 'single',
+      drafts: [expect.objectContaining({ text: captured.text })],
+    });
+    expect(test.workflows.latestCompletedWebsitePostImport).toHaveBeenCalledWith(
+      scope,
+      'Ad sale · Channel',
+      expect.any(Date),
+    );
+  });
+
+  it('does not query when the recovery context is blank', async () => {
+    const test = setup();
+
+    await expect(test.service.recoverRecent(scope, '  ')).resolves.toBeNull();
+    expect(test.workflows.latestCompletedWebsitePostImport).not.toHaveBeenCalled();
   });
 
   it('captures and completes a single non-album post automatically', async () => {

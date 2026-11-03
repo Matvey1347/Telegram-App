@@ -3,12 +3,45 @@
 import { useEffect, useRef } from "react";
 import { telegramSystemBotApi } from "@/lib/api";
 
+let lastSyncedWorkspaceId = "";
+let requestedWorkspaceId = "";
+let workspaceSyncPromise: Promise<void> | null = null;
+
+function syncWorkspaceSelection(workspaceId: string) {
+  requestedWorkspaceId = workspaceId;
+  if (lastSyncedWorkspaceId === workspaceId)
+    return workspaceSyncPromise ?? Promise.resolve();
+  if (workspaceSyncPromise) return workspaceSyncPromise;
+
+  let shouldProcessLatestRequest = true;
+  workspaceSyncPromise = (async () => {
+    while (requestedWorkspaceId !== lastSyncedWorkspaceId) {
+      const targetWorkspaceId = requestedWorkspaceId;
+      try {
+        await telegramSystemBotApi.selectCurrentWorkspace();
+        lastSyncedWorkspaceId = targetWorkspaceId;
+      } catch {
+        // An unconnected bot is expected; retry on a later mount or workspace change.
+        shouldProcessLatestRequest = requestedWorkspaceId !== targetWorkspaceId;
+        break;
+      }
+    }
+  })().finally(() => {
+    workspaceSyncPromise = null;
+    if (
+      shouldProcessLatestRequest &&
+      requestedWorkspaceId !== lastSyncedWorkspaceId
+    )
+      void syncWorkspaceSelection(requestedWorkspaceId);
+  });
+  return workspaceSyncPromise;
+}
+
 /** Keeps the connected System Bot aligned with the website-owned selection. */
 export function useSystemBotWorkspaceSync(
   workspaceId: string,
   selectWebsiteWorkspace: (workspaceId: string) => void,
 ) {
-  const lastSyncedWorkspaceId = useRef("");
   const websiteSyncInFlight = useRef<Promise<void> | null>(null);
   const botReconcileInFlight = useRef<Promise<void> | null>(null);
   const botReconcileQueued = useRef(false);
@@ -21,19 +54,11 @@ export function useSystemBotWorkspaceSync(
   }, [selectWebsiteWorkspace, workspaceId]);
 
   useEffect(() => {
-    if (!workspaceId || lastSyncedWorkspaceId.current === workspaceId) return;
-    lastSyncedWorkspaceId.current = workspaceId;
-    const request = telegramSystemBotApi
-      .selectCurrentWorkspace()
-      .then(() => undefined)
-      .catch(() => {
-        // An unconnected bot is expected; retry after a workspace change/remount.
-        lastSyncedWorkspaceId.current = "";
-      })
-      .finally(() => {
-        if (websiteSyncInFlight.current === request)
-          websiteSyncInFlight.current = null;
-      });
+    if (!workspaceId) return;
+    const request = syncWorkspaceSelection(workspaceId).finally(() => {
+      if (websiteSyncInFlight.current === request)
+        websiteSyncInFlight.current = null;
+    });
     websiteSyncInFlight.current = request;
   }, [workspaceId]);
 

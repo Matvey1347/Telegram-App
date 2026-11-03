@@ -9,6 +9,7 @@ build
 .codex/tmp/
 coverage
 .finance-backups/
+/research/telegram-ad-filter/
 .vscode
 .idea
 

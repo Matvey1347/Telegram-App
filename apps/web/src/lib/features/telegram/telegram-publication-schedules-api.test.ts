@@ -81,7 +81,12 @@ describe("telegram publication schedules api", () => {
       get: vi
         .fn()
         .mockResolvedValue({
-          data: { channelIds: [], occurrencesByChannel: {}, events: [] },
+          data: {
+            scheduleId: "schedule-1",
+            channelIds: [],
+            occurrencesByChannel: {},
+            events: [],
+          },
         }),
     };
     const client = createTelegramPublicationSchedulesApi(http as never);
@@ -97,6 +102,31 @@ describe("telegram publication schedules api", () => {
       {
         params: { ...range, scheduleId: "schedule-1" },
       },
+    );
+  });
+
+  it("omits the schedule id to let the API resolve the default calendar", async () => {
+    const http = {
+      get: vi.fn().mockResolvedValue({
+        data: {
+          scheduleId: "schedule-1",
+          channelIds: [],
+          occurrencesByChannel: {},
+          events: [],
+        },
+      }),
+    };
+    const client = createTelegramPublicationSchedulesApi(http as never);
+    const range = {
+      from: "2026-10-24T00:00:00.000Z",
+      to: "2026-11-05T00:00:00.000Z",
+    };
+
+    await client.calendar(undefined, range);
+
+    expect(http.get).toHaveBeenCalledWith(
+      "/telegram-publication-schedules/calendar",
+      { params: range },
     );
   });
 });

@@ -4,6 +4,7 @@ import type {
   OperationsNotificationItem,
   OperationsNotificationUnreadCount,
 } from "@telegram-system/shared";
+import dynamic from "next/dynamic";
 import {
   useInfiniteQuery,
   useMutation,
@@ -26,11 +27,20 @@ import {
   type NotificationCacheSnapshot,
 } from "@/lib/features/operations/operations-notifications-query";
 import { operationsNotificationKeys } from "@/lib/query-keys";
-import { NotificationPanel } from "./notification-panel";
-import { NotificationPushSettings } from "./notification-push-settings";
 import { useNotificationRealtime } from "./use-notification-realtime";
 
 const PAGE_SIZE = 25;
+const NotificationPanel = dynamic(
+  () => import("./notification-panel").then((module) => module.NotificationPanel),
+  { loading: () => null },
+);
+const NotificationPushSettings = dynamic(
+  () =>
+    import("./notification-push-settings").then(
+      (module) => module.NotificationPushSettings,
+    ),
+  { loading: () => null },
+);
 
 export function NotificationCenter({
   workspaceId,
@@ -63,9 +73,9 @@ export function NotificationCenter({
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage) => lastPage.nextCursor,
     enabled: enabled && Boolean(workspaceId) && open,
-    // The unread badge can be updated by the realtime stream while a previous
-    // empty panel response is still fresh. Opening must always load its rows.
-    refetchOnMount: "always",
+    // Reuse the panel rows briefly on close/reopen. Realtime events and stream
+    // reconnects invalidate this key when the list may have changed.
+    staleTime: 30_000,
   });
 
   const reconcileUnread = (result: OperationsNotificationUnreadCount) => {
@@ -174,7 +184,7 @@ export function NotificationCenter({
           </span>
         ) : null}
       </button>
-      <NotificationPanel
+      {open ? <NotificationPanel
         open={open}
         onClose={close}
         unread={unread}
@@ -219,7 +229,7 @@ export function NotificationCenter({
         actionError={
           mutationError ? "Notification read status could not be saved." : null
         }
-      />
+      /> : null}
     </div>
   );
 }

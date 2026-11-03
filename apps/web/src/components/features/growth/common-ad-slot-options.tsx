@@ -106,7 +106,7 @@ export function CommonAdSlotOptions({
       occurrencesByChannel === undefined && !loading &&
       ids.length > 0 &&
       /^\d{4}-\d{2}-\d{2}$/.test(date),
-    staleTime: 30_000,
+    staleTime: 60_000,
   });
   const options = useMemo(
     () => commonAdSlotOptions(ids, date, occurrencesByChannel ?? query.data ?? {}),

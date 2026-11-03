@@ -50,6 +50,8 @@ describe("RolesWorkspace assignments", () => {
     const user = userEvent.setup();
     renderWorkspace();
 
+    expect(workspaceMembersApi.select).not.toHaveBeenCalled();
+
     await user.click(
       await screen.findByRole("button", {
         name: "Actions for Content manager",
@@ -61,9 +63,37 @@ describe("RolesWorkspace assignments", () => {
       "src",
       "https://example.com/alice.jpg",
     );
+    expect(workspaceMembersApi.select).toHaveBeenCalledTimes(1);
   });
 
-  it("uses navigation and permission icons without generated access prose", async () => {
+  it("shows a retry action when the assignment member list fails", async () => {
+    const user = userEvent.setup();
+    vi.mocked(workspaceMembersApi.select)
+      .mockRejectedValueOnce(new Error("temporary failure"))
+      .mockResolvedValueOnce([
+        {
+          id: "member-1",
+          user: { name: "Alice", email: "alice@example.com" },
+          avatarPresentation: { type: "image", url: "https://example.com/alice.jpg" },
+        },
+      ] as never);
+    renderWorkspace();
+
+    await user.click(
+      await screen.findByRole("button", {
+        name: "Actions for Content manager",
+      }),
+    );
+    await user.click(screen.getByRole("menuitem", { name: "Assign members" }));
+    await user.click(
+      await screen.findByRole("button", { name: "Retry" }),
+    );
+
+    expect(await screen.findByRole("img", { name: "Alice" })).toBeInTheDocument();
+    expect(workspaceMembersApi.select).toHaveBeenCalledTimes(2);
+  });
+
+  it("uses permission icons without generated access prose", async () => {
     const user = userEvent.setup();
     vi.mocked(workspaceRolesApi.list).mockResolvedValue([
       {
@@ -108,7 +138,7 @@ describe("RolesWorkspace assignments", () => {
         },
       ],
     } as never);
-    const { container } = renderWorkspace();
+    renderWorkspace();
 
     const capabilities = await screen.findByLabelText("Role capabilities");
     expect(within(capabilities).getByText("Full access")).toBeInTheDocument();
@@ -124,7 +154,6 @@ describe("RolesWorkspace assignments", () => {
       screen.getByRole("button", { name: "Actions for Content manager" }),
     );
     await user.click(screen.getByRole("menuitem", { name: "Edit role" }));
-    expect(container.querySelector(".lucide-send")).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "No access" }).querySelector("svg"),
     ).toHaveClass("lucide-eye-off");

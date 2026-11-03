@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type ComponentProps } from "react";
+import { useRef, type ComponentProps } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   accountsApi,
@@ -10,7 +10,10 @@ import {
   telegramSystemBotApi,
 } from "@/lib/api";
 import { accountKeys, authKeys, networkKeys, telegramSystemBotKeys } from "@/lib/query-keys";
-import { telegramAdSalesKeys } from "@/lib/features/growth/telegram-ad-sales-query";
+import {
+  invalidateTelegramAdSalesDerivedQueries,
+  telegramAdSalesKeys,
+} from "@/lib/features/growth/telegram-ad-sales-query";
 import { telegramCrmKeys } from "@/lib/features/growth/telegram-crm-query";
 import { useAppToast } from "@/providers/toast-provider";
 import { AdSalesCheckoutDialogs } from "../ad-sales-checkout-dialogs";
@@ -40,7 +43,7 @@ export function CrmAdSaleLauncher({
     queryKey: networkKeys.list(),
     queryFn: telegramChannelNetworksApi.list,
     enabled: open,
-    staleTime: 60_000,
+    staleTime: 24 * 60 * 60_000,
   });
   const meQuery = useQuery({
     queryKey: authKeys.me(),
@@ -107,13 +110,21 @@ export function CrmAdSaleLauncher({
           },
           (item, current, total) => operation.update({ message: item.message, current, total }),
         );
-        if (result.failures.length) throw new Error(result.failures[0]?.message);
+        if (result.failures.length) {
+          await invalidateTelegramAdSalesDerivedQueries(queryClient, {
+            publicationCalendar: true,
+          });
+          throw new Error(result.failures[0]?.message);
+        }
         idempotencyKey.current = null;
         operation.succeed({ message: "Ad sale created." });
         await Promise.all([
           queryClient.invalidateQueries({ queryKey: telegramCrmKeys.contactLists() }),
           queryClient.invalidateQueries({ queryKey: telegramCrmKeys.analytics() }),
           queryClient.invalidateQueries({ queryKey: telegramAdSalesKeys.listRoot() }),
+          invalidateTelegramAdSalesDerivedQueries(queryClient, {
+            publicationCalendar: true,
+          }),
         ]);
         return result;
       } catch (error) {

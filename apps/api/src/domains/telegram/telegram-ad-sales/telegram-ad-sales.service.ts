@@ -781,6 +781,9 @@ export class TelegramAdSalesService {
 
   private includeSaleRelations() {
     return {
+      advertiser: {
+        include: telegramAdvertiserCompatibilityInclude,
+      },
       sellerMember: {
         select: {
           id: true,
@@ -796,9 +799,6 @@ export class TelegramAdSalesService {
           },
           user: { select: { name: true, email: true } },
         },
-      },
-      advertiser: {
-        include: telegramAdvertiserCompatibilityInclude,
       },
       placements: {
         orderBy: { scheduledAt: 'asc' as const },
@@ -3573,6 +3573,12 @@ export class TelegramAdSalesService {
         userId,
         dto.assignedMemberId,
       );
+    const advertiser = await this.resolveAdvertiserForSale(
+      workspaceId,
+      userId,
+      dto,
+      assignedMemberId,
+    );
     const sellerMemberId =
       dto.sellerMemberId === undefined
         ? assignedMemberId
@@ -3582,12 +3588,6 @@ export class TelegramAdSalesService {
               dto.sellerMemberId,
             )
           ).assignedMemberId;
-    const advertiser = await this.resolveAdvertiserForSale(
-      workspaceId,
-      userId,
-      dto,
-      assignedMemberId,
-    );
     const commissionSnapshot = await resolveAdSaleCommissionSnapshot(
       this.prisma,
       workspaceId,
@@ -3732,7 +3732,7 @@ export class TelegramAdSalesService {
                 : null,
             }),
         ...(assignedMemberId === undefined ? {} : { assignedMemberId }),
-        ...(sellerMemberId === undefined ? {} : { ...commissionSnapshot }),
+        ...(commissionSnapshot ?? {}),
         ...(dto.status === undefined ? {} : { status: dto.status }),
         ...(dto.crmDealStage === undefined
           ? {}
@@ -4044,29 +4044,6 @@ export class TelegramAdSalesService {
       dto.telegramAdProductId === undefined
         ? placement.isPermanentSnapshot
         : (product?.isPermanent ?? false);
-    const underMinimumPricingChanged =
-      !agreedPrice.eq(placement.agreedPrice) ||
-      !minimumPrice.eq(placement.minimumPrice);
-    if (
-      agreedPrice.lt(minimumPrice) &&
-      underMinimumPricingChanged &&
-      !(dto.manualPriceReason ?? placement.manualPriceReason)
-    ) {
-      this.logger.info({
-        level: 'warn',
-        event: 'telegram_ad_sales.price_below_minimum',
-        message: `Placement ${placementId} price below minimum`,
-        metadata: {
-          placementId,
-          saleId,
-        },
-      });
-      throw new BadRequestException({
-        code: 'UNDER_MINIMUM_PRICE',
-        message:
-          'manualPriceReason is required when agreedPrice is below minimumPrice',
-      });
-    }
     const managedPostScheduleIsOutOfSync =
       placement.managedPost?.status === TelegramManagedPostStatus.SCHEDULED &&
       placement.managedPost.scheduledAt?.getTime() !==

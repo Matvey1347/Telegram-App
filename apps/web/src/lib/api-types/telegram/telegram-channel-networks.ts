@@ -6,6 +6,8 @@ import type {
   TelegramChannelTrafficAttributionPreview,
 } from "@telegram-system/shared";
 
+export type { TelegramChannelNetworkOption } from "@telegram-system/shared";
+
 export type TelegramChannelNetworkKpiStatus =
   | "good"
   | "acceptable"

@@ -1,5 +1,6 @@
 "use client";
 import { useLeadText } from "./lead-copy";
+import { useOptionalI18n } from "@/providers/i18n-provider";
 import { Button } from "@/components/ui/primitives";
 export function LeadQueryState({
   loading,
@@ -13,6 +14,7 @@ export function LeadQueryState({
   onRetry: () => void;
 }) {
   const t = useLeadText();
+  const ru = useOptionalI18n()?.locale === "ru";
   if (loading)
     return (
       <div
@@ -29,7 +31,7 @@ export function LeadQueryState({
         role="alert"
         className="rounded-lg border border-rose-900 p-4 text-sm"
       >
-        Lead Discovery could not be loaded. Check access and retry.{" "}
+        {ru ? "Не удалось загрузить данные. Проверьте доступ и повторите попытку." : "Lead Discovery could not be loaded. Check access and retry."}{" "}
         <Button
           className="max-w-full !whitespace-normal"
           variant="secondary"

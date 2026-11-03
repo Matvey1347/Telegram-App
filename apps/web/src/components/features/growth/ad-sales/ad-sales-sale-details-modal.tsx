@@ -67,6 +67,8 @@ type SaveDraft = {
     manualPriceReason: string | null;
     telegramAdProductId: string | null;
     managedPostId: string | null;
+    managedPostDraft?: PlacementManagedPostDraft;
+    postAttachment?: { telegramPostUrl?: string; telegramPostId?: string };
   }>;
   payments: Array<{
     id: string;
@@ -98,11 +100,6 @@ export function SaleDetailsModal(props: {
     action: SaleActionKey,
     placement?: TelegramAdSale["placements"][number],
   ) => Promise<void>;
-  onAttachPost?: (
-    sale: TelegramAdSale,
-    placement: TelegramAdSale["placements"][number],
-    post: { telegramPostUrl?: string; telegramPostId?: string },
-  ) => Promise<void>;
   onLoadPlacementPosts?: (
     placement: TelegramAdSale["placements"][number],
   ) => Promise<PlacementPostOption[]>;
@@ -120,6 +117,9 @@ export function SaleDetailsModal(props: {
     sale: TelegramAdSale,
     payload: RegisterPaymentPayload,
   ) => Promise<void>;
+  systemBotConnected?: boolean;
+  systemBotUsername?: string | null;
+  systemBotWorkspaceId?: string | null;
 }) {
   const [placements, setPlacements] = useState<PlacementDraft[]>([]);
   const [payments, setPayments] = useState<PaymentDraft[]>([]);
@@ -127,7 +127,7 @@ export function SaleDetailsModal(props: {
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [syncPayment, setSyncPayment] = useState(true);
   const [origin, setOrigin] = useState<TelegramAdSale["origin"]>("DIRECT");
-  const [memberId, setMemberId] = useState("");
+  const [sellerMemberId, setSellerMemberId] = useState("");
   const [buyerContact, setBuyerContact] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -141,7 +141,9 @@ export function SaleDetailsModal(props: {
   useEffect(() => {
     if (!props.sale || !props.open) return;
     setOrigin(props.sale.origin);
-    setMemberId(props.sale.sellerMemberId ?? props.sale.assignedMemberId ?? "");
+    setSellerMemberId(
+      props.sale.sellerMemberId ?? props.sale.assignedMemberId ?? "",
+    );
     setBuyerContact(
       props.sale.advertiserTelegramSnapshot ??
         props.sale.advertiserTelegram ??
@@ -255,6 +257,8 @@ export function SaleDetailsModal(props: {
   const save = async (
     placementId?: string,
     replacements?: PlacementDraft[],
+    managedPostDraft?: PlacementManagedPostDraft,
+    postAttachment?: { telegramPostUrl?: string; telegramPostId?: string },
   ) => {
     const sourcePlacements = replacements ?? placements;
     const placementsToSave = placementId
@@ -270,7 +274,7 @@ export function SaleDetailsModal(props: {
     try {
       await props.onSave(sale, {
         origin,
-        sellerMemberId: memberId || null,
+        sellerMemberId: sellerMemberId || null,
         buyerContact: buyerContact.trim(),
         placements: placementsToSave.map((p) => ({
           id: p.id,
@@ -287,6 +291,10 @@ export function SaleDetailsModal(props: {
           manualPriceReason: p.manualPriceReason.trim() || null,
           telegramAdProductId: p.telegramAdProductId || null,
           managedPostId: p.managedPostId || null,
+          ...(managedPostDraft && p.id === placementId
+            ? { managedPostDraft }
+            : {}),
+          ...(postAttachment && p.id === placementId ? { postAttachment } : {}),
         })),
         payments: paymentsToSave.map((p, index) => {
           const amount =
@@ -364,6 +372,7 @@ export function SaleDetailsModal(props: {
         />
       ) : placement && draft ? (
         <PlacementEditor
+          key={placement.id}
           sale={sale}
           placement={placement}
           draft={draft}
@@ -384,30 +393,30 @@ export function SaleDetailsModal(props: {
           syncPayment={syncPayment}
           onSync={setSyncPayment}
           onChange={changePlacement}
-          onAttachPost={(post) =>
-            props.onAttachPost
-              ? props.onAttachPost(sale, placement, post)
-              : Promise.reject(new Error("Post attachment is unavailable."))
-          }
           onLoadPosts={() =>
             props.onLoadPlacementPosts?.(placement) ?? Promise.resolve([])
           }
-          onSave={() => save(placement.id)}
+          onSave={(managedPostDraft, postAttachment) =>
+            save(placement.id, undefined, managedPostDraft, postAttachment)
+          }
           saving={saving}
           error={error}
+          workspaceId={props.systemBotWorkspaceId}
+          systemBotUsername={props.systemBotUsername}
+          systemBotConnected={props.systemBotConnected}
         />
       ) : (
         <DealOverview
           sale={sale}
           origin={origin}
-          memberId={memberId}
+          sellerMemberId={sellerMemberId}
           buyerContact={buyerContact}
           channels={channels}
           payments={payments}
           accounts={props.accounts}
           paymentOpen={paymentOpen}
           onOrigin={setOrigin}
-          onMember={setMemberId}
+          onSellerMember={setSellerMemberId}
           onBuyerContact={setBuyerContact}
           onPlacement={setSelectedId}
           onSharedPost={
@@ -536,14 +545,14 @@ function DealDetailsSkeleton() {
 function DealOverview(props: {
   sale: TelegramAdSale;
   origin: TelegramAdSale["origin"];
-  memberId: string;
+  sellerMemberId: string;
   buyerContact: string;
   channels: Map<string, TelegramChannel>;
   payments: PaymentDraft[];
   accounts: Account[];
   paymentOpen: boolean;
   onOrigin: (v: TelegramAdSale["origin"]) => void;
-  onMember: (v: string) => void;
+  onSellerMember: (v: string) => void;
   onBuyerContact: (v: string) => void;
   onPlacement: (v: string) => void;
   productsByChannelId: Record<string, TelegramAdProduct[]>;
@@ -592,7 +601,10 @@ function DealOverview(props: {
           />
         </FormField>
         <FormField label="Sold by">
-          <MemberSelect value={props.memberId} onChange={props.onMember} />
+          <MemberSelect
+            value={props.sellerMemberId}
+            onChange={props.onSellerMember}
+          />
         </FormField>
         <SaleStatusActions sale={props.sale} onAction={props.onAction} />
       </section>

@@ -1,12 +1,32 @@
 "use client";
 import { useState } from "react";
+import dynamic from "next/dynamic";
 import { BarChart3, CreditCard, UsersRound, Waypoints } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Button, PageHeader } from "@/components/ui/primitives";
-import { FinanceIntegrationsSection } from "./finance-integrations-section";
-import { FinanceMonetizationSection } from "./finance-monetization-section";
 import { FinanceOverviewSection } from "./finance-overview-section";
-import { FinanceSubscribersSection } from "./finance-subscribers-section";
+
+const FinanceIntegrationsSection = dynamic(
+  () =>
+    import("./finance-integrations-section").then(
+      (module) => module.FinanceIntegrationsSection,
+    ),
+  { loading: () => null },
+);
+const FinanceMonetizationSection = dynamic(
+  () =>
+    import("./finance-monetization-section").then(
+      (module) => module.FinanceMonetizationSection,
+    ),
+  { loading: () => null },
+);
+const FinanceSubscribersSection = dynamic(
+  () =>
+    import("./finance-subscribers-section").then(
+      (module) => module.FinanceSubscribersSection,
+    ),
+  { loading: () => null },
+);
 type FinanceAdminSection =
   | "overview"
   | "monetization"

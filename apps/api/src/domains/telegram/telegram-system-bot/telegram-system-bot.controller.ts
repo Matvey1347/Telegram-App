@@ -115,6 +115,26 @@ export class TelegramSystemBotController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @Get('post-imports/recover')
+  @Header('Cache-Control', 'no-store, no-cache, must-revalidate')
+  async recoverRecentPostImport(
+    @CurrentUser() user: JwtUser,
+    @Query('context') context: string,
+  ) {
+    const workspaceId = await this.workspace.resolveWorkspaceIdForUser(
+      user.sub,
+    );
+    const connection = await this.connections.workflowScopeForUser(
+      user.sub,
+      workspaceId,
+    );
+    return this.postImports.recoverRecent(
+      { ...connection, timezone: 'UTC' },
+      context ?? '',
+    );
+  }
+
+  @UseGuards(JwtAuthGuard)
   @Get('post-imports/:workflowId')
   @Header('Cache-Control', 'no-store, no-cache, must-revalidate')
   async postImportResult(

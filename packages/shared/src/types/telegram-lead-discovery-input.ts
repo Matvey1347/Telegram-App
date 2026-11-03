@@ -9,7 +9,7 @@ export type LeadSourceImportPreview = {
   validCount: number;
 };
 export type LeadMaterialInput = { externalMessageId: string; text: string; publishedAt: string; messageUrl?: string; deleted?: boolean };
-export type LeadIngestResult = { received: number; changed: number; unchanged: number; filtered: number; gap: boolean; blockedSourceIds?: string[] };
+export type LeadIngestResult = { received: number; changed: number; unchanged: number; filtered: number; gap: boolean; historyFenceLost?: boolean; blockedSourceIds?: string[] };
 export type LeadCandidateReviewInput = {
   revision: number; action: 'APPROVE' | 'REJECT' | 'LINK' | 'CREATE_CLIENT' | 'MERGE';
   contactId?: string; mergeIntoId?: string; displayName?: string;

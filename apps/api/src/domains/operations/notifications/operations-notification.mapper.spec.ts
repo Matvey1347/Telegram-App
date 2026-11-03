@@ -36,6 +36,7 @@ describe('mapOperationsNotification', () => {
       publishedAt: timestamp,
       expiresAt: new Date('2026-12-06T10:00:00.000Z'),
       pushAttemptedAt: null,
+      channelReminderTelegramSentAt: null,
       createdAt: timestamp,
     });
 
@@ -79,6 +80,7 @@ describe('mapOperationsNotification', () => {
       publishedAt: timestamp,
       expiresAt: new Date('2026-12-06T10:00:00.000Z'),
       pushAttemptedAt: null,
+      channelReminderTelegramSentAt: null,
       createdAt: timestamp,
     });
 

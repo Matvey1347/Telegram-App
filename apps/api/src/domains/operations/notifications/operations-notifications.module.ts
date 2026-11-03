@@ -1,3 +1,6 @@
+import { ChannelReminderDeliveryService } from './channel-reminder-delivery.service';
+import { TelegramBotApiClient } from '@api/telegram/shared/bot/telegram-bot-api.client';
+import { TelegramSystemBotConfigService } from '../../telegram/telegram-system-bot/telegram-system-bot-config.service';
 import { Module } from '@nestjs/common';
 import { OperationsNotificationDueService } from './operations-notification-due.service';
 import { OperationsNotificationEventHub } from './operations-notification-event-hub.service';
@@ -16,6 +19,9 @@ import { OperationsNotificationTestService } from './operations-notification-tes
 @Module({
   controllers: [OperationsNotificationsController],
   providers: [
+    ChannelReminderDeliveryService,
+    TelegramBotApiClient,
+    TelegramSystemBotConfigService,
     OperationsNotificationDueService,
     OperationsNotificationDeliveryPolicyService,
     OperationsNotificationPreferencesService,
@@ -30,6 +36,7 @@ import { OperationsNotificationTestService } from './operations-notification-tes
     OperationsWebPushService,
   ],
   exports: [
+    ChannelReminderDeliveryService,
     OperationsNotificationDeliveryPolicyService,
     OperationsWebPushService,
     OperationsNotificationDueService,

@@ -2,13 +2,14 @@
 
 import { useCallback, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarClock, Pencil, Plus, Trash2 } from "lucide-react";
+import { CalendarClock, Plus, Trash2 } from "lucide-react";
 import type {
   ResolvedEmoji,
   TelegramPublicationSchedule,
   TelegramPublicationScheduleInput,
 } from "@telegram-system/shared";
 import { IconAvatar } from "@/components/icons/icon-avatar";
+import { TemplateCardActions } from "./template-card-actions";
 import { ModalDraftPicker } from "@/components/ui/modal-draft-picker";
 import {
   Button,
@@ -27,6 +28,7 @@ import { useAppToast } from "@/providers/toast-provider";
 import {
   PublicationScheduleEditor,
   PUBLICATION_SLOT_KINDS,
+  sortPublicationSlots,
 } from "./publication-schedule-editor";
 
 const blankDraft = (): TelegramPublicationScheduleInput => ({
@@ -56,7 +58,7 @@ export function PublicationSchedulesModal({
   });
   const restoreDraft = useCallback(
     (value: TelegramPublicationScheduleInput) => {
-      setDraft(value);
+      setDraft({ ...value, slots: sortPublicationSlots(value.slots) });
       setDraftIcon(null);
     },
     [],
@@ -98,14 +100,15 @@ export function PublicationSchedulesModal({
       name: schedule.name,
       iconId: schedule.iconId,
       isDefault: schedule.isDefault,
-      slots: schedule.slots.map(
-        ({ id, title, kind, time, position, isActive }) => ({
+      slots: sortPublicationSlots(schedule.slots).map(
+        ({ id, title, kind, time, position, isActive, isOptional }) => ({
           id,
           title,
           kind,
           time,
           position,
           isActive,
+          isOptional,
         }),
       ),
     });
@@ -115,8 +118,9 @@ export function PublicationSchedulesModal({
     mutationFn: () => {
       const payload = {
         ...draft,
-        slots: draft.slots.map((slot) => ({
+        slots: sortPublicationSlots(draft.slots).map((slot, position) => ({
           ...slot,
+          position,
           time: canonicalizeTimeInputValue(slot.time) ?? slot.time,
         })),
       };
@@ -132,6 +136,7 @@ export function PublicationSchedulesModal({
             ? current.map((item) => (item.id === saved.id ? saved : item))
             : [...current, saved],
       );
+      void queryClient.invalidateQueries({ queryKey: telegramPublicationScheduleKeys.all(), refetchType: "none" });
       if (!editingId) modalDrafts.clearCurrentDraft();
       pushToast(editingId ? "Schedule updated" : "Schedule created", "success");
       closeEditor();
@@ -173,21 +178,10 @@ export function PublicationSchedulesModal({
         title="Publication schedules"
         titleIcon={<CalendarClock size={19} aria-hidden="true" />}
         size="xl"
+        leadingHeaderAction={editorOpen ? (
+          <Button type="button" variant="secondary" className="h-9 w-9 p-0" aria-label="Back to schedules" title="Back to schedules" onClick={closeEditor}>←</Button>
+        ) : undefined}
       >
-        {editorOpen ? (
-          <Button
-            type="button"
-            variant="secondary"
-            className="mb-4 h-9 w-9 p-0"
-            aria-label="Back to schedules"
-            title="Back to schedules"
-            onClick={closeEditor}
-          >
-            <span aria-hidden className="text-xl leading-none">
-              ←
-            </span>
-          </Button>
-        ) : null}
         {editorOpen && !editingId && modalDrafts.pendingDrafts.length ? (
           <ModalDraftPicker
             drafts={modalDrafts.pendingDrafts}
@@ -333,25 +327,13 @@ function ScheduleOverview({
                   {schedule.assignedChannelsCount} channels
                 </p>
               </div>
-              <div className="flex shrink-0 gap-2">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  aria-label={`Edit ${schedule.name}`}
-                  onClick={() => onEdit(schedule)}
-                >
-                  <Pencil size={15} />
-                </Button>
-                <Button
-                  type="button"
-                  variant="danger"
-                  aria-label={`Delete ${schedule.name}`}
-                  disabled={deletingId === schedule.id}
-                  onClick={() => onDelete(schedule)}
-                >
-                  <Trash2 size={15} />
-                </Button>
-              </div>
+              <TemplateCardActions
+                editLabel={`Edit ${schedule.name}`}
+                deleteLabel={`Delete ${schedule.name}`}
+                onEdit={() => onEdit(schedule)}
+                onDelete={() => onDelete(schedule)}
+                deleteDisabled={deletingId === schedule.id}
+              />
             </div>
             <div className="flex flex-wrap gap-1.5">
               {schedule.slots.map((slot) => (

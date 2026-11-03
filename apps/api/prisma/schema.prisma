@@ -414,6 +414,7 @@ enum OperationsNotificationType {
   TELEGRAM_ACCOUNT_REAUTH_REQUIRED
   CRM_AI_LEAD_QUALIFIED
   SYSTEM_TEST
+  CHANNEL_POSTS_REMINDER
 }
 
 enum OperationsNotificationPriority {
@@ -1017,6 +1018,8 @@ model Workspace {
   transactions                           Transaction[]
   transfers                              Transfer[]
   telegramChannels                       TelegramChannel[]
+  channelReminderTemplates TelegramChannelReminderTemplate[]
+  channelReminderAssignments TelegramChannelReminderAssignment[]
   telegramCustomEmojiPacks               TelegramCustomEmojiPack[]
   telegramBotIntegrations                TelegramBotIntegration[]
   telegramBotRuntimeInstances            TelegramBotRuntimeInstance[]
@@ -1129,6 +1132,7 @@ model Workspace {
   aiOperations AiOperation[]
   crmAiDrafts TelegramCrmAiDraft[]
   leadSources TelegramLeadSource[]
+  leadHistoryJobs TelegramLeadHistoryJob[]
   leadCandidates TelegramLeadCandidate[]
   leadObservations TelegramLeadObservation[]
   aiBudgetPeriods AiBudgetPeriod[]
@@ -1352,6 +1356,7 @@ model OperationsNotification {
   publishedAt           DateTime?
   expiresAt             DateTime
   pushAttemptedAt       DateTime?
+  channelReminderTelegramSentAt DateTime?
   createdAt             DateTime                       @default(now())
 
   workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
@@ -1390,6 +1395,8 @@ model OperationsNotificationPreference {
   crmFollowUpEnabled         Boolean  @default(true)
   crmAiLeadsEnabled          Boolean  @default(false)
   crmMessagePreviewEnabled   Boolean  @default(false)
+  channelRemindersPushEnabled Boolean @default(false)
+  channelRemindersTelegramEnabled Boolean @default(false)
   createdAt                  DateTime @default(now())
   updatedAt                  DateTime @updatedAt
 
@@ -1758,6 +1765,7 @@ model TelegramChannel {
   adAnalyses                    TelegramChannelAdAnalysis[]
   timePosts                     TelegramChannelTimePost[]
   publicationScheduleAssignment TelegramChannelPublicationScheduleAssignment?
+  reminderAssignment TelegramChannelReminderAssignment?
   contentHypotheses             TelegramContentHypothesis[]
   adProducts                    TelegramAdProduct[]
   admissionBatches              AdCampaignAdmissionBatch[]
@@ -1850,6 +1858,35 @@ enum TelegramContentHypothesisStatus {
   ARCHIVED
 }
 
+model TelegramChannelReminderTemplate {
+  id String @id @default(cuid())
+  workspaceId String
+  name String
+  iconId String?
+  icon Icon? @relation("TelegramChannelReminderTemplateIcon", fields: [iconId], references: [id], onDelete: SetNull)
+  daysBefore Int[]
+  notifyEmpty Boolean @default(true)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  assignments TelegramChannelReminderAssignment[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([id, workspaceId])
+  @@index([workspaceId, createdAt])
+}
+
+model TelegramChannelReminderAssignment {
+  id String @id @default(cuid())
+  workspaceId String
+  channelId String @unique
+  templateId String
+  nextDueAt DateTime
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  channel TelegramChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  template TelegramChannelReminderTemplate @relation(fields: [templateId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  @@index([nextDueAt, id])
+  @@index([workspaceId, templateId])
+}
+
 model TelegramPublicationSchedule {
   id                 String                                         @id @default(cuid())
   workspaceId        String
@@ -1877,6 +1914,7 @@ model TelegramPublicationScheduleSlot {
   time         String                                           @db.VarChar(5)
   position     Int                                              @default(0)
   isActive     Boolean                                          @default(true)
+  isOptional   Boolean                                          @default(false)
   iconId       String?
   schedule     TelegramPublicationSchedule                      @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
   icon         Icon?                                            @relation("TelegramPublicationScheduleSlotIcon", fields: [iconId], references: [id], onDelete: SetNull)
@@ -2428,6 +2466,7 @@ model TelegramAdSalePlacement {
   @@unique([workspaceId, attachmentIdempotencyKey], map: "TelegramAdSalePlacement_workspaceId_attachmentIdempotencyKey_ke")
   @@index([workspaceId])
   @@index([telegramChannelId, scheduledAt])
+  @@index([workspaceId, telegramChannelId, scheduledAt], map: "TelegramAdSalePlacement_calendar_idx")
   @@index([telegramAdSaleId])
   @@index([status, scheduledAt])
   @@index([workspaceId, status, scheduledAt])
@@ -3643,6 +3682,7 @@ model CrossPromotionPlan {
   @@index([workspaceId, status, scheduledAt], map: "CrossPromotionPlan_workspace_status_date_idx")
   @@index([status, nextDueAt, id], map: "CrossPromotionPlan_due_idx")
   @@index([workspaceId, advertiserId, scheduledAt], map: "CrossPromotionPlan_workspace_advertiser_date_idx")
+  @@index([publisherChannelIds], type: Gin, map: "CrossPromotionPlan_publisher_channel_ids_gin_idx")
   @@index([targets], type: Gin, map: "CrossPromotionPlan_targets_gin_idx")
 }
 
@@ -4616,6 +4656,7 @@ model FinanceCategory {
 
   @@unique([profileId, type, key])
   @@index([profileId, parentId])
+  @@index([profileId, archivedAt])
 }
 
 model FinanceTransaction {
@@ -4661,6 +4702,7 @@ model FinanceTransaction {
   @@index([profileId, accountId, occurredAt])
   @@index([profileId, categoryId, occurredAt])
   @@index([profileId, merchantNormalized, occurredAt])
+  @@index([profileId, deletedAt])
 }
 
 // Receipt/products are detail of one ledger purchase, never separate ledger rows.
@@ -4724,6 +4766,7 @@ model FinanceTransfer {
   savingsMovements FinanceSavingsMovement[]
 
   @@index([profileId, occurredAt])
+  @@index([profileId, deletedAt])
 }
 
 model FinanceMerchantMapping {
@@ -5926,6 +5969,7 @@ model Icon {
   telegramAdvertiserAvatars        TelegramAdvertiser[]             @relation("TelegramAdvertiserAvatarIcon")
   telegramPublicationScheduleSlots TelegramPublicationScheduleSlot[] @relation("TelegramPublicationScheduleSlotIcon")
   telegramPublicationSchedules     TelegramPublicationSchedule[]     @relation("TelegramPublicationScheduleIcon")
+  telegramChannelReminderTemplates TelegramChannelReminderTemplate[] @relation("TelegramChannelReminderTemplateIcon")
   telegramContentHypotheses        TelegramContentHypothesis[]       @relation("TelegramContentHypothesisIcon")
   telegramPostBatchPosts           TelegramPostBatchPost[]           @relation("TelegramPostBatchPostIcon")
 
@@ -6009,11 +6053,21 @@ model AiOperation {
   finishedAt DateTime?
   createdAt DateTime @default(now())
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  durableResult AiOperationResult?
   @@unique([workspaceId, operationId])
   @@index([workspaceId, createdAt, id])
   @@index([workspaceId, category, createdAt, id])
   @@index([workspaceId, status, deadlineAt])
   @@index([expiresAt, id])
+}
+
+// Output-only cache inherits the operation's tenant identity and 90-day retention.
+model AiOperationResult {
+  operationDbId String @id
+  version String @db.VarChar(80)
+  output Json
+  createdAt DateTime @default(now())
+  operation AiOperation @relation(fields: [operationDbId], references: [id], onDelete: Cascade)
 }
 
 model AiBudgetPeriod {
@@ -6110,6 +6164,7 @@ model TelegramLeadSource {
   allowOwnChannel         Boolean @default(false)
   monitoringState         String @default("PAUSED") @db.VarChar(30)
   monitoringActorUserId   String
+  bindingRevision         Int @default(0)
   lastObservedAt          DateTime?
   lastAdAt                DateTime?
   checkpointMessageId     Int?
@@ -6123,12 +6178,81 @@ model TelegramLeadSource {
   updatedAt               DateTime @updatedAt
   workspace               Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   observations            TelegramLeadObservation[]
+  historyJob              TelegramLeadHistoryJob?
+  autoConfig              TelegramLeadAutoConfig?
   account                 TelegramUserAccountIntegration? @relation(fields: [accountId, workspaceId], references: [id, workspaceId], onDelete: Restrict)
   @@unique([id, workspaceId])
   @@unique([workspaceId, normalizedKey])
   @@unique([workspaceId, channelId])
   @@index([workspaceId, createdAt, id])
   @@index([monitoringState, accountId, workspaceId])
+}
+
+// Explicit opt-in only. Collection/monitoring never enables paid analysis.
+model TelegramLeadAutoConfig {
+  sourceId String
+  workspaceId String
+  enabled Boolean @default(false)
+  overflowedAt DateTime?
+  reconcileNeeded Boolean @default(false)
+  reconcileGeneration Int @default(0)
+  reconcileRunningGeneration Int?
+  reconcileCursorObservedAt DateTime?
+  reconcileCursorId String?
+  reconcileSnapshotObservedAt DateTime?
+  reconcileSnapshotId String?
+  source TelegramLeadSource @relation(fields: [sourceId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  @@id([sourceId, workspaceId])
+}
+
+// Outbox contains identity/version only; removed with its observation.
+model TelegramLeadAnalysisQueue {
+  id String @id
+  workspaceId String
+  sourceId String
+  observationId String
+  contentHash String @db.VarChar(64)
+  bindingRevision Int
+  actorUserId String
+  status String @default("WAIT_AUTH_RECHECK") @db.VarChar(24)
+  claimToken String?
+  claimUntil DateTime?
+  lastErrorCode String? @db.VarChar(100)
+  prefilterDecision String? @db.VarChar(24)
+  prefilterVersion String? @db.VarChar(80)
+  prefilterReason String? @db.VarChar(300)
+  prefilterSignals Json?
+  prefilterTargets Json?
+  createdAt DateTime @default(now())
+  observation TelegramLeadObservation @relation(fields: [observationId, workspaceId, sourceId], references: [id, workspaceId, sourceId], onDelete: Cascade)
+  @@unique([workspaceId, observationId, contentHash, bindingRevision])
+  @@index([workspaceId, sourceId, status, id])
+  @@index([workspaceId, status])
+  @@index([status, claimUntil])
+}
+
+// Durable state for a user-started, bounded history collection. No AI payloads.
+model TelegramLeadHistoryJob {
+  id            String @id @default(cuid())
+  workspaceId   String
+  sourceId      String
+  actorUserId   String
+  status        String @db.VarChar(24)
+  cutoffAt      DateTime
+  beforeId      Int?
+  pages         Int @default(0)
+  received      Int @default(0)
+  hasGaps       Boolean @default(false)
+  lastErrorCode String? @db.VarChar(100)
+  leaseToken    String?
+  leaseUntil    DateTime?
+  startedAt     DateTime @default(now())
+  completedAt   DateTime?
+  updatedAt     DateTime @updatedAt
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  source        TelegramLeadSource @relation(fields: [sourceId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  @@unique([sourceId, workspaceId])
+  @@index([status, leaseUntil])
 }
 
 model TelegramLeadCandidate {
@@ -6184,6 +6308,11 @@ model TelegramLeadObservation {
   links                      Json
   contentHash                String @db.VarChar(64)
   originalStatus             String @default("OBSERVED") @db.VarChar(30)
+  metadataComplete           Boolean @default(false)
+  metadataTextOnly           Boolean @default(false)
+  textMetadataComplete       Boolean?
+  mediaPresent               Boolean?
+  targetEvidence             Json?
   processingStatus           String @default("PENDING") @db.VarChar(40)
   reviewStatus               String @default("PENDING") @db.VarChar(30)
   classificationVersion      String? @db.VarChar(80)
@@ -6198,11 +6327,38 @@ model TelegramLeadObservation {
   source                     TelegramLeadSource @relation(fields: [sourceId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
   candidate                  TelegramLeadCandidate? @relation(fields: [candidateId, workspaceId], references: [id, workspaceId], onDelete: Restrict)
   workspace                  Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  analysisQueue              TelegramLeadAnalysisQueue[]
+  promotions                 TelegramLeadPromotion[]
+  @@unique([id, workspaceId, sourceId])
   @@unique([workspaceId, sourceId, externalMessageId])
   @@index([workspaceId, observedAt, id])
   @@index([workspaceId, sourceId, publishedAt, id])
   @@index([workspaceId, candidateId, observedAt, id])
   @@index([expiresAt, id])
+}
+
+// Directed, independently validated promotion evidence, retained with its observation.
+model TelegramLeadPromotion {
+  id String @id @default(cuid())
+  workspaceId String
+  sourceId String
+  targetSourceId String
+  sourceChannelId String @db.VarChar(40)
+  targetChannelId String @db.VarChar(40)
+  sourceBindingRevision Int
+  targetBindingRevision Int
+  observationId String
+  observationHash String @db.VarChar(64)
+  publishedAt DateTime
+  evidence Json
+  verificationStatus String @db.VarChar(40)
+  classificationVersion String @db.VarChar(80)
+  pairedObservationId String?
+  pairedPublishedAt DateTime?
+  createdAt DateTime @default(now())
+  observation TelegramLeadObservation @relation(fields: [observationId, workspaceId, sourceId], references: [id, workspaceId, sourceId], onDelete: Cascade)
+  @@unique([workspaceId, observationId])
+  @@index([workspaceId, sourceChannelId, targetChannelId, publishedAt], map: "TelegramLeadPromotion_reverse_idx")
 }
 
 // Versioned business result; paid receipts remain in Operations AI ledger.

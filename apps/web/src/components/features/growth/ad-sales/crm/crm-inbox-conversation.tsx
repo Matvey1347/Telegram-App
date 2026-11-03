@@ -30,7 +30,7 @@ export function CrmInboxConversation({ conversationId, peerId, canSendManual, on
   const query = useQuery({ queryKey: telegramCrmKeys.conversationDetail(conversationId),
     queryFn: ({ signal }) => telegramCrmApi.getConversation(conversationId, signal), staleTime: 60_000 });
   const accounts = useQuery({ queryKey: telegramAccountKeys.accounts(), queryFn: telegramUserAccountsApi.list,
-    enabled: query.isSuccess && canSendManual, staleTime: 60_000 });
+    enabled: query.isSuccess && canSendManual, staleTime: 24 * 60 * 60_000 });
   const selected = query.data;
   const account = accounts.data?.find((item) => item.id === selected?.mtprotoAccountId);
   const doNotContact = workflow.data?.outreachBlockedReason === "DO_NOT_CONTACT";

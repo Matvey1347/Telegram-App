@@ -16,6 +16,7 @@ import {
 import {
   CRM_COPILOT_TONES,
   LEAD_WORKFLOW_STATES,
+  LEAD_CONTACT_CATEGORIES,
 } from '@telegram-system/shared';
 export class LeadQualifyDto {
   @IsString()
@@ -49,6 +50,12 @@ export class LeadPreparedDraftPatchDto {
   @IsOptional() @IsString() @MaxLength(3000) text?: string;
 }
 export class LeadPreparationQueueDto {
+  @IsOptional() @IsString() @MaxLength(100) sourceId?: string;
+  @IsOptional() @IsIn(['asc', 'desc']) sortDirection?: 'asc' | 'desc';
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(100000) page?: number;
+  @IsOptional()
+  @IsIn(LEAD_CONTACT_CATEGORIES)
+  contactCategory?: (typeof LEAD_CONTACT_CATEGORIES)[number];
   @IsOptional() @IsIn([...LEAD_WORKFLOW_STATES, 'HIGH_PRIORITY']) workflow?:
     | (typeof LEAD_WORKFLOW_STATES)[number]
     | 'HIGH_PRIORITY';

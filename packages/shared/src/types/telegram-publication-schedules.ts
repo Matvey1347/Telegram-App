@@ -12,6 +12,7 @@ export type TelegramPublicationScheduleSlot = {
   time: string;
   position: number;
   isActive: boolean;
+  isOptional: boolean;
   iconPresentation: ResolvedEmoji | null;
 };
 
@@ -51,6 +52,7 @@ export type TelegramPublicationScheduleInput = {
     time: string;
     position?: number;
     isActive?: boolean;
+    isOptional?: boolean;
     iconId?: string | null;
   }>;
 };
@@ -66,6 +68,7 @@ export type TelegramPublicationSlotOccurrence = {
   scheduledAt: string;
   title: string;
   kind: TelegramPublicationSlotKind;
+  isOptional?: boolean;
   time: string;
   timezone: string;
   state: "AVAILABLE" | "OCCUPIED" | "PAST";
@@ -93,6 +96,7 @@ export type TelegramPublicationPlanCalendarEvent = {
 };
 
 export type TelegramPublicationPlanCalendar = {
+  scheduleId: string | null;
   channelIds: string[];
   occurrencesByChannel: TelegramPublicationSlotOccurrencesByChannel;
   events: TelegramPublicationPlanCalendarEvent[];

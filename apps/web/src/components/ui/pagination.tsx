@@ -16,6 +16,7 @@ type PaginationProps = {
   loading?: boolean;
   disabled?: boolean;
   pageSizeOptions?: readonly number[];
+  cursorMode?: boolean;
 };
 
 export const THREE_COLUMN_GRID_PAGE_SIZES = [12, 24, 48, 96] as const;
@@ -64,6 +65,7 @@ export function Pagination({
   loading = false,
   disabled = false,
   pageSizeOptions = [10, 25, 50, 100],
+  cursorMode = false,
 }: PaginationProps) {
   const i18n = useOptionalI18n();
   const t = i18n?.t;
@@ -74,7 +76,7 @@ export function Pagination({
     return null;
   }
 
-  const pageItems = buildPageItems(page, totalPages);
+  const pageItems = cursorMode ? [] : buildPageItems(page, totalPages);
   const from = (page - 1) * pageSize + 1;
   const to = Math.min(page * pageSize, totalItems);
   const formattedTotal = new Intl.NumberFormat(i18n?.locale).format(totalItems);
@@ -103,7 +105,7 @@ export function Pagination({
             {t?.("common.pagination.pageOf", { page, total: totalPages }) ??
               `Page ${page} of ${totalPages}`}
           </span>
-          <div className="hidden sm:flex">
+          {cursorMode ? <span className="hidden min-w-24 items-center justify-center border-l border-neutral-800 px-3 py-2 font-medium sm:flex" aria-live="polite">{t?.("common.pagination.pageOf", { page, total: totalPages }) ?? `Page ${page} of ${totalPages}`}</span> : <div className="hidden sm:flex">
             {pageItems.map((item) =>
               typeof item === "number" ? (
                 <button
@@ -130,7 +132,7 @@ export function Pagination({
                 </span>
               ),
             )}
-          </div>
+          </div>}
           <Button
             type="button"
             variant="secondary"

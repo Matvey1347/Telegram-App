@@ -98,7 +98,7 @@ const pageSlice =
 const pageHookAllowances = [
   ["(finance)/currencies/page.tsx", 3],
   ["(growth)/ad-campaigns/[id]/page.tsx", 5],
-  ["(growth)/ad-campaigns/page.tsx", 20],
+  ["(growth)/ad-campaigns/page.tsx", 19],
   ["(telegram)/system-bot/connect/page.tsx", 3],
   ["(telegram)/telegram-channel-networks/[id]/page.tsx", 5],
   ["(telegram)/telegram-channels/page.tsx", 15],

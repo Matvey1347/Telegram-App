@@ -28,14 +28,16 @@ import { telegramPublicationScheduleKeys } from "@/lib/query-keys";
 import { zonedDateTimeToUtc } from "@/lib/features/growth/telegram-ad-sales";
 import { useWorkspaceTimezone } from "@/hooks/use-workspace-timezone";
 import { PublicationCalendarEventEditor } from "./publication-calendar-event-editor";
+import {
+  calendarDateKey,
+  calendarDisplayTime,
+  indexPublicationCalendarItems,
+  type PublicationCalendarSlotRow,
+} from "./publication-calendar-index";
+
+export { eventMatchesPublicationSlot } from "./publication-calendar-index";
 
 type CalendarView = "week" | "month" | "threeWeeks";
-type SlotRow = {
-  slotId: string;
-  scheduledAt: string;
-  title: string;
-  time: string;
-};
 
 export function isPublicationCalendarLoading(
   schedulesLoading: boolean,
@@ -43,6 +45,13 @@ export function isPublicationCalendarLoading(
   calendarLoading: boolean,
 ) {
   return schedulesLoading || (Boolean(selectedScheduleId) && calendarLoading);
+}
+
+export function shouldLoadPublicationCalendar(
+  schedulesLoading: boolean,
+  selectedScheduleId: string,
+) {
+  return schedulesLoading || Boolean(selectedScheduleId);
 }
 
 const views: Array<{
@@ -86,43 +95,6 @@ function monthGridDays(cursor: Date) {
 function calendarDayKey(value: Date) {
   return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
 }
-function dateKey(value: string, timezone: string) {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: timezone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date(value));
-}
-function displayTime(value: string, timezone: string) {
-  return new Intl.DateTimeFormat("en-GB", {
-    timeZone: timezone,
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-  }).format(new Date(value));
-}
-function minuteKey(value: string) {
-  return new Date(value).toISOString().slice(0, 16);
-}
-
-export function eventMatchesPublicationSlot(
-  event: TelegramPublicationPlanCalendarEvent,
-  slot: SlotRow,
-  timezone: string,
-) {
-  if (minuteKey(event.scheduledAt) === minuteKey(slot.scheduledAt)) return true;
-
-  // Publication-plan slots keep a canonical UTC time, while an externally
-  // scheduled ad or VP is an exact local datetime. Around a DST transition
-  // those instants may differ by an hour even though both are the configured
-  // local slot time. Match the presentation time so the calendar does not
-  // render the same 10:10 as a free slot plus an unrelated event.
-  return (
-    dateKey(event.scheduledAt, timezone) === dateKey(slot.scheduledAt, timezone) &&
-    displayTime(event.scheduledAt, timezone) === slot.time
-  );
-}
 function secondaryButton(active = false) {
   return active
     ? "border-blue-500 bg-blue-600 text-white"
@@ -133,14 +105,6 @@ function eventTone(event: TelegramPublicationPlanCalendarEvent) {
   return event.kind === "AD"
     ? "border-emerald-700/80 bg-emerald-950/30 text-emerald-50 hover:border-emerald-500"
     : "border-violet-700/80 bg-violet-950/30 text-violet-50 hover:border-violet-500";
-}
-
-function relevantEvents(events: TelegramPublicationPlanCalendarEvent[]) {
-  const unique = new Map<string, TelegramPublicationPlanCalendarEvent>();
-  for (const event of events)
-    if (event.kind !== "CONTENT")
-      unique.set(`${event.kind}:${event.title}`, event);
-  return [...unique.values()];
 }
 
 function EventMarker({
@@ -190,6 +154,7 @@ export function PublicationPlanCalendarPage() {
     return schedule?.id ?? "";
   }, [schedulesQuery.data]);
   const selectedScheduleId = scheduleId || defaultScheduleId;
+  const calendarRequestScheduleId = scheduleId || "__default__";
   const range = useMemo(() => rangeFor(view, cursor), [cursor, view]);
   const requestRange = useMemo(() => {
     const visibleDays = view === "month" ? monthGridDays(cursor) : null;
@@ -210,16 +175,25 @@ export function PublicationPlanCalendarPage() {
   }, [cursor, range, timezone, view]);
   const calendarQuery = useQuery({
     queryKey: telegramPublicationScheduleKeys.calendar(
-      selectedScheduleId,
+      calendarRequestScheduleId,
       requestRange,
     ),
     queryFn: () =>
       telegramPublicationSchedulesApi.calendar(
-        selectedScheduleId,
+        scheduleId || undefined,
         requestRange,
       ),
-    enabled: Boolean(selectedScheduleId),
-    staleTime: 30 * 1000,
+    // Resolve the default schedule on the server while the selector list loads,
+    // avoiding a list → calendar request waterfall on a cold visit.
+    enabled: shouldLoadPublicationCalendar(
+      schedulesQuery.isLoading,
+      selectedScheduleId,
+    ),
+    // Calendar responses are persisted. Reuse them for a few minutes on
+    // revisit, then refresh quietly in the background.
+    staleTime: 5 * 60 * 1000,
+    // A different range must never display the previous range's events.
+    placeholderData: () => undefined,
   });
   const selected = schedulesQuery.data?.find(
     (schedule) => schedule.id === selectedScheduleId,
@@ -242,7 +216,7 @@ export function PublicationPlanCalendarPage() {
     [cursor, range.from, view],
   );
   const slotRows = useMemo(() => {
-    const rows = new Map<string, SlotRow>();
+    const rows = new Map<string, PublicationCalendarSlotRow>();
     for (const occurrence of Object.values(
       calendarQuery.data?.occurrencesByChannel ?? {},
     ).flat()) {
@@ -256,15 +230,15 @@ export function PublicationPlanCalendarPage() {
     }
     return [...rows.values()];
   }, [calendarQuery.data?.occurrencesByChannel]);
-  const eventsForSlot = (slot: SlotRow) =>
-    relevantEvents(
-      (calendarQuery.data?.events ?? []).filter(
-        (event) =>
-          event.slotId === slot.slotId ||
-          (event.slotId === null &&
-            eventMatchesPublicationSlot(event, slot, timezone)),
+  const indexedCalendar = useMemo(
+    () =>
+      indexPublicationCalendarItems(
+        slotRows,
+        calendarQuery.data?.events ?? [],
+        timezone,
       ),
-    );
+    [calendarQuery.data?.events, slotRows, timezone],
+  );
   const openEvent = (event: TelegramPublicationPlanCalendarEvent) => {
     setConflictEvents([]);
     setEditorEvent(event);
@@ -276,7 +250,7 @@ export function PublicationPlanCalendarPage() {
         direction * (view === "month" ? 30 : view === "threeWeeks" ? 21 : 7),
       ),
     );
-  const today = dateKey(new Date().toISOString(), timezone);
+  const today = calendarDateKey(new Date().toISOString(), timezone);
 
   return (
     <AppShell>
@@ -380,24 +354,11 @@ export function PublicationPlanCalendarPage() {
               <div className="grid grid-cols-7">
                 {days.map((day) => {
                   const dayKey = calendarDayKey(day);
+                  const dayItems = indexedCalendar.get(dayKey);
                   const outsideMonth =
                     view === "month" && day.getMonth() !== cursor.getMonth();
-                  const rows = slotRows
-                    .filter(
-                      (slot) => dateKey(slot.scheduledAt, timezone) === dayKey,
-                    )
-                    .sort((left, right) =>
-                      left.scheduledAt.localeCompare(right.scheduledAt),
-                    );
-                  const outside = relevantEvents(
-                    (calendarQuery.data?.events ?? []).filter(
-                      (event) =>
-                        dateKey(event.scheduledAt, timezone) === dayKey &&
-                        !rows.some((slot) =>
-                          eventMatchesPublicationSlot(event, slot, timezone),
-                        ),
-                    ),
-                  );
+                  const rows = dayItems?.slots ?? [];
+                  const outside = dayItems?.outsideEvents ?? [];
                   return (
                     <div
                       key={day.toISOString()}
@@ -440,7 +401,7 @@ export function PublicationPlanCalendarPage() {
                                   className={`flex w-full items-center gap-1.5 rounded-md border border-dashed px-1.5 py-1 text-left text-[10px] font-medium ${eventTone(event)}`}
                                 >
                                   <span className="shrink-0">
-                                    {displayTime(event.scheduledAt, timezone)}
+                                    {calendarDisplayTime(event.scheduledAt, timezone)}
                                   </span>
                                   <span className="min-w-0 flex-1 truncate">
                                     {event.title}
@@ -450,7 +411,9 @@ export function PublicationPlanCalendarPage() {
                               );
                             }
                             const { slot } = entry;
-                            const events = eventsForSlot(slot);
+                            const events = dayItems?.eventsBySlot.get(
+                              `${slot.slotId}:${slot.scheduledAt}`,
+                            ) ?? [];
                             const conflict = events.length > 1;
                             return (
                               <button
@@ -511,7 +474,7 @@ export function PublicationPlanCalendarPage() {
                 <span className="truncate">{event.title}</span>
               </span>
               <span className="shrink-0 text-xs text-neutral-400">
-                {displayTime(event.scheduledAt, timezone)}
+                {calendarDisplayTime(event.scheduledAt, timezone)}
               </span>
             </Button>
           ))}

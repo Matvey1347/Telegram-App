@@ -255,6 +255,26 @@ export class TelegramSystemBotWorkflowStore {
     return row;
   }
 
+  latestCompletedWebsitePostImport(
+    scope: TelegramSystemBotWorkflowScope,
+    context: string,
+    since: Date,
+  ) {
+    return this.prisma.telegramSystemBotWorkflow.findFirst({
+      where: {
+        connectionId: scope.connectionId,
+        workspaceId: scope.workspaceId,
+        kind: TelegramSystemBotWorkflowKind.WEBSITE_POST_IMPORT,
+        postImportMode: 'SINGLE',
+        status: TelegramSystemBotWorkflowStatus.COMPLETED,
+        completedAt: { gte: since },
+        payload: { path: ['context'], equals: context },
+      },
+      orderBy: [{ completedAt: 'desc' }, { id: 'desc' }],
+      select: { id: true },
+    });
+  }
+
   expire(input: VersionedWorkflowInput) {
     return this.changeStatus(input, {
       from: [TelegramSystemBotWorkflowStatus.ACTIVE],

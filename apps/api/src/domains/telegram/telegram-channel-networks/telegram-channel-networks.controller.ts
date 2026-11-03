@@ -17,11 +17,20 @@ import { JwtAuthGuard } from '../../../common/jwt-auth.guard';
 import { CreateTelegramChannelNetworkDto } from './dto/create-telegram-channel-network.dto';
 import { UpdateTelegramChannelNetworkDto } from './dto/update-telegram-channel-network.dto';
 import { TelegramChannelNetworksService } from './telegram-channel-networks.service';
+import { TelegramChannelNetworkOptionsService } from './telegram-channel-network-options.service';
 
 @UseGuards(JwtAuthGuard)
 @Controller('telegram-channel-networks')
 export class TelegramChannelNetworksController {
-  constructor(private service: TelegramChannelNetworksService) {}
+  constructor(
+    private service: TelegramChannelNetworksService,
+    private networkOptions: TelegramChannelNetworkOptionsService,
+  ) {}
+
+  @Get('options')
+  networkOptionsList(@CurrentUser() user: JwtUser) {
+    return this.networkOptions.list(user.sub);
+  }
 
   @Get()
   list(@CurrentUser() user: JwtUser, @Query() query: PaginationQueryDto) {

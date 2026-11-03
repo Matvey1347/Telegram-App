@@ -22,6 +22,7 @@ export const notificationRecipientSelect = {
       crmFollowUpEnabled: true,
       crmAiLeadsEnabled: true,
       crmMessagePreviewEnabled: true,
+      channelRemindersPushEnabled: true,
     },
   },
 } satisfies Prisma.WorkspaceMemberSelect;
@@ -54,6 +55,8 @@ export function pushPreferenceAllows(
 ) {
   return (
     Boolean(preference?.webPushEnabled) &&
+    (type !== 'CHANNEL_POSTS_REMINDER' ||
+      Boolean(preference?.channelRemindersPushEnabled)) &&
     notificationPreferenceAllows(type, preference)
   );
 }

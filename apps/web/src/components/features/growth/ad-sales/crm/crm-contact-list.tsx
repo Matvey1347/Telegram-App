@@ -192,7 +192,6 @@ export function CrmContactList({
     queryKey: telegramCrmKeys.contactList(params),
     queryFn: ({ signal }) => telegramCrmApi.listContacts(params, signal),
     placeholderData: keepPreviousData,
-    staleTime: 30_000,
   });
   // Warm this tiny catalog while the list is visible. The Tags modal can then
   // open from the card's already-loaded tags without a loading screen.

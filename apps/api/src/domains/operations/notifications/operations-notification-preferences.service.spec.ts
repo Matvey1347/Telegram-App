@@ -29,9 +29,25 @@ describe('CRM personal notification preferences', () => {
     await expect(service.preferences('user-a')).resolves.toEqual({
       webPushEnabled: true,
       ...CRM_NOTIFICATION_PREFERENCE_DEFAULTS,
+      channelRemindersPushEnabled: false,
+      channelRemindersTelegramEnabled: false,
       activeSubscriptionCount: 2,
       pushConfigured: true,
     });
+  });
+  it('saves each reminder delivery preference independently', async () => {
+    const { service, prisma } = setup();
+    await service.updatePreferences('user-a', {
+      channelRemindersTelegramEnabled: true,
+    });
+    expect(prisma.operationsNotificationPreference.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({
+          channelRemindersTelegramEnabled: true,
+        }),
+        update: { channelRemindersTelegramEnabled: true },
+      }),
+    );
   });
   it('keeps default/no-op updates write-free and accepts an empty partial patch', async () => {
     const { service, prisma } = setup();

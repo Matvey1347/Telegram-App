@@ -13,6 +13,21 @@ export type TelegramLeadPost = {
   text: string;
   publishedAt: Date;
   editedAt: Date | null;
+  metadata?: TelegramLeadPostMetadata;
+};
+export type TelegramLeadPostMetadata = {
+  complete: boolean;
+  textComplete?: boolean;
+  incompleteReasons: string[];
+  unsupportedEntityTypes?: string[];
+  entityUrls: string[];
+  textUrls?: string[];
+  inlineButtonUrls: string[];
+  mentions: string[];
+  hasForwardMetadata: boolean;
+  forwardChannelId: string | null;
+  hasMedia: boolean;
+  mediaType: 'PHOTO' | 'DOCUMENT' | 'OTHER' | null;
 };
 export type TelegramLeadChannelEvent =
   | {
@@ -37,6 +52,20 @@ export type TelegramLeadRecovery = {
   tooLong: boolean;
 };
 export interface TelegramLeadChannelHandle {
+  /** Public description and at most one pinned post on the existing session. */
+  publicProfile?(
+    username: string,
+  ): Promise<{
+    channelId: string;
+    username: string;
+    about: string;
+    pinned?: { id: number; text: string };
+  }>;
+  /** Explicit, bounded media read on the existing live session; never marks read. */
+  readPhoto?(
+    channelId: string,
+    input: { messageId: number; maxBytes: number; reference?: string },
+  ): Promise<{ data: Buffer; mime: string; post: TelegramLeadPost }>;
   list(input: { cursor?: string; limit?: number }): Promise<{
     items: TelegramLeadChannel[];
     nextCursor: string | null;

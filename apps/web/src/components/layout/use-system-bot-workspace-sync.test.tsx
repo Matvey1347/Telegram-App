@@ -37,6 +37,25 @@ describe("useSystemBotWorkspaceSync", () => {
     );
   });
 
+  it("does not resync the same workspace when AppShell remounts on another route", async () => {
+    const workspaceId = "route-remount-workspace";
+    const firstMount = renderHook(() =>
+      useSystemBotWorkspaceSync(workspaceId, vi.fn()),
+    );
+
+    await waitFor(() =>
+      expect(telegramSystemBotApi.selectCurrentWorkspace).toHaveBeenCalledTimes(
+        1,
+      ),
+    );
+    firstMount.unmount();
+    renderHook(() => useSystemBotWorkspaceSync(workspaceId, vi.fn()));
+
+    expect(telegramSystemBotApi.selectCurrentWorkspace).toHaveBeenCalledTimes(
+      1,
+    );
+  });
+
   it("does not make a request before a website workspace is resolved", () => {
     renderHook(() => useSystemBotWorkspaceSync("", vi.fn()));
     expect(telegramSystemBotApi.selectCurrentWorkspace).not.toHaveBeenCalled();

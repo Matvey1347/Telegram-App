@@ -1,387 +1,103 @@
 "use client";
 import { useRef, useState } from "react";
-import {
-  useInfiniteQuery,
-  useMutation,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { Brain, Search, Sparkles, Tag } from "lucide-react";
 import type { LeadPreparationQueueInput } from "@telegram-system/shared";
-import {
-  Button,
-  Card,
-  FormField,
-  Input,
-  Modal,
-  Select,
-} from "@/components/ui/primitives";
+import { Button, Card, FormField, Input, Select } from "@/components/ui/primitives";
+import { Pagination } from "@/components/ui/pagination";
+import { IconAvatar } from "@/components/icons/icon-avatar";
 import { leadPreparationApi } from "@/lib/features/growth/lead-preparation-api";
 import { leadDiscoveryApi } from "@/lib/features/growth/lead-discovery-api";
-import {
-  leadKeys,
-  leadQueryPolicy,
-  patchLeadEntity,
-} from "@/lib/features/growth/lead-discovery-query";
+import { leadKeys, leadQueryPolicy } from "@/lib/features/growth/lead-discovery-query";
+import { useOptionalI18n } from "@/providers/i18n-provider";
 import { LeadCandidateContent } from "./lead-candidate-details";
 import { LeadQueryState } from "./lead-query-state";
 import { useQualificationText } from "./qualification-copy";
-const workflows = [
-  "NEW",
-  "NEEDS_REVIEW",
-  "QUALIFIED",
-  "LOW_RELEVANCE",
-  "HIGH_PRIORITY",
-  "SUSPICIOUS",
-  "REJECTED",
-  "LINKED",
-] as const;
-export function LeadCandidates({
-  workspace,
-  canReview,
-  compact = false,
-  externalSearch,
-}: {
-  workspace: string;
-  canReview: boolean;
-  compact?: boolean;
-  externalSearch?: string;
-}) {
+import { LeadSourceFilter } from "./lead-source-filter";
+
+export function LeadCandidates({ workspace, canReview, compact = false, externalSearch }: { workspace: string; canReview: boolean; compact?: boolean; externalSearch?: string }) {
   const t = useQualificationText();
-  const client = useQueryClient();
-  const [filter, setFilter] = useState<LeadPreparationQueueInput>({
-    limit: 50,
-  });
-  const [selected, setSelected] = useState<string[]>([]);
-  const [limitError, setLimitError] = useState(false);
+  const ru = useOptionalI18n()?.locale !== "en";
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const [filter, setFilter] = useState<LeadPreparationQueueInput>({ limit: 20 });
+  const [pageIndex, setPageIndex] = useState(0);
   const [details, setDetails] = useState<string | null>(null);
-  const [confirm, setConfirm] = useState<"APPROVE" | "REJECT" | null>(null);
+  const [selectionOverride, setSelectionOverride] = useState<{
+    routeCandidate: string | null;
+    selectedCandidate: string | null;
+  } | null>(null);
   const heading = useRef<HTMLHeadingElement>(null);
   const opener = useRef<HTMLButtonElement | null>(null);
-  const effective = compact
-    ? { ...filter, search: externalSearch || undefined }
-    : filter;
-  const query = useInfiniteQuery({
-    queryKey: leadKeys.queue(workspace, effective),
-    queryFn: ({ pageParam, signal }) =>
-      leadPreparationApi.queue({ ...effective, cursor: pageParam }, signal),
-    initialPageParam: undefined as string | undefined,
-    getNextPageParam: (p) =>
-      p.hasMore ? (p.nextCursor ?? undefined) : undefined,
+  const routeCandidate = searchParams.get("candidate");
+  const selectedCandidate = compact
+    ? details
+    : selectionOverride?.routeCandidate === routeCandidate
+      ? selectionOverride.selectedCandidate
+      : routeCandidate;
+  const effective = compact ? { ...filter, search: externalSearch || undefined } : filter;
+  const pageFilter = { ...effective, page: pageIndex + 1 };
+  const query = useQuery({
+    queryKey: leadKeys.queue(workspace, pageFilter),
+    queryFn: ({ signal }) => leadPreparationApi.queue(pageFilter, signal),
     ...leadQueryPolicy,
   });
-  const items = query.data?.pages.flatMap((p) => p.items) ?? [];
+  const currentPage = query.data;
+  const items = currentPage?.items ?? [];
   const detail = useQuery({
-    queryKey: leadKeys.candidate(workspace, details ?? ""),
-    queryFn: ({ signal }) => leadDiscoveryApi.candidate(details!, signal),
-    enabled: !!details,
-    ...leadQueryPolicy,
-    staleTime: 0,
+    queryKey: leadKeys.candidate(workspace, selectedCandidate ?? ""),
+    queryFn: ({ signal }) => leadDiscoveryApi.candidate(selectedCandidate!, signal),
+    enabled: !!selectedCandidate, ...leadQueryPolicy, staleTime: 0,
   });
-  const review = useMutation({
-    mutationFn: (action: "APPROVE" | "REJECT") =>
-      leadDiscoveryApi.reviewCandidates(selected, action),
-    retry: false,
-    onSuccess: async (result) => {
-      for (const item of result.items) {
-        await patchLeadEntity(client, leadKeys.candidatesRoot(workspace), item);
-        client.setQueryData(leadKeys.candidate(workspace, item.id), item);
-      }
-      setSelected([]);
-      setConfirm(null);
-      void client.invalidateQueries({
-        queryKey: leadKeys.queueRoot(workspace),
+  const selectCandidate = (id: string | null) => {
+    setDetails(id);
+    if (!compact) {
+      setSelectionOverride({
+        routeCandidate,
+        selectedCandidate: id,
       });
-      void client.invalidateQueries({
-        queryKey: leadKeys.sourcesRoot(workspace),
-      });
-      if (details)
-        void client.invalidateQueries({
-          queryKey: leadKeys.preparation(workspace, details),
-          exact: true,
-        });
-    },
-  });
-  return (
-    <section className="min-w-0 space-y-4">
-      <div className={details ? (compact ? "hidden" : "hidden space-y-4 xl:block") : "space-y-4"}>
-        <p className="text-xs text-neutral-400">
-          {t(
-            "Review evidence, qualify explicitly, then prepare a first offer. No automatic generation, rejection or outreach.",
-          )}
-        </p>
-        <details className={compact ? "hidden" : "rounded-lg border border-neutral-800 px-3 py-2"}>
-          <summary className="cursor-pointer text-sm text-neutral-300">{t("Lead workflow filters")}</summary>
-        <div
-          className="mt-3 flex flex-wrap gap-2"
-          aria-label={t("Lead workflow filters")}
-        >
-          <Button
-            variant={!filter.workflow ? "primary" : "secondary"}
-            onClick={() => {
-              setFilter({ limit: 50 });
-              setSelected([]);
-            }}
-          >
-            {t("All candidates")}
-          </Button>
-          {workflows.map((v) => (
-            <Button
-              key={v}
-              variant={filter.workflow === v ? "primary" : "secondary"}
-              aria-pressed={filter.workflow === v}
-              onClick={() => {
-                setFilter({ ...filter, workflow: v });
-                setSelected([]);
-              }}
-            >
-              {t(v)}
-            </Button>
-          ))}
-        </div>
-        </details>
-        {!compact ? (
-          <form
-            className="flex flex-wrap items-end gap-3"
-            onSubmit={(e) => {
-              e.preventDefault();
-              const f = new FormData(e.currentTarget);
-              setFilter({
-                ...filter,
-                search: String(f.get("search") ?? "") || undefined,
-              });
-              setSelected([]);
-            }}
-          >
-            <FormField label={t("Search candidates")}>
-              <Input
-                name="search"
-                maxLength={100}
-                aria-label={t("Search candidates")}
-              />
-            </FormField>
-            <FormField label={t("Workflow")}>
-              <Select
-                aria-label={t("Workflow")}
-                value={filter.workflow ?? ""}
-                onChange={(e) => {
-                  setFilter({
-                    ...filter,
-                    workflow: (e.target.value ||
-                      undefined) as LeadPreparationQueueInput["workflow"],
-                  });
-                  setSelected([]);
-                }}
-              >
-                <option value="">{t("All candidates")}</option>
-                {workflows.map((v) => (
-                  <option key={v} value={v}>
-                    {t(v)}
-                  </option>
-                ))}
-              </Select>
-            </FormField>
-            <Button type="submit" variant="secondary">
-              {t("Apply candidate filters")}
-            </Button>
-          </form>
-        ) : null}
-        {canReview && !compact ? (
-          <div className="flex flex-wrap gap-2">
-            <Button
-              variant="secondary"
-              disabled={!selected.length || review.isPending}
-              onClick={() => setConfirm("APPROVE")}
-            >
-              {t("Approve selected")} ({selected.length}/20)
-            </Button>
-            <Button
-              variant="secondary"
-              disabled={!selected.length || review.isPending}
-              onClick={() => setConfirm("REJECT")}
-            >
-              {t("Reject selected")} ({selected.length}/20)
-            </Button>
-            <span className="self-center text-xs text-neutral-400">
-              {t("Bulk review never qualifies or generates AI messages.")}
-            </span>
-          </div>
-        ) : null}
-        {limitError ? (
-          <p role="alert">{t("Select no more than 20 candidates.")}</p>
-        ) : null}
-        {review.isError ? (
-          <p role="alert" className="text-sm text-amber-200">
-            {t(
-              "Bulk review failed. Reload stale or inaccessible candidates and review again.",
-            )}
-          </p>
-        ) : null}
+      const params = new URLSearchParams(searchParams.toString());
+      if (id) params.set("candidate", id); else params.delete("candidate");
+      router.push(`${pathname}${params.size ? `?${params}` : ""}`, { scroll: false });
+    }
+  };
+  return <section className="min-w-0 space-y-4">
+    {!compact ? <form className="flex flex-wrap items-end gap-3" onSubmit={(event) => {
+      event.preventDefault();
+      const fields = new FormData(event.currentTarget);
+      setPageIndex(0);
+      setFilter({ ...filter, limit: filter.limit ?? 20, cursor: undefined, search: String(fields.get("search") ?? "").trim() || undefined });
+    }}>
+      <div className="min-w-64 flex-1"><FormField label={t("Search candidates")}><Input name="search" maxLength={100} aria-label={t("Search candidates")} placeholder={ru ? "Название проекта или контакт" : "Project or contact"} /></FormField></div>
+      <div className="min-w-52 flex-1"><FormField label={ru ? "Канал" : "Channel"}><LeadSourceFilter workspace={workspace} value={filter.sourceId ?? ""} onChange={(sourceId) => { setPageIndex(0); setFilter({ ...filter, cursor: undefined, sourceId: sourceId || undefined }); }} /></FormField></div>
+      <div className="min-w-48"><FormField label={ru ? "Порядок" : "Order"}><Select aria-label={ru ? "Порядок публикаций" : "Publication order"} value={filter.sortDirection ?? "desc"} onChange={(event) => { setPageIndex(0); setFilter({ ...filter, cursor: undefined, sortDirection: event.target.value as "asc" | "desc" }); }}><option value="desc">{ru ? "Сначала новые" : "Newest first"}</option><option value="asc">{ru ? "Сначала старые" : "Oldest first"}</option></Select></FormField></div>
+      <Button type="submit"><Search size={16} aria-hidden="true" />{ru ? "Найти" : "Search"}</Button>
+    </form> : null}
+    <div className={compact ? "grid min-w-0 gap-4" : "grid min-w-0 items-start gap-4 xl:grid-cols-[minmax(20rem,1fr)_minmax(0,1.5fr)]"}>
+      <div className={`min-w-0 space-y-3 ${selectedCandidate ? (compact ? "hidden" : "hidden xl:block") : ""}`}>
+        <LeadQueryState loading={query.isLoading} error={query.isError} empty={query.isSuccess && !items.length} onRetry={() => void query.refetch()} />
+        {query.isSuccess ? <p className="text-xs text-neutral-400">{ru ? "Найдено" : "Found"}: {query.data?.total ?? items.length}</p> : null}
+        {items.map((candidate) => {
+          const target = candidate.contacts.find((contact) => contact.type === "TELEGRAM" && contact.role === "ADVERTISED_DESTINATION");
+          const targetValue = target?.value ?? (candidate.title.startsWith("@") ? candidate.title : "");
+          const username = /^(?:@|https?:\/\/(?:www\.)?t\.me\/)?([a-z][a-z0-9_]{3,31})\/?$/i.exec(targetValue)?.[1];
+          const displayName = username ? `@${username}` : candidate.title;
+          const avatar = username ? { type: "image" as const, id: username, url: `https://t.me/i/userpic/320/${username}.jpg` } : null;
+          return <Card key={candidate.id} className={selectedCandidate === candidate.id ? "!border-blue-700 !bg-blue-950/20" : ""}>
+            <button className="flex min-h-11 w-full items-center gap-3 text-left" aria-label={candidate.title} aria-pressed={selectedCandidate === candidate.id} onClick={(event) => { opener.current = event.currentTarget; selectCandidate(candidate.id); requestAnimationFrame(() => { heading.current?.focus(); if (window.innerWidth < 1280) heading.current?.scrollIntoView?.({ block: "start" }); }); }}>
+              <IconAvatar icon={avatar} label={displayName} size="md" className="!rounded-full" decorative />
+              <span className="min-w-0"><span className="block break-all text-sm font-semibold text-blue-200">{displayName}</span><span className="mt-1 flex flex-wrap gap-1.5">{candidate.sources.map((source) => { const parts = source.title.split(" · "); const topic = parts.length > 1 ? parts.slice(0, -1).join(" · ") : "—"; const channel = parts.at(-1) ?? source.title; const Topic = /псих|psych/i.test(topic) ? Brain : /(?:^|\s)(?:ии|ai|ші)(?:\s|$)/i.test(topic) ? Sparkles : Tag; const sourceAvatar = source.username && /^[a-z][a-z0-9_]{3,31}$/i.test(source.username) ? { type: "image" as const, id: source.username, url: `https://t.me/i/userpic/320/${source.username}.jpg` } : null; return <span key={source.id} className="inline-flex items-center gap-1 rounded-md border border-neutral-800 bg-neutral-900 px-1.5 py-1 text-xs text-neutral-300"><IconAvatar icon={sourceAvatar} label={channel} size="xs" className="!rounded-full" decorative /><Topic size={13} className="text-blue-300" aria-hidden="true" /><span>{topic} · {channel}</span></span>; })}{!candidate.sources.length ? <span className="text-xs text-neutral-400">{ru ? "Источник не указан" : "Source not specified"}</span> : null}<span className="inline-flex items-center text-xs text-neutral-400">{new Intl.DateTimeFormat(ru ? "ru-RU" : "en", { dateStyle: "medium" }).format(new Date(candidate.latestPublishedAt ?? candidate.createdAt))}</span></span></span>
+            </button>
+          </Card>;
+        })}
+        <Pagination page={pageIndex + 1} pageSize={filter.limit ?? 20} totalItems={query.data?.total ?? 0} totalPages={Math.max(1, Math.ceil((query.data?.total ?? 0) / (filter.limit ?? 20)))} hasNextPage={Boolean(currentPage?.hasMore)} hasPreviousPage={pageIndex > 0} loading={query.isFetching} cursorMode onPageChange={(page) => setPageIndex(page - 1)} onPageSizeChange={(limit) => { setPageIndex(0); setFilter({ ...filter, limit, cursor: undefined }); }} pageSizeOptions={[20, 50, 100]} />
       </div>
-      <div className={compact ? "grid min-w-0 gap-4" : "grid min-w-0 items-start gap-4 xl:grid-cols-[minmax(13rem,.65fr)_minmax(0,2.35fr)]"}>
-        <div
-          className={`min-w-0 space-y-3 ${details ? (compact ? "hidden" : "hidden xl:block") : ""}`}
-        >
-          <LeadQueryState
-            loading={query.isLoading}
-            error={query.isError}
-            empty={query.isSuccess && !items.length}
-            onRetry={() => void query.refetch()}
-          />
-          {items.map((v) => (
-            <Card
-              key={v.id}
-              className={
-                details === v.id ? "!border-blue-700 !bg-blue-950/20" : ""
-              }
-            >
-              <button
-                className="min-h-11 w-full break-words text-left text-sm font-semibold text-blue-200"
-                aria-pressed={details === v.id}
-                onClick={(e) => {
-                  opener.current = e.currentTarget;
-                  setDetails(v.id);
-                  requestAnimationFrame(() => {
-                    heading.current?.focus();
-                    if (window.innerWidth < 1280)
-                      heading.current?.scrollIntoView?.({ block: "start" });
-                  });
-                }}
-              >
-                {v.title}
-              </button>
-              <p className="mt-1 break-words text-xs text-neutral-400">
-                {v.niche || t("Unknown niche")} ·{" "}
-                {t(v.preparation?.workflowState ?? "NEW")}
-              </p>
-              <p className="mt-2 break-words text-xs text-neutral-400">
-                {v.sources.map((s) => s.title).join(" · ") ||
-                  t("Evidence not linked")}
-              </p>
-              {v.contacts.find((c) => c.confirmed) ? (
-                <p className="mt-2 break-all text-xs">
-                  {v.contacts.find((c) => c.confirmed)?.value}
-                </p>
-              ) : null}
-              {v.preparation?.qualification?.score ? (
-                <dl className="mt-3 grid grid-cols-2 gap-2 text-xs">
-                  <div>
-                    <dt className="text-neutral-400">{t("Relevance")}</dt>
-                    <dd>
-                      {v.preparation.qualification.score.relevance ??
-                        t("Insufficient evidence")}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-neutral-400">{t("Risk level")}</dt>
-                    <dd className="break-words text-amber-200">
-                      {v.preparation.qualification.score.riskLevel}
-                    </dd>
-                  </div>
-                </dl>
-              ) : null}
-              {v.risks.length ? (
-                <p className="mt-2 text-xs text-amber-200">
-                  {v.risks.join(" · ")}
-                </p>
-              ) : null}
-              {canReview && !compact ? (
-                <label className="mt-2 flex min-h-11 items-center gap-2 text-xs">
-                  <input
-                    type="checkbox"
-                    aria-label={`Select candidate ${v.title}`}
-                    checked={selected.includes(v.id)}
-                    onChange={(e) => {
-                      const next = e.target.checked
-                        ? [...selected, v.id]
-                        : selected.filter((id) => id !== v.id);
-                      if (next.length > 20) setLimitError(true);
-                      else {
-                        setSelected(next);
-                        setLimitError(false);
-                      }
-                    }}
-                  />
-                  {t("Select")}
-                </label>
-              ) : null}
-            </Card>
-          ))}
-          {query.hasNextPage ? (
-            <Button
-              variant="secondary"
-              disabled={query.isFetchingNextPage}
-              onClick={() => void query.fetchNextPage()}
-            >
-              {t("Load more candidates")}
-            </Button>
-          ) : null}
-        </div>
-        {details ? (
-          <div className="min-w-0 space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <h2
-                ref={heading}
-                tabIndex={-1}
-                className="min-w-0 scroll-mt-20 break-words text-lg font-semibold outline-none"
-              >
-                {detail.data?.title ?? t("Candidate details")}
-              </h2>
-              <Button
-                variant="secondary"
-                onClick={() => {
-                  setDetails(null);
-                  requestAnimationFrame(() => opener.current?.focus());
-                }}
-              >
-                {t("Back to candidates")}
-              </Button>
-            </div>
-            <LeadQueryState
-              loading={detail.isLoading}
-              error={detail.isError}
-              empty={false}
-              onRetry={() => void detail.refetch()}
-            />
-            {detail.data ? (
-              <LeadCandidateContent
-                key={detail.data.id}
-                candidate={detail.data}
-                canReview={canReview}
-                onReload={() => void detail.refetch()}
-              />
-            ) : null}
-          </div>
-        ) : (
-          <div className={compact ? "hidden" : "hidden min-h-52 place-items-center rounded-xl border border-dashed border-neutral-800 p-6 text-sm text-neutral-400 xl:grid"}>
-            {t("Select a candidate to inspect evidence and prepare an offer.")}
-          </div>
-        )}
-      </div>
-      {confirm ? (
-        <Modal
-          open
-          onClose={() => setConfirm(null)}
-          title={t("Confirm bulk review")}
-        >
-          <p className="text-sm">
-            {t(
-              "Apply this human review decision to the selected candidates? No AI or message is sent.",
-            )}{" "}
-            {confirm} · {selected.length}
-          </p>
-          <div className="mt-4 flex flex-wrap gap-2">
-            <Button
-              disabled={review.isPending}
-              onClick={() => review.mutate(confirm)}
-            >
-              {t("Confirm selected review")}
-            </Button>
-            <Button variant="secondary" onClick={() => setConfirm(null)}>
-              {t("Cancel")}
-            </Button>
-          </div>
-        </Modal>
-      ) : null}
-    </section>
-  );
+      {selectedCandidate ? <div className="min-w-0 space-y-4"><h2 ref={heading} tabIndex={-1} className="min-w-0 scroll-mt-20 break-words text-lg font-semibold outline-none">{detail.data?.title ?? t("Candidate details")}</h2>
+        <LeadQueryState loading={detail.isLoading} error={detail.isError} empty={false} onRetry={() => void detail.refetch()} />
+        {detail.data ? <LeadCandidateContent key={detail.data.id} candidate={detail.data} canReview={canReview} onReload={() => void detail.refetch()} /> : null}
+      </div> : <div className={compact ? "hidden" : "hidden min-h-52 place-items-center rounded-xl border border-dashed border-neutral-800 p-6 text-sm text-neutral-400 xl:grid"}>{ru ? "Выберите кандидата, чтобы посмотреть подробности" : "Select a candidate to view details"}</div>}
+    </div>
+  </section>;
 }

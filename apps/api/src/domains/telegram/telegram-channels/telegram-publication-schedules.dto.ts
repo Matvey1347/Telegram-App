@@ -24,6 +24,7 @@ export class TelegramPublicationScheduleSlotInputDto {
   @Matches(/^([01]\d|2[0-3]):[0-5]\d$/) time!: string;
   @IsOptional() @IsInt() @Min(0) position?: number;
   @IsOptional() @IsBoolean() isActive?: boolean;
+  @IsOptional() @IsBoolean() isOptional?: boolean;
   @IsOptional() @IsString() iconId?: string | null;
 }
 
@@ -59,5 +60,5 @@ export class TelegramPublicationBatchOccurrenceQueryDto extends TelegramPublicat
 }
 
 export class TelegramPublicationPlanCalendarQueryDto extends TelegramPublicationOccurrenceQueryDto {
-  @IsString() scheduleId!: string;
+  @IsOptional() @IsString() scheduleId?: string;
 }

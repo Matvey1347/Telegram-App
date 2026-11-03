@@ -5,6 +5,7 @@ export const OPERATIONS_NOTIFICATION_TYPES = [
   "TELEGRAM_ACCOUNT_REAUTH_REQUIRED",
   "CRM_AI_LEAD_QUALIFIED",
   "SYSTEM_TEST",
+  "CHANNEL_POSTS_REMINDER",
 ] as const;
 
 export type OperationsNotificationType =
@@ -26,6 +27,7 @@ export const OPERATIONS_NOTIFICATION_COPY_KEYS = [
   "telegram.notification.accountReauthRequired",
   "crm.notification.aiLeadQualified",
   "operations.notification.pushTest",
+  "telegram.notification.channelPostsReminder",
 ] as const;
 
 export type OperationsNotificationCopyKey =
@@ -93,6 +95,8 @@ export type OperationsNotificationPreferences = {
   crmFollowUpEnabled?: boolean;
   crmAiLeadsEnabled?: boolean;
   crmMessagePreviewEnabled?: boolean;
+  channelRemindersPushEnabled?: boolean;
+  channelRemindersTelegramEnabled?: boolean;
 };
 
 export const CRM_NOTIFICATION_PREFERENCE_DEFAULTS = {
@@ -103,11 +107,24 @@ export const CRM_NOTIFICATION_PREFERENCE_DEFAULTS = {
   crmMessagePreviewEnabled: false,
 } as const;
 
-export type OperationsNotificationPreferencesPatch = Partial<Pick<OperationsNotificationPreferences,
-  "webPushEnabled" | keyof typeof CRM_NOTIFICATION_PREFERENCE_DEFAULTS>>;
+export type OperationsNotificationPreferencesPatch = Partial<
+  Pick<
+    OperationsNotificationPreferences,
+    | "webPushEnabled"
+    | "channelRemindersPushEnabled"
+    | "channelRemindersTelegramEnabled"
+    | keyof typeof CRM_NOTIFICATION_PREFERENCE_DEFAULTS
+  >
+>;
 
 export type OperationsNotificationTestResult = {
-  status: "sent" | "failed" | "disabled" | "unavailable" | "no_subscription" | "rate_limited";
+  status:
+    | "sent"
+    | "failed"
+    | "disabled"
+    | "unavailable"
+    | "no_subscription"
+    | "rate_limited";
   attempted: number;
   delivered: number;
   failed: number;

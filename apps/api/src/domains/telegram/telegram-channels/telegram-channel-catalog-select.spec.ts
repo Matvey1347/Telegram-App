@@ -12,6 +12,12 @@ describe('TelegramChannelCatalogService.selectOptions', () => {
             username: 'owned',
             telegramChatId: '1',
             photoUrl: null,
+            presentationIcon: {
+              id: 'icon-1',
+              type: 'emoji',
+              emoji: '🗞️',
+              imageUrl: null,
+            },
             currentSubscribersCount: 100,
             isActive: true,
             adminLinks: [
@@ -54,6 +60,7 @@ describe('TelegramChannelCatalogService.selectOptions', () => {
         }),
         select: expect.objectContaining({
           currentSubscribersCount: true,
+          presentationIcon: true,
           adminLinks: {
             select: { id: true, telegramUserAccountIntegrationId: true },
           },
@@ -61,6 +68,10 @@ describe('TelegramChannelCatalogService.selectOptions', () => {
       }),
     );
     expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({
+      presentationIconPresentation: { type: 'unicode', value: '🗞️' },
+    });
+    expect(result[0]).not.toHaveProperty('presentationIcon');
   });
 
   it('includes active test channels only when a post composer explicitly requests them', async () => {

@@ -1,5 +1,5 @@
 import type { AxiosInstance, AxiosRequestConfig } from "axios";
-import type { EditorShortcutPreferences } from "@telegram-system/shared";
+import type { AccountShell, EditorShortcutPreferences } from "@telegram-system/shared";
 import type {
   AccountMe,
   AuthResponse,
@@ -62,6 +62,7 @@ export function createWorkspaceApi({
   };
 
   const accountApi = {
+    shell: async () => (await api.get<AccountShell>("/account/shell")).data,
     me: async () => (await api.get<AccountMe>("/account/me")).data,
     updateMe: async (payload: {
       name?: string;

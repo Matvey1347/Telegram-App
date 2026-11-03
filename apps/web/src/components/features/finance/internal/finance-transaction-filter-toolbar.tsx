@@ -12,6 +12,7 @@ export function FinanceTransactionFilterToolbar({
   categoryId,
   onSearchChange,
   onAccountChange,
+  onAccountFocus,
   onCategoryChange,
 }: {
   accounts: Account[];
@@ -21,6 +22,7 @@ export function FinanceTransactionFilterToolbar({
   categoryId: string;
   onSearchChange: (value: string) => void;
   onAccountChange: (value: string) => void;
+  onAccountFocus: () => void;
   onCategoryChange: (value: string) => void;
 }) {
   return (
@@ -29,7 +31,7 @@ export function FinanceTransactionFilterToolbar({
         <Search aria-hidden="true" size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500" />
         <Input aria-label="Search transactions" value={search} onChange={(event) => onSearchChange(event.target.value)} className="pl-9" placeholder="Search transactions" />
       </label>
-      <Select aria-label="Filter transactions by account" value={accountId} onChange={(event) => onAccountChange(event.target.value)}>
+      <Select aria-label="Filter transactions by account" value={accountId} onFocus={onAccountFocus} onChange={(event) => onAccountChange(event.target.value)}>
         <option value="">All accounts</option>
         {accounts.map((account) => <option key={account.id} value={account.id} {...financeOptionIcon(account)}>{accountDisplayName(account)}</option>)}
       </Select>

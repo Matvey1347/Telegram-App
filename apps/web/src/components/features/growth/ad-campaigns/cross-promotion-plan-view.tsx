@@ -5,6 +5,7 @@ import { ChevronDown, Plus, Trash2 } from "lucide-react";
 import type {
   CrossPromotionPlan,
   CrossPromotionPlanKind,
+  TelegramChannelNetworkOption,
   TelegramAdProduct,
   TelegramAdvertiser,
   TelegramSystemBotPostDraft,
@@ -13,7 +14,6 @@ import { normalizeTelegramPostMediaItems } from "@telegram-system/shared";
 import type {
   Promo,
   TelegramChannel,
-  TelegramChannelNetwork,
   TelegramInviteLinkOption,
 } from "@/lib/api";
 import {
@@ -117,7 +117,7 @@ export function CrossPromotionPlanView({
   allChannels: TelegramChannel[];
   ownChannels: TelegramChannel[];
   partnerChannels: TelegramChannel[];
-  ownNetworks: TelegramChannelNetwork[];
+  ownNetworks: TelegramChannelNetworkOption[];
   productsByChannelId: Record<string, TelegramAdProduct[]>;
   targetIds: string[];
   updateTargetIds: (ids: string[]) => void;

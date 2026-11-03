@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { TelegramBot } from "@/lib/api";
-import { SwitchApplicationForm } from "./telegram-bots-page";
+import { SwitchApplicationForm } from "./telegram-bot-action-modals";
 
 const bot: TelegramBot = {
   id: "bot-1",

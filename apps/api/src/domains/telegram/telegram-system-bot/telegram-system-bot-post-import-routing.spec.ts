@@ -17,6 +17,7 @@ describe('canonical System Bot website post import routing', () => {
 
   it('exposes one mode-based import resource and one preview route', () => {
     expect(controller).toContain("@Post('post-imports')");
+    expect(controller).toContain("@Get('post-imports/recover')");
     expect(controller).toContain("@Get('post-imports/:workflowId')");
     expect(controller).toContain("@Delete('post-imports/:workflowId')");
     expect(controller).toContain("@Post('post-preview')");

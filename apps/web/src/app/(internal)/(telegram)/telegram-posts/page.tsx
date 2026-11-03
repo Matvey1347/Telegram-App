@@ -13,6 +13,7 @@ import {
   type Dispatch,
   type SetStateAction,
 } from "react";
+import dynamic from "next/dynamic";
 import * as Slider from "@radix-ui/react-slider";
 import { createPortal } from "react-dom";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -85,22 +86,18 @@ import {
   ManagedPostInternalLinksNotice,
 } from "@/components/features/telegram/telegram/managed-post-internal-links-notice";
 import { TelegramPostMediaUpload } from "@/components/features/telegram/telegram/telegram-post-media-upload";
-import {
-  TelegramTextEditor,
-  type TelegramTextEditorHandle,
-} from "@/components/features/telegram/telegram/telegram-text-editor";
-import { TelegramPostPreview } from "@/components/features/telegram/telegram/telegram-post-preview";
+import type { TelegramTextEditorHandle } from "@/components/features/telegram/telegram/telegram-text-editor";
+import { LazyTelegramTextEditor } from "@/components/features/telegram/telegram/lazy-telegram-text-editor";
 import { TelegramPostSendToBotButton } from "@/components/features/telegram/telegram/telegram-post-send-to-bot-button";
 import { hasInvalidTelegramInlineButtons } from "@/lib/features/telegram/telegram-inline-buttons";
-import { TelegramCustomEmojiPacksModal } from "@/components/features/telegram/telegram/telegram-custom-emoji-packs-modal";
 import {
+  invalidateManagedPostScheduleReads,
   mapManagedPostPages,
   reconcileManagedPost,
   restoreManagedPostPages,
   snapshotManagedPostPages,
 } from "@/components/features/telegram/telegram/managed-post-cache";
 import { useManagedPostDueRefresh } from "@/components/features/telegram/telegram/use-managed-post-due-refresh";
-import { ManagedPostHistoryModal } from "@/components/features/telegram/telegram/managed-post-history-modal";
 import { ManagedPostExportButton } from "@/components/features/telegram/telegram/managed-post-export-button";
 import { ManagedPostReadOnlyPanel } from "@/components/features/telegram/telegram/managed-post-read-only-panel";
 import { ManagedPostSearchInput } from "@/components/features/telegram/telegram/managed-post-search-input";
@@ -119,13 +116,33 @@ import {
   postBatchLifetimeFromFormat,
 } from "@/components/features/telegram/telegram/post-from-bot/post-batch-format";
 import { ManagedPostHypothesisSelector } from "@/components/features/telegram/telegram/managed-post-hypothesis-selector";
-import { ContentHypothesesWorkspace } from "@/components/features/telegram/telegram/content-hypotheses-modal";
 import {
   TelegramPostsWorkspaceNavigation,
   type TelegramPostsWorkspaceView,
 } from "@/components/features/telegram/telegram/telegram-posts-workspace-navigation";
 import { MemberBadge } from "@/components/features/workspace/member-badge";
 import { MemberSelect } from "@/components/features/workspace/member-select";
+
+const TelegramPostPreview = dynamic(() =>
+  import("@/components/features/telegram/telegram/telegram-post-preview").then(
+    (module) => module.TelegramPostPreview,
+  ),
+);
+const TelegramCustomEmojiPacksModal = dynamic(() =>
+  import("@/components/features/telegram/telegram/telegram-custom-emoji-packs-modal").then(
+    (module) => module.TelegramCustomEmojiPacksModal,
+  ),
+);
+const ManagedPostHistoryModal = dynamic(() =>
+  import("@/components/features/telegram/telegram/managed-post-history-modal").then(
+    (module) => module.ManagedPostHistoryModal,
+  ),
+);
+const ContentHypothesesWorkspace = dynamic(() =>
+  import("@/components/features/telegram/telegram/content-hypotheses-modal").then(
+    (module) => module.ContentHypothesesWorkspace,
+  ),
+);
 import {
   iconsApi,
   telegramAdSalesApi,
@@ -975,10 +992,12 @@ function TelegramPostWorkspace({
     queryKey: telegramPostKeys.managedList(channelId, {
       all: true,
     }),
-    queryFn: () =>
-      telegramChannelsApi.managedPostsPage(channelId, {
-        all: true,
-      }),
+    queryFn: () => telegramChannelsApi.managedPostsPage(channelId, { all: true }),
+    enabled: workspaceView === "posts",
+    // This archive is expensive and already kept in memory for tab switches.
+    // Every managed-post mutation invalidates the channel list family, so a
+    // longer stale window avoids repeat reads without hiding local edits.
+    staleTime: 15 * 60_000,
   });
   const deepLinkedPost = useManagedPostDeepLink({
     channelId,
@@ -1858,9 +1877,7 @@ function TelegramPostWorkspace({
       queryClient.invalidateQueries({
         queryKey: telegramPostKeys.managedLists(channelId),
       }),
-      queryClient.invalidateQueries({
-        queryKey: telegramPostKeys.managedCalendar(channelId),
-      }),
+      invalidateManagedPostScheduleReads(queryClient, channelId),
       queryClient.invalidateQueries({
         queryKey: [
           "telegram-ad-availability",
@@ -3310,6 +3327,7 @@ function TelegramPostWorkspace({
 
   const run = () => {
     if (isReadOnlyTelegramPost) return;
+    setError("");
     const editingPost = editing;
     const saveMode = effectivePublishingMode;
     const saveTitle = title.trim();
@@ -3501,9 +3519,7 @@ function TelegramPostWorkspace({
           onPostSelect(post.id);
         }
         await Promise.all([
-          queryClient.invalidateQueries({
-            queryKey: telegramPostKeys.managedCalendar(channelId),
-          }),
+          invalidateManagedPostScheduleReads(queryClient, channelId),
           queryClient.invalidateQueries({
             queryKey: telegramPostKeys.linkTargets(channelId),
           }),
@@ -3536,27 +3552,16 @@ function TelegramPostWorkspace({
           toastIcon,
         );
       } catch (runError) {
+        const message = localizedApiError(runError, t("telegram.posts.editor.saveError", { title: saveTitle }));
+        setError(message);
+        pushToast(message, "error", 7000);
         if (persisted) {
-          await Promise.all([
-            queryClient.invalidateQueries({
-              queryKey: telegramPostKeys.managedLists(channelId),
-            }),
-            queryClient.invalidateQueries({
-              queryKey: telegramPostKeys.managedCalendar(channelId),
-            }),
-            queryClient.invalidateQueries({
-              queryKey: telegramPostKeys.linkTargets(channelId),
-            }),
+          void Promise.allSettled([
+            queryClient.invalidateQueries({ queryKey: telegramPostKeys.managedLists(channelId) }),
+            invalidateManagedPostScheduleReads(queryClient, channelId),
+            queryClient.invalidateQueries({ queryKey: telegramPostKeys.linkTargets(channelId) }),
           ]);
         }
-        pushToast(
-          localizedApiError(
-            runError,
-            t("telegram.posts.editor.saveError", { title: saveTitle }),
-          ),
-          "error",
-          7000,
-        );
       } finally {
         setPendingPostSaves((current) =>
           current.filter((item) => item.id !== pendingId),
@@ -4440,27 +4445,29 @@ function TelegramPostWorkspace({
           setDeletingPlannerFormat(null);
         }}
       />
-      <TelegramCustomEmojiPacksModal
-        open={customEmojiPacksOpen}
-        onClose={() => setCustomEmojiPacksOpen(false)}
-        packs={customEmojiPacks.data?.packs || []}
-        onImport={async (input) => {
-          const response =
-            await telegramChannelsApi.importCustomEmojiPack(input);
-          queryClient.setQueryData(
-            workspaceKeys.telegramCustomEmojiPacks(),
-            response,
-          );
-        }}
-        onDetach={async (packId) => {
-          const response =
-            await telegramChannelsApi.detachCustomEmojiPack(packId);
-          queryClient.setQueryData(
-            workspaceKeys.telegramCustomEmojiPacks(),
-            response,
-          );
-        }}
-      />
+      {customEmojiPacksOpen ? (
+        <TelegramCustomEmojiPacksModal
+          open
+          onClose={() => setCustomEmojiPacksOpen(false)}
+          packs={customEmojiPacks.data?.packs || []}
+          onImport={async (input) => {
+            const response =
+              await telegramChannelsApi.importCustomEmojiPack(input);
+            queryClient.setQueryData(
+              workspaceKeys.telegramCustomEmojiPacks(),
+              response,
+            );
+          }}
+          onDetach={async (packId) => {
+            const response =
+              await telegramChannelsApi.detachCustomEmojiPack(packId);
+            queryClient.setQueryData(
+              workspaceKeys.telegramCustomEmojiPacks(),
+              response,
+            );
+          }}
+        />
+      ) : null}
       <ConfirmDeleteModal
         open={Boolean(deletingPlannerSlotGroup)}
         onClose={() => setDeletingPlannerSlotGroup(null)}
@@ -5479,8 +5486,8 @@ function TelegramPostWorkspace({
               </div>
             </div>
             <FormField label={t("telegram.posts.editor.text")}>
-              <TelegramTextEditor
-                ref={textEditorRef}
+              <LazyTelegramTextEditor
+                editorRef={textEditorRef}
                 value={text}
                 onChange={setText}
                 disabled={busy}
@@ -5710,6 +5717,7 @@ function TelegramPostWorkspace({
                           : t("telegram.posts.editor.schedulePost")}
               </Button>
             </div>
+            {error ? <p role="alert" className="text-right text-sm text-rose-300">{error}</p> : null}
             {publishDisabledReason ? (
               <p className="text-right text-xs text-neutral-500">
                 {publishDisabledReason}
@@ -5734,9 +5742,9 @@ function TelegramPostWorkspace({
                 }}
               />
             ) : null}
-            {editing ? (
+            {editing && historyOpen ? (
               <ManagedPostHistoryModal
-                open={historyOpen}
+                open
                 channelId={channelId}
                 postId={editing.id}
                 restorePending={restorePostRevision.isPending}

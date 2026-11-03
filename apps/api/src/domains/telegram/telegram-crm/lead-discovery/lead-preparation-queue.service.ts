@@ -53,10 +53,15 @@ export class TelegramLeadPreparationQueueService {
       ? Prisma.sql`o."sourceId" IN (${Prisma.join(eligibleIds)})`
       : Prisma.sql`FALSE`;
     const rows = await this.context.prisma.$queryRaw<
-      Array<{ id: string; workflow: string; fresh: boolean }>
+      Array<{ id: string; workflow: string; fresh: boolean; total: bigint; latest_published_at: Date | null }>
     >(Prisma.sql`
    WITH current_candidates AS (
     SELECT c.id,
+     (SELECT MAX(po."publishedAt") FROM "TelegramLeadObservation" po WHERE po."workspaceId"=c."workspaceId" AND po."candidateId"=c.id) AS latest_published_at,
+     CASE WHEN c.risks ?| ARRAY['UNRESOLVED_PROJECT','IMAGE_EVIDENCE_UNVERIFIED'] THEN 'TARGET_UNRESOLVED'
+       WHEN EXISTS (SELECT 1 FROM jsonb_array_elements(c.contacts) x WHERE x->>'type'<>'WEBSITE' AND NOT (x->>'type'='TELEGRAM' AND x->>'value' ~* 'bot$') AND x->>'role'='SALES_CONTACT' AND x->>'purpose' IN ('CONTACT_FOR_ADS','PROJECT_CONTACT') AND length(btrim(COALESCE(x->>'evidence','')))>0) THEN 'BUSINESS_CONTACT_FOUND'
+       WHEN EXISTS (SELECT 1 FROM jsonb_array_elements(c.contacts) x WHERE x->>'role'='ADVERTISED_DESTINATION') THEN 'CONTACT_POINT_ONLY'
+       ELSE 'CONTACT_NOT_FOUND' END AS contact_category,
      (q.id IS NOT NULL AND q.status='READY' AND q."expiresAt">(NOW() AT TIME ZONE 'UTC') AND q."policyVersion"=${this.context.scorePolicy().version} AND q."requestSnapshot"->'policy'=${JSON.stringify(this.context.scorePolicy())}::jsonb AND ${this.context.enabled()}
       AND ${leadQualificationSnapshotCurrent}
       AND NOT EXISTS(SELECT 1 FROM jsonb_array_elements(COALESCE(q."requestSnapshot"->'checks','[]'::jsonb)) ref LEFT JOIN "TelegramLeadObservation" o ON o.id=ref->>'id' AND o."workspaceId"=c."workspaceId" WHERE NOT(${validSources}))
@@ -66,12 +71,13 @@ export class TelegramLeadPreparationQueueService {
     LEFT JOIN "TelegramAdvertiser" a ON a.id=c."contactId" AND a."workspaceId"=c."workspaceId"
     LEFT JOIN LATERAL(SELECT * FROM "TelegramLeadQualification" q WHERE q."candidateId"=c.id AND q."workspaceId"=c."workspaceId" ORDER BY q."createdAt" DESC,q.id DESC LIMIT 1) q ON TRUE
     WHERE c."workspaceId"=${workspaceId} AND c."reviewStatus"<>'MERGED' AND c."expiresAt">(NOW() AT TIME ZONE 'UTC')
-     ${cursor ? Prisma.sql`AND c.id<${cursor}` : Prisma.empty}
      ${contactId ? Prisma.sql`AND c."contactId"=${contactId}` : Prisma.empty}
      ${!hasCrmScope ? Prisma.sql`AND c."contactId" IS NULL` : own ? Prisma.sql`AND (c."contactId" IS NULL OR a."ownerMemberId"=${own})` : Prisma.empty}
      ${input.search ? Prisma.sql`AND c.title ILIKE ${`%${input.search.slice(0, 100)}%`}` : Prisma.empty}
+     ${input.sourceId ? Prisma.sql`AND EXISTS (SELECT 1 FROM "TelegramLeadObservation" so WHERE so."workspaceId"=c."workspaceId" AND so."candidateId"=c.id AND so."sourceId"=${input.sourceId})` : Prisma.empty}
    ), states AS(SELECT *,CASE WHEN "reviewStatus"='REJECTED' OR "riskStatus"='REJECTED' THEN 'REJECTED' WHEN "contactId" IS NOT NULL THEN 'LINKED' WHEN "riskStatus"='SUSPICIOUS' OR fresh AND score->>'riskLevel'='RISK_HIGH' THEN 'SUSPICIOUS' WHEN fresh AND "qualificationReviewedAt">=qualification_created AND (score->>'riskLevel'<>'RISK_HIGH' OR "riskAcknowledgedAt">=qualification_created) AND "qualificationContextVersion"="contextVersion" AND "reviewStatus"='APPROVED' AND "qualificationDecision" IN('QUALIFIED','LOW_RELEVANCE') THEN "qualificationDecision" WHEN qualification_id IS NOT NULL OR "reviewStatus"='APPROVED' THEN 'NEEDS_REVIEW' ELSE 'NEW' END AS workflow FROM current_candidates)
-   SELECT id,workflow,fresh FROM states WHERE TRUE ${input.workflow === 'HIGH_PRIORITY' ? Prisma.sql`AND fresh AND score->>'priority'='HIGH' AND workflow='QUALIFIED'` : input.workflow ? Prisma.sql`AND workflow=${input.workflow}` : Prisma.empty} ORDER BY id DESC LIMIT ${limit + 1}`);
+   , matching AS (SELECT *, count(*) OVER() AS total FROM states WHERE TRUE ${input.workflow === 'HIGH_PRIORITY' ? Prisma.sql`AND fresh AND score->>'priority'='HIGH' AND workflow='QUALIFIED'` : input.workflow ? Prisma.sql`AND workflow=${input.workflow}` : Prisma.empty} ${input.contactCategory ? Prisma.sql`AND contact_category=${input.contactCategory}` : Prisma.empty})
+   SELECT id,workflow,fresh,total,latest_published_at FROM matching WHERE TRUE ${!input.page && cursor ? Prisma.sql`AND id<${cursor}` : Prisma.empty} ORDER BY ${input.page ? Prisma.sql`latest_published_at ${input.sortDirection === 'asc' ? Prisma.raw('ASC') : Prisma.raw('DESC')} NULLS LAST,id DESC` : Prisma.raw('id DESC')} ${input.page ? Prisma.sql`OFFSET ${(input.page - 1) * limit}` : Prisma.empty} LIMIT ${limit + 1}`);
     const ids = rows.slice(0, limit).map((row) => row.id);
     const candidates = ids.length
       ? await this.context.prisma.telegramLeadCandidate.findMany({
@@ -85,7 +91,7 @@ export class TelegramLeadPreparationQueueService {
               orderBy: { observedAt: 'desc' },
               take: 1,
               include: {
-                source: { select: { id: true, title: true, url: true } },
+                source: { select: { id: true, title: true, url: true, username: true } },
               },
             },
             preparedDrafts: {
@@ -98,11 +104,15 @@ export class TelegramLeadPreparationQueueService {
               take: 1,
             },
           },
-          orderBy: { id: 'desc' },
+          orderBy: { id: input.sortDirection === 'asc' ? 'asc' : 'desc' },
         })
       : [];
+    const candidatesById = new Map(candidates.map((candidate) => [candidate.id, candidate]));
     return {
-      items: candidates.map((candidate) => {
+      total: Number(rows[0]?.total ?? 0),
+      items: ids.flatMap((id) => {
+        const candidate = candidatesById.get(id);
+        if (!candidate) return [];
         const item = rows.find((row) => row.id === candidate.id)!,
           q = candidate.qualifications[0];
         const summary: LeadPreparationSummary = {
@@ -134,7 +144,7 @@ export class TelegramLeadPreparationQueueService {
             ),
           ),
         };
-        return { ...leadCandidateSummary(candidate), preparation: summary };
+        return [{ ...leadCandidateSummary(candidate), latestPublishedAt: item.latest_published_at?.toISOString() ?? null, preparation: summary }];
       }),
       hasMore: rows.length > limit,
       nextCursor: rows.length > limit ? leadCursor(ids.at(-1)!) : null,

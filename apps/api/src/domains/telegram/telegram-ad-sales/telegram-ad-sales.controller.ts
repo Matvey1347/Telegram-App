@@ -66,9 +66,11 @@ import {
   UpdateTelegramAdProductDto,
   UpdateTelegramAdSaleDto,
   UpdateTelegramAdSalePlacementDto,
+  TelegramAdSaleEditWorkflowDto,
 } from './dto';
 import { TelegramAdSalesBulkService } from './telegram-ad-sales-bulk.service';
 import { TelegramAdSalesCheckoutService } from './telegram-ad-sales-checkout.service';
+import { TelegramAdSalesEditWorkflowService } from './telegram-ad-sales-edit-workflow.service';
 import { TelegramAdSalesCrmAdvertisersService } from './telegram-ad-sales-crm-advertisers.service';
 import { TelegramAdSalesCrmSettingsService } from './telegram-ad-sales-crm-settings.service';
 import { TelegramAdSalesService } from './telegram-ad-sales.service';
@@ -83,6 +85,7 @@ export class TelegramAdSalesController {
     private readonly service: TelegramAdSalesService,
     private readonly bulkService: TelegramAdSalesBulkService,
     private readonly checkoutService: TelegramAdSalesCheckoutService,
+    private readonly editWorkflowService: TelegramAdSalesEditWorkflowService,
     private readonly crmAdvertisersService: TelegramAdSalesCrmAdvertisersService,
     private readonly crmSettingsService: TelegramAdSalesCrmSettingsService,
     private readonly legacyCrmService: TelegramAdSalesLegacyCrmService,
@@ -607,6 +610,21 @@ export class TelegramAdSalesController {
     @Body() dto: UpdateTelegramAdSaleDto,
   ) {
     return this.service.updateSale(user.sub, id, dto);
+  }
+
+  @Post(':saleId/edit-workflow')
+  saveSaleWorkflow(
+    @CurrentUser() user: JwtUser,
+    @Param('saleId') saleId: string,
+    @Body() dto: TelegramAdSaleEditWorkflowDto,
+    @Res() res: Response,
+  ) {
+    return this.streamResponse.stream(res, {
+      eventPrefix: 'telegram_ad_sales.edit_workflow',
+      persistLifecycleLogs: false,
+      action: (onProgress) =>
+        this.editWorkflowService.save(user.sub, saleId, dto, onProgress),
+    });
   }
 
   @Delete(':id')

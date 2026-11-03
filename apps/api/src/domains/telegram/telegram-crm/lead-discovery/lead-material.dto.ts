@@ -1,6 +1,7 @@
 import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
+  ArrayMinSize,
   ArrayUnique,
   IsArray,
   IsBoolean,
@@ -38,6 +39,15 @@ export class LeadAnalyzeDto {
   @ArrayMaxSize(5)
   @ArrayUnique()
   @IsString({ each: true })
+  observationIds!: string[];
+}
+export class LeadMediaPilotDto {
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(30)
+  @ArrayUnique()
+  @IsString({ each: true })
+  @MaxLength(100, { each: true })
   observationIds!: string[];
 }
 export class LeadContactDto implements LeadContact {

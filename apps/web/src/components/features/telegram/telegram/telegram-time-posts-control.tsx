@@ -49,7 +49,9 @@ function reconcileTimePosts(
   queryClient: ReturnType<typeof useQueryClient>,
   channel: Awaited<ReturnType<typeof telegramChannelsApi.updateQuiet>>,
 ) {
-  patchTelegramChannelCaches(queryClient, channel);
+  patchTelegramChannelCaches(queryClient, channel, {
+    invalidateNetworks: true,
+  });
   queryClient.setQueriesData<TelegramChannelSelectOption[]>(
     { queryKey: telegramChannelKeys.selects() },
     (channels) =>
