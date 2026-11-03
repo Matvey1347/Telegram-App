@@ -584,7 +584,7 @@ export type TelegramAdSalePublicationDeletionResult = {
 };
 
 export type TelegramAdvertiserContact = {
-  instagram?: import('./crm-instagram-contacts').CrmInstagramMethod;
+  instagram?: import("./crm-instagram-contacts").CrmInstagramMethod;
   id: string;
   workspaceId: string;
   advertiserId: string;
