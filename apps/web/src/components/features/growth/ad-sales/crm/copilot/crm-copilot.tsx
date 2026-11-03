@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/primitives";
 import { CrmCopilotDraftEditor } from "./crm-copilot-draft";
 import { useCrmCopilot } from "./use-crm-copilot";
 
-export type CrmCopilotHandle = { review: (id: string, text: string) => void };
+export type CrmCopilotHandle = { review: (id: string, text: string) => void; activate: () => void };
 function failureMessage(draft: CrmCopilotDraft) {
   const warnings = draft.warnings.join(" ");
   if (/POLICY|PERMISSION|ACCESS|PROCESSING/.test(warnings))
@@ -26,22 +26,17 @@ export const CrmCopilot = forwardRef<
     conversationId: string;
     contactId: string | null;
     canSend: boolean;
+    compactTrigger?: boolean;
     onInsert: (draft: CrmCopilotDraft) => void;
   }
 >(function CrmCopilot(
-  { workspaceId, conversationId, contactId, canSend, onInsert },
+  { workspaceId, conversationId, contactId, canSend, onInsert, compactTrigger = false },
   ref,
 ) {
   const copilot = useCrmCopilot(workspaceId, conversationId, contactId);
   const [review, setReview] = useState<{ id: string; text: string } | null>(
     null,
   );
-  useImperativeHandle(ref, () => ({
-    review: (id, text) => {
-      setReview({ id, text });
-      copilot.setOpen(true);
-    },
-  }));
   const items = copilot.drafts.data?.items ?? [];
   const selected = review
     ? items.find((item) => item.id === review.id)
@@ -65,6 +60,14 @@ export const CrmCopilot = forwardRef<
       void copilot.generate(true);
     else void copilot.drafts.refetch();
   };
+  useImperativeHandle(ref, () => ({
+    review: (id, text) => { setReview({ id, text }); copilot.setOpen(true); },
+    activate: () => {
+      if (!canSend || copilot.generation.isPending || copilot.update.isPending || (recoveryRequired && copilot.drafts.isFetching)) return;
+      if (recoveryRequired) checkGeneration(); else generate();
+    },
+  }));
+  if (compactTrigger && !copilot.open) return null;
   return (
     <section
       aria-label="AI Sales Copilot"

@@ -30,6 +30,7 @@ const row = (id: string, lastMessageAt: Date | null = time, linked = true) => ({
   lastInboundAt: lastMessageAt,
   lastOutboundAt: null,
   unreadCount: 2,
+  ignoreInUnread: false,
   readState: 'UNREAD',
   folderMemberships: [] as Array<{
     workspaceId: string;
@@ -365,7 +366,7 @@ describe('TelegramCrmInboxConversationsService', () => {
       const where = findMany.mock.calls[0][0].where;
       expect(where.state).toBe(filter === 'ARCHIVED' ? 'ARCHIVED' : 'ACTIVE');
       if (filter === 'UNREAD')
-        expect(where.AND).toContainEqual({ unreadCount: { gt: 0 } });
+        expect(where.AND).toContainEqual({ unreadCount: { gt: 0 }, ignoreInUnread: false });
     },
   );
 

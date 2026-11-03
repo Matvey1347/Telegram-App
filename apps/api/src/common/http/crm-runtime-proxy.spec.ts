@@ -129,6 +129,34 @@ describe('CRM runtime owner proxy', () => {
     expect(local).not.toHaveBeenCalled();
   });
 
+  it('keeps the local reaction lookup in the local API only when explicitly enabled', async () => {
+    const upstream = await listen((_req, res) => res.end('upstream'));
+    const app = express();
+    app.use(createCrmRuntimeProxy(upstream, { localReactionAssets: true }));
+    app.use((_req, res) => res.send('local'));
+    expect(
+      (
+        await supertest(app).post(
+          '/api/telegram-crm/conversations/id/reaction-assets',
+        )
+      ).text,
+    ).toBe('local');
+    expect(
+      (
+        await supertest(app).get(
+          '/api/telegram-crm/conversations/id/reaction-assets',
+        )
+      ).text,
+    ).toBe('upstream');
+    expect(
+      (
+        await supertest(app).post(
+          '/api/telegram-crm/conversations/id/reaction-assets/other',
+        )
+      ).text,
+    ).toBe('upstream');
+  });
+
   it('rejects a second proxy hop before forwarding credentials again', async () => {
     const called = jest.fn();
     const upstream = await listen((_req, res) => {

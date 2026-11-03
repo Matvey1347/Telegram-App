@@ -1,13 +1,13 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { useState } from "react";
 import type {
   LeadHistoryJob,
   LeadPipelineProgress,
 } from "@telegram-system/shared";
 import { leadDiscoveryApi } from "@/lib/features/growth/lead-discovery-api";
-import { LeadSourceCard } from "./lead-source-card";
-import { sourceFixture } from "./lead-fixtures.test-support";
+import { LeadHistoryPanel } from "./lead-history-panel";
 
 vi.mock("@/providers/toast-provider", () => ({
   useAppToast: () => ({ setProgress: vi.fn(), pushToast: vi.fn() }),
@@ -51,10 +51,14 @@ function mount() {
   });
   render(
     <QueryClientProvider client={client}>
-      <table><tbody><LeadSourceCard source={sourceFixture()} canManage enabled /></tbody></table>
+      <HistoryHarness />
     </QueryClientProvider>,
   );
   return client;
+}
+function HistoryHarness() {
+  const [open, setOpen] = useState(false);
+  return <><button onClick={() => setOpen(true)}>История за 90 дней</button>{open ? <LeadHistoryPanel workspace="workspace-one" sourceId="source-1" canManage enabled /> : null}</>;
 }
 function open() {
   fireEvent.click(screen.getByRole("button", { name: "История за 90 дней" }));

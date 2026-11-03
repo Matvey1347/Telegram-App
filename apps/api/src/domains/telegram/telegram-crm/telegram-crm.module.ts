@@ -1,3 +1,7 @@
+import { TelegramBotApiClient } from '@api/telegram/shared/bot/telegram-bot-api.client';
+import { TelegramBotReactionAssets } from '@api/telegram/shared/bot/telegram-bot-reaction-assets';
+import { TelegramSystemBotConfigService } from '../telegram-system-bot/telegram-system-bot-config.service';
+import { TelegramCrmReactionAssetsService } from './telegram-crm-reaction-assets.service';
 import { TelegramCrmFolderRefreshService } from './telegram-crm-folder-refresh.service';
 import { TelegramCrmInboxFoldersService } from './telegram-crm-inbox-folders.service';
 import { TelegramCrmStreamAccessService } from './telegram-crm-stream-access.service';
@@ -126,6 +130,10 @@ import { TelegramCrmRuntimeLeaseService } from './telegram-crm-runtime-lease.ser
     TelegramCrmStreamAccessService,
     TelegramCrmManualSendIntentService,
     TelegramCrmChatAccess,
+    TelegramCrmReactionAssetsService,
+    TelegramBotApiClient,
+    TelegramBotReactionAssets,
+    TelegramSystemBotConfigService,
     TelegramCrmChatStore,
     TelegramCrmChatReceipts,
     TelegramCrmChatOperations,

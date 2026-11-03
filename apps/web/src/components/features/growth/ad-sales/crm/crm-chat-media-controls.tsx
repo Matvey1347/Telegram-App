@@ -6,9 +6,10 @@ import { Mic, Paperclip, Square } from "lucide-react";
 import { Button, Input, Modal } from "@/components/ui/primitives";
 import type { CrmChatCapabilities } from "@telegram-system/shared";
 
-export function CrmChatMediaControls({ capabilities, disabled, onUpload }: {
+export function CrmChatMediaControls({ capabilities, disabled, onUpload, showVoice = true }: {
   capabilities?: CrmChatCapabilities;
   disabled: boolean;
+  showVoice?: boolean;
   onUpload: (data: FormData, signal: AbortSignal) => Promise<boolean>;
 }) {
   const input = useRef<HTMLInputElement>(null);
@@ -77,8 +78,8 @@ export function CrmChatMediaControls({ capabilities, disabled, onUpload }: {
   if (!capabilities?.canUpload) return null;
   return <>
     <input ref={input} type="file" className="sr-only" aria-label="Choose attachment" onChange={(event) => { choose(event.target.files?.[0] ?? null); event.target.value = ""; }} />
-    <Button variant="secondary" disabled={disabled} onClick={() => input.current?.click()} aria-label="Attach file"><Paperclip size={16} /></Button>
-    <Button variant="secondary" disabled={disabled} onClick={() => setRecordDialog(true)} aria-label="Record audio"><Mic size={16} /></Button>
+    <button type="button" className="order-none inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-neutral-300 hover:bg-neutral-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-400 disabled:opacity-40" disabled={disabled} onClick={() => input.current?.click()} aria-label="Attach file" title="Attach file"><Paperclip size={19} /></button>
+    {showVoice ? <button type="button" className="order-3 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-neutral-800 text-neutral-200 hover:bg-neutral-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-400 disabled:opacity-40" disabled={disabled} onClick={() => setRecordDialog(true)} aria-label="Record audio" title="Record audio"><Mic size={19} /></button> : null}
     {error ? <p role="alert" className="basis-full text-xs text-rose-300">{error}</p> : null}
     <Modal open={recordDialog} onClose={cancelRecording} title="Record audio" size="sm">
       <p className="mb-3 text-sm text-neutral-300">Record up to 60 seconds, then listen before sending.</p>

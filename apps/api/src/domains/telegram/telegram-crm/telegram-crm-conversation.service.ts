@@ -42,6 +42,7 @@ export const crmConversationSelect = {
   lastInboundAt: true,
   lastOutboundAt: true,
   unreadCount: true,
+  ignoreInUnread: true,
   readState: true,
   lastReadTelegramMessageId: true,
   lastReadInboxTelegramMessageId: true,

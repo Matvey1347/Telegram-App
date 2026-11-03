@@ -61,8 +61,8 @@ describe("source table", () => {
     fireEvent.click(screen.getByRole("button", { name: "Обновить все каналы" }));
     expect(await screen.findByRole("status")).toHaveTextContent("Обновлено: 1 · Ошибок: 1 · Пропущено: 1");
     expect(scan).toHaveBeenCalledTimes(1);
-    fireEvent.click(screen.getByRole("button", { name: /Действия источника/ }));
-    expect(screen.getByRole("button", { name: /История за 90 дней/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Действия источника/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /История за 90 дней/ })).not.toBeInTheDocument();
     scan.mockRestore();
     query.mockRestore();
   });

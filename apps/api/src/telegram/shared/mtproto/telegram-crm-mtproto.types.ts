@@ -179,6 +179,7 @@ export type TelegramCrmMtprotoDifference = {
 export interface TelegramCrmMtprotoHandle {
   readonly leadDiscovery?: TelegramLeadChannelHandle;
   readonly chatActions?: TelegramCrmChatActions;
+  getReactionAssets?(ids: string[], signal?: AbortSignal): Promise<Record<string, ResolvedEmoji>>;
   listPrivateDialogs(input: {
     cursor?: string | null;
     limit?: number;

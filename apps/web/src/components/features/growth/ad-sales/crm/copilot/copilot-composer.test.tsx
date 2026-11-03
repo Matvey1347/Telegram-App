@@ -55,15 +55,18 @@ function mount() {
     review,
   };
 }
+function enterComposerText(text: string) {
+  const input = screen.getByRole("textbox", { name: "Message text" });
+  input.textContent = text;
+  fireEvent.input(input);
+}
 describe("AI composer provenance", () => {
   it("keeps an edited AI draft when the old approved bubble retry succeeds", () => {
     const { ref } = mount();
     act(() => ref.current?.insertApproved(approved));
-    fireEvent.change(screen.getByRole("textbox", { name: "Message text" }), {
-      target: { value: "Preserve the manager edit" },
-    });
+    enterComposerText("Preserve the manager edit");
     act(() => ref.current?.clearSent("ai:draft-one:4"));
-    expect(screen.getByRole("textbox", { name: "Message text" })).toHaveValue(
+    expect(screen.getByRole("textbox", { name: "Message text" })).toHaveTextContent(
       "Preserve the manager edit",
     );
   });
@@ -100,7 +103,7 @@ describe("AI composer provenance", () => {
   it("requires explicit manual Send after insertion and carries approval", async () => {
     const { ref, send } = mount();
     act(() => ref.current?.insertApproved(approved));
-    expect(screen.getByRole("textbox", { name: "Message text" })).toHaveValue(
+    expect(screen.getByRole("textbox", { name: "Message text" })).toHaveTextContent(
       approved.text,
     );
     expect(send).not.toHaveBeenCalled();
@@ -115,9 +118,7 @@ describe("AI composer provenance", () => {
   it("blocks edited approved text and opens review with actual composer text", () => {
     const { ref, send, review } = mount();
     act(() => ref.current?.insertApproved(approved));
-    fireEvent.change(screen.getByRole("textbox", { name: "Message text" }), {
-      target: { value: "Manager changed this text" },
-    });
+    enterComposerText("Manager changed this text");
     expect(screen.getByRole("button", { name: "Send message" })).toBeDisabled();
     fireEvent.click(
       screen.getByRole("button", { name: "Review edited AI text" }),
@@ -136,20 +137,18 @@ describe("AI composer provenance", () => {
   });
   it("never overwrites an existing draft without confirmation and keeps it saved", async () => {
     const { ref } = mount();
-    fireEvent.change(screen.getByRole("textbox", { name: "Message text" }), {
-      target: { value: "Keep my independent message" },
-    });
+    enterComposerText("Keep my independent message");
     act(() => ref.current?.insertApproved(approved));
     expect(
       screen.getByRole("dialog", { name: "Insert approved AI text?" }),
     ).toBeTruthy();
-    expect(screen.getByRole("textbox", { name: "Message text" })).toHaveValue(
+    expect(screen.getByRole("textbox", { name: "Message text" })).toHaveTextContent(
       "Keep my independent message",
     );
     fireEvent.click(
       screen.getByRole("button", { name: "Create AI composer draft" }),
     );
-    expect(screen.getByRole("textbox", { name: "Message text" })).toHaveValue(
+    expect(screen.getByRole("textbox", { name: "Message text" })).toHaveTextContent(
       approved.text,
     );
     await waitFor(() =>

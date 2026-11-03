@@ -1,10 +1,10 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import {
   CurrentUser,
   type JwtUser,
 } from '../../../common/current-user.decorator';
 import { JwtAuthGuard } from '../../../common/jwt-auth.guard';
-import { CrmInboxConversationsQueryDto } from './telegram-crm-inbox-conversations.dto';
+import { CrmInboxConversationsQueryDto, SetCrmUnreadIgnoredDto } from './telegram-crm-inbox-conversations.dto';
 import { TelegramCrmInboxFoldersService } from './telegram-crm-inbox-folders.service';
 import { TelegramCrmInboxConversationsService } from './telegram-crm-inbox-conversations.service';
 
@@ -19,6 +19,11 @@ export class TelegramCrmInboxConversationsController {
   @Get('folders')
   listFolders(@CurrentUser() user: JwtUser) {
     return this.folders.list(user.sub);
+  }
+
+  @Post('conversations/:id/unread-ignore')
+  setUnreadIgnored(@CurrentUser() user: JwtUser, @Param('id') id: string, @Body() dto: SetCrmUnreadIgnoredDto) {
+    return this.conversations.setIgnoreInUnread(user.sub, id, dto.ignored);
   }
 
   @Get('conversations')

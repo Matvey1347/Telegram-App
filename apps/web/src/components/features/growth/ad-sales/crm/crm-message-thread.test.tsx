@@ -55,6 +55,12 @@ const onlyMessage = {
 
 afterEach(() => vi.unstubAllGlobals());
 
+function enterComposerText(text: string) {
+  const input = screen.getByRole("textbox", { name: "Message text" });
+  input.textContent = text;
+  fireEvent.input(input);
+}
+
 describe("CrmMessageThread header", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -168,8 +174,7 @@ describe("CrmMessageThread header", () => {
   });
 
   it.each([
-    ["Expand editor", "Done"],
-    ["Quick replies", "Close dialog"],
+    ["More formatting", "Done"],
   ])("waits while %s is open and resumes on close", async (openLabel, closeLabel) => {
     vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
     vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({ top: 0, bottom: 100, left: 0, right: 100, width: 100, height: 100, x: 0, y: 0, toJSON: () => ({}) } as DOMRect);
@@ -180,6 +185,7 @@ describe("CrmMessageThread header", () => {
     const view = render(tree(0));
     await screen.findByText("Only saved message");
     await waitFor(() => expect(telegramCrmApi.importHistory).toHaveBeenCalled());
+    await userEvent.click(screen.getByRole("button", { name: "Formatting" }));
     await userEvent.click(screen.getByRole("button", { name: openLabel }));
     expect(screen.getByRole("dialog")).toBeInTheDocument();
     view.rerender(tree(1));
@@ -208,9 +214,9 @@ describe("CrmMessageThread header", () => {
 
     const loading = screen.getByText("Loading messages…");
     expect(loading.parentElement).toHaveClass("flex-1");
-    expect(screen.getByPlaceholderText("Write a message…")).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Send message" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Expand editor" })).toBeDisabled();
+    expect(screen.getByRole("textbox", { name: "Message text" })).toHaveAttribute("aria-disabled", "true");
+    expect(screen.queryByRole("button", { name: "Send message" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Formatting" })).toBeDisabled();
   });
 
   it("keeps sending disabled when the first history request fails", async () => {
@@ -219,9 +225,9 @@ describe("CrmMessageThread header", () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
     render(<QueryClientProvider client={client}><TestI18nProvider><CrmMessageThread conversation={conversation} canSendManual /></TestI18nProvider></QueryClientProvider>);
     expect(await screen.findByRole("alert")).toHaveTextContent("Messages could not be loaded");
-    expect(screen.getByPlaceholderText("Write a message…")).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Send message" })).toBeDisabled();
-    fireEvent.keyDown(screen.getByPlaceholderText("Write a message…"), { key: "Enter", ctrlKey: true });
+    expect(screen.getByRole("textbox", { name: "Message text" })).toHaveAttribute("aria-disabled", "true");
+    expect(screen.queryByRole("button", { name: "Send message" })).not.toBeInTheDocument();
+    fireEvent.keyDown(screen.getByRole("textbox", { name: "Message text" }), { key: "Enter", ctrlKey: true });
     expect(send).not.toHaveBeenCalled();
   });
 
@@ -236,16 +242,16 @@ describe("CrmMessageThread header", () => {
     const tree = <QueryClientProvider client={client}><TestI18nProvider><CrmMessageThread conversation={conversation} canSendManual /></TestI18nProvider></QueryClientProvider>;
     const view = render(tree);
     await screen.findByText("No messages in this conversation yet.");
-    fireEvent.change(screen.getByPlaceholderText("Write a message…"), { target: { value: "Retry this saved draft" } });
+    enterComposerText("Retry this saved draft");
     await userEvent.click(screen.getByRole("button", { name: "Send message" }));
     await userEvent.click(await screen.findByRole("button", { name: "Retry send" }));
-    await waitFor(() => expect(screen.getByPlaceholderText("Write a message…")).toHaveValue(""));
+    await waitFor(() => expect(screen.getByRole("textbox", { name: "Message text" })).toHaveTextContent(""));
     expect(send.mock.calls[0][1].clientIdempotencyKey).toBe(send.mock.calls[1][1].clientIdempotencyKey);
     expect(localStorage.getItem(`crm-message:${conversation.id}:${conversation.workspaceId}`)).toBeNull();
     view.unmount();
     render(tree);
     expect(screen.queryByText("Saved drafts")).not.toBeInTheDocument();
-    expect(screen.getByPlaceholderText("Write a message…")).toHaveValue("");
+    expect(screen.getByRole("textbox", { name: "Message text" })).toHaveTextContent("");
   });
 
   it("cleans the old draft when retry finishes after switching conversations and preserves the new draft", async () => {
@@ -257,7 +263,7 @@ describe("CrmMessageThread header", () => {
     const tree = (selected: CrmConversationListItem) => <QueryClientProvider client={client}><TestI18nProvider><CrmMessageThread conversation={selected} canSendManual /></TestI18nProvider></QueryClientProvider>;
     const view = render(tree(conversation));
     await screen.findByText("No messages in this conversation yet.");
-    fireEvent.change(screen.getByPlaceholderText("Write a message…"), { target: { value: "Old chat pending retry" } });
+    enterComposerText("Old chat pending retry");
     await userEvent.click(screen.getByRole("button", { name: "Send message" }));
     await userEvent.click(await screen.findByRole("button", { name: "Retry send" }));
     await waitFor(() => expect(send).toHaveBeenCalledTimes(2));
@@ -265,14 +271,14 @@ describe("CrmMessageThread header", () => {
     const next = { ...conversation, id: "other-conversation", workspaceId: "other-workspace" };
     view.rerender(tree(next));
     await screen.findByText("No messages in this conversation yet.");
-    fireEvent.change(screen.getByPlaceholderText("Write a message…"), { target: { value: "Keep the new conversation draft" } });
+    enterComposerText("Keep the new conversation draft");
     await act(async () => resolveRetry({ message: { ...onlyMessage, id: "sent-old-retry", direction: "OUTBOUND", origin: "MANUAL", text: "Old chat pending retry", clientIdempotencyKey: retryKey, deliveryState: "SENT" }, idempotentReplay: true }));
     await waitFor(() => expect(localStorage.getItem(`crm-message:${conversation.id}:${conversation.workspaceId}`)).toBeNull());
     expect(localStorage.getItem(`crm-message:${next.id}:${next.workspaceId}`)).toContain("Keep the new conversation draft");
-    expect(screen.getByPlaceholderText("Write a message…")).toHaveValue("Keep the new conversation draft");
+    expect(screen.getByRole("textbox", { name: "Message text" })).toHaveTextContent("Keep the new conversation draft");
     view.rerender(tree(conversation));
     expect(screen.queryByText("Saved drafts")).not.toBeInTheDocument();
-    expect(screen.getByPlaceholderText("Write a message…")).toHaveValue("");
+    expect(screen.getByRole("textbox", { name: "Message text" })).toHaveTextContent("");
   });
 
   it("automatically reconciles recent messages, then imports older history at the DB boundary", async () => {
@@ -376,7 +382,8 @@ describe("CrmMessageThread header", () => {
     );
 
     await screen.findByText("No messages in this conversation yet.");
-    fireEvent.click(screen.getByRole("button", { name: "Expand editor" }));
+    fireEvent.click(screen.getByRole("button", { name: "Formatting" }));
+    fireEvent.click(screen.getByRole("button", { name: "More formatting" }));
     fireEvent.click(screen.getByRole("button", { name: "Emoji" }));
     expect(customEmojiPacks).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Premium" }));
@@ -388,7 +395,7 @@ describe("CrmMessageThread header", () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
     render(<QueryClientProvider client={client}><TestI18nProvider><CrmMessageThread conversation={conversation} canSendManual /></TestI18nProvider></QueryClientProvider>);
     await screen.findByText("No messages in this conversation yet.");
-    fireEvent.change(screen.getByPlaceholderText("Write a message…"), { target: { value: "Uncertain send" } });
+    enterComposerText("Uncertain send");
     await userEvent.click(screen.getByRole("button", { name: "Send message" }));
     await screen.findByText(/Send result is unknown/);
     expect(screen.queryByRole("button", { name: "Retry send" })).not.toBeInTheDocument();
@@ -396,9 +403,9 @@ describe("CrmMessageThread header", () => {
     await userEvent.click(screen.getByRole("button", { name: "Check send result" }));
     await waitFor(() => expect(receipt).toHaveBeenCalledTimes(1));
     expect(screen.getByRole("button", { name: "Send message" })).toBeDisabled();
-    expect(screen.getByPlaceholderText("Write a message…")).toHaveValue("Uncertain send");
+    expect(screen.getByRole("textbox", { name: "Message text" })).toHaveTextContent("Uncertain send");
     await userEvent.click(screen.getByRole("button", { name: "Check send result" }));
-    await waitFor(() => expect(screen.getByPlaceholderText("Write a message…")).toHaveValue(""));
+    await waitFor(() => expect(screen.getByRole("textbox", { name: "Message text" })).toHaveTextContent(""));
     expect(send).toHaveBeenCalledOnce();
     expect(receipt.mock.calls[0][1]).toBe(send.mock.calls[0][1].clientIdempotencyKey);
   });

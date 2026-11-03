@@ -35,7 +35,7 @@ export function toChatMessage(message: CrmMessageListItem, history: CrmMessageLi
   const original = reference !== undefined ? history instanceof Map ? history.get(reference as number | string) : history.find((item) => item.telegramMessageIdNumeric === reference || item.id === reference) : undefined;
   const text = message.text ?? "";
   const entities = meta?.entities;
-  const reactions = Array.isArray(meta?.reactions) ? meta.reactions.filter((item): item is { emoji: string; count: number; chosen?: boolean } => !!item && typeof item.emoji === "string" && typeof item.count === "number") : undefined;
+  const reactions = Array.isArray(meta?.reactions) ? meta.reactions.filter((item): item is { emoji: string; count: number; chosen?: boolean; displayEmoji?: string } => !!item && typeof item.emoji === "string" && typeof item.count === "number") : undefined;
   const forwarded = meta?.forwarded as { author?: string; date?: string } | undefined;
   const deleted = !!message.deletedAt;
   return { id: message.id, text, direction: message.direction === "OUTBOUND" ? "outgoing" : "incoming", sentAt: message.sentAt,

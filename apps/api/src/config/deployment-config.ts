@@ -166,6 +166,17 @@ export function crmChatRollout(
   };
 }
 
+/** A local proxy may resolve reaction files with the dedicated local bot. */
+export function crmLocalReactionAssetsEnabled(
+  environment: DeploymentEnvironment = process.env,
+) {
+  return (
+    !isProductionEnvironment(environment) &&
+    Boolean(nonBlank(environment.CRM_RUNTIME_PROXY_URL)) &&
+    Boolean(nonBlank(environment.TELEGRAM_SYSTEM_BOT_LOCAL_TOKEN))
+  );
+}
+
 /** Allow compatibility API hosts to avoid owning the shared CRM MTProto runtime. */
 export function crmRuntimeProxyOrigin(
   environment: DeploymentEnvironment = process.env,

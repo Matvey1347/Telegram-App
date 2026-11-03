@@ -21,7 +21,12 @@ import {
   CRM_CHAT_MEDIA_LIMIT,
 } from './telegram-crm-chat-operations.service';
 import { TelegramCrmChatMedia } from './telegram-crm-chat-media.service';
-import { CrmChatActionDto, CrmChatMediaDto } from './telegram-crm-chat.dto';
+import {
+  CrmReactionAssetsDto,
+  CrmChatActionDto,
+  CrmChatMediaDto,
+} from './telegram-crm-chat.dto';
+import { TelegramCrmReactionAssetsService } from './telegram-crm-reaction-assets.service';
 import { TelegramCrmChatTransferGuard } from './telegram-crm-chat-transfer.guard';
 @UseGuards(JwtAuthGuard)
 @Controller('telegram-crm/conversations/:conversationId')
@@ -29,7 +34,24 @@ export class TelegramCrmChatController {
   constructor(
     private readonly operations: TelegramCrmChatOperations,
     private readonly media: TelegramCrmChatMedia,
+    private readonly reactionAssets: TelegramCrmReactionAssetsService,
   ) {}
+  @Post('reaction-assets') reactionAssetsForMessages(
+    @CurrentUser() user: JwtUser,
+    @Param('conversationId') id: string,
+    @Body() input: CrmReactionAssetsDto,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    response.setHeader('Cache-Control', 'private, no-store');
+    const abort = new AbortController();
+    const onClose = () => {
+      if (!response.writableEnded) abort.abort();
+    };
+    response.once('close', onClose);
+    return this.reactionAssets
+      .get(user.sub, id, input.messageIds, abort.signal, input.documentIds)
+      .finally(() => response.off('close', onClose));
+  }
   @Get('chat-capabilities') capabilities(
     @CurrentUser() user: JwtUser,
     @Param('conversationId') id: string,

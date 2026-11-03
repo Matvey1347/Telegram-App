@@ -62,7 +62,7 @@ export function LeadSources({
           void patchLeadEntity(client, leadKeys.sourcesRoot(workspace), item.source);
           const metrics = item.source.metrics;
           setProgress({ id, title: ru ? "Обновление источников" : "Refreshing sources", current, total,
-            message: `${item.source.title}: ${item.status === "failed" ? (ru ? "ошибка" : "failed") : item.status === "skipped" ? (ru ? "пропущен" : "skipped") : `${ru ? "проверено" : "scanned"} ${item.scanned}, ${ru ? "реклама" : "ads"} ${metrics.advertisements}, ${ru ? "кандидаты" : "candidates"} ${metrics.uniqueCandidates}${item.truncated ? " (500+)" : ""}`}` });
+            message: `${item.source.title}: ${item.status === "failed" ? (ru ? "ошибка" : "failed") : item.status === "skipped" ? (ru ? "пропущен" : "skipped") : `${ru ? "проверено" : "scanned"} ${item.scanned}, ${ru ? "реклама" : "ads"} ${metrics.advertisements}, ${ru ? "взаимопиар" : "mutual promotion"} ${metrics.mutualPromotions ?? 0}, ${ru ? "кандидаты" : "candidates"} ${metrics.uniqueCandidates}${item.truncated ? " (500+)" : ""}`}` });
         });
         setProgress({ id, title: ru ? "Обновление завершено" : "Refresh complete", completed: true, successCount: result.updated, failedCount: result.failed, skippedCount: result.skipped });
         return result;

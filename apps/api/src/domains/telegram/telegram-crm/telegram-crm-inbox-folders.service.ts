@@ -24,7 +24,7 @@ export class TelegramCrmInboxFoldersService {
     );
     const memberId =
       'assignedMemberId' in ownership ? ownership.assignedMemberId : null;
-    const [folders, counts, total] = await Promise.all([
+    const [folders, counts, total, visible] = await Promise.all([
       this.prisma.telegramCrmFolder.findMany({
         where: {
           workspaceId: access.workspaceId,
@@ -76,6 +76,15 @@ export class TelegramCrmInboxFoldersService {
         },
         _sum: { unreadCount: true },
       }),
+      this.prisma.telegramCrmConversation.aggregate({
+        where: {
+          workspaceId: access.workspaceId,
+          state: 'ACTIVE',
+          ignoreInUnread: false,
+          ...(memberId ? { contact: { ownerMemberId: memberId } } : {}),
+        },
+        _sum: { unreadCount: true },
+      }),
     ]);
     const byFolder = new Map(
       counts.map((row) => [row.folderId, Number(row.unreadCount)]),
@@ -90,6 +99,7 @@ export class TelegramCrmInboxFoldersService {
         excludeRead: folder.excludeRead,
       })),
       totalUnread: total._sum.unreadCount ?? 0,
+      visibleUnread: visible._sum.unreadCount ?? 0,
     };
   }
 }

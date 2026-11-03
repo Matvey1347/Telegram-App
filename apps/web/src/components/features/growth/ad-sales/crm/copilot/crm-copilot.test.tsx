@@ -7,12 +7,12 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import type { ReactNode } from "react";
+import { createRef, type ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { crmCopilotApi } from "@/lib/features/growth/crm-copilot-api";
 import { copilotKeys } from "@/lib/features/growth/crm-copilot-query";
 import { telegramCrmKeys } from "@/lib/features/growth/telegram-crm-query";
-import { CrmCopilot } from "./crm-copilot";
+import { CrmCopilot, type CrmCopilotHandle } from "./crm-copilot";
 import { useCrmCopilot } from "./use-crm-copilot";
 import { copilotDraft } from "./copilot-fixtures.test-support";
 const setup = () => {
@@ -68,6 +68,16 @@ function mount() {
 const generate = () =>
   fireEvent.click(screen.getByRole("button", { name: "Сгенерировать ответ" }));
 describe("compact one-click CRM suggestions", () => {
+  it("opens generation from the compact composer control", async () => {
+    const { wrapper } = setup();
+    const ref = createRef<CrmCopilotHandle>();
+    render(<CrmCopilot ref={ref} compactTrigger workspaceId="workspace-one" conversationId="chat-one" contactId="client-one" canSend onInsert={vi.fn()} />, { wrapper });
+    expect(screen.queryByLabelText("AI Sales Copilot")).not.toBeInTheDocument();
+    act(() => ref.current?.activate());
+    expect(await screen.findByRole("textbox", { name: "AI suggested message" })).toHaveValue(copilotDraft.text);
+    expect(crmCopilotApi.suggest).toHaveBeenCalledOnce();
+  });
+
   it("does no AI reads or generation merely on chat selection", () => {
     mount();
     expect(crmCopilotApi.list).not.toHaveBeenCalled();

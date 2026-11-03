@@ -38,7 +38,10 @@ function endToEndHeaders(headers: IncomingHttpHeaders): IncomingHttpHeaders {
 }
 
 /** Install before body parsers: one trusted owner handles CRM HTTP and SSE. */
-export function createCrmRuntimeProxy(origin: string): RequestHandler {
+export function createCrmRuntimeProxy(
+  origin: string,
+  options: { localReactionAssets?: boolean } = {},
+): RequestHandler {
   const target = new URL(origin);
   if (
     !['http:', 'https:'].includes(target.protocol) ||
@@ -53,6 +56,14 @@ export function createCrmRuntimeProxy(origin: string): RequestHandler {
   return (req, res, next) => {
     const path = req.originalUrl || req.url;
     if (!/^\/api\/telegram-crm(?:\/|\?|$)/.test(path)) return next();
+    if (
+      options.localReactionAssets &&
+      req.method === 'POST' &&
+      /^\/api\/telegram-crm\/conversations\/[^/?]+\/reaction-assets(?:\?|$)/.test(
+        path,
+      )
+    )
+      return next();
     if (req.headers[HOP_HEADER] !== undefined) {
       res.status(503).json({
         statusCode: 503,

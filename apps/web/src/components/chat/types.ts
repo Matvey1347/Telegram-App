@@ -48,7 +48,7 @@ export type ChatMessage = {
   status?: "sending" | "sent" | "delivered" | "read" | "failed" | "unknown";
   attachments?: ChatAttachment[];
   replyTo?: { id: string; text: string; author?: string } | null;
-  reactions?: Array<{ emoji: string; count: number; chosen?: boolean }>;
+  reactions?: Array<{ emoji: string; count: number; chosen?: boolean; displayEmoji?: string; iconPresentation?: ResolvedEmoji }>;
   /** Optional safe renderer supplied by an adapter for supported text entities. */
   content?: ReactNode;
 };

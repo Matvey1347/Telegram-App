@@ -55,13 +55,13 @@ describe('CRM Inbox folder unread messages', () => {
     );
     expect(sql.values).toEqual(['workspace']);
   });
-  it('uses the same three reads for 100 folders and filters own counts before aggregation', async () => {
+  it('uses bounded reads for 100 folders and filters own counts before aggregation', async () => {
     const h = setup(100, true);
     const result = await h.service.list('manager');
     expect(result.items).toHaveLength(100);
     expect(h.prisma.telegramCrmFolder.findMany).toHaveBeenCalledTimes(1);
     expect(h.prisma.$queryRaw).toHaveBeenCalledTimes(1);
-    expect(h.prisma.telegramCrmConversation.aggregate).toHaveBeenCalledTimes(1);
+    expect(h.prisma.telegramCrmConversation.aggregate).toHaveBeenCalledTimes(2);
     expect(h.prisma.$queryRaw.mock.calls[0][0].values).toEqual([
       'workspace',
       'member',

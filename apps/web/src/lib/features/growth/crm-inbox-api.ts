@@ -21,3 +21,7 @@ export async function listCrmInboxConversations(
     params: { ...params, cursor: cursor || undefined }, signal,
   })).data;
 }
+
+export async function setCrmUnreadIgnored(id: string, ignored: boolean) {
+  return (await api.post<{ id: string; ignoreInUnread: boolean }>(`/telegram-crm/inbox/conversations/${encodeURIComponent(id)}/unread-ignore`, { ignored }, { feedback: { mode: "managed" } } as Parameters<typeof api.post>[2])).data;
+}

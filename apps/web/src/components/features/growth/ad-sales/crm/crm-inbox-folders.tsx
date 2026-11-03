@@ -1,9 +1,12 @@
 "use client";
 
-import { Folder, MessageCircle } from "lucide-react";
+import { useState } from "react";
+import { ArrowDown, ArrowUp, Folder, MessageCircle } from "lucide-react";
 import type { ResolvedEmoji } from "@telegram-system/shared";
 import { IconAvatar } from "@/components/icons/icon-avatar";
 import styles from "./crm-inbox.module.css";
+import { crmTagDisplayName } from "./crm-tag-presentation";
+import { useCrmFolderOrder } from "./use-crm-folder-order";
 
 type FolderItem = {
   id: string;
@@ -29,6 +32,8 @@ export function CrmInboxFolders({
   error,
   onSelect,
   onRetry,
+  userId,
+  workspaceId,
 }: {
   folders: FolderItem[];
   selectedId: string;
@@ -37,9 +42,14 @@ export function CrmInboxFolders({
   error: boolean;
   onSelect: (id: string) => void;
   onRetry: () => void;
+  userId?: string;
+  workspaceId?: string;
 }) {
+  const { ordered, move } = useCrmFolderOrder(folders, userId, workspaceId);
+  const [reordering, setReordering] = useState(false);
+  const [dragged, setDragged] = useState<string | null>(null);
   return (
-    <nav aria-label="Telegram folders" className={styles.folderRail}>
+    <nav aria-label="Telegram folders" className={`${styles.folderRail} app-scrollbar`} style={reordering ? { flexBasis: "5.5rem" } : undefined}>
       <button
         type="button"
         className={styles.folderButton}
@@ -64,14 +74,14 @@ export function CrmInboxFolders({
       {!loading && !error && folders.length === 0 ? (
         <span className={styles.folderStatus}>No folders</span>
       ) : null}
-      {folders.map((folder) => (
+      {ordered.map((folder, index) => (
+        <div key={folder.id} draggable onDragStart={(event) => { setDragged(folder.id); event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", folder.id); }} onDragEnd={() => setDragged(null)} onDragOver={(event) => { if (dragged) event.preventDefault(); }} onDrop={(event) => { event.preventDefault(); if (dragged) move(dragged, folder.id); setDragged(null); }}>
         <button
           type="button"
-          key={folder.id}
-          className={styles.folderButton}
+          className={`${styles.folderButton} w-full`}
           aria-label={`${folder.name}, ${folder.unreadCount} unread messages`}
           aria-pressed={selectedId === folder.id}
-          title={folder.name}
+          title={`${folder.name} · Drag to reorder`}
           onClick={() => onSelect(folder.id)}
         >
           <span className={styles.folderIcon}>
@@ -80,10 +90,16 @@ export function CrmInboxFolders({
           </span>
           <span className={styles.folderLabel}>
             {folder.emojiPresentation ? <IconAvatar icon={folder.emojiPresentation} label={folder.name} size="xs" bordered={false} decorative className="!h-4 !w-4 !bg-transparent" /> : null}
-            <span className={styles.folderName}>{folder.name}</span>
+            <span className={styles.folderName}>{crmTagDisplayName(folder)}</span>
           </span>
         </button>
+        {reordering ? <div className="flex justify-center gap-1">
+          <button type="button" aria-label={`Move ${folder.name} up`} disabled={index === 0} onClick={() => move(folder.id, ordered[index - 1].id)} className="flex h-10 w-10 items-center justify-center rounded text-neutral-300 hover:bg-neutral-800 focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-30"><ArrowUp size={16} aria-hidden /></button>
+          <button type="button" aria-label={`Move ${folder.name} down`} disabled={index === ordered.length - 1} onClick={() => move(folder.id, ordered[index + 1].id)} className="flex h-10 w-10 items-center justify-center rounded text-neutral-300 hover:bg-neutral-800 focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-30"><ArrowDown size={16} aria-hidden /></button>
+        </div> : null}
+        </div>
       ))}
+      {folders.length > 1 ? <button type="button" aria-pressed={reordering} onClick={() => setReordering(!reordering)} className={`${styles.folderStatus} rounded hover:bg-neutral-800`}>{reordering ? "Done" : "Reorder"}</button> : null}
     </nav>
   );
 }

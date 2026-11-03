@@ -1,8 +1,9 @@
-import type { CrmChatActionRequest, CrmChatActionResult, CrmChatCapabilities } from "@telegram-system/shared";
+import type { CrmChatActionRequest, CrmChatActionResult, CrmChatCapabilities, CrmReactionAssetsResponse } from "@telegram-system/shared";
 import { api } from "@/lib/api";
 
 const path = (id: string) => `/telegram-crm/conversations/${encodeURIComponent(id)}`;
 export const crmChatActionsApi = {
+  reactionAssets: async (id: string, messageIds: string[], documentIds: string[], signal?: AbortSignal) => (await api.post<CrmReactionAssetsResponse>(`${path(id)}/reaction-assets`, { messageIds, documentIds }, { signal })).data,
   capabilities: async (id: string, signal?: AbortSignal) => (await api.get<CrmChatCapabilities>(`${path(id)}/chat-capabilities`, { signal })).data,
   execute: async (id: string, body: CrmChatActionRequest) => (await api.post<CrmChatActionResult>(`${path(id)}/message-actions`, body)).data,
   check: async (id: string, operationId: string) => (await api.get<CrmChatActionResult>(`${path(id)}/message-actions/${encodeURIComponent(operationId)}`)).data,

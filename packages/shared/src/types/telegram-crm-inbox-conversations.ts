@@ -21,7 +21,7 @@ export const CRM_INBOX_FILTERS = [
 export type CrmInboxFilter = (typeof CRM_INBOX_FILTERS)[number];
 
 export type CrmInboxFolderSummary = { id: string; name: string; color: string | null; emojiPresentation: ResolvedEmoji | null; unreadCount: number; excludeRead: boolean };
-export type CrmInboxFoldersResult = { items: CrmInboxFolderSummary[]; totalUnread: number };
+export type CrmInboxFoldersResult = { items: CrmInboxFolderSummary[]; totalUnread: number; visibleUnread?: number };
 
 /** One exact Telegram account/peer dialog, including linked CRM clients. */
 export type CrmInboxConversationItem = {
@@ -45,6 +45,7 @@ export type CrmInboxConversationItem = {
   lastInboundAt: string | null;
   lastOutboundAt: string | null;
   unreadCount: number;
+  ignoreInUnread: boolean;
   readState: CrmReadState;
   attentionStatus?: CrmSalesAttentionStatus | null;
   /** Text is bounded to 240 characters; full content belongs to the thread. */

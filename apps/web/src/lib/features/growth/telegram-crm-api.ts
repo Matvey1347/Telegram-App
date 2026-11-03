@@ -268,23 +268,24 @@ export const telegramCrmApi = {
     ).data,
   getManualSendReceipt: async (conversationId: string, clientIdempotencyKey: string) =>
     (await api.get<CrmManualMessageResult | null>(`/telegram-crm/conversations/${conversationId}/manual-send-receipt`, { params: { clientIdempotencyKey } })).data,
-  markConversationRead: async (conversationId: string, maxTelegramMessageId?: number) =>
+  markConversationRead: async (conversationId: string, maxTelegramMessageId?: number, signal?: AbortSignal) =>
     (
       await api.post<CrmConversationReadResult>(
         `/telegram-crm/conversations/${conversationId}/read`,
         maxTelegramMessageId === undefined ? undefined : { maxTelegramMessageId },
-        { feedback: { mode: "managed" } } as Parameters<typeof api.post>[2],
+        { signal, feedback: { mode: "managed" } } as Parameters<typeof api.post>[2],
       )
     ).data,
   importHistory: async (
     conversationId: string,
     payload: { beforeTelegramMessageId?: number; limit?: number; recent?: boolean },
+    signal?: AbortSignal,
   ) =>
     (
       await api.post<CrmHistoryImportResult>(
         `/telegram-crm/conversations/${conversationId}/history`,
         payload,
-        { feedback: { mode: "managed" } } as Parameters<typeof api.post>[2],
+        { signal, feedback: { mode: "managed" } } as Parameters<typeof api.post>[2],
       )
     ).data,
   getUnread: async (signal?: AbortSignal) =>

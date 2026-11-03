@@ -1,3 +1,4 @@
+import { CrmReactionAssets } from './telegram-crm-reaction-assets';
 import { readCrmPeerDialogs } from './telegram-crm-peer-dialogs';
 import { parseCrmOutgoingText } from './telegram-crm-chat-text';
 import {
@@ -39,15 +40,19 @@ import {
 class GramJsTelegramCrmHandle implements TelegramCrmMtprotoHandle {
   private closePromise?: Promise<void>;
   private readonly excludedUsers = new Set<string>();
+  private readonly reactionAssets: CrmReactionAssets;
   private readonly dialogFolders: TelegramCrmDialogFolders;
   readonly leadDiscovery: TelegramLeadChannelReader;
   readonly chatActions: TelegramCrmChatActionTransport;
 
   constructor(private readonly client: TelegramClient) {
     this.chatActions = new TelegramCrmChatActionTransport(client);
+    this.reactionAssets = new CrmReactionAssets(client);
     this.dialogFolders = new TelegramCrmDialogFolders(client);
     this.leadDiscovery = new TelegramLeadChannelReader(client);
   }
+
+  getReactionAssets(ids: string[], signal?: AbortSignal) { return this.reactionAssets.get(ids, signal); }
 
   listPrivatePeerDialogs(peers: Parameters<typeof readCrmPeerDialogs>[2]) {
     return readCrmPeerDialogs(this.client, this.dialogFolders, peers);

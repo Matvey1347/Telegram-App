@@ -1,6 +1,7 @@
 import {
   apiPort,
   crmRuntimeEnabled,
+  crmLocalReactionAssetsEnabled,
   crmRuntimeProxyOrigin,
   publicApiOrigin,
   publicWebOrigin,
@@ -31,6 +32,26 @@ describe('deployment config', () => {
         CRM_RUNTIME_PROXY_URL: 'http://127.0.0.1:4100',
       }),
     ).toThrow('trusted HTTP origin');
+  });
+  it('enables the local reaction resolver only for development relays with a local bot', () => {
+    const relay = {
+      CRM_RUNTIME_PROXY_URL: 'https://api.example',
+      TELEGRAM_SYSTEM_BOT_LOCAL_TOKEN: 'test',
+    };
+    expect(crmLocalReactionAssetsEnabled(relay)).toBe(true);
+    expect(
+      crmLocalReactionAssetsEnabled({ ...relay, NODE_ENV: 'production' }),
+    ).toBe(false);
+    expect(
+      crmLocalReactionAssetsEnabled({
+        CRM_RUNTIME_PROXY_URL: relay.CRM_RUNTIME_PROXY_URL,
+      }),
+    ).toBe(false);
+    expect(
+      crmLocalReactionAssetsEnabled({
+        TELEGRAM_SYSTEM_BOT_LOCAL_TOKEN: 'test',
+      }),
+    ).toBe(false);
   });
   it('designates only one local API port for the shared CRM runtime', () => {
     const local = { CRM_RUNTIME_OWNER_API_PORT: '4000' };

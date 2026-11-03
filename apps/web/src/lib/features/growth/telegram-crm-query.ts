@@ -51,6 +51,7 @@ export const telegramCrmKeys = {
     ["telegram-crm", "conversations", "list", params] as const,
   conversationDetail: (conversationId: string) =>
     [...telegramCrmKeys.conversations(), "detail", conversationId] as const,
+  reactionAssets: (workspaceId: string, conversationId: string, fingerprint: string) => ["telegram-crm", "reaction-assets", workspaceId, conversationId, fingerprint] as const,
   chatCapabilities: (conversationId: string) => ["telegram-crm", "chat-capabilities", conversationId] as const,
   forwardDestinations: (accountId: string, page: number) => ["telegram-crm", "forward-destinations", accountId, page] as const,
   messages: () => ["telegram-crm", "messages"] as const,

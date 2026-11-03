@@ -357,6 +357,7 @@ export type CrmConversation = {
   lastInboundAt: string | null;
   lastOutboundAt: string | null;
   unreadCount: number;
+  ignoreInUnread?: boolean;
   readState: CrmReadState;
   lastReadTelegramMessageId: string | null;
   lastReadInboxTelegramMessageId: number | null;

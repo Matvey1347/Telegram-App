@@ -128,6 +128,19 @@ writes, worker pages are bounded, and remote deletion is grouped by workspace
 and channel. Media egress scales with channel count; aggregate media/fan-out
 limits must be reviewed before increasing any batch ceiling.
 
+## Local CRM reaction previews
+
+When a development API proxies CRM to an older runtime owner, the local System
+Bot can resolve authorized reaction documents without opening a second MTProto
+session. This path is disabled in production and has no polling or persistence.
+Only opened chats request assets; the client batches up to five document IDs,
+with one Bot API lookup and at most two file requests per uncached document.
+The process cache is capped at 128 entries and 8 MiB; raw files are capped at
+256 KiB and decompressed animations at 1 MiB. At 100 independently opened chats
+with five unique uncached reactions each, the upper estimate is 100 lookup
+calls plus 1,000 file metadata/download calls, with cache hits reducing this.
+Idle Railway and Neon usage remain unchanged; there are no database writes.
+
 ## Frontend rules
 
 Do not add `refetchInterval`, duplicate polling, per-row detail requests,

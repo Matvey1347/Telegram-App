@@ -5,11 +5,13 @@ import type { CrmConversationListItem, CrmMessageListItem } from "@telegram-syst
 import { ChatThread } from "@/components/chat/chat-thread";
 import { chatDetailsAreMobile, useChatDetailsMobile } from "@/components/chat/use-chat-details-mobile";
 import { Button } from "@/components/ui/primitives";
+import { Sparkles } from "lucide-react";
 import { crmChatCapabilities, toChatMessage } from "./crm-chat-adapter";
 import {
   CrmMessageComposer,
   type CrmMessageComposerHandle,
 } from "./crm-message-composer";
+import { useCrmReactionAssets } from "@/lib/features/growth/use-crm-reaction-assets";
 import { useCrmThread } from "./use-crm-thread";
 import { useCrmAutoRead } from "./use-crm-auto-read";
 import { CrmCopilot, type CrmCopilotHandle } from "./copilot/crm-copilot";
@@ -47,6 +49,7 @@ function CrmThreadSession({
 }: ThreadProps) {
   const thread = useCrmThread(conversation);
   const messages = thread.messages;
+  const reactionAssets = useCrmReactionAssets(conversation.workspaceId, conversation.id, messages);
   const originals = useMemo(() => {
     const index = new Map<number | string, CrmMessageListItem>();
     for (const message of messages) { index.set(message.id, message); if (message.telegramMessageIdNumeric != null) index.set(message.telegramMessageIdNumeric, message); }
@@ -86,13 +89,16 @@ function CrmThreadSession({
     <ChatThread
       threadId={conversation.id}
       onNearBottomChange={onNearBottomChange}
-      messages={thread.messages.map((message) => toChatMessage(message, originals, conversation.lastReadOutboxTelegramMessageId))}
+      messages={thread.messages.map((message) => {
+        const model = toChatMessage(message, originals, conversation.lastReadOutboxTelegramMessageId);
+        return { ...model, reactions: model.reactions?.map((reaction) => ({ ...reaction, iconPresentation: reactionAssets[reaction.emoji.slice(7)] })) };
+      })}
       actions={{ onReply: setReply, onEdit: (message) => selectAction("EDIT", message), onDelete: (message) => selectAction("DELETE", message), onReact: (message) => selectAction("REACTION", message), onForward: (message) => selectAction("FORWARD", message) }}
       capabilities={capabilities}
+      historyOverlay={thread.refreshRecent.isPending ? <p role="status" className="rounded-full border border-neutral-700 bg-neutral-900/95 px-3 py-1.5 text-xs text-neutral-300 shadow-sm"><span>Синхронизация сообщений</span><span aria-hidden="true" className="crm-loading-dots"><span>.</span><span>.</span><span>.</span></span></p> : null}
       header={
         <>
           {header}
-          {thread.refreshRecent.isPending ? <p role="status" className="mt-1 text-xs text-neutral-400">Синхронизация сообщений…</p> : null}
           {thread.refreshRecent.error ? <div role="alert" className="mt-1 flex flex-wrap items-center gap-2 text-xs text-rose-300"><span>Не удалось обновить сообщения из Telegram.</span><Button variant="secondary" disabled={thread.importHistory.isPending} onClick={() => thread.refreshRecent.mutate()}>Повторить синхронизацию</Button></div> : null}
           {conversation.unreadCount > 0 ? (
             <div className="mt-1 flex justify-end">
@@ -161,6 +167,7 @@ function CrmThreadSession({
             conversationId={conversation.id}
             contactId={conversation.contactId}
             canSend={canSendManual}
+            compactTrigger
             onInsert={(draft) => composer.current?.insertApproved(draft)}
           />
           {canSendManual ? (
@@ -175,12 +182,12 @@ function CrmThreadSession({
                 if (sent) setReply(null);
                 return sent;
               }}
-              extraControls={<CrmChatMediaControls capabilities={chat.capabilities} disabled={chat.blocked || thread.send.isPending || thread.unknownSend || !thread.query.isSuccess} onUpload={async (body, signal) => {
+              extraControls={(hasText) => <><CrmChatMediaControls showVoice={!hasText} capabilities={chat.capabilities} disabled={chat.blocked || thread.send.isPending || thread.unknownSend || !thread.query.isSuccess} onUpload={async (body, signal) => {
                 if (reply) body.set("replyToMessageId", reply.id);
                 const sent = await chat.upload(body, signal);
                 if (sent) setReply(null);
                 return sent;
-              }} />}
+              }} /><button type="button" aria-label="Сгенерировать ответ" title="Сгенерировать ответ" className="order-none inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-blue-300 hover:bg-neutral-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-400 disabled:opacity-40" disabled={chat.blocked || thread.send.isPending || thread.unknownSend || !thread.query.isSuccess} onClick={() => copilot.current?.activate()}><Sparkles size={18} aria-hidden /></button></>}
               onReviewAiEdit={(id, text) => copilot.current?.review(id, text)}
             />
           ) : (

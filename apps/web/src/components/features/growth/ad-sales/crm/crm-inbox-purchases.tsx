@@ -23,14 +23,14 @@ export function CrmInboxPurchases({ contactId, conversationId, workspaceId }: { 
   const items = [...new Map(sales.data?.pages.flatMap((page) => page.items).map((item) => [item.id, item]) ?? []).values()];
   if (sales.isLoading) return <p role="status" className="text-xs text-neutral-400">{t("crmSales.loadingPurchases")}</p>;
   if (sales.error) return <div role="alert" className="space-y-2"><p>{t("crmSales.purchaseError")}</p><Button variant="secondary" onClick={() => void sales.refetch()}>{t("crmSales.retry")}</Button></div>;
+  if (!items.length) return null;
   const returnTo = `/ad-sales/inbox?${new URLSearchParams({ conversationId, workspaceId, details: "1" })}`;
-  return <div className="space-y-3">
+  return <section className="space-y-3 border-t border-neutral-800 pt-3"><h3 className="font-medium text-neutral-200">{t("crmSales.purchases")}</h3>
     {summary && summary.dealCount > 1 ? <div className="rounded-lg border border-neutral-700 bg-neutral-900 p-3">
       <div className="flex items-center gap-2 text-xs text-neutral-400"><CircleDollarSign size={15} aria-hidden />{t("crmSales.purchases")}</div>
       <div className="mt-1 flex flex-wrap items-baseline gap-1.5 font-semibold text-neutral-100"><span>{summary.dealCount} ·</span><CrmContactRevenue amounts={summary.receivedByCurrency} /></div>
       {summary.lastPurchaseAt ? <p className="mt-1 text-xs text-neutral-500">{t("crmSales.lastPurchase")}: {formatDateTime(summary.lastPurchaseAt)}</p> : null}
     </div> : null}
-    {!items.length ? <p className="text-xs text-neutral-500">{t("crmSales.noPurchases")}</p> : null}
     {items.map((sale) => {
       const channels = [...new Set(sale.placements.map((placement) => placement.channel.title))];
       return <Link key={sale.id} href={`/ad-sales/sales?${new URLSearchParams({ saleId: sale.id, returnTo })}`} className="block min-w-0 rounded-xl border border-neutral-700 bg-neutral-900/60 p-3 transition hover:border-neutral-500 hover:bg-neutral-800/60">
@@ -40,5 +40,5 @@ export function CrmInboxPurchases({ contactId, conversationId, workspaceId }: { 
       </Link>;
     })}
     {sales.hasNextPage ? <Button variant="secondary" className="w-full" disabled={sales.isFetchingNextPage} onClick={() => void sales.fetchNextPage()}>{t("crmSales.loadMore")}</Button> : null}
-  </div>;
+  </section>;
 }

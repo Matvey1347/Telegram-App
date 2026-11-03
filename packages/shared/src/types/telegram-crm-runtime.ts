@@ -1,3 +1,4 @@
+import type { ResolvedEmoji } from "./resolved-emoji";
 import type { CrmManualSalesStatus } from "./telegram-crm-sales-workflow";
 import type {
   CrmConversation,
@@ -79,3 +80,6 @@ export type CrmRealtimeEvent =
       current: number;
       total: number;
     });
+
+/** Ephemeral, authorized original Premium reaction assets keyed by Telegram document ID. */
+export type CrmReactionAssetsResponse = { items: Record<string, ResolvedEmoji> };

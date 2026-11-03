@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { deriveCrmSalesAttention } from '@telegram-system/shared';
 import type {
@@ -29,6 +29,7 @@ const inboxSelect = {
   lastInboundAt: true,
   lastOutboundAt: true,
   unreadCount: true,
+  ignoreInUnread: true,
   readState: true,
   contact: {
     select: {
@@ -154,10 +155,37 @@ export class TelegramCrmInboxConversationsService {
     };
   }
 
+  async setIgnoreInUnread(userId: string, conversationId: string, ignored: boolean) {
+    const access = await this.authorization.require(userId, 'adSales.crm.view');
+    const view = await this.authorization.scope(userId, 'adSales.crm.viewOwn', 'adSales.crm.viewAny');
+    const edit = await this.authorization.scope(userId, 'adSales.crm.editOwn', 'adSales.crm.editAny');
+    const ownership = 'assignedMemberId' in view ? view : edit;
+    const result = await this.prisma.telegramCrmConversation.updateMany({
+      where: {
+        id: conversationId,
+        workspaceId: access.workspaceId,
+        ...('assignedMemberId' in ownership
+          ? { contact: { ownerMemberId: ownership.assignedMemberId } }
+          : {}),
+        ignoreInUnread: { not: ignored },
+      },
+      data: { ignoreInUnread: ignored },
+    });
+    if (!result.count) {
+      const existing = await this.prisma.telegramCrmConversation.findFirst({
+        where: { id: conversationId, workspaceId: access.workspaceId,
+          ...('assignedMemberId' in ownership ? { contact: { ownerMemberId: ownership.assignedMemberId } } : {}) },
+        select: { id: true },
+      });
+      if (!existing) throw new NotFoundException('CRM Conversation not found');
+    }
+    return { id: conversationId, ignoreInUnread: ignored };
+  }
+
   private filterWhere(
     filter: CrmInboxFilter,
   ): Prisma.TelegramCrmConversationWhereInput {
-    if (filter === 'UNREAD') return { unreadCount: { gt: 0 } };
+    if (filter === 'UNREAD') return { unreadCount: { gt: 0 }, ignoreInUnread: false };
     if (filter === 'FOLLOW_UP') {
       return {
         contact: {
@@ -231,6 +259,7 @@ export class TelegramCrmInboxConversationsService {
       lastInboundAt: row.lastInboundAt?.toISOString() ?? null,
       lastOutboundAt: row.lastOutboundAt?.toISOString() ?? null,
       unreadCount: row.unreadCount,
+      ignoreInUnread: row.ignoreInUnread,
       readState: row.readState,
       attentionStatus: deriveCrmSalesAttention({
         state: row.state,

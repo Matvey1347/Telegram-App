@@ -1,6 +1,8 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useEffect } from "react";
+import type { CrmMessagesCursorPage } from "@telegram-system/shared";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Info } from "lucide-react";
 import { Button } from "@/components/ui/primitives";
 import { IconAvatar } from "@/components/icons/icon-avatar";
@@ -9,23 +11,32 @@ import { telegramCrmApi } from "@/lib/features/growth/telegram-crm-api";
 import { telegramCrmKeys } from "@/lib/features/growth/telegram-crm-query";
 import { telegramAccountKeys } from "@/lib/query-keys";
 import { useCrmSalesWorkflow } from "@/lib/features/growth/use-crm-sales-workflow";
-import { CrmSalesControls } from "./crm-sales-controls";
 import { useCrmSalesCopy } from "./crm-sales-copy";
+import { CrmUnreadIgnoreControl } from "./crm-unread-ignore-control";
 import { CrmMessageThread } from "./crm-message-thread";
 
-export function CrmInboxConversation({ conversationId, peerId, canSendManual, onBack, onOpenDetails, displayName, photoUrl, workflowMenuOpen, onWorkflowMenuOpenChange, detailsOpen }: {
+export function CrmInboxConversation({ conversationId, peerId, canSendManual, canEdit, onBack, onOpenDetails, displayName, photoUrl, detailsOpen }: {
   conversationId: string;
   peerId: string | null;
   canSendManual: boolean;
+  canEdit: boolean;
   onBack?: () => void;
   onOpenDetails?: () => void;
   displayName?: string;
   photoUrl?: string | null;
-  workflowMenuOpen?: boolean;
-  onWorkflowMenuOpenChange?: (open: boolean) => void;
   detailsOpen?: boolean;
 }) {
   const t = useCrmSalesCopy();
+  const client = useQueryClient();
+  useEffect(() => {
+    void client.prefetchInfiniteQuery({
+      queryKey: telegramCrmKeys.messagesInfinite(conversationId),
+      queryFn: ({ pageParam, signal }) => telegramCrmApi.listMessages(conversationId, pageParam, 50, signal),
+      initialPageParam: null as string | null,
+      getNextPageParam: (page: CrmMessagesCursorPage) => page.hasMore ? page.nextCursor : undefined,
+      staleTime: 60_000,
+    });
+  }, [client, conversationId]);
   const workflow = useCrmSalesWorkflow(conversationId);
   const query = useQuery({ queryKey: telegramCrmKeys.conversationDetail(conversationId),
     queryFn: ({ signal }) => telegramCrmApi.getConversation(conversationId, signal), staleTime: 60_000 });
@@ -52,8 +63,8 @@ export function CrmInboxConversation({ conversationId, peerId, canSendManual, on
   return <CrmMessageThread conversation={selected} canSendManual={canSend} sendDisabledReason={disabledReason} detailsOpen={detailsOpen}
     header={<div className="flex min-w-0 items-center gap-2">
       {back}<IconAvatar label={name} size="md" className="!rounded-full" icon={selected.peer.photoUrl ? { type: "image", id: selected.peer.id, url: selected.peer.photoUrl, name } : null} />
-      <div className="min-w-0 flex-1"><h2 className="truncate text-sm font-semibold text-white">{name}</h2><p className="truncate text-xs text-neutral-400">Telegram · {selected.account.username ? `@${selected.account.username}` : selected.account.label}</p></div>
-      <CrmSalesControls conversationId={conversationId} compact menuOpen={workflowMenuOpen} onMenuOpenChange={onWorkflowMenuOpenChange} />
+      <div className="min-w-0 flex-1"><h2 className="truncate text-sm font-semibold text-white">{name}</h2><p className="truncate text-xs text-neutral-400">Telegram{selected.peer.username ? <> · <a href={`https://t.me/${encodeURIComponent(selected.peer.username.replace(/^@/, ""))}`} target="_blank" rel="noreferrer" className="text-blue-300 hover:underline">@{selected.peer.username.replace(/^@/, "")}</a></> : null}</p></div>
+      {canEdit ? <CrmUnreadIgnoreControl id={conversationId} ignored={Boolean(selected.ignoreInUnread)} compact /> : null}
       <button type="button" onClick={onOpenDetails} aria-label="Client details" className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-neutral-300 hover:bg-neutral-800"><Info size={20} /></button>
     </div>} />;
 }

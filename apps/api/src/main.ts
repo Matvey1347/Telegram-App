@@ -12,6 +12,7 @@ import {
   apiPort,
   configuredRuntimeEnvironmentName,
   crmRuntimeProxyOrigin,
+  crmLocalReactionAssetsEnabled,
   publicWebOrigin,
   trustedProxyHops,
 } from './config/deployment-config';
@@ -24,7 +25,12 @@ async function bootstrap() {
     rawBody: true,
   });
   const crmOwnerOrigin = crmRuntimeProxyOrigin();
-  if (crmOwnerOrigin) app.use(createCrmRuntimeProxy(crmOwnerOrigin));
+  if (crmOwnerOrigin)
+    app.use(
+      createCrmRuntimeProxy(crmOwnerOrigin, {
+        localReactionAssets: crmLocalReactionAssetsEnabled(),
+      }),
+    );
   // Unified post imports contain up to 100 posts with their text and media
   // references. Nest's default JSON parser limit (100 KB) rejects these before
   // DTO validation or the import preview handler can run.

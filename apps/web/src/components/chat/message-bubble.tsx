@@ -1,5 +1,6 @@
 import { Check, CheckCheck, Clock3, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/primitives";
+import { IconAvatar } from "@/components/icons/icon-avatar";
 import { AttachmentPreview } from "./attachment-preview";
 import { MessageActions } from "./message-actions";
 import type { ChatCapabilities, ChatMessage, ChatMessageActions } from "./types";
@@ -28,7 +29,7 @@ export function MessageBubble({ message, capabilities, actions, onRetry, actions
         {message.replyTo ? <blockquote className="mb-2 min-w-0 border-l-2 border-blue-400 pl-2 text-xs text-blue-200"><span className="block font-medium">{message.replyTo.author}</span><button type="button" disabled={!actions?.onJumpToReply} onClick={() => actions?.onJumpToReply?.(message.replyTo!.id)} className="line-clamp-3 break-words text-left [overflow-wrap:anywhere]">{message.replyTo.text}</button></blockquote> : null}
         <div className="whitespace-pre-wrap break-words text-sm leading-relaxed text-neutral-100 [overflow-wrap:anywhere]">{message.deleted ? "Message deleted" : message.content ?? (message.text || (!message.attachments?.length ? "Unsupported message" : ""))}</div>
         {!message.deleted && message.attachments?.map((attachment) => <AttachmentPreview key={attachment.id} attachment={attachment} />)}
-        {!message.deleted && message.reactions?.length ? <div className="mt-2 flex flex-wrap gap-1">{message.reactions.map((reaction) => <button type="button" key={reaction.emoji} disabled={!capabilities.canReact || !actions?.onReact} onClick={() => actions?.onReact?.(message)} className={`min-h-8 rounded-full px-2 py-0.5 text-xs ${reaction.chosen ? "bg-blue-800" : "bg-white/10"}`} aria-label={`${reaction.emoji}: ${reaction.count}${reaction.chosen ? ", your reaction" : ""}`}>{reaction.emoji} {reaction.count}</button>)}</div> : null}
+        {!message.deleted && message.reactions?.length ? <div className="mt-2 flex flex-wrap gap-1">{message.reactions.map((reaction) => <button type="button" key={reaction.emoji} disabled={!capabilities.canReact || !actions?.onReact} onClick={() => actions?.onReact?.(message)} className={`min-h-8 rounded-full px-2 py-0.5 text-xs ${reaction.chosen ? "bg-blue-800" : "bg-white/10"}`} aria-label={`${reaction.displayEmoji ?? (reaction.emoji.startsWith("custom:") ? "Custom reaction" : reaction.emoji)}: ${reaction.count}${reaction.chosen ? ", your reaction" : ""}`}>{reaction.iconPresentation ? <IconAvatar icon={reaction.iconPresentation} label={reaction.displayEmoji ?? "Premium reaction"} decorative bordered={false} size="xs" className="!h-5 !w-5 !bg-transparent align-middle" /> : reaction.displayEmoji ?? (reaction.emoji.startsWith("custom:") ? "◌" : reaction.emoji)} {reaction.count}</button>)}</div> : null}
         <footer className="clear-both mt-1 flex flex-wrap items-center justify-end gap-1 text-[10px] text-neutral-300">
           {message.editedAt && !message.deleted ? <span>Edited ·</span> : null}
           <time dateTime={message.sentAt} title={validDate ? date.toLocaleString() : undefined}>{validDate ? date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }) : ""}</time>

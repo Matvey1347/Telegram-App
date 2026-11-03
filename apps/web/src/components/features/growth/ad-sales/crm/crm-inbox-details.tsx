@@ -7,9 +7,8 @@ import { telegramCrmApi } from "@/lib/features/growth/telegram-crm-api";
 import { patchInboxConversation } from "@/lib/features/growth/crm-inbox-cache";
 import { telegramCrmKeys } from "@/lib/features/growth/telegram-crm-query";
 import { CrmContactNotes } from "./crm-contact-notes";
-import { CrmSalesControls } from "./crm-sales-controls";
+import { CrmContactTagsEditor } from "./crm-contact-tags-editor";
 import { CrmInboxPurchases } from "./crm-inbox-purchases";
-import { useCrmSalesCopy } from "./crm-sales-copy";
 
 export function CrmInboxDetails({
   conversation,
@@ -24,12 +23,17 @@ export function CrmInboxDetails({
   canEditOwn?: boolean;
   currentMemberId?: string;
 }) {
-  const t = useCrmSalesCopy();
   const client = useQueryClient();
   const contactId = conversation.contactId;
   const contact = useQuery({
     queryKey: telegramCrmKeys.chatContext(contactId ?? "unassigned"),
     queryFn: ({ signal }) => telegramCrmApi.getChatContext(contactId!, signal),
+    enabled: Boolean(contactId),
+    staleTime: 60_000,
+  });
+  const tagContact = useQuery({
+    queryKey: telegramCrmKeys.contactDetail(contactId ?? "unassigned"),
+    queryFn: ({ signal }) => telegramCrmApi.getContact(contactId!, signal),
     enabled: Boolean(contactId),
     staleTime: 60_000,
   });
@@ -54,9 +58,6 @@ export function CrmInboxDetails({
       });
     },
   });
-  const username = (
-    contact.data?.telegramUsername || conversation.peer.username
-  )?.replace(/^@/, "");
   const canEdit =
     canManage ||
     Boolean(
@@ -70,23 +71,6 @@ export function CrmInboxDetails({
         <span className="sr-only">{contact.data.displayName}</span>
       ) : null}
       <section className="space-y-2">
-        <h3 className="font-medium text-neutral-200">
-          {t("crmSales.contacts")}
-        </h3>
-        {username ? (
-          <a
-            className="inline-flex min-h-10 items-center break-all text-blue-300"
-            href={`https://t.me/${encodeURIComponent(username)}`}
-            target="_blank"
-            rel="noreferrer"
-          >
-            @{username}
-          </a>
-        ) : (
-          <p className="text-xs text-neutral-500">
-            Публичный контакт Telegram не указан.
-          </p>
-        )}
         {contact.error ? (
           <p role="alert" className="text-xs text-amber-200">
             Не удалось обновить данные клиента.{" "}
@@ -102,8 +86,7 @@ export function CrmInboxDetails({
       {!contactId ? (
         <div className="space-y-3">
           <p className="text-xs text-neutral-400">
-            Свяжите переписку с клиентом, чтобы добавлять заметки и планировать
-            контакт.
+            Свяжите переписку с клиентом, чтобы добавлять заметки и теги.
           </p>
           {canManage ? (
             <Button
@@ -121,22 +104,17 @@ export function CrmInboxDetails({
         </div>
       ) : (
         <>
-          <CrmSalesControls conversationId={conversation.id} />
+          {tagContact.data ? <CrmContactTagsEditor key={tagContact.data.id} contact={tagContact.data} canEdit={canEdit} /> : tagContact.error ? <p role="alert">Не удалось загрузить теги. <button onClick={() => void tagContact.refetch()} className="text-blue-300">Повторить</button></p> : <p role="status">Загрузка тегов…</p>}
           <section className="space-y-3 border-t border-neutral-800 pt-3">
             <h3 className="font-medium text-neutral-200">Заметки и история</h3>
             <CrmContactNotes contact={{ id: contactId }} canEdit={canEdit} />
           </section>
           {canViewSales ? (
-            <section className="space-y-3 border-t border-neutral-800 pt-3">
-              <h3 className="font-medium text-neutral-200">
-                {t("crmSales.purchases")}
-              </h3>
-              <CrmInboxPurchases
+            <CrmInboxPurchases
                 contactId={contactId}
                 conversationId={conversation.id}
                 workspaceId={conversation.workspaceId}
               />
-            </section>
           ) : null}
         </>
       )}

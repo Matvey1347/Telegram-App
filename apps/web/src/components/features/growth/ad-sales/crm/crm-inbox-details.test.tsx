@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { CrmContactDetail, CrmConversationListItem } from "@telegram-system/shared";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -9,6 +9,7 @@ import { CrmInboxDetails } from "./crm-inbox-details";
 
 vi.mock("@/lib/features/growth/crm-sales-workflow-api", () => ({ crmSalesWorkflowApi: { purchases: vi.fn(), packages: vi.fn() } }));
 vi.mock("./crm-sales-controls", () => ({ CrmSalesControls: () => <p>Workflow controls</p> }));
+vi.mock("./crm-contact-tags-editor", () => ({ CrmContactTagsEditor: ({ canEdit }: { canEdit: boolean }) => <button disabled={!canEdit}>Edit tags</button> }));
 vi.mock("./crm-contact-notes", () => ({
   CrmContactNotes: vi.fn(({ canEdit }: { canEdit: boolean }) => <button disabled={!canEdit}>Add test note</button>),
 }));
@@ -45,15 +46,16 @@ beforeEach(() => {
 });
 
 describe("CRM inbox details permissions", () => {
-  it("renders contact link, notes and independent purchases before compact identity resolves", async () => {
+  it("keeps notes and hides empty purchases without exposing sales controls", async () => {
     vi.mocked(telegramCrmApi.getChatContext).mockImplementation(() => new Promise(() => undefined));
     renderDetails({ canManage: true, canViewSales: true });
-    expect(screen.getByRole("link", { name: "@saved_customer" })).toHaveAttribute("href", "https://t.me/saved_customer");
     expect(screen.getByRole("button", { name: "Add test note" })).not.toBeDisabled();
-    expect(screen.getByText("Workflow controls")).toBeInTheDocument();
-    expect(await screen.findByText("No linked sales recorded.")).toBeInTheDocument();
+    expect(screen.queryByText("Workflow controls")).not.toBeInTheDocument();
+    await screen.findByRole("button", { name: "Edit tags" });
+    await waitFor(() => expect(crmSalesWorkflowApi.purchases).toHaveBeenCalledTimes(1));
+    expect(screen.queryByText("No linked sales recorded.")).not.toBeInTheDocument();
     expect(crmSalesWorkflowApi.purchases).toHaveBeenCalledTimes(1);
-    expect(telegramCrmApi.getContact).not.toHaveBeenCalled();
+    expect(telegramCrmApi.getContact).toHaveBeenCalled();
     expect(screen.queryByText(/Open client profile/)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Packages|Пакеты/ })).not.toBeInTheDocument();
   });
@@ -71,7 +73,7 @@ describe("CRM inbox details permissions", () => {
     if (editable) expect(noteButton).not.toBeDisabled();
     else expect(noteButton).toBeDisabled();
     expect(telegramCrmApi.getChatContext).toHaveBeenCalledWith(contact.id, expect.any(AbortSignal));
-    expect(telegramCrmApi.getContact).not.toHaveBeenCalled();
+    expect(await screen.findByRole("button", { name: "Edit tags" })).toHaveProperty("disabled", !editable);
   });
 
   it("hides sales summaries and never queries purchases without sales permission", async () => {
@@ -90,7 +92,8 @@ describe("CRM inbox details permissions", () => {
     expect(screen.queryByText("Paid: 2500 UAH")).not.toBeInTheDocument();
     expect(await screen.findByRole("alert")).toHaveTextContent("Purchase history could not be loaded");
     await userEvent.click(screen.getByRole("button", { name: "Retry" }));
-    expect(await screen.findByText("No linked sales recorded.")).toBeInTheDocument();
+    await waitFor(() => expect(crmSalesWorkflowApi.purchases).toHaveBeenCalledTimes(2));
+    expect(screen.queryByText("No linked sales recorded.")).not.toBeInTheDocument();
     expect(crmSalesWorkflowApi.purchases).toHaveBeenCalledWith(contact.id, null, expect.any(AbortSignal));
     expect(screen.getByRole("button", { name: "Add test note" })).toBeInTheDocument();
   });

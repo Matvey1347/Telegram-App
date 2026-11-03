@@ -19,7 +19,7 @@ export function inboxItemMatches(item: CrmInboxConversationItem, params: CrmInbo
   if (params.filter === "AI_LEADS") return false;
   if (params.folderId && !item.folders?.some((folder) => folder.id === params.folderId && (!folder.excludeRead || item.unreadCount > 0))) return false;
   if (item.state !== (params.filter === "ARCHIVED" ? "ARCHIVED" : "ACTIVE")) return false;
-  if (params.filter === "UNREAD" && !item.unreadCount) return false;
+  if (params.filter === "UNREAD" && (!item.unreadCount || item.ignoreInUnread)) return false;
   if (params.filter === "NEEDS_REPLY" && (item.attentionStatus !== undefined
     ? item.attentionStatus !== "NEEDS_REPLY"
     : item.contact?.manualSalesStatus || !item.lastInboundAt || (item.lastOutboundAt && item.lastInboundAt <= item.lastOutboundAt))) return false;

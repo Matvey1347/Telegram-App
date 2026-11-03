@@ -2762,6 +2762,7 @@ model TelegramCrmConversation {
   unreadSnapshotPts Int?
   unreadSnapshotTopMessageId       Int?
   unreadCount                     Int                          @default(0)
+  ignoreInUnread                  Boolean                      @default(false)
   readState                       TelegramCrmReadState         @default(UNKNOWN)
   lastReadTelegramMessageId       String?
   lastReadInboxTelegramMessageId  Int?

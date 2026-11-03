@@ -107,6 +107,7 @@ const listed = (id: string, title: string): CrmInboxConversationItem => ({
   lastInboundAt: null,
   lastOutboundAt: null,
   unreadCount: 0,
+  ignoreInUnread: false,
   readState: "READ",
   lastMessage: null,
 });
@@ -144,6 +145,7 @@ describe("CrmInbox", () => {
     vi.clearAllMocks();
     navigation.query = "";
     vi.spyOn(telegramCrmApi, "listTags").mockResolvedValue([]);
+    vi.spyOn(telegramCrmApi, "listMessages").mockResolvedValue({ items: [], hasMore: false, nextCursor: null });
     vi.mocked(listCrmInboxFolders).mockResolvedValue({ items: [], totalUnread: 0 });
     vi.spyOn(telegramCrmApi, "getConversation").mockResolvedValue(conversation);
     vi.spyOn(telegramCrmApi, "getContact").mockResolvedValue({
@@ -151,6 +153,7 @@ describe("CrmInbox", () => {
       displayName: "Saved client",
       stage: "CUSTOMER",
       contactChannels: [],
+      tags: [],
       paymentSummary: [],
       counts: { deals: 0 },
     } as never);
@@ -168,6 +171,13 @@ describe("CrmInbox", () => {
       nextCursor: null,
       hasMore: false,
     });
+  });
+
+  it("starts loading messages while the conversation detail is pending", async () => {
+    vi.mocked(telegramCrmApi.getConversation).mockReturnValue(new Promise(() => {}));
+    renderInbox();
+    await waitFor(() => expect(telegramCrmApi.listMessages).toHaveBeenCalledWith("conversation-exact", null, 50, expect.any(AbortSignal)));
+    expect(screen.getByText("Loading messages…")).toBeInTheDocument();
   });
 
   it("shows server-wide folder counts and switches between a folder and all unread conversations", async () => {

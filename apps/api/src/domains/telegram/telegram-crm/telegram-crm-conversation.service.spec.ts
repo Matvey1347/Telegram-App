@@ -183,6 +183,7 @@ describe('TelegramCrmConversationService', () => {
   it('returns fixed account and peer summaries for list and deep-link reads', async () => {
     const enriched = {
       ...conversation('account-2'),
+      ignoreInUnread: true,
       mtprotoAccount: {
         id: 'account-2',
         label: 'Manager two',
@@ -226,11 +227,13 @@ describe('TelegramCrmConversationService', () => {
     });
     expect(direct).toMatchObject({
       id: enriched.id,
+      ignoreInUnread: true,
       account: { id: 'account-2' },
       peer: { telegramUserId: '42' },
     });
     expect(prisma.telegramCrmConversation.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({
+        select: expect.objectContaining({ ignoreInUnread: true }),
         where: {
           id: enriched.id,
           workspaceId: 'workspace-1',

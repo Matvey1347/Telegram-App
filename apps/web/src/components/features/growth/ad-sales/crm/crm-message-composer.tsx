@@ -2,8 +2,8 @@
 import { useCopilotText } from "./copilot/copilot-copy";
 
 import { forwardRef, useImperativeHandle, useState, type ReactNode } from "react";
-import { Maximize2 } from "lucide-react";
-import { MessageComposer } from "@/components/chat/message-composer";
+import { CrmCompactEditor } from "./crm-compact-editor";
+import { Send } from "lucide-react";
 import { TelegramTextEditor } from "@/components/features/telegram/telegram/telegram-text-editor";
 import { ModalDraftPicker } from "@/components/ui/modal-draft-picker";
 import { useWorkspaceModalDrafts } from "@/hooks/use-workspace-modal-drafts";
@@ -31,7 +31,7 @@ export const CrmMessageComposer = forwardRef<
     workspaceId: string;
     conversationId: string;
     sending: boolean;
-    extraControls?: ReactNode;
+    extraControls?: (hasText: boolean) => ReactNode;
     disabled?: boolean;
     onSend: (
       text: string,
@@ -57,7 +57,6 @@ export const CrmMessageComposer = forwardRef<
   const [pendingInsert, setPendingInsert] = useState<ComposerDraft | null>(
     null,
   );
-  const [templatesOpen, setTemplatesOpen] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
   const drafts = useWorkspaceModalDrafts({
     namespace: `crm-message:${conversationId}`,
@@ -123,30 +122,7 @@ export const CrmMessageComposer = forwardRef<
     }
   };
   return (
-    <MessageComposer
-      onSubmit={() => void submit()}
-      sending={sending}
-      disabled={
-        disabled ||
-        dirtyAi ||
-        !value.text.trim() ||
-        value.text.length > 4096 ||
-        drafts.pendingDrafts.length > 0
-      }
-      footer={
-        <>
-          {extraControls}
-          <Button
-            variant="secondary"
-            disabled={sending || drafts.pendingDrafts.length > 0}
-            onClick={() => setTemplatesOpen(true)}
-          >
-            Quick replies
-          </Button>
-          <span className="ml-2 hidden xl:inline">Ctrl / ⌘ + Enter</span>
-        </>
-      }
-    >
+    <div className="shrink-0 border-t border-neutral-800 bg-neutral-900/95 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 md:px-3">
       {drafts.pendingDrafts.length ? (
         <div className="max-h-52 overflow-y-auto">
           <ModalDraftPicker
@@ -169,10 +145,9 @@ export const CrmMessageComposer = forwardRef<
             }
           }}
         >
-          <div className="flex items-end gap-2 rounded-lg border border-neutral-700 bg-neutral-900 p-2">
-            <textarea aria-label="Message text" value={value.text} onChange={(event) => updateText(event.target.value)} disabled={sending || disabled} rows={2} placeholder="Write a message…" className="min-w-0 flex-1 resize-none bg-transparent px-2 py-1 text-sm leading-6 text-white outline-none placeholder:text-neutral-500" />
-            <button type="button" onClick={() => setEditorOpen(true)} disabled={sending || disabled} aria-label="Expand editor" title="Expand editor" className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md text-blue-300 hover:bg-neutral-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"><Maximize2 size={17} aria-hidden /></button>
-          </div>
+          <CrmCompactEditor value={value.text} onChange={updateText} disabled={sending || disabled} onExpand={() => setEditorOpen(true)}
+            leading={extraControls?.(Boolean(value.text))}
+            trailing={value.text ? <button type="button" className="order-3 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-sky-500 text-white hover:bg-sky-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300 disabled:opacity-40" aria-label="Send message" title="Send message" disabled={disabled || sending || dirtyAi || !value.text.trim() || value.text.length > 4096 || drafts.pendingDrafts.length > 0} onClick={() => void submit()}><Send size={18} aria-hidden /></button> : null} />
           <Modal open={editorOpen} onClose={() => setEditorOpen(false)} title="Edit message" size="xl">
             <TelegramTextEditor value={value.text} onChange={updateText} disabled={sending || disabled} rows={8} placeholder="Write a message…" characterCountLabel={(count) => `${count} / 4096`} enableCustomEmoji />
             <div className="mt-3 flex justify-end"><Button onClick={() => setEditorOpen(false)}>Done</Button></div>
@@ -222,50 +197,6 @@ export const CrmMessageComposer = forwardRef<
           Telegram messages can contain at most 4096 characters.
         </p>
       ) : null}
-      <Modal
-        open={templatesOpen}
-        onClose={() => setTemplatesOpen(false)}
-        title="Quick replies"
-        size="sm"
-      >
-        <p className="mb-3 text-sm text-neutral-400">
-          Insert a starting point, then review it before sending.
-        </p>
-        <div className="space-y-2">
-          {[
-            [
-              "Acknowledge",
-              "Thank you for your message. I’ll check the details and get back to you.",
-            ],
-            [
-              "Clarify dates",
-              "Which dates would work best for your advertising placement?",
-            ],
-            [
-              "Follow-up",
-              "Hello! Is advertising placement still relevant for you?",
-            ],
-          ].map(([label, text]) => (
-            <Button
-              key={label}
-              variant="secondary"
-              className="w-full"
-              onClick={() => {
-                setValue({
-                  ...value,
-                  text: [value.text, text].filter(Boolean).join("\n"),
-                  key: value.ai
-                    ? `ai:${value.ai.aiDraftId}:${value.ai.aiDraftRevision}`
-                    : crypto.randomUUID(),
-                });
-                setTemplatesOpen(false);
-              }}
-            >
-              {label}
-            </Button>
-          ))}
-        </div>
-      </Modal>
-    </MessageComposer>
+    </div>
   );
 });

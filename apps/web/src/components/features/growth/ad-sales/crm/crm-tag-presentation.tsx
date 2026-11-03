@@ -14,7 +14,7 @@ export function crmTagColorStyle(tag: CrmTagSummary): CSSProperties {
   return { borderColor: `${color}80`, backgroundColor: `${color}22`, color };
 }
 
-export function crmTagDisplayName(tag: CrmTagSummary) {
+export function crmTagDisplayName(tag: Pick<CrmTagSummary, "name" | "emojiPresentation">) {
   if (!tag.emojiPresentation || tag.emojiPresentation.type !== "unicode") {
     return tag.name;
   }

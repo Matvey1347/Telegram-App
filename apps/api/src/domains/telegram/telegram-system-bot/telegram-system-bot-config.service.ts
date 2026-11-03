@@ -31,6 +31,10 @@ export class TelegramSystemBotConfigService {
     return this.environmentValue('TOKEN');
   }
 
+  get localToken() {
+    return this.valueForEnvironment('LOCAL', 'TOKEN');
+  }
+
   get productionToken() {
     return this.valueForEnvironment('PRODUCTION', 'TOKEN');
   }

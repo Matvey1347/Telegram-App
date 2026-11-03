@@ -1,5 +1,6 @@
 import { Type } from 'class-transformer';
 import {
+  IsBoolean,
   IsIn,
   IsInt,
   IsOptional,
@@ -39,4 +40,9 @@ export class CrmInboxConversationsQueryDto {
   @Min(1)
   @Max(100)
   limit?: number = 50;
+}
+
+export class SetCrmUnreadIgnoredDto {
+  @IsBoolean()
+  ignored!: boolean;
 }
