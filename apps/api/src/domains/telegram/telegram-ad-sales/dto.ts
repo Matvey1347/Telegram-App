@@ -463,6 +463,7 @@ export class CreateTelegramAdSaleDto {
   @Matches(/^[A-Z]{3}$/)
   settlementCurrency!: string;
   @IsOptional() @IsString() assignedMemberId?: string | null;
+  @IsOptional() @IsString() sellerMemberId?: string | null;
   @IsOptional()
   @ValidateIf((_, value) => value !== null && value !== undefined)
   @IsDateString()
@@ -504,6 +505,7 @@ export class UpdateTelegramAdSaleDto {
   @Matches(/^[A-Z]{3}$/)
   settlementCurrency?: string;
   @IsOptional() @IsString() assignedMemberId?: string | null;
+  @IsOptional() @IsString() sellerMemberId?: string | null;
   @IsOptional()
   @ValidateIf((_, value) => value !== null && value !== undefined)
   @IsDateString()

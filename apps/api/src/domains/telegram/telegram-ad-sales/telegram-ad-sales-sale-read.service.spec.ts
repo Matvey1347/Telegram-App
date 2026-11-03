@@ -44,9 +44,16 @@ describe('TelegramAdSalesSaleReadService', () => {
       sourceAdvertiserActivityId: null,
       createdByUserId: 'user-1',
       assignedMemberId: null,
+      sellerMemberId: 'member-seller',
       createdAt: new Date('2026-08-01T00:00:00.000Z'),
       updatedAt: new Date('2026-08-02T00:00:00.000Z'),
       assignedMember: null,
+      sellerMember: {
+        id: 'member-seller',
+        telegramUsername: 'seller',
+        avatarIcon: null,
+        user: { name: 'Seller', email: 'seller@example.com' },
+      },
       advertiser: {
         displayName: 'Current buyer',
         telegramUsername: 'current_buyer',
@@ -176,6 +183,11 @@ describe('TelegramAdSalesSaleReadService', () => {
         paymentStatus: 'PARTIALLY_PAID',
         paymentSummary: { amount: '40', currency: 'UAH' },
         financeSkipped: false,
+        sellerMemberId: 'member-seller',
+        sellerMember: expect.objectContaining({
+          id: 'member-seller',
+          name: 'Seller',
+        }),
         advertiserSummary: {
           displayName: 'Current buyer',
           telegramUsername: 'current_buyer',
