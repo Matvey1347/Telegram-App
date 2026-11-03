@@ -44,9 +44,26 @@ const SALE_LIST_SELECT = {
   sourceAdvertiserActivityId: true,
   createdByUserId: true,
   assignedMemberId: true,
+  sellerMemberId: true,
   createdAt: true,
   updatedAt: true,
   assignedMember: {
+    select: {
+      id: true,
+      telegramUsername: true,
+      avatarIcon: {
+        select: {
+          id: true,
+          type: true,
+          name: true,
+          emoji: true,
+          imageUrl: true,
+        },
+      },
+      user: { select: { name: true, email: true } },
+    },
+  },
+  sellerMember: {
     select: {
       id: true,
       telegramUsername: true,
@@ -350,6 +367,7 @@ export class TelegramAdSalesSaleReadService {
       sourceAdvertiserActivityId: sale.sourceAdvertiserActivityId,
       createdByUserId: sale.createdByUserId,
       assignedMemberId: sale.assignedMemberId,
+      sellerMemberId: sale.sellerMemberId,
       assignedMember: sale.assignedMember
         ? {
             id: sale.assignedMember.id,
@@ -361,6 +379,20 @@ export class TelegramAdSalesSaleReadService {
             email: sale.assignedMember.user?.email ?? null,
             avatarPresentation: iconToResolvedEmoji(
               sale.assignedMember.avatarIcon,
+            ),
+          }
+        : null,
+      sellerMember: sale.sellerMember
+        ? {
+            id: sale.sellerMember.id,
+            name:
+              sale.sellerMember.user?.name ||
+              sale.sellerMember.telegramUsername ||
+              sale.sellerMember.user?.email ||
+              'Workspace member',
+            email: sale.sellerMember.user?.email ?? null,
+            avatarPresentation: iconToResolvedEmoji(
+              sale.sellerMember.avatarIcon,
             ),
           }
         : null,

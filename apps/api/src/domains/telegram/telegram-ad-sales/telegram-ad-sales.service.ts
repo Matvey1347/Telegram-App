@@ -433,6 +433,21 @@ export class TelegramAdSalesService {
             ),
           }
         : null,
+      sellerMemberId: sale.sellerMemberId ?? null,
+      sellerMember: sale.sellerMember
+        ? {
+            id: sale.sellerMember.id,
+            name:
+              sale.sellerMember.user?.name ||
+              sale.sellerMember.telegramUsername ||
+              sale.sellerMember.user?.email ||
+              'Workspace member',
+            email: sale.sellerMember.user?.email ?? null,
+            avatarPresentation: iconToResolvedEmoji(
+              sale.sellerMember.avatarIcon,
+            ),
+          }
+        : null,
       reservedUntil: sale.reservedUntil?.toISOString() ?? null,
       createdAt: sale.createdAt.toISOString(),
       updatedAt: sale.updatedAt.toISOString(),
@@ -766,6 +781,22 @@ export class TelegramAdSalesService {
 
   private includeSaleRelations() {
     return {
+      sellerMember: {
+        select: {
+          id: true,
+          telegramUsername: true,
+          avatarIcon: {
+            select: {
+              id: true,
+              type: true,
+              name: true,
+              emoji: true,
+              imageUrl: true,
+            },
+          },
+          user: { select: { name: true, email: true } },
+        },
+      },
       advertiser: {
         include: telegramAdvertiserCompatibilityInclude,
       },
@@ -3542,6 +3573,15 @@ export class TelegramAdSalesService {
         userId,
         dto.assignedMemberId,
       );
+    const sellerMemberId =
+      dto.sellerMemberId === undefined
+        ? assignedMemberId
+        : (
+            await this.workspaceService.resolveAssignedMemberId(
+              userId,
+              dto.sellerMemberId,
+            )
+          ).assignedMemberId;
     const advertiser = await this.resolveAdvertiserForSale(
       workspaceId,
       userId,
@@ -3551,7 +3591,7 @@ export class TelegramAdSalesService {
     const commissionSnapshot = await resolveAdSaleCommissionSnapshot(
       this.prisma,
       workspaceId,
-      assignedMemberId,
+      sellerMemberId,
     );
     const sale = await this.prisma.telegramAdSale.create({
       data: {
@@ -3612,6 +3652,23 @@ export class TelegramAdSalesService {
               dto.assignedMemberId,
             )
           ).assignedMemberId;
+    const sellerMemberId =
+      dto.sellerMemberId === undefined
+        ? undefined
+        : (
+            await this.workspaceService.resolveAssignedMemberId(
+              userId,
+              dto.sellerMemberId,
+            )
+          ).assignedMemberId;
+    const commissionSnapshot =
+      sellerMemberId === undefined
+        ? undefined
+        : await resolveAdSaleCommissionSnapshot(
+            this.prisma,
+            workspaceId,
+            sellerMemberId,
+          );
     if (dto.status) {
       this.assertSaleTransition(existing.status, dto.status);
       if (
@@ -3675,6 +3732,7 @@ export class TelegramAdSalesService {
                 : null,
             }),
         ...(assignedMemberId === undefined ? {} : { assignedMemberId }),
+        ...(sellerMemberId === undefined ? {} : { ...commissionSnapshot }),
         ...(dto.status === undefined ? {} : { status: dto.status }),
         ...(dto.crmDealStage === undefined
           ? {}

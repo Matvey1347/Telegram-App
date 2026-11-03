@@ -248,15 +248,24 @@ export function SalesTab(props: {
                       <td className="px-4 py-3">
                         <div className="space-y-2">
                           <AdSaleOriginPreview origin={sale.origin} />
-                          {sale.assignedMember ? (
+                          {(sale.sellerMember ?? sale.assignedMember) ? (
                             <div className="flex items-center gap-2">
                               <IconAvatar
-                                icon={sale.assignedMember.avatarPresentation}
-                                label={sale.assignedMember.name}
+                                icon={
+                                  (sale.sellerMember ?? sale.assignedMember)!
+                                    .avatarPresentation
+                                }
+                                label={
+                                  (sale.sellerMember ?? sale.assignedMember)!
+                                    .name
+                                }
                                 size="xs"
                               />
                               <span className="max-w-40 truncate text-xs text-neutral-300">
-                                {sale.assignedMember.name}
+                                {
+                                  (sale.sellerMember ?? sale.assignedMember)!
+                                    .name
+                                }
                               </span>
                             </div>
                           ) : (

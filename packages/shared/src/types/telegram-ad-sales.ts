@@ -537,7 +537,14 @@ export type TelegramAdSale = {
   sourceAdvertiserActivityId?: string | null;
   createdByUserId: string | null;
   assignedMemberId: string | null;
+  sellerMemberId?: string | null;
   assignedMember?: {
+    id: string;
+    name: string;
+    email: string | null;
+    avatarPresentation: ResolvedEmoji | null;
+  } | null;
+  sellerMember?: {
     id: string;
     name: string;
     email: string | null;
@@ -577,7 +584,7 @@ export type TelegramAdSalePublicationDeletionResult = {
 };
 
 export type TelegramAdvertiserContact = {
-  instagram?: import('./crm-instagram-contacts').CrmInstagramMethod;
+  instagram?: import("./crm-instagram-contacts").CrmInstagramMethod;
   id: string;
   workspaceId: string;
   advertiserId: string;

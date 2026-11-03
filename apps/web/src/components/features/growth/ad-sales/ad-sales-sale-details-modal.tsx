@@ -78,7 +78,7 @@ type SaveDraft = {
     allocations: Array<{ placementId: string; amount: number }>;
   }>;
   origin: TelegramAdSale["origin"];
-  assignedMemberId: string | null;
+  sellerMemberId: string | null;
   buyerContact: string;
 };
 
@@ -141,7 +141,7 @@ export function SaleDetailsModal(props: {
   useEffect(() => {
     if (!props.sale || !props.open) return;
     setOrigin(props.sale.origin);
-    setMemberId(props.sale.assignedMemberId ?? "");
+    setMemberId(props.sale.sellerMemberId ?? props.sale.assignedMemberId ?? "");
     setBuyerContact(
       props.sale.advertiserTelegramSnapshot ??
         props.sale.advertiserTelegram ??
@@ -225,11 +225,12 @@ export function SaleDetailsModal(props: {
         const placement = sale.placements.find(
           (item) => item.id === placementDraft.id,
         );
-        const product = placement && changes.formatName
-          ? props.productsByChannelId[placement.telegramChannelId]?.find(
-              (candidate) => candidate.name === changes.formatName,
-            )
-          : undefined;
+        const product =
+          placement && changes.formatName
+            ? props.productsByChannelId[placement.telegramChannelId]?.find(
+                (candidate) => candidate.name === changes.formatName,
+              )
+            : undefined;
         if (changes.formatName && !product) {
           throw new Error(
             `Format ${changes.formatName} is unavailable for a placement.`,
@@ -258,7 +259,7 @@ export function SaleDetailsModal(props: {
     const sourcePlacements = replacements ?? placements;
     const placementsToSave = placementId
       ? sourcePlacements.filter((placement) => placement.id === placementId)
-      : replacements ?? [];
+      : (replacements ?? []);
     const paymentsToSave = replacements
       ? []
       : placementId && !(priceChanged && syncPayment)
@@ -269,7 +270,7 @@ export function SaleDetailsModal(props: {
     try {
       await props.onSave(sale, {
         origin,
-        assignedMemberId: memberId || null,
+        sellerMemberId: memberId || null,
         buyerContact: buyerContact.trim(),
         placements: placementsToSave.map((p) => ({
           id: p.id,
@@ -784,4 +785,3 @@ function allocatePayment(amount: number, placements: PlacementDraft[]) {
     return allocation > 0 ? [{ placementId: p.id, amount: allocation }] : [];
   });
 }
-

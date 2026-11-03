@@ -98,7 +98,8 @@ export function AdSalesSaleDetailsDialog({
         };
         if (
           draft.origin !== sale.origin ||
-          draft.assignedMemberId !== sale.assignedMemberId ||
+          draft.sellerMemberId !==
+            (sale.sellerMemberId ?? sale.assignedMemberId) ||
           draft.buyerContact !==
             (sale.advertiserTelegramSnapshot ??
               sale.advertiserTelegram ??
@@ -119,7 +120,7 @@ export function AdSalesSaleDetailsDialog({
             sale.id,
             {
               origin: draft.origin,
-              assignedMemberId: draft.assignedMemberId,
+              sellerMemberId: draft.sellerMemberId,
               ...(buyerChanged
                 ? {
                     advertiserId: null,
