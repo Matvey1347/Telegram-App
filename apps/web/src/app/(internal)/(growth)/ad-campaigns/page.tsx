@@ -726,9 +726,9 @@ function AdCampaignsPage({
                 setShowArchivedPromos(archived);
                 promosPagination.resetPage();
               }}
-              className={`rounded-lg px-4 py-2 text-sm ${showArchivedPromos === archived ? "bg-blue-600 text-white" : "border border-neutral-700 text-neutral-300"}`}
+              className={`inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-lg px-4 py-2 text-sm ${showArchivedPromos === archived ? "bg-blue-600 text-white" : "border border-neutral-700 text-neutral-300"}`}
             >
-              <span aria-hidden="true">
+              <span className="inline-flex shrink-0" aria-hidden="true">
                 {archived ? <Archive size={16} /> : <CheckCircle2 size={16} />}
               </span>
               {archived ? "Archive" : "Active"}
