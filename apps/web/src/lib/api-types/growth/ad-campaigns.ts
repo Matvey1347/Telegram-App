@@ -29,6 +29,7 @@ export type Promo = {
   defaultInviteLinkId?: string | null;
   defaultInviteLink?: TelegramInviteLink | null;
   status: "draft" | "active" | "archived";
+  archivedAt?: string | null;
   telegramChannel?: TelegramChannel;
 };
 export type AdvertisingChannel = {

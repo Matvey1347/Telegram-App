@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { Pencil, Send, Trash2 } from "lucide-react";
+import { Archive, ArchiveRestore, Pencil, Send, Trash2 } from "lucide-react";
 import type { Promo } from "@/lib/api";
 import {
   CardActionsMenu,
@@ -17,6 +17,7 @@ export function PromoCard({
   member,
   onEdit,
   onDelete,
+  onToggleArchive,
 }: {
   promo: Promo;
   icon?: ReactNode;
@@ -24,6 +25,7 @@ export function PromoCard({
   member?: ReactNode;
   onEdit: () => void;
   onDelete: () => void;
+  onToggleArchive?: () => void;
 }) {
   const [quickSendOpen, setQuickSendOpen] = useState(false);
   const openingText =
@@ -85,6 +87,11 @@ export function PromoCard({
             label="Send to bot"
             icon={<Send size={16} />}
             onClick={() => setQuickSendOpen(true)}
+          />
+          <CardMenuAction
+            label={promo.archivedAt ? "Restore from archive" : "Archive"}
+            icon={promo.archivedAt ? <ArchiveRestore size={16} /> : <Archive size={16} />}
+            onClick={() => onToggleArchive?.()}
           />
           <CardMenuAction
             danger

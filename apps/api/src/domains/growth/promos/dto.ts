@@ -69,4 +69,5 @@ export class PromoQueryDto extends PaginationQueryDto {
   @IsOptional() @IsString() telegramChannelId?: string;
   @IsOptional() @IsString() @MaxLength(10_000) telegramChannelIds?: string;
   @IsOptional() @IsString() @MaxLength(120) search?: string;
+  @IsOptional() @IsString() archived?: string;
 }

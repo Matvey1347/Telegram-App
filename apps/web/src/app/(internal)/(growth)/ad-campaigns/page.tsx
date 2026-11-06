@@ -64,7 +64,14 @@ import {
   PageHeader,
 } from "@/components/ui/primitives";
 import { useAppToast } from "@/providers/toast-provider";
-import { CircleHelp, EyeOff, Pencil, Trash2 } from "lucide-react";
+import {
+  Archive,
+  CheckCircle2,
+  CircleHelp,
+  EyeOff,
+  Pencil,
+  Trash2,
+} from "lucide-react";
 import { NativeMoney } from "@/components/ui/native-money";
 import {
   toAdCampaignInputDate as toInputDate,
@@ -201,6 +208,7 @@ function AdCampaignsPage({
   const editingCampaignRequest = useRef(0);
   const [deleting, setDeleting] = useState<any | null>(null);
   const [channelScopeFilter, setChannelScopeFilter] = useState("");
+  const [showArchivedPromos, setShowArchivedPromos] = useState(false);
   const viewMode: AdCampaignsViewMode =
     topSection === "promo"
       ? "promos"
@@ -322,6 +330,7 @@ function AdCampaignsPage({
   const {
     data: promosPage,
     isLoading: promosLoading,
+    isFetching: promosFetching,
     error: promosError,
   } = useQuery({
     queryKey: [
@@ -333,6 +342,7 @@ function AdCampaignsPage({
         pageSize: promosPagination.pageSize,
         search: deferredSearch,
         channelScopeFilter,
+        showArchivedPromos,
       },
     ],
     queryFn: () =>
@@ -341,9 +351,9 @@ function AdCampaignsPage({
         pageSize: promosPagination.pageSize,
         search: deferredSearch || undefined,
         telegramChannelIds: channelScopeFilter || undefined,
+        archived: showArchivedPromos,
       }),
     enabled: viewMode === "promos",
-    placeholderData: keepPreviousData,
   });
 
   const hypotheses = hypothesesPage?.items ?? [];
@@ -464,7 +474,7 @@ function AdCampaignsPage({
   const showCampaignsInitialLoading =
     viewMode === "campaigns" && isLoading && !data;
   const showHypothesesInitialLoading = hypothesesLoading && !hypotheses.length;
-  const showPromosInitialLoading = promosLoading && !promos.length;
+  const showPromosLoading = promosLoading || promosFetching;
   const visibleCampaigns = campaigns;
   const visibleHypotheses = hypotheses;
   const visiblePromos = promos;
@@ -705,9 +715,31 @@ function AdCampaignsPage({
         />
       ) : null}
       {viewMode === "promos" ? (
+        <div className="mb-4 flex gap-2" role="tablist" aria-label="Promo archive">
+          {([false, true] as const).map((archived) => (
+            <button
+              key={String(archived)}
+              type="button"
+              role="tab"
+              aria-selected={showArchivedPromos === archived}
+              onClick={() => {
+                setShowArchivedPromos(archived);
+                promosPagination.resetPage();
+              }}
+              className={`rounded-lg px-4 py-2 text-sm ${showArchivedPromos === archived ? "bg-blue-600 text-white" : "border border-neutral-700 text-neutral-300"}`}
+            >
+              <span aria-hidden="true">
+                {archived ? <Archive size={16} /> : <CheckCircle2 size={16} />}
+              </span>
+              {archived ? "Archive" : "Active"}
+            </button>
+          ))}
+        </div>
+      ) : null}
+      {viewMode === "promos" ? (
         <PromosSection
-          promos={visiblePromos}
-          loading={showPromosInitialLoading}
+          promos={showPromosLoading ? [] : visiblePromos}
+          loading={showPromosLoading}
           error={promosError}
           onEdit={async (promo) => {
             try {
@@ -721,6 +753,13 @@ function AdCampaignsPage({
             }
           }}
           onDelete={setDeletingPromo}
+          onToggleArchive={(promo) => {
+            void promosApi.setArchived(promo.id, !promo.archivedAt).then(() => {
+              void qc.invalidateQueries({ queryKey: ["promos"] });
+              void qc.invalidateQueries({ queryKey: ["channel-promos"] });
+              pushToast(promo.archivedAt ? "Promo restored." : "Promo archived.", "success");
+            }).catch((error) => pushToast(getErrorMessage(error, "Failed to update promo archive."), "error"));
+          }}
         />
       ) : null}
       {viewMode === "promos" && promosPage ? (
@@ -1914,12 +1953,14 @@ function PromosSection({
   error,
   onEdit,
   onDelete,
+  onToggleArchive,
 }: {
   promos: Promo[];
   loading: boolean;
   error: unknown;
   onEdit: (promo: Promo) => void;
   onDelete: (promo: Promo) => void;
+  onToggleArchive: (promo: Promo) => void;
 }) {
   return (
     <>
@@ -1957,6 +1998,7 @@ function PromosSection({
               }
               onEdit={() => onEdit(promo)}
               onDelete={() => onDelete(promo)}
+              onToggleArchive={() => onToggleArchive(promo)}
             />
           ))}
         </MasonryGrid>

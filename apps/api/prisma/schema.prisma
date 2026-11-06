@@ -3073,6 +3073,7 @@ model Promo {
   buttonRows          Json        @default("[]")
   defaultInviteLinkId String?
   status              PromoStatus @default(draft)
+  archivedAt          DateTime?
   assignedMemberId    String?
   createdByUserId     String?
 
@@ -3090,6 +3091,7 @@ model Promo {
   updatedAt DateTime @updatedAt
 
   @@index([workspaceId, assignedMemberId])
+  @@index([workspaceId, archivedAt])
   @@index([defaultInviteLinkId])
   @@index([iconId])
 }

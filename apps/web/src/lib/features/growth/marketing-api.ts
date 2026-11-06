@@ -58,12 +58,15 @@ export function createMarketingApi({
     get: promoCrud.get,
     create: promoCrud.create,
     update: promoCrud.update,
+    setArchived: async (id: string, archived: boolean) =>
+      (await api.patch<Promo>(`/promos/${id}/archive`, { archived })).data,
     remove: promoCrud.remove,
     listPage: async (
       params?: PaginationParams & {
         telegramChannelId?: string;
         telegramChannelIds?: string;
         search?: string;
+        archived?: boolean;
       },
     ) => getPaginated<Promo>("/promos", params),
     uploadImage: async (file: File) => {

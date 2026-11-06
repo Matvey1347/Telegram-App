@@ -36,6 +36,7 @@ const promoDetailSelect = {
   buttonRows: true,
   defaultInviteLinkId: true,
   status: true,
+  archivedAt: true,
   assignedMemberId: true,
   createdByUserId: true,
   createdAt: true,
@@ -157,6 +158,8 @@ export class PromosService {
         query.telegramChannelIds,
       ),
       assignedMemberId: query.assignedMemberId || undefined,
+      archivedAt:
+        query.archived === 'true' ? { not: null } : null,
       ...(search
         ? {
             OR: [
@@ -191,6 +194,7 @@ export class PromosService {
           previewText: true,
           previewImageUrl: true,
           status: true,
+          archivedAt: true,
           assignedMemberId: true,
           createdAt: true,
           updatedAt: true,
@@ -349,6 +353,20 @@ export class PromosService {
   async remove(userId: string, id: string) {
     await this.findOne(userId, id);
     return this.prisma.promo.delete({ where: { id } });
+  }
+
+  async setArchived(userId: string, id: string, archived: boolean) {
+    await this.findOne(userId, id);
+    const promo = await this.prisma.promo.update({
+      where: { id },
+      data: { archivedAt: archived ? new Date() : null },
+      select: promoDetailSelect,
+    });
+    return {
+      ...promo,
+      iconPresentation: iconToResolvedEmoji(promo.icon),
+      assignedMember: withWorkspaceMemberAvatar(promo.assignedMember),
+    };
   }
 
   async uploadPromoImage(file: Express.Multer.File) {

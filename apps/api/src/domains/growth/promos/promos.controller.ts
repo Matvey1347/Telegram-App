@@ -42,6 +42,13 @@ export class PromosController {
     const imageUrl = await this.service.uploadPromoImage(file);
     return { imageUrl };
   }
+  @Patch(':id/archive') archive(
+    @CurrentUser() user: JwtUser,
+    @Param('id') id: string,
+    @Body('archived') archived: boolean,
+  ) {
+    return this.service.setArchived(user.sub, id, archived);
+  }
   @Get(':id') findOne(@CurrentUser() user: JwtUser, @Param('id') id: string) {
     return this.service.findOne(user.sub, id);
   }
