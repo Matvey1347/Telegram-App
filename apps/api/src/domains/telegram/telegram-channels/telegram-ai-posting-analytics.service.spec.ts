@@ -104,4 +104,15 @@ describe('TelegramAiPostingAnalyticsService', () => {
     ).rejects.toBeInstanceOf(NotFoundException);
     expect(prisma.$queryRaw).not.toHaveBeenCalled();
   });
+
+  it('rejects periods outside retained detailed-operation history', async () => {
+    const { service, prisma } = setup();
+    await expect(
+      service.read('user', 'channel', {
+        from: '2026-01-01',
+        to: '2026-04-01',
+      }),
+    ).rejects.toThrow('AI_POSTING_ANALYTICS_RANGE_INVALID');
+    expect(prisma.$queryRaw).not.toHaveBeenCalled();
+  });
 });
