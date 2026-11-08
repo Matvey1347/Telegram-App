@@ -41,6 +41,10 @@ Analytics use the detailed `AiOperation` ledger, filtered by workspace, channel,
 
 ## Verification
 
+The production UI is available at `https://www.nexeloq.com/ai-posting`. Sign
+in with a Workspace account that has access to a Telegram channel; AI Posting
+remains workspace-scoped and Autopilot is off until explicitly enabled.
+
 Useful commands from the repository root:
 
 ```sh
