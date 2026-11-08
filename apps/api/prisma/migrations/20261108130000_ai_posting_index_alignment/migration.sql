@@ -1,0 +1,27 @@
+-- Align PostgreSQL's physically truncated index names with the names Prisma
+-- derives from the current schema. Also replace the obsolete notification
+-- retry index with the claim-expiry index used by the worker.
+DROP INDEX "TelegramAiPostingNotificationDelivery_status_nextAttemptAt_idx";
+CREATE INDEX "TelegramAiPostingNotificationDelivery_status_claimExpiresAt_idx"
+  ON "TelegramAiPostingNotificationDelivery"("status", "claimExpiresAt");
+
+ALTER INDEX "AiOperation_workspaceId_aiPostingAutopilotRunId_aiPostingPublic"
+  RENAME TO "AiOperation_workspaceId_aiPostingAutopilotRunId_aiPostingPu_idx";
+ALTER INDEX "AiOperation_workspaceId_aiPostingTestRunId_aiPostingPublication"
+  RENAME TO "AiOperation_workspaceId_aiPostingTestRunId_aiPostingPublica_idx";
+ALTER INDEX "TelegramAiPostingAutopilotRun_workspaceId_telegramChannelId_cre"
+  RENAME TO "TelegramAiPostingAutopilotRun_workspaceId_telegramChannelId_idx";
+ALTER INDEX "TelegramAiPostingGeneration_workspaceId_telegramChannelId_creat"
+  RENAME TO "TelegramAiPostingGeneration_workspaceId_telegramChannelId_c_idx";
+ALTER INDEX "TelegramAiPostingNotificationDelivery_runId_memberId_eventKey_t"
+  RENAME TO "TelegramAiPostingNotificationDelivery_runId_memberId_eventK_key";
+ALTER INDEX "TelegramAiPostingNotificationDelivery_workspaceId_channelId_cre"
+  RENAME TO "TelegramAiPostingNotificationDelivery_workspaceId_channelId_idx";
+ALTER INDEX "TelegramAiPostingNotificationPreference_scope_key"
+  RENAME TO "TelegramAiPostingNotificationPreference_workspaceId_memberI_key";
+ALTER INDEX "TelegramAiPostingNotificationPreference_workspaceId_memberId_id"
+  RENAME TO "TelegramAiPostingNotificationPreference_workspaceId_memberI_idx";
+ALTER INDEX "TelegramAiPostingSettings_autopilotEnabled_autopilotNextRunAt_i"
+  RENAME TO "TelegramAiPostingSettings_autopilotEnabled_autopilotNextRun_idx";
+ALTER INDEX "TelegramAiPostingTestRun_workspaceId_telegramChannelId_createdA"
+  RENAME TO "TelegramAiPostingTestRun_workspaceId_telegramChannelId_crea_idx";
