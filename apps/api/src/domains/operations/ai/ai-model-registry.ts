@@ -33,6 +33,14 @@ const PRICES: AiPrice[] = [
     outputPerMillion: '4.50',
     sourceUrl: 'https://developers.openai.com/api/docs/models/gpt-5.4-mini',
   },
+  {
+    modelId: 'gpt-image-2.5-flare',
+    inputPerMillion: '5',
+    cachedInputPerMillion: '1.25',
+    cacheWritePerMillion: null,
+    outputPerMillion: '30',
+    sourceUrl: 'https://developers.openai.com/api/docs/guides/image-generation',
+  },
 ].map((p) => ({
   ...p,
   provider: 'openai',
@@ -67,6 +75,10 @@ const SCHEMAS: Record<
   LEAD_CONTACT_EXTRACTION: AI_LEAD_EXTRACTION_SCHEMA,
   LEAD_QUALIFICATION: AI_LEAD_QUALIFICATION_SCHEMA,
   SUPPORT_ASSISTANT: shape({ reply: text, requiresHuman: { type: 'boolean' } }),
+  TELEGRAM_POSTING_PLAN: shape({ reply: text }),
+  TELEGRAM_POSTING_TEXT: shape({ reply: text }),
+  TELEGRAM_POSTING_REVIEW: shape({ reply: text }),
+  TELEGRAM_POSTING_IMAGE: shape({ reply: text }),
 };
 
 @Injectable()
@@ -86,6 +98,10 @@ export class AiModelRegistry {
   price(modelId: string): AiPrice | undefined {
     const value = PRICES.find((p) => p.modelId === modelId);
     return value && { ...value };
+  }
+  supports(category: AiCategory, modelId: string) {
+    const imageModel = modelId.startsWith('gpt-image-');
+    return category === 'TELEGRAM_POSTING_IMAGE' ? imageModel : !imageModel;
   }
   schema(category: AiCategory, media = false) {
     if (media) {
@@ -117,19 +133,27 @@ export class AiModelRegistry {
       budgetCategory: category,
       modelId: category.startsWith('LEAD_')
         ? 'gpt-6-luna'
-        : 'gpt-5.4-mini-2026-03-17',
+        : category === 'TELEGRAM_POSTING_IMAGE'
+          ? 'gpt-image-2.5-flare'
+          : 'gpt-5.4-mini-2026-03-17',
       enabled: false,
       automaticEnabled: false,
       maxInputTokens: 8000,
-      maxOutputTokens: category.includes('ANALYSIS') ? 2000 : 1000,
+      maxOutputTokens:
+        category === 'TELEGRAM_POSTING_IMAGE'
+          ? 8000
+          : category.includes('ANALYSIS')
+            ? 2000
+            : 1000,
       timeoutMs: 30000,
       concurrencyLimit: 2,
       dailyBudget: null,
       monthlyBudget: null,
       maxRequestCost: null,
       schemaId: this.schema(category).id,
-      promptVersion:
-        category === 'LEAD_AD_CLASSIFICATION'
+      promptVersion: category.startsWith('TELEGRAM_POSTING_')
+        ? `${category.toLowerCase()}-v1`
+        : category === 'LEAD_AD_CLASSIFICATION'
           ? 'lead-classification-evidence-v2'
           : category === 'LEAD_QUALIFICATION'
             ? 'lead-qualification-v1'

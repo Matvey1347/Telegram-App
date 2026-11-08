@@ -65,8 +65,13 @@ export function parseUsage(raw: unknown): AiTokenUsage | null {
     totalTokens !== inputTokens + outputTokens
   )
     return null;
-  const knownInput = new Set(['cached_tokens', 'cache_write_tokens']);
-  const knownOutput = new Set(['reasoning_tokens']);
+  const knownInput = new Set([
+    'cached_tokens',
+    'cache_write_tokens',
+    'text_tokens',
+    'image_tokens',
+  ]);
+  const knownOutput = new Set(['reasoning_tokens', 'image_tokens']);
   if (
     Object.entries(inputDetails).some(
       ([key, value]) => !knownInput.has(key) && value !== 0,

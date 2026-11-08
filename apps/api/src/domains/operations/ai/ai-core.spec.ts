@@ -79,7 +79,7 @@ describe('internal AI registry, pricing and limits', () => {
       enabled: false,
       automaticEnabled: false,
     });
-    expect(registry.models()).toHaveLength(2);
+    expect(registry.models()).toHaveLength(3);
     expect(
       registry
         .models()

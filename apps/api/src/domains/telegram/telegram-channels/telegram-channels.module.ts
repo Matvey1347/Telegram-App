@@ -1,9 +1,20 @@
 import { forwardRef, Module } from '@nestjs/common';
 import { OperationsNotificationsModule } from '../../operations/notifications/operations-notifications.module';
+import { AiModule } from '../../operations/ai/ai.module';
 import { TelegramChannelRemindersController } from './telegram-channel-reminders.controller';
 import { TelegramChannelRemindersService } from './telegram-channel-reminders.service';
 import { TelegramChannelRemindersDueService } from './telegram-channel-reminders-due.service';
 import { TelegramChannelsController } from './telegram-channels.controller';
+import { TelegramAiPostingController } from './telegram-ai-posting.controller';
+import { TelegramAiPostingService } from './telegram-ai-posting.service';
+import { TelegramAiPostingGeneratorService } from './telegram-ai-posting-generator.service';
+import { TelegramAiPostingSourceService } from './telegram-ai-posting-source.service';
+import { TelegramAiPostingImageService } from './telegram-ai-posting-image.service';
+import { TelegramAiPostingTestRunService } from './telegram-ai-posting-test-run.service';
+import { TelegramAiPostingRuleFeedbackService } from './telegram-ai-posting-rule-feedback.service';
+import { TelegramAiPostingAutopilotService } from './telegram-ai-posting-autopilot.service';
+import { TelegramAiPostingAutopilotNotificationService } from './telegram-ai-posting-autopilot-notification.service';
+import { TelegramAiPostingAnalyticsService } from './telegram-ai-posting-analytics.service';
 import {
   TelegramPublicationSchedulesController,
   TelegramChannelPublicationScheduleController,
@@ -113,9 +124,14 @@ import { TelegramChannelTrafficAttributionReadService } from './telegram-channel
 import { TelegramChannelTrafficAttributionService } from './telegram-channel-traffic-attribution.service';
 
 @Module({
-  imports: [forwardRef(() => AdCampaignsModule), OperationsNotificationsModule],
+  imports: [
+    forwardRef(() => AdCampaignsModule),
+    OperationsNotificationsModule,
+    AiModule,
+  ],
   controllers: [
     TelegramChannelsController,
+    TelegramAiPostingController,
     TelegramChannelRemindersController,
     TelegramPublicationSchedulesController,
     TelegramChannelPublicationScheduleController,
@@ -131,6 +147,15 @@ import { TelegramChannelTrafficAttributionService } from './telegram-channel-tra
   ],
   providers: [
     TelegramChannelsService,
+    TelegramAiPostingService,
+    TelegramAiPostingGeneratorService,
+    TelegramAiPostingSourceService,
+    TelegramAiPostingImageService,
+    TelegramAiPostingTestRunService,
+    TelegramAiPostingRuleFeedbackService,
+    TelegramAiPostingAutopilotService,
+    TelegramAiPostingAutopilotNotificationService,
+    TelegramAiPostingAnalyticsService,
     TelegramChannelRemindersService,
     TelegramChannelRemindersDueService,
     TelegramPublicationSchedulesService,

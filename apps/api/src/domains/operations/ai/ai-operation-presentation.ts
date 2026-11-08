@@ -27,6 +27,13 @@ export const aiOperationPresentationSelect = {
   pricingVersion: true,
   pricingEffectiveAt: true,
   businessObjectId: true,
+  aiPostingChannelId: true,
+  aiPostingTestRunId: true,
+  aiPostingAutopilotRunId: true,
+  aiPostingPublicationIndex: true,
+  aiPostingAttempt: true,
+  aiPostingMode: true,
+  aiPostingManagedPostId: true,
 } satisfies Prisma.AiOperationSelect;
 export type AiOperationPresentationRow = Pick<
   AiOperation,
@@ -67,5 +74,15 @@ export function mapAiOperationView(
     pricingVersion: row.pricingVersion,
     pricingEffectiveAt: row.pricingEffectiveAt?.toISOString() ?? null,
     businessObjectId: row.businessObjectId,
+    aiPostingChannelId: row.aiPostingChannelId,
+    aiPostingTestRunId: row.aiPostingTestRunId,
+    aiPostingAutopilotRunId: row.aiPostingAutopilotRunId,
+    aiPostingPublicationIndex: row.aiPostingPublicationIndex,
+    aiPostingAttempt: row.aiPostingAttempt,
+    aiPostingMode:
+      row.aiPostingMode === 'TEST' || row.aiPostingMode === 'AUTOMATIC'
+        ? row.aiPostingMode
+        : null,
+    aiPostingManagedPostId: row.aiPostingManagedPostId,
   };
 }

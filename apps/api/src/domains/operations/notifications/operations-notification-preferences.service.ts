@@ -10,6 +10,8 @@ import { WorkspaceAuthorizationService } from '../../workspace/workspace-authori
 import { OperationsPushSubscriptionDto } from './operations-notifications.dto';
 import { OperationsWebPushConfigService } from './operations-web-push-config.service';
 import { OPERATIONS_PUSH_MAX_ACTIVE_DEVICES } from './operations-notification-policy';
+import { AI_POSTING_AUTOPILOT_EVENTS } from './ai-posting-autopilot-notifications.service';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 
 const preferenceSelect = {
   webPushEnabled: true,
@@ -169,6 +171,79 @@ export class OperationsNotificationPreferencesService {
       data: { active: false, disabledAt: new Date() },
     });
     return this.preferences(userId);
+  }
+
+  async autopilotPreferences(userId: string, channelId?: string) {
+    const access = await this.access(userId);
+    if (channelId) {
+      const channel = await this.prisma.telegramChannel.findFirst({
+        where: { id: channelId, workspaceId: access.workspaceId },
+        select: { id: true },
+      });
+      if (!channel) throw new NotFoundException('Telegram channel not found');
+    }
+    return this.prisma.telegramAiPostingNotificationPreference.findMany({
+      where: {
+        workspaceId: access.workspaceId,
+        memberId: access.memberId,
+        ...(channelId
+          ? { channelScopeKey: { in: ['*', channelId] } }
+          : { channelScopeKey: '*' }),
+      },
+      orderBy: [{ channelScopeKey: 'asc' }, { eventKey: 'asc' }],
+    });
+  }
+
+  async updateAutopilotPreference(
+    userId: string,
+    input: {
+      eventKey: string;
+      channelId?: string;
+      telegramBot: boolean;
+      pwaPush: boolean;
+      email: boolean;
+    },
+  ) {
+    const access = await this.access(userId);
+    if (
+      input.eventKey !== '*' &&
+      !AI_POSTING_AUTOPILOT_EVENTS.includes(
+        input.eventKey as (typeof AI_POSTING_AUTOPILOT_EVENTS)[number],
+      )
+    )
+      throw new BadRequestException('AI_POSTING_NOTIFICATION_EVENT_INVALID');
+    if (input.channelId) {
+      const channel = await this.prisma.telegramChannel.findFirst({
+        where: { id: input.channelId, workspaceId: access.workspaceId },
+        select: { id: true },
+      });
+      if (!channel) throw new NotFoundException('Telegram channel not found');
+    }
+    const channelScopeKey = input.channelId ?? '*';
+    return this.prisma.telegramAiPostingNotificationPreference.upsert({
+      where: {
+        workspaceId_memberId_eventKey_channelScopeKey: {
+          workspaceId: access.workspaceId,
+          memberId: access.memberId,
+          eventKey: input.eventKey,
+          channelScopeKey,
+        },
+      },
+      create: {
+        workspaceId: access.workspaceId,
+        memberId: access.memberId,
+        eventKey: input.eventKey,
+        channelScopeKey,
+        telegramBot: input.telegramBot,
+        pwaPush: input.pwaPush,
+        email: input.email,
+      },
+      update: {
+        telegramBot: input.telegramBot,
+        pwaPush: input.pwaPush,
+        email: input.email,
+      },
+    });
   }
 
   pushPublicConfig(userId: string) {

@@ -8,6 +8,7 @@ import type { OperationsNotificationPreferences } from "@telegram-system/shared"
 import { operationsNotificationKeys } from "@/lib/query-keys";
 import { telegramCrmKeys } from "@/lib/features/growth/telegram-crm-query";
 import { I18nProvider } from "@/providers/i18n-provider";
+import { telegramChannelsApi } from "@/lib/api";
 
 const { getSubscription, subscribe, requestPermission, browserState } = vi.hoisted(() => {
   const getSubscription = vi.fn();
@@ -96,6 +97,9 @@ describe("NotificationPushSettings", () => {
       activeSubscriptionCount: 0,
     });
     vi.spyOn(operationsNotificationsApi, "testPush").mockResolvedValue({ status: "sent", attempted: 2, delivered: 2, failed: 0, skipped: 0 });
+    vi.spyOn(operationsNotificationsApi, "autopilotPreferences").mockResolvedValue([]);
+    vi.spyOn(operationsNotificationsApi, "updateAutopilotPreference").mockResolvedValue({});
+    vi.spyOn(telegramChannelsApi, "select").mockResolvedValue([]);
   });
 
   it("updates personal channel reminder delivery independently", async () => {

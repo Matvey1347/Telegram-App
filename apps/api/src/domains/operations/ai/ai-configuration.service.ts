@@ -194,7 +194,8 @@ export class AiConfigurationService {
     ]);
     if (
       values.modelId !== undefined &&
-      !this.registry.price(String(values.modelId))
+      (!this.registry.price(String(values.modelId)) ||
+        !this.registry.supports(category, String(values.modelId)))
     )
       throw new BadRequestException('Unsupported AI model');
     await this.prisma.$transaction(async (tx) => {

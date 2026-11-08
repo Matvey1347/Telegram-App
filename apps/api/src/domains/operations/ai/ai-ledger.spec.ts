@@ -178,6 +178,35 @@ function harness() {
 }
 
 describe('AI locked admission and settlement', () => {
+  it('reserves per-channel daily and monthly limits and tags operation dimensions', async () => {
+    const h = harness();
+    const request: AiExecutionRequest = {
+      ...h.request(),
+      businessObjectId: 'channel-1',
+      aiPosting: {
+        channelId: 'channel-1',
+        testRunId: 'test-run-1',
+        publicationIndex: 2,
+        attempt: 2,
+        postingMode: 'TEST',
+        dailyBudget: '1',
+        monthlyBudget: '10',
+      },
+    };
+    const admitted = await h.admission.admit(request);
+    expect(admitted.operation).toMatchObject({
+      aiPostingChannelId: 'channel-1',
+      aiPostingTestRunId: 'test-run-1',
+      aiPostingPublicationIndex: 2,
+      aiPostingAttempt: 2,
+      aiPostingMode: 'TEST',
+    });
+    expect(
+      [...h.buckets.values()].filter((bucket) =>
+        bucket.scope.startsWith('TELEGRAM_CHANNEL:channel-1'),
+      ),
+    ).toHaveLength(2);
+  });
   it('blocks a 31st media operation even when budget remains', async () => {
     const h = harness();
     h.tx.$queryRaw.mockResolvedValue([

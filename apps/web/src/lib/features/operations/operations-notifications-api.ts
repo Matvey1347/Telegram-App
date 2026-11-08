@@ -83,6 +83,10 @@ export const operationsNotificationsApi = {
         { data: { endpoint } },
       )
     ).data,
+  autopilotPreferences: async (channelId?: string, signal?: AbortSignal) =>
+    (await api.get<Array<{eventKey:string;channelScopeKey:string;telegramBot:boolean;pwaPush:boolean;email:boolean}>>(`${BASE_PATH}/ai-posting-preferences`, { params: channelId ? {channelId} : {}, signal })).data,
+  updateAutopilotPreference: async (preference: {eventKey:string;channelId?:string;telegramBot:boolean;pwaPush:boolean;email:boolean}) =>
+    (await api.patch(`${BASE_PATH}/ai-posting-preferences`, preference)).data,
 };
 
 export function parseOperationsNotificationStreamChunk(

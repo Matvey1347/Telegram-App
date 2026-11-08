@@ -6,6 +6,7 @@ export const OPERATIONS_NOTIFICATION_TYPES = [
   "CRM_AI_LEAD_QUALIFIED",
   "SYSTEM_TEST",
   "CHANNEL_POSTS_REMINDER",
+  "AI_POSTING_AUTOPILOT",
 ] as const;
 
 export type OperationsNotificationType =
@@ -28,6 +29,7 @@ export const OPERATIONS_NOTIFICATION_COPY_KEYS = [
   "crm.notification.aiLeadQualified",
   "operations.notification.pushTest",
   "telegram.notification.channelPostsReminder",
+  "telegram.notification.aiPostingAutopilot",
 ] as const;
 
 export type OperationsNotificationCopyKey =

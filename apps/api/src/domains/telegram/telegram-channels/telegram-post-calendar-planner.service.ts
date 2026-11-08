@@ -726,6 +726,7 @@ export class TelegramPostCalendarPlannerService {
         origin: 'SYSTEM',
         status: { in: [TelegramManagedPostStatus.DRAFT] },
         text: { not: null },
+        adSalePlacements: { none: {} },
         ...(excludePostIds.length
           ? { id: { notIn: [...new Set(excludePostIds)] } }
           : {}),

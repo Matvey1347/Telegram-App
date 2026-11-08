@@ -63,6 +63,51 @@ export class AiProvider {
           config.modelId !== 'gpt-5.4-mini-2026-03-17')
       )
         return empty('VISION_MODEL_UNSUPPORTED');
+      if (config.category === 'TELEGRAM_POSTING_IMAGE') {
+        generationStarted = true;
+        const response = await this.post(
+          '/images/generations',
+          {
+            model: config.modelId,
+            prompt: input,
+            n: 1,
+            size: '1024x1024',
+            quality: 'medium',
+            output_format: 'jpeg',
+          },
+          controller.signal,
+          20 * 1024 * 1024,
+        );
+        const usage = parseUsage(response.body.usage);
+        const items = Array.isArray(response.body.data)
+          ? response.body.data
+          : [];
+        const encoded = aiRecord(items[0]).b64_json;
+        const metadata = {
+          usage,
+          generationStarted,
+          providerModel: config.modelId,
+          providerRequestId: response.requestId,
+        };
+        if (!response.ok)
+          return {
+            ...metadata,
+            errorCategory: `PROVIDER_${this.failure(response.status)}`,
+          };
+        if (
+          typeof encoded !== 'string' ||
+          encoded.length > 18 * 1024 * 1024 ||
+          !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(
+            encoded,
+          )
+        )
+          return { ...metadata, errorCategory: 'IMAGE_OUTPUT_INVALID' };
+        return {
+          ...metadata,
+          result: { imageBase64: encoded, contentType: 'image/jpeg' },
+          errorCategory: null,
+        };
+      }
       const schema = this.registry.schema(config.category, Boolean(image));
       const payload = {
         model: config.modelId,
@@ -181,9 +226,14 @@ export class AiProvider {
     if (status === 404) return 'MODEL_UNAVAILABLE';
     return 'UNAVAILABLE';
   }
-  private async post(suffix: string, body: unknown, signal: AbortSignal) {
+  private async post(
+    suffix: string,
+    body: unknown,
+    signal: AbortSignal,
+    maxBytes = 512 * 1024,
+  ) {
     const response = await fetch(
-      `https://api.openai.com/v1/responses${suffix}`,
+      `https://api.openai.com/v1${suffix === '' ? '/responses' : suffix === '/input_tokens' ? `/responses${suffix}` : suffix}`,
       {
         method: 'POST',
         headers: {
@@ -194,7 +244,7 @@ export class AiProvider {
         signal,
       },
     );
-    if (Number(response.headers.get('content-length') ?? 0) > 512 * 1024) {
+    if (Number(response.headers.get('content-length') ?? 0) > maxBytes) {
       await response.body?.cancel();
       throw new Error('RESPONSE_TOO_LARGE');
     }
@@ -207,7 +257,7 @@ export class AiProvider {
         const { done, value } = await reader.read();
         if (done) break;
         size += value.length;
-        if (size > 512 * 1024) throw new Error('RESPONSE_TOO_LARGE');
+        if (size > maxBytes) throw new Error('RESPONSE_TOO_LARGE');
         chunks.push(value);
       }
     } finally {

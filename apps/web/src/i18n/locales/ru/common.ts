@@ -398,6 +398,20 @@ const common = {
     "Сервер не смог выполнить действие. Попробуйте ещё раз.",
   "common.error.network":
     "Не удалось подключиться к серверу. Проверьте соединение и повторите попытку.",
+  "notifications.settings.email": "Электронная почта",
+  "notifications.settings.autopilotTitle": "Уведомления Content Autopilot",
+  "notifications.settings.autopilotDescription": "Выберите способы доставки для всех событий, затем задайте переопределения для отдельных событий или канала. Критические ошибки отправляются сразу, недельные отчёты — по расписанию автопилота.",
+  "notifications.settings.autopilotEvent": "Событие",
+  "notifications.settings.autopilotAllEvents": "Общие настройки",
+  "notifications.settings.allChannels": "Все каналы",
+  "notifications.settings.autopilotSaveError": "Не удалось сохранить настройки уведомлений Content Autopilot.",
+  "notifications.settings.autopilotEvents.LOW_SCHEDULE_COVERAGE": "Недостаточное покрытие расписания",
+  "notifications.settings.autopilotEvents.CRITICAL_DRAFT_STOCK": "Критически малый запас черновиков",
+  "notifications.settings.autopilotEvents.GENERATION_OR_IMAGE_FAILURE": "Ошибка генерации текста или изображения",
+  "notifications.settings.autopilotEvents.AI_API_OR_BUDGET_FAILURE": "Недоступен AI API или исчерпан бюджет",
+  "notifications.settings.autopilotEvents.PLANNING_OR_PUBLICATION_FAILURE": "Ошибка планирования или публикации",
+  "notifications.settings.autopilotEvents.WEEKLY_REPLENISHMENT": "Успешное недельное пополнение",
+  "notifications.settings.autopilotEvents.WEEKLY_REPORT": "Еженедельный отчёт по каналам",
 } as const satisfies Record<keyof typeof en, string>;
 
 export default common;

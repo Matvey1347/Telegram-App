@@ -398,6 +398,20 @@ const common = {
     "The server could not complete this action. Please try again.",
   "common.error.network":
     "Could not connect to the server. Check your connection and try again.",
+  "notifications.settings.email": "Email",
+  "notifications.settings.autopilotTitle": "Content Autopilot notifications",
+  "notifications.settings.autopilotDescription": "Choose delivery methods for all events, then override individual events or a channel. Critical failures are sent as soon as they occur; weekly reports follow the autopilot schedule.",
+  "notifications.settings.autopilotEvent": "Event",
+  "notifications.settings.autopilotAllEvents": "General defaults",
+  "notifications.settings.allChannels": "All channels",
+  "notifications.settings.autopilotSaveError": "Could not save Content Autopilot notification preferences.",
+  "notifications.settings.autopilotEvents.LOW_SCHEDULE_COVERAGE": "Low schedule coverage",
+  "notifications.settings.autopilotEvents.CRITICAL_DRAFT_STOCK": "Critical draft stock",
+  "notifications.settings.autopilotEvents.GENERATION_OR_IMAGE_FAILURE": "Text or image generation failed",
+  "notifications.settings.autopilotEvents.AI_API_OR_BUDGET_FAILURE": "AI API or budget unavailable",
+  "notifications.settings.autopilotEvents.PLANNING_OR_PUBLICATION_FAILURE": "Planning or publication failed",
+  "notifications.settings.autopilotEvents.WEEKLY_REPLENISHMENT": "Weekly replenishment completed",
+  "notifications.settings.autopilotEvents.WEEKLY_REPORT": "Weekly channel report",
 } as const satisfies TranslationCatalog;
 
 export default common;

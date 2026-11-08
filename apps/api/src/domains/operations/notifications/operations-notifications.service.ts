@@ -218,6 +218,23 @@ export class OperationsNotificationsService {
   preferences(userId: string) {
     return this.preferencesService.preferences(userId);
   }
+
+  autopilotPreferences(userId: string, channelId?: string) {
+    return this.preferencesService.autopilotPreferences(userId, channelId);
+  }
+
+  updateAutopilotPreference(
+    userId: string,
+    input: {
+      eventKey: string;
+      channelId?: string;
+      telegramBot: boolean;
+      pwaPush: boolean;
+      email: boolean;
+    },
+  ) {
+    return this.preferencesService.updateAutopilotPreference(userId, input);
+  }
   updatePreferences(
     userId: string,
     input: boolean | OperationsNotificationPreferencesPatch,

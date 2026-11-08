@@ -77,13 +77,14 @@ describe('internal AI configuration', () => {
       monthlyBudget: null,
       maxRequestCost: null,
     });
-    expect(result.categories).toHaveLength(8);
+    expect(result.categories).toHaveLength(12);
     expect(
       result.categories.every((c) => !c.enabled && !c.automaticEnabled),
     ).toBe(true);
     expect(result.models.map((m) => m.modelId)).toEqual([
       'gpt-6-luna',
       'gpt-5.4-mini-2026-03-17',
+      'gpt-image-2.5-flare',
     ]);
     expect(JSON.stringify(result)).not.toContain('test-private-api-key');
     expect(prisma.aiWorkspaceConfig.upsert).not.toHaveBeenCalled();

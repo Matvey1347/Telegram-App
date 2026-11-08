@@ -17,6 +17,10 @@ export type AiOperationView = AiTokenUsage & {
   status: AiOperationStatus; pricingStatus: AiPricingStatus; actualCost: string | null;
   reservedCost: string; currency: "USD"; durationMs: number | null; errorCategory: string | null;
   pricingVersion: string | null; pricingEffectiveAt: string | null; businessObjectId: string | null;
+  aiPostingChannelId: string | null; aiPostingTestRunId: string | null;
+  aiPostingAutopilotRunId: string | null; aiPostingPublicationIndex: number | null;
+  aiPostingAttempt: number | null; aiPostingMode: "TEST" | "AUTOMATIC" | null;
+  aiPostingManagedPostId: string | null;
 };
 export type AiUsageTotals = {
   requests: number; errors: number; knownCost: string; pricedRequests: number; unpricedRequests: number;

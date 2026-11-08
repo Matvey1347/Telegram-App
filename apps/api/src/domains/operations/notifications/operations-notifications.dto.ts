@@ -61,6 +61,26 @@ export class UpdateNotificationPreferencesDto {
   channelRemindersTelegramEnabled?: boolean;
 }
 
+export class OperationsAiPostingNotificationPreferenceDto {
+  @IsString()
+  @MaxLength(64)
+  eventKey!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(128)
+  channelId?: string;
+
+  @IsBoolean()
+  telegramBot!: boolean;
+
+  @IsBoolean()
+  pwaPush!: boolean;
+
+  @IsBoolean()
+  email!: boolean;
+}
+
 class OperationsPushKeysDto {
   @IsString()
   @MaxLength(512)

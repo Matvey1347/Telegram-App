@@ -8,6 +8,7 @@ const navigation = {
   "navigation.resources": "Resources",
   "navigation.posts": "Posts",
   "navigation.publicationCalendar": "Calendar",
+  "navigation.aiPosting": "AI Posting",
   "navigation.selling": "Selling",
   "navigation.bots": "Bots",
   "navigation.growth": "Growth",

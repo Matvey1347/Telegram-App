@@ -415,6 +415,7 @@ enum OperationsNotificationType {
   CRM_AI_LEAD_QUALIFIED
   SYSTEM_TEST
   CHANNEL_POSTS_REMINDER
+  AI_POSTING_AUTOPILOT
 }
 
 enum OperationsNotificationPriority {
@@ -1018,6 +1019,9 @@ model Workspace {
   transactions                           Transaction[]
   transfers                              Transfer[]
   telegramChannels                       TelegramChannel[]
+  telegramAiPostingSettings              TelegramAiPostingSettings[]
+  telegramAiPostingGenerations           TelegramAiPostingGeneration[]
+  telegramAiPostingTestRuns              TelegramAiPostingTestRun[]
   channelReminderTemplates TelegramChannelReminderTemplate[]
   channelReminderAssignments TelegramChannelReminderAssignment[]
   telegramCustomEmojiPacks               TelegramCustomEmojiPack[]
@@ -1767,6 +1771,9 @@ model TelegramChannel {
   publicationScheduleAssignment TelegramChannelPublicationScheduleAssignment?
   reminderAssignment TelegramChannelReminderAssignment?
   contentHypotheses             TelegramContentHypothesis[]
+  aiPostingSettings             TelegramAiPostingSettings?
+  aiPostingGenerations          TelegramAiPostingGeneration[]
+  aiPostingTestRuns             TelegramAiPostingTestRun[]
   adProducts                    TelegramAdProduct[]
   admissionBatches              AdCampaignAdmissionBatch[]
   admissionBackfillStates       AdCampaignAdmissionBackfillState[]
@@ -1795,6 +1802,165 @@ model TelegramChannel {
   @@index([workspaceId, isActive, autoSyncEnabled])
   @@index([workspaceId, archivedAt, createdAt, id])
   @@index([workspaceId, isTest, archivedAt, createdAt, id])
+}
+
+model TelegramAiPostingSettings {
+  id                   String          @id @default(cuid())
+  workspaceId          String
+  telegramChannelId    String          @unique
+  configuration        Json
+  configurationVersion Int             @default(1)
+  autopilotEnabled     Boolean         @default(false)
+  postsPerDay          Int             @default(4)
+  targetReadyDrafts    Int             @default(50)
+  maxReadyDrafts       Int             @default(100)
+  targetCoverageDays   Int             @default(14)
+  criticalCoverageDays Int             @default(7)
+  aiDailyBudget        Decimal?        @db.Decimal(24, 12)
+  aiMonthlyBudget      Decimal?        @db.Decimal(24, 12)
+  autopilotNextRunAt   DateTime?
+  autopilotRetryOfRunId String?
+  autopilotLeaseOwner  String?
+  autopilotLeaseExpiresAt DateTime?
+  autopilotLastRunAt   DateTime?
+  autopilotLastStatus  String?
+  autopilotLastError   String?
+  autopilotLastSummary Json?
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
+  workspace            Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  telegramChannel      TelegramChannel @relation(fields: [telegramChannelId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, autopilotEnabled])
+  @@index([autopilotEnabled, autopilotNextRunAt])
+}
+
+model TelegramAiPostingGeneration {
+  id                String              @id @default(cuid())
+  workspaceId       String
+  telegramChannelId String
+  managedPostId     String              @unique
+  settingsVersion   Int
+  attempts          Int
+  ideaSources       Json
+  modelUsage        Json
+  planningCost      Decimal?            @db.Decimal(24, 12)
+  textCost          Decimal?            @db.Decimal(24, 12)
+  imageCost         Decimal?            @db.Decimal(24, 12)
+  reviewCost        Decimal?            @db.Decimal(24, 12)
+  createdAt         DateTime            @default(now())
+  workspace         Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  telegramChannel   TelegramChannel     @relation(fields: [telegramChannelId], references: [id], onDelete: Cascade)
+  managedPost       TelegramManagedPost @relation(fields: [managedPostId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, telegramChannelId, createdAt])
+}
+
+model TelegramAiPostingTestRun {
+  id                String          @id @default(cuid())
+  workspaceId       String
+  telegramChannelId String
+  requestedCount    Int
+  settingsVersion   Int
+  version           Int             @default(1)
+  status            String
+  publications      Json
+  failures          Json
+  operations        Json
+  feedback          Json
+  planningCost      Decimal?        @db.Decimal(24, 12)
+  textCost          Decimal?        @db.Decimal(24, 12)
+  imageCost         Decimal?        @db.Decimal(24, 12)
+  reviewCost         Decimal?        @db.Decimal(24, 12)
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  workspace         Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  telegramChannel   TelegramChannel @relation(fields: [telegramChannelId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, telegramChannelId, createdAt])
+}
+
+model TelegramAiPostingAutopilotRun {
+  id                String   @id @default(cuid())
+  workspaceId       String
+  telegramChannelId String
+  settingsVersion Int
+  retryOfRunId      String?
+  trigger           String
+  status            String
+  currentStage      String?
+  attempts          Int      @default(1)
+  startedAt         DateTime @default(now())
+  completedAt       DateTime?
+  summary           Json?
+  failureType       String?
+  failureMessage    String?
+  createdAt         DateTime @default(now())
+  stages            TelegramAiPostingAutopilotStage[]
+  notificationDeliveries TelegramAiPostingNotificationDelivery[]
+
+  @@index([workspaceId, telegramChannelId, createdAt])
+  @@index([status, createdAt])
+}
+
+model TelegramAiPostingAutopilotStage {
+  id          String   @id @default(cuid())
+  runId       String
+  stage       String
+  status      String
+  attempt     Int      @default(1)
+  postId      String?
+  startedAt   DateTime @default(now())
+  completedAt DateTime?
+  errorType   String?
+  errorMessage String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  run         TelegramAiPostingAutopilotRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId, createdAt])
+}
+
+model TelegramAiPostingNotificationPreference {
+  id               String   @id @default(cuid())
+  workspaceId      String
+  memberId         String
+  eventKey         String
+  channelScopeKey  String   @default("*")
+  telegramBot      Boolean  @default(false)
+  pwaPush          Boolean  @default(true)
+  email            Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([workspaceId, memberId, eventKey, channelScopeKey])
+  @@index([workspaceId, memberId])
+}
+
+model TelegramAiPostingNotificationDelivery {
+  id                 String   @id @default(cuid())
+  workspaceId        String
+  memberId           String
+  channelId          String
+  runId              String
+  eventKey           String
+  transport          String
+  status             String   @default("PENDING")
+  attempts            Int      @default(0)
+  nextAttemptAt      DateTime?
+  claimOwner          String?
+  claimExpiresAt      DateTime?
+  notificationId     String?
+  lastErrorType      String?
+  lastErrorMessage   String?
+  sentAt              DateTime?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  run                 TelegramAiPostingAutopilotRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@unique([runId, memberId, eventKey, transport])
+  @@index([status, claimExpiresAt])
+  @@index([workspaceId, channelId, createdAt])
 }
 
 model TelegramCustomEmojiPack {
@@ -5658,6 +5824,7 @@ model TelegramManagedPost {
   postBatchDelivery       TelegramPostBatchDelivery?
   publicationSlot         TelegramPublicationScheduleSlot?       @relation(fields: [publicationSlotId], references: [id], onDelete: SetNull)
   contentHypotheses       TelegramManagedPostContentHypothesis[]
+  aiPostingGeneration     TelegramAiPostingGeneration?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -6045,6 +6212,13 @@ model AiOperation {
   errorCategory String? @db.VarChar(64)
   providerRequestId String? @db.VarChar(200)
   businessObjectId String? @db.VarChar(100)
+  aiPostingChannelId String? @db.VarChar(100)
+  aiPostingTestRunId String? @db.VarChar(100)
+  aiPostingAutopilotRunId String? @db.VarChar(100)
+  aiPostingPublicationIndex Int?
+  aiPostingAttempt Int?
+  aiPostingMode String? @db.VarChar(16)
+  aiPostingManagedPostId String? @db.VarChar(100)
   configurationSnapshot Json
   pricingSnapshot Json
   pricingVersion String?
@@ -6060,6 +6234,10 @@ model AiOperation {
   @@unique([workspaceId, operationId])
   @@index([workspaceId, createdAt, id])
   @@index([workspaceId, category, createdAt, id])
+  @@index([workspaceId, aiPostingChannelId, createdAt])
+  @@index([workspaceId, aiPostingTestRunId, aiPostingPublicationIndex])
+  @@index([workspaceId, aiPostingAutopilotRunId, aiPostingPublicationIndex])
+  @@index([workspaceId, aiPostingManagedPostId])
   @@index([workspaceId, status, deadlineAt])
   @@index([expiresAt, id])
 }
@@ -6108,8 +6286,11 @@ model AiUsageDaily {
   cacheWriteTokens BigInt @default(0)
   reasoningTokens BigInt @default(0)
   totalTokens BigInt @default(0)
+  aiPostingChannelId String @default("") @db.VarChar(100)
+  aiPostingPublicationKey String @default("") @db.VarChar(140)
+  aiPostingMode String @default("NONE") @db.VarChar(16)
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  @@unique([workspaceId, day, category, provider, model, status], map: "AiUsageDaily_dimensions_key")
+  @@unique([workspaceId, day, category, provider, model, status, aiPostingChannelId, aiPostingPublicationKey, aiPostingMode], map: "AiUsageDaily_dimensions_key")
   @@index([workspaceId, day])
   @@index([day, id])
 }

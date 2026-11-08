@@ -14,6 +14,13 @@ export async function writeAiRollup(
     provider: operation.provider,
     model: operation.model,
     status: operation.status,
+    aiPostingChannelId: operation.aiPostingChannelId ?? '',
+    aiPostingPublicationKey:
+      (operation.aiPostingTestRunId ?? operation.aiPostingAutopilotRunId) &&
+      operation.aiPostingPublicationIndex !== null
+        ? `${operation.aiPostingTestRunId ?? operation.aiPostingAutopilotRunId}:${operation.aiPostingPublicationIndex}`
+        : '',
+    aiPostingMode: operation.aiPostingMode ?? 'NONE',
   };
   const counters = {
     requests: direction,
@@ -40,7 +47,10 @@ export async function writeAiRollup(
     reasoningTokens: BigInt(operation.reasoningTokens ?? 0) * BigInt(direction),
     totalTokens: BigInt(operation.totalTokens ?? 0) * BigInt(direction),
   };
-  const where = { workspaceId_day_category_provider_model_status: dimensions };
+  const where = {
+    workspaceId_day_category_provider_model_status_aiPostingChannelId_aiPostingPublicationKey_aiPostingMode:
+      dimensions,
+  };
   const update = Object.fromEntries(
     Object.entries(counters).map(([key, value]) => [key, { increment: value }]),
   );
@@ -62,7 +72,14 @@ export async function settleAiBuckets(
   operation: AiOperation,
   actualCost: Prisma.Decimal | null,
 ) {
-  for (const scope of ['WORKSPACE', operation.category])
+  const scopes = [
+    'WORKSPACE',
+    operation.category,
+    ...(operation.aiPostingChannelId
+      ? [`TELEGRAM_CHANNEL:${operation.aiPostingChannelId}`]
+      : []),
+  ];
+  for (const scope of scopes)
     for (const period of budgetPeriods(operation.createdAt)) {
       await tx.aiBudgetPeriod.update({
         where: {

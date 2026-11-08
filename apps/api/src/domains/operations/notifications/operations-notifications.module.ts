@@ -15,6 +15,8 @@ import { OperationsNotificationDueResolutionService } from './operations-notific
 import { OperationsNotificationDeliveryPolicyService } from './operations-notification-delivery-policy.service';
 import { OperationsNotificationPreferencesService } from './operations-notification-preferences.service';
 import { OperationsNotificationTestService } from './operations-notification-test.service';
+import { OperationsEmailAdapterService } from './operations-email-adapter.service';
+import { AiPostingAutopilotNotificationsService } from './ai-posting-autopilot-notifications.service';
 
 @Module({
   controllers: [OperationsNotificationsController],
@@ -26,11 +28,14 @@ import { OperationsNotificationTestService } from './operations-notification-tes
     OperationsNotificationDeliveryPolicyService,
     OperationsNotificationPreferencesService,
     OperationsNotificationTestService,
+    OperationsEmailAdapterService,
+    AiPostingAutopilotNotificationsService,
     OperationsNotificationDueResolutionService,
     OperationsNotificationEventHub,
     OperationsNotificationPermissionService,
     OperationsNotificationPublisherService,
     OperationsNotificationStoreService,
+    AiPostingAutopilotNotificationsService,
     OperationsNotificationsService,
     OperationsWebPushConfigService,
     OperationsWebPushService,

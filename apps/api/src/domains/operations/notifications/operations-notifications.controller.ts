@@ -22,6 +22,7 @@ import {
   OperationsPushSubscriptionDto,
   OperationsPushUnsubscribeDto,
   UpdateNotificationPreferencesDto,
+  OperationsAiPostingNotificationPreferenceDto,
 } from './operations-notifications.dto';
 import { OperationsNotificationEventHub } from './operations-notification-event-hub.service';
 import { OperationsNotificationsService } from './operations-notifications.service';
@@ -81,6 +82,20 @@ export class OperationsNotificationsController {
     @Body() dto: UpdateNotificationPreferencesDto,
   ) {
     return this.service.updatePreferences(user.sub, dto);
+  }
+
+  @Get('ai-posting-preferences') aiPostingPreferences(
+    @CurrentUser() user: JwtUser,
+    @Query('channelId') channelId?: string,
+  ) {
+    return this.service.autopilotPreferences(user.sub, channelId);
+  }
+
+  @Patch('ai-posting-preferences') updateAiPostingPreferences(
+    @CurrentUser() user: JwtUser,
+    @Body() dto: OperationsAiPostingNotificationPreferenceDto,
+  ) {
+    return this.service.updateAutopilotPreference(user.sub, dto);
   }
 
   @Get('push/config')

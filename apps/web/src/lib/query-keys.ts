@@ -156,6 +156,11 @@ export const telegramChannelKeys = {
     ["telegram-channel-campaigns", channelId, page, pageSize, search] as const,
 };
 
+export const telegramAiPostingKeys = {
+  analytics: (channelId: string, from: string, to: string) =>
+    ["telegram-ai-posting-analytics", channelId, from, to] as const,
+};
+
 export const telegramChannelNetworkKeys = {
   trafficAttribution: (networkId: string) =>
     ["telegram-channel-network-traffic-attribution", networkId] as const,

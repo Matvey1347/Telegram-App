@@ -30,6 +30,16 @@ export type AiExecutionRequest = {
   /** Trusted server instructions; never populated from a client override. */
   instructions?: string;
   businessObjectId?: string;
+  aiPosting?: {
+    channelId: string;
+    testRunId?: string;
+    autopilotRunId?: string;
+    publicationIndex?: number;
+    attempt?: number;
+    postingMode: 'TEST' | 'AUTOMATIC';
+    dailyBudget?: string | null;
+    monthlyBudget?: string | null;
+  };
   /** Opt-in bounded result persistence for explicitly supported business categories. */
   durableVersion?: string;
   signal?: AbortSignal;
@@ -44,6 +54,16 @@ export const operationFingerprint = (request: AiExecutionRequest) =>
         request.mode,
         request.input,
         request.businessObjectId ?? null,
+        request.aiPosting
+          ? {
+              channelId: request.aiPosting.channelId,
+              testRunId: request.aiPosting.testRunId ?? null,
+              autopilotRunId: request.aiPosting.autopilotRunId ?? null,
+              publicationIndex: request.aiPosting.publicationIndex ?? null,
+              attempt: request.aiPosting.attempt ?? null,
+              postingMode: request.aiPosting.postingMode,
+            }
+          : null,
         ...(request.image
           ? [
               request.image.mime,
@@ -102,6 +122,22 @@ export class AiAdmissionService {
         request.operationId,
       ) ||
       (request.businessObjectId && request.businessObjectId.length > 100) ||
+      (request.aiPosting !== undefined &&
+        (!/^[A-Za-z0-9_-]{1,100}$/.test(request.aiPosting.channelId) ||
+          request.businessObjectId !== request.aiPosting.channelId ||
+          (request.aiPosting.testRunId !== undefined &&
+            !/^[A-Za-z0-9_-]{1,100}$/.test(request.aiPosting.testRunId)) ||
+          (request.aiPosting.autopilotRunId !== undefined &&
+            !/^[A-Za-z0-9_-]{1,100}$/.test(request.aiPosting.autopilotRunId)) ||
+          (request.aiPosting.publicationIndex !== undefined &&
+            (!Number.isInteger(request.aiPosting.publicationIndex) ||
+              request.aiPosting.publicationIndex < 0 ||
+              request.aiPosting.publicationIndex > 4)) ||
+          (request.aiPosting.attempt !== undefined &&
+            (!Number.isInteger(request.aiPosting.attempt) ||
+              request.aiPosting.attempt < 1 ||
+              request.aiPosting.attempt > 20)) ||
+          !['TEST', 'AUTOMATIC'].includes(request.aiPosting.postingMode))) ||
       Buffer.byteLength(request.input, 'utf8') +
         Buffer.byteLength(request.instructions ?? '', 'utf8') >
         256 * 1024 ||
@@ -175,6 +211,8 @@ export class AiAdmissionService {
         }),
       ]);
       const configured = this.registry.resolve(request.category, persisted);
+      if (!this.registry.supports(request.category, configured.modelId))
+        throw new ConflictException('AI_MODEL_CATEGORY_UNSUPPORTED');
       const config = request.image
         ? {
             ...configured,
@@ -275,7 +313,19 @@ export class AiAdmissionService {
         unresolved >= 32
       )
         throw new ServiceUnavailableException('AI_CAPACITY_EXHAUSTED');
-      for (const scope of ['WORKSPACE', request.category])
+      const budgetScopes: Array<{ scope: string; limit?: string | null }> = [
+        { scope: 'WORKSPACE' },
+        { scope: request.category },
+      ];
+      if (request.aiPosting)
+        budgetScopes.push({
+          scope: `TELEGRAM_CHANNEL:${request.aiPosting.channelId}`,
+          limit:
+            request.aiPosting.dailyBudget === undefined
+              ? null
+              : request.aiPosting.dailyBudget,
+        });
+      for (const { scope, limit: channelDailyLimit } of budgetScopes)
         for (const period of budgetPeriods(now)) {
           const key = {
             workspaceId: request.workspaceId,
@@ -293,12 +343,20 @@ export class AiAdmissionService {
               ? period.period === 'DAY'
                 ? workspace.dailyBudget
                 : workspace.monthlyBudget
-              : period.period === 'DAY'
-                ? config.dailyBudget
-                : config.monthlyBudget;
+              : scope.startsWith('TELEGRAM_CHANNEL:')
+                ? period.period === 'DAY'
+                  ? channelDailyLimit
+                  : (request.aiPosting?.monthlyBudget ?? null)
+                : period.period === 'DAY'
+                  ? config.dailyBudget
+                  : config.monthlyBudget;
           if (
             limit !== null &&
-            bucket.spent.add(bucket.reserved).add(reservedCost).gt(limit)
+            limit !== undefined &&
+            bucket.spent
+              .add(bucket.reserved)
+              .add(reservedCost)
+              .gt(new Prisma.Decimal(limit.toString()))
           )
             throw new ConflictException('AI_BUDGET_EXHAUSTED');
           await tx.aiBudgetPeriod.update({
@@ -320,6 +378,12 @@ export class AiAdmissionService {
           pricingStatus: 'UNKNOWN',
           reservedCost,
           businessObjectId: request.businessObjectId,
+          aiPostingChannelId: request.aiPosting?.channelId,
+          aiPostingTestRunId: request.aiPosting?.testRunId,
+          aiPostingAutopilotRunId: request.aiPosting?.autopilotRunId,
+          aiPostingPublicationIndex: request.aiPosting?.publicationIndex,
+          aiPostingAttempt: request.aiPosting?.attempt,
+          aiPostingMode: request.aiPosting?.postingMode,
           configurationSnapshot: config,
           pricingSnapshot: price,
           pricingVersion: price.version,

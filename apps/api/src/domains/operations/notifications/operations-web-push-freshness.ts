@@ -92,6 +92,7 @@ export class OperationsWebPushFreshness {
             pushPreferenceAllows(
               row.type,
               row.recipient.operationsNotificationPreference,
+              row.metadata,
             ),
         );
         const allowed = await this.policies.filter(tx, permitted);

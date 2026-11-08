@@ -81,6 +81,12 @@ const groups: readonly NavigationGroup[] = [
         featureId: "posts",
       },
       {
+        label: "navigation.aiPosting",
+        href: "/ai-posting",
+        icon: MessageCircle,
+        featureId: "posts",
+      },
+      {
         label: "navigation.bots",
         href: "/telegram-bots",
         icon: workspaceFeatureIcons.bots,

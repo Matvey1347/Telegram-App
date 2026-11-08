@@ -65,3 +65,4 @@ export * from './instagram-profile';
 export * from './types/crm-instagram-contacts';
 
 export * from "./types/telegram-chat-actions";
+export * from "./types/telegram-ai-posting";

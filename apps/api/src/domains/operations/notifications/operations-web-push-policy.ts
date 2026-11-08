@@ -52,19 +52,34 @@ type PushPreference = Prisma.OperationsNotificationPreferenceGetPayload<{
 export function pushPreferenceAllows(
   type: OperationsNotification['type'],
   preference: PushPreference | null,
+  metadata?: Prisma.JsonValue | null,
 ) {
   return (
     Boolean(preference?.webPushEnabled) &&
+    (type !== 'AI_POSTING_AUTOPILOT' ||
+      (metadata !== null &&
+        typeof metadata === 'object' &&
+        !Array.isArray(metadata) &&
+        metadata.pwaPushEnabled !== false)) &&
     (type !== 'CHANNEL_POSTS_REMINDER' ||
       Boolean(preference?.channelRemindersPushEnabled)) &&
-    notificationPreferenceAllows(type, preference)
+    notificationPreferenceAllows(type, preference, metadata)
   );
 }
 
 export function notificationPreferenceAllows(
   type: OperationsNotification['type'],
   preference: PushPreference | null,
+  metadata?: Prisma.JsonValue | null,
 ) {
+  if (
+    type === 'AI_POSTING_AUTOPILOT' &&
+    metadata !== null &&
+    typeof metadata === 'object' &&
+    !Array.isArray(metadata) &&
+    metadata.pwaPushEnabled === false
+  )
+    return false;
   if (!type.startsWith('CRM_')) return true;
   if (!(preference?.crmNotificationsEnabled ?? true)) return false;
   if (type === 'CRM_MESSAGE_RECEIVED')

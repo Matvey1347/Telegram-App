@@ -4,6 +4,7 @@ import { ModuleRef } from '@nestjs/core';
 import { MutualPromotionLifecycleService } from '../../growth/mutual-promotion-folders/mutual-promotion-lifecycle.service';
 import { TelegramPostBatchLifecycleService } from '../../telegram/telegram-channels/telegram-post-batch-lifecycle.service';
 import { CrossPromotionPlanLifecycleService } from '../../growth/cross-promotion-plans/cross-promotion-plan-lifecycle.service';
+import { TelegramAiPostingAutopilotService } from '../../telegram/telegram-channels/telegram-ai-posting-autopilot.service';
 
 @Injectable()
 export class ScheduledTaskDomainDueResolverService {
@@ -22,6 +23,10 @@ export class ScheduledTaskDomainDueResolverService {
           { strict: false },
         );
       return lifecycle.nextDueAt();
+    }
+    if (taskKey === 'telegram.ai_posting.autopilot') {
+      const service = await this.moduleRef.resolve<TelegramAiPostingAutopilotService>(TelegramAiPostingAutopilotService, undefined, { strict: false });
+      return service.nextDueAt();
     }
     if (taskKey !== 'mutual_promotion.lifecycle') return undefined;
     const [lifecycle, direct] = await Promise.all([
