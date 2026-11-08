@@ -1,8 +1,8 @@
 {
   "$schema": "https://railway.com/railway.schema.json",
   "build": {
-    "buildCommand": "pnpm --filter api exec prisma generate && pnpm --filter @telegram-system/shared build && pnpm --filter api build && NEXT_PUBLIC_API_URL=/api RAILWAY_API_PROXY=true pnpm --filter web build",
-    "builder": "RAILPACK",
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "Dockerfile",
     "watchPatterns": [
       "apps/api/**",
       "apps/web/**",
