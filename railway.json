@@ -9,6 +9,8 @@
       "packages/shared/**",
       "products/**",
       "scripts/**",
+      "Dockerfile",
+      ".dockerignore",
       "package.json",
       "pnpm-lock.yaml",
       "pnpm-workspace.yaml",
