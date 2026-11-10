@@ -672,6 +672,27 @@ describe("DateRangeInput", () => {
     expect(container).not.toContainElement(calendar);
     expect(calendar).toHaveStyle({ position: "fixed" });
   });
+
+  it("disables dates after the optional maximum", async () => {
+    const user = userEvent.setup();
+    render(
+      <DateRangeInput
+        from="2020-01-01"
+        to="2020-01-03"
+        max="2020-01-05"
+        onChange={() => {}}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "01.01.2020 - 03.01.2020" }));
+
+    expect(
+      screen.getAllByRole("button", { name: "6" }).every((button) => button.hasAttribute("disabled")),
+    ).toBe(true);
+    expect(
+      screen.getAllByRole("button", { name: "5" }).some((button) => !button.hasAttribute("disabled")),
+    ).toBe(true);
+  });
 });
 
 describe("DateInput", () => {

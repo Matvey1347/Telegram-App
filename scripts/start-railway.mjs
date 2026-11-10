@@ -18,9 +18,15 @@ const publicOrigin = publicDeployment?.publicOrigin;
 const children = new Map();
 let stopping = false;
 let memoryTimer;
+let apiChild;
+let apiRestartInProgress = false;
+const intentionalApiRestarts = new WeakSet();
 
 const API_READY_TIMEOUT_MS = 60_000;
 const API_READY_RETRY_MS = 500;
+const API_HEALTH_FAILURE_LIMIT = 3;
+const API_HEALTH_REQUEST_TIMEOUT_MS = 2_000;
+let consecutiveApiHealthFailures = 0;
 
 function logMemory(sample) {
   process.stdout.write(
@@ -40,9 +46,32 @@ function requestChildMemory(child) {
   }
 }
 
+async function checkApiHealth() {
+  if (stopping) return;
+  try {
+    const response = await fetch(
+      `http://127.0.0.1:${internalApiPort}/api/health`,
+      { signal: AbortSignal.timeout(API_HEALTH_REQUEST_TIMEOUT_MS) },
+    );
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+    await response.arrayBuffer();
+    consecutiveApiHealthFailures = 0;
+  } catch (error) {
+    consecutiveApiHealthFailures += 1;
+    if (consecutiveApiHealthFailures < API_HEALTH_FAILURE_LIMIT) return;
+    process.stderr.write(
+      `[railway] API health check failed ${consecutiveApiHealthFailures} consecutive times (${error instanceof Error ? error.message : String(error)}); restarting API only.\n`,
+    );
+    void restartApi();
+  }
+}
+
 function sampleMemory() {
   logMemory(takeRailwayMemorySnapshot("supervisor"));
   for (const child of children.keys()) requestChildMemory(child);
+  void checkApiHealth();
 }
 
 function startMemoryDiagnostics() {
@@ -77,6 +106,7 @@ function start(name, command, args, env, processType) {
   child.once("exit", (code, signal) => {
     children.delete(child);
     if (stopping) return;
+    if (intentionalApiRestarts.has(child)) return;
     process.stderr.write(
       `[railway] ${name} stopped (${signal || `code ${code ?? 1}`}).\n`,
     );
@@ -90,7 +120,72 @@ function start(name, command, args, env, processType) {
 }
 
 function terminate(child) {
-  if (!child.killed) child.kill("SIGTERM");
+  if (child.exitCode === null && child.signalCode === null) {
+    child.kill("SIGTERM");
+  }
+}
+
+async function stopApiChild(child) {
+  if (!child || child.exitCode !== null || child.signalCode !== null) return;
+  intentionalApiRestarts.add(child);
+  await new Promise((resolve) => {
+    const force = setTimeout(() => {
+      if (child.exitCode === null && child.signalCode === null) {
+        child.kill("SIGKILL");
+      }
+      if (child.exitCode !== null || child.signalCode !== null) resolve();
+    }, 5_000);
+    force.unref();
+    child.once("exit", () => {
+      clearTimeout(force);
+      resolve();
+    });
+    child.kill("SIGTERM");
+  });
+}
+
+async function restartApi() {
+  if (stopping || apiRestartInProgress || !apiChild) return;
+  apiRestartInProgress = true;
+  consecutiveApiHealthFailures = 0;
+  const oldApiChild = apiChild;
+  process.stderr.write(
+    "[railway] API health checks failed repeatedly; restarting only the API process.\n",
+  );
+  await stopApiChild(oldApiChild);
+  if (stopping) {
+    apiRestartInProgress = false;
+    return;
+  }
+
+  apiChild = start(
+    "API",
+    process.execPath,
+    [
+      "--import",
+      "./scripts/railway-memory-reporter.mjs",
+      "apps/api/dist/main.js",
+    ],
+    {
+      PORT: internalApiPort,
+      NODE_ENV: "production",
+      TELEGRAM_BOT_RUNTIME_ENVIRONMENT: "PRODUCTION",
+      RAILWAY_PROCESS_TYPE: "api",
+      ...productionUrls,
+    },
+    "api",
+  );
+
+  try {
+    await waitForInternalApi();
+    process.stdout.write("[railway] API recovered; web process remained online.\n");
+  } catch (error) {
+    process.stderr.write(
+      `[railway] API did not recover after restart (${error instanceof Error ? error.message : String(error)}); web process remains online.\n`,
+    );
+  } finally {
+    apiRestartInProgress = false;
+  }
 }
 
 async function stop(exitCode = 0) {
@@ -100,7 +195,9 @@ async function stop(exitCode = 0) {
   for (const child of children.keys()) terminate(child);
   const force = setTimeout(() => {
     for (const child of children.keys()) {
-      if (!child.killed) child.kill("SIGKILL");
+      if (child.exitCode === null && child.signalCode === null) {
+        child.kill("SIGKILL");
+      }
     }
   }, 10_000);
   force.unref();
@@ -142,7 +239,7 @@ for (const signal of ["SIGINT", "SIGTERM"]) {
 
 const productionUrls = publicDeployment?.values ?? {};
 
-start(
+apiChild = start(
   "API",
   process.execPath,
   [

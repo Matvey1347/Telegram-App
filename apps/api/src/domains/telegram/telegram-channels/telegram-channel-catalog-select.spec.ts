@@ -11,7 +11,7 @@ describe('TelegramChannelCatalogService.selectOptions', () => {
             title: 'Owned channel',
             username: 'owned',
             telegramChatId: '1',
-            photoUrl: null,
+            photoUrl: 'https://cdn.example/channel-1.jpg',
             presentationIcon: {
               id: 'icon-1',
               type: 'emoji',
@@ -70,6 +70,12 @@ describe('TelegramChannelCatalogService.selectOptions', () => {
     expect(result).toHaveLength(1);
     expect(result[0]).toMatchObject({
       presentationIconPresentation: { type: 'unicode', value: '🗞️' },
+      avatarPresentation: {
+        type: 'image',
+        id: 'channel-1',
+        url: 'https://cdn.example/channel-1.jpg',
+        name: 'Owned channel',
+      },
     });
     expect(result[0]).not.toHaveProperty('presentationIcon');
   });

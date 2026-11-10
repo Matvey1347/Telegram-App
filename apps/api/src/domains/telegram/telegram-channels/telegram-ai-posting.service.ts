@@ -94,8 +94,13 @@ export class TelegramAiPostingService {
   async sourceChannels(userId: string, channelId: string) {
     const { workspaceId } = await this.owned(userId, channelId);
     return this.prisma.telegramChannel.findMany({
-      where: { workspaceId, isActive: true, id: { not: channelId } },
-      select: { id: true, title: true, username: true },
+      where: {
+        workspaceId,
+        isActive: true,
+        id: { not: channelId },
+        adminLinks: { some: {} },
+      },
+      select: { id: true, title: true, username: true, photoUrl: true },
       orderBy: { title: 'asc' },
       take: 250,
     });

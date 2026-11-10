@@ -145,10 +145,6 @@ export class AccountService {
     });
     const membership =
       await this.workspaceService.resolveWorkspaceMembershipForUser(userId);
-    const activeMembership = await this.prisma.workspaceMember.findUnique({
-      where: { id: membership.id },
-      select: { salesCommissionRate: true },
-    });
     const profileAccounts = user.profileTelegramUserAccount
       ? [user.profileTelegramUserAccount]
       : [];
@@ -161,10 +157,6 @@ export class AccountService {
     return {
       ...publicUser,
       workspaceMemberId: membership.id,
-      salesCommissionRate:
-        activeMembership?.salesCommissionRate == null
-          ? null
-          : Number(activeMembership.salesCommissionRate),
       editorShortcuts:
         (user.editorShortcuts as EditorShortcutPreferences | null) ?? {},
       locale: normalizeAppLocale(user.locale),
@@ -197,6 +189,7 @@ export class AccountService {
   async updateMe(userId: string, dto: UpdateMeDto) {
     const data: Prisma.UserUpdateInput = {};
     let avatarSource: ProfileAvatarSource | null | undefined;
+    let telegramUsernameChanged = false;
     const membership =
       await this.workspaceService.resolveWorkspaceMembershipForUser(userId);
     const normalizedTelegramUsername =
@@ -208,15 +201,6 @@ export class AccountService {
 
     if (dto.locale !== undefined) {
       data.locale = normalizeAppLocale(dto.locale) satisfies AppLocale;
-    }
-
-    if (
-      dto.salesCommissionRate !== undefined &&
-      membership.role !== WorkspaceRole.owner
-    ) {
-      throw new ForbiddenException(
-        'Only workspace owners can change their sales commission rate',
-      );
     }
 
     if (dto.name !== undefined) {
@@ -284,6 +268,14 @@ export class AccountService {
     }
 
     await this.prisma.$transaction(async (tx) => {
+      if (normalizedTelegramUsername !== undefined) {
+        const current = await tx.user.findUniqueOrThrow({
+          where: { id: userId },
+          select: { telegramUsername: true },
+        });
+        telegramUsernameChanged =
+          current.telegramUsername !== normalizedTelegramUsername;
+      }
       const profileAvatarIconId = avatarSource
         ? (await saveGlobalProfileAvatar(tx, userId, avatarSource)).id
         : avatarSource === null
@@ -379,22 +371,12 @@ export class AccountService {
         }
       }
 
-      if (dto.salesCommissionRate !== undefined) {
-        await tx.workspaceMember.update({
-          where: { id: membership.id },
-          data: { salesCommissionRate: dto.salesCommissionRate },
-        });
-      }
-
       if (Object.keys(data).length) {
         await tx.user.update({ where: { id: userId }, data });
       }
     });
 
-    if (
-      normalizedTelegramUsername !== undefined ||
-      dto.telegramUserAccountIds !== undefined
-    ) {
+    if (telegramUsernameChanged) {
       const memberships = await this.prisma.workspaceMember.findMany({
         where: { userId },
         select: { workspaceId: true },

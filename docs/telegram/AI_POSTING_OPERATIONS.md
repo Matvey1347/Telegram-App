@@ -17,7 +17,29 @@ Configure these values in the normal local or deployment environment (never comm
 | `WEB_PUSH_VAPID_SUBJECT`, `WEB_PUSH_VAPID_PUBLIC_KEY`, `WEB_PUSH_VAPID_PRIVATE_KEY` | PWA Push | Optional unless push delivery is selected. |
 | `TELEGRAM_SYSTEM_BOT_ENVIRONMENT`, `TELEGRAM_SYSTEM_BOT_LOCAL_USERNAME`, `TELEGRAM_SYSTEM_BOT_LOCAL_TOKEN`, `TELEGRAM_SYSTEM_BOT_LOCAL_WEBHOOK_SECRET` | Local System Bot notifications | Select the environment and configure its matching credentials. Production variants use the corresponding `_PRODUCTION_` names. |
 
-The OpenAI key is consumed only by the existing AI Gateway. Workspace and category enablement, provider/model selection, and workspace/category budget limits are configured in Operations > AI. AI Posting additionally accepts per-channel daily and monthly USD budgets; blank values leave the channel-specific cap unset while existing workspace/category caps continue to apply.
+The OpenAI key is consumed only by the existing AI Gateway. It is used for both text and image requests; there is no separate image-provider key in this integration. Workspace and category enablement, provider/model selection, and workspace/category budget limits are configured in Operations > AI. AI Posting additionally accepts per-channel daily and monthly USD budgets; blank values leave the channel-specific cap unset while existing workspace/category caps continue to apply.
+
+Image behavior is selected per channel in AI Posting settings. **Found images** searches the enabled idea sources and does not call image generation if no usable image is found. **AI generation** generates through the existing `TELEGRAM_POSTING_IMAGE` Gateway category. **Hybrid** searches and validates candidates first, stores a usable result through B2, and falls back to AI generation only when no candidate passes checks. Broken external URLs are not saved to a post. B2 credentials are needed to persist generated/downloaded assets.
+
+### PWA Push setup
+
+Generate one VAPID key pair for each isolated deployment/environment. From the repository root, run:
+
+```sh
+pnpm --filter api exec web-push generate-vapid-keys
+```
+
+Set the command's public/private values in the API's secret environment, together with a contact subject:
+
+```dotenv
+WEB_PUSH_VAPID_SUBJECT=mailto:admin@example.com
+WEB_PUSH_VAPID_PUBLIC_KEY=<generated-public-key>
+WEB_PUSH_VAPID_PRIVATE_KEY=<generated-private-key>
+```
+
+All three must be configured together. Keep the private key only in the API environment/secret manager; the web app receives only the public key. Restart the API, sign in to Nexeloq, allow notifications in the browser and subscribe to push, then enable PWA Push in notification settings for the desired events. The PWA service worker receives the push and displays it. Localhost is treated as a secure context by modern browsers; deployed sites need HTTPS. On iPhone/iPad, web push requires iOS/iPadOS 16.4 or later and the web app added to the Home Screen.
+
+Never reuse a local development key pair against production notification subscriptions. If the local API shares the production database, keep VAPID disabled locally until it has an isolated database and subscriptions.
 
 ## Local setup
 

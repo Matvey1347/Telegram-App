@@ -147,20 +147,13 @@ describe("AccountWorkspace", () => {
     );
   });
 
-  it("lets an owner save a personal sales commission override", async () => {
+  it("keeps the profile focused on personal details without legacy finance fields", async () => {
     renderAccount();
-    const rate = await screen.findByRole("spinbutton", {
-      name: "My commission override, %",
-    });
-    fireEvent.change(rate, { target: { value: "17.5" } });
-    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
-
-    await waitFor(() =>
-      expect(accountApi.updateMe).toHaveBeenCalledWith(
-        expect.objectContaining({ salesCommissionRate: 17.5 }),
-        expect.anything(),
-      ),
-    );
+    expect(await screen.findByText("Telegram identity")).toBeInTheDocument();
+    expect(screen.queryByText("Sales commission")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("My earnings and investments"),
+    ).not.toBeInTheDocument();
   });
 
   it("shows a recoverable Russian error when the profile cannot load", async () => {

@@ -252,6 +252,7 @@ type DateRangeInputProps = {
   className?: string;
   placeholder?: string;
   uiLocale?: UiLocale;
+  max?: string;
 };
 function formatLocalDateValue(date: Date) {
   const y = date.getFullYear();
@@ -306,6 +307,7 @@ export function DateRangeInput({
   className = "",
   placeholder,
   uiLocale,
+  max,
 }: DateRangeInputProps) {
   const i18n = useOptionalI18n();
   const effectiveLocale = uiLocale ?? i18n?.locale;
@@ -334,6 +336,7 @@ export function DateRangeInput({
   const cells = monthCells(cursor);
 
   const pick = (iso: string) => {
+    if (max && iso > max) return;
     if (!selectingEnd || !from) {
       onChange({ from: iso, to: "" });
       setSelectingEnd(true);
@@ -418,12 +421,14 @@ export function DateRangeInput({
                   const inRange = Boolean(
                     start && end && cell.iso > start && cell.iso < end,
                   );
+                  const beyondMax = Boolean(max && cell.iso > max);
                   return (
                     <button
                       key={`${cell.iso}-${cell.day}`}
                       type="button"
+                      disabled={beyondMax}
                       onClick={() => pick(cell.iso)}
-                      className={`rounded px-1 py-1.5 text-sm ${selected ? "bg-blue-600 text-white" : inRange ? "bg-blue-950 text-blue-100" : cell.muted ? "text-neutral-500 hover:bg-neutral-800" : "text-white hover:bg-neutral-800"}`}
+                      className={`rounded px-1 py-1.5 text-sm disabled:cursor-not-allowed disabled:opacity-30 ${selected ? "bg-blue-600 text-white" : inRange ? "bg-blue-950 text-blue-100" : cell.muted ? "text-neutral-500 hover:bg-neutral-800" : "text-white hover:bg-neutral-800"}`}
                     >
                       {cell.day}
                     </button>

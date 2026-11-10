@@ -24,6 +24,15 @@ describe("buildTelegramPostsUrl", () => {
     ).toBe("/telegram-posts/channel-1/calendar");
   });
 
+  it("builds a channel-scoped AI Posting url", () => {
+    expect(
+      buildTelegramPostsUrl({
+        channelId: "channel-1",
+        postView: "ai-posting",
+      }),
+    ).toBe("/telegram-posts/channel-1/ai-posting");
+  });
+
   it("keeps groups separate from editor and calendar urls", () => {
     expect(
       buildTelegramPostsUrl({
@@ -76,5 +85,13 @@ describe("buildTelegramPostsLegacyRedirectUrl", () => {
         ),
       ),
     ).toBeNull();
+  });
+
+  it("redirects legacy AI Posting urls to the selected channel route", () => {
+    expect(
+      buildTelegramPostsLegacyRedirectUrl(
+        new URLSearchParams("channelId=channel-1&postView=ai-posting"),
+      ),
+    ).toBe("/telegram-posts/channel-1/ai-posting");
   });
 });

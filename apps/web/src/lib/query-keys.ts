@@ -157,6 +157,8 @@ export const telegramChannelKeys = {
 };
 
 export const telegramAiPostingKeys = {
+  sourceChannels: (channelId: string) =>
+    ["telegram-ai-posting", channelId, "source-channels"] as const,
   analytics: (channelId: string, from: string, to: string) =>
     ["telegram-ai-posting-analytics", channelId, from, to] as const,
 };
@@ -239,10 +241,18 @@ export const telegramPublicationScheduleKeys = {
       range,
     ] as const,
   occurrencesByChannelsRoot: () =>
-    [...telegramPublicationScheduleKeys.all(), "occurrences-by-channels"] as const,
-  calendarRoot: () => [...telegramPublicationScheduleKeys.all(), "calendar"] as const,
+    [
+      ...telegramPublicationScheduleKeys.all(),
+      "occurrences-by-channels",
+    ] as const,
+  calendarRoot: () =>
+    [...telegramPublicationScheduleKeys.all(), "calendar"] as const,
   calendar: (scheduleId: string, range: { from: string; to: string }) =>
-    [...telegramPublicationScheduleKeys.calendarRoot(), scheduleId, range] as const,
+    [
+      ...telegramPublicationScheduleKeys.calendarRoot(),
+      scheduleId,
+      range,
+    ] as const,
 };
 
 export const telegramContentHypothesisKeys = {

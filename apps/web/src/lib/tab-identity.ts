@@ -99,11 +99,16 @@ function telegramPostsRouteView(
       ? "Groups"
       : get("postView") === "calendar"
         ? "Calendar"
-        : "Posts";
+        : get("postView") === "ai-posting"
+          ? "AI Posting"
+          : "Posts";
   }
 
   if (/^\/telegram-posts\/[^/]+\/calendar$/u.test(pathname)) {
     return "Calendar";
+  }
+  if (/^\/telegram-posts\/[^/]+\/ai-posting$/u.test(pathname)) {
+    return "AI Posting";
   }
   if (/^\/telegram-posts\/[^/]+\/editor$/u.test(pathname)) {
     return "Posts";

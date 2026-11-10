@@ -2,7 +2,7 @@
 
 import { RotateCcw } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button } from "@/components/ui/primitives";
+import { Button, Card } from "@/components/ui/primitives";
 import { api } from "@/lib/api";
 
 type Stage = {
@@ -63,7 +63,7 @@ export function AiPostingAutopilotHistory({
       client.invalidateQueries({ queryKey: queryKey(channelId) }),
   });
   return (
-    <section className="mt-5 space-y-3 rounded-xl border border-neutral-800 bg-neutral-900/60 p-4 sm:p-5">
+    <Card className="mt-5 space-y-3 bg-neutral-900/60">
       <h2 className="text-lg font-semibold">История запусков автопилота</h2>
       {runs.isLoading ? (
         <p className="text-sm text-neutral-400">Загружаем историю…</p>
@@ -73,10 +73,7 @@ export function AiPostingAutopilotHistory({
         </p>
       ) : runs.data?.length ? (
         runs.data.map((run) => (
-          <article
-            key={run.id}
-            className="rounded-lg border border-neutral-800 p-3"
-          >
+          <Card key={run.id} className="p-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <p className="text-sm font-medium text-white">
@@ -127,7 +124,7 @@ export function AiPostingAutopilotHistory({
                 ))}
               </ul>
             </details>
-          </article>
+          </Card>
         ))
       ) : (
         <p className="text-sm text-neutral-400">Запусков пока нет.</p>
@@ -137,6 +134,6 @@ export function AiPostingAutopilotHistory({
           Не удалось поставить задачу на повтор.
         </p>
       )}
-    </section>
+    </Card>
   );
 }

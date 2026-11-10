@@ -49,7 +49,6 @@ import {
 import { IconAvatar } from "@/components/icons/icon-avatar";
 import { IconPicker } from "@/components/icons/icon-picker";
 import { AppShell } from "@/components/layout/app-shell";
-import { PageTabHead } from "@/components/layout/page-tab-head";
 import { AddPostsModal } from "@/components/features/telegram/telegram/add-posts-to-group-modal";
 import {
   ChannelImportNavigation,
@@ -117,7 +116,9 @@ import {
 } from "@/components/features/telegram/telegram/post-from-bot/post-batch-format";
 import { ManagedPostHypothesisSelector } from "@/components/features/telegram/telegram/managed-post-hypothesis-selector";
 import {
+  TelegramPostsPageTabHead,
   TelegramPostsWorkspaceNavigation,
+  TelegramPostsViewNavigation,
   type TelegramPostsWorkspaceView,
 } from "@/components/features/telegram/telegram/telegram-posts-workspace-navigation";
 import { MemberBadge } from "@/components/features/workspace/member-badge";
@@ -131,6 +132,11 @@ const TelegramPostPreview = dynamic(() =>
 const TelegramCustomEmojiPacksModal = dynamic(() =>
   import("@/components/features/telegram/telegram/telegram-custom-emoji-packs-modal").then(
     (module) => module.TelegramCustomEmojiPacksModal,
+  ),
+);
+const AiPostingPage = dynamic(() =>
+  import("@/components/features/telegram/ai-posting/ai-posting-page").then(
+    (module) => module.AiPostingPage,
   ),
 );
 const ManagedPostHistoryModal = dynamic(() =>
@@ -173,6 +179,7 @@ import {
 import {
   buildTelegramPostsLegacyRedirectUrl,
   buildTelegramPostsUrl,
+  parseTelegramPostsView,
   type TelegramPostsRouteView,
 } from "@/lib/features/telegram/telegram-posts-url";
 import {
@@ -516,15 +523,11 @@ export function TelegramPostsPageClient({
           ? "hypotheses"
           : "posts",
     );
-  const initialPostView = (() => {
-    if (routePostView) return routePostView;
-    const value = searchParams.get("postView");
-    if (value === "calendar") return "calendar";
-    if (value === "editor") return "editor";
-    return null;
-  })();
+  const initialPostView = routePostView ?? parseTelegramPostsView(searchParams.get("postView"));
   const currentRoutePostView: PostViewMode =
-    initialPostView === "calendar" ? "calendar" : "editor";
+    initialPostView === "calendar" || initialPostView === "ai-posting"
+      ? initialPostView
+      : "editor";
   const routeNamespaces = useMemo<I18nNamespace[]>(
     () => [
       "ad-sales/common",
@@ -551,11 +554,13 @@ export function TelegramPostsPageClient({
   const channels = useQuery({
     queryKey: telegramChannelKeys.select({
       canPostMessagesOnly: true,
+      owned: true,
       includeTest: true,
     }),
     queryFn: () =>
       telegramChannelsApi.select({
         canPostMessagesOnly: true,
+        owned: true,
         includeTest: true,
       }),
   });
@@ -836,7 +841,9 @@ function TelegramPostWorkspace({
     return () => window.clearTimeout(timeout);
   }, [channelId, newGroupRequested, onWorkspaceViewChange]);
   const [postView, setPostView] = useState<PostViewMode>(() => {
-    return initialPostView === "calendar" ? "calendar" : "editor";
+    return initialPostView === "calendar" || initialPostView === "ai-posting"
+      ? initialPostView
+      : "editor";
   });
   const [calendarMonth, setCalendarMonth] = useState(() =>
     startOfMonth(new Date()),
@@ -992,8 +999,9 @@ function TelegramPostWorkspace({
     queryKey: telegramPostKeys.managedList(channelId, {
       all: true,
     }),
-    queryFn: () => telegramChannelsApi.managedPostsPage(channelId, { all: true }),
-    enabled: workspaceView === "posts",
+    queryFn: () =>
+      telegramChannelsApi.managedPostsPage(channelId, { all: true }),
+    enabled: workspaceView === "posts" && postView !== "ai-posting",
     // This archive is expensive and already kept in memory for tab switches.
     // Every managed-post mutation invalidates the channel list family, so a
     // longer stale window avoids repeat reads without hiding local edits.
@@ -1017,7 +1025,7 @@ function TelegramPostWorkspace({
   const authoritativeEditingPost =
     editing?.id && deepLinkedPost.data?.id === editing.id
       ? deepLinkedPost.data
-      : posts.data?.find((post) => post.id === editing?.id) ?? editing;
+      : (posts.data?.find((post) => post.id === editing?.id) ?? editing);
   const scheduleTimezone =
     authoritativeEditingPost?.scheduleTimezone ?? workspaceTimezone;
   const isDeepLinkedPostLoading =
@@ -1078,7 +1086,7 @@ function TelegramPostWorkspace({
   const postGroups = useQuery({
     queryKey: ["post-groups", channelId],
     queryFn: () => telegramChannelsApi.postGroupSummaries(channelId),
-    enabled: workspaceView === "posts",
+    enabled: workspaceView === "posts" && postView !== "ai-posting",
   });
   const plannerFormats = useQuery({
     queryKey: telegramPostKeys.plannerFormats(channelId),
@@ -1251,7 +1259,11 @@ function TelegramPostWorkspace({
     effectivePublishingMode === "schedule" &&
     scheduleDate &&
     hasValidScheduleTime
-      ? zonedDateTimeToUtc(scheduleDate, scheduleTime, scheduleTimezone).toISOString()
+      ? zonedDateTimeToUtc(
+          scheduleDate,
+          scheduleTime,
+          scheduleTimezone,
+        ).toISOString()
       : undefined;
   const editingIsSaving = Boolean(
     editing && savingPostIds.includes(editing.id),
@@ -2764,7 +2776,6 @@ function TelegramPostWorkspace({
       `telegram-posts-status:${channelId}`,
     );
     if (saved === "DRAFT" || saved === "SCHEDULED" || saved === "PUBLISHED") {
-      // Restore the last tab independently for every Telegram channel.
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setStatusTab(saved);
     } else {
@@ -2773,6 +2784,10 @@ function TelegramPostWorkspace({
   }, [channelId, initialPostView]);
 
   useEffect(() => {
+    if (initialPostView === "ai-posting") {
+      setWorkspaceView("posts");
+      return;
+    }
     if (initialPostView === "groups" || initialPostView === "hypotheses") {
       setWorkspaceView(initialPostView);
       return;
@@ -2786,7 +2801,11 @@ function TelegramPostWorkspace({
   }, [channelId, initialPostView]);
 
   useEffect(() => {
-    setPostView(initialPostView === "calendar" ? "calendar" : "editor");
+    setPostView(
+      initialPostView === "calendar" || initialPostView === "ai-posting"
+        ? initialPostView
+        : "editor",
+    );
     setCalendarMonth(startOfMonth(new Date()));
     setSelectedCalendarDate(toLocalDateKey(new Date()));
   }, [channelId, initialPostView]);
@@ -2960,8 +2979,12 @@ function TelegramPostWorkspace({
       authoritativeEditingPost.scheduledAt,
       scheduleTimezone,
     );
-    setScheduleDate((current) => (current === local.date ? current : local.date));
-    setScheduleTime((current) => (current === local.time ? current : local.time));
+    setScheduleDate((current) =>
+      current === local.date ? current : local.date,
+    );
+    setScheduleTime((current) =>
+      current === local.time ? current : local.time,
+    );
   }, [
     authoritativeEditingPost?.id,
     authoritativeEditingPost?.scheduledAt,
@@ -3278,10 +3301,7 @@ function TelegramPostWorkspace({
       deepLinkedPost.data?.id === initialPostId &&
       (editing?.scheduledAt !== deepLinkedPost.data.scheduledAt ||
         editing?.scheduleTimezone !== deepLinkedPost.data.scheduleTimezone);
-    if (
-      restoredPostIdRef.current === initialPostId &&
-      !detailScheduleChanged
-    ) {
+    if (restoredPostIdRef.current === initialPostId && !detailScheduleChanged) {
       return;
     }
     // URL restoration intentionally hydrates the local editor state.
@@ -3552,14 +3572,21 @@ function TelegramPostWorkspace({
           toastIcon,
         );
       } catch (runError) {
-        const message = localizedApiError(runError, t("telegram.posts.editor.saveError", { title: saveTitle }));
+        const message = localizedApiError(
+          runError,
+          t("telegram.posts.editor.saveError", { title: saveTitle }),
+        );
         setError(message);
         pushToast(message, "error", 7000);
         if (persisted) {
           void Promise.allSettled([
-            queryClient.invalidateQueries({ queryKey: telegramPostKeys.managedLists(channelId) }),
+            queryClient.invalidateQueries({
+              queryKey: telegramPostKeys.managedLists(channelId),
+            }),
             invalidateManagedPostScheduleReads(queryClient, channelId),
-            queryClient.invalidateQueries({ queryKey: telegramPostKeys.linkTargets(channelId) }),
+            queryClient.invalidateQueries({
+              queryKey: telegramPostKeys.linkTargets(channelId),
+            }),
           ]);
         }
       } finally {
@@ -3636,41 +3663,24 @@ function TelegramPostWorkspace({
 
   return (
     <>
-      <PageTabHead
-        title={`${
-          workspaceView === "groups"
-            ? t("telegram.posts.tabs.groups")
-            : workspaceView === "hypotheses"
-              ? t("telegram.posts.hypotheses")
-              : postView === "calendar"
-                ? t("telegram.posts.tabs.calendar")
-                : t("telegram.posts.tabs.posts")
-        } · ${channelTitle} · Telegram System`}
-        iconUrl={channelPhotoUrl || null}
-        emoji={
-          workspaceView === "groups"
-            ? "🗂️"
-            : workspaceView === "hypotheses"
-              ? "🧠"
-              : postView === "calendar"
-                ? "🗓️"
-                : "✈️"
-        }
-        color={
-          workspaceView === "groups"
-            ? "#475569"
-            : workspaceView === "hypotheses"
-              ? "#6d28d9"
-              : postView === "calendar"
-                ? "#7c2d12"
-                : "#1d4ed8"
-        }
+      <TelegramPostsPageTabHead
+        workspaceView={workspaceView}
+        postView={postView}
+        channelTitle={channelTitle}
+        channelPhotoUrl={channelPhotoUrl}
+        labels={{
+          groups: t("telegram.posts.tabs.groups"),
+          hypotheses: t("telegram.posts.hypotheses"),
+          calendar: t("telegram.posts.tabs.calendar"),
+          posts: t("telegram.posts.tabs.posts"),
+        }}
       />
       <TelegramPostsWorkspaceNavigation
         view={workspaceView}
         onViewChange={changeWorkspaceView}
         onNewPost={onRequestNewPost}
         onNewGroup={onRequestNewGroup}
+        showNewPost={postView !== "ai-posting"}
         labels={{
           posts: t("telegram.posts.tabs.posts"),
           groups: t("telegram.posts.tabs.groups"),
@@ -3680,32 +3690,15 @@ function TelegramPostWorkspace({
         }}
       >
         {workspaceView === "posts" ? (
-          <div className="inline-flex shrink-0 rounded-lg border border-neutral-800 bg-neutral-950 p-1">
-            <button
-              type="button"
-              onClick={() => changePostView("editor")}
-              className={`flex items-center gap-2 rounded-md px-4 py-2 text-sm ${
-                postView === "editor"
-                  ? "bg-blue-600 text-white"
-                  : "text-neutral-400 hover:text-white"
-              }`}
-            >
-              <FileText size={15} />
-              {t("telegram.posts.tabs.editor")}
-            </button>
-            <button
-              type="button"
-              onClick={() => changePostView("calendar")}
-              className={`flex items-center gap-2 rounded-md px-4 py-2 text-sm ${
-                postView === "calendar"
-                  ? "bg-blue-600 text-white"
-                  : "text-neutral-400 hover:text-white"
-              }`}
-            >
-              <Clock3 size={15} />
-              {t("telegram.posts.tabs.calendar")}
-            </button>
-          </div>
+          <TelegramPostsViewNavigation
+            view={postView}
+            onViewChange={changePostView}
+            labels={{
+              editor: t("telegram.posts.tabs.editor"),
+              calendar: t("telegram.posts.tabs.calendar"),
+              "ai-posting": "AI Posting",
+            }}
+          />
         ) : null}
       </TelegramPostsWorkspaceNavigation>
       <Modal
@@ -4516,6 +4509,8 @@ function TelegramPostWorkspace({
             onPostSelect(post.id);
           }}
         />
+      ) : postView === "ai-posting" ? (
+        <AiPostingPage channelId={channelId} channelTitle={channelTitle} />
       ) : postView === "calendar" ? (
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.72fr)]">
           <Card className="min-w-0 p-4">
@@ -5717,7 +5712,11 @@ function TelegramPostWorkspace({
                           : t("telegram.posts.editor.schedulePost")}
               </Button>
             </div>
-            {error ? <p role="alert" className="text-right text-sm text-rose-300">{error}</p> : null}
+            {error ? (
+              <p role="alert" className="text-right text-sm text-rose-300">
+                {error}
+              </p>
+            ) : null}
             {publishDisabledReason ? (
               <p className="text-right text-xs text-neutral-500">
                 {publishDisabledReason}

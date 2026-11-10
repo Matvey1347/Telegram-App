@@ -4,10 +4,25 @@ import { AppNavigation } from "./app-navigation";
 
 describe("AppNavigation permissions", () => {
   it("keeps one CRM entry and lands leads-only roles in their permitted workspace", () => {
-    render(<AppNavigation pathname="/ad-sales/leads" openGroups={{growth:true}} onToggleGroup={vi.fn()} canViewAdmin={false} effectiveFeatureIds={['adSales.leads']} effectivePermissionKeys={['adSales.leads.view']}/>);
-    expect(screen.getByRole('link',{name:'CRM'})).toHaveAttribute('href','/ad-sales/leads');
-    expect(screen.getByRole('link',{name:'CRM'})).toHaveAttribute('aria-current','page');
-    expect(screen.queryByRole('link',{name:'Finance'})).toBeNull();
+    render(
+      <AppNavigation
+        pathname="/ad-sales/leads"
+        openGroups={{ growth: true }}
+        onToggleGroup={vi.fn()}
+        canViewAdmin={false}
+        effectiveFeatureIds={["adSales.leads"]}
+        effectivePermissionKeys={["adSales.leads.view"]}
+      />,
+    );
+    expect(screen.getByRole("link", { name: "CRM" })).toHaveAttribute(
+      "href",
+      "/ad-sales/leads",
+    );
+    expect(screen.getByRole("link", { name: "CRM" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    expect(screen.queryByRole("link", { name: "Finance" })).toBeNull();
   });
 
   it("omits features absent from effective access", () => {
@@ -42,7 +57,7 @@ describe("AppNavigation permissions", () => {
     expect(screen.getByText("Finance")).toBeInTheDocument();
   });
 
-  it("renders posts directly when it is the only accessible page", () => {
+  it("keeps Telegram navigation for posts and calendar access without a separate AI Posting link", () => {
     render(
       <AppNavigation
         pathname="/telegram-posts"
@@ -58,7 +73,11 @@ describe("AppNavigation permissions", () => {
       "aria-current",
       "page",
     );
-    expect(screen.queryByRole("button", { name: /Telegram/i })).toBeNull();
+    expect(screen.getByRole("link", { name: "Calendar" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Telegram/i }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "AI Posting" })).toBeNull();
     expect(screen.queryByRole("button", { name: /Growth/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /Operations/i })).toBeNull();
   });

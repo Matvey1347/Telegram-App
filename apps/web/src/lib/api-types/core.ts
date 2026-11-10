@@ -81,7 +81,6 @@ export type TelegramAccountCapabilitySummary = {
 export type AccountMe = {
   id: string;
   workspaceMemberId: string;
-  salesCommissionRate?: number | null;
   email: string;
   name: string;
   editorShortcuts?: EditorShortcutPreferences;

@@ -3,8 +3,21 @@
 export type TelegramPostsRouteView =
   | "editor"
   | "calendar"
+  | "ai-posting"
   | "groups"
   | "hypotheses";
+
+export function parseTelegramPostsView(
+  value: string | null,
+): TelegramPostsRouteView | null {
+  return value === "editor" ||
+    value === "calendar" ||
+    value === "ai-posting" ||
+    value === "groups" ||
+    value === "hypotheses"
+    ? value
+    : null;
+}
 
 type TelegramPostsUrlInput = {
   channelId?: string | null;
@@ -72,7 +85,9 @@ export function buildTelegramPostsLegacyRedirectUrl(
   if (
     !channelId ||
     groupId ||
-    (postView !== "editor" && postView !== "calendar")
+    (postView !== "editor" &&
+      postView !== "calendar" &&
+      postView !== "ai-posting")
   ) {
     return null;
   }

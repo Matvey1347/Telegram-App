@@ -1,6 +1,5 @@
-import type { Metadata } from "next";
-import { AiPostingPage } from "@/components/features/telegram/ai-posting/ai-posting-page";
-export const metadata: Metadata = { title: "AI Posting · Nexeloq" };
+import { redirect } from "next/navigation";
+
 export default function AiPostingRoute() {
-  return <AiPostingPage />;
+  redirect("/telegram-posts?postView=ai-posting");
 }

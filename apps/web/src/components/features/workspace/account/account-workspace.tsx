@@ -26,7 +26,6 @@ import {
 } from "@/lib/query-keys";
 import { useI18n } from "@/providers/i18n-provider";
 import { localizedAccountError } from "@/lib/features/workspace/account-error";
-import { AccountMemberFinance } from "./account-member-finance";
 
 const IconPicker = dynamic(() =>
   import("@/components/icons/icon-picker").then((module) => module.IconPicker),
@@ -39,7 +38,6 @@ type ProfileValues = {
   email: string;
   telegramUsername: string;
   telegramUserAccountIds: string[];
-  salesCommissionRate: string;
 };
 type PasswordValues = {
   currentPassword: string;
@@ -53,6 +51,7 @@ type ProfileTelegramAccount = {
   firstName?: string | null;
   lastName?: string | null;
   photoUrl?: string | null;
+  assignedMember?: { userId: string } | null;
 };
 
 const accountTitle = (account: ProfileTelegramAccount) =>
@@ -83,10 +82,6 @@ export function AccountWorkspace() {
       telegramUsername: account.data?.telegramUsername ?? "",
       telegramUserAccountIds:
         account.data?.assignedTelegramUserAccounts?.map(({ id }) => id) ?? [],
-      salesCommissionRate:
-        account.data?.salesCommissionRate == null
-          ? ""
-          : String(account.data.salesCommissionRate),
     },
   });
   const passwordForm = useForm<PasswordValues>();
@@ -108,13 +103,20 @@ export function AccountWorkspace() {
     const profileAccounts = account.data?.assignedTelegramUserAccounts ?? [];
     const assignedIds = new Set(profileAccounts.map(({ id }) => id));
     const workspaceAccounts = (telegramAccounts.data ?? []).filter(
-      (item) => !item.assignedMember || assignedIds.has(item.id),
+      (item) =>
+        !item.assignedMember ||
+        item.assignedMember.userId === account.data?.id ||
+        assignedIds.has(item.id),
     );
     return [
       ...profileAccounts,
       ...workspaceAccounts.filter(({ id }) => !assignedIds.has(id)),
     ];
-  }, [account.data?.assignedTelegramUserAccounts, telegramAccounts.data]);
+  }, [
+    account.data?.id,
+    account.data?.assignedTelegramUserAccounts,
+    telegramAccounts.data,
+  ]);
   const selectedAccountId =
     useWatch({
       control: profileForm.control,
@@ -220,19 +222,8 @@ export function AccountWorkspace() {
                   identityMode === "account" && selectedAccountId
                     ? [selectedAccountId]
                     : [],
-                salesCommissionRate:
-                  account.data.workspace.role === "owner"
-                    ? values.salesCommissionRate === ""
-                      ? null
-                      : Number(values.salesCommissionRate)
-                    : undefined,
               })
             }
-          />
-          <AccountMemberFinance
-            memberId={account.data.workspaceMemberId}
-            name={account.data.name}
-            canManage={account.data.workspace.role === "owner"}
           />
         </>
       ) : (
@@ -439,40 +430,6 @@ function ProfileForm({
             </div>
           )}
         </section>
-        {data.workspace.role === "owner" ? (
-          <section className="space-y-2 border-t border-neutral-800 pt-4">
-            <div>
-              <h3 className="font-semibold text-white">Sales commission</h3>
-              <p className="mt-0.5 text-xs text-neutral-500">
-                Leave this blank to use the workspace default. Your chosen rate
-                is saved with each new deal.
-              </p>
-            </div>
-            <FormField label="My commission override, %">
-              <Input
-                type="number"
-                aria-label="My commission override, %"
-                min="0"
-                max="100"
-                step="0.01"
-                placeholder="Use workspace default"
-                {...form.register("salesCommissionRate", {
-                  validate: (value) =>
-                    value === "" ||
-                    (Number.isFinite(Number(value)) &&
-                      Number(value) >= 0 &&
-                      Number(value) <= 100) ||
-                    "Enter a rate from 0 to 100",
-                })}
-              />
-              {form.formState.errors.salesCommissionRate ? (
-                <p className="mt-1 text-xs text-rose-300">
-                  {form.formState.errors.salesCommissionRate.message}
-                </p>
-              ) : null}
-            </FormField>
-          </section>
-        ) : null}
         <FormError message={error} />
         <div className="flex justify-end">
           <Button type="submit" disabled={pending}>

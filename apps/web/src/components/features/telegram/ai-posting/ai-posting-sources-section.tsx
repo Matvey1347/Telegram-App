@@ -1,10 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import { Button, CustomSelect, Input } from "@/components/ui/primitives";
+import { telegramAiPostingKeys } from "@/lib/query-keys";
+import {
+  Button,
+  Card,
+  CustomSelect,
+  IconButton,
+  Input,
+  ToggleRow,
+} from "@/components/ui/primitives";
 
 type Source = {
   id: string;
@@ -28,13 +36,18 @@ export function AiPostingSourcesSection({
   const [newSourceType, setNewSourceType] = useState<Source["type"]>("website");
   const [rightsConfirmed, setRightsConfirmed] = useState(false);
   const sourceChannels = useQuery({
-    queryKey: ["telegram-ai-posting", channelId, "source-channels"],
+    queryKey: telegramAiPostingKeys.sourceChannels(channelId),
     queryFn: async () =>
       (
         await api.get(
           `/telegram-channels/${channelId}/ai-posting/source-channels`,
         )
-      ).data as Array<{ id: string; title: string; username: string | null }>,
+      ).data as Array<{
+        id: string;
+        title: string;
+        username: string | null;
+        photoUrl: string | null;
+      }>,
     enabled: Boolean(channelId) && newSourceType === "telegram",
   });
   const addSource = () => {
@@ -69,14 +82,14 @@ export function AiPostingSourcesSection({
     });
   };
   return (
-    <section className="space-y-4 rounded-xl border border-neutral-800 bg-neutral-900/60 p-4 sm:p-5">
+    <Card className="space-y-4 bg-neutral-900/60">
       <h2 className="text-lg font-semibold">Источники идей</h2>
       <p className="text-sm text-neutral-400">
-        Добавьте до 5 сайтов, RSS или доступных Telegram-каналов. История
-        канала управляется отдельно.
+        Добавьте до 5 сайтов, RSS или доступных Telegram-каналов. История канала
+        управляется отдельно.
       </p>
-      <div className="flex flex-col gap-2 sm:flex-row">
-        <div className="w-full sm:w-48">
+      <div className="flex flex-col gap-2 2xl:flex-row">
+        <div className="w-full 2xl:w-48">
           <CustomSelect
             value={newSourceType}
             onChange={(v) => {
@@ -104,6 +117,8 @@ export function AiPostingSourcesSection({
                 value: item.id,
                 label: item.title,
                 meta: item.username ? `@${item.username}` : undefined,
+                iconUrl: item.photoUrl ?? undefined,
+                iconFallback: item.title,
               }))}
             />
           </div>
@@ -119,31 +134,26 @@ export function AiPostingSourcesSection({
         </Button>
       </div>
       {(newSourceType === "website" || newSourceType === "rss") && (
-        <label className="flex items-start gap-2 text-xs text-neutral-400">
-          <input
-            type="checkbox"
-            checked={rightsConfirmed}
-            onChange={(event) => setRightsConfirmed(event.target.checked)}
-          />
-          Подтверждаю право использовать изображения с этого источника
-        </label>
+        <ToggleRow
+          checked={rightsConfirmed}
+          onChange={setRightsConfirmed}
+          label="Есть право использовать изображения с этого источника"
+          description="Подтверждение требуется перед использованием найденных изображений."
+        />
       )}
       <div className="space-y-2">
         {config.sources.map((source) => (
-          <div
+          <Card
             key={source.id}
-            className="flex flex-wrap items-center gap-3 rounded-lg border border-neutral-800 p-3"
+            className="flex flex-wrap items-center gap-3 p-3"
           >
-            <input
-              type="checkbox"
-              aria-label={`Источник включён: ${source.value}`}
+            <ToggleRow
               checked={source.enabled}
-              onChange={(e) =>
+              label={`Источник включён: ${source.value}`}
+              onChange={(enabled) =>
                 patch({
                   sources: config.sources.map((s) =>
-                    s.id === source.id
-                      ? { ...s, enabled: e.target.checked }
-                      : s,
+                    s.id === source.id ? { ...s, enabled } : s,
                   ),
                 })
               }
@@ -160,22 +170,21 @@ export function AiPostingSourcesSection({
                 </span>
               )}
               {(source.type === "website" || source.type === "rss") && (
-                <label className="mt-1 flex items-center gap-2 text-xs text-neutral-500">
-                  <input
-                    type="checkbox"
+                <span className="mt-1 block">
+                  <ToggleRow
                     checked={Boolean(source.rightsConfirmed)}
-                    onChange={(event) =>
+                    label="Есть право использовать изображения"
+                    onChange={(rightsConfirmed) =>
                       patch({
                         sources: config.sources.map((item) =>
                           item.id === source.id
-                            ? { ...item, rightsConfirmed: event.target.checked }
+                            ? { ...item, rightsConfirmed }
                             : item,
                         ),
                       })
                     }
                   />
-                  Есть право использовать изображения
-                </label>
+                </span>
               )}
             </span>
             <Button
@@ -184,20 +193,19 @@ export function AiPostingSourcesSection({
             >
               Проверить
             </Button>
-            <button
+            <IconButton
+              type="button"
+              kind="delete"
               aria-label="Удалить источник"
-              className="p-2 text-neutral-400 hover:text-rose-300"
               onClick={() =>
                 patch({
                   sources: config.sources.filter((s) => s.id !== source.id),
                 })
               }
-            >
-              <Trash2 size={16} />
-            </button>
-          </div>
+            />
+          </Card>
         ))}
       </div>
-    </section>
+    </Card>
   );
 }

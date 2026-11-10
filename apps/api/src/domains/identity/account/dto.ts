@@ -3,12 +3,9 @@ import {
   IsArray,
   IsEmail,
   IsIn,
-  IsNumber,
   IsObject,
   IsOptional,
   IsString,
-  Max,
-  Min,
   MinLength,
 } from 'class-validator';
 import { APP_LOCALES, type AppLocale } from '@telegram-system/shared';
@@ -44,12 +41,6 @@ export class UpdateMeDto {
   @IsOptional()
   @IsObject()
   editorShortcuts?: Record<string, string>;
-
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  @Max(100)
-  salesCommissionRate?: number | null;
 }
 
 export class UpdateLocaleDto {

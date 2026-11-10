@@ -6,7 +6,7 @@ describe('TelegramAiPostingService', () => {
     resolveWorkspaceIdForUser: jest.fn().mockResolvedValue('ws-a'),
   };
   const prisma = {
-    telegramChannel: { findFirst: jest.fn() },
+    telegramChannel: { findFirst: jest.fn(), findMany: jest.fn() },
     telegramAiPostingSettings: { findFirst: jest.fn(), upsert: jest.fn() },
   };
   const service = new TelegramAiPostingService(
@@ -44,6 +44,24 @@ describe('TelegramAiPostingService', () => {
     prisma.telegramChannel.findFirst.mockResolvedValue(null);
     await expect(service.get('user-a', 'other-channel')).rejects.toBeInstanceOf(
       NotFoundException,
+    );
+  });
+
+  it('limits Telegram idea sources to owned channels in the active workspace', async () => {
+    prisma.telegramChannel.findFirst.mockResolvedValue({ id: 'ch-a' });
+    prisma.telegramChannel.findMany.mockResolvedValue([]);
+
+    await service.sourceChannels('user-a', 'ch-a');
+
+    expect(prisma.telegramChannel.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          workspaceId: 'ws-a',
+          id: { not: 'ch-a' },
+          adminLinks: { some: {} },
+        }),
+        select: expect.objectContaining({ photoUrl: true }),
+      }),
     );
   });
 

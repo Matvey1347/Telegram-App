@@ -13,7 +13,14 @@ import {
   WandSparkles,
 } from "lucide-react";
 import { api } from "@/lib/api";
-import { Button, Textarea } from "@/components/ui/primitives";
+import {
+  Button,
+  Card,
+  FormField,
+  Input,
+  StatusPill,
+  Textarea,
+} from "@/components/ui/primitives";
 import { TelegramPostPreview } from "@/components/features/telegram/telegram/telegram-post-preview";
 
 type Publication = {
@@ -155,8 +162,8 @@ export function AiPostingTestConsole({
   });
   const error = generate.error || act.error || suggest.error || confirm.error;
   return (
-    <section className="mt-6 space-y-4" aria-labelledby="ai-posting-test-title">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-neutral-800 bg-neutral-900/60 p-4">
+    <div className="space-y-4" aria-labelledby="ai-posting-test-title">
+      <Card className="flex flex-wrap items-center justify-between gap-3 bg-neutral-900/60">
         <div>
           <h2 id="ai-posting-test-title" className="text-lg font-semibold">
             Тестирование AI Posting
@@ -178,7 +185,7 @@ export function AiPostingTestConsole({
             "Сгенерировать 3 публикации"
           )}
         </Button>
-      </div>
+      </Card>
       {!settingsReady && (
         <p className="text-sm text-amber-300">
           Сначала сохраните текущие настройки AI Posting.
@@ -216,17 +223,12 @@ export function AiPostingTestConsole({
         </div>
       )}
       {(runs.data ?? []).map((run) => (
-        <article
-          key={run.id}
-          className="space-y-4 rounded-xl border border-neutral-800 bg-neutral-900/40 p-4"
-        >
+        <Card key={run.id} className="space-y-4 bg-neutral-900/40">
           <header className="flex flex-wrap items-center justify-between gap-2 text-sm">
             <div className="flex items-center gap-2">
               <Clock3 size={15} />
               <strong>{new Date(run.createdAt).toLocaleString()}</strong>
-              <span className="rounded-full border border-neutral-700 px-2 py-0.5 text-xs">
-                {run.status}
-              </span>
+              <StatusPill value={run.status.toLowerCase()} />
             </div>
             <span className="text-neutral-400">
               Версия настроек {run.settingsVersion} · запуск v{run.version}
@@ -245,7 +247,7 @@ export function AiPostingTestConsole({
             {(run.publications ?? []).map((post, index) => (
               <div
                 key={`${index}-${post.topic}`}
-                className="grid gap-4 border-t border-neutral-800 pt-4 lg:grid-cols-[minmax(0,1fr)_minmax(300px,0.8fr)]"
+                className="grid min-w-0 gap-4 border-t border-neutral-800 pt-4"
               >
                 <div className="min-w-0">
                   <TelegramPostPreview
@@ -274,9 +276,8 @@ export function AiPostingTestConsole({
                       {post.category} · {post.format}
                     </span>
                   </div>
-                  <label className="block text-xs font-medium text-neutral-300">
-                    Текст публикации
-                    <textarea
+                  <FormField label="Текст публикации">
+                    <Textarea
                       aria-label="Редактировать текст публикации"
                       value={edits[`${run.id}:${index}`] ?? post.text}
                       disabled={Boolean(post.savedPostId)}
@@ -287,9 +288,9 @@ export function AiPostingTestConsole({
                         }))
                       }
                       rows={8}
-                      className="mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-950 p-3 text-sm text-neutral-100"
+                      className="mt-1 min-h-40 bg-neutral-950"
                     />
-                  </label>
+                  </FormField>
                   <details className="rounded-lg border border-neutral-800 p-3">
                     <summary className="cursor-pointer text-sm">
                       Модели и расходы
@@ -389,7 +390,7 @@ export function AiPostingTestConsole({
                     </Button>
                   </div>
                   <div className="flex gap-2">
-                    <input
+                    <Input
                       aria-label="Причина отклонения или пожелание к тексту"
                       value={reject[`${run.id}:${index}`] ?? ""}
                       onChange={(e) =>
@@ -399,7 +400,7 @@ export function AiPostingTestConsole({
                         }))
                       }
                       placeholder="Почему не подошла или что улучшить?"
-                      className="min-w-0 flex-1 rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm"
+                      className="min-w-0 flex-1"
                     />
                     <Button
                       variant="secondary"
@@ -478,14 +479,14 @@ export function AiPostingTestConsole({
                 </div>
               ))}
           </div>
-        </article>
+        </Card>
       ))}
       {!runs.isLoading && !runs.isError && !runs.data?.length && (
         <p className="rounded-lg border border-dashed border-neutral-700 p-6 text-center text-sm text-neutral-400">
           Тестовых запусков пока нет.
         </p>
       )}
-    </section>
+    </div>
   );
 }
 
