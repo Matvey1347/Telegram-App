@@ -34,6 +34,7 @@
     "check": "pnpm db:generate && pnpm architecture:check && pnpm i18n:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build",
     "check:changed": "node scripts/check-changed.mjs",
     "db:up": "docker compose up -d postgres",
+    "db:snapshot:refresh": "node scripts/refresh-local-db.mjs",
     "db:down": "docker compose down",
     "db:logs": "docker compose logs -f postgres",
     "db:migrate": "pnpm --filter api exec prisma migrate dev",

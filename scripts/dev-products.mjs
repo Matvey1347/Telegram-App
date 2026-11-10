@@ -42,7 +42,10 @@ export const LOCAL_PRODUCTS = {
         localUrl: "http://localhost:3000",
         webReadyUrl: "http://127.0.0.1:3000",
         args: ["--filter", "web", "exec", "next", "dev", "--port", "3000"],
-        env: { NEXT_PUBLIC_API_URL: "http://localhost:4000/api" },
+        env: {
+          NEXT_PUBLIC_API_URL: "http://localhost:4000/api",
+          NEXT_PUBLIC_DATABASE_ENV: "local",
+        },
       },
     ],
   },

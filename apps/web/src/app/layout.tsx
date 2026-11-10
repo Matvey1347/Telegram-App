@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { cookies } from 'next/headers';
 import { TelegramWebAppSdk } from '@/components/telegram/telegram-web-app-sdk';
+import { DatabaseEnvironmentBadge } from '@/components/layout/database-environment-badge';
 import { APP_LOCALE_COOKIE, normalizeAppLocale } from '@/i18n/types';
 import './globals.css';
 
@@ -39,6 +40,7 @@ export default async function RootLayout({
       </head>
       <body>
         {children}
+        <DatabaseEnvironmentBadge />
       </body>
     </html>
   );
