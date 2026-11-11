@@ -5,7 +5,10 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { recomputeTelegramPostPerformanceForChannel } from './telegram-post-performance-recompute';
+import { isSnapshotAtPerformanceAgePoint } from './telegram-post-performance-math';
 import {
+  Prisma,
   TelegramChannelDataType,
   TelegramDataSourceStatus,
   TelegramSourceType,
@@ -26,6 +29,10 @@ import {
 import { TelegramChannelCatalogService } from './telegram-channel-catalog.service';
 import { TelegramChannelsSupportService } from './telegram-channels-support.service';
 import { BulkProgressCallback } from './telegram-channels.internal';
+import {
+  dueAgeTargetsInPreviousHour,
+  selectMetricSnapshotAtWindow,
+} from './telegram-post-performance-math';
 
 @Injectable()
 export class TelegramPostMetricsService {
@@ -51,6 +58,7 @@ export class TelegramPostMetricsService {
       telegramUserAccountId?: string;
       postLimit?: number;
       messageIds?: string[];
+      captureAgeSnapshots?: boolean;
     },
     onProgress?: BulkProgressCallback,
     progressStep = { current: 3, total: 8 },
@@ -78,6 +86,7 @@ export class TelegramPostMetricsService {
       telegramUserAccountId?: string;
       postLimit?: number;
       messageIds?: string[];
+      captureAgeSnapshots?: boolean;
     },
     onProgress?: BulkProgressCallback,
     progressStep = { current: 3, total: 8 },
@@ -121,6 +130,7 @@ export class TelegramPostMetricsService {
         progressStep.total,
         `Downloaded ${metrics.length} posts, saving metrics to the database`,
       );
+      const snapshotPostIds: string[] = [];
       const persistence = await this.persistPostMetrics(
         workspaceId,
         channel.id,
@@ -132,6 +142,13 @@ export class TelegramPostMetricsService {
             this.telegramChannelAccessService.accountCredentials(account),
           channel: channelReference,
         },
+        dto.captureAgeSnapshots === true,
+        (postIds) => snapshotPostIds.push(...postIds),
+      );
+      await this.recomputeAiPostingPerformance(
+        workspaceId,
+        channel.id,
+        snapshotPostIds,
       );
       const changed =
         persistence.changedPosts > 0 || persistence.snapshotsCreated > 0;
@@ -205,6 +222,8 @@ export class TelegramPostMetricsService {
         TelegramMtprotoClient['downloadChannelMessagesMedia']
       >[0]['channel'];
     },
+    captureAgeSnapshots = false,
+    onSnapshotsCreated?: (postIds: string[]) => void,
   ) {
     const affectedDays = new Set<string>();
     const incomingMessageIds = metrics.map((post) =>
@@ -235,6 +254,20 @@ export class TelegramPostMetricsService {
             commentsCount: true,
             reactions: true,
             rawMessage: true,
+            metricSnapshots: {
+              where: {
+                collectedAt: {
+                  gte: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000),
+                },
+              },
+              select: {
+                collectedAt: true,
+                viewsCount: true,
+                reactionsCount: true,
+                forwardsCount: true,
+                commentsCount: true,
+              },
+            },
           },
         })
       : [];
@@ -308,6 +341,7 @@ export class TelegramPostMetricsService {
     let changedPosts = 0;
     let imageUrlsUpdated = 0;
     let snapshotsCreated = 0;
+    const snapshotPostIds = new Set<string>();
     for (const [index, post] of metrics.entries()) {
       if (index > 0 && index % 100 === 0) {
         await this.telegramChannelsSupportService.notifyDetailedTaskProgress(
@@ -328,13 +362,56 @@ export class TelegramPostMetricsService {
         Boolean(existing) &&
         this.metricValue(existing?.imageUrls ?? []) !==
           this.metricValue(imageUrls);
-      if (!metricsChanged && !imageChanged) continue;
+      const ageSnapshotNeeded =
+        captureAgeSnapshots &&
+        dueAgeTargetsInPreviousHour(post.postDate, new Date()).some(
+          (target) =>
+            !selectMetricSnapshotAtWindow(
+              post.postDate,
+              existing?.metricSnapshots ?? [],
+              target.hours,
+              target.toleranceHours,
+              new Date(),
+            ),
+        );
+      if (!metricsChanged && !imageChanged && !ageSnapshotNeeded) continue;
       if (existing && !metricsChanged && imageChanged) {
         await this.prisma.telegramPost.update({
           where: { id: existing.id },
           data: { imageUrls },
         });
         imageUrlsUpdated += 1;
+        if (ageSnapshotNeeded) {
+          await this.prisma.telegramPostMetricSnapshot.create({
+            data: {
+              telegramPostId: existing.id,
+              viewsCount: post.viewsCount,
+              forwardsCount: post.forwardsCount,
+              reactionsCount: post.reactionsCount,
+              commentsCount: post.commentsCount,
+              reactions: post.reactions,
+            },
+          });
+          snapshotsCreated += 1;
+          if (isSnapshotAtPerformanceAgePoint(post.postDate, new Date()))
+            snapshotPostIds.add(existing.id);
+        }
+        continue;
+      }
+      if (existing && !metricsChanged && ageSnapshotNeeded) {
+        await this.prisma.telegramPostMetricSnapshot.create({
+          data: {
+            telegramPostId: existing.id,
+            viewsCount: post.viewsCount,
+            forwardsCount: post.forwardsCount,
+            reactionsCount: post.reactionsCount,
+            commentsCount: post.commentsCount,
+            reactions: post.reactions,
+          },
+        });
+        snapshotsCreated += 1;
+        if (isSnapshotAtPerformanceAgePoint(post.postDate, new Date()))
+          snapshotPostIds.add(existing.id);
         continue;
       }
       const data = {
@@ -376,6 +453,8 @@ export class TelegramPostMetricsService {
       });
       changedPosts += 1;
       snapshotsCreated += 1;
+      if (isSnapshotAtPerformanceAgePoint(post.postDate, new Date()))
+        snapshotPostIds.add(upserted.id);
       if (existing)
         affectedDays.add(existing.postDate.toISOString().slice(0, 10));
       affectedDays.add(post.postDate.toISOString().slice(0, 10));
@@ -389,6 +468,23 @@ export class TelegramPostMetricsService {
     if (affectedDays.size) {
       await this.recalculateDailyStatsFromPosts(channelId, [...affectedDays]);
     }
+    if (
+      incomingMessageIds.length &&
+      typeof this.prisma.$executeRaw === 'function'
+    ) {
+      await this.prisma.$executeRaw(Prisma.sql`
+        UPDATE "TelegramManagedPost" managed
+        SET "telegramPostId" = post."id"
+        FROM "TelegramPost" post
+        WHERE managed."telegramPostId" IS NULL
+          AND managed."status" = 'PUBLISHED'
+          AND managed."telegramChannelId" = ${channelId}
+          AND post."telegramChannelId" = managed."telegramChannelId"
+          AND post."telegramMessageId" = managed."telegramMessageIds"[1]
+          AND post."telegramMessageId" IN (${Prisma.join(incomingMessageIds)})
+      `);
+    }
+    onSnapshotsCreated?.([...snapshotPostIds]);
     return {
       affectedDays: affectedDays.size,
       changedPosts,
@@ -396,6 +492,26 @@ export class TelegramPostMetricsService {
       imageUrlsFailed,
       snapshotsCreated,
     };
+  }
+
+  private async recomputeAiPostingPerformance(
+    workspaceId: string,
+    channelId: string,
+    postIds: string[],
+  ) {
+    if (!postIds.length) return;
+    try {
+      await recomputeTelegramPostPerformanceForChannel(
+        this.prisma,
+        workspaceId,
+        channelId,
+        postIds,
+      );
+    } catch (error) {
+      this.logger.warn(
+        `AI Posting performance recalculation failed for channel=${channelId}: ${error instanceof Error ? error.message : 'unknown error'}`,
+      );
+    }
   }
 
   public postMetricsChanged(

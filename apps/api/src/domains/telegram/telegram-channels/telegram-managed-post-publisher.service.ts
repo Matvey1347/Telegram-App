@@ -603,6 +603,17 @@ export class TelegramManagedPostPublisherService {
             mediaItems.length,
           );
       const published = await this.prisma.$transaction(async (tx) => {
+        const firstMessageId = scheduleAt ? null : ids[0];
+        const linkedTelegramPost =
+          firstMessageId && typeof tx.telegramPost?.findFirst === 'function'
+            ? await tx.telegramPost.findFirst({
+                where: {
+                  telegramChannelId: channelId,
+                  telegramMessageId: firstMessageId,
+                },
+                select: { id: true },
+              })
+            : null;
         const updated = await tx.telegramManagedPost.update({
           where: { id: post.id },
           data: {
@@ -619,6 +630,9 @@ export class TelegramManagedPostPublisherService {
                 : new Date(Date.now() + post.deleteAfterHours * 3_600_000),
             telegramScheduledMessageIds: scheduleAt ? ids : [],
             telegramMessageIds: scheduleAt ? [] : ids,
+            ...(linkedTelegramPost?.id
+              ? { telegramPostId: linkedTelegramPost.id }
+              : {}),
             telegramMessageUrls: publishedUrls,
             telegramIdVerificationStatus: scheduleAt
               ? TelegramManagedPostIdVerificationStatus.UNVERIFIED

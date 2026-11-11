@@ -54,7 +54,7 @@ export function selectExpectedViewsAtWindow(
   post: ExpectedViewsWindowPost,
   targetHours: number | null,
   now: Date,
-  options?: { historicalAsOf?: boolean },
+  options?: { historicalAsOf?: boolean; toleranceHours?: number },
 ) {
   const snapshots = post.metricSnapshots
     .filter(
@@ -76,7 +76,8 @@ export function selectExpectedViewsAtWindow(
     post.postDate.getTime() + targetHours * 60 * 60 * 1000,
   );
   if (targetAt > now) return null;
-  const toleranceHours = targetHours <= 24 ? 8 : targetHours <= 48 ? 12 : 24;
+  const toleranceHours =
+    options?.toleranceHours ?? (targetHours <= 24 ? 8 : targetHours <= 48 ? 12 : 24);
   const candidate = snapshots
     .map((snapshot) => ({
       ...snapshot,
@@ -88,7 +89,7 @@ export function selectExpectedViewsAtWindow(
     : candidate.viewsCount;
 }
 
-function median(values: number[]) {
+export function median(values: number[]) {
   if (!values.length) return null;
   const sorted = [...values].sort((a, b) => a - b);
   const middle = Math.floor(sorted.length / 2);
