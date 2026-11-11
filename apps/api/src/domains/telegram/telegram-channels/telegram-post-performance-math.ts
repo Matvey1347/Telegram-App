@@ -56,6 +56,8 @@ export type PerformancePostInput = Omit<
     mutualPromotionDelivery?: unknown;
   }>;
   crossPromotion?: boolean;
+  manualClassification?: string | null;
+  performance?: { manualClassification: string | null } | null;
 };
 
 export function selectMetricSnapshotAtWindow(
@@ -144,6 +146,12 @@ export function telegramLocalPublicationParts(
 }
 
 export function isTelegramPostExcludedFromNorm(post: PerformancePostInput) {
+  if (
+    post.manualClassification === 'AD' ||
+    post.manualClassification === 'MUTUAL_PROMO' ||
+    post.manualClassification === 'EXCLUDED'
+  )
+    return `MANUAL_${post.manualClassification}`;
   if (post.excludeFromAnalytics) return 'EXCLUDED_FROM_ANALYTICS';
   if (
     post.adSalePlacements.length ||
@@ -221,14 +229,18 @@ export function computeTelegramPostPerformance(
   timezone: string,
   now: Date,
 ) {
-  const origin: TelegramPostOrigin = classifyPostOrigin({
+  const origin: TelegramPostOrigin = post.manualClassification === 'AD'
+    ? 'AD'
+    : post.manualClassification === 'MUTUAL_PROMO'
+      ? 'MUTUAL_PROMO'
+      : classifyPostOrigin({
     managedPost: post.managedPosts[0] ?? null,
     adSalePlacement: post.adSalePlacements.length > 0,
     mutualPromotionDelivery: post.managedPosts.some(
       (managedPost) => managedPost.mutualPromotionDelivery,
     ),
     crossPromotion: post.crossPromotion,
-  });
+      });
   const excludedReason = isTelegramPostExcludedFromNorm(post);
   const body = visibleTelegramText(post.text ?? post.formattedText);
   const lengthChars = [...body].length;
@@ -259,13 +271,15 @@ export function computeTelegramPostPerformance(
     views24Samples.length >= TELEGRAM_POST_PERFORMANCE_MIN_SAMPLE
       ? median(views24Samples)
       : null;
-  const normFinal =
+  const rawNormFinal =
     finalSamples.length >= TELEGRAM_POST_PERFORMANCE_MIN_SAMPLE
       ? median(finalSamples)
       : null;
+  const normFinal = rawNormFinal != null && rawNormFinal >= 50 ? rawNormFinal : null;
   const normReason =
     views24Samples.length < TELEGRAM_POST_PERFORMANCE_MIN_SAMPLE ||
     (matured && finalSamples.length < TELEGRAM_POST_PERFORMANCE_MIN_SAMPLE)
+    || (matured && rawNormFinal != null && rawNormFinal < 50)
       ? 'NOT_ENOUGH_DATA'
       : null;
   const engagementTotal =
@@ -298,7 +312,10 @@ export function computeTelegramPostPerformance(
     norm24h,
     score24h: score(current24.views, norm24h),
     normFinal,
-    scoreFinal: matured ? score(viewsFinal, normFinal) : null,
+    scoreFinal:
+      matured && finalSamples.length >= TELEGRAM_POST_PERFORMANCE_MIN_SAMPLE
+        ? score(viewsFinal, normFinal)
+        : null,
     normSampleSize: views24Samples.length,
     normReason,
     lengthChars,
@@ -313,6 +330,7 @@ export function computeTelegramPostPerformance(
     publishWeekday: publish.weekday,
     excludedFromNorm: excludedReason != null,
     excludedReason,
+    manualClassification: post.manualClassification ?? null,
     methodVersion: TELEGRAM_POST_PERFORMANCE_METHOD_VERSION,
     computedAt: now,
   };

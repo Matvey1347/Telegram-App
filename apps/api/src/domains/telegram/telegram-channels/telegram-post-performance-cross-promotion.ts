@@ -35,6 +35,7 @@ export async function flagCrossPromotionPosts(
     }));
     return {
       ...row,
+      manualClassification: row.performance?.manualClassification ?? null,
       managedPosts,
       crossPromotion: managedPosts.some(
         (managedPost) => managedPost.crossPromotion,

@@ -15,6 +15,11 @@ import { TelegramAiPostingRuleFeedbackService } from './telegram-ai-posting-rule
 import { TelegramAiPostingAutopilotService } from './telegram-ai-posting-autopilot.service';
 import { TelegramAiPostingAutopilotNotificationService } from './telegram-ai-posting-autopilot-notification.service';
 import { TelegramAiPostingAnalyticsService } from './telegram-ai-posting-analytics.service';
+import { TelegramAiPostingSettingsVersionService } from './telegram-ai-posting-settings-version.service';
+import { TelegramAiPostingPerformanceService } from './telegram-ai-posting-performance.service';
+import { TelegramAiPostingRhythmService } from './telegram-ai-posting-rhythm.service';
+import { TelegramAiPostingRhythmController } from './telegram-ai-posting-rhythm.controller';
+import { TelegramAiPostingPerformanceControlController } from './telegram-ai-posting-performance-control.controller';
 import {
   TelegramPublicationSchedulesController,
   TelegramChannelPublicationScheduleController,
@@ -132,6 +137,8 @@ import { TelegramChannelTrafficAttributionService } from './telegram-channel-tra
   controllers: [
     TelegramChannelsController,
     TelegramAiPostingController,
+    TelegramAiPostingRhythmController,
+    TelegramAiPostingPerformanceControlController,
     TelegramChannelRemindersController,
     TelegramPublicationSchedulesController,
     TelegramChannelPublicationScheduleController,
@@ -156,6 +163,9 @@ import { TelegramChannelTrafficAttributionService } from './telegram-channel-tra
     TelegramAiPostingAutopilotService,
     TelegramAiPostingAutopilotNotificationService,
     TelegramAiPostingAnalyticsService,
+    TelegramAiPostingSettingsVersionService,
+    TelegramAiPostingPerformanceService,
+    TelegramAiPostingRhythmService,
     TelegramChannelRemindersService,
     TelegramChannelRemindersDueService,
     TelegramPublicationSchedulesService,

@@ -176,4 +176,53 @@ describe('Telegram post performance calculation', () => {
     expect(result.normSampleSize).toBe(7);
     expect(result.normReason).toBe('NOT_ENOUGH_DATA');
   });
+
+  it('preserves a manual ad label through score recomputation', () => {
+    const publishedAt = new Date('2026-01-01T00:00:00Z');
+    const item = post('manual-ad', publishedAt);
+    item.manualClassification = 'AD';
+    const result = computeTelegramPostPerformance(item, [], 'UTC', publishedAt);
+    expect(result.origin).toBe('AD');
+    expect(result.excludedFromNorm).toBe(true);
+    expect(result.excludedReason).toBe('MANUAL_AD');
+    expect(result.manualClassification).toBe('AD');
+  });
+
+  it('does not show saturated scores below the minimum norm threshold', () => {
+    const publishedAt = new Date('2026-01-10T00:00:00Z');
+    const target = post('target-low-norm', publishedAt, 100);
+    const comparable = Array.from({ length: 8 }, (_, index) => {
+      const prior = post(
+        `low-${index}`,
+        new Date(publishedAt.getTime() - (index + 1) * 60 * 60 * 1000),
+        20,
+      );
+      prior.metricSnapshots = [
+        {
+          collectedAt: new Date(prior.postDate.getTime() + 24 * 60 * 60 * 1000),
+          viewsCount: 100,
+          reactionsCount: null,
+          forwardsCount: null,
+          commentsCount: null,
+        },
+        {
+          collectedAt: new Date(publishedAt.getTime() + 8 * 24 * 60 * 60 * 1000),
+          viewsCount: 20,
+          reactionsCount: null,
+          forwardsCount: null,
+          commentsCount: null,
+        },
+      ];
+      return prior;
+    });
+    const result = computeTelegramPostPerformance(
+      target,
+      comparable,
+      'UTC',
+      new Date(publishedAt.getTime() + 9 * 24 * 60 * 60 * 1000),
+    );
+    expect(result.normFinal).toBeNull();
+    expect(result.scoreFinal).toBeNull();
+    expect(result.normReason).toBe('NOT_ENOUGH_DATA');
+  });
 });

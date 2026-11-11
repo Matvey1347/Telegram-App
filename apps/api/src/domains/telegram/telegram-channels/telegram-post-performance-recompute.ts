@@ -26,6 +26,7 @@ const performancePostSelect = {
   mediaKind: true,
   imageUrls: true,
   excludeFromAnalytics: true,
+  performance: { select: { manualClassification: true } },
   metricSnapshots: {
     select: {
       collectedAt: true,

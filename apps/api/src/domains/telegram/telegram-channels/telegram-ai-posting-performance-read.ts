@@ -20,10 +20,13 @@ type PerformanceRow = {
   publishHour: number;
   publishWeekday: number;
   excludedReason: string | null;
+  manualClassification: string | null;
   telegramPost: { text: string | null; formattedText: string | null };
 };
 
 function bestScore(row: PerformanceRow) {
+  if (Date.now() - row.publishedAt.getTime() >= 7 * 24 * 60 * 60 * 1000)
+    return row.scoreFinal;
   return row.scoreFinal ?? row.score24h;
 }
 
@@ -91,6 +94,11 @@ export function buildTelegramAiPostingPerformanceReadModel(
         row.scoreFinal != null ? 'final' : row.score24h != null ? '24h' : null,
       engagementPer1k24h: row.engagementPer1k24h,
       excludedReason: row.excludedReason,
+      manualClassification: row.manualClassification,
+      suggestedPromotion:
+        /t\.me\/(?:addlist|\+|joinchat\/)|(?<![\p{L}\p{N}_])@[\p{L}\p{N}_]{4,}/iu.test(
+          visibleTelegramText(row.telegramPost.text ?? row.telegramPost.formattedText),
+        ),
     }));
 
   return {

@@ -1,9 +1,9 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { telegramAiPostingKeys } from "@/lib/query-keys";
-import { Card } from "@/components/ui/primitives";
+import { Button, Card } from "@/components/ui/primitives";
 
 type Summary = {
   currentNorm24h: number | null;
@@ -38,6 +38,8 @@ type PerformanceData = {
     scoreWindow: string | null;
     engagementPer1k24h: number | null;
     excludedReason: string | null;
+    manualClassification: string | null;
+    suggestedPromotion: boolean;
   }>;
 };
 
@@ -78,6 +80,7 @@ export function AiPostingPerformanceSection({
   active: boolean;
 }) {
   const days = 28;
+  const client = useQueryClient();
   const query = useQuery<PerformanceData>({
     queryKey: telegramAiPostingKeys.performance(channelId, days),
     queryFn: async () =>
@@ -90,6 +93,27 @@ export function AiPostingPerformanceSection({
     enabled: Boolean(active && channelId),
   });
   const data = query.data;
+  const classify = useMutation({
+    mutationFn: async (input: {
+      ids: string[];
+      classification: "AD" | "MUTUAL_PROMO" | "EXCLUDED" | null;
+    }) => {
+      for (let offset = 0; offset < input.ids.length; offset += 100) {
+        await api.put(
+          `/telegram-channels/${channelId}/ai-posting/performance/classification`,
+          {
+            telegramPostIds: input.ids.slice(offset, offset + 100),
+            classification: input.classification,
+          },
+        );
+      }
+    },
+    onSuccess: async () => {
+      await client.invalidateQueries({
+        queryKey: telegramAiPostingKeys.performance(channelId, days),
+      });
+    },
+  });
   return (
     <Card className="space-y-5 border border-neutral-800 bg-neutral-900/60 p-4 sm:p-5">
       <div>
@@ -125,6 +149,34 @@ export function AiPostingPerformanceSection({
               detail="Медианный результат за период"
             />
           </div>
+          {data.posts.some((post) => post.suggestedPromotion) && (
+            <section className="rounded-lg border border-amber-800/70 bg-amber-950/20 p-3">
+              <p className="text-sm text-amber-200">
+                Похоже на рекламу или промо — проверьте подсказки.
+              </p>
+              <ul className="mt-2 list-disc pl-5 text-xs text-neutral-300">
+                {data.posts.filter((post) => post.suggestedPromotion).map((post) => (
+                  <li key={post.telegramPostId}>{post.textStart}</li>
+                ))}
+              </ul>
+              <Button
+                className="mt-3"
+                variant="secondary"
+                disabled={classify.isPending}
+                onClick={() => classify.mutate({
+                  ids: data.posts.filter((post) => post.suggestedPromotion).map((post) => post.telegramPostId),
+                  classification: "EXCLUDED",
+                })}
+              >
+                Исключить все
+              </Button>
+            </section>
+          )}
+          {classify.isError && (
+            <p role="alert" className="text-sm text-rose-300">
+              Не удалось сохранить отметку.
+            </p>
+          )}
           <section className="space-y-2">
             <h3 className="text-sm font-medium">
               Медианный скор по происхождению
@@ -207,6 +259,26 @@ export function AiPostingPerformanceSection({
                       </td>
                       <td className="px-3 py-2">
                         {post.excludedReason ?? "—"}
+                        <div className="mt-2 flex flex-wrap gap-1">
+                          {([
+                            ["AD", "Реклама"],
+                            ["MUTUAL_PROMO", "ВП / промо"],
+                            ["EXCLUDED", "Исключить"],
+                          ] as const).map(([classification, label]) => (
+                            <button
+                              key={classification}
+                              type="button"
+                              className="rounded border border-neutral-700 px-1.5 py-1 text-[10px] hover:bg-neutral-800"
+                              aria-pressed={post.manualClassification === classification}
+                              onClick={() => classify.mutate({
+                                ids: [post.telegramPostId],
+                                classification: post.manualClassification === classification ? null : classification,
+                              })}
+                            >
+                              {label}
+                            </button>
+                          ))}
+                        </div>
                       </td>
                     </tr>
                   ))}

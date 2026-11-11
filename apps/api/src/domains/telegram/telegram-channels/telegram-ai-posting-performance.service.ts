@@ -13,6 +13,7 @@ import {
   type PerformanceSnapshot,
 } from './telegram-post-performance-math';
 import {
+  recomputeTelegramPostPerformanceForChannel,
   recomputeTelegramPostPerformanceBatch,
   type PerformanceChannelSetting,
 } from './telegram-post-performance-recompute';
@@ -78,6 +79,7 @@ export class TelegramAiPostingPerformanceService {
         publishHour: true,
         publishWeekday: true,
         excludedReason: true,
+        manualClassification: true,
         telegramPost: { select: { text: true, formattedText: true } },
       },
     });
@@ -88,6 +90,43 @@ export class TelegramAiPostingPerformanceService {
       days,
       ...buildTelegramAiPostingPerformanceReadModel(rows),
     };
+  }
+
+  async classifyPosts(
+    userId: string,
+    channelId: string,
+    telegramPostIds: string[],
+    classification: 'AD' | 'MUTUAL_PROMO' | 'EXCLUDED' | null,
+  ) {
+    const workspaceId = await this.workspace.resolveWorkspaceIdForUser(userId);
+    const channel = await this.prisma.telegramChannel.findFirst({
+      where: { id: channelId, workspaceId },
+      select: { id: true },
+    });
+    if (!channel) throw new NotFoundException('Telegram channel not found');
+    const ids = [...new Set(telegramPostIds)].slice(0, 100);
+    if (!ids.length || ids.length !== new Set(telegramPostIds).size)
+      throw new BadRequestException('AI_POSTING_PERFORMANCE_POST_IDS_INVALID');
+    const posts = await this.prisma.telegramPost.findMany({
+      where: { id: { in: ids }, telegramChannelId: channelId },
+      select: { id: true },
+    });
+    if (posts.length !== ids.length)
+      throw new NotFoundException('AI_POSTING_PERFORMANCE_POST_NOT_FOUND');
+    await this.prisma.telegramPostPerformance.updateMany({
+      where: {
+        telegramPostId: { in: ids },
+        telegramPost: { telegramChannelId: channelId },
+      },
+      data: { manualClassification: classification },
+    });
+    await recomputeTelegramPostPerformanceForChannel(
+      this.prisma,
+      workspaceId,
+      channelId,
+      ids,
+    );
+    return { updated: ids.length, classification };
   }
 
   async processScheduledBatch(now = new Date()) {

@@ -1811,6 +1811,8 @@ model TelegramAiPostingSettings {
   configuration        Json
   configurationVersion Int             @default(1)
   autopilotEnabled     Boolean         @default(false)
+  mode                 String          @default("TEST")
+  draftExpirationDays  Int             @default(30)
   postsPerDay          Int             @default(4)
   targetReadyDrafts    Int             @default(50)
   maxReadyDrafts       Int             @default(100)
@@ -1830,9 +1832,24 @@ model TelegramAiPostingSettings {
   updatedAt            DateTime        @updatedAt
   workspace            Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   telegramChannel      TelegramChannel @relation(fields: [telegramChannelId], references: [id], onDelete: Cascade)
+  versions             TelegramAiPostingSettingsVersion[]
 
   @@index([workspaceId, autopilotEnabled])
   @@index([autopilotEnabled, autopilotNextRunAt])
+}
+
+model TelegramAiPostingSettingsVersion {
+  id                String                    @id @default(cuid())
+  settingsId        String
+  version           Int
+  configuration     Json
+  changeSource      String
+  changedByMemberId String?
+  createdAt         DateTime                  @default(now())
+  settings          TelegramAiPostingSettings @relation(fields: [settingsId], references: [id], onDelete: Cascade)
+
+  @@unique([settingsId, version])
+  @@index([settingsId, createdAt])
 }
 
 model TelegramAiPostingGeneration {
@@ -5757,6 +5774,8 @@ model TelegramPost {
   workspace        Workspace                    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   telegramChannel  TelegramChannel              @relation(fields: [telegramChannelId], references: [id], onDelete: Cascade)
   metricSnapshots  TelegramPostMetricSnapshot[]
+  managedPosts    TelegramManagedPost[]
+  performance     TelegramPostPerformance?
   adSalePlacements TelegramAdSalePlacement[]    @relation("TelegramAdPlacementTelegramPost")
 
   @@unique([telegramChannelId, telegramMessageId])
@@ -5811,9 +5830,14 @@ model TelegramManagedPost {
   statusPosition               Int?
   sidebarPosition              Int?
   publicationSlotId            String?
+  telegramPostId               String?
+  aiPostingReviewStatus        String?
+  aiPostingApprovedWithoutEdits Boolean?
+  aiPostingRecheckRequired     Boolean                                  @default(false)
 
   workspace               Workspace                              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   telegramChannel         TelegramChannel                        @relation(fields: [telegramChannelId], references: [id], onDelete: Cascade)
+  telegramPost            TelegramPost?                          @relation(fields: [telegramPostId], references: [id], onDelete: SetNull)
   assignedMember          WorkspaceMember                        @relation("TelegramManagedPostAssignedMember", fields: [assignedMemberId, workspaceId], references: [id, workspaceId], onDelete: Restrict, map: "TelegramManagedPost_assignedMemberId_fkey")
   group                   PostGroup?                             @relation(fields: [groupId], references: [id], onDelete: SetNull)
   plannerFormat           TelegramPostPlannerFormat?             @relation(fields: [plannerFormatId], references: [id], onDelete: SetNull)
@@ -5833,6 +5857,7 @@ model TelegramManagedPost {
   // Enforced by a partial unique index in the baseline migration. Prisma's
   // schema language cannot represent `WHERE remoteImportKey IS NOT NULL`.
   @@index([workspaceId, telegramChannelId, createdAt])
+  @@index([telegramPostId])
   @@index([workspaceId, assignedMemberId])
   @@index([groupId])
   @@index([groupId, groupPosition])
@@ -6095,6 +6120,46 @@ model TelegramPostMetricSnapshot {
   telegramPost TelegramPost @relation(fields: [telegramPostId], references: [id], onDelete: Cascade)
 
   @@index([telegramPostId, collectedAt])
+}
+
+model TelegramPostPerformance {
+  id                     String        @id @default(cuid())
+  telegramPostId         String        @unique
+  origin                 String
+  publishedAt            DateTime
+  views24h               Int?
+  views72h               Int?
+  views168h              Int?
+  viewsFinal             Int?
+  reactions24h           Int?
+  forwards24h            Int?
+  comments24h            Int?
+  engagementPer1k24h     Float?
+  norm24h                Float?
+  score24h               Float?
+  normFinal              Float?
+  scoreFinal             Float?
+  normSampleSize         Int           @default(0)
+  normReason             String?
+  lengthChars            Int
+  lengthBand             String
+  hasMedia               Boolean
+  mediaKind              String?
+  hasLink                Boolean
+  endsWithQuestion       Boolean
+  publishHour            Int
+  publishWeekday         Int
+  excludedFromNorm       Boolean       @default(false)
+  excludedReason         String?
+  manualClassification String?
+  methodVersion          String
+  computedAt             DateTime      @updatedAt
+
+  telegramPost TelegramPost @relation(fields: [telegramPostId], references: [id], onDelete: Cascade)
+
+  @@index([publishedAt, origin])
+  @@index([origin, scoreFinal])
+  @@index([excludedFromNorm, publishedAt])
 }
 
 model ExchangeRate {
