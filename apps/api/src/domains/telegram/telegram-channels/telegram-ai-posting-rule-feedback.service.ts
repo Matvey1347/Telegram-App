@@ -9,6 +9,7 @@ import { randomUUID } from 'node:crypto';
 import { WorkspaceService } from '../../../common/workspace.service';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { AiGateway } from '../../operations/ai/ai-gateway';
+import { writeTelegramAiPostingSettingsVersion } from './telegram-ai-posting-settings-version.store';
 
 type Run = {
   stage: string;
@@ -52,21 +53,23 @@ export class TelegramAiPostingRuleFeedbackService {
         select: { aiDailyBudget: true, aiMonthlyBudget: true },
       });
     const priorOperations = run.operations as unknown as Run[];
-    const attempt = priorOperations.filter((operation) => operation.stage === 'text').length + 1;
+    const attempt =
+      priorOperations.filter((operation) => operation.stage === 'text').length +
+      1;
     const response = await this.gateway.execute({
       userId,
       workspaceId,
       category: 'TELEGRAM_POSTING_TEXT',
       operationId: `${new Date().toISOString().slice(0, 10)}:${randomUUID()}`,
       mode: 'MANUAL',
-      input: `Return only JSON {"key":string,"value":string,"reason":string}. Suggest one concise persistent editorial setting change based on this feedback. Allowed keys: topic, audience, style, instructions, ending. Do not change hashtags, sources, language, or safety rules. Feedback: ${feedbackText}`,
+      input: `Return only one JSON object matching exactly one of these forms: {"type":"add_rule","text":string,"reason":string} | {"type":"set_ending","value":string,"reason":string} | {"type":"append_description","text":string,"reason":string}. Suggest a concise persistent change from the owner's feedback. Do not return legacy keys such as topic, audience, style, or instructions. Feedback: ${feedbackText}`,
       businessObjectId: channelId,
       aiPosting: {
         channelId,
         testRunId: run.id,
         attempt,
         postingMode: 'TEST',
-        dailyBudget: postingSettings?.aiDailyBudget?.toString() ?? null,
+        dailyBudget: null,
         monthlyBudget: postingSettings?.aiMonthlyBudget?.toString() ?? null,
       },
     });
@@ -120,19 +123,26 @@ export class TelegramAiPostingRuleFeedbackService {
     const proposal = this.parseJson(
       (response.result as { reply?: string }).reply ?? '',
     );
-    const allowed = ['topic', 'audience', 'style', 'instructions', 'ending'];
+    const type = proposal?.type;
     if (
       !proposal ||
-      !allowed.includes(String(proposal.key)) ||
-      typeof proposal.value !== 'string' ||
+      !['add_rule', 'set_ending', 'append_description'].includes(
+        String(type),
+      ) ||
+      (type === 'set_ending' && typeof proposal.value !== 'string') ||
+      (type !== 'set_ending' && typeof proposal.text !== 'string') ||
+      (type === 'set_ending' && !(proposal.value as string).trim()) ||
+      (type !== 'set_ending' && !(proposal.text as string).trim()) ||
       typeof proposal.reason !== 'string'
     )
       return persistFailure('AI_POSTING_RULE_SUGGESTION_INVALID');
     const suggestion = {
       id: randomUUID(),
       feedback: feedbackText.trim(),
-      key: proposal.key,
-      value: proposal.value.slice(0, 1000),
+      type,
+      ...(type === 'set_ending'
+        ? { value: String(proposal.value).slice(0, 1000) }
+        : { text: String(proposal.text).slice(0, 1000) }),
       reason: proposal.reason.slice(0, 1000),
       status: 'PENDING_CONFIRMATION',
     };
@@ -184,7 +194,38 @@ export class TelegramAiPostingRuleFeedbackService {
       if (!settings)
         throw new NotFoundException('AI_POSTING_SETTINGS_REQUIRED');
       const configuration = settings.configuration as Record<string, unknown>;
-      configuration[String(proposal.key)] = proposal.value;
+      const type = proposal.type;
+      const value = typeof proposal.value === 'string' ? proposal.value : '';
+      const text =
+        typeof proposal.text === 'string' ? proposal.text.trim() : '';
+      if (type === 'add_rule') {
+        const rules = Array.isArray(configuration.rules)
+          ? (configuration.rules as Array<Record<string, unknown>>)
+          : [];
+        if (!rules.some((rule) => rule.text === text))
+          rules.push({
+            id: randomUUID(),
+            text,
+            source: 'feedback',
+            active: true,
+            createdAt: new Date().toISOString(),
+            feedbackId: suggestionId,
+          });
+        configuration.rules = rules;
+      } else if (type === 'set_ending') {
+        configuration.ending = value;
+      } else if (type === 'append_description') {
+        const current =
+          typeof configuration.channelDescription === 'string'
+            ? configuration.channelDescription.trim()
+            : '';
+        if (!current.split(/\n{2,}/).includes(text))
+          configuration.channelDescription = [current, text]
+            .filter(Boolean)
+            .join('\n\n');
+      } else {
+        throw new ConflictException('AI_POSTING_RULE_SUGGESTION_INVALID');
+      }
       proposal.status = 'APPLIED';
       const updatedSettings = await tx.telegramAiPostingSettings.updateMany({
         where: {
@@ -199,6 +240,12 @@ export class TelegramAiPostingRuleFeedbackService {
       });
       if (!updatedSettings.count)
         throw new ConflictException('AI_POSTING_SETTINGS_CHANGED');
+      await writeTelegramAiPostingSettingsVersion(tx, {
+        settingsId: settings.id,
+        version: settings.configurationVersion + 1,
+        configuration: configuration as Prisma.InputJsonObject,
+        changeSource: 'feedback',
+      });
       const changed = await tx.telegramAiPostingTestRun.updateMany({
         where: { id: run.id, workspaceId, version: expectedVersion },
         data: {

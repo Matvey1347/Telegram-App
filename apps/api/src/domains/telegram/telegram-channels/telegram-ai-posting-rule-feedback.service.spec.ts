@@ -15,6 +15,7 @@ describe('TelegramAiPostingRuleFeedbackService', () => {
     textCost: '0',
   };
   const prisma = {
+    telegramAiPostingSettings: { findFirst: jest.fn().mockResolvedValue(null) },
     telegramAiPostingTestRun: {
       findFirst: jest.fn(),
       updateMany: jest.fn(),
@@ -44,8 +45,8 @@ describe('TelegramAiPostingRuleFeedbackService', () => {
       },
       result: {
         reply: JSON.stringify({
-          key: 'style',
-          value: 'Use more practical examples',
+          type: 'add_rule',
+          text: 'Use more practical examples',
           reason: 'This addresses the review feedback.',
         }),
       },
@@ -62,5 +63,74 @@ describe('TelegramAiPostingRuleFeedbackService', () => {
     expect(result.suggestion.status).toBe('PENDING_CONFIRMATION');
     expect(prisma.telegramAiPostingTestRun.updateMany).toHaveBeenCalled();
     expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('applies a feedback rule and writes its configuration snapshot in the same transaction', async () => {
+    const settings = {
+      id: 'settings-1',
+      configurationVersion: 4,
+      configuration: { rules: [] },
+    };
+    const tx = {
+      telegramAiPostingTestRun: {
+        findFirst: jest.fn().mockResolvedValue({
+          ...run,
+          version: 3,
+          feedback: [
+            {
+              id: 'suggestion-1',
+              type: 'add_rule',
+              text: 'Use examples',
+              status: 'PENDING_CONFIRMATION',
+            },
+          ],
+        }),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      telegramAiPostingSettings: {
+        findFirst: jest.fn().mockResolvedValue(settings),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      telegramAiPostingSettingsVersion: {
+        create: jest.fn().mockResolvedValue({ version: 5 }),
+      },
+    };
+    prisma.$transaction.mockImplementation(
+      (callback: (client: typeof tx) => unknown) => callback(tx),
+    );
+
+    await service.confirmRuleChange(
+      'user-1',
+      'channel-1',
+      'run-1',
+      'suggestion-1',
+      3,
+    );
+
+    expect(tx.telegramAiPostingSettings.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          configurationVersion: { increment: 1 },
+        }),
+      }),
+    );
+    expect(tx.telegramAiPostingSettingsVersion.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          settingsId: 'settings-1',
+          version: 5,
+          changeSource: 'feedback',
+          configuration: expect.objectContaining({
+            rules: [
+              expect.objectContaining({
+                text: 'Use examples',
+                source: 'feedback',
+                active: true,
+              }),
+            ],
+          }),
+        }),
+      }),
+    );
   });
 });
