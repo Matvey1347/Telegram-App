@@ -15,4 +15,6 @@ RUN pnpm install --frozen-lockfile
 RUN pnpm --filter finance-api prisma:generate \
     && pnpm --filter finance-api build
 
-CMD ["pnpm", "--filter", "finance-api", "start:prod"]
+RUN test -f /app/apps/standalone/finance/api/dist/main.js
+
+CMD ["node", "/app/apps/standalone/finance/api/dist/main.js"]
