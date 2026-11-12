@@ -8,12 +8,15 @@ import {
 describe('Finance Telegram application URLs', () => {
   const previousFrontendUrl = process.env.FRONTEND_URL;
   const previousFinanceUrl = process.env.FINANCE_WEB_PUBLIC_URL;
+  const previousNodeEnv = process.env.NODE_ENV;
 
   afterEach(() => {
     if (previousFrontendUrl === undefined) delete process.env.FRONTEND_URL;
     else process.env.FRONTEND_URL = previousFrontendUrl;
     if (previousFinanceUrl === undefined) delete process.env.FINANCE_WEB_PUBLIC_URL;
     else process.env.FINANCE_WEB_PUBLIC_URL = previousFinanceUrl;
+    if (previousNodeEnv === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = previousNodeEnv;
   });
 
   it('opens the independent Finance site when both public origins are configured', () => {
@@ -42,6 +45,17 @@ describe('Finance Telegram application URLs', () => {
     expect(financeChatMenuButton('finance-bot')).toMatchObject({
       type: 'web_app',
       webAppUrl: 'https://public-web.example/',
+    });
+  });
+
+  it('uses the standalone Finance origin in production without a web URL setting', () => {
+    process.env.NODE_ENV = 'production';
+    delete process.env.FRONTEND_URL;
+    delete process.env.FINANCE_WEB_PUBLIC_URL;
+
+    expect(financeChatMenuButton('finance-bot')).toMatchObject({
+      type: 'web_app',
+      webAppUrl: 'https://groshly.nexeloq.com/',
     });
   });
 

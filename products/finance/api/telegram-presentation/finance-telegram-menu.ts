@@ -3,9 +3,20 @@ import { financeStandaloneWebOrigin, isProductionEnvironment, publicWebOrigin } 
 import { t, type FinanceChatLocale } from '@consumer-finance/api/i18n/finance-chat-i18n';
 import type { ConsumerFinanceAssistantScreen } from '@telegram-system/shared';
 
+const FINANCE_PRODUCTION_WEB_ORIGIN = 'https://groshly.nexeloq.com';
+
+function financeWebOrigin() {
+  return (
+    financeStandaloneWebOrigin() ??
+    (isProductionEnvironment()
+      ? FINANCE_PRODUCTION_WEB_ORIGIN
+      : publicWebOrigin())
+  );
+}
+
 export function financeMiniAppUrl(
   botId: string,
-  base = financeStandaloneWebOrigin() ?? (isProductionEnvironment() ? undefined : publicWebOrigin()),
+  base = financeWebOrigin(),
   screen?: ConsumerFinanceAssistantScreen | 'settings',
   transfer = false,
 ) {
@@ -25,7 +36,7 @@ export function financeMiniAppUrl(
 export function financeCheckoutReturnUrl(
   botId: string,
   checkout: 'success' | 'cancelled',
-  base = financeStandaloneWebOrigin() ?? (isProductionEnvironment() ? undefined : publicWebOrigin()),
+  base = financeWebOrigin(),
 ) {
   const applicationUrl = financeMiniAppUrl(botId, base);
   if (!applicationUrl) return null;
