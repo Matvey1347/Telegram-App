@@ -255,7 +255,7 @@ describe('FinanceBotService chat UX', () => {
 
   it('builds a canonical Mini App URL and complete main-menu keyboard', () => {
     expect(financeMiniAppUrl('bot id', 'https://app.example/')).toBe(
-      'https://app.example/finance/bot%20id',
+      'https://app.example/',
     );
     expect(
       financeMainMenu('bot id')

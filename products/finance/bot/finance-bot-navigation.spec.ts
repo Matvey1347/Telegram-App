@@ -13,10 +13,10 @@ describe('Finance bot navigation', () => {
 
   it('links analytics and subscription status to handled Finance screens', () => {
     expect(financeBotNavigation('bot-1', 'uk', 'analytics').inlineButtons?.[0][0]).toMatchObject({
-      webAppUrl: 'https://finance.example/finance/bot-1?screen=analytics',
+      webAppUrl: 'https://finance.example/?screen=analytics',
     });
     expect(financeBotNavigation('bot-1', 'en', 'plus').inlineButtons?.[0][0]).toMatchObject({
-      webAppUrl: 'https://finance.example/finance/bot-1?screen=billing',
+      webAppUrl: 'https://finance.example/?screen=billing',
     });
   });
 

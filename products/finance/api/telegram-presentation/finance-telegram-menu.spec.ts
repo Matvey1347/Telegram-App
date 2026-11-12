@@ -21,10 +21,10 @@ describe('Finance Telegram application URLs', () => {
     process.env.FINANCE_WEB_PUBLIC_URL = 'https://finance.example';
     expect(financeChatMenuButton('finance-bot')).toMatchObject({
       type: 'web_app',
-      webAppUrl: 'https://finance.example/finance/finance-bot',
+      webAppUrl: 'https://finance.example/',
     });
     expect(financeCheckoutReturnUrl('finance-bot', 'success')).toBe(
-      'https://finance.example/finance/finance-bot?checkout=success',
+      'https://finance.example/?checkout=success',
     );
   });
 
@@ -32,7 +32,7 @@ describe('Finance Telegram application URLs', () => {
     process.env.FRONTEND_URL = 'https://public-web.example/';
 
     expect(financeMiniAppUrl('bot id', undefined, 'transactions', true)).toBe(
-      'https://public-web.example/finance/bot%20id?screen=transactions&transfer=1',
+      'https://public-web.example/?screen=transactions&transfer=1',
     );
   });
 
@@ -41,7 +41,7 @@ describe('Finance Telegram application URLs', () => {
 
     expect(financeChatMenuButton('finance-bot')).toMatchObject({
       type: 'web_app',
-      webAppUrl: 'https://public-web.example/finance/finance-bot',
+      webAppUrl: 'https://public-web.example/',
     });
   });
 
@@ -68,7 +68,7 @@ describe('Finance Telegram application URLs', () => {
         'success',
         'https://public-web.example',
       ),
-    ).toBe('https://public-web.example/finance/finance-bot?checkout=success');
+    ).toBe('https://public-web.example/?checkout=success');
   });
 
   it('falls back to commands when the deployment has no public web origin', () => {
