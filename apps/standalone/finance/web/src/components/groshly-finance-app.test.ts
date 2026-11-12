@@ -87,6 +87,58 @@ describe("groshlySnapshot", () => {
       recurringId: "regular-1",
     });
   });
+  it("includes transfers in the shared activity history with both account amounts", () => {
+    const snapshot = groshlySnapshot({
+      ...base,
+      transfers: {
+        nextCursor: "transfer-next",
+        items: [{
+          id: "transfer-1",
+          fromAccountId: "account-1",
+          toAccountId: "account-2",
+          fromAmount: "40",
+          toAmount: "36.5",
+          fromCurrency: "PLN",
+          toCurrency: "EUR",
+          exchangeRate: "0.9125",
+          occurredAt: "2026-10-28T10:00:00.000Z",
+          description: "Trip",
+          fromAccount: {
+            id: "account-1",
+            name: "Card",
+            currency: "PLN",
+            iconPresentation: { type: "unicode", value: "💳" },
+          },
+          toAccount: {
+            id: "account-2",
+            name: "Euro wallet",
+            currency: "EUR",
+            iconPresentation: { type: "unicode", value: "💶" },
+          },
+        }],
+      },
+    }) as {
+      transactions: Array<Record<string, unknown>>;
+      cursors: Record<string, unknown>;
+    };
+
+    expect(snapshot.transactions).toContainEqual(expect.objectContaining({
+      id: "transfer-1",
+      type: "transfer",
+      fromId: "account-1",
+      toId: "account-2",
+      amount: 40,
+      receivedAmount: 36.5,
+      currency: "PLN",
+      receivedCurrency: "EUR",
+      title: "Trip",
+    }));
+    expect(snapshot.cursors).toMatchObject({
+      transactions: null,
+      activity: "transfer-next",
+      transferHistory: "transfer-next",
+    });
+  });
   it("keeps server debts, regular payments, and investments visible", () => {
     const snapshot = groshlySnapshot({
       ...base,
