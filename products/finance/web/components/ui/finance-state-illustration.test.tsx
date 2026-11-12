@@ -36,7 +36,7 @@ describe("Finance state illustration system", () => {
     ["empty", EmptyState],
     ["error", ErrorState],
   ] as const)(
-    "renders the %s state through the shared visual",
+    "renders the %s state with the light Groshly visual",
     (state, State) => {
       render(<State text={`${state} copy`} context="transfers" />);
 
@@ -46,6 +46,9 @@ describe("Finance state illustration system", () => {
           `[data-finance-state='${state}'][data-finance-context='transfers']`,
         ),
       ).toBeInTheDocument();
+      expect(
+        document.querySelector(`[data-finance-state='${state}']`),
+      ).toHaveAttribute("data-finance-visual-tone", "groshly-light");
     },
   );
 

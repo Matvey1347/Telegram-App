@@ -16,6 +16,7 @@ export function FinanceMoneyLoader({
       data-finance-state="loading"
       data-finance-context={context}
       data-finance-compact={compact ? "true" : "false"}
+      data-finance-visual-tone="groshly-light"
       className={styles.loader}
       aria-hidden="true"
     >

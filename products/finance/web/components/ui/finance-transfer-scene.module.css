@@ -5,8 +5,8 @@
 
 .transferAccountLeft,
 .transferAccountRight {
-  fill: #151d26;
-  stroke: rgb(255 255 255 / 0.1);
+  fill: #f9fcf6;
+  stroke: #d7e5d5;
   stroke-linecap: round;
   stroke-linejoin: round;
   animation: finance-transfer-item 600ms cubic-bezier(0.22, 1, 0.36, 1) both;
@@ -27,7 +27,7 @@
 .transferAccountLeft path,
 .transferAccountRight path {
   fill: none;
-  stroke: #506071;
+  stroke: #9fb99f;
   stroke-width: 3;
 }
 
@@ -46,7 +46,7 @@
 }
 
 .transferCore {
-  fill: #0d1822;
+  fill: #f3f8ee;
   stroke: currentColor;
   stroke-opacity: 0.42;
 }
