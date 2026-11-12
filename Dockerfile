@@ -12,6 +12,7 @@ COPY . .
 
 RUN pnpm install --frozen-lockfile
 
+# Railway currently builds the Finance API service from this shared root image.
 RUN DATABASE_URL='postgresql://build:build@localhost:5432/build' \
     pnpm --filter api exec prisma generate \
     && pnpm --filter @telegram-system/shared build \
