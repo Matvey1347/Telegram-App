@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -67,6 +67,21 @@ test("ordinary Finance development does not reconcile a Telegram webhook", () =>
   );
 
   assert.equal(analyticsApi?.env.FINANCE_API_PUBLIC_URL, "");
+});
+
+test("Finance tunnel marks Analytics ready after its HTTP health check", () => {
+  const source = readFileSync(new URL("./dev-tunnel.mjs", import.meta.url), "utf8");
+  const analyticsHealthCheck = source.indexOf(
+    'waitForHttpReady("http://127.0.0.1:4002/api/health")',
+  );
+  const analyticsReady = source.indexOf(
+    'status("Finance analytics API", "http://localhost:4002/api")',
+  );
+  const botActivation = source.indexOf("await activateLocalBots()");
+
+  assert.ok(analyticsHealthCheck >= 0);
+  assert.ok(analyticsReady > analyticsHealthCheck);
+  assert.ok(analyticsReady < botActivation);
 });
 
 test("Finance does not start children without its own API profile", () => {

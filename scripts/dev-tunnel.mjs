@@ -518,10 +518,11 @@ if (withFinanceApi) {
       waitForHttpReady("http://127.0.0.1:3001"),
     ]);
     backendReady = true;
+    status("Finance API", "http://localhost:4001/api");
+    status("Finance analytics API", "http://localhost:4002/api");
+    status("Finance Web", "http://localhost:3001");
     await synchronizeFinanceLocalBot();
     await activateLocalBots();
-    status("Finance API", "http://localhost:4001/api");
-    status("Finance Web", "http://localhost:3001");
     dashboard.notice(
       "✓ Finance bot: LOCAL runtime is active through this Cloudflare URL; Ctrl-C removes its local webhook and Mini App links.",
     );
