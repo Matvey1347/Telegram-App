@@ -102,6 +102,12 @@ export class TelegramManagedPostPublisherService {
           : 'TELEGRAM_CHANNEL_NOT_FOUND',
         'Post or channel not found',
       );
+    if (foundPost.status === TelegramManagedPostStatus.PUBLISHED) {
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_PUBLISH_FAILED',
+        'This post is already published; create a new post for another publication',
+      );
+    }
     const { _count, ...postRecord } = foundPost;
     let post = postRecord;
     let mediaItems = normalizeTelegramPostMediaItems(
@@ -356,8 +362,11 @@ export class TelegramManagedPostPublisherService {
             refreshedAccount.premiumCheckedAt;
         }
       }
-      const conservativeLimits = Boolean(managedPostDeliveryContext.getStore()) &&
-        this.telegramChannelAccessService.isCapabilityStale((source as { premiumCheckedAt?: Date | null }).premiumCheckedAt);
+      const conservativeLimits =
+        Boolean(managedPostDeliveryContext.getStore()) &&
+        this.telegramChannelAccessService.isCapabilityStale(
+          (source as { premiumCheckedAt?: Date | null }).premiumCheckedAt,
+        );
       const renderLimits =
         !conservativeLimits && source.sourceType === TelegramSourceType.MTPROTO
           ? {
