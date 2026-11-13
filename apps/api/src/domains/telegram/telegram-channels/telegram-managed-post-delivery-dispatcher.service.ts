@@ -29,11 +29,31 @@ export class TelegramManagedPostDeliveryDispatcherService {
   ) {}
 
   async dispatch(post: Post) {
+    const admission = new AbortController();
+    let timer: NodeJS.Timeout | undefined;
+    try {
+      return await Promise.race([
+        this.claimAndStart(post, admission.signal),
+        new Promise<boolean>((resolve) => {
+          timer = setTimeout(() => {
+            admission.abort();
+            resolve(false);
+          }, 5_000);
+          timer.unref?.();
+        }),
+      ]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+
+  private async claimAndStart(post: Post, admission: AbortSignal) {
     const disposition = await this.journal.summarise(
       post.id,
       post.workspaceId,
       post.telegramChannelId,
     );
+    admission.throwIfAborted();
     if (disposition.state === 'BLOCKED')
       throw new ManagedPostDeliveryBlockedError(
         'Telegram permanently rejected this publication; correct channel access or content',
@@ -75,6 +95,9 @@ export class TelegramManagedPostDeliveryDispatcherService {
         deliveryAttemptCount: { increment: 1 },
       },
     });
+    // Admission has no remote side effects. A late database result must never
+    // launch a send after the caller has moved on to other deadlines.
+    admission.throwIfAborted();
     if (claimed.count !== 1) return false;
     // The deadline fences future remote operations. An operation already sent
     // remains STARTED/UNKNOWN in the durable journal and is NEVER blindly retried.

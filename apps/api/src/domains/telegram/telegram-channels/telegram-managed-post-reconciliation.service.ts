@@ -214,11 +214,14 @@ export class TelegramManagedPostReconciliationService {
     });
     if (!this.dispatcher)
       throw new Error('Durable publication dispatcher unavailable');
-    let dispatched = 0;
-    for (const post of duePosts) {
-      if (await this.dispatcher.dispatch(post)) dispatched += 1;
-    }
-    return { considered: duePosts.length, published: dispatched, failed: 0 };
+    const admitted = await Promise.all(
+      duePosts.map((post) => this.dispatcher!.dispatch(post)),
+    );
+    return {
+      considered: duePosts.length,
+      published: admitted.filter(Boolean).length,
+      failed: 0,
+    };
   }
 
   public async reconcileManagedPostIdentities(params: {

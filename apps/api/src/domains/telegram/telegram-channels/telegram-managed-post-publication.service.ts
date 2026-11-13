@@ -234,6 +234,7 @@ export class TelegramManagedPostPublicationService {
       );
     const workspaceId =
       await this.telegramChannelsSupportService.workspace(userId);
+
     if (dto.publicationSlotId) {
       const assignedSlot =
         await this.prisma.telegramPublicationScheduleSlot.findFirst({
@@ -299,6 +300,14 @@ export class TelegramManagedPostPublicationService {
     await this.prisma.telegramManagedPost.updateMany({
       where: { id: postId, workspaceId, telegramChannelId: channelId },
       data: { publicationSlotId: dto.publicationSlotId ?? null },
+    });
+    await this.prisma.telegramManagedPostSendOperation.deleteMany({
+      where: {
+        postId,
+        workspaceId,
+        channelId,
+        status: { in: ['BLOCKED', 'REJECTED'] },
+      },
     });
     const result = await this.publishManagedPost(
       workspaceId,
