@@ -6,11 +6,10 @@ import type { ConsumerFinanceAssistantScreen } from '@telegram-system/shared';
 const FINANCE_PRODUCTION_WEB_ORIGIN = 'https://groshly.nexeloq.com';
 
 function financeWebOrigin() {
+  if (isProductionEnvironment()) return FINANCE_PRODUCTION_WEB_ORIGIN;
   return (
     financeStandaloneWebOrigin() ??
-    (isProductionEnvironment()
-      ? FINANCE_PRODUCTION_WEB_ORIGIN
-      : publicWebOrigin())
+    publicWebOrigin()
   );
 }
 

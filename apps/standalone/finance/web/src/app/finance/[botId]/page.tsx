@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { FinanceRootApp } from "@finance-web/components/finance-root-app";
+import { redirect } from "next/navigation";
 
 export async function generateMetadata({
   params,
@@ -21,11 +21,6 @@ export async function generateMetadata({
  * its API session, but retains this route so those buttons open the real app
  * rather than Next's 404 page.
  */
-export default async function FinanceTelegramMiniAppPage({
-  params,
-}: {
-  params: Promise<{ botId: string }>;
-}) {
-  const { botId } = await params;
-  return <FinanceRootApp botId={botId} />;
+export default function FinanceTelegramMiniAppPage() {
+  redirect("/app");
 }
