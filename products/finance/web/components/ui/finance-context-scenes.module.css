@@ -27,8 +27,8 @@
 .featurePill rect:first-child,
 .settingRow rect:first-child,
 .notificationCard rect:first-child {
-  fill: #151d26;
-  stroke: rgb(255 255 255 / 0.1);
+  fill: #f9fcf6;
+  stroke: #d7e5d5;
 }
 
 .summaryCard rect:not(:first-child),
@@ -42,7 +42,7 @@
 .featurePill rect:not(:first-child),
 .settingRow rect:not(:first-child),
 .notificationCard rect:not(:first-child) {
-  fill: #526171;
+  fill: #b9cdb8;
 }
 
 .summaryCard rect:nth-of-type(3),
@@ -59,7 +59,7 @@
 .chartAxis,
 .chartBars {
   fill: none;
-  stroke: #465362;
+  stroke: #afc4b0;
   stroke-linecap: round;
 }
 
@@ -73,7 +73,7 @@
 }
 
 .backCard {
-  fill: #0e151d;
+  fill: #e7f0e3;
   stroke: currentColor;
   stroke-opacity: 0.16;
   transform-origin: 329px 62px;
@@ -81,8 +81,8 @@
 }
 
 .accountCard {
-  fill: #151d26;
-  stroke: rgb(255 255 255 / 0.12);
+  fill: #f9fcf6;
+  stroke: #d3e2d1;
   animation: finance-account-card 620ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
@@ -122,7 +122,7 @@
 }
 
 .chartPoint {
-  fill: #0a0f15;
+  fill: #ffffff;
   stroke: currentColor;
   stroke-width: 1.7;
 }
@@ -140,8 +140,8 @@
 }
 
 .calendarCard {
-  fill: #151d26;
-  stroke: rgb(255 255 255 / 0.12);
+  fill: #f9fcf6;
+  stroke: #d3e2d1;
   stroke-linecap: round;
   stroke-width: 2;
   animation: finance-item-enter 560ms cubic-bezier(0.22, 1, 0.36, 1) both;
@@ -159,8 +159,8 @@
 }
 
 .goalTrack {
-  fill: #151d26;
-  stroke: rgb(255 255 255 / 0.1);
+  fill: #eaf2e6;
+  stroke: #d7e5d5;
 }
 
 .goalProgress {
@@ -172,7 +172,7 @@
 }
 
 .savingsCoin {
-  fill: #0e1821;
+  fill: #f7fbf3;
   stroke: currentColor;
   stroke-linecap: round;
   stroke-linejoin: round;
@@ -189,7 +189,7 @@
 }
 
 .bell {
-  fill: #111a23;
+  fill: #eef5ea;
   stroke: currentColor;
   stroke-linecap: round;
   stroke-linejoin: round;
@@ -221,7 +221,7 @@
 }
 
 .settingRow circle {
-  fill: #d5dee8;
+  fill: #dce9d8;
 }
 
 .toggleOn {

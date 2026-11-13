@@ -7,10 +7,10 @@
   gap: 12px;
   overflow: hidden;
   padding: 12px;
-  border: 1px solid rgb(255 255 255 / 0.08);
-  border-radius: 16px;
-  background: #090e14;
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.035);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .loader::after {
@@ -19,7 +19,7 @@
   background: linear-gradient(
     105deg,
     transparent 24%,
-    rgb(255 255 255 / 0.035) 46%,
+    rgb(92 140 102 / 0.07) 46%,
     transparent 68%
   );
   content: "";
@@ -31,8 +31,8 @@
 .walletCard,
 .activity {
   min-width: 0;
-  border: 1px solid rgb(255 255 255 / 0.09);
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.04);
+  border: 1px solid #d9e7d6;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.9);
 }
 
 .walletCard {
@@ -42,8 +42,8 @@
   padding: 13px;
   border-radius: 14px;
   background:
-    radial-gradient(circle at 88% 10%, rgb(45 212 191 / 0.18), transparent 34%),
-    linear-gradient(145deg, #111b23, #0b1118);
+    radial-gradient(circle at 88% 10%, rgb(122 180 119 / 0.2), transparent 34%),
+    linear-gradient(145deg, #f1f7ec, #e5f0df);
 }
 
 .cardTopline {
@@ -70,7 +70,7 @@
 
 .maskedNumber,
 .balanceLabel {
-  color: rgb(163 163 163);
+  color: #789082;
   font-size: 10px;
   letter-spacing: 0.12em;
 }
@@ -87,7 +87,7 @@
 .amountReel {
   display: flex;
   flex-direction: column;
-  color: white;
+  color: #244a35;
   font-size: 19px;
   font-weight: 650;
   font-variant-numeric: tabular-nums;
@@ -102,7 +102,7 @@
   gap: 7px;
   padding: 10px;
   border-radius: 14px;
-  background: #0d141b;
+  background: #f8fbf5;
 }
 
 .activityHeader {
@@ -115,7 +115,7 @@
   width: 58px;
   height: 5px;
   border-radius: 999px;
-  background: rgb(255 255 255 / 0.1);
+  background: #dce8d9;
 }
 
 .activityHeader span:last-child {
@@ -130,9 +130,9 @@
   gap: 8px;
   min-height: 27px;
   padding: 4px 7px;
-  border: 1px solid rgb(255 255 255 / 0.055);
+  border: 1px solid #e2ece0;
   border-radius: 9px;
-  background: rgb(255 255 255 / 0.025);
+  background: #ffffff;
   animation: finance-money-row 1.45s ease-in-out infinite alternate;
 }
 
@@ -140,8 +140,8 @@
   width: 22px;
   height: 22px;
   border-radius: 7px;
-  background: rgb(148 163 184 / 0.13);
-  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.06);
+  background: #eaf3e5;
+  box-shadow: inset 0 0 0 1px #dce8d9;
 }
 
 .merchantLines {
@@ -153,27 +153,27 @@
   width: min(76px, 80%);
   height: 4px;
   border-radius: 999px;
-  background: rgb(255 255 255 / 0.13);
+  background: #c4d7c0;
 }
 
 .merchantLines span:last-child {
   width: min(46px, 55%);
-  background: rgb(255 255 255 / 0.07);
+  background: #d6e4d2;
 }
 
 .moneyRow strong {
-  color: rgb(212 212 212);
+  color: #355744;
   font-size: 10px;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
 .moneyRow[data-tone="expense"] strong {
-  color: rgb(253 164 175);
+  color: #b95650;
 }
 
 .moneyRow[data-tone="income"] strong {
-  color: rgb(110 231 183);
+  color: #37875b;
 }
 
 .loader[data-finance-compact="true"] {
@@ -205,11 +205,11 @@
 
 @keyframes finance-money-row {
   from {
-    border-color: rgb(255 255 255 / 0.045);
+    border-color: #e2ece0;
     transform: translateX(0);
   }
   to {
-    border-color: rgb(56 189 248 / 0.14);
+    border-color: #cde2c5;
     transform: translateX(2px);
   }
 }

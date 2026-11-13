@@ -8,12 +8,15 @@ import {
 describe('Finance Telegram application URLs', () => {
   const previousFrontendUrl = process.env.FRONTEND_URL;
   const previousFinanceUrl = process.env.FINANCE_WEB_PUBLIC_URL;
+  const previousNodeEnv = process.env.NODE_ENV;
 
   afterEach(() => {
     if (previousFrontendUrl === undefined) delete process.env.FRONTEND_URL;
     else process.env.FRONTEND_URL = previousFrontendUrl;
     if (previousFinanceUrl === undefined) delete process.env.FINANCE_WEB_PUBLIC_URL;
     else process.env.FINANCE_WEB_PUBLIC_URL = previousFinanceUrl;
+    if (previousNodeEnv === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = previousNodeEnv;
   });
 
   it('opens the independent Finance site when both public origins are configured', () => {
@@ -21,10 +24,10 @@ describe('Finance Telegram application URLs', () => {
     process.env.FINANCE_WEB_PUBLIC_URL = 'https://finance.example';
     expect(financeChatMenuButton('finance-bot')).toMatchObject({
       type: 'web_app',
-      webAppUrl: 'https://finance.example/finance/finance-bot',
+      webAppUrl: 'https://finance.example/app',
     });
     expect(financeCheckoutReturnUrl('finance-bot', 'success')).toBe(
-      'https://finance.example/finance/finance-bot?checkout=success',
+      'https://finance.example/app?checkout=success',
     );
   });
 
@@ -32,7 +35,7 @@ describe('Finance Telegram application URLs', () => {
     process.env.FRONTEND_URL = 'https://public-web.example/';
 
     expect(financeMiniAppUrl('bot id', undefined, 'transactions', true)).toBe(
-      'https://public-web.example/finance/bot%20id?screen=transactions&transfer=1',
+      'https://public-web.example/app?screen=transactions&transfer=1',
     );
   });
 
@@ -41,7 +44,18 @@ describe('Finance Telegram application URLs', () => {
 
     expect(financeChatMenuButton('finance-bot')).toMatchObject({
       type: 'web_app',
-      webAppUrl: 'https://public-web.example/finance/finance-bot',
+      webAppUrl: 'https://public-web.example/app',
+    });
+  });
+
+  it('uses the standalone Finance origin in production without a web URL setting', () => {
+    process.env.NODE_ENV = 'production';
+    delete process.env.FRONTEND_URL;
+    delete process.env.FINANCE_WEB_PUBLIC_URL;
+
+    expect(financeChatMenuButton('finance-bot')).toMatchObject({
+      type: 'web_app',
+      webAppUrl: 'https://groshly.nexeloq.com/app',
     });
   });
 
@@ -68,7 +82,7 @@ describe('Finance Telegram application URLs', () => {
         'success',
         'https://public-web.example',
       ),
-    ).toBe('https://public-web.example/finance/finance-bot?checkout=success');
+    ).toBe('https://public-web.example/app?checkout=success');
   });
 
   it('falls back to commands when the deployment has no public web origin', () => {

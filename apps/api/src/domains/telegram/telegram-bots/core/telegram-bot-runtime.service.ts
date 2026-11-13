@@ -473,7 +473,13 @@ export class TelegramBotRuntimeService implements OnModuleInit {
       const actualUrl = this.webhookUrl(
         await this.botApi.getWebhookInfo(entry.token),
       );
-      if (actualUrl !== expectedUrl) {
+      // Telegram's getWebhookInfo omits the secret token. Reapply the
+      // production webhook on startup so a rotated or stale secret cannot
+      // leave an apparently healthy URL rejecting every update.
+      if (
+        runtime.environment === TelegramBotRuntimeEnvironment.PRODUCTION ||
+        actualUrl !== expectedUrl
+      ) {
         await this.botApi.setWebhook(
           entry.token,
           expectedUrl,
@@ -519,6 +525,9 @@ export class TelegramBotRuntimeService implements OnModuleInit {
     environment: TelegramBotRuntimeEnvironment,
   ) {
     const runtimes = await this.registry.bootstrap(environment);
+    this.logger.log(
+      `Reconciling ${runtimes.length} ${environment} Telegram bot runtime(s).`,
+    );
     for (const entry of runtimes) await this.reconcileStartupRuntime(entry);
     if (environment === TelegramBotRuntimeEnvironment.LOCAL) {
       await this.activateSavedLocalRuntimes();

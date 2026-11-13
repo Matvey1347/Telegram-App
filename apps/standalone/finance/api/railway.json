@@ -1,21 +1,21 @@
 {
   "$schema": "https://railway.com/railway.schema.json",
   "build": {
-    "builder": "RAILPACK",
-    "buildCommand": "pnpm --filter finance-api prisma:generate && pnpm --filter finance-api build",
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "apps/standalone/finance/api/Dockerfile",
     "watchPatterns": [
       "apps/standalone/finance/api/**",
-      "packages/shared/**",
       "products/finance/api/**",
-      "products/finance/assets/**",
       "products/finance/bot/**",
+      "packages/shared/**",
+      "package.json",
       "pnpm-lock.yaml",
       "pnpm-workspace.yaml"
     ]
   },
   "deploy": {
     "preDeployCommand": "pnpm --filter finance-api prisma:migrate:deploy",
-    "startCommand": "pnpm --filter finance-api start:prod",
+    "startCommand": "node apps/standalone/finance/api/dist/main.js",
     "healthcheckPath": "/api/health/ready",
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 3

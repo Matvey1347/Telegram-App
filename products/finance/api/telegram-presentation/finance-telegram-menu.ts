@@ -3,25 +3,39 @@ import { financeStandaloneWebOrigin, isProductionEnvironment, publicWebOrigin } 
 import { t, type FinanceChatLocale } from '@consumer-finance/api/i18n/finance-chat-i18n';
 import type { ConsumerFinanceAssistantScreen } from '@telegram-system/shared';
 
+const FINANCE_PRODUCTION_WEB_ORIGIN = 'https://groshly.nexeloq.com';
+
+function financeWebOrigin() {
+  if (isProductionEnvironment()) return FINANCE_PRODUCTION_WEB_ORIGIN;
+  return (
+    financeStandaloneWebOrigin() ??
+    publicWebOrigin()
+  );
+}
+
 export function financeMiniAppUrl(
   botId: string,
-  base = financeStandaloneWebOrigin() ?? (isProductionEnvironment() ? undefined : publicWebOrigin()),
+  base = financeWebOrigin(),
   screen?: ConsumerFinanceAssistantScreen | 'settings',
   transfer = false,
 ) {
   const normalized = base?.trim().replace(/\/$/u, '');
   if (!normalized) return null;
+  // Finance is served from its standalone root. The bot context is resolved
+  // by the Finance API, so Telegram links must not send users to the legacy
+  // /finance/:botId compatibility route.
+  void botId;
   const query = new URLSearchParams();
   if (screen) query.set('screen', screen);
   if (transfer) query.set('transfer', '1');
   const suffix = query.size ? `?${query.toString()}` : '';
-  return `${normalized}/finance/${encodeURIComponent(botId)}${suffix}`;
+  return `${normalized}/app${suffix}`;
 }
 
 export function financeCheckoutReturnUrl(
   botId: string,
   checkout: 'success' | 'cancelled',
-  base = financeStandaloneWebOrigin() ?? (isProductionEnvironment() ? undefined : publicWebOrigin()),
+  base = financeWebOrigin(),
 ) {
   const applicationUrl = financeMiniAppUrl(botId, base);
   if (!applicationUrl) return null;

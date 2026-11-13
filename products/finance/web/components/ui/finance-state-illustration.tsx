@@ -63,12 +63,12 @@ const contextKind: Record<FinanceVisualContext, FinanceStateGraphicKind> = {
 };
 
 const stateTone: Record<FinanceVisualState, string> = {
-  loading: "text-sky-300",
-  waiting: "text-amber-300",
-  saving: "text-emerald-300",
-  syncing: "text-blue-300",
-  empty: "text-slate-300",
-  error: "text-rose-300",
+  loading: "text-[#5b8f76]",
+  waiting: "text-[#a47a36]",
+  saving: "text-[#43875d]",
+  syncing: "text-[#527d9b]",
+  empty: "text-[#70877b]",
+  error: "text-[#c35b52]",
 };
 
 export function FinanceStateIllustration({
@@ -87,6 +87,7 @@ export function FinanceStateIllustration({
       data-finance-context={context}
       data-finance-visual-kind={contextKind[context]}
       data-finance-compact={compact ? "true" : "false"}
+      data-finance-visual-tone="groshly-light"
       className={`${styles.illustration} ${styles[state]} relative aspect-[600/136] w-full shrink-0 ${stateTone[state]}`}
       aria-hidden="true"
     >
