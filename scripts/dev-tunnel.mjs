@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { localDatabaseEnvironment } from "./dev-database-environment.mjs";
 import {
   createServer as createHttpServer,
   request as httpRequest,
@@ -541,6 +542,7 @@ if (withFinanceApi) {
       ["--filter", "@telegram-system/finance-web", "dev"],
       {
         ...financeWebEnvironment(),
+        NEXT_PUBLIC_DATABASE_ENV: localDatabaseEnvironment(),
         FINANCE_API_PROXY: "true",
         FINANCE_ALLOWED_DEV_ORIGIN: publicUrl,
       },
@@ -667,6 +669,7 @@ if (withFinanceApi) {
       // HTTPS page receiving this loopback URL resolves API calls to same-origin
       // /api, without a product-specific origin list or tunnel-vendor check.
       NEXT_PUBLIC_API_URL: "http://localhost:4000/api",
+      NEXT_PUBLIC_DATABASE_ENV: localDatabaseEnvironment(),
       NEXT_ALLOWED_DEV_ORIGIN: publicApiUrl || "",
     },
   );

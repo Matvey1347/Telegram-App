@@ -1,6 +1,7 @@
 import { financeBrandIcon } from "@consumer-finance/web/lib/finance-brand-icon";
 import type { Metadata, Viewport } from "next";
 import { TelegramWebAppSdk } from "@finance-web/components/telegram/telegram-web-app-sdk";
+import { FinanceDatabaseEnvironmentBadge } from "@finance-web/components/finance-database-environment-badge";
 import { ConsumerFinanceProvider } from "@consumer-finance/web/provider/consumer-finance-provider";
 import "../groshly/style.css";
 import "../groshly/finance-polish.css";
@@ -48,6 +49,7 @@ export default function RootLayout({
       </head>
       <body>
         <ConsumerFinanceProvider>{children}</ConsumerFinanceProvider>
+        <FinanceDatabaseEnvironmentBadge />
       </body>
     </html>
   );
