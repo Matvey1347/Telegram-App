@@ -11,6 +11,7 @@ type TelegramWebApp = {
   isExpanded?: boolean;
   ready?: () => void;
   expand?: () => void;
+  disableVerticalSwipes?: () => void;
   openLink?: (url: string, options?: { try_instant_view?: boolean }) => void;
 };
 
@@ -82,7 +83,8 @@ export function useTelegramMiniAppBootstrap(): TelegramMiniAppBootstrap {
       if (!configuredWebApp.current) {
         configuredWebApp.current = true;
         webApp.ready?.();
-        if (!webApp.isExpanded) webApp.expand?.();
+        webApp.expand?.();
+        webApp.disableVerticalSwipes?.();
       }
       commit({ status: "ready", initData });
       return true;

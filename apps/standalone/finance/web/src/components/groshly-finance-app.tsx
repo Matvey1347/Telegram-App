@@ -633,6 +633,7 @@ export function GroshlyFinanceApp({ botId }: { botId: string }) {
         fromAccountId: draft.fromId,
         toAccountId: draft.toId,
         amount: String(draft.amount),
+        toAmount: String(draft.receivedAmount),
         description: draft.title,
         occurredAt,
       };
