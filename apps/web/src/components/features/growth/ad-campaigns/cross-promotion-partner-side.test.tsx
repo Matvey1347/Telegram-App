@@ -37,20 +37,16 @@ describe("CrossPromotionPartnerSide", () => {
         channels={[
           { id: "own-1", title: "My selected publishing channel" } as never,
         ]}
-        partnerChannels={[]}
         ownChannels={[
           { id: "own-1", title: "My selected publishing channel" } as never,
         ]}
         partnerIds={[]}
-        onPartnerIdsChange={vi.fn()}
         partnerAdvertiserId={null}
         partnerContact=""
         onPartnerContactChange={vi.fn()}
         onPartnerTelegramChange={vi.fn()}
         onPartnerAdvertiserChange={vi.fn()}
         onSearchAdvertisers={vi.fn().mockResolvedValue([])}
-        importingChannel={false}
-        onImportChannel={vi.fn()}
         productsByChannelId={{}}
         settings={{ formatIds: {}, times: {} }}
         defaultDate="2026-09-15"
@@ -75,7 +71,7 @@ describe("CrossPromotionPartnerSide", () => {
     );
 
     expect(screen.getByText("Client")).toBeVisible();
-    expect(screen.getByText("Partner channels (optional)")).toBeVisible();
+    expect(screen.queryByText("Partner channels (optional)")).toBeNull();
     expect(screen.queryByText("Formats in partner channels")).toBeNull();
     expect(
       screen.getByRole("button", { name: "Add promo placement" }),
@@ -90,18 +86,14 @@ describe("CrossPromotionPartnerSide", () => {
         expanded
         onExpandedChange={vi.fn()}
         channels={[{ id: "own-1", title: "My channel" } as never]}
-        partnerChannels={[]}
         ownChannels={[{ id: "own-1", title: "My channel" } as never]}
         partnerIds={[]}
-        onPartnerIdsChange={vi.fn()}
         partnerAdvertiserId={null}
         partnerContact=""
         onPartnerContactChange={vi.fn()}
         onPartnerTelegramChange={vi.fn()}
         onPartnerAdvertiserChange={vi.fn()}
         onSearchAdvertisers={vi.fn().mockResolvedValue([])}
-        importingChannel={false}
-        onImportChannel={vi.fn()}
         productsByChannelId={{}}
         settings={{ formatIds: {}, times: {} }}
         defaultDate="2026-09-15"
@@ -142,18 +134,14 @@ describe("CrossPromotionPartnerSide", () => {
         expanded={false}
         onExpandedChange={onExpandedChange}
         channels={[]}
-        partnerChannels={[]}
         ownChannels={[]}
         partnerIds={[]}
-        onPartnerIdsChange={vi.fn()}
         partnerAdvertiserId={null}
         partnerContact=""
         onPartnerContactChange={vi.fn()}
         onPartnerTelegramChange={vi.fn()}
         onPartnerAdvertiserChange={vi.fn()}
         onSearchAdvertisers={vi.fn().mockResolvedValue([])}
-        importingChannel={false}
-        onImportChannel={vi.fn()}
         productsByChannelId={{}}
         settings={{ formatIds: {}, times: {} }}
         defaultDate="2026-09-15"

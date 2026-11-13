@@ -68,7 +68,6 @@ export function CrossPromotionPlanView({
   state,
   allChannels,
   ownChannels,
-  partnerChannels,
   ownNetworks,
   productsByChannelId,
   targetIds,
@@ -78,9 +77,7 @@ export function CrossPromotionPlanView({
   botFlowTarget,
   setBotFlowTarget,
   botTargetStorageKey,
-  partnerImport,
   resolvedTargets,
-  basicsReady,
   promoReady,
   searchAdvertisers,
   resolveOutboundPreview,
@@ -116,7 +113,6 @@ export function CrossPromotionPlanView({
   state: DraftState;
   allChannels: TelegramChannel[];
   ownChannels: TelegramChannel[];
-  partnerChannels: TelegramChannel[];
   ownNetworks: TelegramChannelNetworkOption[];
   productsByChannelId: Record<string, TelegramAdProduct[]>;
   targetIds: string[];
@@ -126,14 +122,9 @@ export function CrossPromotionPlanView({
   botFlowTarget: string;
   setBotFlowTarget: (target: string) => void;
   botTargetStorageKey?: string;
-  partnerImport: {
-    importing: boolean;
-    importReferences: (input: string) => void | Promise<void>;
-  };
   resolvedTargets: MutableRefObject<
     Map<string, { promo?: Promo; inviteLink?: TelegramInviteLinkOption }>
   >;
-  basicsReady: boolean;
   promoReady: boolean;
   searchAdvertisers: (query: string) => Promise<TelegramAdvertiser[]>;
   resolveOutboundPreview: (
@@ -168,7 +159,6 @@ export function CrossPromotionPlanView({
     publisherIds,
     setPublisherIds,
     partnerIds,
-    setPartnerIds,
     partnerAdvertiserId,
     setPartnerAdvertiserId,
     partnerContact,
@@ -185,6 +175,7 @@ export function CrossPromotionPlanView({
     partnerDate,
     setPartnerDate,
     time,
+    setTime,
     publisherSettings,
     setPublisherSettings,
     partnerSettings,
@@ -720,32 +711,8 @@ export function CrossPromotionPlanView({
               expanded={partnerSideOpen}
               onExpandedChange={setPartnerSideOpen}
               channels={allChannels}
-              partnerChannels={partnerChannels}
               ownChannels={ownChannels}
               partnerIds={partnerIds}
-              onPartnerIdsChange={(ids) => {
-                setPartnerIds(ids);
-                if (!ids.length) {
-                  setTargets([]);
-                  return;
-                }
-                // A direct mutual promotion needs one reciprocal placement as
-                // soon as the partner confirms where they publish it. Extra
-                // placements remain optional and can be added below.
-                setTargets((current) => {
-                  if (current.length) return current;
-                  const telegramChannelId = ownChannels[0]?.id;
-                  return telegramChannelId
-                    ? [
-                        {
-                          telegramChannelId,
-                          promoId: outboundMode === "CUSTOM" ? null : "",
-                          inviteLinkId: "",
-                        },
-                      ]
-                    : current;
-                });
-              }}
               partnerAdvertiserId={partnerAdvertiserId}
               partnerClient={initial?.advertiser ?? null}
               partnerContact={partnerContact}
@@ -755,8 +722,6 @@ export function CrossPromotionPlanView({
                 setPartnerAdvertiserId(advertiser?.id ?? null)
               }
               onSearchAdvertisers={searchAdvertisers}
-              importingChannel={partnerImport.importing}
-              onImportChannel={partnerImport.importReferences}
               productsByChannelId={productsByChannelId}
               settings={partnerSettings}
               defaultDate={partnerDate}
@@ -807,11 +772,15 @@ export function CrossPromotionPlanView({
               showValidationErrors={showValidationErrors}
             />
           ) : null}
-          {kind === "OWN_CHANNELS" && basicsReady ? (
+          {kind === "OWN_CHANNELS" ? (
             <CrossPromotionOwnTargets
               channels={ownChannels}
               publisherIds={publisherIds}
               targetIds={targetIds}
+              date={date}
+              time={time}
+              onDateChange={setDate}
+              onTimeChange={setTime}
               targets={targets}
               onTargetIdsChange={updateTargetIds}
               onTargetsChange={setTargets}

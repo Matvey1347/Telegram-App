@@ -6,7 +6,6 @@ import { useForm } from "react-hook-form";
 import { resolveTitleTemplate } from "@telegram-system/shared";
 import {
   accountsApi,
-  advertisingChannelsApi,
   getTelegramChannelPromos,
   workspaceMembersApi,
   type AdCampaign,
@@ -50,9 +49,10 @@ import { SystemLinkKindBadge } from "@/components/features/telegram/telegram/tel
 
 type CampaignSubmission = Omit<
   CampaignValues,
-  "customTitle" | "trackCrossChannelRequests"
+  "customTitle" | "trackCrossChannelRequests" | "endedAt"
 > & {
   customTitle: string | null;
+  endedAt?: string | null;
 };
 type CampaignChannel = {
   id: string;
@@ -178,7 +178,7 @@ function initialValues(row?: CampaignInitial): CampaignValues {
         price: undefined,
         accountId: "",
         date: formatLocalDate(new Date()),
-        customTitle: "",
+        customTitle: "[date]##",
         notes: "",
       };
 }
@@ -328,11 +328,6 @@ export function CampaignModal({
     queryFn: accountsApi.list,
     enabled: open && !loading,
   });
-  const { data: people } = useQuery({
-    queryKey: ["advertising-people"],
-    queryFn: advertisingChannelsApi.list,
-    enabled: open && !loading,
-  });
   const {
     data: trackingInviteLinks,
     isError: trackingInviteLinksError,
@@ -356,48 +351,11 @@ export function CampaignModal({
       ),
     [promos, initial],
   );
-  const advertisingSources = useMemo(() => {
-    const live = [
-      ...(people || []).map((person) => ({
-        value: person.selectionId || `source:${person.id}`,
-        label: person.title,
-        iconUrl: person.imageUrl ?? undefined,
-        iconFallback: person.title,
-        description: "Person",
-        searchText: `${person.username || ""} ${person.contactInfo || ""}`,
-      })),
-      ...(channels || [])
-        .filter((channel) => channel.id !== selectedChannelId)
-        .map((channel) => ({
-          value: `channel:${channel.id}`,
-          label: channel.title,
-          iconUrl: channel.photoUrl ?? undefined,
-          iconFallback: channel.title,
-          description: isOwnChannel(channel)
-            ? "Own channel"
-            : "External channel",
-          searchText: channel.username || "",
-        })),
-    ];
-    const fallback = campaignSources(initial).map((candidate) => {
-      const source =
-        typeof candidate === "string" ? { id: candidate } : candidate;
-      return {
-        value: selectionId(source),
-        label: source.title || source.name || "Unknown source",
-        iconUrl: source.photoUrl || source.imageUrl || undefined,
-        iconFallback: source.title || source.name || "Unknown source",
-        description:
-          source.selectionId?.startsWith("source:") ||
-          source.sourceKind === "person" ||
-          source.kind === "person"
-            ? "Person"
-            : "External channel",
-        searchText: `${source.username || source.telegramUsername || ""} ${source.contactInfo || ""}`,
-      };
-    });
-    return mergeOptions(live, fallback);
-  }, [channels, initial, people, selectedChannelId]);
+  const trackingChannelsForKind = (kind: string) =>
+    (trackingInviteLinks?.kinds || [])
+      .find((item) => item.kind === kind)
+      ?.channels.filter((channel) => channel.id !== selectedChannelId)
+      .map((channel) => channel.id) || [];
   const setArray = (
     name: "promoIds" | "inviteLinkIds" | "botInviteLinkIds" | "trackingChannelIds" | "advertisingChannelIds",
     value: string[],
@@ -449,6 +407,7 @@ export function CampaignModal({
                   : {}),
                 ...(accountId ? { accountId } : {}),
                 advertisingChannelIds: value.advertisingChannelIds || [],
+                endedAt: value.endedAt?.trim() || null,
                 customTitle: customTitle?.trim() || null,
               });
               campaignDrafts.clearCurrentDraft();
@@ -520,18 +479,6 @@ export function CampaignModal({
                 placeholder="Select promos"
               />
             </FormField>
-            <FormField label="Advertising Sources">
-              <CampaignMultiValueSelect
-                value={selectedAdChannels.filter(
-                  (id) =>
-                    id !== `channel:${selectedChannelId}` &&
-                    id !== selectedChannelId,
-                )}
-                onChange={(value) => setArray("advertisingChannelIds", value)}
-                options={advertisingSources}
-                placeholder="Select sources"
-              />
-            </FormField>
           </div>
           <FormField label="Invite Links">
             <CampaignInviteLinksSelect
@@ -550,7 +497,9 @@ export function CampaignModal({
             checked={trackCrossChannelRequests}
             onChange={(enabled) => {
               setValue("trackCrossChannelRequests", enabled, { shouldDirty: true });
-              if (!enabled) {
+              if (enabled && !selectedTrackingChannelIds.length) {
+                setArray("trackingChannelIds", trackingChannelsForKind(trackingLinkKind));
+              } else if (!enabled) {
                 setArray("botInviteLinkIds", []);
                 setArray("trackingChannelIds", []);
               }
@@ -566,7 +515,7 @@ export function CampaignModal({
                   value={trackingLinkKind}
                   onChange={(value) => {
                     setValue("trackingLinkKind", value, { shouldDirty: true });
-                    setArray("trackingChannelIds", []);
+                    setArray("trackingChannelIds", trackingChannelsForKind(value));
                   }}
                   options={(trackingInviteLinks?.kinds || []).map((kind) => ({
                     value: kind.kind,

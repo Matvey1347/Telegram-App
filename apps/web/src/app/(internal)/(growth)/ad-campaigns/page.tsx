@@ -1,5 +1,4 @@
 "use client";
-
 import type { MouseEventHandler, ReactNode } from "react";
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
@@ -12,13 +11,15 @@ import {
 } from "@tanstack/react-query";
 import { resolveTitleTemplate } from "@telegram-system/shared";
 import { AdCampaignsTable } from "@/components/features/growth/ad-campaigns/campaigns-table";
+import { CampaignsTableSkeleton } from "@/components/features/growth/ad-campaigns/campaigns-table-skeleton";
+import { useAdsFilterVisibility } from "@/components/features/growth/ad-campaigns/use-ads-filter-visibility";
+import { AdsFiltersPanel } from "@/components/features/growth/ad-campaigns/ads-filters-panel";
 import { AdHypothesisAvatar } from "@/components/features/growth/ad-campaigns/ad-hypothesis-avatar";
 import { AdHypothesisRowActions } from "@/components/features/growth/ad-campaigns/ad-hypothesis-row-actions";
 import { PromoPreviewModal } from "@/components/features/growth/ad-campaigns/promo-preview-modal";
 import { PromoFormModal } from "@/components/features/growth/ad-campaigns/promo-form-modal";
 import { usePromoDeepLink } from "@/components/features/growth/ad-campaigns/use-promo-deep-link";
 import {
-  AdCampaignSortMenu,
   type AdCampaignSort,
 } from "@/components/features/growth/ad-campaigns/ad-campaign-sort-menu";
 import { IconAvatar } from "@/components/icons/icon-avatar";
@@ -52,23 +53,22 @@ import { useCampaignInviteLinkRefresh } from "@/components/features/growth/ad-ca
 const CAMPAIGN_BOT_REQUESTS_READ_MODEL_VERSION = "campaign-metrics-v3";
 import {
   Button,
-  Card,
   ConfirmDeleteModal,
-  DateRangeInput,
   EmptyState,
-  FormField,
-  Input,
   LoadingState,
   MasonryGrid,
   Modal,
   PageHeader,
 } from "@/components/ui/primitives";
 import { useAppToast } from "@/providers/toast-provider";
+import { useI18n } from "@/providers/i18n-provider";
+import type { TranslationKey } from "@/i18n/catalog";
 import {
   Archive,
   CheckCircle2,
   CircleHelp,
   EyeOff,
+  Filter,
   Pencil,
   Trash2,
 } from "lucide-react";
@@ -91,7 +91,6 @@ import { adsSectionHeader } from "@/components/features/growth/ad-campaigns/ads-
 import { PromoCard } from "@/components/features/growth/ad-campaigns/promo-card";
 import { HypothesisFormModal } from "@/components/features/growth/ad-campaigns/hypothesis-form-modal";
 import { CampaignModal } from "@/components/features/growth/ad-campaigns/campaign-form-modal";
-import { AdsChannelScopeFilter } from "@/components/features/growth/ad-campaigns/ads-channel-scope-filter";
 import {
   CardActionsMenu,
   CardMenuAction,
@@ -160,11 +159,29 @@ const LazyMutualPromotionModeTabs = dynamic(
 );
 
 export default function AdsPage() {
+  const { t } = useI18n();
   const searchParams = useSearchParams();
   const requestedSection = searchParams.get("section");
   const legacyView = searchParams.get("view");
   const section: AdsSection = resolveAdsSection(requestedSection, legacyView);
-  const sectionTabs = <AdsSectionTabs value={section} />;
+  const [filtersOpen, toggleFilters] = useAdsFilterVisibility();
+  const showFilterToggle = ["campaigns", "hypotheses", "promo"].includes(section);
+  const sectionTabs = (
+    <AdsSectionTabs
+      value={section}
+      trailing={showFilterToggle ? (
+        <Button
+          type="button"
+          variant="secondary"
+          aria-expanded={filtersOpen}
+          aria-controls="ads-filter-panel"
+          onClick={toggleFilters}
+        >
+          <Filter size={16} /> {filtersOpen ? t("ads.hide_filters") : t("ads.filters")}
+        </Button>
+      ) : undefined}
+    />
+  );
   const mutualMode =
     searchParams.get("mode") === "folders" ? "folders" : "direct";
   return section === "mutual-promotion" && mutualMode === "folders" ? (
@@ -188,17 +205,20 @@ export default function AdsPage() {
       sectionTabs={sectionTabs}
     />
   ) : (
-    <AdCampaignsPage sectionTabs={sectionTabs} topSection={section} />
+    <AdCampaignsPage sectionTabs={sectionTabs} topSection={section} filtersOpen={filtersOpen} />
   );
 }
 
 function AdCampaignsPage({
   sectionTabs,
   topSection,
+  filtersOpen,
 }: {
   sectionTabs: ReactNode;
   topSection: "campaigns" | "hypotheses" | "promo";
+  filtersOpen: boolean;
 }) {
+  const { t } = useI18n();
   const qc = useQueryClient();
   const searchParams = useSearchParams();
   const { pushToast, startOperation } = useAppToast();
@@ -273,7 +293,7 @@ function AdCampaignsPage({
     queryKey: networkKeys.list(),
     queryFn: telegramChannelNetworksApi.list,
   });
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, isFetching, error } = useQuery({
     queryKey: [
       "ad-campaigns",
       "list",
@@ -472,13 +492,24 @@ function AdCampaignsPage({
     [channels],
   );
   const showCampaignsInitialLoading =
-    viewMode === "campaigns" && isLoading && !data;
+    viewMode === "campaigns" && (isLoading || isFetching);
   const showHypothesesInitialLoading = hypothesesLoading && !hypotheses.length;
   const showPromosLoading = promosLoading || promosFetching;
   const visibleCampaigns = campaigns;
   const visibleHypotheses = hypotheses;
   const visiblePromos = promos;
-  const sectionHeader = adsSectionHeader(topSection);
+  const sectionHeaderKeys: Record<typeof topSection, { title: TranslationKey; subtitle: TranslationKey; action: TranslationKey }> = {
+    campaigns: { title: "ads.campaigns_title", subtitle: "ads.campaigns_subtitle", action: "ads.create_campaign" },
+    hypotheses: { title: "ads.hypotheses_title", subtitle: "ads.hypotheses_subtitle", action: "ads.create_hypothesis" },
+    promo: { title: "ads.promo_title", subtitle: "ads.promo_subtitle", action: "ads.create_promo" },
+  };
+  const headerKeys = sectionHeaderKeys[topSection];
+  const sectionHeader = {
+    ...adsSectionHeader(topSection),
+    title: t(headerKeys.title),
+    subtitle: t(headerKeys.subtitle),
+    actionLabel: t(headerKeys.action),
+  };
   const openCreateForCurrentView = () => {
     if (viewMode === "hypotheses") {
       setEditingHypothesis(null);
@@ -507,78 +538,31 @@ function AdCampaignsPage({
         }
       />
       {sectionTabs}
-      <Card className="mb-4">
-        <div
-          className={`grid min-w-0 gap-3 md:grid-cols-2 ${viewMode === "campaigns" ? "lg:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)_minmax(0,1fr)_auto] lg:items-end" : "lg:max-w-4xl"}`}
-        >
-          <AdsChannelScopeFilter
+      {filtersOpen ? (
+        <div id="ads-filter-panel">
+          <AdsFiltersPanel
+            viewMode={viewMode}
             networks={channelNetworks ?? []}
             channels={ownTelegramChannels}
-            onChange={(channelIds) => {
-              setChannelScopeFilter(channelIds.join(","));
+            onChannelScopeChange={(channelIds) => setChannelScopeFilter(channelIds.join(","))}
+            search={search}
+            setSearch={setSearch}
+            resetPage={() => {
               campaignsPagination.resetPage();
               hypothesesPagination.resetPage();
               promosPagination.resetPage();
             }}
+            dateFrom={dateFrom}
+            dateTo={dateTo}
+            setDateFrom={setDateFrom}
+            setDateTo={setDateTo}
+            sort={sort}
+            setSort={setSort}
           />
-          <label className="min-w-0 space-y-1">
-            <span className="flex min-h-7 items-center text-sm text-neutral-300">
-              Search
-            </span>
-            <Input
-              className="h-[42px]"
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                campaignsPagination.resetPage();
-                hypothesesPagination.resetPage();
-                promosPagination.resetPage();
-              }}
-              placeholder={
-                viewMode === "campaigns"
-                  ? "Campaign, source, channel"
-                  : viewMode === "promos"
-                    ? "Promo, text, channel"
-                    : "Hypothesis"
-              }
-            />
-          </label>
-          {viewMode === "campaigns" ? (
-            <div className="min-w-0">
-              <FormField label="Period">
-                <DateRangeInput
-                  from={dateFrom}
-                  to={dateTo}
-                  onChange={(range) => {
-                    setDateFrom(range.from);
-                    setDateTo(range.to);
-                    campaignsPagination.resetPage();
-                  }}
-                />
-              </FormField>
-            </div>
-          ) : null}
-          {viewMode === "campaigns" ? (
-            <div className="space-y-1 justify-self-start md:justify-self-end">
-              <span
-                className="flex min-h-7 items-center text-sm opacity-0"
-                aria-hidden="true"
-              >
-                Sort
-              </span>
-              <AdCampaignSortMenu
-                value={sort}
-                onChange={(value) => {
-                  setSort(value);
-                  campaignsPagination.resetPage();
-                }}
-              />
-            </div>
-          ) : null}
         </div>
-      </Card>
+      ) : null}
 
-      {showCampaignsInitialLoading ? <LoadingState /> : null}
+      {showCampaignsInitialLoading ? <CampaignsTableSkeleton /> : null}
       {viewMode === "campaigns" && error ? (
         <div className="mb-4 rounded-lg border border-rose-700 p-3 text-sm text-rose-200">
           Failed to load campaigns.
@@ -650,7 +634,7 @@ function AdCampaignsPage({
           pageSizeOptions={[5]}
           onPageChange={campaignsPagination.setPage}
           onPageSizeChange={campaignsPagination.setPageSize}
-          loading={isLoading}
+          loading={isFetching}
         />
       ) : null}
 

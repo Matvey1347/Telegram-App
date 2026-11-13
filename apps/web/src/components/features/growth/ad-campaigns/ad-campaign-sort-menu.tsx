@@ -1,6 +1,7 @@
 "use client";
 
 import { SortControl, type SortDirection } from "@/components/ui/sort-control";
+import { useI18n } from "@/providers/i18n-provider";
 
 export type AdCampaignSort =
   | "date_desc"
@@ -12,11 +13,11 @@ export type AdCampaignSort =
 
 type AdCampaignSortField = "date" | "cost" | "joined";
 
-const OPTIONS: ReadonlyArray<{ value: AdCampaignSortField; label: string }> = [
-  { value: "date", label: "Date" },
-  { value: "cost", label: "Spend" },
-  { value: "joined", label: "Joined" },
-];
+const OPTION_KEYS = [
+  ["date", "ads.sort_date"],
+  ["cost", "ads.sort_spend"],
+  ["joined", "ads.sort_joined"],
+] as const;
 
 function splitSort(value: AdCampaignSort) {
   const [field, direction] = value.split("_") as [
@@ -40,14 +41,15 @@ export function AdCampaignSortMenu({
   value: AdCampaignSort;
   onChange: (value: AdCampaignSort) => void;
 }) {
+  const { t } = useI18n();
   const current = splitSort(value);
   return (
     <SortControl
       className="w-full sm:w-64"
       field={current.field}
-      options={OPTIONS}
+      options={OPTION_KEYS.map(([option, key]) => ({ value: option, label: t(key) }))}
       direction={current.direction}
-      fieldLabel="Sort campaigns by"
+      fieldLabel={t("ads.sort_by")}
       onFieldChange={(field) => onChange(joinSort(field, current.direction))}
       onDirectionChange={(direction) =>
         onChange(joinSort(current.field, direction))

@@ -20,7 +20,6 @@ import {
 import { zonedDateTimeToUtc } from "@/lib/features/growth/telegram-ad-sales";
 import { renderSelectedPromoDraft } from "./promo-invite-template";
 import { useTelegramSystemBotPostFlow } from "@/hooks/use-telegram-system-bot-post-flow";
-import { useTelegramChannelBatchImport } from "@/hooks/use-telegram-channel-batch-import";
 import { telegramAdSalesKeys } from "@/lib/features/growth/telegram-ad-sales-query";
 import type { CrossPromotionPlacementSettingsValue } from "./cross-promotion-placement-settings";
 import { ensureCrossPromotionPartnerClient } from "./cross-promotion-partner-client";
@@ -117,7 +116,6 @@ export function CrossPromotionPlanModal({
     title,
     publisherIds,
     partnerIds,
-    setPartnerIds,
     partnerAdvertiserId,
     setPartnerAdvertiserId,
     partnerContact,
@@ -173,10 +171,6 @@ export function CrossPromotionPlanModal({
     [channels, importedChannels],
   );
   const ownChannels = useMemo(() => allChannels.filter(isOwn), [allChannels]);
-  const partnerChannels = useMemo(
-    () => allChannels.filter((channel) => !isOwn(channel)),
-    [allChannels],
-  );
   const ownNetworks = useMemo(
     () =>
       networks.filter((network) =>
@@ -280,16 +274,10 @@ export function CrossPromotionPlanModal({
     if (botFlow.terminalStatus && botTargetStorageKey)
       window.localStorage.removeItem(botTargetStorageKey);
   }, [botFlow.terminalStatus, botTargetStorageKey]);
-  const partnerChannelImport = useTelegramChannelBatchImport({
-    setChannels: setImportedChannels,
-    setSelectedIds: setPartnerIds,
-    onError: setError,
-  });
   const hasRequiredFormat = (channelId: string, formatId?: string) => {
     const products = productsByChannelId[channelId] ?? [];
     return !products.length || Boolean(formatId);
   };
-  const basicsReady = Boolean(title.trim()) && publisherIds.length > 0;
   const hasOutboundPost = Boolean(
     outboundPost.text.trim() ||
     outboundPost.imageUrls.length ||
@@ -704,7 +692,6 @@ export function CrossPromotionPlanModal({
         state={state}
         allChannels={allChannels}
         ownChannels={ownChannels}
-        partnerChannels={partnerChannels}
         ownNetworks={ownNetworks}
         productsByChannelId={productsByChannelId}
         targetIds={targetIds}
@@ -714,9 +701,7 @@ export function CrossPromotionPlanModal({
         botFlowTarget={botFlowTarget}
         setBotFlowTarget={setBotFlowTarget}
         botTargetStorageKey={botTargetStorageKey}
-        partnerImport={partnerChannelImport}
         resolvedTargets={resolvedTargets}
-        basicsReady={basicsReady}
         promoReady={promoReady}
         showValidationErrors={showValidationErrors}
         sharedPublicationChanged={sharedPublicationChanged}

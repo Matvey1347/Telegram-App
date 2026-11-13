@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useI18n } from "@/providers/i18n-provider";
 import type { TelegramChannel, TelegramChannelNetwork } from "@/lib/api";
 import {
   resolveTelegramChannelScopeIds,
@@ -17,6 +18,7 @@ export function AdsChannelScopeFilter({
   channels: TelegramChannel[];
   onChange: (channelIds: string[]) => void;
 }) {
+  const { t } = useI18n();
   const [mode, setMode] = useState<TelegramChannelScopeMode>("channels");
   const [selectedNetworkId, setSelectedNetworkId] = useState("");
   const [selectedChannelIds, setSelectedChannelIds] = useState<string[]>([]);
@@ -54,8 +56,11 @@ export function AdsChannelScopeFilter({
         setSelectedChannelIds(channelIds);
         emit(mode, selectedNetworkId, channelIds);
       }}
-      label="Channel source"
-      channelsPlaceholder="All channels"
+      label={t("ads.channel_source")}
+      channelsPlaceholder={t("ads.all_channels")}
+      networkLabel={t("ads.network")}
+      channelsLabel={t("ads.channels")}
+      networkPlaceholder={t("ads.choose_network")}
     />
   );
 }

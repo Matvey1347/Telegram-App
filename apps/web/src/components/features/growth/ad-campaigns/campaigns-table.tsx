@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  type MouseEventHandler,
   type ReactNode,
   useMemo,
   useState,
@@ -10,7 +9,9 @@ import { Line, LineChart, ResponsiveContainer } from "recharts";
 import { CampaignAdmissionViewAnalyticsModal } from "@/components/features/growth/ad-campaigns/campaign-admission-view-analytics-modal";
 import { CampaignInviteLinkHistoryModal } from "@/components/features/growth/ad-campaigns/campaign-invite-link-history-modal";
 import { PromoPreviewModal } from "@/components/features/growth/ad-campaigns/promo-preview-modal";
-import { resolveTitleTemplate } from "@telegram-system/shared";
+import { displayCampaignTitleWithDate } from "./campaign-display-title";
+import { KpiStatusBadge } from "./campaign-kpi-status-badge";
+import { useCampaignText } from "./use-campaign-text";
 import { IconAvatar } from "@/components/icons/icon-avatar";
 import { InviteLinkPreviewModal } from "@/components/features/telegram/telegram/invite-link-preview-modal";
 import {
@@ -114,64 +115,6 @@ function effectiveCampaignKpiStatus(
   return calculatedKpiStatus(cpaInKpiCurrency, campaign.telegramChannel);
 }
 
-function displayCampaignTitle(campaign: AdCampaign) {
-  const date = toInputDate(
-    campaign?.placementDate ||
-      campaign?.startedAt ||
-      (campaign as any)?.createdAt,
-  );
-  const customTitle = resolveTitleTemplate(campaign?.customTitleTemplate, {
-    date,
-  });
-  if (customTitle) return customTitle;
-  let title = String(campaign?.title || "").trim();
-  title = title.replace(/^Telegram ad campaign:\s*/i, "").trim();
-  if (date) {
-    title = title
-      .replace(new RegExp(`^${date}\\s*\\|\\s*`), "")
-      .replace(new RegExp(`^${date}\\b\\s*[-|:]?\\s*`), "")
-      .trim();
-  }
-  if (!title || /^Campaign\s+\d{4}-\d{2}-\d{2}$/i.test(title)) {
-    return generatedCampaignDisplayTitle(campaign);
-  }
-  return title;
-}
-
-function displayCampaignTitleWithDate(campaign: AdCampaign) {
-  if (String(campaign?.customTitleTemplate || "").trim()) {
-    return displayCampaignTitle(campaign);
-  }
-  const date = toInputDate(
-    campaign?.placementDate ||
-      campaign?.startedAt ||
-      (campaign as any)?.createdAt,
-  );
-  return date
-    ? `${date} | ${displayCampaignTitle(campaign)}`
-    : displayCampaignTitle(campaign);
-}
-
-function generatedCampaignDisplayTitle(campaign: AdCampaign) {
-  const sources = (campaign?.advertisingChannels || [])
-    .map((source: any) => source.title || source.name)
-    .filter(Boolean);
-  const promo = campaign?.promo?.title;
-  const parts = [...sources.slice(0, 2), promo].filter(Boolean);
-  if (parts.length) return [...new Set(parts)].join(" | ");
-  return campaign?.telegramChannel?.title || "Campaign";
-}
-
-function toInputDate(value?: string | null) {
-  if (!value) return "";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
 function hasValue(value: unknown) {
   return value != null && Number.isFinite(Number(value));
 }
@@ -220,29 +163,6 @@ function performanceCardClass(status?: AdCampaignKpiStatus | null) {
   if (status === "acceptable") return "border-yellow-700/70 bg-yellow-950/20";
   if (status === "bad") return "border-rose-700/70 bg-rose-950/20";
   return "border-slate-800 bg-slate-950/40";
-}
-
-function kpiStatusClass(status?: AdCampaignKpiStatus | null) {
-  if (status === "good")
-    return "border-emerald-700 bg-emerald-950/20 text-emerald-200";
-  if (status === "acceptable")
-    return "border-yellow-700 bg-yellow-950/20 text-yellow-200";
-  if (status === "bad") return "border-rose-700 bg-rose-950/20 text-rose-200";
-  return "border-slate-700 bg-slate-950/30 text-slate-300";
-}
-
-function kpiStatusLabel(status?: AdCampaignKpiStatus | null) {
-  if (status === "good") return "KPI hit";
-  if (status === "acceptable") return "KPI ok";
-  if (status === "bad") return "KPI missed";
-  return "KPI unknown";
-}
-
-function kpiStatusTitle(status?: AdCampaignKpiStatus | null) {
-  if (status === "good") return "CPA is inside target KPI range.";
-  if (status === "acceptable") return "CPA is inside acceptable KPI range.";
-  if (status === "bad") return "CPA is inside stop KPI range.";
-  return "KPI range or enough CPA data is missing.";
 }
 
 function hypothesisStatusClass(status?: string) {
@@ -414,27 +334,6 @@ function KpiTooltip({
   );
 }
 
-function KpiStatusBadge({
-  status,
-  onMouseEnter,
-  onMouseLeave,
-}: {
-  status?: AdCampaignKpiStatus | null;
-  onMouseEnter?: MouseEventHandler<HTMLSpanElement>;
-  onMouseLeave?: MouseEventHandler<HTMLSpanElement>;
-}) {
-  return (
-    <span
-      className={`inline-flex rounded border px-1.5 py-0.5 text-[11px] leading-tight ${kpiStatusClass(status)} ${status && status !== "unknown" && onMouseEnter ? "cursor-help" : ""}`}
-      title={kpiStatusTitle(status)}
-      onMouseEnter={onMouseEnter}
-      onMouseLeave={onMouseLeave}
-    >
-      {kpiStatusLabel(status)}
-    </span>
-  );
-}
-
 function PerformanceCell({
   campaign,
   cost,
@@ -517,6 +416,7 @@ function PerformanceCell({
     peakPrimaryCostPerJoined != null &&
     primaryCostPerJoined != null &&
     Math.abs(peakPrimaryCostPerJoined - primaryCostPerJoined) >= 0.005;
+  const t = useCampaignText();
   const displayMode = moneySettings?.currencyDisplayMode ?? "code";
 
   return (
@@ -527,7 +427,7 @@ function PerformanceCell({
       <div className="inline-grid grid-cols-[minmax(90px,auto)_minmax(92px,auto)_minmax(90px,auto)] gap-x-6">
         <div>
           <p className="mb-0.5 text-[10px] uppercase tracking-wide text-slate-500">
-            Spend
+            {t("Spend")}
           </p>
           <p className="text-sm font-semibold leading-snug text-white">
             {formatMoney(cost, currency, displayMode)}
@@ -535,14 +435,14 @@ function PerformanceCell({
         </div>
         <div>
           <p className="mb-0.5 text-[10px] uppercase tracking-wide text-slate-500">
-            Attributed
+            {t("Attributed")}
           </p>
           <p className={`text-sm font-semibold leading-snug ${kpiTextClass}`}>
             {formatMetric(attributed)}
           </p>
           <div className="mt-0.5 space-y-0.5 text-[11px] leading-snug text-slate-500">
-            <p>Joined {formatMetric(resolvedCurrentJoined)}</p>
-            {pending > 0 ? <p>Pending {formatMetric(pending)}</p> : null}
+            <p>{t("Joined")} {formatMetric(resolvedCurrentJoined)}</p>
+            {pending > 0 ? <p>{t("Pending")} {formatMetric(pending)}</p> : null}
           </div>
         </div>
         <div>
@@ -559,7 +459,7 @@ function PerformanceCell({
           {showPeakCost ? (
             <div className="mt-0.5 space-y-0.5 text-[11px] leading-snug text-slate-500">
               <p>
-                Peak {formatMoney(peakCostPerJoined, currency, displayMode)}
+                {t("Peak")} {formatMoney(peakCostPerJoined, currency, displayMode)}
               </p>
             </div>
           ) : null}
@@ -596,9 +496,9 @@ function PerformanceCell({
                 type="button"
                 onClick={onOpenHistory}
                 className="rounded border border-slate-700/80 bg-black/20 px-1.5 py-0.5 text-slate-200 transition-colors hover:border-slate-500 hover:text-white"
-                title="Open campaign trend"
+                title={t("Open campaign trend")}
               >
-                Peak {formatMetric(resolvedPeakAttributed)}
+                {t("Peak")} {formatMetric(resolvedPeakAttributed)}
               </button>
             ) : null}
             {historySummary != null || resolvedDropPercent > 0 ? (
@@ -606,9 +506,9 @@ function PerformanceCell({
                 type="button"
                 onClick={onOpenHistory}
                 className="rounded border border-amber-700/80 bg-amber-950/20 px-1.5 py-0.5 text-amber-200 transition-colors hover:border-amber-500 hover:text-amber-100"
-                title="Open campaign trend"
+                title={t("Open campaign trend")}
               >
-                Drop from peak {formatMetric(resolvedDropAbsolute)} ·{" "}
+                {t("Drop from peak")} {formatMetric(resolvedDropAbsolute)} ·{" "}
                 {formatPercent(resolvedDropPercent)}
               </button>
             ) : null}
@@ -627,7 +527,7 @@ function PerformanceCell({
                 : "No new bot requests in the selected period"
             }
           >
-            Bot requests +{formatMetric(campaign.botRequestPerformance.total)}
+            {t("Bot requests")} +{formatMetric(campaign.botRequestPerformance.total)}
           </button>
         ) : null}
       </div>
@@ -1048,6 +948,7 @@ export function AdCampaignsTable({
   showActions?: boolean;
   showHypotheses?: boolean;
 }) {
+  const t = useCampaignText();
   const [kpiTooltip, setKpiTooltip] = useState<{
     channel: TelegramChannel;
     left: number;
@@ -1155,13 +1056,13 @@ export function AdCampaignsTable({
           </colgroup>
           <thead className="bg-slate-950 text-xs uppercase text-neutral-400">
             <tr>
-              <th className="px-4 py-3 font-medium">Campaign</th>
-              <th className="px-4 py-3 font-medium">Performance</th>
+              <th className="px-4 py-3 font-medium">{t("Campaign")}</th>
+              <th className="px-4 py-3 font-medium">{t("Performance")}</th>
               {showHypotheses ? (
-                <th className="px-4 py-3 font-medium">Hypotheses</th>
+                <th className="px-4 py-3 font-medium">{t("Hypotheses")}</th>
               ) : null}
               {showActions ? (
-                <th className="px-4 py-3 text-right font-medium">Actions</th>
+                <th className="px-4 py-3 text-right font-medium">{t("Actions")}</th>
               ) : null}
             </tr>
           </thead>

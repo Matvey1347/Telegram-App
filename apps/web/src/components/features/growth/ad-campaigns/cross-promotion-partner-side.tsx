@@ -17,7 +17,6 @@ import {
   Button,
   CustomSelect,
   FormField,
-  MultiSelect,
 } from "@/components/ui/primitives";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { MutualPromotionPostComposer } from "./mutual-promotion/mutual-promotion-post-composer";
@@ -34,10 +33,8 @@ export function CrossPromotionPartnerSide({
   expanded,
   onExpandedChange,
   channels,
-  partnerChannels,
   ownChannels,
   partnerIds,
-  onPartnerIdsChange,
   partnerAdvertiserId,
   partnerClient,
   partnerContact,
@@ -45,8 +42,6 @@ export function CrossPromotionPartnerSide({
   onPartnerTelegramChange,
   onPartnerAdvertiserChange,
   onSearchAdvertisers,
-  importingChannel,
-  onImportChannel,
   productsByChannelId,
   settings,
   defaultDate,
@@ -72,10 +67,8 @@ export function CrossPromotionPartnerSide({
   expanded: boolean;
   onExpandedChange: (expanded: boolean) => void;
   channels: TelegramChannel[];
-  partnerChannels: TelegramChannel[];
   ownChannels: TelegramChannel[];
   partnerIds: string[];
-  onPartnerIdsChange: (ids: string[]) => void;
   partnerAdvertiserId: string | null;
   partnerClient?: {
     id: string;
@@ -88,8 +81,6 @@ export function CrossPromotionPartnerSide({
   onPartnerTelegramChange: (value: string) => void;
   onPartnerAdvertiserChange: (advertiser: TelegramAdvertiser | null) => void;
   onSearchAdvertisers: (query: string) => Promise<TelegramAdvertiser[]>;
-  importingChannel: boolean;
-  onImportChannel: (input: string) => void | Promise<void>;
   productsByChannelId: Record<string, TelegramAdProduct[]>;
   settings: CrossPromotionPlacementSettingsValue;
   defaultDate: string;
@@ -155,7 +146,7 @@ export function CrossPromotionPartnerSide({
       </button>
       {expanded ? (
         <>
-          <div className="grid items-end gap-3 md:grid-cols-[minmax(280px,.8fr)_minmax(0,1.2fr)]">
+          <div className="grid items-end gap-3">
             <CrmClientField
               contact={partnerContact}
               selectedAdvertiserId={partnerAdvertiserId}
@@ -165,19 +156,6 @@ export function CrossPromotionPartnerSide({
               onSelect={onPartnerAdvertiserChange}
               onSearchAdvertisers={onSearchAdvertisers}
             />
-            <FormField label="Partner channels (optional)">
-              <MultiSelect
-                value={partnerIds}
-                onChange={onPartnerIdsChange}
-                options={channelOptions(partnerChannels)}
-                placeholder="Where the partner publishes my promo"
-                searchPlaceholder="Search or paste a Telegram channel link"
-                canCreateOption={(input) => Boolean(input.trim())}
-                createOptionLabel={() => "Import and select pasted channels"}
-                onCreateOption={onImportChannel}
-                creatingOption={importingChannel}
-              />
-            </FormField>
           </div>
           {partnerIds.length ? (
             <CrossPromotionPlacementSettings

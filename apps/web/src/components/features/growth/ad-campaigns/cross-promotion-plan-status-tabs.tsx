@@ -2,6 +2,7 @@ import type {
   CrossPromotionPlan,
   CrossPromotionPlanStatus,
 } from "@telegram-system/shared";
+import { Check, Circle, Clock3, FilePenLine, type LucideIcon } from "lucide-react";
 
 export type CrossPromotionPlanTab =
   | "DRAFT"
@@ -13,7 +14,7 @@ export const crossPromotionPlanTabDefinitions: Array<{
   value: CrossPromotionPlanTab;
   label: string;
   statuses: CrossPromotionPlanStatus[];
-  icon: string;
+  icon: LucideIcon;
   activeClassName: string;
   countClassName: string;
 }> = [
@@ -21,7 +22,7 @@ export const crossPromotionPlanTabDefinitions: Array<{
     value: "DRAFT",
     label: "Draft",
     statuses: ["DRAFT"],
-    icon: "✎",
+    icon: FilePenLine,
     activeClassName: "bg-violet-600 text-white",
     countClassName: "bg-violet-500/15 text-violet-300",
   },
@@ -29,7 +30,7 @@ export const crossPromotionPlanTabDefinitions: Array<{
     value: "ACTIVE",
     label: "Active",
     statuses: ["ACTIVE"],
-    icon: "●",
+    icon: Circle,
     activeClassName: "bg-emerald-600 text-white",
     countClassName: "bg-emerald-500/15 text-emerald-300",
   },
@@ -37,7 +38,7 @@ export const crossPromotionPlanTabDefinitions: Array<{
     value: "SCHEDULED",
     label: "Scheduled",
     statuses: ["SCHEDULED"],
-    icon: "◷",
+    icon: Clock3,
     activeClassName: "bg-sky-600 text-white",
     countClassName: "bg-sky-500/15 text-sky-300",
   },
@@ -45,7 +46,7 @@ export const crossPromotionPlanTabDefinitions: Array<{
     value: "COMPLETED",
     label: "Completed",
     statuses: ["CANCELLED", "COMPLETED"],
-    icon: "✓",
+    icon: Check,
     activeClassName: "bg-neutral-600 text-white",
     countClassName: "bg-neutral-700 text-neutral-300",
   },
@@ -79,6 +80,7 @@ export function CrossPromotionPlanStatusTabs({
       {crossPromotionPlanTabDefinitions.map((tab) => {
         const active = tab.value === value;
         const count = plans.filter((plan) => tab.statuses.includes(plan.status)).length;
+        const Icon = tab.icon;
         return (
           <button
             key={tab.value}
@@ -92,7 +94,7 @@ export function CrossPromotionPlanStatusTabs({
                 : "text-neutral-300 hover:bg-neutral-800 hover:text-white"
             }`}
           >
-            <span aria-hidden="true" className="text-xs">{tab.icon}</span>
+            <Icon aria-hidden="true" size={15} strokeWidth={2} className="shrink-0" />
             {tab.label}
             <span
               className={`rounded-full px-1.5 py-0.5 text-xs tabular-nums ${

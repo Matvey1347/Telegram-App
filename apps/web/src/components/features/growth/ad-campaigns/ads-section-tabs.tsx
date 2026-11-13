@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import {
   FlaskConical,
   Images,
@@ -9,6 +9,8 @@ import {
   Network,
   Repeat2,
 } from "lucide-react";
+import { useI18n } from "@/providers/i18n-provider";
+import type { TranslationKey } from "@/i18n/catalog";
 
 export type AdsSection =
   | "campaigns"
@@ -19,37 +21,37 @@ export type AdsSection =
 
 const ADS_SECTIONS: ReadonlyArray<{
   value: AdsSection;
-  label: string;
+  labelKey: TranslationKey;
   href: string;
   icon: typeof Megaphone;
 }> = [
   {
     value: "campaigns",
-    label: "Ad campaigns",
+    labelKey: "ads.section_campaigns",
     href: "/ad-campaigns?section=campaigns",
     icon: Megaphone,
   },
   {
     value: "hypotheses",
-    label: "Hypotheses",
+    labelKey: "ads.section_hypotheses",
     href: "/ad-campaigns?section=hypotheses",
     icon: FlaskConical,
   },
   {
     value: "promo",
-    label: "Promo",
+    labelKey: "ads.section_promo",
     href: "/ad-campaigns?section=promo",
     icon: Images,
   },
   {
     value: "mutual-promotion",
-    label: "Mutual promotion",
+    labelKey: "ads.section_mutual",
     href: "/ad-campaigns?section=mutual-promotion",
     icon: Repeat2,
   },
   {
     value: "own-promotion",
-    label: "Own channels",
+    labelKey: "ads.section_own",
     href: "/ad-campaigns?section=own-promotion",
     icon: Network,
   },
@@ -68,7 +70,8 @@ export function resolveAdsSection(
   return "campaigns";
 }
 
-export function AdsSectionTabs({ value }: { value: AdsSection }) {
+export function AdsSectionTabs({ value, trailing }: { value: AdsSection; trailing?: ReactNode }) {
+  const { t } = useI18n();
   const activeTabRef = useRef<HTMLAnchorElement>(null);
   useEffect(() => {
     activeTabRef.current?.scrollIntoView?.({
@@ -78,10 +81,11 @@ export function AdsSectionTabs({ value }: { value: AdsSection }) {
   }, [value]);
 
   return (
-    <div
-      data-testid="ads-section-tabs-scroll"
-      className="mb-5 w-full min-w-0 max-w-full overflow-x-auto overscroll-x-contain"
-    >
+    <div className="mb-5 flex min-w-0 flex-wrap items-center justify-between gap-2">
+      <div
+        data-testid="ads-section-tabs-scroll"
+        className="min-w-0 max-w-full flex-1 overflow-x-auto overscroll-x-contain"
+      >
       <div
         role="tablist"
         aria-label="Ads sections"
@@ -103,11 +107,13 @@ export function AdsSectionTabs({ value }: { value: AdsSection }) {
               }`}
             >
               <Icon size={16} aria-hidden="true" />
-              {section.label}
+              {t(section.labelKey)}
             </Link>
           );
         })}
       </div>
+      </div>
+      {trailing}
     </div>
   );
 }

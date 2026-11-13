@@ -41,7 +41,7 @@ const TRANSITION_BASELINE = new Map([
   ["apps/web/src/components/ui/primitives.tsx", 1504],
   [
     "apps/web/src/components/features/growth/ad-campaigns/campaigns-table.tsx",
-    1239,
+    1214,
   ],
   [
     "apps/api/src/domains/telegram/telegram-user-accounts/telegram-user-accounts.service.ts",

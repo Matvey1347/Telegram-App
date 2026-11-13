@@ -315,6 +315,7 @@ export function useCrossPromotionDraftState({
     partnerDate,
     setPartnerDate,
     time,
+    setTime,
     publisherSettings,
     setPublisherSettings,
     partnerSettings,
