@@ -99,6 +99,32 @@ identical SUCCESS metadata is suppressed while failures remain auditable.
 Scheduled batch success is represented by its task run summary, not a
 per-channel PostgreSQL INFO log.
 
+### AI Posting post performance
+
+The AI Posting performance task runs hourly because 24/72/168-hour age points
+need bounded capture windows. It scans only channels with AI Posting settings
+and posts near those age points. A channel makes at most one existing metrics
+sync call per run, and only when a target age point is due and has no in-window
+snapshot; an empty run makes no MTProto calls. Each selected sync is capped by
+the count of posts from the last eight days plus five (and the metrics service's
+existing hard cap). Performance recomputation/backfill processes at most 500
+posts per run, in batched database reads and writes, with recent posts refreshed
+at most about once every 20 hours. No AI calls or frontend polling are used.
+
+
+At 100 enabled channels the bounded upper case is 100 Telegram sync calls per
+hour when all channels have due points, plus one settings read, one due-post
+read, one post-count query, one backfill-candidate read, at most 100 channel
+comparison reads, and cross-promotion lookups in chunks of 500 managed posts.
+An empty no-due run has zero Telegram calls; after backfill and stale young-post
+refreshes are caught up, it also has zero performance writes.
+`TelegramPostPerformance` stores one durable row per
+synchronized post; this is historical product data with no scheduled cleanup.
+The hourly batch can write up to 500 rows while backfill is catching up, then
+only stale young-post rows and posts whose target snapshot changed. This adds
+bounded Postgres work and Telegram egress only at real measurement points; the
+job uses the existing scheduled-task lease/lock and one aggregate run summary.
+
 Before adding metric-history retention, preserve the query windows used by ad
 sales placement analytics and campaign admission analytics (`metricSnapshots`
 and raw `TelegramPostMetricSnapshot` SQL). The next retention migration must

@@ -336,6 +336,10 @@ export const operationsNotificationKeys = {
 export const telegramSystemBotKeys = {
   root: ["telegram-system-bot"] as const,
   connection: () => ["telegram-system-bot", "connection"] as const,
+  notificationGroup: (workspaceId: string) =>
+    ["telegram-system-bot", "notification-group", workspaceId] as const,
+  notificationAccount: (workspaceId: string) =>
+    ["telegram-system-bot", "notification-account", workspaceId] as const,
   subscriptions: (workspaceId: string) =>
     ["telegram-system-bot", "subscriptions", workspaceId] as const,
   linkPreview: (token: string) =>

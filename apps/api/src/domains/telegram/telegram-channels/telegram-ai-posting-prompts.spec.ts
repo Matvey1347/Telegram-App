@@ -1,6 +1,7 @@
 import {
   editorialDescription,
   mandatoryChannelRules,
+  publicationEmojiInstruction,
 } from './telegram-ai-posting-prompts';
 
 describe('AI posting prompt context', () => {
@@ -34,5 +35,16 @@ describe('AI posting prompt context', () => {
         style: 'Warm and concise',
       }),
     ).toContain('Описание канала: A technology channel');
+  });
+
+  it('asks for relevant emojis throughout the text when contextual mode is selected', () => {
+    expect(
+      publicationEmojiInstruction({ emojiPolicy: 'contextual' }),
+    ).toContain(
+      'Use 2–3 relevant emojis in a normal-length post, distributed through its body',
+    );
+    expect(publicationEmojiInstruction({ emojiPolicy: 'start' })).toContain(
+      'exactly one relevant emoji at the very beginning',
+    );
   });
 });

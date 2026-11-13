@@ -59,22 +59,29 @@ export class AiProvider {
         return empty('INPUT_TOO_LARGE');
       if (
         image &&
-        (config.category !== 'LEAD_AD_CLASSIFICATION' ||
-          config.modelId !== 'gpt-5.4-mini-2026-03-17')
+        !(
+          (config.category === 'LEAD_AD_CLASSIFICATION' &&
+            config.modelId === 'gpt-5.4-mini-2026-03-17') ||
+          config.category === 'TELEGRAM_POSTING_IMAGE'
+        )
       )
         return empty('VISION_MODEL_UNSUPPORTED');
       if (config.category === 'TELEGRAM_POSTING_IMAGE') {
         generationStarted = true;
+        const suffix = image ? '/images/edits' : '/images/generations';
+        const body = image
+          ? this.imageEditBody(input, config.modelId, image)
+          : {
+              model: config.modelId,
+              prompt: input,
+              n: 1,
+              size: '1024x1024',
+              quality: 'medium',
+              output_format: 'jpeg',
+            };
         const response = await this.post(
-          '/images/generations',
-          {
-            model: config.modelId,
-            prompt: input,
-            n: 1,
-            size: '1024x1024',
-            quality: 'medium',
-            output_format: 'jpeg',
-          },
+          suffix,
+          body,
           controller.signal,
           20 * 1024 * 1024,
         );
@@ -226,6 +233,25 @@ export class AiProvider {
     if (status === 404) return 'MODEL_UNAVAILABLE';
     return 'UNAVAILABLE';
   }
+  private imageEditBody(
+    prompt: string,
+    model: string,
+    image: { mime: 'image/jpeg'; data: Buffer },
+  ) {
+    const form = new FormData();
+    form.set('model', model);
+    form.set('prompt', prompt);
+    form.set('n', '1');
+    form.set('size', '1024x1024');
+    form.set('quality', 'medium');
+    form.set('output_format', 'jpeg');
+    form.set(
+      'image',
+      new Blob([new Uint8Array(image.data)], { type: image.mime }),
+      'reference.jpg',
+    );
+    return form;
+  }
   private async post(
     suffix: string,
     body: unknown,
@@ -238,9 +264,11 @@ export class AiProvider {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${this.deployment.key()}`,
-          'Content-Type': 'application/json',
+          ...(body instanceof FormData
+            ? {}
+            : { 'Content-Type': 'application/json' }),
         },
-        body: JSON.stringify(body),
+        body: body instanceof FormData ? body : JSON.stringify(body),
         signal,
       },
     );

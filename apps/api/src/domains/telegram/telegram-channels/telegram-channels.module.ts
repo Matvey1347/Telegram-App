@@ -9,6 +9,7 @@ import { TelegramAiPostingController } from './telegram-ai-posting.controller';
 import { TelegramAiPostingService } from './telegram-ai-posting.service';
 import { TelegramAiPostingGeneratorService } from './telegram-ai-posting-generator.service';
 import { TelegramAiPostingSourceService } from './telegram-ai-posting-source.service';
+import { TelegramAiPostingStructureService } from './telegram-ai-posting-structure.service';
 import { TelegramAiPostingImageService } from './telegram-ai-posting-image.service';
 import { TelegramAiPostingTestRunService } from './telegram-ai-posting-test-run.service';
 import { TelegramAiPostingRuleFeedbackService } from './telegram-ai-posting-rule-feedback.service';
@@ -17,6 +18,7 @@ import { TelegramAiPostingAutopilotNotificationService } from './telegram-ai-pos
 import { TelegramAiPostingAnalyticsService } from './telegram-ai-posting-analytics.service';
 import { TelegramAiPostingSettingsVersionService } from './telegram-ai-posting-settings-version.service';
 import { TelegramAiPostingPerformanceService } from './telegram-ai-posting-performance.service';
+import { TelegramAiPostingFailedRetryService } from './telegram-ai-posting-failed-retry.service';
 import { TelegramAiPostingRhythmService } from './telegram-ai-posting-rhythm.service';
 import { TelegramAiPostingRhythmController } from './telegram-ai-posting-rhythm.controller';
 import { TelegramAiPostingPerformanceControlController } from './telegram-ai-posting-performance-control.controller';
@@ -157,6 +159,7 @@ import { TelegramChannelTrafficAttributionService } from './telegram-channel-tra
     TelegramAiPostingService,
     TelegramAiPostingGeneratorService,
     TelegramAiPostingSourceService,
+    TelegramAiPostingStructureService,
     TelegramAiPostingImageService,
     TelegramAiPostingTestRunService,
     TelegramAiPostingRuleFeedbackService,
@@ -165,6 +168,7 @@ import { TelegramChannelTrafficAttributionService } from './telegram-channel-tra
     TelegramAiPostingAnalyticsService,
     TelegramAiPostingSettingsVersionService,
     TelegramAiPostingPerformanceService,
+    TelegramAiPostingFailedRetryService,
     TelegramAiPostingRhythmService,
     TelegramChannelRemindersService,
     TelegramChannelRemindersDueService,

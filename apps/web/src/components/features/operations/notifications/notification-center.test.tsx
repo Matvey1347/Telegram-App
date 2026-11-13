@@ -6,16 +6,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { operationsNotificationsApi } from "@/lib/features/operations/operations-notifications-api";
 import { NotificationCenter } from "./notification-center";
 
-const mocks = vi.hoisted(() => ({ pushSettingsRender: vi.fn() }));
-
 vi.mock("./use-notification-realtime", () => ({
   useNotificationRealtime: vi.fn(),
-}));
-vi.mock("./notification-push-settings", () => ({
-  NotificationPushSettings: () => {
-    mocks.pushSettingsRender();
-    return <div>Push settings</div>;
-  },
 }));
 
 function item(
@@ -62,7 +54,6 @@ function renderCenter(compact = false) {
 describe("NotificationCenter", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
-    mocks.pushSettingsRender.mockClear();
     vi.spyOn(operationsNotificationsApi, "unreadCount").mockResolvedValue({
       unread: 101,
     });
@@ -85,7 +76,7 @@ describe("NotificationCenter", () => {
     ).toHaveClass("h-8", "w-8");
   });
 
-  it("loads panel rows and push settings only when their surfaces open", async () => {
+  it("shows notifications without exposing obsolete preference controls", async () => {
     const list = vi
       .spyOn(operationsNotificationsApi, "list")
       .mockResolvedValue({ items: [], nextCursor: null });
@@ -95,18 +86,16 @@ describe("NotificationCenter", () => {
       name: "Notifications, 101 unread",
     });
     expect(list).not.toHaveBeenCalled();
-    expect(mocks.pushSettingsRender).not.toHaveBeenCalled();
 
     await userEvent.click(trigger);
     await screen.findByText(
-      "You’re all caught up. New CRM activity will appear here.",
+      "You’re all caught up. New workspace notifications will appear here.",
     );
     expect(list).toHaveBeenCalledTimes(1);
-    expect(mocks.pushSettingsRender).not.toHaveBeenCalled();
 
-    await userEvent.click(screen.getByRole("button", { name: "Push" }));
-    expect(await screen.findByText("Push settings")).toBeInTheDocument();
-    expect(mocks.pushSettingsRender).toHaveBeenCalled();
+    expect(
+      screen.queryByRole("button", { name: "Push" }),
+    ).not.toBeInTheDocument();
   });
 
   it("caps the accessible badge, labels priority/read state, and bounds pagination", async () => {
@@ -174,7 +163,7 @@ describe("NotificationCenter", () => {
     );
     expect(
       await screen.findByText(
-        "You’re all caught up. New CRM activity will appear here.",
+        "You’re all caught up. New workspace notifications will appear here.",
       ),
     ).toBeInTheDocument();
   });
@@ -190,12 +179,12 @@ describe("NotificationCenter", () => {
 
     await userEvent.click(trigger);
     await screen.findByText(
-      "You’re all caught up. New CRM activity will appear here.",
+      "You’re all caught up. New workspace notifications will appear here.",
     );
     await userEvent.keyboard("{Escape}");
     await userEvent.click(trigger);
     await screen.findByText(
-      "You’re all caught up. New CRM activity will appear here.",
+      "You’re all caught up. New workspace notifications will appear here.",
     );
     expect(list).toHaveBeenCalledTimes(1);
 
@@ -206,7 +195,7 @@ describe("NotificationCenter", () => {
     });
     await userEvent.click(trigger);
     await screen.findByText(
-      "You’re all caught up. New CRM activity will appear here.",
+      "You’re all caught up. New workspace notifications will appear here.",
     );
     await waitFor(() => expect(list).toHaveBeenCalledTimes(2));
   });
@@ -234,7 +223,9 @@ describe("NotificationCenter", () => {
       await screen.findByRole("button", { name: "Notifications, 101 unread" }),
     );
 
-    expect(screen.getByRole("button", { name: "Push" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Push" }),
+    ).not.toBeInTheDocument();
     expect(await screen.findByText("Ada Client")).toBeInTheDocument();
     expect(screen.getByText("4 messages")).toBeInTheDocument();
     expect(screen.getByRole("img", { name: "Ada Client" })).toHaveAttribute(
@@ -270,7 +261,7 @@ describe("NotificationCenter", () => {
     ).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Retry" }));
     await screen.findByText(
-      "You’re all caught up. New CRM activity will appear here.",
+      "You’re all caught up. New workspace notifications will appear here.",
     );
     expect(list).toHaveBeenCalledTimes(2);
   });

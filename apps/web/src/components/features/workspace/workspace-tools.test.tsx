@@ -11,6 +11,10 @@ describe("WorkspaceTools", () => {
     expect(
       screen.getByRole("link", { name: /Scheduled tasks/ }),
     ).toHaveAttribute("href", "/scheduled-tasks");
+    expect(screen.getByRole("link", { name: /Notifications/ })).toHaveAttribute(
+      "href",
+      "/settings/notifications",
+    );
     expect(screen.getByRole("link", { name: /Trash/ })).toHaveAttribute(
       "href",
       "/trash",
@@ -37,7 +41,7 @@ describe("WorkspaceTools", () => {
     );
   });
 
-  it("keeps restricted tools hidden from a member without permissions", () => {
+  it("shows workspace notification settings to workspace managers", () => {
     render(
       <WorkspaceTools
         role="member"
@@ -50,6 +54,12 @@ describe("WorkspaceTools", () => {
         }}
       />,
     );
-    expect(screen.queryByRole("link")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Notifications/ })).toHaveAttribute(
+      "href",
+      "/settings/notifications",
+    );
+    expect(
+      screen.queryByRole("link", { name: /Roles & access/ }),
+    ).not.toBeInTheDocument();
   });
 });

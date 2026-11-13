@@ -27,6 +27,9 @@ const settingsKey = (channelId: string) => ["telegram-ai-posting", channelId] as
 export function AiPostingAutopilotSettingsSection({
   channelId,
   settings,
+  postsPerDayMin,
+  postsPerDayMax,
+  onPostsPerDayRange,
   lookupsReady,
   pending,
   error,
@@ -35,6 +38,9 @@ export function AiPostingAutopilotSettingsSection({
 }: {
   channelId: string;
   settings: Settings;
+  postsPerDayMin: number;
+  postsPerDayMax: number;
+  onPostsPerDayRange: (minimum: number, maximum: number) => void;
   lookupsReady: boolean;
   pending: boolean;
   error: boolean;
@@ -70,7 +76,6 @@ export function AiPostingAutopilotSettingsSection({
         />
         {(
           [
-            ["postsPerDay", "Постов в сутки", 1, 20],
             ["targetReadyDrafts", "Целевой запас DRAFT", 0, 500],
             ["maxReadyDrafts", "Максимальный запас", 1, 500],
             ["targetCoverageDays", "Покрытие расписания, дней", 1, 62],
@@ -87,10 +92,42 @@ export function AiPostingAutopilotSettingsSection({
             />
           </FormField>
         ))}
+        <FormField label="Публикаций в день · минимум">
+          <Input
+            type="number"
+            min={1}
+            max={5}
+            value={postsPerDayMin}
+            onChange={(event) =>
+              onPostsPerDayRange(
+                Math.min(5, Math.max(1, Number(event.target.value) || 1)),
+                Math.max(
+                  Math.min(5, Math.max(1, Number(event.target.value) || 1)),
+                  postsPerDayMax,
+                ),
+              )
+            }
+          />
+        </FormField>
+        <FormField label="Публикаций в день · максимум">
+          <Input
+            type="number"
+            min={postsPerDayMin}
+            max={5}
+            value={postsPerDayMax}
+            onChange={(event) =>
+              onPostsPerDayRange(
+                postsPerDayMin,
+                Math.min(5, Math.max(postsPerDayMin, Number(event.target.value) || postsPerDayMin)),
+              )
+            }
+          />
+        </FormField>
       </div>
       <p className="text-xs text-neutral-500">
-        Проверка дефицита выполняется по расписанию раз в неделю. Планирование
-        использует часовой пояс рабочего пространства и активные слоты календаря.
+        Дневная генерация создаст набор в этом диапазоне. AI подбирает длину
+        каждого текста по теме, без жёсткого чередования. Планирование использует
+        часовой пояс рабочего пространства и активные слоты календаря.
       </p>
       <FormField label="Месячный лимит AI, USD">
         <Input

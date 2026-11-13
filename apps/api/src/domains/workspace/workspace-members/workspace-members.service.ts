@@ -596,11 +596,6 @@ export class WorkspaceMembersService {
     );
 
     if (current.role === WorkspaceRole.admin) {
-      if (dto.salesCommissionRate !== undefined) {
-        throw new ForbiddenException(
-          'Only owner can change sales commission rates',
-        );
-      }
       if (member.role !== WorkspaceRole.member) {
         throw new ForbiddenException('Admin cannot edit owner/admin');
       }
@@ -729,10 +724,6 @@ export class WorkspaceMembersService {
             nextTelegramUsername === undefined
               ? undefined
               : nextTelegramUsername,
-          salesCommissionRate:
-            dto.salesCommissionRate === undefined
-              ? undefined
-              : dto.salesCommissionRate,
         },
         include: this.memberInclude,
       });

@@ -644,7 +644,7 @@ export function IconPicker({
             <div
               ref={panelRef}
               style={panelStyle}
-              className="z-50 flex overflow-hidden rounded-2xl border border-neutral-700 bg-neutral-900 shadow-2xl"
+              className="z-[100] flex overflow-hidden rounded-2xl border border-neutral-700 bg-neutral-900 shadow-2xl"
             >
               <div className="flex min-h-0 flex-1 flex-col px-3 py-3">
                 <div className="space-y-2.5">

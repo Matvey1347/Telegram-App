@@ -289,6 +289,12 @@ function ConfigForm({
               </FormField>
             )}
           </div>
+          {category?.category === "TELEGRAM_POSTING_IMAGE" && (
+            <p className="text-xs text-neutral-400">
+              Для изображений заданный лимит на запрос заменяет общий лимит на
+              запрос. Дневной и месячный бюджеты рабочего пространства действуют.
+            </p>
+          )}
           {category ? (
             <p className="break-all text-xs text-neutral-400">
               Schema {category.schemaId} · Prompt {category.promptVersion} ·

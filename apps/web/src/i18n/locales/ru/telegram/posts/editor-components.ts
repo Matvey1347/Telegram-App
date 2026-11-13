@@ -10,6 +10,8 @@ export const messages = {
   "telegram.posts.editorComponents.emojiPacks.allChannelsHelp": "Если включено, набор будет подключён ко всем текущим каналам рабочего пространства. Отключите, чтобы выбрать отдельные каналы.",
   "telegram.posts.editorComponents.emojiPacks.delete": "Удалить набор",
   "telegram.posts.editorComponents.emojiPacks.deleteNamed": "Удалить {name}",
+  "telegram.posts.editorComponents.emojiPacks.refresh": "Загрузить актуальные эмодзи из набора",
+  "telegram.posts.editorComponents.emojiPacks.refreshNamed": "Обновить эмодзи из набора {name}",
   "telegram.posts.editorComponents.emojiPacks.emojiCount": "Эмодзи: {count}",
   "telegram.posts.editorComponents.emojiPacks.empty": "В рабочем пространстве нет наборов премиум-эмодзи.",
   "telegram.posts.editorComponents.emojiPacks.linkPlaceholder": "Ссылка на набор эмодзи Telegram",

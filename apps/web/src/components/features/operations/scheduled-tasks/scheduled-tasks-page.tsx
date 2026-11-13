@@ -17,7 +17,6 @@ import {
   type UpdateScheduledTaskPayload,
 } from "@/lib/api";
 import { scheduledTaskKeys } from "@/lib/query-keys";
-import { TaskGroupNotificationSubscription } from "./task-notification-subscription";
 
 const EditTaskModal = dynamic(
   () =>
@@ -215,13 +214,6 @@ function TaskGroup({
             <h4 className="font-medium text-white">{group.name}</h4>
             <p className="mt-1 text-xs text-neutral-400">{group.description}</p>
           </div>
-          {tasks[0]?.workspaceId && groupKey === "TELEGRAM" ? (
-            <TaskGroupNotificationSubscription
-              workspaceId={tasks[0].workspaceId}
-              groupKey="TELEGRAM"
-              taskKeys={tasks.map((task) => task.key)}
-            />
-          ) : null}
         </div>
       ) : null}
         <Table>

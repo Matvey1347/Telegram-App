@@ -9,6 +9,13 @@ const messages = {
   "telegram.posts.groups.delete": "Удалить группу",
   "telegram.posts.groups.deleteDescription":
     "Удалить группу? Публикации не удалятся, но останутся без группы.",
+  "telegram.posts.groups.archive": "Архивировать группу",
+  "telegram.posts.groups.restore": "Восстановить группу",
+  "telegram.posts.groups.active": "Активные",
+  "telegram.posts.groups.archived": "Архивированные",
+  "telegram.posts.groups.status": "Статус групп",
+  "telegram.posts.groups.loadError":
+    "Не удалось загрузить группы. Попробуйте ещё раз.",
   "telegram.posts.groups.postsInGroup": "Публикации в группе",
   "telegram.posts.groups.makeDraftsTitle":
     "Вернуть все публикации в черновики?",

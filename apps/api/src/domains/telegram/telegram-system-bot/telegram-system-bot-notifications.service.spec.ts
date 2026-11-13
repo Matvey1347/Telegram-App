@@ -1,100 +1,90 @@
 import { TelegramSystemBotNotificationsService } from './telegram-system-bot-notifications.service';
 
 describe('TelegramSystemBotNotificationsService', () => {
-  it('routes by persisted subscription membership, not current workspace', async () => {
+  it('routes user-directed workspace notifications to the selected workspace Telegram account', async () => {
     const prisma = {
-      telegramSystemBotTaskSubscription: {
-        findMany: jest.fn().mockResolvedValue([
-          {
-            connection: {
-              telegramChatId: '44',
-              user: { locale: 'en' },
-            },
-          },
-        ]),
-      },
       workspace: {
-        findUnique: jest.fn().mockResolvedValue({ name: 'Business' }),
+        findUnique: jest
+          .fn()
+          .mockResolvedValue({ telegramNotificationUserChatId: '12345' }),
       },
     } as any;
     const handler = {
-      sendTaskNotification: jest.fn().mockResolvedValue({ status: 'SENT' }),
+      sendSystemMessage: jest.fn().mockResolvedValue({ status: 'SENT' }),
     } as any;
     const service = new TelegramSystemBotNotificationsService(prisma, handler);
 
     await expect(
-      service.notify({
-        taskKey: 'telegram.channels.full_sync',
-        taskName: 'Channels sync',
+      service.sendToWorkspaceUser({
         workspaceId: 'workspace-a',
-        runId: 'run',
-        status: 'SUCCESS',
-        resultSummary: 'Successful: 8/8',
-        durationMs: 41_000,
-        errorReason: null,
+        userId: 'personal-user',
+        text: 'Ad booked',
       }),
-    ).resolves.toEqual({ status: 'DELIVERED', sent: 1 });
-
-    const where =
-      prisma.telegramSystemBotTaskSubscription.findMany.mock.calls[0][0].where;
-    expect(where.connection).not.toHaveProperty('currentWorkspaceId');
-    expect(where.connection.user.memberships).toEqual({
-      some: { workspaceId: 'workspace-a' },
-    });
-    expect(handler.sendTaskNotification).toHaveBeenCalledWith({
-      chatId: '44',
-      text: expect.stringContaining('Successful: 8/8'),
+    ).resolves.toEqual({ status: 'SENT' });
+    expect(handler.sendSystemMessage).toHaveBeenCalledWith({
+      chatId: '12345',
+      text: 'Ad booked',
+      parseMode: undefined,
     });
   });
 
-  it('renders direct Telegram output using each persisted user locale', async () => {
+  it('keeps group delivery independent from personal workspace account delivery', async () => {
     const prisma = {
-      telegramSystemBotTaskSubscription: {
-        findMany: jest.fn().mockResolvedValue([
-          {
-            connection: {
-              telegramChatId: '44',
-              user: { locale: 'en' },
-            },
-          },
-          {
-            connection: {
-              telegramChatId: '45',
-              user: { locale: 'ru' },
-            },
-          },
-        ]),
-      },
       workspace: {
-        findUnique: jest.fn().mockResolvedValue({ name: 'Business' }),
+        findUnique: jest.fn().mockResolvedValue({
+          telegramNotificationUserChatId: '12345',
+          telegramNotificationChatId: '-1001',
+        }),
+      },
+    } as any;
+    const handler = {
+      sendSystemMessage: jest.fn().mockResolvedValue({ status: 'SENT' }),
+    } as any;
+    const service = new TelegramSystemBotNotificationsService(prisma, handler);
+
+    await expect(
+      service.sendToWorkspace('workspace-a', 'Urgent issue'),
+    ).resolves.toEqual({ status: 'SENT' });
+    expect(handler.sendSystemMessage).toHaveBeenCalledWith({
+      chatId: '-1001',
+      text: 'Urgent issue',
+      parseMode: undefined,
+    });
+  });
+
+  it('delivers scheduled task failures once to the workspace group and suppresses success noise', async () => {
+    const prisma = {
+      workspace: {
+        findUnique: jest.fn().mockResolvedValue({
+          name: 'Business',
+          telegramNotificationChatId: '-1001',
+        }),
       },
     } as any;
     const handler = {
       sendTaskNotification: jest.fn().mockResolvedValue({ status: 'SENT' }),
     } as any;
     const service = new TelegramSystemBotNotificationsService(prisma, handler);
-
-    await service.notify({
+    const input = {
       taskKey: 'telegram.managed_posts.sync',
       taskName: 'Managed posts sync',
       workspaceId: 'workspace-a',
       runId: 'run',
-      status: 'FAILED',
       resultSummary: null,
       durationMs: 2_000,
-      errorReason: null,
-    });
+      errorReason: 'Telegram unavailable',
+    } as const;
 
-    expect(handler.sendTaskNotification).toHaveBeenNthCalledWith(1, {
-      chatId: '44',
-      text: expect.stringContaining('Failed: Managed posts sync'),
+    await expect(
+      service.notify({ ...input, status: 'SUCCESS' }),
+    ).resolves.toEqual({ status: 'SKIPPED', sent: 0 });
+    await expect(
+      service.notify({ ...input, status: 'FAILED' }),
+    ).resolves.toEqual({ status: 'SENT', sent: 1 });
+    expect(handler.sendTaskNotification).toHaveBeenCalledTimes(1);
+    expect(handler.sendTaskNotification).toHaveBeenCalledWith({
+      chatId: '-1001',
+      text: expect.stringContaining('Telegram unavailable'),
     });
-    expect(handler.sendTaskNotification).toHaveBeenNthCalledWith(2, {
-      chatId: '45',
-      text: expect.stringContaining('Ошибка: Managed posts sync'),
-    });
-    expect(
-      prisma.telegramSystemBotTaskSubscription.findMany,
-    ).toHaveBeenCalledTimes(1);
   });
 });

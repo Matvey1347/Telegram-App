@@ -10,6 +10,8 @@ export const messages = {
   "telegram.posts.editorComponents.emojiPacks.allChannelsHelp": "When enabled, the pack is attached to every current workspace channel. Turn it off to choose specific channels.",
   "telegram.posts.editorComponents.emojiPacks.delete": "Delete pack",
   "telegram.posts.editorComponents.emojiPacks.deleteNamed": "Delete {name}",
+  "telegram.posts.editorComponents.emojiPacks.refresh": "Load the latest emoji from this pack",
+  "telegram.posts.editorComponents.emojiPacks.refreshNamed": "Refresh emoji from {name}",
   "telegram.posts.editorComponents.emojiPacks.emojiCount": "{count} emoji",
   "telegram.posts.editorComponents.emojiPacks.empty": "No Premium emoji packs in this workspace.",
   "telegram.posts.editorComponents.emojiPacks.linkPlaceholder": "Telegram emoji pack link",

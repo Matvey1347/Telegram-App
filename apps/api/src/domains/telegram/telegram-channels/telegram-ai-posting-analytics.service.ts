@@ -88,7 +88,16 @@ export class TelegramAiPostingAnalyticsService {
               p.ordinal - 1 AS publication_index,
               p.item->'costs'->>'planning' AS allocated_planning_cost
             FROM "TelegramAiPostingTestRun" r
-            CROSS JOIN LATERAL jsonb_array_elements(r."publications") WITH ORDINALITY p(item, ordinal)
+            CROSS JOIN LATERAL jsonb_array_elements(
+              CASE
+                WHEN jsonb_typeof(r."publications") = 'array'
+                  THEN r."publications"
+                WHEN jsonb_typeof(r."publications") = 'object'
+                  AND jsonb_typeof(r."publications"->'items') = 'array'
+                  THEN r."publications"->'items'
+                ELSE '[]'::jsonb
+              END
+            ) WITH ORDINALITY p(item, ordinal)
             WHERE r."workspaceId" = ${workspaceId} AND r."telegramChannelId" = ${channelId}
               AND r."createdAt" >= ${start} AND r."createdAt" < ${exclusiveEnd}
               AND p.item->>'status' = 'REJECTED'

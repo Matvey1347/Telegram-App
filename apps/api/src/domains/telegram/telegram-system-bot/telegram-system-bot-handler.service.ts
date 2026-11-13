@@ -2,6 +2,7 @@ import { Injectable, Logger, Optional } from '@nestjs/common';
 import { TelegramBotApiClient } from '@api/telegram/shared/bot/telegram-bot-api.client';
 import { TelegramSystemBotConfigService } from './telegram-system-bot-config.service';
 import { TelegramSystemBotConnectionsService } from './telegram-system-bot-connections.service';
+import { TelegramSystemBotNotificationConnectionsService } from './telegram-system-bot-notification-connections.service';
 import { TelegramSystemBotDomainGatewayService } from './telegram-system-bot-domain-gateway.service';
 import { TelegramSystemBotFinanceHandlerService } from './telegram-system-bot-finance-handler.service';
 import { sanitizeOperationalError } from '../../../common/security/operational-error';
@@ -51,12 +52,64 @@ export class TelegramSystemBotHandlerService {
     private readonly workspaceFlow?: TelegramSystemBotWorkspaceFlowService,
     @Optional()
     private readonly postImport?: TelegramSystemBotPostImportService,
+    @Optional()
+    private readonly notificationConnections?: TelegramSystemBotNotificationConnectionsService,
   ) {}
 
   async handle(update: TelegramSystemBotUpdate) {
     if (update.my_chat_member)
       return this.channelAccess?.handleMyChatMember(update.my_chat_member);
     if (!this.config.token) return;
+    const groupLink =
+      /^\/connect_workspace(?:@\w+)?\s+([A-Za-z0-9_-]{20,})\s*$/.exec(
+        update.message?.text?.trim() ?? '',
+      );
+    const group = update.message?.chat;
+    if (
+      groupLink &&
+      group?.id !== undefined &&
+      (group.type === 'group' || group.type === 'supergroup')
+    ) {
+      const connected =
+        await this.notificationConnections?.consumeNotificationGroupLink(
+          groupLink[1],
+          String(group.id),
+          group.title,
+        );
+      return this.api.sendMessage(this.config.token, {
+        chat_id: String(group.id),
+        text: connected
+          ? '✅ This group is now connected to workspace notifications.'
+          : '⚠️ This link is invalid or expired. Create a new link from workspace settings.',
+      });
+    }
+    const accountLink =
+      /^\/start(?:@\w+)?\s+workspace_notify_([A-Za-z0-9_-]{20,})\s*$/.exec(
+        update.message?.text?.trim() ?? '',
+      );
+    if (
+      accountLink &&
+      group?.type === 'private' &&
+      group.id !== undefined &&
+      update.message?.from?.id !== undefined &&
+      String(group.id) === String(update.message.from.id)
+    ) {
+      const linked =
+        await this.notificationConnections?.consumeNotificationAccountLink({
+          token: accountLink[1],
+          telegramUserId: String(update.message.from.id),
+          telegramChatId: String(group.id),
+          username: update.message.from.username,
+          firstName: update.message.from.first_name,
+          lastName: update.message.from.last_name,
+        });
+      return this.api.sendMessage(this.config.token, {
+        chat_id: String(group.id),
+        text: linked
+          ? '✅ This Telegram account is now connected to workspace notifications.'
+          : '⚠️ This link is invalid or expired. Create a new link from workspace settings.',
+      });
+    }
     const action = resolveSystemBotAction(update);
     if (!action) return;
     const { actor, telegramUserId, chatId, command, callback } = action;

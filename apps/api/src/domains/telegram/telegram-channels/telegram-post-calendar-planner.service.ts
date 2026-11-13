@@ -38,21 +38,21 @@ import {
 import { TelegramManagedPostBulkService } from './telegram-managed-post-bulk.service';
 import { TelegramManagedPostPublicationService } from './telegram-managed-post-publication.service';
 import {
+  loadEligibleTelegramPlannerPosts,
+  type EligiblePlannerPost,
+} from './telegram-post-calendar-planner-eligible-posts';
+import {
   plannerDateKeyFromInput,
   plannerDateKeys,
   plannerWeekday,
+  pickPlannerPostForSlot,
+  plannerSlotConstraintScore,
   rotatePlannerItems,
   serializePlannerFormat,
   serializePlannerSlot,
 } from './telegram-post-calendar-planner-utils';
 
-type PlannerPost = {
-  id: string;
-  title: string;
-  groupId: string | null;
-  groupPosition: number | null;
-  createdAt: Date;
-};
+type PlannerPost = EligiblePlannerPost;
 
 @Injectable()
 export class TelegramPostCalendarPlannerService {
@@ -553,7 +553,8 @@ export class TelegramPostCalendarPlannerService {
         .filter((slot) => !occupiedTimes.has(slot.scheduledAt.toISOString()))
         .sort((left, right) => {
           const constraintDelta =
-            this.slotConstraintScore(left) - this.slotConstraintScore(right);
+            plannerSlotConstraintScore(left) -
+            plannerSlotConstraintScore(right);
           if (constraintDelta !== 0) return constraintDelta;
           const timeDelta =
             left.scheduledAt.getTime() - right.scheduledAt.getTime();
@@ -569,7 +570,8 @@ export class TelegramPostCalendarPlannerService {
         weightedSlots.map((slot) => [slot.scheduledAt.toISOString(), slot]),
       ).values(),
     ];
-    const posts = await this.loadEligiblePosts(
+    const posts = await loadEligibleTelegramPlannerPosts(
+      this.prisma,
       workspaceId,
       channelId,
       requestedGroupIds,
@@ -579,7 +581,7 @@ export class TelegramPostCalendarPlannerService {
     const remainingPosts = rotatePlannerItems(posts, dto.rerollOffset ?? 0);
     const assignments: TelegramPostPlannerAssignment[] = [];
     for (const slot of availableSlots) {
-      const postIndex = this.pickPostForSlot(remainingPosts, slot);
+      const postIndex = pickPlannerPostForSlot(remainingPosts, slot);
       if (postIndex < 0) continue;
       const [post] = remainingPosts.splice(postIndex, 1);
       const generatedAt = new Date().toISOString();
@@ -712,38 +714,6 @@ export class TelegramPostCalendarPlannerService {
     return unique;
   }
 
-  private async loadEligiblePosts(
-    workspaceId: string,
-    channelId: string,
-    postGroupIds: string[],
-    excludePostIds: string[],
-    limit: number,
-  ): Promise<PlannerPost[]> {
-    return this.prisma.telegramManagedPost.findMany({
-      where: {
-        workspaceId,
-        telegramChannelId: channelId,
-        origin: 'SYSTEM',
-        status: { in: [TelegramManagedPostStatus.DRAFT] },
-        text: { not: null },
-        adSalePlacements: { none: {} },
-        ...(excludePostIds.length
-          ? { id: { notIn: [...new Set(excludePostIds)] } }
-          : {}),
-        ...(postGroupIds.length ? { groupId: { in: postGroupIds } } : {}),
-      },
-      select: {
-        id: true,
-        title: true,
-        groupId: true,
-        groupPosition: true,
-        createdAt: true,
-      },
-      orderBy: [{ groupPosition: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
-      take: limit,
-    });
-  }
-
   private async loadMatchingSlots(
     workspaceId: string,
     channelId: string,
@@ -781,20 +751,6 @@ export class TelegramPostCalendarPlannerService {
           timezone: slot.timezone || timezone,
         })),
     );
-  }
-
-  private postMatchesSlot(
-    post: PlannerPost,
-    slot: TelegramPostPlannerSlot & { date: string },
-  ) {
-    return (
-      !slot.postGroupIds.length ||
-      (post.groupId != null && slot.postGroupIds.includes(post.groupId))
-    );
-  }
-
-  private slotConstraintScore(slot: TelegramPostPlannerSlot) {
-    return slot.postGroupIds.length || Number.MAX_SAFE_INTEGER;
   }
 
   private orderSlotsByFormatWeights<
@@ -837,10 +793,4 @@ export class TelegramPostCalendarPlannerService {
     return [...ordered, ...unformattedSlots];
   }
 
-  private pickPostForSlot(
-    posts: PlannerPost[],
-    slot: TelegramPostPlannerSlot & { date: string },
-  ) {
-    return posts.findIndex((post) => this.postMatchesSlot(post, slot));
-  }
 }

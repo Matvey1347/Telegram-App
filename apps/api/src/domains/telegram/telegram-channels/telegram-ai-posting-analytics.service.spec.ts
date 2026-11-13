@@ -79,6 +79,64 @@ describe('TelegramAiPostingAnalyticsService', () => {
     expect(result.monthlyForecast.knownCost).toBe('3');
     expect(result.budgets.daily.limit).toBe('2.5');
     expect(prisma.$queryRaw).toHaveBeenCalledTimes(6);
+
+    const queryRaw = (prisma as { $queryRaw: jest.Mock }).$queryRaw;
+    const rejectedQuery = (queryRaw.mock.calls[3] as unknown[])[0] as {
+      sql: string;
+      values: unknown[];
+    };
+    expect(rejectedQuery.sql).toContain(
+      `WHEN jsonb_typeof(r."publications") = 'array'`,
+    );
+    expect(rejectedQuery.sql).toContain(
+      `WHEN jsonb_typeof(r."publications") = 'object'`,
+    );
+    expect(rejectedQuery.sql).toContain(
+      "jsonb_typeof(r.\"publications\"->'items') = 'array'",
+    );
+    expect(rejectedQuery.sql).toContain("ELSE '[]'::jsonb");
+    expect(rejectedQuery.sql).toContain('WITH ORDINALITY');
+    expect(rejectedQuery.sql).toContain('p.ordinal - 1 AS publication_index');
+    expect(rejectedQuery.sql).toContain("p.item->>'status' = 'REJECTED'");
+    expect(rejectedQuery.sql).toContain('r."workspaceId" = ?');
+    expect(rejectedQuery.sql).toContain('r."telegramChannelId" = ?');
+    expect(rejectedQuery.sql).toContain('r."createdAt" >= ?');
+    expect(rejectedQuery.sql).toContain('r."createdAt" < ?');
+    expect(rejectedQuery.sql).toContain(
+      'r.publication_index = o."aiPostingPublicationIndex"',
+    );
+    expect(rejectedQuery.sql).toContain(`o."aiPostingMode" = 'TEST'`);
+    expect(rejectedQuery.sql).toContain(
+      '"actualCost" IS NULL AND "pricingStatus" NOT IN',
+    );
+    expect(rejectedQuery.sql).toContain('SUM("actualCost")');
+    expect(rejectedQuery.sql).toContain(
+      'SUM(allocated_planning_cost::numeric)',
+    );
+    expect(rejectedQuery.values).toEqual([
+      'workspace',
+      'channel',
+      new Date('2026-11-01T00:00:00.000Z'),
+      new Date('2026-11-09T00:00:00.000Z'),
+      'workspace',
+      'channel',
+    ]);
+
+    expect(Object.keys(result)).toEqual([
+      'channelId',
+      'currency',
+      'from',
+      'to',
+      'expenses',
+      'byStage',
+      'byMode',
+      'rejectedTests',
+      'readyPosts',
+      'unpricedReadyPosts',
+      'costPerReadyPost',
+      'monthlyForecast',
+      'budgets',
+    ]);
   });
 
   it('returns no zero cost per ready post when ready draft costs are unknown', async () => {

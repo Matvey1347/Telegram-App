@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -67,6 +67,52 @@ test("ordinary Finance development does not reconcile a Telegram webhook", () =>
   );
 
   assert.equal(analyticsApi?.env.FINANCE_API_PUBLIC_URL, "");
+});
+
+test("Finance tunnel marks Analytics ready after its HTTP health check", () => {
+  const source = readFileSync(new URL("./dev-tunnel.mjs", import.meta.url), "utf8");
+  const analyticsHealthCheck = source.indexOf(
+    'waitForHttpReady("http://127.0.0.1:4002/api/health").then(() =>',
+  );
+  const analyticsReady = source.indexOf(
+    'status("Finance analytics API", "http://localhost:4002/api")',
+  );
+  const botActivation = source.indexOf("await activateLocalBots()");
+
+  assert.ok(analyticsHealthCheck >= 0);
+  assert.ok(analyticsReady > analyticsHealthCheck);
+  assert.ok(analyticsReady < botActivation);
+});
+
+test("Finance tunnel reports Web readiness independently of API readiness", () => {
+  const source = readFileSync(new URL("./dev-tunnel.mjs", import.meta.url), "utf8");
+  const apiHealthCheck = source.indexOf(
+    'waitForHttpReady("http://127.0.0.1:4001/api/health").then(() =>',
+  );
+  const webHealthCheck = source.indexOf(
+    'waitForHttpReady("http://127.0.0.1:3001").then(() =>',
+  );
+  const webReady = source.indexOf('status("Finance Web", "http://localhost:3001")');
+
+  assert.ok(apiHealthCheck >= 0);
+  assert.ok(webReady > webHealthCheck);
+  assert.ok(webReady < source.indexOf("await synchronizeFinanceLocalBot()"));
+});
+
+test("Finance tunnel confirms the LOCAL username and active webhook runtime", () => {
+  const source = readFileSync(new URL("./dev-tunnel.mjs", import.meta.url), "utf8");
+  assert.match(source, /result\?\.synchronized !== true/u);
+  assert.match(source, /runtime\.runtimeStatus !== "ACTIVE"/u);
+  assert.match(source, /runtime\.webhookStatus !== "CONFIGURED"/u);
+  assert.match(source, /Open this bot in Telegram and send \/start/u);
+});
+
+test("tunnel labels bot cleanup as an exit action", () => {
+  const source = readFileSync(new URL("./dev-tunnel.mjs", import.meta.url), "utf8");
+
+  assert.match(source, /\["Bot cleanup", "Cleanup on exit"\]/u);
+  assert.match(source, /async function stop\(exitCode = 0\)/u);
+  assert.ok(source.indexOf("await stopLocalDevProcesses()") < source.indexOf("assertPortAvailable(4001"));
 });
 
 test("Finance does not start children without its own API profile", () => {

@@ -37,6 +37,12 @@ export class TelegramCustomEmojiController {
   ) {
     return this.service.importPack(user.sub, { source: dto.source });
   }
+  @Post(':packId/refresh') refresh(
+    @CurrentUser() user: JwtUser,
+    @Param('packId') packId: string,
+  ) {
+    return this.service.refreshPack(user.sub, packId);
+  }
   @Post('resolve') resolveDocuments(
     @CurrentUser() user: JwtUser,
     @Body() dto: ResolveTelegramCustomEmojiDocumentsDto,

@@ -2,6 +2,7 @@ import Link from "next/link";
 import {
   ArrowUpRight,
   CalendarClock,
+  BellRing,
   ShieldCheck,
   Trash2,
   ChartNoAxesCombined,
@@ -36,6 +37,13 @@ const tools = [
     icon: CalendarClock,
   },
   {
+    key: "notifications",
+    href: "/settings/notifications",
+    title: "Notifications",
+    description: "Connect the workspace Telegram bot and notification group.",
+    icon: BellRing,
+  },
+  {
     key: "trash",
     href: "/trash",
     title: "Trash",
@@ -65,6 +73,9 @@ export function WorkspaceTools({ role, access }: WorkspaceToolsProps) {
         canUseOperations &&
         (isOwner || permissions.has("operations.restoreTrash") || legacyAdmin)
       );
+    }
+    if (tool.key === "notifications") {
+      return isOwner || features.has("workspace") || legacyAdmin;
     }
     return canUseOperations;
   });

@@ -23,6 +23,10 @@ describe('TelegramSystemBotHandlerService', () => {
         },
       }),
     } as any;
+    const notificationConnections = {
+      consumeNotificationGroupLink: jest.fn(),
+      consumeNotificationAccountLink: jest.fn(),
+    } as any;
     const finance = {
       menu: jest.fn(),
       callback: jest.fn(),
@@ -58,17 +62,75 @@ describe('TelegramSystemBotHandlerService', () => {
       undefined,
       undefined,
       postImport,
+      notificationConnections,
     );
     return {
       service,
       api,
       connections,
+      notificationConnections,
       finance,
       postFlow,
       adSaleFlow,
       postImport,
     };
   }
+
+  it('connects a notification group and replies using a string chat id', async () => {
+    const test = workflowHarness();
+    test.notificationConnections.consumeNotificationGroupLink.mockResolvedValue(
+      true,
+    );
+
+    await test.service.handle({
+      message: {
+        chat: { id: -1001234567890, type: 'supergroup', title: 'Finance' },
+        text: '/connect_workspace abcdefghijklmnopqrstuvwxyz',
+      },
+    });
+
+    expect(
+      test.notificationConnections.consumeNotificationGroupLink,
+    ).toHaveBeenCalledWith(
+      'abcdefghijklmnopqrstuvwxyz',
+      '-1001234567890',
+      'Finance',
+    );
+    expect(test.api.sendMessage).toHaveBeenCalledWith('token', {
+      chat_id: '-1001234567890',
+      text: '✅ This group is now connected to workspace notifications.',
+    });
+  });
+
+  it('connects the private Telegram account from the workspace deep link', async () => {
+    const test = workflowHarness();
+    test.notificationConnections.consumeNotificationAccountLink.mockResolvedValue(
+      true,
+    );
+
+    await test.service.handle({
+      message: {
+        chat: { id: 44, type: 'private' },
+        from: { id: 44, username: 'admin_account', first_name: 'Admin' },
+        text: '/start workspace_notify_abcdefghijklmnopqrstuvwxyz',
+      },
+    });
+
+    expect(
+      test.notificationConnections.consumeNotificationAccountLink,
+    ).toHaveBeenCalledWith({
+      token: 'abcdefghijklmnopqrstuvwxyz',
+      telegramUserId: '44',
+      telegramChatId: '44',
+      username: 'admin_account',
+      firstName: 'Admin',
+      lastName: undefined,
+    });
+    expect(test.api.sendMessage).toHaveBeenCalledWith('token', {
+      chat_id: '44',
+      text: '✅ This Telegram account is now connected to workspace notifications.',
+    });
+  });
 
   it('opens the Ad Sale workflow from the website deep link', async () => {
     const test = workflowHarness();

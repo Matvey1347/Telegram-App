@@ -96,7 +96,6 @@ import { TelegramCrmRecoveryService } from './telegram-crm-recovery.service';
 import { TelegramCrmRuntimeController } from './telegram-crm-runtime.controller';
 import { TelegramCrmRuntimeManager } from './telegram-crm-runtime-manager.service';
 import { OperationsNotificationsModule } from '../../operations/notifications/operations-notifications.module';
-import { TelegramCrmIncomingNotificationProjector } from './telegram-crm-incoming-notification-projector.service';
 import { TelegramCrmNotificationRecipientService } from './telegram-crm-notification-recipient.service';
 import { TelegramCrmNotificationEligibilityService } from './telegram-crm-notification-eligibility.service';
 import { TelegramCrmNotificationDeliveryPolicy } from './telegram-crm-notification-delivery-policy.service';
@@ -217,7 +216,6 @@ import { TelegramCrmRuntimeLeaseService } from './telegram-crm-runtime-lease.ser
     TelegramCrmReadService,
     TelegramCrmRecoveryService,
     TelegramCrmRuntimeManager,
-    TelegramCrmIncomingNotificationProjector,
     TelegramCrmNotificationRecipientService,
     TelegramCrmNotificationEligibilityService,
     TelegramCrmNotificationDeliveryPolicy,

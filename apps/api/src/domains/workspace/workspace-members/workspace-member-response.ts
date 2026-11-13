@@ -11,7 +11,6 @@ type MemberResponseRow = {
     systemKey: string | null;
     icon: Icon;
   } | null;
-  salesCommissionRate?: unknown;
 };
 
 export function toWorkspaceMemberResponse<T extends MemberResponseRow>(
@@ -21,8 +20,6 @@ export function toWorkspaceMemberResponse<T extends MemberResponseRow>(
   const roleDefinition = row.roleDefinition;
   return {
     ...row,
-    salesCommissionRate:
-      row.salesCommissionRate != null ? Number(row.salesCommissionRate) : null,
     avatarPresentation: iconToResolvedEmoji(row.avatarIcon),
     roleDefinition: roleDefinition
       ? {

@@ -1,6 +1,6 @@
 "use client";
 
-import { Settings2 } from "lucide-react";
+import { Upload } from "lucide-react";
 import { useMemo, useState } from "react";
 import type {
   TelegramCustomEmoji,
@@ -100,26 +100,21 @@ export function TelegramCustomEmojiPickerModal({
             )}
             className="h-9"
           />
-          {tab === "PREMIUM" && onManage ? (
-            <Button
-              type="button"
-              variant="secondary"
-              className="h-9 shrink-0 px-2"
-              onClick={() => {
-                onClose();
-                onManage();
-              }}
-              aria-label={t(
-                "telegram.posts.editorComponents.emojiPicker.managePremium",
-              )}
-              title={t(
-                "telegram.posts.editorComponents.emojiPicker.managePremium",
-              )}
-            >
-              <Settings2 size={15} />
-            </Button>
-          ) : null}
         </div>
+        {tab === "PREMIUM" && onManage ? (
+          <Button
+            type="button"
+            variant="secondary"
+            className="w-full justify-center"
+            onClick={() => {
+              onClose();
+              onManage();
+            }}
+          >
+            <Upload size={15} />
+            {t("telegram.posts.editorComponents.emojiPacks.add")}
+          </Button>
+        ) : null}
         <div className="h-64 overflow-y-auto pr-1">
           {tab === "STANDARD" ? (
             <div className="grid grid-cols-8 gap-1">

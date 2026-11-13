@@ -50,6 +50,8 @@ const messages = {
   "telegram.posts.hypotheses.forwardRate": "Forward rate",
   "telegram.posts.hypotheses.subscriberDeltaLabel": "Subscriber change",
   "telegram.posts.hypotheses.actionsNamed": "Actions for {name}",
+  "telegram.posts.hypotheses.archive": "Archive",
+  "telegram.posts.hypotheses.restore": "Restore",
   "telegram.posts.editor.hypothesis": "Hypothesis",
   "telegram.posts.editor.group": "Group",
   "telegram.posts.groups.usedInPosts": "Used in posts",
@@ -128,7 +130,8 @@ const messages = {
   "telegramPosts.errors.groupAlreadyInTargetChannel":
     "This group is already in the selected channel.",
   "telegramPosts.errors.publishFailed": "Telegram could not publish this post.",
-  "telegramPosts.errors.imageUnavailable": "The image could not be downloaded. Check the image link or upload it again, then retry.",
+  "telegramPosts.errors.imageUnavailable":
+    "The image could not be downloaded. Check the image link or upload it again, then retry.",
   "telegramPosts.errors.importRowInvalid":
     "An import row contains invalid data.",
   "telegramPosts.errors.notEditable": "This post cannot be edited.",

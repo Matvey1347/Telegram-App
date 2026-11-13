@@ -78,31 +78,9 @@ export class TelegramCustomEmojiStorageService {
       throw new InternalServerErrorException(
         `B2 bucket not found: ${bucketName}`,
       );
-    // Lottie must fetch JSON (unlike img/video). Configure this once on the
-    // existing bucket so derived TGS assets are genuinely browser-readable.
-    const cors = await fetch(`${authData.apiUrl}/b2api/v2/b2_update_bucket`, {
-      method: 'POST',
-      headers: {
-        Authorization: authData.authorizationToken,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        accountId: authData.accountId,
-        bucketId: bucket.bucketId,
-        corsRules: [
-          ...(bucket.corsRules ?? []).filter(
-            (rule: any) =>
-              rule?.corsRuleName !==
-              telegramCustomEmojiBrowserCorsRule.corsRuleName,
-          ),
-          telegramCustomEmojiBrowserCorsRule,
-        ],
-      }),
-    });
-    if (!cors.ok)
-      throw new InternalServerErrorException(
-        'Failed to configure browser access for Premium emoji render assets.',
-      );
+    // Bucket policy is infrastructure configuration. Import only needs object
+    // upload permissions; attempting b2_update_bucket here made valid pack
+    // imports fail for bucket-scoped upload keys.
     const cleanEndpoint = endpoint?.replace(/\/+$/, '');
     const publicBaseUrl = !cleanEndpoint
       ? `${authData.downloadUrl}/file/${bucketName}`

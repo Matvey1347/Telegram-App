@@ -4,6 +4,10 @@ import type {
   CancelTelegramSystemBotPostImportResult,
   PrepareTelegramSystemBotPostImportPayload,
   TelegramSystemBotConnectionStatus,
+  TelegramSystemBotNotificationGroupStatus,
+  TelegramSystemBotNotificationGroupLink,
+  TelegramSystemBotNotificationAccountStatus,
+  TelegramSystemBotNotificationAccountLink,
   TelegramSystemBotLinkPreview,
   TelegramSystemBotPostImportResult,
   TelegramSystemBotPostImportStart,
@@ -58,6 +62,42 @@ export function createTelegramSystemBotApi(api: AxiosInstance) {
           "/telegram/system-bot/connection",
         )
       ).data,
+    notificationGroup: async () =>
+      (
+        await api.get<TelegramSystemBotNotificationGroupStatus>(
+          "/telegram/system-bot/notification-group",
+        )
+      ).data,
+    createNotificationGroupLink: async () =>
+      (
+        await api.post<TelegramSystemBotNotificationGroupLink>(
+          "/telegram/system-bot/notification-group/link",
+        )
+      ).data,
+    disconnectNotificationGroup: async () =>
+      (
+        await api.delete<{ success: boolean }>(
+          "/telegram/system-bot/notification-group",
+        )
+      ).data,
+    notificationAccount: async () =>
+      (
+        await api.get<TelegramSystemBotNotificationAccountStatus>(
+          "/telegram/system-bot/notification-account",
+        )
+      ).data,
+    createNotificationAccountLink: async () =>
+      (
+        await api.post<TelegramSystemBotNotificationAccountLink>(
+          "/telegram/system-bot/notification-account/link",
+        )
+      ).data,
+    disconnectNotificationAccount: async () =>
+      (
+        await api.delete<{ success: boolean }>(
+          "/telegram/system-bot/notification-account",
+        )
+      ).data,
     selectCurrentWorkspace: async () =>
       (
         await api.post<{ success: boolean }>(
@@ -66,7 +106,9 @@ export function createTelegramSystemBotApi(api: AxiosInstance) {
           silentFeedback,
         )
       ).data,
-    startPostImport: async (payload: PrepareTelegramSystemBotPostImportPayload) =>
+    startPostImport: async (
+      payload: PrepareTelegramSystemBotPostImportPayload,
+    ) =>
       (
         await api.post<TelegramSystemBotPostImportStart>(
           "/telegram/system-bot/post-imports",

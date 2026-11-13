@@ -2,7 +2,6 @@ import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { TelegramSystemBotHandlerService } from './telegram-system-bot-handler.service';
 import { sanitizeOperationalError } from '../../../common/security/operational-error';
-import { translateSystemBotNotification as t } from './i18n/notifications';
 
 @Injectable()
 export class TelegramSystemBotNotificationsService {
@@ -21,19 +20,30 @@ export class TelegramSystemBotNotificationsService {
     text: string;
     parseMode?: string;
   }) {
-    const connection = await this.prisma.telegramSystemBotConnection.findFirst({
-      where: {
-        userId: input.userId,
-        enabled: true,
-        user: { memberships: { some: { workspaceId: input.workspaceId } } },
-      },
-      select: { telegramChatId: true },
+    const workspace = await this.prisma.workspace.findUnique({
+      where: { id: input.workspaceId },
+      select: { telegramNotificationUserChatId: true },
     });
-    if (!connection) return { status: 'NOT_CONNECTED' as const };
+    if (!workspace?.telegramNotificationUserChatId)
+      return { status: 'NOT_CONNECTED' as const };
     return this.handler.sendSystemMessage({
-      chatId: connection.telegramChatId,
+      chatId: workspace.telegramNotificationUserChatId,
       text: input.text,
       parseMode: input.parseMode,
+    });
+  }
+
+  async sendToWorkspace(workspaceId: string, text: string, parseMode?: string) {
+    const workspace = await this.prisma.workspace.findUnique({
+      where: { id: workspaceId },
+      select: { telegramNotificationChatId: true },
+    });
+    if (!workspace?.telegramNotificationChatId)
+      return { status: 'NOT_CONNECTED' as const };
+    return this.handler.sendSystemMessage({
+      chatId: workspace.telegramNotificationChatId,
+      text,
+      parseMode,
     });
   }
 
@@ -48,78 +58,34 @@ export class TelegramSystemBotNotificationsService {
     errorReason: string | null;
     details?: unknown;
   }) {
-    if (!input.workspaceId || input.status === 'SKIPPED')
+    if (!input.workspaceId || input.status !== 'FAILED')
       return { status: 'SKIPPED' as const, sent: 0 };
-    const subscriptions =
-      await this.prisma.telegramSystemBotTaskSubscription.findMany({
-        where: {
-          workspaceId: input.workspaceId,
-          taskKey: input.taskKey,
-          ...(input.status === 'SUCCESS'
-            ? { notifyOnSuccess: true }
-            : { notifyOnFailure: true }),
-          enabled: true,
-          connection: {
-            enabled: true,
-            user: { memberships: { some: { workspaceId: input.workspaceId } } },
-          },
-        },
-        select: {
-          connection: {
-            select: {
-              telegramChatId: true,
-              user: { select: { locale: true } },
-            },
-          },
-        },
-      });
     const workspace = await this.prisma.workspace.findUnique({
       where: { id: input.workspaceId },
-      select: { name: true },
+      select: { name: true, telegramNotificationChatId: true },
     });
+    if (!workspace?.telegramNotificationChatId)
+      return { status: 'NOT_CONNECTED' as const, sent: 0 };
     const seconds = Math.max(0, Math.round(input.durationMs / 1000));
-    let sent = 0;
-    for (const subscription of subscriptions) {
-      try {
-        const locale = subscription.connection.user.locale;
-        const lines = [
-          t(locale, input.status === 'SUCCESS' ? 'completed' : 'failed', {
-            taskName: input.taskName,
-          }),
-          t(locale, 'workspace', {
-            workspaceName: workspace?.name ?? t(locale, 'unknownWorkspace'),
-          }),
-        ];
-        if (input.status === 'SUCCESS' && input.resultSummary) {
-          lines.push(
-            sanitizeOperationalError(
-              input.resultSummary,
-              t(locale, 'taskCompleted'),
-            ),
-          );
-        }
-        if (input.status === 'FAILED') {
-          lines.push(
-            t(locale, 'reason', {
-              reason: sanitizeOperationalError(
-                input.errorReason,
-                t(locale, 'taskFailed'),
-              ),
-            }),
-          );
-        }
-        lines.push(t(locale, 'duration', { seconds }));
-        const result = await this.handler.sendTaskNotification({
-          chatId: subscription.connection.telegramChatId,
-          text: lines.join('\n'),
-        });
-        if (result.status === 'SENT') sent += 1;
-      } catch (error) {
-        this.logger.warn(
-          `System bot notification failed: ${sanitizeOperationalError(error)}`,
-        );
-      }
+    try {
+      const lines = [
+        `🚨 ${input.taskName}`,
+        `Рабочее пространство: ${workspace.name}`,
+      ];
+      lines.push(
+        `Причина: ${sanitizeOperationalError(input.errorReason, 'Задача завершилась с ошибкой')}`,
+      );
+      lines.push(`Время: ${seconds} сек.`);
+      const result = await this.handler.sendTaskNotification({
+        chatId: workspace.telegramNotificationChatId,
+        text: lines.join('\n'),
+      });
+      return { status: result.status, sent: result.status === 'SENT' ? 1 : 0 };
+    } catch (error) {
+      this.logger.warn(
+        `System bot notification failed: ${sanitizeOperationalError(error)}`,
+      );
+      return { status: 'FAILED' as const, sent: 0 };
     }
-    return { status: 'DELIVERED' as const, sent };
   }
 }

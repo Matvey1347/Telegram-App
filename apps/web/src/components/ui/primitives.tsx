@@ -208,7 +208,7 @@ type MultiSelectOption = {
   value: string;
   label: string;
   selectedLabel?: string;
-  icon?: React.ReactNode;
+  icon?: React.ReactNode; iconPresentation?: ResolvedEmoji;
   iconUrl?: string;
   iconEmoji?: string;
   iconPremium?: boolean;
@@ -351,7 +351,7 @@ export function MultiSelect({
                     className="flex h-6 w-6 items-center justify-center overflow-hidden rounded-md border border-neutral-600 bg-neutral-800"
                   >
                     <OptionIcon
-                      iconNode={option.icon}
+                      iconNode={option.icon} iconPresentation={option.iconPresentation}
                       iconUrl={option.iconUrl}
                       iconEmoji={option.iconEmoji}
                       fallback={option.iconFallback}
@@ -374,7 +374,7 @@ export function MultiSelect({
                   style={option.badgeStyle}
                 >
                   <OptionIcon
-                    iconNode={option.icon}
+                    iconNode={option.icon} iconPresentation={option.iconPresentation}
                     iconUrl={option.iconUrl}
                     iconEmoji={option.iconEmoji}
                     fallback={option.iconFallback}
@@ -434,7 +434,7 @@ export function MultiSelect({
                       >
                         <span className="flex min-w-0 items-center gap-2">
                           <OptionIcon
-                            iconNode={option.icon}
+                            iconNode={option.icon} iconPresentation={option.iconPresentation}
                             iconUrl={option.iconUrl}
                             iconEmoji={option.iconEmoji}
                             fallback={option.iconFallback}

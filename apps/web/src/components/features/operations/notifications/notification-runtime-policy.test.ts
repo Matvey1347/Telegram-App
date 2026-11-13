@@ -16,7 +16,6 @@ describe("notification runtime policy", () => {
   it("does not add React Query polling to notification reads", () => {
     const sources = [
       "notification-center.tsx",
-      "notification-push-settings.tsx",
       "use-notification-realtime.ts",
     ].map((file) =>
       readFileSync(

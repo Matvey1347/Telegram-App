@@ -370,11 +370,18 @@ export class UpdatePostGroupDto {
   @IsOptional() @IsString() description?: string | null;
   @IsOptional() @IsString() icon?: string | null;
   @IsOptional() @IsBoolean() statusNumberingEnabled?: boolean;
+  @IsOptional() @IsBoolean() archived?: boolean;
 }
 
 export class PostGroupsQueryDto extends PaginationQueryDto {
   @IsOptional() @IsString() telegramChannelId?: string;
   @IsOptional() @IsString() search?: string;
+  @IsOptional()
+  @Transform(({ value }) =>
+    value == null ? undefined : value === true || value === 'true',
+  )
+  @IsBoolean()
+  archived?: boolean;
 }
 
 export class TelegramChannelListQueryDto extends PaginationQueryDto {

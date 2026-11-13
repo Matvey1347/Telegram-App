@@ -31,14 +31,8 @@ import { useNotificationRealtime } from "./use-notification-realtime";
 
 const PAGE_SIZE = 25;
 const NotificationPanel = dynamic(
-  () => import("./notification-panel").then((module) => module.NotificationPanel),
-  { loading: () => null },
-);
-const NotificationPushSettings = dynamic(
   () =>
-    import("./notification-push-settings").then(
-      (module) => module.NotificationPushSettings,
-    ),
+    import("./notification-panel").then((module) => module.NotificationPanel),
   { loading: () => null },
 );
 
@@ -54,7 +48,6 @@ export function NotificationCenter({
   const queryClient = useQueryClient();
   const triggerRef = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const [anchorStyle, setAnchorStyle] = useState<CSSProperties>();
   useNotificationRealtime({ workspaceId, enabled, panelOpen: open });
 
@@ -144,7 +137,6 @@ export function NotificationCenter({
 
   const close = useCallback(() => {
     setOpen(false);
-    setSettingsOpen(false);
   }, []);
   const items = useMemo(
     () => listQuery.data?.pages.flatMap((page) => page.items) ?? [],
@@ -184,52 +176,53 @@ export function NotificationCenter({
           </span>
         ) : null}
       </button>
-      {open ? <NotificationPanel
-        open={open}
-        onClose={close}
-        unread={unread}
-        state={{
-          items: unreadItems,
-          loading: listQuery.isLoading,
-          error: listQuery.isError && !listQuery.isFetchNextPageError,
-          paginationError: listQuery.isFetchNextPageError,
-          hasMore: Boolean(listQuery.hasNextPage),
-          loadingMore: listQuery.isFetchingNextPage,
-        }}
-        busy={busy}
-        settingsOpen={settingsOpen}
-        onSettingsChange={setSettingsOpen}
-        onMarkAll={() => markAll.mutate(undefined)}
-        onMarkVisible={() =>
-          markVisible.mutate(
-            unreadItems
-              .flatMap((item) =>
-                item.presentation?.kind === "crm-message"
-                  ? item.presentation.notificationIds
-                  : [item.id],
-              )
-              .slice(0, 50),
-          )
-        }
-        onOpenNotification={(notification: OperationsNotificationItem) => {
-          if (!busy && !notification.readAt) {
-            const groupedIds =
-              notification.presentation?.kind === "crm-message"
-                ? notification.presentation.notificationIds
-                : [];
-            if (groupedIds.length > 1) markVisible.mutate(groupedIds);
-            else markRead.mutate(notification.id);
+      {open ? (
+        <NotificationPanel
+          open={open}
+          onClose={close}
+          unread={unread}
+          state={{
+            items: unreadItems,
+            loading: listQuery.isLoading,
+            error: listQuery.isError && !listQuery.isFetchNextPageError,
+            paginationError: listQuery.isFetchNextPageError,
+            hasMore: Boolean(listQuery.hasNextPage),
+            loadingMore: listQuery.isFetchingNextPage,
+          }}
+          busy={busy}
+          onMarkAll={() => markAll.mutate(undefined)}
+          onMarkVisible={() =>
+            markVisible.mutate(
+              unreadItems
+                .flatMap((item) =>
+                  item.presentation?.kind === "crm-message"
+                    ? item.presentation.notificationIds
+                    : [item.id],
+                )
+                .slice(0, 50),
+            )
           }
-          close();
-        }}
-        onRetry={() => void listQuery.refetch()}
-        onLoadMore={() => void listQuery.fetchNextPage()}
-        anchorStyle={anchorStyle}
-        settings={<NotificationPushSettings workspaceId={workspaceId} />}
-        actionError={
-          mutationError ? "Notification read status could not be saved." : null
-        }
-      /> : null}
+          onOpenNotification={(notification: OperationsNotificationItem) => {
+            if (!busy && !notification.readAt) {
+              const groupedIds =
+                notification.presentation?.kind === "crm-message"
+                  ? notification.presentation.notificationIds
+                  : [];
+              if (groupedIds.length > 1) markVisible.mutate(groupedIds);
+              else markRead.mutate(notification.id);
+            }
+            close();
+          }}
+          onRetry={() => void listQuery.refetch()}
+          onLoadMore={() => void listQuery.fetchNextPage()}
+          anchorStyle={anchorStyle}
+          actionError={
+            mutationError
+              ? "Notification read status could not be saved."
+              : null
+          }
+        />
+      ) : null}
     </div>
   );
 }

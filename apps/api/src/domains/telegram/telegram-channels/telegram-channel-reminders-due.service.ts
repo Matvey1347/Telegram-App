@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { forwardRef, Inject, Injectable } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { notifyScheduledTaskDueWorkChanged } from '../../../common/scheduled-task-wake-notifier';
@@ -38,6 +38,7 @@ export class TelegramChannelRemindersDueService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly booking: TelegramChannelBookingReadService,
+    @Inject(forwardRef(() => ChannelReminderDeliveryService))
     private readonly delivery: ChannelReminderDeliveryService,
   ) {}
   async nextDueAt() {

@@ -8,14 +8,13 @@ describe('resolveAdSaleCommissionSnapshot', () => {
 
   beforeEach(() => jest.clearAllMocks());
 
-  it('locks the member override into a newly created sale', async () => {
+  it('uses the workspace commission rate for a newly created sale', async () => {
     prisma.telegramAdSalesWorkspaceSettings.findUnique.mockResolvedValue({
       salesCommissionEnabled: true,
       defaultSalesCommissionRate: 10,
     });
     prisma.workspaceMember.findFirst.mockResolvedValue({
       id: 'member-1',
-      salesCommissionRate: 15,
     });
 
     await expect(
@@ -23,7 +22,7 @@ describe('resolveAdSaleCommissionSnapshot', () => {
     ).resolves.toEqual({
       sellerMemberId: 'member-1',
       sellerCommissionEnabled: true,
-      sellerCommissionRate: 15,
+      sellerCommissionRate: 10,
     });
   });
 
@@ -31,7 +30,6 @@ describe('resolveAdSaleCommissionSnapshot', () => {
     prisma.telegramAdSalesWorkspaceSettings.findUnique.mockResolvedValue(null);
     prisma.workspaceMember.findFirst.mockResolvedValue({
       id: 'member-1',
-      salesCommissionRate: null,
     });
 
     await expect(

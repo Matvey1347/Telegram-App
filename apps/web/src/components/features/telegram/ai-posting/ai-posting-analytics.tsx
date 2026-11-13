@@ -65,7 +65,9 @@ export function AiPostingAnalytics({ channelId }: { channelId: string }) {
         </FormField>
       </div>
       {!from || !to ? (
-        <p className="text-sm text-neutral-500">Выберите начало и конец периода.</p>
+        <p className="text-sm text-neutral-500">
+          Выберите начало и конец периода.
+        </p>
       ) : analytics.isLoading ? (
         <p role="status" className="text-sm text-neutral-400">
           Загружаем расходы…
@@ -179,14 +181,12 @@ export function AiPostingAnalytics({ channelId }: { channelId: string }) {
           </div>
           <Card className="p-3">
             <h3 className="mb-2 text-sm font-medium">Лимиты канала</h3>
-            <div className="grid gap-2 sm:grid-cols-2">
-              <Budget label="День" budget={data.budgets.daily} />
+            <div className="grid gap-2">
               <Budget label="Месяц" budget={data.budgets.monthly} />
             </div>
             <p className="mt-2 text-xs text-neutral-500">
-              При превышении лимита блокируются новые платные AI-операции этого
-              канала. Уже готовые черновики и публикации продолжают
-              обрабатываться обычным календарём.
+              Месячный лимит канала применяется к новым платным AI-операциям.
+              Общие лимиты рабочего пространства и категории сохраняют силу.
             </p>
           </Card>
         </>
@@ -238,7 +238,7 @@ function stageTitle(stage: string) {
     (
       {
         text: "Текст",
-        image: "Изображения",
+        image: "Медиа",
         planning: "Планирование",
         checks: "AI-проверки",
         other: "Прочие операции",

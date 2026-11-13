@@ -1,7 +1,16 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Camera, Eye, EyeOff, Pencil, ShieldCheck, Trash2 } from "lucide-react";
+import {
+  Camera,
+  Eye,
+  EyeOff,
+  Pencil,
+  ShieldCheck,
+  Trash2,
+  UsersRound,
+  WalletCards,
+} from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import {
@@ -97,6 +106,9 @@ export function WorkspaceMembersSection({
   );
   const [tempPassword, setTempPassword] = useState<string>("");
   const [error, setError] = useState("");
+  const [memberTab, setMemberTab] = useState<"investors" | "others">(
+    "investors",
+  );
   const {
     data,
     isLoading,
@@ -124,6 +136,26 @@ export function WorkspaceMembersSection({
       new Map((memberFinance.data ?? []).map((item) => [item.memberId, item])),
     [memberFinance.data],
   );
+  const investorMembers = useMemo(
+    () =>
+      (data ?? []).filter(
+        (member) =>
+          !member.isHidden &&
+          (financeByMember.get(member.id)?.investments.total ?? 0) > 0,
+      ),
+    [data, financeByMember],
+  );
+  const otherMembers = useMemo(
+    () =>
+      (data ?? []).filter(
+        (member) =>
+          member.isHidden ||
+          (financeByMember.get(member.id)?.investments.total ?? 0) <= 0,
+      ),
+    [data, financeByMember],
+  );
+  const visibleMembers =
+    memberTab === "investors" ? investorMembers : otherMembers;
   const totalVisibleInvested = useMemo(
     () =>
       (data ?? []).reduce((sum, member) => {
@@ -177,7 +209,6 @@ export function WorkspaceMembersSection({
         avatarIconId?: string | null;
         telegramUsername?: string | null;
         telegramUserAccountIds?: string[];
-        salesCommissionRate?: number | null;
       };
     }) => workspaceMembersApi.update(id, payload),
     onSuccess: () => {
@@ -250,7 +281,8 @@ export function WorkspaceMembersSection({
         >
           <p className="font-medium">Save this generated password now.</p>
           <p className="mt-1 text-sm">
-            It is shown only once: <span className="font-mono">{tempPassword}</span>
+            It is shown only once:{" "}
+            <span className="font-mono">{tempPassword}</span>
           </p>
         </div>
       ) : null}
@@ -265,8 +297,37 @@ export function WorkspaceMembersSection({
         </div>
       ) : null}
 
-      <div className="columns-1 gap-4 md:columns-2 xl:columns-3">
-        {data?.map((member: WorkspaceMember) => {
+      <div
+        className="mb-4 flex gap-2"
+        role="tablist"
+        aria-label="Workspace member groups"
+      >
+        <button
+          type="button"
+          role="tab"
+          aria-selected={memberTab === "investors"}
+          onClick={() => setMemberTab("investors")}
+          className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm ${memberTab === "investors" ? "border-blue-500 bg-blue-600 text-white" : "border-neutral-800 text-neutral-300 hover:bg-neutral-900"}`}
+        >
+          <WalletCards size={16} /> Investors{" "}
+          <span className="opacity-70">{investorMembers.length}</span>
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={memberTab === "others"}
+          onClick={() => setMemberTab("others")}
+          className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm ${memberTab === "others" ? "border-blue-500 bg-blue-600 text-white" : "border-neutral-800 text-neutral-300 hover:bg-neutral-900"}`}
+        >
+          <UsersRound size={16} /> Other members{" "}
+          <span className="opacity-70">{otherMembers.length}</span>
+        </button>
+      </div>
+      <div
+        className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3"
+        role="tabpanel"
+      >
+        {visibleMembers.map((member: WorkspaceMember) => {
           const financeSummary = financeByMember.get(member.id);
           const totalInvested = financeSummary?.investments.total ?? 0;
           const hasInvestments = !member.isHidden && totalInvested > 0;
@@ -281,7 +342,7 @@ export function WorkspaceMembersSection({
           return (
             <Card
               key={member.id}
-              className="relative mb-4 inline-block w-full break-inside-avoid overflow-visible border-neutral-800 bg-neutral-900/60 align-top !p-0"
+              className="relative w-full overflow-visible border-neutral-800 bg-neutral-900/60 !p-0"
             >
               <div className="p-4">
                 <div className="flex items-start gap-2.5">
@@ -405,8 +466,12 @@ export function WorkspaceMembersSection({
         })}
       </div>
 
-      {!isLoading && !membersError && !data?.length ? (
-        <EmptyState text="No members" />
+      {!isLoading && !membersError && !visibleMembers.length ? (
+        <EmptyState
+          text={
+            memberTab === "investors" ? "No investors yet" : "No other members"
+          }
+        />
       ) : null}
 
       <WorkspaceMemberModal
@@ -445,7 +510,6 @@ export function WorkspaceMembersSection({
               avatarIconId: values.avatarIconId,
               telegramUsername: values.telegramUsername?.trim() || null,
               telegramUserAccountIds: values.telegramUserAccountIds,
-              salesCommissionRate: values.salesCommissionRate,
             },
           });
         }}

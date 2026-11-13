@@ -59,3 +59,19 @@ export const rotatePlannerItems = <T>(items: T[], offset: number) => {
   const normalized = offset % items.length;
   return [...items.slice(normalized), ...items.slice(0, normalized)];
 };
+
+export const plannerPostMatchesSlot = (
+  post: { groupId: string | null },
+  slot: Pick<TelegramPostPlannerSlot, 'postGroupIds'>,
+) =>
+  !slot.postGroupIds.length ||
+  (post.groupId != null && slot.postGroupIds.includes(post.groupId));
+
+export const plannerSlotConstraintScore = (
+  slot: Pick<TelegramPostPlannerSlot, 'postGroupIds'>,
+) => slot.postGroupIds.length || Number.MAX_SAFE_INTEGER;
+
+export const pickPlannerPostForSlot = <T extends { groupId: string | null }>(
+  posts: T[],
+  slot: Pick<TelegramPostPlannerSlot, 'postGroupIds'>,
+) => posts.findIndex((post) => plannerPostMatchesSlot(post, slot));

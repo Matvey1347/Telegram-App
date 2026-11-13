@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Trash2 } from "lucide-react";
+import { RefreshCw, Trash2 } from "lucide-react";
 import type { TelegramCustomEmojiPackSummary } from "@telegram-system/shared";
 import { Button, Input, Modal } from "@/components/ui/primitives";
 import { TelegramCustomEmojiRenderer } from "./telegram-custom-emoji";
@@ -13,6 +13,7 @@ type Props = {
   packs: TelegramCustomEmojiPackSummary[];
   onImport: (input: { source: string }) => Promise<void> | void;
   onDetach: (packId: string) => Promise<void> | void;
+  onRefresh: (packId: string) => Promise<void> | void;
 };
 
 export function TelegramCustomEmojiPacksModal({
@@ -21,14 +22,21 @@ export function TelegramCustomEmojiPacksModal({
   packs,
   onImport,
   onDetach,
+  onRefresh,
 }: Props) {
   const { t } = useI18n();
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
   const run = async (operation: () => Promise<void> | void) => {
     setBusy(true);
+    setError("");
     try {
       await operation();
+    } catch (reason) {
+      const response = reason as { response?: { data?: { message?: string | string[] } } };
+      const message = response.response?.data?.message;
+      setError(Array.isArray(message) ? message.join(" ") : message || "Не удалось выполнить операцию. Проверьте подключение и попробуйте снова.");
     } finally {
       setBusy(false);
     }
@@ -41,6 +49,7 @@ export function TelegramCustomEmojiPacksModal({
       size="md"
     >
       <div className="space-y-4">
+        {error ? <p role="alert" className="rounded-lg border border-rose-900/60 bg-rose-950/30 p-3 text-sm text-rose-200">{error}</p> : null}
         <div className="space-y-2">
           <Input
             value={input}
@@ -104,19 +113,31 @@ export function TelegramCustomEmojiPacksModal({
                   </span>
                 </span>
               </span>
-              <button
-                type="button"
-                aria-label={t(
-                  "telegram.posts.editorComponents.emojiPacks.deleteNamed",
-                  { name: pack.title },
-                )}
-                title={t("telegram.posts.editorComponents.emojiPacks.delete")}
-                disabled={busy}
-                onClick={() => run(() => onDetach(pack.id))}
-                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded text-rose-400 hover:bg-rose-950/50 hover:text-rose-300 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                <Trash2 size={16} />
-              </button>
+              <span className="flex shrink-0 items-center gap-1">
+                <button
+                  type="button"
+                  aria-label={t("telegram.posts.editorComponents.emojiPacks.refreshNamed", { name: pack.title })}
+                  title={t("telegram.posts.editorComponents.emojiPacks.refresh")}
+                  disabled={busy}
+                  onClick={() => run(() => onRefresh(pack.id))}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded text-neutral-300 hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <RefreshCw size={15} />
+                </button>
+                <button
+                  type="button"
+                  aria-label={t(
+                    "telegram.posts.editorComponents.emojiPacks.deleteNamed",
+                    { name: pack.title },
+                  )}
+                  title={t("telegram.posts.editorComponents.emojiPacks.delete")}
+                  disabled={busy}
+                  onClick={() => run(() => onDetach(pack.id))}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded text-rose-400 hover:bg-rose-950/50 hover:text-rose-300 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <Trash2 size={16} />
+                </button>
+              </span>
             </div>
           ))}
           {!packs.length && (

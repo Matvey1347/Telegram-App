@@ -287,6 +287,12 @@ export function createTelegramChannelsApi({
           `/telegram-custom-emoji-packs/${packId}`,
         )
       ).data,
+    refreshCustomEmojiPack: async (packId: string) =>
+      (
+        await api.post<TelegramWorkspaceCustomEmojiPacksResponse>(
+          `/telegram-custom-emoji-packs/${packId}/refresh`,
+        )
+      ).data,
     updateQuiet: async (id: string, payload: Record<string, unknown>) =>
       (
         await api.patch<TelegramChannel>(
@@ -439,6 +445,7 @@ export function createTelegramChannelsApi({
       params?: PaginationParams & {
         telegramChannelId?: string;
         search?: string;
+        archived?: boolean;
       },
     ) => getPaginated<PostGroup>("/telegram-channels/post-groups", params),
     postGroupSummaries: async (channelId: string) =>
@@ -493,6 +500,7 @@ export function createTelegramChannelsApi({
         description?: string | null;
         icon?: string | null;
         statusNumberingEnabled?: boolean;
+        archived?: boolean;
       },
     ) =>
       (

@@ -1,0 +1,2 @@
+-- Keep historical member values intact. Prisma ignores this deprecated column,
+-- so it is not exposed to application code or the workspace member API.

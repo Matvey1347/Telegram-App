@@ -1012,6 +1012,16 @@ model Workspace {
   currencyDisplayMode             CurrencyDisplayMode @default(code)
   avatarIconId                    String?
   systemNetworkExcludedChannelIds String[]            @default([])
+  telegramNotificationChatId                    String?
+  telegramNotificationChatTitle                 String?
+  telegramNotificationLinkTokenHash             String?             @unique
+  telegramNotificationLinkExpiresAt             DateTime?
+  telegramNotificationUserId                    String?
+  telegramNotificationUserChatId                String?
+  telegramNotificationUserName                  String?
+  telegramNotificationAccountLinkTokenHash      String?             @unique
+  telegramNotificationAccountLinkExpiresAt      DateTime?
+  telegramNotificationAccountLinkTelegramUserId String?
 
   members                                WorkspaceMember[]
   roleDefinitions                        WorkspaceRoleDefinition[]
@@ -1288,7 +1298,7 @@ model WorkspaceMember {
   isHidden            Boolean       @default(false)
   avatarIconId        String?
   telegramUsername    String?
-  salesCommissionRate Decimal?
+  salesCommissionRate Decimal?   @ignore
 
   workspace                                 Workspace                          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   roleDefinition                            WorkspaceRoleDefinition?           @relation(fields: [roleDefinitionId, workspaceId], references: [id, workspaceId], onDelete: Restrict)
@@ -1836,6 +1846,7 @@ model TelegramAiPostingSettings {
 
   @@index([workspaceId, autopilotEnabled])
   @@index([autopilotEnabled, autopilotNextRunAt])
+  @@index([mode, autopilotNextRunAt], map: "TelegramAiPostingSettings_mode_nextRun_idx")
 }
 
 model TelegramAiPostingSettingsVersion {
@@ -2807,10 +2818,10 @@ model TelegramAdvertiserActivity {
   actorMember  WorkspaceMember?         @relation("TelegramAdvertiserActivityActorMember", fields: [actorMemberId], references: [id], onDelete: SetNull)
   sourcedSales TelegramAdSale[]         @relation("TelegramAdSaleSourceActivity")
 
-  @@index([workspaceId, advertiserId, occurredAt], map: "TelegramAdvertiserActivity_workspaceId_advertiserId_occurredAt_")
-  @@index([workspaceId, type, occurredAt])
   // Partial Instagram activity-retention index is SQL-owned in 20261101120100_crm_instagram_manual_contacts.
   @@unique([workspaceId, operationId])
+  @@index([workspaceId, advertiserId, occurredAt], map: "TelegramAdvertiserActivity_workspaceId_advertiserId_occurredAt_")
+  @@index([workspaceId, type, occurredAt])
 }
 
 model TelegramAdvertiserTask {
@@ -2850,11 +2861,11 @@ model TelegramAdvertiserTask {
   sourcedSales         TelegramAdSale[]                        @relation("TelegramAdSaleSourceTask")
   automationExecutions TelegramAdvertiserAutomationExecution[]
 
+  @@unique([workspaceId, manualOperationId])
   @@index([workspaceId, assignedMemberId, status, dueAt], map: "TelegramAdvertiserTask_workspaceId_assignedMemberId_status_dueA")
   // Partial effective-reminder expression index is SQL-owned in 20261031110000_crm_sales_workflow.
   @@index([workspaceId, advertiserId, dueAt])
   @@index([workspaceId, status, dueAt])
-  @@unique([workspaceId, manualOperationId])
 }
 
 model TelegramAdCrmMemberSettings {
@@ -5866,6 +5877,7 @@ model TelegramManagedPost {
   @@index([workspaceId, telegramChannelId, plannerRunId], map: "TelegramManagedPost_workspaceId_telegramChannelId_plannerRunId_")
   @@index([workspaceId, telegramChannelId, plannerSlotId], map: "TelegramManagedPost_workspaceId_telegramChannelId_plannerSlotId")
   @@index([status, scheduledAt])
+  @@index([aiPostingReviewStatus, scheduledAt])
   @@index([status, deleteAt])
   @@index([workspaceId, telegramChannelId, publicationSlotId], map: "TelegramManagedPost_workspaceId_telegramChannelId_publicationSl")
   @@index([telegramIdVerificationStatus, status, telegramIdLastCheckedAt], map: "TelegramManagedPost_due_identity_idx")
@@ -5993,6 +6005,7 @@ model PostGroup {
   statusNumberingEnabled Boolean @default(false)
   createdByMemberId      String
   sidebarPosition        Int?
+  archivedAt             DateTime?
 
   workspace            Workspace                     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   telegramChannel      TelegramChannel               @relation(fields: [telegramChannelId], references: [id], onDelete: Cascade)
@@ -6008,6 +6021,7 @@ model PostGroup {
   @@index([telegramChannelId])
   @@index([createdByMemberId])
   @@index([telegramChannelId, sidebarPosition])
+  @@index([workspaceId, telegramChannelId, archivedAt])
 }
 
 model TelegramPostBatch {
@@ -6153,7 +6167,7 @@ model TelegramPostPerformance {
   excludedReason         String?
   manualClassification String?
   methodVersion          String
-  computedAt             DateTime      @updatedAt
+  computedAt           DateTime @default(now()) @updatedAt
 
   telegramPost TelegramPost @relation(fields: [telegramPostId], references: [id], onDelete: Cascade)
 
@@ -6686,8 +6700,8 @@ model TelegramCrmChatOperation {
 
   account TelegramUserAccountIntegration @relation(fields: [mtprotoAccountId, workspaceId], references: [id, workspaceId], onDelete: Cascade, map: "TelegramCrmChatOperation_account_workspace_fkey")
 
-  @@index([mtprotoAccountId])
   @@unique([workspaceId, operationId])
+  @@index([mtprotoAccountId])
   @@index([createdAt, id])
 }
 

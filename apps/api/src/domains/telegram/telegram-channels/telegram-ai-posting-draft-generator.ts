@@ -11,9 +11,15 @@ import {
 import {
   editorialDescription,
   mandatoryChannelRules,
+  publicationEmojiInstruction,
 } from './telegram-ai-posting-prompts';
-import { parseTelegramAiPostingJson } from './telegram-ai-posting-json';
+import {
+  parseTelegramAiPostingDraft,
+  parseTelegramAiPostingJson,
+} from './telegram-ai-posting-json';
 import { recentTelegramAiPostingHistory } from './telegram-ai-posting-learning';
+import { telegramAiPostingLanguageName } from './telegram-ai-posting-language';
+import { telegramAiPostingMediaPreferences } from './telegram-ai-posting-media-preferences';
 
 const normalize = (value: string) =>
   value
@@ -55,10 +61,19 @@ export async function generateTelegramAiPostingDraft(
     channelId: string;
     topic: string;
     config: Record<string, any>;
+    referenceImage?: Buffer | null;
+    referenceImageFailed?: boolean;
+    referenceImageCache?: Map<
+      string,
+      { image: Buffer | null; failed: boolean }
+    >;
+    channelAvatar?: Buffer | null;
+    watermarkChannelAvatar?: boolean;
     context: Awaited<ReturnType<TelegramAiPostingSourceService['collect']>>;
     planningCost: string | null;
     previousFormats: string[];
     previousLengths: number[];
+    onMediaProgress?: () => void;
     invoke: (
       stage: Run['stage'],
       category: AiCategory,
@@ -84,43 +99,41 @@ export async function generateTelegramAiPostingDraft(
     currentAndScheduled: input.context.existingPosts,
   }).slice(0, 30000);
   let draft: Draft | null = null;
-  const configuredStyles: unknown = input.config.imageStyles;
-  const imageStyles: string[] = Array.isArray(configuredStyles)
-    ? configuredStyles
-        .filter(
-          (style: unknown): style is string =>
-            typeof style === 'string' && Boolean(style.trim()),
-        )
-        .slice(0, 10)
-    : [];
+  const imagePreferences = telegramAiPostingMediaPreferences(input.config);
+  const imageStyles = imagePreferences.map(({ name, description }) => ({
+    name,
+    description,
+  }));
+  let selectedReference = {
+    image: input.referenceImage ?? null,
+    failed: input.referenceImageFailed ?? false,
+  };
   let reviewReasons: string[] = [];
   let attempt = 0;
   let shortenedOnce = false;
   let lastFailureCode = 'AI_POSTING_REVIEW_REJECTED';
   for (; attempt < 3; attempt++) {
     const lang =
-      input.config.language ||
-      input.context.editorialProfile.language ||
-      'English';
+      telegramAiPostingLanguageName(
+        input.config.language || input.context.editorialProfile.language,
+      ) || 'English';
     const reply = await input.invoke(
       'text',
       'TELEGRAM_POSTING_TEXT',
-      `Return exactly one valid JSON object with all required fields: {"title":string,"text":string,"imagePrompt":string,"imageSearchQuery":string,"imageStyleIndex":number,"format":string,"category":string}. Never omit a field; use an empty string for imageSearchQuery if needed. No markdown fences around the JSON. Write one original Telegram post in ${lang} about: ${input.topic}. Channel description and editorial guidance:\n${editorialDescription(input.config).slice(0, 7000)}\n${mandatoryChannelRules(input.config)}\n${typeof input.config.learningBlock === 'string' ? input.config.learningBlock : 'ЧТО РАБОТАЕТ В КАНАЛЕ\nДанных пока мало.'}\nReturn text using only these markup forms: **bold**, _italic_, > quote lines, [label](https://url), and paragraphs separated by a blank line. Do not return HTML, any other markdown, or Telegram formatting tags. Do not add a channel name, link, signature or configured ending yourself; application code handles ending and hashtags. Publication group choices: ${JSON.stringify(input.config.formats ?? [])}; content hypothesis choices: ${JSON.stringify(input.config.categories ?? [])}. ${input.config.allowCreateGroups === true ? 'Prefer supplied groups; suggest a new concise group name only when none fits.' : 'Choose a group only from the supplied choices, or standard if empty.'} ${input.config.allowCreateHypotheses === true ? 'Prefer supplied hypotheses; suggest a new concise content hypothesis only when none fits.' : 'Choose a hypothesis only from the supplied choices, or general if empty.'} Choose a group distinct from these already selected: ${JSON.stringify(input.previousFormats)}. Vary length is ${input.config.variedLength ? 'enabled' : 'disabled'}; existing draft lengths in characters: ${JSON.stringify(input.previousLengths)}. Keep the complete caption under ${TELEGRAM_AI_POSTING_CAPTION_LIMIT} visible characters. Avoid repeating these posts: ${history}. ${input.config.hashtags === 'disabled' ? 'Do not add hashtags.' : 'Include 1–3 relevant hashtags for the configured placement.'} Emoji policy: ${input.config.emojiPolicy === 'start' ? 'use at most one relevant emoji at the very beginning of the post and no other emojis.' : 'use emojis only when they naturally strengthen the meaning; place them sparingly, at most three in the post.'} ${reviewReasons.length ? `Revise the previous draft to address these review notes: ${JSON.stringify(reviewReasons)}.` : ''} Image preferences: ${JSON.stringify(imageStyles)}. Previously rejected visual directions for this channel: ${JSON.stringify(Array.isArray(input.config.imageAvoidances) ? input.config.imageAvoidances.slice(-5) : [])}. Do not create a closely similar scene to those directions. Choose the most suitable preference for this post and return its zero-based index as imageStyleIndex. These are preferences, not strict constraints. Write an English imagePrompt describing the post and the chosen visual direction, without text or logos. Return imageSearchQuery as a few English keywords for a relevant image in that style.`,
+      `Return exactly one valid JSON object with required fields {"title":string,"text":string}. Optional fields: imagePrompt, imageSearchQuery, imageStyleIndex, format, category. Do not include other required fields and do not use markdown fences. Write one original Telegram post about: ${input.topic}. The reader-facing title and text MUST be exclusively in ${lang}; do not switch languages even if source material, topic names, examples or channel context use another language. Only imagePrompt and imageSearchQuery must be in English. Channel description and editorial guidance:\n${editorialDescription(input.config).slice(0, 7000)}\n${mandatoryChannelRules(input.config)}\n${typeof input.config.learningBlock === 'string' ? input.config.learningBlock : 'ЧТО РАБОТАЕТ В КАНАЛЕ\nДанных пока мало.'}\nReturn text using only these markup forms: **bold**, _italic_, > quote lines, [label](https://url), and paragraphs separated by a blank line. Do not return HTML, any other markdown, or Telegram formatting tags. Do not add a channel name, link, signature or configured ending yourself; application code handles ending and hashtags. Publication group choices: ${JSON.stringify(input.config.formats ?? [])}; content hypothesis choices: ${JSON.stringify(input.config.categories ?? [])}. ${input.config.allowCreateGroups === true ? 'Prefer supplied groups; suggest a new concise group name only when none fits.' : 'Choose a group only from the supplied choices, or standard if empty.'} ${input.config.allowCreateHypotheses === true ? 'Prefer supplied hypotheses; suggest a new concise content hypothesis only when none fits.' : 'Choose a hypothesis only from the supplied choices, or general if empty.'} Choose a group distinct from these already selected: ${JSON.stringify(input.previousFormats)}. ${input.config.variedLength === false ? 'Prefer a consistent medium length, expanding only when the topic needs more explanation.' : 'Choose a natural short, medium or long length based on this topic complexity. Let the topic determine length; do not force a pattern or alternate lengths.'} Keep the complete caption under ${TELEGRAM_AI_POSTING_CAPTION_LIMIT} visible characters. Avoid repeating these posts: ${history}. ${input.config.hashtags === 'disabled' ? 'Do not add hashtags.' : 'Include 1–3 relevant hashtags for the configured placement.'} ${publicationEmojiInstruction(input.config)} ${reviewReasons.length ? `Revise the previous draft to address these review notes: ${JSON.stringify(reviewReasons)}.` : ''} Image preferences: ${JSON.stringify(imageStyles)}. Previously rejected visual directions for this channel: ${JSON.stringify(Array.isArray(input.config.imageAvoidances) ? input.config.imageAvoidances.slice(-5) : [])}. Do not create a closely similar scene to those directions. Choose the most suitable preference for this post and return its zero-based index as imageStyleIndex. These are preferences, not strict constraints. Write an English imagePrompt describing the post and the chosen visual direction, without text or logos. Return imageSearchQuery as a few English keywords for a relevant image in that style.`,
       attempt + 1,
     );
-    const value = parseTelegramAiPostingJson(reply);
+    const value = parseTelegramAiPostingDraft(reply);
     if (
       !value ||
       typeof value.title !== 'string' ||
       typeof value.text !== 'string' ||
-      (value.format !== undefined && typeof value.format !== 'string') ||
-      (value.category !== undefined && typeof value.category !== 'string') ||
       !value.title.trim() ||
       !value.text.trim()
     ) {
       lastFailureCode = 'AI_POSTING_DRAFT_INVALID';
       reviewReasons = [
-        'Ответ должен быть валидным JSON с непустыми title и text. imagePrompt можно не указывать.',
+        'Ответ должен содержать непустой текст публикации; заголовок можно восстановить из первой строки.',
       ];
       continue;
     }
@@ -152,9 +165,28 @@ export async function generateTelegramAiPostingDraft(
       typeof value.imageStyleIndex === 'number' &&
       Number.isInteger(value.imageStyleIndex) &&
       value.imageStyleIndex >= 0 &&
-      value.imageStyleIndex < imageStyles.length
+      value.imageStyleIndex < imagePreferences.length
         ? value.imageStyleIndex
-        : input.publicationIndex % (imageStyles.length || 1);
+        : input.publicationIndex % (imagePreferences.length || 1);
+    const selectedPreference = imagePreferences[styleIndex];
+    selectedReference = {
+      image: input.referenceImage ?? null,
+      failed: input.referenceImageFailed ?? false,
+    };
+    const preferenceReferences = selectedPreference?.references ?? [];
+    if (
+      preferenceReferences.length &&
+      ['ai', 'hybrid'].includes(input.config.imageMode ?? 'found')
+    ) {
+      const referenceKey = JSON.stringify(preferenceReferences);
+      const cached = input.referenceImageCache?.get(referenceKey);
+      if (cached) selectedReference = cached;
+      else {
+        selectedReference =
+          await dependencies.images.prepareReferenceSheet(preferenceReferences);
+        input.referenceImageCache?.set(referenceKey, selectedReference);
+      }
+    }
     draft = {
       title: value.title.trim(),
       text: renderTelegramAiPostingText(value.text, input.config),
@@ -162,8 +194,8 @@ export async function generateTelegramAiPostingDraft(
         typeof value.imagePrompt === 'string' && value.imagePrompt.trim()
           ? value.imagePrompt.trim()
           : `Editorial illustration for ${input.topic}`,
-        imageStyles[styleIndex]
-          ? `Visual preference: ${imageStyles[styleIndex]}`
+        selectedPreference
+          ? `Visual preference: ${selectedPreference.name}${selectedPreference.description ? `. ${selectedPreference.description}` : ''}`
           : '',
       ]
         .filter(Boolean)
@@ -229,10 +261,15 @@ export async function generateTelegramAiPostingDraft(
         throw new BadGatewayException(lastFailureCode);
       continue;
     }
+    const reviewText = renderTelegramAiPostingText(value.text, {
+      ...input.config,
+      ending: '',
+      hashtags: 'disabled',
+    });
     const review = await input.invoke(
       'review',
       'TELEGRAM_POSTING_REVIEW',
-      `Return exactly one valid JSON object with this schema: {"approved":boolean,"reasons":[string]}. No markdown fences or extra text. Review only factual accuracy, safety, repetition, fit with the channel description, compliance with the mandatory channel rules, and tone. Do not review formatting, HTML, hashtags, caption length, or ending.\n${editorialDescription(input.config).slice(0, 7000)}\n${mandatoryChannelRules(input.config)}\nRecent and scheduled posts to compare for repetition: ${history}\nProposed post title: ${draft.title}\nProposed post text: ${draft.text}`,
+      `Return exactly one valid JSON object with this schema: {"approved":boolean,"reasons":[string]}. No markdown fences or extra text. Review only factual accuracy, safety, repetition, fit with the channel description, compliance with the mandatory channel rules, tone, and whether the reader-facing title and authored text use the required language exclusively: ${lang}. Do not review formatting, HTML, hashtags, caption length, or the configured channel ending.\n${editorialDescription(input.config).slice(0, 7000)}\n${mandatoryChannelRules(input.config)}\nRecent and scheduled posts to compare for repetition: ${history}\nRequired reader-facing language: ${lang}\nProposed post title: ${draft.title}\nProposed authored post text (without configured ending or hashtags): ${reviewText}`,
       attempt + 1,
     );
     const verdict = parseTelegramAiPostingJson(review);
@@ -272,6 +309,7 @@ export async function generateTelegramAiPostingDraft(
     )
   )
     throw new BadGatewayException('AI_POSTING_DUPLICATE_CONTENT');
+  input.onMediaProgress?.();
   const resolvedImage = await dependencies.images.resolve({
     userId: input.userId,
     workspaceId: input.workspaceId,
@@ -279,6 +317,10 @@ export async function generateTelegramAiPostingDraft(
     topic: input.topic,
     imageMode: input.config.imageMode ?? 'found',
     imageCandidates: input.context.imageCandidates,
+    referenceImage: selectedReference.image,
+    referenceImageFailed: selectedReference.failed,
+    channelAvatar: input.channelAvatar,
+    watermarkChannelAvatar: input.watermarkChannelAvatar,
     prompt: draft.imagePrompt,
     searchQuery: draft.imageSearchQuery || input.topic,
     mode: input.mode,

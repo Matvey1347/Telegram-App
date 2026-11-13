@@ -342,7 +342,6 @@ function createService() {
   };
   prisma.workspaceMember.findFirst.mockResolvedValue({
     id: 'member-1',
-    salesCommissionRate: null,
   });
   prisma.workspace.findUniqueOrThrow.mockResolvedValue({ timezone: 'UTC' });
   prisma.telegramAdSalesWorkspaceSettings.upsert.mockResolvedValue({

@@ -477,6 +477,10 @@ export function TelegramChannelMessageTemplateSettings({
             await telegramChannelsApi.detachCustomEmojiPack(packId);
             await premiumEmojiPacks.refetch();
           }}
+          onRefresh={async (packId) => {
+            await telegramChannelsApi.refreshCustomEmojiPack(packId);
+            await premiumEmojiPacks.refetch();
+          }}
         />
       </>
     );

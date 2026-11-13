@@ -5,6 +5,7 @@ describe('AiPostingAutopilotNotificationsService', () => {
   it('retries failed Telegram delivery without creating duplicate notifications', async () => {
     const delivery: any = {
       id: 'delivery-1',
+      workspaceId: 'ws-1',
       memberId: 'member-1',
       transport: 'TELEGRAM_BOT',
       status: 'PENDING',
@@ -22,10 +23,6 @@ describe('AiPostingAutopilotNotificationsService', () => {
             roleDefinition: null,
             user: {
               email: 'member@example.test',
-              telegramSystemBotConnection: {
-                enabled: true,
-                telegramChatId: 'chat-1',
-              },
             },
           },
         ]),
@@ -88,22 +85,21 @@ describe('AiPostingAutopilotNotificationsService', () => {
         skipped: 0,
       }),
     };
-    const bot: any = {
-      sendMessage: jest
+    const botNotifications: any = {
+      sendToWorkspace: jest
         .fn()
         .mockRejectedValueOnce(new Error('temporary'))
-        .mockResolvedValueOnce(undefined),
+        .mockResolvedValueOnce({ status: 'SENT' }),
     };
-    const systemBot: any = { token: 'bot-token' };
+    const moduleRef: any = { resolve: jest.fn().mockResolvedValue(botNotifications) };
     const email: any = { send: jest.fn() };
     const service = new AiPostingAutopilotNotificationsService(
       prisma,
       store,
       publisher,
       new OperationsNotificationPermissionService(),
-      bot,
-      systemBot,
       email,
+      moduleRef,
     );
     const input = {
       workspaceId: 'ws-1',
@@ -120,7 +116,7 @@ describe('AiPostingAutopilotNotificationsService', () => {
 
     expect(first.failed).toBe(1);
     expect(second.failed).toBe(0);
-    expect(bot.sendMessage).toHaveBeenCalledTimes(2);
+    expect(botNotifications.sendToWorkspace).toHaveBeenCalledTimes(2);
     expect(store.insertMany).toHaveBeenCalledTimes(2);
     // Notification creation is deduped; retries only resume the failed transport.
     expect(publisher.publish).toHaveBeenCalledTimes(1);
@@ -137,8 +133,6 @@ describe('AiPostingAutopilotNotificationsService', () => {
       {} as any,
       {} as any,
       new OperationsNotificationPermissionService(),
-      {} as any,
-      {} as any,
       {} as any,
     );
     await expect(

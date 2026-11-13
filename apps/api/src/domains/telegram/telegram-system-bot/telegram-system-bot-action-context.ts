@@ -7,7 +7,7 @@ import { normalizeAppLocale } from '@telegram-system/shared';
 export type TelegramSystemBotUpdate = {
   update_id?: number | string;
   message?: TelegramSystemBotIncomingMessage & {
-    chat?: { id?: number | string; type?: string };
+    chat?: { id?: number | string; type?: string; title?: string };
     from?: {
       id?: number | string;
       username?: string;

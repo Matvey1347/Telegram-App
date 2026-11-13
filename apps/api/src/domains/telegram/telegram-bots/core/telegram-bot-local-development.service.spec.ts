@@ -13,6 +13,8 @@ describe('TelegramBotLocalDevelopmentService', () => {
     botIntegrationId: 'finance-1',
     environment: TelegramBotRuntimeEnvironment.LOCAL,
     runtimeStatus: TelegramBotRuntimeStatus.ACTIVE,
+    webhookStatus: TelegramBotWebhookStatus.CONFIGURED,
+    lastRuntimeError: null,
     webhookUrl: 'https://old.trycloudflare.com/api/webhook',
     botTokenEncrypted: 'encrypted',
     botTokenIv: 'iv',
@@ -125,7 +127,16 @@ describe('TelegramBotLocalDevelopmentService', () => {
   it('pushes a fresh localized keyboard when the tunnel URL changed', async () => {
     prisma.telegramBotRuntimeInstance.findMany.mockResolvedValue([runtime]);
 
-    await service.start('control-secret');
+    await expect(service.start('control-secret')).resolves.toMatchObject({
+      started: true,
+      runtimes: [
+        {
+          applicationType: TelegramBotApplicationType.FINANCE,
+          runtimeStatus: TelegramBotRuntimeStatus.ACTIVE,
+          webhookStatus: TelegramBotWebhookStatus.CONFIGURED,
+        },
+      ],
+    });
 
     expect(runtimeService.reconcileLocalDevelopment).toHaveBeenCalledTimes(1);
     expect(api.sendMessage).toHaveBeenCalledWith(
@@ -180,6 +191,28 @@ describe('TelegramBotLocalDevelopmentService', () => {
     expect(financePresentation.menuButton).toHaveBeenCalledWith(
       'finance-1',
       'ru',
+    );
+  });
+
+  it('rejects activation when the LOCAL webhook is not configured', async () => {
+    prisma.telegramBotRuntimeInstance.findMany
+      .mockResolvedValueOnce([
+        {
+          ...runtime,
+          miniAppExpectedUrl: 'https://new.trycloudflare.com/finance/finance-1',
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          ...runtime,
+          runtimeStatus: TelegramBotRuntimeStatus.ERROR,
+          webhookStatus: TelegramBotWebhookStatus.ERROR,
+          lastRuntimeError: 'Telegram rejected the webhook URL',
+        },
+      ]);
+
+    await expect(service.start('control-secret')).rejects.toThrow(
+      'LOCAL Telegram bot activation failed: Telegram rejected the webhook URL',
     );
   });
 

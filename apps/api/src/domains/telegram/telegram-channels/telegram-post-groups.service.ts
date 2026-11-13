@@ -174,6 +174,7 @@ export class TelegramPostGroupsService {
     statusNumberingEnabled: true,
     createdByMemberId: true,
     sidebarPosition: true,
+    archivedAt: true,
     createdAt: true,
     updatedAt: true,
     ...this.postGroupBaseInclude,
@@ -212,6 +213,7 @@ export class TelegramPostGroupsService {
     const where = {
       workspaceId,
       telegramChannelId: query.telegramChannelId,
+      archivedAt: query.archived ? { not: null } : null,
       title: query.search?.trim()
         ? { contains: query.search.trim(), mode: 'insensitive' as const }
         : undefined,
@@ -464,6 +466,12 @@ export class TelegramPostGroupsService {
             : dto.description?.trim() || null,
         icon: dto.icon === undefined ? undefined : dto.icon?.trim() || null,
         statusNumberingEnabled: dto.statusNumberingEnabled,
+        archivedAt:
+          dto.archived === undefined
+            ? undefined
+            : dto.archived
+              ? new Date()
+              : null,
       },
     });
     return this.telegramPostGroupStore.postGroupForWorkspace(

@@ -52,6 +52,8 @@ const messages = {
   "telegram.posts.hypotheses.forwardRate": "Доля пересылок",
   "telegram.posts.hypotheses.subscriberDeltaLabel": "Изменение подписчиков",
   "telegram.posts.hypotheses.actionsNamed": "Действия для {name}",
+  "telegram.posts.hypotheses.archive": "Архивировать",
+  "telegram.posts.hypotheses.restore": "Восстановить",
   "telegram.posts.editor.hypothesis": "Гипотеза",
   "telegram.posts.editor.group": "Группа",
   "telegram.posts.groups.usedInPosts": "Используется в публикациях",
@@ -134,7 +136,8 @@ const messages = {
     "Публикация уже находится в выбранном канале.",
   "telegramPosts.errors.groupAlreadyInTargetChannel":
     "Группа уже находится в выбранном канале.",
-  "telegramPosts.errors.imageUnavailable": "Не удалось загрузить изображение. Проверьте ссылку или загрузите изображение заново и повторите попытку.",
+  "telegramPosts.errors.imageUnavailable":
+    "Не удалось загрузить изображение. Проверьте ссылку или загрузите изображение заново и повторите попытку.",
   "telegramPosts.errors.publishFailed":
     "Telegram не смог опубликовать эту публикацию.",
   "telegramPosts.errors.importRowInvalid":

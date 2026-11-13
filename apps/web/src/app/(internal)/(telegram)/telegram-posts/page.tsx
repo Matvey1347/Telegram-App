@@ -25,6 +25,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import {
+  Archive,
   AlertTriangle,
   Check,
   CheckCircle2,
@@ -523,7 +524,8 @@ export function TelegramPostsPageClient({
           ? "hypotheses"
           : "posts",
     );
-  const initialPostView = routePostView ?? parseTelegramPostsView(searchParams.get("postView"));
+  const initialPostView =
+    routePostView ?? parseTelegramPostsView(searchParams.get("postView"));
   const currentRoutePostView: PostViewMode =
     initialPostView === "calendar" || initialPostView === "ai-posting"
       ? initialPostView
@@ -4459,6 +4461,14 @@ function TelegramPostWorkspace({
               response,
             );
           }}
+          onRefresh={async (packId) => {
+            const response =
+              await telegramChannelsApi.refreshCustomEmojiPack(packId);
+            queryClient.setQueryData(
+              workspaceKeys.telegramCustomEmojiPacks(),
+              response,
+            );
+          }}
         />
       ) : null}
       <ConfirmDeleteModal
@@ -6589,25 +6599,22 @@ function PostGroupsWorkspace({
     return () => window.clearTimeout(timeout);
   }, [newGroupRequested, onNewGroupRequestHandled]);
   const [addPostsOpen, setAddPostsOpen] = useState(false);
-  const [moveOpen, setMoveOpen] = useState(false);
-  const [movingListGroup, setMovingListGroup] = useState<PostGroup | null>(
-    null,
-  );
   const [movingGroupPost, setMovingGroupPost] =
     useState<TelegramManagedPost | null>(null);
   const [publishOpen, setPublishOpen] = useState(false);
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [resetDraftsOpen, setResetDraftsOpen] = useState(false);
-  const [deletingGroup, setDeletingGroup] = useState<PostGroup | null>(null);
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const reorderTimerRef = useRef<number | null>(null);
   const reorderVersionRef = useRef(0);
   const reorderQueueRef = useRef<Promise<void>>(Promise.resolve());
   const groupsPagination = usePagination({ initialPageSize: 12 });
+  const [showArchivedGroups, setShowArchivedGroups] = useState(false);
   const groups = useQuery({
     queryKey: [
       "post-groups",
       channelId,
+      showArchivedGroups,
       { page: groupsPagination.page, pageSize: groupsPagination.pageSize },
     ],
     queryFn: () =>
@@ -6615,6 +6622,7 @@ function PostGroupsWorkspace({
         telegramChannelId: channelId,
         page: groupsPagination.page,
         pageSize: groupsPagination.pageSize,
+        archived: showArchivedGroups,
       }),
     placeholderData: keepPreviousData,
   });
@@ -6717,17 +6725,6 @@ function PostGroupsWorkspace({
 
   const scheduleProgressDismiss = (progressId: string, delayMs = 2800) => {
     window.setTimeout(() => clearProgress(progressId), delayMs);
-  };
-  const progressMetaForGroup = (group: PostGroup) => {
-    const icon = group.iconPresentation;
-    return {
-      id: `move-group:${group.id}`,
-      title: t("telegram.posts.groups.movingNamed", {
-        title: telegramPostGroupTitle(group, t),
-      }),
-      iconEmoji: icon?.type === "unicode" ? icon.value : undefined,
-      iconUrl: icon?.type === "image" ? icon.url : undefined,
-    };
   };
   const scheduleReorderSave = (
     groupId: string,
@@ -6912,8 +6909,6 @@ function PostGroupsWorkspace({
     "inline-flex h-9 items-center gap-2 rounded-md border border-neutral-700 px-3 text-sm font-medium text-neutral-200 transition hover:bg-neutral-800";
   const groupIconActionButtonClass =
     "inline-flex h-9 w-9 items-center justify-center rounded-md border border-neutral-700 text-neutral-300 transition hover:bg-neutral-800";
-  const groupDangerActionButtonClass =
-    "inline-flex h-9 w-9 items-center justify-center rounded-md border border-rose-700 text-rose-300 transition hover:bg-rose-950/40";
 
   if (selectedGroupId) {
     const group = detail.data;
@@ -6961,15 +6956,6 @@ function PostGroupsWorkspace({
                 <RotateCcw size={14} />
                 {t("telegram.posts.groups.makeDrafts")}
               </button>
-              <button
-                type="button"
-                onClick={() => setMoveOpen(true)}
-                className={groupIconActionButtonClass}
-                title={t("telegram.posts.groups.move")}
-                aria-label={t("telegram.posts.groups.move")}
-              >
-                <MoveRight size={14} />
-              </button>
               {!group.isSystem ? (
                 <>
                   <button
@@ -6983,12 +6969,33 @@ function PostGroupsWorkspace({
                   </button>
                   <button
                     type="button"
-                    onClick={() => setDeletingGroup(group)}
-                    className={groupDangerActionButtonClass}
-                    title={t("telegram.posts.groups.delete")}
-                    aria-label={t("telegram.posts.groups.delete")}
+                    onClick={async () => {
+                      await telegramChannelsApi.updatePostGroup(group.id, {
+                        archived: !showArchivedGroups,
+                      });
+                      selectGroup(null);
+                      setShowArchivedGroups(!showArchivedGroups);
+                      await queryClient.invalidateQueries({
+                        queryKey: ["post-groups", channelId],
+                      });
+                    }}
+                    className={groupIconActionButtonClass}
+                    title={t(
+                      showArchivedGroups
+                        ? "telegram.posts.groups.restore"
+                        : "telegram.posts.groups.archive",
+                    )}
+                    aria-label={t(
+                      showArchivedGroups
+                        ? "telegram.posts.groups.restore"
+                        : "telegram.posts.groups.archive",
+                    )}
                   >
-                    <Trash2 size={14} />
+                    {showArchivedGroups ? (
+                      <RotateCcw size={14} />
+                    ) : (
+                      <Archive size={14} />
+                    )}
                   </button>
                 </>
               ) : null}
@@ -7176,35 +7183,6 @@ function PostGroupsWorkspace({
             }}
           />
         ) : null}
-        {moveOpen ? (
-          <MoveGroupModal
-            group={group}
-            channels={channels}
-            onClose={() => setMoveOpen(false)}
-            onSubmit={async (targetId) => {
-              setMoveOpen(false);
-              await runBulk(
-                t("telegram.posts.groups.moving"),
-                async (onProgress) => {
-                  const response = await telegramChannelsApi.movePostGroup(
-                    group!.id,
-                    targetId,
-                    true,
-                    onProgress,
-                  );
-                  return response;
-                },
-                {
-                  ...progressMetaForGroup(group!),
-                  initialMessage: t("common.loading"),
-                },
-              );
-              selectGroup(null);
-              await refresh([channelId, targetId]);
-              await forceReloadGroupData([channelId, targetId]);
-            }}
-          />
-        ) : null}
         {movingGroupPost ? (
           <MovePostModal
             post={movingGroupPost}
@@ -7294,20 +7272,6 @@ function PostGroupsWorkspace({
             </Button>
           </div>
         </Modal>
-        <ConfirmDeleteModal
-          open={!!deletingGroup}
-          onClose={() => setDeletingGroup(null)}
-          entityName={deletingGroup?.title || ""}
-          label={t("telegram.posts.groups.delete")}
-          description={t("telegram.posts.groups.deleteDescription")}
-          onConfirm={async () => {
-            if (!deletingGroup) return;
-            await telegramChannelsApi.deletePostGroup(deletingGroup.id);
-            setDeletingGroup(null);
-            selectGroup(null);
-            await groups.refetch();
-          }}
-        />
       </>
     );
   }
@@ -7324,12 +7288,48 @@ function PostGroupsWorkspace({
           </p>
         </div>
       </div>
+      <div
+        className="mb-4 flex gap-2"
+        role="tablist"
+        aria-label={t("telegram.posts.groups.status")}
+      >
+        {[false, true].map((archived) => (
+          <button
+            key={String(archived)}
+            type="button"
+            role="tab"
+            aria-selected={showArchivedGroups === archived}
+            onClick={() => {
+              setShowArchivedGroups(archived);
+              groupsPagination.setPage(1);
+            }}
+            className={`rounded-lg border px-3 py-2 text-sm ${showArchivedGroups === archived ? "border-blue-500 bg-blue-600 text-white" : "border-neutral-700 text-neutral-300"}`}
+          >
+            {t(
+              archived
+                ? "telegram.posts.groups.archived"
+                : "telegram.posts.groups.active",
+            )}{" "}
+            <span className="ml-1 rounded-full bg-black/20 px-1.5">
+              {groups.isError ? "—" : (groups.data?.pagination.totalItems ?? 0)}
+            </span>
+          </button>
+        ))}
+      </div>
+      {groups.isError ? (
+        <div
+          role="alert"
+          className="mb-4 rounded-lg border border-rose-800 bg-rose-950/30 p-4 text-sm text-rose-200"
+        >
+          {t("telegram.posts.groups.loadError")}
+        </div>
+      ) : null}
       {groupsLoading ? (
         <PostGroupCardsSkeleton
           count={groups.data?.items.length || groupsPagination.pageSize}
         />
       ) : null}
-      {!groupsLoading && groupsList.length ? (
+      {!groupsLoading && !groups.isError && groupsList.length ? (
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {groupsList.map((group) => (
             <div
@@ -7374,11 +7374,6 @@ function PostGroupsWorkspace({
                       icon={<ChevronRight size={17} />}
                       onClick={() => selectGroup(group.id)}
                     />
-                    <TelegramCardMenuAction
-                      label={t("telegram.posts.groups.move")}
-                      icon={<MoveRight size={17} />}
-                      onClick={() => setMovingListGroup(group)}
-                    />
                     {!group.isSystem ? (
                       <>
                         <TelegramCardMenuAction
@@ -7388,10 +7383,27 @@ function PostGroupsWorkspace({
                         />
                         <div className="my-1 border-t border-neutral-800" />
                         <TelegramCardMenuAction
-                          label={t("telegram.posts.groups.delete")}
-                          icon={<Trash2 size={17} />}
-                          onClick={() => setDeletingGroup(group)}
-                          danger
+                          label={t(
+                            showArchivedGroups
+                              ? "telegram.posts.groups.restore"
+                              : "telegram.posts.groups.archive",
+                          )}
+                          icon={
+                            showArchivedGroups ? (
+                              <RotateCcw size={17} />
+                            ) : (
+                              <Archive size={17} />
+                            )
+                          }
+                          onClick={async () => {
+                            await telegramChannelsApi.updatePostGroup(
+                              group.id,
+                              { archived: !showArchivedGroups },
+                            );
+                            await queryClient.invalidateQueries({
+                              queryKey: ["post-groups", channelId],
+                            });
+                          }}
                         />
                       </>
                     ) : null}
@@ -7408,7 +7420,7 @@ function PostGroupsWorkspace({
             </div>
           ))}
         </div>
-      ) : !groupsLoading ? (
+      ) : !groupsLoading && !groups.isError ? (
         <EmptyState text={t("telegram.posts.groups.emptyAll")} />
       ) : null}
       {groups.data ? (
@@ -7438,47 +7450,6 @@ function PostGroupsWorkspace({
           }}
         />
       ) : null}
-      {movingListGroup ? (
-        <MoveGroupModal
-          group={movingListGroup}
-          channels={channels}
-          onClose={() => setMovingListGroup(null)}
-          onSubmit={async (targetId) => {
-            const group = movingListGroup;
-            setMovingListGroup(null);
-            if (!group) return;
-            await runBulk(
-              t("telegram.posts.groups.moving"),
-              async (onProgress) =>
-                telegramChannelsApi.movePostGroup(
-                  group.id,
-                  targetId,
-                  true,
-                  onProgress,
-                ),
-              {
-                ...progressMetaForGroup(group),
-                initialMessage: t("common.loading"),
-              },
-            );
-            await refresh([channelId, targetId]);
-            await forceReloadGroupData([channelId, targetId]);
-          }}
-        />
-      ) : null}
-      <ConfirmDeleteModal
-        open={!!deletingGroup}
-        onClose={() => setDeletingGroup(null)}
-        entityName={deletingGroup?.title || ""}
-        label={t("telegram.posts.groups.delete")}
-        description={t("telegram.posts.groups.deleteDescription")}
-        onConfirm={async () => {
-          if (!deletingGroup) return;
-          await telegramChannelsApi.deletePostGroup(deletingGroup.id);
-          setDeletingGroup(null);
-          await groups.refetch();
-        }}
-      />
     </>
   );
 }
@@ -7776,56 +7747,6 @@ function GroupFormModal({
             }}
           >
             {t("telegram.posts.groups.save")}
-          </Button>
-        </div>
-      </div>
-    </Modal>
-  );
-}
-
-function MoveGroupModal({
-  group,
-  channels,
-  onClose,
-  onSubmit,
-}: {
-  group?: PostGroup;
-  channels: TelegramChannel[];
-  onClose: () => void;
-  onSubmit: (targetId: string) => Promise<void>;
-}) {
-  const { t } = useI18n();
-  const [targetId, setTargetId] = useState("");
-  return (
-    <Modal
-      open
-      onClose={onClose}
-      title={t("telegram.posts.groups.move")}
-      allowOverflow
-    >
-      <div className="space-y-4">
-        <p className="text-sm text-amber-200">
-          {t("telegram.posts.groups.moveDescription")}
-        </p>
-        <FormField label={t("telegram.posts.groups.targetChannel")} required>
-          <CustomSelect
-            value={targetId}
-            onChange={setTargetId}
-            options={channels
-              .filter((channel) => channel.id !== group?.telegramChannelId)
-              .map((channel) => ({
-                value: channel.id,
-                label: channel.title,
-                iconUrl: channel.photoUrl || undefined,
-              }))}
-          />
-        </FormField>
-        <div className="flex justify-end gap-2">
-          <Button variant="secondary" onClick={onClose}>
-            {t("common.cancel")}
-          </Button>
-          <Button disabled={!targetId} onClick={() => onSubmit(targetId)}>
-            {t("telegram.posts.groups.move")}
           </Button>
         </div>
       </div>

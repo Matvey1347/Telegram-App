@@ -70,6 +70,45 @@ export type TelegramSystemBotConnectionStatus = {
   runtimeEnvironment?: "LOCAL" | "PRODUCTION" | null;
 };
 
+export type TelegramSystemBotNotificationGroupStatus = {
+  connected: boolean;
+  chatTitle: string | null;
+  botUsername: string | null;
+  runtimeEnvironment?: "LOCAL" | "PRODUCTION" | null;
+  botRuntimes?: TelegramSystemBotRuntimeInfo[];
+};
+
+export type TelegramSystemBotRuntimeInfo = {
+  environment: "LOCAL" | "PRODUCTION";
+  username: string | null;
+  selected: boolean;
+};
+
+export type TelegramSystemBotNotificationGroupLink = {
+  token: string;
+  botUsername: string;
+  expiresAt: string;
+  botRuntimes?: TelegramSystemBotRuntimeInfo[];
+};
+
+export type TelegramSystemBotNotificationAccountStatus = {
+  connected: boolean;
+  telegramUserId?: string | null;
+  telegramUsername: string | null;
+  displayName: string | null;
+  botUsername: string | null;
+  runtimeEnvironment?: "LOCAL" | "PRODUCTION" | null;
+  botRuntimes?: TelegramSystemBotRuntimeInfo[];
+};
+
+export type TelegramSystemBotNotificationAccountLink = {
+  token: string;
+  botUsername: string;
+  expiresAt: string;
+  runtimeEnvironment?: "LOCAL" | "PRODUCTION" | null;
+  botRuntimes?: TelegramSystemBotRuntimeInfo[];
+};
+
 export type TelegramChannelSystemBotConnectionStatus =
   | "CONNECTED"
   | "NOT_CONNECTED"

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { Archive, Pencil, Plus, RotateCcw } from "lucide-react";
 import type {
   ResolvedEmoji,
   TelegramContentHypothesis,
@@ -14,7 +14,6 @@ import { IconPicker } from "@/components/icons/icon-picker";
 import {
   Button,
   Card,
-  ConfirmDeleteModal,
   FormField,
   Input,
   Modal,
@@ -210,25 +209,45 @@ export function ContentHypothesesWorkspace({
   const { pushToast } = useAppToast();
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState<TelegramContentHypothesis | null>();
-  const [deleting, setDeleting] = useState<TelegramContentHypothesis | null>(
-    null,
-  );
+  const [statusTab, setStatusTab] =
+    useState<TelegramContentHypothesisStatus>("ACTIVE");
   const list = useQuery({
     queryKey: telegramContentHypothesisKeys.list(channelId),
     queryFn: () => telegramContentHypothesesApi.list(channelId),
   });
-  const remove = useMutation({
-    mutationFn: (id: string) =>
-      telegramContentHypothesesApi.remove(channelId, id),
+  const setStatus = useMutation({
+    mutationFn: ({
+      id,
+      status,
+    }: {
+      id: string;
+      status: TelegramContentHypothesisStatus;
+    }) => {
+      const item = list.data?.find((hypothesis) => hypothesis.id === id);
+      if (!item) throw new Error("Hypothesis not found");
+      return telegramContentHypothesesApi.update(channelId, id, {
+        name: item.name,
+        description: item.description,
+        status,
+        conclusion: item.conclusion,
+        iconId: item.iconId,
+      });
+    },
     onSuccess: async () => {
       await queryClient.invalidateQueries({
         queryKey: telegramContentHypothesisKeys.list(channelId),
       });
-      setDeleting(null);
     },
-    onError: () =>
-      pushToast(t("telegram.posts.hypotheses.deleteError"), "error"),
+    onError: () => pushToast(t("telegram.posts.hypotheses.saveError"), "error"),
   });
+  const counts = Object.fromEntries(
+    CONTENT_HYPOTHESIS_STATUSES.map((status) => [
+      status,
+      list.data?.filter((item) => item.status === status).length ?? 0,
+    ]),
+  ) as Record<TelegramContentHypothesisStatus, number>;
+  const visibleHypotheses =
+    list.data?.filter((item) => item.status === statusTab) ?? [];
 
   return (
     <section>
@@ -251,13 +270,34 @@ export function ContentHypothesesWorkspace({
           {t("telegram.posts.hypotheses.loadError")}
         </p>
       ) : null}
-      {list.data?.length === 0 ? (
+      <div
+        className="mb-4 flex flex-wrap gap-2"
+        role="tablist"
+        aria-label={t("telegram.posts.hypotheses")}
+      >
+        {CONTENT_HYPOTHESIS_STATUSES.map((status) => (
+          <button
+            key={status}
+            type="button"
+            role="tab"
+            aria-selected={statusTab === status}
+            onClick={() => setStatusTab(status)}
+            className={`rounded-lg border px-3 py-2 text-sm ${statusTab === status ? "border-blue-500 bg-blue-600 text-white" : "border-neutral-700 text-neutral-300"}`}
+          >
+            {t(`telegram.posts.hypotheses.status.${status}`)}{" "}
+            <span className="ml-1 rounded-full bg-black/20 px-1.5">
+              {counts[status]}
+            </span>
+          </button>
+        ))}
+      </div>
+      {visibleHypotheses.length === 0 ? (
         <Card className="p-5 text-sm text-neutral-400">
           {t("telegram.posts.hypotheses.empty")}
         </Card>
       ) : null}
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-        {list.data?.map((item) => (
+        {visibleHypotheses.map((item) => (
           <Card
             key={item.id}
             className={`p-4 transition hover:border-blue-700 ${CONTENT_HYPOTHESIS_STATUS_TONE[item.status]}`}
@@ -283,10 +323,25 @@ export function ContentHypothesesWorkspace({
                   onClick={() => setEditing(item)}
                 />
                 <TelegramCardMenuAction
-                  label={t("telegram.posts.hypotheses.delete")}
-                  icon={<Trash2 size={16} />}
-                  onClick={() => setDeleting(item)}
-                  danger
+                  label={t(
+                    item.status === "ARCHIVED"
+                      ? "telegram.posts.hypotheses.restore"
+                      : "telegram.posts.hypotheses.archive",
+                  )}
+                  icon={
+                    item.status === "ARCHIVED" ? (
+                      <RotateCcw size={16} />
+                    ) : (
+                      <Archive size={16} />
+                    )
+                  }
+                  onClick={() =>
+                    setStatus.mutate({
+                      id: item.id,
+                      status:
+                        item.status === "ARCHIVED" ? "ACTIVE" : "ARCHIVED",
+                    })
+                  }
                 />
               </TelegramCardActionsMenu>
             </div>
@@ -339,16 +394,6 @@ export function ContentHypothesesWorkspace({
           onClose={() => setEditing(undefined)}
         />
       ) : null}
-      <ConfirmDeleteModal
-        open={Boolean(deleting)}
-        onClose={() => setDeleting(null)}
-        entityName={deleting?.name ?? ""}
-        label={deleting?.name ?? ""}
-        description={t("telegram.posts.hypotheses.delete")}
-        onConfirm={async () => {
-          if (deleting) await remove.mutateAsync(deleting.id);
-        }}
-      />
     </section>
   );
 }

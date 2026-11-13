@@ -1,11 +1,6 @@
 "use client";
 
-import {
-  useRef,
-  useState,
-  type ClipboardEvent,
-  type DragEvent,
-} from "react";
+import { useRef, useState, type ClipboardEvent, type DragEvent } from "react";
 import { FileUp, Link2, LoaderCircle, Plus, Upload, X } from "lucide-react";
 import {
   inferTelegramPostMediaKind,
@@ -24,6 +19,14 @@ export function TelegramPostMediaUpload({
   compact,
   allowedKinds,
   maxItems,
+  maxFileSizeBytes = 20 * 1024 * 1024,
+  label,
+  dropAreaLabel,
+  dropPrompt,
+  browseLabel,
+  sizeHint,
+  removeLabel = "Remove media",
+  showUrlInput = true,
   onUploadingChange,
 }: {
   value: TelegramPostMediaItem[];
@@ -33,6 +36,14 @@ export function TelegramPostMediaUpload({
   compact?: boolean;
   allowedKinds?: TelegramPostMediaKind[];
   maxItems?: number;
+  maxFileSizeBytes?: number;
+  label?: string;
+  dropAreaLabel?: string;
+  dropPrompt?: string;
+  browseLabel?: string;
+  sizeHint?: string;
+  removeLabel?: string;
+  showUrlInput?: boolean;
   onUploadingChange?: (uploading: boolean) => void;
 }) {
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -63,6 +74,13 @@ export function TelegramPostMediaUpload({
 
   const uploadFiles = async (files: File[]) => {
     if (!files.length) return;
+    if (files.some((file) => file.size > maxFileSizeBytes)) {
+      pushToast(
+        `Media files must be ${Math.round(maxFileSizeBytes / (1024 * 1024))} MB or smaller.`,
+        "error",
+      );
+      return;
+    }
     if (
       files.some((file) => {
         const kind = inferTelegramPostMediaKind(file.name, file.type);
@@ -87,7 +105,7 @@ export function TelegramPostMediaUpload({
       append(uploaded);
     } catch {
       pushToast(
-        "Media upload failed. The maximum file size is 20 MB.",
+        `Media upload failed. Ensure each file is no larger than ${Math.round(maxFileSizeBytes / (1024 * 1024))} MB.`,
         "error",
       );
     } finally {
@@ -118,7 +136,13 @@ export function TelegramPostMediaUpload({
 
   const pasteFiles = (event: ClipboardEvent<HTMLElement>) => {
     if (locked || value.length >= itemLimit) return;
-    const files = Array.from(event.clipboardData.files);
+    const clipboard = event.clipboardData;
+    const files = Array.from(clipboard.files).length
+      ? Array.from(clipboard.files)
+      : Array.from(clipboard.items)
+          .filter((item) => item.kind === "file")
+          .map((item) => item.getAsFile())
+          .filter((file): file is File => Boolean(file));
     if (!files.length) return;
     event.preventDefault();
     void uploadFiles(files);
@@ -132,12 +156,12 @@ export function TelegramPostMediaUpload({
   };
 
   return (
-    <FormField label="Media (photos, video, GIF)">
+    <FormField label={label ?? "Media (photos, video, GIF)"}>
       {!readOnly ? (
         <div className="space-y-2">
           <div
             role="region"
-            aria-label="Media drop and paste area"
+            aria-label={dropAreaLabel ?? "Media drop and paste area"}
             className={`flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed px-4 py-5 text-center transition ${
               dragging
                 ? "border-blue-500 bg-blue-950/30 text-white"
@@ -151,8 +175,14 @@ export function TelegramPostMediaUpload({
             tabIndex={locked || value.length >= itemLimit ? -1 : 0}
           >
             <span className="inline-flex items-center gap-2 text-sm font-medium">
-              {uploading ? <LoaderCircle className="animate-spin" size={18} /> : <FileUp size={18} />}
-              {uploading ? "Uploading media…" : "Drop or paste photos, video or GIF"}
+              {uploading ? (
+                <LoaderCircle className="animate-spin" size={18} />
+              ) : (
+                <FileUp size={18} />
+              )}
+              {uploading
+                ? "Uploading media…"
+                : (dropPrompt ?? "Drop or paste photos, video or GIF")}
             </span>
             <button
               type="button"
@@ -160,9 +190,11 @@ export function TelegramPostMediaUpload({
               onClick={() => inputRef.current?.click()}
               className="inline-flex h-9 items-center gap-2 rounded-lg border border-blue-500/70 bg-blue-600/15 px-4 text-sm font-medium text-blue-200 transition hover:bg-blue-600/30 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <Upload size={14} /> Choose files
+              <Upload size={14} /> {browseLabel ?? "Choose files"}
             </button>
-            <span className="text-xs text-neutral-500">Images, GIFs, MP4, or WebM up to 20 MB</span>
+            <span className="text-xs text-neutral-500">
+              {sizeHint ?? "Images, GIFs, MP4, or WebM up to 20 MB"}
+            </span>
             <input
               ref={inputRef}
               type="file"
@@ -180,25 +212,27 @@ export function TelegramPostMediaUpload({
               }}
             />
           </div>
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <Input
-              value={url}
-              onChange={(event) => setUrl(event.target.value)}
-              placeholder="Direct image, video or GIF URL"
-              disabled={locked}
-            />
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={addUrl}
-              disabled={locked || !url.trim()}
-            >
-              <span className="inline-flex items-center gap-1.5">
-                <Link2 size={15} />
-                Add
-              </span>
-            </Button>
-          </div>
+          {showUrlInput ? (
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Input
+                value={url}
+                onChange={(event) => setUrl(event.target.value)}
+                placeholder="Direct image, video or GIF URL"
+                disabled={locked}
+              />
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={addUrl}
+                disabled={locked || !url.trim()}
+              >
+                <span className="inline-flex items-center gap-1.5">
+                  <Link2 size={15} />
+                  Add
+                </span>
+              </Button>
+            </div>
+          ) : null}
         </div>
       ) : null}
       {value.length ? (
@@ -215,11 +249,11 @@ export function TelegramPostMediaUpload({
               {!readOnly ? (
                 <button
                   type="button"
-                  aria-label="Remove media"
+                  aria-label={removeLabel}
                   onClick={() =>
                     onChange(value.filter((_, position) => position !== index))
                   }
-                  className="absolute right-1 top-1 rounded bg-black/75 p-1 text-white opacity-0 group-hover:opacity-100"
+                  className="absolute right-1 top-1 rounded bg-black/75 p-1 text-white opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
                 >
                   <X size={14} />
                 </button>

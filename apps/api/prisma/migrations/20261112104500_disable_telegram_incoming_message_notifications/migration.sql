@@ -1,0 +1,1 @@
+-- Stop creating this notification type in application code, but retain history.

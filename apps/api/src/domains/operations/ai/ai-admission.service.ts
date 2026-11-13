@@ -117,6 +117,23 @@ export class AiAdmissionService {
   }
   async admit(request: AiExecutionRequest) {
     const now = new Date();
+    const imagePayloadInvalid =
+      request.image !== undefined &&
+      (!['LEAD_AD_CLASSIFICATION', 'TELEGRAM_POSTING_IMAGE'].includes(
+        request.category,
+      ) ||
+        (request.category === 'LEAD_AD_CLASSIFICATION' &&
+          request.durableVersion !== 'lead-media-vision-v1') ||
+        (request.category === 'TELEGRAM_POSTING_IMAGE' &&
+          (request.durableVersion !== undefined ||
+            request.mediaPilotSourceId !== undefined)) ||
+        request.image.mime !== 'image/jpeg' ||
+        !Buffer.isBuffer(request.image.data) ||
+        request.image.data.length < 3 ||
+        request.image.data.length > 5 * 1024 * 1024 ||
+        !request.image.data
+          .subarray(0, 3)
+          .equals(Buffer.from([0xff, 0xd8, 0xff])));
     if (
       !/^\d{4}-\d{2}-\d{2}:[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
         request.operationId,
@@ -141,18 +158,10 @@ export class AiAdmissionService {
       Buffer.byteLength(request.input, 'utf8') +
         Buffer.byteLength(request.instructions ?? '', 'utf8') >
         256 * 1024 ||
-      (request.image !== undefined &&
-        (request.category !== 'LEAD_AD_CLASSIFICATION' ||
-          request.durableVersion !== 'lead-media-vision-v1' ||
-          request.image.mime !== 'image/jpeg' ||
-          !Buffer.isBuffer(request.image.data) ||
-          request.image.data.length < 3 ||
-          request.image.data.length > 5 * 1024 * 1024 ||
-          !request.image.data
-            .subarray(0, 3)
-            .equals(Buffer.from([0xff, 0xd8, 0xff])))) ||
+      imagePayloadInvalid ||
       (request.durableVersion === 'lead-media-vision-v1' && !request.image) ||
       (request.image !== undefined &&
+        request.category === 'LEAD_AD_CLASSIFICATION' &&
         (request.mode !== 'MANUAL' ||
           !request.mediaPilotSourceId ||
           request.mediaPilotSourceId.length > 100)) ||
@@ -213,14 +222,15 @@ export class AiAdmissionService {
       const configured = this.registry.resolve(request.category, persisted);
       if (!this.registry.supports(request.category, configured.modelId))
         throw new ConflictException('AI_MODEL_CATEGORY_UNSUPPORTED');
-      const config = request.image
-        ? {
-            ...configured,
-            schemaId: this.registry.schema(request.category, true).id,
-            promptVersion: 'lead-media-vision-v1',
-            mediaPilotSourceId: request.mediaPilotSourceId,
-          }
-        : configured;
+      const config =
+        request.image && request.category === 'LEAD_AD_CLASSIFICATION'
+          ? {
+              ...configured,
+              schemaId: this.registry.schema(request.category, true).id,
+              promptVersion: 'lead-media-vision-v1',
+              mediaPilotSourceId: request.mediaPilotSourceId,
+            }
+          : configured;
       if (
         !this.deployment.enabled ||
         !this.deployment.configured ||
@@ -260,7 +270,7 @@ export class AiAdmissionService {
         config.maxInputTokens,
         config.maxOutputTokens,
       );
-      if (request.image) {
+      if (request.image && request.category === 'LEAD_AD_CLASSIFICATION') {
         // The existing workspace advisory lock also fences settlement and concurrent admissions.
         // Uncertain and still-running operations retain their entire reservation.
         const [pilot] = await tx.$queryRaw<
@@ -279,9 +289,17 @@ export class AiAdmissionService {
         )
           throw new ConflictException('AI_MEDIA_PILOT_BUDGET_EXHAUSTED');
       }
+      // An explicitly configured image limit replaces the workspace per-request
+      // cap; workspace and category daily/monthly budgets still apply.
+      const requestLimit =
+        request.category === 'TELEGRAM_POSTING_IMAGE' && config.maxRequestCost
+          ? config.maxRequestCost
+          : workspace.maxRequestCost;
       if (
-        reservedCost.gt(workspace.maxRequestCost) ||
-        (config.maxRequestCost && reservedCost.gt(config.maxRequestCost))
+        reservedCost.gt(requestLimit) ||
+        (request.category !== 'TELEGRAM_POSTING_IMAGE' &&
+          config.maxRequestCost &&
+          reservedCost.gt(config.maxRequestCost))
       )
         throw new ConflictException('AI_REQUEST_BUDGET_EXCEEDED');
       const [active, categoryActive, unresolved] = await Promise.all([

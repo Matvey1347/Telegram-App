@@ -81,6 +81,7 @@ describe("WorkspaceMembersSection", () => {
   it("defers role and Telegram account catalogs until a member editor opens", async () => {
     const user = userEvent.setup();
     renderSection();
+    await user.click(await screen.findByRole("tab", { name: /Other members/ }));
     await screen.findByText("Alice");
 
     expect(telegramUserAccountsApi.list).not.toHaveBeenCalled();
@@ -93,17 +94,62 @@ describe("WorkspaceMembersSection", () => {
     });
   });
 
-  it("uses channel-card padding and a responsive masonry layout", async () => {
+  it("opens on the investors tab and shows the other member group separately", async () => {
+    const user = userEvent.setup();
+    renderSection();
+    expect(
+      await screen.findByRole("tab", { name: /Investors/ }),
+    ).toHaveAttribute("aria-selected", "true");
+    expect(await screen.findByText("No investors yet")).toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: /Other members/ }));
+    expect(await screen.findByText("Alice")).toBeInTheDocument();
+  });
+
+  it("keeps four investors in a deterministic three-column responsive grid", async () => {
+    const members = Array.from({ length: 4 }, (_, index) => ({
+      id: `investor-${index + 1}`,
+      role: "member",
+      isCurrentUser: false,
+      isHidden: false,
+      user: {
+        name: `Investor ${index + 1}`,
+        email: `investor-${index + 1}@example.com`,
+      },
+      assignedTelegramUserAccounts: [],
+    }));
+    vi.mocked(workspaceMembersApi.list).mockResolvedValue(members as never);
+    vi.mocked(memberFinanceApi.summaries).mockResolvedValue(
+      members.map((member) => ({
+        memberId: member.id,
+        primaryCurrency: "UAH",
+        commissionEarned: 0,
+        commissionSettled: 0,
+        commissionPayable: 0,
+        investments: {
+          external: 0,
+          salary: 100,
+          investorEarnings: 0,
+          principal: 100,
+          total: 100,
+        },
+      })) as never,
+    );
+
     const { container } = renderSection();
+    const memberName = await screen.findByText("Investor 1");
+    const card = memberName.closest(".relative.w-full");
+    const grid = screen.getByRole("tabpanel");
 
-    const memberName = await screen.findByText("Alice");
-    const card = memberName.closest(".break-inside-avoid");
-    const masonry = card?.parentElement;
-
-    expect(masonry).toHaveClass("columns-1", "md:columns-2", "xl:columns-3");
-    expect(card).toHaveClass("mb-4", "inline-block", "w-full", "!p-0");
+    expect(grid).toHaveClass(
+      "grid",
+      "grid-cols-1",
+      "md:grid-cols-2",
+      "xl:grid-cols-3",
+    );
+    expect(card).toHaveClass("w-full", "!p-0");
     expect(card?.firstElementChild).toHaveClass("p-4");
-    expect(container).toHaveTextContent("Owner");
+    expect(container).toHaveTextContent("Invested");
+    expect(screen.getByText("Investor 4")).toBeInTheDocument();
   });
 
   it("creates a member with one selected MTProto identity", async () => {
@@ -165,13 +211,12 @@ describe("WorkspaceMembersSection", () => {
     ] as never);
     renderSection();
 
+    await user.click(await screen.findByRole("tab", { name: /Other members/ }));
+
     await user.click(
       await screen.findByRole("button", { name: "Actions for Bob" }),
     );
     await user.click(screen.getByRole("menuitem", { name: "Edit member" }));
-    const commissionRate = screen.getByRole("spinbutton");
-    await user.clear(commissionRate);
-    await user.type(commissionRate, "17.5");
     await user.click(screen.getByRole("button", { name: /Content manager/u }));
     await user.click(screen.getByRole("button", { name: /Reviewer/u }));
     await user.click(screen.getByRole("button", { name: "Save" }));
@@ -180,7 +225,6 @@ describe("WorkspaceMembersSection", () => {
       "member-2",
       expect.objectContaining({
         roleDefinitionId: "role-reviewer",
-        salesCommissionRate: 17.5,
       }),
     );
   });

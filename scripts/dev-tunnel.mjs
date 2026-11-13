@@ -53,7 +53,7 @@ const dashboardServices = withFinanceApi
       ["Mini App gateway", "Gateway · :4100"],
       ["Cloudflare", "Cloudflare tunnel"],
       ["Finance bot", "LOCAL bot"],
-      ["Bot cleanup", "Bot cleanup"],
+      ["Bot cleanup", "Cleanup on exit"],
     ]
   : [
       ["Backend", "API · :4000"],
@@ -61,7 +61,7 @@ const dashboardServices = withFinanceApi
       ["Mini App gateway", "Gateway · :4100"],
       ["Cloudflare", "Cloudflare tunnel"],
       ["Bot activation", "LOCAL bots"],
-      ["Bot cleanup", "Bot cleanup"],
+      ["Bot cleanup", "Cleanup on exit"],
       ["Database", "Database"],
       ["Prisma", "Prisma client"],
     ];
@@ -236,11 +236,31 @@ async function activateLocalBots() {
       .replace(/\s+/g, " ")
       .replace(/[\r\n]/g, " ")
       .slice(0, 240);
-    throw new Error(
+    const error = new Error(
       `LOCAL bot activation returned HTTP ${response.status}${message ? `: ${message}` : ""}`,
     );
+    failure("Bot activation", error);
+    throw error;
   }
-  status("Bot activation", "LOCAL webhooks and Mini App links reconciled");
+  const result = await response.json().catch(() => null);
+  const runtimes = Array.isArray(result?.runtimes) ? result.runtimes : [];
+  const inactive = runtimes.filter(
+    (runtime) =>
+      runtime.runtimeStatus !== "ACTIVE" ||
+      runtime.webhookStatus !== "CONFIGURED",
+  );
+  if (result?.started !== true || runtimes.length === 0 || inactive.length) {
+    const error = new Error(
+      "LOCAL bot activation endpoint did not confirm an ACTIVE runtime with a configured webhook",
+    );
+    failure("Bot activation", error);
+    throw error;
+  }
+  status(
+    "Bot activation",
+    `${runtimes.length} LOCAL runtime${runtimes.length === 1 ? "" : "s"} active; webhook configured`,
+  );
+  return runtimes;
 }
 
 async function synchronizeFinanceLocalBot() {
@@ -256,14 +276,27 @@ async function synchronizeFinanceLocalBot() {
     const detail = (await response.text().catch(() => ""))
       .replace(/\s+/g, " ")
       .slice(0, 240);
-    throw new Error(
+    const error = new Error(
       `Finance LOCAL bot synchronization returned HTTP ${response.status}${detail ? `: ${detail}` : ""}`,
     );
+    failure("Finance bot", error);
+    throw error;
   }
+  const result = await response.json().catch(() => null);
+  if (result?.synchronized !== true) {
+    const error = new Error("Finance LOCAL bot synchronization was not confirmed");
+    failure("Finance bot", error);
+    throw error;
+  }
+  const username =
+    typeof result.username === "string" && result.username.trim()
+      ? `@${result.username.replace(/^@/u, "")}`
+      : "LOCAL Finance bot";
   status(
     "Finance bot",
-    "LOCAL token synchronized from products/finance/.env.local",
+    `${username} token synchronized from products/finance/.env.local`,
   );
+  return username;
 }
 
 async function assertCloudflaredAvailable() {
@@ -513,17 +546,21 @@ if (withFinanceApi) {
       },
     );
     await Promise.all([
-      waitForHttpReady("http://127.0.0.1:4001/api/health"),
-      waitForHttpReady("http://127.0.0.1:4002/api/health"),
-      waitForHttpReady("http://127.0.0.1:3001"),
+      waitForHttpReady("http://127.0.0.1:4001/api/health").then(() =>
+        status("Finance API", "http://localhost:4001/api"),
+      ),
+      waitForHttpReady("http://127.0.0.1:4002/api/health").then(() =>
+        status("Finance analytics API", "http://localhost:4002/api"),
+      ),
+      waitForHttpReady("http://127.0.0.1:3001").then(() =>
+        status("Finance Web", "http://localhost:3001"),
+      ),
     ]);
     backendReady = true;
-    await synchronizeFinanceLocalBot();
+    const username = await synchronizeFinanceLocalBot();
     await activateLocalBots();
-    status("Finance API", "http://localhost:4001/api");
-    status("Finance Web", "http://localhost:3001");
     dashboard.notice(
-      "✓ Finance bot: LOCAL runtime is active through this Cloudflare URL; Ctrl-C removes its local webhook and Mini App links.",
+      `✓ Finance bot ${username}: LOCAL webhook confirmed. Open this bot in Telegram and send /start. Ctrl-C removes its local webhook and Mini App links.`,
     );
     await new Promise(() => {});
   } catch (error) {

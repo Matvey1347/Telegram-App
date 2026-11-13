@@ -10,7 +10,6 @@ type CommissionReader = {
   workspaceMember: {
     findFirst(args: unknown): Promise<{
       id: string;
-      salesCommissionRate: Prisma.Decimal | null;
     } | null>;
   };
 };
@@ -38,17 +37,11 @@ export async function resolveAdSaleCommissionSnapshot(
     }),
     prisma.workspaceMember.findFirst({
       where: { id: sellerMemberId, workspaceId },
-      select: { id: true, salesCommissionRate: true },
+      select: { id: true },
     }),
   ]);
   const enabled = Boolean(settings?.salesCommissionEnabled && member);
-  const rate = enabled
-    ? Number(
-        member?.salesCommissionRate ??
-          settings?.defaultSalesCommissionRate ??
-          0,
-      )
-    : 0;
+  const rate = enabled ? Number(settings?.defaultSalesCommissionRate ?? 0) : 0;
   return {
     sellerMemberId: member?.id ?? null,
     sellerCommissionEnabled: enabled && rate > 0,

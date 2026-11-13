@@ -110,6 +110,7 @@ describe('TelegramPostGroupSummaryReadService', () => {
           where: {
             workspaceId: 'workspace-1',
             telegramChannelId: 'channel-1',
+            archivedAt: null,
           },
           orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
           take: TELEGRAM_POST_GROUP_SUMMARY_MAX_ITEMS + 1,

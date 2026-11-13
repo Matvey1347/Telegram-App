@@ -26,7 +26,6 @@ export type MemberFormValues = {
   avatarIconId?: string | null;
   telegramUsername?: string | null;
   telegramUserAccountIds: string[];
-  salesCommissionRate?: number | null;
 };
 
 export function WorkspaceMemberModal({
@@ -91,7 +90,6 @@ export function WorkspaceMemberModal({
       avatarIconId: null,
       telegramUsername: "",
       telegramUserAccountIds: [],
-      salesCommissionRate: null,
     },
   });
 
@@ -112,7 +110,6 @@ export function WorkspaceMemberModal({
       avatarIconId: member?.avatarIconId ?? null,
       telegramUsername: member?.telegramUsername ?? "",
       telegramUserAccountIds: initialAssignedIds,
-      salesCommissionRate: member?.salesCommissionRate ?? null,
     });
     setIdentityMode(initialAssignedIds.length ? "account" : "username");
   }, [allowedRoles, initialAssignedIds, member, mode, open, reset]);
@@ -284,28 +281,6 @@ export function WorkspaceMemberModal({
             </FormField>
           )}
         </section>
-
-        {mode === "edit" && currentRole === "owner" ? (
-          <section className="border-t border-neutral-800 pt-4">
-            <FormField label="Sales commission override, %">
-              <Input
-                type="number"
-                min="0"
-                max="100"
-                step="0.01"
-                placeholder="Use workspace default"
-                {...register("salesCommissionRate", {
-                  setValueAs: (value) =>
-                    value === "" || value == null ? null : Number(value),
-                })}
-              />
-              <p className="mt-2 text-xs text-neutral-500">
-                Leave empty to use the workspace default. The rate is locked
-                into each new deal.
-              </p>
-            </FormField>
-          </section>
-        ) : null}
 
         <div className="flex justify-end gap-2">
           <Button variant="secondary" type="button" onClick={onClose}>

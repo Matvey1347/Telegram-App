@@ -98,16 +98,17 @@ export function floatingMenuStyle(
     direction === "up" ||
     (availableBelow < 240 && availableAbove > availableBelow);
   const maxHeight = Math.max(
-    120,
+    0,
     Math.min(maxMenuHeight, openUp ? availableAbove : availableBelow),
   );
 
   return {
     position: "fixed",
     left,
-    top: openUp
-      ? Math.max(viewportTop + padding, triggerTop - gap - maxHeight)
-      : Math.min(triggerBottom + gap, viewportBottom - gap),
+    // Anchor the menu edge to the trigger. Positioning the top using the
+    // maximum height leaves short menus floating above the control.
+    top: openUp ? triggerTop - gap : triggerBottom + gap,
+    ...(openUp ? { transform: "translateY(-100%)" } : {}),
     width,
     maxHeight,
   };

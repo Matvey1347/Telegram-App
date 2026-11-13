@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useState } from "react";
+import { floatingMenuStyle } from "./select-shared";
 import { Plus } from "lucide-react";
 import {
   canonicalizeTimeInputValue,
@@ -111,13 +112,19 @@ describe("Modal", () => {
 
   it("keeps an extra-small confirmation dialog compact", () => {
     render(
-      <Modal open onClose={vi.fn()} title="Replace active bot import?" size="xs">
+      <Modal
+        open
+        onClose={vi.fn()}
+        title="Replace active bot import?"
+        size="xs"
+      >
         Confirm replacement
       </Modal>,
     );
 
-    expect(screen.getByRole("dialog", { name: "Replace active bot import?" }))
-      .toHaveClass("!max-w-[400px]");
+    expect(
+      screen.getByRole("dialog", { name: "Replace active bot import?" }),
+    ).toHaveClass("!max-w-[400px]");
   });
 
   it("renders an action beside the dialog title", () => {
@@ -213,6 +220,25 @@ describe("ConfirmDeleteModal", () => {
 });
 
 describe("CustomSelect", () => {
+  it("anchors an upward-opening menu directly above its trigger", () => {
+    const style = floatingMenuStyle(
+      { top: 300, bottom: 340, left: 10, right: 210, width: 200 } as DOMRect,
+      { direction: "up", maxMenuHeight: 320 },
+    );
+
+    expect(style.top).toBe(296);
+    expect(style.transform).toBe("translateY(-100%)");
+  });
+
+  it("keeps upward menus within a short visible viewport", () => {
+    const style = floatingMenuStyle(
+      { top: 20, bottom: 60, left: 10, right: 210, width: 200 } as DOMRect,
+      { direction: "up", maxMenuHeight: 320 },
+    );
+
+    expect(style.maxHeight).toBeLessThanOrEqual(8);
+  });
+
   it("keeps focus on its trigger when opened so mobile does not summon the keyboard", async () => {
     const user = userEvent.setup();
     render(
@@ -437,6 +463,31 @@ describe("CustomSelect", () => {
 });
 
 describe("MultiSelect", () => {
+  it("renders resolved entity emoji in the selection and dropdown", async () => {
+    const user = userEvent.setup();
+    render(
+      <MultiSelect
+        value={["one"]}
+        onChange={() => {}}
+        options={[
+          {
+            value: "one",
+            label: "Psychology",
+            iconPresentation: { type: "unicode", value: "🧩" },
+          },
+          {
+            value: "two",
+            label: "Art",
+            iconPresentation: { type: "unicode", value: "🎨" },
+          },
+        ]}
+      />,
+    );
+    expect(screen.getByText("🧩")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Psychology/ }));
+    expect(screen.getAllByText("🧩")).toHaveLength(2);
+    expect(screen.getByText("🎨")).toBeInTheDocument();
+  });
   it("keeps focus on its trigger when opened so mobile does not summon the keyboard", async () => {
     const user = userEvent.setup();
     render(
@@ -554,7 +605,9 @@ describe("MultiSelect", () => {
         name: "Test channel",
       });
       expect(option.parentElement?.parentElement).toHaveStyle({
-        top: "208px",
+        top: "336px",
+        maxHeight: "128px",
+        transform: "translateY(-100%)",
       });
     } finally {
       rectSpy.mockRestore();
@@ -684,13 +737,19 @@ describe("DateRangeInput", () => {
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: "01.01.2020 - 03.01.2020" }));
+    await user.click(
+      screen.getByRole("button", { name: "01.01.2020 - 03.01.2020" }),
+    );
 
     expect(
-      screen.getAllByRole("button", { name: "6" }).every((button) => button.hasAttribute("disabled")),
+      screen
+        .getAllByRole("button", { name: "6" })
+        .every((button) => button.hasAttribute("disabled")),
     ).toBe(true);
     expect(
-      screen.getAllByRole("button", { name: "5" }).some((button) => !button.hasAttribute("disabled")),
+      screen
+        .getAllByRole("button", { name: "5" })
+        .some((button) => !button.hasAttribute("disabled")),
     ).toBe(true);
   });
 });

@@ -54,7 +54,7 @@ describe("ContentHypothesesWorkspace", () => {
     const statusSelect = screen.getByRole("button", { name: "Active" });
     expect(statusSelect).toHaveClass("bg-blue-950/60");
     fireEvent.click(statusSelect);
-    expect(screen.getByText("Successful")).toHaveClass("text-emerald-200");
+    expect(screen.getByRole("option", { name: "Successful" })).toBeVisible();
     expect(screen.queryByRole("button", { name: "Draft" })).toBeNull();
     expect(screen.getByText("Posts assigned to this hypothesis")).toBeVisible();
   });
@@ -172,5 +172,65 @@ describe("ContentHypothesesWorkspace", () => {
     expect(screen.getByText("1,250")).toBeVisible();
     expect(screen.getByText("4.25%")).toBeVisible();
     expect(screen.getByText("+42")).toBeVisible();
+  });
+
+  it("filters hypotheses by status and archives from the card menu", async () => {
+    const base = {
+      telegramChannelId: "channel-1",
+      description: null,
+      iconId: null,
+      iconPresentation: null,
+      startedAt: null,
+      completedAt: null,
+      conclusion: null,
+      metrics: {
+        linkedPosts: 0,
+        publishedPosts: 0,
+        averageViews: null,
+        averageReactionRate: null,
+        averageCommentRate: null,
+        averageForwardRate: null,
+        observedSubscriberDelta: null,
+      },
+      postIds: [],
+      createdAt: "2026-09-01T00:00:00.000Z",
+      updatedAt: "2026-09-01T00:00:00.000Z",
+    };
+    api.list.mockResolvedValueOnce([
+      { ...base, id: "active", name: "Active idea", status: "ACTIVE" },
+      { ...base, id: "success", name: "Successful idea", status: "SUCCESSFUL" },
+      { ...base, id: "failed", name: "Failed idea", status: "FAILED" },
+      { ...base, id: "archived", name: "Archived idea", status: "ARCHIVED" },
+    ]);
+    api.update.mockResolvedValueOnce({});
+
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <TestI18nProvider>
+          <ContentHypothesesWorkspace channelId="channel-1" />
+        </TestI18nProvider>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByText("Active idea")).toBeVisible();
+    expect(screen.queryByText("Successful idea")).toBeNull();
+    const successfulTab = screen.getByRole("tab", { name: /Successful/ });
+    expect(successfulTab).toHaveTextContent("1");
+    fireEvent.click(successfulTab);
+    expect(screen.getByText("Successful idea")).toBeVisible();
+    expect(screen.queryByText("Active idea")).toBeNull();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /actions.*successful idea/i }),
+    );
+    fireEvent.click(screen.getByRole("menuitem", { name: "Archive" }));
+
+    await waitFor(() =>
+      expect(api.update).toHaveBeenCalledWith(
+        "channel-1",
+        "success",
+        expect.objectContaining({ status: "ARCHIVED" }),
+      ),
+    );
   });
 });

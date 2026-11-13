@@ -11,6 +11,7 @@ import {
   CustomSelect,
   IconButton,
   Input,
+  Textarea,
   ToggleRow,
 } from "@/components/ui/primitives";
 
@@ -20,7 +21,7 @@ type Source = {
   value: string;
   enabled: boolean;
   checked?: string;
-  rightsConfirmed?: boolean;
+  useImages?: boolean;
 };
 type Config = { sources: Source[] };
 export function AiPostingSourcesSection({
@@ -34,7 +35,88 @@ export function AiPostingSourcesSection({
 }) {
   const [newSource, setNewSource] = useState("");
   const [newSourceType, setNewSourceType] = useState<Source["type"]>("website");
-  const [rightsConfirmed, setRightsConfirmed] = useState(false);
+  const [useImages, setUseImages] = useState(true);
+  const [showImport, setShowImport] = useState(false);
+  const [json, setJson] = useState("");
+  const [importError, setImportError] = useState("");
+  const [fileName, setFileName] = useState("");
+  const [checking, setChecking] = useState(false);
+  const [sourceMessage, setSourceMessage] = useState("");
+  const loadFile = async (file: File) => {
+    if (file.size > 1024 * 1024) {
+      setImportError("Файл должен быть не больше 1 МБ.");
+      return;
+    }
+    try {
+      const contents = await file.text();
+      setJson(contents);
+      setFileName(file.name);
+      setImportError("");
+    } catch {
+      setImportError("Не удалось прочитать файл.");
+    }
+  };
+  const checkCandidate = async (source: Source) =>
+    (
+      await api.post(
+        `/telegram-channels/${channelId}/ai-posting/check-source`,
+        { sourceId: source.id, source },
+      )
+    ).data as { ok: boolean; available?: boolean; message: string };
+  const importSources = async () => {
+    try {
+      const parsed: unknown = JSON.parse(json);
+      if (!Array.isArray(parsed)) throw new Error();
+      const items: Source[] = parsed.map((item: unknown) => {
+        if (!item || typeof item !== "object") throw new Error();
+        const value = item as Record<string, unknown>;
+        if (
+          !["website", "rss", "telegram"].includes(String(value.type)) ||
+          typeof value.value !== "string" ||
+          !value.value.trim() ||
+          (value.enabled !== undefined && typeof value.enabled !== "boolean") ||
+          (value.useImages !== undefined &&
+            typeof value.useImages !== "boolean")
+        )
+          throw new Error();
+        return {
+          id: crypto.randomUUID(),
+          type: value.type as Source["type"],
+          value: value.value.trim(),
+          enabled: value.enabled !== false,
+          useImages: value.useImages !== false,
+        };
+      });
+      setChecking(true);
+      const available: Source[] = [];
+      const unavailable: string[] = [];
+      for (const item of items) {
+        if (item.enabled === false) {
+          available.push(item);
+          continue;
+        }
+        const check = await checkCandidate(item);
+        if (check.available ?? check.ok) available.push(item);
+        else unavailable.push(item.value);
+      }
+      patch({ sources: [...config.sources, ...available] });
+      setSourceMessage(
+        unavailable.length
+          ? `Добавлено ${available.length}; недоступные источники пропущены: ${unavailable.join(", ")}`
+          : `Проверено и добавлено источников: ${available.length}.`,
+      );
+      setJson("");
+      setFileName("");
+      setImportError("");
+      setShowImport(false);
+    } catch {
+      setImportError(
+        "Введите JSON-массив источников с полями type и value. Поля enabled и useImages должны быть логическими значениями.",
+      );
+    } finally {
+      setChecking(false);
+    }
+  };
   const sourceChannels = useQuery({
     queryKey: telegramAiPostingKeys.sourceChannels(channelId),
     queryFn: async () =>
@@ -50,43 +132,130 @@ export function AiPostingSourcesSection({
       }>,
     enabled: Boolean(channelId) && newSourceType === "telegram",
   });
-  const addSource = () => {
-    if (!newSource.trim() || config.sources.length >= 5) return;
-    patch({
-      sources: [
-        ...config.sources,
-        {
-          id: crypto.randomUUID(),
-          type: newSourceType,
-          value: newSource.trim(),
-          enabled: true,
-          ...(newSourceType === "website" || newSourceType === "rss"
-            ? { rightsConfirmed }
-            : {}),
-        },
-      ],
-    });
-    setNewSource("");
+  const addSource = async () => {
+    if (!newSource.trim()) return;
+    const source: Source = {
+      id: crypto.randomUUID(),
+      type: newSourceType,
+      value: newSource.trim(),
+      enabled: true,
+      useImages,
+    };
+    setChecking(true);
+    setSourceMessage("");
+    try {
+      const check = await checkCandidate(source);
+      if (!(check.available ?? check.ok)) {
+        setSourceMessage(`Источник не добавлен: ${check.message}`);
+        return;
+      }
+      patch({
+        sources: [...config.sources, { ...source, checked: check.message }],
+      });
+      setSourceMessage(check.message);
+      setNewSource("");
+    } catch {
+      setSourceMessage("Не удалось проверить источник, он не добавлен.");
+    } finally {
+      setChecking(false);
+    }
   };
   const checkSource = async (id: string) => {
-    const result = (
-      await api.post(
-        `/telegram-channels/${channelId}/ai-posting/check-source`,
-        { sourceId: id },
-      )
-    ).data as { ok: boolean; message: string };
-    patch({
-      sources: config.sources.map((s) =>
-        s.id === id ? { ...s, checked: result.message } : s,
-      ),
-    });
+    const source = config.sources.find((item) => item.id === id);
+    if (!source) return;
+    setChecking(true);
+    try {
+      const result = await checkCandidate(source);
+      if (!(result.available ?? result.ok)) {
+        patch({ sources: config.sources.filter((item) => item.id !== id) });
+        setSourceMessage(`Недоступный источник удалён: ${result.message}`);
+        return;
+      }
+      setSourceMessage(result.message);
+      patch({
+        sources: config.sources.map((s) =>
+          s.id === id ? { ...s, checked: result.message } : s,
+        ),
+      });
+    } catch {
+      patch({ sources: config.sources.filter((item) => item.id !== id) });
+      setSourceMessage(
+        "Источник не удалось проверить и он удалён из настроек.",
+      );
+    } finally {
+      setChecking(false);
+    }
   };
   return (
     <Card className="space-y-4 bg-neutral-900/60">
       <h2 className="text-lg font-semibold">Источники идей</h2>
+      <Button variant="secondary" onClick={() => setShowImport(!showImport)}>
+        Импорт JSON
+      </Button>
+      {showImport && (
+        <div className="space-y-2">
+          <div
+            className="rounded-lg border border-dashed border-neutral-700 bg-neutral-950 p-4 text-center text-sm text-neutral-300"
+            onDragOver={(event) => event.preventDefault()}
+            onDrop={(event) => {
+              event.preventDefault();
+              const file = event.dataTransfer.files[0];
+              if (file) void loadFile(file);
+            }}
+          >
+            <p>Перетащите JSON-файл сюда или выберите файл</p>
+            <label className="mt-2 inline-flex cursor-pointer rounded-lg border border-blue-500/70 px-4 py-2 text-blue-200">
+              Выбрать файл
+              <input
+                aria-label="Выбрать JSON-файл"
+                type="file"
+                accept=".json,application/json"
+                className="sr-only"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) void loadFile(file);
+                  event.currentTarget.value = "";
+                }}
+              />
+            </label>
+            {fileName && (
+              <p className="mt-2 break-all text-xs text-neutral-400">
+                {fileName}
+              </p>
+            )}
+          </div>
+          <Textarea
+            aria-label="JSON источников"
+            value={json}
+            onChange={(event) => setJson(event.target.value)}
+            rows={6}
+            placeholder={
+              '[{"type":"rss","value":"https://example.com/feed","enabled":true,"useImages":true}]'
+            }
+          />
+          {importError && (
+            <p role="alert" className="text-sm text-rose-300">
+              {importError}
+            </p>
+          )}
+          <Button disabled={checking} onClick={() => void importSources()}>
+            {checking ? "Проверяем источники…" : "Проверить и добавить из JSON"}
+          </Button>
+        </div>
+      )}
+      {sourceMessage && (
+        <p role="status" className="text-sm text-neutral-300">
+          {sourceMessage}
+        </p>
+      )}
       <p className="text-sm text-neutral-400">
-        Добавьте до 5 сайтов, RSS или доступных Telegram-каналов. История канала
+        Добавьте сайты, RSS или доступные Telegram-каналы. История канала
         управляется отдельно.
+      </p>
+      <p className="-mt-2 text-xs text-neutral-500">
+        Сайт — отдельная веб-страница, с которой берётся текст статьи. RSS —
+        адрес ленты, из которой берутся отдельные новые записи; это не адрес
+        главной страницы сайта.
       </p>
       <div className="flex flex-col gap-2 2xl:flex-row">
         <div className="w-full 2xl:w-48">
@@ -129,80 +298,98 @@ export function AiPostingSourcesSection({
             placeholder="URL источника"
           />
         )}
-        <Button onClick={addSource} disabled={config.sources.length >= 5}>
+        <Button
+          disabled={checking || !newSource.trim()}
+          onClick={() => void addSource()}
+        >
           <Plus size={16} /> Добавить
         </Button>
       </div>
-      {(newSourceType === "website" || newSourceType === "rss") && (
-        <ToggleRow
-          checked={rightsConfirmed}
-          onChange={setRightsConfirmed}
-          label="Есть право использовать изображения с этого источника"
-          description="Подтверждение требуется перед использованием найденных изображений."
-        />
-      )}
+      <ToggleRow
+        checked={
+          config.sources.length
+            ? config.sources.every((source) => source.useImages !== false)
+            : useImages
+        }
+        onChange={(enabled) => {
+          setUseImages(enabled);
+          patch({
+            sources: config.sources.map((source) => ({
+              ...source,
+              useImages: enabled,
+            })),
+          });
+        }}
+        label="Использовать изображения из всех источников"
+        className="w-fit !border-0 !bg-transparent !p-0"
+      />
       <div className="space-y-2">
         {config.sources.map((source) => (
-          <Card
-            key={source.id}
-            className="flex flex-wrap items-center gap-3 p-3"
-          >
-            <ToggleRow
-              checked={source.enabled}
-              label={`Источник включён: ${source.value}`}
-              onChange={(enabled) =>
-                patch({
-                  sources: config.sources.map((s) =>
-                    s.id === source.id ? { ...s, enabled } : s,
-                  ),
-                })
-              }
-            />
-            <span className="min-w-0 flex-1 break-all text-sm">
-              {source.type.toUpperCase()} ·{" "}
-              {source.type === "telegram"
-                ? (sourceChannels.data?.find((item) => item.id === source.value)
-                    ?.title ?? source.value)
-                : source.value}
-              {source.checked && (
-                <span className="block text-xs text-neutral-400">
-                  {source.checked}
+          <Card key={source.id} className="min-w-0 space-y-3 p-3">
+            <div className="flex min-w-0 items-start justify-between gap-3">
+              <div className="min-w-0 text-sm">
+                <span className="text-neutral-400">
+                  {source.type.toUpperCase()} ·{" "}
                 </span>
-              )}
-              {(source.type === "website" || source.type === "rss") && (
-                <span className="mt-1 block">
-                  <ToggleRow
-                    checked={Boolean(source.rightsConfirmed)}
-                    label="Есть право использовать изображения"
-                    onChange={(rightsConfirmed) =>
-                      patch({
-                        sources: config.sources.map((item) =>
-                          item.id === source.id
-                            ? { ...item, rightsConfirmed }
-                            : item,
-                        ),
-                      })
-                    }
-                  />
+                <span className="break-all">
+                  {source.type === "telegram"
+                    ? (sourceChannels.data?.find(
+                        (item) => item.id === source.value,
+                      )?.title ?? source.value)
+                    : source.value}
                 </span>
-              )}
-            </span>
-            <Button
-              variant="secondary"
-              onClick={() => void checkSource(source.id)}
-            >
-              Проверить
-            </Button>
-            <IconButton
-              type="button"
-              kind="delete"
-              aria-label="Удалить источник"
-              onClick={() =>
-                patch({
-                  sources: config.sources.filter((s) => s.id !== source.id),
-                })
-              }
-            />
+                {source.checked && (
+                  <p className="mt-1 text-xs text-neutral-400">
+                    {source.checked}
+                  </p>
+                )}
+              </div>
+              <ToggleRow
+                checked={source.enabled !== false}
+                label={`Использовать источник: ${source.value}`}
+                className="w-auto shrink-0 !border-0 !bg-transparent !p-0 [&>div]:sr-only"
+                onChange={(enabled) =>
+                  patch({
+                    sources: config.sources.map((s) =>
+                      s.id === source.id ? { ...s, enabled } : s,
+                    ),
+                  })
+                }
+              />
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <ToggleRow
+                checked={source.useImages !== false}
+                label="Использовать изображения из источника"
+                className="w-auto !border-0 !bg-transparent !p-0"
+                onChange={(useImages) =>
+                  patch({
+                    sources: config.sources.map((item) =>
+                      item.id === source.id ? { ...item, useImages } : item,
+                    ),
+                  })
+                }
+              />
+              <div className="flex items-center justify-end gap-2">
+                <Button
+                  variant="secondary"
+                  disabled={checking}
+                  onClick={() => void checkSource(source.id)}
+                >
+                  Проверить
+                </Button>
+                <IconButton
+                  type="button"
+                  kind="delete"
+                  aria-label="Удалить источник"
+                  onClick={() =>
+                    patch({
+                      sources: config.sources.filter((s) => s.id !== source.id),
+                    })
+                  }
+                />
+              </div>
+            </div>
           </Card>
         ))}
       </div>

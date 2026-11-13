@@ -17,9 +17,6 @@ vi.mock("@/lib/api", () => ({
     runNow: vi.fn(),
   },
 }));
-vi.mock("./task-notification-subscription", () => ({
-  TaskGroupNotificationSubscription: () => null,
-}));
 
 const runsMock = vi.mocked(scheduledTasksApi.runs);
 const listMock = vi.mocked(scheduledTasksApi.list);

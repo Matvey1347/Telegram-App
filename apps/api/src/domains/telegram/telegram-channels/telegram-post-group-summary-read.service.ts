@@ -93,7 +93,7 @@ export class TelegramPostGroupSummaryReadService {
     if (!channel) throw telegramChannelNotFound();
 
     const groups = await this.prisma.postGroup.findMany({
-      where: { workspaceId, telegramChannelId: channelId },
+      where: { workspaceId, telegramChannelId: channelId, archivedAt: null },
       select: this.postGroupSelect,
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: TELEGRAM_POST_GROUP_SUMMARY_MAX_ITEMS + 1,

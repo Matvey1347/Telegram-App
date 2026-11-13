@@ -109,7 +109,6 @@ function setup(overrides?: { account?: unknown }) {
     workspaceMember: {
       findFirst: jest.fn().mockResolvedValue({
         id: 'member-1',
-        salesCommissionRate: null,
       }),
     },
     transactionCategory: {

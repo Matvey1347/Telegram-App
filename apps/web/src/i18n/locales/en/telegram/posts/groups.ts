@@ -9,6 +9,12 @@ const messages = {
   "telegram.posts.groups.delete": "Delete group",
   "telegram.posts.groups.deleteDescription":
     "Delete group? Posts will not be deleted. They will become ungrouped.",
+  "telegram.posts.groups.archive": "Archive group",
+  "telegram.posts.groups.restore": "Restore group",
+  "telegram.posts.groups.active": "Active",
+  "telegram.posts.groups.archived": "Archived",
+  "telegram.posts.groups.status": "Group status",
+  "telegram.posts.groups.loadError": "Could not load groups. Please try again.",
   "telegram.posts.groups.postsInGroup": "Posts in group",
   "telegram.posts.groups.makeDraftsTitle": "Make all posts drafts?",
   "telegram.posts.groups.open": "Open group",

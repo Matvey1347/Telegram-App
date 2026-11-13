@@ -17,6 +17,7 @@ import {
 import { JwtAuthGuard } from '../../../common/jwt-auth.guard';
 import { WorkspaceService } from '../../../common/workspace.service';
 import { TelegramSystemBotConnectionsService } from './telegram-system-bot-connections.service';
+import { TelegramSystemBotNotificationConnectionsService } from './telegram-system-bot-notification-connections.service';
 import { TelegramSystemBotHandlerService } from './telegram-system-bot-handler.service';
 import { TelegramSystemBotRuntimeService } from './telegram-system-bot-runtime.service';
 import type { TelegramSystemBotPostPreviewDraft } from './telegram-system-bot-post-flow.types';
@@ -33,6 +34,7 @@ import {
 export class TelegramSystemBotController {
   constructor(
     private readonly connections: TelegramSystemBotConnectionsService,
+    private readonly notificationConnections: TelegramSystemBotNotificationConnectionsService,
     private readonly runtime: TelegramSystemBotRuntimeService,
     private readonly handler: TelegramSystemBotHandlerService,
     private readonly postImports: TelegramSystemBotPostImportService,
@@ -196,6 +198,78 @@ export class TelegramSystemBotController {
   @Delete('connection')
   disconnect(@CurrentUser() user: JwtUser) {
     return this.connections.disconnect(user.sub);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('notification-group')
+  async notificationGroup(@CurrentUser() user: JwtUser) {
+    const workspaceId = await this.workspace.resolveWorkspaceIdForUser(
+      user.sub,
+    );
+    return this.notificationConnections.notificationGroupStatus(
+      workspaceId,
+      user.sub,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('notification-group/link')
+  async createNotificationGroupLink(@CurrentUser() user: JwtUser) {
+    const workspaceId = await this.workspace.resolveWorkspaceIdForUser(
+      user.sub,
+    );
+    return this.notificationConnections.createNotificationGroupLink(
+      workspaceId,
+      user.sub,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Delete('notification-group')
+  async disconnectNotificationGroup(@CurrentUser() user: JwtUser) {
+    const workspaceId = await this.workspace.resolveWorkspaceIdForUser(
+      user.sub,
+    );
+    return this.notificationConnections.disconnectNotificationGroup(
+      workspaceId,
+      user.sub,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('notification-account')
+  async notificationAccount(@CurrentUser() user: JwtUser) {
+    const workspaceId = await this.workspace.resolveWorkspaceIdForUser(
+      user.sub,
+    );
+    return this.notificationConnections.notificationAccountStatus(
+      workspaceId,
+      user.sub,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('notification-account/link')
+  async createNotificationAccountLink(@CurrentUser() user: JwtUser) {
+    const workspaceId = await this.workspace.resolveWorkspaceIdForUser(
+      user.sub,
+    );
+    return this.notificationConnections.createNotificationAccountLink(
+      workspaceId,
+      user.sub,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Delete('notification-account')
+  async disconnectNotificationAccount(@CurrentUser() user: JwtUser) {
+    const workspaceId = await this.workspace.resolveWorkspaceIdForUser(
+      user.sub,
+    );
+    return this.notificationConnections.disconnectNotificationAccount(
+      workspaceId,
+      user.sub,
+    );
   }
 
   @UseGuards(JwtAuthGuard)

@@ -86,6 +86,7 @@ describe("Telegram custom emoji", () => {
         packs={[pack]}
         onImport={onImport}
         onDetach={vi.fn()}
+        onRefresh={vi.fn()}
       />,
     );
     fireEvent.change(screen.getByPlaceholderText("Telegram emoji pack link"), {
@@ -105,6 +106,7 @@ describe("Telegram custom emoji", () => {
         packs={[pack]}
         onImport={vi.fn()}
         onDetach={onDetach}
+        onRefresh={vi.fn()}
       />,
     );
     expect(screen.getByAltText("spark")).toHaveAttribute(
@@ -113,5 +115,22 @@ describe("Telegram custom emoji", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Delete Team emoji" }));
     expect(onDetach).toHaveBeenCalledWith("pack_1");
+  });
+  it("refreshes the current emoji contents of a pack", () => {
+    const onRefresh = vi.fn();
+    render(
+      <TelegramCustomEmojiPacksModal
+        open
+        onClose={() => {}}
+        packs={[pack]}
+        onImport={vi.fn()}
+        onDetach={vi.fn()}
+        onRefresh={onRefresh}
+      />,
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Refresh emoji from Team emoji" }),
+    );
+    expect(onRefresh).toHaveBeenCalledWith("pack_1");
   });
 });

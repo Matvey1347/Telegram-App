@@ -140,7 +140,6 @@ export type WorkspaceMember = {
   avatarIcon?: Icon | null;
   avatarPresentation?: ResolvedEmoji | null;
   telegramUsername?: string | null;
-  salesCommissionRate?: number | null;
   createdAt: string;
   user: User;
   isCurrentUser: boolean;

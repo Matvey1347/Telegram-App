@@ -1,9 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import { randomUUID } from 'node:crypto';
 import { OperationsNotificationPriority } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { TelegramBotApiClient } from '@api/telegram/shared/bot/telegram-bot-api.client';
-import { TelegramSystemBotConfigService } from '../../telegram/telegram-system-bot/telegram-system-bot-config.service';
+import { TelegramSystemBotNotificationsService } from '../../telegram/telegram-system-bot/telegram-system-bot-notifications.service';
 import { OperationsNotificationStoreService } from './operations-notification-store.service';
 import { OperationsNotificationPublisherService } from './operations-notification-publisher.service';
 import {
@@ -44,22 +44,19 @@ export class AiPostingAutopilotNotificationsService {
     private readonly store: OperationsNotificationStoreService,
     private readonly publisher: OperationsNotificationPublisherService,
     private readonly permissions: OperationsNotificationPermissionService,
-    private readonly telegram: TelegramBotApiClient,
-    private readonly systemBot: TelegramSystemBotConfigService,
     private readonly email: OperationsEmailAdapterService,
+    @Optional() private readonly moduleRef?: ModuleRef,
   ) {}
 
   async notify(input: AutopilotNotificationInput) {
     const members = await this.prisma.workspaceMember.findMany({
       where: { workspaceId: input.workspaceId },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       select: {
         ...operationsNotificationMemberSelect,
         user: {
           select: {
             email: true,
-            telegramSystemBotConnection: {
-              select: { enabled: true, telegramChatId: true },
-            },
           },
         },
       },
@@ -156,10 +153,16 @@ export class AiPostingAutopilotNotificationsService {
         (row) => row.recipientMemberId === member.id,
       )?.id;
       if (!notificationId) return [];
+      const critical = input.event === 'LOW_SCHEDULE_COVERAGE' ||
+        input.event === 'CRITICAL_DRAFT_STOCK' ||
+        input.event === 'GENERATION_OR_IMAGE_FAILURE' ||
+        input.event === 'AI_API_OR_BUDGET_FAILURE' ||
+        input.event === 'PLANNING_OR_PUBLICATION_FAILURE';
+      const isGroupNotificationOwner = member.id === recipients[0]?.id;
       return (['TELEGRAM_BOT', 'EMAIL'] as const)
-        .filter((transport) =>
-          transport === 'TELEGRAM_BOT' ? settings.telegramBot : settings.email,
-        )
+        .filter((transport) => transport === 'TELEGRAM_BOT'
+          ? critical && isGroupNotificationOwner
+          : settings.email)
         .map((transport) => ({
           workspaceId: input.workspaceId,
           memberId: member.id,
@@ -216,13 +219,10 @@ export class AiPostingAutopilotNotificationsService {
       const member = recipients.find((item) => item.id === delivery.memberId);
       try {
         if (delivery.transport === 'TELEGRAM_BOT') {
-          const connection = member?.user.telegramSystemBotConnection;
-          if (!connection?.enabled || !this.systemBot.token)
-            throw new Error('TELEGRAM_SYSTEM_BOT_NOT_CONNECTED');
-          await this.telegram.sendMessage(this.systemBot.token, {
-            chat_id: connection.telegramChatId,
-            text: `${input.title}\n\n${input.body}`.slice(0, 4096),
-          });
+          await this.sendToWorkspaceBot(
+            input.workspaceId,
+            `${input.title}\n\n${input.body}`.slice(0, 4096),
+          );
         } else {
           if (!member?.user.email)
             throw new Error('EMAIL_RECIPIENT_UNAVAILABLE');
@@ -338,9 +338,6 @@ export class AiPostingAutopilotNotificationsService {
               user: {
                 select: {
                   email: true,
-                  telegramSystemBotConnection: {
-                    select: { enabled: true, telegramChatId: true },
-                  },
                 },
               },
             },
@@ -348,7 +345,7 @@ export class AiPostingAutopilotNotificationsService {
         ]);
         if (!notification || !member)
           throw new Error('NOTIFICATION_RECIPIENT_UNAVAILABLE');
-        await this.sendTransport(delivery.transport, member.user, notification);
+        await this.sendTransport(delivery.transport, delivery.workspaceId, member.user, notification);
         await this.prisma.telegramAiPostingNotificationDelivery.updateMany({
           where: { id: delivery.id, claimOwner: owner },
           data: {
@@ -393,23 +390,14 @@ export class AiPostingAutopilotNotificationsService {
 
   private async sendTransport(
     transport: string,
+    workspaceId: string,
     user: {
       email: string;
-      telegramSystemBotConnection: {
-        enabled: boolean;
-        telegramChatId: string;
-      } | null;
     },
     message: { title: string; body: string; targetUrl: string },
   ) {
     if (transport === 'TELEGRAM_BOT') {
-      const connection = user.telegramSystemBotConnection;
-      if (!connection?.enabled || !this.systemBot.token)
-        throw new Error('TELEGRAM_SYSTEM_BOT_NOT_CONNECTED');
-      await this.telegram.sendMessage(this.systemBot.token, {
-        chat_id: connection.telegramChatId,
-        text: `${message.title}\n\n${message.body}`.slice(0, 4096),
-      });
+      await this.sendToWorkspaceBot(workspaceId, `${message.title}\n\n${message.body}`.slice(0, 4096));
       return;
     }
     if (!user.email) throw new Error('EMAIL_RECIPIENT_UNAVAILABLE');
@@ -419,6 +407,18 @@ export class AiPostingAutopilotNotificationsService {
       body: message.body,
       targetUrl: message.targetUrl,
     });
+  }
+
+  private async sendToWorkspaceBot(workspaceId: string, text: string) {
+    if (!this.moduleRef) throw new Error('TELEGRAM_SYSTEM_BOT_NOT_AVAILABLE');
+    const notifications = await this.moduleRef.resolve(
+      TelegramSystemBotNotificationsService,
+      undefined,
+      { strict: false },
+    );
+    const result = await notifications.sendToWorkspace(workspaceId, text);
+    if (result.status !== 'SENT')
+      throw new Error('TELEGRAM_WORKSPACE_NOTIFICATION_GROUP_NOT_CONNECTED');
   }
 
   private async recordDeliveryFailure(

@@ -58,6 +58,34 @@ describe('AiProvider image generation', () => {
     );
   });
 
+  it('uses the OpenAI image edit route when a visual reference is attached', async () => {
+    const fetch = jest
+      .spyOn(global, 'fetch')
+      .mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            data: [{ b64_json: Buffer.from('edited').toString('base64') }],
+          }),
+          { status: 200 },
+        ),
+      );
+    await provider.execute(
+      'Create an original image guided by the attached reference sheet',
+      registry.category('TELEGRAM_POSTING_IMAGE'),
+      undefined,
+      undefined,
+      { mime: 'image/jpeg', data: Buffer.from([0xff, 0xd8, 0xff, 0x01]) },
+    );
+
+    expect(fetch).toHaveBeenCalledWith(
+      'https://api.openai.com/v1/images/edits',
+      expect.objectContaining({ method: 'POST' }),
+    );
+    const form = fetch.mock.calls[0][1]?.body as FormData;
+    expect(form.get('prompt')).toContain('guided by the attached reference');
+    expect(form.get('image')).toBeInstanceOf(Blob);
+  });
+
   it('rejects an invalid image payload instead of returning it to a post', async () => {
     jest.spyOn(global, 'fetch').mockResolvedValue(
       new Response(JSON.stringify({ data: [{ b64_json: 'not base64!' }] }), {

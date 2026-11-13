@@ -200,7 +200,11 @@ export class TelegramCustomEmojiService {
     }
   }
 
-  async importPack(userId: string, input: ImportTelegramCustomEmojiPackInput) {
+  async importPack(
+    userId: string,
+    input: ImportTelegramCustomEmojiPackInput,
+    refresh = false,
+  ) {
     const workspaceId =
       await this.workspaceService.resolveWorkspaceIdForUser(userId);
     const documentId = parseTelegramCustomEmojiDocumentId(input.source);
@@ -221,7 +225,7 @@ export class TelegramCustomEmojiService {
             data: { archivedAt: null },
           });
         }
-        return this.list(userId);
+        if (!refresh) return this.list(userId);
       }
     }
 
@@ -304,8 +308,16 @@ export class TelegramCustomEmojiService {
         },
         select: { id: true },
       });
-      await tx.telegramCustomEmoji.createMany({
-        data: resolved.documents.map((emoji, position) => {
+      const documentIds = resolved.documents.map((emoji) => emoji.documentId);
+      if (refresh) {
+        await tx.telegramCustomEmoji.deleteMany({
+          where: {
+            packId: pack.id,
+            ...(documentIds.length ? { documentId: { notIn: documentIds } } : {}),
+          },
+        });
+      }
+      const emojiRows = resolved.documents.map((emoji, position) => {
           const prefix = `telegram-custom-emoji/${workspaceId}/${resolved.shortName}/${emoji.documentId}`;
           const ext =
             emoji.kind === 'VIDEO'
@@ -313,9 +325,7 @@ export class TelegramCustomEmojiService {
               : emoji.kind === 'ANIMATED'
                 ? 'tgs'
                 : 'webp';
-          return {
-            packId: pack.id,
-            documentId: emoji.documentId,
+          const data = {
             alt: emoji.alt,
             mimeType: emoji.mimeType,
             kind: emoji.kind,
@@ -335,11 +345,33 @@ export class TelegramCustomEmojiService {
                 ? (urls.get(`${prefix}/render.json`) ?? null)
                 : null,
           };
-        }),
-        skipDuplicates: true,
+          return { packId: pack.id, documentId: emoji.documentId, ...data };
       });
+      if (refresh) {
+        for (const row of emojiRows) {
+          const { packId, documentId, ...data } = row;
+          await tx.telegramCustomEmoji.upsert({
+            where: { packId_documentId: { packId, documentId } },
+            create: row,
+            update: data,
+          });
+        }
+      } else {
+        await tx.telegramCustomEmoji.createMany({ data: emojiRows, skipDuplicates: true });
+      }
     });
     return this.list(userId);
+  }
+
+  async refreshPack(userId: string, packId: string) {
+    const workspaceId =
+      await this.workspaceService.resolveWorkspaceIdForUser(userId);
+    const pack = await this.prisma.telegramCustomEmojiPack.findFirst({
+      where: { id: packId, workspaceId, archivedAt: null },
+      select: { telegramLink: true },
+    });
+    if (!pack) throw new NotFoundException('Premium emoji pack not found.');
+    return this.importPack(userId, { source: pack.telegramLink }, true);
   }
 
   async deletePack(userId: string, packId: string) {

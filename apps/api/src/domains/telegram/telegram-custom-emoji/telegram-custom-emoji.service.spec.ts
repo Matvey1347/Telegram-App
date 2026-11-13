@@ -10,6 +10,8 @@ function setup() {
     },
     telegramCustomEmoji: {
       createMany: jest.fn().mockResolvedValue({ count: 1 }),
+      deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+      upsert: jest.fn().mockResolvedValue({}),
     },
   };
   const prisma = {
@@ -18,6 +20,7 @@ function setup() {
       findUnique: jest.fn(),
       update: jest.fn(),
       updateMany: jest.fn(),
+      findFirst: jest.fn(),
     },
     telegramUserAccountIntegration: { findFirst: jest.fn() },
     $transaction: jest.fn((callback: (client: typeof tx) => unknown) =>
@@ -254,6 +257,42 @@ describe('TelegramCustomEmojiService workspace scope', () => {
     });
     expect(prisma).not.toHaveProperty('telegramChannelCustomEmojiPack');
     expect(tx).not.toHaveProperty('telegramChannelCustomEmojiPack');
+  });
+
+  it('refreshes the latest pack contents in workspace scope without duplicating emoji records', async () => {
+    const { mtproto, prisma, service, storage, tx } = setup();
+    prisma.telegramCustomEmojiPack.findFirst.mockResolvedValue({
+      telegramLink: 'https://t.me/addemoji/workspace_pack',
+    });
+    prisma.telegramCustomEmojiPack.findUnique.mockResolvedValue({
+      id: 'pack-1', archivedAt: null,
+    });
+    prisma.telegramUserAccountIntegration.findFirst.mockResolvedValue({
+      apiId: 123,
+      apiHashEncrypted: 'hash', apiHashIv: 'hash-iv', apiHashAuthTag: 'hash-tag',
+      sessionEncrypted: 'session', sessionIv: 'session-iv', sessionAuthTag: 'session-tag',
+    });
+    mtproto.getCustomEmojiPack.mockResolvedValue({
+      shortName: 'workspace_pack', title: 'Workspace Pack updated', telegramSetId: 'set-1',
+      documents: [{
+        documentId: 'emoji-new', alt: '✨', mimeType: 'image/webp', kind: 'STATIC',
+        isFree: false, needsRepainting: false, originalAsset: Buffer.from('asset'),
+      }],
+    });
+    storage.uploadMany.mockResolvedValue(new Map());
+
+    await service.refreshPack('user-1', 'pack-1');
+
+    expect(prisma.telegramCustomEmojiPack.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'pack-1', workspaceId: 'workspace-1', archivedAt: null },
+    }));
+    expect(tx.telegramCustomEmoji.deleteMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { packId: 'pack-1', documentId: { notIn: ['emoji-new'] } },
+    }));
+    expect(tx.telegramCustomEmoji.upsert).toHaveBeenCalledWith(expect.objectContaining({
+      where: { packId_documentId: { packId: 'pack-1', documentId: 'emoji-new' } },
+    }));
+    expect(tx.telegramCustomEmoji.createMany).not.toHaveBeenCalled();
   });
 
   it('rejects a new import when the workspace has no active MTProto account', async () => {

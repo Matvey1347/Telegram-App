@@ -1,14 +1,8 @@
 "use client";
 
 import type { OperationsNotificationItem } from "@telegram-system/shared";
-import { ArrowLeft, Bell, Settings, X } from "lucide-react";
-import {
-  type CSSProperties,
-  type ReactNode,
-  useEffect,
-  useId,
-  useRef,
-} from "react";
+import { Bell, X } from "lucide-react";
+import { type CSSProperties, useEffect, useId, useRef } from "react";
 import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/primitives";
 import { NotificationRow } from "./notification-row";
@@ -48,15 +42,12 @@ export function NotificationPanel({
   unread,
   state,
   busy,
-  settingsOpen,
-  onSettingsChange,
   onMarkAll,
   onMarkVisible,
   onOpenNotification,
   onRetry,
   onLoadMore,
   anchorStyle,
-  settings,
   actionError,
 }: {
   open: boolean;
@@ -64,15 +55,12 @@ export function NotificationPanel({
   unread: number;
   state: NotificationPanelState;
   busy: boolean;
-  settingsOpen: boolean;
-  onSettingsChange: (open: boolean) => void;
   onMarkAll: () => void;
   onMarkVisible: () => void;
   onOpenNotification: (notification: OperationsNotificationItem) => void;
   onRetry: () => void;
   onLoadMore: () => void;
   anchorStyle?: CSSProperties;
-  settings: ReactNode;
   actionError?: string | null;
 }) {
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -135,27 +123,14 @@ export function NotificationPanel({
       >
         <header className="border-b border-neutral-800 px-4 py-3">
           <div className="flex items-center gap-2">
-            {settingsOpen ? (
-              <button
-                type="button"
-                onClick={() => onSettingsChange(false)}
-                className="flex h-8 w-8 items-center justify-center rounded-lg text-neutral-400 hover:bg-neutral-800 hover:text-white"
-                aria-label="Back to notifications"
-              >
-                <ArrowLeft size={17} />
-              </button>
-            ) : (
-              <Bell size={17} className="text-neutral-400" aria-hidden="true" />
-            )}
+            <Bell size={17} className="text-neutral-400" aria-hidden="true" />
             <h2
               id={titleId}
               className="min-w-0 flex-1 text-base font-semibold text-white"
             >
-              {settingsOpen ? "Notification settings" : "Notifications"}
+              Notifications
             </h2>
-            {!settingsOpen ? (
-              <span className="text-xs text-neutral-400">{unread} unread</span>
-            ) : null}
+            <span className="text-xs text-neutral-400">{unread} unread</span>
             <button
               type="button"
               onClick={onClose}
@@ -165,106 +140,94 @@ export function NotificationPanel({
               <X size={17} />
             </button>
           </div>
-          {!settingsOpen ? (
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <Button
-                variant="secondary"
-                className="!px-2.5 !py-1.5 text-xs"
-                onClick={() => onSettingsChange(true)}
-              >
-                <Settings size={14} /> Push
-              </Button>
-              <Button
-                variant="secondary"
-                className="!px-2.5 !py-1.5 text-xs"
-                disabled={busy || unread === 0}
-                onClick={onMarkAll}
-              >
-                Mark all read
-              </Button>
-              <button
-                type="button"
-                disabled={busy || visibleUnread === 0}
-                onClick={onMarkVisible}
-                className="ml-auto text-xs text-neutral-400 hover:text-white disabled:opacity-40"
-              >
-                Mark visible read
-              </button>
-            </div>
-          ) : null}
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <Button
+              variant="secondary"
+              className="!px-2.5 !py-1.5 text-xs"
+              disabled={busy || unread === 0}
+              onClick={onMarkAll}
+            >
+              Mark all read
+            </Button>
+            <button
+              type="button"
+              disabled={busy || visibleUnread === 0}
+              onClick={onMarkVisible}
+              className="ml-auto text-xs text-neutral-400 hover:text-white disabled:opacity-40"
+            >
+              Mark visible read
+            </button>
+          </div>
           {actionError ? (
             <p role="alert" className="mt-2 text-xs text-rose-300">
               {actionError}
             </p>
           ) : null}
         </header>
-        {settingsOpen ? (
-          <div className="min-h-0 flex-1 overflow-y-auto p-4">{settings}</div>
-        ) : (
-          <div className="min-h-0 flex-1 overflow-y-auto">
-            {state.loading ? <NotificationSkeletons /> : null}
-            {state.error ? (
-              <div className="flex min-h-64 flex-col items-center justify-center px-6 text-center">
-                <p className="text-sm font-medium text-white">
-                  Notifications could not be loaded.
-                </p>
-                <p className="mt-1 text-xs text-neutral-500">
-                  Your unread badge is kept separate.
-                </p>
-                <Button variant="secondary" className="mt-4" onClick={onRetry}>
-                  Retry
-                </Button>
-              </div>
-            ) : null}
-            {!state.loading && !state.error && !state.items.length ? (
-              <div className="flex min-h-64 flex-col items-center justify-center px-6 text-center">
-                <Bell
-                  size={26}
-                  className="mb-3 text-neutral-600"
-                  aria-hidden="true"
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          {state.loading ? <NotificationSkeletons /> : null}
+          {state.error ? (
+            <div className="flex min-h-64 flex-col items-center justify-center px-6 text-center">
+              <p className="text-sm font-medium text-white">
+                Notifications could not be loaded.
+              </p>
+              <p className="mt-1 text-xs text-neutral-500">
+                Your unread badge is kept separate.
+              </p>
+              <Button variant="secondary" className="mt-4" onClick={onRetry}>
+                Retry
+              </Button>
+            </div>
+          ) : null}
+          {!state.loading && !state.error && !state.items.length ? (
+            <div className="flex min-h-64 flex-col items-center justify-center px-6 text-center">
+              <Bell
+                size={26}
+                className="mb-3 text-neutral-600"
+                aria-hidden="true"
+              />
+              <p className="text-sm text-neutral-300">
+                You’re all caught up. New workspace notifications will appear
+                here.
+              </p>
+            </div>
+          ) : null}
+          {!state.error
+            ? state.items.map((notification) => (
+                <NotificationRow
+                  key={notification.id}
+                  notification={notification}
+                  onOpen={onOpenNotification}
                 />
-                <p className="text-sm text-neutral-300">
-                  You’re all caught up. New CRM activity will appear here.
-                </p>
-              </div>
-            ) : null}
-            {!state.error
-              ? state.items.map((notification) => (
-                  <NotificationRow
-                    key={notification.id}
-                    notification={notification}
-                    onOpen={onOpenNotification}
-                  />
-                ))
-              : null}
-            {state.items.length || state.hasMore || state.paginationError ? (
-              <div className="p-3 text-center">
-                {state.paginationError ? (
-                  <div>
-                    <p className="mb-2 text-xs text-rose-300">
-                      More notifications could not be loaded.
-                    </p>
-                    <Button variant="secondary" onClick={onLoadMore}>
-                      Retry
-                    </Button>
-                  </div>
-                ) : state.hasMore ? (
-                  <Button
-                    variant="secondary"
-                    disabled={state.loadingMore}
-                    onClick={onLoadMore}
-                  >
-                    {state.loadingMore ? "Loading…" : "Load more"}
-                  </Button>
-                ) : (
-                  <p className="text-xs text-neutral-600">
-                    End of recent activity
+              ))
+            : null}
+          {state.items.length || state.hasMore || state.paginationError ? (
+            <div className="p-3 text-center">
+              {state.paginationError ? (
+                <div>
+                  <p className="mb-2 text-xs text-rose-300">
+                    More notifications could not be loaded.
                   </p>
-                )}
-              </div>
-            ) : null}
-          </div>
-        )}
+                  <Button variant="secondary" onClick={onLoadMore}>
+                    Retry
+                  </Button>
+                </div>
+              ) : state.hasMore ? (
+                <Button
+                  variant="secondary"
+                  disabled={state.loadingMore}
+                  onClick={onLoadMore}
+                >
+                  {state.loadingMore ? "Loading…" : "Load more"}
+                </Button>
+              ) : (
+                <p className="text-xs text-neutral-600">
+                  End of recent activity
+                </p>
+              )}
+            </div>
+          ) : null}
+        </div>
       </section>
     </>,
     document.body,

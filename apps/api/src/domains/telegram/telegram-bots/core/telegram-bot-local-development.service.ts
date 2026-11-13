@@ -1,4 +1,9 @@
-import { ForbiddenException, Injectable, Logger } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  Logger,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import {
   TelegramBotApplicationType,
   TelegramBotRuntimeEnvironment,
@@ -39,7 +44,56 @@ export class TelegramBotLocalDevelopmentService {
     this.assertAuthorized(secret);
     await this.runtime.reconcileLocalDevelopment();
     await this.refreshChangedFinanceKeyboards();
-    return { started: true };
+    const runtimes = await this.prisma.telegramBotRuntimeInstance.findMany({
+      where: {
+        environment: TelegramBotRuntimeEnvironment.LOCAL,
+        botIntegration: {
+          isActive: true,
+          applicationType: { not: TelegramBotApplicationType.NONE },
+        },
+      },
+      select: {
+        id: true,
+        botIntegrationId: true,
+        runtimeStatus: true,
+        webhookStatus: true,
+        lastRuntimeError: true,
+        botIntegration: { select: { applicationType: true } },
+      },
+    });
+    if (!runtimes.length) {
+      throw new ServiceUnavailableException(
+        'No active LOCAL Telegram bot runtime was found after activation',
+      );
+    }
+    const failed = runtimes.filter(
+      (runtime) =>
+        runtime.runtimeStatus !== TelegramBotRuntimeStatus.ACTIVE ||
+        runtime.webhookStatus !== TelegramBotWebhookStatus.CONFIGURED ||
+        runtime.lastRuntimeError,
+    );
+    if (failed.length) {
+      const details = failed
+        .map(
+          (runtime) =>
+            runtime.lastRuntimeError ||
+            `${runtime.botIntegration.applicationType} is ${runtime.runtimeStatus}/${runtime.webhookStatus}`,
+        )
+        .join('; ');
+      throw new ServiceUnavailableException(
+        `LOCAL Telegram bot activation failed: ${details}`,
+      );
+    }
+    return {
+      started: true,
+      runtimes: runtimes.map((runtime) => ({
+        id: runtime.id,
+        botIntegrationId: runtime.botIntegrationId,
+        applicationType: runtime.botIntegration.applicationType,
+        runtimeStatus: runtime.runtimeStatus,
+        webhookStatus: runtime.webhookStatus,
+      })),
+    };
   }
 
   async stop(secret: string | undefined) {

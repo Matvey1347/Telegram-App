@@ -1,9 +1,6 @@
-import { Injectable } from '@nestjs/common';
-import {
-  TelegramBotApiClient,
-  TelegramBotApiError,
-} from '@api/telegram/shared/bot/telegram-bot-api.client';
-import { TelegramSystemBotConfigService } from '../../telegram/telegram-system-bot/telegram-system-bot-config.service';
+import { Injectable, Optional } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
+import { TelegramSystemBotNotificationsService } from '../../telegram/telegram-system-bot/telegram-system-bot-notifications.service';
 import { PrismaService } from '../../../prisma/prisma.service';
 import {
   OperationsNotificationPermissionService,
@@ -20,8 +17,7 @@ export class ChannelReminderDeliveryService {
     private readonly store: OperationsNotificationStoreService,
     private readonly publisher: OperationsNotificationPublisherService,
     private readonly permissions: OperationsNotificationPermissionService,
-    private readonly bot: TelegramBotApiClient,
-    private readonly config: TelegramSystemBotConfigService,
+    @Optional() private readonly moduleRef?: ModuleRef,
   ) {}
 
   async deliver(input: {
@@ -35,16 +31,6 @@ export class ChannelReminderDeliveryService {
       where: { id: input.memberId, workspaceId: input.workspaceId },
       select: {
         ...operationsNotificationMemberSelect,
-        operationsNotificationPreference: {
-          select: { channelRemindersTelegramEnabled: true },
-        },
-        user: {
-          select: {
-            telegramSystemBotConnection: {
-              select: { enabled: true, telegramChatId: true },
-            },
-          },
-        },
       },
     });
     if (
@@ -83,29 +69,27 @@ export class ChannelReminderDeliveryService {
     // Publishing an existing occurrence recovers a crash after insertion. Push
     // claims are idempotent in the shared publisher.
     await this.publisher.publish([notification.id]);
-    const connection = member.user.telegramSystemBotConnection;
-    if (
-      !member.operationsNotificationPreference
-        ?.channelRemindersTelegramEnabled ||
-      !connection?.enabled ||
-      !this.config.token
-    )
-      return;
-    const deliveryState = await this.prisma.operationsNotification.findUnique({
-      where: { id: notification.id },
-      select: { channelReminderTelegramSentAt: true },
+    if (!this.moduleRef) return;
+    const alreadySent = await this.prisma.operationsNotification.findFirst({
+      where: {
+        workspaceId: input.workspaceId,
+        type: 'CHANNEL_POSTS_REMINDER',
+        sourceKey: input.sourceKey,
+        channelReminderTelegramSentAt: { not: null },
+      },
+      select: { id: true },
     });
-    if (!deliveryState || deliveryState.channelReminderTelegramSentAt) return;
-    try {
-      await this.bot.sendMessage(this.config.token, {
-        chat_id: connection.telegramChatId,
-        text: `${input.title}\n\n${input.body}`.slice(0, 4096),
-      });
-    } catch (error) {
-      // Permanent Telegram rejections must not block other recipients forever.
-      if (!(error instanceof TelegramBotApiError) || error.kind === 'TRANSIENT')
-        throw error;
-    }
+    if (alreadySent) return;
+    const botNotifications = await this.moduleRef.resolve(
+      TelegramSystemBotNotificationsService,
+      undefined,
+      { strict: false },
+    );
+    const result = await botNotifications.sendToWorkspace(
+      input.workspaceId,
+      `${input.title}\n\n${input.body}`.slice(0, 4096),
+    );
+    if (result.status !== 'SENT') return;
     await this.prisma.operationsNotification.update({
       where: { id: notification.id },
       data: { channelReminderTelegramSentAt: new Date() },

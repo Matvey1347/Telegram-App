@@ -16,6 +16,7 @@ import { TelegramAiPostingAutopilotNotificationService } from './telegram-ai-pos
 import { classifyAutopilotError } from './telegram-ai-posting-autopilot-error';
 import { WorkspaceService } from '../../../common/workspace.service';
 import { notifyScheduledTaskDueWorkChanged } from '../../../common/scheduled-task-wake-notifier';
+import { markTelegramAiPostingRunForReview } from './telegram-ai-posting-review-queue';
 
 const LEASE_MS = 60 * 60_000;
 const WEEK_MS = 7 * 24 * 60 * 60_000;
@@ -35,7 +36,11 @@ export class TelegramAiPostingAutopilotService {
   async nextDueAt() {
     const [next, deliveryAt] = await Promise.all([
       this.prisma.telegramAiPostingSettings.findFirst({
-        where: { autopilotEnabled: true, autopilotNextRunAt: { not: null } },
+        where: {
+          autopilotEnabled: true,
+          mode: { in: ['AUTOPILOT', 'REVIEW'] },
+          autopilotNextRunAt: { not: null },
+        },
         orderBy: { autopilotNextRunAt: 'asc' },
         select: { autopilotNextRunAt: true },
       }),
@@ -56,6 +61,7 @@ export class TelegramAiPostingAutopilotService {
     const due = await this.prisma.telegramAiPostingSettings.findMany({
       where: {
         autopilotEnabled: true,
+        mode: { in: ['AUTOPILOT', 'REVIEW'] },
         autopilotNextRunAt: { lte: now },
         OR: [
           { autopilotLeaseExpiresAt: null },
@@ -111,6 +117,7 @@ export class TelegramAiPostingAutopilotService {
           where: {
             id: row.id,
             autopilotEnabled: true,
+            mode: { in: ['AUTOPILOT', 'REVIEW'] },
             autopilotNextRunAt: row.autopilotNextRunAt,
             OR: [
               { autopilotLeaseExpiresAt: null },
@@ -149,6 +156,7 @@ export class TelegramAiPostingAutopilotService {
               id: row.id,
               autopilotLeaseOwner: owner,
               autopilotEnabled: true,
+              mode: { in: ['AUTOPILOT', 'REVIEW'] },
             },
             data: {
               autopilotNextRunAt: new Date(Date.now() + 60 * 60_000),
@@ -166,26 +174,67 @@ export class TelegramAiPostingAutopilotService {
           row.workspaceId,
           row.telegramChannelId,
           run.id,
+          owner,
         );
         totals.scheduled += result.scheduled;
         totals.generated += result.generated;
-        await this.prisma.telegramAiPostingSettings.updateMany({
-          where: {
-            id: row.id,
-            autopilotLeaseOwner: owner,
-            autopilotEnabled: true,
+        if (result.status === 'STOPPED') {
+          await this.prisma.telegramAiPostingAutopilotRun.update({
+            where: { id: run.id },
+            data: {
+              status: 'STOPPED',
+              currentStage: 'STOPPED',
+              completedAt: new Date(),
+              summary: result,
+            },
+          });
+          continue;
+        }
+        const released = await this.prisma.telegramAiPostingSettings.updateMany(
+          {
+            where: {
+              id: row.id,
+              autopilotLeaseOwner: owner,
+              autopilotEnabled: true,
+              autopilotLeaseExpiresAt: { gt: new Date() },
+            },
+            data: {
+              autopilotNextRunAt: new Date(Date.now() + WEEK_MS),
+              autopilotLeaseOwner: null,
+              autopilotLeaseExpiresAt: null,
+              autopilotLastRunAt: new Date(),
+              autopilotLastStatus: result.status,
+              autopilotLastError:
+                result.errors.join('; ').slice(0, 1000) || null,
+              autopilotLastSummary: result,
+              autopilotRetryOfRunId: null,
+            },
           },
-          data: {
-            autopilotNextRunAt: new Date(Date.now() + WEEK_MS),
-            autopilotLeaseOwner: null,
-            autopilotLeaseExpiresAt: null,
-            autopilotLastRunAt: new Date(),
-            autopilotLastStatus: result.status,
-            autopilotLastError: result.errors.join('; ').slice(0, 1000) || null,
-            autopilotLastSummary: result,
-            autopilotRetryOfRunId: null,
-          },
-        });
+        );
+        if (!released.count) {
+          const current = await this.prisma.telegramAiPostingSettings.findFirst(
+            {
+              where: {
+                workspaceId: row.workspaceId,
+                telegramChannelId: row.telegramChannelId,
+              },
+              select: { autopilotEnabled: true },
+            },
+          );
+          if (current?.autopilotEnabled === false) {
+            await this.prisma.telegramAiPostingAutopilotRun.update({
+              where: { id: run.id },
+              data: {
+                status: 'STOPPED',
+                currentStage: 'STOPPED',
+                completedAt: new Date(),
+                summary: result,
+              },
+            });
+            continue;
+          }
+          throw new ConflictException('AI_POSTING_AUTOPILOT_LEASE_LOST');
+        }
         await this.prisma.telegramAiPostingAutopilotRun.update({
           where: { id: run.id },
           data: {
@@ -263,19 +312,19 @@ export class TelegramAiPostingAutopilotService {
     workspaceId: string,
     channelId: string,
     runId: string,
+    leaseOwner: string,
   ) {
     const settings = await this.prisma.telegramAiPostingSettings.findFirst({
       where: {
         workspaceId,
         telegramChannelId: channelId,
         autopilotEnabled: true,
-        OR: [
-          { autopilotLeaseExpiresAt: null },
-          { autopilotLeaseExpiresAt: { lte: new Date() } },
-        ],
+        autopilotLeaseOwner: leaseOwner,
+        autopilotLeaseExpiresAt: { gt: new Date() },
       },
       select: {
         postsPerDay: true,
+        mode: true,
         targetReadyDrafts: true,
         maxReadyDrafts: true,
         targetCoverageDays: true,
@@ -457,12 +506,22 @@ export class TelegramAiPostingAutopilotService {
         throw error;
       }
       for (let i = 0; i < generationRun.generated.length; i++) {
+        if (settings.mode === 'REVIEW') continue;
+        const approvalVersion = generationRun.version + i * 3;
+        await this.testRuns.reviewPublication(
+          actor.userId,
+          channelId,
+          generationRun.runId,
+          i,
+          approvalVersion,
+          'approve',
+        );
         const saved = (await this.testRuns.reviewPublication(
           actor.userId,
           channelId,
           generationRun.runId,
           i,
-          generationRun.version + i * 2,
+          approvalVersion + 1,
           'save',
         )) as { publications?: Array<{ savedPostId?: string | null }> };
         const postId = saved.publications?.[i]?.savedPostId;
@@ -505,6 +564,13 @@ export class TelegramAiPostingAutopilotService {
           }
         }
       }
+      if (settings.mode === 'REVIEW') {
+        await markTelegramAiPostingRunForReview(
+          this.prisma,
+          workspaceId,
+          generationRun.runId,
+        );
+      }
       const generationErrors = (generationRun.failures ?? []).map(
         (failure) => failure.code,
       );
@@ -528,6 +594,7 @@ export class TelegramAiPostingAutopilotService {
         undefined,
         pass + 1,
       );
+      if (settings.mode === 'REVIEW') break;
       drafts = await this.prisma.telegramManagedPost.count({
         where: {
           workspaceId,

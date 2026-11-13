@@ -136,6 +136,9 @@ export class TelegramManagedPostCommandService {
       groupId?: string | null;
       groupPosition?: number | null;
       jsonImportKey?: string | null;
+      aiPostingReviewStatus?: string | null;
+      aiPostingApprovedWithoutEdits?: boolean | null;
+      aiPostingRecheckRequired?: boolean;
     },
   ) {
     return tx.telegramManagedPost.create({
@@ -154,6 +157,10 @@ export class TelegramManagedPostCommandService {
         groupId: params.groupId,
         groupPosition: params.groupPosition,
         jsonImportKey: params.jsonImportKey ?? null,
+        aiPostingReviewStatus: params.aiPostingReviewStatus ?? null,
+        aiPostingApprovedWithoutEdits:
+          params.aiPostingApprovedWithoutEdits ?? null,
+        aiPostingRecheckRequired: params.aiPostingRecheckRequired ?? false,
       },
       include: this.managedPostInclude,
     });

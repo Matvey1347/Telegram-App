@@ -2,14 +2,26 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
 import { TelegramSystemBotConnectionsService } from './telegram-system-bot-connections.service';
+import { TelegramSystemBotNotificationConnectionsService } from './telegram-system-bot-notification-connections.service';
 
 describe('TelegramSystemBotConnectionsService', () => {
   const config = {
     frontendUrl: 'https://app.example.test',
     username: 'system_bot',
+    configured: true,
+    environment: 'LOCAL',
+    dashboardRuntimes: jest.fn().mockReturnValue([
+      { environment: 'LOCAL', username: 'system_bot', selected: true },
+      {
+        environment: 'PRODUCTION',
+        username: 'system_bot_prod',
+        selected: false,
+      },
+    ]),
     hashLinkToken: jest.fn((value: string) => `hash:${value}`),
   };
   const prisma = {
@@ -26,6 +38,12 @@ describe('TelegramSystemBotConnectionsService', () => {
       update: jest.fn(),
     },
     workspaceMember: { findMany: jest.fn(), findFirst: jest.fn() },
+    workspace: {
+      update: jest.fn(),
+      updateMany: jest.fn(),
+      findFirst: jest.fn(),
+      findUniqueOrThrow: jest.fn(),
+    },
     telegramSystemBotTaskSubscription: {
       deleteMany: jest.fn(),
       findMany: jest.fn(),
@@ -36,6 +54,7 @@ describe('TelegramSystemBotConnectionsService', () => {
     ),
   } as any;
   let service: TelegramSystemBotConnectionsService;
+  let notificationConnections: TelegramSystemBotNotificationConnectionsService;
   const taskRegistry = {
     definitions: jest.fn().mockReturnValue([]),
     get: jest.fn(),
@@ -48,6 +67,151 @@ describe('TelegramSystemBotConnectionsService', () => {
       config as any,
       taskRegistry as any,
     );
+    notificationConnections =
+      new TelegramSystemBotNotificationConnectionsService(
+        prisma,
+        config as any,
+      );
+  });
+
+  it('creates a short-lived group linking code for an authorized workspace manager', async () => {
+    prisma.workspaceMember.findFirst.mockResolvedValue({ role: 'owner' });
+    prisma.workspace.update.mockResolvedValue({});
+    const link = await notificationConnections.createNotificationGroupLink(
+      'workspace-a',
+      'user-a',
+    );
+    expect(link.botUsername).toBe('system_bot');
+    expect(link.token).toHaveLength(32);
+    expect(new Date(link.expiresAt).getTime()).toBeGreaterThan(Date.now());
+    expect(prisma.workspace.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'workspace-a' },
+        data: expect.objectContaining({
+          telegramNotificationLinkTokenHash: `hash:${link.token}`,
+        }),
+      }),
+    );
+  });
+
+  it('does not let a regular member create or consume group binding links', async () => {
+    prisma.workspaceMember.findFirst.mockResolvedValue({ role: 'member' });
+    await expect(
+      notificationConnections.createNotificationGroupLink(
+        'workspace-a',
+        'user-a',
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('consumes the group code once and stores workspace chat metadata', async () => {
+    prisma.workspace.findFirst.mockResolvedValue({ id: 'workspace-a' });
+    prisma.workspace.updateMany.mockResolvedValue({ count: 1 });
+    await expect(
+      notificationConnections.consumeNotificationGroupLink(
+        'one-time-token-value',
+        '-100123',
+        'Ops group',
+      ),
+    ).resolves.toBe(true);
+    expect(prisma.workspace.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          telegramNotificationLinkTokenHash: 'hash:one-time-token-value',
+        }),
+        data: expect.objectContaining({
+          telegramNotificationChatId: '-100123',
+          telegramNotificationChatTitle: 'Ops group',
+          telegramNotificationLinkTokenHash: null,
+        }),
+      }),
+    );
+  });
+
+  it('creates an expiring workspace notification account link independent of its creator', async () => {
+    prisma.workspaceMember.findFirst.mockResolvedValue({ role: 'admin' });
+    prisma.workspace.update.mockResolvedValue({});
+    const link = await notificationConnections.createNotificationAccountLink(
+      'workspace-a',
+      'admin-a',
+    );
+    expect(link.botUsername).toBe('system_bot');
+    expect(link.runtimeEnvironment).toBe('LOCAL');
+    expect(link.botRuntimes).toHaveLength(2);
+    expect(prisma.workspace.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'workspace-a' },
+        data: expect.objectContaining({
+          telegramNotificationAccountLinkTokenHash: `hash:${link.token}`,
+        }),
+      }),
+    );
+  });
+
+  it('binds the Telegram identity that opens the workspace token rather than its creating member', async () => {
+    prisma.workspace.findFirst.mockResolvedValue({ id: 'workspace-a' });
+    prisma.workspace.updateMany.mockResolvedValue({ count: 1 });
+    await expect(
+      notificationConnections.consumeNotificationAccountLink({
+        token: 'one-time-account-token',
+        telegramUserId: 'telegram-user-44',
+        telegramChatId: 'telegram-user-44',
+        username: 'primary_admin',
+        firstName: 'Primary',
+      }),
+    ).resolves.toBe(true);
+    expect(prisma.workspace.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          telegramNotificationAccountLinkTokenHash:
+            'hash:one-time-account-token',
+        }),
+        data: expect.objectContaining({
+          telegramNotificationUserId: 'telegram-user-44',
+          telegramNotificationUserChatId: 'telegram-user-44',
+          telegramNotificationUserName: '@primary_admin',
+          telegramNotificationAccountLinkTelegramUserId: 'telegram-user-44',
+        }),
+      }),
+    );
+  });
+
+  it('reports an expired or previously consumed workspace account token without binding it', async () => {
+    prisma.workspace.findFirst.mockResolvedValue(null);
+    await expect(
+      notificationConnections.consumeNotificationAccountLink({
+        token: 'expired-account-token',
+        telegramUserId: 'telegram-user-44',
+        telegramChatId: 'telegram-user-44',
+      }),
+    ).resolves.toBe(false);
+    expect(prisma.workspace.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('refuses to bind an account token from a non-private chat', async () => {
+    await expect(
+      notificationConnections.consumeNotificationAccountLink({
+        token: 'group-account-token',
+        telegramUserId: 'telegram-user-44',
+        telegramChatId: '-100123',
+      }),
+    ).resolves.toBe(false);
+    expect(prisma.workspace.findFirst).not.toHaveBeenCalled();
+  });
+
+  it('accepts the same account opening the shared binding link in a second bot environment', async () => {
+    prisma.workspace.findFirst.mockResolvedValue({
+      id: 'workspace-a',
+      telegramNotificationAccountLinkTelegramUserId: 'telegram-user-44',
+    });
+    await expect(
+      notificationConnections.consumeNotificationAccountLink({
+        token: 'shared-account-token',
+        telegramUserId: 'telegram-user-44',
+        telegramChatId: 'telegram-user-44',
+      }),
+    ).resolves.toBe(true);
+    expect(prisma.workspace.updateMany).not.toHaveBeenCalled();
   });
 
   it('reuses an authorized connection when resolving current workspace membership', async () => {

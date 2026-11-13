@@ -178,6 +178,41 @@ function harness() {
 }
 
 describe('AI locked admission and settlement', () => {
+  it('allows an explicit image request limit above the workspace cap without changing text limits', async () => {
+    const h = harness();
+    h.workspace.maxRequestCost = decimal('0.05');
+    h.workspace.dailyBudget = decimal('1');
+    h.workspace.monthlyBudget = decimal('1');
+    Object.assign(h.config, h.registry.category('TELEGRAM_POSTING_IMAGE'), {
+      enabled: true,
+      maxRequestCost: decimal('0.30'),
+    });
+    const image = {
+      ...h.request(),
+      category: 'TELEGRAM_POSTING_IMAGE' as const,
+    };
+    await expect(h.admission.admit(image)).resolves.toMatchObject({
+      operation: { category: 'TELEGRAM_POSTING_IMAGE' },
+    });
+    h.config.maxRequestCost = decimal('0.20');
+    await expect(
+      h.admission.admit({ ...image, operationId: h.request().operationId }),
+    ).rejects.toThrow('AI_REQUEST_BUDGET_EXCEEDED');
+    h.config.maxRequestCost = null as never;
+    await expect(
+      h.admission.admit({ ...image, operationId: h.request().operationId }),
+    ).rejects.toThrow('AI_REQUEST_BUDGET_EXCEEDED');
+    Object.assign(h.config, h.registry.category('LEAD_AD_CLASSIFICATION'), {
+      enabled: true,
+      maxRequestCost: decimal('1'),
+      modelId: 'gpt-5.4-mini-2026-03-17',
+      maxInputTokens: 32768,
+      maxOutputTokens: 8000,
+    });
+    await expect(h.admission.admit(h.request())).rejects.toThrow(
+      'AI_REQUEST_BUDGET_EXCEEDED',
+    );
+  });
   it('reserves per-channel daily and monthly limits and tags operation dimensions', async () => {
     const h = harness();
     const request: AiExecutionRequest = {

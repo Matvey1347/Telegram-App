@@ -42,3 +42,42 @@ export function parseTelegramAiPostingJson(
   }
   return null;
 }
+
+export function parseTelegramAiPostingDraft(
+  reply: string,
+): Record<string, unknown> | null {
+  const parsed = parseTelegramAiPostingJson(reply);
+  const nested = parsed?.draft ?? parsed?.publication ?? parsed?.post;
+  const value =
+    nested && typeof nested === 'object' && !Array.isArray(nested)
+      ? (nested as Record<string, unknown>)
+      : parsed;
+  const firstString = (...keys: string[]) => {
+    for (const key of keys) {
+      const candidate = value?.[key];
+      if (typeof candidate === 'string' && candidate.trim())
+        return candidate.trim();
+    }
+    return '';
+  };
+  let text = firstString('text', 'content', 'body', 'caption', 'postText');
+  if (
+    !text &&
+    !parsed &&
+    reply.trim() &&
+    !['{', '[', '```'].some((prefix) => reply.trim().startsWith(prefix))
+  )
+    text = reply.trim();
+  if (!text) return null;
+  const title =
+    firstString('title', 'headline') ||
+    text
+      .split(/\n+/u)
+      .find((line) => line.trim())
+      ?.replace(/^\s*(?:#{1,6}\s+|\*\*|_)+/u, '')
+      .replace(/[\*_]+$/u, '')
+      .trim()
+      .slice(0, 120) ||
+    '';
+  return { ...(value ?? {}), title, text };
+}
