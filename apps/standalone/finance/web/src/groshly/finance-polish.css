@@ -4,7 +4,8 @@
 .emoji-more{display:block;flex:none;margin:8px auto 0;padding:10px 18px;border:1px solid var(--line);border-radius:14px;color:var(--ink);background:var(--paper);font-weight:700}
 .app-shell .segmented button svg{display:inline-block;vertical-align:middle;margin-right:7px}
 .debt-direction-tabs{margin-top:18px}
-.app-shell .investment-summary{background:#d6eea9;color:#18382d}
+.app-shell .investment-summary{background:var(--paper);color:#18382d}
+.app-shell .investment-hero{background:var(--paper)!important}
 .app-shell .investment-summary>small,.app-shell .investment-summary .investment-metrics span{color:#527861;opacity:1}
 .app-shell .investment-summary .investment-metrics b{color:#18382d}
 .app-shell .investment-summary .investment-metrics b.negative{color:#a44138}

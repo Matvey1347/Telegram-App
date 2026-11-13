@@ -90,6 +90,13 @@ const GroshlyRoot = GroshlyApp as ComponentType<{
     kind: "transactions" | "analytics" | "debts" | "recurring" | "investments",
   ) => Promise<GroshlySnapshot>;
   onOpenInvestment: (id: string) => Promise<{
+    id: string;
+    name: string;
+    emoji: string;
+    currency: string;
+    invested: number;
+    returned: number;
+    value: number;
     status: string;
     closedAt: string;
     description: string;
@@ -1021,6 +1028,13 @@ export function GroshlyFinanceApp({ botId }: { botId: string }) {
   const openInvestment = async (id: string) => {
     const detail = await consumerFinanceInvestmentsApi.get(botId, id);
     return {
+      id: detail.id,
+      name: detail.name,
+      emoji: detail.customTypeEmoji || "📈",
+      currency: detail.currency,
+      invested: Number(detail.totalInvested),
+      returned: Number(detail.totalReturned),
+      value: Number(detail.currentValue),
       status: detail.status.toLowerCase(),
       closedAt: detail.closedAt?.slice(0, 10) || "",
       description: detail.description || "",

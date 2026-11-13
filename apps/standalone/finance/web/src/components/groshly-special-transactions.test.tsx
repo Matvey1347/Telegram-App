@@ -9,6 +9,7 @@ const App = GroshlyApp as ComponentType<{
   onSaveLedgerEntry?: (input: { draft: { categoryId?: string | null } }) => Promise<ReturnType<typeof initial>>;
   onChangeRegularPayment?: (input: { id: string; action: string }) => Promise<ReturnType<typeof initial>>;
   onSaveInvestmentMovement?: (input: { id: string; mode: string; amount: number; accountId: string; occurredAt: string; idempotencyKey: string }) => Promise<ReturnType<typeof initial>>;
+  onOpenInvestment?: (id: string) => Promise<unknown>;
 }>;
 
 beforeEach(() => {
@@ -25,6 +26,22 @@ function snapshot() {
 }
 
 describe("Groshly special transactions", () => {
+  it("keeps an investment address and restores its details after a reload", async () => {
+    const data = snapshot();
+    data.investments = [{ id: "asset", name: "Fund", currency: "UAH", accountId: "a1", invested: 100, returned: 0, value: 100, events: [] }] as never;
+    const detail = vi.fn().mockResolvedValue({ events: [{ id: "event", date: "2026-11-12", type: "deposit", amount: 25, accountId: "a1" }] });
+    const view = render(<App initialData={data} onOpenInvestment={detail} />);
+    fireEvent.click(screen.getByRole("link", { name: /Investments/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Fund/ }));
+    await waitFor(() => expect(window.location.search).toContain("investment=asset"));
+    view.unmount();
+    render(<App initialData={data} onOpenInvestment={detail} />);
+    await waitFor(() => expect(screen.getByText("Investment details")).toBeInTheDocument());
+    await waitFor(() => expect(detail).toHaveBeenCalledTimes(2));
+    expect(screen.getByText("Movement history")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    expect(window.location.search).not.toContain("investment=");
+  });
   it("waits for a contribution to be saved and uses the server snapshot", async () => {
     const data = snapshot();
     data.investments = [{ id: "asset", name: "Fund", currency: "UAH", accountId: "a1", invested: 100, returned: 0, value: 100, events: [] }] as never;
