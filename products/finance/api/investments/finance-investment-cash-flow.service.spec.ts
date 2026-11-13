@@ -46,11 +46,15 @@ function setup(
   const transaction = rawTransaction(kind);
   const created = flowRow(kind);
   const tx = {
+    financeInvestmentValuation: { findFirst: jest.fn().mockResolvedValue(null) },
+    financeTransaction: { groupBy: jest.fn().mockResolvedValue([]) },
     financeInvestmentCashFlow: {
+      groupBy: jest.fn().mockResolvedValue([]),
       findUnique: jest.fn().mockResolvedValue(null),
       create: jest.fn().mockResolvedValue(created),
     },
     financeInvestment: {
+      update: jest.fn().mockResolvedValue({}),
       findFirst: jest.fn().mockResolvedValue({
         name: 'Business',
         startedAt: new Date('2026-01-01T00:00:00.000Z'),
@@ -98,15 +102,18 @@ function setup(
     investment: jest.fn().mockResolvedValue({ id: 'investment-1' }),
   };
   const valuation = { lock: jest.fn().mockResolvedValue(undefined) };
+  const conversion = { getRateMetadata: jest.fn().mockResolvedValue({ available: true, rate: '3.91', rateAt: now }) };
   return {
     prisma,
     tx,
     ledger,
+    conversion,
     service: new FinanceInvestmentCashFlowService(
       prisma as never,
       ledger as never,
       reads as never,
       valuation as never,
+      conversion as never,
     ),
   };
 }
@@ -143,6 +150,21 @@ function flowRow(kind: 'CONTRIBUTION' | 'RETURN') {
 }
 
 describe('FinanceInvestmentCashFlowService', () => {
+  it('converts a contribution from the account currency to the investment currency', async () => {
+    const { service, prisma, tx, conversion } = setup('CONTRIBUTION');
+    prisma.financeInvestment.findFirst.mockResolvedValue({ id: 'investment-1', name: 'Business', currency: 'PLN', status: 'ACTIVE', startedAt: new Date('2026-01-01T00:00:00.000Z') });
+    await service.record('profile-1', 'investment-1', { kind: 'CONTRIBUTION', accountId: 'account-1', amount: '25', occurredAt: now.toISOString(), idempotencyKey: 'cross-currency-1' });
+    expect(conversion.getRateMetadata).toHaveBeenCalledWith('USD', 'PLN', 'workspace-1', expect.anything());
+    expect(tx.financeInvestmentCashFlow.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ amountInInvestmentCurrency: new Prisma.Decimal('97.75') }) }));
+  });
+
+  it('does not write a contribution if the exchange rate is unavailable', async () => {
+    const { service, prisma, conversion } = setup('CONTRIBUTION');
+    prisma.financeInvestment.findFirst.mockResolvedValue({ id: 'investment-1', name: 'Business', currency: 'PLN', status: 'ACTIVE', startedAt: new Date('2026-01-01T00:00:00.000Z') });
+    conversion.getRateMetadata.mockResolvedValueOnce({ available: false, rate: '', rateAt: now });
+    await expect(service.record('profile-1', 'investment-1', { kind: 'CONTRIBUTION', accountId: 'account-1', amount: '25', occurredAt: now.toISOString(), idempotencyKey: 'cross-currency-2' })).rejects.toThrow();
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
   it.each([
     ['CONTRIBUTION', 'EXPENSE', 'INVESTMENT_CONTRIBUTION', 'totalInvested'],
     ['RETURN', 'INCOME', 'INVESTMENT_RETURN', 'totalReturned'],

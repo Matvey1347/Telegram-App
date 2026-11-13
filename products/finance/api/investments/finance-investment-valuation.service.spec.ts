@@ -27,6 +27,8 @@ describe('FinanceInvestmentValuationService', () => {
     };
     const tx = {
       $executeRaw: jest.fn().mockResolvedValue(1),
+      financeInvestmentCashFlow: { groupBy: jest.fn().mockResolvedValue([]) },
+      financeTransaction: { groupBy: jest.fn().mockResolvedValue([]) },
       financeInvestmentValuation: {
         findUnique: jest.fn().mockResolvedValue(null),
         findFirst: jest.fn().mockResolvedValue(latest),
@@ -92,6 +94,8 @@ describe('FinanceInvestmentValuationService', () => {
     const corrected = valuation('correction', 95, currentDate);
     const tx = {
       $executeRaw: jest.fn().mockResolvedValue(1),
+      financeInvestmentCashFlow: { groupBy: jest.fn().mockResolvedValue([]) },
+      financeTransaction: { groupBy: jest.fn().mockResolvedValue([]) },
       financeInvestmentValuation: {
         findUnique: jest.fn().mockResolvedValue(null),
         findFirst: jest

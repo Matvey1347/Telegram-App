@@ -1,3 +1,4 @@
+import { refreshInvestmentCurrent } from '@consumer-finance/api/investments/finance-investment-current';
 import {
   BadRequestException,
   ConflictException,
@@ -153,7 +154,7 @@ export class FinanceInvestmentValuationService {
         },
         select: financeInvestmentValuationSelect,
       });
-      await this.refreshCurrent(tx, profileId, investmentId);
+      await refreshInvestmentCurrent(tx, profileId, investmentId);
       return { row: created, duplicate: false };
     });
     return this.mutation(profileId, result.row, result.duplicate);
@@ -189,30 +190,8 @@ export class FinanceInvestmentValuationService {
       },
       select: financeInvestmentValuationSelect,
     });
-    await this.refreshCurrent(tx, input.profileId, input.investmentId);
+    await refreshInvestmentCurrent(tx, input.profileId, input.investmentId);
     return valuation;
-  }
-
-  private async refreshCurrent(
-    tx: Prisma.TransactionClient,
-    profileId: string,
-    investmentId: string,
-  ) {
-    const current = await tx.financeInvestmentValuation.findFirst({
-      where: { profileId, investmentId, correctedBy: null },
-      orderBy: [{ valuedAt: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }],
-      select: { value: true, amountInValuationCurrency: true, valuedAt: true },
-    });
-    await tx.financeInvestment.update({
-      where: { id: investmentId },
-      data: {
-        currentValue: current?.value || 0,
-        currentValueInValuationCurrency:
-          current?.amountInValuationCurrency || 0,
-        currentValuationAt: current?.valuedAt || null,
-        version: { increment: 1 },
-      },
-    });
   }
 
   private async mutation(
