@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { GroshlyApp } from "@finance-web/groshly/main";
 import { readFinanceRateCache } from "@finance-web/groshly/rate-cache";
 import { GroshlyLoadingScreen } from "@finance-web/components/groshly-loading-screen";
+import { recordInvestmentMovement, type InvestmentMovement } from "@finance-web/components/groshly-investment-movement";
 import { useTelegramMiniAppBootstrap } from "@consumer-finance/web/components/hooks/use-telegram-mini-app-bootstrap";
 import { ConsumerFinanceLogin } from "@consumer-finance/web/components/app/consumer-finance-login";
 import { useFinanceBotBranding } from "@consumer-finance/web/components/hooks/use-finance-bot-branding";
@@ -36,6 +37,7 @@ const GroshlyRoot = GroshlyApp as ComponentType<{
   faviconLightUrl?: string;
   telegramAuthenticated: boolean;
   onRefresh: () => Promise<GroshlySnapshot>;
+  onSaveInvestmentMovement: (input: InvestmentMovement) => Promise<GroshlySnapshot>;
   onCloseInvestment: (input: {
     id: string;
     closedAt: string;
@@ -588,6 +590,18 @@ export function GroshlyFinanceApp({ botId }: { botId: string }) {
       obligations: nextObligations,
     });
   };
+  const saveInvestmentMovement = async (input: InvestmentMovement) => {
+    if (!financeData.data?.authenticated || !obligations.data) throw new Error("Finance data is unavailable");
+    const result = await recordInvestmentMovement(botId, input);
+    const nextFinance = result.account ? { ...financeData.data, accounts: financeData.data.accounts.map((account) => account.id === result.account!.id ? result.account! : account) } : financeData.data;
+    const nextObligations = { ...obligations.data, investments: { ...obligations.data.investments, items: obligations.data.investments.items.map((item) => item.id === input.id ? result.investment : item) } };
+    const nextHistory = result.transaction && history.data ? { ...history.data, items: [result.transaction, ...history.data.items.filter((item) => item.id !== result.transaction!.id)] } : history.data;
+    queryClient.setQueryData(groshlyReadKey, nextFinance);
+    queryClient.setQueryData(obligationsKey, nextObligations);
+    if (nextHistory) queryClient.setQueryData(historyKey, nextHistory);
+    void Promise.all([groshlyReadKey, obligationsKey, historyKey].map((queryKey) => queryClient.invalidateQueries({ queryKey, refetchType: "active" })));
+    return groshlySnapshot({ ...nextFinance, transactions: nextHistory ?? { items: [], nextCursor: null }, transfers: transferHistory.data, obligations: nextObligations });
+  };
   const saveLedgerEntry = async (input: {
     draft: Record<string, any>;
     editing?: Record<string, any> | null;
@@ -1070,6 +1084,7 @@ export function GroshlyFinanceApp({ botId }: { botId: string }) {
       telegramAuthenticated={financeData.data.authenticated}
       onRefresh={refreshSnapshot}
       onCloseInvestment={closeInvestment}
+      onSaveInvestmentMovement={saveInvestmentMovement}
       onSaveLedgerEntry={saveLedgerEntry}
       onDeleteLedgerEntry={deleteLedgerEntry}
       onSaveRegularPayment={saveRegularPayment}
