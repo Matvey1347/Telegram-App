@@ -73,8 +73,11 @@ describe('durable publication dispatch', () => {
 
   it('can recover an expired claim even if the previous failure-persistence promise hangs', async () => {
     const test = setup();
-    test.publication.publishManagedPost.mockImplementationOnce(() => new Promise(() => {}));
-    await test.service.dispatch(post); await flush();
+    test.publication.publishManagedPost.mockImplementationOnce(
+      () => new Promise(() => {}),
+    );
+    await test.service.dispatch(post);
+    await flush();
     // Failure recovery itself can wait on a broken database connection. The
     // durable lease, not an immortal in-process set, decides who can recover.
     test.journal.summarise.mockImplementationOnce(() => new Promise(() => {}));
@@ -82,6 +85,36 @@ describe('durable publication dispatch', () => {
     await expect(test.service.dispatch(post)).resolves.toBe(true);
     await flush();
     expect(test.publication.publishManagedPost).toHaveBeenCalledTimes(2);
+  });
+
+  it('bounds admission when a journal read never resolves without blocking another channel', async () => {
+    const test = setup();
+    test.journal.summarise.mockImplementationOnce(() => new Promise(() => {}));
+    const stalled = test.service.dispatch(post);
+    await expect(
+      test.service.dispatch({ ...post, id: 'healthy' }),
+    ).resolves.toBe(true);
+    await jest.advanceTimersByTimeAsync(5_000);
+    await expect(stalled).resolves.toBe(false);
+    expect(test.publication.publishManagedPost).toHaveBeenCalledTimes(1);
+  });
+
+  it('never launches a send after an admission claim returns late', async () => {
+    const test = setup();
+    let release!: (value: { count: number }) => void;
+    test.prisma.telegramManagedPost.updateMany.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          release = resolve;
+        }),
+    );
+    const pending = test.service.dispatch(post);
+    await flush();
+    await jest.advanceTimersByTimeAsync(5_000);
+    expect(await pending).toBe(false);
+    release({ count: 1 });
+    await flush();
+    expect(test.publication.publishManagedPost).not.toHaveBeenCalled();
   });
 
   it('never sends when the durable claim is rejected by another worker', async () => {
@@ -135,7 +168,9 @@ describe('durable publication dispatch', () => {
 
   it('blocks permanent rejection without an endless retry timer', async () => {
     const test = setup('BLOCKED');
-    await expect(test.service.dispatch(post)).rejects.toThrow('permanently rejected');
+    await expect(test.service.dispatch(post)).rejects.toThrow(
+      'permanently rejected',
+    );
     expect(test.publication.publishManagedPost).not.toHaveBeenCalled();
     expect(test.prisma.telegramManagedPost.updateMany).not.toHaveBeenCalled();
   });

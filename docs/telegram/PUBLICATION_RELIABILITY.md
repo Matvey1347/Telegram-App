@@ -119,3 +119,13 @@ channel IDs, inject production variables using Railway run, and execute the
 guarded smoke script. It creates zero-value fixture placements, validates
 message IDs and placement states, and cancels future VP work. Run only with the
 explicit publish-private-test-only guard, never against a customer channel.
+
+Final admission hardening bounds journal/claim admission to five seconds per
+post, with up to 25 independent admissions in the existing due batch. A late
+claim result cannot start a remote send; its durable lease expires for recovery.
+Explicit rescheduling clears only definite BLOCKED/REJECTED operations after
+validation, preserving ACKED/STARTED/UNKNOWN evidence. Regression tests cover
+hung admission, late claims and manual publish/reschedule recovery. Final
+focused rerun: 22 suites / 127 tests passed (four real-database tests skipped in
+this rerun; those passed separately above); API typecheck and build passed.
+Turing read-only integration review found no release blocker.
