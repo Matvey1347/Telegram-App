@@ -7,6 +7,8 @@ build
 .env.*.local
 .DS_Store
 .codex/tmp/
+.codegraphcontext/
+graphify-out/
 coverage
 .finance-backups/
 /research/telegram-ad-filter/

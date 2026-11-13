@@ -37,14 +37,14 @@ export const emojiIcons: EmojiIcon[] = emojiMartData.categories.flatMap((entry) 
   if (!category) return [];
   return entry.emojis.flatMap((emojiId) => {
     const emoji = emojiMartData.emojis[emojiId];
-    const native = emoji?.skins?.[0]?.native;
-    if (!native) return [];
+    const natives = emoji?.skins?.map((skin) => skin.native).filter((native): native is string => Boolean(native)) ?? [];
+    if (!natives.length) return [];
     const name = normalizeName(String(emoji?.name ?? emoji?.id ?? emojiId));
-    return [{
+    return natives.map((native) => ({
       name,
       emoji: native,
       keywords: Array.from(new Set([...keywords(emoji?.keywords), normalizeName(String(emoji?.id ?? emojiId)), name])),
       category,
-    }];
+    }));
   });
 }).sort((left, right) => left.category.localeCompare(right.category) || left.name.localeCompare(right.name));

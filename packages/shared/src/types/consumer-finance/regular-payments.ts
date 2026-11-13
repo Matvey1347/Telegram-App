@@ -70,6 +70,7 @@ export type ConsumerFinanceRegularPaymentInput = {
 export type ConsumerFinanceRegularPaymentQuery = {
   id?: string;
   status?: ConsumerFinanceRegularPaymentStatus;
+  excludeCanceled?: "true";
   cursor?: string;
   limit?: number;
 };

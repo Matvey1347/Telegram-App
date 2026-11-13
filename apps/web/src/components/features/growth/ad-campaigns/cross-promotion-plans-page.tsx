@@ -487,7 +487,7 @@ export function CrossPromotionPlansPage({
             : "Own-channel promotion status"
         }
       />
-      <div>
+      <div className="mt-4">
         {plansQuery.isLoading ? (
           <LoadingState />
         ) : plansQuery.isError ? (

@@ -20,6 +20,7 @@ import { authApi } from "@/lib/api";
 import { authKeys } from "@/lib/query-keys";
 import { leadAccess } from "@/lib/features/growth/lead-discovery-query";
 import { crmPermissions } from "./crm-permissions";
+import { useLayoutEffect, useRef } from "react";
 
 const primary = [
   ["nav.contacts", "/ad-sales", Users],
@@ -41,6 +42,7 @@ export function CrmNavigation({
   const ru = useOptionalI18n()?.locale === "ru";
   const navRu = { "nav.contacts": "Клиенты", "nav.deals": "Сделки", "nav.calendar": "Календарь", "nav.analytics": "Аналитика" } as const;
   const pathname = usePathname();
+  const tabsRef = useRef<HTMLDivElement>(null);
   const me = useQuery({
     queryKey: authKeys.me(),
     queryFn: authApi.me,
@@ -53,14 +55,25 @@ export function CrmNavigation({
     pathname === "/ad-sales" ||
     pathname.startsWith("/ad-sales/contacts") ||
     pathname.startsWith("/ad-sales/clients");
+  const showInbox = canViewInbox ?? (permissions.canViewOwn || permissions.canViewAll);
+  const showLeads = leadAccess(me.data?.workspace.access).view;
+  useLayoutEffect(() => {
+    const container = tabsRef.current;
+    const active = container?.querySelector<HTMLElement>('[aria-current="page"]');
+    if (!container || !active) return;
+    const left = active.offsetLeft;
+    if (left < container.scrollLeft) container.scrollLeft = left;
+    else if (left + active.offsetWidth > container.scrollLeft + container.clientWidth)
+      container.scrollLeft = left + active.offsetWidth - container.clientWidth;
+  }, [pathname, showSales, showInbox, showLeads]);
   return (
     <nav
       aria-label="CRM navigation"
       className="mb-5 overflow-hidden rounded-[18px] border border-neutral-800 bg-[#111111]"
     >
-      <div className="flex overflow-x-auto px-2">
-        {(canViewInbox ?? (permissions.canViewOwn || permissions.canViewAll)) ? <Link href="/ad-sales/inbox" className={linkClass(pathname === "/ad-sales/inbox")}><Inbox size={16} /><span>{ru ? "Входящие" : "Inbox"}</span>{inboxUnread ? <span className="rounded-full bg-blue-500/20 px-1.5 text-xs text-blue-200">{inboxUnread}</span> : null}</Link> : null}
-        {leadAccess(me.data?.workspace.access).view ? <Link href="/ad-sales/leads" className={linkClass(pathname.startsWith("/ad-sales/leads"))}><Radar size={16}/><span>{t("Lead Discovery")}</span></Link> : null}
+      <div ref={tabsRef} className="relative flex overflow-x-auto px-2">
+        {showInbox ? <Link href="/ad-sales/inbox" aria-current={pathname.startsWith("/ad-sales/inbox") ? "page" : undefined} className={linkClass(pathname.startsWith("/ad-sales/inbox"))}><Inbox size={16} /><span>{ru ? "Входящие" : "Inbox"}</span>{inboxUnread ? <span className="rounded-full bg-blue-500/20 px-1.5 text-xs text-blue-200">{inboxUnread}</span> : null}</Link> : null}
+        {showLeads ? <Link href="/ad-sales/leads" aria-current={pathname.startsWith("/ad-sales/leads") ? "page" : undefined} className={linkClass(pathname.startsWith("/ad-sales/leads"))}><Radar size={16}/><span>{t("Lead Discovery")}</span></Link> : null}
         {primary
           .filter(
             ([copyKey]) =>
@@ -72,7 +85,7 @@ export function CrmNavigation({
                 ? contactsActive
                 : pathname === href || pathname.startsWith(`${href}/`);
             return (
-              <Link key={href} href={href} className={linkClass(active)}>
+              <Link key={href} href={href} aria-current={active ? "page" : undefined} className={linkClass(active)}>
                 <Icon size={16} />
                 <span>{ru ? navRu[copyKey] : crmText(copyKey)}</span>
               </Link>

@@ -2,13 +2,18 @@
 
 import type { CrossPromotionTargetInput } from "@telegram-system/shared";
 import type { Promo, TelegramChannel, TelegramInviteLinkOption } from "@/lib/api";
-import { FormField, MultiSelect } from "@/components/ui/primitives";
+import { DateInput, FormField, MultiSelect, TimeInput } from "@/components/ui/primitives";
 import { CrossPromotionTargetEditor } from "./cross-promotion-target-editor";
+import { CommonAdSlotOptions } from "../common-ad-slot-options";
 
 export function CrossPromotionOwnTargets({
   channels,
   publisherIds,
   targetIds,
+  date,
+  time,
+  onDateChange,
+  onTimeChange,
   targets,
   onTargetIdsChange,
   onTargetsChange,
@@ -17,6 +22,10 @@ export function CrossPromotionOwnTargets({
   channels: TelegramChannel[];
   publisherIds: string[];
   targetIds: string[];
+  date: string;
+  time: string;
+  onDateChange: (date: string) => void;
+  onTimeChange: (time: string) => void;
   targets: CrossPromotionTargetInput[];
   onTargetIdsChange: (ids: string[]) => void;
   onTargetsChange: (targets: CrossPromotionTargetInput[]) => void;
@@ -30,6 +39,15 @@ export function CrossPromotionOwnTargets({
   );
   return (
     <section className="space-y-3 rounded-xl border border-neutral-800 p-3">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <FormField label="Publication date" required>
+          <DateInput value={date} onChange={(event) => onDateChange(event.currentTarget.value)} />
+        </FormField>
+        <FormField label="Publication time" required>
+          <TimeInput value={time} onChange={(event) => onTimeChange(event.currentTarget.value)} />
+          <CommonAdSlotOptions channelIds={publisherIds} date={date} selectedTime={time} onSelect={onTimeChange} />
+        </FormField>
+      </div>
       <FormField label="Channels being promoted" required>
         <MultiSelect
           value={targetIds}

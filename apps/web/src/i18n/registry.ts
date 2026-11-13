@@ -58,6 +58,8 @@ export function namespacesForPath(pathname: string): I18nNamespace[] {
   }
   if (pathname.startsWith("/ad-sales"))
     return ["common", "navigation", "ad-sales/common"];
+  if (pathname.startsWith("/ad-campaigns"))
+    return ["common", "navigation", "ad-sales/common"];
   return pathname.startsWith("/telegram-posts")
     ? telegramPostsNamespaces(pathname)
     : ["common", "navigation"];

@@ -70,7 +70,7 @@ export class FinanceRegularPaymentService {
         where: {
           profileId,
           ...(query.id ? { id: query.id } : {}),
-          ...(query.status ? { status: query.status } : {}),
+          ...(query.status ? { status: query.status } : query.excludeCanceled === 'true' ? { status: { not: FinanceRecurringPaymentStatus.CANCELED } } : {}),
         },
         select: financeRegularPaymentSelect,
         orderBy: [{ nextOccurrenceAt: 'asc' }, { id: 'asc' }],

@@ -1,6 +1,7 @@
 "use client";
 
-import type { TelegramInviteLink } from "@/lib/api";
+import { useEffect, useRef, useState } from "react";
+import type { TelegramInviteLink, TelegramInviteLinkOption } from "@/lib/api";
 import { useTelegramInviteLinkOptions } from "@/lib/features/telegram/use-telegram-invite-link-options";
 import { useRegisterTelegramInviteLink } from "@/lib/features/telegram/use-register-telegram-invite-link";
 import { inviteLinkCreatorFallback } from "@/lib/features/telegram/telegram-invite-link-creator";
@@ -27,9 +28,16 @@ export function CampaignInviteLinksSelect({
   enabled: boolean;
   onChange: (value: string[]) => void;
 }) {
+  const [registeredLinks, setRegisteredLinks] = useState<TelegramInviteLinkOption[]>([]);
+  const selectedIdsRef = useRef(value);
+  useEffect(() => {
+    selectedIdsRef.current = value;
+  }, [value]);
+
   const query = useTelegramInviteLinkOptions({
     channelId,
     selectedId: value[0],
+    selectedIds: value,
     enabled,
     includeUnavailable: false,
     availableForCampaignId: campaignId,
@@ -37,8 +45,25 @@ export function CampaignInviteLinksSelect({
   });
   const registerLink = useRegisterTelegramInviteLink({
     channelId,
-    onRegistered: (link) => onChange([...new Set([...value, link.id])]),
+    onRegistered: (link) => {
+      const option: TelegramInviteLinkOption = {
+        id: link.id,
+        telegramChannelId: channelId,
+        name: link.name,
+        url: link.url,
+      };
+      setRegisteredLinks((current) => [
+        ...current.filter((item) => item.id !== link.id),
+        option,
+      ]);
+      onChange([...new Set([...selectedIdsRef.current, link.id])]);
+    },
   });
+
+  const optionsById = new Map(
+    [...query.links, ...registeredLinks.filter((link) => link.telegramChannelId === channelId)]
+      .map((link) => [link.id, link]),
+  );
 
   return (
     <CampaignMultiValueSelect
@@ -48,7 +73,7 @@ export function CampaignInviteLinksSelect({
       loading={query.loading}
       loadingLabel="Loading invite links…"
       placeholder="Select invite links"
-      options={query.links.map((link) => ({
+      options={[...optionsById.values()].map((link) => ({
         value: link.id,
         label: telegramInviteLinkOptionLabel(link),
         labelContent: <TelegramInviteLinkOptionLabel link={link} />,

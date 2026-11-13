@@ -61,6 +61,14 @@ Before adding a selector, picker, modal, table, form field, metric card, chart w
 
 Prefer existing primitives, `apps/web/src/lib/query-keys.ts`, shared contracts and Telegram adapters over local duplicates, except where a documented consumer product owns its visual and query layer.
 
+## Code knowledge graph
+
+- For unfamiliar modules, architecture questions, callers, or cross-file flows, query the local Graphify MCP graph before tracing manually. Use ordinary code search for simple, local tasks.
+- Before substantial refactors, check graph dependencies and downstream impact. Treat graph results as navigation evidence, not proof of runtime behavior; verify relevant source and tests.
+- The source graph is in ignored `graphify-out/`. Build/update it with `pnpm graph build` or `pnpm graph update`. For continuous updates during a coding session, start `pnpm graph watch` in a terminal; it refreshes Graphify's `graph.json`, `graph.html`, and report for code changes. Stop it with Ctrl+C when finished.
+- Open Graphify's built-in visualization by opening `graphify-out/graph.html`, or run `pnpm graph serve` and visit `http://localhost:8000`.
+- The project-local Graphify MCP server reads `graphify-out/graph.json`; reload trusted project configuration in Codex after the initial graph build so its tools become available. Do not add the graph, watcher, or MCP server to API/web runtime services.
+
 ## Required reading
 
 - Frontend tasks: `apps/web/AGENTS.md`, `docs/design-system/BRAND_GUIDE.md`, `docs/design-system/SERVICE_DESIGN_RULES.md`, `docs/design-system/COMPONENT_CATALOG.md`, `docs/frontend-cache-efficiency.md`.
@@ -76,6 +84,15 @@ Prefer existing primitives, `apps/web/src/lib/query-keys.ts`, shared contracts a
 - Before hand-off, explicitly check idle polling, unchanged-state writes, 100-channel behavior, batching/N+1, retention, Neon sleep impact, and Railway CPU/RAM/network baseline.
 
 ## Before changing code
+
+### Secret handling — mandatory
+
+- Never print secrets, database connection strings with credentials, tokens, or complete environment/configuration files. Report only variable names, redacted metadata, status codes, or comparison results.
+- Never place passwords or credential-bearing URLs in command-line arguments, shell interpolation, tool-call text, process listings, screenshots, logs, patches, commits, or generated reports. Do not use `ps` with command arguments when a process may carry secrets.
+- Read credentials inside the executing process from approved environment/configuration sources. For database tools, use a private credential file or supported environment input; never a password-bearing `--dbname` argument.
+- Capture and redact third-party tool responses before displaying them. Rotation tools may return passwords: keep these in memory and transfer them through a protected channel without displaying plaintext.
+- Before credential rotation, inventory consumers; update their secrets, deploy/restart as required, verify new authentication and rejection of the old credential, and check application health. Rotating access does not require copying or replacing business data.
+- Secret-bearing local files must be ignored by Git and restricted to the current user. Remove temporary secret material after verification. Never claim that historical chat/tool output was deleted unless deletion was actually verified.
 
 1. Read neighboring files before editing.
 2. Find usages with `rg`.
@@ -215,3 +232,17 @@ A change is not done until:
 - Do not build a generic framework without at least two real use cases.
 - Do not run unrelated refactors while implementing a feature.
 - Do extract a shared layer when behavior is already duplicated or clearly cross-cutting.
+
+## graphify
+
+This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
+
+When the user types `/graphify`, use the installed graphify skill or instructions before doing anything else.
+
+Rules:
+- When graphify-out/graph.json exists, run `graphify query "<question>"` before your first grep, search or source-file read for a codebase question, and put this rule in every subagent prompt that explores code. Read raw files only for lines the graph or an earlier read already located. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
+- Dirty graphify-out/ files are expected after hooks or incremental updates; dirty graph files are not a reason to skip graphify. Only skip graphify if the task is about stale or incorrect graph output, or the user explicitly says not to use it.
+- If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
+- Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
+- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
+- A committed graphify-out/graph.json is rewritten whole on every build, so a large diff to it in a pull request is expected. Do not flag it as churn or suggest skipping the graph rebuild or its hooks.

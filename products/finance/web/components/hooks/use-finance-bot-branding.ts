@@ -2,20 +2,34 @@
 
 import { useEffect } from "react";
 
-const iconUrl = "/brand/groshly-icon.png";
-const darkIconUrl = "/brand/groshly-dark-icon.png";
+import { financeBrandIcon } from "@consumer-finance/web/lib/finance-brand-icon";
+
+const iconUrl = financeBrandIcon("light");
+const darkIconUrl = financeBrandIcon("dark");
+
+export function applyFinanceDocumentMetadata(
+  theme: "light" | "dark",
+  locale: "uk" | "ru" | "en",
+  title: string,
+) {
+  const icon = `${financeBrandIcon(theme)}?theme=${theme}&v=2`;
+  document.title = title;
+  document.documentElement.lang = locale;
+  document
+    .querySelector('meta[name="theme-color"]')
+    ?.setAttribute("content", theme === "dark" ? "#0c1712" : "#f7f8f4");
+  document.head
+    .querySelectorAll<HTMLLinkElement>('link[rel="icon"], link[rel="shortcut icon"]')
+    .forEach((link) => link.remove());
+  for (const rel of ["icon", "shortcut icon"]) {
+    const link = document.createElement("link");
+    link.rel = rel;
+    link.href = icon;
+    document.head.appendChild(link);
+  }
+}
 
 export function useFinanceBotBranding(botId: string, applyBranding = true) {
-  useEffect(() => {
-    if (!applyBranding) return;
-    const links = Array.from(document.head.querySelectorAll<HTMLLinkElement>(
-      'link[rel="icon"], link[rel="shortcut icon"], link[rel="apple-touch-icon"]',
-    ));
-    const previous = links.map((link) => link.href);
-    links.forEach((link) => { link.href = darkIconUrl; });
-    return () => links.forEach((link, index) => { link.href = previous[index]; });
-  }, [applyBranding]);
-
   useEffect(() => {
     if (!applyBranding) return;
     let manifest = document.head.querySelector<HTMLLinkElement>('link[rel="manifest"]');

@@ -21,6 +21,7 @@
     "dev:plain": "pnpm dev:nexeloq",
     "dev:web": "NEXT_PUBLIC_API_URL=http://localhost:4000/api pnpm --filter web dev",
     "dev:api": "pnpm --filter api start:dev",
+    "graph": "node scripts/code-graph.mjs",
     "build": "pnpm --recursive build",
     "lint": "pnpm --recursive lint",
     "typecheck": "pnpm --filter @telegram-system/shared typecheck && pnpm --filter api typecheck && pnpm --filter web typecheck",

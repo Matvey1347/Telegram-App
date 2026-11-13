@@ -1,3 +1,4 @@
+import { financeBrandIcon } from "@consumer-finance/web/lib/finance-brand-icon";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
@@ -8,7 +9,7 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { botId } = await params;
   const encodedBotId = encodeURIComponent(botId);
-  const favicon = "/brand/groshly-dark-icon.png";
+  const favicon = `${financeBrandIcon("light")}?theme=light&v=2`;
   return {
     icons: { icon: favicon, shortcut: favicon, apple: favicon },
     manifest: `/finance/${encodedBotId}/manifest.webmanifest`,

@@ -1,0 +1,18 @@
+.emoji-categories{display:flex;flex:none;gap:6px;overflow-x:auto;margin-top:14px;padding-bottom:3px}
+.emoji-categories button{flex:1;min-width:38px;min-height:38px;border-radius:12px;font-size:20px}
+.emoji-categories button[aria-pressed=true]{background:var(--lime2)}
+.emoji-more{display:block;flex:none;margin:8px auto 0;padding:10px 18px;border:1px solid var(--line);border-radius:14px;color:var(--ink);background:var(--paper);font-weight:700}
+.app-shell .segmented button svg{display:inline-block;vertical-align:middle;margin-right:7px}
+.debt-direction-tabs{margin-top:18px}
+.app-shell .investment-summary{background:#d6eea9;color:#18382d}
+.app-shell .investment-summary>small,.app-shell .investment-summary .investment-metrics span{color:#527861;opacity:1}
+.app-shell .investment-summary .investment-metrics b{color:#18382d}
+.app-shell .investment-summary .investment-metrics b.negative{color:#a44138}
+.app-shell .investment-summary .investment-metrics b.positive{color:#257a55}
+.dark .investment-summary{background:#345544!important;color:#f1f8ee!important}
+.dark .investment-summary>small,.dark .investment-summary .investment-metrics span{color:#c6dccc!important}
+.dark .investment-summary .investment-metrics b{color:#fff!important}
+.dark .investment-summary .investment-metrics b.negative{color:#ffada0!important}
+
+.app-shell .balance-foot .brand-logo.small{width:54px!important;height:54px!important}
+.finance-database-badge{position:fixed;z-index:100;top:max(12px,env(safe-area-inset-top));left:50%;transform:translateX(-50%);pointer-events:none;padding:8px 20px;border:1px solid #d99b3d80;border-radius:999px;background:#451a03f2;color:#fde68a;font-size:14px;font-weight:800;letter-spacing:.04em;white-space:nowrap;box-shadow:0 8px 20px #0003}

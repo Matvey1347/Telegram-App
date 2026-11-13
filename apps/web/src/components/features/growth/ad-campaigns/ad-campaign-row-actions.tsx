@@ -1,5 +1,6 @@
 "use client";
 
+import { useCampaignText } from "./use-campaign-text";
 import { EyeOff, Pencil, RefreshCw, Trash2, TrendingUp } from "lucide-react";
 import {
   CardActionsMenu,
@@ -26,18 +27,19 @@ export function AdCampaignRowActions({
   refreshingInviteLinks?: boolean;
   refreshInviteLinksProgress?: { current: number; total: number } | null;
 }) {
+  const t = useCampaignText();
   return (
     <CardActionsMenu label={`Actions for ${campaign.title}`}>
       {campaign.inviteLinks?.length ? (
         <CardMenuAction
-          label="Open trend"
+          label={t("Open trend")}
           icon={<TrendingUp size={16} />}
           onClick={onOpenHistory}
         />
       ) : null}
       {onEdit ? (
         <CardMenuAction
-          label="Edit campaign"
+          label={t("Edit campaign")}
           icon={<Pencil size={16} />}
           onClick={() => onEdit(campaign)}
         />
@@ -48,7 +50,7 @@ export function AdCampaignRowActions({
           label={
             refreshingInviteLinks
               ? `Refreshing invite links ${refreshInviteLinksProgress?.current ?? 0}/${refreshInviteLinksProgress?.total ?? "…"}`
-              : "Refresh invite-link data"
+              : t("Refresh invite-link data")
           }
           icon={<RefreshCw size={16} />}
           disabled={refreshingInviteLinks}
@@ -59,8 +61,8 @@ export function AdCampaignRowActions({
         <CardMenuAction
           label={
             campaign.excludeFromAnalytics
-              ? "Include in analytics"
-              : "Exclude from analytics"
+              ? t("Include in analytics")
+              : t("Exclude from analytics")
           }
           icon={<EyeOff size={16} />}
           onClick={() =>
@@ -70,7 +72,7 @@ export function AdCampaignRowActions({
       ) : null}
       {onDelete ? (
         <CardMenuAction
-          label="Delete campaign"
+          label={t("Delete campaign")}
           icon={<Trash2 size={16} />}
           danger
           onClick={() => onDelete(campaign)}

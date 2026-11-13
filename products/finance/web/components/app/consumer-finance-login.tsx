@@ -12,7 +12,10 @@ import { consumerFinanceKeys } from "@consumer-finance/web/lib/query/consumer-fi
 import { normalizeFinanceLocale } from "@consumer-finance/web/components/i18n/core";
 import { financeAuthCopy } from "@consumer-finance/web/components/i18n/auth";
 import { financeLandingCopy } from "@consumer-finance/web/components/i18n/landing";
-import { useFinanceBotBranding } from "@consumer-finance/web/components/hooks/use-finance-bot-branding";
+import {
+  applyFinanceDocumentMetadata,
+  useFinanceBotBranding,
+} from "@consumer-finance/web/components/hooks/use-finance-bot-branding";
 
 /** Browser authentication is delegated to the API so Telegram verifies identity server-side. */
 export function ConsumerFinanceLogin({
@@ -51,8 +54,11 @@ export function ConsumerFinanceLogin({
     window.localStorage.setItem("groshly-theme", theme);
     document.cookie = `groshly-language=${locale}; Path=/; Max-Age=31536000; SameSite=Lax`;
     document.cookie = `groshly-theme=${theme}; Path=/; Max-Age=31536000; SameSite=Lax`;
-    document.documentElement.lang = locale;
-    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme === "dark" ? "#0c1712" : "#f7f8f4");
+    applyFinanceDocumentMetadata(
+      theme,
+      locale,
+      locale === "en" ? "Sign in to Groshly" : "Увійти в Groshly",
+    );
   }, [locale, theme, preferencesReady]);
   const t = financeLandingCopy(locale);
   const [waiting, setWaiting] = useState(false);
@@ -137,7 +143,7 @@ export function ConsumerFinanceLogin({
           )}
           {waiting ? <p className="groshly-login-waiting" role="status">{t.telegramSignInWaiting}</p> : null}
           {challenge.isError || approval.isError || approval.data?.status === "expired" ? (
-            <div className="groshly-login-error"><ErrorState text={approval.data?.status === "expired" ? t.telegramSignInExpired : t.signInUnavailable} /><Button variant="secondary" onClick={() => void retry()}>{t.retry}</Button></div>
+            <div className="groshly-login-error"><p role="alert">{approval.data?.status === "expired" ? t.telegramSignInExpired : t.signInUnavailable}</p><Button variant="secondary" onClick={() => void retry()}>{t.retry}</Button></div>
           ) : null}
           <div className="groshly-login-security"><ShieldCheck size={18} aria-hidden="true" /><span>{t.landingSecurity}</span></div>
           <a className="groshly-login-back" href="/">← {locale === "uk" ? "На головну" : "Back to home"}</a>

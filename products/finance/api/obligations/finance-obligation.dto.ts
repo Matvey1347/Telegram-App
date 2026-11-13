@@ -97,6 +97,7 @@ export class FinanceRegularPaymentQueryDto {
   @IsOptional()
   @IsIn(["ACTIVE", "PAUSED", "CANCELED"])
   status?: "ACTIVE" | "PAUSED" | "CANCELED";
+  @IsOptional() @IsIn(["true"]) excludeCanceled?: "true";
   @IsOptional() @IsString() cursor?: string;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(100) limit = 30;
 }

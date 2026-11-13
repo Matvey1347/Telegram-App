@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { localDatabaseEnvironment } from "./dev-database-environment.mjs";
 import { randomBytes } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import process from "node:process";
@@ -44,7 +45,6 @@ export const LOCAL_PRODUCTS = {
         args: ["--filter", "web", "exec", "next", "dev", "--port", "3000"],
         env: {
           NEXT_PUBLIC_API_URL: "http://localhost:4000/api",
-          NEXT_PUBLIC_DATABASE_ENV: "local",
         },
       },
     ],
@@ -310,6 +310,9 @@ function start(product, definition) {
       ...tunnelProcessEnvironment(product, name, tunnelOrigins.get(product)),
       ...systemBotTunnelEnvironment,
       ...systemBotEnvironment,
+      ...(name === "Finance Web" || name === "Nexeloq Web"
+        ? { NEXT_PUBLIC_DATABASE_ENV: localDatabaseEnvironment() }
+        : {}),
     },
     stdio: ["ignore", "pipe", "pipe"],
     detached: process.platform !== "win32",

@@ -46,11 +46,15 @@ export function TelegramChannelScopeModeToggle({
   mode,
   onChange,
   ariaLabel = "Channel source",
+  networkLabel = "Network",
+  channelsLabel = "Channels",
   disabled = false,
 }: {
   mode: TelegramChannelScopeMode;
   onChange: (mode: TelegramChannelScopeMode) => void;
   ariaLabel?: string;
+  networkLabel?: string;
+  channelsLabel?: string;
   disabled?: boolean;
 }) {
   return (
@@ -60,8 +64,8 @@ export function TelegramChannelScopeModeToggle({
       ariaLabel={ariaLabel}
       disabled={disabled}
       options={[
-        { value: "network", label: "Network" },
-        { value: "channels", label: "Channels" },
+        { value: "network", label: networkLabel },
+        { value: "channels", label: channelsLabel },
       ]}
     />
   );
@@ -78,6 +82,9 @@ export function TelegramChannelScopeSelector({
   onChannelsChange,
   label = "Channel source",
   channelsPlaceholder = "Choose channels",
+  networkLabel = "Network",
+  channelsLabel = "Channels",
+  networkPlaceholder = "Choose network",
   disabled = false,
 }: {
   mode: TelegramChannelScopeMode;
@@ -90,6 +97,9 @@ export function TelegramChannelScopeSelector({
   onChannelsChange: (channelIds: string[]) => void;
   label?: string;
   channelsPlaceholder?: string;
+  networkLabel?: string;
+  channelsLabel?: string;
+  networkPlaceholder?: string;
   disabled?: boolean;
 }) {
   return (
@@ -99,6 +109,8 @@ export function TelegramChannelScopeSelector({
         <TelegramChannelScopeModeToggle
           mode={mode}
           onChange={onModeChange}
+          networkLabel={networkLabel}
+          channelsLabel={channelsLabel}
           disabled={disabled}
         />
       </div>
@@ -108,7 +120,7 @@ export function TelegramChannelScopeSelector({
             disabled={disabled}
             value={selectedNetworkId}
             onChange={onNetworkChange}
-            placeholder="Choose network"
+            placeholder={networkPlaceholder}
             options={networks.map((network) => ({
               value: network.id,
               label: network.name,
