@@ -304,7 +304,7 @@ export function groshlySnapshot({
         receivedCurrency: transfer.toCurrency,
       })),
     ].sort((left, right) => right.date.localeCompare(left.date)),
-    recurring: (obligations?.regularPayments.items ?? []).map((payment) => ({
+    recurring: (obligations?.regularPayments.items ?? []).filter((payment) => payment.status !== "CANCELED").map((payment) => ({
       id: payment.id,
       version: payment.version,
       nextOccurrenceAt: payment.nextOccurrenceAt,
@@ -420,7 +420,7 @@ export function GroshlyFinanceApp({ botId }: { botId: string }) {
     queryFn: async () => {
       const [debts, regularPayments, investments] = await Promise.all([
         consumerFinanceObligationsApi.debts(botId, { limit: 50 }),
-        consumerFinanceObligationsApi.regularPayments(botId, { limit: 50 }),
+        consumerFinanceObligationsApi.regularPayments(botId, { limit: 50, excludeCanceled: "true" }),
         consumerFinanceInvestmentsApi.list(botId, { limit: 50 }),
       ]);
       return { debts, regularPayments, investments };
@@ -973,6 +973,7 @@ export function GroshlyFinanceApp({ botId }: { botId: string }) {
     }
     if (kind === "recurring" && current.regularPayments.nextCursor) {
       const page = await consumerFinanceObligationsApi.regularPayments(botId, {
+        excludeCanceled: "true",
         cursor: current.regularPayments.nextCursor,
         limit: 50,
       });

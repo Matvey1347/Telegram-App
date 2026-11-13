@@ -3,6 +3,7 @@ import type { Metadata, Viewport } from "next";
 import { TelegramWebAppSdk } from "@finance-web/components/telegram/telegram-web-app-sdk";
 import { ConsumerFinanceProvider } from "@consumer-finance/web/provider/consumer-finance-provider";
 import "../groshly/style.css";
+import "../groshly/finance-polish.css";
 import "./globals.css";
 import "./legal.css";
 import "@consumer-finance/web/components/app/consumer-finance-landing-base.css";
