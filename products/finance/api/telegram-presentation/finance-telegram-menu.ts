@@ -30,7 +30,7 @@ export function financeMiniAppUrl(
   if (screen) query.set('screen', screen);
   if (transfer) query.set('transfer', '1');
   const suffix = query.size ? `?${query.toString()}` : '';
-  return `${normalized}/${suffix}`;
+  return `${normalized}/app${suffix}`;
 }
 
 export function financeCheckoutReturnUrl(

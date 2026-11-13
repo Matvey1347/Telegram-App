@@ -184,7 +184,7 @@ describe('FinanceBotChatResponderService', () => {
         expect.arrayContaining([
           expect.objectContaining({ callbackData: 'fin:flow:start-language' }),
           expect.objectContaining({
-            webAppUrl: expect.stringMatching(/^https:\/\/[^/]+\/$/),
+            webAppUrl: expect.stringMatching(/^https:\/\/[^/]+\/app$/),
           }),
         ]),
       );
