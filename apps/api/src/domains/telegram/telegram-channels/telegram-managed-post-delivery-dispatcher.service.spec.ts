@@ -71,6 +71,19 @@ describe('durable publication dispatch', () => {
     );
   });
 
+  it('can recover an expired claim even if the previous failure-persistence promise hangs', async () => {
+    const test = setup();
+    test.publication.publishManagedPost.mockImplementationOnce(() => new Promise(() => {}));
+    await test.service.dispatch(post); await flush();
+    // Failure recovery itself can wait on a broken database connection. The
+    // durable lease, not an immortal in-process set, decides who can recover.
+    test.journal.summarise.mockImplementationOnce(() => new Promise(() => {}));
+    await jest.advanceTimersByTimeAsync(30_000);
+    await expect(test.service.dispatch(post)).resolves.toBe(true);
+    await flush();
+    expect(test.publication.publishManagedPost).toHaveBeenCalledTimes(2);
+  });
+
   it('never sends when the durable claim is rejected by another worker', async () => {
     const test = setup();
     test.prisma.telegramManagedPost.updateMany.mockResolvedValue({ count: 0 });

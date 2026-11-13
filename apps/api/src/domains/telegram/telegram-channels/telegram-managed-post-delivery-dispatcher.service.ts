@@ -20,7 +20,6 @@ export class TelegramManagedPostDeliveryDispatcherService {
   private readonly logger = new Logger(
     TelegramManagedPostDeliveryDispatcherService.name,
   );
-  private readonly active = new Set<string>();
   constructor(
     private readonly prisma: PrismaService,
     private readonly publication: TelegramManagedPostPublicationService,
@@ -30,7 +29,6 @@ export class TelegramManagedPostDeliveryDispatcherService {
   ) {}
 
   async dispatch(post: Post) {
-    if (this.active.has(post.id)) return false;
     const disposition = await this.journal.summarise(
       post.id,
       post.workspaceId,
@@ -78,7 +76,6 @@ export class TelegramManagedPostDeliveryDispatcherService {
       },
     });
     if (claimed.count !== 1) return false;
-    this.active.add(post.id);
     // The deadline fences future remote operations. An operation already sent
     // remains STARTED/UNKNOWN in the durable journal and is NEVER blindly retried.
     void this.run(post, owner).catch(() =>
@@ -205,7 +202,6 @@ export class TelegramManagedPostDeliveryDispatcherService {
         where: { id: post.id, deliveryClaimOwner: owner },
         data: { deliveryClaimOwner: null, deliveryClaimExpiresAt: null },
       });
-      this.active.delete(post.id);
       notifyScheduledTaskDueWorkChanged('telegram.managed_posts.reconcile_due');
       notifyScheduledTaskDueWorkChanged('mutual_promotion.lifecycle');
     }
