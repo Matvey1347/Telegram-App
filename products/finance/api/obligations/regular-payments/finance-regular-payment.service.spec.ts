@@ -359,6 +359,14 @@ describe('FinanceRegularPaymentService', () => {
       }),
     );
 
+    await service.list('profile-1', { excludeCanceled: 'true', limit: 25 });
+    expect(prisma.financeRecurringPayment.findMany).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        where: { profileId: 'profile-1', status: { not: 'CANCELED' } },
+        take: 26,
+      }),
+    );
+
     await service.list('profile-1', {
       id: 'regular-101',
       status: 'ACTIVE',
