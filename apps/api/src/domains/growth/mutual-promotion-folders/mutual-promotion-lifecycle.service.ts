@@ -1,3 +1,7 @@
+import {
+  TelegramManagedPostDeliveryDispatcherService,
+  ManagedPostDeliveryBlockedError,
+} from '../../telegram/telegram-channels/telegram-managed-post-delivery-dispatcher.service';
 import { forwardRef, Inject, Injectable } from '@nestjs/common';
 import {
   MutualPromotionWorkItem,
@@ -13,8 +17,13 @@ import {
   mutualPromotionRetryAt,
   refreshMutualPromotionFolderDueTimes,
   runMutualPromotionBounded,
+  mutualPromotionLaneWhere,
+  pendingMutualPromotionConfirmationAt,
+  attemptMutualPromotionConfirmation,
 } from './mutual-promotion-lifecycle.utils';
 import { MutualPromotionBotNotificationService } from './mutual-promotion-bot-notification.service';
+
+export type MutualPromotionLifecycleLane = 'publication' | 'maintenance';
 
 export type MutualPromotionLifecycleResult = {
   considered: number;
@@ -34,17 +43,22 @@ export class MutualPromotionLifecycleService {
     private readonly remoteDeletion: TelegramManagedPostRemoteDeletionService,
     @Inject(forwardRef(() => MutualPromotionBotNotificationService))
     private readonly botConfirmation?: MutualPromotionBotNotificationService,
+    private readonly dispatcher?: TelegramManagedPostDeliveryDispatcherService,
   ) {}
 
-  async nextDueAt(): Promise<Date | null> {
+  async nextDueAt(lane?: MutualPromotionLifecycleLane): Promise<Date | null> {
     const [ready, leased] = await Promise.all([
       this.prisma.mutualPromotionWorkItem.findFirst({
-        where: { status: { in: ['PENDING', 'RETRY'] } },
+        where: {
+          ...mutualPromotionLaneWhere(lane),
+          status: { in: ['PENDING', 'RETRY'] },
+        },
         orderBy: [{ nextAttemptAt: 'asc' }, { id: 'asc' }],
         select: { nextAttemptAt: true },
       }),
       this.prisma.mutualPromotionWorkItem.findFirst({
         where: {
+          ...mutualPromotionLaneWhere(lane),
           status: 'PROCESSING',
           leaseExpiresAt: { not: null },
         },
@@ -52,21 +66,34 @@ export class MutualPromotionLifecycleService {
         select: { leaseExpiresAt: true },
       }),
     ]);
-    const values = [ready?.nextAttemptAt, leased?.leaseExpiresAt].filter(
-      (value): value is Date => Boolean(value),
-    );
+    const confirmationAt =
+      lane === 'maintenance'
+        ? await pendingMutualPromotionConfirmationAt(this.prisma)
+        : null;
+    const values = [
+      ready?.nextAttemptAt,
+      leased?.leaseExpiresAt,
+      confirmationAt,
+    ].filter((value): value is Date => Boolean(value));
     return (
       values.sort((left, right) => left.getTime() - right.getTime())[0] ?? null
     );
   }
 
   async processDueActions(
-    options: { now?: Date; limit?: number } = {},
+    options: {
+      now?: Date;
+      limit?: number;
+      lane?: MutualPromotionLifecycleLane;
+    } = {},
   ): Promise<MutualPromotionLifecycleResult> {
     const now = options.now ?? new Date();
+    if (options.lane === 'maintenance')
+      await this.reconcilePublishedDeliveries(now);
     const limit = Math.max(1, Math.min(options.limit ?? 50, 100));
     const candidates = await this.prisma.mutualPromotionWorkItem.findMany({
       where: {
+        ...mutualPromotionLaneWhere(options.lane),
         OR: [
           { status: { in: ['PENDING', 'RETRY'] }, nextAttemptAt: { lte: now } },
           { status: 'PROCESSING', leaseExpiresAt: { lte: now } },
@@ -82,6 +109,7 @@ export class MutualPromotionLifecycleService {
       const claim = await this.prisma.mutualPromotionWorkItem.updateMany({
         where: {
           id: candidate.id,
+          ...mutualPromotionLaneWhere(options.lane),
           OR: [
             {
               status: { in: ['PENDING', 'RETRY'] },
@@ -100,7 +128,11 @@ export class MutualPromotionLifecycleService {
       if (claim.count) claimedIds.push(candidate.id);
     }
     const work = await this.prisma.mutualPromotionWorkItem.findMany({
-      where: { id: { in: claimedIds }, status: 'PROCESSING' },
+      where: {
+        ...mutualPromotionLaneWhere(options.lane),
+        id: { in: claimedIds },
+        status: 'PROCESSING',
+      },
       orderBy: [{ dueAt: 'asc' }, { id: 'asc' }],
     });
     const result = {
@@ -133,8 +165,12 @@ export class MutualPromotionLifecycleService {
     await refreshMutualPromotionFolderDueTimes(this.prisma, [
       ...new Set(work.map((item) => item.folderId)),
     ]);
-    notifyScheduledTaskDueWorkChanged('mutual_promotion.lifecycle');
-    return { ...result, nextDueAt: await this.nextDueAt() };
+    notifyScheduledTaskDueWorkChanged(
+      options.lane === 'publication'
+        ? 'mutual_promotion.publish_due'
+        : 'mutual_promotion.lifecycle',
+    );
+    return { ...result, nextDueAt: await this.nextDueAt(options.lane) };
   }
 
   /**
@@ -146,15 +182,28 @@ export class MutualPromotionLifecycleService {
   async reconcilePublishedDeliveries(now = new Date(), limit = 100) {
     const deliveries = await this.prisma.mutualPromotionPostDelivery.findMany({
       where: {
-        status: { in: ['PENDING', 'PUBLISHING', 'FAILED'] },
+        OR: [
+          { status: { in: ['PENDING', 'PUBLISHING', 'FAILED'] } },
+          {
+            status: 'PUBLISHED',
+            folderPost: {
+              publishedBotConfirmationSentAt: null,
+              updatedAt: { lte: new Date(now.getTime() - 60_000) },
+            },
+          },
+        ],
         managedPost: { status: 'PUBLISHED' },
       },
       orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
       take: Math.max(1, Math.min(limit, 100)),
-      select: { id: true, folderPostId: true },
+      select: { id: true, folderPostId: true, status: true },
     });
     const confirmedPostIds = new Set<string>();
     for (const delivery of deliveries) {
+      if (delivery.status === 'PUBLISHED') {
+        confirmedPostIds.add(delivery.folderPostId);
+        continue;
+      }
       const updated = await this.prisma.mutualPromotionPostDelivery.updateMany({
         where: {
           id: delivery.id,
@@ -165,7 +214,14 @@ export class MutualPromotionLifecycleService {
       if (updated.count) confirmedPostIds.add(delivery.folderPostId);
     }
     for (const folderPostId of confirmedPostIds) {
-      await this.botConfirmation?.sendPublishedOnce(folderPostId);
+      await attemptMutualPromotionConfirmation(
+        this.prisma,
+        folderPostId,
+        now,
+        () =>
+          this.botConfirmation?.sendPublishedOnce(folderPostId) ??
+          Promise.resolve(),
+      );
     }
     return { reconciled: deliveries.length };
   }
@@ -200,7 +256,9 @@ export class MutualPromotionLifecycleService {
     } catch (error) {
       const deferred =
         error instanceof MutualPromotionFinishDeferredError ? error : null;
-      const terminal = !deferred && work.attemptCount >= work.maxAttempts;
+      const terminal =
+        error instanceof ManagedPostDeliveryBlockedError ||
+        (!deferred && work.attemptCount >= work.maxAttempts);
       await this.prisma.mutualPromotionWorkItem.update({
         where: { id: work.id },
         data: {
@@ -233,21 +291,8 @@ export class MutualPromotionLifecycleService {
       now >= folder.endsAt
     )
       return;
-    const missingBoundaries =
-      await this.prisma.mutualPromotionFolderParticipant.count({
-        where: {
-          folderId: work.folderId,
-          OR: [
-            { baselineCapturedAt: null },
-            { subscribersAtStart: null },
-            { inviteJoinedAtStart: null },
-            { inviteRequestedAtStart: null },
-          ],
-        },
-      });
-    if (missingBoundaries) {
-      throw new Error('Participant start boundaries are not ready');
-    }
+    // Publication deadlines must not depend on analytics availability. Missing
+    // baseline fields remain null until the separate maintenance lane captures them.
     const deliveries = await this.prisma.mutualPromotionPostDelivery.findMany({
       where: {
         folderPostId,
@@ -270,13 +315,13 @@ export class MutualPromotionLifecycleService {
       },
     });
     const errors: string[] = [];
+    let blocked: Error | undefined;
     await runMutualPromotionBounded(deliveries, 5, async (delivery) => {
       if (delivery.managedPost?.status === 'PUBLISHED') {
         await this.prisma.mutualPromotionPostDelivery.update({
           where: { id: delivery.id },
           data: { status: 'PUBLISHED', publishedAt: now, lastError: null },
         });
-        await this.botConfirmation?.sendPublishedOnce(folderPostId);
         return;
       }
       if (
@@ -287,27 +332,29 @@ export class MutualPromotionLifecycleService {
         // confirmed that the message is published yet. Let identity
         // reconciliation promote the managed post first; otherwise VP can
         // report a publication (and lack its link) before Telegram publishes.
-        throw new Error(
+        errors.push(
           'Telegram native scheduled post is awaiting publication confirmation',
         );
+        return;
       }
       await this.prisma.mutualPromotionPostDelivery.update({
         where: { id: delivery.id },
         data: { status: 'PUBLISHING', lastError: null },
       });
       try {
-        await this.publication.publishManagedPost(
-          delivery.workspaceId,
-          delivery.telegramChannelId,
-          delivery.managedPostId!,
-        );
-        await this.prisma.mutualPromotionPostDelivery.update({
-          where: { id: delivery.id },
-          data: { status: 'PUBLISHED', publishedAt: now, lastError: null },
+        if (!this.dispatcher)
+          throw new Error('Durable publication dispatcher unavailable');
+        await this.dispatcher.dispatch({
+          id: delivery.managedPostId!,
+          workspaceId: delivery.workspaceId,
+          telegramChannelId: delivery.telegramChannelId,
         });
-        await this.botConfirmation?.sendPublishedOnce(folderPostId);
+        errors.push(
+          'Publication dispatched; waiting for confirmed Telegram identity',
+        );
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
+        if (error instanceof ManagedPostDeliveryBlockedError) blocked = error;
         errors.push(message);
         await this.prisma.mutualPromotionPostDelivery.update({
           where: { id: delivery.id },
@@ -315,9 +362,14 @@ export class MutualPromotionLifecycleService {
         });
       }
     });
+    // Confirmation runs in reconciliation maintenance; it must never occupy
+    // delivery capacity or prevent another logical post meeting its deadline.
+    notifyScheduledTaskDueWorkChanged('mutual_promotion.lifecycle');
+    if (blocked) throw blocked;
     if (errors.length)
-      throw new Error(
-        `${errors.length} publication deliveries failed: ${errors[0]}`,
+      throw new MutualPromotionFinishDeferredError(
+        new Date(Date.now() + 30_000),
+        errors.length,
       );
   }
 

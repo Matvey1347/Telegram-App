@@ -1,3 +1,7 @@
+import { PrismaService } from '../../../prisma/prisma.service';
+import { TelegramManagedPostDeliveryDispatcherService } from './telegram-managed-post-delivery-dispatcher.service';
+import { TelegramManagedPostSendJournalService } from './telegram-managed-post-send-journal.service';
+import { MutualPromotionLifecycleService } from '../../growth/mutual-promotion-folders/mutual-promotion-lifecycle.service';
 import { Test } from '@nestjs/testing';
 import { AppModule } from '../../../app.module';
 import { TelegramAdSalesService } from '../telegram-ad-sales/telegram-ad-sales.service';
@@ -17,12 +21,17 @@ describe('Telegram channels module integration', () => {
       })
         .overrideProvider(TokenEncryptionService)
         .useValue({ encrypt: jest.fn(), decrypt: jest.fn() })
+        .overrideProvider(PrismaService)
+        .useValue({})
         .compile();
 
       expect(await moduleRef.resolve(TelegramAdSalesService)).toBeInstanceOf(
         TelegramAdSalesService,
       );
 
+      expect(await moduleRef.resolve(TelegramManagedPostDeliveryDispatcherService)).toBeInstanceOf(TelegramManagedPostDeliveryDispatcherService);
+      expect(await moduleRef.resolve(TelegramManagedPostSendJournalService)).toBeInstanceOf(TelegramManagedPostSendJournalService);
+      expect(await moduleRef.resolve(MutualPromotionLifecycleService)).toBeInstanceOf(MutualPromotionLifecycleService);
       await moduleRef.close();
     } finally {
       if (previousKey === undefined)

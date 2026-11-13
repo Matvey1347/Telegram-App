@@ -1,7 +1,7 @@
+import { notifyManagedPostSchedulePersisted } from './managed-post-publication-wake';
 import { TelegramManagedPostStatus } from '@prisma/client';
 import { scheduledTaskWakeNotifier } from '../../../common/scheduled-task-wake-notifier';
 import { TelegramManagedPostPublicationService } from './telegram-managed-post-publication.service';
-import { TelegramManagedPostPublisherService } from './telegram-managed-post-publisher.service';
 
 describe('TelegramManagedPostPublicationService failure persistence', () => {
   it('requires the publisher to create a real Telegram native schedule', async () => {
@@ -83,14 +83,87 @@ describe('TelegramManagedPostPublicationService failure persistence', () => {
     });
   });
 
+  it('manual retry clears only definite rejections inside the authenticated workspace and channel', async () => {
+    const rows = [
+      ...['ACKED', 'UNKNOWN', 'STARTED', 'BLOCKED', 'REJECTED'].map(
+        (status) => ({
+          postId: 'post',
+          workspaceId: 'workspace',
+          channelId: 'channel',
+          status,
+        }),
+      ),
+      {
+        postId: 'post',
+        workspaceId: 'other-workspace',
+        channelId: 'channel',
+        status: 'BLOCKED',
+      },
+      {
+        postId: 'post',
+        workspaceId: 'workspace',
+        channelId: 'other-channel',
+        status: 'REJECTED',
+      },
+    ];
+    const deleteMany = jest.fn(async ({ where }) => {
+      for (let index = rows.length - 1; index >= 0; index -= 1) {
+        const row = rows[index];
+        if (
+          row.postId === where.postId &&
+          row.workspaceId === where.workspaceId &&
+          row.channelId === where.channelId &&
+          where.status.in.includes(row.status)
+        )
+          rows.splice(index, 1);
+      }
+      return { count: 2 };
+    });
+    const publisher = {
+      publishManagedPost: jest.fn().mockResolvedValue({ id: 'post' }),
+    };
+    const service = new TelegramManagedPostPublicationService(
+      { telegramManagedPostSendOperation: { deleteMany } } as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      { workspace: jest.fn().mockResolvedValue('workspace') } as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      publisher as never,
+    );
+    await service.publishManagedPostNow('user', 'channel', 'post', {});
+    expect(
+      rows
+        .filter(
+          (row) =>
+            row.workspaceId === 'workspace' && row.channelId === 'channel',
+        )
+        .map((row) => row.status),
+    ).toEqual(['ACKED', 'UNKNOWN', 'STARTED']);
+    expect(rows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          workspaceId: 'other-workspace',
+          status: 'BLOCKED',
+        }),
+        expect.objectContaining({
+          channelId: 'other-channel',
+          status: 'REJECTED',
+        }),
+      ]),
+    );
+    expect(publisher.publishManagedPost).toHaveBeenCalledTimes(1);
+  });
+
   it('wakes ad-sale reconciliation after a linked post is published', () => {
     const wake = jest.fn();
     scheduledTaskWakeNotifier.on('changed', wake);
     try {
-      const publisher = Object.create(
-        TelegramManagedPostPublisherService.prototype,
-      ) as TelegramManagedPostPublisherService;
-      publisher.notifyManagedPostSchedulePersisted({}, undefined, true);
+      notifyManagedPostSchedulePersisted({}, undefined, true);
     } finally {
       scheduledTaskWakeNotifier.off('changed', wake);
     }

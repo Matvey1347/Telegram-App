@@ -36,4 +36,24 @@ describe('ScheduledTaskWakeTimer', () => {
     expect(onWake).toHaveBeenCalledTimes(1);
     timer.destroy();
   });
+  it('excludes active executions while arming a future publication wake', async () => {
+    const publicationAt = new Date(now.getTime() + 30_000);
+    const findFirst = jest
+      .fn()
+      .mockResolvedValueOnce({ nextScheduledRunAt: publicationAt })
+      .mockResolvedValueOnce(null);
+    const onWake = jest.fn().mockResolvedValue(undefined);
+    const timer = new ScheduledTaskWakeTimer(
+      { scheduledTaskConfig: { findFirst } } as never,
+      onWake,
+      jest.fn(),
+      () => ['hung-maintenance'],
+    );
+    await timer.scheduleNext();
+    for (const [query] of findFirst.mock.calls)
+      expect(query.where.id).toEqual({ notIn: ['hung-maintenance'] });
+    await jest.advanceTimersByTimeAsync(30_000);
+    expect(onWake).toHaveBeenCalledTimes(1);
+    timer.destroy();
+  });
 });

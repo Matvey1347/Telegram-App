@@ -1,3 +1,5 @@
+import { MutualPromotionWorkKind, Prisma } from '@prisma/client';
+import type { MutualPromotionLifecycleLane } from './mutual-promotion-lifecycle.service';
 export class MutualPromotionFinishDeferredError extends Error {
   constructor(
     readonly retryAt: Date,
@@ -44,3 +46,47 @@ export async function refreshMutualPromotionFolderDueTimes(
   }
 }
 import type { PrismaService } from '../../../prisma/prisma.service';
+
+/** Pending confirmations arm a real retry deadline; no pending row means no wake. */
+export async function pendingMutualPromotionConfirmationAt(
+  prisma: PrismaService,
+) {
+  const pending = await prisma.mutualPromotionFolderPost.findFirst({
+    where: {
+      publishedBotConfirmationSentAt: null,
+      deliveries: { some: {}, every: { status: 'PUBLISHED' } },
+    },
+    orderBy: { updatedAt: 'asc' },
+    select: { updatedAt: true },
+  });
+  return pending ? new Date(pending.updatedAt.getTime() + 60_000) : null;
+}
+
+export async function attemptMutualPromotionConfirmation(
+  prisma: PrismaService,
+  folderPostId: string,
+  now: Date,
+  send: () => Promise<unknown>,
+) {
+  try {
+    await send();
+  } finally {
+    // Persist only a real attempt, keeping failed notification retries bounded.
+    await prisma.mutualPromotionFolderPost.updateMany({
+      where: { id: folderPostId, publishedBotConfirmationSentAt: null },
+      data: { updatedAt: now },
+    });
+  }
+}
+
+export function mutualPromotionLaneWhere(
+  lane?: MutualPromotionLifecycleLane,
+): Prisma.MutualPromotionWorkItemWhereInput {
+  if (!lane) return {};
+  return {
+    kind:
+      lane === 'publication'
+        ? MutualPromotionWorkKind.PUBLISH_POST
+        : { not: MutualPromotionWorkKind.PUBLISH_POST },
+  };
+}

@@ -134,7 +134,6 @@ describe('DueTaskSchedule', () => {
     const { schedule, prisma } = setup();
     const rawDue = new Date(now.getTime() - 60_000);
     prisma.telegramManagedPost.findFirst
-      .mockResolvedValueOnce(null)
       .mockResolvedValueOnce({
         scheduledAt: rawDue,
         telegramIdLastCheckedAt: null,
@@ -158,7 +157,6 @@ describe('DueTaskSchedule', () => {
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce(null)
       .mockResolvedValueOnce({
         scheduledAt: new Date(now.getTime() - 60_000),
         telegramIdLastCheckedAt: now,
@@ -173,7 +171,6 @@ describe('DueTaskSchedule', () => {
   it('uses the slower retry timestamp for failed dependent repair after identity confirmation', async () => {
     const { schedule, prisma } = setup();
     prisma.telegramManagedPost.findFirst
-      .mockResolvedValueOnce(null)
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce(null)
@@ -198,7 +195,6 @@ describe('DueTaskSchedule', () => {
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce(null)
       .mockResolvedValueOnce({
         scheduledAt: new Date(now.getTime() - 60_000),
         telegramIdLastCheckedAt: now,
@@ -213,7 +209,6 @@ describe('DueTaskSchedule', () => {
   it('does not let an older missing check delay a faster unverified retry', async () => {
     const { schedule, prisma } = setup();
     prisma.telegramManagedPost.findFirst
-      .mockResolvedValueOnce(null)
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce(null)
@@ -237,17 +232,28 @@ describe('DueTaskSchedule', () => {
     const { schedule, prisma } = setup();
     const claimedAt = new Date(now.getTime() - 4 * 60_000);
     prisma.telegramManagedPost.findFirst
+      .mockResolvedValueOnce(null)
       .mockResolvedValueOnce({
         status: 'PUBLISHING',
         scheduledAt: new Date(now.getTime() - 5 * 60_000),
-        updatedAt: claimedAt,
+        deliveryClaimExpiresAt: new Date(claimedAt.getTime() + 30_000),
       })
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce(null);
 
     await expect(
-      schedule.nextDueAt('telegram.managed_posts.reconcile_due'),
-    ).resolves.toEqual(new Date(claimedAt.getTime() + 10 * 60_000));
+      schedule.nextDueAt('telegram.managed_posts.publish_due'),
+    ).resolves.toEqual(new Date(claimedAt.getTime() + 30_000));
+  });
+  it('wakes for a scheduled post before an older active delivery becomes stale', async () => {
+    const { schedule, prisma } = setup();
+    const scheduledAt = new Date(now.getTime() + 20_000);
+    prisma.telegramManagedPost.findFirst
+      .mockResolvedValueOnce({ scheduledAt })
+      .mockResolvedValueOnce({ deliveryClaimExpiresAt: new Date(now.getTime() + 30_000) });
+    await expect(
+      schedule.nextDueAt('telegram.managed_posts.publish_due'),
+    ).resolves.toEqual(scheduledAt);
   });
 });

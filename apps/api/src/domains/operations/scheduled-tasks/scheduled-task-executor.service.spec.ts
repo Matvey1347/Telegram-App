@@ -46,6 +46,9 @@ describe('scheduled task registry executors', () => {
         .mockResolvedValue({ operations: 5, daily: 6, budgetPeriods: 7 }),
     };
     const managedPosts = {
+      publishDueLocallyScheduledManagedPosts: jest
+        .fn()
+        .mockResolvedValue({ considered: 7, published: 7, failed: 0 }),
       reconcileAllDueManagedPosts: jest.fn().mockResolvedValue({
         checked: 3,
         verified: 2,
@@ -155,6 +158,25 @@ describe('scheduled task registry executors', () => {
     expect(result).toMatchObject({
       summary: expect.stringContaining('2 MTProto CRM sources') as unknown,
     });
+  });
+
+  it('publishes deadlines without waiting for maintenance or confirmations', async () => {
+    const { executor, managedPosts, placementLifecycle, mutualPromotion } =
+      setup();
+    managedPosts.reconcileAllDueManagedPosts.mockImplementation(
+      () => new Promise(() => {}),
+    );
+    const result =
+      await executor.executors['telegram.managed_posts.publish_due']();
+    expect(result.summary).toContain('Dispatched 7');
+    expect(
+      managedPosts.publishDueLocallyScheduledManagedPosts,
+    ).toHaveBeenCalledTimes(1);
+    expect(managedPosts.reconcileAllDueManagedPosts).not.toHaveBeenCalled();
+    expect(
+      placementLifecycle.reconcilePublishedPlacements,
+    ).not.toHaveBeenCalled();
+    expect(mutualPromotion.reconcilePublishedDeliveries).not.toHaveBeenCalled();
   });
 
   it('reconciles only the bounded due managed-post queue', async () => {

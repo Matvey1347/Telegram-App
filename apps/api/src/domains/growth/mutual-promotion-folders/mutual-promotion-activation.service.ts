@@ -189,6 +189,9 @@ export class MutualPromotionActivationService {
             membership.id;
           for (const post of folder.posts) {
             const managedPostId = randomUUID();
+            const hasButtons = Boolean(
+              normalizeTelegramPostButtonRows(post.buttonRows).length,
+            );
             managedPosts.push({
               id: managedPostId,
               workspaceId: folder.workspaceId,
@@ -199,16 +202,15 @@ export class MutualPromotionActivationService {
               mediaItems: post.mediaItems as Prisma.InputJsonValue,
               buttonRows: post.buttonRows ?? Prisma.JsonNull,
               origin: 'SYSTEM',
-              status: 'DRAFT',
+              status: hasButtons ? 'SCHEDULED' : 'DRAFT',
+              scheduleMode: hasButtons ? 'LOCAL' : null,
               scheduledAt: post.scheduledAt,
               assignedMemberId,
               groupId: groupByChannel.get(publisher.telegramChannelId),
               groupPosition: post.position,
             });
             const deliveryId = randomUUID();
-            const hasButtons = Boolean(
-              normalizeTelegramPostButtonRows(post.buttonRows).length,
-            );
+
             deliveries.push({
               id: deliveryId,
               workspaceId: folder.workspaceId,

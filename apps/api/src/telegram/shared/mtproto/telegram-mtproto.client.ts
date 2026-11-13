@@ -1,4 +1,8 @@
 import {
+  withTelegramPublicationDeadline,
+  waitTelegramOperationWithTimeout,
+} from './telegram-publication-deadline';
+import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
@@ -548,21 +552,7 @@ export class TelegramMtprotoClient {
     await closeTelegramMtprotoSession(client);
   }
 
-  public async withTimeout<T>(
-    promise: Promise<T>,
-    timeoutMs: number,
-    label: string,
-  ) {
-    return await Promise.race<T>([
-      promise,
-      new Promise<T>((_, reject) => {
-        const timer = setTimeout(() => {
-          reject(new Error(`${label} timed out after ${timeoutMs}ms`));
-        }, timeoutMs);
-        timer.unref?.();
-      }),
-    ]);
-  }
+  public readonly withTimeout = waitTelegramOperationWithTimeout;
 
   private now() {
     return Date.now();
@@ -3107,6 +3097,7 @@ export class TelegramMtprotoClient {
   }
 
   async publishPost(params: {
+    signal?: AbortSignal;
     apiId: string;
     apiHash: string;
     session: string;
@@ -3120,84 +3111,92 @@ export class TelegramMtprotoClient {
     imageUrls: string[];
     mediaItems?: TelegramPostMediaItem[];
   }) {
-    const client = await this.createClient(params);
-    try {
-      const resolved = params.channel
-        ? await this.resolveStoredChannel(client, params.channel)
-        : null;
-      const entity = resolved
-        ? resolved.entity
-        : await client.getEntity(params.channelRef as string);
-      const schedule = params.scheduleAt
-        ? Math.floor(params.scheduleAt.getTime() / 1000)
-        : undefined;
-      const messageIds: string[] = [];
-      const mediaItems = normalizeTelegramPostMediaItems(
-        params.mediaItems,
-        params.imageUrls,
-      );
-      if (mediaItems.length) {
-        const captionSourceHtml = params.captionHtml ?? params.html;
-        const caption = this.parseMtprotoHtml(captionSourceHtml);
-        const files = await Promise.all(
-          mediaItems.map((media, index) =>
-            media.kind === 'PHOTO'
-              ? this.downloadPublishImage(media.url, index)
-              : downloadTelegramPublishMotion(
-                  media.url,
-                  index,
-                  media.kind,
-                  media.fileName,
-                ),
-          ),
+    return withTelegramPublicationDeadline({
+      timeoutMs: 60_000,
+      signal: params.signal,
+      create: (signal) => this.createClient(params, signal),
+      close: (client) => this.closeClient(client),
+      run: async (client, checkpoint) => {
+        const resolved = params.channel
+          ? await this.resolveStoredChannel(client, params.channel)
+          : null;
+        const entity = resolved
+          ? resolved.entity
+          : await client.getEntity(params.channelRef as string);
+        checkpoint();
+        const schedule = params.scheduleAt
+          ? Math.floor(params.scheduleAt.getTime() / 1000)
+          : undefined;
+        const messageIds: string[] = [];
+        const mediaItems = normalizeTelegramPostMediaItems(
+          params.mediaItems,
+          params.imageUrls,
         );
-        const result =
-          files.length > 1
-            ? await client.sendFile(entity, {
-                file: files,
-                // GramJS album uploads ignore formattingEntities, so provide
-                // compatible HTML while working around its `+` URL parser bug.
-                caption: captionSourceHtml
-                  ? [telegramHtmlToGramJsAlbumHtml(captionSourceHtml)]
-                  : [''],
-                parseMode: 'html',
-                scheduleDate: schedule,
-              })
-            : await client.sendFile(entity, {
-                file: files[0],
-                caption: caption.text,
-                formattingEntities: caption.entities,
-                parseMode: false,
-                scheduleDate: schedule,
-              });
-        const messages = Array.isArray(result) ? result : [result];
-        for (const message of messages) {
-          if (message?.id != null) messageIds.push(String(message.id));
-        }
-        for (const followupHtml of params.followupHtmlParts ?? []) {
-          const textMessage = await this.sendTextMessageWithEntities(
-            client,
-            entity,
-            followupHtml,
-            schedule,
+        if (mediaItems.length) {
+          const captionSourceHtml = params.captionHtml ?? params.html;
+          const caption = this.parseMtprotoHtml(captionSourceHtml);
+          const files = await Promise.all(
+            mediaItems.map((media, index) =>
+              media.kind === 'PHOTO'
+                ? this.downloadPublishImage(media.url, index)
+                : downloadTelegramPublishMotion(
+                    media.url,
+                    index,
+                    media.kind,
+                    media.fileName,
+                  ),
+            ),
           );
-          if (textMessage?.id != null) messageIds.push(String(textMessage.id));
+          checkpoint();
+          const result =
+            files.length > 1
+              ? await client.sendFile(entity, {
+                  file: files,
+                  // GramJS album uploads ignore formattingEntities, so provide
+                  // compatible HTML while working around its `+` URL parser bug.
+                  caption: captionSourceHtml
+                    ? [telegramHtmlToGramJsAlbumHtml(captionSourceHtml)]
+                    : [''],
+                  parseMode: 'html',
+                  scheduleDate: schedule,
+                })
+              : await client.sendFile(entity, {
+                  file: files[0],
+                  caption: caption.text,
+                  formattingEntities: caption.entities,
+                  parseMode: false,
+                  scheduleDate: schedule,
+                });
+          const messages = Array.isArray(result) ? result : [result];
+          for (const message of messages) {
+            if (message?.id != null) messageIds.push(String(message.id));
+          }
+          for (const followupHtml of params.followupHtmlParts ?? []) {
+            checkpoint();
+            const textMessage = await this.sendTextMessageWithEntities(
+              client,
+              entity,
+              followupHtml,
+              schedule,
+            );
+            if (textMessage?.id != null)
+              messageIds.push(String(textMessage.id));
+          }
+        } else {
+          for (const textHtml of params.textHtmlParts ?? [params.html]) {
+            checkpoint();
+            const message = await this.sendTextMessageWithEntities(
+              client,
+              entity,
+              textHtml,
+              schedule,
+            );
+            if (message?.id != null) messageIds.push(String(message.id));
+          }
         }
-      } else {
-        for (const textHtml of params.textHtmlParts ?? [params.html]) {
-          const message = await this.sendTextMessageWithEntities(
-            client,
-            entity,
-            textHtml,
-            schedule,
-          );
-          if (message?.id != null) messageIds.push(String(message.id));
-        }
-      }
-      return messageIds;
-    } finally {
-      await this.closeClient(client);
-    }
+        return messageIds;
+      },
+    });
   }
 
   async editPostText(params: {

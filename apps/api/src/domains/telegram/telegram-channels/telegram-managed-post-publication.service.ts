@@ -1,3 +1,4 @@
+import { managedPostDeliveryContext } from './telegram-managed-post-delivery-context';
 import { Injectable } from '@nestjs/common';
 import {
   TelegramManagedPostIdVerificationStatus,
@@ -104,6 +105,7 @@ export class TelegramManagedPostPublicationService {
         requireTelegramNativeSchedule,
       );
     } catch (error) {
+      if (managedPostDeliveryContext.getStore()?.signal.aborted) throw error;
       const message =
         error instanceof Error ? error.message : 'Telegram publish failed';
       // Publisher preflight can fail before its delivery journal is entered.
@@ -197,6 +199,16 @@ export class TelegramManagedPostPublicationService {
   ) {
     const workspaceId =
       await this.telegramChannelsSupportService.workspace(userId);
+    // An authenticated manual retry can reset a definite rejection. Accepted
+    // and uncertain operations remain protected against duplicate publication.
+    await this.prisma.telegramManagedPostSendOperation.deleteMany({
+      where: {
+        postId,
+        workspaceId,
+        channelId,
+        status: { in: ['BLOCKED', 'REJECTED'] },
+      },
+    });
     return this.publishManagedPost(
       workspaceId,
       channelId,

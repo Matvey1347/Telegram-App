@@ -1,3 +1,4 @@
+import { notifyScheduledTaskDueWorkChanged } from '../../../common/scheduled-task-wake-notifier';
 import { TelegramCrmChatReceipts } from '../../telegram/telegram-crm/telegram-crm-chat-receipts.service';
 import { TelegramCrmManualRetentionService } from '../../telegram/telegram-crm/telegram-crm-manual-retention.service';
 import { TelegramLeadRetentionService } from '../../telegram/telegram-crm/lead-discovery/lead-retention.service';
@@ -32,6 +33,20 @@ export class ScheduledTaskExecutorService {
   constructor(private readonly moduleRef: ModuleRef) {}
 
   readonly executors = {
+    'telegram.managed_posts.publish_due': async () => {
+      const result = await (
+        await this.telegramManagedPostReconciliationService()
+      ).publishDueLocallyScheduledManagedPosts();
+      if (result.published > 0) {
+        notifyScheduledTaskDueWorkChanged(
+          'telegram.managed_posts.reconcile_due',
+        );
+        notifyScheduledTaskDueWorkChanged('telegram_ad_sales.due_deletions');
+      }
+      return {
+        summary: `Dispatched ${result.published} locally scheduled posts; ${result.failed} failed.`,
+      };
+    },
     'telegram.managed_posts.reconcile_due': async () => {
       const result = await (
         await this.telegramManagedPostReconciliationService()
@@ -111,9 +126,19 @@ export class ScheduledTaskExecutorService {
         summary: `Reconciled ${lifecycleResult.reconciled} published placements; processed ${result.processed} placements, ${result.failed} failed.`,
       };
     },
+    'mutual_promotion.publish_due': async () => {
+      const result = await (
+        await this.mutualPromotionLifecycleService()
+      ).processDueActions({ lane: 'publication' });
+      return {
+        summary: `Published mutual-promotion work: ${result.completed} completed, ${result.retried} retried, ${result.failed} failed.`,
+      };
+    },
     'mutual_promotion.lifecycle': async () => {
       const [result, direct] = await Promise.all([
-        (await this.mutualPromotionLifecycleService()).processDueActions(),
+        (await this.mutualPromotionLifecycleService()).processDueActions({
+          lane: 'maintenance',
+        }),
         this.moduleRef
           .resolve<CrossPromotionPlanLifecycleService>(
             CrossPromotionPlanLifecycleService,
@@ -128,9 +153,15 @@ export class ScheduledTaskExecutorService {
       };
     },
     'telegram.channel_reminders.due': async () => {
-      const service = await this.moduleRef.resolve(TelegramChannelRemindersDueService, undefined, { strict: false });
+      const service = await this.moduleRef.resolve(
+        TelegramChannelRemindersDueService,
+        undefined,
+        { strict: false },
+      );
       const result = await service.processDueActions();
-      return { summary: `Processed ${result.processed} channel reminder assignments.` };
+      return {
+        summary: `Processed ${result.processed} channel reminder assignments.`,
+      };
     },
     'telegram.post_batches.lifecycle': async () => {
       const result = await (
@@ -142,15 +173,25 @@ export class ScheduledTaskExecutorService {
       };
     },
     'telegram.ai_posting.autopilot': async () => {
-      const result = await (await this.moduleRef.resolve<TelegramAiPostingAutopilotService>(TelegramAiPostingAutopilotService, undefined, { strict: false })).processDueBatch(20);
-      return { summary: `AI Posting autopilot processed ${result.processed} channels; scheduled ${result.scheduled}, generated ${result.generated}, failed ${result.failed}.`, details: result };
+      const result = await (
+        await this.moduleRef.resolve<TelegramAiPostingAutopilotService>(
+          TelegramAiPostingAutopilotService,
+          undefined,
+          { strict: false },
+        )
+      ).processDueBatch(20);
+      return {
+        summary: `AI Posting autopilot processed ${result.processed} channels; scheduled ${result.scheduled}, generated ${result.generated}, failed ${result.failed}.`,
+        details: result,
+      };
     },
     'telegram.ai_posting.performance': async () => {
-      const service = await this.moduleRef.resolve<TelegramAiPostingPerformanceService>(
-        TelegramAiPostingPerformanceService,
-        undefined,
-        { strict: false },
-      );
+      const service =
+        await this.moduleRef.resolve<TelegramAiPostingPerformanceService>(
+          TelegramAiPostingPerformanceService,
+          undefined,
+          { strict: false },
+        );
       const result = await service.processScheduledBatch();
       return {
         summary: `Measured age windows for ${result.syncedChannels} AI Posting channels; backfilled ${result.backfilled} posts; ${result.failed} channel syncs failed.`,

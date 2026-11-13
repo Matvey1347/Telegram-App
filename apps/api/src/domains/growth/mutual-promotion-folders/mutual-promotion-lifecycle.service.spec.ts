@@ -11,6 +11,10 @@ describe('MutualPromotionLifecycleService', () => {
       'notifyScheduledTaskDueWorkChanged',
     );
     const prisma = {
+      mutualPromotionFolderPost: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
       mutualPromotionWorkItem: {
         findMany: jest.fn().mockResolvedValue([]),
         findFirst: jest.fn().mockResolvedValue(null),
@@ -32,12 +36,272 @@ describe('MutualPromotionLifecycleService', () => {
     expect(notify).toHaveBeenCalledWith('mutual_promotion.lifecycle');
   });
 
+  it.each(['publication', 'maintenance'] as const)(
+    'filters %s work before claiming or resolving its next wake',
+    async (lane) => {
+      const findMany = jest.fn().mockResolvedValue([]);
+      const findFirst = jest.fn().mockResolvedValue(null);
+      const service = new MutualPromotionLifecycleService(
+        {
+          mutualPromotionWorkItem: { findMany, findFirst },
+          mutualPromotionPostDelivery: {
+            findMany: jest.fn().mockResolvedValue([]),
+          },
+          mutualPromotionFolderPost: {
+            findFirst: jest.fn().mockResolvedValue(null),
+          },
+        } as never,
+        {} as never,
+        {} as never,
+        {} as never,
+      );
+      await service.processDueActions({ lane });
+      const kind =
+        lane === 'publication' ? 'PUBLISH_POST' : { not: 'PUBLISH_POST' };
+      expect(findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.objectContaining({ kind }) }),
+      );
+      expect(findFirst).toHaveBeenCalledTimes(2);
+      for (const [query] of findFirst.mock.calls)
+        expect(query.where.kind).toEqual(kind);
+    },
+  );
+
+  it('publishes with unavailable baseline analytics and does not wait for native delivery before other channels', async () => {
+    const publication = {
+      publishManagedPost: jest.fn(),
+      dispatch: jest.fn().mockResolvedValue(true),
+    };
+    const boundaries = {
+      captureStart: jest.fn(() => new Promise(() => {})),
+      captureFinal: jest.fn(() => new Promise(() => {})),
+    };
+    const baselineCount = jest.fn(() => new Promise(() => {}));
+    const prisma = {
+      mutualPromotionFolderPost: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      mutualPromotionFolder: {
+        findUnique: jest.fn().mockResolvedValue({
+          status: 'ACTIVE',
+          endsAt: new Date('2026-12-01'),
+        }),
+      },
+      mutualPromotionFolderParticipant: { count: baselineCount },
+      mutualPromotionPostDelivery: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'native',
+            managedPostId: 'native-post',
+            managedPost: {
+              status: 'SCHEDULED',
+              scheduleMode: 'TELEGRAM_NATIVE',
+            },
+          },
+          {
+            id: 'local',
+            managedPostId: 'local-post',
+            workspaceId: 'workspace',
+            telegramChannelId: 'channel',
+            managedPost: { status: 'SCHEDULED', scheduleMode: 'LOCAL' },
+          },
+        ]),
+        update: jest.fn().mockResolvedValue({}),
+      },
+    };
+    const service = new MutualPromotionLifecycleService(
+      prisma as never,
+      boundaries as never,
+      publication as never,
+      {} as never,
+      undefined,
+      publication as never,
+    );
+    await expect(
+      service['publishPost'](
+        { folderId: 'folder', folderPostId: 'post' } as never,
+        new Date('2026-11-13'),
+      ),
+    ).rejects.toThrow('must finish before folder cleanup');
+    expect(publication.dispatch).toHaveBeenCalledWith({
+      workspaceId: 'workspace',
+      telegramChannelId: 'channel',
+      id: 'local-post',
+    });
+    expect(baselineCount).not.toHaveBeenCalled();
+    expect(boundaries.captureStart).not.toHaveBeenCalled();
+    expect(boundaries.captureFinal).not.toHaveBeenCalled();
+    expect(prisma.mutualPromotionPostDelivery.update).toHaveBeenCalledWith({
+      where: { id: 'local' },
+      data: {
+        status: 'PUBLISHING',
+        lastError: null,
+      },
+    });
+  });
+
+  it('does not wait for bot confirmation before publishing the next channel', async () => {
+    const confirmation = {
+      sendPublishedOnce: jest.fn(() => new Promise(() => {})),
+    };
+    const publication = {
+      publishManagedPost: jest.fn(),
+      dispatch: jest.fn().mockResolvedValue(true),
+    };
+    const prisma = {
+      mutualPromotionFolderPost: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      mutualPromotionFolder: {
+        findUnique: jest.fn().mockResolvedValue({
+          status: 'ACTIVE',
+          endsAt: new Date('2026-12-01'),
+        }),
+      },
+      mutualPromotionPostDelivery: {
+        findMany: jest.fn().mockResolvedValue(
+          Array.from({ length: 8 }, (_, index) => ({
+            id: `delivery-${index}`,
+            managedPostId: `post-${index}`,
+            workspaceId: 'workspace',
+            telegramChannelId: `channel-${index}`,
+            managedPost: { status: 'SCHEDULED', scheduleMode: 'LOCAL' },
+          })),
+        ),
+        update: jest.fn().mockResolvedValue({}),
+      },
+    };
+    const service = new MutualPromotionLifecycleService(
+      prisma as never,
+      {} as never,
+      publication as never,
+      {} as never,
+      confirmation as never,
+      publication as never,
+    );
+    await expect(
+      service['publishPost'](
+        { folderId: 'folder', folderPostId: 'post' } as never,
+        new Date('2026-11-13'),
+      ),
+    ).rejects.toThrow('must finish before folder cleanup');
+    expect(publication.dispatch).toHaveBeenCalledTimes(8);
+    expect(confirmation.sendPublishedOnce).not.toHaveBeenCalled();
+  });
+
+  it('keeps dispatched work retryable without spending failure attempts before Telegram confirmation', async () => {
+    const now = new Date('2026-11-13T12:00:00Z');
+    const prisma = {
+      mutualPromotionFolder: {
+        findUnique: jest
+          .fn()
+          .mockResolvedValue({
+            status: 'ACTIVE',
+            endsAt: new Date('2026-12-01'),
+          }),
+      },
+      mutualPromotionPostDelivery: {
+        findMany: jest
+          .fn()
+          .mockResolvedValue([
+            {
+              id: 'delivery',
+              managedPostId: 'managed',
+              workspaceId: 'workspace',
+              telegramChannelId: 'channel',
+              managedPost: { status: 'SCHEDULED', scheduleMode: 'LOCAL' },
+            },
+          ]),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      mutualPromotionWorkItem: { update: jest.fn().mockResolvedValue({}) },
+    };
+    const dispatcher = { dispatch: jest.fn().mockResolvedValue(true) };
+    const service = new MutualPromotionLifecycleService(
+      prisma as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      undefined,
+      dispatcher as never,
+    );
+    const result = { completed: 0, retried: 0, failed: 0 };
+    await service['runOne'](
+      {
+        id: 'work',
+        folderId: 'folder',
+        folderPostId: 'logical-post',
+        kind: 'PUBLISH_POST',
+        attemptCount: 3,
+        maxAttempts: 3,
+      } as never,
+      now,
+      result,
+    );
+    expect(dispatcher.dispatch).toHaveBeenCalledWith({
+      id: 'managed',
+      workspaceId: 'workspace',
+      telegramChannelId: 'channel',
+    });
+    expect(prisma.mutualPromotionWorkItem.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'work' },
+        data: expect.objectContaining({
+          status: 'RETRY',
+          attemptCount: { decrement: 1 },
+          claimedAt: null,
+          leaseExpiresAt: null,
+        }),
+      }),
+    );
+    expect(result).toEqual({ completed: 0, retried: 1, failed: 0 });
+    expect(prisma.mutualPromotionPostDelivery.update).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ status: 'PUBLISHED' }),
+      }),
+    );
+  });
+
+  it('persists a maintenance wake for already verified local post confirmations', async () => {
+    const updatedAt = new Date('2026-11-13T12:00:00Z');
+    const prisma = {
+      mutualPromotionWorkItem: { findFirst: jest.fn().mockResolvedValue(null) },
+      mutualPromotionFolderPost: {
+        findFirst: jest.fn().mockResolvedValue({ updatedAt }),
+      },
+    };
+    const service = new MutualPromotionLifecycleService(
+      prisma as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+    await expect(service.nextDueAt('maintenance')).resolves.toEqual(
+      new Date('2026-11-13T12:01:00Z'),
+    );
+    expect(prisma.mutualPromotionFolderPost.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          publishedBotConfirmationSentAt: null,
+          deliveries: { some: {}, every: { status: 'PUBLISHED' } },
+        },
+      }),
+    );
+    await expect(service.nextDueAt('publication')).resolves.toBeNull();
+  });
+
   it('confirms a native publication as soon as reconciliation observes every delivery', async () => {
     const confirmation = {
       sendPublishedOnce: jest.fn().mockResolvedValue(undefined),
     };
     const now = new Date('2026-09-07T12:00:05.000Z');
     const prisma = {
+      mutualPromotionFolderPost: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
       mutualPromotionPostDelivery: {
         findMany: jest.fn().mockResolvedValue([
           { id: 'delivery-1', folderPostId: 'folder-post-1' },
@@ -73,6 +337,10 @@ describe('MutualPromotionLifecycleService', () => {
   it('does not send a duplicate confirmation when another worker claimed the delivery', async () => {
     const confirmation = { sendPublishedOnce: jest.fn() };
     const prisma = {
+      mutualPromotionFolderPost: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
       mutualPromotionPostDelivery: {
         findMany: jest
           .fn()
@@ -109,6 +377,10 @@ describe('MutualPromotionLifecycleService', () => {
       }),
     };
     const prisma = {
+      mutualPromotionFolderPost: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
       $transaction: jest.fn((callback) => callback(tx)),
       mutualPromotionWorkItem: {
         findMany: jest.fn().mockResolvedValue([]),
@@ -154,8 +426,15 @@ describe('MutualPromotionLifecycleService', () => {
   });
 
   it('re-enters the publisher when a failed post has only a partial delivery journal', async () => {
-    const publication = { publishManagedPost: jest.fn().mockResolvedValue({}) };
+    const publication = {
+      publishManagedPost: jest.fn(),
+      dispatch: jest.fn().mockResolvedValue(true),
+    };
     const prisma = {
+      mutualPromotionFolderPost: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
       mutualPromotionFolder: {
         findUnique: jest.fn().mockResolvedValue({
           status: 'ACTIVE',
@@ -186,22 +465,26 @@ describe('MutualPromotionLifecycleService', () => {
       {} as never,
       publication as never,
       {} as never,
+      undefined,
+      publication as never,
     );
 
-    await service['publishPost'](
-      { folderId: 'folder-1', folderPostId: 'post-1' } as never,
-      new Date('2026-09-07T12:00:00.000Z'),
-    );
+    await expect(
+      service['publishPost'](
+        { folderId: 'folder-1', folderPostId: 'post-1' } as never,
+        new Date('2026-09-07T12:00:00.000Z'),
+      ),
+    ).rejects.toThrow('must finish before folder cleanup');
 
-    expect(publication.publishManagedPost).toHaveBeenCalledWith(
-      'workspace-1',
-      'channel-1',
-      'managed-1',
-    );
+    expect(publication.dispatch).toHaveBeenCalledWith({
+      workspaceId: 'workspace-1',
+      telegramChannelId: 'channel-1',
+      id: 'managed-1',
+    });
     expect(prisma.mutualPromotionPostDelivery.update).toHaveBeenLastCalledWith(
       expect.objectContaining({
         where: { id: 'delivery-1' },
-        data: expect.objectContaining({ status: 'PUBLISHED' }),
+        data: expect.objectContaining({ status: 'PUBLISHING' }),
       }),
     );
   });
@@ -211,6 +494,10 @@ describe('MutualPromotionLifecycleService', () => {
     const update = jest.fn().mockResolvedValue({});
     const scheduledAt = new Date('2026-09-07T12:00:00.000Z');
     const prisma = {
+      mutualPromotionFolderPost: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
       mutualPromotionFolder: {
         findUnique: jest.fn().mockResolvedValue({
           status: 'ACTIVE',
@@ -243,6 +530,8 @@ describe('MutualPromotionLifecycleService', () => {
       {} as never,
       publication as never,
       {} as never,
+      undefined,
+      publication as never,
     );
 
     await expect(
@@ -250,7 +539,7 @@ describe('MutualPromotionLifecycleService', () => {
         { folderId: 'folder-1', folderPostId: 'post-1' } as never,
         scheduledAt,
       ),
-    ).rejects.toThrow('awaiting publication confirmation');
+    ).rejects.toThrow('must finish before folder cleanup');
 
     expect(publication.publishManagedPost).not.toHaveBeenCalled();
     expect(update).not.toHaveBeenCalled();
@@ -260,6 +549,10 @@ describe('MutualPromotionLifecycleService', () => {
     const boundaries = { captureFinal: jest.fn().mockResolvedValue(undefined) };
     const remoteDeletion = { deletePublishedManagedPosts: jest.fn() };
     const prisma = {
+      mutualPromotionFolderPost: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
       mutualPromotionWorkItem: {
         updateMany: jest.fn().mockResolvedValue({ count: 0 }),
         findMany: jest
@@ -292,6 +585,10 @@ describe('MutualPromotionLifecycleService', () => {
   it('does not publish an overdue retry after the folder end', async () => {
     const publication = { publishManagedPost: jest.fn() };
     const prisma = {
+      mutualPromotionFolderPost: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
       mutualPromotionFolder: {
         findUnique: jest.fn().mockResolvedValue({
           status: 'ACTIVE',
@@ -304,6 +601,8 @@ describe('MutualPromotionLifecycleService', () => {
       {} as never,
       publication as never,
       {} as never,
+      undefined,
+      publication as never,
     );
 
     await service['publishPost'](

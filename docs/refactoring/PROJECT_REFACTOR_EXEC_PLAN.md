@@ -2,6 +2,25 @@
 
 Updated: 2026-11-03
 
+## 2026-11-13 Critical advertising and VP deadline isolation
+
+Implementation complete; release verification in progress in isolated checkout
+`codex/publication-reliability`, based on production main. Grace mapped runtime
+paths; Knuth/Parnas audited cost and structure; Turing reviewed integration.
+Independent deadline tasks, per-post fenced dispatch, operation-level durable
+outcomes, safe retries/reconciliation and actionable deduplicated notifications
+replace shared maintenance blocking and unsafe replay. VP initial LOCAL state,
+cancellation/end-time eligibility and independent retry of healthy sibling
+channels are covered. 217 focused tests pass; four real PostgreSQL concurrency/
+recovery tests pass separately. API types/build and new-file lint pass. Additive
+migration plus all existing migrations/schema verification pass on a disposable
+PostgreSQL database. Full API suite: 568 suites passed, 15 failed before fixing
+its DB-dependent DI smoke fixture; other failures are outside this change.
+Architecture retains existing unrelated failures without increased allowances;
+MTProto shrinking-only ceiling lowered one line. See
+[publication reliability](../telegram/PUBLICATION_RELIABILITY.md) for business
+contract, remote uncertainty limits, runtime cost and live smoke workflow.
+
 ## 2026-11-03 Site performance initiative — Publication Calendar first slice
 
 The site-wide performance pass is in progress, starting with Publication Calendar. Its exact-range query is persisted under the existing workspace-scoped schedule key; a five-minute stale window enables immediate same-range revisits with a background refresh, while range changes do not reuse the prior range as placeholder data. Ad placement and VP mutations invalidate only the calendar query family, leaving schedule-list reads fresh. Calendar slots/events are indexed by local day once per response instead of filtering full collections repeatedly during rendering. The supplied browser capture is the baseline: the calendar API request took 2.59s and the route RSC requests took 4.49s and 2.11s; post-change browser timings have not yet been captured. Focused tests cover DST matching, indexed slot/event rendering, and targeted calendar invalidation. The Telegram Posts workspace now skips its full managed-post list request in Groups and Hypotheses views; switching back to Posts uses the existing query cache and normal stale refresh. Targeted post/calendar cache tests pass. The Ad Campaigns route no longer fires its unused performance summary read; repository search showed no consumer of its result, while the API query loaded every matching campaign and its channel plus the last sync run. The now-dead frontend query cache key/invalidation path was removed. Its mutually exclusive mutual-promotion folder and plan screens are now dynamically loaded, with a route-aware loading shell preserving the app navigation, section title and tabs. The production build succeeds and focused route tests pass (11 tests); generated route manifest confirms separate asynchronous module groups for those screens. The route was reduced to its existing 2,382-line shrinking-only ceiling; the matching page-query allowance was lowered from 20 to 19. Web typecheck passes. The architecture gate has no new violation from this slice, but still fails on existing repo-wide debt in unrelated/currently edited files. Browser timing capture remains pending because the in-app browser opens localhost at the sign-in screen and has no authenticated workspace session. Next work is to establish a local authenticated QA path, measure calendar/post cold and warm paths, inspect the API hot reads, then repeat the read/cache/invalidation audit across the remaining major tabs. Runtime work remains request-driven: no polling, timers, background jobs, database writes, or additional reads on idle.

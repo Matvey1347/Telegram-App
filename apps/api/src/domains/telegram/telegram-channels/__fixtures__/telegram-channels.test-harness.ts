@@ -1,3 +1,5 @@
+import { TelegramManagedPostDeliveryDispatcherService } from '../telegram-managed-post-delivery-dispatcher.service';
+import { TelegramManagedPostSendJournalService } from '../telegram-managed-post-send-journal.service';
 import { CurrencyConversionService } from '../../../../common/currency-conversion.service';
 import { B2ObjectStorageService } from '../../../../common/object-storage/b2-object-storage.service';
 import { ResponseCacheService } from '../../../../common/response-cache.service';
@@ -177,8 +179,32 @@ export function createTelegramChannelsTestHarness(
     persistImageUrls: (imageUrls: string[]) => Promise.resolve(imageUrls),
   } as TelegramManagedPostMediaStorageService,
 ): TelegramChannelsTestHarness {
+  const fixturePrisma = prisma as unknown as {
+    telegramManagedPostSendOperation?: unknown;
+  };
+  fixturePrisma.telegramManagedPostSendOperation ??= {
+    deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+  };
   const instances = new Map<unknown, unknown>([
     [PrismaService, prisma],
+    [
+      TelegramManagedPostDeliveryDispatcherService,
+      { dispatch: jest.fn().mockResolvedValue(true) },
+    ],
+    [
+      TelegramManagedPostSendJournalService,
+      {
+        forPost:
+          () =>
+          async (
+            _ordinal: number,
+            _payload: unknown,
+            call: () => Promise<unknown>,
+            extract: (value: unknown) => string[],
+          ) =>
+            extract(await call()),
+      },
+    ],
     [WorkspaceService, workspaceService],
     [ResponseCacheService, responseCache],
     [TokenEncryptionService, encryptionService],
