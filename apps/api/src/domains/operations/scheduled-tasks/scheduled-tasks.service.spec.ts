@@ -131,6 +131,92 @@ describe('ScheduledTasksService', () => {
     );
   });
 
+  it('dispatches due publication while maintenance remains blocked and retains its exclusion', async () => {
+    const { service, runner, config, prisma, registry, definition } = setup();
+    const publication = {
+      ...definition,
+      key: 'telegram.managed_posts.publish_due',
+    };
+    registry.get.mockImplementation((key: string) =>
+      key === publication.key ? publication : definition,
+    );
+    const publicationConfig = {
+      ...config,
+      id: 'publication',
+      taskKey: publication.key,
+    };
+    runner.executeScheduledOccurrence.mockImplementation((task) =>
+      task.key === definition.key
+        ? new Promise(() => {})
+        : Promise.resolve(null),
+    );
+    prisma.scheduledTaskConfig.findMany.mockResolvedValue([config]);
+    await service.tick();
+    prisma.scheduledTaskConfig.findMany.mockResolvedValue([
+      config,
+      publicationConfig,
+    ]);
+    await service.tick();
+    expect(runner.executeScheduledOccurrence).toHaveBeenCalledTimes(2);
+    expect(runner.executeScheduledOccurrence).toHaveBeenLastCalledWith(
+      publication,
+      publicationConfig,
+    );
+    expect(prisma.scheduledTaskConfig.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          id: { notIn: expect.arrayContaining([config.id]) },
+        }),
+      }),
+    );
+    service.onApplicationShutdown();
+  });
+
+  it('automatically wakes for a future publication while maintenance never completes', async () => {
+    const { service, runner, config, prisma, registry, definition } = setup();
+    const publication = {
+      ...definition,
+      key: 'telegram.managed_posts.publish_due',
+    };
+    const publicationAt = new Date(now.getTime() + 30_000);
+    const publicationConfig = {
+      ...config,
+      id: 'future-publication',
+      taskKey: publication.key,
+      nextScheduledRunAt: publicationAt,
+    };
+    registry.get.mockImplementation((key: string) =>
+      key === publication.key ? publication : definition,
+    );
+    let sent = false;
+    runner.executeScheduledOccurrence.mockImplementation((task) => {
+      if (task.key === definition.key) return new Promise(() => {});
+      sent = true;
+      return Promise.resolve(null);
+    });
+    prisma.scheduledTaskConfig.findMany
+      .mockResolvedValueOnce([config])
+      .mockResolvedValue([publicationConfig]);
+    prisma.scheduledTaskConfig.findFirst.mockImplementation(({ where }) =>
+      Promise.resolve(
+        !sent && !where.scheduledClaimOwner
+          ? { nextScheduledRunAt: publicationAt }
+          : null,
+      ),
+    );
+    await service.tick();
+    expect(runner.executeScheduledOccurrence).toHaveBeenCalledTimes(1);
+    await jest.advanceTimersByTimeAsync(29_999);
+    expect(sent).toBe(false);
+    await jest.advanceTimersByTimeAsync(1);
+    expect(sent).toBe(true);
+    expect(runner.executeScheduledOccurrence).toHaveBeenLastCalledWith(
+      publication,
+      publicationConfig,
+    );
+    service.onApplicationShutdown();
+  });
+
   it('treats a null runner result as an attempted due-driven occurrence', async () => {
     const { service, runner, definition, config } = setup();
     definition.key = 'mutual_promotion.lifecycle';

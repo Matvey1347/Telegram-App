@@ -6,18 +6,36 @@ import {
 
 export type TelegramBotApiErrorKind = 'TRANSIENT' | 'PERMANENT' | 'BLOCKED';
 
+export type TelegramBotApiRejection = {
+  explicitRejected: boolean;
+  errorCode?: number;
+  retryAfterSeconds?: number;
+};
+
 export class TelegramBotApiError extends Error {
+  readonly explicitRejected: boolean;
+  get confirmedRejection() {
+    return this.explicitRejected;
+  }
+  readonly errorCode?: number;
+  readonly retryAfterSeconds?: number;
   constructor(
     message: string,
     readonly kind: TelegramBotApiErrorKind,
+    rejection: TelegramBotApiRejection = { explicitRejected: false },
   ) {
     super(message);
+    this.explicitRejected = rejection.explicitRejected;
+    this.errorCode = rejection.errorCode;
+    this.retryAfterSeconds = rejection.retryAfterSeconds;
   }
 }
 
 type TelegramApiResponse<TResult> = {
   ok?: boolean;
   description?: string;
+  error_code?: number;
+  parameters?: { retry_after?: number };
   result?: TResult;
 };
 
@@ -470,7 +488,7 @@ export class TelegramBotApiClient {
     const response = await fetch(url, init);
     const payload = (await response.json()) as TelegramApiResponse<TResult>;
     if (!response.ok || !payload.ok) {
-      throw this.toError(payload.description, response.status);
+      throw this.toError(payload.description, response.status, payload);
     }
     return payload.result as TResult;
   }
@@ -490,7 +508,7 @@ export class TelegramBotApiClient {
     );
     const payload = (await response.json()) as TelegramApiResponse<TResult>;
     if (!response.ok || !payload.ok) {
-      throw this.toError(payload.description, response.status);
+      throw this.toError(payload.description, response.status, payload);
     }
     return payload.result as TResult;
   }
@@ -498,7 +516,20 @@ export class TelegramBotApiClient {
   private toError(
     description = 'Telegram Bot API request failed',
     status: number,
+    payload: TelegramApiResponse<unknown>,
   ) {
+    const errorCode = Number.isInteger(payload.error_code)
+      ? payload.error_code
+      : undefined;
+    const retry = payload.parameters?.retry_after;
+    const rejection: TelegramBotApiRejection = {
+      explicitRejected: payload.ok === false && errorCode !== undefined,
+      errorCode,
+      retryAfterSeconds:
+        typeof retry === 'number' && Number.isFinite(retry) && retry >= 0
+          ? retry
+          : undefined,
+    };
     const lower = description.toLowerCase();
     if (
       lower.includes('bot was blocked') ||
@@ -506,15 +537,19 @@ export class TelegramBotApiClient {
       lower.includes('chat not found') ||
       lower.includes('user is deactivated')
     ) {
-      return new TelegramBotApiError(description, 'BLOCKED');
+      return new TelegramBotApiError(description, 'BLOCKED', rejection);
     }
-    if (status >= 500 || lower.includes('too many requests')) {
-      return new TelegramBotApiError(description, 'TRANSIENT');
+    if (
+      status >= 500 ||
+      errorCode === 429 ||
+      lower.includes('too many requests')
+    ) {
+      return new TelegramBotApiError(description, 'TRANSIENT', rejection);
     }
     if (lower.includes('invalid') || lower.includes('unauthorized')) {
-      return new BadRequestException(description);
+      return new TelegramBotApiError(description, 'PERMANENT', rejection);
     }
     if (status >= 500) return new BadGatewayException(description);
-    return new TelegramBotApiError(description, 'PERMANENT');
+    return new TelegramBotApiError(description, 'PERMANENT', rejection);
   }
 }

@@ -10,6 +10,7 @@ export class ScheduledTaskWakeTimer {
     private readonly prisma: PrismaService,
     private readonly onWake: () => Promise<void>,
     private readonly onError: (error: unknown) => void,
+    private readonly excludedConfigIds: () => string[] = () => [],
   ) {}
 
   destroy() {
@@ -26,6 +27,7 @@ export class ScheduledTaskWakeTimer {
     const [ready, claimed] = await Promise.all([
       this.prisma.scheduledTaskConfig.findFirst({
         where: {
+          id: { notIn: this.excludedConfigIds() },
           enabled: true,
           nextScheduledRunAt: { not: null },
           OR: [
@@ -39,6 +41,7 @@ export class ScheduledTaskWakeTimer {
       }),
       this.prisma.scheduledTaskConfig.findFirst({
         where: {
+          id: { notIn: this.excludedConfigIds() },
           enabled: true,
           nextScheduledRunAt: { not: null },
           scheduledClaimOwner: { not: null },

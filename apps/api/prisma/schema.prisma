@@ -5828,6 +5828,10 @@ model TelegramManagedPost {
   captionLengthMaxUsed         Int?
   messageLengthMaxUsed         Int?
   publishMode                  String?
+  deliveryClaimOwner           String?
+  deliveryClaimExpiresAt       DateTime?
+  deliveryNextAttemptAt       DateTime?
+  deliveryAttemptCount        Int                                     @default(0)
   lastError                    String?
   plannerFormatId              String?
   plannerSlotId                String?
@@ -5853,6 +5857,7 @@ model TelegramManagedPost {
   group                   PostGroup?                             @relation(fields: [groupId], references: [id], onDelete: SetNull)
   plannerFormat           TelegramPostPlannerFormat?             @relation(fields: [plannerFormatId], references: [id], onDelete: SetNull)
   plannerSlot             TelegramPostPlannerSlot?               @relation(fields: [plannerSlotId], references: [id], onDelete: SetNull)
+  sendOperations          TelegramManagedPostSendOperation[]
   revisions               TelegramManagedPostRevision[]
   adSalePlacements        TelegramAdSalePlacement[]              @relation("TelegramAdPlacementManagedPost")
   mutualPromotionDelivery MutualPromotionPostDelivery?
@@ -5877,11 +5882,39 @@ model TelegramManagedPost {
   @@index([workspaceId, telegramChannelId, plannerRunId], map: "TelegramManagedPost_workspaceId_telegramChannelId_plannerRunId_")
   @@index([workspaceId, telegramChannelId, plannerSlotId], map: "TelegramManagedPost_workspaceId_telegramChannelId_plannerSlotId")
   @@index([status, scheduledAt])
+  @@index([status, deliveryNextAttemptAt])
+  @@index([deliveryClaimExpiresAt])
   @@index([aiPostingReviewStatus, scheduledAt])
   @@index([status, deleteAt])
   @@index([workspaceId, telegramChannelId, publicationSlotId], map: "TelegramManagedPost_workspaceId_telegramChannelId_publicationSl")
   @@index([telegramIdVerificationStatus, status, telegramIdLastCheckedAt], map: "TelegramManagedPost_due_identity_idx")
   @@index([workspaceId, telegramChannelId, origin, status, scheduledAt], map: "TelegramManagedPost_workspaceId_telegramChannelId_origin_status")
+}
+
+model TelegramManagedPostSendOperation {
+  id                String   @id @default(cuid())
+  postId            String
+  workspaceId       String
+  channelId         String
+  sourceType        TelegramSourceType
+  sourceId          String
+  ordinal           Int
+  payloadHash       String
+  status            String   @default("READY")
+  messageIds        String[] @default([])
+  attemptCount      Int      @default(0)
+  retryAt           DateTime?
+  errorCode         Int?
+  startedAt         DateTime?
+  confirmedAt       DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  managedPost TelegramManagedPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, ordinal])
+  @@index([workspaceId, channelId, status, retryAt], map: "ManagedPostSendOperation_workspace_channel_status_retry_idx")
+  @@index([status, updatedAt])
 }
 
 model TelegramPostPlannerFormat {

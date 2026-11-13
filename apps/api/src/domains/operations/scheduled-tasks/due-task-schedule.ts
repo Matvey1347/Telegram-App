@@ -1,3 +1,4 @@
+import { managedPostDeliveryEligibility } from '../../telegram/telegram-channels/managed-post-delivery-eligibility';
 import { PrismaService } from '../../../prisma/prisma.service';
 import {
   AD_DELETION_RETRY_MS,
@@ -111,6 +112,8 @@ export class DueTaskSchedule {
     this.progress.set(taskKey, state);
     state.unchangedRuns += 1;
     const maxBackoff =
+      taskKey === 'mutual_promotion.publish_due' ||
+      taskKey === 'telegram.managed_posts.publish_due' ||
       taskKey === 'mutual_promotion.lifecycle' ||
       taskKey === 'telegram.post_batches.lifecycle'
         ? NO_PROGRESS_MIN_BACKOFF_MS
@@ -127,6 +130,8 @@ export class DueTaskSchedule {
     if (domainDueAt !== undefined) return domainDueAt;
     const now = new Date();
     switch (taskKey) {
+      case 'telegram.managed_posts.publish_due':
+        return this.nextLocalPublicationDueAt();
       case 'telegram.managed_posts.reconcile_due':
         return this.nextManagedPostDueAt(now);
       case 'telegram_ad_sales.due_deletions':
@@ -138,26 +143,57 @@ export class DueTaskSchedule {
     }
   }
 
+  private async nextLocalPublicationDueAt() {
+    const ownership = {
+      scheduleMode: 'LOCAL',
+      AND: [managedPostDeliveryEligibility(new Date())],
+    };
+    const [scheduled, publishing, retry] = await Promise.all([
+      this.prisma.telegramManagedPost.findFirst({
+        where: {
+          ...ownership,
+          status: 'SCHEDULED',
+          mutualPromotionDelivery: { is: null },
+          scheduledAt: { not: null },
+        },
+        orderBy: { scheduledAt: 'asc' },
+        select: { scheduledAt: true },
+      }),
+      this.prisma.telegramManagedPost.findFirst({
+        where: {
+          ...ownership,
+          status: 'PUBLISHING',
+          deliveryClaimExpiresAt: { not: null },
+        },
+        orderBy: { deliveryClaimExpiresAt: 'asc' },
+        select: { deliveryClaimExpiresAt: true },
+      }),
+      this.prisma.telegramManagedPost.findFirst({
+        where: {
+          ...ownership,
+          status: 'FAILED',
+          deliveryAttemptCount: { gt: 0 },
+          deliveryNextAttemptAt: { not: null },
+        },
+        orderBy: { deliveryNextAttemptAt: 'asc' },
+        select: { deliveryNextAttemptAt: true },
+      }),
+    ]);
+    return earliest([
+      scheduled?.scheduledAt,
+      publishing?.deliveryClaimExpiresAt,
+      retry?.deliveryNextAttemptAt,
+    ]);
+  }
+
   private async nextManagedPostDueAt(now: Date) {
     const [
-      local,
       ready,
       autoDelete,
       futureIdentity,
       unverifiedBackoff,
       missingBackoff,
     ] = await Promise.all([
-      this.prisma.telegramManagedPost.findFirst({
-        where: {
-          scheduleMode: 'LOCAL',
-          OR: [
-            { status: 'SCHEDULED', scheduledAt: { not: null } },
-            { status: 'PUBLISHING' },
-          ],
-        },
-        orderBy: [{ scheduledAt: 'asc' }, { updatedAt: 'asc' }],
-        select: { status: true, scheduledAt: true, updatedAt: true },
-      }),
       this.prisma.telegramManagedPost.findFirst({
         where: managedPostIdentityReadyWhere(now),
         orderBy: [{ telegramIdLastCheckedAt: 'asc' }, { id: 'asc' }],
@@ -185,7 +221,10 @@ export class DueTaskSchedule {
           scheduledAt: { gt: now },
           AND: [
             {
-              OR: [{ scheduleMode: null }, { scheduleMode: { not: 'BATCH' } }],
+              OR: [
+                { scheduleMode: null },
+                { scheduleMode: { notIn: ['BATCH', 'LOCAL'] } },
+              ],
             },
           ],
         },
@@ -253,11 +292,6 @@ export class DueTaskSchedule {
         )
       : null;
     return earliest([
-      local?.status === 'PUBLISHING'
-        ? new Date(
-            local.updatedAt.getTime() + MANAGED_POST_LOCAL_PUBLISHING_STALE_MS,
-          )
-        : local?.scheduledAt,
       readyAt,
       futureIdentity?.scheduledAt,
       unverifiedBackoffAt,

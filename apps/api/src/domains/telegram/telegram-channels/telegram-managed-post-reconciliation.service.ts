@@ -1,4 +1,6 @@
-import { Injectable } from '@nestjs/common';
+import { managedPostDeliveryEligibility } from './managed-post-delivery-eligibility';
+import { TelegramManagedPostDeliveryDispatcherService } from './telegram-managed-post-delivery-dispatcher.service';
+import { Injectable, Optional } from '@nestjs/common';
 import { TelegramManagedPostStatus } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { TelegramMtprotoClient } from '@api/telegram/shared/mtproto/telegram-mtproto.client';
@@ -26,6 +28,8 @@ export class TelegramManagedPostReconciliationService {
     private readonly telegramManagedPostGroupPresentationService: TelegramManagedPostGroupPresentationService,
     private readonly telegramManagedPostPublicationService: TelegramManagedPostPublicationService,
     private readonly telegramManagedPostRemoteDeletionService: TelegramManagedPostRemoteDeletionService,
+    @Optional()
+    private readonly dispatcher?: TelegramManagedPostDeliveryDispatcherService,
   ) {}
 
   private readonly iconSelect = {
@@ -67,7 +71,8 @@ export class TelegramManagedPostReconciliationService {
   }
 
   async reconcileAllDueManagedPosts(options?: { identityTimeoutMs?: number }) {
-    const localDelivery = await this.publishDueLocallyScheduledManagedPosts();
+    // Delivery has its own task/lease: maintenance must never hold deadlines.
+    const localDelivery = { considered: 0, published: 0, failed: 0 };
     const identity = await this.reconcilePendingIdentitiesWithin(
       options?.identityTimeoutMs ?? IDENTITY_RECONCILIATION_TIMEOUT_MS,
     );
@@ -185,14 +190,21 @@ export class TelegramManagedPostReconciliationService {
     const duePosts = await this.prisma.telegramManagedPost.findMany({
       where: {
         scheduleMode: 'LOCAL',
+        AND: [managedPostDeliveryEligibility(now)],
         OR: [
           {
+            status: TelegramManagedPostStatus.FAILED,
+            deliveryNextAttemptAt: { lte: now },
+            deliveryAttemptCount: { gt: 0 },
+          },
+          {
             status: TelegramManagedPostStatus.SCHEDULED,
+            mutualPromotionDelivery: { is: null },
             scheduledAt: { lte: now },
           },
           {
             status: TelegramManagedPostStatus.PUBLISHING,
-            updatedAt: { lte: stalePublishingCutoff },
+            deliveryClaimExpiresAt: { lte: now },
           },
         ],
       },
@@ -200,42 +212,13 @@ export class TelegramManagedPostReconciliationService {
       orderBy: { scheduledAt: 'asc' },
       take: 25,
     });
-    let published = 0;
-    let failed = 0;
-    for (const due of duePosts) {
-      const claim = await this.prisma.telegramManagedPost.updateMany({
-        where: {
-          id: due.id,
-          scheduleMode: 'LOCAL',
-          OR: [
-            {
-              status: TelegramManagedPostStatus.SCHEDULED,
-              scheduledAt: { lte: new Date() },
-            },
-            {
-              status: TelegramManagedPostStatus.PUBLISHING,
-              updatedAt: { lte: stalePublishingCutoff },
-            },
-          ],
-        },
-        data: { status: TelegramManagedPostStatus.PUBLISHING },
-      });
-      if (claim.count) {
-        try {
-          await this.telegramManagedPostPublicationService.publishManagedPost(
-            due.workspaceId,
-            due.telegramChannelId,
-            due.id,
-          );
-          published += 1;
-        } catch {
-          // The publisher persists the post-level FAILED state and message.
-          // Continue so one broken bot or post cannot block the remaining due queue.
-          failed += 1;
-        }
-      }
+    if (!this.dispatcher)
+      throw new Error('Durable publication dispatcher unavailable');
+    let dispatched = 0;
+    for (const post of duePosts) {
+      if (await this.dispatcher.dispatch(post)) dispatched += 1;
     }
-    return { considered: duePosts.length, published, failed };
+    return { considered: duePosts.length, published: dispatched, failed: 0 };
   }
 
   public async reconcileManagedPostIdentities(params: {

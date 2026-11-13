@@ -76,4 +76,22 @@ describe('Telegram managed post Bot delivery', () => {
     ).rejects.toThrow('Telegram rejected the message');
     expect(persist).not.toHaveBeenCalled();
   });
+  it('routes the first unjournaled follow-up through its durable ordinal after a partial send', async () => {
+    const executeOperation = jest
+      .fn()
+      .mockRejectedValue(new Error('ambiguous follow-up'));
+    const call = jest.fn();
+    await expect(
+      deliverTelegramManagedPostViaBot({
+        operations: [operation('sendMessage'), operation('sendMessage')],
+        journaledMessageIds: ['41'],
+        call,
+        executeOperation,
+        persist: jest.fn(),
+      }),
+    ).rejects.toThrow('ambiguous follow-up');
+    expect(executeOperation).toHaveBeenCalledTimes(1);
+    expect(executeOperation).toHaveBeenCalledWith(expect.anything(), 1);
+    expect(call).not.toHaveBeenCalled();
+  });
 });

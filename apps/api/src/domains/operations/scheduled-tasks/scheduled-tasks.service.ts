@@ -43,6 +43,8 @@ export class ScheduledTasksService
   private readonly automaticEligibility: ScheduledTaskAutomaticEligibility;
   private readonly dueSchedule: DueTaskSchedule;
   private readonly wakeTimer: ScheduledTaskWakeTimer;
+  private readonly inFlight = new Set<string>();
+  private shuttingDown = false;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -59,6 +61,7 @@ export class ScheduledTasksService
         this.logger.warn(
           `Scheduled task wake failed: ${sanitizeOperationalError(error)}`,
         ),
+      () => [...this.inFlight],
     );
   }
 
@@ -81,23 +84,19 @@ export class ScheduledTasksService
   }
 
   onApplicationShutdown() {
+    this.shuttingDown = true;
     this.wakeTimer.destroy();
     scheduledTaskWakeNotifier.off('changed', this.onDueWorkChanged);
   }
 
-  /**
-   * Runs only after the timer has reached a persisted due occurrence. It is
-   * deliberately not a cron: an empty system must not wake Postgres merely to
-   * discover that nothing has changed.
-   */
+  // Due-driven: an empty system never polls Postgres.
   async tick() {
     if (isLocalTelegramBotRuntime()) return;
-    const attemptedDueDriven = new Set<string>();
-    let tickFailed = false;
     try {
       const now = new Date();
       const configs = await this.prisma.scheduledTaskConfig.findMany({
         where: {
+          id: { notIn: [...this.inFlight] },
           enabled: true,
           nextScheduledRunAt: { lte: now },
           OR: [
@@ -109,32 +108,50 @@ export class ScheduledTasksService
       });
       for (const config of configs) {
         const definition = this.registry.get(config.taskKey);
-        if (!definition || !config.nextScheduledRunAt) continue;
-        if (definition.dueDriven) {
-          attemptedDueDriven.add(config.taskKey);
-        }
-        try {
-          await this.runner.executeScheduledOccurrence(definition, config);
-        } catch (error) {
-          this.logger.warn(
-            `Scheduled task ${config.taskKey} failed without crashing scheduler loop: ${sanitizeOperationalError(error)}`,
-          );
-        }
+        if (
+          !definition ||
+          !config.nextScheduledRunAt ||
+          this.inFlight.has(config.id)
+        )
+          continue;
+        // Keep the durable runner/lease until real completion. An unrelated
+        // blocked task must never hold the timer for the next publication.
+        this.inFlight.add(config.id);
+        void this.runIndependentOccurrence(definition, config);
       }
+      await this.scheduleNextWake();
     } catch (error) {
-      tickFailed = true;
+      this.armRecoveryWake();
       throw error;
+    }
+  }
+
+  private async runIndependentOccurrence(
+    definition: ScheduledTaskDefinition,
+    config: ScheduledConfig,
+  ) {
+    try {
+      await this.runner.executeScheduledOccurrence(definition, config);
+    } catch (error) {
+      this.logger.warn(
+        `Scheduled task ${config.taskKey} failed: ${sanitizeOperationalError(error)}`,
+      );
     } finally {
-      if (tickFailed) {
-        this.armRecoveryWake();
-      } else {
+      // Refresh before removing the local exclusion, so a completion signal
+      // cannot re-dispatch the stale occurrence between these operations.
+      try {
+        if (definition.dueDriven)
+          await this.refreshDueDrivenTask(config.taskKey, true);
+      } catch (error) {
+        this.logger.warn(
+          `Could not refresh ${config.taskKey}: ${sanitizeOperationalError(error)}`,
+        );
+      }
+      this.inFlight.delete(config.id);
+      if (!this.shuttingDown) {
         try {
-          await this.refreshDueDrivenTasks(attemptedDueDriven);
           await this.scheduleNextWake();
-        } catch (error) {
-          this.logger.warn(
-            `Could not rearm scheduled tasks: ${sanitizeOperationalError(error)}`,
-          );
+        } catch {
           this.armRecoveryWake();
         }
       }
@@ -290,7 +307,13 @@ export class ScheduledTasksService
       return;
     }
     if (!this.registry.get(taskKey)?.dueDriven) return;
-    void this.refreshDueDrivenTask(taskKey)
+    const keys =
+      taskKey === 'telegram.managed_posts.reconcile_due'
+        ? [taskKey, 'telegram.managed_posts.publish_due']
+        : taskKey === 'mutual_promotion.lifecycle'
+          ? [taskKey, 'mutual_promotion.publish_due']
+          : [taskKey];
+    void Promise.all(keys.map((key) => this.refreshDueDrivenTask(key)))
       .then(() => this.scheduleNextWake())
       .catch((error) => {
         this.logger.warn(
