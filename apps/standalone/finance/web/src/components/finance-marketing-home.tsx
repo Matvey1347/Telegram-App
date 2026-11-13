@@ -1,8 +1,10 @@
 "use client";
+import { financeBrandIcon } from "@consumer-finance/web/lib/finance-brand-icon";
 
 import { useEffect, useState } from "react";
 import { ConsumerFinanceLanding } from "@consumer-finance/web/components/app/consumer-finance-landing";
 import { consumerFinanceAuthApi } from "@consumer-finance/web/lib/api/consumer-finance-auth-api";
+import { applyFinanceDocumentMetadata } from "@consumer-finance/web/components/hooks/use-finance-bot-branding";
 
 type Locale = "uk" | "en";
 type Theme = "light" | "dark";
@@ -16,6 +18,15 @@ export function FinanceMarketingHome({ initialLocale, initialTheme }: { initialL
   const [locale, setLocale] = useState(initialLocale);
   const [theme, setTheme] = useState(initialTheme);
   useEffect(() => {
+    applyFinanceDocumentMetadata(
+      theme,
+      locale,
+      locale === "en"
+        ? "Groshly — Personal Finance"
+        : "Groshly — особисті фінанси в Telegram і браузері",
+    );
+  }, [locale, theme]);
+  useEffect(() => {
     const botId = window.localStorage.getItem("finance-active-bot-id")?.trim();
     if (!botId) return;
     let active = true;
@@ -27,9 +38,7 @@ export function FinanceMarketingHome({ initialLocale, initialTheme }: { initialL
   return <ConsumerFinanceLanding
     locale={locale}
     theme={theme}
-    iconUrl={process.env.NODE_ENV === "development"
-      ? theme === "dark" ? "/brand/groshly-dev-dark-icon.png" : "/brand/groshly-dev-icon.png"
-      : theme === "dark" ? "/brand/groshly-dark-icon.png" : "/brand/groshly-icon.png"}
+    iconUrl={financeBrandIcon(theme)}
     onLocaleChange={(next) => {
       const value = next === "en" ? "en" : "uk";
       setLocale(value);

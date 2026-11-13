@@ -23,6 +23,24 @@ function snapshot() {
 }
 
 describe("Groshly special transactions", () => {
+  it("allows correcting a cross currency transfer after its source was emptied", async () => {
+    const data = snapshot();
+    data.accounts = [
+      { id: "source", name: "Source", emoji: "💵", balance: 0, currency: "USD" },
+      { id: "target", name: "Target", emoji: "💳", balance: 249.1, currency: "PLN" },
+    ];
+    data.rates = { UAH: 1, USD: 39.065435568, PLN: 10, EUR: 48.2 };
+    data.transactions = [{ id: "transfer", type: "transfer", title: "Exchange", amount: 249.1, currency: "USD", receivedAmount: 249.1, receivedCurrency: "PLN", fromId: "source", toId: "target", date: today() }] as unknown as typeof data.transactions;
+    const onSaveLedgerEntry = vi.fn().mockResolvedValue(data);
+    render(<App initialData={data} onSaveLedgerEntry={onSaveLedgerEntry} />);
+    fireEvent.click(screen.getByRole("button", { name: /Activity/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Exchange/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    fireEvent.click(screen.getByRole("button", { name: /Transfer money/ }));
+    await waitFor(() => expect(onSaveLedgerEntry).toHaveBeenCalledOnce());
+    expect(onSaveLedgerEntry.mock.calls[0][0].draft.receivedAmount).toBe(973.12);
+  });
+
   it("settles the AI preparation state after a simple message", async () => {
     render(<App initialData={snapshot()} />);
     fireEvent.click(screen.getByRole("button", { name: /AI/ }));

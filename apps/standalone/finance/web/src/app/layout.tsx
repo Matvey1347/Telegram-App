@@ -1,3 +1,4 @@
+import { financeBrandIcon } from "@consumer-finance/web/lib/finance-brand-icon";
 import type { Metadata, Viewport } from "next";
 import { TelegramWebAppSdk } from "@finance-web/components/telegram/telegram-web-app-sdk";
 import { ConsumerFinanceProvider } from "@consumer-finance/web/provider/consumer-finance-provider";
@@ -11,7 +12,7 @@ import "@consumer-finance/web/components/app/consumer-finance-landing-updates.cs
 import "@consumer-finance/web/components/app/consumer-finance-landing-pricing.css";
 import "@consumer-finance/web/components/app/consumer-finance-landing-polish.css";
 
-const initialFavicon = process.env.NODE_ENV === "development" ? "/brand/groshly-dev-dark-icon.png" : "/brand/groshly-dark-icon.png";
+const lightFavicon = `${financeBrandIcon("light")}?theme=light&v=2`;
 
 export const metadata: Metadata = {
   title: "Groshly — особисті фінанси в Telegram і браузері",
@@ -25,9 +26,9 @@ export const metadata: Metadata = {
     type: "website",
   },
   icons: {
-    icon: initialFavicon,
-    shortcut: initialFavicon,
-    apple: initialFavicon,
+    icon: lightFavicon,
+    shortcut: lightFavicon,
+    apple: lightFavicon,
   },
 };
 

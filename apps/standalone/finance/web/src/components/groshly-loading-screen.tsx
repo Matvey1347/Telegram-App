@@ -1,5 +1,7 @@
+import { financeBrandIcon } from "@consumer-finance/web/lib/finance-brand-icon";
+
 export function GroshlyLoadingScreen() {
-  const icon = process.env.NODE_ENV === "development" ? "/brand/groshly-dev-icon.png" : "/brand/groshly-icon.png";
+  const icon = financeBrandIcon("light");
   return (
     <main className="groshly-page-loading" aria-busy="true" data-testid="groshly-loading">
       <div role="status" aria-live="polite">

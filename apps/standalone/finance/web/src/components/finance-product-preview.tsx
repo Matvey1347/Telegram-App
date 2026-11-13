@@ -1,4 +1,5 @@
 "use client";
+import { financeBrandIcon } from "@consumer-finance/web/lib/finance-brand-icon";
 
 import { GroshlyApp } from "@finance-web/groshly/main";
 import { initial } from "@finance-web/groshly/data";
@@ -31,8 +32,8 @@ export function FinanceProductPreview({
   data.onboarded = true;
   data.lang = preferences.lang;
   data.theme = preferences.theme;
-  const iconUrl = process.env.NODE_ENV === "development" ? "/brand/groshly-dev-icon.png" : "/brand/groshly-icon.png";
-  const darkIconUrl = process.env.NODE_ENV === "development" ? "/brand/groshly-dev-dark-icon.png" : "/brand/groshly-dark-icon.png";
+  const iconUrl = financeBrandIcon("light");
+  const darkIconUrl = financeBrandIcon("dark");
   return (
     <div className="finance-product-preview" aria-label="Groshly product preview">
       <PreviewApp initialData={data} previewScreen={screen} logoUrl={iconUrl} faviconUrl={iconUrl} faviconLightUrl={darkIconUrl} />

@@ -38,7 +38,10 @@ import {
   type ConsumerFinanceAction,
   type ConsumerFinanceScreen,
 } from "@consumer-finance/web/components/app/consumer-finance-navigation";
-import { useFinanceBotBranding } from "@consumer-finance/web/components/hooks/use-finance-bot-branding";
+import {
+  applyFinanceDocumentMetadata,
+  useFinanceBotBranding,
+} from "@consumer-finance/web/components/hooks/use-finance-bot-branding";
 import { FinanceAssistantDrawer } from "@consumer-finance/web/components/assistant/finance-assistant-drawer";
 import { FinanceOnboardingTour } from "@consumer-finance/web/components/onboarding/finance-onboarding-tour";
 
@@ -288,6 +291,20 @@ export function ConsumerFinanceApp({ botId }: { botId: string }) {
   useEffect(() => {
     if (profile?.locale) window.localStorage.setItem(localeStorageKey, locale);
   }, [locale, localeStorageKey, profile?.locale]);
+
+  useEffect(() => {
+    if (!profile) return;
+    const theme = window.localStorage.getItem("groshly-theme") === "dark" ? "dark" : "light";
+    applyFinanceDocumentMetadata(
+      theme,
+      locale,
+      locale === "en"
+        ? "Groshly — Personal Finance"
+        : locale === "ru"
+          ? "Groshly — личные финансы"
+          : "Groshly — особисті фінанси",
+    );
+  }, [locale, profile]);
 
   useEffect(() => {
     const syncLocation = () => {

@@ -2,10 +2,7 @@
 
 import type { PropsWithChildren } from "react";
 import { financeUiTokens } from "@consumer-finance/web/components/ui/finance-ui-tokens";
-import {
-  FinanceStateIllustration,
-  type FinanceVisualState,
-} from "@consumer-finance/web/components/ui/finance-state-illustration";
+import type { FinanceVisualState } from "@consumer-finance/web/components/ui/finance-state-illustration";
 import {
   useFinanceVisualContext,
   type FinanceVisualContext,
@@ -62,7 +59,7 @@ export function FinanceFeedbackState({
   return (
     <div
       data-finance-feedback={state}
-      className={`relative flex w-full flex-col overflow-hidden rounded-[24px] border p-3 shadow-[0_12px_36px_rgba(21,58,41,0.05)] sm:p-4 ${compact ? "min-h-32" : "min-h-48"} ${stateSurface[state]} ${className}`}
+      className={`relative flex w-full flex-col overflow-hidden rounded-[24px] border p-3 shadow-[0_12px_36px_rgba(21,58,41,0.05)] sm:p-4 ${state === "error" ? "" : compact ? "min-h-32" : "min-h-48"} ${stateSurface[state]} ${className}`}
       role={role}
       aria-live={state === "error" ? "assertive" : "polite"}
       aria-busy={
@@ -74,13 +71,7 @@ export function FinanceFeedbackState({
     >
       {state === "loading" ? (
         <FinanceMoneyLoader context={resolvedContext} compact={compact} />
-      ) : (
-        <FinanceStateIllustration
-          state={state}
-          context={resolvedContext}
-          compact={compact}
-        />
-      )}
+      ) : null}
       {text ? (
         <p className="w-full px-2 pb-1 pt-3 text-center text-sm font-medium leading-6">
           {text}

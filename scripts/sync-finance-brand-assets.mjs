@@ -10,6 +10,8 @@ const targets = [
 ];
 const icons = [
   'groshly-icon.png',
+  'groshly-icon-transparent.png',
+  'groshly-dev-icon-transparent.png',
   'groshly-dev-icon.png',
   'groshly-dark-icon.png',
   'groshly-dev-dark-icon.png',

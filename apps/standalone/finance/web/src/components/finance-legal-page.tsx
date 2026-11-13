@@ -1,8 +1,10 @@
 "use client";
+import { financeBrandIcon } from "@consumer-finance/web/lib/finance-brand-icon";
 
 import { useEffect, useState } from "react";
 import { Moon, Sun } from "lucide-react";
 import Link from "next/link";
+import { applyFinanceDocumentMetadata } from "@consumer-finance/web/components/hooks/use-finance-bot-branding";
 
 type Locale = "uk" | "en";
 type Kind = "privacy" | "terms";
@@ -75,12 +77,16 @@ export function FinanceLegalPage({ kind, initialLocale = "uk", initialTheme = "l
     window.localStorage.setItem("groshly-theme", theme);
     document.cookie = `groshly-language=${locale}; Path=/; Max-Age=31536000; SameSite=Lax`;
     document.cookie = `groshly-theme=${theme}; Path=/; Max-Age=31536000; SameSite=Lax`;
-    document.documentElement.lang = locale;
-  }, [locale, theme]);
+    applyFinanceDocumentMetadata(
+      theme,
+      locale,
+      locale === "en"
+        ? kind === "terms" ? "Terms & Conditions — Groshly" : "Privacy Policy — Groshly"
+        : kind === "terms" ? "Умови використання — Groshly" : "Політика конфіденційності — Groshly",
+    );
+  }, [kind, locale, theme]);
   const content = copy[locale][kind];
-  const icon = process.env.NODE_ENV === "development"
-    ? theme === "dark" ? "/brand/groshly-dev-dark-icon.png" : "/brand/groshly-dev-icon.png"
-    : theme === "dark" ? "/brand/groshly-dark-icon.png" : "/brand/groshly-icon.png";
+  const icon = financeBrandIcon(theme);
   return <main className="groshly-legal" data-theme={theme} lang={locale}>
     <header>
       <Link href="/" className="groshly-legal-brand"><img src={icon} alt="" /><span>Groshly<span>.</span></span></Link>
