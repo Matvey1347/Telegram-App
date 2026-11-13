@@ -91,3 +91,31 @@ cascade on its deletion; accepted operation evidence must outlive retries. Due r
 existing persistence; independent dispatch reduces serial latency, not operation count. New task configs add constant metadata and actual-due reads; idle work
 must stay disarmed. Existing operational history retention applies. No new
 telemetry or RAM baseline service is added.
+
+## Production release evidence — 2026-11-13
+
+Merged implementation PR #3 and claim recovery PR #4 into main. Railway
+deployment `d685c0b6-e92e-4162-9a59-c615b783c359` for commit
+`73a8c3293c09178c63f08003de847cc998e85afe` reached SUCCESS; the migration is
+applied and public API health returns HTTP 200. Both deadline tasks are enabled.
+
+Canonical production smoke in existing private Test channels scheduled one
+ad and one folder VP at 21:58:20.647 UTC. Telegram acknowledgements were recorded
+after 4,178 ms and 4,543 ms respectively, with one message ID per post; the ad
+placement and VP delivery both became PUBLISHED. Four future VP fixture posts
+were cancelled. An earlier rollout smoke also published both (4,579/5,233 ms);
+its cleanup incorrectly attempted the unpublished-ad cancellation action after
+publication. The smoke script now cancels only unpublished placements. Published
+test artifacts were removed separately with fixture/private-channel guards.
+The original Mira deal retains all seven post and placement PUBLISHED statuses.
+
+Verification: 218 focused tests plus four real PostgreSQL integration tests;
+API types/build, module DI and focused new-file lint passed. Full suite and
+architecture retain unrelated existing failures documented in the execution
+plan. The disposable PostgreSQL container was stopped. No dev server remains.
+
+QA reproduction: set explicit SMOKE_WORKSPACE_ID and two distinct private test
+channel IDs, inject production variables using Railway run, and execute the
+guarded smoke script. It creates zero-value fixture placements, validates
+message IDs and placement states, and cancels future VP work. Run only with the
+explicit publish-private-test-only guard, never against a customer channel.

@@ -3,7 +3,7 @@
  * Explicit production smoke. Reads secrets only from injected process env.
  * Requires SMOKE_EXECUTE=publish-private-test-only and explicit guarded channel IDs.
  * Railway usage: railway run --service 'Nexeloq API' node scripts/publication-production-smoke.mjs
- * Set non-secret SMOKE_AD_CHANNEL_ID / SMOKE_VP_CHANNEL_ID in the invoking environment.
+ * Set non-secret SMOKE_WORKSPACE_ID / SMOKE_AD_CHANNEL_ID / SMOKE_VP_CHANNEL_ID in the invoking environment.
  * Creates one ad and a draft VP folder with five logical posts (four tomorrow).
  * Canonical API activation/scheduling wakes the actual production scheduler.
  * Always cancels VP future work and ad publications before exiting normally.
@@ -19,7 +19,7 @@ const require = createRequire(
 );
 const { PrismaClient } = require("@prisma/client");
 const { PrismaPg } = require("@prisma/adapter-pg");
-const workspaceId = "cmptsyujx0001flritxdrq84b";
+const workspaceId = process.env.SMOKE_WORKSPACE_ID;
 const nonce = `smoke-publication-${randomUUID()}`;
 const state = {
   nonce,
@@ -53,7 +53,8 @@ async function cleanup() {
     }
     if (state.saleId) {
       try {
-        await request(
+        const unpublished = await prisma.telegramAdSalePlacement.count({ where: { workspaceId, telegramAdSaleId: state.saleId, status: { in: ['DRAFT', 'RESERVED', 'SCHEDULED'] } } });
+        if (unpublished) await request(
           `/telegram-ad-sales/${state.saleId}/cancel-publications`,
           {},
         );
@@ -99,6 +100,7 @@ try {
     process.env.DATABASE_URL && process.env.JWT_SECRET,
     "Injected DATABASE_URL and JWT_SECRET required",
   );
+  requireThat(typeof workspaceId === "string" && /^[a-zA-Z0-9-]{12,80}$/.test(workspaceId), "Explicit workspace ID required");
   const channelIds = [
     process.env.SMOKE_AD_CHANNEL_ID,
     process.env.SMOKE_VP_CHANNEL_ID,

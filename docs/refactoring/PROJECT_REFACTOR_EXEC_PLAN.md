@@ -4,14 +4,14 @@ Updated: 2026-11-03
 
 ## 2026-11-13 Critical advertising and VP deadline isolation
 
-Implementation complete; release verification in progress in isolated checkout
+Released and production-verified in isolated checkout
 `codex/publication-reliability`, based on production main. Grace mapped runtime
 paths; Knuth/Parnas audited cost and structure; Turing reviewed integration.
 Independent deadline tasks, per-post fenced dispatch, operation-level durable
 outcomes, safe retries/reconciliation and actionable deduplicated notifications
 replace shared maintenance blocking and unsafe replay. VP initial LOCAL state,
 cancellation/end-time eligibility and independent retry of healthy sibling
-channels are covered. 217 focused tests pass; four real PostgreSQL concurrency/
+channels are covered. 218 focused tests pass; four real PostgreSQL concurrency/
 recovery tests pass separately. API types/build and new-file lint pass. Additive
 migration plus all existing migrations/schema verification pass on a disposable
 PostgreSQL database. Full API suite: 568 suites passed, 15 failed before fixing
@@ -19,7 +19,9 @@ its DB-dependent DI smoke fixture; other failures are outside this change.
 Architecture retains existing unrelated failures without increased allowances;
 MTProto shrinking-only ceiling lowered one line. See
 [publication reliability](../telegram/PUBLICATION_RELIABILITY.md) for business
-contract, remote uncertainty limits, runtime cost and live smoke workflow.
+contract, remote uncertainty limits, runtime cost and live smoke evidence. PRs #3/#4 are merged; production migration
+and health passed. The final private-channel smoke confirmed ad/VP acknowledgements
+in 4.178/4.543 seconds and both placement statuses; generated future work was cancelled.
 
 ## 2026-11-03 Site performance initiative — Publication Calendar first slice
 
