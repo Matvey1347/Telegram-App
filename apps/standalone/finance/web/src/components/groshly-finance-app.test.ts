@@ -40,6 +40,17 @@ const base = {
 };
 
 describe("groshlySnapshot", () => {
+  it("omits cancelled schedules while retaining active and paused payments", () => {
+    const payment = { id: "one", name: "Plan", amount: "10", accountId: "account-1", recurrence: "MONTHLY", nextOccurrenceAt: "2026-11-13T12:00:00.000Z", version: 1 };
+    const obligations = {
+      regularPayments: { items: [{ ...payment, id: "active", status: "ACTIVE" }, { ...payment, id: "paused", status: "PAUSED" }, { ...payment, id: "cancelled", status: "CANCELED" }], nextCursor: null },
+      debts: { items: [], nextCursor: null },
+      investments: { items: [], nextCursor: null },
+    } as unknown as NonNullable<Parameters<typeof groshlySnapshot>[0]["obligations"]>;
+    const snapshot = groshlySnapshot({ ...base, obligations }) as { recurring: Array<{ id: string }> };
+    expect(snapshot.recurring.map((item) => item.id)).toEqual(["active", "paused"]);
+  });
+
   it("uses the last confirmed rates after reopening the PWA", () => {
     writeFinanceRateCache({ rates: { UAH: 1, PLN: 11.2, USD: 42, EUR: 49 }, rateDate: "2026-10-28" });
     const snapshot = groshlySnapshot(base) as { rates: Record<string, number>; rateSource: string };

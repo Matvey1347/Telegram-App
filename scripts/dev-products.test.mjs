@@ -3,6 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import { localDatabaseEnvironment } from "./dev-database-environment.mjs";
 import {
   LOCAL_PRODUCTS,
   assertFinanceLocalProfile,
@@ -223,4 +224,20 @@ test("all tunnel routes each public web origin to its own same-origin API", () =
     ),
     {},
   );
+});
+
+test("local database badge reflects the effective API database URL", () => {
+  const directory = mkdtempSync(join(tmpdir(), "finance-db-environment-"));
+  const envFile = join(directory, ".env");
+  try {
+    writeFileSync(envFile, 'DATABASE_URL="postgresql://name:secret@localhost:5433/example"\n');
+    assert.equal(localDatabaseEnvironment({}, envFile), "local");
+    assert.equal(localDatabaseEnvironment({ DATABASE_URL: "postgresql://name:secret@cloud.example/db" }, envFile), "");
+    assert.equal(localDatabaseEnvironment({ DATABASE_URL: "postgresql://name:secret@[::1]/db" }, envFile), "local");
+    assert.equal(localDatabaseEnvironment({ DATABASE_URL: "not a valid url" }, envFile), "");
+    writeFileSync(envFile, "DATABASE_URL=postgresql://name:secret@cloud.example/db\n");
+    assert.equal(localDatabaseEnvironment({}, envFile), "");
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 });

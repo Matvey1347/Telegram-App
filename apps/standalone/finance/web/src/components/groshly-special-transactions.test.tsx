@@ -7,6 +7,7 @@ import { initial, today } from "@finance-web/groshly/data";
 const App = GroshlyApp as ComponentType<{
   initialData: ReturnType<typeof initial>;
   onSaveLedgerEntry?: (input: { draft: { categoryId?: string | null } }) => Promise<ReturnType<typeof initial>>;
+  onChangeRegularPayment?: (input: { id: string; action: string }) => Promise<ReturnType<typeof initial>>;
 }>;
 
 beforeEach(() => {
@@ -23,6 +24,66 @@ function snapshot() {
 }
 
 describe("Groshly special transactions", () => {
+  it("removes a cancelled recurring payment from the visible list", async () => {
+    const data = snapshot();
+    data.recurring = [{ ...data.recurring[0], id: "cancel-me", title: "Sample plan" }];
+    const next = { ...data, recurring: [] };
+    const change = vi.fn().mockResolvedValue(next);
+    render(<App initialData={data} onChangeRegularPayment={change} />);
+    fireEvent.click(screen.getByRole("link", { name: /Recurring payments/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Sample plan/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByRole("button", { name: /Sample plan/ })).not.toBeInTheDocument());
+    expect(change).toHaveBeenCalledWith({ id: "cancel-me", action: "cancel" });
+  });
+
+  it("keeps the payment visible when cancellation fails", async () => {
+    const data = snapshot();
+    data.recurring = [{ ...data.recurring[0], id: "keep-me", title: "Active plan" }];
+    const change = vi.fn().mockRejectedValue(new Error("unavailable"));
+    render(<App initialData={data} onChangeRegularPayment={change} />);
+    fireEvent.click(screen.getByRole("link", { name: /Recurring payments/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Active plan/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.getByText("Could not cancel payment")).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: /Active plan/ })).toBeInTheDocument();
+  });
+
+  it("filters debts by direction when switching tabs", () => {
+    const data = snapshot();
+    data.debts = [
+      { ...data.debts[0], id: "owed", name: "Alex", direction: "owed" },
+      { ...data.debts[0], id: "owe", name: "Sam", direction: "owe" },
+    ];
+    render(<App initialData={data} />);
+    fireEvent.click(screen.getByRole("link", { name: /Debts/ }));
+    expect(screen.getByRole("button", { name: /Debt details: Alex/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Debt details: Sam/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "I owe" }));
+    expect(screen.getByRole("button", { name: /Debt details: Sam/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Debt details: Alex/ })).not.toBeInTheDocument();
+  });
+
+  it("allows correcting a cross currency transfer after its source was emptied", async () => {
+    const data = snapshot();
+    data.accounts = [
+      { id: "source", name: "Source", emoji: "💵", balance: 0, currency: "USD" },
+      { id: "target", name: "Target", emoji: "💳", balance: 249.1, currency: "PLN" },
+    ];
+    data.rates = { UAH: 1, USD: 39.065435568, PLN: 10, EUR: 48.2 };
+    data.transactions = [{ id: "transfer", type: "transfer", title: "Exchange", amount: 249.1, currency: "USD", receivedAmount: 249.1, receivedCurrency: "PLN", fromId: "source", toId: "target", date: today() }] as unknown as typeof data.transactions;
+    const onSaveLedgerEntry = vi.fn().mockResolvedValue(data);
+    render(<App initialData={data} onSaveLedgerEntry={onSaveLedgerEntry} />);
+    fireEvent.click(screen.getByRole("button", { name: /Activity/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Exchange/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    fireEvent.click(screen.getByRole("button", { name: /Transfer money/ }));
+    await waitFor(() => expect(onSaveLedgerEntry).toHaveBeenCalledOnce());
+    expect(onSaveLedgerEntry.mock.calls[0][0].draft.receivedAmount).toBe(973.12);
+  });
+
   it("settles the AI preparation state after a simple message", async () => {
     render(<App initialData={snapshot()} />);
     fireEvent.click(screen.getByRole("button", { name: /AI/ }));
