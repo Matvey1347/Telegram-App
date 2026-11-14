@@ -50,6 +50,19 @@ describe('Telegram AI posting renderer', () => {
     ).toBe('Текст\n\n#правило');
   });
 
+  it('places only one hashtag next to the intact configured ending', () => {
+    const ending = '**Жіноча сила** ![🍃](tg://emoji?id=42)';
+    expect(renderTelegramAiPostingText('Текст #память #мозок', {
+      ending, hashtags: 'ending_inline',
+    })).toBe(`Текст\n\n${ending} | #память`);
+    expect(renderTelegramAiPostingText('Текст #память #мозок', {
+      hashtags: 'ending_inline',
+    })).toBe('Текст\n\n#память');
+    expect(renderTelegramAiPostingText('Текст', {
+      ending, hashtags: 'ending_inline',
+    })).toBe(`Текст\n\n${ending}`);
+  });
+
   it('keeps numeric hash tokens in the sentence and extracts only letter hashtags', () => {
     expect(
       renderTelegramAiPostingText(

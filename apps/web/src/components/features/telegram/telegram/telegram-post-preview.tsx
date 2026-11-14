@@ -641,13 +641,14 @@ function TelegramMessageBubble({
     </div>
   );
 }
-function EditableTelegramPreviewText({
+export function EditableTelegramPreviewText({
   value,
   formattedHtml,
   onChange,
   onUndo,
   onRedo,
   customEmojiPacks = [],
+  ariaLabel,
 }: {
   value: string;
   formattedHtml?: string | null;
@@ -655,6 +656,7 @@ function EditableTelegramPreviewText({
   onUndo?: () => void;
   onRedo?: () => void;
   customEmojiPacks?: TelegramCustomEmojiPackSummary[];
+  ariaLabel?: string;
 }) {
   const { t } = useI18n();
   const previewLabels = useMemo<PreviewLabels>(
@@ -678,7 +680,7 @@ function EditableTelegramPreviewText({
     null,
   );
   const usesExternalHistory = Boolean(onUndo && onRedo);
-  useTelegramCustomEmojiLottie(contentRef, value, customEmojiPacks);
+  const renderedPacksRef = useRef(customEmojiPacks);
 
   const isSelectionInsidePreview = useCallback(() => {
     const element = contentRef.current;
@@ -710,8 +712,37 @@ function EditableTelegramPreviewText({
       element.innerHTML = nextHtml;
       hasRenderedValueRef.current = true;
       lastMarkupRef.current = value;
+      renderedPacksRef.current = customEmojiPacks;
       return;
     }
+
+    // Hydrate emoji that were initially rendered before their packs arrived.
+    // Replace only emoji nodes so the user's text and selection stay intact.
+    if (
+      renderedPacksRef.current !== customEmojiPacks &&
+      lastMarkupRef.current === value
+    ) {
+      const rendered = document.createElement("div");
+      rendered.innerHTML = nextHtml;
+      const currentEmoji = element.querySelectorAll(
+        "[data-telegram-custom-emoji-id]",
+      );
+      const nextEmoji = rendered.querySelectorAll(
+        "[data-telegram-custom-emoji-id]",
+      );
+      if (currentEmoji.length === nextEmoji.length) {
+        currentEmoji.forEach((node, index) => {
+          const replacement = nextEmoji[index];
+          if (
+            node.getAttribute("data-telegram-custom-emoji-id") ===
+            replacement.getAttribute("data-telegram-custom-emoji-id")
+          ) {
+            node.replaceWith(replacement);
+          }
+        });
+      }
+    }
+    renderedPacksRef.current = customEmojiPacks;
 
     // An input updates the parent value synchronously. That echo is already
     // represented by the browser-owned contentEditable DOM, so replacing its
@@ -736,6 +767,8 @@ function EditableTelegramPreviewText({
     previewLabels,
     value,
   ]);
+
+  useTelegramCustomEmojiLottie(contentRef, value, customEmojiPacks);
 
   const applyMarkup = useCallback(
     (
@@ -1033,6 +1066,9 @@ function EditableTelegramPreviewText({
       <div
         ref={contentRef}
         contentEditable
+        role="textbox"
+        aria-label={ariaLabel}
+        aria-multiline="true"
         tabIndex={0}
         suppressContentEditableWarning
         className="telegram-preview-text whitespace-pre-wrap break-words text-[14px] leading-[1.3] text-[#f5f5f5] outline-none"

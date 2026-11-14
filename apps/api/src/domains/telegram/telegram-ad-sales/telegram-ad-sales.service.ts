@@ -536,6 +536,7 @@ export class TelegramAdSalesService {
     return {
       ...legacySettings,
       telegramUserId: crmPeers?.[0]?.telegramUserId ?? null,
+      photoUrl: crmPeers?.[0]?.photoUrl ?? null,
       status: legacyAdvertiserStatus(stage, hasActiveDeal),
       lifecycleStage: legacyAdvertiserLifecycleStage(stage),
       totalRevenueInPrimaryCurrency: decimalToString(

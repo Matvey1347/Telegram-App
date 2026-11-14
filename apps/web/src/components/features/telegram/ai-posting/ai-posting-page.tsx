@@ -22,6 +22,9 @@ import {
   telegramChannelsApi,
   telegramContentHypothesesApi,
 } from "@/lib/api";
+import { AiPostingChat } from "./ai-posting-chat";
+import { useEndingEmojiPacks } from "./use-ending-emoji-packs";
+import { aiPostingCategoryIcons, aiPostingPreferenceIcons } from "./ai-posting-entity-icons";
 import { AiPostingSourcesSection } from "./ai-posting-sources-section";
 import { AiPostingStructureSection } from "./ai-posting-structure-section";
 import { AiPostingImagesSection } from "./ai-posting-images-section";
@@ -48,8 +51,10 @@ import {
 } from "./ai-posting-settings-tabs";
 import { TelegramCustomEmojiPickerModal } from "../telegram/telegram-custom-emoji-picker-modal";
 import { TelegramCustomEmojiPacksModal } from "../telegram/telegram-custom-emoji-packs-modal";
+import { EditableTelegramPreviewText } from "../telegram/telegram-post-preview";
 import { customEmojiToken } from "../telegram/telegram-custom-emoji";
 import { workspaceKeys } from "@/lib/query-keys";
+import type { ResolvedEmoji } from "@telegram-system/shared";
 import type { TelegramCustomEmoji } from "@telegram-system/shared";
 import type { TelegramChannelSelectOption } from "@/lib/api-types/telegram/telegram-channels";
 
@@ -118,6 +123,7 @@ const initial: Config = {
 };
 const key = (id: string) => ["telegram-ai-posting", id] as const;
 type SettingsResponse = {
+  mediaPreferenceIcons?: Record<string, ResolvedEmoji>;
   channel?: { photoUrl?: string | null };
   configuration: Config;
   autopilotEnabled: boolean;
@@ -166,13 +172,6 @@ export function AiPostingPage({
     queryFn: () => telegramChannelsApi.postGroupSummaries(channelId),
     enabled: Boolean(channelId),
   });
-  const endingEmojiPacks = useQuery({
-    queryKey: workspaceKeys.telegramCustomEmojiPacks(),
-    queryFn: () => telegramChannelsApi.customEmojiPacks(),
-    enabled:
-      endingEmojiPacksOpen ||
-      (endingEmojiPickerOpen && endingPremiumEmojiRequested),
-  });
   const settings = useQuery<SettingsResponse>({
     queryKey: key(channelId),
     queryFn: async () =>
@@ -208,6 +207,18 @@ export function AiPostingPage({
       )
       ?.find((channel) => channel.id === channelId)?.photoUrl ?? null;
   const config = configs[channelId] ?? settings.data?.configuration ?? initial;
+  const endingEmojiPacks = useQuery({
+    queryKey: workspaceKeys.telegramCustomEmojiPacks(),
+    queryFn: () => telegramChannelsApi.customEmojiPacks(),
+    enabled:
+      /!\[[^\]\n]*\]\(tg:\/\/emoji\?id=\d+\)/.test(config.ending) ||
+      endingEmojiPacksOpen ||
+      (endingEmojiPickerOpen && endingPremiumEmojiRequested),
+  });
+  const endingEmoji = useEndingEmojiPacks(
+    config.ending,
+    endingEmojiPacks.data?.packs,
+  );
   const defaultCategorySelection =
     !settings.data?.configured &&
     !selectionTouched[channelId]?.categories &&
@@ -404,6 +415,9 @@ export function AiPostingPage({
                 key={channelId}
                 channelId={channelId}
                 channelTitle={channelTitle}
+                customEmojiPacks={endingEmoji.packs}
+                categoryIcons={aiPostingCategoryIcons(hypotheses.data ?? [])}
+                preferenceIcons={aiPostingPreferenceIcons(effectiveConfig.mediaPreferences, settings.data?.mediaPreferenceIcons)}
                 dailyPostCount={Math.min(5, postsPerDayMax)}
                 settingsReady={settingsReady}
                 onRememberImageRule={rememberImageRule}
@@ -417,6 +431,7 @@ export function AiPostingPage({
                 value={settingsTab}
                 onChange={setSettingsTab}
               />
+              <div hidden={settingsTab !== "chat"}><AiPostingChat key={channelId} channelId={channelId} active={settingsTab === "chat"} settingsReady={settingsReady} /></div>
               <div hidden={settingsTab !== "context"}>
                 <>
                   <Card className={section}>
@@ -519,12 +534,28 @@ export function AiPostingPage({
                     </div>
                     <div className="grid gap-3 md:grid-cols-2">
                       <FormField label="Постоянная концовка">
-                        <Textarea
-                          value={config.ending}
-                          onChange={(e) => patch({ ending: e.target.value })}
-                          rows={2}
-                          placeholder="Текст, добавляемый в конец публикаций"
-                        />
+                        <div className="min-h-[60px] rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 focus-within:border-blue-500 [&_[role=textbox]]:min-h-[40px]">
+                          <EditableTelegramPreviewText
+                            value={config.ending}
+                            onChange={(ending) => patch({ ending })}
+                            customEmojiPacks={
+                              endingEmojiPacks.data?.packs ?? []
+                            }
+                            ariaLabel="Постоянная концовка"
+                          />
+                        </div>
+                        {endingEmoji.failed && (
+                          <p className="mt-1 text-xs text-amber-300">
+                            Не удалось загрузить Premium-эмодзи.{" "}
+                            <button
+                              type="button"
+                              className="underline"
+                              onClick={endingEmoji.retry}
+                            >
+                              Повторить
+                            </button>
+                          </p>
+                        )}
                         <div className="mt-2 space-y-1">
                           <Button
                             type="button"
@@ -542,12 +573,14 @@ export function AiPostingPage({
                       </FormField>
                       <FormField label="Хэштеги">
                         <CustomSelect
+                          ariaLabel="Хэштеги"
                           value={config.hashtags}
                           onChange={(hashtags) => patch({ hashtags })}
                           options={[
                             { value: "disabled", label: "Отключены" },
                             { value: "start", label: "В начале публикации" },
                             { value: "end", label: "В конце публикации" },
+                            { value: "ending_inline", label: "Один хэштег рядом с концовкой" },
                           ]}
                         />
                       </FormField>

@@ -2,6 +2,7 @@ import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { api, streamProgressAction } from "@/lib/api";
 import { renderWithProviders } from "@/test/render-with-providers";
+import type { TestRun } from "./ai-posting-test-console-model";
 import { AiPostingTestConsole } from "./ai-posting-test-console";
 
 vi.mock("@/lib/api", () => ({
@@ -9,6 +10,14 @@ vi.mock("@/lib/api", () => ({
   api: { get: vi.fn(), post: vi.fn(), delete: vi.fn() },
   streamProgressAction: vi.fn(),
 }));
+vi.mock(
+  "@/components/features/telegram/telegram/telegram-post-send-to-bot-button",
+  () => ({
+    TelegramPostSendToBotButton: () => (
+      <button>Отправить в Telegram-бота</button>
+    ),
+  }),
+);
 vi.mock(
   "@/components/features/telegram/telegram/telegram-post-preview",
   () => ({
@@ -171,6 +180,8 @@ describe("AiPostingTestConsole", () => {
     expect(
       await screen.findByText("Пишу текст · публикация 1/4"),
     ).toBeInTheDocument();
+    expect(screen.getByText("Публикации: 0 из 4")).toBeInTheDocument();
+    expect(screen.getByText("Текст: в процессе")).toBeInTheDocument();
     finish?.({ status: "COMPLETED" });
   });
 
@@ -254,6 +265,9 @@ describe("AiPostingTestConsole", () => {
         settingsReady
         onRememberImageRule={onRememberImageRule}
       />,
+    );
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Написать правки" }),
     );
     fireEvent.change(
       await screen.findByRole("textbox", { name: "Правка медиа" }),
@@ -449,7 +463,9 @@ describe("AiPostingTestConsole", () => {
     );
 
     expect(await screen.findByText("Идея: A useful topic")).toBeInTheDocument();
-    expect(screen.getByText("Медиа отсутствует")).toBeInTheDocument();
+    expect(
+      screen.getByText(/Текст готов, но медиа не найдено/),
+    ).toBeInTheDocument();
   });
 
   it("marks all three publications ready when each has a valid persisted image", async () => {
@@ -476,12 +492,12 @@ describe("AiPostingTestConsole", () => {
     expect(
       await screen.findByText("Все 3 публикации готовы с медиа."),
     ).toBeInTheDocument();
-    expect(screen.getAllByText("Медиа готово")).toHaveLength(1);
+    expect(screen.getByText(/Рубрика:/)).toBeInTheDocument();
     fireEvent.click(
       screen.getByRole("button", { name: "Следующая публикация" }),
     );
     expect(await screen.findByText("Публикация 2 из 3")).toBeInTheDocument();
-    expect(screen.getAllByText("Медиа готово")).toHaveLength(1);
+    expect(screen.getByText(/Рубрика:/)).toBeInTheDocument();
   });
 
   it("identifies the incomplete publication in a partial three-image preview", async () => {
@@ -508,7 +524,7 @@ describe("AiPostingTestConsole", () => {
     expect(
       await screen.findByText("2 из 3 публикаций готовы с медиа."),
     ).toBeInTheDocument();
-    expect(screen.getAllByText("Медиа готово")).toHaveLength(1);
+    expect(screen.getByText(/Рубрика:/)).toBeInTheDocument();
     fireEvent.click(
       screen.getByRole("button", { name: "Следующая публикация" }),
     );
@@ -516,7 +532,100 @@ describe("AiPostingTestConsole", () => {
       screen.getByRole("button", { name: "Следующая публикация" }),
     );
     expect(await screen.findByText("Публикация 3 из 3")).toBeInTheDocument();
-    expect(screen.getByText("Медиа отсутствует")).toBeInTheDocument();
+    expect(
+      screen.getByText(/Текст готов, но медиа не найдено/),
+    ).toBeInTheDocument();
+  });
+
+  it.each([
+    ["openai-image-generation", "создано с помощью AI"],
+    ["openverse", "найденное изображение"],
+    [null, "неизвестен"],
+  ])("shows media provenance %s without guessing", async (sourceId, label) => {
+    const run: TestRun = { ...previewRun(), sourceDiagnostics: undefined };
+    run.publications[0].imageUrl = "https://cdn.test/image.jpg";
+    run.publications[0].imageSourceId = sourceId;
+    run.publications[0].mediaPreference = { id: "pref-a", name: "Visual" };
+    vi.mocked(api.get).mockResolvedValue({ data: [run] });
+    renderWithProviders(
+      <AiPostingTestConsole
+        channelId="channel-1"
+        channelTitle="Channel"
+        settingsReady
+        categoryIcons={{ general: { type: "unicode", value: "🚀" } }}
+        preferenceIcons={{ "pref-a": { type: "unicode", value: "🎨" } }}
+      />,
+    );
+    expect(
+      await screen.findByText(`Источник медиа: ${label}`),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Рубрика:/)).toHaveTextContent("general");
+    expect(screen.getByText(/Предпочтение:/)).toHaveTextContent("Visual");
+    expect(screen.getByRole("button", { name: "Одобрить" })).toHaveClass(
+      "bg-blue-600",
+    );
+  });
+
+  it("keeps a single publication compact and opens corrections on demand", async () => {
+    vi.mocked(api.get).mockResolvedValue({ data: [previewRun()] });
+    renderWithProviders(
+      <AiPostingTestConsole
+        channelId="channel-1"
+        channelTitle="Channel"
+        settingsReady
+      />,
+    );
+    expect(
+      await screen.findByRole("button", { name: "Отправить в Telegram-бота" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Предыдущая публикация" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("textbox", { name: "Правка текста" }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Написать правки" }));
+    expect(
+      screen.getByRole("textbox", { name: "Правка текста" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getAllByRole("button", { name: "Надиктовать правки" }),
+    ).toHaveLength(3);
+  });
+
+  it("retries failed media on the existing publication instead of creating another run", async () => {
+    const run: TestRun = { ...previewRun(), sourceDiagnostics: undefined };
+    run.failures = [
+      { topic: run.publications[0].topic, code: "AI_REQUEST_BUDGET_EXCEEDED" },
+    ];
+    run.publications[0].mediaReadiness = "FAILED";
+    run.publications[0].mediaFailureCode = "AI_REQUEST_BUDGET_EXCEEDED";
+    vi.mocked(api.get).mockResolvedValue({ data: [run] });
+    renderWithProviders(
+      <AiPostingTestConsole
+        channelId="channel-1"
+        channelTitle="Channel"
+        settingsReady
+      />,
+    );
+    expect(
+      await screen.findByText(/расчётный максимум запроса/),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", {
+        name: "Повторить генерацию (новый запуск)",
+      }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Повторить создание медиа" }),
+    );
+    await waitFor(() =>
+      expect(api.post).toHaveBeenCalledWith(
+        "/telegram-channels/channel-1/ai-posting/test-runs/run-diagnostics/review",
+        expect.objectContaining({ index: 0, action: "regenerate-image" }),
+      ),
+    );
+    expect(streamProgressAction).not.toHaveBeenCalled();
   });
 
   it("shows a safe failed-image state and keeps explicit image regeneration available", async () => {
@@ -543,7 +652,7 @@ describe("AiPostingTestConsole", () => {
     );
 
     fireEvent.click(
-      await screen.findByRole("button", { name: "Создать медиа" }),
+      await screen.findByRole("button", { name: "Повторить создание медиа" }),
     );
     await waitFor(() =>
       expect(api.post).toHaveBeenCalledWith(
@@ -551,10 +660,7 @@ describe("AiPostingTestConsole", () => {
         expect.objectContaining({ index: 0, action: "regenerate-image" }),
       ),
     );
-    expect(
-      screen.getByText("Не удалось подготовить медиа"),
-    ).toBeInTheDocument();
-    expect(screen.getByText(/Текст сохранён в превью/)).toBeInTheDocument();
+    expect(screen.getByText(/Не удалось сохранить медиа/)).toBeInTheDocument();
     expect(
       screen.queryByText("AI_POSTING_IMAGE_STORAGE_FAILED"),
     ).not.toBeInTheDocument();
@@ -781,10 +887,41 @@ describe("AiPostingTestConsole", () => {
 
     fireEvent.click(
       await screen.findByRole("button", {
-        name: "Перегенерировать публикацию",
+        name: "Повторить генерацию (новый запуск)",
       }),
     );
 
+    await waitFor(() =>
+      expect(streamProgressAction).toHaveBeenCalledWith(
+        "/telegram-channels/channel-retry/ai-posting/test-runs/run-diagnostics/regenerate-failure/stream",
+        { failureIndex: 0, expectedVersion: 1 },
+        expect.any(Function),
+      ),
+    );
+  });
+  it("allows retry when a run failed before a topic was selected", async () => {
+    vi.mocked(api.get).mockResolvedValue({
+      data: [
+        {
+          ...previewRun(),
+          status: "FAILED",
+          publications: [],
+          failures: [{ code: "AI_POSTING_GENERATION_FAILED" }],
+        },
+      ],
+    });
+    renderWithProviders(
+      <AiPostingTestConsole
+        channelId="channel-retry"
+        channelTitle="Channel"
+        settingsReady
+      />,
+    );
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "Повторить генерацию (новый запуск)",
+      }),
+    );
     await waitFor(() =>
       expect(streamProgressAction).toHaveBeenCalledWith(
         "/telegram-channels/channel-retry/ai-posting/test-runs/run-diagnostics/regenerate-failure/stream",

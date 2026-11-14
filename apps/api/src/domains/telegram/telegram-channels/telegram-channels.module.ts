@@ -6,6 +6,10 @@ import { TelegramChannelRemindersService } from './telegram-channel-reminders.se
 import { TelegramChannelRemindersDueService } from './telegram-channel-reminders-due.service';
 import { TelegramChannelsController } from './telegram-channels.controller';
 import { TelegramAiPostingController } from './telegram-ai-posting.controller';
+import { TelegramAiPostingChatController } from './telegram-ai-posting-chat.controller';
+import { TelegramAiPostingChatService } from './telegram-ai-posting-chat.service';
+import { TelegramAiPostingChatSourcesService } from './telegram-ai-posting-chat-sources.service';
+import { TelegramAiPostingChatMediaService } from './telegram-ai-posting-chat-media.service';
 import { TelegramAiPostingService } from './telegram-ai-posting.service';
 import { TelegramAiPostingGeneratorService } from './telegram-ai-posting-generator.service';
 import { TelegramAiPostingSourceService } from './telegram-ai-posting-source.service';
@@ -139,6 +143,7 @@ import { TelegramChannelTrafficAttributionService } from './telegram-channel-tra
   controllers: [
     TelegramChannelsController,
     TelegramAiPostingController,
+    TelegramAiPostingChatController,
     TelegramAiPostingRhythmController,
     TelegramAiPostingPerformanceControlController,
     TelegramChannelRemindersController,
@@ -157,6 +162,9 @@ import { TelegramChannelTrafficAttributionService } from './telegram-channel-tra
   providers: [
     TelegramChannelsService,
     TelegramAiPostingService,
+    TelegramAiPostingChatService,
+    TelegramAiPostingChatSourcesService,
+    TelegramAiPostingChatMediaService,
     TelegramAiPostingGeneratorService,
     TelegramAiPostingSourceService,
     TelegramAiPostingStructureService,

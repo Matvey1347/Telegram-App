@@ -21,6 +21,9 @@ import {
 export class AiWorkspaceConfigurationDto {
   @ValidateIf((_o, v: unknown) => v !== undefined)
   @IsBoolean()
+  aiPostingUnlimited?: boolean;
+  @ValidateIf((_o, v: unknown) => v !== undefined)
+  @IsBoolean()
   enabled?: boolean;
   @ValidateIf((_o, v: unknown) => v !== undefined)
   @IsBoolean()

@@ -202,6 +202,8 @@ export type AdCampaign = AdCampaignAnalyticsFields & {
   promoIds?: string[];
   telegramInviteLinkId?: string | null;
   inviteLinkIds?: string[];
+  inviteLinkWindows?: Array<{ inviteLinkId: string; fromDate: string; joinedCount?: number | null; pendingCount?: number | null; computedAt?: string | null }>;
+  periodCountsUnavailable?: boolean;
   botInviteLinkIds?: string[];
   trackingLinkKind?: string;
   trackingChannelIds?: string[];
@@ -218,6 +220,7 @@ export type AdCampaign = AdCampaignAnalyticsFields & {
   >;
   botRequestPerformance?: {
     total: number;
+    estimated?: boolean;
     points: Array<{
       syncedAt: string;
       joinedCount: number;

@@ -10,14 +10,20 @@ import { useI18n } from "@/providers/i18n-provider";
 export function TelegramPostSendToBotButton({
   draft,
   disabled = false,
+  recoveryKey = "telegram-post-editor-preview",
+  variant = "secondary",
+  className,
 }: {
   draft: TelegramSystemBotPostDraft;
   disabled?: boolean;
+  recoveryKey?: string;
+  variant?: "primary" | "secondary";
+  className?: string;
 }) {
   const { t } = useI18n();
   const botFlow = useTelegramSystemBotPostFlow({
     mode: "single",
-    recoveryKey: "telegram-post-editor-preview",
+    recoveryKey,
     importContext: "Telegram post editor",
     previewDraft: draft,
     errorCopy: {
@@ -35,7 +41,8 @@ export function TelegramPostSendToBotButton({
     <div className="contents">
       <Button
         type="button"
-        variant="secondary"
+        variant={variant}
+        className={className}
         disabled={
           disabled ||
           !hasContent ||
@@ -52,11 +59,11 @@ export function TelegramPostSendToBotButton({
             : t("telegram.posts.editor.sendToBot")}
       </Button>
       {hasInvalidInlineButtons ? (
-        <p className="w-full text-right text-xs text-rose-400">
+        <p className="col-span-full w-full text-right text-xs text-rose-400">
           {t("telegram.posts.editor.error.inlineButtonUrl")}
         </p>
       ) : botFlow.error ? (
-        <p className="w-full text-right text-xs text-rose-400">
+        <p className="col-span-full w-full text-right text-xs text-rose-400">
           {botFlow.error}
         </p>
       ) : null}

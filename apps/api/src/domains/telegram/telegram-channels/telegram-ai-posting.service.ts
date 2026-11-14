@@ -5,6 +5,7 @@ import {
   Optional,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { TELEGRAM_AI_POSTING_MAX_MEDIA_REFERENCES } from '@telegram-system/shared';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { WorkspaceService } from '../../../common/workspace.service';
 import { notifyScheduledTaskDueWorkChanged } from '../../../common/scheduled-task-wake-notifier';
@@ -17,6 +18,7 @@ import {
   telegramAiPostingLanguageName,
 } from './telegram-ai-posting-language';
 import { TelegramAiPostingSourceService } from './telegram-ai-posting-source.service';
+import { resolveAiPostingPreferenceIcons } from './telegram-ai-posting-preference-icons';
 import { writeTelegramAiPostingSettingsVersion } from './telegram-ai-posting-settings-version.store';
 
 const defaults = {
@@ -132,6 +134,11 @@ export class TelegramAiPostingService {
           .join('\n');
     return {
       channel,
+      mediaPreferenceIcons: await resolveAiPostingPreferenceIcons(
+        this.prisma,
+        workspaceId,
+        stored,
+      ),
       detectedLanguage,
       configuration: {
         ...defaults,
@@ -230,7 +237,7 @@ export class TelegramAiPostingService {
         !/^\d{4}-\d{2}-\d{2}$/.test(configuration.historyFrom))
     )
       throw new BadRequestException('A valid history date is required');
-    if (!['disabled', 'start', 'end'].includes(String(configuration.hashtags)))
+    if (!['disabled', 'start', 'end', 'ending_inline'].includes(String(configuration.hashtags)))
       throw new BadRequestException('Invalid hashtag placement');
     if (!['found', 'ai', 'hybrid'].includes(String(configuration.imageMode)))
       throw new BadRequestException('Invalid image mode');
@@ -266,7 +273,8 @@ export class TelegramAiPostingService {
               (typeof preference.emojiIconId !== 'string' ||
                 preference.emojiIconId.length > 100)) ||
             !Array.isArray(preference.references) ||
-            preference.references.length > 4
+            preference.references.length >
+              TELEGRAM_AI_POSTING_MAX_MEDIA_REFERENCES
           )
             return true;
           return preference.references.some((value) => {
@@ -287,7 +295,8 @@ export class TelegramAiPostingService {
     if (
       configuration.imageReferenceUrls !== undefined &&
       (!Array.isArray(configuration.imageReferenceUrls) ||
-        configuration.imageReferenceUrls.length > 4 ||
+        configuration.imageReferenceUrls.length >
+          TELEGRAM_AI_POSTING_MAX_MEDIA_REFERENCES ||
         configuration.imageReferenceUrls.some((value) => {
           if (typeof value !== 'string' || value.length > 2000) return true;
           try {

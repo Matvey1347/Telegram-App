@@ -3,16 +3,19 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { TelegramSystemBotConfigService } from './telegram-system-bot-config.service';
+import { TelegramSystemBotNotificationAvatarService } from './telegram-system-bot-notification-avatar.service';
 
 @Injectable()
 export class TelegramSystemBotNotificationConnectionsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: TelegramSystemBotConfigService,
+    @Optional() private readonly avatars?: TelegramSystemBotNotificationAvatarService,
   ) {}
 
   async notificationGroupStatus(workspaceId: string, userId: string) {
@@ -22,11 +25,15 @@ export class TelegramSystemBotNotificationConnectionsService {
       select: {
         telegramNotificationChatId: true,
         telegramNotificationChatTitle: true,
+        telegramNotificationLinkTokenHash: true,
+        telegramNotificationLinkExpiresAt: true,
       },
     });
     return {
       connected: Boolean(workspace.telegramNotificationChatId),
       chatTitle: workspace.telegramNotificationChatTitle,
+      photoUrl: await this.avatars?.get('group', workspace.telegramNotificationChatId) ?? null,
+      linkPending: Boolean(workspace.telegramNotificationLinkTokenHash && workspace.telegramNotificationLinkExpiresAt && workspace.telegramNotificationLinkExpiresAt > new Date()),
       botUsername: this.config.username,
       runtimeEnvironment: this.config.environment,
       botRuntimes: this.config.dashboardRuntimes().map((runtime) => ({
@@ -109,6 +116,9 @@ export class TelegramSystemBotNotificationConnectionsService {
         telegramNotificationUserId: true,
         telegramNotificationUserChatId: true,
         telegramNotificationUserName: true,
+        telegramNotificationAccountLinkTokenHash: true,
+        telegramNotificationAccountLinkExpiresAt: true,
+        telegramNotificationAccountLinkTelegramUserId: true,
       },
     });
     return {
@@ -118,6 +128,8 @@ export class TelegramSystemBotNotificationConnectionsService {
         ? workspace.telegramNotificationUserName.slice(1)
         : null,
       displayName: workspace.telegramNotificationUserName,
+      photoUrl: await this.avatars?.get('user', workspace.telegramNotificationUserId) ?? null,
+      linkPending: Boolean(workspace.telegramNotificationAccountLinkTokenHash && workspace.telegramNotificationAccountLinkExpiresAt && workspace.telegramNotificationAccountLinkExpiresAt > new Date() && !workspace.telegramNotificationAccountLinkTelegramUserId),
       botUsername: this.config.username,
       runtimeEnvironment: this.config.environment,
       botRuntimes: this.dashboardRuntimes(),

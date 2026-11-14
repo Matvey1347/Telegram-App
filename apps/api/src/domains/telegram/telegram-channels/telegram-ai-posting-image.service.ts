@@ -1,4 +1,4 @@
-import { Injectable, ServiceUnavailableException } from '@nestjs/common';
+import { HttpException, Injectable } from '@nestjs/common';
 import { randomInt, randomUUID } from 'node:crypto';
 import sharp from 'sharp';
 import { AiGateway } from '../../operations/ai/ai-gateway';
@@ -86,7 +86,14 @@ export class TelegramAiPostingImageService {
   async prepareChannelAvatar(url: unknown) {
     if (typeof url !== 'string' || !url.trim()) return null;
     try {
-      const bytes = await this.sources.downloadImage(url);
+      const data =
+        /^data:image\/(?:png|jpeg|webp);base64,([A-Za-z0-9+/]+={0,2})$/i.exec(
+          url,
+        );
+      const bytes = data
+        ? Buffer.from(data[1], 'base64')
+        : await this.sources.downloadImage(url);
+      if (!bytes.length || bytes.length > 5 * 1024 * 1024) return null;
       const { width, height } = await sharp(bytes, {
         limitInputPixels: 40_000_000,
       }).metadata();
@@ -139,6 +146,12 @@ export class TelegramAiPostingImageService {
         ? await this.prepareChannelAvatar(input.channelAvatarUrl)
         : (input.channelAvatar ?? null)
       : null;
+    if (input.watermarkChannelAvatar && !avatar)
+      return {
+        image: null,
+        readiness: 'FAILED',
+        failureCode: 'AI_POSTING_IMAGE_AVATAR_UNAVAILABLE',
+      };
     const searchTurn =
       input.imageMode === 'hybrid' &&
       (input.aiPosting?.publicationIndex ?? 0) % 2 === 0;
@@ -230,7 +243,7 @@ export class TelegramAiPostingImageService {
         category: 'TELEGRAM_POSTING_IMAGE',
         operationId: `${new Date().toISOString().slice(0, 10)}:${randomUUID()}`,
         mode: input.mode ?? 'MANUAL',
-        input: `Create a clean editorial illustration for a Telegram post about ${input.topic}. ${input.prompt}. ${referenceImage ? 'Use the attached reference sheet as visual guidance for style, palette and composition. Create an original image; do not copy its exact subject or layout.' : ''} No text, watermarks, recognizable copyrighted characters, or logos.`,
+        input: `Create a clean editorial illustration for a Telegram post about ${input.topic}. ${input.prompt}. ${referenceImage ? 'Use the attached reference sheet as visual guidance for style, palette and composition. Create an original image; do not copy its exact subject or layout.' : ''} Avoid unnecessary text or watermarks; follow the requested visual direction and provided reference images.`,
         businessObjectId: input.channelId,
         aiPosting: input.aiPosting,
         ...(referenceImage
@@ -239,9 +252,7 @@ export class TelegramAiPostingImageService {
       });
     } catch (error) {
       const response =
-        error instanceof ServiceUnavailableException
-          ? error.getResponse()
-          : undefined;
+        error instanceof HttpException ? error.getResponse() : undefined;
       const errorCode =
         response && typeof response === 'object' && 'message' in response
           ? (response as { message?: unknown }).message
@@ -249,7 +260,10 @@ export class TelegramAiPostingImageService {
       return {
         image: null,
         readiness: 'FAILED',
-        failureCode: 'AI_POSTING_IMAGE_PROVIDER_FAILED',
+        failureCode:
+          errorCode === 'AI_REQUEST_BUDGET_EXCEEDED'
+            ? 'AI_REQUEST_BUDGET_EXCEEDED'
+            : 'AI_POSTING_IMAGE_PROVIDER_FAILED',
         ...(errorCode === 'AI_SETTLEMENT_UNCERTAIN'
           ? { costUnknown: true }
           : {}),

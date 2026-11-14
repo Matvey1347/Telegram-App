@@ -15,6 +15,7 @@ import { acquirePostgresTransactionLock } from '../../../prisma/postgres-advisor
 import { AiModelRegistry } from './ai-model-registry';
 import { AiDeploymentConfig } from './ai-deployment-config.service';
 import { budgetPeriods, reservationCost } from './ai-pricing';
+import { aiTranscriptionWavSeconds } from './ai-transcription-audio';
 
 export type AiExecutionRequest = {
   userId: string;
@@ -25,6 +26,9 @@ export type AiExecutionRequest = {
   input: string;
   /** Server-only, transient image; never persisted in operation records. */
   image?: { mime: 'image/jpeg'; data: Buffer };
+  chatPlan?: boolean;
+  revisionDraft?: boolean;
+  audio?: { mime: 'audio/wav'; data: Buffer };
   /** Restricts this experimental manual media batch to one approved source. */
   mediaPilotSourceId?: string;
   /** Trusted server instructions; never populated from a client override. */
@@ -53,6 +57,8 @@ export const operationFingerprint = (request: AiExecutionRequest) =>
         request.category,
         request.mode,
         request.input,
+        request.chatPlan === true,
+        request.revisionDraft === true,
         request.businessObjectId ?? null,
         request.aiPosting
           ? {
@@ -68,6 +74,12 @@ export const operationFingerprint = (request: AiExecutionRequest) =>
           ? [
               request.image.mime,
               createHash('sha256').update(request.image.data).digest('hex'),
+            ]
+          : []),
+        ...(request.audio
+          ? [
+              request.audio.mime,
+              createHash('sha256').update(request.audio.data).digest('hex'),
             ]
           : []),
         ...(request.mediaPilotSourceId ? [request.mediaPilotSourceId] : []),
@@ -117,11 +129,30 @@ export class AiAdmissionService {
   }
   async admit(request: AiExecutionRequest) {
     const now = new Date();
+    if (request.chatPlan && (request.category !== 'TELEGRAM_POSTING_PLAN' || request.mode !== 'MANUAL' || !request.aiPosting || request.image || request.audio)) throw new BadRequestException('AI_CHAT_PLAN_INVALID');
+    if (request.revisionDraft && (request.category !== 'TELEGRAM_POSTING_TEXT' || request.mode !== 'MANUAL' || !request.aiPosting || request.image || request.audio || request.chatPlan)) throw new BadRequestException('AI_REVISION_DRAFT_INVALID');
+    const audioInvalid =
+      request.audio !== undefined &&
+      (request.category !== 'TELEGRAM_POSTING_PLAN' ||
+        request.mode !== 'MANUAL' ||
+        !request.aiPosting ||
+        !!request.image ||
+        !!request.durableVersion ||
+        !!request.mediaPilotSourceId ||
+        request.audio.mime !== 'audio/wav' ||
+        aiTranscriptionWavSeconds(request.audio.data) === null);
     const imagePayloadInvalid =
       request.image !== undefined &&
-      (!['LEAD_AD_CLASSIFICATION', 'TELEGRAM_POSTING_IMAGE'].includes(
-        request.category,
-      ) ||
+      (![
+        'LEAD_AD_CLASSIFICATION',
+        'TELEGRAM_POSTING_IMAGE',
+        'TELEGRAM_POSTING_PLAN',
+      ].includes(request.category) ||
+        (request.category === 'TELEGRAM_POSTING_PLAN' &&
+          (request.mode !== 'MANUAL' ||
+            !request.aiPosting ||
+            request.durableVersion !== undefined ||
+            request.mediaPilotSourceId !== undefined)) ||
         (request.category === 'LEAD_AD_CLASSIFICATION' &&
           request.durableVersion !== 'lead-media-vision-v1') ||
         (request.category === 'TELEGRAM_POSTING_IMAGE' &&
@@ -159,6 +190,7 @@ export class AiAdmissionService {
         Buffer.byteLength(request.instructions ?? '', 'utf8') >
         256 * 1024 ||
       imagePayloadInvalid ||
+      audioInvalid ||
       (request.durableVersion === 'lead-media-vision-v1' && !request.image) ||
       (request.image !== undefined &&
         request.category === 'LEAD_AD_CLASSIFICATION' &&
@@ -222,15 +254,28 @@ export class AiAdmissionService {
       const configured = this.registry.resolve(request.category, persisted);
       if (!this.registry.supports(request.category, configured.modelId))
         throw new ConflictException('AI_MODEL_CATEGORY_UNSUPPORTED');
-      const config =
-        request.image && request.category === 'LEAD_AD_CLASSIFICATION'
+      const config = request.audio
+        ? {
+            ...configured,
+            modelId: 'gpt-transcribe',
+            schemaId: 'telegram_posting_chat_audio_v1',
+            promptVersion: 'telegram-posting-chat-audio-v1',
+          }
+        : request.image && request.category === 'LEAD_AD_CLASSIFICATION'
           ? {
               ...configured,
               schemaId: this.registry.schema(request.category, true).id,
               promptVersion: 'lead-media-vision-v1',
               mediaPilotSourceId: request.mediaPilotSourceId,
             }
-          : configured;
+          : request.image && request.category === 'TELEGRAM_POSTING_PLAN'
+            ? {
+                ...configured,
+                modelId: 'gpt-5.4-mini-2026-03-17',
+                schemaId: this.registry.schema(request.category, true).id,
+                promptVersion: 'telegram-posting-chat-vision-v1',
+              }
+            : configured;
       if (
         !this.deployment.enabled ||
         !this.deployment.configured ||
@@ -238,18 +283,27 @@ export class AiAdmissionService {
         !config.enabled
       )
         throw new ServiceUnavailableException('AI_DISABLED');
+      const unlimitedPosting =
+        workspace.aiPostingUnlimited === true &&
+        request.aiPosting !== undefined &&
+        [
+          'TELEGRAM_POSTING_PLAN',
+          'TELEGRAM_POSTING_TEXT',
+          'TELEGRAM_POSTING_REVIEW',
+          'TELEGRAM_POSTING_IMAGE',
+        ].includes(request.category);
       if (
-        !workspace.dailyBudget ||
-        !workspace.monthlyBudget ||
-        !workspace.maxRequestCost
+        !unlimitedPosting &&
+        (!workspace.dailyBudget ||
+          !workspace.monthlyBudget ||
+          !workspace.maxRequestCost)
       )
         throw new ConflictException('AI_BUDGET_REQUIRED');
       if (
         request.mode === 'AUTOMATIC' &&
         (!workspace.automaticEnabled ||
           !config.automaticEnabled ||
-          !config.dailyBudget ||
-          !config.monthlyBudget)
+          (!unlimitedPosting && (!config.dailyBudget || !config.monthlyBudget)))
       )
         throw new ConflictException('AI_AUTOMATIC_DISABLED');
       if (
@@ -263,13 +317,13 @@ export class AiAdmissionService {
         config.concurrencyLimit > 8
       )
         throw new ConflictException('AI_CONFIG_INVALID');
-      const price = this.registry.price(config.modelId);
+      const price = request.audio
+        ? this.registry.transcriptionPrice()
+        : this.registry.price(config.modelId);
       if (!price) throw new ConflictException('AI_MODEL_UNPRICED');
-      const reservedCost = reservationCost(
-        price,
-        config.maxInputTokens,
-        config.maxOutputTokens,
-      );
+      const reservedCost = request.audio
+        ? new Prisma.Decimal('0.0045')
+        : reservationCost(price, config.maxInputTokens, config.maxOutputTokens);
       if (request.image && request.category === 'LEAD_AD_CLASSIFICATION') {
         // The existing workspace advisory lock also fences settlement and concurrent admissions.
         // Uncertain and still-running operations retain their entire reservation.
@@ -296,10 +350,11 @@ export class AiAdmissionService {
           ? config.maxRequestCost
           : workspace.maxRequestCost;
       if (
-        reservedCost.gt(requestLimit) ||
-        (request.category !== 'TELEGRAM_POSTING_IMAGE' &&
-          config.maxRequestCost &&
-          reservedCost.gt(config.maxRequestCost))
+        !unlimitedPosting &&
+        (reservedCost.gt(requestLimit!) ||
+          (request.category !== 'TELEGRAM_POSTING_IMAGE' &&
+            config.maxRequestCost &&
+            reservedCost.gt(config.maxRequestCost)))
       )
         throw new ConflictException('AI_REQUEST_BUDGET_EXCEEDED');
       const [active, categoryActive, unresolved] = await Promise.all([
@@ -369,6 +424,7 @@ export class AiAdmissionService {
                   ? config.dailyBudget
                   : config.monthlyBudget;
           if (
+            !unlimitedPosting &&
             limit !== null &&
             limit !== undefined &&
             bucket.spent
@@ -385,6 +441,7 @@ export class AiAdmissionService {
       const operation = await tx.aiOperation.create({
         data: {
           workspaceId: request.workspaceId,
+          source: this.deployment.usageSource,
           operationId: request.operationId,
           actorUserId: request.userId,
           category: request.category,

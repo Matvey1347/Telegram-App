@@ -5,6 +5,7 @@ export type Publication = {
   title: string;
   text: string;
   imageUrl: string | null;
+  mediaPreference?: { id: string; name: string } | null;
   imageSourceId: string | null;
   savedPostId: string | null;
   status: string;
@@ -96,12 +97,17 @@ export const failureMessage: Record<string, string> = {
   AI_POSTING_TELEGRAM_LENGTH: "Текст не помещается в подпись Telegram к медиа.",
   AI_POSTING_DUPLICATE_CONTENT:
     "Текст слишком похож на уже опубликованный или запланированный.",
+  AI_REQUEST_BUDGET_EXCEEDED:
+    "Медиа не создано: расчётный максимум запроса превышает лимит AI. Проверьте лимит стоимости запроса в настройках AI.",
+  AI_POSTING_IMAGE_REFERENCE_UNAVAILABLE:
+    "Не удалось загрузить референсы выбранного предпочтения. Проверьте их и повторите создание медиа.",
+  AI_POSTING_IMAGE_AVATAR_UNAVAILABLE: "Не удалось загрузить аватар канала для изображения. Проверьте аватар канала и повторите создание медиа.",
   AI_POSTING_IMAGE_PROVIDER_FAILED: "Не удалось создать медиа у AI-провайдера.",
   AI_POSTING_IMAGE_STORAGE_FAILED: "Не удалось сохранить медиа в медиатеке.",
   AI_POSTING_NO_DRAFTS_CREATED:
     "AI не смог подготовить ни одной публикации. Откройте запуск ниже: там указаны причины и замечания проверки.",
   AI_POSTING_GENERATION_FAILED:
-    "Генерация не завершилась. Откройте запуск ниже, чтобы увидеть этап и точную причину.",
+    "Генерация не завершилась. Причина не была сохранена; попробуйте перегенерировать публикацию.",
 };
 
 export function resolveTestConsoleError(error: unknown) {

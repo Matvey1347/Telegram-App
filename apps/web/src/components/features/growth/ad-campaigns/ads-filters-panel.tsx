@@ -4,7 +4,7 @@ import type { Dispatch, SetStateAction } from "react";
 import type { TelegramChannel, TelegramChannelNetwork } from "@/lib/api";
 import { useI18n } from "@/providers/i18n-provider";
 import { Card, DateRangeInput, FormField, Input } from "@/components/ui/primitives";
-import { AdsChannelScopeFilter } from "./ads-channel-scope-filter";
+import { AdsChannelScopeFilter, type useAdsChannelScopeState } from "./ads-channel-scope-filter";
 import { AdCampaignSortMenu, type AdCampaignSort } from "./ad-campaign-sort-menu";
 
 type AdsViewMode = "campaigns" | "hypotheses" | "promos";
@@ -14,6 +14,7 @@ export function AdsFiltersPanel({
   networks,
   channels,
   onChannelScopeChange,
+  channelScopeState,
   search,
   setSearch,
   resetPage,
@@ -28,6 +29,7 @@ export function AdsFiltersPanel({
   networks: TelegramChannelNetwork[];
   channels: TelegramChannel[];
   onChannelScopeChange: (channelIds: string[]) => void;
+  channelScopeState: ReturnType<typeof useAdsChannelScopeState>;
   search: string;
   setSearch: Dispatch<SetStateAction<string>>;
   resetPage: () => void;
@@ -45,6 +47,7 @@ export function AdsFiltersPanel({
         <AdsChannelScopeFilter
           networks={networks}
           channels={channels}
+          state={channelScopeState}
           onChange={(channelIds) => {
             onChannelScopeChange(channelIds);
             resetPage();

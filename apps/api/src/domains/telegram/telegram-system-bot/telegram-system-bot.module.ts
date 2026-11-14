@@ -9,6 +9,7 @@ import { TransfersModule } from '../../finance/transfers/transfers.module';
 import { TelegramSystemBotConfigService } from './telegram-system-bot-config.service';
 import { TelegramSystemBotConnectionsService } from './telegram-system-bot-connections.service';
 import { TelegramSystemBotNotificationConnectionsService } from './telegram-system-bot-notification-connections.service';
+import { TelegramSystemBotNotificationAvatarService } from './telegram-system-bot-notification-avatar.service';
 import { TelegramSystemBotController } from './telegram-system-bot.controller';
 import { TelegramSystemBotDomainGatewayService } from './telegram-system-bot-domain-gateway.service';
 import { TelegramSystemBotHandlerService } from './telegram-system-bot-handler.service';
@@ -46,6 +47,7 @@ import { TelegramSystemBotPostImportService } from './telegram-system-bot-post-i
     TelegramSystemBotConfigService,
     TelegramSystemBotConnectionsService,
     TelegramSystemBotNotificationConnectionsService,
+    TelegramSystemBotNotificationAvatarService,
     TelegramSystemBotDomainGatewayService,
     TelegramSystemBotHandlerService,
     TelegramSystemBotRuntimeService,

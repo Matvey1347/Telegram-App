@@ -151,15 +151,12 @@ function orderSql(sort: AdCampaignQueryDto['sort']) {
   if (sort === 'joined_desc' || sort === 'joined_asc') {
     const direction =
       sort === 'joined_asc' ? Prisma.sql`ASC` : Prisma.sql`DESC`;
-    return Prisma.sql`COALESCE(
-      NULLIF((
-        SELECT SUM(link."joinedCount")
-        FROM "TelegramInviteLink" link
-        WHERE link."adCampaignId" = campaign."id"
-          AND link."workspaceId" = campaign."workspaceId"
-      ), 0),
-      campaign."joinedCount"
-    ) ${direction}, campaign."id" ${direction}`;
+    return Prisma.sql`(SELECT CASE WHEN COUNT(*) = 0 THEN campaign."joinedCount"
+      WHEN COUNT(*) FILTER (WHERE w."id" IS NOT NULL AND w."joinedCount" IS NULL) > 0 THEN NULL
+      ELSE SUM(CASE WHEN w."id" IS NULL THEN link."joinedCount" ELSE w."joinedCount" END) END
+      FROM "TelegramInviteLink" link LEFT JOIN "AdCampaignInviteLinkWindow" w
+        ON w."adCampaignId" = campaign."id" AND w."inviteLinkId" = link."id"
+      WHERE link."adCampaignId" = campaign."id" AND link."workspaceId" = campaign."workspaceId") ${direction} NULLS LAST, campaign."id" ${direction}`;
   }
   return Prisma.sql`COALESCE(campaign."placementDate", campaign."startedAt", campaign."createdAt") DESC, campaign."id" DESC`;
 }

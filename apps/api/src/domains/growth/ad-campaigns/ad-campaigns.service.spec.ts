@@ -412,6 +412,7 @@ describe('AdCampaignsService campaign creation without a cost', () => {
 describe('AdCampaignListReadService bot request performance', () => {
   it('uses the saved bot-link baseline instead of counting the link lifetime', async () => {
     const prisma = {
+      adCampaignBotInviteLink: { findMany: jest.fn().mockResolvedValue([]) },
       telegramInviteLinkSnapshot: {
         findMany: jest.fn().mockResolvedValue([
           {
@@ -484,6 +485,7 @@ describe('AdCampaignListReadService bot request performance', () => {
 
   it('keeps all campaign bot links in the result after the placement ends', async () => {
     const prisma = {
+      adCampaignBotInviteLink: { findMany: jest.fn().mockResolvedValue([]) },
       telegramInviteLinkSnapshot: {
         findMany: jest.fn().mockResolvedValue([
           {

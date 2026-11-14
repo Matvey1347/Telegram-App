@@ -77,6 +77,10 @@ export class TelegramBotApiClient {
     return this.call<{ name?: string }>(token, 'getMyName', {}, 'GET');
   }
 
+  async getChat(token: string, chatId: string) {
+    return this.call<{ photo?: { small_file_id?: string } }>(token, 'getChat', { chat_id: chatId });
+  }
+
   async setMyName(token: string, name: string) {
     return this.call<boolean>(token, 'setMyName', { name });
   }

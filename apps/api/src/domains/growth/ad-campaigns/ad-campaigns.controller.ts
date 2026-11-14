@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Query,
   Res,
   UseGuards,
@@ -17,6 +18,8 @@ import { JwtAuthGuard } from '../../../common/jwt-auth.guard';
 import { AdCampaignsService } from './ad-campaigns.service';
 import { AdCampaignListReadService } from './ad-campaign-list-read.service';
 import { StreamResponseService } from '../../../common/stream/stream-response.service';
+import { AdCampaignInviteWindowsService } from './ad-campaign-invite-windows.service';
+import { SetAdCampaignInviteWindowsDto } from './ad-campaign-invite-windows.dto';
 import {
   AdCampaignAnalyticsInputDto,
   CreateAdCampaignDto,
@@ -31,6 +34,7 @@ export class AdCampaignsController {
     private service: AdCampaignsService,
     private readonly listReadService: AdCampaignListReadService,
     private readonly streamResponse: StreamResponseService,
+    private readonly inviteWindows: AdCampaignInviteWindowsService,
   ) {}
 
   @Get()
@@ -68,6 +72,21 @@ export class AdCampaignsController {
     @Query('limit') limit?: string,
   ) {
     return this.service.inviteLinkHistory(user.sub, id, Number(limit || 120));
+  }
+
+  @Get(':id/invite-link-windows')
+  inviteLinkWindows(@CurrentUser() user: JwtUser, @Param('id') id: string) {
+    return this.inviteWindows.list(user.sub, id);
+  }
+
+  @Put(':id/invite-link-windows')
+  setInviteLinkWindows(@CurrentUser() user: JwtUser, @Param('id') id: string, @Body() dto: SetAdCampaignInviteWindowsDto) {
+    return this.inviteWindows.set(user.sub, id, dto);
+  }
+
+  @Post(':id/invite-link-windows/refresh')
+  refreshInviteLinkWindows(@CurrentUser() user: JwtUser, @Param('id') id: string) {
+    return this.inviteWindows.refresh(user.sub, id);
   }
 
   @Get(':id/admission-view-analytics')

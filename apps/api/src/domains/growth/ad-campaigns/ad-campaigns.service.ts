@@ -4,10 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import {
-  sumInviteLinkAttributedSubscribers,
-  sumInviteLinkJoinedSubscribers,
-} from '../../../common/analytics/invite-link-metrics';
+import { campaignDetailMetrics } from './ad-campaign-detail-metrics';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { WorkspaceService } from '../../../common/workspace.service';
 import { iconToResolvedEmoji } from '../../../common/icons/resolved-emoji';
@@ -1926,44 +1923,7 @@ export class AdCampaignsService {
   }
 
   private async campaignMetrics(campaign: any) {
-    const inviteLinks = Array.isArray(campaign.inviteLinks)
-      ? campaign.inviteLinks
-      : campaign.id
-        ? await this.prisma.telegramInviteLink.findMany({
-            where: {
-              workspaceId: campaign.workspaceId,
-              adCampaignId: campaign.id,
-            },
-            select: { joinedCount: true, requestedCount: true },
-          })
-        : [];
-    const linkedJoinedCount = sumInviteLinkJoinedSubscribers(inviteLinks);
-    const linkedRequestedCount =
-      sumInviteLinkAttributedSubscribers(inviteLinks) - linkedJoinedCount;
-    const joinedCount =
-      linkedJoinedCount > 0
-        ? linkedJoinedCount
-        : Number(campaign.joinedCount ?? 0);
-    const requestedCount =
-      linkedJoinedCount > 0
-        ? linkedRequestedCount
-        : Number(campaign.requestedCount ?? 0);
-    const attributedCount = joinedCount + requestedCount;
-    const costAmount = Number(campaign.price || 0);
-
-    return {
-      joinedCount,
-      requestedCount,
-      attributedCount,
-      leftCount: null,
-      netGrowth: null,
-      costAmount,
-      currency: campaign.currency,
-      costPerJoinedSubscriber:
-        attributedCount > 0 ? costAmount / attributedCount : null,
-      costPerNetSubscriber: null,
-      attributionSource: 'mtproto_invite_link_usage',
-    };
+    return campaignDetailMetrics(this.prisma, campaign);
   }
 
   async analytics(userId: string, id: string) {

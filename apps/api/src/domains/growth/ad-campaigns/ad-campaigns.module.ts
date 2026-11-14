@@ -8,12 +8,14 @@ import { AdCampaignsController } from './ad-campaigns.controller';
 import { AdCampaignsService } from './ad-campaigns.service';
 import { AdCampaignListReadService } from './ad-campaign-list-read.service';
 import { GrowthInviteLinkReservationService } from '../invite-link-reservation.service';
+import { AdCampaignInviteWindowsService } from './ad-campaign-invite-windows.service';
 
 @Module({
   imports: [FinanceCategoriesModule, forwardRef(() => TelegramChannelsModule)],
   controllers: [AdCampaignsController],
   providers: [
     AdCampaignsService,
+    AdCampaignInviteWindowsService,
     AdCampaignListReadService,
     AdCampaignAnalyticsService,
     AdCampaignAdmissionAnalyticsService,

@@ -162,7 +162,10 @@ export function renderTelegramAiPostingText(
     options.hashtags === 'start' && hashtags.length
       ? [hashtags.join(' '), markup].filter(Boolean).join('\n\n')
       : markup;
-  const withEnding = [body, ending].filter(Boolean).join('\n\n');
+  const inlineEnding = options.hashtags === 'ending_inline' && hashtags.length
+    ? [ending, hashtags[0]].filter(Boolean).join(' | ')
+    : ending;
+  const withEnding = [body, inlineEnding].filter(Boolean).join('\n\n');
   return options.hashtags === 'end' && hashtags.length
     ? [withEnding, hashtags.join(' ')].filter(Boolean).join('\n\n')
     : withEnding;

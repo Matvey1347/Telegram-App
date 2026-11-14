@@ -72,6 +72,8 @@ export type TelegramSystemBotConnectionStatus = {
 
 export type TelegramSystemBotNotificationGroupStatus = {
   connected: boolean;
+  photoUrl?: string | null;
+  linkPending?: boolean;
   chatTitle: string | null;
   botUsername: string | null;
   runtimeEnvironment?: "LOCAL" | "PRODUCTION" | null;
@@ -93,6 +95,8 @@ export type TelegramSystemBotNotificationGroupLink = {
 
 export type TelegramSystemBotNotificationAccountStatus = {
   connected: boolean;
+  photoUrl?: string | null;
+  linkPending?: boolean;
   telegramUserId?: string | null;
   telegramUsername: string | null;
   displayName: string | null;

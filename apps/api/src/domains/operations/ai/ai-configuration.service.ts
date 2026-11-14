@@ -21,13 +21,14 @@ import { AiModelRegistry } from './ai-model-registry';
 export const AI_WORKSPACE_DEFAULTS: AiWorkspaceConfiguration = {
   enabled: false,
   automaticEnabled: false,
+  aiPostingUnlimited: false,
   dailyBudget: null,
   monthlyBudget: null,
   maxRequestCost: null,
   warningPercent: 80,
 };
 const moneyFields = new Set(['dailyBudget', 'monthlyBudget', 'maxRequestCost']);
-const booleans = new Set(['enabled', 'automaticEnabled']);
+const booleans = new Set(['enabled', 'automaticEnabled', 'aiPostingUnlimited']);
 const bounds: Record<string, [number, number]> = {
   warningPercent: [1, 100],
   maxInputTokens: [64, 32768],
@@ -124,6 +125,7 @@ export class AiConfigurationService {
         ? {
             enabled: row.enabled,
             automaticEnabled: row.automaticEnabled,
+            aiPostingUnlimited: row.aiPostingUnlimited,
             dailyBudget: row.dailyBudget?.toFixed(12) ?? null,
             monthlyBudget: row.monthlyBudget?.toFixed(12) ?? null,
             maxRequestCost: row.maxRequestCost?.toFixed(12) ?? null,

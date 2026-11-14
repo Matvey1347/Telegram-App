@@ -1,6 +1,6 @@
 "use client";
-
-import { useState, type MutableRefObject } from "react";
+import { useRef, useState, type MutableRefObject } from "react";
+import { trackingLinkTitle } from "./cross-promotion-auto-title";
 import { ChevronDown, Plus, Trash2 } from "lucide-react";
 import type {
   CrossPromotionPlan,
@@ -187,10 +187,10 @@ export function CrossPromotionPlanView({
     error,
     drafts,
   } = state;
+  const autoTitle = useRef<string | null>(null);
   const useFirstTrackingLinkAsTitle = (link?: TelegramInviteLinkOption) => {
-    if (title.trim() || !link?.name.trim()) return;
-    setTitle(link.name);
-  };
+    const next = trackingLinkTitle(title, autoTitle.current, link?.name);
+    if (next) { autoTitle.current = next; setTitle(next); } };
   const publishedPrimaryMediaCount =
     initial?.status === "ACTIVE"
       ? normalizeTelegramPostMediaItems(
@@ -362,7 +362,7 @@ export function CrossPromotionPlanView({
             <FormField label="Promotion title" required>
               <Input
                 value={title}
-                onChange={(event) => setTitle(event.target.value)}
+                onChange={(event) => { autoTitle.current = null; setTitle(event.target.value); }}
                 placeholder="Mentor ↔ Partner channel"
               />
             </FormField>
@@ -749,7 +749,7 @@ export function CrossPromotionPlanView({
               }}
               onResolved={(channelId, resolved) => {
                 resolvedTargets.current.set(channelId, resolved);
-                useFirstTrackingLinkAsTitle(resolved.inviteLink);
+                if (channelId === "target:0") useFirstTrackingLinkAsTitle(resolved.inviteLink);
               }}
               outboundMode={outboundMode}
               onOutboundModeChange={(value) => {

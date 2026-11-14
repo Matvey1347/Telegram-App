@@ -60,6 +60,25 @@ describe('TelegramAiPostingSourceService', () => {
     });
   });
 
+  it('discovers only verified same-origin news pages', async () => {
+    const { service } = make();
+    jest.spyOn(service as any, 'fetchPublic').mockResolvedValue(Buffer.from('<a href="/news/">News</a><a href="https://other.example/news/">External</a>'));
+    const check = jest.spyOn(service, 'checkWebSource').mockResolvedValue({ ok: true, available: true, message: 'ok' });
+    await expect(service.discoverNewsPages('https://company.example/')).resolves.toEqual(['https://company.example/news/']);
+    expect(check).toHaveBeenCalledTimes(1);
+  });
+
+  it('includes bounded article content and public URLs from selected official news pages', async () => {
+    const { service, prisma } = make();
+    prisma.telegramManagedPost.findMany.mockResolvedValue([]);
+    const fetch = jest.spyOn(service as any, 'fetchPublic').mockImplementation(async (url: string) => Buffer.from(url.endsWith('/news/') ? '<a href="/news/first?token=secret">First story</a><a href="https://other.example/news/evil">Other</a>' : '<article>Specific verifiable fact</article>'));
+    const result = await service.collect({ workspaceId: 'w', channelId: 'c', config: { historyMode: 'none', sources: [{ id: 'news', type: 'website', value: 'https://company.example/news/', enabled: true, useImages: false, followNewsArticles: true }] } });
+    expect(result.sourceContexts.join(' ')).toContain('Specific verifiable fact');
+    expect(result.sourceContexts.join(' ')).toContain('https://company.example/news/first');
+    expect(result.sourceContexts.join(' ')).not.toContain('token=secret');
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
   it('distinguishes a reachable empty feed from an unavailable one', async () => {
     const { service } = make();
     jest
@@ -485,7 +504,7 @@ describe('TelegramAiPostingSourceService', () => {
       .spyOn(service as any, 'fetchPublic')
       .mockResolvedValue(
         Buffer.from(
-          '<rss><channel><item><title>First story</title><description><![CDATA[<p>Details &amp; context</p>]]></description></item><item><title>Second story</title><description>Another update</description></item></channel></rss>',
+          '<rss><channel><item><title>First story</title><link>https://news.example/story?token=private</link><pubDate>Mon, 09 Nov 2026 10:00:00 GMT</pubDate><description><![CDATA[<p>Details &amp; context</p>]]></description></item><item><title>Second story</title><description>Another update</description></item></channel></rss>',
         ),
       );
 
@@ -507,6 +526,9 @@ describe('TelegramAiPostingSourceService', () => {
 
     expect(result.sourceContexts.join('\n')).toContain('title: First story');
     expect(result.sourceContexts.join('\n')).toContain('Details & context');
+    expect(result.sourceContexts.join('\n')).toContain('source: https://news.example/story');
+    expect(result.sourceContexts.join('\n')).toContain('pubDate: Mon, 09 Nov 2026');
+    expect(result.sourceContexts.join('\n')).not.toContain('token=private');
     expect(result.sourceContexts.join('\n')).toContain('title: Second story');
     expect(result.sourceDiagnostics).toEqual([
       expect.objectContaining({ sourceId: 'feed', status: 'COLLECTED' }),

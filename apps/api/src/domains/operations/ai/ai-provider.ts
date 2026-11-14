@@ -14,6 +14,7 @@ export type AiProviderOutcome = {
   generationStarted: boolean;
   providerModel: string | null;
   providerRequestId: string | null;
+  audioDurationSeconds?: number | null;
 };
 const safeIdentifier = (value: unknown, max: number) =>
   typeof value === 'string' &&
@@ -35,6 +36,9 @@ export class AiProvider {
     callerSignal?: AbortSignal,
     instructions?: string,
     image?: { mime: 'image/jpeg'; data: Buffer },
+    audio?: { mime: 'audio/wav'; data: Buffer },
+    chatPlan = false,
+    revisionDraft = false,
   ): Promise<AiProviderOutcome> {
     let generationStarted = false;
     const controller = new AbortController();
@@ -51,6 +55,62 @@ export class AiProvider {
     });
     try {
       if (controller.signal.aborted) return empty('ABORTED');
+      if (audio) {
+        if (
+          config.category !== 'TELEGRAM_POSTING_PLAN' ||
+          config.modelId !== 'gpt-transcribe'
+        )
+          return empty('AUDIO_MODEL_UNSUPPORTED');
+        const body = new FormData();
+        body.set('model', config.modelId);
+        body.set('response_format', 'json');
+        body.set(
+          'file',
+          new Blob([new Uint8Array(audio.data)], { type: audio.mime }),
+          'voice.wav',
+        );
+        generationStarted = true;
+        const response = await this.post(
+          '/audio/transcriptions',
+          body,
+          controller.signal,
+        );
+        const metadata = {
+          usage: null,
+          generationStarted,
+          providerModel: config.modelId,
+          providerRequestId: response.requestId,
+        };
+        if (!response.ok)
+          return {
+            ...metadata,
+            errorCategory: `PROVIDER_${this.failure(response.status)}`,
+          };
+        const usage = aiRecord(response.body.usage);
+        const seconds =
+          usage.type === 'duration' &&
+          typeof usage.seconds === 'number' &&
+          Number.isFinite(usage.seconds) &&
+          usage.seconds >= 0 &&
+          usage.seconds <= 60
+            ? usage.seconds
+            : null;
+        if (
+          typeof response.body.text !== 'string' ||
+          !response.body.text.trim()
+        )
+          return {
+            ...metadata,
+            audioDurationSeconds: seconds,
+            errorCategory: 'AUDIO_OUTPUT_INVALID',
+          };
+        return {
+          ...metadata,
+          audioDurationSeconds: seconds,
+          result: { reply: response.body.text.trim() },
+          errorCategory: null,
+        };
+      }
       if (
         Buffer.byteLength(input, 'utf8') +
           Buffer.byteLength(instructions ?? '', 'utf8') >
@@ -61,6 +121,8 @@ export class AiProvider {
         image &&
         !(
           (config.category === 'LEAD_AD_CLASSIFICATION' &&
+            config.modelId === 'gpt-5.4-mini-2026-03-17') ||
+          (config.category === 'TELEGRAM_POSTING_PLAN' &&
             config.modelId === 'gpt-5.4-mini-2026-03-17') ||
           config.category === 'TELEGRAM_POSTING_IMAGE'
         )
@@ -115,7 +177,7 @@ export class AiProvider {
           errorCategory: null,
         };
       }
-      const schema = this.registry.schema(config.category, Boolean(image));
+      const schema = this.registry.schema(config.category, Boolean(image), chatPlan, revisionDraft);
       const payload = {
         model: config.modelId,
         input: image
@@ -210,7 +272,7 @@ export class AiProvider {
       } catch {
         return { ...metadata, errorCategory: 'OUTPUT_INVALID_JSON' };
       }
-      if (!this.registry.validate(config.category, result, Boolean(image)))
+      if (!this.registry.validate(config.category, result, Boolean(image), chatPlan, revisionDraft))
         return { ...metadata, errorCategory: 'OUTPUT_SCHEMA_INVALID' };
       return { ...metadata, result, errorCategory: null };
     } catch {

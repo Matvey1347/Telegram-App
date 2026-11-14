@@ -1,20 +1,22 @@
 import sharp from 'sharp';
+import { TELEGRAM_AI_POSTING_MAX_MEDIA_REFERENCES } from '@telegram-system/shared';
 
-const MAX_REFERENCE_COUNT = 4;
 const MAX_REFERENCE_BYTES = 2 * 1024 * 1024;
 
 export async function createTelegramAiPostingReferenceSheet(
   urls: string[],
   download: (url: string) => Promise<Buffer>,
 ) {
-  const selected = urls.slice(0, MAX_REFERENCE_COUNT);
+  const selected = urls.slice(0, TELEGRAM_AI_POSTING_MAX_MEDIA_REFERENCES);
   if (!selected.length) return null;
   const inputs = await Promise.all(selected.map(download));
   if (
     inputs.some((bytes) => !bytes.length || bytes.length > MAX_REFERENCE_BYTES)
   )
     throw new Error('AI_POSTING_IMAGE_REFERENCE_INVALID');
-  const tileSize = selected.length === 1 ? 1024 : 512;
+  const columns = selected.length === 1 ? 1 : selected.length <= 4 ? 2 : 3;
+  const tileSize = columns === 1 ? 1024 : 512;
+  const canvasSize = tileSize * columns;
   const tiles = await Promise.all(
     inputs.map((bytes) =>
       sharp(bytes, { limitInputPixels: 40_000_000 })
@@ -29,13 +31,13 @@ export async function createTelegramAiPostingReferenceSheet(
   );
   const composites = tiles.map((input, index) => ({
     input,
-    left: selected.length === 1 ? 0 : (index % 2) * tileSize,
-    top: selected.length === 1 ? 0 : Math.floor(index / 2) * tileSize,
+    left: (index % columns) * tileSize,
+    top: Math.floor(index / columns) * tileSize,
   }));
   return sharp({
     create: {
-      width: 1024,
-      height: 1024,
+      width: canvasSize,
+      height: canvasSize,
       channels: 3,
       background: { r: 238, g: 238, b: 238 },
     },

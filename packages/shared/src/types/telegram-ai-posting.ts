@@ -1,3 +1,18 @@
+export const TELEGRAM_AI_POSTING_MAX_MEDIA_REFERENCES = 8;
+
+export type TelegramAiPostingChatMessage = { role: 'user' | 'assistant'; text: string; suggestedTopic?: string };
+export type TelegramAiPostingChatAction = {
+  kind: 'setup' | 'revision';
+  status: 'completed' | 'failed';
+  message: string;
+};
+export type TelegramAiPostingChatReply = {
+  reply: string;
+  actions: TelegramAiPostingChatAction[];
+  suggestedTopic: string | null;
+  revisedPublication: { runId: string; version: number; publication: { title: string; text: string; imageUrl: string | null } } | null;
+};
+
 export type TelegramAiPostingAnalytics = {
   channelId: string;
   currency: 'USD';

@@ -32,7 +32,10 @@ export function managedPostIdentityCandidateWhere(
         scheduledAt: { lte: now },
         AND: [
           {
-            OR: [{ scheduleMode: null }, { scheduleMode: { not: 'BATCH' } }],
+            OR: [
+              { scheduleMode: null },
+              { scheduleMode: { notIn: ['BATCH', 'LOCAL'] } },
+            ],
           },
         ],
       },
@@ -50,7 +53,10 @@ function managedPostUnverifiedIdentityCandidateWhere(
     scheduledAt: { lte: now },
     AND: [
       {
-        OR: [{ scheduleMode: null }, { scheduleMode: { not: 'BATCH' } }],
+        OR: [
+          { scheduleMode: null },
+          { scheduleMode: { notIn: ['BATCH', 'LOCAL'] } },
+        ],
       },
     ],
   };
@@ -101,7 +107,10 @@ export function managedPostIdentityReadyWhere(
         scheduledAt: { lte: now },
         AND: [
           {
-            OR: [{ scheduleMode: null }, { scheduleMode: { not: 'BATCH' } }],
+            OR: [
+              { scheduleMode: null },
+              { scheduleMode: { notIn: ['BATCH', 'LOCAL'] } },
+            ],
           },
         ],
         OR: [

@@ -49,23 +49,35 @@ export function AdSaleDealPlacementActions({
       }),
     [productsByChannelId, sale.placements],
   );
+  const commonSelectedFormat = useMemo(() => {
+    const names = sale.placements.map((placement) => {
+      const productId = placement.telegramAdProductId;
+      return productsByChannelId[placement.telegramChannelId]?.find(
+        (product) => product.id === productId,
+      )?.name ?? "";
+    });
+    return names.length && names[0] && names.every((name) => name === names[0])
+      ? names[0]
+      : "";
+  }, [productsByChannelId, sale.placements]);
   const canEditSharedPost =
     Boolean(onSharedPost) &&
     sale.placements.length > 1 &&
     sale.placements.every(
       (placement) => placement.managedPostId && placement.managedPost,
     );
+  const selectedFormat = formatName || commonSelectedFormat;
   const hasChanges = Boolean(formatName || dateChanged || timeChanged);
 
   return (
-    <div className="flex w-full flex-col gap-2 sm:w-auto sm:items-end">
-      <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-end">
+    <div className="flex w-full flex-col gap-2">
+      <div className="grid w-full grid-cols-2 gap-2 lg:grid-cols-[minmax(9rem,1fr)_minmax(8rem,1fr)_minmax(6rem,0.7fr)_auto_auto] lg:items-end">
         {formats.length ? (
-          <div className="min-w-36">
+          <div className="min-w-0">
             <span className="mb-1 block text-xs text-neutral-400">Format</span>
             <CustomSelect
               aria-label="Format for all placements"
-              value={formatName}
+              value={selectedFormat}
               onChange={setFormatName}
               options={[
                 { value: "", label: "Format for all" },
@@ -77,7 +89,7 @@ export function AdSaleDealPlacementActions({
             />
           </div>
         ) : null}
-        <label className="min-w-32 flex-1 space-y-1">
+        <label className="min-w-0 space-y-1">
           <span className="block text-xs text-neutral-400">Date for all</span>
           <DateInput
             id={`ad-sale-date-for-all-${sale.id}`}
@@ -90,7 +102,7 @@ export function AdSaleDealPlacementActions({
             className="h-10 min-h-0 w-full"
           />
         </label>
-        <label className="w-28 space-y-1">
+        <label className="min-w-0 space-y-1">
           <span className="block text-xs text-neutral-400">Time for all</span>
           <TimeInput
             aria-label="Time for all"
@@ -99,11 +111,12 @@ export function AdSaleDealPlacementActions({
               setTime(event.target.value);
               setTimeChanged(true);
             }}
-            className="h-10"
+            className="h-10 w-full"
           />
         </label>
         <Button
-          variant="secondary"
+          className="w-full sm:w-auto"
+          variant="primary"
           disabled={
             !hasChanges ||
             saving ||
@@ -123,15 +136,15 @@ export function AdSaleDealPlacementActions({
             Apply all ({sale.placements.length})
           </span>
         </Button>
+        {canEditSharedPost ? (
+          <Button className="w-full lg:w-auto" onClick={onSharedPost}>
+            <span className="inline-flex items-center gap-2">
+              <Pencil size={16} aria-hidden="true" />
+              Edit shared post
+            </span>
+          </Button>
+        ) : null}
       </div>
-      {canEditSharedPost ? (
-        <Button className="w-full sm:w-auto" onClick={onSharedPost}>
-          <span className="inline-flex items-center gap-2">
-            <Pencil size={16} aria-hidden="true" />
-            Edit shared post
-          </span>
-        </Button>
-      ) : null}
     </div>
   );
 }

@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { GroshlyApp } from "@finance-web/groshly/main";
 import { readFinanceRateCache } from "@finance-web/groshly/rate-cache";
 import { GroshlyLoadingScreen } from "@finance-web/components/groshly-loading-screen";
+import { recordInvestmentMovement, type InvestmentMovement } from "@finance-web/components/groshly-investment-movement";
 import { useTelegramMiniAppBootstrap } from "@consumer-finance/web/components/hooks/use-telegram-mini-app-bootstrap";
 import { ConsumerFinanceLogin } from "@consumer-finance/web/components/app/consumer-finance-login";
 import { useFinanceBotBranding } from "@consumer-finance/web/components/hooks/use-finance-bot-branding";
@@ -36,6 +37,9 @@ const GroshlyRoot = GroshlyApp as ComponentType<{
   faviconLightUrl?: string;
   telegramAuthenticated: boolean;
   onRefresh: () => Promise<GroshlySnapshot>;
+  onSaveInvestmentMovement: (input: InvestmentMovement) => Promise<GroshlySnapshot>;
+  onEditInvestment: (input: { id: string; name: string; emoji: string }) => Promise<GroshlySnapshot>;
+  onArchiveInvestment: (id: string) => Promise<GroshlySnapshot>;
   onCloseInvestment: (input: {
     id: string;
     closedAt: string;
@@ -88,12 +92,22 @@ const GroshlyRoot = GroshlyApp as ComponentType<{
     kind: "transactions" | "analytics" | "debts" | "recurring" | "investments",
   ) => Promise<GroshlySnapshot>;
   onOpenInvestment: (id: string) => Promise<{
+    id: string;
+    name: string;
+    emoji: string;
+    currency: string;
+    invested: number;
+    returned: number;
+    value: number;
     status: string;
     closedAt: string;
     description: string;
+    historyPartial?: boolean;
     events: Array<{
       id: string;
       date: string;
+      at?: string;
+      createdAt?: string;
       type: string;
       amount: number;
       accountId?: string | null;
@@ -588,6 +602,30 @@ export function GroshlyFinanceApp({ botId }: { botId: string }) {
       obligations: nextObligations,
     });
   };
+  const saveInvestmentMovement = async (input: InvestmentMovement) => {
+    if (!financeData.data?.authenticated || !obligations.data) throw new Error("Finance data is unavailable");
+    const result = await recordInvestmentMovement(botId, input);
+    const nextFinance = result.account ? { ...financeData.data, accounts: financeData.data.accounts.map((account) => account.id === result.account!.id ? result.account! : account) } : financeData.data;
+    const nextObligations = { ...obligations.data, investments: { ...obligations.data.investments, items: obligations.data.investments.items.map((item) => item.id === input.id ? result.investment : item) } };
+    const nextHistory = result.transaction && history.data ? { ...history.data, items: [result.transaction, ...history.data.items.filter((item) => item.id !== result.transaction!.id)] } : history.data;
+    queryClient.setQueryData(groshlyReadKey, nextFinance);
+    queryClient.setQueryData(obligationsKey, nextObligations);
+    if (nextHistory) queryClient.setQueryData(historyKey, nextHistory);
+    void Promise.all([groshlyReadKey, obligationsKey, historyKey].map((queryKey) => queryClient.invalidateQueries({ queryKey, refetchType: "active" })));
+    return groshlySnapshot({ ...nextFinance, transactions: nextHistory ?? { items: [], nextCursor: null }, transfers: transferHistory.data, obligations: nextObligations });
+  };
+  const replaceInvestment = async (id: string, operation: "edit" | "archive", values?: { name: string; emoji: string }) => {
+    if (!financeData.data?.authenticated || !obligations.data) throw new Error("Finance data is unavailable");
+    const existing = obligations.data.investments.items.find((item) => item.id === id) ?? await consumerFinanceInvestmentsApi.get(botId, id);
+    const result = operation === "archive" ? await consumerFinanceInvestmentsApi.archive(botId, id) : await consumerFinanceInvestmentsApi.update(botId, id, {
+      name: values!.name, customTypeEmoji: values!.emoji, description: existing.description, type: existing.type,
+      customTypeName: existing.customTypeName, startedAt: existing.startedAt,
+    });
+    const next = { ...obligations.data, investments: { ...obligations.data.investments, items: obligations.data.investments.items.map((item) => item.id === id ? result : item) } };
+    queryClient.setQueryData(obligationsKey, next);
+    void queryClient.invalidateQueries({ queryKey: obligationsKey, refetchType: "active" });
+    return groshlySnapshot({ ...financeData.data, transactions: history.data ?? { items: [], nextCursor: null }, transfers: transferHistory.data, obligations: next });
+  };
   const saveLedgerEntry = async (input: {
     draft: Record<string, any>;
     editing?: Record<string, any> | null;
@@ -1006,21 +1044,47 @@ export function GroshlyFinanceApp({ botId }: { botId: string }) {
   };
   const openInvestment = async (id: string) => {
     const detail = await consumerFinanceInvestmentsApi.get(botId, id);
+    const loadHistory = async <T,>(first: { items: T[]; nextCursor: string | null }, load: (cursor: string) => Promise<{ items: T[]; nextCursor: string | null }>) => {
+      const items = [...first.items];
+      let cursor = first.nextCursor;
+      for (let page = 0; cursor && page < 10; page++) {
+        const next = await load(cursor);
+        items.push(...next.items);
+        cursor = next.nextCursor;
+      }
+      return { items, partial: Boolean(cursor) };
+    };
+    const [flows, valuations] = await Promise.all([
+      loadHistory(detail.cashFlows, (cursor) => consumerFinanceInvestmentsApi.cashFlows(botId, id, { cursor, limit: 100 })),
+      loadHistory(detail.valuations, (cursor) => consumerFinanceInvestmentsApi.valuations(botId, id, { cursor, limit: 100 })),
+    ]);
     return {
+      id: detail.id,
+      name: detail.name,
+      emoji: detail.customTypeEmoji || "📈",
+      currency: detail.currency,
+      invested: Number(detail.totalInvested),
+      returned: Number(detail.totalReturned),
+      value: Number(detail.currentValue),
       status: detail.status.toLowerCase(),
       closedAt: detail.closedAt?.slice(0, 10) || "",
       description: detail.description || "",
+      historyPartial: flows.partial || valuations.partial,
       events: [
-        ...detail.cashFlows.items.map((event) => ({
+        ...flows.items.map((event) => ({
           id: event.id,
           date: event.occurredAt.slice(0, 10),
+          at: event.occurredAt,
+          createdAt: event.createdAt,
           type: event.kind === "CONTRIBUTION" ? "deposit" : "return",
           amount: Number(event.amountInInvestmentCurrency),
           accountId: event.accountId,
         })),
-        ...detail.valuations.items.map((event) => ({
+        ...valuations.items.filter((event) => !event.correctedByValuationId).map((event) => ({
           id: event.id,
           date: event.valuedAt.slice(0, 10),
+          at: event.valuedAt,
+          createdAt: event.createdAt,
           type: "valuation",
           amount: Number(event.value),
           accountId: null,
@@ -1070,6 +1134,9 @@ export function GroshlyFinanceApp({ botId }: { botId: string }) {
       telegramAuthenticated={financeData.data.authenticated}
       onRefresh={refreshSnapshot}
       onCloseInvestment={closeInvestment}
+      onSaveInvestmentMovement={saveInvestmentMovement}
+      onEditInvestment={(input) => replaceInvestment(input.id, "edit", input)}
+      onArchiveInvestment={(id) => replaceInvestment(id, "archive")}
       onSaveLedgerEntry={saveLedgerEntry}
       onDeleteLedgerEntry={deleteLedgerEntry}
       onSaveRegularPayment={saveRegularPayment}

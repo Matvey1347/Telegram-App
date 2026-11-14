@@ -39,6 +39,11 @@ vi.mock("@/lib/api", () => ({
 vi.mock("@/providers/toast-provider", () => ({
   useAppToast: () => ({ pushToast: vi.fn() }),
 }));
+vi.mock("../telegram/telegram-post-preview", () => ({
+  EditableTelegramPreviewText: ({ value, onChange }: { value: string; onChange: (value: string) => void }) => (
+    <textarea aria-label="Постоянная концовка" value={value} onChange={(event) => onChange(event.target.value)} />
+  ),
+}));
 vi.mock("./ai-posting-test-console", () => ({
   AiPostingTestConsole: ({
     settingsReady,
@@ -68,8 +73,9 @@ describe("AiPostingPage", () => {
     mocks.post.mockResolvedValue({
       data: { ok: true, available: true, message: "Источник доступен." },
     });
-    mocks.get.mockResolvedValue({
-      data: {
+    mocks.get.mockImplementation(async (url?: string) => {
+      if (url?.includes("/ai-posting/test-runs")) return { data: [] };
+      return { data: {
         configuration: {
           language: "",
           channelDescription: "",
@@ -101,7 +107,7 @@ describe("AiPostingPage", () => {
           criticalCoverageDays: 7,
           aiMonthlyBudget: "",
         },
-      },
+      } };
     });
     mocks.put.mockResolvedValue({ data: {} });
     mocks.listHypotheses.mockResolvedValue([]);
@@ -111,10 +117,24 @@ describe("AiPostingPage", () => {
     mocks.detachCustomEmojiPack.mockResolvedValue({ packs: [] });
   });
 
+  it("saves the single hashtag beside the ending option", async () => {
+    const user = userEvent.setup();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(<QueryClientProvider client={client}><AiPostingPage channelId="channel-1" channelTitle="Channel" /></QueryClientProvider>);
+    await user.click(await screen.findByRole("button", { name: "Хэштеги" }));
+    await user.click(screen.getByText("Один хэштег рядом с концовкой"));
+    await user.click(screen.getByRole("button", { name: "Сохранить настройки" }));
+    await waitFor(() => expect(mocks.put).toHaveBeenCalledWith(
+      expect.any(String), expect.objectContaining({ configuration: expect.objectContaining({ hashtags: "ending_inline" }) }),
+    ));
+  });
+
   it("enables generation after a saved configuration is normalized and reordered by the server", async () => {
     const user = userEvent.setup();
     let stored = (await mocks.get()).data;
-    mocks.get.mockImplementation(async () => ({ data: stored }));
+    mocks.get.mockImplementation(async (url?: string) => ({
+      data: url?.includes("/ai-posting/test-runs") ? [] : stored,
+    }));
     mocks.put.mockImplementation(async (_url, body) => {
       stored = {
         ...stored,

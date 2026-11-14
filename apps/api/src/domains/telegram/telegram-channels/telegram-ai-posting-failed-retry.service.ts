@@ -38,6 +38,8 @@ export class TelegramAiPostingFailedRetryService {
       throw new ConflictException('AI_POSTING_TEST_RUN_CHANGED');
     const failures = Array.isArray(run.failures) ? run.failures : [];
     const failure = failures[failureIndex];
+    if (!failure || typeof failure !== 'object' || Array.isArray(failure))
+      throw new NotFoundException('AI_POSTING_FAILURE_NOT_RETRYABLE');
     const topic =
       failure &&
       typeof failure === 'object' &&
@@ -46,7 +48,6 @@ export class TelegramAiPostingFailedRetryService {
       typeof failure.topic === 'string'
         ? failure.topic.trim().slice(0, 200)
         : '';
-    if (!topic) throw new NotFoundException('AI_POSTING_FAILURE_NOT_RETRYABLE');
 
     return this.generator.generate(
       userId,
@@ -55,7 +56,7 @@ export class TelegramAiPostingFailedRetryService {
       'MANUAL',
       undefined,
       onProgress,
-      topic,
+      topic || undefined,
     );
   }
 }

@@ -124,6 +124,16 @@ describe('internal AI configuration', () => {
     await service.patchWorkspace('user-current', { dailyBudget: '1.1000' });
     expect(prisma.aiWorkspaceConfig.upsert).not.toHaveBeenCalled();
   });
+  it('enables unlimited AI Posting only in the authorized workspace', async () => {
+    const { service, prisma } = setup();
+    await service.patchWorkspace('user-current', { aiPostingUnlimited: true });
+    expect(prisma.aiWorkspaceConfig.upsert).toHaveBeenCalledWith({
+      where: { workspaceId: 'workspace-current' },
+      create: { workspaceId: 'workspace-current', aiPostingUnlimited: true },
+      update: { aiPostingUnlimited: true },
+    });
+  });
+
   it('changes only current workspace with exact decimal strings', async () => {
     const { service, prisma } = setup();
     await service.patchWorkspace('user-current', {

@@ -9,6 +9,23 @@ export class ScheduledTaskRegistryService {
   definitions(): ScheduledTaskDefinition[] {
     return [
       {
+        key: 'telegram.managed_posts.publish_due',
+        name: 'Scheduled Telegram publication delivery',
+        description:
+          'Publishes due local posts independently of identity checks and cleanup.',
+        scope: 'SYSTEM_MAINTENANCE',
+        defaultSchedule: {
+          frequency: 'INTERVAL',
+          intervalMinutes: 1,
+          timezone: 'Europe/Warsaw',
+        },
+        scheduleEditable: false,
+        supportedFrequencies: ['INTERVAL'],
+        notificationSupported: false,
+        dueDriven: true,
+        execute: this.executor.executors['telegram.managed_posts.publish_due'],
+      },
+      {
         key: 'telegram.managed_posts.reconcile_due',
         name: 'Telegram managed post identity reconciliation',
         description:
@@ -170,10 +187,27 @@ export class ScheduledTaskRegistryService {
         execute: this.executor.executors['telegram_ad_sales.due_deletions'],
       },
       {
+        key: 'mutual_promotion.publish_due',
+        name: 'Mutual promotion publication',
+        description:
+          'Publishes due mutual-promotion posts independently of analytics and deletion.',
+        scope: 'SYSTEM_MAINTENANCE',
+        defaultSchedule: {
+          frequency: 'INTERVAL',
+          intervalMinutes: 1,
+          timezone: 'Europe/Warsaw',
+        },
+        scheduleEditable: false,
+        supportedFrequencies: ['INTERVAL'],
+        notificationSupported: false,
+        dueDriven: true,
+        execute: this.executor.executors['mutual_promotion.publish_due'],
+      },
+      {
         key: 'mutual_promotion.lifecycle',
         name: 'Mutual promotion lifecycle',
         description:
-          'Publishes due mutual-promotion posts, captures boundaries, and removes Telegram copies at folder end.',
+          'Captures boundaries, reconciles confirmations, and removes Telegram copies at folder end.',
         scope: 'SYSTEM_MAINTENANCE',
         defaultSchedule: {
           frequency: 'INTERVAL',
@@ -205,9 +239,14 @@ export class ScheduledTaskRegistryService {
       {
         key: 'telegram.ai_posting.autopilot',
         name: 'Telegram AI Posting content autopilot',
-        description: 'Maintains editorial draft stock and calendar coverage for enabled channels.',
+        description:
+          'Maintains editorial draft stock and calendar coverage for enabled channels.',
         scope: 'SYSTEM_MAINTENANCE',
-        defaultSchedule: { frequency: 'INTERVAL', intervalMinutes: 1440, timezone: 'Europe/Warsaw' },
+        defaultSchedule: {
+          frequency: 'INTERVAL',
+          intervalMinutes: 1440,
+          timezone: 'Europe/Warsaw',
+        },
         scheduleEditable: false,
         supportedFrequencies: ['INTERVAL'],
         notificationSupported: false,
@@ -249,9 +288,14 @@ export class ScheduledTaskRegistryService {
       {
         key: 'telegram.channel_reminders.due',
         name: 'Channel post reminders',
-        description: 'Checks configured channel post coverage and delivers reminders.',
+        description:
+          'Checks configured channel post coverage and delivers reminders.',
         scope: 'SYSTEM_MAINTENANCE',
-        defaultSchedule: { frequency: 'INTERVAL', intervalMinutes: 60, timezone: 'Europe/Warsaw' },
+        defaultSchedule: {
+          frequency: 'INTERVAL',
+          intervalMinutes: 60,
+          timezone: 'Europe/Warsaw',
+        },
         scheduleEditable: false,
         supportedFrequencies: ['INTERVAL'],
         notificationSupported: false,

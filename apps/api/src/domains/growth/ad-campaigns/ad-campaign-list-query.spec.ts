@@ -56,14 +56,21 @@ describe('ad campaign server list query', () => {
     ['joined_desc', 'DESC'],
     ['joined_asc', 'ASC'],
   ] as const)(
-    'sorts aggregate joins %s with one bounded scalar aggregate',
+    'sorts materialized invite windows %s with one bounded scalar aggregate',
     (sort, direction) => {
       const query = buildAdCampaignPageIdQuery('workspace-1', { sort }, 0, 50);
       const sql = query.strings.join('?');
 
-      expect(sql).toContain('COALESCE(');
-      expect(sql).toContain('NULLIF(');
-      expect(sql.match(/SELECT SUM\(link\."joinedCount"\)/gu)).toHaveLength(1);
+      expect(sql).toContain(
+        'WHEN COUNT(*) = 0 THEN campaign."joinedCount"',
+      );
+      expect(sql).toContain(
+        'COUNT(*) FILTER (WHERE w."id" IS NOT NULL AND w."joinedCount" IS NULL) > 0 THEN NULL',
+      );
+      expect(sql).toContain(
+        'SUM(CASE WHEN w."id" IS NULL THEN link."joinedCount" ELSE w."joinedCount" END)',
+      );
+      expect(sql).toContain('FROM "TelegramInviteLink" link LEFT JOIN "AdCampaignInviteLinkWindow" w');
       expect(sql).toContain(`campaign."id" ${direction}`);
     },
   );

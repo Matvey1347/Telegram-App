@@ -49,6 +49,13 @@ function setup(
     financeInvestmentCashFlow: {
       findUnique: jest.fn().mockResolvedValue(null),
       create: jest.fn().mockResolvedValue(created),
+      groupBy: jest.fn().mockResolvedValue([]),
+    },
+    financeInvestmentValuation: {
+      findFirst: jest.fn().mockResolvedValue(null),
+    },
+    financeTransaction: {
+      groupBy: jest.fn().mockResolvedValue([]),
     },
     financeInvestment: {
       findFirst: jest.fn().mockResolvedValue({
@@ -56,6 +63,7 @@ function setup(
         startedAt: new Date('2026-01-01T00:00:00.000Z'),
       }),
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      update: jest.fn().mockResolvedValue({}),
     },
   };
   const prisma = {

@@ -137,6 +137,14 @@ describe("AI usage safeguards", () => {
     fireEvent.click(screen.getByRole("button", { name: "Apply filters" }));
     expect(change).toHaveBeenCalledWith({ model: "gpt-6-luna" });
   });
+  it("saves and displays the workspace AI Posting unlimited option", async () => {
+    mocks.updateWorkspace.mockResolvedValue({ ...config, settings: { ...config.settings, aiPostingUnlimited: true } });
+    wrap(<AiConfigurationPanel workspaceId="one" />);
+    const toggle = await screen.findByRole("checkbox", { name: "AI Posting без денежных лимитов (расходы учитываются)" });
+    fireEvent.click(toggle);
+    fireEvent.click(screen.getByRole("button", { name: "Save controls" }));
+    await waitFor(() => expect(mocks.updateWorkspace).toHaveBeenCalledWith(expect.objectContaining({ aiPostingUnlimited: true })));
+  });
   it("disables configuration editing for viewers", async () => {
     mocks.configuration.mockResolvedValue({ ...config, canConfigure: false });
     wrap(<AiConfigurationPanel workspaceId="one" />);

@@ -5,7 +5,7 @@ import type {
   TelegramAdProduct,
   TelegramAdSale,
 } from "@telegram-system/shared";
-import { ExternalLink, FileText, Link2 } from "lucide-react";
+import { ExternalLink, FileText, Link2, Save, Trash2 } from "lucide-react";
 import { TelegramEntityAvatar } from "@/components/features/telegram/telegram/telegram-entity-avatar";
 import {
   Button,
@@ -493,6 +493,7 @@ export function PaymentEditor(props: {
   payment: PaymentDraft;
   accounts: Account[];
   onChange: (p: Partial<PaymentDraft>) => void;
+  showNotes?: boolean;
 }) {
   const options = useMemo(
     () =>
@@ -545,14 +546,16 @@ export function PaymentEditor(props: {
           onChange={(e) => props.onChange({ paidTime: e.target.value })}
         />
       </FormField>
-      <div className="md:col-span-2 lg:col-span-4">
-        <FormField label="Notes">
-          <Input
-            value={props.payment.notes}
-            onChange={(e) => props.onChange({ notes: e.target.value })}
-          />
-        </FormField>
-      </div>
+      {props.showNotes !== false ? (
+        <div className="md:col-span-2 lg:col-span-4">
+          <FormField label="Notes">
+            <Input
+              value={props.payment.notes}
+              onChange={(e) => props.onChange({ notes: e.target.value })}
+            />
+          </FormField>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -561,17 +564,41 @@ export function SaveFooter({
   error,
   saving,
   onSave,
+  onDeletePublications,
+  deletingPublications = false,
 }: {
   error: string;
   saving: boolean;
   onSave: () => Promise<void>;
+  onDeletePublications?: () => Promise<void>;
+  deletingPublications?: boolean;
 }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-neutral-800 pt-4">
-      <p className="text-sm text-rose-300">{error}</p>
-      <Button onClick={() => void onSave()} disabled={saving}>
-        {saving ? "Saving…" : "Save changes"}
-      </Button>
+    <div className="space-y-3 border-t border-neutral-800 pt-4">
+      {error ? <p className="text-sm text-rose-300">{error}</p> : null}
+      <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:justify-end">
+        {onDeletePublications ? (
+          <Button
+            type="button"
+            variant="danger"
+            className="w-full sm:w-auto"
+            onClick={() => void onDeletePublications()}
+            disabled={saving || deletingPublications}
+          >
+            <Trash2 size={16} aria-hidden="true" />
+            {deletingPublications ? "Deleting…" : "Delete publications"}
+          </Button>
+        ) : null}
+        <Button
+          type="button"
+          className="w-full sm:w-auto"
+          onClick={() => void onSave()}
+          disabled={saving || deletingPublications}
+        >
+          <Save size={16} aria-hidden="true" />
+          {saving ? "Saving…" : "Save changes"}
+        </Button>
+      </div>
     </div>
   );
 }

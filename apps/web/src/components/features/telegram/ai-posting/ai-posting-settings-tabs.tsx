@@ -5,10 +5,12 @@ import {
   Film,
   FolderKanban,
   History,
+  MessageCircle,
   Rss,
 } from "lucide-react";
 
 export type AiPostingSettingsTab =
+  | "chat"
   | "context"
   | "sources"
   | "formats"
@@ -18,6 +20,7 @@ export type AiPostingSettingsTab =
   | "history";
 
 const options = [
+  { value: "chat", label: "Чат", icon: MessageCircle },
   { value: "context", label: "Контекст", icon: FileText },
   { value: "sources", label: "Источники", icon: Rss },
   { value: "formats", label: "Форматы", icon: FolderKanban },

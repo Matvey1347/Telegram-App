@@ -115,7 +115,7 @@ export function Modal({
   if (!open || !portalTarget) return null;
   return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 pb-[max(1rem,env(safe-area-inset-bottom))] pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] pt-[max(1rem,env(safe-area-inset-top))]"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 pb-[max(0.5rem,env(safe-area-inset-bottom))] pl-[max(0.5rem,env(safe-area-inset-left))] pr-[max(0.5rem,env(safe-area-inset-right))] pt-[max(0.5rem,env(safe-area-inset-top))] sm:pb-4 sm:pl-4 sm:pr-4 sm:pt-4"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
@@ -127,9 +127,9 @@ export function Modal({
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className={`relative flex max-h-[calc(100dvh-2rem)] w-full min-w-0 max-w-[calc(100vw-2rem)] flex-col rounded-lg border border-neutral-700 bg-neutral-900 shadow-2xl sm:max-h-[84vh] ${allowOverflow ? "overflow-visible" : "overflow-hidden"} ${size === "xs" ? "!max-w-[400px]" : size === "sm" ? "!max-w-[560px]" : size === "xl" ? "!max-w-[1280px]" : "!max-w-[660px]"}`}
+        className={`relative flex max-h-[calc(100dvh-1rem)] w-full min-w-0 max-w-[calc(100vw-1rem)] flex-col rounded-lg border border-neutral-700 bg-neutral-900 shadow-2xl sm:max-h-[84vh] sm:max-w-[calc(100vw-2rem)] ${allowOverflow ? "overflow-visible" : "overflow-hidden"} ${size === "xs" ? "!max-w-[400px]" : size === "sm" ? "!max-w-[560px]" : size === "xl" ? "!max-w-[1280px]" : "!max-w-[660px]"}`}
       >
-        <div className="mb-1 flex items-start justify-between gap-3 p-4 pb-3 sm:items-center sm:p-5 sm:pb-3">
+        <div className="mb-1 flex items-start justify-between gap-2 p-3 pb-2 sm:items-center sm:gap-3 sm:p-5 sm:pb-3">
           <div className="flex min-w-0 flex-1 flex-wrap items-start gap-2 sm:items-center">
             {leadingHeaderAction}
             <span
@@ -156,7 +156,7 @@ export function Modal({
           </button>
         </div>
         <div
-          className={`min-h-0 min-w-0 overscroll-contain px-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-5 sm:pb-5 ${allowOverflow ? "overflow-visible" : "overflow-x-hidden overflow-y-auto"}`}
+          className={`min-h-0 min-w-0 overscroll-contain px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-5 sm:pb-5 ${allowOverflow ? "overflow-visible" : "overflow-x-hidden overflow-y-auto"}`}
         >
           {children}
         </div>

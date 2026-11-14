@@ -65,7 +65,7 @@ export function createTelegramSystemBotApi(api: AxiosInstance) {
     notificationGroup: async () =>
       (
         await api.get<TelegramSystemBotNotificationGroupStatus>(
-          "/telegram/system-bot/notification-group",
+          "/telegram/system-bot/notification-group", { headers: { "X-Bypass-Response-Cache": "true" } },
         )
       ).data,
     createNotificationGroupLink: async () =>
@@ -83,7 +83,7 @@ export function createTelegramSystemBotApi(api: AxiosInstance) {
     notificationAccount: async () =>
       (
         await api.get<TelegramSystemBotNotificationAccountStatus>(
-          "/telegram/system-bot/notification-account",
+          "/telegram/system-bot/notification-account", { headers: { "X-Bypass-Response-Cache": "true" } },
         )
       ).data,
     createNotificationAccountLink: async () =>

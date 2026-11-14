@@ -1,3 +1,4 @@
+import { refreshInvestmentCurrent } from '@consumer-finance/api/investments/finance-investment-current';
 import {
   BadRequestException,
   ConflictException,
@@ -233,6 +234,7 @@ export class FinanceInvestmentCashFlowService {
     });
     if (changed.count !== 1)
       throw new ConflictException('Investment changed concurrently');
+    await refreshInvestmentCurrent(tx, prepared.profile.id, prepared.investment.id);
     return created;
   }
 

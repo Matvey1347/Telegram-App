@@ -133,6 +133,19 @@ describe("AiPostingImagesSection", () => {
     expect(onUseChannelAvatarInMedia).toHaveBeenCalledWith(true);
   });
 
+  it("accepts eight reference images and bounds further uploads", async () => {
+    const user = userEvent.setup();
+    const onPreferences = vi.fn();
+    mocks.upload.mockImplementation(async (file: File) => ({ kind: "PHOTO", url: `https://media.example/${file.name}`, mimeType: "image/png" }));
+    renderSection({ onPreferences });
+    await user.click(screen.getByRole("button", { name: "Редактировать предпочтение 1" }));
+    const files = Array.from({ length: 9 }, (_, index) => new File(["ref"], `ref-${index}.png`, { type: "image/png" }));
+    fireEvent.paste(screen.getByRole("region", { name: "Область референсов для предпочтения" }), { clipboardData: { files } });
+    await waitFor(() => expect(mocks.upload).toHaveBeenCalledTimes(8));
+    await user.click(screen.getByRole("button", { name: "Сохранить" }));
+    expect(onPreferences.mock.calls[0][0][0].references).toHaveLength(8);
+  });
+
   it("rejects references above the upload size limit", async () => {
     const user = userEvent.setup();
     const onPreferences = vi.fn();

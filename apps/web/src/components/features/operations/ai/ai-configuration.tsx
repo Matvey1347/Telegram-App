@@ -32,6 +32,8 @@ export function readAiForm(
     enabled: data.has("enabled"),
     automaticEnabled: data.has("automaticEnabled"),
   };
+  if (data.has("aiPostingUnlimitedPresent"))
+    result.aiPostingUnlimited = data.has("aiPostingUnlimited");
   for (const key of amounts) {
     const value = String(data.get(key) ?? "").trim();
     if (value && !/^(0|[1-9]\d{0,6})(\.\d{1,12})?$/.test(value))
@@ -217,6 +219,20 @@ function ConfigForm({
               {t("Automatic execution allowed")}
             </label>
           </div>
+          {!category && (
+            <label className="flex min-h-10 items-center gap-2 text-sm">
+              <input type="hidden" name="aiPostingUnlimitedPresent" value="1" />
+              <input
+                type="checkbox"
+                name="aiPostingUnlimited"
+                defaultChecked={
+                  "aiPostingUnlimited" in value &&
+                  value.aiPostingUnlimited === true
+                }
+              />
+              AI Posting без денежных лимитов (расходы учитываются)
+            </label>
+          )}
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {amounts.map((key) => (
               <FormField key={key} label={t(labels[key])}>
@@ -292,7 +308,8 @@ function ConfigForm({
           {category?.category === "TELEGRAM_POSTING_IMAGE" && (
             <p className="text-xs text-neutral-400">
               Для изображений заданный лимит на запрос заменяет общий лимит на
-              запрос. Дневной и месячный бюджеты рабочего пространства действуют.
+              запрос. Если включён режим AI Posting без денежных лимитов,
+              ограничения расходов не применяются к AI Posting.
             </p>
           )}
           {category ? (

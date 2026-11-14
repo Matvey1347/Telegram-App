@@ -12,7 +12,9 @@ const draft = {
   title: "Current post",
   text: "Unsaved text",
   imageUrls: ["https://cdn.test/current.jpg"],
-  buttonRows: [[{ text: "Open", url: "https://example.com", style: "primary" as const }]],
+  buttonRows: [
+    [{ text: "Open", url: "https://example.com", style: "primary" as const }],
+  ],
 };
 
 describe("TelegramPostSendToBotButton", () => {
@@ -30,6 +32,20 @@ describe("TelegramPostSendToBotButton", () => {
 
     expect(await screen.findByText("✓ Sent to bot")).toBeInTheDocument();
     expect(telegramSystemBotApi.sendPostPreview).toHaveBeenCalledWith(draft);
+  });
+
+  it("supports a primary action while keeping the shared send behavior", () => {
+    render(
+      <TelegramPostSendToBotButton
+        draft={draft}
+        variant="primary"
+        className="w-full"
+      />,
+    );
+    expect(screen.getByRole("button", { name: "Send to bot" })).toHaveClass(
+      "bg-blue-600",
+      "w-full",
+    );
   });
 
   it("does not offer an empty post for sending", () => {

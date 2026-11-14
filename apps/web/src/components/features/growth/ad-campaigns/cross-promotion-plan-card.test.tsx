@@ -116,7 +116,7 @@ describe("CrossPromotionPlanCard", () => {
     expect(screen.getByText("🤝")).toBeInTheDocument();
     expect(screen.getByText("Scheduled")).toBeInTheDocument();
     expect(screen.getByText("My channels")).toBeInTheDocument();
-    expect(screen.getByText("Partner channels")).toBeInTheDocument();
+    expect(screen.queryByText("Partner channels")).not.toBeInTheDocument();
     expect(screen.getByText("Mentor")).toBeInTheDocument();
     expect(screen.getByText("✨ Promoted")).toBeInTheDocument();
     expect(screen.getByRole("img", { name: "During placement: +13" })).toHaveAttribute("title", "During placement: +13");
@@ -138,7 +138,7 @@ describe("CrossPromotionPlanCard", () => {
       }),
     ).not.toBeInTheDocument();
     expect(screen.getByRole("img", { name: "Actual views: 120" })).toBeInTheDocument();
-    expect(screen.getByRole("img", { name: "Audience decline: −2" })).toBeInTheDocument();
+    expect(screen.queryByRole("img", { name: "Audience decline: −2" })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "My channels: 1" }));
     expect(

@@ -9,19 +9,26 @@ import {
   type TelegramChannelScopeMode,
 } from "@/components/features/telegram/telegram/telegram-channel-scope-selector";
 
+export function useAdsChannelScopeState() {
+  const [mode, setMode] = useState<TelegramChannelScopeMode>("channels");
+  const [selectedNetworkId, setSelectedNetworkId] = useState("");
+  const [selectedChannelIds, setSelectedChannelIds] = useState<string[]>([]);
+  return { mode, setMode, selectedNetworkId, setSelectedNetworkId, selectedChannelIds, setSelectedChannelIds };
+}
+
 export function AdsChannelScopeFilter({
   networks,
   channels,
   onChange,
+  state,
 }: {
   networks: TelegramChannelNetwork[];
   channels: TelegramChannel[];
   onChange: (channelIds: string[]) => void;
+  state: ReturnType<typeof useAdsChannelScopeState>;
 }) {
   const { t } = useI18n();
-  const [mode, setMode] = useState<TelegramChannelScopeMode>("channels");
-  const [selectedNetworkId, setSelectedNetworkId] = useState("");
-  const [selectedChannelIds, setSelectedChannelIds] = useState<string[]>([]);
+  const { mode, setMode, selectedNetworkId, setSelectedNetworkId, selectedChannelIds, setSelectedChannelIds } = state;
 
   const emit = (
     nextMode: TelegramChannelScopeMode,

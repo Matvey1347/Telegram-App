@@ -175,9 +175,10 @@ export async function writeFinanceAssetImport(input: {
       const total = (
         kind: 'CONTRIBUTION' | 'RETURN',
         rate: 'investment' | 'usd',
+        after?: string,
       ) =>
         flows
-          .filter((flow) => flow.kind === kind)
+          .filter((flow) => flow.kind === kind && (!after || Date.parse(flow.occurredAt) > Date.parse(after)))
           .reduce(
             (sum, flow) =>
               sum.plus(
@@ -200,14 +201,13 @@ export async function writeFinanceAssetImport(input: {
               valuationCreatedAt.get(left.ref)!.getTime() ||
             right.ref.localeCompare(left.ref),
         )[0];
-      const currentValue = latest
-        ? decimal(latest.value)
-        : invested.minus(returned);
-      const currentValueUsd = latest
-        ? decimal(latest.value).mul(
-            rates.investmentValuations.get(latest.ref)!.usd.rate,
-          )
-        : investedUsd.minus(returnedUsd);
+      const currentValue = (latest ? decimal(latest.value) : decimal('0'))
+        .plus(total('CONTRIBUTION', 'investment', latest?.valuedAt))
+        .minus(total('RETURN', 'investment', latest?.valuedAt));
+      const currentValueUsd = (latest ? decimal(latest.value).mul(
+        rates.investmentValuations.get(latest.ref)!.usd.rate,
+      ) : decimal('0')).plus(total('CONTRIBUTION', 'usd', latest?.valuedAt))
+        .minus(total('RETURN', 'usd', latest?.valuedAt));
       return {
         id: investmentIds.get(row.ref)!,
         profileId,

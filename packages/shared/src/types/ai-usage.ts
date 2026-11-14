@@ -15,7 +15,7 @@ export type AiOperationView = AiTokenUsage & {
   id: string; operationId: string; workspaceId: string; category: AiCategory; provider: AiProvider;
   model: string; providerModel: string | null; createdAt: string; finishedAt: string | null;
   status: AiOperationStatus; pricingStatus: AiPricingStatus; actualCost: string | null;
-  reservedCost: string; currency: "USD"; durationMs: number | null; errorCategory: string | null;
+  reservedCost: string; currency: "USD"; durationMs: number | null; audioDurationSeconds?: string | null; errorCategory: string | null;
   pricingVersion: string | null; pricingEffectiveAt: string | null; businessObjectId: string | null;
   aiPostingChannelId: string | null; aiPostingTestRunId: string | null;
   aiPostingAutopilotRunId: string | null; aiPostingPublicationIndex: number | null;

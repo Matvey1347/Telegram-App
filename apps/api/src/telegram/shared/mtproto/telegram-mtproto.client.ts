@@ -6,6 +6,8 @@ import {
   Logger,
 } from '@nestjs/common';
 import { Api, TelegramClient } from 'telegram';
+import type { TelegramInviteLinksResult } from './telegram-invite-links.types';
+export type { TelegramInviteLinksResult } from './telegram-invite-links.types';
 import { returnBigInt } from 'telegram/Helpers';
 import { HTMLParser } from 'telegram/extensions/html';
 import { normalizeTelegramChannelId } from '@api/telegram/shared/imports/telegram-post-url';
@@ -85,40 +87,6 @@ type ResolvedStoredTelegramChannel = {
     resolvedBy: 'dialog-id' | 'stored-peer' | 'username' | 'invite-link';
   };
 };
-export type TelegramInviteLinksResult = {
-  scope: 'ALL_ADMINS' | 'PARTIAL_ADMINS';
-  expectedTotalLinks: number;
-  admins: Array<{
-    telegramUserId: string;
-    username: string | null;
-    firstName: string | null;
-    lastName: string | null;
-    photoUrl: string | null;
-    activeLinksCount: number;
-    revokedLinksCount: number;
-  }>;
-  links: Array<{
-    url: string;
-    title: string | null;
-    telegramCreatorUserId: string;
-    creatorUsername: string | null;
-    creatorFirstName: string | null;
-    creatorLastName: string | null;
-    creatorPhotoUrl: string | null;
-    createdAt: Date | null;
-    startDate: Date | null;
-    expireDate: Date | null;
-    usageLimit: number | null;
-    usage: number;
-    requested: number;
-    requestNeeded: boolean;
-    permanent: boolean;
-    revoked: boolean;
-    joinedWithinPeriod?: number | null;
-  }>;
-  warnings: string[];
-};
-
 export type TelegramScheduledMessage = {
   id: string;
   text: string;
@@ -2817,6 +2785,7 @@ export class TelegramMtprotoClient {
     inviteLink: string;
     joinedFrom?: Date | null;
     joinedUntil?: Date | null;
+    includePendingSince?: boolean;
   }): Promise<TelegramInviteLinksResult['links'][number]> {
     const parsed = parseTelegramImportInput(params.inviteLink);
     if (parsed.type !== 'invite') {
@@ -2879,6 +2848,10 @@ export class TelegramMtprotoClient {
           })
         : null;
 
+      const pendingWithinPeriod = params.joinedFrom && params.includePendingSince
+        ? await this.countInviteLinkJoinsInPeriod({ client, peer: resolved.peer, inviteLink: parsed.inviteLink, from: params.joinedFrom, until: params.joinedUntil ?? new Date(), requested: true })
+        : undefined;
+
       return {
         url: canonicalTelegramInviteLink(parsed.inviteHash),
         title:
@@ -2904,6 +2877,7 @@ export class TelegramMtprotoClient {
         permanent: Boolean(invite.permanent),
         revoked: Boolean(invite.revoked),
         joinedWithinPeriod,
+        ...(params.includePendingSince ? { pendingWithinPeriod: pendingWithinPeriod ?? null } : {}),
       };
     } finally {
       await this.closeClient(client);
@@ -2943,6 +2917,7 @@ export class TelegramMtprotoClient {
     inviteLink: string;
     from: Date;
     until: Date;
+    requested?: boolean;
   }): Promise<number | null> {
     const limit = 100;
     let offsetDate = 0;
@@ -2957,7 +2932,7 @@ export class TelegramMtprotoClient {
             new Api.messages.GetChatInviteImporters({
               peer: params.peer,
               link: params.inviteLink,
-              requested: false,
+              requested: params.requested === true,
               offsetDate,
               offsetUser,
               limit,
@@ -2977,7 +2952,7 @@ export class TelegramMtprotoClient {
         let reachedBeforePeriod = false;
         for (const importer of importers) {
           const joinedAt = this.toTelegramDate(importer.date);
-          if (!joinedAt) continue;
+          if (!joinedAt) return null;
           if (joinedAt < params.from) {
             reachedBeforePeriod = true;
             continue;

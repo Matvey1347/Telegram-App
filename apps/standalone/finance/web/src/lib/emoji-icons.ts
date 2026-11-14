@@ -31,6 +31,7 @@ function keywords(value: unknown) {
 }
 
 const emojiMartData = data as EmojiMartData;
+const heartSymbols = new Set(["gift_heart", "sparkling_heart", "heartpulse", "heartbeat", "revolving_hearts", "two_hearts", "heart_decoration", "heavy_heart_exclamation_mark_ornament", "broken_heart", "heart_on_fire", "mending_heart", "heart", "pink_heart", "orange_heart", "yellow_heart", "green_heart", "blue_heart", "light_blue_heart", "purple_heart", "brown_heart", "black_heart", "grey_heart", "white_heart", "purple_heart", "cupid"]);
 
 export const emojiIcons: EmojiIcon[] = emojiMartData.categories.flatMap((entry) => {
   const category = categoryMap[entry.id];
@@ -44,7 +45,7 @@ export const emojiIcons: EmojiIcon[] = emojiMartData.categories.flatMap((entry) 
       name,
       emoji: native,
       keywords: Array.from(new Set([...keywords(emoji?.keywords), normalizeName(String(emoji?.id ?? emojiId)), name])),
-      category,
+      category: heartSymbols.has(emojiId) ? "symbols" : category,
     }));
   });
-}).sort((left, right) => left.category.localeCompare(right.category) || left.name.localeCompare(right.name));
+});

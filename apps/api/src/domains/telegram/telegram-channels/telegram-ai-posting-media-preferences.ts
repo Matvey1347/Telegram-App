@@ -1,3 +1,5 @@
+import { TELEGRAM_AI_POSTING_MAX_MEDIA_REFERENCES } from '@telegram-system/shared';
+
 export type TelegramAiPostingMediaPreference = {
   id: string;
   name: string;
@@ -47,7 +49,7 @@ export function telegramAiPostingMediaPreferences(
           references: Array.isArray(item.references)
             ? item.references
                 .filter((url): url is string => typeof url === 'string')
-                .slice(0, 4)
+                .slice(0, TELEGRAM_AI_POSTING_MAX_MEDIA_REFERENCES)
             : [],
         },
       ];
@@ -64,7 +66,7 @@ export function telegramAiPostingMediaPreferences(
   const references = Array.isArray(config.imageReferenceUrls)
     ? config.imageReferenceUrls
         .filter((value): value is string => typeof value === 'string')
-        .slice(0, 4)
+        .slice(0, TELEGRAM_AI_POSTING_MAX_MEDIA_REFERENCES)
     : [];
   return styles.map((style, index) => ({
     id: `legacy-${index}`,
@@ -73,4 +75,38 @@ export function telegramAiPostingMediaPreferences(
     emoji: '🎨',
     references,
   }));
+}
+
+export function resolveTelegramAiPostingMediaPreference(
+  config: Record<string, unknown>,
+  publication: { imagePrompt: string; mediaPreference?: { id: string } | null },
+) {
+  const preferences = telegramAiPostingMediaPreferences(config);
+  return (
+    preferences.find((item) => item.id === publication.mediaPreference?.id) ??
+    preferences.find((item) =>
+      publication.imagePrompt.includes(`Visual preference: ${item.name}`),
+    )
+  );
+}
+
+export function clearTelegramAiPostingMediaFailure(
+  failures: unknown,
+  topic: string,
+) {
+  return Array.isArray(failures)
+    ? failures.filter((failure) => {
+        if (!failure || typeof failure !== 'object' || Array.isArray(failure))
+          return true;
+        const entry = failure as { topic?: unknown; code?: unknown };
+        return (
+          entry.topic !== topic ||
+          !(
+            typeof entry.code === 'string' &&
+            (entry.code.startsWith('AI_POSTING_IMAGE_') ||
+              entry.code === 'AI_REQUEST_BUDGET_EXCEEDED')
+          )
+        );
+      })
+    : [];
 }

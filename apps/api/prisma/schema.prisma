@@ -1032,6 +1032,8 @@ model Workspace {
   telegramAiPostingSettings              TelegramAiPostingSettings[]
   telegramAiPostingGenerations           TelegramAiPostingGeneration[]
   telegramAiPostingTestRuns              TelegramAiPostingTestRun[]
+  telegramAiPostingChatMessages          TelegramAiPostingChatMessage[]
+  telegramAiPostingChatAttachments       TelegramAiPostingChatAttachment[]
   channelReminderTemplates TelegramChannelReminderTemplate[]
   channelReminderAssignments TelegramChannelReminderAssignment[]
   telegramCustomEmojiPacks               TelegramCustomEmojiPack[]
@@ -1784,6 +1786,8 @@ model TelegramChannel {
   aiPostingSettings             TelegramAiPostingSettings?
   aiPostingGenerations          TelegramAiPostingGeneration[]
   aiPostingTestRuns             TelegramAiPostingTestRun[]
+  aiPostingChatMessages         TelegramAiPostingChatMessage[]
+  aiPostingChatAttachments     TelegramAiPostingChatAttachment[]
   adProducts                    TelegramAdProduct[]
   admissionBatches              AdCampaignAdmissionBatch[]
   admissionBackfillStates       AdCampaignAdmissionBackfillState[]
@@ -1882,6 +1886,38 @@ model TelegramAiPostingGeneration {
   managedPost       TelegramManagedPost @relation(fields: [managedPostId], references: [id], onDelete: Cascade)
 
   @@index([workspaceId, telegramChannelId, createdAt])
+}
+
+model TelegramAiPostingChatMessage {
+  id                String          @id @default(cuid())
+  workspaceId       String
+  telegramChannelId String
+  role              String
+  text              String
+  metadata          Json?
+  createdAt         DateTime        @default(now())
+  workspace         Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  telegramChannel   TelegramChannel @relation(fields: [telegramChannelId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, telegramChannelId, createdAt, id], map: "TelegramAiPostingChatMessage_workspaceId_telegramChannelId_crea")
+}
+
+model TelegramAiPostingChatAttachment {
+  id                String          @id @default(cuid())
+  workspaceId       String
+  telegramChannelId String
+  actorUserId       String
+  kind              String
+  name              String
+  content           String
+  durationSeconds   Decimal?        @db.Decimal(12, 3)
+  expiresAt         DateTime
+  createdAt         DateTime        @default(now())
+  workspace         Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  telegramChannel   TelegramChannel @relation(fields: [telegramChannelId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, telegramChannelId, actorUserId, expiresAt], map: "TelegramAiPostingChatAttachment_scope_expiry_idx")
+  @@index([expiresAt])
 }
 
 model TelegramAiPostingTestRun {
@@ -3425,6 +3461,7 @@ model AdCampaign {
   inviteLinkSnapshots TelegramInviteLinkSnapshot[]
   admissionBatches    AdCampaignAdmissionBatch[]
   botInviteLinks      AdCampaignBotInviteLink[]
+  inviteLinkWindows   AdCampaignInviteLinkWindow[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3447,6 +3484,22 @@ model AdCampaignBotInviteLink {
 
   adCampaign AdCampaign        @relation(fields: [adCampaignId], references: [id], onDelete: Cascade)
   inviteLink TelegramInviteLink @relation("AdCampaignBotRequestInviteLinks", fields: [inviteLinkId], references: [id], onDelete: Cascade)
+
+  @@unique([adCampaignId, inviteLinkId])
+  @@index([inviteLinkId])
+}
+
+model AdCampaignInviteLinkWindow {
+  id             String   @id @default(cuid())
+  adCampaignId   String
+  inviteLinkId   String
+  fromDate       String   @db.VarChar(10)
+  timezone       String
+  joinedCount    Int?
+  pendingCount   Int?
+  computedAt     DateTime?
+  adCampaign     AdCampaign @relation(fields: [adCampaignId], references: [id], onDelete: Cascade)
+  inviteLink     TelegramInviteLink @relation(fields: [inviteLinkId], references: [id], onDelete: Cascade)
 
   @@unique([adCampaignId, inviteLinkId])
   @@index([inviteLinkId])
@@ -3780,6 +3833,7 @@ model TelegramInviteLink {
   defaultForChannelBroadcasts TelegramChannel[]                  @relation("TelegramChannelBroadcastInviteLink")
   defaultForAudienceTransfers TelegramChannel[]                  @relation("TelegramChannelAudienceTransferInviteLink")
   botRequestTrackingCampaigns AdCampaignBotInviteLink[]          @relation("AdCampaignBotRequestInviteLinks")
+  campaignWindows             AdCampaignInviteLinkWindow[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -6237,6 +6291,7 @@ model AiWorkspaceConfig {
   workspaceId String @id
   enabled Boolean @default(false)
   automaticEnabled Boolean @default(false)
+  aiPostingUnlimited Boolean @default(false)
   dailyBudget Decimal? @db.Decimal(24, 12)
   monthlyBudget Decimal? @db.Decimal(24, 12)
   maxRequestCost Decimal? @db.Decimal(24, 12)
@@ -6268,6 +6323,7 @@ model AiCategoryConfig {
 model AiOperation {
   id String @id @default(cuid())
   workspaceId String
+  source String @default("PRODUCTION") @db.VarChar(20)
   operationId String @db.VarChar(100)
   actorUserId String
   category String @db.VarChar(64)
@@ -6288,6 +6344,7 @@ model AiOperation {
   reasoningTokens Int?
   totalTokens Int?
   durationMs Int?
+  audioDurationSeconds Decimal? @db.Decimal(12, 3)
   errorCategory String? @db.VarChar(64)
   providerRequestId String? @db.VarChar(200)
   businessObjectId String? @db.VarChar(100)
@@ -6348,6 +6405,7 @@ model AiBudgetPeriod {
 model AiUsageDaily {
   id String @id @default(cuid())
   workspaceId String
+  source String @default("PRODUCTION") @db.VarChar(20)
   day DateTime @db.Date
   category String @db.VarChar(64)
   provider String @db.VarChar(32)
@@ -6369,7 +6427,7 @@ model AiUsageDaily {
   aiPostingPublicationKey String @default("") @db.VarChar(140)
   aiPostingMode String @default("NONE") @db.VarChar(16)
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  @@unique([workspaceId, day, category, provider, model, status, aiPostingChannelId, aiPostingPublicationKey, aiPostingMode], map: "AiUsageDaily_dimensions_key")
+  @@unique([workspaceId, source, day, category, provider, model, status, aiPostingChannelId, aiPostingPublicationKey, aiPostingMode], map: "AiUsageDaily_dimensions_key")
   @@index([workspaceId, day])
   @@index([day, id])
 }

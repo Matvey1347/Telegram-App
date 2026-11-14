@@ -7,7 +7,7 @@ export const telegramAdvertiserCompatibilityInclude = {
   crmPeers: {
     orderBy: [{ updatedAt: 'desc' as const }, { id: 'desc' as const }],
     take: 1,
-    select: { telegramUserId: true },
+    select: { telegramUserId: true, photoUrl: true },
   },
   _count: {
     select: {

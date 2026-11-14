@@ -15,6 +15,7 @@ type PostingSource = {
   value: string;
   enabled?: boolean;
   useImages?: boolean;
+  followNewsArticles?: boolean;
 };
 type ImageCandidate = { url: string; sourceId: string; sourceType: string };
 export type TelegramAiPostingSourceStatus =
@@ -78,12 +79,25 @@ function rssFeedText(value: string) {
     .map(([, , body]) => {
       const fields = [
         ...body.matchAll(
-          /<(title|description|summary|content:encoded|content)\b[^>]*>([\s\S]*?)<\/\1>/gi,
+          /<(title|description|summary|content:encoded|content|pubDate|published|updated)\b[^>]*>([\s\S]*?)<\/\1>/gi,
         ),
       ].map(
         ([, name, content]) =>
           `${name}: ${content.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')}`,
       );
+      const link = /<link\b[^>]*>([^<]+)<\/link>/i.exec(body)?.[1] ??
+        /<link\b[^>]*\bhref=["']([^"']+)["']/i.exec(body)?.[1];
+      if (link) {
+        try {
+          const url = new URL(link.replace(/&amp;/gi, '&').trim());
+          if (url.protocol === 'https:' && !url.username && !url.password) {
+            // Query parameters can contain private feed tokens; retain the public article path.
+            url.search = '';
+            url.hash = '';
+            fields.push(`source: ${url.toString().slice(0, 1000)}`);
+          }
+        } catch { /* Invalid links are not evidence. */ }
+      }
       return cleanMarkup(fields.join(' '));
     })
     .filter(Boolean);
@@ -102,6 +116,22 @@ function urlsFromMarkup(markup: string, base: string) {
     }
   }
   return [...new Set(found)].slice(0, 12);
+}
+
+function officialNewsLinks(markup: string, base: string) {
+  const root = new URL(base);
+  const result: Array<{ url: string; title: string }> = [];
+  for (const match of markup.matchAll(/<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi)) {
+    try {
+      const url = new URL(match[1].replace(/&amp;/gi, '&'), base);
+      if (url.origin !== root.origin || url.protocol !== 'https:' || url.username || url.password || !/\/(?:news|novyny|новини|press|blog)(?:\/|$)/iu.test(url.pathname)) continue;
+      url.search = ''; url.hash = '';
+      const title = cleanMarkup(match[2]).slice(0, 240);
+      if (!result.some((entry) => entry.url === url.toString())) result.push({ url: url.toString(), title });
+      if (result.length >= 20) break;
+    } catch { /* Ignore invalid or external links. */ }
+  }
+  return result;
 }
 function safeSourceValue(source: PostingSource) {
   if (source.type === 'telegram') return 'Telegram source';
@@ -373,7 +403,24 @@ export class TelegramAiPostingSourceService {
           const text =
             source.type === 'rss' ? rssFeedText(body) : cleanMarkup(body);
           let hasUsableMaterial = Boolean(text);
-          if (text) contexts.push(`[${source.type} ${source.id}] ${text}`);
+          if (text) {
+            const publicUrl = new URL(source.value);
+            publicUrl.search = '';
+            publicUrl.hash = '';
+            const links = source.followNewsArticles === true && source.type === 'website' ? officialNewsLinks(body, source.value).filter((item) => /\/(?:news|novyny|новини|press|blog)\/[^/]+/iu.test(new URL(item.url).pathname)) : [];
+            const articles = await Promise.all(links.slice(0, 2).map(async (item) => {
+              try {
+                const articleUrl = item.url.endsWith('/') ? item.url : `${item.url}/`;
+                let bytes: Buffer;
+                try { bytes = await this.fetchPublic(item.url, MAX_SOURCE_BYTES); }
+                catch { bytes = await this.fetchPublic(articleUrl, MAX_SOURCE_BYTES); }
+                const page = bytes.toString('utf8');
+                const article = /<article\b[^>]*>([\s\S]*?)<\/article>/i.exec(page)?.[1] ?? /<main\b[^>]*>([\s\S]*?)<\/main>/i.exec(page)?.[1] ?? page;
+                return `Article: ${item.title} source: ${item.url} ${cleanMarkup(article).slice(0, 2200)}`;
+              } catch { return ''; }
+            }));
+            contexts.push(`[${source.type} ${source.id}] source: ${publicUrl.toString()} ${articles.filter(Boolean).join('\n')} ${text}`);
+          }
           if (source.useImages !== false)
             for (const url of urlsFromMarkup(body, source.value)) {
               hasUsableMaterial = true;
@@ -492,6 +539,16 @@ export class TelegramAiPostingSourceService {
         }
       })
       .slice(0, 3);
+  }
+
+  async discoverNewsPages(homeUrl: string): Promise<string[]> {
+    try {
+      const markup = (await this.fetchPublic(homeUrl, MAX_SOURCE_BYTES)).toString('utf8');
+      const links = officialNewsLinks(markup, homeUrl).filter((entry) => /\/(?:news|novyny|новини|press|blog)\/?$/iu.test(new URL(entry.url).pathname));
+      const candidates = [...new Set(links.flatMap((entry) => [entry.url, entry.url.endsWith('/') ? entry.url : `${entry.url}/`]))].slice(0, 5);
+      const checked = await Promise.all(candidates.map(async (url) => ({ url, result: await this.checkWebSource('website', url) })));
+      return checked.filter((entry) => entry.result.ok).map((entry) => entry.url).slice(0, 1);
+    } catch { return []; }
   }
 
   async downloadImage(urlValue: string) {

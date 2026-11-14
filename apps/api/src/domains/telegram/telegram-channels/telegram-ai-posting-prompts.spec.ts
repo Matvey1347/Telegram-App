@@ -46,5 +46,8 @@ describe('AI posting prompt context', () => {
     expect(publicationEmojiInstruction({ emojiPolicy: 'start' })).toContain(
       'exactly one relevant emoji at the very beginning',
     );
+    expect(publicationEmojiInstruction({ emojiPolicy: 'contextual' })).toContain(
+      'Prefer placing emojis at the beginning of sentences or paragraphs',
+    );
   });
 });

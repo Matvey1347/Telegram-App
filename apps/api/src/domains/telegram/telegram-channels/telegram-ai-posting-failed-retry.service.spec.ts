@@ -63,7 +63,7 @@ describe('TelegramAiPostingFailedRetryService', () => {
     );
   });
 
-  it('rejects stale runs and failures without a topic', async () => {
+  it('retries failures without a topic and rejects stale or missing failures', async () => {
     await expect(
       service.regenerateFailedPublication('user-a', 'channel-a', 'run-a', 0, 1),
     ).rejects.toBeInstanceOf(ConflictException);
@@ -72,9 +72,24 @@ describe('TelegramAiPostingFailedRetryService', () => {
       version: 2,
       failures: [{ code: 'AI_POSTING_DRAFT_INVALID' }],
     });
+    await service.regenerateFailedPublication(
+      'user-a',
+      'channel-a',
+      'run-a',
+      0,
+      2,
+    );
+    expect(generator.generate).toHaveBeenCalledWith(
+      'user-a',
+      'channel-a',
+      1,
+      'MANUAL',
+      undefined,
+      undefined,
+      undefined,
+    );
     await expect(
-      service.regenerateFailedPublication('user-a', 'channel-a', 'run-a', 0, 2),
+      service.regenerateFailedPublication('user-a', 'channel-a', 'run-a', 1, 2),
     ).rejects.toBeInstanceOf(NotFoundException);
-    expect(generator.generate).not.toHaveBeenCalled();
   });
 });

@@ -7,6 +7,7 @@ export function AiPostingGenerationControls({
   dailyPostCount,
   requestedCount,
   pending,
+  busy = false,
   settingsReady,
   onCountChange,
   onGenerate,
@@ -14,6 +15,7 @@ export function AiPostingGenerationControls({
   dailyPostCount: number;
   requestedCount: string;
   pending: boolean;
+  busy?: boolean;
   settingsReady: boolean;
   onCountChange: (value: string) => void;
   onGenerate: () => void;
@@ -30,8 +32,8 @@ export function AiPostingGenerationControls({
             черновик.
           </p>
           <p className="mt-1 text-xs text-neutral-500">
-            Пачки сохраняются в истории ниже. Текст можно править прямо в превью,
-            а заметки к тексту и медиа задаются отдельно.
+            Пачки сохраняются в истории ниже. Текст можно править прямо в
+            превью, а заметки к тексту и медиа задаются отдельно.
           </p>
         </div>
         <div className="flex items-end gap-2">
@@ -43,11 +45,14 @@ export function AiPostingGenerationControls({
               min={1}
               max={5}
               value={requestedCount}
-              disabled={pending}
+              disabled={pending || busy}
               onChange={(event) => onCountChange(event.target.value)}
             />
           </label>
-          <Button onClick={onGenerate} disabled={pending || !settingsReady}>
+          <Button
+            onClick={onGenerate}
+            disabled={pending || busy || !settingsReady}
+          >
             {pending ? (
               <>
                 <RotateCw size={16} className="animate-spin" /> Генерируем…

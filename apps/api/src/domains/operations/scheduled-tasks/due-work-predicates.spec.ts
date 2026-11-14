@@ -25,7 +25,7 @@ describe('due-work predicate parity', () => {
     const serialized = JSON.stringify(managedPostIdentityReadyWhere(now));
 
     expect(serialized).toContain('"scheduleMode":null');
-    expect(serialized).toContain('"scheduleMode":{"not":"BATCH"}');
+    expect(serialized).toContain('"scheduleMode":{"notIn":["BATCH","LOCAL"]}');
   });
 
   it('rechecks missing scheduled posts with a bounded slow retry', () => {

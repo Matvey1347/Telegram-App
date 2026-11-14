@@ -1,6 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { AdsSectionTabs, resolveAdsSection } from "./ads-section-tabs";
+vi.mock("@/providers/i18n-provider", () => ({ useI18n: () => ({ t: (key: string) => ({ "ads.section_campaigns": "Ad campaigns", "ads.section_hypotheses": "Hypotheses", "ads.section_promo": "Promo", "ads.section_mutual": "Mutual promotion" } as Record<string, string>)[key] || key }) }));
 
 describe("AdsSectionTabs", () => {
   it("exposes the five visually labelled Ads destinations as top-level tabs", () => {
@@ -21,10 +22,7 @@ describe("AdsSectionTabs", () => {
     expect(
       screen.getByRole("tab", { name: "Mutual promotion" }),
     ).toHaveAttribute("href", "/ad-campaigns?section=mutual-promotion");
-    expect(screen.getByRole("tab", { name: "Own channels" })).toHaveAttribute(
-      "href",
-      "/ad-campaigns?section=own-promotion",
-    );
+    expect(screen.queryByRole("tab", { name: "Own channels" })).not.toBeInTheDocument();
   });
 
   it("opens hypotheses from its tab and keeps old deep links compatible", () => {

@@ -1,5 +1,6 @@
 "use client";
 
+import { TELEGRAM_AI_POSTING_MAX_MEDIA_REFERENCES } from "@telegram-system/shared";
 import { useState } from "react";
 import { Info, Pencil, Plus, X } from "lucide-react";
 import { IconAvatar } from "@/components/icons/icon-avatar";
@@ -251,7 +252,8 @@ export function AiPostingMediaPreferenceEditor({
             </FormField>
             <div>
               <p className="mb-1 text-sm font-medium text-neutral-200">
-                Визуальные референсы · до 4
+                Визуальные референсы · до{" "}
+                {TELEGRAM_AI_POSTING_MAX_MEDIA_REFERENCES}
               </p>
               <TelegramPostMediaUpload
                 value={draft.references.map((url) => ({
@@ -262,13 +264,13 @@ export function AiPostingMediaPreferenceEditor({
                   updateDraft({ references: items.map((item) => item.url) })
                 }
                 allowedKinds={["PHOTO"]}
-                maxItems={4}
+                maxItems={TELEGRAM_AI_POSTING_MAX_MEDIA_REFERENCES}
                 maxFileSizeBytes={2 * 1024 * 1024}
                 label="Добавить референсы"
                 dropAreaLabel="Область референсов для предпочтения"
                 dropPrompt="Перетащите изображение сюда или вставьте через ⌘/Ctrl+V"
                 browseLabel="Выбрать файлы"
-                sizeHint="JPEG, PNG или WebP до 2 МБ · до 4 изображений"
+                sizeHint={`JPEG, PNG или WebP до 2 МБ · до ${TELEGRAM_AI_POSTING_MAX_MEDIA_REFERENCES} изображений`}
                 removeLabel="Удалить референс"
                 showUrlInput={false}
               />

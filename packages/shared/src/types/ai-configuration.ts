@@ -25,6 +25,8 @@ export type AiPrice = {
   cachedInputPerMillion: string;
   cacheWritePerMillion: string | null;
   outputPerMillion: string;
+  billingUnit?: "audio_seconds";
+  audioPerMinute?: string;
   sourceUrl: string;
 };
 export type AiCategoryConfiguration = {
@@ -47,6 +49,7 @@ export type AiCategoryConfiguration = {
 export type AiWorkspaceConfiguration = {
   enabled: boolean;
   automaticEnabled: boolean;
+  aiPostingUnlimited?: boolean;
   dailyBudget: string | null;
   monthlyBudget: string | null;
   maxRequestCost: string | null;

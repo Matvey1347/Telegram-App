@@ -14,6 +14,8 @@ import { AdCampaignsTable } from "@/components/features/growth/ad-campaigns/camp
 import { CampaignsTableSkeleton } from "@/components/features/growth/ad-campaigns/campaigns-table-skeleton";
 import { useAdsFilterVisibility } from "@/components/features/growth/ad-campaigns/use-ads-filter-visibility";
 import { AdsFiltersPanel } from "@/components/features/growth/ad-campaigns/ads-filters-panel";
+import { AdsFilterButton, AdsFilterSurface, useAdsFilterPresentation } from "@/components/features/growth/ad-campaigns/ads-filter-presentation";
+import { useAdsChannelScopeState } from "@/components/features/growth/ad-campaigns/ads-channel-scope-filter";
 import { AdHypothesisAvatar } from "@/components/features/growth/ad-campaigns/ad-hypothesis-avatar";
 import { AdHypothesisRowActions } from "@/components/features/growth/ad-campaigns/ad-hypothesis-row-actions";
 import { PromoPreviewModal } from "@/components/features/growth/ad-campaigns/promo-preview-modal";
@@ -68,7 +70,6 @@ import {
   CheckCircle2,
   CircleHelp,
   EyeOff,
-  Filter,
   Pencil,
   Trash2,
 } from "lucide-react";
@@ -159,31 +160,20 @@ const LazyMutualPromotionModeTabs = dynamic(
 );
 
 export default function AdsPage() {
-  const { t } = useI18n();
   const searchParams = useSearchParams();
   const requestedSection = searchParams.get("section");
   const legacyView = searchParams.get("view");
   const section: AdsSection = resolveAdsSection(requestedSection, legacyView);
   const [filtersOpen, toggleFilters] = useAdsFilterVisibility();
+  const filterPresentation = useAdsFilterPresentation();
   const showFilterToggle = ["campaigns", "hypotheses", "promo"].includes(section);
   const sectionTabs = (
     <AdsSectionTabs
       value={section}
-      trailing={showFilterToggle ? (
-        <Button
-          type="button"
-          variant="secondary"
-          aria-expanded={filtersOpen}
-          aria-controls="ads-filter-panel"
-          onClick={toggleFilters}
-        >
-          <Filter size={16} /> {filtersOpen ? t("ads.hide_filters") : t("ads.filters")}
-        </Button>
-      ) : undefined}
+      trailing={showFilterToggle ? <AdsFilterButton presentation={filterPresentation} desktopOpen={filtersOpen} toggleDesktop={toggleFilters} /> : undefined}
     />
   );
-  const mutualMode =
-    searchParams.get("mode") === "folders" ? "folders" : "direct";
+  const mutualMode = section === "own-promotion" || searchParams.get("mode") === "own" ? "own" : searchParams.get("mode") === "folders" ? "folders" : "direct";
   return section === "mutual-promotion" && mutualMode === "folders" ? (
     <LazyMutualPromotionFoldersPage
       sectionTabs={
@@ -193,30 +183,31 @@ export default function AdsPage() {
         </>
       }
     />
-  ) : section === "mutual-promotion" ? (
+  ) : section === "mutual-promotion" && mutualMode !== "own" ? (
     <LazyCrossPromotionPlansPage
       kind="DIRECT_MUTUAL"
       sectionTabs={sectionTabs}
       mutualModeTabs={<LazyMutualPromotionModeTabs mode="direct" />}
     />
-  ) : section === "own-promotion" ? (
+  ) : section === "own-promotion" || (section === "mutual-promotion" && mutualMode === "own") ? (
     <LazyCrossPromotionPlansPage
       kind="OWN_CHANNELS"
       sectionTabs={sectionTabs}
+      mutualModeTabs={<LazyMutualPromotionModeTabs mode="own" />}
     />
   ) : (
-    <AdCampaignsPage sectionTabs={sectionTabs} topSection={section} filtersOpen={filtersOpen} />
+    <AdCampaignsPage sectionTabs={sectionTabs} topSection={section === "mutual-promotion" ? "campaigns" : section} filtersOpen={filtersOpen} filterPresentation={filterPresentation} />
   );
 }
 
 function AdCampaignsPage({
   sectionTabs,
   topSection,
-  filtersOpen,
+  filtersOpen, filterPresentation,
 }: {
   sectionTabs: ReactNode;
   topSection: "campaigns" | "hypotheses" | "promo";
-  filtersOpen: boolean;
+  filtersOpen: boolean; filterPresentation: ReturnType<typeof useAdsFilterPresentation>;
 }) {
   const { t } = useI18n();
   const qc = useQueryClient();
@@ -228,6 +219,7 @@ function AdCampaignsPage({
   const editingCampaignRequest = useRef(0);
   const [deleting, setDeleting] = useState<any | null>(null);
   const [channelScopeFilter, setChannelScopeFilter] = useState("");
+  const channelScopeState = useAdsChannelScopeState();
   const [showArchivedPromos, setShowArchivedPromos] = useState(false);
   const viewMode: AdCampaignsViewMode =
     topSection === "promo"
@@ -538,12 +530,12 @@ function AdCampaignsPage({
         }
       />
       {sectionTabs}
-      {filtersOpen ? (
-        <div id="ads-filter-panel">
+      <AdsFilterSurface presentation={filterPresentation} desktopOpen={filtersOpen}>
           <AdsFiltersPanel
             viewMode={viewMode}
             networks={channelNetworks ?? []}
             channels={ownTelegramChannels}
+            channelScopeState={channelScopeState}
             onChannelScopeChange={(channelIds) => setChannelScopeFilter(channelIds.join(","))}
             search={search}
             setSearch={setSearch}
@@ -559,8 +551,7 @@ function AdCampaignsPage({
             sort={sort}
             setSort={setSort}
           />
-        </div>
-      ) : null}
+      </AdsFilterSurface>
 
       {showCampaignsInitialLoading ? <CampaignsTableSkeleton /> : null}
       {viewMode === "campaigns" && error ? (

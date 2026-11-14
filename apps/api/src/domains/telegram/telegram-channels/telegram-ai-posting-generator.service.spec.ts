@@ -77,6 +77,29 @@ describe('TelegramAiPostingGeneratorService', () => {
     expect(gateway.execute).not.toHaveBeenCalled();
   });
 
+  it('bounds planning context while retaining channel rules and source context', () => {
+    const bulky = 'Текст'.repeat(12000);
+    const prompt = (service as any).planPrompt(
+      {
+        channelDescription: 'Business',
+        rules: [{ active: true, text: 'Use examples' }],
+        learningBlock: bulky,
+      },
+      {
+        editorialProfile: { language: 'Ukrainian', description: bulky },
+        sourceContexts: [{ text: bulky }],
+        existingPosts: [{ title: bulky }],
+        history: [],
+      },
+      bulky,
+      1,
+      [{ topic: bulky, title: bulky, text: bulky }],
+    );
+    expect(prompt.length).toBeLessThan(18000);
+    expect(prompt).toContain('Use examples');
+    expect(prompt).toContain('SOURCES');
+  });
+
   it('parses a JSON object surrounded by model commentary', () => {
     expect(
       (service as any).parseJson(
@@ -301,7 +324,7 @@ describe('TelegramAiPostingGeneratorService', () => {
     });
     sources.collect.mockResolvedValue({
       editorialProfile: { language: 'English' },
-      sourceContexts: [],
+      sourceContexts: ['[website site-1] source: https://example.test/article Verified company fact'],
       existingPosts: [],
       history: [],
       imageCandidates: [],
@@ -420,6 +443,8 @@ describe('TelegramAiPostingGeneratorService', () => {
     expect(gateway.execute.mock.calls[2][0].input).toContain(
       'Proposed authored post text (without configured ending or hashtags): **A useful** post',
     );
+    expect(gateway.execute.mock.calls[1][0].input).toContain('Verified company fact');
+    expect(gateway.execute.mock.calls[2][0].input).toContain('Verified company fact');
     expect(gateway.execute.mock.calls[2][0].input).not.toContain('Test !');
     expect(result.generated[0].text).toContain(
       'Test ! ![👤](tg://emoji?id=6030537299408725010)',
@@ -1243,7 +1268,7 @@ describe('TelegramAiPostingGeneratorService', () => {
   it('uses references attached to the preference selected for that draft', async () => {
     prisma.telegramAiPostingSettings.findFirst.mockResolvedValue({
       configuration: {
-        imageMode: 'ai',
+        imageMode: 'hybrid',
         mediaPreferences: [
           {
             id: 'illustration',
@@ -1303,6 +1328,10 @@ describe('TelegramAiPostingGeneratorService', () => {
       ([request]) => request.category === 'TELEGRAM_POSTING_TEXT',
     )?.[0];
     expect(result.generated).toHaveLength(1);
+    expect(result.generated[0].mediaPreference).toEqual({
+      id: 'illustration',
+      name: 'Рисованная схема',
+    });
     expect(textRequest?.input).toContain('Рисованная схема');
     expect(textRequest?.input).toContain('Тёплая палитра и простая композиция');
     expect(images.prepareReferenceSheet).toHaveBeenCalledWith([
@@ -1310,6 +1339,7 @@ describe('TelegramAiPostingGeneratorService', () => {
     ]);
     expect(images.resolve).toHaveBeenCalledWith(
       expect.objectContaining({
+        imageMode: 'ai',
         referenceImage: Buffer.from('selected-preference-reference'),
       }),
     );

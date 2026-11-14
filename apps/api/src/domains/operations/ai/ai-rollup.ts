@@ -9,6 +9,7 @@ export async function writeAiRollup(
 ) {
   const dimensions = {
     workspaceId: operation.workspaceId,
+    source: operation.source,
     day: budgetPeriods(operation.createdAt)[0].periodStart,
     category: operation.category,
     provider: operation.provider,
@@ -34,6 +35,7 @@ export async function writeAiRollup(
       direction,
     unknownUsageRequests:
       (operation.pricingStatus !== 'NOT_SENT' &&
+      operation.audioDurationSeconds == null &&
       (operation.inputTokens === null || operation.outputTokens === null)
         ? 1
         : 0) * direction,
@@ -48,7 +50,7 @@ export async function writeAiRollup(
     totalTokens: BigInt(operation.totalTokens ?? 0) * BigInt(direction),
   };
   const where = {
-    workspaceId_day_category_provider_model_status_aiPostingChannelId_aiPostingPublicationKey_aiPostingMode:
+    workspaceId_source_day_category_provider_model_status_aiPostingChannelId_aiPostingPublicationKey_aiPostingMode:
       dimensions,
   };
   const update = Object.fromEntries(

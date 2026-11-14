@@ -30,7 +30,7 @@ export class TelegramInviteLinkRegistrationService {
     userId: string,
     channelId: string,
     inviteLink: string,
-    period?: { from: Date; until: Date },
+    period?: { from: Date; until: Date; includePending?: boolean },
   ) {
     const workspaceId =
       await this.workspaceService.resolveWorkspaceIdForUser(userId);
@@ -62,6 +62,7 @@ export class TelegramInviteLinkRegistrationService {
       inviteLink,
       joinedFrom: period?.from,
       joinedUntil: period?.until,
+      ...(period?.includePending ? { includePendingSince: true } : {}),
     });
     if (
       remote.revoked ||
@@ -93,6 +94,7 @@ export class TelegramInviteLinkRegistrationService {
       currentJoinedCount: remote.usage,
       currentRequestedCount: remote.requested,
       joinedWithinPeriod: remote.joinedWithinPeriod ?? null,
+      ...(period?.includePending ? { pendingWithinPeriod: remote.pendingWithinPeriod ?? null } : {}),
     };
   }
 

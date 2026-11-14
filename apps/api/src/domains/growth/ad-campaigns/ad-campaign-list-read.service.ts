@@ -1,9 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import {
-  sumInviteLinkAttributedSubscribers,
-  sumInviteLinkJoinedSubscribers,
-} from '../../../common/analytics/invite-link-metrics';
+import { campaignInviteWindowMetrics } from './ad-campaign-invite-window-metrics';
+import { overlapShare, type CampaignWindow } from './bot-request-allocation';
 import { iconToResolvedEmoji } from '../../../common/icons/resolved-emoji';
 import {
   createPaginatedResponse,
@@ -103,6 +101,7 @@ const CAMPAIGN_LIST_SELECT = {
       creatorPhotoUrl: true,
     },
   },
+  inviteLinkWindows: { select: { inviteLinkId: true, fromDate: true, joinedCount: true, pendingCount: true, computedAt: true } },
   botInviteLinks: {
     select: {
       kind: true,
@@ -167,6 +166,7 @@ type LegacySource =
   CampaignListRow['advertisingChannels'][number]['advertisingSource'];
 type BotRequestPerformance = {
   total: number;
+  estimated: boolean;
   points: BotRequestTrendPoint[];
   channels: Array<{
     telegramChannelId: string;
@@ -401,6 +401,16 @@ export class AdCampaignListReadService {
       }),
     );
     if (!tracked.length) return new Map<string, BotRequestPerformance>();
+    const claims = await this.prisma.adCampaignBotInviteLink.findMany({
+      where: { inviteLinkId: { in: [...new Set(tracked.map((entry) => entry.inviteLinkId))] }, adCampaign: { workspaceId } },
+      select: { inviteLinkId: true, adCampaign: { select: { id: true, placementDate: true, startedAt: true, createdAt: true, endedAt: true } } },
+    });
+    const windowsByLink = new Map<string, CampaignWindow[]>();
+    for (const claim of claims) {
+      const windows = windowsByLink.get(claim.inviteLinkId) ?? [];
+      windows.push({ campaignId: claim.adCampaign.id, startsAt: claim.adCampaign.placementDate ?? claim.adCampaign.startedAt ?? claim.adCampaign.createdAt, endsAt: claim.adCampaign.endedAt });
+      windowsByLink.set(claim.inviteLinkId, windows);
+    }
     // A bot request can be approved after the placement end date. These are
     // campaign-specific invite links with a saved baseline, so their outcome
     // must continue to accumulate instead of being cut off at `endedAt`.
@@ -433,6 +443,7 @@ export class AdCampaignListReadService {
         (entry) => entry.campaignId === campaign.id,
       );
       if (!entries.length) continue;
+      let estimated = false;
       const channels = new Map<
         string,
         {
@@ -447,6 +458,8 @@ export class AdCampaignListReadService {
       >();
       for (const entry of entries) {
         const snapshotsForEntry = snapshotsByLink.get(entry.inviteLinkId) ?? [];
+        const windows = windowsByLink.get(entry.inviteLinkId) ?? [];
+        let previousAt = entry.startsAt, previousJoined = entry.baselineJoined, previousRequested = entry.baselineRequested, allocatedJoined = 0, allocatedRequested = 0;
         const current = channels.get(entry.channelId) ?? {
           telegramChannelId: entry.channelId,
           title: entry.channelTitle,
@@ -464,11 +477,13 @@ export class AdCampaignListReadService {
             joinedCount: 0,
             requestedCount: 0,
           };
-          point.joinedCount += Math.max(0, joinedCount - entry.baselineJoined);
-          point.requestedCount += Math.max(
-            0,
-            requestedCount - entry.baselineRequested,
-          );
+          const share = overlapShare(previousAt, at, entry.campaignId, windows);
+          estimated ||= share < 1;
+          allocatedJoined = Math.max(0, allocatedJoined + (Math.max(0, joinedCount - entry.baselineJoined) - Math.max(0, previousJoined - entry.baselineJoined)) * share);
+          allocatedRequested = Math.max(0, allocatedRequested + (Math.max(0, requestedCount - entry.baselineRequested) - Math.max(0, previousRequested - entry.baselineRequested)) * share);
+          previousAt = at; previousJoined = joinedCount; previousRequested = requestedCount;
+          point.joinedCount += allocatedJoined;
+          point.requestedCount += allocatedRequested;
           current.points.set(key, point);
         };
         addPoint(entry.startsAt, entry.baselineJoined, entry.baselineRequested);
@@ -522,6 +537,7 @@ export class AdCampaignListReadService {
       const points = aggregateBotRequestPoints(channelRows);
       result.set(campaign.id, {
         total: points.at(-1)?.totalAttributed ?? 0,
+        estimated,
         points,
         channels: channelRows.sort((a, b) => b.requests - a.requests),
         startsAt: (
@@ -564,10 +580,10 @@ export class AdCampaignListReadService {
     ]);
     const attributionCount =
       row.advertisingTelegramChannels.length + row.advertisingChannels.length;
-    const joinedCount = sumInviteLinkJoinedSubscribers(row.inviteLinks);
-    const attributedCount = sumInviteLinkAttributedSubscribers(row.inviteLinks);
-    const effectiveJoined = joinedCount > 0 ? joinedCount : row.joinedCount;
-    const requestedCount = joinedCount > 0 ? attributedCount - joinedCount : 0;
+    const counts = campaignInviteWindowMetrics(row.inviteLinks, row.inviteLinkWindows);
+    const unavailable = counts === null;
+    const effectiveJoined = row.inviteLinks.length ? counts?.joined ?? 0 : row.joinedCount;
+    const requestedCount = counts?.pending ?? 0;
     const costAmount = Number(row.price);
     return {
       ...row,
@@ -602,7 +618,8 @@ export class AdCampaignListReadService {
       advertisingChannels: sources,
       attributionType: attributionCount > 1 ? 'mixed' : 'clean',
       isMixedAttribution: attributionCount > 1,
-      inviteLinkHistorySummary: historySummaries.get(row.id) ?? null,
+      inviteLinkHistorySummary: row.inviteLinkWindows.length ? null : historySummaries.get(row.id) ?? null,
+      periodCountsUnavailable: unavailable,
       analytics: {
         joinedCount: effectiveJoined,
         requestedCount,

@@ -425,6 +425,83 @@ describe('TelegramAiPostingTestRunService review lifecycle', () => {
     );
   });
 
+  it('adds missing media in place and clears only its old media failure', async () => {
+    const ctx = setup({
+      imageUrl: null,
+      imageSourceId: null,
+      mediaReadiness: 'FAILED',
+      mediaFailureCode: 'AI_REQUEST_BUDGET_EXCEEDED',
+    });
+    ctx.storedRun.failures = [
+      { topic: 'Editorial topic', code: 'AI_REQUEST_BUDGET_EXCEEDED' },
+      { topic: 'Other topic', code: 'AI_POSTING_REVIEW_REJECTED' },
+    ];
+    ctx.prisma.telegramAiPostingSettings.findFirst.mockResolvedValue({
+      id: 'settings',
+      configuration: {},
+      configurationVersion: 4,
+      aiDailyBudget: null,
+      aiMonthlyBudget: null,
+      telegramChannel: null,
+    });
+    ctx.images.resolve.mockResolvedValue({
+      image: { url: 'https://media.example/new.jpg', sourceId: 'new-source' },
+      readiness: 'READY',
+    });
+    const result = await act(ctx.service, 'regenerate-image');
+    expect(result.publications[0]).toMatchObject({
+      text: 'Approved text',
+      imageUrl: 'https://media.example/new.jpg',
+      mediaReadiness: 'READY',
+    });
+    expect(ctx.storedRun.failures).toEqual([
+      { topic: 'Other topic', code: 'AI_POSTING_REVIEW_REJECTED' },
+    ]);
+    expect(ctx.prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('uses the saved media preference references and channel avatar when retrying media', async () => {
+    const ctx = setup({
+      imageUrl: null,
+      imageSourceId: null,
+      mediaReadiness: 'FAILED',
+      mediaPreference: { id: 'style-a', name: 'Illustration' },
+    });
+    ctx.prisma.telegramAiPostingSettings.findFirst.mockResolvedValue({
+      id: 'settings',
+      configuration: {
+        useChannelAvatarInMedia: true,
+        mediaPreferences: [
+          {
+            id: 'style-a',
+            name: 'Illustration',
+            description: '',
+            references: ['https://media.example/reference.jpg'],
+          },
+        ],
+      },
+      configurationVersion: 4,
+      aiDailyBudget: null,
+      aiMonthlyBudget: null,
+      telegramChannel: { photoUrl: 'data:image/png;base64,example' },
+    });
+    ctx.images.resolve.mockResolvedValue({
+      image: { url: 'https://media.example/new.jpg', sourceId: 'ai' },
+      readiness: 'READY',
+    });
+    const result = await act(ctx.service, 'regenerate-image');
+    expect(ctx.images.resolve).toHaveBeenCalledWith(
+      expect.objectContaining({
+        referenceImageUrls: ['https://media.example/reference.jpg'],
+        channelAvatarUrl: 'data:image/png;base64,example',
+        watermarkChannelAvatar: true,
+      }),
+    );
+    expect(result.publications[0]).toMatchObject({
+      mediaPreference: { id: 'style-a', name: 'Illustration' },
+    });
+  });
+
   it('regenerating an approved image resets approval and rejection state', async () => {
     const ctx = setup({ status: 'APPROVED', rejectionReason: 'Old reason' });
     ctx.prisma.telegramAiPostingSettings.findFirst.mockResolvedValue({

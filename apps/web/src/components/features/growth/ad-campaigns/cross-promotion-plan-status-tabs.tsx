@@ -3,6 +3,7 @@ import type {
   CrossPromotionPlanStatus,
 } from "@telegram-system/shared";
 import { Check, Circle, Clock3, FilePenLine, type LucideIcon } from "lucide-react";
+import { useOptionalI18n } from "@/providers/i18n-provider";
 
 export type CrossPromotionPlanTab =
   | "DRAFT"
@@ -71,6 +72,7 @@ export function CrossPromotionPlanStatusTabs({
   onChange: (value: CrossPromotionPlanTab) => void;
   ariaLabel?: string;
 }) {
+  const i18n = useOptionalI18n();
   return (
     <div
       className="flex w-full gap-1 overflow-x-auto rounded-xl border border-neutral-800 bg-neutral-900/70 p-1"
@@ -95,7 +97,7 @@ export function CrossPromotionPlanStatusTabs({
             }`}
           >
             <Icon aria-hidden="true" size={15} strokeWidth={2} className="shrink-0" />
-            {tab.label}
+            {i18n?.t(`ads.status_${tab.value.toLowerCase()}` as "ads.status_draft") ?? tab.label}
             <span
               className={`rounded-full px-1.5 py-0.5 text-xs tabular-nums ${
                 active

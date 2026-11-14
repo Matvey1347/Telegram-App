@@ -92,6 +92,9 @@ export class AiGateway {
         request.signal,
         request.instructions,
         request.image,
+        request.audio,
+        request.chatPlan,
+        request.revisionDraft,
       );
       let operation: AiOperation;
       try {

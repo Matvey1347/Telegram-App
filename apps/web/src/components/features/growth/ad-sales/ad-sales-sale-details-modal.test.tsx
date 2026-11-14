@@ -276,6 +276,8 @@ describe("SaleDetailsModal", () => {
     await user.type(screen.getByLabelText("Time for all"), "19:30");
     await user.click(screen.getByRole("button", { name: /Apply all \(2\)/ }));
 
+    expect(onSave).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
     await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
     const savedPlacements = onSave.mock.calls[0][1].placements;
     expect(savedPlacements).toHaveLength(2);
@@ -284,6 +286,109 @@ describe("SaleDetailsModal", () => {
         (placement: { scheduledAt: string }) => placement.scheduledAt,
       ),
     ).toEqual(["2026-08-25T17:30:00.000Z", "2026-08-25T17:30:00.000Z"]);
+  });
+
+  it("saves payment edits with the deal footer and hides transaction notes", async () => {
+    const user = userEvent.setup();
+    const onSave = vi.fn().mockResolvedValue(undefined);
+
+    render(
+      <SaleDetailsModal
+        open
+        onClose={vi.fn()}
+        sale={sale}
+        accounts={[]}
+        channels={[]}
+        productsByChannelId={{}}
+        settings={undefined}
+        rates={undefined}
+        onSave={onSave}
+        onAction={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Edit transaction" }));
+    const amount = screen.getByRole("textbox", { name: "Amount (UAH)" });
+    await user.clear(amount);
+    await user.type(amount, "125");
+    expect(screen.queryByLabelText("Notes")).toBeNull();
+    expect(screen.getByRole("button", { name: "Update transaction" })).toBeTruthy();
+
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+    await waitFor(() =>
+      expect(onSave).toHaveBeenCalledWith(
+        sale,
+        expect.objectContaining({
+          placements: [],
+          payments: [expect.objectContaining({ id: "payment-1", amount: 125 })],
+        }),
+      ),
+    );
+  });
+
+  it("updates only the finance transaction from its own action", async () => {
+    const user = userEvent.setup();
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    const onClose = vi.fn();
+
+    render(
+      <SaleDetailsModal
+        open
+        onClose={onClose}
+        sale={sale}
+        accounts={[]}
+        channels={[]}
+        productsByChannelId={{}}
+        settings={undefined}
+        rates={undefined}
+        onSave={onSave}
+        onAction={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Edit transaction" }));
+    const amount = screen.getByRole("textbox", { name: "Amount (UAH)" });
+    await user.clear(amount);
+    await user.type(amount, "135");
+    await user.click(screen.getByRole("button", { name: "Update transaction" }));
+
+    await waitFor(() =>
+      expect(onSave).toHaveBeenCalledWith(
+        sale,
+        expect.objectContaining({
+          paymentsOnly: true,
+          placements: [],
+          payments: [expect.objectContaining({ id: "payment-1", amount: 135 })],
+        }),
+      ),
+    );
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("places publication deletion beside the deal save action", () => {
+    const onAction = vi.fn();
+    render(
+      <SaleDetailsModal
+        open
+        onClose={vi.fn()}
+        sale={sale}
+        accounts={[]}
+        channels={[]}
+        productsByChannelId={{}}
+        settings={undefined}
+        rates={undefined}
+        onSave={vi.fn()}
+        onAction={onAction}
+      />,
+    );
+
+    const deleteButton = screen.getByRole("button", {
+      name: "Delete publications",
+    });
+    expect(deleteButton).toHaveClass("w-full");
+    expect(deleteButton.parentElement).toContainElement(
+      screen.getByRole("button", { name: "Save changes" }),
+    );
   });
 
   it("confirms removal of a linked finance transaction so it can be registered later", async () => {
@@ -307,7 +412,7 @@ describe("SaleDetailsModal", () => {
 
     await user.click(screen.getByRole("button", { name: "Edit transaction" }));
     await user.click(
-      screen.getByRole("button", { name: "Delete finance transaction" }),
+      screen.getByRole("button", { name: "Delete transaction" }),
     );
     await user.type(
       screen.getByPlaceholderText("finance transaction"),
@@ -315,7 +420,7 @@ describe("SaleDetailsModal", () => {
     );
     await user.click(screen.getByLabelText("Also clear the deal value"));
     await user.click(
-      screen.getByRole("button", { name: "Delete transaction" }),
+      screen.getAllByRole("button", { name: "Delete transaction" })[1],
     );
 
     await waitFor(() =>
@@ -459,11 +564,15 @@ describe("SaleDetailsModal", () => {
     const user = userEvent.setup();
     const onSave = vi.fn().mockResolvedValue(undefined);
     const onClose = vi.fn();
+    const saleWithClient = {
+      ...(sale as unknown as Record<string, unknown>),
+      advertiserId: "advertiser-1",
+    } as never;
     render(
       <SaleDetailsModal
         open
         onClose={onClose}
-        sale={sale}
+        sale={saleWithClient}
         accounts={[]}
         channels={[{ id: "channel-1", title: "Psychology" } as never]}
         productsByChannelId={{}}
@@ -474,7 +583,8 @@ describe("SaleDetailsModal", () => {
       />,
     );
 
-    const buyer = screen.getByPlaceholderText("@username, phone, email");
+    await user.click(screen.getByRole("button", { name: "New client" }));
+    const buyer = screen.getByRole("textbox", { name: "Telegram username" });
     await user.clear(buyer);
     await user.type(buyer, "@new_buyer");
     await user.click(screen.getByRole("button", { name: "Save changes" }));
@@ -483,7 +593,7 @@ describe("SaleDetailsModal", () => {
 
     await waitFor(() =>
       expect(onSave).toHaveBeenCalledWith(
-        sale,
+        saleWithClient,
         expect.objectContaining({ buyerContact: "@new_buyer" }),
       ),
     );

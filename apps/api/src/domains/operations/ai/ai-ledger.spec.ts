@@ -12,7 +12,7 @@ import { AiGateway } from './ai-gateway';
 import { AiLocalConcurrency } from './ai-local-concurrency';
 
 const decimal = (n: string) => new Prisma.Decimal(n);
-function harness() {
+function harness(usageSource: 'PRODUCTION' | 'LOCAL_UNSYNCED' = 'LOCAL_UNSYNCED') {
   const registry = new AiModelRegistry();
   const config = {
     ...registry.category('LEAD_AD_CLASSIFICATION'),
@@ -25,6 +25,7 @@ function harness() {
   const workspace = {
     enabled: true,
     automaticEnabled: false,
+    aiPostingUnlimited: false,
     dailyBudget: decimal('0.0015'),
     monthlyBudget: decimal('1'),
     maxRequestCost: decimal('1'),
@@ -152,6 +153,7 @@ function harness() {
   const admission = new AiAdmissionService(prisma, registry, {
     enabled: true,
     configured: true,
+    usageSource,
   } as any);
   const settlement = new AiSettlementService(prisma, auth);
   const request = (): AiExecutionRequest => ({
@@ -178,6 +180,110 @@ function harness() {
 }
 
 describe('AI locked admission and settlement', () => {
+  it('marks local AI operations as unsynced and production operations as production', async () => {
+    const localHarness = harness('LOCAL_UNSYNCED');
+    const local = await localHarness.admission.admit(localHarness.request());
+    expect(local.operation.source).toBe('LOCAL_UNSYNCED');
+
+    const productionHarness = harness('PRODUCTION');
+    const production = await productionHarness.admission.admit(
+      productionHarness.request(),
+    );
+    expect(production.operation.source).toBe('PRODUCTION');
+  });
+
+  it('prices audio by provider duration and retains the reservation when usage is missing', async () => {
+    const h = harness();
+    h.workspace.aiPostingUnlimited = true;
+    const data = Buffer.alloc(44 + 32000);
+    data.write('RIFF', 0); data.writeUInt32LE(data.length - 8, 4); data.write('WAVEfmt ', 8); data.writeUInt32LE(16, 16);
+    data.writeUInt16LE(1, 20); data.writeUInt16LE(1, 22); data.writeUInt32LE(16000, 24); data.writeUInt32LE(32000, 28);
+    data.writeUInt16LE(2, 32); data.writeUInt16LE(16, 34); data.write('data', 36); data.writeUInt32LE(32000, 40);
+    const req = { ...h.request(), category: 'TELEGRAM_POSTING_PLAN' as const, businessObjectId: 'channel',
+      aiPosting: { channelId: 'channel', postingMode: 'TEST' as const }, audio: { mime: 'audio/wav' as const, data } };
+    await expect(h.admission.admit({ ...req, mode: 'AUTOMATIC' })).rejects.toThrow('AI_REQUEST_INVALID');
+    await expect(h.admission.admit({ ...req, audio: { mime: 'audio/wav', data: Buffer.from('invalid') } })).rejects.toThrow('AI_REQUEST_INVALID');
+    const first = await h.admission.admit(req);
+    expect(first.operation.reservedCost.toString()).toBe('0.0045');
+    expect(first.operation.model).toBe('gpt-transcribe');
+    const settled = await h.settlement.settle(first.operation, { generationStarted: true, usage: null, audioDurationSeconds: 1, errorCategory: null, providerModel: 'gpt-transcribe', providerRequestId: null });
+    expect(settled.status).toBe('SUCCEEDED');
+    expect(settled.actualCost?.toString()).toBe('0.000075');
+    expect(settled.inputTokens).toBeNull();
+    expect(h.tx.aiUsageDaily.upsert).toHaveBeenCalledWith(expect.objectContaining({
+      create: expect.objectContaining({ source: 'LOCAL_UNSYNCED' }),
+    }));
+    const second = await h.admission.admit({ ...req, operationId: h.request().operationId });
+    const unknown = await h.settlement.settle(second.operation, { generationStarted: true, usage: null, errorCategory: null, providerModel: 'gpt-transcribe', providerRequestId: null });
+    expect(unknown.status).toBe('UNKNOWN');
+    expect(unknown.actualCost).toBeNull();
+    expect([...h.buckets.values()].every((b) => b.reserved.eq('0.0045'))).toBe(true);
+  });
+  it('removes monetary caps only for explicitly unlimited AI Posting while retaining accounting and other AI limits', async () => {
+    const h = harness();
+    h.workspace.aiPostingUnlimited = true;
+    h.workspace.maxRequestCost = decimal('0.001');
+    h.workspace.dailyBudget = decimal('0.001');
+    h.workspace.monthlyBudget = decimal('0.001');
+    Object.assign(h.config, h.registry.category('TELEGRAM_POSTING_IMAGE'), {
+      enabled: true,
+    });
+    const req = {
+      ...h.request(),
+      category: 'TELEGRAM_POSTING_IMAGE' as const,
+      businessObjectId: 'channel',
+      aiPosting: {
+        channelId: 'channel',
+        postingMode: 'TEST' as const,
+        dailyBudget: '0',
+        monthlyBudget: '0',
+      },
+    };
+    const result = await h.admission.admit(req);
+    expect(result.operation.reservedCost.greaterThan(0)).toBe(true);
+    expect(h.buckets.size).toBe(6);
+    Object.assign(h.config, h.registry.category('LEAD_AD_CLASSIFICATION'), {
+      enabled: true,
+      modelId: 'gpt-5.4-mini-2026-03-17',
+    });
+    await expect(
+      h.admission.admit({
+        ...h.request(),
+        operationId: h.request().operationId,
+      }),
+    ).rejects.toThrow('AI_REQUEST_BUDGET_EXCEEDED');
+    h.workspace.aiPostingUnlimited = false;
+    Object.assign(h.config, h.registry.category('TELEGRAM_POSTING_IMAGE'), {
+      enabled: true,
+    });
+    await expect(
+      h.admission.admit({ ...req, operationId: h.request().operationId }),
+    ).rejects.toThrow('AI_REQUEST_BUDGET_EXCEEDED');
+  });
+
+  it('still requires automatic execution enablement for unlimited posting', async () => {
+    const h = harness();
+    h.workspace.aiPostingUnlimited = true;
+    Object.assign(h.config, h.registry.category('TELEGRAM_POSTING_TEXT'), {
+      enabled: true,
+      automaticEnabled: true,
+    });
+    const req = {
+      ...h.request(),
+      mode: 'AUTOMATIC' as const,
+      category: 'TELEGRAM_POSTING_TEXT' as const,
+      businessObjectId: 'channel',
+      aiPosting: { channelId: 'channel', postingMode: 'AUTOMATIC' as const },
+    };
+    await expect(h.admission.admit(req)).rejects.toThrow(
+      'AI_AUTOMATIC_DISABLED',
+    );
+    h.workspace.automaticEnabled = true;
+    await expect(h.admission.admit(req)).resolves.toMatchObject({
+      operation: { category: 'TELEGRAM_POSTING_TEXT' },
+    });
+  });
+
   it('allows an explicit image request limit above the workspace cap without changing text limits', async () => {
     const h = harness();
     h.workspace.maxRequestCost = decimal('0.05');

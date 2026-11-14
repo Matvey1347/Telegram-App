@@ -51,7 +51,7 @@ describe('TelegramSystemBotHandlerService', () => {
       input: jest.fn().mockResolvedValue(null),
     } as any;
     const service = new TelegramSystemBotHandlerService(
-      { token: 'token' } as any,
+      { token: 'token', username: 'dev_bot' } as any,
       api,
       connections,
       {} as any,
@@ -100,6 +100,17 @@ describe('TelegramSystemBotHandlerService', () => {
       chat_id: '-1001234567890',
       text: '✅ This group is now connected to workspace notifications.',
     });
+  });
+
+  it('ignores commands addressed to another bot and accepts its own username case-insensitively', async () => {
+    const test = workflowHarness();
+    test.notificationConnections.consumeNotificationGroupLink.mockResolvedValue(true);
+    const message = { chat: { id: -1001, type: 'supergroup' as const, title: 'Team' }, text: '/connect_workspace@prod_bot abcdefghijklmnopqrstuvwxyz' };
+    await test.service.handle({ message });
+    expect(test.notificationConnections.consumeNotificationGroupLink).not.toHaveBeenCalled();
+    expect(test.api.sendMessage).not.toHaveBeenCalled();
+    await test.service.handle({ message: { ...message, text: '/connect_workspace@DEV_BOT abcdefghijklmnopqrstuvwxyz' } });
+    expect(test.notificationConnections.consumeNotificationGroupLink).toHaveBeenCalledTimes(1);
   });
 
   it('connects the private Telegram account from the workspace deep link', async () => {

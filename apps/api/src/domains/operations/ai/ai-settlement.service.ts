@@ -57,10 +57,23 @@ export class AiSettlementService {
       }
       const price = fresh.pricingSnapshot as unknown as AiPrice;
       const modelCompatible = outcome.providerModel === fresh.model;
+      const audioSnapshot = fresh.pricingSnapshot as {
+        billingUnit?: string;
+        audioPerMinute?: string;
+      } | null;
+      const audioPrice =
+        fresh.model === 'gpt-transcribe' &&
+        audioSnapshot?.billingUnit === 'audio_seconds' &&
+        audioSnapshot.audioPerMinute === '0.0045';
       const actualCost =
-        outcome.usage && modelCompatible
-          ? priceUsage(price, outcome.usage)
-          : null;
+        audioPrice && modelCompatible && outcome.audioDurationSeconds != null
+          ? new Prisma.Decimal(outcome.audioDurationSeconds)
+              .mul(audioSnapshot.audioPerMinute!)
+              .div(60)
+              .toDecimalPlaces(12, Prisma.Decimal.ROUND_UP)
+          : outcome.usage && modelCompatible
+            ? priceUsage(price, outcome.usage)
+            : null;
       const knownNotSent = !outcome.generationStarted;
       const notSentWithoutError = Boolean(
         durableVersion && knownNotSent && !outcome.errorCategory,
@@ -76,7 +89,7 @@ export class AiSettlementService {
         ? 'NOT_SENT'
         : actualCost !== null
           ? 'PRICED'
-          : outcome.usage
+          : outcome.usage || outcome.audioDurationSeconds != null
             ? 'UNPRICED'
             : 'UNKNOWN';
       if (durableOutput !== undefined)
@@ -96,6 +109,7 @@ export class AiSettlementService {
           pricingStatus,
           actualCost,
           ...(outcome.usage ?? EMPTY_USAGE),
+          audioDurationSeconds: outcome.audioDurationSeconds ?? null,
           providerModel: outcome.providerModel,
           providerRequestId: outcome.providerRequestId,
           errorCategory:

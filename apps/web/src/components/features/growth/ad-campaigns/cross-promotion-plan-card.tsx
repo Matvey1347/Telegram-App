@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarClock, Eye, Pencil, RefreshCw, Send, Trash2, UserMinus, UserPlus, type LucideIcon } from "lucide-react";
+import { CalendarClock, Eye, Pencil, RefreshCw, Send, Trash2, UserPlus, type LucideIcon } from "lucide-react";
 import type { CrossPromotionPlan } from "@telegram-system/shared";
 import { IconAvatar } from "@/components/icons/icon-avatar";
 import { TelegramChannelAvatarList } from "@/components/features/telegram/telegram/telegram-channel-avatar-list";
@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/card-actions-menu";
 import { formatDateTime } from "@/lib/date-format";
 import { useWorkspaceTimezone } from "@/hooks/use-workspace-timezone";
+import { useOptionalI18n } from "@/providers/i18n-provider";
 import { MutualPromotionFolderStatusBadge } from "./mutual-promotion/mutual-promotion-folder-status-badge";
 
 export function CrossPromotionPlanCard({
@@ -33,20 +34,14 @@ export function CrossPromotionPlanCard({
   refreshingInviteLinks?: boolean;
 }) {
   const workspaceTimezone = useWorkspaceTimezone();
+  const i18n = useOptionalI18n();
   const publishingChannels = plan.publisherResults.map((channel) => ({
-    id: channel.telegramChannelId,
-    title: channel.title,
-    photoUrl: channel.photoUrl,
-  }));
-  const partnerChannels = plan.partnerResults.map((channel) => ({
     id: channel.telegramChannelId,
     title: channel.title,
     photoUrl: channel.photoUrl,
   }));
   const publisherPublicationCount =
     plan.publicationPost.publisherPublications?.length ?? 1;
-  const partnerPublicationCount =
-    plan.publicationPost.partnerPublications?.length ?? 1;
   const canEdit = plan.status !== "CANCELLED";
   const advertiser = advertiserPresentation(plan.advertiser);
   const placementTimes = plan.kind === "OWN_CHANNELS"
@@ -57,9 +52,6 @@ export function CrossPromotionPlanCard({
     : plan.scheduledAt;
   const publisherViews = sumKnown(
     plan.publisherResults.map((channel) => channel.postViews),
-  );
-  const publisherAudienceDecline = sumKnown(
-    plan.publisherResults.map((channel) => channel.subscribersLost),
   );
 
   return (
@@ -143,9 +135,8 @@ export function CrossPromotionPlanCard({
         </div>
       </div>
 
-      <div className={`mx-4 mt-3 grid rounded-lg border border-white/5 bg-black/25 py-2 ${plan.kind === "OWN_CHANNELS" ? "grid-cols-1" : "grid-cols-1 divide-y divide-white/10 sm:grid-cols-2 sm:divide-x sm:divide-y-0"}`}>
-        {plan.kind !== "OWN_CHANNELS" ? <ChannelMetric channels={partnerChannels} label="Partner channels" publicationCount={partnerPublicationCount} /> : null}
-        <ChannelMetric channels={publishingChannels} label="My channels" publicationCount={publisherPublicationCount} />
+      <div className="mx-4 mt-2 rounded-lg border border-white/5 bg-black/25 py-1">
+        <ChannelMetric channels={publishingChannels} label={i18n?.t("ads.section_own") ?? "My channels"} publicationCount={publisherPublicationCount} />
       </div>
 
       {plan.status === "DRAFT" ? (
@@ -181,16 +172,6 @@ export function CrossPromotionPlanCard({
                   target.joinedCount + target.requestedCount
                 ).toLocaleString()}`}
                 tone="text-emerald-300"
-              />
-              <Stat
-                label="Audience decline"
-                icon={UserMinus}
-                value={
-                  publisherAudienceDecline == null
-                    ? "—"
-                    : `−${publisherAudienceDecline.toLocaleString()}`
-                }
-                tone="text-rose-300"
               />
               <Stat
                 label="Actual views"

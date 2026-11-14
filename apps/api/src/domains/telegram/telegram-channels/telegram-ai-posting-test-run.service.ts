@@ -15,7 +15,7 @@ import { TelegramAiPostingImageService } from './telegram-ai-posting-image.servi
 import { saveRejectedTelegramAiPostingImage } from './telegram-ai-posting-image-avoidance.store';
 import { TelegramAiPostingStructureService } from './telegram-ai-posting-structure.service';
 import { telegramHtmlToManagedMarkup } from '@api/telegram/shared/markup/telegram-markup';
-import { applyTelegramAiPostingTestRunFormatting } from './telegram-ai-posting-test-run-format';
+import { applyTelegramAiPostingTestRunFormatting, preserveTelegramAiPostingReferences } from './telegram-ai-posting-test-run-format';
 import {
   parseTelegramAiPostingJson,
   telegramAiPostingOperationFromError,
@@ -26,6 +26,10 @@ import {
 } from './telegram-ai-posting-run-data';
 import { resolveTelegramAiPostingLanguage } from './telegram-ai-posting-language';
 import { publicationEmojiInstruction } from './telegram-ai-posting-prompts';
+import {
+  clearTelegramAiPostingMediaFailure,
+  resolveTelegramAiPostingMediaPreference,
+} from './telegram-ai-posting-media-preferences';
 
 type Run = {
   stage: string;
@@ -44,6 +48,7 @@ type TestPublication = {
   title: string;
   text: string;
   imagePrompt: string;
+  mediaPreference?: { id: string; name: string } | null;
   imageUrl: string | null;
   imageSourceId: string | null;
   mediaReadiness?: 'READY' | 'MISSING' | 'FAILED';
@@ -200,11 +205,12 @@ export class TelegramAiPostingTestRunService {
       const textAttempt =
         item.operations.filter((operation) => operation.stage === 'text')
           .length + 1;
-      const prompt = `Return only JSON {"title":string,"text":string,"imagePrompt":string}. Rewrite this Telegram publication according to the user's current channel rules. The reader-facing title and text must be exclusively in ${language}. ${publicationEmojiInstruction(config)} Topic: ${item.topic}. Rules: ${JSON.stringify(config).slice(0, 8000)}. User feedback: ${value?.slice(0, 1000) ?? 'Improve clarity and distinctiveness'}. Existing text: ${item.text}`;
+      const prompt = `Return the complete revised publication as structured fields title, text and imagePrompt. The title and text must be nonempty. Rewrite this Telegram publication according to the user's current channel rules. The reader-facing title and text must be exclusively in ${language}. ${publicationEmojiInstruction(config)} Topic: ${item.topic}. Rules: ${JSON.stringify(config).slice(0, 8000)}. User feedback: ${value?.slice(0, 1000) ?? 'Improve clarity and distinctiveness'}. Existing text: ${item.text}`;
       const result = await this.gateway.execute({
         userId,
         workspaceId,
         category: 'TELEGRAM_POSTING_TEXT',
+        revisionDraft: true,
         operationId: `${new Date().toISOString().slice(0, 10)}:${randomUUID()}`,
         mode: 'MANUAL',
         input: prompt,
@@ -249,9 +255,7 @@ export class TelegramAiPostingTestRunService {
         );
         throw new BadGatewayException('AI_POSTING_TEXT_REGENERATION_FAILED');
       }
-      const rewritten = parseTelegramAiPostingJson(
-        (result.result as { reply?: string }).reply ?? '',
-      );
+      const rewritten = 'text' in result.result ? result.result as { title?: unknown; text?: unknown; imagePrompt?: unknown } : parseTelegramAiPostingJson((result.result as { reply?: string }).reply ?? '');
       if (
         !rewritten ||
         typeof rewritten.title !== 'string' ||
@@ -272,7 +276,7 @@ export class TelegramAiPostingTestRunService {
       }
       item.title = rewritten.title.trim();
       item.text = applyTelegramAiPostingTestRunFormatting(
-        rewritten.text,
+        preserveTelegramAiPostingReferences(rewritten.text, item.text, config, value),
         config,
       );
       if (item.text.length > (item.imageUrl ? 1024 : 4096))
@@ -368,11 +372,11 @@ export class TelegramAiPostingTestRunService {
         expectedVersion,
         publications,
         runs,
-        'PARTIAL',
+        (Array.isArray(run.failures) && run.failures.length) || publications.some((post) => (post.mediaReadiness ?? (post.imageUrl ? 'READY' : 'MISSING')) !== 'READY') ? 'PARTIAL' : 'COMPLETED',
         sourceDiagnostics,
       );
       return {
-        ...run,
+        ...run, status: (Array.isArray(run.failures) && run.failures.length) || publications.some((post) => (post.mediaReadiness ?? (post.imageUrl ? 'READY' : 'MISSING')) !== 'READY') ? 'PARTIAL' : 'COMPLETED',
         version: expectedVersion + 1,
         publications,
         sourceDiagnostics,
@@ -400,7 +404,7 @@ export class TelegramAiPostingTestRunService {
           )
         : [];
       const rejectedDirection =
-        typeof item.imagePrompt === 'string'
+        item.imageUrl && typeof item.imagePrompt === 'string'
           ? item.imagePrompt.trim().slice(0, 500)
           : '';
       const nextAvoidances = rejectedDirection
@@ -431,6 +435,7 @@ export class TelegramAiPostingTestRunService {
       }
       if (item.text.length > 1024)
         throw new ConflictException('AI_POSTING_TELEGRAM_LENGTH_WITH_IMAGE');
+      const preference = resolveTelegramAiPostingMediaPreference(config, item);
       let resolved: Awaited<
         ReturnType<TelegramAiPostingImageService['resolve']>
       >;
@@ -441,7 +446,8 @@ export class TelegramAiPostingTestRunService {
           channelId,
           topic: item.topic,
           imageMode: 'ai',
-          referenceImageUrls: config.imageReferenceUrls,
+          referenceImageUrls:
+            preference?.references ?? config.imageReferenceUrls,
           channelAvatarUrl: settings.telegramChannel?.photoUrl,
           imageCandidates: [],
           prompt: [
@@ -519,27 +525,43 @@ export class TelegramAiPostingTestRunService {
           'PARTIAL',
           sourceDiagnostics,
         );
-        throw new BadGatewayException('AI_POSTING_IMAGE_REGENERATION_FAILED');
+        throw new BadGatewayException(item.mediaFailureCode);
       }
+      if (preference)
+        item.mediaPreference = { id: preference.id, name: preference.name };
       item.imageUrl = resolved.image.url;
       item.imageSourceId = resolved.image.sourceId;
       item.mediaReadiness = 'READY';
       delete item.mediaFailureCode;
       item.status = 'PENDING';
       item.rejectionReason = null;
+      const failures = clearTelegramAiPostingMediaFailure(
+        run.failures,
+        item.topic,
+      );
       await this.writeTestRun(
         run.id,
         workspaceId,
         expectedVersion,
         publications,
         operations,
-        'PARTIAL',
+        failures.length ||
+          publications.some((post) => post.mediaReadiness !== 'READY')
+          ? 'PARTIAL'
+          : 'COMPLETED',
         sourceDiagnostics,
+        failures,
       );
       return {
         ...run,
         version: expectedVersion + 1,
         publications,
+        failures,
+        status:
+          failures.length ||
+          publications.some((post) => post.mediaReadiness !== 'READY')
+            ? 'PARTIAL'
+            : 'COMPLETED',
         sourceDiagnostics,
       };
     }
@@ -747,6 +769,7 @@ export class TelegramAiPostingTestRunService {
     sourceDiagnostics: ReturnType<
       typeof decodeAiPostingRunPublications
     >['sourceDiagnostics'],
+    failures?: unknown[],
   ) {
     const cost = (stage: string): Prisma.Decimal | null => {
       const matching = operations.filter(
@@ -773,6 +796,7 @@ export class TelegramAiPostingTestRunService {
           sourceDiagnostics,
         ),
         operations: operations,
+        ...(failures ? { failures: failures as Prisma.InputJsonArray } : {}),
         planningCost: cost('planning'),
         textCost: cost('text'),
         imageCost: publications.some((item) => item.imageCostUnknown)

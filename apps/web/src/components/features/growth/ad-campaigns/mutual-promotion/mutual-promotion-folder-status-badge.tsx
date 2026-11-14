@@ -1,4 +1,5 @@
 import type { MutualPromotionFolderStatus } from "@telegram-system/shared";
+import { useOptionalI18n } from "@/providers/i18n-provider";
 
 const statusPresentation: Record<
   MutualPromotionFolderStatus,
@@ -42,6 +43,7 @@ export function MutualPromotionFolderStatusBadge({
   status: MutualPromotionFolderStatus;
 }) {
   const presentation = statusPresentation[status];
+  const i18n = useOptionalI18n();
   return (
     <span
       className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium ${presentation.badge}`}
@@ -50,7 +52,7 @@ export function MutualPromotionFolderStatusBadge({
         data-testid="folder-status-dot"
         className={`h-1.5 w-1.5 rounded-full ${presentation.dot}`}
       />
-      {presentation.label}
+      {i18n?.t(`ads.status_${status.toLowerCase()}` as "ads.status_draft") ?? presentation.label}
     </span>
   );
 }

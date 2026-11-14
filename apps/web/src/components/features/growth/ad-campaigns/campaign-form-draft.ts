@@ -5,6 +5,7 @@ export type CampaignValues = {
   assignedMemberId?: string | null;
   promoIds: string[];
   inviteLinkIds: string[];
+  inviteLinkWindows?: Record<string, string>;
   botInviteLinkIds: string[];
   trackingLinkKind: string;
   trackingChannelIds: string[];
@@ -55,6 +56,7 @@ export function normalizeCampaignDraft(value: unknown): CampaignValues | null {
     inviteLinkIds: Array.isArray(draft.inviteLinkIds)
       ? draft.inviteLinkIds.filter((id): id is string => typeof id === "string")
       : [],
+    inviteLinkWindows: draft.inviteLinkWindows && typeof draft.inviteLinkWindows === "object" ? Object.fromEntries(Object.entries(draft.inviteLinkWindows).filter(([, date]) => typeof date === "string")) : {},
     botInviteLinkIds: Array.isArray(draft.botInviteLinkIds)
       ? draft.botInviteLinkIds.filter((id): id is string => typeof id === "string")
       : [],

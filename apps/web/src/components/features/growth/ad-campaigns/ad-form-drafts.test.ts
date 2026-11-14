@@ -69,6 +69,7 @@ describe("ad form draft meaning", () => {
       assignedMemberId: null,
       promoIds: ["promo-1"],
       inviteLinkIds: [],
+      inviteLinkWindows: {},
       botInviteLinkIds: [],
       trackingLinkKind: "BOT",
       trackingChannelIds: [],

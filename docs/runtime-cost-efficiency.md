@@ -1,5 +1,9 @@
 # Runtime cost efficiency
 
+### Workspace notification linking
+
+The settings page checks connection status only while a user-initiated link is valid and the page is visible. It checks every four seconds for the first minute and every fifteen seconds afterwards, stops on confirmation or expiry, and refreshes on return to the page. Each check reads one workspace; avatar downloads are cached for five minutes (failed lookups for twenty seconds). Idle pages and the other 100 channels do not trigger this work. There are no recurring server jobs, extra database writes, or retained photo records.
+
 This is the production engineering standard for Neon and Railway. Cost must
 follow useful work, not application uptime or the number of rows stored.
 

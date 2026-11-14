@@ -36,7 +36,12 @@ describe('linked investment transaction mutations', () => {
         }),
         update: jest.fn().mockResolvedValue({}),
       },
-      financeInvestmentCashFlow: { update: jest.fn().mockResolvedValue({}) },
+      financeInvestmentCashFlow: {
+        update: jest.fn().mockResolvedValue({}),
+        groupBy: jest.fn().mockResolvedValue([]),
+      },
+      financeInvestmentValuation: { findFirst: jest.fn().mockResolvedValue(null) },
+      financeTransaction: { groupBy: jest.fn().mockResolvedValue([]) },
     };
     await syncLinkedInvestmentEdit(tx, linked(), {
       amount: '120',
@@ -85,10 +90,15 @@ describe('linked investment transaction mutations', () => {
   it('removes the cash flow and transaction together and reverses investment totals', async () => {
     const tx: any = {
       $executeRaw: jest.fn().mockResolvedValue(1),
-      financeInvestmentCashFlow: { delete: jest.fn().mockResolvedValue({}) },
+      financeInvestmentCashFlow: {
+        delete: jest.fn().mockResolvedValue({}),
+        groupBy: jest.fn().mockResolvedValue([]),
+      },
+      financeInvestmentValuation: { findFirst: jest.fn().mockResolvedValue(null) },
       financeTransaction: {
         findFirst: jest.fn().mockResolvedValue(linked()),
         update: jest.fn().mockResolvedValue({}),
+        groupBy: jest.fn().mockResolvedValue([]),
       },
       financeInvestment: { update: jest.fn().mockResolvedValue({}) },
     };

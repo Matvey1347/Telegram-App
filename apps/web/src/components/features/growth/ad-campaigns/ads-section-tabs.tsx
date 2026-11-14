@@ -6,7 +6,6 @@ import {
   FlaskConical,
   Images,
   Megaphone,
-  Network,
   Repeat2,
 } from "lucide-react";
 import { useI18n } from "@/providers/i18n-provider";
@@ -49,12 +48,6 @@ const ADS_SECTIONS: ReadonlyArray<{
     href: "/ad-campaigns?section=mutual-promotion",
     icon: Repeat2,
   },
-  {
-    value: "own-promotion",
-    labelKey: "ads.section_own",
-    href: "/ad-campaigns?section=own-promotion",
-    icon: Network,
-  },
 ];
 
 export function resolveAdsSection(
@@ -84,7 +77,7 @@ export function AdsSectionTabs({ value, trailing }: { value: AdsSection; trailin
     <div className="mb-5 flex min-w-0 flex-wrap items-center justify-between gap-2">
       <div
         data-testid="ads-section-tabs-scroll"
-        className="min-w-0 max-w-full flex-1 overflow-x-auto overscroll-x-contain"
+        className="w-full min-w-0 max-w-full flex-1 basis-full overflow-x-auto overscroll-x-contain sm:basis-auto"
       >
       <div
         role="tablist"
@@ -99,9 +92,9 @@ export function AdsSectionTabs({ value, trailing }: { value: AdsSection; trailin
               ref={value === section.value ? activeTabRef : undefined}
               href={section.href}
               role="tab"
-              aria-selected={value === section.value}
+              aria-selected={value === section.value || (value === "own-promotion" && section.value === "mutual-promotion")}
               className={`inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-md px-4 py-2 text-sm transition ${
-                value === section.value
+                value === section.value || (value === "own-promotion" && section.value === "mutual-promotion")
                   ? "bg-blue-600 text-white"
                   : "text-neutral-300 hover:bg-neutral-800"
               }`}

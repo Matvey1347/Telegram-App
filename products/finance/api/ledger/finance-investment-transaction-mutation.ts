@@ -1,3 +1,4 @@
+import { refreshInvestmentCurrent } from '@consumer-finance/api/investments/finance-investment-current';
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import type { PrismaService } from '@api/prisma/prisma.service';
@@ -154,6 +155,7 @@ export async function syncLinkedInvestmentEdit(
       version: { increment: 1 },
     },
   });
+  await refreshInvestmentCurrent(tx, existing.profileId, link.investmentId);
 }
 
 export async function removeLinkedInvestmentTransaction(
@@ -186,5 +188,6 @@ export async function removeLinkedInvestmentTransaction(
       version: { increment: 1 },
     },
   });
+  await refreshInvestmentCurrent(tx, existing.profileId, currentLink.investmentId);
   return { deleted: true, undoable: false };
 }

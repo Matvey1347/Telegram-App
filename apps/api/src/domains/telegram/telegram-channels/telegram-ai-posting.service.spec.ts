@@ -456,7 +456,7 @@ describe('TelegramAiPostingService', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
-  it('limits saved visual references to four safe image URLs', async () => {
+  it('limits saved visual references to eight safe image URLs', async () => {
     prisma.telegramChannel.findFirst.mockResolvedValue({ id: 'ch-a' });
     const base = {
       historyMode: 'all',
@@ -471,7 +471,7 @@ describe('TelegramAiPostingService', () => {
         configuration: {
           ...base,
           imageReferenceUrls: Array.from(
-            { length: 5 },
+            { length: 9 },
             (_, index) => `https://cdn.example/ref-${index}.jpg`,
           ),
         },

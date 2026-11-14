@@ -166,6 +166,7 @@ describe('TelegramMtprotoClient import resolution', () => {
         inviteLink: 'https://telegram.me/+legacy?source=old',
         joinedFrom: new Date('2025-01-01T12:00:00.000Z'),
         joinedUntil: new Date('2025-01-03T00:00:00.000Z'),
+        includePendingSince: true,
       }),
     ).resolves.toMatchObject({
       url: 'https://t.me/+legacy',
@@ -178,7 +179,26 @@ describe('TelegramMtprotoClient import resolution', () => {
       requested: 1,
       permanent: true,
       joinedWithinPeriod: 1,
+      pendingWithinPeriod: 1,
     });
+    expect(fakeClient.invoke).toHaveBeenCalledWith(
+      expect.objectContaining({ requested: true, link: 'https://t.me/+legacy' }),
+    );
+    const previousInvoke = fakeClient.invoke.getMockImplementation()!;
+    fakeClient.invoke.mockImplementation((request: unknown) => {
+      if (request instanceof Api.messages.GetChatInviteImporters && request.requested) {
+        throw new Error('Temporary Telegram failure');
+      }
+      return previousInvoke(request);
+    });
+    await expect(client.getChannelInviteLink({
+      apiId: '1', apiHash: 'hash', session: 'session',
+      channel: { telegramChatId: '123456', telegramAccessHash: '7' },
+      inviteLink: 'https://telegram.me/+legacy',
+      joinedFrom: new Date('2025-01-01T12:00:00.000Z'),
+      joinedUntil: new Date('2025-01-03T00:00:00.000Z'),
+      includePendingSince: true,
+    })).resolves.toMatchObject({ joinedWithinPeriod: 1, pendingWithinPeriod: null });
     expect(fakeClient.invoke).toHaveBeenCalledWith(
       expect.objectContaining({ link: 'https://t.me/+legacy' }),
     );

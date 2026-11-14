@@ -67,7 +67,8 @@ export class TelegramManagedPostReconciliationService {
   }
 
   async reconcileAllDueManagedPosts(options?: { identityTimeoutMs?: number }) {
-    const localDelivery = await this.publishDueLocallyScheduledManagedPosts();
+    // Delivery has its own task/lease: maintenance must never hold deadlines.
+    const localDelivery = { considered: 0, published: 0, failed: 0 };
     const identity = await this.reconcilePendingIdentitiesWithin(
       options?.identityTimeoutMs ?? IDENTITY_RECONCILIATION_TIMEOUT_MS,
     );
@@ -185,6 +186,7 @@ export class TelegramManagedPostReconciliationService {
     const duePosts = await this.prisma.telegramManagedPost.findMany({
       where: {
         scheduleMode: 'LOCAL',
+        mutualPromotionDelivery: { is: null },
         OR: [
           {
             status: TelegramManagedPostStatus.SCHEDULED,
@@ -202,39 +204,56 @@ export class TelegramManagedPostReconciliationService {
     });
     let published = 0;
     let failed = 0;
-    for (const due of duePosts) {
-      const claim = await this.prisma.telegramManagedPost.updateMany({
-        where: {
-          id: due.id,
-          scheduleMode: 'LOCAL',
-          OR: [
-            {
-              status: TelegramManagedPostStatus.SCHEDULED,
-              scheduledAt: { lte: new Date() },
+    const channels = new Map<string, typeof duePosts>();
+    for (const post of duePosts) {
+      const posts = channels.get(post.telegramChannelId) ?? [];
+      posts.push(post);
+      channels.set(post.telegramChannelId, posts);
+    }
+    const queue = [...channels.values()];
+    const publishNext = async () => {
+      while (queue.length) {
+        for (const due of queue.shift()!) {
+          const claim = await this.prisma.telegramManagedPost.updateMany({
+            where: {
+              id: due.id,
+              workspaceId: due.workspaceId,
+              telegramChannelId: due.telegramChannelId,
+              mutualPromotionDelivery: { is: null },
+              scheduleMode: 'LOCAL',
+              OR: [
+                {
+                  status: TelegramManagedPostStatus.SCHEDULED,
+                  scheduledAt: { lte: new Date() },
+                },
+                {
+                  status: TelegramManagedPostStatus.PUBLISHING,
+                  updatedAt: { lte: stalePublishingCutoff },
+                },
+              ],
             },
-            {
-              status: TelegramManagedPostStatus.PUBLISHING,
-              updatedAt: { lte: stalePublishingCutoff },
-            },
-          ],
-        },
-        data: { status: TelegramManagedPostStatus.PUBLISHING },
-      });
-      if (claim.count) {
-        try {
-          await this.telegramManagedPostPublicationService.publishManagedPost(
-            due.workspaceId,
-            due.telegramChannelId,
-            due.id,
-          );
-          published += 1;
-        } catch {
-          // The publisher persists the post-level FAILED state and message.
-          // Continue so one broken bot or post cannot block the remaining due queue.
-          failed += 1;
+            data: { status: TelegramManagedPostStatus.PUBLISHING },
+          });
+          if (claim.count) {
+            try {
+              await this.telegramManagedPostPublicationService.publishManagedPost(
+                due.workspaceId,
+                due.telegramChannelId,
+                due.id,
+              );
+              published += 1;
+            } catch {
+              // The publisher persists the post-level FAILED state and message.
+              // Continue so one broken bot or post cannot block the remaining due queue.
+              failed += 1;
+            }
+          }
         }
       }
-    }
+    };
+    await Promise.all(
+      Array.from({ length: Math.min(5, channels.size) }, publishNext),
+    );
     return { considered: duePosts.length, published, failed };
   }
 

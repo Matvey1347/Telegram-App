@@ -1,5 +1,5 @@
 import sharp from 'sharp';
-import { ServiceUnavailableException } from '@nestjs/common';
+import { ConflictException, ServiceUnavailableException } from '@nestjs/common';
 import { TelegramAiPostingImageService } from './telegram-ai-posting-image.service';
 
 describe('TelegramAiPostingImageService', () => {
@@ -213,6 +213,45 @@ describe('TelegramAiPostingImageService', () => {
     });
   });
 
+  it('uses a data URL channel avatar and fails visibly if it is unavailable', async () => {
+    const avatarUrl = `data:image/png;base64,${imageBytes.toString('base64')}`;
+    const avatar = await service.prepareChannelAvatar(avatarUrl);
+    expect(avatar).toEqual(imageBytes);
+    expect(sources.downloadImage).not.toHaveBeenCalled();
+    const result = await service.resolve({
+      ...request('ai'),
+      watermarkChannelAvatar: true,
+      channelAvatarUrl: avatarUrl,
+    });
+    expect(result.readiness).toBe('READY');
+    expect(media.persistImageBytes.mock.calls[0][0][0].bytes).not.toEqual(
+      imageBytes,
+    );
+    const missing = await service.resolve({
+      ...request('ai'),
+      watermarkChannelAvatar: true,
+      channelAvatarUrl: 'data:image/png;base64,broken',
+    });
+    expect(missing).toMatchObject({
+      readiness: 'FAILED',
+      failureCode: 'AI_POSTING_IMAGE_AVATAR_UNAVAILABLE',
+    });
+  });
+
+  it('uses all eight reference images in a bounded contact sheet', async () => {
+    const urls = Array.from(
+      { length: 8 },
+      (_, index) => `https://cdn.example/ref-${index}.jpg`,
+    );
+    const result = await service.prepareReferenceSheet(urls);
+    expect(result.failed).toBe(false);
+    expect(sources.downloadImage).toHaveBeenCalledTimes(8);
+    expect(await sharp(result.image!).metadata()).toMatchObject({
+      width: 1536,
+      height: 1536,
+    });
+  });
+
   it('creates one bounded contact sheet from saved reference URLs', async () => {
     const result = await service.prepareReferenceSheet([
       'https://cdn.example/ref-1.jpg',
@@ -281,6 +320,17 @@ describe('TelegramAiPostingImageService', () => {
       readiness: 'FAILED',
       failureCode: 'AI_POSTING_IMAGE_PROVIDER_FAILED',
       operation: { status: 'FAILED', actualCost: '0.025' },
+    });
+    expect(media.persistImageBytes).not.toHaveBeenCalled();
+  });
+
+  it('reports an image request budget rejection instead of a provider failure', async () => {
+    gateway.execute.mockRejectedValue(
+      new ConflictException('AI_REQUEST_BUDGET_EXCEEDED'),
+    );
+    expect(await service.resolve(request('ai'))).toMatchObject({
+      readiness: 'FAILED',
+      failureCode: 'AI_REQUEST_BUDGET_EXCEEDED',
     });
     expect(media.persistImageBytes).not.toHaveBeenCalled();
   });

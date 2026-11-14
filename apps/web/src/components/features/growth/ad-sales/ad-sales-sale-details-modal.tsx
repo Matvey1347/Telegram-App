@@ -1,19 +1,23 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type {
   TelegramAdProduct,
   TelegramAdSale,
 } from "@telegram-system/shared";
 import { ArrowLeft, CalendarDays, ExternalLink } from "lucide-react";
 import { MemberSelect } from "@/components/features/workspace/member-select";
+import { CrmClientField } from "@/components/features/growth/crm/crm-client-field";
 import { TelegramEntityAvatar } from "@/components/features/telegram/telegram/telegram-entity-avatar";
 import { adSaleOriginOptions } from "./ad-sale-origin";
-import { SaleStatusActions, type SaleActionKey } from "./sale-status-actions";
+import {
+  allowedSaleActions,
+  SaleStatusActions,
+  type SaleActionKey,
+} from "./sale-status-actions";
 import {
   CustomSelect,
   FormField,
-  Input,
   IconButton,
   Modal,
   Skeleton,
@@ -56,6 +60,7 @@ import {
 } from "./ad-sales-sale-detail-editors";
 
 type SaveDraft = {
+  paymentsOnly?: boolean;
   placements: Array<{
     id: string;
     scheduledAt: string;
@@ -82,6 +87,7 @@ type SaveDraft = {
   origin: TelegramAdSale["origin"];
   sellerMemberId: string | null;
   buyerContact: string;
+  advertiserId: string | null;
 };
 
 export function SaleDetailsModal(props: {
@@ -117,6 +123,7 @@ export function SaleDetailsModal(props: {
     sale: TelegramAdSale,
     payload: RegisterPaymentPayload,
   ) => Promise<void>;
+  onSearchAdvertisers?: (query: string) => Promise<import("@telegram-system/shared").TelegramAdvertiser[]>;
   systemBotConnected?: boolean;
   systemBotUsername?: string | null;
   systemBotWorkspaceId?: string | null;
@@ -129,29 +136,39 @@ export function SaleDetailsModal(props: {
   const [origin, setOrigin] = useState<TelegramAdSale["origin"]>("DIRECT");
   const [sellerMemberId, setSellerMemberId] = useState("");
   const [buyerContact, setBuyerContact] = useState("");
+  const [selectedAdvertiserId, setSelectedAdvertiserId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [initializedSaleId, setInitializedSaleId] = useState<string | null>(
     null,
   );
+  const preserveDraftOnSaleRefreshRef = useRef<string | null>(null);
   const [sharedPostOpen, setSharedPostOpen] = useState(false);
   const [paymentToDelete, setPaymentToDelete] = useState<string | null>(null);
 
-  /* eslint-disable react-hooks/set-state-in-effect -- server entity initializes one cohesive draft */
   useEffect(() => {
-    if (!props.sale || !props.open) return;
+    if (!props.open) {
+      preserveDraftOnSaleRefreshRef.current = null;
+      return;
+    }
+    if (!props.sale) return;
+    if (preserveDraftOnSaleRefreshRef.current === props.sale.id) return;
+    preserveDraftOnSaleRefreshRef.current = null;
     setOrigin(props.sale.origin);
     setSellerMemberId(
       props.sale.sellerMemberId ?? props.sale.assignedMemberId ?? "",
     );
     setBuyerContact(
-      props.sale.advertiserTelegramSnapshot ??
-        props.sale.advertiserTelegram ??
-        props.sale.advertiserContact ??
-        props.sale.advertiserNameSnapshot ??
-        props.sale.advertiserName ??
-        "",
+      props.sale.advertiserId
+        ? props.sale.advertiserTelegramSnapshot ??
+            props.sale.advertiserTelegram ??
+            props.sale.advertiserContact ??
+            props.sale.advertiserNameSnapshot ??
+            props.sale.advertiserName ??
+            ""
+        : "",
     );
+    setSelectedAdvertiserId(props.sale.advertiserId);
     setSelectedId(null);
     setSharedPostOpen(false);
     setPaymentOpen(false);
@@ -190,8 +207,6 @@ export function SaleDetailsModal(props: {
     );
     setInitializedSaleId(props.sale.id);
   }, [props.accounts, props.open, props.sale]);
-  /* eslint-enable react-hooks/set-state-in-effect */
-
   if (!props.sale || initializedSaleId !== props.sale.id) {
     return (
       <Modal open={props.open} onClose={props.onClose} title="Deal" size="xl">
@@ -246,7 +261,7 @@ export function SaleDetailsModal(props: {
         };
       });
       setPlacements(nextPlacements);
-      await save(undefined, nextPlacements);
+      setError("");
     } catch (cause) {
       setError(
         cause instanceof Error ? cause.message : "Could not apply changes.",
@@ -256,26 +271,70 @@ export function SaleDetailsModal(props: {
 
   const save = async (
     placementId?: string,
-    replacements?: PlacementDraft[],
     managedPostDraft?: PlacementManagedPostDraft,
     postAttachment?: { telegramPostUrl?: string; telegramPostId?: string },
+    paymentsOnly = false,
   ) => {
-    const sourcePlacements = replacements ?? placements;
-    const placementsToSave = placementId
-      ? sourcePlacements.filter((placement) => placement.id === placementId)
-      : (replacements ?? []);
-    const paymentsToSave = replacements
+    const placementsToSave = paymentsOnly
       ? []
-      : placementId && !(priceChanged && syncPayment)
-        ? []
-        : payments;
+      : placementId
+      ? placements.filter((placement) => placement.id === placementId)
+      : placements.filter((placementDraft) => {
+          const original = sale.placements.find(
+            (item) => item.id === placementDraft.id,
+          );
+          if (!original) return true;
+          return (
+            placementDraft.date !==
+              channelLocalDateKey(original.scheduledAt, original.timezone) ||
+            placementDraft.time !==
+              channelLocalTime(original.scheduledAt, original.timezone) ||
+            placementDraft.telegramAdProductId !==
+              (original.telegramAdProductId ?? "") ||
+            toNumber(placementDraft.agreedPrice) !==
+              toNumber(original.agreedPrice)
+          );
+        });
+    const paymentsToSave = placementId
+      ? priceChanged && syncPayment
+        ? payments
+        : []
+      : payments.filter((paymentDraft) => {
+          const original = sale.payments?.find(
+            (item) => item.id === paymentDraft.id,
+          );
+          if (!original) return true;
+          return (
+            paymentDraft.accountId !== original.accountId ||
+            toNumber(paymentDraft.amount) !== toNumber(original.amount) ||
+            paymentDraft.paidDate !== original.paidAt.slice(0, 10) ||
+            paymentDraft.paidTime !== original.paidAt.slice(11, 16) ||
+            paymentDraft.notes !== (original.notes ?? "")
+          );
+        });
     setSaving(true);
     setError("");
     try {
+      if (paymentsOnly) {
+        preserveDraftOnSaleRefreshRef.current = sale.id;
+      }
       await props.onSave(sale, {
-        origin,
-        sellerMemberId: sellerMemberId || null,
-        buyerContact: buyerContact.trim(),
+        paymentsOnly,
+        origin: paymentsOnly ? sale.origin : origin,
+        sellerMemberId: paymentsOnly
+          ? (sale.sellerMemberId ?? sale.assignedMemberId ?? null)
+          : sellerMemberId || null,
+        buyerContact: paymentsOnly
+          ? sale.advertiserId
+            ? sale.advertiserTelegramSnapshot ??
+              sale.advertiserTelegram ??
+              sale.advertiserContact ??
+              sale.advertiserNameSnapshot ??
+              sale.advertiserName ??
+              ""
+            : ""
+          : buyerContact.trim(),
+        advertiserId: paymentsOnly ? sale.advertiserId : selectedAdvertiserId,
         placements: placementsToSave.map((p) => ({
           id: p.id,
           scheduledAt: zonedDateTimeToUtc(
@@ -298,7 +357,7 @@ export function SaleDetailsModal(props: {
         })),
         payments: paymentsToSave.map((p, index) => {
           const amount =
-            priceChanged && syncPayment && index === 0
+            placementId && priceChanged && syncPayment && index === 0
               ? total
               : toNumber(p.amount);
           return {
@@ -316,8 +375,9 @@ export function SaleDetailsModal(props: {
           };
         }),
       });
-      props.onClose();
+      if (!paymentsOnly) props.onClose();
     } catch (cause) {
+      if (paymentsOnly) preserveDraftOnSaleRefreshRef.current = null;
       setError(
         cause instanceof Error ? cause.message : "Could not save changes.",
       );
@@ -397,7 +457,7 @@ export function SaleDetailsModal(props: {
             props.onLoadPlacementPosts?.(placement) ?? Promise.resolve([])
           }
           onSave={(managedPostDraft, postAttachment) =>
-            save(placement.id, undefined, managedPostDraft, postAttachment)
+            save(placement.id, managedPostDraft, postAttachment)
           }
           saving={saving}
           error={error}
@@ -411,6 +471,35 @@ export function SaleDetailsModal(props: {
           origin={origin}
           sellerMemberId={sellerMemberId}
           buyerContact={buyerContact}
+          selectedAdvertiserId={selectedAdvertiserId}
+          selectedClient={
+            sale.advertiserId
+              ? {
+                  id: sale.advertiserId,
+                  displayName:
+                    sale.advertiser?.displayName ??
+                    sale.advertiserNameSnapshot ??
+                    sale.advertiserName,
+                  telegramUsername:
+                    sale.advertiser?.telegramUsername ??
+                    sale.advertiserTelegramSnapshot ??
+                    sale.advertiserTelegram,
+                  photoUrl: sale.advertiser?.photoUrl,
+                }
+              : null
+          }
+          onSearchAdvertisers={props.onSearchAdvertisers}
+          onSelectAdvertiser={(advertiser) => {
+            setSelectedAdvertiserId(advertiser?.id ?? null);
+            if (advertiser) {
+              setBuyerContact(
+                advertiser.telegramUsername ??
+                  advertiser.email ??
+                  advertiser.phone ??
+                  "",
+              );
+            }
+          }}
           channels={channels}
           payments={payments}
           accounts={props.accounts}
@@ -439,6 +528,7 @@ export function SaleDetailsModal(props: {
           }
           onAction={(action) => props.onAction(sale, action)}
           onSave={save}
+          onSavePayment={() => save(undefined, undefined, undefined, true)}
           saving={saving}
           error={error}
         />
@@ -547,6 +637,9 @@ function DealOverview(props: {
   origin: TelegramAdSale["origin"];
   sellerMemberId: string;
   buyerContact: string;
+  selectedAdvertiserId: string | null;
+  selectedClient: { id: string; displayName: string; telegramUsername?: string | null; photoUrl?: string | null } | null;
+  onSearchAdvertisers?: (query: string) => Promise<import("@telegram-system/shared").TelegramAdvertiser[]>;
   channels: Map<string, TelegramChannel>;
   payments: PaymentDraft[];
   accounts: Account[];
@@ -554,6 +647,7 @@ function DealOverview(props: {
   onOrigin: (v: TelegramAdSale["origin"]) => void;
   onSellerMember: (v: string) => void;
   onBuyerContact: (v: string) => void;
+  onSelectAdvertiser: (advertiser: import("@telegram-system/shared").TelegramAdvertiser | null) => void;
   onPlacement: (v: string) => void;
   productsByChannelId: Record<string, TelegramAdProduct[]>;
   onApplyAll: (changes: AdSaleApplyAllChanges) => Promise<void>;
@@ -564,11 +658,13 @@ function DealOverview(props: {
   onDeletePayment?: (id: string) => void;
   onAction: (a: SaleActionKey) => Promise<void>;
   onSave: () => Promise<void>;
+  onSavePayment: () => Promise<void>;
   saving: boolean;
   error: string;
 }) {
   const dealValue = nativeAdSalePayment(props.sale);
   const [now, setNow] = useState(() => Date.now());
+  const [deletingPublications, setDeletingPublications] = useState(false);
   useEffect(() => {
     const hasCountdown = props.sale.placements.some(
       (placement) =>
@@ -585,45 +681,53 @@ function DealOverview(props: {
   }, [props.sale.placements]);
   return (
     <div className="min-w-0 space-y-5">
-      <section className="grid min-w-0 gap-3 border-y border-neutral-800 py-4 sm:rounded-xl sm:border sm:bg-neutral-950/45 sm:p-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] xl:items-end">
-        <FormField label="Buyer">
-          <Input
-            value={props.buyerContact}
-            onChange={(event) => props.onBuyerContact(event.target.value)}
-            placeholder="@username, phone, email"
+      <section className="min-w-0 space-y-4 rounded-xl border border-neutral-800 bg-neutral-950/45 p-3 sm:p-4">
+        <div className="grid min-w-0 gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] xl:items-end">
+          <CrmClientField
+            contact={props.buyerContact}
+            selectedAdvertiserId={props.selectedAdvertiserId}
+            selectedClient={props.selectedClient}
+            onContactChange={props.onBuyerContact}
+            onTelegramChange={() => undefined}
+            onSelect={props.onSelectAdvertiser}
+            onSearchAdvertisers={props.onSearchAdvertisers ?? (async () => [])}
           />
-        </FormField>
-        <FormField label="Sale origin">
-          <CustomSelect
-            value={props.origin}
-            onChange={(v) => props.onOrigin(v as TelegramAdSale["origin"])}
-            options={adSaleOriginOptions}
+          <FormField label="Sale origin">
+            <CustomSelect
+              value={props.origin}
+              onChange={(v) => props.onOrigin(v as TelegramAdSale["origin"])}
+              options={adSaleOriginOptions}
+            />
+          </FormField>
+          <FormField label="Sold by">
+            <MemberSelect
+              value={props.sellerMemberId}
+              onChange={props.onSellerMember}
+            />
+          </FormField>
+          <SaleStatusActions
+            sale={props.sale}
+            onAction={props.onAction}
+            excludeActions={["delete-publications"]}
           />
-        </FormField>
-        <FormField label="Sold by">
-          <MemberSelect
-            value={props.sellerMemberId}
-            onChange={props.onSellerMember}
-          />
-        </FormField>
-        <SaleStatusActions sale={props.sale} onAction={props.onAction} />
+        </div>
+        <AdSaleDealPlacementActions
+          key={props.sale.id}
+          sale={props.sale}
+          productsByChannelId={props.productsByChannelId}
+          saving={props.saving}
+          onApplyAll={props.onApplyAll}
+          onSharedPost={props.onSharedPost}
+        />
       </section>
       <section>
-        <div className="mb-3 flex min-w-0 flex-col gap-3 sm:grid sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:items-center sm:gap-4">
+        <div className="mb-3 mt-4 flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h4 className="font-semibold text-white">Placements</h4>
             <p className="text-sm text-neutral-500">
               Choose the placement you want to edit.
             </p>
           </div>
-          <AdSaleDealPlacementActions
-            key={props.sale.id}
-            sale={props.sale}
-            productsByChannelId={props.productsByChannelId}
-            saving={props.saving}
-            onApplyAll={props.onApplyAll}
-            onSharedPost={props.onSharedPost}
-          />
           <div className="text-left sm:text-right">
             <span className="block text-[10px] font-medium uppercase tracking-wider text-neutral-600">
               Deal value
@@ -760,11 +864,26 @@ function DealOverview(props: {
         onPayment={props.onPayment}
         onCreatePayment={props.onCreatePayment}
         onDeletePayment={props.onDeletePayment}
+        onSave={props.onSavePayment}
+        saving={props.saving}
       />
       <SaveFooter
         error={props.error}
         saving={props.saving}
         onSave={props.onSave}
+        deletingPublications={deletingPublications}
+        onDeletePublications={
+          allowedSaleActions(props.sale).includes("delete-publications")
+            ? async () => {
+                setDeletingPublications(true);
+                try {
+                  await props.onAction("delete-publications");
+                } finally {
+                  setDeletingPublications(false);
+                }
+              }
+            : undefined
+        }
       />
     </div>
   );

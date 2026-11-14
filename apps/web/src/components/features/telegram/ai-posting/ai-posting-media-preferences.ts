@@ -1,3 +1,5 @@
+import { TELEGRAM_AI_POSTING_MAX_MEDIA_REFERENCES } from "@telegram-system/shared";
+
 export type AiPostingMediaPreference = {
   id: string;
   name: string;
@@ -16,7 +18,7 @@ export function normalizeAiPostingMediaPreferences(config: {
     Array.isArray(value)
       ? value
           .filter((item): item is string => typeof item === "string")
-          .slice(0, 4)
+          .slice(0, TELEGRAM_AI_POSTING_MAX_MEDIA_REFERENCES)
       : [];
 
   if (Array.isArray(config.mediaPreferences)) {

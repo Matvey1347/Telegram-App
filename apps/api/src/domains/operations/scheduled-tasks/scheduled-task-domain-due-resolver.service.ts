@@ -12,7 +12,11 @@ export class ScheduledTaskDomainDueResolverService {
 
   async nextDueAt(taskKey: string): Promise<Date | null | undefined> {
     if (taskKey === 'telegram.channel_reminders.due') {
-      const service = await this.moduleRef.resolve(TelegramChannelRemindersDueService, undefined, { strict: false });
+      const service = await this.moduleRef.resolve(
+        TelegramChannelRemindersDueService,
+        undefined,
+        { strict: false },
+      );
       return service.nextDueAt();
     }
     if (taskKey === 'telegram.post_batches.lifecycle') {
@@ -25,8 +29,22 @@ export class ScheduledTaskDomainDueResolverService {
       return lifecycle.nextDueAt();
     }
     if (taskKey === 'telegram.ai_posting.autopilot') {
-      const service = await this.moduleRef.resolve<TelegramAiPostingAutopilotService>(TelegramAiPostingAutopilotService, undefined, { strict: false });
+      const service =
+        await this.moduleRef.resolve<TelegramAiPostingAutopilotService>(
+          TelegramAiPostingAutopilotService,
+          undefined,
+          { strict: false },
+        );
       return service.nextDueAt();
+    }
+    if (taskKey === 'mutual_promotion.publish_due') {
+      const lifecycle =
+        await this.moduleRef.resolve<MutualPromotionLifecycleService>(
+          MutualPromotionLifecycleService,
+          undefined,
+          { strict: false },
+        );
+      return lifecycle.nextDueAt('publication');
     }
     if (taskKey !== 'mutual_promotion.lifecycle') return undefined;
     const [lifecycle, direct] = await Promise.all([
@@ -42,7 +60,10 @@ export class ScheduledTaskDomainDueResolverService {
       ),
     ]);
     const values = (
-      await Promise.all([lifecycle.nextDueAt(), direct.nextDueAt()])
+      await Promise.all([
+        lifecycle.nextDueAt('maintenance'),
+        direct.nextDueAt(),
+      ])
     )
       .filter((value): value is Date => value instanceof Date)
       .sort((left, right) => left.getTime() - right.getTime());

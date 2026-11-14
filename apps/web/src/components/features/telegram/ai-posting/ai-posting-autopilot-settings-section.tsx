@@ -3,7 +3,10 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { Play, Square } from "lucide-react";
 import { Button, Card, FormField, Input } from "@/components/ui/primitives";
-import { AiPostingModeFields, type AiPostingMode } from "./ai-posting-mode-fields";
+import {
+  AiPostingModeFields,
+  type AiPostingMode,
+} from "./ai-posting-mode-fields";
 
 type Settings = {
   mode: AiPostingMode;
@@ -22,7 +25,8 @@ type Settings = {
     lastSummary?: { scheduleMode?: string } | null;
   };
 };
-const settingsKey = (channelId: string) => ["telegram-ai-posting", channelId] as const;
+const settingsKey = (channelId: string) =>
+  ["telegram-ai-posting", channelId] as const;
 
 export function AiPostingAutopilotSettingsSection({
   channelId,
@@ -53,7 +57,10 @@ export function AiPostingAutopilotSettingsSection({
     client.setQueryData<Settings>(settingsKey(channelId), (old) =>
       old ? { ...old, ...patch } : old,
     );
-  const updateAutopilot = (name: keyof Settings["autopilot"], value: number | string) =>
+  const updateAutopilot = (
+    name: keyof Settings["autopilot"],
+    value: number | string,
+  ) =>
     client.setQueryData<Settings>(settingsKey(channelId), (old) =>
       old ? { ...old, autopilot: { ...old.autopilot, [name]: value } } : old,
     );
@@ -70,9 +77,14 @@ export function AiPostingAutopilotSettingsSection({
           mode={settings.mode}
           draftExpirationDays={settings.draftExpirationDays}
           onModeChange={(mode) =>
-            update({ mode, autopilotEnabled: mode !== "TEST" } as Partial<Settings>)
+            update({
+              mode,
+              autopilotEnabled: mode !== "TEST",
+            } as Partial<Settings>)
           }
-          onDraftExpirationChange={(draftExpirationDays) => update({ draftExpirationDays })}
+          onDraftExpirationChange={(draftExpirationDays) =>
+            update({ draftExpirationDays })
+          }
         />
         {(
           [
@@ -88,7 +100,9 @@ export function AiPostingAutopilotSettingsSection({
               min={min}
               max={max}
               value={settings.autopilot[name]}
-              onChange={(event) => updateAutopilot(name, Number(event.target.value))}
+              onChange={(event) =>
+                updateAutopilot(name, Number(event.target.value))
+              }
             />
           </FormField>
         ))}
@@ -118,7 +132,13 @@ export function AiPostingAutopilotSettingsSection({
             onChange={(event) =>
               onPostsPerDayRange(
                 postsPerDayMin,
-                Math.min(5, Math.max(postsPerDayMin, Number(event.target.value) || postsPerDayMin)),
+                Math.min(
+                  5,
+                  Math.max(
+                    postsPerDayMin,
+                    Number(event.target.value) || postsPerDayMin,
+                  ),
+                ),
               )
             }
           />
@@ -126,8 +146,9 @@ export function AiPostingAutopilotSettingsSection({
       </div>
       <p className="text-xs text-neutral-500">
         Дневная генерация создаст набор в этом диапазоне. AI подбирает длину
-        каждого текста по теме, без жёсткого чередования. Планирование использует
-        часовой пояс рабочего пространства и активные слоты календаря.
+        каждого текста по теме, без жёсткого чередования. Планирование
+        использует часовой пояс рабочего пространства и активные слоты
+        календаря.
       </p>
       <FormField label="Месячный лимит AI, USD">
         <Input
@@ -136,13 +157,21 @@ export function AiPostingAutopilotSettingsSection({
           step="0.01"
           value={settings.autopilot.aiMonthlyBudget ?? ""}
           placeholder="Без дополнительного лимита канала"
-          onChange={(event) => updateAutopilot("aiMonthlyBudget", event.target.value)}
+          onChange={(event) =>
+            updateAutopilot("aiMonthlyBudget", event.target.value)
+          }
         />
       </FormField>
+      <p className="text-xs text-neutral-400">
+        Этот лимит действует, только если в настройках AI рабочего пространства
+        выключен режим «AI Posting без денежных лимитов».
+      </p>
       {settings.autopilot.lastStatus && (
         <p className="text-sm text-neutral-300">
           Последний запуск: {settings.autopilot.lastStatus}
-          {settings.autopilot.lastError ? ` · ${settings.autopilot.lastError}` : ""}
+          {settings.autopilot.lastError
+            ? ` · ${settings.autopilot.lastError}`
+            : ""}
         </p>
       )}
       {settings.autopilot.lastSummary?.scheduleMode && (
@@ -151,14 +180,27 @@ export function AiPostingAutopilotSettingsSection({
         </p>
       )}
       <div className="flex gap-2">
-        <Button disabled={pending || autopilot || (!settings.configured && !lookupsReady)} onClick={onStart}>
+        <Button
+          disabled={
+            pending || autopilot || (!settings.configured && !lookupsReady)
+          }
+          onClick={onStart}
+        >
           <Play size={16} /> Включить автопилот
         </Button>
-        <Button variant="secondary" disabled={pending || !autopilot} onClick={onStop}>
+        <Button
+          variant="secondary"
+          disabled={pending || !autopilot}
+          onClick={onStop}
+        >
           <Square size={16} /> Остановить автопилот
         </Button>
       </div>
-      {error && <p role="alert" className="text-sm text-rose-300">Не удалось изменить режим автопилота.</p>}
+      {error && (
+        <p role="alert" className="text-sm text-rose-300">
+          Не удалось изменить режим автопилота.
+        </p>
+      )}
     </Card>
   );
 }

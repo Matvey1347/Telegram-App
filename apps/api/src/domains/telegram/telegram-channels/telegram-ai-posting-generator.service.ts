@@ -2,6 +2,7 @@ import {
   BadGatewayException,
   ConflictException,
   Injectable,
+  HttpException,
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
@@ -506,6 +507,7 @@ export class TelegramAiPostingGeneratorService {
         category: string;
         imageUrl: string | null;
         imageSourceId: string | null;
+        mediaPreference: { id: string; name: string } | null;
         mediaReadiness: 'READY' | 'MISSING' | 'FAILED';
         mediaFailureCode?: string;
         imageCostUnknown: boolean;
@@ -665,7 +667,7 @@ export class TelegramAiPostingGeneratorService {
       config.variedLength === false
         ? 'Prefer a consistent medium length, expanding only when the topic needs more explanation.'
         : 'Choose each publication length automatically from the topic complexity; use short, medium or long as appropriate and do not force a pattern.';
-    return `Return only JSON with {"topics":[string]}. Suggest exactly ${count} distinct Telegram post topics in ${language}. ${lengthPolicy} Avoid any duplicates or close paraphrases of existing, scheduled and previously evaluated test posts. Use editorial profile, allowed source material, publication calendar and hypotheses.\nCHANNEL DESCRIPTION\n${profile.slice(0, 7000)}\n${mandatoryChannelRules(config)}\n${typeof config.learningBlock === 'string' ? config.learningBlock : 'ЧТО РАБОТАЕТ В КАНАЛЕ\nДанных пока мало.'}\nCHANNEL DATA ${JSON.stringify(context.editorialProfile).slice(0, 7000)}\nCALENDAR ${calendar.slice(0, 4000)}\nSOURCES ${JSON.stringify(context.sourceContexts).slice(0, 18000)}\nEXISTING POSTS ${JSON.stringify(context.existingPosts).slice(0, 24000)}\nHISTORY — только для защиты от повторов\n${JSON.stringify(recentHistory).slice(0, 6000)}\nPREVIOUS TEST BATCHES ${JSON.stringify(previousDrafts).slice(0, 10000)}\nRUBRICS ${JSON.stringify(config.categories ?? [])}; FORMATS ${JSON.stringify(config.formats ?? [])}`;
+    return `Return only JSON with {"topics":[string]}. Suggest exactly ${count} distinct Telegram post topics in ${language}. ${lengthPolicy} Avoid any duplicates or close paraphrases of existing, scheduled and previously evaluated test posts. Use editorial profile, allowed source material, publication calendar and hypotheses.\nCHANNEL DESCRIPTION\n${profile.slice(0, 3000)}\n${mandatoryChannelRules(config)}\n${typeof config.learningBlock === 'string' ? config.learningBlock.slice(0, 1500) : 'ЧТО РАБОТАЕТ В КАНАЛЕ\nДанных пока мало.'}\nCHANNEL DATA ${JSON.stringify(context.editorialProfile).slice(0, 1500)}\nCALENDAR ${calendar.slice(0, 1500)}\nSOURCES ${JSON.stringify(context.sourceContexts).slice(0, 3500)}\nEXISTING POSTS ${JSON.stringify(context.existingPosts).slice(0, 3000)}\nHISTORY — только для защиты от повторов\n${JSON.stringify(recentHistory).slice(0, 1500)}\nPREVIOUS TEST BATCHES ${JSON.stringify(previousDrafts).slice(0, 1500)}\nRUBRICS ${JSON.stringify(config.categories ?? [])}; FORMATS ${JSON.stringify(config.formats ?? [])}`;
   }
 
   private parseTopics(reply: string) {
@@ -712,7 +714,7 @@ export class TelegramAiPostingGeneratorService {
   }
   private errorCode(error: unknown) {
     let candidate = 'AI_POSTING_GENERATION_FAILED';
-    if (error instanceof BadGatewayException) {
+    if (error instanceof HttpException) {
       const response = error.getResponse();
       candidate =
         typeof response === 'string'

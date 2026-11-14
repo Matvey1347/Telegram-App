@@ -1,7 +1,7 @@
 "use client";
 
 import type { TelegramAdSale } from "@telegram-system/shared";
-import { CreditCard, Trash2 } from "lucide-react";
+import { CreditCard, Pencil, Trash2 } from "lucide-react";
 import { Button, IconButton } from "@/components/ui/primitives";
 import type { Account } from "@/lib/api";
 import { formatCompactMoney } from "@/lib/features/finance/money";
@@ -23,6 +23,8 @@ export function DealFinanceTransaction({
   onPayment,
   onCreatePayment,
   onDeletePayment,
+  onSave,
+  saving,
 }: {
   sale: TelegramAdSale;
   payments: PaymentDraft[];
@@ -32,6 +34,8 @@ export function DealFinanceTransaction({
   onPayment: (id: string, patch: Partial<PaymentDraft>) => void;
   onCreatePayment?: (payload: RegisterPaymentPayload) => Promise<void>;
   onDeletePayment?: (id: string) => void;
+  onSave?: () => Promise<void>;
+  saving?: boolean;
 }) {
   const linkedPaymentLabel = payments.length
     ? `${payments.map((payment) => formatCompactMoney(payment.amount, payment.currency)).join(" · ")} linked`
@@ -61,21 +65,40 @@ export function DealFinanceTransaction({
               <PaymentEditor
                 payment={payment}
                 accounts={accounts}
+                showNotes={false}
                 onChange={(patch) => onPayment(payment.id, patch)}
               />
-              {onDeletePayment ? (
-                <div className="flex justify-end">
-                  <Button
-                    type="button"
-                    variant="danger"
-                    onClick={() => onDeletePayment(payment.id)}
-                  >
-                    <Trash2 size={15} /> Delete finance transaction
-                  </Button>
-                </div>
-              ) : null}
             </div>
           ))}
+          {onDeletePayment || onSave ? (
+            <div className="flex w-full flex-col gap-2 border-t border-neutral-800 pt-3 sm:flex-row sm:justify-end">
+              {onDeletePayment
+                ? payments.map((payment) => (
+                    <Button
+                      key={payment.id}
+                      type="button"
+                      variant="danger"
+                      className="w-full sm:w-auto"
+                      onClick={() => onDeletePayment(payment.id)}
+                    >
+                      <Trash2 size={16} aria-hidden="true" />
+                      Delete transaction
+                    </Button>
+                  ))
+                : null}
+              {onSave ? (
+                <Button
+                  type="button"
+                  className="w-full sm:w-auto"
+                  disabled={saving}
+                  onClick={() => void onSave()}
+                >
+                  <Pencil size={16} aria-hidden="true" />
+                  {saving ? "Saving…" : "Update transaction"}
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       ) : open && onCreatePayment ? (
         <div className="mt-4 border-t border-neutral-800 pt-4">

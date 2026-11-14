@@ -49,6 +49,23 @@ const PRICES: AiPrice[] = [
   effectiveAt: '2026-10-31T00:00:00.000Z',
   verifiedAt: '2026-10-31T00:00:00.000Z',
 }));
+const REVISION_DRAFT_SCHEMA = {
+  type: 'object', additionalProperties: false,
+  properties: { title: { type: 'string' }, text: { type: 'string' }, imagePrompt: { type: 'string' } },
+  required: ['title', 'text', 'imagePrompt'],
+};
+const CHAT_PLAN_SCHEMA = {
+  type: 'object', additionalProperties: false,
+  properties: {
+    reply: { type: 'string' },
+    setup: { anyOf: [
+      { type: 'object', additionalProperties: false, properties: { query: { type: 'string' }, rubric: { type: 'string' }, description: { type: ['string', 'null'] }, entityId: { type: ['string', 'null'] } }, required: ['query', 'rubric', 'description', 'entityId'] },
+      { type: 'null' },
+    ] },
+    topic: { type: ['string', 'null'] },
+    revision: { anyOf: [{ type: 'string', enum: ['text', 'image'] }, { type: 'null' }] },
+  }, required: ['reply', 'setup', 'topic', 'revision'],
+};
 const text = { type: 'string', maxLength: 16000 };
 function shape(properties: Record<string, unknown>) {
   return {
@@ -83,6 +100,25 @@ const SCHEMAS: Record<
 
 @Injectable()
 export class AiModelRegistry {
+  transcriptionPrice() {
+    return {
+      modelId: 'gpt-transcribe',
+      provider: 'openai' as const,
+      version: VERSION,
+      effectiveAt: '2026-10-31T00:00:00.000Z',
+      verifiedAt: '2026-11-13T00:00:00.000Z',
+      currency: 'USD' as const,
+      inputPerMillion: '0',
+      cachedInputPerMillion: '0',
+      cacheWritePerMillion: null,
+      outputPerMillion: '0',
+      billingUnit: 'audio_seconds' as const,
+      audioPerMinute: '0.0045',
+      sourceUrl: 'https://developers.openai.com/api/docs/pricing',
+    };
+  }
+  private readonly revisionDraftValidator = new Ajv({ strict: true }).compile(REVISION_DRAFT_SCHEMA);
+  private readonly chatPlanValidator = new Ajv({ strict: true, allowUnionTypes: true }).compile(CHAT_PLAN_SCHEMA);
   private readonly mediaValidator = new Ajv({ strict: true }).compile(
     AI_LEAD_MEDIA_SCHEMA,
   );
@@ -103,8 +139,21 @@ export class AiModelRegistry {
     const imageModel = modelId.startsWith('gpt-image-');
     return category === 'TELEGRAM_POSTING_IMAGE' ? imageModel : !imageModel;
   }
-  schema(category: AiCategory, media = false) {
+  schema(category: AiCategory, media = false, chatPlan = false, revisionDraft = false) {
+    if (revisionDraft) {
+      if (category !== 'TELEGRAM_POSTING_TEXT' || media || chatPlan) throw new Error('AI_REVISION_DRAFT_CATEGORY_INVALID');
+      return { id: 'telegram_posting_revision_v1', jsonSchema: structuredClone(REVISION_DRAFT_SCHEMA) };
+    }
+    if (chatPlan) {
+      if (category !== 'TELEGRAM_POSTING_PLAN' || media) throw new Error('AI_CHAT_PLAN_CATEGORY_INVALID');
+      return { id: 'telegram_posting_chat_plan_v1', jsonSchema: structuredClone(CHAT_PLAN_SCHEMA) };
+    }
     if (media) {
+      if (category === 'TELEGRAM_POSTING_PLAN')
+        return {
+          id: 'telegram_posting_chat_vision_v1',
+          jsonSchema: structuredClone(SCHEMAS[category]),
+        };
       if (category !== 'LEAD_AD_CLASSIFICATION')
         throw new Error('AI_MEDIA_CATEGORY_INVALID');
       return {
@@ -117,7 +166,11 @@ export class AiModelRegistry {
       jsonSchema: structuredClone(SCHEMAS[category]),
     };
   }
-  validate(category: AiCategory, value: unknown, media = false): boolean {
+  validate(category: AiCategory, value: unknown, media = false, chatPlan = false, revisionDraft = false): boolean {
+    if (revisionDraft) return category === 'TELEGRAM_POSTING_TEXT' && !media && !chatPlan && this.revisionDraftValidator(value) === true;
+    if (chatPlan) return category === 'TELEGRAM_POSTING_PLAN' && !media && this.chatPlanValidator(value) === true;
+    if (media && category === 'TELEGRAM_POSTING_PLAN')
+      return this.validators.get(category)?.(value) === true;
     if (media)
       return (
         category === 'LEAD_AD_CLASSIFICATION' &&

@@ -4,7 +4,8 @@ import { type ReactNode, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus } from "lucide-react";
+import { Plus, Repeat2, Folder, Network } from "lucide-react";
+import { useOptionalI18n } from "@/providers/i18n-provider";
 import type {
   CreateCrossPromotionPlanPayload,
   CrossPromotionPlan,
@@ -669,21 +670,23 @@ export function CrossPromotionPlansPage({
 export function MutualPromotionModeTabs({
   mode,
 }: {
-  mode: "direct" | "folders";
+  mode: "direct" | "folders" | "own";
 }) {
+  const i18n = useOptionalI18n();
   return (
-    <div className="mb-5 flex gap-2">
+    <div className="mb-5 flex max-w-full gap-2 overflow-x-auto whitespace-nowrap">
       <Link
         href="/ad-campaigns?section=mutual-promotion&mode=direct"
         className={`rounded-lg border px-3 py-2 text-sm ${mode === "direct" ? "border-blue-500 bg-blue-950/40 text-blue-200" : "border-neutral-800 text-neutral-400"}`}
       >
-        🤝 Direct exchange
+        <Repeat2 size={15} className="mr-1 inline" /> {i18n?.t("ads.direct_exchange") ?? "Direct exchange"}
       </Link>
+      <Link href="/ad-campaigns?section=mutual-promotion&mode=own" className={`rounded-lg border px-3 py-2 text-sm ${mode === "own" ? "border-blue-500 bg-blue-950/40 text-blue-200" : "border-neutral-800 text-neutral-400"}`}><Network size={15} className="mr-1 inline" /> {i18n?.t("ads.section_own") ?? "Own channels"}</Link>
       <Link
         href="/ad-campaigns?section=mutual-promotion&mode=folders"
         className={`rounded-lg border px-3 py-2 text-sm ${mode === "folders" ? "border-blue-500 bg-blue-950/40 text-blue-200" : "border-neutral-800 text-neutral-400"}`}
       >
-        📁 Folders
+        <Folder size={15} className="mr-1 inline" /> {i18n?.t("ads.folders") ?? "Folders"}
       </Link>
     </div>
   );

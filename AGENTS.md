@@ -78,6 +78,18 @@ Prefer existing primitives, `apps/web/src/lib/query-keys.ts`, shared contracts a
 - Any production implementation that can create runtime work: `docs/runtime-cost-efficiency.md`.
 - Product/application boundaries or architecture checks: `docs/architecture/PRODUCT_BOUNDARIES.md` and `docs/refactoring/PROJECT_REFACTOR_EXEC_PLAN.md`.
 
+## Critical publication business rule
+
+Advertising and mutual promotion (VP) publication deadlines are revenue-critical.
+Once accepted, the stored instant and target channels are the delivery contract.
+Analytics capture, identity repair, deletion, notifications and unrelated jobs must
+never gate or hold the publication lane. Preserve per-post atomic claims and
+reconcile uncertain remote outcomes before retrying; never release a live send
+merely because a waiting timeout elapsed. Changes to scheduling, Telegram
+transport, claims or publication must run the deadline regressions described in
+`docs/telegram/PUBLICATION_RELIABILITY.md`. Never claim guaranteed delivery during
+Telegram outages or claim a fix is live until its deployed version is verified.
+
 ## Runtime cost efficiency
 
 - Read and apply `docs/runtime-cost-efficiency.md` before adding production timers, cron jobs, polling, logging, persistence, external calls, or frontend refetching.

@@ -8,7 +8,10 @@ import { renderWithI18n as render } from "@/test/render-with-i18n";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
-import { TelegramPostPreview } from "@/components/features/telegram/telegram/telegram-post-preview";
+import {
+  EditableTelegramPreviewText,
+  TelegramPostPreview,
+} from "@/components/features/telegram/telegram/telegram-post-preview";
 import { I18nProvider } from "@/providers/i18n-provider";
 import common from "@/i18n/locales/en/common";
 import navigation from "@/i18n/locales/en/navigation";
@@ -399,6 +402,59 @@ describe("TelegramPostPreview", () => {
       "src",
       "https://cdn.test/spark.webp",
     );
+  });
+
+  it("hydrates a saved premium emoji when its pack arrives without changing the ending", () => {
+    const onChange = vi.fn();
+    const value = "Test ! ![spark](tg://emoji?id=123)";
+    const { container, rerender } = render(
+      <EditableTelegramPreviewText
+        value={value}
+        onChange={onChange}
+        ariaLabel="Постоянная концовка"
+        customEmojiPacks={[]}
+      />,
+    );
+    expect(
+      screen.getByRole("textbox", { name: "Постоянная концовка" }),
+    ).toHaveTextContent("Test ! spark");
+    rerender(
+      <EditableTelegramPreviewText
+        value={value}
+        onChange={onChange}
+        ariaLabel="Постоянная концовка"
+        customEmojiPacks={[
+          {
+            id: "pack",
+            shortName: "team",
+            title: "Team",
+            telegramLink: "https://t.me/addemoji/team",
+            emojis: [
+              {
+                id: "emoji",
+                documentId: "123",
+                alt: "spark",
+                kind: "STATIC",
+                mimeType: "image/webp",
+                isFree: true,
+                needsRepainting: false,
+                position: 0,
+                assetUrl: "https://cdn.test/spark.webp",
+                renderAssetUrl: null,
+              },
+            ],
+          },
+        ]}
+      />,
+    );
+    expect(container.querySelector(".tg-custom-emoji img")).toHaveAttribute(
+      "src",
+      "https://cdn.test/spark.webp",
+    );
+    expect(
+      screen.getByRole("textbox", { name: "Постоянная концовка" }),
+    ).toHaveTextContent("Test !");
+    expect(onChange).not.toHaveBeenCalled();
   });
 
   it("renders a single image at its original aspect ratio without a cropping container", () => {

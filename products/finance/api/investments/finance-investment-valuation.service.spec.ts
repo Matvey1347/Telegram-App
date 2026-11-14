@@ -24,6 +24,7 @@ describe('FinanceInvestmentValuationService', () => {
       value: new Prisma.Decimal(100),
       amountInValuationCurrency: new Prisma.Decimal(100),
       valuedAt: currentDate,
+      createdAt: currentDate,
     };
     const tx = {
       $executeRaw: jest.fn().mockResolvedValue(1),
@@ -31,6 +32,12 @@ describe('FinanceInvestmentValuationService', () => {
         findUnique: jest.fn().mockResolvedValue(null),
         findFirst: jest.fn().mockResolvedValue(latest),
         create: jest.fn().mockResolvedValue(created),
+      },
+      financeInvestmentCashFlow: {
+        groupBy: jest.fn().mockResolvedValue([]),
+      },
+      financeTransaction: {
+        groupBy: jest.fn().mockResolvedValue([]),
       },
       financeInvestment: {
         findFirst: jest.fn().mockResolvedValue({
@@ -97,12 +104,19 @@ describe('FinanceInvestmentValuationService', () => {
         findFirst: jest
           .fn()
           .mockResolvedValueOnce({ id: 'old' })
-          .mockResolvedValueOnce({
+          .mockResolvedValue({
             value: new Prisma.Decimal(95),
             amountInValuationCurrency: new Prisma.Decimal(95),
             valuedAt: currentDate,
+            createdAt: currentDate,
           }),
         create: jest.fn().mockResolvedValue(corrected),
+      },
+      financeInvestmentCashFlow: {
+        groupBy: jest.fn().mockResolvedValue([]),
+      },
+      financeTransaction: {
+        groupBy: jest.fn().mockResolvedValue([]),
       },
       financeInvestment: {
         findFirst: jest.fn().mockResolvedValue({

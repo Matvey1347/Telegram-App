@@ -147,6 +147,7 @@ function initialValues(row?: CampaignInitial): CampaignValues {
           : row.telegramInviteLinkId
             ? [row.telegramInviteLinkId]
             : [],
+        inviteLinkWindows: Object.fromEntries((row.inviteLinkWindows ?? []).map((window) => [window.inviteLinkId, window.fromDate])),
         botInviteLinkIds: Array.isArray(row.botInviteLinkIds)
           ? row.botInviteLinkIds
           : [],
@@ -172,6 +173,7 @@ function initialValues(row?: CampaignInitial): CampaignValues {
         assignedMemberId: null,
         promoIds: [],
         inviteLinkIds: [],
+        inviteLinkWindows: {},
         botInviteLinkIds: [],
         trackingLinkKind: "BOT",
         trackingChannelIds: [],
@@ -237,6 +239,7 @@ export function CampaignModal({
     handleSubmit,
     watch,
     setValue,
+    getValues,
     reset,
     formState: { errors },
   } = useForm<CampaignValues>({
@@ -245,6 +248,8 @@ export function CampaignModal({
   const selectedChannelId = watch("telegramChannelId");
   const selectedPromoIds = watch("promoIds") || [];
   const selectedInviteLinkIds = watch("inviteLinkIds") || [];
+  const inviteLinkWindows = watch("inviteLinkWindows") || {};
+  const windowsQuery = useQuery({ queryKey: ["ad-campaign-invite-windows", initial?.id], queryFn: () => adCampaignsApi.inviteLinkWindows(initial!.id!), enabled: open && Boolean(initial?.id), staleTime: 0 });
   const selectedTrackingChannelIds = watch("trackingChannelIds") || [];
   const trackingLinkKind = watch("trackingLinkKind") || "BOT";
   const trackCrossChannelRequests = watch("trackCrossChannelRequests") || false;
@@ -301,12 +306,16 @@ export function CampaignModal({
     register("advertisingChannelIds");
     register("promoIds");
     register("inviteLinkIds");
+    register("inviteLinkWindows");
     register("botInviteLinkIds");
     register("trackCrossChannelRequests");
   }, [register]);
   useEffect(() => {
     if (open) reset(initialValues(initial));
   }, [open, initial, reset]);
+  useEffect(() => {
+    if (open && windowsQuery.data) setValue("inviteLinkWindows", Object.fromEntries(windowsQuery.data.map((item) => [item.inviteLinkId, item.fromDate])));
+  }, [open, initial, windowsQuery.data, setValue]);
   useEffect(() => {
     if (!selectedChannelId) return;
     const own = new Set([selectedChannelId, `channel:${selectedChannelId}`]);
@@ -386,6 +395,7 @@ export function CampaignModal({
         <form
           className="space-y-3"
           onSubmit={handleSubmit(async (value) => {
+            if (initial?.id && (windowsQuery.isLoading || windowsQuery.isError)) return;
             try {
               const {
                 price,
@@ -436,7 +446,18 @@ export function CampaignModal({
               {...register("customTitle")}
             />
           </FormField>
-          <div className="grid min-w-0 gap-3 sm:grid-cols-2">
+          <div className="grid min-w-0 gap-3 sm:grid-cols-3">
+            <FormField label="Member">
+              <MemberSelect
+                value={watch("assignedMemberId") ?? null}
+                onChange={(value) =>
+                  setValue("assignedMemberId", value || null, {
+                    shouldDirty: true,
+                  })
+                }
+                defaultToCurrent={!initial}
+              />
+            </FormField>
             <FormField
               label="Own Telegram Channel"
               required
@@ -461,17 +482,6 @@ export function CampaignModal({
                 }))}
               />
             </FormField>
-            <FormField label="Member">
-              <MemberSelect
-                value={watch("assignedMemberId") ?? null}
-                onChange={(value) =>
-                  setValue("assignedMemberId", value || null, {
-                    shouldDirty: true,
-                  })
-                }
-                defaultToCurrent={!initial}
-              />
-            </FormField>
             <FormField label="Promos">
               <CampaignMultiValueSelect
                 value={selectedPromoIds}
@@ -480,7 +490,7 @@ export function CampaignModal({
                 placeholder="Select promos"
               />
             </FormField>
-            <FormField label="Invite Links">
+            <div className="min-w-0 sm:col-span-3"><FormField label="Invite Links">
               <CampaignInviteLinksSelect
                 channelId={selectedChannelId}
                 campaignId={initial?.id}
@@ -491,8 +501,10 @@ export function CampaignModal({
                 }
                 enabled={open && !loading}
                 onChange={(value) => setArray("inviteLinkIds", value)}
+                windows={inviteLinkWindows}
+                onWindowChange={(id, date) => setValue("inviteLinkWindows", { ...getValues("inviteLinkWindows"), [id]: date }, { shouldDirty: true })}
               />
-            </FormField>
+            </FormField></div>
           </div>
           <ToggleRow
             checked={trackCrossChannelRequests}
@@ -575,7 +587,7 @@ export function CampaignModal({
             </FormField>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
-            <FormField label="Date start">
+            <FormField label={trackCrossChannelRequests ? "Date start" : "Date"}>
               <DateInput
                 name="date"
                 value={selectedDate || ""}
@@ -584,7 +596,7 @@ export function CampaignModal({
                 }
               />
             </FormField>
-            <FormField label="Date end">
+            {trackCrossChannelRequests && <FormField label="Date end">
               <DateInput
                 name="endedAt"
                 value={watch("endedAt") || ""}
@@ -592,7 +604,7 @@ export function CampaignModal({
                   setValue("endedAt", event.target.value || undefined, { shouldDirty: true })
                 }
               />
-            </FormField>
+            </FormField>}
           </div>
           <FormField label="Notes">
             <Textarea {...register("notes")} />
@@ -602,11 +614,12 @@ export function CampaignModal({
             {...register("telegramChannelId", { required: true })}
           />
           <input type="hidden" {...register("accountId")} />
+          {windowsQuery.isError && <p role="alert" className="text-sm text-red-400">Не удалось загрузить даты ссылок. Закройте окно и попробуйте снова.</p>}
           <div className="flex justify-end gap-2">
             <Button variant="secondary" type="button" onClick={onClose}>
               Cancel
             </Button>
-            <Button type="submit">Save</Button>
+            <Button type="submit" disabled={Boolean(initial?.id && (windowsQuery.isLoading || windowsQuery.isError))}>Save</Button>
           </div>
         </form>
       ) : null}

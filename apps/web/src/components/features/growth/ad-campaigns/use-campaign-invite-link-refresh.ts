@@ -23,12 +23,15 @@ export function useCampaignInviteLinkRefresh() {
   const [progress, setProgress] =
     useState<CampaignInviteLinkRefreshState | null>(null);
   const mutation = useMutation({
-    mutationFn: (campaign: AdCampaign) =>
-      adCampaignsApi.refreshInviteLinkData(
+    mutationFn: async (campaign: AdCampaign) => {
+      const result = await adCampaignsApi.refreshInviteLinkData(
         campaign.id,
         (item, current, total) =>
           setProgress({ campaignId: campaign.id, item, current, total }),
-      ),
+      );
+      const failedWindows = campaign.inviteLinkWindows?.length ? await adCampaignsApi.refreshInviteLinkWindows(campaign.id) : [];
+      return { ...result, failedWindows };
+    },
     onSuccess: async (result) => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: adCampaignKeys.list() }),
@@ -39,7 +42,7 @@ export function useCampaignInviteLinkRefresh() {
           queryKey: telegramChannelKeys.cardLists(),
         }),
       ]);
-      const failed = result.failedLinks.length;
+      const failed = result.failedLinks.length + result.failedWindows.length;
       pushToast(
         failed
           ? `Updated ${result.refreshedLinks} of ${result.totalLinks} invite links. ${failed} failed: ${result.failedLinks[0]?.message ?? "check Telegram access"}`

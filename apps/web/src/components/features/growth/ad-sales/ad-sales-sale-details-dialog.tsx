@@ -77,6 +77,9 @@ export function AdSalesSaleDetailsDialog({
       systemBotConnected={systemBotConnected}
       systemBotUsername={systemBotUsername}
       systemBotWorkspaceId={systemBotWorkspaceId}
+      onSearchAdvertisers={(query) =>
+        telegramAdSalesApi.searchAdvertisers({ q: query, limit: 20 })
+      }
       onCreatePayment={async (sale, payload) => {
         await telegramAdSalesApi.createPayment(sale.id, payload);
         await refreshSaleAfterMutation(
@@ -102,21 +105,24 @@ export function AdSalesSaleDetailsDialog({
         });
       }}
       onSave={async (sale, draft) => {
-        const currentBuyer =
-          sale.advertiserTelegramSnapshot ??
-          sale.advertiserTelegram ??
-          sale.advertiserContact ??
-          sale.advertiserNameSnapshot ??
-          sale.advertiserName ??
-          "";
-        const buyerChanged = draft.buyerContact !== currentBuyer;
+        const currentBuyer = sale.advertiserId
+          ? sale.advertiserTelegramSnapshot ??
+            sale.advertiserTelegram ??
+            sale.advertiserContact ??
+            sale.advertiserNameSnapshot ??
+            sale.advertiserName ??
+            ""
+          : "";
+        const buyerChanged = draft.buyerContact !== currentBuyer || draft.advertiserId !== sale.advertiserId;
         const saleChanges = {
-          ...(draft.origin !== sale.origin ? { origin: draft.origin } : {}),
-          ...(draft.sellerMemberId !==
-          (sale.sellerMemberId ?? sale.assignedMemberId)
+          ...(!draft.paymentsOnly && draft.origin !== sale.origin
+            ? { origin: draft.origin }
+            : {}),
+          ...(!draft.paymentsOnly &&
+          draft.sellerMemberId !== (sale.sellerMemberId ?? sale.assignedMemberId)
             ? { sellerMemberId: draft.sellerMemberId }
             : {}),
-          ...(buyerChanged
+          ...(!draft.paymentsOnly && buyerChanged
             ? {
                 advertiserId: null,
                 advertiserName:
@@ -127,6 +133,11 @@ export function AdSalesSaleDetailsDialog({
                   : null,
               }
             : {}),
+          ...(!draft.paymentsOnly &&
+          draft.advertiserId &&
+          draft.advertiserId !== sale.advertiserId
+            ? { advertiserId: draft.advertiserId }
+            : {}),
           ...(draft.payments[0]?.currency &&
           draft.payments[0].currency !== sale.settlementCurrency
             ? { settlementCurrency: draft.payments[0].currency }
@@ -134,7 +145,9 @@ export function AdSalesSaleDetailsDialog({
         };
         const operation = startOperation({
           id: `ad-sale-edit:${sale.id}`,
-          title: "Saving deal changes",
+          title: draft.paymentsOnly
+            ? "Updating finance transaction"
+            : "Saving deal changes",
           message: "Sending changes to the server…",
           current: 0,
           total: 1,
@@ -180,8 +193,12 @@ export function AdSalesSaleDetailsDialog({
             ),
           });
           operation.succeed({
-            title: "Deal changes saved",
-            message: "All placement, post, and payment changes are saved.",
+            title: draft.paymentsOnly
+              ? "Finance transaction updated"
+              : "Deal changes saved",
+            message: draft.paymentsOnly
+              ? "The finance transaction was updated."
+              : "All placement, post, and payment changes are saved.",
           });
         } catch (error) {
           operation.fail({

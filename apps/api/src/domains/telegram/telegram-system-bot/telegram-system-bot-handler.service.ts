@@ -61,10 +61,11 @@ export class TelegramSystemBotHandlerService {
       return this.channelAccess?.handleMyChatMember(update.my_chat_member);
     if (!this.config.token) return;
     const groupLink =
-      /^\/connect_workspace(?:@\w+)?\s+([A-Za-z0-9_-]{20,})\s*$/.exec(
+      /^\/connect_workspace(?:@(\w+))?\s+([A-Za-z0-9_-]{20,})\s*$/.exec(
         update.message?.text?.trim() ?? '',
       );
     const group = update.message?.chat;
+    if (groupLink?.[1] && groupLink[1].toLowerCase() !== this.config.username?.replace(/^@/, '').toLowerCase()) return;
     if (
       groupLink &&
       group?.id !== undefined &&
@@ -72,7 +73,7 @@ export class TelegramSystemBotHandlerService {
     ) {
       const connected =
         await this.notificationConnections?.consumeNotificationGroupLink(
-          groupLink[1],
+          groupLink[2],
           String(group.id),
           group.title,
         );

@@ -66,14 +66,18 @@ export function SaleStatusActions({
   placement,
   onAction,
   hideSchedule = false,
+  excludeActions = [],
 }: {
   sale: TelegramAdSale;
   placement?: TelegramAdSalePlacement | null;
   onAction: (action: SaleActionKey) => void;
   hideSchedule?: boolean;
+  excludeActions?: SaleActionKey[];
 }) {
   const actions = allowedSaleActions(sale, placement).filter(
-    (action) => !hideSchedule || action !== "schedule",
+    (action) =>
+      (!hideSchedule || action !== "schedule") &&
+      !excludeActions.includes(action),
   );
 
   return (

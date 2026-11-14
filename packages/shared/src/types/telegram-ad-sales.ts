@@ -645,6 +645,7 @@ export type TelegramAdvertiser = {
   id: string;
   workspaceId: string;
   displayName: string;
+  photoUrl?: string | null;
   companyName: string | null;
   telegramUsername: string | null;
   telegramUserId: string | null;

@@ -1,18 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ExternalLink, Link2, Link2Off, RefreshCw } from "lucide-react";
 import { ActionMenu, ActionMenuItem } from "@/components/ui/action-menu";
 import { AppShell } from "@/components/layout/app-shell";
 import {
-  Button,
   Card,
   LoadingState,
   PageHeader,
 } from "@/components/ui/primitives";
 import { authApi, telegramSystemBotApi } from "@/lib/api";
 import { authKeys, telegramSystemBotKeys } from "@/lib/query-keys";
+import { TelegramEntityAvatar } from "@/components/features/telegram/telegram/telegram-entity-avatar";
+import { useNotificationLinkWatch } from "./use-notification-link-watch";
 
 type LinkCode = {
   token: string;
@@ -31,6 +32,14 @@ export function NotificationSettingsPage() {
   const [accountLink, setAccountLink] = useState<LinkCode | null>(null);
   const me = useQuery({ queryKey: authKeys.me(), queryFn: authApi.me });
   const workspaceId = me.data?.workspace.id ?? "";
+  const linkWorkspace = useRef(workspaceId);
+  useEffect(() => {
+    if (!workspaceId) return;
+    if (linkWorkspace.current && workspaceId !== linkWorkspace.current) { setGroupLink(null); setAccountLink(null); }
+    linkWorkspace.current = workspaceId;
+  }, [workspaceId]);
+  useNotificationLinkWatch(workspaceId, "group", groupLink);
+  useNotificationLinkWatch(workspaceId, "account", accountLink);
   const canManage =
     me.data?.workspace.access?.isOwner === true ||
     me.data?.workspace.access?.featureIds.includes("workspace") === true ||
@@ -139,7 +148,8 @@ export function NotificationSettingsPage() {
                     <p className="text-xs font-medium uppercase tracking-wide text-neutral-500">
                       Личные уведомления
                     </p>
-                    <h2 className="mt-2 truncate text-base font-semibold text-white">
+                    <h2 className="mt-2 flex items-center gap-2 truncate text-base font-semibold text-white">
+                      {account.data?.connected && <TelegramEntityAvatar imageUrl={account.data.photoUrl} kind="person" alt={account.data.displayName || "Telegram"} size="sm" />}
                       {account.isLoading
                         ? "Загрузка…"
                         : account.data?.connected
@@ -225,7 +235,7 @@ export function NotificationSettingsPage() {
                     <p className="text-xs text-neutral-500">
                       Ссылка действует до{" "}
                       {new Date(accountLink.expiresAt).toLocaleString()}. После
-                      запуска бота обновите статус здесь.
+                      запуска бота статус обновится автоматически.
                     </p>
                   </div>
                 ) : null}
@@ -243,7 +253,8 @@ export function NotificationSettingsPage() {
                     <p className="text-xs font-medium uppercase tracking-wide text-neutral-500">
                       Групповые уведомления
                     </p>
-                    <h2 className="mt-2 truncate text-base font-semibold text-white">
+                    <h2 className="mt-2 flex items-center gap-2 truncate text-base font-semibold text-white">
+                      {group.data?.connected && <TelegramEntityAvatar imageUrl={group.data.photoUrl} kind="channel" alt={group.data.chatTitle || "Telegram"} size="sm" />}
                       {group.isLoading
                         ? "Загрузка…"
                         : group.data?.connected
@@ -306,12 +317,12 @@ export function NotificationSettingsPage() {
                         .join(" · ") || `@${groupLink.botUsername}`}
                     </p>
                     <code className="block select-all break-all rounded-lg bg-neutral-950 p-2 text-sm text-blue-200">
-                      /connect_workspace {groupLink.token}
+                      /connect_workspace@{groupLink.botUsername} {groupLink.token}
                     </code>
                     <p className="text-xs text-neutral-500">
                       Код действует до{" "}
                       {new Date(groupLink.expiresAt).toLocaleString()}. После
-                      команды обновите статус.
+                      команды статус обновится автоматически.
                     </p>
                   </div>
                 ) : null}
