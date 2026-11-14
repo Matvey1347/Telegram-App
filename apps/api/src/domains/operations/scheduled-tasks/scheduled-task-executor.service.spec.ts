@@ -168,7 +168,7 @@ describe('scheduled task registry executors', () => {
     );
     const result =
       await executor.executors['telegram.managed_posts.publish_due']();
-    expect(result.summary).toContain('Published 7');
+    expect(result.summary).toContain('Dispatched 7');
     expect(
       managedPosts.publishDueLocallyScheduledManagedPosts,
     ).toHaveBeenCalledTimes(1);

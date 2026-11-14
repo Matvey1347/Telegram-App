@@ -1,4 +1,6 @@
-import { Injectable } from '@nestjs/common';
+import { managedPostDeliveryEligibility } from './managed-post-delivery-eligibility';
+import { TelegramManagedPostDeliveryDispatcherService } from './telegram-managed-post-delivery-dispatcher.service';
+import { Injectable, Optional } from '@nestjs/common';
 import { TelegramManagedPostStatus } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { TelegramMtprotoClient } from '@api/telegram/shared/mtproto/telegram-mtproto.client';
@@ -26,6 +28,8 @@ export class TelegramManagedPostReconciliationService {
     private readonly telegramManagedPostGroupPresentationService: TelegramManagedPostGroupPresentationService,
     private readonly telegramManagedPostPublicationService: TelegramManagedPostPublicationService,
     private readonly telegramManagedPostRemoteDeletionService: TelegramManagedPostRemoteDeletionService,
+    @Optional()
+    private readonly dispatcher?: TelegramManagedPostDeliveryDispatcherService,
   ) {}
 
   private readonly iconSelect = {
@@ -186,15 +190,21 @@ export class TelegramManagedPostReconciliationService {
     const duePosts = await this.prisma.telegramManagedPost.findMany({
       where: {
         scheduleMode: 'LOCAL',
-        mutualPromotionDelivery: { is: null },
+        AND: [managedPostDeliveryEligibility(now)],
         OR: [
           {
+            status: TelegramManagedPostStatus.FAILED,
+            deliveryNextAttemptAt: { lte: now },
+            deliveryAttemptCount: { gt: 0 },
+          },
+          {
             status: TelegramManagedPostStatus.SCHEDULED,
+            mutualPromotionDelivery: { is: null },
             scheduledAt: { lte: now },
           },
           {
             status: TelegramManagedPostStatus.PUBLISHING,
-            updatedAt: { lte: stalePublishingCutoff },
+            deliveryClaimExpiresAt: { lte: now },
           },
         ],
       },
@@ -202,59 +212,16 @@ export class TelegramManagedPostReconciliationService {
       orderBy: { scheduledAt: 'asc' },
       take: 25,
     });
-    let published = 0;
-    let failed = 0;
-    const channels = new Map<string, typeof duePosts>();
-    for (const post of duePosts) {
-      const posts = channels.get(post.telegramChannelId) ?? [];
-      posts.push(post);
-      channels.set(post.telegramChannelId, posts);
-    }
-    const queue = [...channels.values()];
-    const publishNext = async () => {
-      while (queue.length) {
-        for (const due of queue.shift()!) {
-          const claim = await this.prisma.telegramManagedPost.updateMany({
-            where: {
-              id: due.id,
-              workspaceId: due.workspaceId,
-              telegramChannelId: due.telegramChannelId,
-              mutualPromotionDelivery: { is: null },
-              scheduleMode: 'LOCAL',
-              OR: [
-                {
-                  status: TelegramManagedPostStatus.SCHEDULED,
-                  scheduledAt: { lte: new Date() },
-                },
-                {
-                  status: TelegramManagedPostStatus.PUBLISHING,
-                  updatedAt: { lte: stalePublishingCutoff },
-                },
-              ],
-            },
-            data: { status: TelegramManagedPostStatus.PUBLISHING },
-          });
-          if (claim.count) {
-            try {
-              await this.telegramManagedPostPublicationService.publishManagedPost(
-                due.workspaceId,
-                due.telegramChannelId,
-                due.id,
-              );
-              published += 1;
-            } catch {
-              // The publisher persists the post-level FAILED state and message.
-              // Continue so one broken bot or post cannot block the remaining due queue.
-              failed += 1;
-            }
-          }
-        }
-      }
-    };
-    await Promise.all(
-      Array.from({ length: Math.min(5, channels.size) }, publishNext),
+    if (!this.dispatcher)
+      throw new Error('Durable publication dispatcher unavailable');
+    const admitted = await Promise.all(
+      duePosts.map((post) => this.dispatcher!.dispatch(post)),
     );
-    return { considered: duePosts.length, published, failed };
+    return {
+      considered: duePosts.length,
+      published: admitted.filter(Boolean).length,
+      failed: 0,
+    };
   }
 
   public async reconcileManagedPostIdentities(params: {

@@ -1,3 +1,4 @@
+jest.mock('@consumer-finance/api/investments/finance-investment-current', () => ({ refreshInvestmentCurrent: jest.fn().mockResolvedValue(undefined) }));
 import { BadRequestException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import {

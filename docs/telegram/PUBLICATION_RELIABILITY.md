@@ -41,27 +41,91 @@ same future instant; verify Telegram message IDs, accepted timestamps, placement
 statuses and notification status. Repeat with maintenance stalled and a channel
 permission failure. Do not create real public posts as an unsolicited test.
 
-## Remaining limits and release status
+## Durable recovery and remote uncertainty
 
-This change does not prove an absolute delivery guarantee. Telegram outages,
-permission removal, rate limits and a request accepted remotely before its
-response is lost require explicit handling. A long-lived publisher promise can
-still hold its publication lane after the current bounded batch; do not release
-its live send and retry on a Promise.race timeout. A cancellation-safe preflight
-and ambiguous-send reconciliation audit remains a release requirement for a
-claim of comprehensive reliability. FAILED local deliveries currently leave the automatic queue; a durable typed
-attempt/outcome model is still required to distinguish definite rejection from
-an accepted send with lost response, schedule retries, and reconcile before
-resending. Blindly requeueing FAILED would risk duplicate paid advertising.
+Each immediate send now has an immutable post/ordinal/payload/source identity.
+The journal persists STARTED before the network request and ACKED with accepted
+Telegram IDs before the next operation. A partial prefix cannot authorize replay
+of an uncertain follow-up. Explicit Telegram 429 rejection stores retry_after;
+other definite 4xx responses become actionable BLOCKED failures. Network failure,
+5xx, lost responses and failed acknowledgement persistence are UNKNOWN and enter
+remote identity reconciliation, never blind resend. Authenticated manual retry
+can reset only definite rejected operations in its workspace/channel.
 
-Exact server acceptance time also includes
-Telegram/network latency; the system must dispatch at the requested instant and
-record observed acceptance truthfully.
+Per-post claims and a dispatch context fence replace whole-batch waiting.
+A 30-second dispatch deadline aborts the transport and fences preparation that
+resumes later. Fencing is rechecked after the database ownership read and before
+each new remote operation; cancelled/ended VP is excluded. An already-started
+request remains journaled as uncertain until its outcome is recovered. The next
+channel/batch does not await that promise. MTProto cancellation closes its
+connection and checks cancellation before subsequent sends; Bot requests retain
+real fetch abort deadlines. Post-publication emoji repair cannot hold dispatch.
 
-No schema, external API contract, frontend polling or additional process is
-introduced. Due reads use existing status/time indexes. At 100 due channels,
+Failed recoverable VP posts also retain an independent LOCAL recovery driver,
+even if one sibling permanently fails. Retry eligibility respects folder
+cancellation and end time. Definitive rejected operations honor persisted retry
+dates; preflight retries back off to fifteen minutes. Ambiguous recovery checks
+are spaced five minutes apart. No background empty polling is added.
+
+Delivery cannot be guaranteed while Telegram is unavailable or permissions are
+removed. Bot API has no client idempotency key or arbitrary history read; if a
+response is lost and a connected account cannot prove a unique remote match,
+the failure stays visible and is not resent speculatively. Server dispatch time
+and Telegram acceptance time are recorded separately; network latency and
+Telegram rate limits cannot be represented as exact zero-latency acceptance.
+
+## Migration and verification
+
+The additive migration creates operation journals and per-post claim/retry
+metadata. Legacy active LOCAL sends are backfilled as UNKNOWN with expired
+claims so rollout recovers them without interpreting an empty journal as no-send.
+Migrations and schema verification passed on a disposable PostgreSQL database.
+Real two-client integration tests prove atomic ownership, lost-response safety,
+429 continuation without prefix duplication and single publisher ownership.
+The Nest module dependency smoke test also passes without production secrets.
+
+The schema change is additive; external API contracts, frontend polling and
+process count are unchanged. Journals are retained with their managed post and
+cascade on its deletion; accepted operation evidence must outlive retries. Due reads use existing status/time indexes. At 100 due channels,
 100 messages still require approximately 100 send operations plus media and
-existing persistence; pool concurrency reduces serial latency, not operation
-count. New task configs add constant metadata and actual-due reads; idle work
+existing persistence; independent dispatch reduces serial latency, not operation count. New task configs add constant metadata and actual-due reads; idle work
 must stay disarmed. Existing operational history retention applies. No new
 telemetry or RAM baseline service is added.
+
+## Production release evidence — 2026-11-13
+
+Merged implementation PR #3 and claim recovery PR #4 into main. Railway
+deployment `d685c0b6-e92e-4162-9a59-c615b783c359` for commit
+`73a8c3293c09178c63f08003de847cc998e85afe` reached SUCCESS; the migration is
+applied and public API health returns HTTP 200. Both deadline tasks are enabled.
+
+Canonical production smoke in existing private Test channels scheduled one
+ad and one folder VP at 21:58:20.647 UTC. Telegram acknowledgements were recorded
+after 4,178 ms and 4,543 ms respectively, with one message ID per post; the ad
+placement and VP delivery both became PUBLISHED. Four future VP fixture posts
+were cancelled. An earlier rollout smoke also published both (4,579/5,233 ms);
+its cleanup incorrectly attempted the unpublished-ad cancellation action after
+publication. The smoke script now cancels only unpublished placements. Published
+test artifacts were removed separately with fixture/private-channel guards.
+The original Mira deal retains all seven post and placement PUBLISHED statuses.
+
+Verification: 218 focused tests plus four real PostgreSQL integration tests;
+API types/build, module DI and focused new-file lint passed. Full suite and
+architecture retain unrelated existing failures documented in the execution
+plan. The disposable PostgreSQL container was stopped. No dev server remains.
+
+QA reproduction: set explicit SMOKE_WORKSPACE_ID and two distinct private test
+channel IDs, inject production variables using Railway run, and execute the
+guarded smoke script. It creates zero-value fixture placements, validates
+message IDs and placement states, and cancels future VP work. Run only with the
+explicit publish-private-test-only guard, never against a customer channel.
+
+Final admission hardening bounds journal/claim admission to five seconds per
+post, with up to 25 independent admissions in the existing due batch. A late
+claim result cannot start a remote send; its durable lease expires for recovery.
+Explicit rescheduling clears only definite BLOCKED/REJECTED operations after
+validation, preserving ACKED/STARTED/UNKNOWN evidence. Regression tests cover
+hung admission, late claims and manual publish/reschedule recovery. Final
+focused rerun: 22 suites / 127 tests passed (four real-database tests skipped in
+this rerun; those passed separately above); API typecheck and build passed.
+Turing read-only integration review found no release blocker.

@@ -8,6 +8,8 @@ const App = GroshlyApp as ComponentType<{
   initialData: ReturnType<typeof initial>;
   onSaveLedgerEntry?: (input: { draft: { categoryId?: string | null } }) => Promise<ReturnType<typeof initial>>;
   onChangeRegularPayment?: (input: { id: string; action: string }) => Promise<ReturnType<typeof initial>>;
+  onSaveInvestmentMovement?: (input: { id: string; mode: string; amount: number; accountId: string; occurredAt: string; idempotencyKey: string }) => Promise<ReturnType<typeof initial>>;
+  onOpenInvestment?: (id: string) => Promise<unknown>;
 }>;
 
 beforeEach(() => {
@@ -24,6 +26,77 @@ function snapshot() {
 }
 
 describe("Groshly special transactions", () => {
+  it("keeps an investment address and restores its details after a reload", async () => {
+    const data = snapshot();
+    data.investments = [{ id: "asset", name: "Fund", currency: "UAH", accountId: "a1", invested: 100, returned: 0, value: 100, events: [] }] as never;
+    const detail = vi.fn().mockResolvedValue({ events: [{ id: "event", date: "2026-11-12", type: "deposit", amount: 25, accountId: "a1" }] });
+    const view = render(<App initialData={data} onOpenInvestment={detail} />);
+    fireEvent.click(screen.getByRole("link", { name: /Investments/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Fund/ }));
+    await waitFor(() => expect(window.location.search).toContain("investment=asset"));
+    view.unmount();
+    render(<App initialData={data} onOpenInvestment={detail} />);
+    await waitFor(() => expect(screen.getByText("Investment details")).toBeInTheDocument());
+    await waitFor(() => expect(detail).toHaveBeenCalledTimes(2));
+    expect(screen.getByText("Movement history")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    expect(window.location.search).not.toContain("investment=");
+  });
+  it("waits for a contribution to be saved and uses the server snapshot", async () => {
+    const data = snapshot();
+    data.investments = [{ id: "asset", name: "Fund", currency: "UAH", accountId: "a1", invested: 100, returned: 0, value: 100, events: [] }] as never;
+    const saved: typeof data = { ...data, investments: [{ id: "asset", name: "Fund", currency: "UAH", accountId: "a1", invested: 125, returned: 0, value: 100, events: [] }] as never };
+    let resolve!: (value: typeof data) => void;
+    const save = vi.fn(() => new Promise<typeof data>((done) => { resolve = done; }));
+    render(<App initialData={data} onSaveInvestmentMovement={save} />);
+    fireEvent.click(screen.getByRole("link", { name: /Investments/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Fund/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Contribute" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "ACCOUNT AMOUNT" }), { target: { value: "25" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(screen.getByText("Saving operation")).toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: "ACCOUNT AMOUNT" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Investment updated")).not.toBeInTheDocument();
+    expect(save).toHaveBeenCalledWith(expect.objectContaining({ id: "asset", mode: "deposit", amount: 25, accountId: "a1", idempotencyKey: expect.any(String) }));
+    resolve(saved);
+    await waitFor(() => expect(screen.getByText("Investment updated")).toBeInTheDocument());
+    expect(screen.getAllByText(/125/).length).toBeGreaterThan(0);
+  });
+
+  it("shows a failure alert and reuses the request key on retry", async () => {
+    const data = snapshot();
+    data.investments = [{ id: "asset", name: "Fund", currency: "UAH", accountId: "a1", invested: 100, returned: 0, value: 100, events: [] }] as never;
+    const save = vi.fn().mockRejectedValue(new Error("unavailable"));
+    render(<App initialData={data} onSaveInvestmentMovement={save} />);
+    fireEvent.click(screen.getByRole("link", { name: /Investments/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Fund/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Contribute" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "ACCOUNT AMOUNT" }), { target: { value: "25" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(screen.getByText("Could not save the operation. Please try again.")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Contribute" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "ACCOUNT AMOUNT" }), { target: { value: "25" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(2));
+    expect(save.mock.calls[0][0]).toEqual(save.mock.calls[1][0]);
+  });
+  it("accepts a different account currency and previews the converted contribution", async () => {
+    const data = snapshot();
+    data.rates = { UAH: 1, PLN: 10, USD: 40, EUR: 45 };
+    data.investments = [{ id: "asset", name: "Fund", currency: "PLN", invested: 100, returned: 0, value: 100, events: [] }] as never;
+    const save = vi.fn().mockResolvedValue(data);
+    render(<App initialData={data} onSaveInvestmentMovement={save} />);
+    fireEvent.click(screen.getByRole("link", { name: /Investments/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Fund/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Contribute" }));
+    fireEvent.click(screen.getByRole("button", { name: "Select account" }));
+    fireEvent.click(screen.getByRole("button", { name: /Доларові заощадження/ }));
+    fireEvent.change(screen.getByRole("textbox", { name: "ACCOUNT AMOUNT" }), { target: { value: "25" } });
+    expect(screen.getByText(/Estimated in investment currency/)).toHaveTextContent("100 zł");
+    expect(screen.getByText(/Estimated rate/)).toHaveTextContent("1 USD ≈ 4.0000 PLN");
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(save).toHaveBeenCalledWith(expect.objectContaining({ amount: 25, accountId: "a5" })));
+  });
   it("removes a cancelled recurring payment from the visible list", async () => {
     const data = snapshot();
     data.recurring = [{ ...data.recurring[0], id: "cancel-me", title: "Sample plan" }];

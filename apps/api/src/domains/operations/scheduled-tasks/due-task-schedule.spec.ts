@@ -236,7 +236,7 @@ describe('DueTaskSchedule', () => {
       .mockResolvedValueOnce({
         status: 'PUBLISHING',
         scheduledAt: new Date(now.getTime() - 5 * 60_000),
-        updatedAt: claimedAt,
+        deliveryClaimExpiresAt: new Date(claimedAt.getTime() + 30_000),
       })
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce(null)
@@ -244,14 +244,14 @@ describe('DueTaskSchedule', () => {
 
     await expect(
       schedule.nextDueAt('telegram.managed_posts.publish_due'),
-    ).resolves.toEqual(new Date(claimedAt.getTime() + 10 * 60_000));
+    ).resolves.toEqual(new Date(claimedAt.getTime() + 30_000));
   });
   it('wakes for a scheduled post before an older active delivery becomes stale', async () => {
     const { schedule, prisma } = setup();
     const scheduledAt = new Date(now.getTime() + 20_000);
     prisma.telegramManagedPost.findFirst
       .mockResolvedValueOnce({ scheduledAt })
-      .mockResolvedValueOnce({ updatedAt: now });
+      .mockResolvedValueOnce({ deliveryClaimExpiresAt: new Date(now.getTime() + 30_000) });
     await expect(
       schedule.nextDueAt('telegram.managed_posts.publish_due'),
     ).resolves.toEqual(scheduledAt);

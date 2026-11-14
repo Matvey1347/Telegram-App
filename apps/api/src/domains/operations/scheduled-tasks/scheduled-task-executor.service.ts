@@ -44,7 +44,7 @@ export class ScheduledTaskExecutorService {
         notifyScheduledTaskDueWorkChanged('telegram_ad_sales.due_deletions');
       }
       return {
-        summary: `Published ${result.published} locally scheduled posts; ${result.failed} failed.`,
+        summary: `Dispatched ${result.published} locally scheduled posts; ${result.failed} failed.`,
       };
     },
     'telegram.managed_posts.reconcile_due': async () => {

@@ -27,6 +27,10 @@ type TelegramBotDeliveryInput = {
   journaledMessageIds: string[];
   call(method: string, body: Record<string, unknown>): Promise<unknown>;
   persist(messageIds: string[]): Promise<void>;
+  executeOperation?(
+    operation: TelegramBotDeliveryOperation,
+    ordinal: number,
+  ): Promise<string[]>;
   applyReplyMarkup?(lastMessageId: string): Promise<void>;
 };
 
@@ -48,7 +52,7 @@ export async function deliverTelegramManagedPostViaBot(
 ) {
   const messageIds = [...input.journaledMessageIds];
   let completedCount = 0;
-  for (const operation of input.operations) {
+  for (const [ordinal, operation] of input.operations.entries()) {
     const operationEnd = completedCount + operation.expectedMessageCount;
     if (messageIds.length >= operationEnd) {
       completedCount = operationEnd;
@@ -59,9 +63,11 @@ export async function deliverTelegramManagedPostViaBot(
         'Telegram delivery journal is incomplete or inconsistent',
       );
     }
-    const createdIds = operation.messageIds(
-      await input.call(operation.method, operation.body),
-    );
+    const createdIds = input.executeOperation
+      ? await input.executeOperation(operation, ordinal)
+      : operation.messageIds(
+          await input.call(operation.method, operation.body),
+        );
     if (createdIds.length !== operation.expectedMessageCount) {
       throw new Error('Telegram returned an unexpected number of messages');
     }

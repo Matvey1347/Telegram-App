@@ -356,7 +356,11 @@ describe('TelegramChannelsService characterization seams', () => {
     } as never);
 
     await expect(
-      store.createManagedPostRevision({} as never, {} as never, 'before_edit'),
+      store.createManagedPostRevision(
+        { $queryRaw: jest.fn().mockResolvedValue([{ exists: null }]) } as never,
+        {} as never,
+        'before_edit',
+      ),
     ).resolves.toBeUndefined();
 
     expect(create).not.toHaveBeenCalled();

@@ -1,3 +1,6 @@
+import { TelegramManagedPostDeliveryAlertsService } from './telegram-managed-post-delivery-alerts.service';
+import { TelegramManagedPostDeliveryDispatcherService } from './telegram-managed-post-delivery-dispatcher.service';
+import { TelegramManagedPostSendJournalService } from './telegram-managed-post-send-journal.service';
 import { forwardRef, Module } from '@nestjs/common';
 import { OperationsNotificationsModule } from '../../operations/notifications/operations-notifications.module';
 import { AiModule } from '../../operations/ai/ai.module';
@@ -223,6 +226,8 @@ import { TelegramChannelTrafficAttributionService } from './telegram-channel-tra
     TelegramManagedPostQueryService,
     TelegramManagedPostSyntheticReadService,
     TelegramManagedPostReconciliationService,
+    { provide: 'managed-post-reconciler', useExisting: TelegramManagedPostReconciliationService },
+    TelegramManagedPostDeliveryDispatcherService,
     TelegramManagedPostRemoteSyncService,
     TelegramManagedPostRemoteLoaderService,
     TelegramRemoteScheduledPostImportService,
@@ -233,6 +238,9 @@ import { TelegramChannelTrafficAttributionService } from './telegram-channel-tra
     TelegramManagedPostScheduledResetService,
     TelegramManagedPostPublicationService,
     TelegramManagedPostPublisherService,
+    TelegramManagedPostDeliveryDispatcherService,
+    TelegramManagedPostSendJournalService,
+    TelegramManagedPostDeliveryAlertsService,
     TelegramManagedPostPremiumEmojiRepairService,
     TelegramManagedPostBulkService,
     TelegramManagedPostMoveService,
@@ -295,6 +303,7 @@ import { TelegramChannelTrafficAttributionService } from './telegram-channel-tra
     TelegramPostGroupsService,
     TelegramSystemPostGroupsService,
     TelegramManagedPostReconciliationService,
+    TelegramManagedPostDeliveryDispatcherService,
     TelegramManagedPostRemoteSyncService,
     TelegramChannelSyncOrchestrator,
     TelegramPostMetricsService,

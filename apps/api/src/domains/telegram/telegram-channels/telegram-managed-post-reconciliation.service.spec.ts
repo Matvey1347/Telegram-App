@@ -48,71 +48,21 @@ describe('TelegramManagedPostReconciliationService local delivery', () => {
     );
   });
 
-  it('publishes another channel while the first channel is stalled', async () => {
-    let release!: () => void;
-    const stalled = new Promise<void>((resolve) => { release = resolve; });
-    const prisma = { telegramManagedPost: {
-      findMany: jest.fn().mockResolvedValue([
-        { id: 'a', workspaceId: 'w', telegramChannelId: 'slow' },
-        { id: 'b', workspaceId: 'w', telegramChannelId: 'fast' },
-      ]),
-      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
-    } };
-    const sent: string[] = [];
-    const publication = { publishManagedPost: jest.fn(async (_w, _c, id) => {
-      if (id === 'a') await stalled;
-      sent.push(id);
-    }) };
+  it('dispatches due channels without awaiting their Telegram send', async () => {
+    const posts = [
+      { id: 'a', workspaceId: 'w', telegramChannelId: 'slow' },
+      { id: 'b', workspaceId: 'w', telegramChannelId: 'fast' },
+    ];
+    const prisma = { telegramManagedPost: { findMany: jest.fn().mockResolvedValue(posts) } };
+    const dispatcher = { dispatch: jest.fn().mockResolvedValue(true) };
     const service = new TelegramManagedPostReconciliationService(
       prisma as never, {} as never, {} as never, {} as never,
       { isProductionDeliveryRuntime: () => true } as never,
-      {} as never, {} as never, publication as never, {} as never,
+      {} as never, {} as never, {} as never, {} as never, dispatcher as never,
     );
-    const running = service.publishDueLocallyScheduledManagedPosts();
-    for (let i = 0; i < 10; i++) await Promise.resolve();
-    expect(sent).toEqual(['b']);
-    release();
-    await expect(running).resolves.toEqual({ considered: 2, published: 2, failed: 0 });
-    expect(prisma.telegramManagedPost.findMany.mock.calls[0][0].where)
-      .toMatchObject({ mutualPromotionDelivery: { is: null } });
-  });
-
-  it('continues after one due post fails and reports the observable result', async () => {
-    const duePosts = [
-      { id: 'broken', workspaceId: 'workspace', telegramChannelId: 'channel' },
-      { id: 'healthy', workspaceId: 'workspace', telegramChannelId: 'channel' },
-    ];
-    const prisma = {
-      telegramManagedPost: {
-        findMany: jest.fn().mockResolvedValue(duePosts),
-        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
-      },
-    };
-    const publication = {
-      publishManagedPost: jest
-        .fn()
-        .mockRejectedValueOnce(new Error('bot unavailable'))
-        .mockResolvedValueOnce({ status: 'PUBLISHED' }),
-    };
-    const access = {
-      isProductionDeliveryRuntime: jest.fn().mockReturnValue(true),
-    };
-    const service = new TelegramManagedPostReconciliationService(
-      prisma as never,
-      {} as never,
-      {} as never,
-      {} as never,
-      access as never,
-      {} as never,
-      {} as never,
-      publication as never,
-      {} as never,
-    );
-
-    await expect(
-      service.publishDueLocallyScheduledManagedPosts(),
-    ).resolves.toEqual({ considered: 2, published: 1, failed: 1 });
-    expect(publication.publishManagedPost).toHaveBeenCalledTimes(2);
+    await expect(service.publishDueLocallyScheduledManagedPosts()).resolves.toEqual({ considered: 2, published: 2, failed: 0 });
+    expect(dispatcher.dispatch.mock.calls.map(([post]) => post.id)).toEqual(['a', 'b']);
+    expect(prisma.telegramManagedPost.findMany.mock.calls[0][0].where.OR).toContainEqual(expect.objectContaining({ status: 'SCHEDULED', mutualPromotionDelivery: { is: null } }));
   });
 
   it('does not let a local runtime consume the production delivery queue', async () => {

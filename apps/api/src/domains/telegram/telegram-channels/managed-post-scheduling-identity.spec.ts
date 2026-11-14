@@ -1,3 +1,4 @@
+import { TELEGRAM_PRODUCTION_SYSTEM_BOT_SOURCE_ID } from '@api/telegram/shared/imports/telegram-source-access.service';
 import {
   TelegramManagedPostRemoteStatus,
   TelegramManagedPostStatus,
@@ -43,6 +44,10 @@ describe('Telegram managed post scheduled identity', () => {
       telegramManagedPost: {
         findFirst: jest.fn().mockResolvedValue(post),
         update,
+        updateMany: jest.fn().mockImplementation(async ({ data }) => {
+          stored = { ...stored, ...data };
+          return { count: 1 };
+        }),
         findUnique: jest.fn().mockImplementation(async () => stored),
       },
       telegramChannel: {
@@ -175,11 +180,12 @@ describe('Telegram managed post scheduled identity', () => {
     const { service, update } = setup(TelegramManagedPostStatus.DRAFT, []);
     service['sourcesForChannel'] = jest.fn().mockResolvedValue([
       {
-        sourceId: 'system-bot',
+        sourceId: TELEGRAM_PRODUCTION_SYSTEM_BOT_SOURCE_ID,
         sourceType: TelegramSourceType.BOT,
         permissions: { canPostMessages: true },
       },
     ]);
+    service['isProductionDeliveryRuntime'] = jest.fn().mockReturnValue(true);
     service['botTokenForSource'] = jest
       .fn()
       .mockRejectedValue(new Error('System bot is not configured'));

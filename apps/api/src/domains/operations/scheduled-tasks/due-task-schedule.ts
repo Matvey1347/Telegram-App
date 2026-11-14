@@ -1,3 +1,4 @@
+import { managedPostDeliveryEligibility } from '../../telegram/telegram-channels/managed-post-delivery-eligibility';
 import { PrismaService } from '../../../prisma/prisma.service';
 import {
   AD_DELETION_RETRY_MS,
@@ -145,32 +146,43 @@ export class DueTaskSchedule {
   private async nextLocalPublicationDueAt() {
     const ownership = {
       scheduleMode: 'LOCAL',
-      mutualPromotionDelivery: { is: null },
-    } as const;
-    const [scheduled, publishing] = await Promise.all([
+      AND: [managedPostDeliveryEligibility(new Date())],
+    };
+    const [scheduled, publishing, retry] = await Promise.all([
       this.prisma.telegramManagedPost.findFirst({
         where: {
           ...ownership,
           status: 'SCHEDULED',
+          mutualPromotionDelivery: { is: null },
           scheduledAt: { not: null },
         },
         orderBy: { scheduledAt: 'asc' },
         select: { scheduledAt: true },
       }),
       this.prisma.telegramManagedPost.findFirst({
-        where: { ...ownership, status: 'PUBLISHING' },
-        orderBy: { updatedAt: 'asc' },
-        select: { updatedAt: true },
+        where: {
+          ...ownership,
+          status: 'PUBLISHING',
+          deliveryClaimExpiresAt: { not: null },
+        },
+        orderBy: { deliveryClaimExpiresAt: 'asc' },
+        select: { deliveryClaimExpiresAt: true },
+      }),
+      this.prisma.telegramManagedPost.findFirst({
+        where: {
+          ...ownership,
+          status: 'FAILED',
+          deliveryAttemptCount: { gt: 0 },
+          deliveryNextAttemptAt: { not: null },
+        },
+        orderBy: { deliveryNextAttemptAt: 'asc' },
+        select: { deliveryNextAttemptAt: true },
       }),
     ]);
     return earliest([
       scheduled?.scheduledAt,
-      publishing
-        ? new Date(
-            publishing.updatedAt.getTime() +
-              MANAGED_POST_LOCAL_PUBLISHING_STALE_MS,
-          )
-        : null,
+      publishing?.deliveryClaimExpiresAt,
+      retry?.deliveryNextAttemptAt,
     ]);
   }
 

@@ -1,3 +1,7 @@
+import {
+  TelegramManagedPostDeliveryDispatcherService,
+  ManagedPostDeliveryBlockedError,
+} from '../../telegram/telegram-channels/telegram-managed-post-delivery-dispatcher.service';
 import { forwardRef, Inject, Injectable } from '@nestjs/common';
 import {
   MutualPromotionWorkItem,
@@ -39,6 +43,7 @@ export class MutualPromotionLifecycleService {
     private readonly remoteDeletion: TelegramManagedPostRemoteDeletionService,
     @Inject(forwardRef(() => MutualPromotionBotNotificationService))
     private readonly botConfirmation?: MutualPromotionBotNotificationService,
+    private readonly dispatcher?: TelegramManagedPostDeliveryDispatcherService,
   ) {}
 
   async nextDueAt(lane?: MutualPromotionLifecycleLane): Promise<Date | null> {
@@ -251,7 +256,9 @@ export class MutualPromotionLifecycleService {
     } catch (error) {
       const deferred =
         error instanceof MutualPromotionFinishDeferredError ? error : null;
-      const terminal = !deferred && work.attemptCount >= work.maxAttempts;
+      const terminal =
+        error instanceof ManagedPostDeliveryBlockedError ||
+        (!deferred && work.attemptCount >= work.maxAttempts);
       await this.prisma.mutualPromotionWorkItem.update({
         where: { id: work.id },
         data: {
@@ -308,6 +315,7 @@ export class MutualPromotionLifecycleService {
       },
     });
     const errors: string[] = [];
+    let blocked: Error | undefined;
     await runMutualPromotionBounded(deliveries, 5, async (delivery) => {
       if (delivery.managedPost?.status === 'PUBLISHED') {
         await this.prisma.mutualPromotionPostDelivery.update({
@@ -334,17 +342,19 @@ export class MutualPromotionLifecycleService {
         data: { status: 'PUBLISHING', lastError: null },
       });
       try {
-        await this.publication.publishManagedPost(
-          delivery.workspaceId,
-          delivery.telegramChannelId,
-          delivery.managedPostId!,
-        );
-        await this.prisma.mutualPromotionPostDelivery.update({
-          where: { id: delivery.id },
-          data: { status: 'PUBLISHED', publishedAt: now, lastError: null },
+        if (!this.dispatcher)
+          throw new Error('Durable publication dispatcher unavailable');
+        await this.dispatcher.dispatch({
+          id: delivery.managedPostId!,
+          workspaceId: delivery.workspaceId,
+          telegramChannelId: delivery.telegramChannelId,
         });
+        errors.push(
+          'Publication dispatched; waiting for confirmed Telegram identity',
+        );
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
+        if (error instanceof ManagedPostDeliveryBlockedError) blocked = error;
         errors.push(message);
         await this.prisma.mutualPromotionPostDelivery.update({
           where: { id: delivery.id },
@@ -355,9 +365,11 @@ export class MutualPromotionLifecycleService {
     // Confirmation runs in reconciliation maintenance; it must never occupy
     // delivery capacity or prevent another logical post meeting its deadline.
     notifyScheduledTaskDueWorkChanged('mutual_promotion.lifecycle');
+    if (blocked) throw blocked;
     if (errors.length)
-      throw new Error(
-        `${errors.length} publication deliveries failed: ${errors[0]}`,
+      throw new MutualPromotionFinishDeferredError(
+        new Date(Date.now() + 30_000),
+        errors.length,
       );
   }
 
