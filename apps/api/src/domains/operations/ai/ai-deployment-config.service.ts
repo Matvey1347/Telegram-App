@@ -10,8 +10,12 @@ export class AiDeploymentConfig {
   private readonly apiKey: string | undefined;
   constructor(config: ConfigService) {
     this.enabled = config.get<string>('INTERNAL_AI_ENABLED') === 'true';
+    const runtimeEnvironment =
+      config.get<string>('NODE_ENV')?.trim().toLowerCase() ?? '';
+    const railwayEnvironment =
+      config.get<string>('RAILWAY_ENVIRONMENT_NAME')?.trim().toLowerCase() ?? '';
     this.usageSource =
-      config.get<string>('NODE_ENV')?.trim().toLowerCase() === 'production'
+      runtimeEnvironment === 'production' || railwayEnvironment === 'production'
         ? 'PRODUCTION'
         : 'LOCAL_UNSYNCED';
     this.apiKey =
