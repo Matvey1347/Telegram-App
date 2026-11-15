@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/primitives";
@@ -9,7 +9,7 @@ import { aiPostingTestRunKeys, failureMessage, resolveTestConsoleError, type Tes
 type Publication = { title: string; text: string; imageUrl?: string | null };
 type Current = { runId: string; version: number; publication: Publication };
 
-export function AiPostingChatPublication({ channelId, topic, feedback, settingsReady = true, onCurrentChange, revisedPublication }: { channelId: string; topic: string; feedback: string; settingsReady?: boolean; onCurrentChange?: (current: { runId: string; version: number; index: number } | null) => void; revisedPublication?: Current | null }) {
+export function AiPostingChatPublication({ channelId, topic, feedback, settingsReady = true, onCurrentChange, onGenerateActionChange, revisedPublication }: { channelId: string; topic: string; feedback: string; settingsReady?: boolean; onCurrentChange?: (current: { runId: string; version: number; index: number } | null) => void; onGenerateActionChange?: (action: ReactNode) => void; revisedPublication?: Current | null }) {
   const client = useQueryClient();
   const [current, setCurrent] = useState<Current | null>(null);
   const runs = useQuery({ queryKey: aiPostingTestRunKeys(channelId).runs, queryFn: async () => (await api.get(`/telegram-channels/${channelId}/ai-posting/test-runs`)).data as TestRun[], staleTime: 30000 });
@@ -39,10 +39,17 @@ export function AiPostingChatPublication({ channelId, topic, feedback, settingsR
       await client.invalidateQueries({ queryKey: aiPostingTestRunKeys(channelId).runs });
     },
   });
-  return <div className="space-y-2 border-t border-neutral-800 pt-3">
+  useEffect(() => {
+    onGenerateActionChange?.(
+      <Button type="button" variant="secondary" className="h-10 shrink-0 px-3 text-xs" aria-label="Попробовать сгенерировать публикацию" disabled={!settingsReady || !topic || generate.isPending || revise.isPending} onClick={() => generate.mutate()} title="Создать пробную публикацию">
+        {generate.isPending ? "Создаём…" : "Пробная публикация"}
+      </Button>,
+    );
+    return () => onGenerateActionChange?.(null);
+  }, [generate.isPending, onGenerateActionChange, revise.isPending, settingsReady, topic]);
+  return <div className="space-y-2 py-2">
     <p className="text-xs text-neutral-400">{topic ? `Предложенная тема: ${topic}` : "Обсудите с ассистентом тему пробной публикации."} Правки вводятся в поле сообщения.</p>
     {!effective && latest && <Button type="button" variant="secondary" onClick={() => { const next = { runId: latest.id, version: latest.version, publication: latest.publications[0] }; setCurrent(next); onCurrentChange?.({ runId: next.runId, version: next.version, index: 0 }); }}>Выбрать последнюю публикацию</Button>}
-    <Button type="button" disabled={!settingsReady || !topic || generate.isPending || revise.isPending} onClick={() => generate.mutate()}>{generate.isPending ? "Создаём публикацию…" : "Попробовать сгенерировать публикацию"}</Button>
     {generate.isError && <p role="alert" className="text-sm text-rose-300">{failureMessage[resolveTestConsoleError(generate.error).code] ?? "Не удалось создать публикацию. Подробности доступны в последней генерации."}</p>}
     {generate.isSuccess && !effective && <p role="alert" className="text-sm text-rose-300">Публикация не создана. Подробности доступны в последней генерации.</p>}
     {effective && <div className="space-y-2 rounded-lg border border-neutral-700 p-3">

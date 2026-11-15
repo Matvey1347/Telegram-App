@@ -32,6 +32,12 @@ export const FEATURE_I18N_REGISTRY = {
 >;
 
 export function telegramPostsNamespaces(pathname: string): I18nNamespace[] {
+  if (pathname.includes("/ai-posting")) {
+    return [
+      ...FEATURE_I18N_REGISTRY.posts.base,
+      ...FEATURE_I18N_REGISTRY.posts.lazy.import,
+    ];
+  }
   if (pathname.endsWith("/groups")) {
     return [
       ...FEATURE_I18N_REGISTRY.posts.base,

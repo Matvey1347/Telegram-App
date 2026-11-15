@@ -631,6 +631,8 @@ export function IconPicker({
             bordered={!(compact || bare)}
             className={`${bare ? "!h-5 !w-5 !bg-transparent !border-0 !rounded-none !text-base" : ""} ${iconClassName}`}
           />
+        ) : compact && buttonLabel ? (
+          <span aria-hidden="true" className={`text-base leading-none ${iconClassName}`}>{buttonLabel}</span>
         ) : (
           <Plus size={bare ? 14 : 16} />
         )}

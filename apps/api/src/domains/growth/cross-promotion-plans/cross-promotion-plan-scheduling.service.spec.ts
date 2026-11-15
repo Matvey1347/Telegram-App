@@ -86,6 +86,8 @@ function setup() {
       },
     ]),
     markRescheduling: jest.fn().mockResolvedValue(undefined),
+    claimRescheduling: jest.fn().mockResolvedValue(undefined),
+    appendReschedulingPlacement: jest.fn().mockResolvedValue(undefined),
     resumeSchedulingContext: jest.fn().mockResolvedValue({
       dto: payload,
       placements: [
@@ -603,7 +605,7 @@ describe('CrossPromotionPlanSchedulingService', () => {
       'user-1',
       'plan-1',
       expect.objectContaining({
-        placements: [],
+        placements: [expect.objectContaining({ managedPostId: 'post-1' })],
         lastError: 'Telegram rejected scheduling',
       }),
     );
@@ -657,11 +659,7 @@ describe('CrossPromotionPlanSchedulingService', () => {
       new AbortController().signal,
     );
 
-    expect(plans.markRescheduling).toHaveBeenCalledWith(
-      'user-1',
-      'plan-1',
-      'Rescheduling in progress',
-    );
+    expect(plans.claimRescheduling).toHaveBeenCalledWith('user-1', 'plan-1');
     expect(telegram.scheduleManagedPost).toHaveBeenCalledWith(
       'user-1',
       'channel-1',
@@ -868,11 +866,7 @@ describe('CrossPromotionPlanSchedulingService', () => {
       'old-channel',
       'old-post',
     );
-    expect(plans.markRescheduling).toHaveBeenCalledWith(
-      'user-1',
-      'plan-1',
-      'Rescheduling in progress',
-    );
+    expect(plans.claimRescheduling).toHaveBeenCalledWith('user-1', 'plan-1');
     expect(plans.replaceScheduled).toHaveBeenCalledWith(
       'user-1',
       'plan-1',
@@ -908,7 +902,7 @@ describe('CrossPromotionPlanSchedulingService', () => {
       ),
     ).rejects.toThrow('Telegram rejected edited schedule');
 
-    expect(telegram.deleteManagedPost).not.toHaveBeenCalledWith(
+    expect(telegram.deleteManagedPost).toHaveBeenCalledWith(
       'user-1',
       'channel-1',
       'post-1',

@@ -161,6 +161,11 @@ function AccountCapabilityBadges({
           <Share2 size={12} /> Publishing
         </CapabilityBadge>
       ) : null}
+      {account.isPriorityPublisher ? (
+        <CapabilityBadge className="border-sky-500/40 bg-sky-500/10 text-sky-200">
+          Priority
+        </CapabilityBadge>
+      ) : null}
     </>
   );
 }

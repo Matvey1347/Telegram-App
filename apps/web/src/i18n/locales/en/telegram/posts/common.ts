@@ -199,6 +199,22 @@ const messages = {
   "telegram.posts.support.importGroups": "Import groups",
   "telegram.posts.support.promptCopied": "Prompt copied.",
   "telegram.posts.support.returnDrafts": "Return all scheduled posts to drafts",
+  "telegram.posts.support.rescheduleAll": "Reschedule all scheduled posts",
+  "telegram.posts.support.rescheduling": "Rescheduling…",
+  "telegram.posts.support.rescheduleConfirm":
+    "Reconcile Telegram first, then reschedule future managed posts in {channel} for their existing times. Overdue unpublished posts will return to drafts. Posts already published will remain unchanged.",
+  "telegram.posts.support.rescheduleResult":
+    "Rescheduled: {rescheduled}; returned to drafts: {drafts}; needs attention: {failed}.",
+  "telegram.posts.support.rescheduleError":
+    "Could not reschedule channel posts. No unconfirmed Telegram schedules were removed.",
+  "telegram.posts.support.rescheduleProgress": "Processed {completed} posts so far",
+  "telegram.posts.support.reconcilingTelegram": "Checking the channel against Telegram…",
+  "telegram.posts.support.removingOldSchedule": "Removing the previous Telegram schedule…",
+  "telegram.posts.support.schedulingAgain": "Scheduling this post again…",
+  "telegram.posts.support.returningToDraft": "Returning overdue post to drafts…",
+  "telegram.posts.support.rescheduled": "Scheduled again",
+  "telegram.posts.support.returnedToDraft": "Returned to drafts",
+  "telegram.posts.support.reschedulePostFailed": "Could not process this post",
   "telegram.posts.support.returnDraftsDescription":
     "This permanently deletes every scheduled message currently queued in this Telegram channel. All scheduled posts in Telegram System will become clean drafts and lose their Telegram message IDs and links. Published messages are not affected.",
   "telegram.posts.support.noPostsAvailable": "No posts available to add.",

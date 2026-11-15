@@ -25,8 +25,6 @@ import { TelegramCrmInitialSyncService } from '../../telegram/telegram-crm/teleg
 import { MutualPromotionLifecycleService } from '../../growth/mutual-promotion-folders/mutual-promotion-lifecycle.service';
 import { TelegramPostBatchLifecycleService } from '../../telegram/telegram-channels/telegram-post-batch-lifecycle.service';
 import { CrossPromotionPlanLifecycleService } from '../../growth/cross-promotion-plans/cross-promotion-plan-lifecycle.service';
-import { TelegramAiPostingAutopilotService } from '../../telegram/telegram-channels/telegram-ai-posting-autopilot.service';
-import { TelegramAiPostingPerformanceService } from '../../telegram/telegram-channels/telegram-ai-posting-performance.service';
 
 @Injectable()
 export class ScheduledTaskExecutorService {
@@ -169,32 +167,6 @@ export class ScheduledTaskExecutorService {
       ).processDueActions();
       return {
         summary: `Considered ${result.considered} post batch deliveries; published ${result.published}, deleted ${result.deleted}.`,
-        details: result,
-      };
-    },
-    'telegram.ai_posting.autopilot': async () => {
-      const result = await (
-        await this.moduleRef.resolve<TelegramAiPostingAutopilotService>(
-          TelegramAiPostingAutopilotService,
-          undefined,
-          { strict: false },
-        )
-      ).processDueBatch(20);
-      return {
-        summary: `AI Posting autopilot processed ${result.processed} channels; scheduled ${result.scheduled}, generated ${result.generated}, failed ${result.failed}.`,
-        details: result,
-      };
-    },
-    'telegram.ai_posting.performance': async () => {
-      const service =
-        await this.moduleRef.resolve<TelegramAiPostingPerformanceService>(
-          TelegramAiPostingPerformanceService,
-          undefined,
-          { strict: false },
-        );
-      const result = await service.processScheduledBatch();
-      return {
-        summary: `Measured age windows for ${result.syncedChannels} AI Posting channels; backfilled ${result.backfilled} posts; ${result.failed} channel syncs failed.`,
         details: result,
       };
     },

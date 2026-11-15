@@ -32,25 +32,23 @@ type PersonCard = {
 const cardClass =
   "rounded-xl border border-neutral-800/80 bg-neutral-900/55 p-4 text-sm text-neutral-300";
 
-export function sortNetworksByEstimatedAdPrice(
+export function sortNetworksBySize(
   networks: TelegramChannelNetwork[],
 ) {
   return networks
     .map((network, index) => ({
       network,
       index,
-      price: network.summary.assetEconomics?.estimatedAdPrice,
+      size: network.summary.totalSubscribers,
     }))
     .sort((left, right) => {
-      const leftHasPrice =
-        left.price != null && Number.isFinite(Number(left.price));
-      const rightHasPrice =
-        right.price != null && Number.isFinite(Number(right.price));
-
-      if (leftHasPrice !== rightHasPrice) return leftHasPrice ? -1 : 1;
-      if (!leftHasPrice || !rightHasPrice) return left.index - right.index;
-
-      return Number(right.price) - Number(left.price) || left.index - right.index;
+      const leftSize = Number(left.size);
+      const rightSize = Number(right.size);
+      const leftValid = Number.isFinite(leftSize);
+      const rightValid = Number.isFinite(rightSize);
+      if (leftValid !== rightValid) return leftValid ? -1 : 1;
+      if (!leftValid) return left.index - right.index;
+      return rightSize - leftSize || left.index - right.index;
     })
     .map(({ network }) => network);
 }
@@ -70,7 +68,7 @@ export function TelegramNetworkCards({
   const queryClient = useQueryClient();
   const { pushToast } = useAppToast();
   const sortedNetworks = useMemo(
-    () => sortNetworksByEstimatedAdPrice(networks),
+    () => sortNetworksBySize(networks),
     [networks],
   );
   const [pickerGeneration, setPickerGeneration] = useState<

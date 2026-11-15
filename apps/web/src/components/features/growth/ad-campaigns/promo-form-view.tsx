@@ -100,7 +100,7 @@ export function PromoFormView(props: {
         />
       ) : (
         <Card className="space-y-3">
-          <div>
+          <div className="grid min-w-0 gap-3 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-end">
             <FormField label="Emoji">
               <IconPicker
                 compact
@@ -110,8 +110,6 @@ export function PromoFormView(props: {
                 buttonLabel="Add emoji"
               />
             </FormField>
-          </div>
-          <div className="grid gap-3 md:grid-cols-2">
             <FormField label="Internal title" required>
               <Input
                 value={p.titleValue}
@@ -119,6 +117,8 @@ export function PromoFormView(props: {
                 placeholder="Promo title"
               />
             </FormField>
+          </div>
+          <div className="grid gap-3">
             <FormField label="Channel" required>
               <CustomSelect
                 value={p.channelId}

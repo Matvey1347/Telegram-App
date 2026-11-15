@@ -352,6 +352,10 @@ export class TelegramSourceAccessService {
             row.sourceType === TelegramSourceType.MTPROTO
               ? account?.mtprotoPublishingEnabled !== false
               : null,
+          isPriorityPublisher:
+            row.sourceType === TelegramSourceType.MTPROTO
+              ? Boolean(account?.isPriorityPublisher)
+              : false,
           canBeUsedForAnalytics: this.canBeUsedForAnalytics(
             permissions,
             row.role,

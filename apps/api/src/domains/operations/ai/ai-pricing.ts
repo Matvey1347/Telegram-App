@@ -18,67 +18,30 @@ export const EMPTY_USAGE: AiTokenUsage = {
 export function parseUsage(raw: unknown): AiTokenUsage | null {
   if (!raw || typeof raw !== 'object') return null;
   const u = raw as Record<string, unknown>;
-  const allowed = new Set([
-    'input_tokens',
-    'output_tokens',
-    'total_tokens',
-    'input_tokens_details',
-    'output_tokens_details',
-  ]);
-  if (
-    Object.entries(u).some(
-      ([key, value]) => !allowed.has(key) && value !== 0 && value !== null,
-    )
-  )
-    return null;
   const inputDetails = aiRecord(u.input_tokens_details);
   const outputDetails = aiRecord(u.output_tokens_details);
-  const values = [
-    u.input_tokens,
-    u.output_tokens,
-    inputDetails.cached_tokens ?? 0,
-    inputDetails.cache_write_tokens ?? 0,
-    outputDetails.reasoning_tokens ?? 0,
-    u.total_tokens,
-  ];
+  const tokenCount = (value: unknown, fallback?: number) => {
+    if (value === undefined && fallback !== undefined) return fallback;
+    return typeof value === 'number' && Number.isSafeInteger(value) &&
+      value >= 0 && value <= 2147483647 ? value : null;
+  };
+  const inputTokens = tokenCount(u.input_tokens);
+  const outputTokens = tokenCount(u.output_tokens);
+  const cachedInputTokens = tokenCount(inputDetails.cached_tokens, 0);
+  const cacheWriteTokens = tokenCount(inputDetails.cache_write_tokens, 0);
+  const reasoningTokens = tokenCount(outputDetails.reasoning_tokens, 0);
+  const reportedTotal = tokenCount(u.total_tokens);
   if (
-    !values.every(
-      (n) =>
-        Number.isSafeInteger(n) &&
-        typeof n === 'number' &&
-        n >= 0 &&
-        n <= 2147483647,
-    )
-  )
-    return null;
-  const [
-    inputTokens,
-    outputTokens,
-    cachedInputTokens,
-    cacheWriteTokens,
-    reasoningTokens,
-    totalTokens,
-  ] = values as number[];
+    inputTokens === null || outputTokens === null ||
+    cachedInputTokens === null || cacheWriteTokens === null ||
+    reasoningTokens === null ||
+    (u.total_tokens !== undefined && reportedTotal === null)
+  ) return null;
+  const totalTokens = reportedTotal ?? inputTokens + outputTokens;
   if (
     cachedInputTokens + cacheWriteTokens > inputTokens ||
     reasoningTokens > outputTokens ||
     totalTokens !== inputTokens + outputTokens
-  )
-    return null;
-  const knownInput = new Set([
-    'cached_tokens',
-    'cache_write_tokens',
-    'text_tokens',
-    'image_tokens',
-  ]);
-  const knownOutput = new Set(['reasoning_tokens', 'image_tokens']);
-  if (
-    Object.entries(inputDetails).some(
-      ([key, value]) => !knownInput.has(key) && value !== 0,
-    ) ||
-    Object.entries(outputDetails).some(
-      ([key, value]) => !knownOutput.has(key) && value !== 0,
-    )
   )
     return null;
   return {

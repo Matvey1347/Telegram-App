@@ -675,6 +675,7 @@ enum CrossPromotionPlanStatus {
   DRAFT
   SCHEDULED
   ACTIVE
+  RESCHEDULING
   COMPLETED
   CANCELLED
 }
@@ -1034,6 +1035,10 @@ model Workspace {
   telegramAiPostingTestRuns              TelegramAiPostingTestRun[]
   telegramAiPostingChatMessages          TelegramAiPostingChatMessage[]
   telegramAiPostingChatAttachments       TelegramAiPostingChatAttachment[]
+  telegramAiPostingIdeas                TelegramAiPostingIdea[]
+  telegramAiPostingSpheres               TelegramAiPostingSphere[]
+  telegramAiPostingLengths                TelegramAiPostingLength[]
+  telegramAiPostingRubrics                TelegramAiPostingRubric[]
   channelReminderTemplates TelegramChannelReminderTemplate[]
   channelReminderAssignments TelegramChannelReminderAssignment[]
   telegramCustomEmojiPacks               TelegramCustomEmojiPack[]
@@ -1192,6 +1197,7 @@ model TelegramUserAccountIntegration {
   crmSyncEnabled            Boolean                   @default(false)
   crmSendEnabled            Boolean                   @default(false)
   mtprotoPublishingEnabled  Boolean                   @default(true)
+  isPriorityPublisher       Boolean                   @default(false)
   sessionEncrypted          String?
   sessionIv                 String?
   sessionAuthTag            String?
@@ -1788,6 +1794,10 @@ model TelegramChannel {
   aiPostingTestRuns             TelegramAiPostingTestRun[]
   aiPostingChatMessages         TelegramAiPostingChatMessage[]
   aiPostingChatAttachments     TelegramAiPostingChatAttachment[]
+  aiPostingIdeas               TelegramAiPostingIdea[]
+  aiPostingSpheres              TelegramAiPostingSphere[]
+  aiPostingLengths               TelegramAiPostingLength[]
+  aiPostingRubrics               TelegramAiPostingRubric[]
   adProducts                    TelegramAdProduct[]
   admissionBatches              AdCampaignAdmissionBatch[]
   admissionBackfillStates       AdCampaignAdmissionBackfillState[]
@@ -1880,6 +1890,7 @@ model TelegramAiPostingGeneration {
   textCost          Decimal?            @db.Decimal(24, 12)
   imageCost         Decimal?            @db.Decimal(24, 12)
   reviewCost        Decimal?            @db.Decimal(24, 12)
+  researchCost      Decimal?            @db.Decimal(24, 12)
   createdAt         DateTime            @default(now())
   workspace         Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   telegramChannel   TelegramChannel     @relation(fields: [telegramChannelId], references: [id], onDelete: Cascade)
@@ -1888,10 +1899,96 @@ model TelegramAiPostingGeneration {
   @@index([workspaceId, telegramChannelId, createdAt])
 }
 
+model TelegramAiPostingIdea {
+  id                String          @id @default(cuid())
+  workspaceId       String
+  telegramChannelId String          @unique
+  audience          String          @default("")
+  valueProposition  String          @default("")
+  language          String          @default("")
+  workspace         Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  telegramChannel   TelegramChannel @relation(fields: [telegramChannelId], references: [id], onDelete: Cascade)
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@index([workspaceId, telegramChannelId])
+}
+
+model TelegramAiPostingSphere {
+  id                String          @id
+  workspaceId       String
+  telegramChannelId String
+  parentId          String?
+  name              String          @db.VarChar(120)
+  emoji             String          @default("✨") @db.VarChar(32)
+  tier              String          @default("SECONDARY") @db.VarChar(16)
+  description       String          @default("") @db.VarChar(2000)
+  sources           Json            @default("[]")
+  mediaPreferenceId String?         @db.VarChar(128)
+  workspace         Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  telegramChannel   TelegramChannel @relation(fields: [telegramChannelId], references: [id], onDelete: Cascade)
+  parent            TelegramAiPostingSphere?  @relation("AiPostingSphereTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children          TelegramAiPostingSphere[] @relation("AiPostingSphereTree")
+  rubrics           TelegramAiPostingRubric[]
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@index([workspaceId, telegramChannelId, tier])
+  @@index([parentId])
+}
+
+model TelegramAiPostingLength {
+  id                String          @id
+  workspaceId       String
+  telegramChannelId String
+  name              String          @db.VarChar(80)
+  emoji             String          @default("✍️") @db.VarChar(32)
+  minCharacters     Int
+  maxCharacters     Int?
+  workspace         Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  telegramChannel   TelegramChannel @relation(fields: [telegramChannelId], references: [id], onDelete: Cascade)
+  rubrics           TelegramAiPostingRubricLength[]
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@unique([telegramChannelId, name])
+  @@index([workspaceId, telegramChannelId])
+}
+
+model TelegramAiPostingRubric {
+  id                String          @id
+  workspaceId       String
+  telegramChannelId String
+  sphereId          String?
+  name              String          @db.VarChar(120)
+  emoji             String          @default("📝") @db.VarChar(32)
+  description       String          @default("") @db.VarChar(2000)
+  goal              String          @default("") @db.VarChar(1000)
+  workspace         Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  telegramChannel   TelegramChannel @relation(fields: [telegramChannelId], references: [id], onDelete: Cascade)
+  sphere            TelegramAiPostingSphere? @relation(fields: [sphereId], references: [id], onDelete: SetNull)
+  lengths           TelegramAiPostingRubricLength[]
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@index([workspaceId, telegramChannelId, sphereId])
+}
+
+model TelegramAiPostingRubricLength {
+  rubricId String
+  lengthId String
+  rubric   TelegramAiPostingRubric @relation(fields: [rubricId], references: [id], onDelete: Cascade)
+  length   TelegramAiPostingLength @relation(fields: [lengthId], references: [id], onDelete: Cascade)
+
+  @@id([rubricId, lengthId])
+  @@index([lengthId])
+}
+
 model TelegramAiPostingChatMessage {
   id                String          @id @default(cuid())
   workspaceId       String
   telegramChannelId String
+  replyToMessageId  String?
   role              String
   text              String
   metadata          Json?

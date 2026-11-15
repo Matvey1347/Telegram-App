@@ -24,6 +24,7 @@ export type TelegramUserAccount = {
   crmSyncEnabled: boolean;
   crmSendEnabled: boolean;
   mtprotoPublishingEnabled: boolean;
+  isPriorityPublisher?: boolean;
   status:
     | "pending"
     | "needs_code"

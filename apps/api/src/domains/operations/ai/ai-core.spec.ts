@@ -107,15 +107,19 @@ describe('internal AI registry, pricing and limits', () => {
     ).toBe(true);
     expect(registry.price('arbitrary-model')).toBeUndefined();
   });
-  it('rejects missing, inconsistent and extra billed usage without inventing zero', () => {
+  it('accepts forward-compatible usage details while rejecting inconsistent token counts', () => {
     expect(parseUsage(undefined)).toBeNull();
     expect(parseUsage({ ...usage, total_tokens: 0 })).toBeNull();
     expect(
       parseUsage({ ...usage, input_tokens_details: { cached_tokens: 1001 } }),
     ).toBeNull();
-    expect(
-      parseUsage({ ...usage, output_tokens_details: { audio_tokens: 1 } }),
-    ).toBeNull();
+    expect(parseUsage({
+      input_tokens: 30,
+      output_tokens: 10,
+      input_tokens_details: { cached_tokens: 0, text_tokens: 30, newProviderMetric: 2 },
+      output_tokens_details: { reasoning_tokens: 0, audio_tokens: 10 },
+    })).toMatchObject({ inputTokens: 30, outputTokens: 10, totalTokens: 40 });
+    expect(parseUsage({ input_tokens: 30, output_tokens: 10 })).toMatchObject({ totalTokens: 40 });
   });
   it('uses UTC day and month boundaries including year rollover', () => {
     const periods = budgetPeriods(new Date('2026-12-31T23:59:59Z'));

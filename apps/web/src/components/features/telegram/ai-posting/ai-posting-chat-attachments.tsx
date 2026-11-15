@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type DragEvent } from "react";
+import type { ReactNode } from "react";
 import { Mic, Paperclip, Square, X } from "lucide-react";
 import { recordingToPcmWav } from "./ai-posting-chat-voice";
 
@@ -14,11 +15,17 @@ export function AiPostingChatAttachments({
   onChange,
   disabled,
   onRecordingChange,
+  children,
+  sendAction,
+  leadingAction,
 }: {
   file: File | null;
   onChange: (file: File | null) => void;
   disabled?: boolean;
   onRecordingChange?: (recording: boolean) => void;
+  children?: ReactNode;
+  sendAction?: ReactNode;
+  leadingAction?: ReactNode;
 }) {
   const input = useRef<HTMLInputElement>(null);
   const audio = useRef<HTMLAudioElement>(null);
@@ -185,9 +192,9 @@ export function AiPostingChatAttachments({
     <div
       onDragOver={(event) => event.preventDefault()}
       onDrop={drop}
-      className="space-y-2 rounded-lg border border-dashed border-neutral-700 p-2"
+      className="space-y-2"
     >
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex min-h-[72px] min-w-0 items-center gap-2 rounded-[28px] border border-neutral-700 bg-neutral-900 px-3 py-2">
         <input
           ref={input}
           type="file"
@@ -202,7 +209,7 @@ export function AiPostingChatAttachments({
         />
         <button
           type="button"
-          className={buttonClass}
+          className={`${buttonClass} shrink-0 rounded-full border-0 bg-transparent hover:bg-neutral-800`}
           disabled={disabled || recording || starting}
           onClick={() => input.current?.click()}
           aria-label="Прикрепить изображение или аудио"
@@ -210,9 +217,11 @@ export function AiPostingChatAttachments({
         >
           <Paperclip size={18} />
         </button>
+        {leadingAction}
+        {children}
         <button
           type="button"
-          className={buttonClass}
+          className={`${buttonClass} shrink-0 rounded-full border-0 bg-transparent hover:bg-neutral-800`}
           disabled={disabled || starting}
           aria-label={
             recording ? "Остановить запись" : "Записать голосовое сообщение"
@@ -226,7 +235,8 @@ export function AiPostingChatAttachments({
         >
           {recording ? <Square size={16} /> : <Mic size={18} />}
         </button>
-        <span className="text-xs text-neutral-400">
+        {sendAction}
+        <span className="sr-only">
           {starting
             ? "Подготавливаем запись или аудиофайл…"
             : recording

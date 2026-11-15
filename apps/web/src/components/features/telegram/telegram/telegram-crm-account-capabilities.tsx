@@ -3,7 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { CrmAccountCapabilities } from "@telegram-system/shared";
 import type { TelegramUserAccount } from "@/lib/api";
-import { authApi } from "@/lib/api";
+import { authApi, telegramUserAccountsApi } from "@/lib/api";
 import { Modal, ToggleRow } from "@/components/ui/primitives";
 import { telegramCrmApi } from "@/lib/features/growth/telegram-crm-api";
 import { telegramCrmKeys } from "@/lib/features/growth/telegram-crm-query";
@@ -65,6 +65,23 @@ export function TelegramCrmAccountCapabilitiesModal({
       );
     },
   });
+  const priorityUpdate = useMutation({
+    mutationFn: (isPriorityPublisher: boolean) =>
+      telegramUserAccountsApi.update(account.id, { isPriorityPublisher }),
+    onSuccess: (next) => {
+      queryClient.setQueryData<TelegramUserAccount[]>(
+        telegramAccountKeys.accounts(),
+        (current = []) =>
+          current.map((item) => ({
+            ...item,
+            isPriorityPublisher:
+              item.id === account.id
+                ? Boolean(next.isPriorityPublisher)
+                : false,
+          })),
+      );
+    },
+  });
   const values = capabilities.data;
   const editable = permissions.canEditAll;
   const pending = update.isPending;
@@ -96,7 +113,19 @@ export function TelegramCrmAccountCapabilitiesModal({
               onChange={(checked) => update.mutate({ [row.key]: checked })}
             />
           ))}
-          {capabilities.error || update.error ? (
+          <ToggleRow
+            checked={Boolean(account.isPriorityPublisher)}
+            label="Priority publishing account"
+            description="Use this account first for channel publishing. Other eligible accounts remain available as fallback."
+            disabled={
+              !editable ||
+              pending ||
+              priorityUpdate.isPending ||
+              !account.mtprotoPublishingEnabled
+            }
+            onChange={(checked) => priorityUpdate.mutate(checked)}
+          />
+          {capabilities.error || update.error || priorityUpdate.error ? (
             <p className="text-sm text-rose-300">
               Account capability could not be saved. Try again.
             </p>

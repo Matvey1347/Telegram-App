@@ -126,6 +126,30 @@ export type ResetChannelScheduledPostsResult = {
   postIds: string[];
 };
 
+export type RescheduleChannelScheduledPostsResult = {
+  action: "RESCHEDULE_CHANNEL_SCHEDULED_POSTS";
+  channelId: string;
+  rescheduledCount: number;
+  returnedToDraftCount: number;
+  failedCount: number;
+  failedPostIds: string[];
+};
+
+export type RescheduleChannelScheduledPostProgress = {
+  postId?: string;
+  title?: string | null;
+  scheduledAt?: string | null;
+  stage:
+    | "RECONCILING_TELEGRAM"
+    | "REMOVING_OLD_SCHEDULE"
+    | "SCHEDULING_AGAIN"
+    | "RETURNING_TO_DRAFT"
+    | "RESCHEDULED"
+    | "DRAFTED"
+    | "FAILED";
+  message?: string;
+};
+
 export type TelegramManagedPostCalendarItem = {
   id: string;
   telegramChannelId: string;

@@ -5,17 +5,13 @@ export type TelegramAiPostingMediaPreference = {
   name: string;
   description: string;
   emoji: string;
+  emojiIconId?: string;
   references: string[];
+  purpose: 'SEARCH' | 'GENERATION' | 'BOTH';
 };
 
-export function createTelegramAiPostingMediaRunState(
-  config: Record<string, unknown>,
-) {
+export function createTelegramAiPostingMediaRunState() {
   return {
-    hasConfiguredPreferences:
-      (Array.isArray(config.mediaPreferences) &&
-        config.mediaPreferences.length > 0) ||
-      (Array.isArray(config.imageStyles) && config.imageStyles.length > 0),
     referenceImageCache: new Map<
       string,
       { image: Buffer | null; failed: boolean }
@@ -46,35 +42,23 @@ export function telegramAiPostingMediaPreferences(
             typeof item.emoji === 'string' && item.emoji.trim()
               ? item.emoji.trim().slice(0, 16)
               : '🎨',
+          emojiIconId:
+            typeof item.emojiIconId === 'string' && item.emojiIconId
+              ? item.emojiIconId
+              : undefined,
           references: Array.isArray(item.references)
             ? item.references
                 .filter((url): url is string => typeof url === 'string')
                 .slice(0, TELEGRAM_AI_POSTING_MAX_MEDIA_REFERENCES)
             : [],
+          purpose: item.purpose === 'SEARCH' || item.purpose === 'GENERATION'
+            ? item.purpose
+            : 'BOTH',
         },
       ];
     });
   }
-  const styles = Array.isArray(config.imageStyles)
-    ? config.imageStyles
-        .filter(
-          (value): value is string =>
-            typeof value === 'string' && Boolean(value.trim()),
-        )
-        .slice(0, 10)
-    : [];
-  const references = Array.isArray(config.imageReferenceUrls)
-    ? config.imageReferenceUrls
-        .filter((value): value is string => typeof value === 'string')
-        .slice(0, TELEGRAM_AI_POSTING_MAX_MEDIA_REFERENCES)
-    : [];
-  return styles.map((style, index) => ({
-    id: `legacy-${index}`,
-    name: style.slice(0, 80),
-    description: '',
-    emoji: '🎨',
-    references,
-  }));
+  return [];
 }
 
 export function resolveTelegramAiPostingMediaPreference(

@@ -123,6 +123,10 @@ function harness(options?: {
   const remoteSync = {
     syncManagedPosts: jest.fn().mockResolvedValue({ checked: posts.length }),
   };
+  const publication = {
+    publishManagedPost: jest.fn().mockResolvedValue({ id: 'rescheduled' }),
+    returnManagedPostToDraft: jest.fn().mockResolvedValue({ id: 'draft' }),
+  };
   const service = new TelegramManagedPostScheduledResetService(
     prisma as never,
     mtproto as never,
@@ -131,6 +135,7 @@ function harness(options?: {
     revisions as never,
     groups as never,
     remoteSync as never,
+    publication as never,
   );
   return {
     service,
@@ -140,11 +145,87 @@ function harness(options?: {
     revisions,
     groups,
     remoteSync,
+    publication,
     updateInputs,
   };
 }
 
 describe('TelegramManagedPostScheduledResetService', () => {
+  it('reschedules future posts and returns overdue unpublished posts to drafts', async () => {
+    const future = {
+      ...scheduledPost('future'),
+      scheduledAt: new Date(Date.now() + 60_000),
+      origin: 'MANUAL',
+    };
+    const overdue = {
+      ...scheduledPost('overdue'),
+      scheduledAt: new Date(Date.now() - 60_000),
+      origin: 'MANUAL',
+    };
+    const { service, publication } = harness({ posts: [future, overdue] });
+    const progress: string[] = [];
+    publication.publishManagedPost.mockImplementationOnce((...args: unknown[]) => {
+      const report = args[7] as (stage: string) => void;
+      report('REMOVING_OLD_SCHEDULE');
+      report('SCHEDULING_AGAIN');
+      return Promise.resolve({ id: 'rescheduled' });
+    });
+    const result = await service.rescheduleChannelScheduledPosts(
+      'user-1',
+      'channel-1',
+      (item) => progress.push(`${item.postId ?? 'sync'}:${item.stage}`),
+    );
+    expect(publication.publishManagedPost).toHaveBeenCalledWith(
+      'workspace-1',
+      'channel-1',
+      'future',
+      future.scheduledAt,
+      'IMAGES_THEN_TEXT',
+      'user-1',
+      false,
+      expect.any(Function),
+    );
+    expect(publication.returnManagedPostToDraft).toHaveBeenCalledWith(
+      'user-1',
+      'channel-1',
+      'overdue',
+    );
+    expect(result).toMatchObject({
+      rescheduledCount: 1,
+      returnedToDraftCount: 1,
+      failedCount: 0,
+    });
+    expect(progress).toEqual([
+      'sync:RECONCILING_TELEGRAM',
+      'future:REMOVING_OLD_SCHEDULE',
+      'future:SCHEDULING_AGAIN',
+      'future:RESCHEDULED',
+      'overdue:RETURNING_TO_DRAFT',
+      'overdue:DRAFTED',
+    ]);
+  });
+
+  it('reports failed posts and continues processing the rest', async () => {
+    const future = {
+      ...scheduledPost('future'),
+      scheduledAt: new Date(Date.now() + 60_000),
+      origin: 'MANUAL',
+    };
+    const { service, publication } = harness({ posts: [future] });
+    publication.publishManagedPost.mockRejectedValueOnce(
+      new Error('Telegram unavailable'),
+    );
+    const result = await service.rescheduleChannelScheduledPosts(
+      'user-1',
+      'channel-1',
+    );
+    expect(result).toMatchObject({
+      rescheduledCount: 0,
+      failedCount: 1,
+      failedPostIds: ['future'],
+    });
+  });
+
   it('deletes every remote scheduled message and resets channel posts to clean drafts', async () => {
     const second = { ...scheduledPost('post-2'), groupId: null };
     const {

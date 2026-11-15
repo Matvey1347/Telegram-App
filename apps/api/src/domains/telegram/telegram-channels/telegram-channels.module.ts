@@ -16,19 +16,14 @@ import { TelegramAiPostingChatMediaService } from './telegram-ai-posting-chat-me
 import { TelegramAiPostingService } from './telegram-ai-posting.service';
 import { TelegramAiPostingGeneratorService } from './telegram-ai-posting-generator.service';
 import { TelegramAiPostingSourceService } from './telegram-ai-posting-source.service';
+import { TelegramAiPostingContentModelService } from './telegram-ai-posting-content-model.service';
 import { TelegramAiPostingStructureService } from './telegram-ai-posting-structure.service';
 import { TelegramAiPostingImageService } from './telegram-ai-posting-image.service';
 import { TelegramAiPostingTestRunService } from './telegram-ai-posting-test-run.service';
 import { TelegramAiPostingRuleFeedbackService } from './telegram-ai-posting-rule-feedback.service';
-import { TelegramAiPostingAutopilotService } from './telegram-ai-posting-autopilot.service';
-import { TelegramAiPostingAutopilotNotificationService } from './telegram-ai-posting-autopilot-notification.service';
-import { TelegramAiPostingAnalyticsService } from './telegram-ai-posting-analytics.service';
-import { TelegramAiPostingSettingsVersionService } from './telegram-ai-posting-settings-version.service';
-import { TelegramAiPostingPerformanceService } from './telegram-ai-posting-performance.service';
 import { TelegramAiPostingFailedRetryService } from './telegram-ai-posting-failed-retry.service';
 import { TelegramAiPostingRhythmService } from './telegram-ai-posting-rhythm.service';
 import { TelegramAiPostingRhythmController } from './telegram-ai-posting-rhythm.controller';
-import { TelegramAiPostingPerformanceControlController } from './telegram-ai-posting-performance-control.controller';
 import {
   TelegramPublicationSchedulesController,
   TelegramChannelPublicationScheduleController,
@@ -148,7 +143,6 @@ import { TelegramChannelTrafficAttributionService } from './telegram-channel-tra
     TelegramAiPostingController,
     TelegramAiPostingChatController,
     TelegramAiPostingRhythmController,
-    TelegramAiPostingPerformanceControlController,
     TelegramChannelRemindersController,
     TelegramPublicationSchedulesController,
     TelegramChannelPublicationScheduleController,
@@ -165,6 +159,7 @@ import { TelegramChannelTrafficAttributionService } from './telegram-channel-tra
   providers: [
     TelegramChannelsService,
     TelegramAiPostingService,
+    TelegramAiPostingContentModelService,
     TelegramAiPostingChatService,
     TelegramAiPostingChatSourcesService,
     TelegramAiPostingChatMediaService,
@@ -174,11 +169,6 @@ import { TelegramChannelTrafficAttributionService } from './telegram-channel-tra
     TelegramAiPostingImageService,
     TelegramAiPostingTestRunService,
     TelegramAiPostingRuleFeedbackService,
-    TelegramAiPostingAutopilotService,
-    TelegramAiPostingAutopilotNotificationService,
-    TelegramAiPostingAnalyticsService,
-    TelegramAiPostingSettingsVersionService,
-    TelegramAiPostingPerformanceService,
     TelegramAiPostingFailedRetryService,
     TelegramAiPostingRhythmService,
     TelegramChannelRemindersService,

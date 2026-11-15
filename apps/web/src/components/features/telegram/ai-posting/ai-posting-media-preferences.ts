@@ -7,12 +7,11 @@ export type AiPostingMediaPreference = {
   emoji: string;
   emojiIconId?: string;
   references: string[];
+  purpose?: "SEARCH" | "GENERATION" | "BOTH";
 };
 
 export function normalizeAiPostingMediaPreferences(config: {
   mediaPreferences?: unknown;
-  imageStyles?: unknown;
-  imageReferenceUrls?: unknown;
 }): AiPostingMediaPreference[] {
   const validReferences = (value: unknown): string[] =>
     Array.isArray(value)
@@ -45,36 +44,13 @@ export function normalizeAiPostingMediaPreferences(config: {
               ? item.emojiIconId
               : undefined,
           references: validReferences(item.references),
+          purpose: item.purpose === "SEARCH" || item.purpose === "GENERATION" ? item.purpose : "BOTH",
         },
       ];
     });
   }
 
-  const styles = Array.isArray(config.imageStyles)
-    ? config.imageStyles
-        .filter(
-          (item): item is string =>
-            typeof item === "string" && Boolean(item.trim()),
-        )
-        .slice(0, 10)
-    : [];
-  const references = validReferences(config.imageReferenceUrls);
-  const migrated = styles.map((style, index) => ({
-    id: `legacy-${index}`,
-    name: style.slice(0, 80),
-    description: "",
-    emoji: "🎨",
-    references,
-  }));
-  if (!migrated.length && references.length)
-    migrated.push({
-      id: "legacy-default",
-      name: "Основное направление",
-      description: "",
-      emoji: "🎨",
-      references,
-    });
-  return migrated;
+  return [];
 }
 
 export function appendAiPostingImageFeedback(
@@ -102,6 +78,7 @@ export function appendAiPostingImageFeedback(
       description: rule,
       emoji: "✨",
       references: [],
+      purpose: "BOTH",
     },
   ];
 }

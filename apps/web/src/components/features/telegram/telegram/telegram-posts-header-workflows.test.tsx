@@ -11,6 +11,11 @@ vi.mock("./post-from-bot/post-from-bot-modal", () => ({
 vi.mock("./telegram-time-posts-control", () => ({
   TimePostsControl: () => null,
 }));
+vi.mock("./reschedule-channel-posts-button", () => ({
+  RescheduleChannelPostsButton: ({ channelId }: { channelId: string }) => (
+    <button type="button">Reschedule scheduled posts for {channelId}</button>
+  ),
+}));
 
 const channel = {
   id: "channel-1",
@@ -47,6 +52,11 @@ describe("TelegramPostsHeaderWorkflows", () => {
     );
 
     expect(screen.getByRole("button", { name: "Import" })).toBeVisible();
+    expect(
+      screen.getByRole("button", {
+        name: "Reschedule scheduled posts for channel-1",
+      }),
+    ).toBeVisible();
     expect(
       screen.queryByRole("button", { name: "Context" }),
     ).not.toBeInTheDocument();

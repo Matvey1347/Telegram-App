@@ -2,74 +2,45 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
-  Optional,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { TELEGRAM_AI_POSTING_MAX_MEDIA_REFERENCES } from '@telegram-system/shared';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { WorkspaceService } from '../../../common/workspace.service';
-import { notifyScheduledTaskDueWorkChanged } from '../../../common/scheduled-task-wake-notifier';
-import {
-  isValidTelegramAiPostingSourceId,
-  telegramAiPostingSourceWhere,
-} from './telegram-ai-posting-source-policy';
 import {
   detectTelegramAiPostingLanguage,
   telegramAiPostingLanguageName,
 } from './telegram-ai-posting-language';
-import { TelegramAiPostingSourceService } from './telegram-ai-posting-source.service';
 import { resolveAiPostingPreferenceIcons } from './telegram-ai-posting-preference-icons';
-import { writeTelegramAiPostingSettingsVersion } from './telegram-ai-posting-settings-version.store';
+import { TelegramAiPostingContentModelService } from './telegram-ai-posting-content-model.service';
 
 const defaults = {
   language: '',
-  channelDescription: '',
   topic: '',
   audience: '',
-  style: '',
-  instructions: '',
   historyMode: 'all',
   historyFrom: '',
-  sources: [],
-  categories: [],
-  formats: [],
-  suggestCategories: true,
-  allowCreateHypotheses: false,
-  allowCreateGroups: false,
   variedLength: true,
-  variedFormats: true,
   emojiPolicy: 'contextual',
   ending: '',
   hashtags: 'disabled',
   imageMode: 'ai',
-  imageStyles: [],
-  imageReferenceUrls: [],
   useChannelAvatarInMedia: false,
 };
+const defaultLengths = [
+  { id: 'ultra-short', name: 'Ультракороткая', emoji: '⚡', minCharacters: 0, maxCharacters: 99 },
+  { id: 'short', name: 'Короткая', emoji: '📝', minCharacters: 100, maxCharacters: 299 },
+  { id: 'medium', name: 'Средняя', emoji: '📖', minCharacters: 300, maxCharacters: 699 },
+  { id: 'long', name: 'Длинная', emoji: '📚', minCharacters: 700, maxCharacters: null },
+];
 
-function isInvalidChannelRule(value: unknown): boolean {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return true;
-  const rule = value as Record<string, unknown>;
-  return (
-    typeof rule.id !== 'string' ||
-    !rule.id.trim() ||
-    typeof rule.text !== 'string' ||
-    !rule.text.trim() ||
-    rule.text.length > 1000 ||
-    !['feedback', 'manual'].includes(String(rule.source)) ||
-    typeof rule.active !== 'boolean' ||
-    typeof rule.createdAt !== 'string' ||
-    (rule.feedbackId !== undefined && typeof rule.feedbackId !== 'string')
-  );
-}
 
 @Injectable()
 export class TelegramAiPostingService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly workspace: WorkspaceService,
-    @Optional()
-    private readonly sourceCollector?: TelegramAiPostingSourceService,
+    private readonly contentModel: TelegramAiPostingContentModelService,
   ) {}
 
   private async owned(userId: string, channelId: string) {
@@ -78,8 +49,11 @@ export class TelegramAiPostingService {
       where: { id: channelId, workspaceId },
       select: {
         id: true,
+        title: true,
+        username: true,
         language: true,
         niche: true,
+        description: true,
         shortDescription: true,
         photoUrl: true,
       },
@@ -116,22 +90,14 @@ export class TelegramAiPostingService {
     const storedText = (key: string) =>
       typeof stored[key] === 'string' ? stored[key] : '';
     const topic = storedText('topic') || channel.niche || '';
-    const audience = storedText('audience') || channel.shortDescription || '';
-    const channelDescription = Object.prototype.hasOwnProperty.call(
-      stored,
-      'channelDescription',
-    )
-      ? storedText('channelDescription')
-      : [
-          topic ? `Тематика: ${topic}` : '',
-          audience ? `Аудитория: ${audience}` : '',
-          storedText('style') ? `Стиль: ${storedText('style')}` : '',
-          storedText('instructions')
-            ? `Дополнительные пожелания: ${storedText('instructions')}`
-            : '',
-        ]
-          .filter(Boolean)
-          .join('\n');
+    const audience = storedText('audience');
+    const editorial = await this.contentModel.read(workspaceId, channelId, this.prisma);
+    const mode = saved?.mode === 'REVIEW' ? 'REVIEW' : 'TEST';
+    const retainedKeys = [
+      'historyMode', 'historyFrom', 'variedLength', 'emojiPolicy', 'ending',
+      'hashtags', 'imageMode',
+      'mediaPreferences', 'imageAvoidances', 'useChannelAvatarInMedia',
+    ];
     return {
       channel,
       mediaPreferenceIcons: await resolveAiPostingPreferenceIcons(
@@ -142,50 +108,178 @@ export class TelegramAiPostingService {
       detectedLanguage,
       configuration: {
         ...defaults,
-        ...stored,
-        channelDescription,
-        language: storedText('language'),
-        topic,
-        audience,
+        ...Object.fromEntries(retainedKeys.filter((key) => Object.hasOwn(stored, key)).map((key) => [key, stored[key]])),
+        audience: editorial.idea.audience || audience,
+        topic: editorial.idea.valueProposition || topic,
+        language: editorial.idea.language || storedText('language'),
+        spheres: editorial.spheres,
+        rubrics: editorial.rubrics,
+        lengths: editorial.lengths.length ? editorial.lengths : defaultLengths,
       },
-      autopilotEnabled: saved?.autopilotEnabled ?? false,
-      mode: saved?.mode ?? (saved?.autopilotEnabled ? 'AUTOPILOT' : 'TEST'),
+      mode,
       draftExpirationDays: saved?.draftExpirationDays ?? 30,
-      autopilot: saved
-        ? {
-            postsPerDay: saved.postsPerDay,
-            targetReadyDrafts: saved.targetReadyDrafts,
-            maxReadyDrafts: saved.maxReadyDrafts,
-            targetCoverageDays: saved.targetCoverageDays,
-            criticalCoverageDays: saved.criticalCoverageDays,
-            nextRunAt: saved.autopilotNextRunAt,
-            aiMonthlyBudget: saved.aiMonthlyBudget?.toString() ?? '',
-            lastRunAt: saved.autopilotLastRunAt,
-            lastStatus: saved.autopilotLastStatus,
-            lastError: saved.autopilotLastError,
-            lastSummary: saved.autopilotLastSummary,
-          }
-        : {
-            postsPerDay: 4,
-            targetReadyDrafts: 50,
-            maxReadyDrafts: 100,
-            targetCoverageDays: 14,
-            criticalCoverageDays: 7,
-            aiMonthlyBudget: '',
-          },
       configured: Boolean(saved),
       configurationVersion: saved?.configurationVersion ?? 1,
     };
   }
 
-  async sourceChannels(userId: string, channelId: string) {
+  async contentModelForChannel(userId: string, channelId: string) {
     const { workspaceId } = await this.owned(userId, channelId);
-    return this.prisma.telegramChannel.findMany({
-      where: telegramAiPostingSourceWhere(workspaceId, channelId),
-      select: { id: true, title: true, username: true, photoUrl: true },
-      orderBy: { title: 'asc' },
-      take: 250,
+    return this.contentModel.read(workspaceId, channelId, this.prisma);
+  }
+
+  async exportSettings(userId: string, channelId: string) {
+    const settings = await this.get(userId, channelId);
+    const configuration = settings.configuration as Record<string, unknown>;
+    return {
+      schemaVersion: 2,
+      exportedAt: new Date().toISOString(),
+      channel: {
+        id: settings.channel.id,
+        title: settings.channel.title,
+        username: settings.channel.username,
+        language: settings.channel.language,
+        niche: settings.channel.niche,
+        description: settings.channel.description,
+        shortDescription: settings.channel.shortDescription,
+      },
+      instruction: [
+        '# Инструкция для настройки AI Posting канала Telegram',
+        '',
+        'Цель этой инструкции: помочь владельцу подготовить настройки AI Posting, которые система затем импортирует и применит к выбранному каналу. Внимательно прочитай запрос владельца, сопоставь его с описанными полями и текущим контекстом. Меняй настройки только в соответствии с запросом; не подменяй намерение владельца предположениями.',
+        'Рабочий порядок: 1) определи, какие разделы затронуты запросом; 2) изучи текущие значения и контекст канала; 3) сохрани все нетронутые настройки; 4) обнови или добавь только нужные поля/сущности; 5) проверь типы значений, диапазоны и связи ID; 6) верни полный configuration в JSON. Импорт проверяет этот объект и сохраняет настройки для канала.',
+        '',
+        '## Формат ответа',
+        'Верни только один валидный JSON без markdown-блоков и текста вокруг: {"schemaVersion":2,"configuration":{...}}. В configuration передай полный набор изменяемых настроек, а не только изменённые поля. Начинай с текущего configuration и сохраняй всё, о замене чего пользователь явно не просил. Не включай channel, schema и instruction в configuration.',
+        '',
+        '## Правила безопасного редактирования',
+        '• Не удаляй и не обнуляй существующие сущности или поля без прямой просьбы. Пустой массив означает удалить все сущности этого типа, поэтому используй его только если это явно запрошено.',
+        '• При изменении сущности сохраняй её id. Новым сферам, подсферам, рубрикам, длинам и предпочтениям назначай уникальные строковые id. Не используй id другой сущности.',
+        '• Все ссылки должны быть согласованы: rubric.sphereId указывает на существующую сферу/подсферу или null; sphere.parentId указывает на существующую родительскую сферу или null; sphere.mediaPreferenceId указывает на существующее предпочтение или null; rubric.lengthIds содержит только существующие length.id.',
+        '• Не выдумывай адреса сайтов, RSS, факты о канале, визуальные референсы или медиа-ссылки. Сохраняй URL только если он есть в контексте или предоставлен пользователем. Источники сфер можно оставить пустыми: тогда тему нужно исследовать в интернете при подготовке идеи.',
+        '• Строковые поля передавай строками, переключатели — true/false, списки — массивами. Не меняй единицы измерения.',
+        '',
+        '## Контекст канала',
+        'channel.title — название канала; channel.username — публичное имя без @ либо null; channel.description — описание Telegram; channel.shortDescription — краткая аудитория/позиционирование; channel.niche — заданная тематика; channel.language — язык метаданных. Это контекст для принятия решений, а не редактируемые поля этой конфигурации.',
+        '',
+        '## Идея канала',
+        '• audience («Для кого этот канал») — кому адресованы публикации, что важно этой аудитории, её потребности и уровень знаний. Это описание читателя, не тема постов. Строка до 4000 символов.',
+        '• topic («Что я хочу дать аудитории») — ценность канала: какую пользу, знания или эмоции должны получать читатели. Строка до 4000 символов.',
+        '• language — язык публикаций: ru, en, uk, de или es. Пустая строка означает автоопределение по каналу/контексту; не подставляй язык автоматически без причины.',
+        '',
+        '## Как писать',
+        '• historyMode — использование истории публикаций: all = учитывать всю доступную историю; since = учитывать историю начиная с historyFrom; none = не использовать историю. historyFrom обязателен при since и задаётся как YYYY-MM-DD.',
+        '• variedLength — true разрешает автоматически выбирать подходящую длину; false оставляет подбор длины правилам рубрик/запроса.',
+        '• emojiPolicy — start размещает эмодзи в начале текста; contextual подбирает эмодзи по смыслу.',
+        '• ending — постоянная концовка публикаций, пустая строка отключает её. Поддерживается Telegram-разметка.',
+        '• hashtags — disabled = без хэштегов; start = в начале; end = в конце; ending_inline = вместе с постоянной концовкой.',
+        '',
+        '## Медиа',
+        '• imageMode — found использует найденные медиа; ai генерирует изображения; hybrid сочетает поиск и генерацию.',
+        '• useChannelAvatarInMedia — true добавляет аватар канала к создаваемому медиа, если это поддерживается настройками обработки.',
+        '• imageAvoidances — массив визуальных направлений/объектов, которых нужно избегать. Не добавляй желаемые стили сюда.',
+        '• mediaPreferences — предпочтения оформления. Каждый объект: id (стабильный ключ), name (короткое название), emoji (эмодзи), emojiIconId (необязательный ID сохранённого icon; если он задан, сохраняй его без изменения), description (визуальные характеристики), references (массив URL визуальных примеров), purpose: SEARCH — использовать при поиске, GENERATION — при генерации, BOTH — в обоих случаях. Новое предпочтение создавай только по запросу/контексту.',
+        '',
+        '## Сферы и подсферы',
+        '• spheres — направления содержания канала. Корневая сфера задаёт широкую тему, подсфера уточняет её и имеет parentId родителя. Сфера: id, parentId (null для основной сферы), name, emoji, tier (PRIMARY или SECONDARY), description, sources (необязательные URL, обычно сайты/RSS для этой сферы), mediaPreferenceId (id предпочтения или null).',
+        '• Для генерации выбираются корневые сферы: доступные PRIMARY и SECONDARY чередуются примерно 50/50 независимо от количества сфер в каждой группе. Если одна группа пуста, система использует доступную группу. Внутри выбранной группы сферы по очереди распределяются между публикациями; подсферы задают детализацию направления. Это не 50/50 доля от числа сущностей.',
+        '• Если sources пуст, для идеи публикации выполняется самостоятельное исследование. Если источники заданы, сначала проверь их; если материал слабый или неполный, дополни исследованием, не выдумывая факты.',
+        '• mediaPreferenceId закрепляет подходящее медиа-предпочтение за сферой. null означает использовать любое подходящее предпочтение.',
+        '',
+        '## Рубрики',
+        '• rubrics задают повторяемый тип публикации. Каждый объект содержит id, sphereId (связанная сфера/подсфера или null), name, emoji, description, goal и lengthIds.',
+        '• description объясняет содержание и характер рубрики. goal формулирует конкретное желаемое действие читателя после публикации (например, понять короткую новость, оставить комментарий или поставить реакцию); не дублируй description.',
+        '• lengthIds ограничивает выбор допустимыми длинами. Пустой список означает, что конкретные длины не закреплены за рубрикой. Указывай только существующие id.',
+        '',
+        '## Длины публикаций',
+        '• lengths задаёт диапазоны количества символов текста: id, name, emoji, minCharacters, maxCharacters. maxCharacters = null означает отсутствие верхней границы; границы включительные, символы считаются в тексте публикации.',
+        '• Стандартные диапазоны: ultra-short 0–99, short 100–299, medium 300–699, long 700 и больше. Их можно редактировать, но сохраняй неперекрывающиеся диапазоны и связь id с рубриками. Для собственных длин используй уникальные id и не создавай случайных пересечений.',
+        '',
+        '## Полная схема configuration',
+        JSON.stringify({
+          language: 'ru | en | uk | de | es | ""', audience: 'string (до 4000)', topic: 'string (до 4000)',
+          historyMode: 'all | since | none', historyFrom: 'YYYY-MM-DD | ""', variedLength: 'boolean', emojiPolicy: 'start | contextual', ending: 'string', hashtags: 'disabled | start | end | ending_inline',
+          imageMode: 'found | ai | hybrid', useChannelAvatarInMedia: 'boolean', imageAvoidances: ['string'],
+          mediaPreferences: [{ id: 'string', name: 'string', emoji: 'string', emojiIconId: 'string | optional saved icon ID', description: 'string', references: ['URL'], purpose: 'SEARCH | GENERATION | BOTH' }],
+          spheres: [{ id: 'string', parentId: 'string | null', name: 'string', emoji: 'string', tier: 'PRIMARY | SECONDARY', description: 'string', sources: ['URL'], mediaPreferenceId: 'string | null' }],
+          rubrics: [{ id: 'string', sphereId: 'string | null', name: 'string', emoji: 'string', description: 'string', goal: 'string', lengthIds: ['length id'] }],
+          lengths: [{ id: 'string', name: 'string', emoji: 'string', minCharacters: 'integer >= 0', maxCharacters: 'integer >= min | null' }],
+        }, null, 2),
+      ].join('\n'),
+      schema: {
+        channelIdea: { audience: 'string, до 4000 символов', topic: 'string, до 4000 символов', language: 'ru | en | uk | de | es | пустая строка для автоопределения' },
+        writing: { historyMode: 'all | since | none', historyFrom: 'YYYY-MM-DD при since', variedLength: 'boolean', emojiPolicy: 'start | contextual', ending: 'Telegram-разметка', hashtags: 'disabled | start | end | ending_inline' },
+        media: { imageMode: 'found | ai | hybrid', useChannelAvatarInMedia: 'boolean', imageAvoidances: 'string[]', mediaPreferences: '{id,name,emoji,emojiIconId?:string,description,references:string[],purpose:SEARCH|GENERATION|BOTH}[]' },
+        spheres: '{id,parentId,name,emoji,tier:PRIMARY|SECONDARY,description,sources:string[],mediaPreferenceId}[]',
+        rubrics: '{id,sphereId,name,emoji,description,goal,lengthIds:string[]}[]',
+        lengths: '{id,name,emoji,minCharacters,maxCharacters:number|null}[]',
+      },
+      fieldGuide: {
+        audience: 'Для кого этот канал: кому адресованы публикации и что важно этой аудитории.',
+        topic: 'Что канал даёт аудитории: польза, знания или эмоции читателей.',
+        language: 'Язык создаваемых публикаций; пустое значение включает автоопределение.',
+        historyMode: 'Какая история публикаций используется при подготовке новых материалов.',
+        historyFrom: 'Начальная дата истории при historyMode=since, формат YYYY-MM-DD.',
+        variedLength: 'Разрешает автоматический выбор длины публикации.',
+        emojiPolicy: 'Правило выбора и размещения эмодзи.', ending: 'Постоянный завершающий текст публикаций.',
+        hashtags: 'Включение хэштегов и их размещение.', imageMode: 'Источник изображений: поиск, генерация или гибрид.',
+        useChannelAvatarInMedia: 'Добавлять ли аватар канала на создаваемое медиа.', imageAvoidances: 'Визуальные решения, которых следует избегать.',
+        mediaPreferences: 'Профили визуального оформления с референсами и областью применения.',
+        spheres: 'Смысловые направления и подсферы, их источники и связь с медиа предпочтением.',
+        rubrics: 'Повторяемые типы публикаций: описание, целевое действие, сфера и разрешённые длины.',
+        lengths: 'Диапазоны символов, определяющие длину текста публикации.',
+      },
+      configuration,
+    };
+  }
+
+  async importSettings(userId: string, channelId: string, document: unknown) {
+    if (!document || typeof document !== 'object' || Array.isArray(document))
+      throw new BadRequestException('AI_POSTING_IMPORT_INVALID');
+    const value = document as Record<string, unknown>;
+    if (![1, 2].includes(Number(value.schemaVersion)) || !value.configuration || typeof value.configuration !== 'object' || Array.isArray(value.configuration))
+      throw new BadRequestException('AI_POSTING_IMPORT_VERSION_UNSUPPORTED');
+    const current = await this.get(userId, channelId);
+    const imported = value.configuration as Record<string, unknown>;
+    const supportedFields = new Set([
+      'audience', 'topic', 'language', 'historyMode', 'historyFrom',
+      'variedLength', 'emojiPolicy', 'ending', 'hashtags', 'imageMode',
+      'mediaPreferences', 'imageAvoidances', 'useChannelAvatarInMedia',
+      'spheres', 'rubrics', 'lengths',
+    ]);
+    if (!Object.keys(imported).some((key) => supportedFields.has(key)))
+      throw new BadRequestException('AI_POSTING_IMPORT_NO_SUPPORTED_FIELDS');
+    const configuration = { ...(current.configuration as Record<string, unknown>), ...imported };
+    const saved = await this.save(userId, channelId, {
+      configuration,
+      mode: current.mode === 'REVIEW' ? 'REVIEW' : 'TEST',
+      draftExpirationDays: current.draftExpirationDays,
     });
+    const sections = [
+      { id: 'idea', label: 'Идея канала', keys: ['audience', 'topic', 'language'] },
+      { id: 'writing', label: 'Как писать', keys: ['historyMode', 'historyFrom', 'variedLength', 'emojiPolicy', 'ending', 'hashtags'] },
+      { id: 'media', label: 'Медиа', keys: ['imageMode', 'mediaPreferences', 'imageAvoidances', 'useChannelAvatarInMedia'] },
+      { id: 'spheres', label: 'Сферы', keys: ['spheres'] },
+      { id: 'rubrics', label: 'Рубрики', keys: ['rubrics'] },
+      { id: 'lengths', label: 'Длины', keys: ['lengths'] },
+    ];
+    const applied = sections.map((section) => {
+      const supplied = section.keys.filter((key) => Object.hasOwn(imported, key));
+      const rows = imported[section.id];
+      const counts = section.id === 'spheres' || section.id === 'rubrics' || section.id === 'lengths'
+        ? `: ${Array.isArray(rows) ? rows.length : 0}`
+        : '';
+      return {
+        id: section.id,
+        label: section.label,
+        status: supplied.length ? 'applied' : 'kept',
+        suppliedFields: supplied,
+        message: supplied.length
+          ? `${section.label}: обновлено${counts}.`
+          : `${section.label}: сохранено без изменений (в файле нет этих полей).`,
+      };
+    });
+    return { saved, report: { applied, ignoredFields: Object.keys(imported).filter((key) => !sections.some((section) => section.keys.includes(key))) } };
   }
 
   async save(
@@ -193,568 +287,85 @@ export class TelegramAiPostingService {
     channelId: string,
     input: {
       configuration: Record<string, unknown>;
-      autopilotEnabled?: boolean;
-      postsPerDay?: number;
-      targetReadyDrafts?: number;
-      maxReadyDrafts?: number;
-      targetCoverageDays?: number;
-      criticalCoverageDays?: number;
-      mode?: 'TEST' | 'REVIEW' | 'AUTOPILOT';
+      mode?: 'TEST' | 'REVIEW';
       draftExpirationDays?: number;
-      aiMonthlyBudget?: string | null;
     },
   ) {
     const { workspaceId } = await this.owned(userId, channelId);
     const configuration = input.configuration;
-    const postsPerDayMin = configuration.postsPerDayMin ?? 3;
-    const postsPerDayMax = configuration.postsPerDayMax ?? 4;
-    if (
-      !Number.isInteger(postsPerDayMin) ||
-      !Number.isInteger(postsPerDayMax) ||
-      Number(postsPerDayMin) < 1 ||
-      Number(postsPerDayMax) > 5 ||
-      Number(postsPerDayMin) > Number(postsPerDayMax)
-    )
-      throw new BadRequestException('Invalid daily generation range');
-    if (
-      input.mode !== undefined &&
-      !['TEST', 'REVIEW', 'AUTOPILOT'].includes(input.mode)
-    )
-      throw new BadRequestException('Invalid AI Posting mode');
-    const draftExpirationDaysInput = input.draftExpirationDays;
-    if (
-      draftExpirationDaysInput !== undefined &&
-      (!Number.isInteger(draftExpirationDaysInput) ||
-        draftExpirationDaysInput < 1 ||
-        draftExpirationDaysInput > 365)
-    )
-      throw new BadRequestException('Invalid draft expiration');
+    const mode = input.mode ?? 'TEST';
+    if (!['TEST', 'REVIEW'].includes(mode))
+      throw new BadRequestException('AI_POSTING_MODE_INVALID');
+    const draftExpirationDays = input.draftExpirationDays ?? 30;
+    if (!Number.isInteger(draftExpirationDays) || draftExpirationDays < 1 || draftExpirationDays > 365)
+      throw new BadRequestException('AI_POSTING_DRAFT_EXPIRATION_INVALID');
     if (!['all', 'since', 'none'].includes(String(configuration.historyMode)))
-      throw new BadRequestException('Invalid history mode');
-    if (
-      configuration.historyMode === 'since' &&
-      (typeof configuration.historyFrom !== 'string' ||
-        !/^\d{4}-\d{2}-\d{2}$/.test(configuration.historyFrom))
-    )
-      throw new BadRequestException('A valid history date is required');
+      throw new BadRequestException('AI_POSTING_HISTORY_MODE_INVALID');
+    if (configuration.historyMode === 'since' && (typeof configuration.historyFrom !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(configuration.historyFrom)))
+      throw new BadRequestException('AI_POSTING_HISTORY_DATE_INVALID');
     if (!['disabled', 'start', 'end', 'ending_inline'].includes(String(configuration.hashtags)))
-      throw new BadRequestException('Invalid hashtag placement');
+      throw new BadRequestException('AI_POSTING_HASHTAGS_INVALID');
     if (!['found', 'ai', 'hybrid'].includes(String(configuration.imageMode)))
-      throw new BadRequestException('Invalid image mode');
-    if (
-      configuration.imageStyles !== undefined &&
-      (!Array.isArray(configuration.imageStyles) ||
-        configuration.imageStyles.length > 10 ||
-        configuration.imageStyles.some(
-          (style) =>
-            typeof style !== 'string' || !style.trim() || style.length > 500,
-        ))
-    )
-      throw new BadRequestException('Invalid image preferences');
-    if (
-      configuration.mediaPreferences !== undefined &&
-      (!Array.isArray(configuration.mediaPreferences) ||
-        configuration.mediaPreferences.length > 10 ||
-        configuration.mediaPreferences.some((value) => {
-          if (!value || typeof value !== 'object' || Array.isArray(value))
-            return true;
-          const preference = value as Record<string, unknown>;
-          if (
-            typeof preference.id !== 'string' ||
-            preference.id.length > 100 ||
-            typeof preference.name !== 'string' ||
-            !preference.name.trim() ||
-            preference.name.length > 80 ||
-            typeof preference.description !== 'string' ||
-            preference.description.length > 500 ||
-            typeof preference.emoji !== 'string' ||
-            preference.emoji.length > 16 ||
-            (preference.emojiIconId !== undefined &&
-              (typeof preference.emojiIconId !== 'string' ||
-                preference.emojiIconId.length > 100)) ||
-            !Array.isArray(preference.references) ||
-            preference.references.length >
-              TELEGRAM_AI_POSTING_MAX_MEDIA_REFERENCES
-          )
-            return true;
-          return preference.references.some((value) => {
-            if (typeof value !== 'string' || value.length > 2000) return true;
-            try {
-              const url = new URL(value);
-              return (
-                !['http:', 'https:'].includes(url.protocol) ||
-                Boolean(url.username || url.password)
-              );
-            } catch {
-              return true;
-            }
-          });
-        }))
-    )
-      throw new BadRequestException('Invalid image preferences');
-    if (
-      configuration.imageReferenceUrls !== undefined &&
-      (!Array.isArray(configuration.imageReferenceUrls) ||
-        configuration.imageReferenceUrls.length >
-          TELEGRAM_AI_POSTING_MAX_MEDIA_REFERENCES ||
-        configuration.imageReferenceUrls.some((value) => {
-          if (typeof value !== 'string' || value.length > 2000) return true;
-          try {
-            const url = new URL(value);
-            return (
-              !['http:', 'https:'].includes(url.protocol) ||
-              Boolean(url.username || url.password)
-            );
-          } catch {
-            return true;
-          }
-        }))
-    )
-      throw new BadRequestException('Invalid image references');
-    if (
-      configuration.useChannelAvatarInMedia !== undefined &&
-      typeof configuration.useChannelAvatarInMedia !== 'boolean'
-    )
-      throw new BadRequestException('Invalid channel avatar media option');
-    if (
-      !Array.isArray(configuration.sources) ||
-      !Array.isArray(configuration.categories) ||
-      !Array.isArray(configuration.formats)
-    )
-      throw new BadRequestException(
-        'Sources, categories and formats must be lists',
-      );
-    const rules = configuration.rules ?? [];
-    if (
-      !Array.isArray(rules) ||
-      rules.length > 100 ||
-      rules.some(isInvalidChannelRule)
-    )
-      throw new BadRequestException('Invalid channel rules');
-    const cleanedSources = await this.cleanUnavailableSources(
-      workspaceId,
-      channelId,
-      configuration.sources,
-    );
-    const configurationToSave = {
-      ...configuration,
-      sources: cleanedSources.sources,
-      rules,
-    };
-    const existingLimits =
-      await this.prisma.telegramAiPostingSettings.findFirst({
-        where: { workspaceId, telegramChannelId: channelId },
-        select: {
-          postsPerDay: true,
-          targetReadyDrafts: true,
-          maxReadyDrafts: true,
-          targetCoverageDays: true,
-          criticalCoverageDays: true,
-          draftExpirationDays: true,
-          aiMonthlyBudget: true,
-        },
+      throw new BadRequestException('AI_POSTING_IMAGE_MODE_INVALID');
+    if (configuration.useChannelAvatarInMedia !== undefined && typeof configuration.useChannelAvatarInMedia !== 'boolean')
+      throw new BadRequestException('AI_POSTING_AVATAR_OPTION_INVALID');
+    if (configuration.mediaPreferences !== undefined && (!Array.isArray(configuration.mediaPreferences) || configuration.mediaPreferences.length > 10 || configuration.mediaPreferences.some((value) => {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) return true;
+      const preference = value as Record<string, unknown>;
+      return typeof preference.id !== 'string' || preference.id.length > 100 || typeof preference.name !== 'string' || !preference.name.trim() || preference.name.length > 80 || typeof preference.description !== 'string' || preference.description.length > 500 || typeof preference.emoji !== 'string' || preference.emoji.length > 32 || (preference.emojiIconId !== undefined && (typeof preference.emojiIconId !== 'string' || preference.emojiIconId.length > 128)) || (preference.purpose !== undefined && !['SEARCH', 'GENERATION', 'BOTH'].includes(String(preference.purpose))) || !Array.isArray(preference.references) || preference.references.length > TELEGRAM_AI_POSTING_MAX_MEDIA_REFERENCES || preference.references.some((url) => {
+        if (typeof url !== 'string' || url.length > 2000) return true;
+        try { const parsed = new URL(url); return !['http:', 'https:'].includes(parsed.protocol) || Boolean(parsed.username || parsed.password); }
+        catch { return true; }
       });
-    const draftExpirationDays =
-      draftExpirationDaysInput ?? existingLimits?.draftExpirationDays ?? 30;
-    const limits = {
-      postsPerDay: input.postsPerDay ?? existingLimits?.postsPerDay ?? 4,
-      targetReadyDrafts:
-        input.targetReadyDrafts ?? existingLimits?.targetReadyDrafts ?? 50,
-      maxReadyDrafts:
-        input.maxReadyDrafts ?? existingLimits?.maxReadyDrafts ?? 100,
-      targetCoverageDays:
-        input.targetCoverageDays ?? existingLimits?.targetCoverageDays ?? 14,
-      criticalCoverageDays:
-        input.criticalCoverageDays ?? existingLimits?.criticalCoverageDays ?? 7,
-    };
-    if (
-      limits.postsPerDay < 1 ||
-      limits.postsPerDay > 20 ||
-      limits.targetReadyDrafts < 0 ||
-      limits.maxReadyDrafts < limits.targetReadyDrafts ||
-      limits.maxReadyDrafts > 500 ||
-      limits.targetCoverageDays < 1 ||
-      limits.targetCoverageDays > 62 ||
-      limits.criticalCoverageDays < 1 ||
-      limits.criticalCoverageDays > limits.targetCoverageDays
-    )
-      throw new BadRequestException('Invalid autopilot limits');
-    const budget = (value: string | null | undefined, fallback: unknown) => {
-      const resolved = value === undefined ? fallback : value;
-      if (resolved === null || resolved === undefined || resolved === '')
-        return null;
-      if (
-        typeof resolved !== 'string' ||
-        !/^(0|[1-9]\d{0,6})(\.\d{1,12})?$/.test(resolved)
-      )
-        throw new BadRequestException('Invalid AI Posting budget');
-      return resolved;
-    };
-    const budgets = {
-      // AI Posting has no channel-level daily USD cap. Clear legacy values so
-      // they cannot continue to appear or be enforced by older call paths.
-      aiDailyBudget: null,
-      aiMonthlyBudget: budget(
-        input.aiMonthlyBudget,
-        existingLimits?.aiMonthlyBudget?.toString(),
-      ),
+    }))) throw new BadRequestException('AI_POSTING_MEDIA_PREFERENCES_INVALID');
+    const configurationToSave = {
+      language: typeof configuration.language === 'string' ? configuration.language.slice(0, 32) : '',
+      audience: typeof configuration.audience === 'string' ? configuration.audience.slice(0, 4000) : '',
+      topic: typeof configuration.topic === 'string' ? configuration.topic.slice(0, 4000) : '',
+      historyMode: configuration.historyMode,
+      historyFrom: typeof configuration.historyFrom === 'string' ? configuration.historyFrom : '',
+      variedLength: configuration.variedLength !== false,
+      emojiPolicy: configuration.emojiPolicy === 'start' ? 'start' : 'contextual',
+      ending: typeof configuration.ending === 'string' ? configuration.ending.slice(0, 4000) : '',
+      hashtags: configuration.hashtags,
+      imageMode: configuration.imageMode,
+      mediaPreferences: Array.isArray(configuration.mediaPreferences) ? configuration.mediaPreferences.map((value) => {
+        const preference = value as Record<string, unknown>;
+        return {
+          id: preference.id,
+          name: preference.name,
+          emoji: preference.emoji,
+          emojiIconId: typeof preference.emojiIconId === 'string' ? preference.emojiIconId : undefined,
+          description: preference.description,
+          references: preference.references,
+          purpose: preference.purpose ?? 'BOTH',
+        };
+      }) : [],
+      imageAvoidances: Array.isArray(configuration.imageAvoidances) ? configuration.imageAvoidances.filter((item): item is string => typeof item === 'string').slice(0, 100) : [],
+      useChannelAvatarInMedia: configuration.useChannelAvatarInMedia === true,
+      spheres: Array.isArray(configuration.spheres) ? configuration.spheres : [],
+      rubrics: Array.isArray(configuration.rubrics) ? configuration.rubrics : [],
+      lengths: Array.isArray(configuration.lengths) ? configuration.lengths.map((value) => {
+        const length = value as Record<string, unknown>;
+        return {
+          id: length.id,
+          name: length.name,
+          emoji: length.emoji,
+          minCharacters: length.minCharacters,
+          maxCharacters: length.maxCharacters ?? null,
+        };
+      }) : [],
     };
     const saved = await this.prisma.$transaction(async (tx) => {
       const result = await tx.telegramAiPostingSettings.upsert({
         where: { telegramChannelId: channelId },
-        create: {
-          workspaceId,
-          telegramChannelId: channelId,
-          configuration: configurationToSave as Prisma.InputJsonObject,
-          autopilotEnabled: input.mode !== undefined && input.mode !== 'TEST',
-          mode: input.mode ?? 'TEST',
-          draftExpirationDays,
-          ...limits,
-          ...budgets,
-        },
-        update: {
-          configuration: configurationToSave as Prisma.InputJsonObject,
-          configurationVersion: { increment: 1 },
-          ...limits,
-          ...budgets,
-          ...(input.autopilotEnabled === undefined
-            ? {}
-            : { autopilotEnabled: input.autopilotEnabled }),
-          ...(input.mode === undefined
-            ? {}
-            : {
-                mode: input.mode,
-                autopilotEnabled: input.mode !== 'TEST',
-                autopilotNextRunAt: input.mode === 'TEST' ? null : new Date(),
-                autopilotLeaseOwner: null,
-                autopilotLeaseExpiresAt: null,
-              }),
-          draftExpirationDays,
-        },
-        select: {
-          id: true,
-          configuration: true,
-          configurationVersion: true,
-          autopilotEnabled: true,
-          mode: true,
-          draftExpirationDays: true,
-          updatedAt: true,
-        },
+        create: { workspaceId, telegramChannelId: channelId, configuration: configurationToSave as Prisma.InputJsonObject, mode, draftExpirationDays },
+        update: { configuration: configurationToSave as Prisma.InputJsonObject, configurationVersion: { increment: 1 }, mode, draftExpirationDays },
+        select: { configuration: true, configurationVersion: true, mode: true, draftExpirationDays: true, updatedAt: true },
       });
-      await writeTelegramAiPostingSettingsVersion(tx, {
-        settingsId: result.id,
-        version: result.configurationVersion,
-        configuration: result.configuration as Prisma.InputJsonValue,
-        changeSource: 'manual',
-      });
-      return {
-        configuration: result.configuration,
-        configurationVersion: result.configurationVersion,
-        autopilotEnabled: result.autopilotEnabled,
-        mode: result.mode,
-        draftExpirationDays: result.draftExpirationDays,
-        updatedAt: result.updatedAt,
-      };
+      await this.contentModel.replace(tx, workspaceId, channelId, configurationToSave);
+      return result;
     });
-    return {
-      ...saved,
-      sourceCleanup: {
-        checkedCount: cleanedSources.checkedCount,
-        removed: cleanedSources.removed,
-      },
-    };
-  }
-
-  async checkSource(
-    userId: string,
-    channelId: string,
-    sourceId: string,
-    candidate?: Record<string, unknown>,
-  ) {
-    const { workspaceId } = await this.owned(userId, channelId);
-    const settings = await this.prisma.telegramAiPostingSettings.findFirst({
-      where: { workspaceId, telegramChannelId: channelId },
-      select: { configuration: true },
-    });
-    const storedConfiguration = settings?.configuration as Record<
-      string,
-      unknown
-    > | null;
-    const sources = storedConfiguration?.sources;
-    const source =
-      candidate ??
-      (Array.isArray(sources)
-        ? sources.find(
-            (item): item is Record<string, unknown> =>
-              Boolean(item) &&
-              typeof item === 'object' &&
-              !Array.isArray(item) &&
-              (item as Record<string, unknown>).id === sourceId,
-          )
-        : null);
-    if (!source) throw new NotFoundException('AI Posting source not found');
-    const sourceType = source.type;
-    const sourceValue = source.value;
-    if (
-      (sourceType !== 'website' &&
-        sourceType !== 'rss' &&
-        sourceType !== 'telegram') ||
-      typeof sourceValue !== 'string' ||
-      !sourceValue.trim()
-    )
-      throw new BadRequestException('Invalid AI Posting source');
-    if (sourceType === 'website' || sourceType === 'rss') {
-      try {
-        const url = new URL(sourceValue);
-        if (url.protocol !== 'https:' || url.username || url.password)
-          throw new Error();
-      } catch {
-        return {
-          ok: false,
-          available: false,
-          message: 'Введите корректный HTTPS-адрес источника.',
-        };
-      }
-      if (this.sourceCollector)
-        return this.sourceCollector.checkWebSource(sourceType, sourceValue);
-      return {
-        ok: false,
-        available: false,
-        message: 'Проверка источника недоступна.',
-      };
-    }
-    if (sourceType === 'telegram') {
-      if (!isValidTelegramAiPostingSourceId(sourceValue))
-        return {
-          ok: false,
-          available: false,
-          message: 'Telegram source identifier is invalid.',
-        };
-      const available = await this.prisma.telegramChannel.findFirst({
-        where: telegramAiPostingSourceWhere(workspaceId, channelId, [
-          sourceValue,
-        ]),
-        select: { id: true },
-      });
-      if (!available)
-        return {
-          ok: false,
-          available: false,
-          message:
-            'Telegram channel is unavailable or not eligible in this workspace.',
-        };
-    }
-    return { ok: true, message: 'Source settings look valid.' };
-  }
-
-  private async cleanUnavailableSources(
-    workspaceId: string,
-    targetChannelId: string,
-    sources: unknown[],
-  ) {
-    const candidates = sources.map((value) =>
-      value && typeof value === 'object' && !Array.isArray(value)
-        ? (value as Record<string, unknown>)
-        : null,
-    );
-    const telegramIds = [
-      ...new Set(
-        candidates
-          .filter(
-            (source) => source?.type === 'telegram' && source.enabled !== false,
-          )
-          .map((source) => source?.value)
-          .filter(isValidTelegramAiPostingSourceId),
-      ),
-    ];
-    const eligibleTelegramIds = new Set<string>();
-    if (telegramIds.length) {
-      const eligible = await this.prisma.telegramChannel.findMany({
-        where: telegramAiPostingSourceWhere(
-          workspaceId,
-          targetChannelId,
-          telegramIds,
-        ),
-        select: { id: true },
-      });
-      for (const channel of eligible) eligibleTelegramIds.add(channel.id);
-    }
-
-    const kept: unknown[] = [];
-    const removed: Array<{
-      id?: string;
-      type: string;
-      value: string;
-      reason: string;
-    }> = [];
-    let checkedCount = 0;
-    const checkWeb = async (
-      source: Record<string, unknown>,
-      type: 'website' | 'rss',
-      value: string,
-    ) => {
-      if (source.enabled === false) return { available: true };
-      let url: URL;
-      try {
-        url = new URL(value);
-        if (url.protocol !== 'https:' || url.username || url.password)
-          throw new Error();
-      } catch {
-        return { available: false, reason: 'Некорректный HTTPS-адрес.' };
-      }
-      if (!this.sourceCollector)
-        return { available: false, reason: 'Проверка источника недоступна.' };
-      checkedCount++;
-      try {
-        const result = await this.sourceCollector.checkWebSource(type, value);
-        return {
-          available: result.available ?? result.ok,
-          reason: result.message,
-        };
-      } catch {
-        return { available: false, reason: 'Источник недоступен.' };
-      }
-    };
-
-    for (let offset = 0; offset < candidates.length; offset += 5) {
-      const chunk = candidates.slice(offset, offset + 5);
-      const results = await Promise.all(
-        chunk.map(async (source) => {
-          if (!source)
-            return { source, available: false, reason: 'Некорректная запись.' };
-          const type = typeof source.type === 'string' ? source.type : '';
-          const value =
-            typeof source.value === 'string' ? source.value.trim() : '';
-          if (
-            (type !== 'website' && type !== 'rss' && type !== 'telegram') ||
-            !value
-          )
-            return {
-              source,
-              available: false,
-              reason: 'Некорректный источник.',
-            };
-          if (type === 'telegram') {
-            const valid = isValidTelegramAiPostingSourceId(value);
-            const available =
-              source.enabled === false ||
-              (valid && eligibleTelegramIds.has(value));
-            return {
-              source,
-              available,
-              reason: valid
-                ? 'Telegram-канал недоступен или нет права чтения.'
-                : 'Некорректный Telegram-канал.',
-            };
-          }
-          const checked = await checkWeb(source, type, value);
-          return { source, ...checked };
-        }),
-      );
-      for (const result of results) {
-        if (result.available && result.source) kept.push(result.source);
-        else if (result.source)
-          removed.push({
-            ...(typeof result.source.id === 'string'
-              ? { id: result.source.id }
-              : {}),
-            type:
-              typeof result.source.type === 'string'
-                ? result.source.type
-                : 'unknown',
-            value:
-              typeof result.source.value === 'string'
-                ? result.source.value.slice(0, 500)
-                : '',
-            reason: result.reason ?? 'Источник недоступен.',
-          });
-      }
-    }
-    return { sources: kept, removed, checkedCount };
-  }
-
-  async startAutopilot(
-    userId: string,
-    channelId: string,
-    values: Partial<{
-      postsPerDay: number;
-      targetReadyDrafts: number;
-      maxReadyDrafts: number;
-      targetCoverageDays: number;
-      criticalCoverageDays: number;
-      mode: 'REVIEW' | 'AUTOPILOT';
-    }> = {},
-  ) {
-    const { workspaceId } = await this.owned(userId, channelId);
-    const current = await this.prisma.telegramAiPostingSettings.findUnique({
-      where: { telegramChannelId: channelId },
-      select: {
-        postsPerDay: true,
-        targetReadyDrafts: true,
-        maxReadyDrafts: true,
-        targetCoverageDays: true,
-        criticalCoverageDays: true,
-      },
-    });
-    const settings = {
-      postsPerDay: values.postsPerDay ?? current?.postsPerDay ?? 4,
-      targetReadyDrafts:
-        values.targetReadyDrafts ?? current?.targetReadyDrafts ?? 50,
-      maxReadyDrafts: values.maxReadyDrafts ?? current?.maxReadyDrafts ?? 100,
-      targetCoverageDays:
-        values.targetCoverageDays ?? current?.targetCoverageDays ?? 14,
-      criticalCoverageDays:
-        values.criticalCoverageDays ?? current?.criticalCoverageDays ?? 7,
-      mode: values.mode ?? 'AUTOPILOT',
-    };
-    if (
-      settings.postsPerDay < 1 ||
-      settings.postsPerDay > 20 ||
-      settings.targetReadyDrafts < 0 ||
-      settings.maxReadyDrafts < settings.targetReadyDrafts ||
-      settings.maxReadyDrafts > 500 ||
-      settings.targetCoverageDays < 1 ||
-      settings.targetCoverageDays > 62 ||
-      settings.criticalCoverageDays < 1 ||
-      settings.criticalCoverageDays > settings.targetCoverageDays
-    )
-      throw new BadRequestException('Invalid autopilot limits');
-    const saved = await this.prisma.telegramAiPostingSettings.upsert({
-      where: { telegramChannelId: channelId },
-      create: {
-        workspaceId,
-        telegramChannelId: channelId,
-        configuration: defaults,
-        ...settings,
-        autopilotEnabled: true,
-        mode: settings.mode,
-        autopilotNextRunAt: new Date(),
-      },
-      update: {
-        ...settings,
-        autopilotEnabled: true,
-        autopilotNextRunAt: new Date(),
-        autopilotLeaseOwner: null,
-        autopilotLeaseExpiresAt: null,
-      },
-    });
-    notifyScheduledTaskDueWorkChanged('telegram.ai_posting.autopilot');
-    return { autopilotEnabled: saved.autopilotEnabled, autopilot: saved };
-  }
-
-  async stopAutopilot(userId: string, channelId: string) {
-    const { workspaceId } = await this.owned(userId, channelId);
-    const result = await this.prisma.telegramAiPostingSettings.updateMany({
-      where: { workspaceId, telegramChannelId: channelId },
-      data: {
-        autopilotEnabled: false,
-        mode: 'TEST',
-        autopilotNextRunAt: null,
-        autopilotLeaseOwner: null,
-        autopilotLeaseExpiresAt: null,
-      },
-    });
-    notifyScheduledTaskDueWorkChanged('telegram.ai_posting.autopilot');
-    return { autopilotEnabled: false, stopped: result.count > 0 };
+    return saved;
   }
 }

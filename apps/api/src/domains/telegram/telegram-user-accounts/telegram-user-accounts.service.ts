@@ -305,6 +305,30 @@ export class TelegramUserAccountsService {
       data.apiHashIv = encrypted.iv;
       data.apiHashAuthTag = encrypted.authTag;
     }
+    if (dto.isPriorityPublisher !== undefined) {
+      if (
+        dto.isPriorityPublisher &&
+        (!existing.isActive ||
+          existing.status !== TelegramUserAccountStatus.connected ||
+          !existing.mtprotoPublishingEnabled)
+      ) {
+        throw new BadRequestException(
+          'A priority publisher must be connected, active, and enabled for publishing.',
+        );
+      }
+      await this.prisma.$transaction(async (tx) => {
+        if (dto.isPriorityPublisher) {
+          await tx.telegramUserAccountIntegration.updateMany({
+            where: { workspaceId, isPriorityPublisher: true },
+            data: { isPriorityPublisher: false },
+          });
+        }
+        await tx.telegramUserAccountIntegration.update({
+          where: { id },
+          data: { isPriorityPublisher: dto.isPriorityPublisher },
+        });
+      });
+    }
     const row = await this.prisma.telegramUserAccountIntegration.update({
       where: { id },
       data,

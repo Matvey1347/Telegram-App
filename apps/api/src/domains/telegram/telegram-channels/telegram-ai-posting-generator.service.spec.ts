@@ -23,6 +23,7 @@ describe('TelegramAiPostingGeneratorService', () => {
     ),
     telegramAiPostingTestRun: {
       create: jest.fn().mockResolvedValue({ id: 'run-1', version: 1 }),
+      aggregate: jest.fn().mockResolvedValue({ _sum: { requestedCount: 0 } }),
       update: jest.fn().mockResolvedValue({}),
       findFirst: jest.fn(),
       findMany: jest.fn(),
@@ -61,6 +62,7 @@ describe('TelegramAiPostingGeneratorService', () => {
   );
   beforeEach(() => {
     jest.clearAllMocks();
+    prisma.telegramAiPostingTestRun.aggregate.mockResolvedValue({ _sum: { requestedCount: 0 } });
     images.prepareReferenceSheet.mockResolvedValue({
       image: null,
       failed: false,
@@ -314,7 +316,10 @@ describe('TelegramAiPostingGeneratorService', () => {
           },
         ],
         imageMode: 'found',
-        imageStyles: ['Minimalist photography', 'Drawn abstraction'],
+        mediaPreferences: [
+          { id: 'photo', name: 'Minimalist photography', emoji: '📷', description: '', references: [], purpose: 'BOTH' },
+          { id: 'drawn', name: 'Drawn abstraction', emoji: '🎨', description: '', references: [], purpose: 'BOTH' },
+        ],
         formats: ['Known group'],
         categories: ['Known hypothesis'],
         allowCreateGroups: false,
@@ -349,7 +354,8 @@ describe('TelegramAiPostingGeneratorService', () => {
         operationId: `op-${gateway.execute.mock.calls.length}`,
         category: request.category,
         model: 'test-model',
-        status: 'SUCCEEDED',
+        status: 'UNKNOWN',
+        errorCategory: 'USAGE_MISSING',
         actualCost: null,
         pricingStatus: 'UNKNOWN',
         inputTokens: 10,
@@ -501,11 +507,11 @@ describe('TelegramAiPostingGeneratorService', () => {
     expect(posts.prepareManagedPostCreate).not.toHaveBeenCalled();
   });
 
-  it('generates the requested three image-ready captions with Telegram-safe length and emoji rules', async () => {
+  it('keeps image-ready captions when usage is unavailable and applies Telegram-safe length and emoji rules', async () => {
     prisma.telegramAiPostingSettings.findFirst.mockResolvedValue({
       configuration: {
         imageMode: 'ai',
-        imageReferenceUrls: ['https://media.example/reference.jpg'],
+        mediaPreferences: [{ id: 'reference-style', name: 'Reference style', emoji: '🎨', description: '', references: ['https://media.example/reference.jpg'], purpose: 'GENERATION' }],
         useChannelAvatarInMedia: true,
         emojiPolicy: 'start',
         hashtags: 'disabled',
@@ -587,7 +593,7 @@ describe('TelegramAiPostingGeneratorService', () => {
     expect(result.failures).toEqual([]);
     expect(images.resolve).toHaveBeenCalledWith(
       expect.objectContaining({
-        prompt: 'Editorial illustration for Distinct topic about habits',
+        prompt: expect.stringContaining('Distinct topic about habits'),
         referenceImage: Buffer.from('reference-sheet'),
         channelAvatar: Buffer.from('channel-avatar'),
         watermarkChannelAvatar: true,

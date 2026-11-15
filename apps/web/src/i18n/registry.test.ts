@@ -58,5 +58,6 @@ describe("feature i18n registry", () => {
     expect(catalog.default["telegram.posts.import.title"]).toBe(
       "Импорт канала",
     );
+    expect(telegramPostsNamespaces("/telegram-posts/channel-1/ai-posting")).toContain("telegram/posts/import");
   });
 });

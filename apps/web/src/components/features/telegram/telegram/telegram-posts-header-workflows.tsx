@@ -13,6 +13,7 @@ import { ChannelReimportDeleteModal } from "./channel-reimport-delete-modal";
 import type { ChannelImportMode } from "./channel-import-navigation";
 import { PostFromBotModal } from "./post-from-bot/post-from-bot-modal";
 import { UnifiedImportModal } from "./unified-import-modal";
+import { RescheduleChannelPostsButton } from "./reschedule-channel-posts-button";
 
 export function TelegramPostsHeaderWorkflows({
   channel,
@@ -74,6 +75,14 @@ export function TelegramPostsHeaderWorkflows({
           ) : undefined
         }
       />
+      {activeChannel ? (
+        <div className="mb-5 flex justify-end">
+          <RescheduleChannelPostsButton
+            channelId={activeChannel.id}
+            channelTitle={activeChannel.title}
+          />
+        </div>
+      ) : null}
 
       {activeChannel && importTranslationsReady ? (
         <UnifiedImportModal

@@ -8,6 +8,7 @@ import {
   IconButton,
   ToggleRow,
 } from "@/components/ui/primitives";
+import { Blend, Images, WandSparkles } from "lucide-react";
 import { TelegramEntityAvatar } from "../telegram/telegram-entity-avatar";
 import { AiPostingMediaPreferenceEditor } from "./ai-posting-media-preference-editor";
 import type { AiPostingMediaPreference } from "./ai-posting-media-preferences";
@@ -41,9 +42,9 @@ export function AiPostingImagesSection({
           value={mode}
           onChange={onMode}
           options={[
-            { value: "found", label: "Найденные медиа" },
-            { value: "ai", label: "AI-генерация для каждой публикации" },
-            { value: "hybrid", label: "Гибридный режим" },
+            { value: "found", label: "Найденные медиа", icon: <Images size={16} /> },
+            { value: "ai", label: "AI-генерация для каждой публикации", icon: <WandSparkles size={16} /> },
+            { value: "hybrid", label: "Гибридный режим", icon: <Blend size={16} /> },
           ]}
         />
       </FormField>
@@ -54,20 +55,20 @@ export function AiPostingImagesSection({
             ? "Режим чередует поиск в открытом каталоге Openverse и AI-генерацию. Кнопка «Новое медиа» создаёт AI-замену только для открытой публикации."
             : "Для новых публикаций выбираются медиа из включённых источников и открытого каталога. Кнопка «Новое медиа» создаёт AI-замену только для открытой публикации."}
       </p>
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-neutral-800 px-3 py-2">
+      <div className="flex min-h-12 items-center justify-between gap-3 rounded-lg border border-neutral-800 px-3 py-1.5">
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <ToggleRow
             checked={useChannelAvatarInMedia}
             onChange={onUseChannelAvatarInMedia}
             label="Добавлять аватар канала на медиа"
-            className="min-w-0 flex-1 border-0 p-0"
+            className="min-w-0 flex-1 border-0 p-0 text-sm"
           />
           {channelAvatarUrl && useChannelAvatarInMedia ? (
             <TelegramEntityAvatar
               imageUrl={channelAvatarUrl}
               kind="channel"
               alt="Аватар канала для водяного знака"
-              size="sm"
+              size="xs"
             />
           ) : null}
         </div>

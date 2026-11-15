@@ -68,6 +68,20 @@ describe('selectManagedPostPublishingSource', () => {
     ).toMatchObject({ sourceId: 'current' });
   });
 
+  it('uses the workspace priority publisher ahead of the scheduled source when available', () => {
+    const priority = {
+      ...source('priority', TelegramSourceType.MTPROTO),
+      isPriorityPublisher: true,
+    };
+    const oldScheduled = source('previous', TelegramSourceType.MTPROTO);
+    expect(
+      selectManagedPostPublishingSource([oldScheduled, priority], {
+        requiresBotApi: false,
+        existingScheduledSourceId: 'previous',
+      }),
+    ).toBe(priority);
+  });
+
   it('does not silently fall back to MTProto when rich publishing needs a bot', () => {
     expect(
       selectManagedPostPublishingSource([sources[0]], {

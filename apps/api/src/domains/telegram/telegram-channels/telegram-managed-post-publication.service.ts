@@ -53,6 +53,9 @@ export class TelegramManagedPostPublicationService {
     longTextMode: 'IMAGES_THEN_TEXT' | 'CAPTION_THEN_TEXT' = 'IMAGES_THEN_TEXT',
     actorUserId?: string,
     requireTelegramNativeSchedule = false,
+    onRescheduleProgress?: (
+      stage: 'REMOVING_OLD_SCHEDULE' | 'SCHEDULING_AGAIN',
+    ) => void,
   ) {
     await requireNonBatchManagedPosts(this.prisma, {
       workspaceId,
@@ -67,6 +70,7 @@ export class TelegramManagedPostPublicationService {
       longTextMode,
       actorUserId,
       requireTelegramNativeSchedule,
+      onRescheduleProgress,
     );
   }
 
@@ -93,6 +97,9 @@ export class TelegramManagedPostPublicationService {
     longTextMode: 'IMAGES_THEN_TEXT' | 'CAPTION_THEN_TEXT' = 'IMAGES_THEN_TEXT',
     actorUserId?: string,
     requireTelegramNativeSchedule = false,
+    onRescheduleProgress?: (
+      stage: 'REMOVING_OLD_SCHEDULE' | 'SCHEDULING_AGAIN',
+    ) => void,
   ) {
     try {
       return await this.telegramManagedPostPublisherService.publishManagedPost(
@@ -103,6 +110,7 @@ export class TelegramManagedPostPublicationService {
         longTextMode,
         actorUserId,
         requireTelegramNativeSchedule,
+        onRescheduleProgress,
       );
     } catch (error) {
       if (managedPostDeliveryContext.getStore()?.signal.aborted) throw error;

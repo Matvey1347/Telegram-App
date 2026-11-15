@@ -57,6 +57,11 @@ type TestPublication = {
   ownerEdited?: boolean;
   format: string;
   category: string;
+  editorialMetadata?: {
+    sphere: { id: string; name: string; emoji: string; tier: string } | null;
+    rubric: { id: string; name: string; emoji: string } | null;
+    length: { id: string; name: string; emoji: string } | null;
+  };
   reviewNotes: string[];
   costs: Record<string, string | null>;
   operations: Run[];
@@ -447,7 +452,7 @@ export class TelegramAiPostingTestRunService {
           topic: item.topic,
           imageMode: 'ai',
           referenceImageUrls:
-            preference?.references ?? config.imageReferenceUrls,
+            preference?.references ?? [],
           channelAvatarUrl: settings.telegramChannel?.photoUrl,
           imageCandidates: [],
           prompt: [
@@ -708,6 +713,7 @@ export class TelegramAiPostingTestRunService {
               operations: item.operations,
               format: item.format,
               category: item.category,
+              editorialMetadata: item.editorialMetadata ?? null,
             },
             planningCost: costs.planning,
             textCost: costs.text,

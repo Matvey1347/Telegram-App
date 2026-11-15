@@ -84,6 +84,9 @@ export class TelegramManagedPostPublisherService {
     longTextMode: 'IMAGES_THEN_TEXT' | 'CAPTION_THEN_TEXT' = 'IMAGES_THEN_TEXT',
     actorUserId?: string,
     requireTelegramNativeSchedule = false,
+    onRescheduleProgress?: (
+      stage: 'REMOVING_OLD_SCHEDULE' | 'SCHEDULING_AGAIN',
+    ) => void,
   ) {
     const [foundPost, channel, initialSources] = await Promise.all([
       this.prisma.telegramManagedPost.findFirst({
@@ -144,6 +147,8 @@ export class TelegramManagedPostPublisherService {
         });
     const preferredBotSourceId = undefined;
     let source = selectManagedPostPublishingSource(sources, {
+      preferredMtprotoSourceId: sources.find((item) => item.isPriorityPublisher)
+        ?.sourceId,
       existingScheduledSourceId:
         scheduleAt && post.status === 'SCHEDULED' ? post.sourceId : null,
       requiresBotApi,
@@ -164,6 +169,9 @@ export class TelegramManagedPostPublisherService {
         channelId,
       );
       source = selectManagedPostPublishingSource(sources, {
+        preferredMtprotoSourceId: sources.find(
+          (item) => item.isPriorityPublisher,
+        )?.sourceId,
         existingScheduledSourceId:
           scheduleAt && post.status === 'SCHEDULED' ? post.sourceId : null,
         requiresBotApi: true,
@@ -405,10 +413,37 @@ export class TelegramManagedPostPublisherService {
         if (
           scheduleAt &&
           post.status === 'SCHEDULED' &&
-          post.telegramScheduledMessageIds.length
+          post.telegramScheduledMessageIds.length &&
+          post.sourceId === source.sourceId
         ) {
+          onRescheduleProgress?.('REMOVING_OLD_SCHEDULE');
           await this.mtprotoClient.deleteScheduledPost({
             ...this.telegramChannelAccessService.accountCredentials(account),
+            channel: channelReference,
+            messageIds: post.telegramScheduledMessageIds,
+          });
+          previousScheduledMessageCancelled = true;
+        } else if (
+          scheduleAt &&
+          post.status === 'SCHEDULED' &&
+          post.telegramScheduledMessageIds.length &&
+          post.sourceType === TelegramSourceType.MTPROTO &&
+          post.sourceId !== source.sourceId
+        ) {
+          // Telegram's scheduled queue is account-scoped. Remove the old
+          // schedule using its original sender before moving it to the
+          // workspace's priority publisher.
+          const previousAccount =
+            await this.telegramChannelAccessService.connectedAccount(
+              workspaceId,
+              channelId,
+              post.sourceId ?? undefined,
+            );
+          onRescheduleProgress?.('REMOVING_OLD_SCHEDULE');
+          await this.mtprotoClient.deleteScheduledPost({
+            ...this.telegramChannelAccessService.accountCredentials(
+              previousAccount,
+            ),
             channel: channelReference,
             messageIds: post.telegramScheduledMessageIds,
           });
@@ -427,6 +462,7 @@ export class TelegramManagedPostPublisherService {
             scheduleAt,
             signal: managedPostDeliveryContext.getStore()?.signal,
           });
+        if (scheduleAt) onRescheduleProgress?.('SCHEDULING_AGAIN');
         ids = scheduleAt
           ? await publish()
           : await sendOperation(

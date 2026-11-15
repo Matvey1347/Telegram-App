@@ -1,6 +1,22 @@
 # Project Refactor ExecPlan
 
-Updated: 2026-11-03
+Updated: 2026-11-14
+
+## 2026-11-14 AI Posting configuration redesign
+
+Active cross-stack work is specified in
+[`docs/plans/ai-posting-configuration-redesign.md`](../plans/ai-posting-configuration-redesign.md).
+The product contract replaces legacy AI Posting sources/formats/history and
+autopilot with channel idea, spheres/sub-spheres, lengths, rubrics, explicit
+research, stage-cost attribution and a usable channel chat. The calendar
+planner's independent formats remain. Historical data removal is restricted to
+those retired AI Posting settings/history/autopilot records; generated posts,
+test runs and AI expense facts remain. Primary/secondary spheres have equal
+default probability. No new recurring work is planned.
+
+Current progress: Graphify navigation and architecture/cost/design constraints
+are reviewed; end-to-end API shape and product decisions are documented.
+Implementation and regression coverage are pending.
 
 ## 2026-11-13 Critical advertising and VP deadline isolation
 

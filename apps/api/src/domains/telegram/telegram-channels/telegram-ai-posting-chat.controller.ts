@@ -9,7 +9,7 @@ import { TelegramAiPostingChatMediaService } from './telegram-ai-posting-chat-me
 
 class GenerateChatPostDto { @IsString() @MinLength(1) @MaxLength(200) topic!: string; }
 
-class ChatDto { @IsArray() messages!: unknown[]; @IsOptional() @IsArray() @ArrayMaxSize(3) @IsString({ each: true }) attachmentIds?: string[]; @IsOptional() @IsObject() publication?: Record<string, unknown>; }
+class ChatDto { @IsArray() messages!: unknown[]; @IsOptional() @IsArray() @ArrayMaxSize(3) @IsString({ each: true }) attachmentIds?: string[]; @IsOptional() @IsString() replyToMessageId?: string; @IsOptional() @IsObject() publication?: Record<string, unknown>; }
 
 @UseGuards(JwtAuthGuard)
 @Controller('telegram-channels/:channelId/ai-posting/chat')
@@ -24,6 +24,6 @@ export class TelegramAiPostingChatController {
     return this.media.analyzeAttachment(user.sub, channelId, file);
   }
   @Post() reply(@CurrentUser() user: JwtUser, @Param('channelId') channelId: string, @Body() dto: ChatDto) {
-    return this.chat.reply(user.sub, channelId, dto.messages, dto.attachmentIds, dto.publication);
+    return this.chat.reply(user.sub, channelId, dto.messages, dto.attachmentIds, dto.publication, dto.replyToMessageId);
   }
 }

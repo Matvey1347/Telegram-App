@@ -29,6 +29,7 @@ const blankPreference = (): AiPostingMediaPreference => ({
   description: "",
   emoji: "🎨",
   references: [],
+  purpose: "BOTH",
 });
 
 export function AiPostingMediaPreferenceEditor({
@@ -137,6 +138,9 @@ export function AiPostingMediaPreferenceEditor({
                 <p className="truncate text-sm font-medium text-white">
                   {preference.name}
                 </p>
+                <span className="mt-0.5 inline-flex rounded bg-blue-950/70 px-1.5 py-0.5 text-[10px] text-blue-200">
+                  {preference.purpose === "SEARCH" ? "Для поиска" : preference.purpose === "GENERATION" ? "Для генерации" : "Поиск и генерация"}
+                </span>
                 <p className="truncate text-xs text-neutral-400">
                   {preference.description || "Без описания"} ·{" "}
                   {preference.references.length} референсов
@@ -249,6 +253,29 @@ export function AiPostingMediaPreferenceEditor({
                 rows={3}
                 placeholder="Палитра, композиция и детали, которые хочется видеть"
               />
+            </FormField>
+            <FormField label="Использовать предпочтение для">
+              <div className="grid grid-cols-3 gap-1 rounded-lg border border-neutral-800 bg-neutral-950 p-1">
+                {([
+                  ["SEARCH", "Поиска"],
+                  ["GENERATION", "Генерации"],
+                  ["BOTH", "Обоих"],
+                ] as const).map(([purpose, label]) => (
+                  <button
+                    key={purpose}
+                    type="button"
+                    aria-pressed={(draft.purpose ?? "BOTH") === purpose}
+                    onClick={() => updateDraft({ purpose })}
+                    className={`rounded-md px-2 py-2 text-xs transition ${
+                      (draft.purpose ?? "BOTH") === purpose
+                        ? "bg-blue-600 text-white"
+                        : "text-neutral-400 hover:bg-neutral-800 hover:text-white"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
             </FormField>
             <div>
               <p className="mb-1 text-sm font-medium text-neutral-200">

@@ -6,6 +6,7 @@ type PublishSource = {
   permissions: { canPostMessages: boolean };
   accountLastCheckedAt?: Date | string | null;
   mtprotoPublishingEnabled?: boolean | null;
+  isPriorityPublisher?: boolean | null;
 };
 
 export function managedPostRequiresBotApi(input: {
@@ -34,6 +35,7 @@ export function selectManagedPostPublishingSource<T extends PublishSource>(
   sources: T[],
   options: {
     existingScheduledSourceId?: string | null;
+    preferredMtprotoSourceId?: string | null;
     requiresBotApi: boolean;
     preferredBotSourceId?: string;
   },
@@ -64,5 +66,10 @@ export function selectManagedPostPublishingSource<T extends PublishSource>(
           source.permissions.canPostMessages,
       )
     : undefined;
-  return existingScheduled ?? mtprotoSources[0] ?? bot;
+  const preferredMtproto = options.preferredMtprotoSourceId
+    ? mtprotoSources.find(
+        (source) => source.sourceId === options.preferredMtprotoSourceId,
+      )
+    : mtprotoSources.find((source) => source.isPriorityPublisher);
+  return preferredMtproto ?? existingScheduled ?? mtprotoSources[0] ?? bot;
 }

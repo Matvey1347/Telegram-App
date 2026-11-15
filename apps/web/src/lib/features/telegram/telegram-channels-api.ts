@@ -6,6 +6,8 @@ import type {
   ManagedPostsSyncResult,
   PaginatedResponse,
   ResetChannelScheduledPostsResult,
+  RescheduleChannelScheduledPostProgress,
+  RescheduleChannelScheduledPostsResult,
   ScheduleManagedPostsBatchPayload,
   TelegramChannelSyncProgressItem,
   TelegramChannelPerformanceHistory,
@@ -674,6 +676,20 @@ export function createTelegramChannelsApi({
           `/telegram-channels/${channelId}/managed-posts/reset-scheduled-to-drafts`,
         )
       ).data,
+    rescheduleChannelScheduledPosts: async (
+      channelId: string,
+      onProgress: StreamProgressHandler<RescheduleChannelScheduledPostProgress>,
+      options?: { signal?: AbortSignal },
+    ) =>
+      streamProgressAction<
+        RescheduleChannelScheduledPostsResult,
+        RescheduleChannelScheduledPostProgress
+      >(
+        `/telegram-channels/${channelId}/managed-posts/reschedule-all-stream`,
+        {},
+        onProgress,
+        options,
+      ),
     scheduleManagedPostsBatch: async (
       channelId: string,
       payload: ScheduleManagedPostsBatchPayload,

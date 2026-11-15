@@ -12,7 +12,25 @@ vi.mock("./ai-posting-chat-voice", () => ({ recordingToPcmWav: async (file: File
 
 beforeEach(() => {
   mocks.post.mockReset();
-  mocks.get.mockReset().mockResolvedValue({ data: [] });
+  mocks.get.mockReset().mockImplementation(async (url: string) => {
+    if (!url.endsWith("/ai-posting/chat")) return { data: [] };
+    const index = mocks.post.mock.calls.findLastIndex(
+      ([path]) => path.endsWith("/ai-posting/chat"),
+    );
+    if (index < 0) return { data: [] };
+    const request = mocks.post.mock.calls[index][1];
+    const response = await mocks.post.mock.results[index].value;
+    return {
+      data: [
+        ...request.messages,
+        {
+          role: "assistant",
+          text: response.data.reply,
+          suggestedTopic: response.data.suggestedTopic,
+        },
+      ],
+    };
+  });
   Object.defineProperty(URL, "createObjectURL", {
     configurable: true,
     value: vi.fn().mockReturnValue("blob:test"),
@@ -30,12 +48,12 @@ it("sends the message to the selected channel and shows the returned answer", as
       <AiPostingChat active channelId="channel-a" />
     </QueryClientProvider>,
   );
-  await screen.findByRole("button", { name: "Отправить" });
   await waitFor(() => expect(mocks.get).toHaveBeenCalled());
+  expect(screen.getByRole("button", { name: "Отправить сообщение" })).toBeDisabled();
   fireEvent.change(screen.getByRole("textbox", { name: "Сообщение" }), {
     target: { value: "Нужна рубрика" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "Отправить" }));
+  fireEvent.click(screen.getByRole("button", { name: "Отправить сообщение" }));
   expect(await screen.findByText("Обсудим рубрику")).toBeInTheDocument();
   expect(mocks.post).toHaveBeenCalledWith(
     "/telegram-channels/channel-a/ai-posting/chat",
@@ -54,12 +72,11 @@ it("keeps the message for retry if the request fails", async () => {
       <AiPostingChat active channelId="channel-b" />
     </QueryClientProvider>,
   );
-  await screen.findByRole("button", { name: "Отправить" });
   await waitFor(() => expect(mocks.get).toHaveBeenCalled());
   fireEvent.change(screen.getByRole("textbox", { name: "Сообщение" }), {
     target: { value: "Моя правка" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "Отправить" }));
+  fireEvent.click(screen.getByRole("button", { name: "Отправить сообщение" }));
   await waitFor(() => expect(screen.getByRole("alert")).toBeInTheDocument());
   expect(screen.getByRole("textbox", { name: "Сообщение" })).toHaveValue(
     "Моя правка",
@@ -111,9 +128,9 @@ it("analyses an attached image before sending it as clearly marked context", asy
     target: { value: "Посмотри" },
   });
   await waitFor(() =>
-    expect(screen.getByRole("button", { name: "Отправить" })).toBeEnabled(),
+    expect(screen.getByRole("button", { name: "Отправить сообщение" })).toBeEnabled(),
   );
-  fireEvent.click(screen.getByRole("button", { name: "Отправить" }));
+  fireEvent.click(screen.getByRole("button", { name: "Отправить сообщение" }));
   expect(
     await screen.findByText("Учту изображение. Источник добавить не удалось"),
   ).toBeInTheDocument();
@@ -177,9 +194,9 @@ it("sends a WAV recording for transcription before asking the assistant", async 
     target: { files: [new File(["RIFF"], "voice.wav", { type: "audio/wav" })] },
   });
   await waitFor(() =>
-    expect(screen.getByRole("button", { name: "Отправить" })).toBeEnabled(),
+    expect(screen.getByRole("button", { name: "Отправить сообщение" })).toBeEnabled(),
   );
-  fireEvent.click(screen.getByRole("button", { name: "Отправить" }));
+  fireEvent.click(screen.getByRole("button", { name: "Отправить сообщение" }));
   expect(await screen.findByText("Зрозуміло")).toBeInTheDocument();
   const call = mocks.post.mock.calls.find(
     (item) => item[0] === "/telegram-channels/channel-e/ai-posting/chat",
@@ -203,7 +220,7 @@ it("prevents chat actions when channel settings have unsaved edits", async () =>
   expect(
     screen.getByText(/Сохраните настройки канала перед сообщением/),
   ).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Отправить" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Отправить сообщение" })).toBeDisabled();
   expect(mocks.post).not.toHaveBeenCalled();
 });
 
@@ -224,9 +241,9 @@ it("uses the assistant suggested topic instead of the user's instruction", async
     target: { value: "Создай рубрику" },
   });
   await waitFor(() =>
-    expect(screen.getByRole("button", { name: "Отправить" })).toBeEnabled(),
+    expect(screen.getByRole("button", { name: "Отправить сообщение" })).toBeEnabled(),
   );
-  fireEvent.click(screen.getByRole("button", { name: "Отправить" }));
+  fireEvent.click(screen.getByRole("button", { name: "Отправить сообщение" }));
   expect(await screen.findByText("Рубрика готова")).toBeInTheDocument();
   expect(
     screen.getByRole("button", {
@@ -242,13 +259,13 @@ it("sends feedback with the generated publication identity and shows the revisio
   render(<QueryClientProvider client={new QueryClient()}><AiPostingChat active channelId="channel-h" /></QueryClientProvider>);
   await waitFor(() => expect(mocks.get).toHaveBeenCalled());
   fireEvent.change(screen.getByRole("textbox", { name: "Сообщение" }), { target: { value: "Предложи тему" } });
-  await waitFor(() => expect(screen.getByRole("button", { name: "Отправить" })).toBeEnabled());
-  fireEvent.click(screen.getByRole("button", { name: "Отправить" }));
+  await waitFor(() => expect(screen.getByRole("button", { name: "Отправить сообщение" })).toBeEnabled());
+  fireEvent.click(screen.getByRole("button", { name: "Отправить сообщение" }));
   await screen.findByText("Попробуем тему");
   fireEvent.click(screen.getByRole("button", { name: "Попробовать сгенерировать публикацию" }));
   await screen.findByText("Прежний текст");
   fireEvent.change(screen.getByRole("textbox", { name: "Сообщение" }), { target: { value: "Сделай короче" } });
-  fireEvent.click(screen.getByRole("button", { name: "Отправить" }));
+  fireEvent.click(screen.getByRole("button", { name: "Отправить сообщение" }));
   expect(await screen.findByText("Новый текст")).toBeInTheDocument();
   const call = mocks.post.mock.calls.filter((item) => item[0] === "/telegram-channels/channel-h/ai-posting/chat").at(-1);
   expect(call?.[1].publication).toEqual({ runId: "run-1", version: 2, index: 0 });
@@ -258,8 +275,8 @@ it("explains the combined transcription length limit and preserves input", async
   mocks.post.mockRejectedValueOnce({ response: { status: 400, data: { message: "AI_POSTING_CHAT_MESSAGE_TOO_LONG" } } });
   render(<QueryClientProvider client={new QueryClient({ defaultOptions: { mutations: { retry: false } } })}><AiPostingChat active channelId="channel-i" /></QueryClientProvider>);
   fireEvent.change(screen.getByRole("textbox", { name: "Сообщение" }), { target: { value: "Мой текст" } });
-  await waitFor(() => expect(screen.getByRole("button", { name: "Отправить" })).toBeEnabled());
-  fireEvent.click(screen.getByRole("button", { name: "Отправить" }));
+  await waitFor(() => expect(screen.getByRole("button", { name: "Отправить сообщение" })).toBeEnabled());
+  fireEvent.click(screen.getByRole("button", { name: "Отправить сообщение" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("расшифровкой слишком длинное");
   expect(screen.getByRole("textbox", { name: "Сообщение" })).toHaveValue("Мой текст");
 });

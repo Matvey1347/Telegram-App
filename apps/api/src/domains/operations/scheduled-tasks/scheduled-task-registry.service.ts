@@ -237,39 +237,6 @@ export class ScheduledTaskRegistryService {
         execute: this.executor.executors['telegram.post_batches.lifecycle'],
       },
       {
-        key: 'telegram.ai_posting.autopilot',
-        name: 'Telegram AI Posting content autopilot',
-        description:
-          'Maintains editorial draft stock and calendar coverage for enabled channels.',
-        scope: 'SYSTEM_MAINTENANCE',
-        defaultSchedule: {
-          frequency: 'INTERVAL',
-          intervalMinutes: 1440,
-          timezone: 'Europe/Warsaw',
-        },
-        scheduleEditable: false,
-        supportedFrequencies: ['INTERVAL'],
-        notificationSupported: false,
-        dueDriven: true,
-        execute: this.executor.executors['telegram.ai_posting.autopilot'],
-      },
-      {
-        key: 'telegram.ai_posting.performance',
-        name: 'Telegram AI Posting post performance',
-        description:
-          'Captures 24, 72 and 168 hour post metrics for AI Posting channels and refreshes performance scores.',
-        scope: 'SYSTEM_MAINTENANCE',
-        defaultSchedule: {
-          frequency: 'INTERVAL',
-          intervalMinutes: 60,
-          timezone: 'Europe/Warsaw',
-        },
-        scheduleEditable: false,
-        supportedFrequencies: ['INTERVAL'],
-        notificationSupported: false,
-        execute: this.executor.executors['telegram.ai_posting.performance'],
-      },
-      {
         key: 'application_logs.cleanup',
         name: 'Application logs cleanup',
         description:

@@ -1,6 +1,6 @@
 export const TELEGRAM_AI_POSTING_MAX_MEDIA_REFERENCES = 8;
 
-export type TelegramAiPostingChatMessage = { role: 'user' | 'assistant'; text: string; suggestedTopic?: string };
+export type TelegramAiPostingChatMessage = { id?: string; replyToMessageId?: string | null; role: 'user' | 'assistant'; text: string; suggestedTopic?: string };
 export type TelegramAiPostingChatAction = {
   kind: 'setup' | 'revision';
   status: 'completed' | 'failed';

@@ -99,6 +99,10 @@ export class TelegramAiPostingGeneratorService {
       }),
     ]);
     if (!settings) throw new NotFoundException('AI_POSTING_SETTINGS_REQUIRED');
+    const previousGeneratedCount = await this.prisma.telegramAiPostingTestRun.aggregate({
+      where: { workspaceId, telegramChannelId: channelId },
+      _sum: { requestedCount: true },
+    });
     const run = await this.prisma.telegramAiPostingTestRun.create({
       data: {
         workspaceId,
@@ -127,6 +131,7 @@ export class TelegramAiPostingGeneratorService {
         channel?.language ?? '',
         channel?.photoUrl ?? null,
         topicOverride,
+        previousGeneratedCount._sum.requestedCount ?? 0,
       );
       const publications = result.generated.map((item) => ({
         ...item,
@@ -225,12 +230,28 @@ export class TelegramAiPostingGeneratorService {
     channelLanguage = '',
     channelPhotoUrl: string | null = null,
     topicOverride?: string,
+    editorialOffset = 0,
   ) {
     const config = settings.configuration as Record<string, any>;
+    const sphereSources = (Array.isArray(config.spheres) ? config.spheres : [])
+      .flatMap((sphere: any) =>
+        Array.isArray(sphere?.sources)
+          ? sphere.sources.slice(0, 10).flatMap((value: unknown, index: number) => {
+              if (typeof value !== 'string') return [];
+              try {
+                const url = new URL(value);
+                if (url.protocol !== 'https:' || url.username || url.password) return [];
+                url.hash = '';
+                return [{ id: `sphere-${String(sphere.id).slice(0, 80)}-${index}`, type: 'website', value: url.toString(), enabled: true, useImages: false }];
+              } catch { return []; }
+            })
+          : [],
+      )
+      .slice(0, 30);
     const sourceContext = await this.sources.collect({
       workspaceId,
       channelId,
-      config,
+      config: { ...config, sources: sphereSources },
       imageSelectionKey: testRunId,
     });
     const learningBlock = await readTelegramAiPostingLearningBlock(
@@ -431,8 +452,16 @@ export class TelegramAiPostingGeneratorService {
         where: { id: testRunId, workspaceId, status: 'RUNNING' },
         data: { operations },
       });
+      // A completed, validated model response is still usable when the
+      // provider omits token usage. Settlement marks it UNKNOWN and retains
+      // the reservation; do not discard the generated plan/text as a failure.
+      const completedWithUnknownUsage =
+        operation.status === 'UNKNOWN' &&
+        operation.errorCategory === 'USAGE_MISSING' &&
+        result.result !== undefined &&
+        typeof result.result === 'object';
       if (
-        operation.status !== 'SUCCEEDED' ||
+        (operation.status !== 'SUCCEEDED' && !completedWithUnknownUsage) ||
         !result.result ||
         typeof result.result !== 'object'
       ) {
@@ -487,15 +516,9 @@ export class TelegramAiPostingGeneratorService {
       }
       if (topics.length < count)
         throw new BadGatewayException('AI_POSTING_TOPIC_REPETITION');
-      const mediaRunState =
-        createTelegramAiPostingMediaRunState(generationConfig);
+      const mediaRunState = createTelegramAiPostingMediaRunState();
       const [reference, channelAvatar] = await Promise.all([
-        ['ai', 'hybrid'].includes(generationConfig.imageMode) &&
-        !mediaRunState.hasConfiguredPreferences
-          ? this.images.prepareReferenceSheet(
-              generationConfig.imageReferenceUrls,
-            )
-          : Promise.resolve({ image: null, failed: false }),
+        Promise.resolve({ image: null, failed: false }),
         generationConfig.useChannelAvatarInMedia === true
           ? this.images.prepareChannelAvatar(channelPhotoUrl)
           : Promise.resolve(null),
@@ -534,20 +557,51 @@ export class TelegramAiPostingGeneratorService {
         .entries()) {
         try {
           activePublicationIndex = publicationIndex;
+          const spheres = (Array.isArray(generationConfig.spheres)
+            ? generationConfig.spheres
+            : []
+          ).filter((item: any) => item && typeof item.id === 'string' && !item.parentId);
+          const primarySpheres = spheres.filter((item: any) => item.tier === 'PRIMARY');
+          const secondarySpheres = spheres.filter((item: any) => item.tier !== 'PRIMARY');
+          const editorialIndex = editorialOffset + publicationIndex;
+          const desiredTier = editorialIndex % 2 === 0 ? primarySpheres : secondarySpheres;
+          const sphereChoices = desiredTier.length ? desiredTier : (primarySpheres.length ? primarySpheres : secondarySpheres);
+          const selectedSphere = sphereChoices.length
+            ? sphereChoices[Math.floor(editorialIndex / 2) % sphereChoices.length]
+            : null;
+          const rubrics = Array.isArray(generationConfig.rubrics) ? generationConfig.rubrics : [];
+          const rubricChoices = rubrics.filter((item: any) => item && (!item.sphereId || item.sphereId === selectedSphere?.id));
+          const selectedRubric = rubricChoices.length
+            ? rubricChoices[editorialIndex % rubricChoices.length]
+            : null;
+          const selectedLengthIds = Array.isArray(selectedRubric?.lengthIds)
+            ? selectedRubric.lengthIds
+            : [];
+          const lengths = (Array.isArray(generationConfig.lengths) ? generationConfig.lengths : [])
+            .filter((item: any) => item && (!selectedLengthIds.length || selectedLengthIds.includes(item.id)));
+          const editorialSelection = { sphere: selectedSphere, rubric: selectedRubric, lengths };
+          const publicationContext = selectedSphere
+            ? {
+                ...sourceContext,
+                sourceContexts: sourceContext.sourceContexts.filter((item) =>
+                  item.includes(`[website sphere-${selectedSphere.id}-`),
+                ),
+              }
+            : sourceContext;
           const generated = await generateTelegramAiPostingDraft(
             {
               userId,
               workspaceId,
               channelId,
               topic,
-              config: generationConfig,
+              config: { ...generationConfig, editorialSelection },
               referenceImage: reference.image,
               referenceImageFailed: reference.failed,
               referenceImageCache: mediaRunState.referenceImageCache,
               channelAvatar,
               watermarkChannelAvatar:
                 generationConfig.useChannelAvatarInMedia === true,
-              context: sourceContext,
+              context: publicationContext,
               planningCost: allocatedPlanningCost,
               previousFormats: results.map((item) => item.format),
               previousLengths: results.map((item) => [...item.text].length),

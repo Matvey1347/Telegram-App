@@ -12,6 +12,11 @@ export type Publication = {
   rejectionReason: string | null;
   format: string;
   category: string;
+  editorialMetadata?: {
+    sphere?: { id: string; name: string; emoji: string; tier?: string } | null;
+    rubric?: { id: string; name: string; emoji: string } | null;
+    length?: { id: string; name: string; emoji: string } | null;
+  };
   mediaReadiness?: "READY" | "MISSING" | "FAILED";
   mediaFailureCode?: string;
   imageCostUnknown?: boolean;

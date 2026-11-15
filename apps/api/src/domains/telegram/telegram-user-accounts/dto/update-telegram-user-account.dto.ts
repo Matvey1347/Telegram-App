@@ -6,4 +6,5 @@ export class UpdateTelegramUserAccountDto {
   @IsOptional() @IsString() apiId?: string;
   @IsOptional() @IsString() @MinLength(8) apiHash?: string;
   @IsOptional() @IsBoolean() isActive?: boolean;
+  @IsOptional() @IsBoolean() isPriorityPublisher?: boolean;
 }

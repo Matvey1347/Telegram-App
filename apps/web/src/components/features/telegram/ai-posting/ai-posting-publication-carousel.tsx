@@ -160,6 +160,13 @@ export function AiPostingPublicationCarousel({
           <p className="mt-2 text-xs text-neutral-400">Идея: {post.topic}</p>
         </div>
         <div className="space-y-3">
+          {post.editorialMetadata && (
+            <div className="flex flex-wrap gap-2 text-xs" aria-label="Редакционная структура публикации">
+              {post.editorialMetadata.sphere && <span className="rounded-full border border-blue-900/70 bg-blue-950/40 px-2 py-1 text-blue-200">{post.editorialMetadata.sphere.emoji} {post.editorialMetadata.sphere.name}</span>}
+              {post.editorialMetadata.rubric && <span className="rounded-full border border-violet-900/70 bg-violet-950/40 px-2 py-1 text-violet-200">{post.editorialMetadata.rubric.emoji} {post.editorialMetadata.rubric.name}</span>}
+              {post.editorialMetadata.length && <span className="rounded-full border border-neutral-700 bg-neutral-800 px-2 py-1 text-neutral-200">{post.editorialMetadata.length.emoji} {post.editorialMetadata.length.name}</span>}
+            </div>
+          )}
           <div className="flex flex-wrap gap-2 text-sm">
             <span className="inline-flex items-center gap-2 rounded-lg border border-neutral-700 bg-neutral-800 px-2 py-1 text-neutral-200">
               <IconAvatar

@@ -229,8 +229,9 @@ export class CrossPromotionPlanSchedulingService {
     );
     await this.plans.validateForScheduling(userId, dto);
     const previous = await this.plans.placementsForReschedule(userId, id);
-    const context = await this.plans.removalContext(userId, id);
+    await this.plans.claimRescheduling(userId, id);
     try {
+      const context = await this.plans.removalContext(userId, id);
       if (context.remotePostIds.length) {
         onProgress(
           {
@@ -260,7 +261,6 @@ export class CrossPromotionPlanSchedulingService {
           total,
         );
       }
-      await this.plans.markRescheduling(userId, id, 'Rescheduling in progress');
       for (const placement of previous) {
         if (context.remotePostIds.includes(placement.managedPostId)) continue;
         signal.throwIfAborted();
@@ -278,6 +278,8 @@ export class CrossPromotionPlanSchedulingService {
         total,
         signal,
         false,
+        (placement) =>
+          this.plans.appendReschedulingPlacement(userId, id, placement),
       );
       const saved = await this.plans.replaceScheduled(
         userId,
@@ -642,21 +644,33 @@ export class CrossPromotionPlanSchedulingService {
     );
     if (!publication || !nextPlacement || !previous)
       throw new BadRequestException('Partner-post channel placement not found');
-    await this.telegramChannels.scheduleManagedPost(
-      userId,
-      channelId,
-      previous.managedPostId,
-      { scheduledAt: nextPlacement.scheduledAt },
-    );
-    return this.plans.replacePublicationChannelPlacement(
-      userId,
-      id,
-      publicationId,
-      channelId,
-      dto,
-      previous,
-      'SCHEDULED',
-    );
+    await this.plans.claimRescheduling(userId, id);
+    try {
+      await this.telegramChannels.scheduleManagedPost(
+        userId,
+        channelId,
+        previous.managedPostId,
+        { scheduledAt: nextPlacement.scheduledAt },
+      );
+      return await this.plans.replacePublicationChannelPlacement(
+        userId,
+        id,
+        publicationId,
+        channelId,
+        dto,
+        previous,
+        'SCHEDULED',
+      );
+    } catch (error) {
+      await this.plans
+        .markRescheduling(
+          userId,
+          id,
+          error instanceof Error ? error.message : 'Rescheduling failed',
+        )
+        .catch(() => undefined);
+      throw error;
+    }
   }
 
   async replacePublicationChannelSchedule(
@@ -681,62 +695,74 @@ export class CrossPromotionPlanSchedulingService {
     );
     if (!publication || !nextPlacement || !previous)
       throw new BadRequestException('Partner-post channel placement not found');
-    const context = await this.plans.removalContext(userId, id);
-    const deletion = await this.remoteDeletion.deletePublishedManagedPosts({
-      workspaceId: context.workspaceId,
-      managedPostIds: [previous.managedPostId],
-    });
-    // A user may already have deleted the published Telegram message manually.
-    // That is the desired end state for this replacement, so only fail for an
-    // operational deletion error rather than a missing remote message.
-    const onlyAlreadyMissing =
-      deletion.failed > 0 &&
-      deletion.results
-        .filter((result) => !result.success)
-        .every(
-          (result) =>
-            result.error?.includes('could not be identified') ||
-            result.error?.includes('no published Telegram message IDs'),
-        );
-    if (deletion.failed && !onlyAlreadyMissing)
-      throw new Error('Existing Telegram post could not be deleted');
-    await this.telegramChannels.deleteManagedPost(
-      userId,
-      channelId,
-      previous.managedPostId,
-    );
-    const group = await this.systemPostGroups.ensureMutualPromotionGroup(
-      userId,
-      channelId,
-    );
-    const post = await this.telegramChannels.createManagedPost(
-      userId,
-      channelId,
-      this.managedPostPayload(dto, publication.post, nextPlacement),
-      { groupId: group.id },
-    );
-    await this.telegramChannels.scheduleManagedPost(
-      userId,
-      channelId,
-      post.id,
-      {
-        scheduledAt: nextPlacement.scheduledAt,
-      },
-    );
-    return this.plans.replacePublicationChannelPlacement(
-      userId,
-      id,
-      publicationId,
-      channelId,
-      dto,
-      {
-        telegramChannelId: channelId,
-        managedPostId: post.id,
-        postGroupId: group.id,
+    await this.plans.claimRescheduling(userId, id);
+    try {
+      const context = await this.plans.removalContext(userId, id);
+      const deletion = await this.remoteDeletion.deletePublishedManagedPosts({
+        workspaceId: context.workspaceId,
+        managedPostIds: [previous.managedPostId],
+      });
+      // A user may already have deleted the published Telegram message manually.
+      // That is the desired end state for this replacement, so only fail for an
+      // operational deletion error rather than a missing remote message.
+      const onlyAlreadyMissing =
+        deletion.failed > 0 &&
+        deletion.results
+          .filter((result) => !result.success)
+          .every(
+            (result) =>
+              result.error?.includes('could not be identified') ||
+              result.error?.includes('no published Telegram message IDs'),
+          );
+      if (deletion.failed && !onlyAlreadyMissing)
+        throw new Error('Existing Telegram post could not be deleted');
+      await this.telegramChannels.deleteManagedPost(
+        userId,
+        channelId,
+        previous.managedPostId,
+      );
+      const group = await this.systemPostGroups.ensureMutualPromotionGroup(
+        userId,
+        channelId,
+      );
+      const post = await this.telegramChannels.createManagedPost(
+        userId,
+        channelId,
+        this.managedPostPayload(dto, publication.post, nextPlacement),
+        { groupId: group.id },
+      );
+      await this.telegramChannels.scheduleManagedPost(
+        userId,
+        channelId,
+        post.id,
+        {
+          scheduledAt: nextPlacement.scheduledAt,
+        },
+      );
+      return await this.plans.replacePublicationChannelPlacement(
+        userId,
+        id,
         publicationId,
-      },
-      'SCHEDULED',
-    );
+        channelId,
+        dto,
+        {
+          telegramChannelId: channelId,
+          managedPostId: post.id,
+          postGroupId: group.id,
+          publicationId,
+        },
+        'SCHEDULED',
+      );
+    } catch (error) {
+      await this.plans
+        .markRescheduling(
+          userId,
+          id,
+          error instanceof Error ? error.message : 'Rescheduling failed',
+        )
+        .catch(() => undefined);
+      throw error;
+    }
   }
 
   private async schedulePosts(
@@ -747,7 +773,7 @@ export class CrossPromotionPlanSchedulingService {
     total: number,
     signal: AbortSignal,
     validate = true,
-    onPlacementSaved?: () => Promise<void>,
+    onPlacementSaved?: (placement: ScheduledPost) => Promise<void>,
   ) {
     if (validate) await this.plans.validateForScheduling(userId, dto);
     const scheduledPublicationKeys = new Set(
@@ -779,19 +805,20 @@ export class CrossPromotionPlanSchedulingService {
         this.managedPostPayload(dto, publication.post, placement),
         { groupId: group.id },
       );
+      const scheduledPost: ScheduledPost = {
+        telegramChannelId: channelId,
+        managedPostId: post.id,
+        postGroupId: group.id,
+        ...(publicationId ? { publicationId } : {}),
+      };
+      createdPosts.push(scheduledPost);
+      await onPlacementSaved?.(scheduledPost);
       await this.telegramChannels.scheduleManagedPost(
         userId,
         channelId,
         post.id,
         { scheduledAt: placement?.scheduledAt ?? dto.scheduledAt },
       );
-      createdPosts.push({
-        telegramChannelId: channelId,
-        managedPostId: post.id,
-        postGroupId: group.id,
-        ...(publicationId ? { publicationId } : {}),
-      });
-      await onPlacementSaved?.();
       onProgress(
         {
           phase: 'SCHEDULING',

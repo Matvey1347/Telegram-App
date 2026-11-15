@@ -52,4 +52,19 @@ describe("IconPicker", () => {
     expect(parentModal).toBeInTheDocument();
     expect(picker).toHaveClass("z-[100]");
   });
+
+  it("shows the selected emoji in a compact picker without a saved icon id", () => {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+
+    render(
+      <QueryClientProvider client={client}>
+        <IconPicker compact buttonLabel="⚡" onChange={vi.fn()} onEmojiChange={vi.fn()} />
+      </QueryClientProvider>,
+    );
+
+    expect(screen.getByRole("button")).toHaveTextContent("⚡");
+    expect(screen.getByRole("button")).not.toHaveTextContent("+");
+  });
 });

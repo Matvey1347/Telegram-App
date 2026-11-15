@@ -468,6 +468,7 @@ export class CrossPromotionPlansService {
       select: {
         id: true,
         status: true,
+        updatedAt: true,
         scheduledAt: true,
         placementPostIds: true,
       },
@@ -476,12 +477,81 @@ export class CrossPromotionPlansService {
     if (row.status === 'CANCELLED') {
       throw new BadRequestException('Cancelled promotions cannot be edited');
     }
+    if (row.status === 'RESCHEDULING') {
+      const interruptedBefore = new Date(Date.now() - 5 * 60_000);
+      if (row.updatedAt >= interruptedBefore) {
+        throw new BadRequestException(
+          'This promotion is already being rescheduled',
+        );
+      }
+    }
     if (expectedStatus && row.status !== expectedStatus) {
       throw new BadRequestException(
         'Only an active promotion can be replaced and published now',
       );
     }
-    return json<ScheduledPlacement[]>(row.placementPostIds, []);
+    const placements = json<ScheduledPlacement[]>(row.placementPostIds, []);
+    if (!placements.length) return placements;
+    const existingPosts = await this.prisma.telegramManagedPost.findMany({
+      where: {
+        workspaceId,
+        id: { in: placements.map((placement) => placement.managedPostId) },
+      },
+      select: { id: true },
+    });
+    const existingIds = new Set(existingPosts.map((post) => post.id));
+    return placements.filter((placement) =>
+      existingIds.has(placement.managedPostId),
+    );
+  }
+
+  async claimRescheduling(userId: string, id: string) {
+    const workspaceId = await this.workspace(userId);
+    const interruptedBefore = new Date(Date.now() - 5 * 60_000);
+    const claimed = await this.prisma.crossPromotionPlan.updateMany({
+      where: {
+        id,
+        workspaceId,
+        OR: [
+          { status: { in: ['DRAFT', 'SCHEDULED', 'ACTIVE'] } },
+          { status: 'RESCHEDULING', updatedAt: { lt: interruptedBefore } },
+        ],
+      },
+      data: { status: 'RESCHEDULING', lastError: null },
+    });
+    if (!claimed.count) {
+      throw new BadRequestException(
+        'This promotion is already being changed or can no longer be rescheduled',
+      );
+    }
+  }
+
+  async appendReschedulingPlacement(
+    userId: string,
+    id: string,
+    placement: ScheduledPlacement,
+  ) {
+    const workspaceId = await this.workspace(userId);
+    const row = await this.prisma.crossPromotionPlan.findFirst({
+      where: { id, workspaceId, status: 'RESCHEDULING' },
+      select: { placementPostIds: true },
+    });
+    if (!row)
+      throw new BadRequestException('Promotion reschedule was interrupted');
+    const placements = json<ScheduledPlacement[]>(row.placementPostIds, []);
+    if (
+      placements.some((item) => item.managedPostId === placement.managedPostId)
+    )
+      return;
+    await this.prisma.crossPromotionPlan.updateMany({
+      where: { id, workspaceId, status: 'RESCHEDULING' },
+      data: {
+        placementPostIds: [
+          ...placements,
+          placement,
+        ] as unknown as Prisma.InputJsonValue,
+      },
+    });
   }
 
   async publicationScheduleForUpdate(
@@ -1026,7 +1096,6 @@ export class CrossPromotionPlansService {
       where: { id, workspaceId },
       data: {
         status: 'DRAFT',
-        placementPostIds: [],
         lastError,
       },
     });
