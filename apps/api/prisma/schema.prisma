@@ -1971,7 +1971,10 @@ model TelegramAiPostingRubric {
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
 
-  @@index([workspaceId, telegramChannelId, sphereId])
+  // PostgreSQL truncated the original migration's long index identifier.
+  // Keep its physical name explicit so Prisma's schema verification agrees
+  // with the index already created in production.
+  @@index([workspaceId, telegramChannelId, sphereId], map: "TelegramAiPostingRubric_workspaceId_telegramChannelId_sphereId_")
 }
 
 model TelegramAiPostingRubricLength {
