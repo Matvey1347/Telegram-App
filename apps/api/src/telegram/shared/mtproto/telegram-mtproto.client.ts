@@ -3433,11 +3433,15 @@ export class TelegramMtprotoClient {
       const peer =
         resolved?.peer ||
         (await client.getInputEntity(params.channelRef as string));
-      const result = await client.invoke(
-        new Api.messages.GetScheduledHistory({
-          peer,
-          hash: returnBigInt(0),
-        }),
+      const result = await this.withTimeout(
+        client.invoke(
+          new Api.messages.GetScheduledHistory({
+            peer,
+            hash: returnBigInt(0),
+          }),
+        ),
+        this.telegramMetadataTimeoutMs,
+        'Telegram scheduled-history lookup',
       );
       const messages = Array.isArray((result as any)?.messages)
         ? (result as any).messages

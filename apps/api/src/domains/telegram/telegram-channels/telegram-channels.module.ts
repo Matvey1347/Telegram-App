@@ -109,6 +109,7 @@ import { TelegramManagedPostMediaStorageService } from './telegram-managed-post-
 import { TelegramSystemPostGroupsService } from './telegram-system-post-groups.service';
 import { TelegramManagedPostRecoveryController } from './telegram-managed-post-recovery.controller';
 import { TelegramManagedPostScheduledResetService } from './telegram-managed-post-scheduled-reset.service';
+import { TelegramManagedPostReschedulerService } from './telegram-managed-post-rescheduler.service';
 import { TelegramPostCalendarPlannerController } from './telegram-post-calendar-planner.controller';
 import { TelegramChannelBoundedReadsController } from './telegram-channel-bounded-reads.controller';
 import { TelegramManagedPostLookupService } from './telegram-managed-post-lookup.service';
@@ -216,7 +217,10 @@ import { TelegramChannelTrafficAttributionService } from './telegram-channel-tra
     TelegramManagedPostQueryService,
     TelegramManagedPostSyntheticReadService,
     TelegramManagedPostReconciliationService,
-    { provide: 'managed-post-reconciler', useExisting: TelegramManagedPostReconciliationService },
+    {
+      provide: 'managed-post-reconciler',
+      useExisting: TelegramManagedPostReconciliationService,
+    },
     TelegramManagedPostDeliveryDispatcherService,
     TelegramManagedPostRemoteSyncService,
     TelegramManagedPostRemoteLoaderService,
@@ -226,6 +230,7 @@ import { TelegramChannelTrafficAttributionService } from './telegram-channel-tra
     TelegramManagedPostCommandService,
     TelegramManagedPostHistoryService,
     TelegramManagedPostScheduledResetService,
+    TelegramManagedPostReschedulerService,
     TelegramManagedPostPublicationService,
     TelegramManagedPostPublisherService,
     TelegramManagedPostDeliveryDispatcherService,

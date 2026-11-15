@@ -4,6 +4,7 @@ import {
   TelegramSourceType,
 } from '@prisma/client';
 import { TelegramManagedPostScheduledResetService } from './telegram-managed-post-scheduled-reset.service';
+import { TelegramManagedPostReschedulerService } from './telegram-managed-post-rescheduler.service';
 
 function scheduledPost(id = 'post-1') {
   return {
@@ -97,9 +98,17 @@ function harness(options?: {
     getScheduledHistory: jest
       .fn()
       .mockResolvedValue([{ id: '101' }, { id: '102' }]),
+    getManagedPostMessages: jest.fn().mockResolvedValue({
+      published: [],
+      recentPublished: [],
+      scheduled: [],
+    }),
     deleteScheduledPost: jest.fn().mockResolvedValue(undefined),
   };
-  const support = { workspace: jest.fn().mockResolvedValue('workspace-1') };
+  const support = {
+    workspace: jest.fn().mockResolvedValue('workspace-1'),
+    invalidateTelegramChannelReadCache: jest.fn(),
+  };
   const access = {
     connectedAccount: jest.fn().mockResolvedValue({ id: 'account-1' }),
     mtprotoChannelReference: jest.fn().mockReturnValue({
@@ -113,9 +122,11 @@ function harness(options?: {
       apiHash: 'api-hash',
       session: 'session',
     }),
+    telegramMessageUrlsForPost: jest.fn().mockReturnValue([]),
   };
   const revisions = {
     createManagedPostRevisions: jest.fn().mockResolvedValue(undefined),
+    createManagedPostRevision: jest.fn().mockResolvedValue(undefined),
   };
   const groups = {
     normalizePostGroupNumbering: jest.fn().mockResolvedValue(undefined),
@@ -127,6 +138,19 @@ function harness(options?: {
     publishManagedPost: jest.fn().mockResolvedValue({ id: 'rescheduled' }),
     returnManagedPostToDraft: jest.fn().mockResolvedValue({ id: 'draft' }),
   };
+  const identity = {
+    findPublishedIdentity: jest.fn().mockReturnValue(null),
+  };
+  const rescheduler = new TelegramManagedPostReschedulerService(
+    prisma as never,
+    mtproto as never,
+    support as never,
+    access as never,
+    revisions as never,
+    groups as never,
+    publication as never,
+    identity as never,
+  );
   const service = new TelegramManagedPostScheduledResetService(
     prisma as never,
     mtproto as never,
@@ -135,7 +159,7 @@ function harness(options?: {
     revisions as never,
     groups as never,
     remoteSync as never,
-    publication as never,
+    rescheduler,
   );
   return {
     service,
@@ -146,6 +170,7 @@ function harness(options?: {
     groups,
     remoteSync,
     publication,
+    identity,
     updateInputs,
   };
 }
@@ -164,16 +189,22 @@ describe('TelegramManagedPostScheduledResetService', () => {
     };
     const { service, publication } = harness({ posts: [future, overdue] });
     const progress: string[] = [];
-    publication.publishManagedPost.mockImplementationOnce((...args: unknown[]) => {
-      const report = args[7] as (stage: string) => void;
-      report('REMOVING_OLD_SCHEDULE');
-      report('SCHEDULING_AGAIN');
-      return Promise.resolve({ id: 'rescheduled' });
-    });
+    const progressCounts: Array<[number, number]> = [];
+    publication.publishManagedPost.mockImplementationOnce(
+      (...args: unknown[]) => {
+        const report = args[7] as (stage: string) => void;
+        report('REMOVING_OLD_SCHEDULE');
+        report('SCHEDULING_AGAIN');
+        return Promise.resolve({ id: 'rescheduled' });
+      },
+    );
     const result = await service.rescheduleChannelScheduledPosts(
       'user-1',
       'channel-1',
-      (item) => progress.push(`${item.postId ?? 'sync'}:${item.stage}`),
+      (item, current, total) => {
+        progress.push(`${item.postId ?? 'sync'}:${item.stage}`);
+        progressCounts.push([current, total]);
+      },
     );
     expect(publication.publishManagedPost).toHaveBeenCalledWith(
       'workspace-1',
@@ -182,7 +213,7 @@ describe('TelegramManagedPostScheduledResetService', () => {
       future.scheduledAt,
       'IMAGES_THEN_TEXT',
       'user-1',
-      false,
+      true,
       expect.any(Function),
     );
     expect(publication.returnManagedPostToDraft).toHaveBeenCalledWith(
@@ -196,13 +227,101 @@ describe('TelegramManagedPostScheduledResetService', () => {
       failedCount: 0,
     });
     expect(progress).toEqual([
+      'sync:LOADING_LOCAL_SCHEDULE',
+      'sync:LOADING_TELEGRAM_SCHEDULE',
+      'sync:LOADING_TELEGRAM_SCHEDULE',
       'sync:RECONCILING_TELEGRAM',
+      'sync:RECONCILING_TELEGRAM',
+      'sync:RECONCILING_TELEGRAM',
+      'future:RECONCILING_TELEGRAM',
       'future:REMOVING_OLD_SCHEDULE',
       'future:SCHEDULING_AGAIN',
       'future:RESCHEDULED',
+      'overdue:RECONCILING_TELEGRAM',
       'overdue:RETURNING_TO_DRAFT',
       'overdue:DRAFTED',
     ]);
+    expect(result.alreadyPublishedCount).toBe(0);
+    expect(progressCounts).toContainEqual([0, 2]);
+    expect(progressCounts).toContainEqual([1, 2]);
+    expect(progressCounts).toContainEqual([2, 2]);
+  });
+
+  it('keeps an overdue post published when Telegram confirms its scheduled message ID', async () => {
+    const overdue = {
+      ...scheduledPost('overdue-published'),
+      scheduledAt: new Date(Date.now() - 60_000),
+      origin: 'MANUAL',
+    };
+    const { service, mtproto, publication, updateInputs } = harness({
+      posts: [overdue],
+    });
+    mtproto.getManagedPostMessages.mockResolvedValue({
+      published: [
+        { id: '101', date: new Date(Date.now() - 30_000).toISOString() },
+      ],
+      recentPublished: [],
+      scheduled: [],
+    });
+
+    const result = await service.rescheduleChannelScheduledPosts(
+      'user-1',
+      'channel-1',
+    );
+
+    expect(result).toMatchObject({
+      rescheduledCount: 0,
+      returnedToDraftCount: 0,
+      alreadyPublishedCount: 1,
+      failedCount: 0,
+    });
+    expect(publication.returnManagedPostToDraft).not.toHaveBeenCalled();
+    expect(updateInputs[0].data).toMatchObject({
+      status: TelegramManagedPostStatus.PUBLISHED,
+      telegramMessageIds: ['101'],
+      telegramScheduledMessageIds: [],
+    });
+  });
+
+  it('preserves future local-scheduler posts without sending them through Telegram native scheduling', async () => {
+    const local = {
+      ...scheduledPost('local-future'),
+      scheduleMode: 'LOCAL',
+      scheduledAt: new Date(Date.now() + 60_000),
+    };
+    const { service, publication, mtproto } = harness({ posts: [local] });
+    const progress: string[] = [];
+
+    const result = await service.rescheduleChannelScheduledPosts(
+      'user-1',
+      'channel-1',
+      (item) => progress.push(item.stage),
+    );
+
+    expect(mtproto.getScheduledHistory).not.toHaveBeenCalled();
+    expect(publication.publishManagedPost).not.toHaveBeenCalled();
+    expect(result.locallyScheduledCount).toBe(1);
+    expect(progress).toContain('LOCAL_SCHEDULE_PRESERVED');
+  });
+
+  it('does not create a duplicate when a future post has no stored Telegram schedule IDs', async () => {
+    const missingIds = {
+      ...scheduledPost('missing-ids'),
+      scheduledAt: new Date(Date.now() + 60_000),
+      telegramScheduledMessageIds: [],
+    };
+    const { service, publication } = harness({ posts: [missingIds] });
+
+    const result = await service.rescheduleChannelScheduledPosts(
+      'user-1',
+      'channel-1',
+    );
+
+    expect(publication.publishManagedPost).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      failedCount: 1,
+      failedPostIds: ['missing-ids'],
+    });
   });
 
   it('reports failed posts and continues processing the rest', async () => {
@@ -223,6 +342,49 @@ describe('TelegramManagedPostScheduledResetService', () => {
       rescheduledCount: 0,
       failedCount: 1,
       failedPostIds: ['future'],
+    });
+  });
+
+  it('continues with other senders when one Telegram scheduled queue is unavailable', async () => {
+    const unavailableSenderPost = {
+      ...scheduledPost('unavailable-sender'),
+      sourceId: 'account-a',
+      scheduledAt: new Date(Date.now() + 60_000),
+      telegramScheduledMessageIds: ['201'],
+    };
+    const availableSenderPost = {
+      ...scheduledPost('available-sender'),
+      sourceId: 'account-b',
+      scheduledAt: new Date(Date.now() + 120_000),
+      telegramScheduledMessageIds: ['101'],
+    };
+    const { service, mtproto, publication } = harness({
+      posts: [unavailableSenderPost, availableSenderPost],
+    });
+    mtproto.getScheduledHistory.mockRejectedValueOnce(
+      new Error('Sender session unavailable'),
+    );
+
+    const result = await service.rescheduleChannelScheduledPosts(
+      'user-1',
+      'channel-1',
+    );
+
+    expect(mtproto.getScheduledHistory).toHaveBeenCalledTimes(2);
+    expect(publication.publishManagedPost).toHaveBeenCalledWith(
+      'workspace-1',
+      'channel-1',
+      'available-sender',
+      availableSenderPost.scheduledAt,
+      'IMAGES_THEN_TEXT',
+      'user-1',
+      true,
+      expect.any(Function),
+    );
+    expect(result).toMatchObject({
+      rescheduledCount: 1,
+      failedCount: 1,
+      failedPostIds: ['unavailable-sender'],
     });
   });
 

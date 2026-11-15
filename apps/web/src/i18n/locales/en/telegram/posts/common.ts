@@ -204,14 +204,25 @@ const messages = {
   "telegram.posts.support.rescheduleConfirm":
     "Reconcile Telegram first, then reschedule future managed posts in {channel} for their existing times. Overdue unpublished posts will return to drafts. Posts already published will remain unchanged.",
   "telegram.posts.support.rescheduleResult":
-    "Rescheduled: {rescheduled}; returned to drafts: {drafts}; needs attention: {failed}.",
+    "Rescheduled: {rescheduled}; already published: {published}; local schedules preserved: {preserved}; returned to drafts: {drafts}; needs attention: {failed}.",
   "telegram.posts.support.rescheduleError":
     "Could not reschedule channel posts. No unconfirmed Telegram schedules were removed.",
-  "telegram.posts.support.rescheduleProgress": "Processed {completed} posts so far",
-  "telegram.posts.support.reconcilingTelegram": "Checking the channel against Telegram…",
-  "telegram.posts.support.removingOldSchedule": "Removing the previous Telegram schedule…",
+  "telegram.posts.support.rescheduleProgress":
+    "Checked posts: {completed} of {total}",
+  "telegram.posts.support.loadingLocalSchedule":
+    "Counting scheduled posts for this channel…",
+  "telegram.posts.support.loadingTelegramSchedule":
+    "Loading Telegram's scheduled queue…",
+  "telegram.posts.support.alreadyPublished": "Already published in Telegram",
+  "telegram.posts.support.localSchedulePreserved":
+    "Local schedule preserved without changes",
+  "telegram.posts.support.reconcilingTelegram":
+    "Checking the channel against Telegram…",
+  "telegram.posts.support.removingOldSchedule":
+    "Removing the previous Telegram schedule…",
   "telegram.posts.support.schedulingAgain": "Scheduling this post again…",
-  "telegram.posts.support.returningToDraft": "Returning overdue post to drafts…",
+  "telegram.posts.support.returningToDraft":
+    "Returning overdue post to drafts…",
   "telegram.posts.support.rescheduled": "Scheduled again",
   "telegram.posts.support.returnedToDraft": "Returned to drafts",
   "telegram.posts.support.reschedulePostFailed": "Could not process this post",

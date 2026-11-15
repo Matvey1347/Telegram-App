@@ -18,7 +18,7 @@ import { TelegramManagedPostRevisionStore } from './telegram-managed-post-revisi
 import { TelegramManagedPostRemoteSyncService } from './telegram-managed-post-remote-sync.service';
 import { TelegramPostGroupsService } from './telegram-post-groups.service';
 import { telegramChannelNotFound } from './telegram-posts.errors';
-import { TelegramManagedPostPublicationService } from './telegram-managed-post-publication.service';
+import { TelegramManagedPostReschedulerService } from './telegram-managed-post-rescheduler.service';
 
 @Injectable()
 export class TelegramManagedPostScheduledResetService {
@@ -30,10 +30,10 @@ export class TelegramManagedPostScheduledResetService {
     private readonly revisions: TelegramManagedPostRevisionStore,
     private readonly groups: TelegramPostGroupsService,
     private readonly remoteSync: TelegramManagedPostRemoteSyncService,
-    private readonly publication: TelegramManagedPostPublicationService,
+    private readonly rescheduler: TelegramManagedPostReschedulerService,
   ) {}
 
-  async rescheduleChannelScheduledPosts(
+  rescheduleChannelScheduledPosts(
     userId: string,
     channelId: string,
     onProgress?: (
@@ -42,115 +42,11 @@ export class TelegramManagedPostScheduledResetService {
       total: number,
     ) => void,
   ): Promise<RescheduleChannelScheduledPostsResult> {
-    onProgress?.({ stage: 'RECONCILING_TELEGRAM' }, 0, 0);
-    await this.remoteSync.syncManagedPosts(userId, channelId);
-    const workspaceId = await this.support.workspace(userId);
-    const channel = await this.prisma.telegramChannel.findFirst({
-      where: { id: channelId, workspaceId, isActive: true },
-      select: { id: true },
-    });
-    if (!channel) throw telegramChannelNotFound();
-    const posts = await this.prisma.telegramManagedPost.findMany({
-      where: {
-        workspaceId,
-        telegramChannelId: channelId,
-        status: TelegramManagedPostStatus.SCHEDULED,
-        postBatchDelivery: { is: null },
-      },
-      select: { id: true, title: true, scheduledAt: true, origin: true, telegramScheduledMessageIds: true },
-      orderBy: { scheduledAt: 'asc' },
-    });
-    const now = new Date();
-    let rescheduledCount = 0;
-    let returnedToDraftCount = 0;
-    const failedPostIds: string[] = [];
-    for (const [index, post] of posts.entries()) {
-      const baseProgress = {
-        postId: post.id,
-        title: post.title,
-        scheduledAt: post.scheduledAt?.toISOString() ?? null,
-      };
-      try {
-        if (post.scheduledAt && post.scheduledAt > now) {
-          if (!post.telegramScheduledMessageIds.length) {
-            onProgress?.(
-              { ...baseProgress, stage: 'SCHEDULING_AGAIN' },
-              index + 1,
-              posts.length,
-            );
-          }
-          await this.publication.publishManagedPost(
-            workspaceId,
-            channelId,
-            post.id,
-            post.scheduledAt,
-            'IMAGES_THEN_TEXT',
-            userId,
-            false,
-            (stage) =>
-              onProgress?.(
-                { ...baseProgress, stage },
-                index + 1,
-                posts.length,
-              ),
-          );
-          rescheduledCount += 1;
-          onProgress?.(
-            { ...baseProgress, stage: 'RESCHEDULED' },
-            index + 1,
-            posts.length,
-          );
-        } else if (post.origin !== 'TELEGRAM') {
-          onProgress?.(
-            { ...baseProgress, stage: 'RETURNING_TO_DRAFT' },
-            index + 1,
-            posts.length,
-          );
-          await this.publication.returnManagedPostToDraft(
-            userId,
-            channelId,
-            post.id,
-          );
-          returnedToDraftCount += 1;
-          onProgress?.(
-            { ...baseProgress, stage: 'DRAFTED' },
-            index + 1,
-            posts.length,
-          );
-        } else {
-          failedPostIds.push(post.id);
-          onProgress?.(
-            {
-              ...baseProgress,
-              stage: 'FAILED',
-              message: 'Telegram-origin post cannot be returned to draft.',
-            },
-            index + 1,
-            posts.length,
-          );
-        }
-      } catch (error) {
-        failedPostIds.push(post.id);
-        onProgress?.(
-          {
-            ...baseProgress,
-            stage: 'FAILED',
-            message:
-              error instanceof Error ? error.message : 'Unknown error',
-          },
-          index + 1,
-          posts.length,
-        );
-      }
-    }
-    return {
-      action: 'RESCHEDULE_CHANNEL_SCHEDULED_POSTS',
+    return this.rescheduler.rescheduleChannelScheduledPosts(
+      userId,
       channelId,
-      rescheduledCount,
-      returnedToDraftCount,
-      failedCount: failedPostIds.length,
-      failedPostIds,
-    };
+      onProgress,
+    );
   }
 
   async resetChannelScheduledPosts(

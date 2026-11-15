@@ -217,17 +217,29 @@ const messages = {
   "telegram.posts.support.rescheduleConfirm":
     "Сначала сверим состояние с Telegram, затем перепланируем будущие публикации канала «{channel}» на прежнее время. Просроченные и не опубликованные публикации вернём в черновики. Уже опубликованные сообщения не изменятся.",
   "telegram.posts.support.rescheduleResult":
-    "Перепланировано: {rescheduled}; возвращено в черновики: {drafts}; требуют внимания: {failed}.",
+    "Перепланировано: {rescheduled}; уже опубликовано: {published}; локальных расписаний сохранено: {preserved}; возвращено в черновики: {drafts}; требуют внимания: {failed}.",
   "telegram.posts.support.rescheduleError":
     "Не удалось перепланировать публикации. Неподтверждённые расписания Telegram не удалялись.",
-  "telegram.posts.support.rescheduleProgress": "Обработано публикаций: {completed}",
-  "telegram.posts.support.reconcilingTelegram": "Сверяем публикации с Telegram…",
-  "telegram.posts.support.removingOldSchedule": "Удаляем прежнее расписание из Telegram…",
+  "telegram.posts.support.rescheduleProgress":
+    "Проверено публикаций: {completed} из {total}",
+  "telegram.posts.support.loadingLocalSchedule":
+    "Считаем запланированные публикации канала…",
+  "telegram.posts.support.loadingTelegramSchedule":
+    "Загружаем очередь публикаций Telegram…",
+  "telegram.posts.support.alreadyPublished": "Уже опубликована в Telegram",
+  "telegram.posts.support.localSchedulePreserved":
+    "Локальное расписание сохранено без изменений",
+  "telegram.posts.support.reconcilingTelegram":
+    "Сверяем публикации с Telegram…",
+  "telegram.posts.support.removingOldSchedule":
+    "Удаляем прежнее расписание из Telegram…",
   "telegram.posts.support.schedulingAgain": "Планируем публикацию заново…",
-  "telegram.posts.support.returningToDraft": "Возвращаем просроченную публикацию в черновики…",
+  "telegram.posts.support.returningToDraft":
+    "Возвращаем просроченную публикацию в черновики…",
   "telegram.posts.support.rescheduled": "Запланирована заново",
   "telegram.posts.support.returnedToDraft": "Возвращена в черновики",
-  "telegram.posts.support.reschedulePostFailed": "Не удалось обработать публикацию",
+  "telegram.posts.support.reschedulePostFailed":
+    "Не удалось обработать публикацию",
   "telegram.posts.support.returnDraftsDescription":
     "Все сообщения, запланированные в этом Telegram-канале, будут удалены безвозвратно. Запланированные публикации в Telegram System станут чистыми черновиками и потеряют ID и ссылки сообщений Telegram. Опубликованные сообщения не изменятся.",
   "telegram.posts.support.noPostsAvailable":

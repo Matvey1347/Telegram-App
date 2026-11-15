@@ -24,17 +24,35 @@ export function RescheduleChannelPostsButton({
   const queryClient = useQueryClient();
   const { pushToast } = useAppToast();
   const [open, setOpen] = useState(false);
-  const [progress, setProgress] = useState<RescheduleChannelScheduledPostProgress[]>([]);
+  const [progress, setProgress] = useState<
+    RescheduleChannelScheduledPostProgress[]
+  >([]);
+  const [progressCurrent, setProgressCurrent] = useState(0);
+  const [progressTotal, setProgressTotal] = useState(0);
   const reschedule = useMutation({
-    mutationFn: () =>
-      telegramChannelsApi.rescheduleChannelScheduledPosts(channelId, (item) =>
-        setProgress((current) => {
-          if (!item.postId) return [...current.filter((entry) => entry.postId), item];
-          const existing = current.findIndex((entry) => entry.postId === item.postId);
-          if (existing < 0) return [...current, item];
-          return current.map((entry, index) => index === existing ? item : entry);
-        }),
-      ),
+    mutationFn: () => {
+      setProgress([]);
+      setProgressCurrent(0);
+      setProgressTotal(0);
+      return telegramChannelsApi.rescheduleChannelScheduledPosts(
+        channelId,
+        (item, currentCount, totalCount) => {
+          setProgressCurrent(currentCount);
+          setProgressTotal(totalCount);
+          setProgress((current) => {
+            if (!item.postId)
+              return [...current.filter((entry) => entry.postId), item];
+            const existing = current.findIndex(
+              (entry) => entry.postId === item.postId,
+            );
+            if (existing < 0) return [...current, item];
+            return current.map((entry, index) =>
+              index === existing ? item : entry,
+            );
+          });
+        },
+      );
+    },
     onSuccess: async (result) => {
       await Promise.all([
         queryClient.invalidateQueries({
@@ -56,6 +74,8 @@ export function RescheduleChannelPostsButton({
         t("telegram.posts.support.rescheduleResult", {
           rescheduled: result.rescheduledCount,
           drafts: result.returnedToDraftCount,
+          published: result.alreadyPublishedCount,
+          preserved: result.locallyScheduledCount,
           failed: result.failedCount,
         }),
         result.failedCount ? "error" : "success",
@@ -101,30 +121,75 @@ export function RescheduleChannelPostsButton({
             >
               <p className="text-sm font-medium text-neutral-200">
                 {t("telegram.posts.support.rescheduleProgress", {
-                  completed: progress.filter((item) =>
-                    ["RESCHEDULED", "DRAFTED", "FAILED"].includes(item.stage),
-                  ).length,
+                  completed: progressCurrent,
+                  total: progressTotal,
                 })}
               </p>
+              <div
+                className="h-1.5 overflow-hidden rounded-full bg-neutral-800"
+                role="progressbar"
+                aria-valuemin={0}
+                aria-valuemax={progressTotal}
+                aria-valuenow={progressCurrent}
+                aria-label={t("telegram.posts.support.rescheduleProgress", {
+                  completed: progressCurrent,
+                  total: progressTotal,
+                })}
+              >
+                <div
+                  className={`h-full rounded-full bg-blue-500 transition-[width] duration-300 ${progressTotal === 0 || progressCurrent === 0 ? "w-1/4 animate-pulse" : ""}`}
+                  style={
+                    progressTotal > 0 && progressCurrent > 0
+                      ? {
+                          width: `${Math.min(100, (progressCurrent / progressTotal) * 100)}%`,
+                        }
+                      : undefined
+                  }
+                />
+              </div>
               {progress.map((item, index) => (
                 <div
                   key={item.postId ?? `progress-${index}`}
                   className="flex items-start gap-2 border-t border-neutral-800 pt-2 text-sm"
                 >
                   {item.stage === "FAILED" ? (
-                    <CircleAlert size={16} className="mt-0.5 shrink-0 text-rose-300" />
-                  ) : item.stage === "RESCHEDULED" || item.stage === "DRAFTED" ? (
-                    <Check size={16} className="mt-0.5 shrink-0 text-emerald-300" />
+                    <CircleAlert
+                      size={16}
+                      className="mt-0.5 shrink-0 text-rose-300"
+                    />
+                  ) : [
+                      "RESCHEDULED",
+                      "DRAFTED",
+                      "ALREADY_PUBLISHED",
+                      "LOCAL_SCHEDULE_PRESERVED",
+                    ].includes(item.stage) ? (
+                    <Check
+                      size={16}
+                      className="mt-0.5 shrink-0 text-emerald-300"
+                    />
                   ) : (
-                    <RotateCw size={15} className="mt-0.5 shrink-0 animate-spin text-blue-300" />
+                    <RotateCw
+                      size={15}
+                      className="mt-0.5 shrink-0 animate-spin text-blue-300"
+                    />
                   )}
                   <div className="min-w-0">
                     <p className="truncate text-neutral-100">
-                      {item.title || item.postId || t("telegram.posts.support.reconcilingTelegram")}
+                      {item.title ||
+                        item.postId ||
+                        t("telegram.posts.support.reconcilingTelegram")}
                     </p>
-                    <p className={item.stage === "FAILED" ? "text-rose-300" : "text-neutral-400"}>
+                    <p
+                      className={
+                        item.stage === "FAILED"
+                          ? "text-rose-300"
+                          : "text-neutral-400"
+                      }
+                    >
                       {progressStageLabel(item.stage, t)}
-                      {item.scheduledAt ? ` · ${new Date(item.scheduledAt).toLocaleString()}` : ""}
+                      {item.scheduledAt
+                        ? ` · ${new Date(item.scheduledAt).toLocaleString()}`
+                        : ""}
                       {item.message ? ` · ${item.message}` : ""}
                     </p>
                   </div>
@@ -165,7 +230,14 @@ function progressStageLabel(
   stage: RescheduleChannelScheduledPostProgress["stage"],
   t: TranslationFunction,
 ) {
-  const keyByStage: Record<RescheduleChannelScheduledPostProgress["stage"], TranslationKey> = {
+  const keyByStage: Record<
+    RescheduleChannelScheduledPostProgress["stage"],
+    TranslationKey
+  > = {
+    ALREADY_PUBLISHED: "telegram.posts.support.alreadyPublished",
+    LOADING_LOCAL_SCHEDULE: "telegram.posts.support.loadingLocalSchedule",
+    LOADING_TELEGRAM_SCHEDULE: "telegram.posts.support.loadingTelegramSchedule",
+    LOCAL_SCHEDULE_PRESERVED: "telegram.posts.support.localSchedulePreserved",
     RECONCILING_TELEGRAM: "telegram.posts.support.reconcilingTelegram",
     REMOVING_OLD_SCHEDULE: "telegram.posts.support.removingOldSchedule",
     SCHEDULING_AGAIN: "telegram.posts.support.schedulingAgain",
