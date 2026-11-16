@@ -50,6 +50,9 @@ export class TelegramManagedPostRecoveryController {
   ) {
     return this.streams.stream(response, {
       eventPrefix: 'telegram_channel.managed_posts_reschedule_all',
+      // Telegram may take a while to accept a scheduled media post. Keep
+      // Railway's idle stream alive while the per-post operation is running.
+      heartbeatIntervalMs: 15_000,
       action: (onProgress) =>
         this.scheduledReset.rescheduleChannelScheduledPosts(
           user.sub,

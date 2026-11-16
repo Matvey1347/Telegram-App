@@ -222,6 +222,8 @@ const messages = {
     "Не удалось перепланировать публикации. Неподтверждённые расписания Telegram не удалялись.",
   "telegram.posts.support.rescheduleProgress":
     "Проверено публикаций: {completed} из {total}",
+  "telegram.posts.support.telegramConnectionActive":
+    "Связь с Telegram активна; ждём завершения текущей операции…",
   "telegram.posts.support.loadingLocalSchedule":
     "Считаем запланированные публикации канала…",
   "telegram.posts.support.loadingTelegramSchedule":

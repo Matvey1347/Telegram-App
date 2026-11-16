@@ -16,6 +16,7 @@ export class StreamResponseService {
     config: {
       eventPrefix: string;
       persistLifecycleLogs?: boolean;
+      heartbeatIntervalMs?: number;
       action: (
         onProgress: (item: TItem, current: number, total: number) => void,
         signal: AbortSignal,
@@ -32,6 +33,17 @@ export class StreamResponseService {
       res.setHeader('X-Correlation-Id', context.correlationId);
     }
     res.flushHeaders();
+    const heartbeatIntervalMs = config.heartbeatIntervalMs;
+    const heartbeat = heartbeatIntervalMs
+      ? setInterval(() => {
+          if (res.destroyed || res.writableEnded) return;
+          res.write(
+            `${JSON.stringify({ type: 'heartbeat', at: new Date().toISOString() })}\n`,
+          );
+          (res as Response & { flush?: () => void }).flush?.();
+        }, heartbeatIntervalMs)
+      : undefined;
+    heartbeat?.unref?.();
     const abortController = new AbortController();
     const abortOnClose = () => abortController.abort();
     res.once('close', abortOnClose);
@@ -104,6 +116,7 @@ export class StreamResponseService {
         });
       }
     } finally {
+      if (heartbeat) clearInterval(heartbeat);
       res.off('close', abortOnClose);
       if (!res.destroyed && !res.writableEnded) res.end();
     }

@@ -681,7 +681,7 @@ export function createTelegramChannelsApi({
       channelId: string,
       postIds: string[],
       onProgress: StreamProgressHandler<RescheduleChannelScheduledPostProgress>,
-      options?: { signal?: AbortSignal },
+      options?: { signal?: AbortSignal; onHeartbeat?: () => void },
     ) =>
       streamProgressAction<
         RescheduleChannelScheduledPostsResult,

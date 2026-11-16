@@ -33,6 +33,7 @@ export function RescheduleChannelPostsButton({
   >([]);
   const [progressCurrent, setProgressCurrent] = useState(0);
   const [progressTotal, setProgressTotal] = useState(0);
+  const [lastHeartbeatAt, setLastHeartbeatAt] = useState<number | null>(null);
   const pendingPostIds = useRef<string[] | null>(null);
   const nextPostIndex = useRef(0);
   const reschedule = useMutation({
@@ -40,6 +41,7 @@ export function RescheduleChannelPostsButton({
       if (!pendingPostIds.current) {
         setProgress([]);
         setProgressCurrent(0);
+        setLastHeartbeatAt(null);
         const plan =
           await telegramChannelsApi.listChannelRescheduleCandidates(channelId);
         pendingPostIds.current = plan.postIds;
@@ -85,6 +87,7 @@ export function RescheduleChannelPostsButton({
                 );
               });
             },
+            { onHeartbeat: () => setLastHeartbeatAt(Date.now()) },
           );
         aggregate.rescheduledCount += result.rescheduledCount;
         aggregate.returnedToDraftCount += result.returnedToDraftCount;
@@ -172,6 +175,11 @@ export function RescheduleChannelPostsButton({
                   total: progressTotal,
                 })}
               </p>
+              {lastHeartbeatAt ? (
+                <p className="text-xs text-neutral-400" aria-live="polite">
+                  {t("telegram.posts.support.telegramConnectionActive")}
+                </p>
+              ) : null}
               <div
                 className="h-1.5 overflow-hidden rounded-full bg-neutral-800"
                 role="progressbar"

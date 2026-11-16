@@ -209,6 +209,8 @@ const messages = {
     "Could not reschedule channel posts. No unconfirmed Telegram schedules were removed.",
   "telegram.posts.support.rescheduleProgress":
     "Checked posts: {completed} of {total}",
+  "telegram.posts.support.telegramConnectionActive":
+    "Connected to Telegram; waiting for the current operation to finish…",
   "telegram.posts.support.loadingLocalSchedule":
     "Counting scheduled posts for this channel…",
   "telegram.posts.support.loadingTelegramSchedule":

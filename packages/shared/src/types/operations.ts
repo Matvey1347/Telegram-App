@@ -71,5 +71,6 @@ export type TelegramChannelSyncProgressItem = {
 
 export type StreamEvent<TResult, TItem = BulkActionResultItem> =
   | BulkProgressEvent<TItem>
+  | { type: "heartbeat"; at: string }
   | StreamCompleteEvent<TResult>
   | StreamErrorEvent;

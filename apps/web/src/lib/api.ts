@@ -209,6 +209,7 @@ export type StreamRequestOptions = {
   signal?: AbortSignal;
   headers?: Record<string, string>;
   method?: "POST" | "PATCH";
+  onHeartbeat?: () => void;
 };
 
 async function streamAction<TResult, TItem = BulkActionResultItem>(
@@ -263,6 +264,8 @@ async function streamAction<TResult, TItem = BulkActionResultItem>(
     const event = JSON.parse(line) as StreamEvent<TResult, TItem>;
     if (event.type === "progress") {
       onProgress(event.item, event.current, event.total);
+    } else if (event.type === "heartbeat") {
+      options?.onHeartbeat?.();
     } else if (event.type === "complete") {
       completed = event.result;
     } else {

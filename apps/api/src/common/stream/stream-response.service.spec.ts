@@ -45,6 +45,28 @@ describe('StreamResponseService', () => {
     expect(response.end).toHaveBeenCalledTimes(1);
   });
 
+  it('keeps a long-running stream alive with heartbeat events', async () => {
+    jest.useFakeTimers();
+    const { response, writes } = responseHarness();
+    let finish!: (value: { ok: true }) => void;
+    const stream = createService().stream(response, {
+      eventPrefix: 'test.long-stream',
+      heartbeatIntervalMs: 15,
+      action: () => new Promise((resolve) => (finish = resolve)),
+    });
+
+    await jest.advanceTimersByTimeAsync(30);
+    expect(
+      writes.filter((line) => line.includes('"type":"heartbeat"')),
+    ).toHaveLength(2);
+
+    finish({ ok: true });
+    await stream;
+    expect(writes.join('')).toContain('"type":"complete"');
+    expect(response.end).toHaveBeenCalledTimes(1);
+    jest.useRealTimers();
+  });
+
   it('aborts server work when the client closes the response', async () => {
     const { response, writes } = responseHarness();
     let receivedSignal: AbortSignal | undefined;
