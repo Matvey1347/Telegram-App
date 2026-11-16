@@ -1,5 +1,6 @@
 import {
   withTelegramPublicationDeadline,
+  withTelegramReadDeadline,
   waitTelegramOperationWithTimeout,
 } from './telegram-publication-deadline';
 import {
@@ -2838,9 +2839,17 @@ export class TelegramMtprotoClient {
           })
         : null;
 
-      const pendingWithinPeriod = params.joinedFrom && params.includePendingSince
-        ? await this.countInviteLinkJoinsInPeriod({ client, peer: resolved.peer, inviteLink: parsed.inviteLink, from: params.joinedFrom, until: params.joinedUntil ?? new Date(), requested: true })
-        : undefined;
+      const pendingWithinPeriod =
+        params.joinedFrom && params.includePendingSince
+          ? await this.countInviteLinkJoinsInPeriod({
+              client,
+              peer: resolved.peer,
+              inviteLink: parsed.inviteLink,
+              from: params.joinedFrom,
+              until: params.joinedUntil ?? new Date(),
+              requested: true,
+            })
+          : undefined;
 
       return {
         url: canonicalTelegramInviteLink(parsed.inviteHash),
@@ -2867,7 +2876,9 @@ export class TelegramMtprotoClient {
         permanent: Boolean(invite.permanent),
         revoked: Boolean(invite.revoked),
         joinedWithinPeriod,
-        ...(params.includePendingSince ? { pendingWithinPeriod: pendingWithinPeriod ?? null } : {}),
+        ...(params.includePendingSince
+          ? { pendingWithinPeriod: pendingWithinPeriod ?? null }
+          : {}),
       };
     } finally {
       await this.closeClient(client);
@@ -3425,33 +3436,69 @@ export class TelegramMtprotoClient {
     channelRef?: string;
     channel?: StoredTelegramChannelReference;
   }): Promise<TelegramScheduledMessage[]> {
-    const client = await this.createClient(params);
-    try {
-      const resolved = params.channel
-        ? await this.resolveStoredChannel(client, params.channel)
-        : null;
-      const peer =
-        resolved?.peer ||
-        (await client.getInputEntity(params.channelRef as string));
-      const result = await this.withTimeout(
-        client.invoke(
+    return withTelegramReadDeadline({
+      timeoutMs: this.telegramMetadataTimeoutMs,
+      label: 'Telegram scheduled-history lookup',
+      create: (signal) => this.createClient(params, signal),
+      close: (client) => this.closeClient(client),
+      run: async (client) => {
+        const resolved = params.channel
+          ? await this.resolveStoredChannel(client, params.channel)
+          : null;
+        const peer =
+          resolved?.peer ||
+          (await client.getInputEntity(params.channelRef as string));
+        const result = await client.invoke(
           new Api.messages.GetScheduledHistory({
             peer,
             hash: returnBigInt(0),
           }),
-        ),
-        this.telegramMetadataTimeoutMs,
-        'Telegram scheduled-history lookup',
-      );
-      const messages = Array.isArray((result as any)?.messages)
-        ? (result as any).messages
-        : [];
-      return messages
-        .filter((message) => message?.id && message?.date)
-        .map((message) => this.serializeManagedPostMessage(message, true));
-    } finally {
-      await this.closeClient(client);
-    }
+        );
+        const messages = Array.isArray((result as any)?.messages)
+          ? (result as any).messages
+          : [];
+        return messages
+          .filter((message) => message?.id && message?.date)
+          .map((message) => this.serializeManagedPostMessage(message, true));
+      },
+    });
+  }
+
+  async getScheduledMessagesByIds(params: {
+    apiId: string;
+    apiHash: string;
+    session: string;
+    channelRef?: string;
+    channel?: StoredTelegramChannelReference;
+    messageIds: string[];
+  }): Promise<TelegramScheduledMessage[]> {
+    const messageIds = [...new Set(params.messageIds)]
+      .map(Number)
+      .filter(Number.isSafeInteger);
+    if (!messageIds.length) return [];
+    return withTelegramReadDeadline({
+      timeoutMs: this.telegramMetadataTimeoutMs,
+      label: 'Telegram scheduled-message lookup',
+      create: (signal) => this.createClient(params, signal),
+      close: (client) => this.closeClient(client),
+      run: async (client) => {
+        const resolved = params.channel
+          ? await this.resolveStoredChannel(client, params.channel)
+          : null;
+        const peer =
+          resolved?.peer ||
+          (await client.getInputEntity(params.channelRef as string));
+        const result = await client.invoke(
+          new Api.messages.GetScheduledMessages({ peer, id: messageIds }),
+        );
+        const messages = Array.isArray((result as any)?.messages)
+          ? (result as any).messages
+          : [];
+        return messages
+          .filter((message) => message?.id && message?.date)
+          .map((message) => this.serializeManagedPostMessage(message, true));
+      },
+    });
   }
 
   private serializeManagedPostMessage(message: any, isScheduled: boolean) {

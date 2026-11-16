@@ -35,7 +35,18 @@ export async function createTelegramMtprotoSession(
   { apiId, apiHash, session }: TelegramMtprotoSessionCredentials,
   signal?: AbortSignal,
 ) {
+  if (signal?.aborted) {
+    const error = new Error('Telegram MTProto connection was cancelled');
+    error.name = 'AbortError';
+    throw error;
+  }
   const releaseLease = await acquireTelegramMtprotoSessionLease(session);
+  if (signal?.aborted) {
+    releaseLease();
+    const error = new Error('Telegram MTProto connection was cancelled');
+    error.name = 'AbortError';
+    throw error;
+  }
   let client: TelegramClient | undefined;
   let closePromise: Promise<void> | undefined;
   const closeOnce = () => {

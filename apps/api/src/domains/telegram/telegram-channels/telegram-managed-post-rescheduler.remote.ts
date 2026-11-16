@@ -47,6 +47,7 @@ export async function loadTelegramScheduledQueues(
   ];
   const accountContexts = new Map<string, ReschedulerAccountContext>();
   let remoteScheduledCount = 0;
+  let checkedPostCount = 0;
   input.onProgress?.(
     {
       stage: 'LOADING_TELEGRAM_SCHEDULE',
@@ -58,29 +59,75 @@ export async function loadTelegramScheduledQueues(
 
   for (const [accountIndex, accountId] of accountIds.entries()) {
     try {
+      const senderPosts = nativePosts.filter(
+        (post) => (post.sourceId ?? '') === accountId,
+      );
+      const scheduledMessageIds = [
+        ...new Set(
+          senderPosts.flatMap((post) => post.telegramScheduledMessageIds),
+        ),
+      ];
+      input.onProgress?.(
+        {
+          stage: 'LOADING_TELEGRAM_SCHEDULE',
+          message: `Checking ${scheduledMessageIds.length} stored Telegram schedule IDs for sender ${accountIndex + 1} of ${accountIds.length}.`,
+        },
+        checkedPostCount,
+        input.total,
+      );
       const account = await deps.access.connectedAccount(
         input.workspaceId,
         input.channelId,
         accountId || undefined,
       );
       const credentials = deps.access.accountCredentials(account);
-      const remoteScheduled = await deps.mtprotoClient.getScheduledHistory({
-        ...credentials,
-        channel: input.channelReference,
-      });
-      remoteScheduledCount += remoteScheduled.length;
+      const scheduledIds = new Set<string>();
+      const messageIdBatches = Array.from(
+        { length: Math.ceil(scheduledMessageIds.length / 100) },
+        (_, index) => scheduledMessageIds.slice(index * 100, index * 100 + 100),
+      );
+      const checkedMessageIds = new Set<string>();
+      for (const [batchIndex, messageIds] of messageIdBatches.entries()) {
+        const remoteScheduled =
+          await deps.mtprotoClient.getScheduledMessagesByIds({
+            ...credentials,
+            channel: input.channelReference,
+            messageIds,
+          });
+        remoteScheduledCount += remoteScheduled.length;
+        remoteScheduled.forEach((message) => scheduledIds.add(message.id));
+        messageIds.forEach((id) => checkedMessageIds.add(id));
+        const checkedPosts = senderPosts.filter(
+          (post) =>
+            post.telegramScheduledMessageIds.length > 0 &&
+            post.telegramScheduledMessageIds.every((id) =>
+              checkedMessageIds.has(id),
+            ),
+        ).length;
+        input.onProgress?.(
+          {
+            stage: 'LOADING_TELEGRAM_SCHEDULE',
+            message: `Checked Telegram schedule IDs for sender ${accountIndex + 1} of ${accountIds.length}, batch ${batchIndex + 1} of ${messageIdBatches.length} (${scheduledIds.size} still scheduled).`,
+          },
+          checkedPostCount + checkedPosts,
+          input.total,
+        );
+      }
+      checkedPostCount += senderPosts.length;
+      if (messageIdBatches.length === 0) {
+        input.onProgress?.(
+          {
+            stage: 'LOADING_TELEGRAM_SCHEDULE',
+            message: `Sender ${accountIndex + 1} of ${accountIds.length} has no stored Telegram schedule IDs to check.`,
+          },
+          checkedPostCount,
+          input.total,
+        );
+      }
       accountContexts.set(accountId, {
         credentials,
-        scheduledIds: new Set(remoteScheduled.map((message) => message.id)),
+        scheduledIds,
       });
-      input.onProgress?.(
-        {
-          stage: 'LOADING_TELEGRAM_SCHEDULE',
-          message: `Loaded Telegram's scheduled queue for sender ${accountIndex + 1} of ${accountIds.length} (${remoteScheduled.length} messages).`,
-        },
-        0,
-        input.total,
-      );
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       accountContexts.set(accountId, {
@@ -92,7 +139,7 @@ export async function loadTelegramScheduledQueues(
           stage: 'LOADING_TELEGRAM_SCHEDULE',
           message: `Could not read Telegram's scheduled queue for sender ${accountIndex + 1} of ${accountIds.length}: ${message}`,
         },
-        0,
+        checkedPostCount,
         input.total,
       );
     }

@@ -66,3 +66,48 @@ export async function waitTelegramOperationWithTimeout<T>(
     if (timer) clearTimeout(timer);
   }
 }
+
+/** Bounds read-only MTProto work, including session connection and entity resolution. */
+export async function withTelegramReadDeadline<TClient, TResult>(input: {
+  timeoutMs: number;
+  label: string;
+  create(signal: AbortSignal): Promise<TClient>;
+  close(client: TClient): Promise<void>;
+  run(client: TClient): Promise<TResult>;
+}) {
+  const controller = new AbortController();
+  let client: TClient | undefined;
+  let closePromise: Promise<void> | undefined;
+  const closeOnce = () =>
+    client === undefined
+      ? Promise.resolve()
+      : (closePromise ??= input.close(client));
+  const timeoutError = () =>
+    new Error(`${input.label} timed out after ${input.timeoutMs}ms`);
+  let rejectTimeout!: (error: Error) => void;
+  const aborted = new Promise<never>((_, reject) => {
+    rejectTimeout = reject;
+  });
+  const onAbort = () => {
+    rejectTimeout(timeoutError());
+    void closeOnce().catch(() => undefined);
+  };
+  controller.signal.addEventListener('abort', onAbort, { once: true });
+  const timer = setTimeout(() => controller.abort(), input.timeoutMs);
+  timer.unref?.();
+  const operation = (async () => {
+    client = await input.create(controller.signal);
+    if (controller.signal.aborted) {
+      await closeOnce();
+      throw timeoutError();
+    }
+    return input.run(client);
+  })();
+  try {
+    return await Promise.race([operation, aborted]);
+  } finally {
+    clearTimeout(timer);
+    controller.signal.removeEventListener('abort', onAbort);
+    if (!controller.signal.aborted) await closeOnce();
+  }
+}

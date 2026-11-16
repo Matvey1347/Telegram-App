@@ -61,6 +61,7 @@ function harness(options?: {
 }) {
   const posts = options?.posts ?? [scheduledPost()];
   const postsAfterSync = options?.postsAfterSync ?? posts;
+  const findManyInputs: unknown[] = [];
   const updateInputs: Array<{
     where: Record<string, unknown>;
     data: Record<string, unknown>;
@@ -86,7 +87,10 @@ function harness(options?: {
       }),
     },
     telegramManagedPost: {
-      findMany: jest.fn().mockResolvedValue(postsAfterSync),
+      findMany: jest.fn().mockImplementation((input: unknown) => {
+        findManyInputs.push(input);
+        return Promise.resolve(postsAfterSync);
+      }),
     },
     $transaction: jest
       .fn()
@@ -98,6 +102,11 @@ function harness(options?: {
     getScheduledHistory: jest
       .fn()
       .mockResolvedValue([{ id: '101' }, { id: '102' }]),
+    getScheduledMessagesByIds: jest
+      .fn()
+      .mockImplementation(({ messageIds }: { messageIds: string[] }) =>
+        Promise.resolve(messageIds.map((id) => ({ id }))),
+      ),
     getManagedPostMessages: jest.fn().mockResolvedValue({
       published: [],
       recentPublished: [],
@@ -172,6 +181,7 @@ function harness(options?: {
     publication,
     identity,
     updateInputs,
+    findManyInputs,
   };
 }
 
@@ -187,7 +197,9 @@ describe('TelegramManagedPostScheduledResetService', () => {
       scheduledAt: new Date(Date.now() - 60_000),
       origin: 'MANUAL',
     };
-    const { service, publication } = harness({ posts: [future, overdue] });
+    const { service, publication, findManyInputs } = harness({
+      posts: [future, overdue],
+    });
     const progress: string[] = [];
     const progressCounts: Array<[number, number]> = [];
     publication.publishManagedPost.mockImplementationOnce(
@@ -216,6 +228,14 @@ describe('TelegramManagedPostScheduledResetService', () => {
       true,
       expect.any(Function),
     );
+    const rescheduleQuery = findManyInputs[0] as {
+      where: Record<string, unknown>;
+    };
+    expect(rescheduleQuery.where).toMatchObject({
+      postBatchDelivery: { is: null },
+      adSalePlacements: { none: {} },
+      mutualPromotionDelivery: { is: null },
+    });
     expect(publication.returnManagedPostToDraft).toHaveBeenCalledWith(
       'user-1',
       'channel-1',
@@ -228,6 +248,7 @@ describe('TelegramManagedPostScheduledResetService', () => {
     });
     expect(progress).toEqual([
       'sync:LOADING_LOCAL_SCHEDULE',
+      'sync:LOADING_TELEGRAM_SCHEDULE',
       'sync:LOADING_TELEGRAM_SCHEDULE',
       'sync:LOADING_TELEGRAM_SCHEDULE',
       'sync:RECONCILING_TELEGRAM',
@@ -298,7 +319,7 @@ describe('TelegramManagedPostScheduledResetService', () => {
       (item) => progress.push(item.stage),
     );
 
-    expect(mtproto.getScheduledHistory).not.toHaveBeenCalled();
+    expect(mtproto.getScheduledMessagesByIds).not.toHaveBeenCalled();
     expect(publication.publishManagedPost).not.toHaveBeenCalled();
     expect(result.locallyScheduledCount).toBe(1);
     expect(progress).toContain('LOCAL_SCHEDULE_PRESERVED');
@@ -361,7 +382,7 @@ describe('TelegramManagedPostScheduledResetService', () => {
     const { service, mtproto, publication } = harness({
       posts: [unavailableSenderPost, availableSenderPost],
     });
-    mtproto.getScheduledHistory.mockRejectedValueOnce(
+    mtproto.getScheduledMessagesByIds.mockRejectedValueOnce(
       new Error('Sender session unavailable'),
     );
 
@@ -370,7 +391,7 @@ describe('TelegramManagedPostScheduledResetService', () => {
       'channel-1',
     );
 
-    expect(mtproto.getScheduledHistory).toHaveBeenCalledTimes(2);
+    expect(mtproto.getScheduledMessagesByIds).toHaveBeenCalledTimes(2);
     expect(publication.publishManagedPost).toHaveBeenCalledWith(
       'workspace-1',
       'channel-1',

@@ -72,6 +72,8 @@ export class TelegramManagedPostReschedulerService {
         telegramChannelId: channelId,
         status: TelegramManagedPostStatus.SCHEDULED,
         postBatchDelivery: { is: null },
+        adSalePlacements: { none: {} },
+        mutualPromotionDelivery: { is: null },
       },
       orderBy: { scheduledAt: 'asc' },
     });
