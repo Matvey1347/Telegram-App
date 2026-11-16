@@ -143,7 +143,7 @@ describe("telegramChannelsApi.rescheduleChannelScheduledPosts", () => {
     );
 
     expect(get).toHaveBeenCalledWith(
-      "/telegram-channels/channel-1/managed-posts/reschedule-all-candidates",
+      "/telegram-channels/channel-1/reschedule-managed-posts-plan",
     );
     expect(streamProgressAction).toHaveBeenCalledWith(
       "/telegram-channels/channel-1/managed-posts/reschedule-all-stream",

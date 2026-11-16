@@ -60,7 +60,7 @@ export class TelegramManagedPostRecoveryController {
     });
   }
 
-  @Get(':id/managed-posts/reschedule-all-candidates')
+  @Get(':id/reschedule-managed-posts-plan')
   rescheduleAllCandidates(
     @CurrentUser() user: JwtUser,
     @Param('id') channelId: string,

@@ -695,7 +695,7 @@ export function createTelegramChannelsApi({
     listChannelRescheduleCandidates: async (channelId: string) =>
       (
         await api.get<RescheduleChannelScheduledPostsPlan>(
-          `/telegram-channels/${channelId}/managed-posts/reschedule-all-candidates`,
+          `/telegram-channels/${channelId}/reschedule-managed-posts-plan`,
         )
       ).data,
     scheduleManagedPostsBatch: async (
