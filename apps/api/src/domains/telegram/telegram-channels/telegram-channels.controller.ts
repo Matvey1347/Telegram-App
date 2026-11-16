@@ -435,6 +435,21 @@ export class TelegramChannelsController {
   ) {
     return this.service.scheduleManagedPost(user.sub, id, postId, dto);
   }
+  @Post(':id/managed-posts/:postId/schedule-stream')
+  scheduleManagedPostStream(
+    @CurrentUser() user: JwtUser,
+    @Param('id') id: string,
+    @Param('postId') postId: string,
+    @Body() dto: ScheduleTelegramManagedPostDto,
+    @Res() res: Response,
+  ) {
+    return this.streamResponse.stream(res, {
+      eventPrefix: 'telegram_channel.managed_post_schedule_stream',
+      heartbeatIntervalMs: 10_000,
+      action: (onProgress) =>
+        this.service.scheduleManagedPost(user.sub, id, postId, dto, onProgress),
+    });
+  }
   @Post(':id/managed-posts/:postId/return-to-draft')
   returnManagedPostToDraft(
     @CurrentUser() user: JwtUser,

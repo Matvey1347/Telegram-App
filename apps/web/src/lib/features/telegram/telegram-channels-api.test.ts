@@ -95,6 +95,47 @@ describe("telegramChannelsApi.syncWorkspaceChannels", () => {
   });
 });
 
+describe("telegramChannelsApi.scheduleManagedPost", () => {
+  it("keeps Telegram media scheduling alive through the streamed response", async () => {
+    const streamProgressAction = vi.fn().mockResolvedValue({ id: "post-1" });
+    const client = createTelegramChannelsApi({
+      api: {} as AxiosInstance,
+      crud: vi.fn(() => ({
+        list: vi.fn(),
+        get: vi.fn(),
+        create: vi.fn(),
+        update: vi.fn(),
+        remove: vi.fn(),
+      })),
+      getPaginated: vi.fn(),
+      getAllPaginatedItems: vi.fn(),
+      streamBulkAction: vi.fn(),
+      streamProgressAction,
+      silentFeedbackConfig: {},
+      quietMutationConfig: {},
+    });
+
+    await client.scheduleManagedPost(
+      "channel-1",
+      "post-1",
+      "2026-11-17T07:10:00.000Z",
+      "IMAGES_THEN_TEXT",
+      true,
+      "slot-1",
+    );
+
+    expect(streamProgressAction).toHaveBeenCalledWith(
+      "/telegram-channels/channel-1/managed-posts/post-1/schedule-stream",
+      {
+        scheduledAt: "2026-11-17T07:10:00.000Z",
+        longTextMode: "IMAGES_THEN_TEXT",
+        publicationSlotId: "slot-1",
+      },
+      expect.any(Function),
+    );
+  });
+});
+
 describe("telegramChannelsApi.rescheduleChannelScheduledPosts", () => {
   it("loads the stable ordinary-post plan and streams only the requested batch", async () => {
     const get = vi

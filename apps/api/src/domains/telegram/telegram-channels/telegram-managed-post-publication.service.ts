@@ -235,6 +235,11 @@ export class TelegramManagedPostPublicationService {
     channelId: string,
     postId: string,
     dto: ScheduleTelegramManagedPostDto,
+    onProgress?: (
+      item: { stage: string; message?: string },
+      current: number,
+      total: number,
+    ) => void,
   ) {
     const scheduledAt = new Date(dto.scheduledAt);
     if (scheduledAt.getTime() <= Date.now())
@@ -327,6 +332,8 @@ export class TelegramManagedPostPublicationService {
       (dto.longTextMode as 'IMAGES_THEN_TEXT' | 'CAPTION_THEN_TEXT') ||
         'IMAGES_THEN_TEXT',
       userId,
+      false,
+      (stage, message) => onProgress?.({ stage, message }, 1, 1),
     );
     return result;
   }

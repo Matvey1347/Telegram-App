@@ -655,16 +655,21 @@ export function createTelegramChannelsApi({
       postId: string,
       scheduledAt: string,
       longTextMode?: "IMAGES_THEN_TEXT" | "CAPTION_THEN_TEXT",
-      background = false,
+      _background = false,
       publicationSlotId?: string,
+      onProgress?: StreamProgressHandler<{
+        stage: string;
+        message?: string;
+      }>,
     ) =>
-      (
-        await api.post<TelegramManagedPost>(
-          `/telegram-channels/${channelId}/managed-posts/${postId}/schedule`,
-          { scheduledAt, longTextMode, publicationSlotId },
-          background ? silentFeedbackConfig : undefined,
-        )
-      ).data,
+      streamProgressAction<
+        TelegramManagedPost,
+        { stage: string; message?: string }
+      >(
+        `/telegram-channels/${channelId}/managed-posts/${postId}/schedule-stream`,
+        { scheduledAt, longTextMode, publicationSlotId },
+        onProgress ?? (() => undefined),
+      ),
     returnManagedPostToDraft: async (channelId: string, postId: string) =>
       (
         await api.post<TelegramManagedPost>(

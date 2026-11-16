@@ -40,6 +40,7 @@ describe('TelegramManagedPostPublicationService failure persistence', () => {
       'IMAGES_THEN_TEXT',
       undefined,
       true,
+      undefined,
     );
   });
 
@@ -294,6 +295,7 @@ describe('TelegramManagedPostPublicationService failure persistence', () => {
         'IMAGES_THEN_TEXT',
         'user-1',
         false,
+        expect.any(Function),
       );
     } finally {
       jest.useRealTimers();
