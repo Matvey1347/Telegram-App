@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { CalendarClock, Check, CircleAlert, RotateCw } from "lucide-react";
 import type { RescheduleChannelScheduledPostProgress } from "@telegram-system/shared";
@@ -12,6 +12,8 @@ import type { TranslationFunction } from "@/providers/i18n-provider";
 import type { TranslationKey } from "@/i18n/catalog";
 import { useAppToast } from "@/providers/toast-provider";
 import { invalidateManagedPostScheduleReads } from "./managed-post-cache";
+
+const RESCHEDULE_BATCH_SIZE = 5;
 
 export function RescheduleChannelPostsButton({
   channelId,
@@ -29,29 +31,72 @@ export function RescheduleChannelPostsButton({
   >([]);
   const [progressCurrent, setProgressCurrent] = useState(0);
   const [progressTotal, setProgressTotal] = useState(0);
+  const pendingPostIds = useRef<string[] | null>(null);
+  const nextPostIndex = useRef(0);
   const reschedule = useMutation({
-    mutationFn: () => {
-      setProgress([]);
-      setProgressCurrent(0);
-      setProgressTotal(0);
-      return telegramChannelsApi.rescheduleChannelScheduledPosts(
+    mutationFn: async () => {
+      if (!pendingPostIds.current) {
+        setProgress([]);
+        setProgressCurrent(0);
+        const plan =
+          await telegramChannelsApi.listChannelRescheduleCandidates(channelId);
+        pendingPostIds.current = plan.postIds;
+        nextPostIndex.current = 0;
+        setProgressTotal(plan.postIds.length);
+      }
+      const postIds = pendingPostIds.current;
+      const aggregate = {
+        action: "RESCHEDULE_CHANNEL_SCHEDULED_POSTS" as const,
         channelId,
-        (item, currentCount, totalCount) => {
-          setProgressCurrent(currentCount);
-          setProgressTotal(totalCount);
-          setProgress((current) => {
-            if (!item.postId)
-              return [...current.filter((entry) => entry.postId), item];
-            const existing = current.findIndex(
-              (entry) => entry.postId === item.postId,
-            );
-            if (existing < 0) return [...current, item];
-            return current.map((entry, index) =>
-              index === existing ? item : entry,
-            );
-          });
-        },
-      );
+        rescheduledCount: 0,
+        returnedToDraftCount: 0,
+        alreadyPublishedCount: 0,
+        locallyScheduledCount: 0,
+        failedCount: 0,
+        failedPostIds: [] as string[],
+      };
+      if (!postIds.length) return aggregate;
+
+      for (
+        let start = nextPostIndex.current;
+        start < postIds.length;
+        start += RESCHEDULE_BATCH_SIZE
+      ) {
+        const batch = postIds.slice(start, start + RESCHEDULE_BATCH_SIZE);
+        const result =
+          await telegramChannelsApi.rescheduleChannelScheduledPosts(
+            channelId,
+            batch,
+            (item, currentCount) => {
+              setProgressCurrent((current) =>
+                Math.max(current, start + currentCount),
+              );
+              setProgress((current) => {
+                if (!item.postId)
+                  return [...current.filter((entry) => entry.postId), item];
+                const existing = current.findIndex(
+                  (entry) => entry.postId === item.postId,
+                );
+                if (existing < 0) return [...current, item];
+                return current.map((entry, index) =>
+                  index === existing ? item : entry,
+                );
+              });
+            },
+          );
+        aggregate.rescheduledCount += result.rescheduledCount;
+        aggregate.returnedToDraftCount += result.returnedToDraftCount;
+        aggregate.alreadyPublishedCount += result.alreadyPublishedCount;
+        aggregate.locallyScheduledCount += result.locallyScheduledCount;
+        aggregate.failedCount += result.failedCount;
+        aggregate.failedPostIds.push(...result.failedPostIds);
+        nextPostIndex.current = start + batch.length;
+      }
+      pendingPostIds.current = aggregate.failedPostIds.length
+        ? aggregate.failedPostIds
+        : null;
+      nextPostIndex.current = 0;
+      return aggregate;
     },
     onSuccess: async (result) => {
       await Promise.all([

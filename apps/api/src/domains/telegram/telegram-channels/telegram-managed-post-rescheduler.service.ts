@@ -44,6 +44,7 @@ export class TelegramManagedPostReschedulerService {
       current: number,
       total: number,
     ) => void,
+    postIds?: string[],
   ): Promise<RescheduleChannelScheduledPostsResult> {
     const workspaceId = await this.support.workspace(userId);
     const channel = await this.prisma.telegramChannel.findFirst({
@@ -74,6 +75,7 @@ export class TelegramManagedPostReschedulerService {
         postBatchDelivery: { is: null },
         adSalePlacements: { none: {} },
         mutualPromotionDelivery: { is: null },
+        ...(postIds ? { id: { in: postIds } } : {}),
       },
       orderBy: { scheduledAt: 'asc' },
     });
@@ -381,5 +383,27 @@ export class TelegramManagedPostReschedulerService {
       failedCount: failedPostIds.length,
       failedPostIds,
     };
+  }
+
+  async listChannelRescheduleCandidates(userId: string, channelId: string) {
+    const workspaceId = await this.support.workspace(userId);
+    const channel = await this.prisma.telegramChannel.findFirst({
+      where: { id: channelId, workspaceId, isActive: true },
+      select: { id: true },
+    });
+    if (!channel) throw telegramChannelNotFound();
+    const posts = await this.prisma.telegramManagedPost.findMany({
+      where: {
+        workspaceId,
+        telegramChannelId: channelId,
+        status: TelegramManagedPostStatus.SCHEDULED,
+        postBatchDelivery: { is: null },
+        adSalePlacements: { none: {} },
+        mutualPromotionDelivery: { is: null },
+      },
+      orderBy: [{ scheduledAt: 'asc' }, { id: 'asc' }],
+      select: { id: true },
+    });
+    return { channelId, postIds: posts.map(({ id }) => id) };
   }
 }

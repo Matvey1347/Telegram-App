@@ -1,4 +1,12 @@
-import { Controller, Param, Post, Res, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
 import type { Response } from 'express';
 import {
   CurrentUser,
@@ -7,6 +15,7 @@ import {
 import { JwtAuthGuard } from '../../../common/jwt-auth.guard';
 import { StreamResponseService } from '../../../common/stream/stream-response.service';
 import { TelegramManagedPostScheduledResetService } from './telegram-managed-post-scheduled-reset.service';
+import { TelegramManagedPostRescheduleBatchDto } from './telegram-managed-post-reschedule-batch.dto';
 
 @UseGuards(JwtAuthGuard)
 @Controller('telegram-channels')
@@ -36,6 +45,7 @@ export class TelegramManagedPostRecoveryController {
   rescheduleAllStream(
     @CurrentUser() user: JwtUser,
     @Param('id') channelId: string,
+    @Body() body: TelegramManagedPostRescheduleBatchDto,
     @Res() response: Response,
   ) {
     return this.streams.stream(response, {
@@ -45,7 +55,19 @@ export class TelegramManagedPostRecoveryController {
           user.sub,
           channelId,
           onProgress,
+          body.postIds,
         ),
     });
+  }
+
+  @Get(':id/managed-posts/reschedule-all-candidates')
+  rescheduleAllCandidates(
+    @CurrentUser() user: JwtUser,
+    @Param('id') channelId: string,
+  ) {
+    return this.scheduledReset.listChannelRescheduleCandidates(
+      user.sub,
+      channelId,
+    );
   }
 }

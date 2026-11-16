@@ -41,12 +41,18 @@ export class TelegramManagedPostScheduledResetService {
       current: number,
       total: number,
     ) => void,
+    postIds?: string[],
   ): Promise<RescheduleChannelScheduledPostsResult> {
     return this.rescheduler.rescheduleChannelScheduledPosts(
       userId,
       channelId,
       onProgress,
+      postIds,
     );
+  }
+
+  listChannelRescheduleCandidates(userId: string, channelId: string) {
+    return this.rescheduler.listChannelRescheduleCandidates(userId, channelId);
   }
 
   async resetChannelScheduledPosts(

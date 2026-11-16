@@ -137,6 +137,11 @@ export type RescheduleChannelScheduledPostsResult = {
   failedPostIds: string[];
 };
 
+export type RescheduleChannelScheduledPostsPlan = {
+  channelId: string;
+  postIds: string[];
+};
+
 export type RescheduleChannelScheduledPostProgress = {
   postId?: string;
   title?: string | null;

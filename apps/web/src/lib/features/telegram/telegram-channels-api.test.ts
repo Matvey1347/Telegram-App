@@ -95,6 +95,65 @@ describe("telegramChannelsApi.syncWorkspaceChannels", () => {
   });
 });
 
+describe("telegramChannelsApi.rescheduleChannelScheduledPosts", () => {
+  it("loads the stable ordinary-post plan and streams only the requested batch", async () => {
+    const get = vi
+      .fn()
+      .mockResolvedValue({
+        data: { channelId: "channel-1", postIds: ["post-1", "post-2"] },
+      });
+    const streamProgressAction = vi.fn().mockResolvedValue({
+      action: "RESCHEDULE_CHANNEL_SCHEDULED_POSTS",
+      channelId: "channel-1",
+      rescheduledCount: 2,
+      returnedToDraftCount: 0,
+      alreadyPublishedCount: 0,
+      locallyScheduledCount: 0,
+      failedCount: 0,
+      failedPostIds: [],
+    });
+    const client = createTelegramChannelsApi({
+      api: { get } as unknown as AxiosInstance,
+      crud: vi.fn(() => ({
+        list: vi.fn(),
+        get: vi.fn(),
+        create: vi.fn(),
+        update: vi.fn(),
+        remove: vi.fn(),
+      })),
+      getPaginated: vi.fn(),
+      getAllPaginatedItems: vi.fn(),
+      streamBulkAction: vi.fn(),
+      streamProgressAction,
+      silentFeedbackConfig: {},
+      quietMutationConfig: {},
+    });
+    const onProgress = vi.fn();
+
+    await expect(
+      client.listChannelRescheduleCandidates("channel-1"),
+    ).resolves.toEqual({
+      channelId: "channel-1",
+      postIds: ["post-1", "post-2"],
+    });
+    await client.rescheduleChannelScheduledPosts(
+      "channel-1",
+      ["post-1", "post-2"],
+      onProgress,
+    );
+
+    expect(get).toHaveBeenCalledWith(
+      "/telegram-channels/channel-1/managed-posts/reschedule-all-candidates",
+    );
+    expect(streamProgressAction).toHaveBeenCalledWith(
+      "/telegram-channels/channel-1/managed-posts/reschedule-all-stream",
+      { postIds: ["post-1", "post-2"] },
+      onProgress,
+      undefined,
+    );
+  });
+});
+
 describe("telegramChannelsApi.createInviteLink", () => {
   it("keeps the real Telegram creation request visible with loading feedback", async () => {
     const post = vi.fn().mockResolvedValue({
