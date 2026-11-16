@@ -3477,7 +3477,10 @@ export class TelegramMtprotoClient {
       .filter(Number.isSafeInteger);
     if (!messageIds.length) return [];
     return withTelegramReadDeadline({
-      timeoutMs: this.telegramMetadataTimeoutMs,
+      // This lookup opens an MTProto session and can be slower than other
+      // metadata reads on production accounts. Keep the deadline scoped to
+      // this operation; callers also limit each request to a small ID batch.
+      timeoutMs: Math.max(this.telegramMetadataTimeoutMs, 30_000),
       label: 'Telegram scheduled-message lookup',
       create: (signal) => this.createClient(params, signal),
       close: (client) => this.closeClient(client),

@@ -82,9 +82,22 @@ export async function loadTelegramScheduledQueues(
       );
       const credentials = deps.access.accountCredentials(account);
       const scheduledIds = new Set<string>();
+      // Keep each Telegram lookup small. A single large GetScheduledMessages
+      // request can exceed the MTProto read deadline on busy channels and
+      // would otherwise stall the whole reconciliation before any post is
+      // processed.
+      const telegramLookupBatchSize = 5;
       const messageIdBatches = Array.from(
-        { length: Math.ceil(scheduledMessageIds.length / 100) },
-        (_, index) => scheduledMessageIds.slice(index * 100, index * 100 + 100),
+        {
+          length: Math.ceil(
+            scheduledMessageIds.length / telegramLookupBatchSize,
+          ),
+        },
+        (_, index) =>
+          scheduledMessageIds.slice(
+            index * telegramLookupBatchSize,
+            index * telegramLookupBatchSize + telegramLookupBatchSize,
+          ),
       );
       const checkedMessageIds = new Set<string>();
       for (const [batchIndex, messageIds] of messageIdBatches.entries()) {

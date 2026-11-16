@@ -13,7 +13,9 @@ import type { TranslationKey } from "@/i18n/catalog";
 import { useAppToast } from "@/providers/toast-provider";
 import { invalidateManagedPostScheduleReads } from "./managed-post-cache";
 
-const RESCHEDULE_BATCH_SIZE = 5;
+// A single post per request makes failures/retries idempotent and keeps each
+// streamed operation short enough to report actionable progress to the UI.
+const RESCHEDULE_BATCH_SIZE = 1;
 
 export function RescheduleChannelPostsButton({
   channelId,
