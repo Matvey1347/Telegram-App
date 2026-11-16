@@ -3458,7 +3458,7 @@ export class TelegramMtprotoClient {
           ? (result as any).messages
           : [];
         return messages
-          .filter((message) => message?.id && message?.date)
+          .filter((message) => message?.id != null)
           .map((message) => this.serializeManagedPostMessage(message, true));
       },
     });
@@ -3494,9 +3494,13 @@ export class TelegramMtprotoClient {
         const messages = Array.isArray((result as any)?.messages)
           ? (result as any).messages
           : [];
-        return messages
-          .filter((message) => message?.id && message?.date)
-          .map((message) => this.serializeManagedPostMessage(message, true));
+        return (
+          messages
+            // Telegram omits `date` on scheduled messages.getScheduledMessages
+            // results in GramJS. Reconciliation relies on the stored message ID.
+            .filter((message) => message?.id != null)
+            .map((message) => this.serializeManagedPostMessage(message, true))
+        );
       },
     });
   }

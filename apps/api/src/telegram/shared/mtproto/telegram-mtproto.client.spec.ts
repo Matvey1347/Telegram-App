@@ -182,23 +182,36 @@ describe('TelegramMtprotoClient import resolution', () => {
       pendingWithinPeriod: 1,
     });
     expect(fakeClient.invoke).toHaveBeenCalledWith(
-      expect.objectContaining({ requested: true, link: 'https://t.me/+legacy' }),
+      expect.objectContaining({
+        requested: true,
+        link: 'https://t.me/+legacy',
+      }),
     );
     const previousInvoke = fakeClient.invoke.getMockImplementation()!;
     fakeClient.invoke.mockImplementation((request: unknown) => {
-      if (request instanceof Api.messages.GetChatInviteImporters && request.requested) {
+      if (
+        request instanceof Api.messages.GetChatInviteImporters &&
+        request.requested
+      ) {
         throw new Error('Temporary Telegram failure');
       }
       return previousInvoke(request);
     });
-    await expect(client.getChannelInviteLink({
-      apiId: '1', apiHash: 'hash', session: 'session',
-      channel: { telegramChatId: '123456', telegramAccessHash: '7' },
-      inviteLink: 'https://telegram.me/+legacy',
-      joinedFrom: new Date('2025-01-01T12:00:00.000Z'),
-      joinedUntil: new Date('2025-01-03T00:00:00.000Z'),
-      includePendingSince: true,
-    })).resolves.toMatchObject({ joinedWithinPeriod: 1, pendingWithinPeriod: null });
+    await expect(
+      client.getChannelInviteLink({
+        apiId: '1',
+        apiHash: 'hash',
+        session: 'session',
+        channel: { telegramChatId: '123456', telegramAccessHash: '7' },
+        inviteLink: 'https://telegram.me/+legacy',
+        joinedFrom: new Date('2025-01-01T12:00:00.000Z'),
+        joinedUntil: new Date('2025-01-03T00:00:00.000Z'),
+        includePendingSince: true,
+      }),
+    ).resolves.toMatchObject({
+      joinedWithinPeriod: 1,
+      pendingWithinPeriod: null,
+    });
     expect(fakeClient.invoke).toHaveBeenCalledWith(
       expect.objectContaining({ link: 'https://t.me/+legacy' }),
     );
@@ -1420,5 +1433,41 @@ describe('TelegramMtprotoClient media batches', () => {
         ),
       }),
     ).rejects.toThrow('Telegram media batch limit is 100 messages.');
+  });
+});
+
+describe('TelegramMtprotoClient scheduled-message lookup', () => {
+  it('keeps scheduled messages even when Telegram omits their date field', async () => {
+    const service = new TelegramMtprotoClient();
+    const telegram = {
+      invoke: jest.fn().mockResolvedValue({
+        messages: [{ id: 4557, message: 'scheduled post', date: undefined }],
+      }),
+      getInputEntity: jest
+        .fn()
+        .mockResolvedValue({ className: 'InputPeerChannel' }),
+    };
+    jest.spyOn(service as any, 'createClient').mockResolvedValue(telegram);
+    const close = jest
+      .spyOn(service as any, 'closeClient')
+      .mockResolvedValue(undefined);
+
+    const result = await service.getScheduledMessagesByIds({
+      apiId: '1',
+      apiHash: 'hash',
+      session: 'session',
+      channelRef: '@channel',
+      messageIds: ['4557'],
+    });
+
+    expect(result).toEqual([
+      expect.objectContaining({
+        id: '4557',
+        text: 'scheduled post',
+        date: null,
+        isScheduled: true,
+      }),
+    ]);
+    expect(close).toHaveBeenCalledTimes(1);
   });
 });
