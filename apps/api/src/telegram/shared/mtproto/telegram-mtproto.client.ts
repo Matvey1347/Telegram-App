@@ -3096,6 +3096,7 @@ export class TelegramMtprotoClient {
     followupHtmlParts?: string[];
     imageUrls: string[];
     mediaItems?: TelegramPostMediaItem[];
+    onUploadProgress?: (progressPercent: number) => void;
   }) {
     return withTelegramPublicationDeadline({
       timeoutMs: 60_000,
@@ -3145,6 +3146,8 @@ export class TelegramMtprotoClient {
                     : [''],
                   parseMode: 'html',
                   scheduleDate: schedule,
+                  progressCallback: (progress) =>
+                    params.onUploadProgress?.(Math.round(progress * 100)),
                 })
               : await client.sendFile(entity, {
                   file: files[0],
@@ -3152,6 +3155,8 @@ export class TelegramMtprotoClient {
                   formattingEntities: caption.entities,
                   parseMode: false,
                   scheduleDate: schedule,
+                  progressCallback: (progress) =>
+                    params.onUploadProgress?.(Math.round(progress * 100)),
                 });
           const messages = Array.isArray(result) ? result : [result];
           for (const message of messages) {
@@ -3307,23 +3312,26 @@ export class TelegramMtprotoClient {
     channel?: StoredTelegramChannelReference;
     messageIds: string[];
   }) {
-    const client = await this.createClient(params);
-    try {
-      const resolved = params.channel
-        ? await this.resolveStoredChannel(client, params.channel)
-        : null;
-      const peer =
-        resolved?.peer ||
-        (await client.getInputEntity(params.channelRef as string));
-      await client.invoke(
-        new Api.messages.DeleteScheduledMessages({
-          peer,
-          id: params.messageIds.map(Number).filter(Number.isFinite),
-        }),
-      );
-    } finally {
-      await this.closeClient(client);
-    }
+    return withTelegramPublicationDeadline({
+      timeoutMs: 60_000,
+      create: (signal) => this.createClient(params, signal),
+      close: (client) => this.closeClient(client),
+      run: async (client, checkpoint) => {
+        const resolved = params.channel
+          ? await this.resolveStoredChannel(client, params.channel)
+          : null;
+        const peer =
+          resolved?.peer ||
+          (await client.getInputEntity(params.channelRef as string));
+        checkpoint();
+        await client.invoke(
+          new Api.messages.DeleteScheduledMessages({
+            peer,
+            id: params.messageIds.map(Number).filter(Number.isFinite),
+          }),
+        );
+      },
+    });
   }
 
   async deletePublishedMessages(params: {

@@ -55,6 +55,7 @@ export class TelegramManagedPostPublicationService {
     requireTelegramNativeSchedule = false,
     onRescheduleProgress?: (
       stage: 'REMOVING_OLD_SCHEDULE' | 'SCHEDULING_AGAIN',
+      message?: string,
     ) => void,
   ) {
     await requireNonBatchManagedPosts(this.prisma, {
@@ -99,6 +100,7 @@ export class TelegramManagedPostPublicationService {
     requireTelegramNativeSchedule = false,
     onRescheduleProgress?: (
       stage: 'REMOVING_OLD_SCHEDULE' | 'SCHEDULING_AGAIN',
+      message?: string,
     ) => void,
   ) {
     try {

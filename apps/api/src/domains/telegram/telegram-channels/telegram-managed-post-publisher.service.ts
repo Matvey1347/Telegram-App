@@ -86,6 +86,7 @@ export class TelegramManagedPostPublisherService {
     requireTelegramNativeSchedule = false,
     onRescheduleProgress?: (
       stage: 'REMOVING_OLD_SCHEDULE' | 'SCHEDULING_AGAIN',
+      message?: string,
     ) => void,
   ) {
     const [foundPost, channel, initialSources] = await Promise.all([
@@ -461,8 +462,17 @@ export class TelegramManagedPostPublisherService {
             mediaItems,
             scheduleAt,
             signal: managedPostDeliveryContext.getStore()?.signal,
+            onUploadProgress: (progressPercent) =>
+              onRescheduleProgress?.(
+                'SCHEDULING_AGAIN',
+                `Uploading media to Telegram: ${progressPercent}%`,
+              ),
           });
-        if (scheduleAt) onRescheduleProgress?.('SCHEDULING_AGAIN');
+        if (scheduleAt)
+          onRescheduleProgress?.(
+            'SCHEDULING_AGAIN',
+            'Sending publication to Telegram.',
+          );
         ids = scheduleAt
           ? await publish()
           : await sendOperation(

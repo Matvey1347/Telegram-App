@@ -358,7 +358,7 @@ export class TelegramManagedPostReschedulerService {
           'IMAGES_THEN_TEXT',
           userId,
           true,
-          (stage) => progressFor(index, post, stage),
+          (stage, message) => progressFor(index, post, stage, message),
         );
         rescheduledCount += 1;
         progressFor(current, post, 'RESCHEDULED');

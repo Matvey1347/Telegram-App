@@ -92,4 +92,19 @@ describe('publication transport cancellation', () => {
     ).rejects.toThrow('requires reconciliation');
     expect(create).not.toHaveBeenCalled();
   });
+
+  it('rejects a hung publication at its deadline and closes the session', async () => {
+    const close = jest.fn().mockResolvedValue(undefined);
+    await expect(
+      withTelegramPublicationDeadline({
+        timeoutMs: 5,
+        create: () => Promise.resolve({}),
+        close,
+        run: () => new Promise(() => undefined),
+      }),
+    ).rejects.toThrow(
+      'deadline reached; remote outcome requires reconciliation',
+    );
+    expect(close).toHaveBeenCalledTimes(1);
+  });
 });
