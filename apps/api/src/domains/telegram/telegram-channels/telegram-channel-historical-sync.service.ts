@@ -93,16 +93,19 @@ export class TelegramChannelHistoricalSyncService {
       sourceId: account.id,
       sourceType: TelegramSourceType.MTPROTO,
       dataType: TelegramChannelDataType.CHANNEL_INFO,
-      status: TelegramDataSourceStatus.SUCCESS,
+      status: info.pendingJoinRequestsCount == null ? TelegramDataSourceStatus.PARTIAL : TelegramDataSourceStatus.SUCCESS,
       sourceDisplayName:
         this.telegramChannelAccessService.sourceDisplayName(account),
       metadata: {
         source: 'sync_public_channel_info',
         subscribersCount: updated.currentSubscribersCount,
+        pendingJoinRequestsVerified: info.pendingJoinRequestsCount != null,
       },
     });
     return {
       updated: true,
+      pendingJoinRequestsCount: info.pendingJoinRequestsCount ?? null,
+      pendingJoinRequestsVerified: info.pendingJoinRequestsCount != null,
       title: updated.title,
       subscribersCount: updated.currentSubscribersCount,
       username: updated.username,
