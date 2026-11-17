@@ -773,7 +773,11 @@ export class TelegramMtprotoClient {
     const initialDcId = statsDcId ?? null;
     try {
       return {
-        result: await client.invoke(requestFactory(), initialDcId ?? undefined),
+        result: await this.withTimeout(
+          client.invoke(requestFactory(), initialDcId ?? undefined),
+          this.telegramMetadataTimeoutMs,
+          'Telegram broadcast statistics request',
+        ),
         dcId: initialDcId,
         migrated: false,
       };
@@ -781,7 +785,11 @@ export class TelegramMtprotoClient {
       const migrationDc = this.getMigrationDc(error);
       if (migrationDc == null || migrationDc === initialDcId) throw error;
       return {
-        result: await client.invoke(requestFactory(), migrationDc),
+        result: await this.withTimeout(
+          client.invoke(requestFactory(), migrationDc),
+          this.telegramMetadataTimeoutMs,
+          'Telegram migrated broadcast statistics request',
+        ),
         dcId: migrationDc,
         migrated: true,
       };
@@ -793,8 +801,12 @@ export class TelegramMtprotoClient {
     entity: unknown,
   ): Promise<number | null> {
     try {
-      const full = await client.invoke(
-        new Api.channels.GetFullChannel({ channel: entity as any }),
+      const full = await this.withTimeout(
+        client.invoke(
+          new Api.channels.GetFullChannel({ channel: entity as any }),
+        ),
+        this.telegramMetadataTimeoutMs,
+        'Telegram broadcast statistics DC lookup',
       );
       return this.toFiniteNumber((full as any)?.fullChat?.statsDc);
     } catch {
@@ -1875,86 +1887,101 @@ export class TelegramMtprotoClient {
     onInviteLinksProgress?: InviteLinksProgressCallback;
     onInviteLinkLoaded?: InviteLinkLoadedCallback;
   }) {
-    const client = await this.createClient(params);
-    try {
-      const resolved = params.channel
-        ? await this.resolveStoredChannel(client, params.channel)
-        : null;
-      const entity = resolved
-        ? resolved.entity
-        : await client.getEntity(params.channelRef as string);
-      const posts = params.postsFrom
-        ? await this.getChannelMessagesFromCutoff(client, entity, {
-            postLimit: params.postLimit,
-            postsFrom: params.postsFrom,
-          })
-        : await client.getMessages(entity, {
-            limit: Math.max(
-              1,
-              Math.min(this.maxPostBackfillLimit, params.postLimit || 100),
-            ),
-          });
-      const dailyMap = new Map<
-        string,
-        {
-          date: string;
-          viewsCount: number;
-          reactionsCount: number;
-          forwardsCount: number;
+    return withTelegramReadDeadline({
+      timeoutMs: 60_000,
+      label: 'Telegram channel history sync',
+      create: (signal) => this.createClient(params, signal),
+      close: (client) => this.closeClient(client),
+      run: async (client) => {
+        const resolved = params.channel
+          ? await this.resolveStoredChannel(client, params.channel)
+          : null;
+        const entity = resolved
+          ? resolved.entity
+          : await this.withTimeout(
+              client.getEntity(params.channelRef as string),
+              this.telegramResolveTimeoutMs,
+              'Telegram history channel lookup',
+            );
+        const posts = params.postsFrom
+          ? await this.getChannelMessagesFromCutoff(client, entity, {
+              postLimit: params.postLimit,
+              postsFrom: params.postsFrom,
+            })
+          : await this.withTimeout(
+              client.getMessages(entity, {
+                limit: Math.max(
+                  1,
+                  Math.min(this.maxPostBackfillLimit, params.postLimit || 100),
+                ),
+              }),
+              this.telegramMetadataTimeoutMs,
+              'Telegram channel history lookup',
+            );
+        const dailyMap = new Map<
+          string,
+          {
+            date: string;
+            viewsCount: number;
+            reactionsCount: number;
+            forwardsCount: number;
+          }
+        >();
+        for (const post of posts) {
+          if (!post?.date) continue;
+          const day = new Date(post.date);
+          const date = new Date(
+            day.getFullYear(),
+            day.getMonth(),
+            day.getDate(),
+          )
+            .toISOString()
+            .slice(0, 10);
+          const existing = dailyMap.get(date) || {
+            date,
+            viewsCount: 0,
+            reactionsCount: 0,
+            forwardsCount: 0,
+          };
+          const reactionsCount = Array.isArray(post.reactions?.results)
+            ? post.reactions.results.reduce(
+                (sum: number, row: any) => sum + Number(row?.count || 0),
+                0,
+              )
+            : 0;
+          existing.viewsCount += Number(post.views || 0);
+          existing.forwardsCount += Number(post.forwards || 0);
+          existing.reactionsCount += reactionsCount;
+          dailyMap.set(date, existing);
         }
-      >();
-      for (const post of posts) {
-        if (!post?.date) continue;
-        const day = new Date(post.date);
-        const date = new Date(day.getFullYear(), day.getMonth(), day.getDate())
-          .toISOString()
-          .slice(0, 10);
-        const existing = dailyMap.get(date) || {
-          date,
-          viewsCount: 0,
-          reactionsCount: 0,
-          forwardsCount: 0,
+
+        const inviteLinksResult = await this.getAllChannelInviteLinksInternal(
+          client,
+          this.asImportableTelegramEntity(entity, 'channel'),
+          params.onInviteLinksProgress,
+          params.onInviteLinkLoaded,
+          params.inviteLinksCreatedFrom ?? null,
+        );
+        const inviteLinks = inviteLinksResult.links.map((inv) => ({
+          url: inv.url,
+          name: inv.title,
+          joinedCount: inv.usage,
+          isRevoked: inv.revoked,
+        }));
+
+        return {
+          channel: resolved?.channel,
+          inviteLinks,
+          inviteLinksDetailed: inviteLinksResult.links,
+          inviteLinkWarnings: inviteLinksResult.warnings,
+          inviteLinksScope: inviteLinksResult.scope,
+          inviteLinksExpectedTotal: inviteLinksResult.expectedTotalLinks,
+          dailyStats: Array.from(dailyMap.values()).sort((a, b) =>
+            a.date.localeCompare(b.date),
+          ),
         };
-        const reactionsCount = Array.isArray(post.reactions?.results)
-          ? post.reactions.results.reduce(
-              (sum: number, row: any) => sum + Number(row?.count || 0),
-              0,
-            )
-          : 0;
-        existing.viewsCount += Number(post.views || 0);
-        existing.forwardsCount += Number(post.forwards || 0);
-        existing.reactionsCount += reactionsCount;
-        dailyMap.set(date, existing);
-      }
-
-      const inviteLinksResult = await this.getAllChannelInviteLinksInternal(
-        client,
-        this.asImportableTelegramEntity(entity, 'channel'),
-        params.onInviteLinksProgress,
-        params.onInviteLinkLoaded,
-        params.inviteLinksCreatedFrom ?? null,
-      );
-      const inviteLinks = inviteLinksResult.links.map((inv) => ({
-        url: inv.url,
-        name: inv.title,
-        joinedCount: inv.usage,
-        isRevoked: inv.revoked,
-      }));
-
-      return {
-        channel: resolved?.channel,
-        inviteLinks,
-        inviteLinksDetailed: inviteLinksResult.links,
-        inviteLinkWarnings: inviteLinksResult.warnings,
-        inviteLinksScope: inviteLinksResult.scope,
-        inviteLinksExpectedTotal: inviteLinksResult.expectedTotalLinks,
-        dailyStats: Array.from(dailyMap.values()).sort((a, b) =>
-          a.date.localeCompare(b.date),
-        ),
-      };
-    } finally {
-      await this.closeClient(client);
-    }
+      },
+    });
   }
 
   async getBroadcastStats(params: {
@@ -1964,66 +1991,81 @@ export class TelegramMtprotoClient {
     channelRef?: string;
     channel?: StoredTelegramChannelReference;
   }) {
-    let client: TelegramClient | null = null;
     try {
-      client = await this.createClient(params);
-      const resolved = params.channel
-        ? await this.resolveStoredChannel(client, params.channel)
-        : null;
-      const entity = resolved
-        ? resolved.entity
-        : await client.getEntity(params.channelRef as string);
-      const warnings: string[] = [];
-      const preferredStatsDcId = await this.getBroadcastStatsDc(client, entity);
-      const statsResponse = await this.invokeWithStatsDcMigration(
-        client,
-        () => new Api.stats.GetBroadcastStats({ channel: entity as any }),
-        preferredStatsDcId,
-      );
-      const rawStats = statsResponse.result;
-      const statsDcId = statsResponse.dcId;
-      if (statsResponse.migrated) {
-        warnings.push(
-          `Broadcast stats request was retried on Telegram stats DC ${statsDcId}`,
-        );
-      }
-      const rawStatsRecord = rawStats as unknown as Record<string, unknown>;
-      const graphs: Partial<Record<BroadcastStatsGraphField, unknown>> = {};
-      const availableFields: string[] = [];
+      return await withTelegramReadDeadline({
+        timeoutMs: 60_000,
+        label: 'Telegram broadcast statistics',
+        create: (signal) => this.createClient(params, signal),
+        close: (client) => this.closeClient(client),
+        run: async (client) => {
+          const resolved = params.channel
+            ? await this.resolveStoredChannel(client, params.channel)
+            : null;
+          const entity = resolved
+            ? resolved.entity
+            : await this.withTimeout(
+                client.getEntity(params.channelRef as string),
+                this.telegramResolveTimeoutMs,
+                'Telegram broadcast channel lookup',
+              );
+          const warnings: string[] = [];
+          const preferredStatsDcId = await this.getBroadcastStatsDc(
+            client,
+            entity,
+          );
+          const statsResponse = await this.invokeWithStatsDcMigration(
+            client,
+            () => new Api.stats.GetBroadcastStats({ channel: entity as any }),
+            preferredStatsDcId,
+          );
+          const rawStats = statsResponse.result;
+          const statsDcId = statsResponse.dcId;
+          if (statsResponse.migrated) {
+            warnings.push(
+              `Broadcast stats request was retried on Telegram stats DC ${statsDcId}`,
+            );
+          }
+          const rawStatsRecord = rawStats as unknown as Record<string, unknown>;
+          const graphs: Partial<Record<BroadcastStatsGraphField, unknown>> = {};
+          const availableFields: string[] = [];
 
-      for (const field of this.broadcastStatsGraphFields) {
-        const normalizedGraph = await this.normalizeStatsGraph(
-          client,
-          field.normalized,
-          field.raw
-            .map((rawField) => rawStatsRecord[rawField])
-            .find((graph) => graph != null),
-          warnings,
-          statsDcId,
-        );
-        graphs[field.normalized] = normalizedGraph;
-        if (normalizedGraph.status === 'available') {
-          availableFields.push(field.normalized);
-        }
-      }
-      const graphPeriod = this.extractGraphStatsPeriod(graphs);
+          for (const field of this.broadcastStatsGraphFields) {
+            const normalizedGraph = await this.normalizeStatsGraph(
+              client,
+              field.normalized,
+              field.raw
+                .map((rawField) => rawStatsRecord[rawField])
+                .find((graph) => graph != null),
+              warnings,
+              statsDcId,
+            );
+            graphs[field.normalized] = normalizedGraph;
+            if (normalizedGraph.status === 'available') {
+              availableFields.push(field.normalized);
+            }
+          }
+          const graphPeriod = this.extractGraphStatsPeriod(graphs);
 
-      return {
-        raw: this.toJsonSafe(rawStats),
-        normalized: {
-          status: 'available',
-          period: graphPeriod || this.toJsonSafe(rawStats.period),
-          raw_period: this.toJsonSafe(rawStats.period),
-          followers: this.toJsonSafe(rawStats.followers),
-          views_per_post: this.toJsonSafe(rawStats.viewsPerPost),
-          shares_per_post: this.toJsonSafe(rawStats.sharesPerPost),
-          reactions_per_post: this.toJsonSafe(rawStats.reactionsPerPost),
-          enabled_notifications: this.toJsonSafe(rawStats.enabledNotifications),
-          graphs,
+          return {
+            raw: this.toJsonSafe(rawStats),
+            normalized: {
+              status: 'available',
+              period: graphPeriod || this.toJsonSafe(rawStats.period),
+              raw_period: this.toJsonSafe(rawStats.period),
+              followers: this.toJsonSafe(rawStats.followers),
+              views_per_post: this.toJsonSafe(rawStats.viewsPerPost),
+              shares_per_post: this.toJsonSafe(rawStats.sharesPerPost),
+              reactions_per_post: this.toJsonSafe(rawStats.reactionsPerPost),
+              enabled_notifications: this.toJsonSafe(
+                rawStats.enabledNotifications,
+              ),
+              graphs,
+            },
+            availableFields,
+            warnings,
+          };
         },
-        availableFields,
-        warnings,
-      };
+      });
     } catch (error) {
       const normalizedError = this.normalizeBroadcastStatsError(error);
       return {
@@ -2032,8 +2074,6 @@ export class TelegramMtprotoClient {
         availableFields: [],
         warnings: normalizedError.warnings,
       };
-    } finally {
-      if (client) await this.closeClient(client);
     }
   }
 
@@ -3372,69 +3412,83 @@ export class TelegramMtprotoClient {
     recentPublishedFrom?: Date;
     recentPublishedUntil?: Date;
   }) {
-    const client = await this.createClient(params);
-    try {
-      const resolved = params.channel
-        ? await this.resolveStoredChannel(client, params.channel)
-        : null;
-      const entity = resolved
-        ? resolved.entity
-        : await client.getEntity(params.channelRef as string);
-      const peer =
-        resolved?.peer ||
-        (await client.getInputEntity(params.channelRef as string));
-      const publishedIds = params.publishedMessageIds
-        .map(Number)
-        .filter(Number.isFinite);
-      const scheduledIds = params.scheduledMessageIds
-        .map(Number)
-        .filter(Number.isFinite);
-      const published = publishedIds.length
-        ? await this.withTimeout(
-            client.getMessages(entity, { ids: publishedIds }),
-            this.telegramMetadataTimeoutMs,
-            'Telegram managed-post identity lookup',
-          )
-        : [];
-      const recentPublished = params.recentPublishedFrom
-        ? await this.getChannelMessagesFromCutoff(client, entity, {
-            postLimit: 500,
-            postsFrom: params.recentPublishedFrom,
-            beforeDate: params.recentPublishedUntil,
-          })
-        : await this.withTimeout(
-            client.getMessages(entity, { limit: 200 }),
-            this.telegramMetadataTimeoutMs,
-            'Telegram recent-post identity lookup',
-          );
-      const scheduledResult = scheduledIds.length
-        ? await this.withTimeout(
-            client.invoke(
-              new Api.messages.GetScheduledMessages({ peer, id: scheduledIds }),
-            ),
-            this.telegramMetadataTimeoutMs,
-            'Telegram scheduled-message identity lookup',
-          )
-        : null;
-      const scheduled = Array.isArray((scheduledResult as any)?.messages)
-        ? (scheduledResult as any).messages
-        : [];
-      const serialize = (message: any, isScheduled: boolean) =>
-        this.serializeManagedPostMessage(message, isScheduled);
-      return {
-        published: (published as any[])
-          .filter((message) => message?.id && message?.date)
-          .map((message) => serialize(message, false)),
-        recentPublished: recentPublished
-          .filter((message) => message?.id && message?.date)
-          .map((message) => serialize(message, false)),
-        scheduled: (scheduled as any[])
-          .filter((message) => message?.id && message?.date)
-          .map((message) => serialize(message, true)),
-      };
-    } finally {
-      await this.closeClient(client);
-    }
+    return withTelegramReadDeadline({
+      timeoutMs: 60_000,
+      label: 'Telegram managed-post reconciliation read',
+      create: (signal) => this.createClient(params, signal),
+      close: (client) => this.closeClient(client),
+      run: async (client) => {
+        const resolved = params.channel
+          ? await this.resolveStoredChannel(client, params.channel)
+          : null;
+        const entity = resolved
+          ? resolved.entity
+          : await this.withTimeout(
+              client.getEntity(params.channelRef as string),
+              this.telegramResolveTimeoutMs,
+              'Telegram managed-post channel lookup',
+            );
+        const peer =
+          resolved?.peer ||
+          (await this.withTimeout(
+            client.getInputEntity(params.channelRef as string),
+            this.telegramResolveTimeoutMs,
+            'Telegram managed-post peer lookup',
+          ));
+        const publishedIds = params.publishedMessageIds
+          .map(Number)
+          .filter(Number.isFinite);
+        const scheduledIds = params.scheduledMessageIds
+          .map(Number)
+          .filter(Number.isFinite);
+        const published = publishedIds.length
+          ? await this.withTimeout(
+              client.getMessages(entity, { ids: publishedIds }),
+              this.telegramMetadataTimeoutMs,
+              'Telegram managed-post identity lookup',
+            )
+          : [];
+        const recentPublished = params.recentPublishedFrom
+          ? await this.getChannelMessagesFromCutoff(client, entity, {
+              postLimit: 500,
+              postsFrom: params.recentPublishedFrom,
+              beforeDate: params.recentPublishedUntil,
+            })
+          : await this.withTimeout(
+              client.getMessages(entity, { limit: 200 }),
+              this.telegramMetadataTimeoutMs,
+              'Telegram recent-post identity lookup',
+            );
+        const scheduledResult = scheduledIds.length
+          ? await this.withTimeout(
+              client.invoke(
+                new Api.messages.GetScheduledMessages({
+                  peer,
+                  id: scheduledIds,
+                }),
+              ),
+              this.telegramMetadataTimeoutMs,
+              'Telegram scheduled-message identity lookup',
+            )
+          : null;
+        const scheduled = Array.isArray((scheduledResult as any)?.messages)
+          ? (scheduledResult as any).messages
+          : [];
+        const serialize = (message: any, isScheduled: boolean) =>
+          this.serializeManagedPostMessage(message, isScheduled);
+        return {
+          published: (published as any[])
+            .filter((message) => message?.id && message?.date)
+            .map((message) => serialize(message, false)),
+          recentPublished: recentPublished
+            .filter((message) => message?.id && message?.date)
+            .map((message) => serialize(message, false)),
+          scheduled: (scheduled as any[])
+            .filter((message) => message?.id && message?.date)
+            .map((message) => serialize(message, true)),
+        };
+      },
+    });
   }
 
   async getScheduledHistory(params: {
@@ -3545,106 +3599,121 @@ export class TelegramMtprotoClient {
     beforeMessageId?: string | number | null;
     postsFrom?: Date | null;
   }) {
-    const client = await this.createClient(params);
-    try {
-      const resolved = params.channel
-        ? await this.resolveStoredChannel(client, params.channel)
-        : null;
-      const entity = resolved
-        ? resolved.entity
-        : await client.getEntity(params.channelRef as string);
-      const requestedMessageIds = [...new Set(params.messageIds ?? [])];
-      const normalizedMessageIds = requestedMessageIds
-        .map((messageId) => this.toFiniteNumber(messageId))
-        .filter(
-          (messageId): messageId is number =>
-            messageId != null &&
-            Number.isInteger(messageId) &&
-            messageId > 0 &&
-            messageId <= 2_147_483_647,
-        );
-      if (
-        requestedMessageIds.length > 0 &&
-        normalizedMessageIds.length !== requestedMessageIds.length
-      ) {
-        throw new BadRequestException('Invalid Telegram message ID');
-      }
-      const messages = normalizedMessageIds.length
-        ? await this.withTimeout(
-            client.getMessages(entity, { ids: normalizedMessageIds }),
-            this.telegramMetadataTimeoutMs,
-            'Telegram post lookup by message ID',
-          )
-        : params.postsFrom
-          ? await this.getChannelMessagesFromCutoff(client, entity, {
-              postLimit: params.postLimit,
-              beforeMessageId: params.beforeMessageId,
-              postsFrom: params.postsFrom,
-            })
-          : await client.getMessages(entity, {
-              limit: Math.max(
-                1,
-                Math.min(this.maxPostBackfillLimit, params.postLimit || 100),
-              ),
-              offsetId:
-                this.toFiniteNumber(params.beforeMessageId) != null
-                  ? Number(this.toFiniteNumber(params.beforeMessageId))
-                  : 0,
-            });
-
-      return messages
-        .filter((message) => message?.id && message?.date)
-        .map((message) => {
-          const postDate = this.toTelegramDate(message.date);
-          if (!postDate) return null;
-          const reactionRows = Array.isArray(message?.reactions?.results)
-            ? message.reactions.results
-            : [];
-          const reactions = reactionRows
-            .map((row: any) => {
-              const count = this.toFiniteNumber(row?.count) ?? 0;
-              const rawReaction = row?.reaction;
-              const reaction =
-                typeof rawReaction === 'string'
-                  ? rawReaction
-                  : rawReaction?.emoticon ||
-                    rawReaction?.emoticonId ||
-                    String(rawReaction || '');
-              return { reaction, count };
-            })
-            .filter(
-              (row: { reaction: string; count: number }) => !!row.reaction,
+    return withTelegramReadDeadline({
+      timeoutMs: 60_000,
+      label: 'Telegram post metrics read',
+      create: (signal) => this.createClient(params, signal),
+      close: (client) => this.closeClient(client),
+      run: async (client) => {
+        const resolved = params.channel
+          ? await this.resolveStoredChannel(client, params.channel)
+          : null;
+        const entity = resolved
+          ? resolved.entity
+          : await this.withTimeout(
+              client.getEntity(params.channelRef as string),
+              this.telegramResolveTimeoutMs,
+              'Telegram metrics channel lookup',
             );
-          const reactionsCount = reactions.reduce(
-            (sum: number, row: { reaction: string; count: number }) =>
-              sum + row.count,
-            0,
+        const requestedMessageIds = [...new Set(params.messageIds ?? [])];
+        const normalizedMessageIds = requestedMessageIds
+          .map((messageId) => this.toFiniteNumber(messageId))
+          .filter(
+            (messageId): messageId is number =>
+              messageId != null &&
+              Number.isInteger(messageId) &&
+              messageId > 0 &&
+              messageId <= 2_147_483_647,
           );
+        if (
+          requestedMessageIds.length > 0 &&
+          normalizedMessageIds.length !== requestedMessageIds.length
+        ) {
+          throw new BadRequestException('Invalid Telegram message ID');
+        }
+        const messages = normalizedMessageIds.length
+          ? await this.withTimeout(
+              client.getMessages(entity, { ids: normalizedMessageIds }),
+              this.telegramMetadataTimeoutMs,
+              'Telegram post lookup by message ID',
+            )
+          : params.postsFrom
+            ? await this.getChannelMessagesFromCutoff(client, entity, {
+                postLimit: params.postLimit,
+                beforeMessageId: params.beforeMessageId,
+                postsFrom: params.postsFrom,
+              })
+            : await this.withTimeout(
+                client.getMessages(entity, {
+                  limit: Math.max(
+                    1,
+                    Math.min(
+                      this.maxPostBackfillLimit,
+                      params.postLimit || 100,
+                    ),
+                  ),
+                  offsetId:
+                    this.toFiniteNumber(params.beforeMessageId) != null
+                      ? Number(this.toFiniteNumber(params.beforeMessageId))
+                      : 0,
+                }),
+                this.telegramMetadataTimeoutMs,
+                'Telegram post metrics history lookup',
+              );
 
-          return {
-            telegramMessageId: String(message.id),
-            postDate,
-            text: message.message || null,
-            formattedText: HTMLParser.unparse(
-              String(message.message || ''),
-              message.entities || [],
-            ),
-            hasMedia: Boolean(message.media),
-            mediaKind: message.media?.className
-              ? String(message.media.className)
-              : null,
-            viewsCount: this.toFiniteNumber(message.views),
-            forwardsCount: this.toFiniteNumber(message.forwards),
-            reactionsCount,
-            commentsCount: this.toFiniteNumber(message?.replies?.replies) ?? 0,
-            reactions,
-            rawMessage: message,
-          };
-        })
-        .filter((row): row is NonNullable<typeof row> => !!row);
-    } finally {
-      await this.closeClient(client);
-    }
+        return messages
+          .filter((message) => message?.id && message?.date)
+          .map((message) => {
+            const postDate = this.toTelegramDate(message.date);
+            if (!postDate) return null;
+            const reactionRows = Array.isArray(message?.reactions?.results)
+              ? message.reactions.results
+              : [];
+            const reactions = reactionRows
+              .map((row: any) => {
+                const count = this.toFiniteNumber(row?.count) ?? 0;
+                const rawReaction = row?.reaction;
+                const reaction =
+                  typeof rawReaction === 'string'
+                    ? rawReaction
+                    : rawReaction?.emoticon ||
+                      rawReaction?.emoticonId ||
+                      String(rawReaction || '');
+                return { reaction, count };
+              })
+              .filter(
+                (row: { reaction: string; count: number }) => !!row.reaction,
+              );
+            const reactionsCount = reactions.reduce(
+              (sum: number, row: { reaction: string; count: number }) =>
+                sum + row.count,
+              0,
+            );
+
+            return {
+              telegramMessageId: String(message.id),
+              postDate,
+              text: message.message || null,
+              formattedText: HTMLParser.unparse(
+                String(message.message || ''),
+                message.entities || [],
+              ),
+              hasMedia: Boolean(message.media),
+              mediaKind: message.media?.className
+                ? String(message.media.className)
+                : null,
+              viewsCount: this.toFiniteNumber(message.views),
+              forwardsCount: this.toFiniteNumber(message.forwards),
+              reactionsCount,
+              commentsCount:
+                this.toFiniteNumber(message?.replies?.replies) ?? 0,
+              reactions,
+              rawMessage: message,
+            };
+          })
+          .filter((row): row is NonNullable<typeof row> => !!row);
+      },
+    });
   }
 
   private async getChannelMessagesFromCutoff(

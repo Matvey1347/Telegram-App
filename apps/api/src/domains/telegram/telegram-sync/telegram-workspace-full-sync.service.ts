@@ -57,7 +57,19 @@ export class TelegramWorkspaceFullSyncService {
           ...(input.actor.type === 'MANUAL'
             ? { adminLinks: { some: {} } }
             : {}),
-          ...(input.actor.type !== 'MANUAL' ? { autoSyncEnabled: true } : {}),
+          ...(input.actor.type !== 'MANUAL'
+            ? {
+                autoSyncEnabled: true,
+                adminLinks: {
+                  some: {
+                    telegramUserAccountIntegration: {
+                      isActive: true,
+                      status: 'connected',
+                    },
+                  },
+                },
+              }
+            : {}),
         },
         orderBy: { title: 'asc' },
         select: {
@@ -71,6 +83,17 @@ export class TelegramWorkspaceFullSyncService {
           syncIncludeChannelStats: true,
           syncIncludeManagedPosts: true,
           syncIncludeAudienceSnapshot: true,
+          adminLinks: {
+            where: {
+              telegramUserAccountIntegration: {
+                isActive: true,
+                status: 'connected',
+              },
+            },
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+            select: { telegramUserAccountIntegrationId: true },
+          },
         },
       }),
       this.actorUserId(input.workspaceId, input.actor),
@@ -137,9 +160,21 @@ export class TelegramWorkspaceFullSyncService {
         message: 'Starting channel synchronization…',
       });
       try {
+        const scheduledAccount =
+          input.actor.type === 'SCHEDULED_TASK'
+            ? channel.adminLinks[0]?.telegramUserAccountIntegrationId
+            : undefined;
         const payload = input.selection
-          ? { ...input.selection, saveSelection: false }
-          : undefined;
+          ? {
+              ...input.selection,
+              ...(scheduledAccount
+                ? { telegramUserAccountId: scheduledAccount }
+                : {}),
+              saveSelection: false,
+            }
+          : scheduledAccount
+            ? { telegramUserAccountId: scheduledAccount, saveSelection: false }
+            : undefined;
         const channelProgress = input.onProgress
           ? (
               item: BulkActionResultItem | TelegramChannelSyncProgressItem,

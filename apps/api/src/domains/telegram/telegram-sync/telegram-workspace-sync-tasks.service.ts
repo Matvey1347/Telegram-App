@@ -32,7 +32,11 @@ export class TelegramWorkspaceSyncTasksService {
           await this.telegramPostMetricsService.syncPostsMetricsForWorkspace(
             workspaceId,
             channel.id,
-            { postLimit: 100 },
+            {
+              postLimit: 100,
+              telegramUserAccountId:
+                channel.adminLinks[0]?.telegramUserAccountIntegrationId,
+            },
           );
         synced += 1;
         postsFetched += result.syncedPosts;
@@ -62,10 +66,7 @@ export class TelegramWorkspaceSyncTasksService {
     let failed = 0;
     for (const channel of channels) {
       try {
-        const link = await this.prisma.telegramChannelAdminLink.findFirst({
-          where: { workspaceId, telegramChannelId: channel.id },
-          orderBy: { createdAt: 'asc' },
-        });
+        const link = channel.adminLinks[0];
         if (!link) continue;
         await this.telegramBroadcastStatsService.syncBroadcastStatsForWorkspace(
           workspaceId,
@@ -91,11 +92,33 @@ export class TelegramWorkspaceSyncTasksService {
 
   private async postMetricsChannelSelection(workspaceId: string) {
     const rows = await this.prisma.telegramChannel.findMany({
-      where: { workspaceId, isActive: true, adminLinks: { some: {} } },
+      where: {
+        workspaceId,
+        isActive: true,
+        adminLinks: {
+          some: {
+            telegramUserAccountIntegration: {
+              isActive: true,
+              status: 'connected',
+            },
+          },
+        },
+      },
       select: {
         id: true,
         autoSyncEnabled: true,
         syncIncludePostMetrics: true,
+        adminLinks: {
+          where: {
+            telegramUserAccountIntegration: {
+              isActive: true,
+              status: 'connected',
+            },
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: { telegramUserAccountIntegrationId: true },
+        },
         _count: {
           select: {
             adSalePlacements: {
@@ -131,9 +154,29 @@ export class TelegramWorkspaceSyncTasksService {
         isActive: true,
         autoSyncEnabled: true,
         syncIncludeChannelStats: true,
-        adminLinks: { some: {} },
+        adminLinks: {
+          some: {
+            telegramUserAccountIntegration: {
+              isActive: true,
+              status: 'connected',
+            },
+          },
+        },
       },
-      select: { id: true },
+      select: {
+        id: true,
+        adminLinks: {
+          where: {
+            telegramUserAccountIntegration: {
+              isActive: true,
+              status: 'connected',
+            },
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: { telegramUserAccountIntegrationId: true },
+        },
+      },
     });
   }
 }

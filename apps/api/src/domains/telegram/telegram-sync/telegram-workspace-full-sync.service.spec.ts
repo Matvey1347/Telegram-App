@@ -19,6 +19,7 @@ function channel(
     syncIncludeChannelStats: false,
     syncIncludeManagedPosts: false,
     syncIncludeAudienceSnapshot: false,
+    adminLinks: [{ telegramUserAccountIntegrationId: `account-${id}` }],
   };
 }
 
@@ -61,18 +62,14 @@ describe('TelegramWorkspaceFullSyncService', () => {
       actor: { type: 'SCHEDULED_TASK' },
     });
 
-    expect(canonicalSync).toHaveBeenNthCalledWith(
-      1,
-      'actor-1',
-      'channel-1',
-      undefined,
-    );
-    expect(canonicalSync).toHaveBeenNthCalledWith(
-      2,
-      'actor-1',
-      'channel-2',
-      undefined,
-    );
+    expect(canonicalSync).toHaveBeenNthCalledWith(1, 'actor-1', 'channel-1', {
+      telegramUserAccountId: 'account-channel-1',
+      saveSelection: false,
+    });
+    expect(canonicalSync).toHaveBeenNthCalledWith(2, 'actor-1', 'channel-2', {
+      telegramUserAccountId: 'account-channel-2',
+      saveSelection: false,
+    });
     expect(result).toMatchObject({
       total: 3,
       successful: 1,
@@ -110,6 +107,14 @@ describe('TelegramWorkspaceFullSyncService', () => {
         where: expect.objectContaining({
           autoSyncEnabled: true,
           isActive: true,
+          adminLinks: {
+            some: {
+              telegramUserAccountIntegration: {
+                isActive: true,
+                status: 'connected',
+              },
+            },
+          },
         }),
       }),
     );

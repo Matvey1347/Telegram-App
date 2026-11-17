@@ -60,6 +60,14 @@ export class DailyAnalyticsSyncService {
             workspaceId: workspace.id,
             isActive: true,
             autoSyncEnabled: true,
+            adminLinks: {
+              some: {
+                telegramUserAccountIntegration: {
+                  isActive: true,
+                  status: 'connected',
+                },
+              },
+            },
           },
           select: {
             id: true,
@@ -68,7 +76,13 @@ export class DailyAnalyticsSyncService {
             syncIncludeChannelStats: true,
             syncIncludeAudienceSnapshot: true,
             adminLinks: {
-              orderBy: { createdAt: 'asc' },
+              where: {
+                telegramUserAccountIntegration: {
+                  isActive: true,
+                  status: 'connected',
+                },
+              },
+              orderBy: { createdAt: 'desc' },
               take: 1,
               select: { telegramUserAccountIntegrationId: true },
             },
@@ -81,7 +95,11 @@ export class DailyAnalyticsSyncService {
               await this.telegramPostMetricsService.syncPostsMetricsForWorkspace(
                 channel.workspaceId,
                 channel.id,
-                { postLimit: 100 },
+                {
+                  postLimit: 100,
+                  telegramUserAccountId:
+                    channel.adminLinks[0]?.telegramUserAccountIntegrationId,
+                },
               );
             }
             if (channel.syncIncludeChannelStats) {

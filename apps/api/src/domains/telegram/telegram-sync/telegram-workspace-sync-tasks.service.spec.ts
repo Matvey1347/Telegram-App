@@ -40,16 +40,23 @@ describe('TelegramWorkspaceSyncTasksService automatic selections', () => {
           autoSyncEnabled: true,
           syncIncludePostMetrics: true,
           _count: { adSalePlacements: 0 },
+          adminLinks: [{ telegramUserAccountIntegrationId: 'account-1' }],
         },
         {
           id: 'stats',
           autoSyncEnabled: true,
           syncIncludePostMetrics: false,
           _count: { adSalePlacements: 0 },
+          adminLinks: [{ telegramUserAccountIntegrationId: 'account-2' }],
         },
       ])
       .mockResolvedValueOnce([
-        { id: 'stats', autoSyncEnabled: true, syncIncludeChannelStats: true },
+        {
+          id: 'stats',
+          autoSyncEnabled: true,
+          syncIncludeChannelStats: true,
+          adminLinks: [{ telegramUserAccountIntegrationId: 'account-2' }],
+        },
       ]);
 
     await service.syncPostMetricsForWorkspace('workspace-1');
@@ -58,12 +65,12 @@ describe('TelegramWorkspaceSyncTasksService automatic selections', () => {
     expect(channels.syncPostsMetricsForWorkspace).toHaveBeenCalledWith(
       'workspace-1',
       'metrics',
-      { postLimit: 100 },
+      { postLimit: 100, telegramUserAccountId: 'account-1' },
     );
     expect(channels.syncBroadcastStatsForWorkspace).toHaveBeenCalledWith(
       'workspace-1',
       'stats',
-      'account-1',
+      'account-2',
     );
   });
 
@@ -93,12 +100,14 @@ describe('TelegramWorkspaceSyncTasksService automatic selections', () => {
         autoSyncEnabled: true,
         syncIncludePostMetrics: true,
         _count: { adSalePlacements: 0 },
+        adminLinks: [{ telegramUserAccountIntegrationId: `account-${index}` }],
       })),
       ...Array.from({ length: 80 }, (_, index) => ({
         id: `off-${index}`,
         autoSyncEnabled: false,
         syncIncludePostMetrics: true,
         _count: { adSalePlacements: 0 },
+        adminLinks: [],
       })),
     ]);
     const result = await service.syncPostMetricsForWorkspace('workspace-1');
@@ -113,12 +122,14 @@ describe('TelegramWorkspaceSyncTasksService automatic selections', () => {
         autoSyncEnabled: true,
         syncIncludePostMetrics: false,
         _count: { adSalePlacements: 1 },
+        adminLinks: [{ telegramUserAccountIntegrationId: 'account-1' }],
       },
       {
         id: 'ordinary-disabled-channel',
         autoSyncEnabled: true,
         syncIncludePostMetrics: false,
         _count: { adSalePlacements: 0 },
+        adminLinks: [{ telegramUserAccountIntegrationId: 'account-2' }],
       },
     ]);
 
@@ -128,7 +139,7 @@ describe('TelegramWorkspaceSyncTasksService automatic selections', () => {
     expect(channels.syncPostsMetricsForWorkspace).toHaveBeenCalledWith(
       'workspace-1',
       'ad-placement-channel',
-      { postLimit: 100 },
+      { postLimit: 100, telegramUserAccountId: 'account-1' },
     );
     expect(result.summary).toContain('selection skipped 1');
   });

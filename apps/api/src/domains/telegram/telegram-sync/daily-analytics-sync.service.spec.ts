@@ -46,7 +46,7 @@ function setup(channelCount: number) {
     campaignAnalytics as any,
     applicationLogger as any,
   );
-  return { service, prisma, broadcastStats, completedRun };
+  return { service, prisma, postMetrics, broadcastStats, completedRun };
 }
 
 describe('DailyAnalyticsSyncService performance', () => {
@@ -61,10 +61,26 @@ describe('DailyAnalyticsSyncService performance', () => {
     expect(prisma.telegramChannel.findMany).toHaveBeenCalledTimes(1);
     expect(prisma.telegramChannel.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({ workspaceId: 'workspace-1' }),
+        where: expect.objectContaining({
+          workspaceId: 'workspace-1',
+          adminLinks: {
+            some: {
+              telegramUserAccountIntegration: {
+                isActive: true,
+                status: 'connected',
+              },
+            },
+          },
+        }),
         select: expect.objectContaining({
           adminLinks: {
-            orderBy: { createdAt: 'asc' },
+            where: {
+              telegramUserAccountIntegration: {
+                isActive: true,
+                status: 'connected',
+              },
+            },
+            orderBy: { createdAt: 'desc' },
             take: 1,
             select: { telegramUserAccountIntegrationId: true },
           },
@@ -103,6 +119,36 @@ describe('DailyAnalyticsSyncService performance', () => {
           errorsCount: 1,
         }),
       }),
+    );
+  });
+
+  it('uses the newest connected admin link for automatic post metrics', async () => {
+    const { service, prisma, postMetrics } = setup(1);
+    prisma.telegramChannel.findMany.mockResolvedValueOnce([
+      {
+        id: 'channel-1',
+        workspaceId: 'workspace-1',
+        syncIncludePostMetrics: true,
+        syncIncludeChannelStats: false,
+        syncIncludeAudienceSnapshot: false,
+        adminLinks: [
+          { telegramUserAccountIntegrationId: 'current-owner-account' },
+        ],
+      },
+    ]);
+
+    await service.runDailyAnalyticsSync({
+      workspaceId: 'workspace-1',
+      source: 'cron',
+    });
+
+    expect(postMetrics.syncPostsMetricsForWorkspace).toHaveBeenCalledWith(
+      'workspace-1',
+      'channel-1',
+      {
+        postLimit: 100,
+        telegramUserAccountId: 'current-owner-account',
+      },
     );
   });
 });
