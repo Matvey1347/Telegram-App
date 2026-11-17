@@ -1030,6 +1030,7 @@ export class TelegramMtprotoClient {
       this.toFiniteNumber(
         (entity as { participantsCount?: unknown }).participantsCount,
       );
+    let pendingJoinRequestsError: string | null = null;
     const pendingJoinRequestsCount = await livePending(
       client,
       entity,
@@ -1040,6 +1041,7 @@ export class TelegramMtprotoClient {
           this.telegramMetadataTimeoutMs,
           'Telegram pending join requests lookup',
         ),
+      (code) => { pendingJoinRequestsError = code; },
     );
     const photoUrl =
       (await this.profilePhotoDataUrl(client, entity)) ||
@@ -1058,6 +1060,7 @@ export class TelegramMtprotoClient {
           | null) || null,
       participantsCount,
       pendingJoinRequestsCount,
+      pendingJoinRequestsError,
       photoUrl,
       telegramAccessHash,
       accessMode: this.inferAccessMode({

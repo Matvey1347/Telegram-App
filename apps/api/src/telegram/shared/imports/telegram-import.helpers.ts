@@ -24,6 +24,7 @@ export type ResolvedTelegramEntity = {
   description: string | null;
   participantsCount: number | null;
   pendingJoinRequestsCount?: number | null;
+  pendingJoinRequestsError?: string | null;
   photoUrl: string | null;
   telegramAccessHash?: string | null;
   inviteLink?: string | null;

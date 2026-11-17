@@ -100,12 +100,14 @@ export class TelegramChannelHistoricalSyncService {
         source: 'sync_public_channel_info',
         subscribersCount: updated.currentSubscribersCount,
         pendingJoinRequestsVerified: info.pendingJoinRequestsCount != null,
+      pendingJoinRequestsError: info.pendingJoinRequestsError ?? null,
       },
     });
     return {
       updated: true,
       pendingJoinRequestsCount: info.pendingJoinRequestsCount ?? null,
       pendingJoinRequestsVerified: info.pendingJoinRequestsCount != null,
+      pendingJoinRequestsError: info.pendingJoinRequestsError ?? null,
       title: updated.title,
       subscribersCount: updated.currentSubscribersCount,
       username: updated.username,
