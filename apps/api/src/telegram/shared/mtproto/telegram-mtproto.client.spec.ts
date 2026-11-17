@@ -359,7 +359,7 @@ describe('TelegramMtprotoClient import resolution', () => {
     ).rejects.toThrow('Join request was sent. Wait for approval');
   });
 
-  it('falls back to ChannelFull pending count when live queue lookup fails', async () => {
+  it('preserves stored state when live queue lookup fails', async () => {
     const entity = new Api.Channel({
       id: '123456' as any,
       title: 'Public Channel',
@@ -386,7 +386,7 @@ describe('TelegramMtprotoClient import resolution', () => {
         session: 'session',
         channelRef: '@public_channel',
       }),
-    ).resolves.toMatchObject({ pendingJoinRequestsCount: 302 });
+    ).resolves.toMatchObject({ pendingJoinRequestsCount: null });
   });
 
   it('handles ChatInviteAlready without importing again', async () => {

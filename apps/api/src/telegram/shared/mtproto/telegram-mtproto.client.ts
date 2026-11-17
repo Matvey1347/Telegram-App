@@ -1178,7 +1178,7 @@ export class TelegramMtprotoClient {
   }
 
   private async dialogCandidates(client: TelegramClient) {
-    const dialogs = await client.getDialogs({ limit: 300 });
+    const dialogs = await this.withTimeout(client.getDialogs({ limit: 300 }), this.telegramResolveTimeoutMs, 'Telegram channel dialogs');
     return dialogs
       .map((dialog: unknown) => {
         const row = dialog as { title?: string; entity?: unknown };
@@ -1772,7 +1772,10 @@ export class TelegramMtprotoClient {
     this.logger.log(
       `Starting Telegram public channel lookup: ref=${maskTelegramReferenceForLog(params.channelRef || params.channel?.telegramChatId || params.channel?.username)} invite=${maskTelegramInviteHash(params.inviteHash)}`,
     );
-    const client = await this.createClient(params);
+    const signal = AbortSignal.timeout(30_000);
+    const client = await this.withTimeout(this.createClient(params, signal), 30_000, 'Telegram channel connection');
+    const abortRead = () => void this.closeClient(client);
+    signal.addEventListener('abort', abortRead, { once: true });
     try {
       if (params.inviteHash) {
         const resolved = await this.resolveInviteLinkInfo(
@@ -1787,10 +1790,7 @@ export class TelegramMtprotoClient {
       }
 
       if (params.channel) {
-        const resolved = await this.resolveStoredChannel(
-          client,
-          params.channel,
-        );
+        const resolved = await this.withTimeout(this.resolveStoredChannel(client, params.channel), 30_000, 'Telegram channel metadata');
         this.logger.log(
           `Telegram stored-channel lookup finished in ${this.elapsed(startedAt)}: chatId=${resolved.channel.telegramChatId || 'n/a'} via=${resolved.channel.resolvedBy}`,
         );
@@ -1821,6 +1821,7 @@ export class TelegramMtprotoClient {
       );
       return described;
     } finally {
+      signal.removeEventListener('abort', abortRead);
       await this.closeClient(client);
     }
   }

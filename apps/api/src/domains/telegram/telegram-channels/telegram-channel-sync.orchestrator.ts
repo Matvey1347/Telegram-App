@@ -129,7 +129,10 @@ export class TelegramChannelSyncOrchestrator {
             account,
           );
         steps.push(
-          this.telegramChannelsSupportService.syncStepSuccess(
+          publicInfo?.pendingJoinRequestsVerified === false
+            ? this.telegramChannelsSupportService.syncStepPartial('channel_info', publicInfoStartedAt,
+              `Channel info refreshed; pending queue not verified: ${publicInfo.pendingJoinRequestsError ?? 'unavailable'}. Previous count preserved.`)
+            : this.telegramChannelsSupportService.syncStepSuccess(
             'channel_info',
             publicInfoStartedAt,
             'Channel info refreshed',

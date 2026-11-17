@@ -80,6 +80,26 @@ export class TelegramChannelHistoricalSyncService {
         reason: 'Resolved Telegram entity is not a channel',
       };
     }
+    let pendingJoinRequestsSourceId = account.id;
+    if (info.pendingJoinRequestsCount == null) {
+      const alternatives = (await this.sourceAccessService.sourcesForChannel(workspaceId, channelId))
+        .filter((source) => source.sourceType === TelegramSourceType.MTPROTO && source.sourceId !== account.id && source.permissions.canManageInviteLinks)
+        .slice(0, 2);
+      for (const source of alternatives) {
+        try {
+          const alternate = await this.telegramChannelAccessService.connectedAccount(workspaceId, channelId, source.sourceId);
+          const verified = await this.mtprotoClient.getPublicChannelInfo({
+            ...this.telegramChannelAccessService.accountCredentials(alternate), channel: channelReference,
+          });
+          if (verified.kind === 'channel' && verified.telegramChatId === info.telegramChatId && verified.pendingJoinRequestsCount != null) {
+            info.pendingJoinRequestsCount = verified.pendingJoinRequestsCount;
+            info.pendingJoinRequestsError = null;
+            pendingJoinRequestsSourceId = source.sourceId;
+            break;
+          }
+        } catch { /* Preserve the original failure and stored counter; never synthesize zero. */ }
+      }
+    }
     const updated = await this.prisma.telegramChannel.update({
       where: { id: channelId },
       data: {
@@ -101,6 +121,7 @@ export class TelegramChannelHistoricalSyncService {
         subscribersCount: updated.currentSubscribersCount,
         pendingJoinRequestsVerified: info.pendingJoinRequestsCount != null,
       pendingJoinRequestsError: info.pendingJoinRequestsError ?? null,
+      pendingJoinRequestsSourceId,
       },
     });
     return {
@@ -108,6 +129,7 @@ export class TelegramChannelHistoricalSyncService {
       pendingJoinRequestsCount: info.pendingJoinRequestsCount ?? null,
       pendingJoinRequestsVerified: info.pendingJoinRequestsCount != null,
       pendingJoinRequestsError: info.pendingJoinRequestsError ?? null,
+      pendingJoinRequestsSourceId,
       title: updated.title,
       subscribersCount: updated.currentSubscribersCount,
       username: updated.username,
