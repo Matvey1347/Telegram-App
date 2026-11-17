@@ -155,7 +155,7 @@ function harness(usageSource: 'PRODUCTION' | 'LOCAL_UNSYNCED' = 'LOCAL_UNSYNCED'
     configured: true,
     usageSource,
   } as any);
-  const settlement = new AiSettlementService(prisma, auth);
+  const settlement = new AiSettlementService(prisma, auth, { usageSource } as never);
   const request = (): AiExecutionRequest => ({
     userId: 'user',
     workspaceId: 'ws',
@@ -487,6 +487,19 @@ describe('AI locked admission and settlement', () => {
     ).rejects.toThrow('AI_AUTOMATIC_DISABLED');
     h.workspace.enabled = false;
     await expect(h.admission.admit(h.request())).rejects.toThrow('AI_DISABLED');
+  });
+  it('requeues a locally reconciled synced receipt and takes the snapshot gate before its workspace lock', async () => {
+    const h = harness();
+    const admitted = await h.admission.admit(h.request());
+    const unknown = await h.settlement.settle(admitted.operation, {
+      generationStarted: true, usage: null, errorCategory: 'TIMEOUT', providerModel: null, providerRequestId: null,
+    });
+    h.operations[0].source = 'LOCAL_SYNCED';
+    h.tx.$executeRaw.mockClear();
+    const updated = await h.settlement.reconcile('admin', unknown.id, { actualCost: '0.002', evidence: 'provider:receipt' });
+    expect(updated.source).toBe('LOCAL_UNSYNCED');
+    expect(h.tx.$executeRaw.mock.calls[0][0].sql).toContain('local-ai-snapshot');
+    expect(h.tx.$executeRaw.mock.calls[1][0].values).toContain('internal-ai:ws');
   });
   it('holds missing usage, manually reconciles four periods once and retracts UNKNOWN rollup', async () => {
     const h = harness(),

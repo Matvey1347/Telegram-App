@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import { TelegramManagedPostStatus } from '@prisma/client';
 import type {
@@ -19,6 +20,8 @@ import {
   returnScheduledPostToDraft,
 } from './telegram-managed-post-rescheduler.persistence';
 import {
+  assertRescheduleActive,
+  rescheduleContext,
   loadTelegramPublishedHistory,
   loadTelegramScheduledQueues,
 } from './telegram-managed-post-rescheduler.remote';
@@ -85,6 +88,7 @@ export class TelegramManagedPostReschedulerService {
     let alreadyPublishedCount = 0;
     let locallyScheduledCount = 0;
     const failedPostIds: string[] = [];
+    const results: RescheduleChannelScheduledPostProgress[] = [];
 
     if (!total) {
       onProgress?.(
@@ -101,6 +105,7 @@ export class TelegramManagedPostReschedulerService {
         locallyScheduledCount,
         failedCount: 0,
         failedPostIds,
+        results,
       };
     }
 
@@ -109,7 +114,24 @@ export class TelegramManagedPostReschedulerService {
       post: (typeof posts)[number],
       stage: RescheduleChannelScheduledPostProgress['stage'],
       message?: string,
-    ) =>
+    ) => {
+      const item = {
+        postId: post.id,
+        title: post.title,
+        scheduledAt: post.scheduledAt?.toISOString() ?? null,
+        stage,
+        ...(message ? { message } : {}),
+      };
+      if (
+        [
+          'FAILED',
+          'RESCHEDULED',
+          'DRAFTED',
+          'ALREADY_PUBLISHED',
+          'LOCAL_SCHEDULE_PRESERVED',
+        ].includes(stage)
+      )
+        results.push(item);
       onProgress?.(
         {
           postId: post.id,
@@ -121,6 +143,7 @@ export class TelegramManagedPostReschedulerService {
         index,
         total,
       );
+    };
 
     const channelReference = this.access.mtprotoChannelReference(channel);
     const { accountContexts, accountIds, remoteScheduledCount } =
@@ -165,20 +188,48 @@ export class TelegramManagedPostReschedulerService {
       const scheduledAt = post.scheduledAt;
       const scheduledIds = post.telegramScheduledMessageIds ?? [];
       const future = Boolean(scheduledAt && scheduledAt > now);
+      if (future && post.scheduleMode === 'LOCAL') {
+        locallyScheduledCount += 1;
+        progressFor(
+          current,
+          post,
+          'LOCAL_SCHEDULE_PRESERVED',
+          'This post uses the local scheduler and was left unchanged.',
+        );
+        continue;
+      }
+      const owner = `reschedule:${randomUUID()}`;
+      let claimed = false;
+      let uncertain = false;
       try {
-        if (future && post.scheduleMode === 'LOCAL') {
-          locallyScheduledCount += 1;
-          progressFor(
-            current,
-            post,
-            'LOCAL_SCHEDULE_PRESERVED',
-            'This post uses the local scheduler and was left unchanged.',
+        const admission = await this.prisma.telegramManagedPost.updateMany({
+          where: {
+            id: post.id,
+            workspaceId,
+            telegramChannelId: channelId,
+            status: TelegramManagedPostStatus.SCHEDULED,
+            updatedAt: post.updatedAt,
+            adSalePlacements: { none: {} },
+            mutualPromotionDelivery: { is: null },
+            postBatchDelivery: { is: null },
+            OR: [
+              { deliveryClaimOwner: null },
+              { deliveryClaimExpiresAt: { lte: new Date() } },
+            ],
+          },
+          data: {
+            deliveryClaimOwner: owner,
+            deliveryClaimExpiresAt: new Date(Date.now() + 120_000),
+          },
+        });
+        if (admission.count !== 1)
+          throw new Error(
+            'Post changed or is already being processed. Refresh before retrying.',
           );
-          continue;
-        }
+        claimed = true;
         const accountId = post.sourceId ?? '';
         const accountContext = accountContexts.get(accountId);
-        if (post.scheduleMode !== 'LOCAL' && accountContext?.error) {
+        if (future && post.scheduleMode !== 'LOCAL' && accountContext?.error) {
           failedPostIds.push(post.id);
           progressFor(
             current,
@@ -191,12 +242,6 @@ export class TelegramManagedPostReschedulerService {
         const remoteScheduledIds =
           accountContext?.scheduledIds ?? new Set<string>();
         const remotePublished = publishedByAccount.get(accountId);
-        const publishedById = new Map(
-          (remotePublished?.published ?? []).map((message) => [
-            message.id,
-            message,
-          ]),
-        );
         const recentPublished = remotePublished?.recentPublished ?? [];
         if (!future) {
           const publishedHistoryError = publishedHistoryErrors.get(accountId);
@@ -210,30 +255,23 @@ export class TelegramManagedPostReschedulerService {
             );
             continue;
           }
-          const expectedIds = scheduledIds;
-          const exactPublished =
-            expectedIds.length > 0 &&
-            expectedIds.every((id) => publishedById.has(id));
-          const matched = exactPublished
-            ? {
-                messageIds: expectedIds,
-                matchedMessage: publishedById.get(expectedIds.at(-1)!)!,
-              }
-            : scheduledAt
-              ? this.identity.findPublishedIdentity(
-                  {
-                    text: post.text,
-                    imageCount: normalizeTelegramPostMediaItems(
-                      post.mediaItems,
-                      post.imageUrls,
-                    ).length,
-                    publishMode: post.publishMode,
-                    scheduledAt,
-                    origin: post.origin,
-                  },
-                  recentPublished,
-                )
-              : null;
+          // Scheduled IDs belong to an account queue, not the channel's published
+          // message namespace. A coincidentally equal ID is not publication proof.
+          const matched = scheduledAt
+            ? this.identity.findPublishedIdentity(
+                {
+                  text: post.text,
+                  imageCount: normalizeTelegramPostMediaItems(
+                    post.mediaItems,
+                    post.imageUrls,
+                  ).length,
+                  publishMode: post.publishMode,
+                  scheduledAt,
+                  origin: post.origin,
+                },
+                recentPublished,
+              )
+            : null;
           if (matched) {
             const remainingRemoteSchedule = scheduledIds.filter((id) =>
               remoteScheduledIds.has(id),
@@ -244,6 +282,10 @@ export class TelegramManagedPostReschedulerService {
                 channelId,
                 post.sourceId ?? undefined,
               );
+              await rescheduleContext.run(
+                { owner, signal: AbortSignal.timeout(60_000) },
+                () => assertRescheduleActive(this.prisma, post.id),
+              );
               await this.mtprotoClient.deleteScheduledPost({
                 ...this.access.accountCredentials(sourceAccount),
                 channel: channelReference,
@@ -253,6 +295,7 @@ export class TelegramManagedPostReschedulerService {
             await markScheduledPostPublished(
               {
                 prisma: this.prisma,
+                owner,
                 access: this.access,
                 revisions: this.revisions,
                 groups: this.groups,
@@ -272,46 +315,24 @@ export class TelegramManagedPostReschedulerService {
             );
             continue;
           }
-          if (!scheduledIds.length) {
-            failedPostIds.push(post.id);
-            progressFor(
-              current,
-              post,
-              'FAILED',
-              'No stored Telegram message IDs and no unique published match; left untouched to prevent an unsafe draft transition.',
-            );
-            continue;
-          }
-          progressFor(index, post, 'RETURNING_TO_DRAFT');
-          const stillScheduledIds = scheduledIds.filter((id) =>
-            remoteScheduledIds.has(id),
-          );
-          if (
-            stillScheduledIds.length === scheduledIds.length &&
-            scheduledIds.length &&
-            post.origin !== 'TELEGRAM'
-          ) {
-            await this.publication.returnManagedPostToDraft(
-              userId,
-              channelId,
-              post.id,
-            );
-          } else {
-            if (stillScheduledIds.length) {
-              const sourceAccount = await this.access.connectedAccount(
-                workspaceId,
-                channelId,
-                post.sourceId ?? undefined,
-              );
-              await this.mtprotoClient.deleteScheduledPost({
-                ...this.access.accountCredentials(sourceAccount),
-                channel: channelReference,
-                messageIds: stillScheduledIds,
+          if (post.scheduleMode === 'LOCAL') {
+            const attempts =
+              await this.prisma.telegramManagedPostSendOperation.count({
+                where: { postId: post.id, workspaceId, channelId },
               });
+            if (
+              attempts ||
+              post.telegramMessageIds.length ||
+              post.deliveryAttemptCount
+            ) {
+              throw new Error(
+                'LOCAL send has delivery evidence but no unique Telegram publication match. Reconcile the send journal before retrying.',
+              );
             }
             await returnScheduledPostToDraft(
               {
                 prisma: this.prisma,
+                owner,
                 access: this.access,
                 revisions: this.revisions,
                 groups: this.groups,
@@ -321,7 +342,60 @@ export class TelegramManagedPostReschedulerService {
               channelId,
               post,
             );
+            returnedToDraftCount += 1;
+            progressFor(current, post, 'DRAFTED');
+            continue;
           }
+          if (accountContext?.error)
+            throw new Error(
+              `Original sender queue cannot be verified: ${accountContext.error}. An alternate account cannot cancel another account's schedule.`,
+            );
+          if (
+            !scheduledIds.length ||
+            !scheduledIds.every((id) => remoteScheduledIds.has(id))
+          ) {
+            failedPostIds.push(post.id);
+            progressFor(
+              current,
+              post,
+              'FAILED',
+              'Telegram publication is not proven absent. Missing scheduled IDs or an incomplete history cannot authorize returning this post to drafts; no changes made.',
+            );
+            continue;
+          }
+          progressFor(index, post, 'RETURNING_TO_DRAFT');
+          const stillScheduledIds = scheduledIds.filter((id) =>
+            remoteScheduledIds.has(id),
+          );
+          if (stillScheduledIds.length) {
+            const sourceAccount = await this.access.connectedAccount(
+              workspaceId,
+              channelId,
+              post.sourceId ?? undefined,
+            );
+            await rescheduleContext.run(
+              { owner, signal: AbortSignal.timeout(60_000) },
+              () => assertRescheduleActive(this.prisma, post.id),
+            );
+            await this.mtprotoClient.deleteScheduledPost({
+              ...this.access.accountCredentials(sourceAccount),
+              channel: channelReference,
+              messageIds: stillScheduledIds,
+            });
+          }
+          await returnScheduledPostToDraft(
+            {
+              prisma: this.prisma,
+              owner,
+              access: this.access,
+              revisions: this.revisions,
+              groups: this.groups,
+            },
+            userId,
+            workspaceId,
+            channelId,
+            post,
+          );
           returnedToDraftCount += 1;
           progressFor(current, post, 'DRAFTED');
           continue;
@@ -350,16 +424,22 @@ export class TelegramManagedPostReschedulerService {
           );
           continue;
         }
-        await this.publication.publishManagedPost(
-          workspaceId,
-          channelId,
-          post.id,
-          scheduledAt!,
-          'IMAGES_THEN_TEXT',
-          userId,
-          true,
-          (stage, message) => progressFor(index, post, stage, message),
+        uncertain = true;
+        await rescheduleContext.run(
+          { owner, signal: AbortSignal.timeout(60_000) },
+          () =>
+            this.publication.publishManagedPost(
+              workspaceId,
+              channelId,
+              post.id,
+              scheduledAt!,
+              'IMAGES_THEN_TEXT',
+              userId,
+              true,
+              (stage, message) => progressFor(index, post, stage, message),
+            ),
         );
+        uncertain = false;
         rescheduledCount += 1;
         progressFor(current, post, 'RESCHEDULED');
       } catch (error) {
@@ -368,8 +448,24 @@ export class TelegramManagedPostReschedulerService {
           current,
           post,
           'FAILED',
-          error instanceof Error ? error.message : 'Unknown error',
+          `${error instanceof Error ? error.message : 'Unknown error'}${uncertain ? ' Remote rescheduling outcome is uncertain; retry must recheck the original Telegram queue after the two-minute lease expires.' : ''}`,
         );
+      } finally {
+        if (claimed && !uncertain)
+          try {
+            await this.prisma.telegramManagedPost.updateMany({
+              where: { id: post.id, workspaceId, deliveryClaimOwner: owner },
+              data: { deliveryClaimOwner: null, deliveryClaimExpiresAt: null },
+            });
+          } catch {
+            if (!failedPostIds.includes(post.id)) failedPostIds.push(post.id);
+            progressFor(
+              current,
+              post,
+              'FAILED',
+              'Operation completed but claim cleanup failed; inspect Telegram and retry after the two-minute lease expires.',
+            );
+          }
       }
     }
     this.support.invalidateTelegramChannelReadCache(userId, workspaceId);
@@ -382,6 +478,7 @@ export class TelegramManagedPostReschedulerService {
       locallyScheduledCount,
       failedCount: failedPostIds.length,
       failedPostIds,
+      results,
     };
   }
 

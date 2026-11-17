@@ -741,6 +741,19 @@ export class TelegramAdSalesController {
     return this.service.publishPlacement(user.sub, saleId, placementId, dto);
   }
 
+  @Post(':saleId/placements/:placementId/reconcile-published')
+  reconcilePublishedPlacement(
+    @CurrentUser() user: JwtUser,
+    @Param('saleId') saleId: string,
+    @Param('placementId') placementId: string,
+  ) {
+    return this.service.reconcilePublishedPlacement(
+      user.sub,
+      saleId,
+      placementId,
+    );
+  }
+
   @Post(':saleId/placements/:placementId/reschedule')
   reschedulePlacement(
     @CurrentUser() user: JwtUser,

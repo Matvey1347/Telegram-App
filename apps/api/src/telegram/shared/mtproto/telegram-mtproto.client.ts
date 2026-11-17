@@ -2772,6 +2772,7 @@ export class TelegramMtprotoClient {
     }
 
     return {
+      pendingJoinRequestsCount: await livePending(client, entity, null, (request) => this.withTimeout(request, this.telegramMetadataTimeoutMs, 'Telegram pending join requests lookup')),
       scope: failedAdmins > 0 ? 'PARTIAL_ADMINS' : 'ALL_ADMINS',
       expectedTotalLinks,
       admins: summaries,
@@ -2796,7 +2797,7 @@ export class TelegramMtprotoClient {
       const entity = resolved
         ? resolved.entity
         : await client.getEntity(params.channelRef as string);
-      return this.getAllChannelInviteLinksInternal(
+      return await this.getAllChannelInviteLinksInternal(
         client,
         this.asImportableTelegramEntity(entity, 'channel'),
         params.onProgress,

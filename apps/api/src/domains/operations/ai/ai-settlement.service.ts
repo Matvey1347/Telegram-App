@@ -2,10 +2,12 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Optional,
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma, type AiOperation } from '@prisma/client';
 import type { AiPrice, AiReconciliationInput } from '@telegram-system/shared';
+import { AiDeploymentConfig } from './ai-deployment-config.service';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { acquirePostgresTransactionLock } from '../../../prisma/postgres-advisory-lock';
 import { WorkspaceAuthorizationService } from '../../workspace/workspace-authorization/workspace-authorization.service';
@@ -18,6 +20,7 @@ export class AiSettlementService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly authorization: WorkspaceAuthorizationService,
+    @Optional() private readonly deployment?: AiDeploymentConfig,
   ) {}
   async settle(
     operation: AiOperation,
@@ -160,6 +163,11 @@ export class AiSettlementService {
     )
       throw new BadRequestException('AI_RECONCILIATION_INVALID');
     return this.prisma.$transaction(async (tx) => {
+      if (this.deployment?.usageSource === 'LOCAL_UNSYNCED') {
+        await tx.$executeRaw(
+          Prisma.sql`SELECT pg_advisory_xact_lock_shared(hashtextextended('local-ai-snapshot', 0))`,
+        );
+      }
       await acquirePostgresTransactionLock(
         tx,
         `internal-ai:${context.workspaceId}`,
@@ -181,6 +189,10 @@ export class AiSettlementService {
         where: { id: operation.id },
         data: {
           status: 'RECONCILED',
+          ...(operation.source === 'LOCAL_SYNCED' &&
+          this.deployment?.usageSource === 'LOCAL_UNSYNCED'
+            ? { source: 'LOCAL_UNSYNCED' }
+            : {}),
           pricingStatus: 'MANUAL',
           actualCost,
           reconciliationReference: input.evidence,

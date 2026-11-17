@@ -3832,4 +3832,54 @@ describe('TelegramAdSalesService', () => {
     ).toBe('AVAILABLE');
     jest.useRealTimers();
   });
+  it('syncs a placement from a confirmed managed Telegram publication without invoking publish', async () => {
+    const { service, prisma } = createService();
+    const publishedAt = new Date('2026-11-17T10:00:00.000Z');
+    prisma.telegramAdSalePlacement.findFirst.mockResolvedValue({
+      ...makePlacement({ status: TelegramAdPlacementStatus.SCHEDULED }),
+      managedPost: {
+        status: TelegramManagedPostStatus.PUBLISHED,
+        telegramIdVerificationStatus: 'VERIFIED',
+        publishedAt,
+        telegramMessageIds: ['remote-message-1'],
+        telegramPostId: 'telegram-post-1',
+      },
+    });
+    jest.spyOn(service, 'getSale').mockResolvedValue({ id: 'sale-1' } as any);
+
+    await service.reconcilePublishedPlacement('user-1', 'sale-1', 'placement-1');
+
+    expect(prisma.telegramAdSalePlacement.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          id: 'placement-1',
+          workspaceId: 'ws-1',
+          telegramAdSaleId: 'sale-1',
+          status: { not: TelegramAdPlacementStatus.PUBLISHED },
+        }),
+        data: expect.objectContaining({
+          status: TelegramAdPlacementStatus.PUBLISHED,
+          publishedAt,
+          telegramPostId: 'telegram-post-1',
+        }),
+      }),
+    );
+    expect(service.getSale).toHaveBeenCalledWith('user-1', 'sale-1');
+  });
+
+  it('refuses placement sync unless Telegram publication is confirmed', async () => {
+    const { service, prisma } = createService();
+    prisma.telegramAdSalePlacement.findFirst.mockResolvedValue({
+      ...makePlacement(),
+      managedPost: {
+        status: TelegramManagedPostStatus.FAILED,
+        publishedAt: null,
+        telegramMessageIds: [],
+      },
+    });
+    await expect(
+      service.reconcilePublishedPlacement('user-1', 'sale-1', 'placement-1'),
+    ).rejects.toThrow('confirmed and Telegram-verified publication');
+    expect(prisma.telegramAdSalePlacement.updateMany).not.toHaveBeenCalled();
+  });
 });

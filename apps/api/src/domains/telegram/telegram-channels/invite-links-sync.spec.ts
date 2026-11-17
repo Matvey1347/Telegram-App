@@ -265,16 +265,19 @@ describe('TelegramChannelsService invite link sync', () => {
         }),
       }),
     );
-    expect(prisma.telegramChannel.updateMany).toHaveBeenCalledWith({
-      where: {
-        id: 'channel-1',
-        workspaceId: 'ws-1',
-        pendingJoinRequestsCount: { not: 3 },
-      },
-      data: { pendingJoinRequestsCount: 3 },
-    });
+    expect(prisma.telegramChannel.updateMany).not.toHaveBeenCalled();
   });
 
+  it.each([undefined, 31])('uses verified channel queue %s independently of empty invite links', async (pendingJoinRequestsCount) => {
+    await (service as any).syncChannelInviteLinks({
+      workspaceId: 'ws-1', channelId: 'channel-1',
+      account: { id: 'tg-account-1', label: 'Owner', username: 'owner_admin', firstName: 'Owner' },
+      channelReference: { telegramChatId: '7001' },
+      prefetchedRemote: { scope: 'ALL_ADMINS', expectedTotalLinks: 0, admins: [], links: [], warnings: [], pendingJoinRequestsCount },
+    });
+    if (pendingJoinRequestsCount === undefined) expect(prisma.telegramChannel.updateMany).not.toHaveBeenCalled();
+    else expect(prisma.telegramChannel.updateMany).toHaveBeenCalledWith(expect.objectContaining({ data: { pendingJoinRequestsCount: 31 } }));
+  });
   it('clears the channel-card pending count after all join requests are accepted', async () => {
     prisma.telegramInviteLink.upsert.mockImplementation(
       async ({ create }: { create: Record<string, unknown> }) => ({
@@ -298,6 +301,7 @@ describe('TelegramChannelsService invite link sync', () => {
       },
       channelReference: { telegramChatId: '7001' },
       prefetchedRemote: {
+        pendingJoinRequestsCount: 0,
         scope: 'ALL_ADMINS',
         expectedTotalLinks: 1,
         admins: [],

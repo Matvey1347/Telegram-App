@@ -5046,6 +5046,54 @@ export class TelegramAdSalesService {
     return this.mapPlacement(this.appendPlacementFinancials(updated));
   }
 
+  async reconcilePublishedPlacement(
+    userId: string,
+    saleId: string,
+    placementId: string,
+  ) {
+    const workspaceId = await this.workspace(userId);
+    const placement = await this.prisma.telegramAdSalePlacement.findFirst({
+      where: { id: placementId, workspaceId, telegramAdSaleId: saleId },
+      include: { managedPost: true },
+    });
+    if (!placement) throw new NotFoundException('Telegram ad sale placement not found');
+    const managedPost = placement.managedPost;
+    if (
+      !managedPost ||
+      managedPost.status !== TelegramManagedPostStatus.PUBLISHED ||
+      !managedPost.publishedAt ||
+      !managedPost.telegramMessageIds.length ||
+      managedPost.telegramIdVerificationStatus !== 'VERIFIED'
+    ) {
+      throw new BadRequestException(
+        'Managed post must have a confirmed and Telegram-verified publication to reconcile',
+      );
+    }
+    const publishedAt = managedPost.publishedAt;
+    const plannedDeleteAt = calculateAdPlacementDeleteAt({
+      scheduledAt: placement.scheduledAt,
+      publishedAt,
+      deleteAfterHoursSnapshot: placement.deleteAfterHoursSnapshot,
+      isPermanentSnapshot: placement.isPermanentSnapshot,
+    });
+    await this.prisma.telegramAdSalePlacement.updateMany({
+      where: {
+        id: placementId,
+        workspaceId,
+        telegramAdSaleId: saleId,
+        status: { not: TelegramAdPlacementStatus.PUBLISHED },
+      },
+      data: {
+        status: TelegramAdPlacementStatus.PUBLISHED,
+        publishedAt,
+        plannedDeleteAt,
+        telegramPostId: managedPost.telegramPostId,
+      },
+    });
+    this.notifyAdDeletionDueWorkChanged();
+    return this.getSale(userId, saleId);
+  }
+
   async reschedulePlacement(
     userId: string,
     saleId: string,

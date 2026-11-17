@@ -135,6 +135,7 @@ export type RescheduleChannelScheduledPostsResult = {
   locallyScheduledCount: number;
   failedCount: number;
   failedPostIds: string[];
+  results?: RescheduleChannelScheduledPostProgress[];
 };
 
 export type RescheduleChannelScheduledPostsPlan = {

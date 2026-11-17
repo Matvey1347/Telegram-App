@@ -13,6 +13,7 @@ import { ManagedPostRevisionSource } from './telegram-channels.internal';
 
 type ReschedulerPersistence = {
   prisma: PrismaService;
+  owner?: string;
   access: TelegramChannelAccessService;
   revisions: TelegramManagedPostRevisionStore;
   groups: TelegramPostGroupsService;
@@ -51,6 +52,12 @@ export async function markScheduledPostPublished(
         workspaceId,
         telegramChannelId: channelId,
         status: TelegramManagedPostStatus.SCHEDULED,
+        ...(deps.owner
+          ? {
+              deliveryClaimOwner: deps.owner,
+              deliveryClaimExpiresAt: { gt: new Date() },
+            }
+          : {}),
       },
       data: {
         status: TelegramManagedPostStatus.PUBLISHED,
@@ -70,7 +77,11 @@ export async function markScheduledPostPublished(
         lastError: null,
       },
     });
-    if (updated.count && post.groupId)
+    if (updated.count !== 1)
+      throw new Error(
+        'Post ownership changed before publication sync; refresh and retry',
+      );
+    if (post.groupId)
       await deps.groups.normalizePostGroupNumbering(tx, post.groupId);
   });
 }
@@ -89,12 +100,18 @@ export async function returnScheduledPostToDraft(
       'before_reschedule_missed_post_to_draft',
       userId,
     );
-    await tx.telegramManagedPost.updateMany({
+    const updated = await tx.telegramManagedPost.updateMany({
       where: {
         id: post.id,
         workspaceId,
         telegramChannelId: channelId,
         status: TelegramManagedPostStatus.SCHEDULED,
+        ...(deps.owner
+          ? {
+              deliveryClaimOwner: deps.owner,
+              deliveryClaimExpiresAt: { gt: new Date() },
+            }
+          : {}),
       },
       data: {
         status: TelegramManagedPostStatus.DRAFT,
@@ -120,6 +137,10 @@ export async function returnScheduledPostToDraft(
           'Missed Telegram publication was not found remotely and returned to drafts during channel rescheduling.',
       },
     });
+    if (updated.count !== 1)
+      throw new Error(
+        'Post ownership changed before draft transition; refresh and retry',
+      );
     if (post.groupId)
       await deps.groups.normalizePostGroupNumbering(tx, post.groupId);
   });

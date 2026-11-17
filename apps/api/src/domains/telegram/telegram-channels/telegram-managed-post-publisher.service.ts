@@ -1,3 +1,8 @@
+import {
+  cancelPreviousNativeSchedule,
+  assertRescheduleActive,
+  rescheduleContext,
+} from './telegram-managed-post-rescheduler.remote';
 import { managedPostPublisherInclude } from './managed-post-publisher-read-model';
 import { managedPostDeliveryContext } from './telegram-managed-post-delivery-context';
 import { TelegramManagedPostSendJournalService } from './telegram-managed-post-send-journal.service';
@@ -411,47 +416,27 @@ export class TelegramManagedPostPublisherService {
             channelId,
             source.sourceId,
           );
-        if (
-          scheduleAt &&
-          post.status === 'SCHEDULED' &&
-          post.telegramScheduledMessageIds.length &&
-          post.sourceId === source.sourceId
-        ) {
-          onRescheduleProgress?.('REMOVING_OLD_SCHEDULE');
-          await this.mtprotoClient.deleteScheduledPost({
-            ...this.telegramChannelAccessService.accountCredentials(account),
-            channel: channelReference,
-            messageIds: post.telegramScheduledMessageIds,
-          });
-          previousScheduledMessageCancelled = true;
-        } else if (
-          scheduleAt &&
-          post.status === 'SCHEDULED' &&
-          post.telegramScheduledMessageIds.length &&
-          post.sourceType === TelegramSourceType.MTPROTO &&
-          post.sourceId !== source.sourceId
-        ) {
-          // Telegram's scheduled queue is account-scoped. Remove the old
-          // schedule using its original sender before moving it to the
-          // workspace's priority publisher.
-          const previousAccount =
-            await this.telegramChannelAccessService.connectedAccount(
-              workspaceId,
-              channelId,
-              post.sourceId ?? undefined,
+        if (scheduleAt)
+          previousScheduledMessageCancelled =
+            await cancelPreviousNativeSchedule(
+              {
+                prisma: this.prisma,
+                access: this.telegramChannelAccessService,
+                mtprotoClient: this.mtprotoClient,
+              },
+              {
+                workspaceId,
+                channelId,
+                channel: channelReference,
+                post,
+                sourceId: source.sourceId,
+                account,
+                onCancel: () => onRescheduleProgress?.('REMOVING_OLD_SCHEDULE'),
+              },
             );
-          onRescheduleProgress?.('REMOVING_OLD_SCHEDULE');
-          await this.mtprotoClient.deleteScheduledPost({
-            ...this.telegramChannelAccessService.accountCredentials(
-              previousAccount,
-            ),
-            channel: channelReference,
-            messageIds: post.telegramScheduledMessageIds,
-          });
-          previousScheduledMessageCancelled = true;
-        }
-        const publish = () =>
-          this.mtprotoClient.publishPost({
+        const publish = async () => {
+          await assertRescheduleActive(this.prisma, post.id);
+          return this.mtprotoClient.publishPost({
             ...this.telegramChannelAccessService.accountCredentials(account),
             channel: channelReference,
             html,
@@ -461,13 +446,16 @@ export class TelegramManagedPostPublisherService {
             imageUrls: post.imageUrls,
             mediaItems,
             scheduleAt,
-            signal: managedPostDeliveryContext.getStore()?.signal,
+            signal:
+              rescheduleContext.getStore()?.signal ??
+              managedPostDeliveryContext.getStore()?.signal,
             onUploadProgress: (progressPercent) =>
               onRescheduleProgress?.(
                 'SCHEDULING_AGAIN',
                 `Uploading media to Telegram: ${progressPercent}%`,
               ),
           });
+        };
         if (scheduleAt)
           onRescheduleProgress?.(
             'SCHEDULING_AGAIN',

@@ -21,7 +21,6 @@ export async function livePending(
     Number.isFinite(reportedCount) && reportedCount >= 0
       ? Math.trunc(reportedCount)
       : null;
-  if (!fallback) return fallback;
   try {
     const response = (await run(
       client.invoke(
@@ -35,8 +34,10 @@ export async function livePending(
       ),
     )) as PendingJoinRequestsResponse;
     const count = Number(response.count);
-    return Number.isFinite(count) && count >= 0 ? Math.trunc(count) : fallback;
+    return response.count != null && Number.isFinite(count) && count >= 0
+      ? Math.trunc(count)
+      : fallback || null;
   } catch {
-    return fallback;
+    return fallback || null;
   }
 }

@@ -25,6 +25,15 @@ describe('fetchPendingJoinRequestsCount', () => {
     );
   });
 
+  it.each([0, undefined])('queries live queue even when channel metadata reports %s', async (requestsPending) => {
+    const invoke = jest.fn().mockResolvedValue({ count: 42 });
+    await expect(livePending({ invoke } as never, {} as never, { requestsPending })).resolves.toBe(42);
+    expect(invoke).toHaveBeenCalledTimes(1);
+  });
+  it('does not turn a failed or missing live response into a verified zero', async () => {
+    await expect(livePending({ invoke: jest.fn().mockRejectedValue(new Error('CHAT_ADMIN_REQUIRED')) } as never, {} as never, { requestsPending: 0 })).resolves.toBeNull();
+    await expect(livePending({ invoke: jest.fn().mockResolvedValue({}) } as never, {} as never, null)).resolves.toBeNull();
+  });
   it('keeps the reported count when Telegram returns an invalid live count', async () => {
     const invoke = jest.fn().mockResolvedValue({ count: 'invalid' });
 

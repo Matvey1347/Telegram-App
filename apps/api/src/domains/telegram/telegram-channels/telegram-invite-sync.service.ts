@@ -212,11 +212,14 @@ export class TelegramInviteSyncService {
       0,
       (params.remote.expectedTotalLinks ?? 0) - fetchedTotalLinks,
     );
-    if (params.remote.scope === 'ALL_ADMINS' && missingTotalLinks === 0) {
-      const pendingJoinRequestsCount = params.remote.links.reduce(
-        (sum, link) => sum + Math.max(0, Number(link.requested) || 0),
-        0,
-      );
+    // Invite requested counters are link-specific and may omit revoked/deleted
+    // links or pending metadata. They must never overwrite the channel queue.
+    const pendingJoinRequestsCount = params.remote.pendingJoinRequestsCount;
+    if (
+      typeof pendingJoinRequestsCount === 'number' &&
+      Number.isInteger(pendingJoinRequestsCount) &&
+      pendingJoinRequestsCount >= 0
+    ) {
       const pendingRequestsUpdate =
         await this.prisma.telegramChannel.updateMany({
           where: {

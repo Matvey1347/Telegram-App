@@ -258,3 +258,18 @@ Rules:
 - Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
 - After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
 - A committed graphify-out/graph.json is rewritten whole on every build, so a large diff to it in a pull request is expected. Do not flag it as churn or suggest skipping the graph rebuild or its hooks.
+
+## Local AI expense release gate
+
+- Before pushing a production release, run `pnpm ai:sync` (dry-run),
+  `pnpm ai:sync --execute`, then `pnpm release:check`.
+- Install the tracked pre-push guard on each checkout with `pnpm hooks:install`.
+  A failed synchronization/check blocks main/master/production pushes.
+- Never run a local API host against production for expense synchronization.
+  The one-shot command reads DATABASE_URL locally and writes only bounded AI
+  receipts/aggregates to DATABASE_URL_PRODUCTION. Railway cannot access local data.
+- Do not bypass the AI guard in `db:snapshot:refresh`. Restart old local API
+  processes so they use the snapshot admission lock before refreshing.
+- UNKNOWN usage stays an unresolved reserve until normal provider reconciliation;
+  do not invent an actual cost to make a sync or release check pass.
+- See `docs/local-development-database.md` for workspace mapping and recovery.

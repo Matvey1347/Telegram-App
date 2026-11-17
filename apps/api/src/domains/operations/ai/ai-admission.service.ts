@@ -129,8 +129,25 @@ export class AiAdmissionService {
   }
   async admit(request: AiExecutionRequest) {
     const now = new Date();
-    if (request.chatPlan && (request.category !== 'TELEGRAM_POSTING_PLAN' || request.mode !== 'MANUAL' || !request.aiPosting || request.image || request.audio)) throw new BadRequestException('AI_CHAT_PLAN_INVALID');
-    if (request.revisionDraft && (request.category !== 'TELEGRAM_POSTING_TEXT' || request.mode !== 'MANUAL' || !request.aiPosting || request.image || request.audio || request.chatPlan)) throw new BadRequestException('AI_REVISION_DRAFT_INVALID');
+    if (
+      request.chatPlan &&
+      (request.category !== 'TELEGRAM_POSTING_PLAN' ||
+        request.mode !== 'MANUAL' ||
+        !request.aiPosting ||
+        request.image ||
+        request.audio)
+    )
+      throw new BadRequestException('AI_CHAT_PLAN_INVALID');
+    if (
+      request.revisionDraft &&
+      (request.category !== 'TELEGRAM_POSTING_TEXT' ||
+        request.mode !== 'MANUAL' ||
+        !request.aiPosting ||
+        request.image ||
+        request.audio ||
+        request.chatPlan)
+    )
+      throw new BadRequestException('AI_REVISION_DRAFT_INVALID');
     const audioInvalid =
       request.audio !== undefined &&
       (request.category !== 'TELEGRAM_POSTING_PLAN' ||
@@ -209,6 +226,11 @@ export class AiAdmissionService {
       throw new BadRequestException('AI_REQUEST_INVALID');
     const fingerprint = operationFingerprint(request);
     return this.prisma.$transaction(async (tx) => {
+      if (this.deployment.usageSource === 'LOCAL_UNSYNCED') {
+        await tx.$executeRaw(
+          Prisma.sql`SELECT pg_advisory_xact_lock_shared(hashtextextended('local-ai-snapshot', 0))`,
+        );
+      }
       await acquirePostgresTransactionLock(
         tx,
         `internal-ai:${request.workspaceId}`,

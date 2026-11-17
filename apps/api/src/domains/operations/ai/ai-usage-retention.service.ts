@@ -19,14 +19,14 @@ export class AiUsageRetentionService {
     const operations = await this.prisma.$executeRaw(Prisma.sql`
       WITH expired AS (
         SELECT "id" FROM "AiOperation"
-        WHERE "expiresAt" < ${now} AND "status" IN ('SUCCEEDED', 'FAILED', 'RECONCILED')
+        WHERE "expiresAt" < ${now} AND "source" = 'PRODUCTION' AND "status" IN ('SUCCEEDED', 'FAILED', 'RECONCILED')
         ORDER BY "expiresAt", "id" LIMIT ${AI_RETENTION_BATCH_SIZE} FOR UPDATE SKIP LOCKED
       ) DELETE FROM "AiOperation" WHERE "id" IN (SELECT "id" FROM expired)`);
     // Prisma DateTime is timestamp without time zone, persisted as UTC. Keep
     // both range operands timestamp to avoid session-time-zone coercion.
     const daily = await this.prisma.$executeRaw(Prisma.sql`
       WITH expired AS (
-        SELECT d."id" FROM "AiUsageDaily" d WHERE d."day" < ${cutoff}
+        SELECT d."id" FROM "AiUsageDaily" d WHERE d."day" < ${cutoff} AND d."source" = 'PRODUCTION'
           AND NOT EXISTS (
             SELECT 1 FROM "AiOperation" o
             WHERE o."workspaceId" = d."workspaceId" AND o."status" = 'UNKNOWN'
@@ -38,8 +38,11 @@ export class AiUsageRetentionService {
       ) DELETE FROM "AiUsageDaily" WHERE "id" IN (SELECT "id" FROM expired)`);
     const budgetPeriods = await this.prisma.$executeRaw(Prisma.sql`
       WITH expired AS (
-        SELECT "id" FROM "AiBudgetPeriod" WHERE "periodEnd" < ${cutoff} AND "reserved" = 0
-        ORDER BY "periodEnd", "id" LIMIT ${AI_RETENTION_BATCH_SIZE} FOR UPDATE SKIP LOCKED
+        SELECT b."id" FROM "AiBudgetPeriod" b WHERE b."periodEnd" < ${cutoff} AND b."reserved" = 0
+          AND NOT EXISTS (SELECT 1 FROM "AiOperation" o WHERE o."workspaceId" = b."workspaceId"
+            AND o."source" IN ('LOCAL_UNSYNCED', 'LOCAL_SYNCED')
+            AND o."createdAt" >= b."periodStart" AND o."createdAt" < b."periodEnd")
+        ORDER BY b."periodEnd", b."id" LIMIT ${AI_RETENTION_BATCH_SIZE} FOR UPDATE SKIP LOCKED
       ) DELETE FROM "AiBudgetPeriod" WHERE "id" IN (SELECT "id" FROM expired) AND "reserved" = 0`);
     // UNKNOWN financial receipts survive, but their bounded output does not outlive
     // the operation retention window. Resolved receipts already cascade on delete.

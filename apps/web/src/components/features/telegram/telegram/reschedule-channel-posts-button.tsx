@@ -89,6 +89,12 @@ export function RescheduleChannelPostsButton({
             },
             { onHeartbeat: () => setLastHeartbeatAt(Date.now()) },
           );
+        if (result.results?.length) setProgress((current) => {
+          const outcomes = new Map(current.filter((entry) => entry.postId).map((entry) => [entry.postId, entry]));
+          result.results!.forEach((entry) => outcomes.set(entry.postId, entry));
+          return [...outcomes.values()];
+        });
+        setProgressCurrent(start + batch.length);
         aggregate.rescheduledCount += result.rescheduledCount;
         aggregate.returnedToDraftCount += result.returnedToDraftCount;
         aggregate.alreadyPublishedCount += result.alreadyPublishedCount;
@@ -119,7 +125,7 @@ export function RescheduleChannelPostsButton({
           queryKey: telegramPostKeys.postGroups(channelId),
         }),
       ]);
-      setOpen(false);
+      setOpen(true);
       pushToast(
         t("telegram.posts.support.rescheduleResult", {
           rescheduled: result.rescheduledCount,
@@ -149,7 +155,7 @@ export function RescheduleChannelPostsButton({
       </Button>
       <Modal
         open={open}
-        onClose={() => setOpen(false)}
+        onClose={() => { if (!reschedule.isPending) setOpen(false); }}
         title={t("telegram.posts.support.rescheduleAll")}
         size="sm"
       >
@@ -161,10 +167,10 @@ export function RescheduleChannelPostsButton({
           </p>
           {reschedule.error ? (
             <p className="text-sm text-rose-300">
-              {t("telegram.posts.support.rescheduleError")}
+              {reschedule.error instanceof Error ? reschedule.error.message : t("telegram.posts.support.rescheduleError")}
             </p>
           ) : null}
-          {reschedule.isPending ? (
+          {progress.length > 0 || reschedule.isPending ? (
             <section
               className="max-h-72 space-y-2 overflow-y-auto rounded-lg border border-neutral-700 bg-neutral-950/60 p-3"
               aria-live="polite"
