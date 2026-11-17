@@ -125,31 +125,34 @@ export class TelegramBroadcastStatsService {
       syncedAt,
       stats.normalized,
     );
-    await this.prisma.$transaction(
-      points.map((point) =>
-        this.prisma.telegramChannelStatsPoint.upsert({
-          where: {
-            telegramChannelId_metric_series_date: {
-              telegramChannelId: point.telegramChannelId,
-              metric: point.metric,
-              series: point.series,
-              date: point.date,
+    for (let offset = 0; offset < points.length; offset += 250) {
+      const batch = points.slice(offset, offset + 250);
+      await this.prisma.$transaction(
+        batch.map((point) =>
+          this.prisma.telegramChannelStatsPoint.upsert({
+            where: {
+              telegramChannelId_metric_series_date: {
+                telegramChannelId: point.telegramChannelId,
+                metric: point.metric,
+                series: point.series,
+                date: point.date,
+              },
             },
-          },
-          create: point,
-          update: {
-            seriesLabel: point.seriesLabel,
-            color: point.color,
-            graphType: point.graphType,
-            value: point.value,
-            latestSyncedAt: point.latestSyncedAt,
-          },
-        }),
-      ),
-      // Graphs can contain several hundred dated points per channel. The
-      // default 5s interactive transaction expires under normal Neon latency.
-      { timeout: 30_000 },
-    );
+            create: point,
+            update: {
+              seriesLabel: point.seriesLabel,
+              color: point.color,
+              graphType: point.graphType,
+              value: point.value,
+              latestSyncedAt: point.latestSyncedAt,
+            },
+          }),
+        ),
+        // Keep each batch bounded; recent channel graphs contain thousands of
+        // points, which exceed Prisma's default interactive transaction limit.
+        { timeout: 30_000 },
+      );
+    }
     await this.sourceAccessService.recordDataSource({
       workspaceId,
       channelId,
