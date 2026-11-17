@@ -224,7 +224,7 @@ export class ScheduledTaskRunnerService {
           ? null
           : computeNextRunAt(
               config.schedule as ScheduledTaskSchedule,
-              scheduledFor,
+              new Date(),
             ),
         scheduledClaimOwner: null,
         scheduledClaimExpiresAt: null,

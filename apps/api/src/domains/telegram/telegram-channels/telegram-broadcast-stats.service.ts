@@ -146,6 +146,9 @@ export class TelegramBroadcastStatsService {
           },
         }),
       ),
+      // Graphs can contain several hundred dated points per channel. The
+      // default 5s interactive transaction expires under normal Neon latency.
+      { timeout: 30_000 },
     );
     await this.sourceAccessService.recordDataSource({
       workspaceId,

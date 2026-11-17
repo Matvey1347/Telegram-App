@@ -220,21 +220,29 @@ describe('ScheduledTaskRunnerService', () => {
     expect(fixture.prisma.scheduledTaskRun.create).toHaveBeenCalledTimes(1);
   });
 
-  it('persists terminal success before awaited notification and advances from scheduledFor', async () => {
-    const { runner, definition, config, prisma, events, notify } = setup();
-    const result = await runner.executeScheduledOccurrence(definition, config);
-    expect(events).toEqual(['persist:SUCCESS', 'notify']);
-    expect(prisma.scheduledTaskConfig.updateMany).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          nextScheduledRunAt: new Date('2026-08-08T10:30:00.000Z'),
+  it('coalesces missed intervals and advances from the current time', async () => {
+    jest.useFakeTimers().setSystemTime(claimTime);
+    try {
+      const { runner, definition, config, prisma, events, notify } = setup();
+      const result = await runner.executeScheduledOccurrence(
+        definition,
+        config,
+      );
+      expect(events).toEqual(['persist:SUCCESS', 'notify']);
+      expect(prisma.scheduledTaskConfig.updateMany).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            nextScheduledRunAt: new Date('2026-08-08T11:00:00.000Z'),
+          }),
         }),
-      }),
-    );
-    expect(notify).toHaveBeenCalledWith(
-      expect.objectContaining({ runId: 'run-1', resultSummary: 'ok' }),
-    );
-    expect(result?.scheduledFor).toBe('2026-08-08T10:00:00.000Z');
+      );
+      expect(notify).toHaveBeenCalledWith(
+        expect.objectContaining({ runId: 'run-1', resultSummary: 'ok' }),
+      );
+      expect(result?.scheduledFor).toBe('2026-08-08T10:00:00.000Z');
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('recovers an expired RUNNING occurrence without creating a duplicate run', async () => {
