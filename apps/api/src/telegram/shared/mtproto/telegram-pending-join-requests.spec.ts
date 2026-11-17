@@ -34,7 +34,7 @@ describe('fetchPendingJoinRequestsCount', () => {
     await expect(livePending({ invoke: jest.fn().mockRejectedValue(new Error('CHAT_ADMIN_REQUIRED')) } as never, {} as never, { requestsPending: 0 })).resolves.toBeNull();
     await expect(livePending({ invoke: jest.fn().mockResolvedValue({}) } as never, {} as never, null)).resolves.toBeNull();
   });
-  it('keeps the reported count when Telegram returns an invalid live count', async () => {
+  it('preserves stored state when Telegram returns an invalid live count', async () => {
     const invoke = jest.fn().mockResolvedValue({ count: 'invalid' });
 
     await expect(
@@ -46,6 +46,6 @@ describe('fetchPendingJoinRequestsCount', () => {
         }),
         { requestsPending: 7 },
       ),
-    ).resolves.toBe(7);
+    ).resolves.toBeNull();
   });
 });

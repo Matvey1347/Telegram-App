@@ -14,13 +14,7 @@ export async function livePending(
   fullChannel: unknown,
   run: <T>(request: Promise<T>) => Promise<T> = (request) => request,
 ) {
-  const reportedCount = Number(
-    (fullChannel as { requestsPending?: unknown } | null)?.requestsPending,
-  );
-  const fallback =
-    Number.isFinite(reportedCount) && reportedCount >= 0
-      ? Math.trunc(reportedCount)
-      : null;
+  void fullChannel; // Metadata is not a verified live queue, even when nonzero.
   try {
     const response = (await run(
       client.invoke(
@@ -33,11 +27,9 @@ export async function livePending(
         }),
       ),
     )) as PendingJoinRequestsResponse;
-    const count = Number(response.count);
-    return response.count != null && Number.isFinite(count) && count >= 0
-      ? Math.trunc(count)
-      : fallback || null;
+    const count = response.count;
+    return typeof count === 'number' && Number.isSafeInteger(count) && count >= 0 ? count : null;
   } catch {
-    return fallback || null;
+    return null;
   }
 }
