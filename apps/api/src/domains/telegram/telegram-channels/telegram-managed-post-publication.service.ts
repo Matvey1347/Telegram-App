@@ -206,6 +206,11 @@ export class TelegramManagedPostPublicationService {
     channelId: string,
     postId: string,
     dto: PublishTelegramManagedPostDto,
+    onProgress?: (
+      item: { stage: string; message?: string },
+      current: number,
+      total: number,
+    ) => void,
   ) {
     const workspaceId =
       await this.telegramChannelsSupportService.workspace(userId);
@@ -227,6 +232,8 @@ export class TelegramManagedPostPublicationService {
       (dto.longTextMode as 'IMAGES_THEN_TEXT' | 'CAPTION_THEN_TEXT') ||
         'IMAGES_THEN_TEXT',
       userId,
+      false,
+      (stage, message) => onProgress?.({ stage, message }, 1, 1),
     );
   }
 

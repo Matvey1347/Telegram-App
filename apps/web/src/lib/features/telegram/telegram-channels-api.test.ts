@@ -136,13 +136,48 @@ describe("telegramChannelsApi.scheduleManagedPost", () => {
   });
 });
 
+describe("telegramChannelsApi.publishManagedPost", () => {
+  it("keeps Telegram publication alive through the streamed response", async () => {
+    const streamProgressAction = vi.fn().mockResolvedValue({ id: "post-1" });
+    const client = createTelegramChannelsApi({
+      api: {} as AxiosInstance,
+      crud: vi.fn(() => ({
+        list: vi.fn(),
+        get: vi.fn(),
+        create: vi.fn(),
+        update: vi.fn(),
+        remove: vi.fn(),
+      })),
+      getPaginated: vi.fn(),
+      getAllPaginatedItems: vi.fn(),
+      streamBulkAction: vi.fn(),
+      streamProgressAction,
+      silentFeedbackConfig: {},
+      quietMutationConfig: {},
+    });
+    const onProgress = vi.fn();
+
+    await client.publishManagedPost(
+      "channel-1",
+      "post-1",
+      "IMAGES_THEN_TEXT",
+      true,
+      onProgress,
+    );
+
+    expect(streamProgressAction).toHaveBeenCalledWith(
+      "/telegram-channels/channel-1/managed-posts/post-1/publish-stream",
+      { longTextMode: "IMAGES_THEN_TEXT" },
+      onProgress,
+    );
+  });
+});
+
 describe("telegramChannelsApi.rescheduleChannelScheduledPosts", () => {
   it("loads the stable ordinary-post plan and streams only the requested batch", async () => {
-    const get = vi
-      .fn()
-      .mockResolvedValue({
-        data: { channelId: "channel-1", postIds: ["post-1", "post-2"] },
-      });
+    const get = vi.fn().mockResolvedValue({
+      data: { channelId: "channel-1", postIds: ["post-1", "post-2"] },
+    });
     const streamProgressAction = vi.fn().mockResolvedValue({
       action: "RESCHEDULE_CHANNEL_SCHEDULED_POSTS",
       channelId: "channel-1",
