@@ -210,7 +210,7 @@ const messages = {
   "telegram.posts.support.rescheduleProgress":
     "Checked posts: {completed} of {total}",
   "telegram.posts.support.telegramConnectionActive":
-    "Connected to Telegram; waiting for the current operation to finish…",
+    "The server is processing the request; waiting for the current operation to finish…",
   "telegram.posts.support.loadingLocalSchedule":
     "Counting scheduled posts for this channel…",
   "telegram.posts.support.loadingTelegramSchedule":

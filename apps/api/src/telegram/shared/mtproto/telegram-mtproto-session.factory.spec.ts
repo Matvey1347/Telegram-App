@@ -18,15 +18,15 @@ describe('closeTelegramMtprotoSession', () => {
     expect(client.disconnect).not.toHaveBeenCalled();
   });
 
-  it('falls back to disconnect and keeps shutdown best-effort', async () => {
+  it('tries disconnect but reports unconfirmed transport shutdown', async () => {
     const client = {
       destroy: jest.fn().mockRejectedValue(new Error('destroy failed')),
       disconnect: jest.fn().mockRejectedValue(new Error('disconnect failed')),
     };
 
-    await expect(
-      closeTelegramMtprotoSession(client as never),
-    ).resolves.toBeUndefined();
+    await expect(closeTelegramMtprotoSession(client as never)).rejects.toThrow(
+      'shutdown could not be confirmed',
+    );
     expect(client.destroy).toHaveBeenCalledTimes(1);
     expect(client.disconnect).toHaveBeenCalledTimes(1);
   });

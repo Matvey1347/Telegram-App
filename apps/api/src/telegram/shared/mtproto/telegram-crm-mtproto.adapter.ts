@@ -14,6 +14,7 @@ import { returnBigInt } from 'telegram/Helpers';
 import {
   closeTelegramMtprotoSession,
   createTelegramMtprotoSession,
+  subscribeTelegramMtprotoSessionInvalidation,
 } from '@api/telegram/shared/mtproto/telegram-mtproto-session.factory';
 import type {
   TelegramCrmMtprotoCheckpoint,
@@ -397,7 +398,11 @@ class GramJsTelegramCrmHandle implements TelegramCrmMtprotoHandle {
       };
     }
     this.client.addEventHandler(rawHandler);
+    const unsubscribe = onError
+      ? subscribeTelegramMtprotoSessionInvalidation(this.client, onError)
+      : () => undefined;
     return () => {
+      unsubscribe();
       this.client.removeEventHandler(rawHandler, undefined as never);
       if (onError) this.client.onError = () => Promise.resolve();
     };

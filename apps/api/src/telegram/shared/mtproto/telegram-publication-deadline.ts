@@ -143,6 +143,11 @@ export async function withTelegramReadDeadline<TClient, TResult>(input: {
   } finally {
     clearTimeout(timer);
     controller.signal.removeEventListener('abort', onAbort);
-    if (!controller.signal.aborted) await closeOnce();
+    if (!controller.signal.aborted)
+      await waitTelegramOperationWithTimeout(
+        closeOnce(),
+        5_000,
+        `${input.label} transport cleanup (session remains owned)`,
+      );
   }
 }

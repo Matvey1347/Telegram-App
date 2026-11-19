@@ -4,6 +4,26 @@ import {
 } from './telegram-publication-deadline';
 
 describe('publication transport cancellation', () => {
+  it('bounds stalled successful read cleanup without releasing transport ownership', async () => {
+    jest.useFakeTimers();
+    try {
+      let release!: () => void;
+      const close = jest.fn(() => new Promise<void>((resolve) => { release = resolve; }));
+      const pending = withTelegramReadDeadline({
+        timeoutMs: 10_000,
+        label: 'queue read',
+        create: async () => ({}),
+        close,
+        run: async () => ['confirmed'],
+      });
+      const rejected = expect(pending).rejects.toThrow('session remains owned');
+      await jest.advanceTimersByTimeAsync(5001);
+      await rejected;
+      expect(close).toHaveBeenCalledTimes(1);
+      release();
+    } finally { jest.useRealTimers(); }
+  });
+
   it('does not send when a future schedule expires during media preparation', async () => {
     const clock = jest.spyOn(Date, 'now').mockReturnValue(1000);
     const send = jest.fn();

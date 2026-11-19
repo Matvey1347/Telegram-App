@@ -56,7 +56,6 @@ export async function loadTelegramScheduledQueues(
   ];
   const accountContexts = new Map<string, ReschedulerAccountContext>();
   let remoteScheduledCount = 0;
-  let checkedPostCount = 0;
   input.onProgress?.(
     {
       stage: 'LOADING_TELEGRAM_SCHEDULE',
@@ -68,15 +67,12 @@ export async function loadTelegramScheduledQueues(
 
   for (const [accountIndex, accountId] of accountIds.entries()) {
     try {
-      const senderPosts = nativePosts.filter(
-        (post) => (post.sourceId ?? '') === accountId,
-      );
       input.onProgress?.(
         {
           stage: 'LOADING_TELEGRAM_SCHEDULE',
           message: `Reading the complete Telegram scheduled queue for sender ${accountIndex + 1} of ${accountIds.length}.`,
         },
-        checkedPostCount,
+        0,
         input.total,
       );
       const account = await deps.access.connectedAccount(
@@ -93,13 +89,12 @@ export async function loadTelegramScheduledQueues(
         remoteScheduled.map((message) => message.id),
       );
       remoteScheduledCount += scheduledIds.size;
-      checkedPostCount += senderPosts.length;
       input.onProgress?.(
         {
           stage: 'LOADING_TELEGRAM_SCHEDULE',
           message: `Read sender ${accountIndex + 1} of ${accountIds.length}: ${scheduledIds.size} messages are scheduled in Telegram.`,
         },
-        checkedPostCount,
+        0,
         input.total,
       );
       accountContexts.set(accountId, {
@@ -131,7 +126,7 @@ export async function loadTelegramScheduledQueues(
           stage: 'LOADING_TELEGRAM_SCHEDULE',
           message: `Could not read Telegram's scheduled queue for sender ${accountIndex + 1} of ${accountIds.length}: ${message}`,
         },
-        checkedPostCount,
+        0,
         input.total,
       );
     }

@@ -29,6 +29,16 @@ history messages. History beyond that cap fails closed for missing-future repair
 
 Release and production execution verification are pending for this revision.
 
+The incident also exposed an exclusive-session deadlock: a live CRM connection
+held the account lease for its entire lifetime, while channel operations waited
+for that same lease. The shared Telegram session factory now lends separate
+caller views of one physical connection. Ordinary completion releases only its
+view, preserving CRM updates; cancellation closes the physical transport,
+invalidates stale views and notifies CRM's existing recovery callback. A new
+connection must await confirmed shutdown. Unconfirmed shutdown retains ownership.
+Read cleanup has a five-second waiting bound without releasing the live lease.
+This reuses the existing CRM socket and adds no idle socket, timer or DB work.
+
 The existing recovery controller, rescheduler and publisher remain the single
 workflow. Candidate reads and claim admission exclude ad placements, folder VP
 and batch deliveries. Final stream results include per-post outcomes; the modal

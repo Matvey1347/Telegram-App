@@ -58,7 +58,10 @@ describe('rescheduler request-scoped Telegram snapshots', () => {
   it('compares 72 posts against one complete original-sender queue and one published history', async () => {
     const h = harness();
     const input = queueInput();
+    const onProgress = jest.fn();
+    Object.assign(input, { onProgress });
     const queues = await loadTelegramScheduledQueues(h.deps, input);
+    expect(onProgress.mock.calls.every(([, current]) => current === 0)).toBe(true);
     expect(queues.remoteScheduledCount).toBe(1);
     expect(queues.accountContexts.get('sender')!.scheduledMessages).toEqual([
       { id: 'scheduled-1' },

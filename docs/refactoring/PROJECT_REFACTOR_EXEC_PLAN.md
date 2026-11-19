@@ -1,5 +1,21 @@
 # Project Refactor ExecPlan
 
+## 2026-11-19 Channel publication recovery
+
+Grace traced the one-post request waterfall and the CRM-held exclusive Telegram
+session lease; Knuth audited bounded reads and Parnas checked existing size
+boundaries. Recovery now uses batches of 100, one original-sender queue snapshot
+and request-scoped complete publication evidence. Missing/partial/early-published
+schedules fail closed. Shared physical Telegram connections preserve CRM while
+allowing short channel operations; cancellation invalidates callers and enters
+existing CRM recovery without releasing an unconfirmed transport. Turing reviewed
+duplicate, timeout, namespace and cleanup safeguards. No new polling, process,
+schema or persisted cache is added. Focused API/UI tests, types and clean builds
+passed; full repository checks retain unrelated failures. Bulk phase deployment
+cc8fe956-f389-4cc3-aa2f-963157e9a75d is SUCCESS. Final session-sharing rollout and
+actual channel recovery verification are in progress; see CHANNEL_RESCHEDULING.
+
+
 Updated: 2026-11-14
 
 ## 2026-11-14 AI Posting configuration redesign
