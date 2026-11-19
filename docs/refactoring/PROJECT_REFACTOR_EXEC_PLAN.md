@@ -12,8 +12,11 @@ existing CRM recovery without releasing an unconfirmed transport. Turing reviewe
 duplicate, timeout, namespace and cleanup safeguards. No new polling, process,
 schema or persisted cache is added. Focused API/UI tests, types and clean builds
 passed; full repository checks retain unrelated failures. Bulk phase deployment
-cc8fe956-f389-4cc3-aa2f-963157e9a75d is SUCCESS. Final session-sharing rollout and
-actual channel recovery verification are in progress; see CHANNEL_RESCHEDULING.
+cc8fe956-f389-4cc3-aa2f-963157e9a75d is SUCCESS. Final deployment 198945a4-79b9-4ff6-9529-c149b5ebf4af / commit 596a3ff9 is SUCCESS.
+The morning post published at 10:10:33 Warsaw; 67 regular future posts cover two
+daily slots through December 22. A repeated batch preserved all 67 in 5,985 ms with
+zero sends/failures. Full queue evidence and unrelated check limitations are in
+[CHANNEL_RESCHEDULING](../telegram/CHANNEL_RESCHEDULING.md).
 
 
 Updated: 2026-11-14

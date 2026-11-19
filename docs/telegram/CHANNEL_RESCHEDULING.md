@@ -27,7 +27,7 @@ still scale with changed posts. Railway process/RAM baseline is unchanged;
 bounded request memory holds at most the operation candidates, queue and 500
 history messages. History beyond that cap fails closed for missing-future repair.
 
-Bulk/session/snapshot recovery is deployed and production-verified below. The final plaintext-normalization regression is being released separately.
+The complete recovery implementation, including the plaintext-normalization regression, is deployed and production-verified below.
 
 The incident also exposed an exclusive-session deadlock: a live CRM connection
 held the account lease for its entire lifetime, while channel operations waited
@@ -147,8 +147,10 @@ native entry in 17,540 ms, with zero failures. A second complete batch preserved
 all 67 in 5,985 ms, performed no replacements and returned zero failures.
 
 Validation: API/web builds and types, targeted UI tests, snapshot/recovery tests,
-transport/CRM sharing tests and publication deadline regressions passed. Full
-API tests retain 14 unrelated failing suites; general lint/architecture/release
+transport/CRM sharing tests and publication deadline regressions passed. The original checkout full
+API run retained 14 unrelated failing suites (604 passed); a later clean-checkout
+full rerun terminated with process exit 139 before completing. Targeted identity,
+recovery and deadline suites pass. General lint/architecture/release
 checks retain existing repository debt. AI dry-run/execute/check passed with
 zero pending receipts; no unknown reserve was invented or released. No main,
 master or production Git ref was pushed while the general release gate fails.
@@ -166,3 +168,16 @@ Telegram visible text is not managed markup: literal placeholders such as
 once and only normalizes whitespace/case in already-visible remote text.
 This prevents a published template post from remaining falsely scheduled or
 being replaced after an early manual publication.
+
+Final normalization deployment `198945a4-79b9-4ff6-9529-c149b5ebf4af`
+(commit `596a3ff9`) reached SUCCESS; previous deployment was removed. Fresh
+production health is HTTP 200. Identity/recovery focused tests: 72 passed;
+publication deadline regressions: 102 passed. No temporary API/web server was
+started. All local verification commands have finished.
+
+The 09:50 UTC read found two newly added native messages (5026/5027), absent
+from the earlier 09:12 snapshot and from all channel managed-post records. Their
+November 20 slots are 12:10 and 17:10 Europe/Warsaw. One visible message is channel
+promotion copy. They are not duplicates or replacements sent by recovery; they
+remain untouched pending the owner's classification. All 67 regular future
+posts still match IDs, content and UTC dates, with no aliases or dated failures.
