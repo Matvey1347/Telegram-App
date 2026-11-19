@@ -264,3 +264,27 @@ instant preservation result. No guaranteed future delivery is inferred.
 The heartbeat hint is now visible only while the mutation is pending, so completed
 results no longer say the server is still processing. Success/error regressions
 retain outcomes, precise errors and an enabled retry action.
+
+## Two-channel live acceptance, 2026-11-19/20
+
+Freudzone (`cmt0fwgs4a0vj0lnve39splof`) has 45 recreated future ordinary
+native schedules; Women Power (`cmtzk1agp000k12rihbrl3d48`) has 47. Explicit
+remaining-post IDs resumed the interrupted website operation without replaying
+already acknowledged rows. Each channel retains two LOCAL schedules. Fresh
+priority-account queue reads confirm new IDs, absence of old IDs, unchanged
+accepted instants and ACKED receipts. One previously acknowledged but unprojected
+row was repaired using unique exact visible text, fresh new ID/date proof and an
+expired claim, without another send. Its receipt timestamp was aligned with the
+accepted database/Telegram UTC instant.
+
+Four overdue records were already published: one matched automatically; three
+had unique canonical text/media matches outside the automatic six-hour window.
+Those three were reconciled using the existing identity matcher, revision store
+and publication persistence helper after positive channel-history verification,
+without sending. One still-queued overdue record was cancelled and drafted by
+the canonical rescheduler. Advertising placements were excluded from mutations.
+
+Manual QA: refresh the channel page, inspect planned dates, run the reschedule
+button, wait for completion, and verify the new IDs through the priority account.
+After an interrupted request, inspect the durable receipt before retrying; a
+completed ACK with stale projection is recovery work, not permission to resend.

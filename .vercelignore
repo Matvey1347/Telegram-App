@@ -1,0 +1,11 @@
+.codex
+.git
+.vercel
+.env*
+**/node_modules
+**/.next
+**/dist
+**/coverage
+graphify-out
+.finance-backups
+.codegraphcontext
