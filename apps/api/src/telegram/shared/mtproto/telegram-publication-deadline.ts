@@ -1,11 +1,15 @@
+import { telegramOperationSignal } from './telegram-operation-signal';
+
 /** Cancels the actual transport, and keeps ownership until work and close settle. */
 export async function withTelegramPublicationDeadline<TClient, TResult>(input: {
   timeoutMs: number;
   signal?: AbortSignal;
+  scheduleAt?: Date | null;
   create(signal: AbortSignal): Promise<TClient>;
   close(client: TClient): Promise<void>;
   run(client: TClient, checkpoint: () => void): Promise<TResult>;
 }) {
+  const callerSignal = input.signal ?? telegramOperationSignal.getStore();
   const controller = new AbortController();
   let client: TClient | undefined;
   let closing: Promise<void> | undefined;
@@ -15,6 +19,10 @@ export async function withTelegramPublicationDeadline<TClient, TResult>(input: {
       ? Promise.resolve()
       : (closing ??= input.close(client));
   const checkpoint = () => {
+    if (input.scheduleAt && input.scheduleAt.getTime() <= Date.now())
+      throw new Error(
+        'Telegram schedule time elapsed; reconcile the remote outcome before rescheduling',
+      );
     if (controller.signal.aborted)
       throw new Error(
         deadlineReached
@@ -40,8 +48,8 @@ export async function withTelegramPublicationDeadline<TClient, TResult>(input: {
   const abortFromCaller = () => {
     controller.abort();
   };
-  input.signal?.addEventListener('abort', abortFromCaller, { once: true });
-  if (input.signal?.aborted) abortFromCaller();
+  callerSignal?.addEventListener('abort', abortFromCaller, { once: true });
+  if (callerSignal?.aborted) abortFromCaller();
   const timer = setTimeout(() => {
     deadlineReached = true;
     controller.abort();
@@ -62,7 +70,7 @@ export async function withTelegramPublicationDeadline<TClient, TResult>(input: {
   } finally {
     clearTimeout(timer);
     controller.signal.removeEventListener('abort', onAbort);
-    input.signal?.removeEventListener('abort', abortFromCaller);
+    callerSignal?.removeEventListener('abort', abortFromCaller);
     // Never release a publication claim merely because the deadline elapsed.
     // A stalled MTProto destroy() must not keep the API request alive forever.
     // The session factory releases its lease in its own finally path.
@@ -103,10 +111,12 @@ export async function waitTelegramOperationWithTimeout<T>(
 export async function withTelegramReadDeadline<TClient, TResult>(input: {
   timeoutMs: number;
   label: string;
+  signal?: AbortSignal;
   create(signal: AbortSignal): Promise<TClient>;
   close(client: TClient): Promise<void>;
   run(client: TClient): Promise<TResult>;
 }) {
+  const callerSignal = input.signal ?? telegramOperationSignal.getStore();
   const controller = new AbortController();
   let client: TClient | undefined;
   let closePromise: Promise<void> | undefined;
@@ -125,9 +135,13 @@ export async function withTelegramReadDeadline<TClient, TResult>(input: {
     void closeOnce().catch(() => undefined);
   };
   controller.signal.addEventListener('abort', onAbort, { once: true });
+  const abortFromCaller = () => controller.abort();
+  callerSignal?.addEventListener('abort', abortFromCaller, { once: true });
+  if (callerSignal?.aborted) abortFromCaller();
   const timer = setTimeout(() => controller.abort(), input.timeoutMs);
   timer.unref?.();
   const operation = (async () => {
+    controller.signal.throwIfAborted();
     client = await input.create(controller.signal);
     if (controller.signal.aborted) {
       await closeOnce();
@@ -139,7 +153,13 @@ export async function withTelegramReadDeadline<TClient, TResult>(input: {
     return await Promise.race([operation, aborted]);
   } finally {
     clearTimeout(timer);
+    callerSignal?.removeEventListener('abort', abortFromCaller);
     controller.signal.removeEventListener('abort', onAbort);
-    if (!controller.signal.aborted) await closeOnce();
+    if (!controller.signal.aborted)
+      await waitTelegramOperationWithTimeout(
+        closeOnce(),
+        5_000,
+        `${input.label} transport cleanup (session remains owned)`,
+      );
   }
 }

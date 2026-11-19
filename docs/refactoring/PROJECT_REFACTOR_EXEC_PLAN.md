@@ -1,5 +1,24 @@
 # Project Refactor ExecPlan
 
+## 2026-11-19 Channel publication recovery
+
+Grace traced the one-post request waterfall and the CRM-held exclusive Telegram
+session lease; Knuth audited bounded reads and Parnas checked existing size
+boundaries. Recovery now uses batches of 100, one original-sender queue snapshot
+and request-scoped complete publication evidence. Missing/partial/early-published
+schedules fail closed. Shared physical Telegram connections preserve CRM while
+allowing short channel operations; cancellation invalidates callers and enters
+existing CRM recovery without releasing an unconfirmed transport. Turing reviewed
+duplicate, timeout, namespace and cleanup safeguards. No new polling, process,
+schema or persisted cache is added. Focused API/UI tests, types and clean builds
+passed; full repository checks retain unrelated failures. Bulk phase deployment
+cc8fe956-f389-4cc3-aa2f-963157e9a75d is SUCCESS. Final deployment 198945a4-79b9-4ff6-9529-c149b5ebf4af / commit 596a3ff9 is SUCCESS.
+The morning post published at 10:10:33 Warsaw; 67 regular future posts cover two
+daily slots through December 22. A repeated batch preserved all 67 in 5,985 ms with
+zero sends/failures. Full queue evidence and unrelated check limitations are in
+[CHANNEL_RESCHEDULING](../telegram/CHANNEL_RESCHEDULING.md).
+
+
 Updated: 2026-11-14
 
 ## 2026-11-14 AI Posting configuration redesign
@@ -2341,3 +2360,44 @@ Release decision remains **NO-GO**: focused API138 suites/1083 tests and web55 f
   unchanged-image reuse were verified; the user confirmed round rendering.
   Initial redundant LOCAL test copies were retained and inventoried. Production
   remains read-only with zero legacy bindings; explicit rollout approval is pending.
+
+
+### 2026-11-19 — Native ownership-transfer recreation
+
+The preservation-only interpretation was rejected: a queued post can fail after
+channel ownership transfer. The explicit recovery button now recreates every
+future ordinary native schedule via the priority publisher, using one initial
+queue and per-post claims. A shared transport helper prepares Telegram-native
+photo/document references and text before deleting exact verified old IDs. One
+latest native-recovery row/post retains start/cancel/acknowledgement evidence;
+unknown outcomes do not replay, and acknowledgement projection uses the live
+owner/status/expiry guard. LOCAL and advertising/VP/batch boundaries stay intact.
+Overdue cancellation through another administrator requires fresh positive
+identity, complete history checking and the same claim context. Grace/Knuth/
+Parnas analysis and Turing review were applied; identified missing-schedule
+receipt, projection fence and overdue context issues were fixed with regressions.
+Targeted native/deadline tests and API/web types/build pass. Existing project
+architecture/full-suite failures are retained, without raised thresholds.
+
+
+Mentor live acceptance: the localhost button recreated43 future native posts
+through tgManage770, drafted1 overdue post and preserved2 LOCAL entries, with
+zero failures. Separate production reads confirmed new disjoint IDs, unchanged
+instants,43 ACKED receipts, unchanged44 ad placements and2 external messages.
+An actual failed read through the obsolete account exposed the missing explicit
+priority-reader selection; that is fixed using the canonical publisher selector.
+One already-published overdue record was reconciled without a send. The completed
+UI heartbeat text is also scoped to pending state. Full evidence is in
+docs/telegram/CHANNEL_RESCHEDULING.md; final release/deployed-version verification
+is recorded in the task handoff after activation.
+
+Final activation (2026-11-19): runtime commit `ea9fdea5`, Railway deployment
+`f8306ee2-8c53-499b-b952-991ba4f9a6e3`, SUCCESS; public API health HTTP 200.
+A second independent production read at 22:18 UTC again found zero discrepancies.
+Targeted API coverage passed 232 tests plus 104 legacy facade regressions;
+6 web button tests passed. The merged root regression selection passed 72 tests.
+The full suite/release gate retains existing unrelated failures; no protected
+branch push or guard bypass was performed. Task-owned local servers were stopped
+and the temporary browser session was logged out. Runtime work adds no idle
+polling, recurring jobs or persistent sockets; queue reads are batched per account
+and channel, writes remain per claimed post, receipts are bounded to one per post.

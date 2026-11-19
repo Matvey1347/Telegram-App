@@ -1,3 +1,4 @@
+import { selectManagedPostPublishingSource } from './managed-post-publishing-source';
 import { telegramAccountCredentials, type EncryptedTelegramAccountCredentials } from '@api/telegram/shared/mtproto/telegram-account-credentials';
 import {
   BadRequestException,
@@ -536,6 +537,26 @@ export class TelegramChannelAccessService {
       throw new BadRequestException('Telegram user account is not connected');
     }
     return account;
+  }
+
+  public async connectedRecoveryAccount(
+    workspaceId: string,
+    channelId: string,
+  ) {
+    const sources = await this.sourceAccessService.sourcesForChannel(
+      workspaceId,
+      channelId,
+    );
+    const source = selectManagedPostPublishingSource(sources, {
+      requiresBotApi: false,
+    });
+    return this.connectedAccount(
+      workspaceId,
+      channelId,
+      source?.sourceType === TelegramSourceType.MTPROTO
+        ? source.sourceId
+        : undefined,
+    );
   }
 
   public sourceDisplayName(account: {

@@ -6021,6 +6021,7 @@ model TelegramManagedPost {
   group                   PostGroup?                             @relation(fields: [groupId], references: [id], onDelete: SetNull)
   plannerFormat           TelegramPostPlannerFormat?             @relation(fields: [plannerFormatId], references: [id], onDelete: SetNull)
   plannerSlot             TelegramPostPlannerSlot?               @relation(fields: [plannerSlotId], references: [id], onDelete: SetNull)
+  nativeRecovery          TelegramManagedPostNativeRecovery?
   sendOperations          TelegramManagedPostSendOperation[]
   revisions               TelegramManagedPostRevision[]
   adSalePlacements        TelegramAdSalePlacement[]              @relation("TelegramAdPlacementManagedPost")
@@ -6053,6 +6054,25 @@ model TelegramManagedPost {
   @@index([workspaceId, telegramChannelId, publicationSlotId], map: "TelegramManagedPost_workspaceId_telegramChannelId_publicationSl")
   @@index([telegramIdVerificationStatus, status, telegramIdLastCheckedAt], map: "TelegramManagedPost_due_identity_idx")
   @@index([workspaceId, telegramChannelId, origin, status, scheduledAt], map: "TelegramManagedPost_workspaceId_telegramChannelId_origin_status")
+}
+
+model TelegramManagedPostNativeRecovery {
+  postId          String   @id
+  workspaceId     String
+  channelId       String
+  sourceId        String
+  owner           String
+  scheduledAt     DateTime
+  oldMessageIds   String[]
+  newMessageIds   String[] @default([])
+  status          String   @default("PREPARED")
+  cancelledAt     DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  post TelegramManagedPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, channelId])
 }
 
 model TelegramManagedPostSendOperation {

@@ -1,3 +1,6 @@
+import { TelegramManagedPostNativeRecoveryStore } from './telegram-managed-post-native-recovery.store';
+import { TelegramProductionRecoveryTransportController } from './telegram-production-recovery-transport.controller';
+import { TelegramProductionRecoveryTransportService } from './telegram-production-recovery-transport.service';
 import { ChannelAvatarEmojiProcessorService } from './channel-avatar-emoji-processor.service';
 import { ChannelAvatarEmojiController } from './channel-avatar-emoji.controller';
 import { ChannelAvatarEmojiService } from './channel-avatar-emoji.service';
@@ -117,6 +120,7 @@ import { TelegramSystemPostGroupsService } from './telegram-system-post-groups.s
 import { TelegramManagedPostRecoveryController } from './telegram-managed-post-recovery.controller';
 import { TelegramManagedPostScheduledResetService } from './telegram-managed-post-scheduled-reset.service';
 import { TelegramManagedPostReschedulerService } from './telegram-managed-post-rescheduler.service';
+import { TelegramManagedPostRecoverySnapshotService } from './telegram-managed-post-recovery-snapshot.service';
 import { TelegramPostCalendarPlannerController } from './telegram-post-calendar-planner.controller';
 import { TelegramChannelBoundedReadsController } from './telegram-channel-bounded-reads.controller';
 import { TelegramManagedPostLookupService } from './telegram-managed-post-lookup.service';
@@ -147,6 +151,7 @@ import { TelegramChannelTrafficAttributionService } from './telegram-channel-tra
     AiModule,
   ],
   controllers: [
+    TelegramProductionRecoveryTransportController,
     ChannelAvatarEmojiController,
     TelegramChannelsController,
     TelegramAiPostingController,
@@ -166,6 +171,8 @@ import { TelegramChannelTrafficAttributionService } from './telegram-channel-tra
     TelegramPostBatchesController,
   ],
   providers: [
+    TelegramManagedPostNativeRecoveryStore,
+    TelegramProductionRecoveryTransportService,
     ChannelAvatarEmojiService,
     ChannelAvatarEmojiProcessorService,
     ChannelAvatarEmojiPublisherService,
@@ -245,6 +252,7 @@ import { TelegramChannelTrafficAttributionService } from './telegram-channel-tra
     TelegramManagedPostHistoryService,
     TelegramManagedPostScheduledResetService,
     TelegramManagedPostReschedulerService,
+    TelegramManagedPostRecoverySnapshotService,
     TelegramManagedPostPublicationService,
     TelegramManagedPostPublisherService,
     TelegramManagedPostDeliveryDispatcherService,

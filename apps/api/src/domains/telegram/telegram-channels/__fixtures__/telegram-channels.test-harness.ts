@@ -1,3 +1,4 @@
+import { TelegramManagedPostNativeRecoveryStore } from '../telegram-managed-post-native-recovery.store';
 import { ChannelAvatarEmojiService } from '../channel-avatar-emoji.service';
 import { TelegramManagedPostDeliveryDispatcherService } from '../telegram-managed-post-delivery-dispatcher.service';
 import { TelegramManagedPostSendJournalService } from '../telegram-managed-post-send-journal.service';
@@ -83,6 +84,7 @@ import { TelegramRemoteScheduledPostImportService } from '../telegram-remote-sch
 type ProviderType = new (...args: any[]) => object;
 
 const narrowProviders: ProviderType[] = [
+  TelegramManagedPostNativeRecoveryStore,
   TelegramChannelsSupportService,
   TelegramChannelAdmissionSyncService,
   TelegramChannelAccessService,

@@ -9,3 +9,7 @@ export type TelegramAccountProfile = {
   nameColor: number | null;
   capabilities: TelegramAccountCapabilities;
 };
+
+export function telegramPublicPhotoUrl(username: string | null) {
+  return username ? `https://t.me/i/userpic/320/${username}.jpg` : null;
+}

@@ -1,3 +1,10 @@
+import { publishTelegramPost, type TelegramPublishPostParams } from './telegram-mtproto-publish-post';
+import {
+  completeTelegramScheduledMessages,
+  readTelegramHistoryFromCutoff,
+  type TelegramHistoryCutoff,
+} from './telegram-history-cutoff';
+import { telegramPublicPhotoUrl } from './telegram-mtproto-account-profile';
 import {
   withTelegramPublicationDeadline,
   withTelegramReadDeadline,
@@ -17,7 +24,6 @@ import { returnBigInt } from 'telegram/Helpers';
 import { HTMLParser } from 'telegram/extensions/html';
 import { normalizeTelegramChannelId } from '@api/telegram/shared/imports/telegram-post-url';
 import {
-  telegramHtmlToGramJsAlbumHtml,
   telegramHtmlToMtprotoHtml,
 } from '@api/telegram/shared/markup/telegram-markup';
 import {
@@ -54,12 +60,12 @@ import {
 import {
   convertTelegramPublishImageWithSips,
   downloadTelegramPublishImage,
-  downloadTelegramPublishMotion,
 } from '@api/telegram/shared/mtproto/telegram-mtproto-publish-image';
 import type { TelegramAccountProfile } from '@api/telegram/shared/mtproto/telegram-mtproto-account-profile';
 import {
   closeTelegramMtprotoSession,
   createTelegramMtprotoSession,
+  type TelegramMtprotoSessionCredentials,
 } from '@api/telegram/shared/mtproto/telegram-mtproto-session.factory';
 import { livePending } from '@api/telegram/shared/mtproto/telegram-pending-join-requests';
 import type { BroadcastStatsGraphField } from '@api/telegram/shared/core/telegram-broadcast-stats.types';
@@ -478,7 +484,7 @@ export class TelegramMtprotoClient {
     const username = me.username || null;
     const photoUrl =
       (await this.profilePhotoDataUrl(client, me)) ||
-      this.telegramPublicPhotoUrl(username);
+      telegramPublicPhotoUrl(username);
 
     return {
       id: String(me.id),
@@ -814,10 +820,6 @@ export class TelegramMtprotoClient {
     }
   }
 
-  private telegramPublicPhotoUrl(username: string | null) {
-    return username ? `https://t.me/i/userpic/320/${username}.jpg` : null;
-  }
-
   private async profilePhotoDataUrl(
     client: TelegramClient,
     entity: unknown,
@@ -1041,18 +1043,22 @@ export class TelegramMtprotoClient {
           this.telegramMetadataTimeoutMs,
           'Telegram pending join requests lookup',
         ),
-      (code) => { pendingJoinRequestsError = code; },
+      (code) => {
+        pendingJoinRequestsError = code;
+      },
     );
     const photoUrl =
       (await this.profilePhotoDataUrl(client, entity)) ||
-      this.telegramPublicPhotoUrl(username);
+      telegramPublicPhotoUrl(username);
     this.logger.log(
       `Telegram entity described in ${this.elapsed(startedAt)}: kind=${this.entityKind(entity)} id=${this.entityIdToString(entity) || 'n/a'} username=${username || 'n/a'}`,
     );
     return {
       kind: this.entityKind(entity),
       isCreator: Boolean('creator' in entity && entity.creator),
-      adminRights: this.toJsonSafe(('adminRights' in entity && entity.adminRights) || null) as Record<string, unknown> | null,
+      adminRights: this.toJsonSafe(
+        ('adminRights' in entity && entity.adminRights) || null,
+      ) as Record<string, unknown> | null,
       telegramChatId: this.entityIdToString(entity),
       title: this.entityTitle(entity) || username || fallbackRef,
       username,
@@ -1180,7 +1186,11 @@ export class TelegramMtprotoClient {
   }
 
   private async dialogCandidates(client: TelegramClient) {
-    const dialogs = await this.withTimeout(client.getDialogs({ limit: 300 }), this.telegramResolveTimeoutMs, 'Telegram channel dialogs');
+    const dialogs = await this.withTimeout(
+      client.getDialogs({ limit: 300 }),
+      this.telegramResolveTimeoutMs,
+      'Telegram channel dialogs',
+    );
     return dialogs
       .map((dialog: unknown) => {
         const row = dialog as { title?: string; entity?: unknown };
@@ -1673,17 +1683,14 @@ export class TelegramMtprotoClient {
     });
   }
 
-  async getAccountProfile(params: {
-    apiId: string;
-    apiHash: string;
-    session: string;
-  }) {
-    const client = await this.createClient(params);
-    try {
-      return await this.getAccountProfileFromClient(client);
-    } finally {
-      await this.closeClient(client);
-    }
+  async getAccountProfile(params: Required<TelegramMtprotoSessionCredentials>) {
+    return withTelegramReadDeadline({
+      timeoutMs: this.telegramMetadataTimeoutMs,
+      label: 'Telegram account profile',
+      create: (signal) => this.createClient(params, signal),
+      close: (client) => this.closeClient(client),
+      run: (client) => this.getAccountProfileFromClient(client),
+    });
   }
 
   async getMe(params: { apiId: string; apiHash: string; session: string }) {
@@ -1775,7 +1782,11 @@ export class TelegramMtprotoClient {
       `Starting Telegram public channel lookup: ref=${maskTelegramReferenceForLog(params.channelRef || params.channel?.telegramChatId || params.channel?.username)} invite=${maskTelegramInviteHash(params.inviteHash)}`,
     );
     const signal = AbortSignal.timeout(30_000);
-    const client = await this.withTimeout(this.createClient(params, signal), 30_000, 'Telegram channel connection');
+    const client = await this.withTimeout(
+      this.createClient(params, signal),
+      30_000,
+      'Telegram channel connection',
+    );
     const abortRead = () => void this.closeClient(client);
     signal.addEventListener('abort', abortRead, { once: true });
     try {
@@ -1792,7 +1803,11 @@ export class TelegramMtprotoClient {
       }
 
       if (params.channel) {
-        const resolved = await this.withTimeout(this.resolveStoredChannel(client, params.channel), 30_000, 'Telegram channel metadata');
+        const resolved = await this.withTimeout(
+          this.resolveStoredChannel(client, params.channel),
+          30_000,
+          'Telegram channel metadata',
+        );
         this.logger.log(
           `Telegram stored-channel lookup finished in ${this.elapsed(startedAt)}: chatId=${resolved.channel.telegramChatId || 'n/a'} via=${resolved.channel.resolvedBy}`,
         );
@@ -2778,7 +2793,17 @@ export class TelegramMtprotoClient {
     }
 
     return {
-      pendingJoinRequestsCount: await livePending(client, entity, null, (request) => this.withTimeout(request, this.telegramMetadataTimeoutMs, 'Telegram pending join requests lookup')),
+      pendingJoinRequestsCount: await livePending(
+        client,
+        entity,
+        null,
+        (request) =>
+          this.withTimeout(
+            request,
+            this.telegramMetadataTimeoutMs,
+            'Telegram pending join requests lookup',
+          ),
+      ),
       scope: failedAdmins > 0 ? 'PARTIAL_ADMINS' : 'ALL_ADMINS',
       expectedTotalLinks,
       admins: summaries,
@@ -3129,112 +3154,16 @@ export class TelegramMtprotoClient {
     }
   }
 
-  async publishPost(params: {
-    signal?: AbortSignal;
-    apiId: string;
-    apiHash: string;
-    session: string;
-    channelRef?: string;
-    channel?: StoredTelegramChannelReference;
-    html: string;
-    textHtmlParts?: string[];
-    scheduleAt?: Date | null;
-    captionHtml?: string;
-    followupHtmlParts?: string[];
-    imageUrls: string[];
-    mediaItems?: TelegramPostMediaItem[];
-    onUploadProgress?: (progressPercent: number) => void;
-  }) {
-    return withTelegramPublicationDeadline({
-      timeoutMs: 60_000,
-      signal: params.signal,
-      create: (signal) => this.createClient(params, signal),
+  publishPost(params: TelegramPublishPostParams) {
+    return publishTelegramPost({
+      create: (credentials, signal) => this.createClient(credentials, signal),
       close: (client) => this.closeClient(client),
-      run: async (client, checkpoint) => {
-        const resolved = params.channel
-          ? await this.resolveStoredChannel(client, params.channel)
-          : null;
-        const entity = resolved
-          ? resolved.entity
-          : await client.getEntity(params.channelRef as string);
-        checkpoint();
-        const schedule = params.scheduleAt
-          ? Math.floor(params.scheduleAt.getTime() / 1000)
-          : undefined;
-        const messageIds: string[] = [];
-        const mediaItems = normalizeTelegramPostMediaItems(
-          params.mediaItems,
-          params.imageUrls,
-        );
-        if (mediaItems.length) {
-          const captionSourceHtml = params.captionHtml ?? params.html;
-          const caption = this.parseMtprotoHtml(captionSourceHtml);
-          const files = await Promise.all(
-            mediaItems.map((media, index) =>
-              media.kind === 'PHOTO'
-                ? this.downloadPublishImage(media.url, index)
-                : downloadTelegramPublishMotion(
-                    media.url,
-                    index,
-                    media.kind,
-                    media.fileName,
-                  ),
-            ),
-          );
-          checkpoint();
-          const result =
-            files.length > 1
-              ? await client.sendFile(entity, {
-                  file: files,
-                  // GramJS album uploads ignore formattingEntities, so provide
-                  // compatible HTML while working around its `+` URL parser bug.
-                  caption: captionSourceHtml
-                    ? [telegramHtmlToGramJsAlbumHtml(captionSourceHtml)]
-                    : [''],
-                  parseMode: 'html',
-                  scheduleDate: schedule,
-                  progressCallback: (progress) =>
-                    params.onUploadProgress?.(Math.round(progress * 100)),
-                })
-              : await client.sendFile(entity, {
-                  file: files[0],
-                  caption: caption.text,
-                  formattingEntities: caption.entities,
-                  parseMode: false,
-                  scheduleDate: schedule,
-                  progressCallback: (progress) =>
-                    params.onUploadProgress?.(Math.round(progress * 100)),
-                });
-          const messages = Array.isArray(result) ? result : [result];
-          for (const message of messages) {
-            if (message?.id != null) messageIds.push(String(message.id));
-          }
-          for (const followupHtml of params.followupHtmlParts ?? []) {
-            checkpoint();
-            const textMessage = await this.sendTextMessageWithEntities(
-              client,
-              entity,
-              followupHtml,
-              schedule,
-            );
-            if (textMessage?.id != null)
-              messageIds.push(String(textMessage.id));
-          }
-        } else {
-          for (const textHtml of params.textHtmlParts ?? [params.html]) {
-            checkpoint();
-            const message = await this.sendTextMessageWithEntities(
-              client,
-              entity,
-              textHtml,
-              schedule,
-            );
-            if (message?.id != null) messageIds.push(String(message.id));
-          }
-        }
-        return messageIds;
-      },
-    });
+      resolve: (client, channel) => this.resolveStoredChannel(client, channel),
+      parse: (html) => this.parseMtprotoHtml(html),
+      downloadImage: (url, index) => this.downloadPublishImage(url, index),
+      sendText: (client, entity, html, schedule) => this.sendTextMessageWithEntities(client, entity, html, schedule),
+      serialize: (message, isScheduled) => this.serializeManagedPostMessage(message, isScheduled),
+    }, params);
   }
 
   async editPostText(params: {
@@ -3455,11 +3384,15 @@ export class TelegramMtprotoClient {
               'Telegram managed-post identity lookup',
             )
           : [];
+        let recentPublishedComplete = false;
         const recentPublished = params.recentPublishedFrom
           ? await this.getChannelMessagesFromCutoff(client, entity, {
               postLimit: 500,
               postsFrom: params.recentPublishedFrom,
               beforeDate: params.recentPublishedUntil,
+              onComplete: (complete) => {
+                recentPublishedComplete = complete;
+              },
             })
           : await this.withTimeout(
               client.getMessages(entity, { limit: 200 }),
@@ -3487,6 +3420,7 @@ export class TelegramMtprotoClient {
           published: (published as any[])
             .filter((message) => message?.id && message?.date)
             .map((message) => serialize(message, false)),
+          recentPublishedComplete,
           recentPublished: recentPublished
             .filter((message) => message?.id && message?.date)
             .map((message) => serialize(message, false)),
@@ -3523,12 +3457,9 @@ export class TelegramMtprotoClient {
             hash: returnBigInt(0),
           }),
         );
-        const messages = Array.isArray((result as any)?.messages)
-          ? (result as any).messages
-          : [];
-        return messages
-          .filter((message) => message?.id != null)
-          .map((message) => this.serializeManagedPostMessage(message, true));
+        return completeTelegramScheduledMessages(result).map((message) =>
+          this.serializeManagedPostMessage(message, true),
+        );
       },
     });
   }
@@ -3726,63 +3657,23 @@ export class TelegramMtprotoClient {
   private async getChannelMessagesFromCutoff(
     client: TelegramClient,
     entity: unknown,
-    params: {
-      postLimit?: number;
-      beforeMessageId?: string | number | null;
-      postsFrom: Date;
-      beforeDate?: Date;
-    },
+    params: TelegramHistoryCutoff,
   ) {
-    const hardCap = Math.max(
-      1,
-      Math.min(this.maxPostBackfillLimit, params.postLimit || 100),
+    return readTelegramHistoryFromCutoff(
+      (page) =>
+        this.withTimeout(
+          client.getMessages(entity as any, page),
+          this.telegramMetadataTimeoutMs,
+          'Telegram post-history page',
+        ),
+      params,
+      {
+        maxPostBackfillLimit: this.maxPostBackfillLimit,
+        pageSize: this.postCutoffPageSize,
+        toFiniteNumber: (value) => this.toFiniteNumber(value),
+        toTelegramDate: (value) => this.toTelegramDate(value),
+      },
     );
-    const pageSize = Math.min(this.postCutoffPageSize, hardCap);
-    let offsetId =
-      this.toFiniteNumber(params.beforeMessageId) != null
-        ? Number(this.toFiniteNumber(params.beforeMessageId))
-        : 0;
-    let processed = 0;
-    let previousOldestId: number | null = null;
-    const accepted: any[] = [];
-
-    while (processed < hardCap) {
-      const remaining = hardCap - processed;
-      const page = (await this.withTimeout(
-        client.getMessages(entity as any, {
-          limit: Math.min(pageSize, remaining),
-          offsetId,
-          ...(processed === 0 && params.beforeDate
-            ? { offsetDate: Math.floor(params.beforeDate.getTime() / 1_000) }
-            : {}),
-        }),
-        this.telegramMetadataTimeoutMs,
-        'Telegram post-history page',
-      )) as any[];
-      if (!page.length) break;
-      processed += page.length;
-      let reachedCutoff = false;
-      for (const message of page) {
-        if (!message?.id || !message?.date) continue;
-        const postDate = this.toTelegramDate(message.date);
-        if (!postDate) continue;
-        if (postDate.getTime() < params.postsFrom.getTime()) {
-          reachedCutoff = true;
-          break;
-        }
-        accepted.push(message);
-      }
-      const pageIds = page
-        .map((message) => this.toFiniteNumber(message?.id))
-        .filter((value): value is number => value != null);
-      const oldestId = pageIds.length > 0 ? Math.min(...pageIds) : null;
-      if (reachedCutoff || oldestId == null || oldestId === previousOldestId) {
-        break;
-      }
-      previousOldestId = oldestId;
-      offsetId = oldestId;
-    }
-    return accepted;
   }
 
   async downloadChannelMessagesMedia(params: {

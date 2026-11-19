@@ -1,3 +1,7 @@
+import {
+  normalizeManagedPostMarkup,
+  normalizeTelegramPlainText,
+} from './telegram-managed-post-identity-text';
 import { BadRequestException, Injectable } from '@nestjs/common';
 import {
   TelegramManagedPostIdVerificationStatus,
@@ -14,11 +18,7 @@ import {
   replaceInternalPostLinks,
   replaceSynchronizedTelegramPostLinks,
 } from '@api/telegram/shared/imports/internal-post-links';
-import { parseTelegramHtml } from '@api/telegram/shared/markup/telegram-html-parser';
-import {
-  telegramHtmlToManagedMarkup,
-  telegramMarkupToHtml,
-} from '@api/telegram/shared/markup/telegram-markup';
+import { telegramHtmlToManagedMarkup } from '@api/telegram/shared/markup/telegram-markup';
 import { buildStableTelegramPostUrl } from '@api/telegram/shared/imports/telegram-post-url';
 import {
   MANAGED_POST_DEPENDENT_REPAIR_PENDING_NOTE,
@@ -64,12 +64,7 @@ export class TelegramManagedPostIdentityService {
   constructor(private readonly prisma?: PrismaService) {}
 
   normalizedPlainText(value: string) {
-    const safe = (value || '').replace(
-      /\[([^\]\n]+)\]\(tg-post:[a-zA-Z0-9_-]+\)/g,
-      '$1',
-    );
-    const [plain] = parseTelegramHtml(telegramMarkupToHtml(safe));
-    return plain.replace(/\s+/g, ' ').trim().toLowerCase();
+    return normalizeManagedPostMarkup(value);
   }
 
   findPublishedIdentity(
@@ -105,7 +100,7 @@ export class TelegramManagedPostIdentityService {
           .map((message) => message.text || '')
           .filter(Boolean)
           .join('\n\n');
-        if (this.normalizedPlainText(visible) !== expected) continue;
+        if (normalizeTelegramPlainText(visible) !== expected) continue;
         const matched = sequence.findLast((message) => Boolean(message.text));
         if (!matched) continue;
         if (post.scheduledAt && matched.date) {
@@ -184,7 +179,7 @@ export class TelegramManagedPostIdentityService {
     const byExactText = normalizedLocal
       ? recentPublished.find(
           (message) =>
-            this.normalizedPlainText(message.text || '') === normalizedLocal,
+            normalizeTelegramPlainText(message.text || '') === normalizedLocal,
         )
       : null;
     const byTitle = titleClue

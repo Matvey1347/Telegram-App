@@ -202,15 +202,15 @@ const messages = {
   "telegram.posts.support.rescheduleAll": "Reschedule all scheduled posts",
   "telegram.posts.support.rescheduling": "Rescheduling…",
   "telegram.posts.support.rescheduleConfirm":
-    "Reconcile Telegram first, then reschedule future managed posts in {channel} for their existing times. Overdue unpublished posts will return to drafts. Posts already published will remain unchanged.",
+    "Check Telegram, cancel the old schedules of ordinary posts in {channel}, and create new schedules through the priority publishing account at the same times. Overdue unpublished posts return to drafts. Advertising, mutual promotion and published messages remain unchanged.",
   "telegram.posts.support.rescheduleResult":
-    "Rescheduled: {rescheduled}; already published: {published}; local schedules preserved: {preserved}; returned to drafts: {drafts}; needs attention: {failed}.",
+    "Rescheduled: {rescheduled}; already published: {published}; local schedules preserved: {preserved}; already scheduled in Telegram: {nativePreserved}; returned to drafts: {drafts}; needs attention: {failed}.",
   "telegram.posts.support.rescheduleError":
     "Could not reschedule channel posts. No unconfirmed Telegram schedules were removed.",
   "telegram.posts.support.rescheduleProgress":
     "Checked posts: {completed} of {total}",
   "telegram.posts.support.telegramConnectionActive":
-    "Connected to Telegram; waiting for the current operation to finish…",
+    "The server is processing the request; waiting for the current operation to finish…",
   "telegram.posts.support.loadingLocalSchedule":
     "Counting scheduled posts for this channel…",
   "telegram.posts.support.loadingTelegramSchedule":
@@ -218,6 +218,8 @@ const messages = {
   "telegram.posts.support.alreadyPublished": "Already published in Telegram",
   "telegram.posts.support.localSchedulePreserved":
     "Local schedule preserved without changes",
+  "telegram.posts.support.nativeSchedulePreserved":
+    "Already scheduled in Telegram; left unchanged",
   "telegram.posts.support.reconcilingTelegram":
     "Checking the channel against Telegram…",
   "telegram.posts.support.removingOldSchedule":

@@ -1,5 +1,10 @@
+import { TelegramManagedPostNativeRecoveryStore } from './telegram-managed-post-native-recovery.store';
 import {
-  cancelPreviousNativeSchedule,
+  publishNativeManagedPost,
+  rethrowNativeReplacementFailure,
+  managedPostPublicationProjectionWhere,
+} from './telegram-managed-post-native-replacement';
+import {
   assertRescheduleActive,
   rescheduleContext,
 } from './telegram-managed-post-rescheduler.remote';
@@ -79,6 +84,7 @@ export class TelegramManagedPostPublisherService {
     private readonly telegramPostGroupsService: TelegramPostGroupsService,
     private readonly telegramManagedPostMediaStorageService: TelegramManagedPostMediaStorageService,
     private readonly telegramManagedPostPremiumEmojiRepairService: TelegramManagedPostPremiumEmojiRepairService,
+    private readonly nativeRecovery: TelegramManagedPostNativeRecoveryStore,
   ) {}
 
   public async publishManagedPost(
@@ -416,44 +422,39 @@ export class TelegramManagedPostPublisherService {
             channelId,
             source.sourceId,
           );
-        if (scheduleAt)
-          previousScheduledMessageCancelled =
-            await cancelPreviousNativeSchedule(
-              {
-                prisma: this.prisma,
-                access: this.telegramChannelAccessService,
-                mtprotoClient: this.mtprotoClient,
-              },
-              {
-                workspaceId,
-                channelId,
-                channel: channelReference,
-                post,
-                sourceId: source.sourceId,
-                account,
-                onCancel: () => onRescheduleProgress?.('REMOVING_OLD_SCHEDULE'),
-              },
-            );
         const publish = async () => {
           await assertRescheduleActive(this.prisma, post.id);
-          return this.mtprotoClient.publishPost({
-            ...this.telegramChannelAccessService.accountCredentials(account),
-            channel: channelReference,
-            html,
-            textHtmlParts,
-            captionHtml,
-            followupHtmlParts,
-            imageUrls: post.imageUrls,
-            mediaItems,
-            scheduleAt,
-            signal:
-              rescheduleContext.getStore()?.signal ??
-              managedPostDeliveryContext.getStore()?.signal,
-            onUploadProgress: (progressPercent) =>
-              onRescheduleProgress?.(
-                'SCHEDULING_AGAIN',
-                `Uploading media to Telegram: ${progressPercent}%`,
-              ),
+          return publishNativeManagedPost({
+            prisma: this.prisma,
+            mtproto: this.mtprotoClient,
+            store: this.nativeRecovery,
+            access: this.telegramChannelAccessService,
+            account,
+            post,
+            sourceId: source.sourceId,
+            onCancel: () => onRescheduleProgress?.('REMOVING_OLD_SCHEDULE'),
+            onCancellationConfirmed: () => {
+              previousScheduledMessageCancelled = true;
+            },
+            params: {
+              ...this.telegramChannelAccessService.accountCredentials(account),
+              channel: channelReference,
+              html,
+              textHtmlParts,
+              captionHtml,
+              followupHtmlParts,
+              imageUrls: post.imageUrls,
+              mediaItems,
+              scheduleAt,
+              signal:
+                rescheduleContext.getStore()?.signal ??
+                managedPostDeliveryContext.getStore()?.signal,
+              onUploadProgress: (progressPercent) =>
+                onRescheduleProgress?.(
+                  'SCHEDULING_AGAIN',
+                  `Uploading media to Telegram: ${progressPercent}%`,
+                ),
+            },
           });
         };
         if (scheduleAt)
@@ -668,7 +669,7 @@ export class TelegramManagedPostPublisherService {
               })
             : null;
         const updated = await tx.telegramManagedPost.update({
-          where: { id: post.id },
+          where: managedPostPublicationProjectionWhere(post),
           data: {
             status: scheduleAt ? 'SCHEDULED' : 'PUBLISHED',
             telegramRemoteStatus: scheduleAt
@@ -734,6 +735,13 @@ export class TelegramManagedPostPublisherService {
       );
     } catch (error) {
       if (managedPostDeliveryContext.getStore()?.signal.aborted) throw error;
+      await rethrowNativeReplacementFailure({
+        prisma: this.prisma,
+        store: this.nativeRecovery,
+        postId: post.id,
+        workspaceId,
+        channelId,
+      });
       const rawMessage =
         error instanceof Error ? error.message : 'Telegram publish failed';
       const publicMessage = /MEDIA_INVALID/i.test(rawMessage)

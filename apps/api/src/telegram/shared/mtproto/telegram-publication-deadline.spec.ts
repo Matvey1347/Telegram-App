@@ -1,9 +1,60 @@
+import { telegramOperationSignal } from './telegram-operation-signal';
 import {
   withTelegramPublicationDeadline,
   withTelegramReadDeadline,
 } from './telegram-publication-deadline';
 
 describe('publication transport cancellation', () => {
+  it('honors owner-scope cancellation before creating read or mutation transports', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const create = jest.fn();
+    await expect(telegramOperationSignal.run(controller.signal, () => withTelegramReadDeadline({ timeoutMs: 60_000, label: 'scope read', create, close: jest.fn(), run: jest.fn() }))).rejects.toThrow();
+    await expect(telegramOperationSignal.run(controller.signal, () => withTelegramPublicationDeadline({ timeoutMs: 60_000, create, close: jest.fn(), run: jest.fn() }))).rejects.toThrow('requires reconciliation');
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('bounds stalled successful read cleanup without releasing transport ownership', async () => {
+    jest.useFakeTimers();
+    try {
+      let release!: () => void;
+      const close = jest.fn(() => new Promise<void>((resolve) => { release = resolve; }));
+      const pending = withTelegramReadDeadline({
+        timeoutMs: 10_000,
+        label: 'queue read',
+        create: async () => ({}),
+        close,
+        run: async () => ['confirmed'],
+      });
+      const rejected = expect(pending).rejects.toThrow('session remains owned');
+      await jest.advanceTimersByTimeAsync(5001);
+      await rejected;
+      expect(close).toHaveBeenCalledTimes(1);
+      release();
+    } finally { jest.useRealTimers(); }
+  });
+
+  it('does not send when a future schedule expires during media preparation', async () => {
+    const clock = jest.spyOn(Date, 'now').mockReturnValue(1000);
+    const send = jest.fn();
+    const close = jest.fn().mockResolvedValue(undefined);
+    try {
+      await expect(withTelegramPublicationDeadline({
+        timeoutMs: 60_000,
+        scheduleAt: new Date(2000),
+        create: async () => ({}),
+        close,
+        run: async (_client, checkpoint) => {
+          clock.mockReturnValue(2001);
+          checkpoint();
+          send();
+        },
+      })).rejects.toThrow('schedule time elapsed');
+      expect(send).not.toHaveBeenCalled();
+      expect(close).toHaveBeenCalledTimes(1);
+    } finally { clock.mockRestore(); }
+  });
+
   it('times out read operations while connecting and aborts the MTProto session', async () => {
     let observedSignal: AbortSignal | undefined;
     let release!: () => void;

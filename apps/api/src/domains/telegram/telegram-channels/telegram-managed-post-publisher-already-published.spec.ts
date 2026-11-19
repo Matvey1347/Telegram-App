@@ -29,6 +29,7 @@ describe('published managed post protection', () => {
         {} as never,
         {} as never,
         {} as never,
+        {} as never,
       );
       await expect(
         service.publishManagedPost('workspace', 'channel', 'post', scheduledAt),

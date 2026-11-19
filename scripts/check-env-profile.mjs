@@ -20,6 +20,13 @@ const profiles = [
     ],
     allowed: [
       "DATABASE_URL",
+      "DATABASE_URL_PRODUCTION",
+      "DATABASE_ENV",
+      "INTERNAL_AI_ENABLED",
+      "INTERNAL_AI_OPENAI_API_KEY",
+      "INTERNAL_AI_OPENAI_API_KEY_2",
+      "CRM_RUNTIME_OWNER_API_PORT",
+      "CRM_RUNTIME_PROXY_URL",
       "GPT_API_SEKRET",
       "API_PORT",
       "API_PUBLIC_URL",
