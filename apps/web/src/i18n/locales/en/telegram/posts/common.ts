@@ -204,7 +204,7 @@ const messages = {
   "telegram.posts.support.rescheduleConfirm":
     "Reconcile Telegram first, then reschedule future managed posts in {channel} for their existing times. Overdue unpublished posts will return to drafts. Posts already published will remain unchanged.",
   "telegram.posts.support.rescheduleResult":
-    "Rescheduled: {rescheduled}; already published: {published}; local schedules preserved: {preserved}; returned to drafts: {drafts}; needs attention: {failed}.",
+    "Rescheduled: {rescheduled}; already published: {published}; local schedules preserved: {preserved}; already scheduled in Telegram: {nativePreserved}; returned to drafts: {drafts}; needs attention: {failed}.",
   "telegram.posts.support.rescheduleError":
     "Could not reschedule channel posts. No unconfirmed Telegram schedules were removed.",
   "telegram.posts.support.rescheduleProgress":
@@ -218,6 +218,8 @@ const messages = {
   "telegram.posts.support.alreadyPublished": "Already published in Telegram",
   "telegram.posts.support.localSchedulePreserved":
     "Local schedule preserved without changes",
+  "telegram.posts.support.nativeSchedulePreserved":
+    "Already scheduled in Telegram; left unchanged",
   "telegram.posts.support.reconcilingTelegram":
     "Checking the channel against Telegram…",
   "telegram.posts.support.removingOldSchedule":

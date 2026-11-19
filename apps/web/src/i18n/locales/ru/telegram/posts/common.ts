@@ -217,7 +217,7 @@ const messages = {
   "telegram.posts.support.rescheduleConfirm":
     "Сначала сверим состояние с Telegram, затем перепланируем будущие публикации канала «{channel}» на прежнее время. Просроченные и не опубликованные публикации вернём в черновики. Уже опубликованные сообщения не изменятся.",
   "telegram.posts.support.rescheduleResult":
-    "Перепланировано: {rescheduled}; уже опубликовано: {published}; локальных расписаний сохранено: {preserved}; возвращено в черновики: {drafts}; требуют внимания: {failed}.",
+    "Перепланировано: {rescheduled}; уже опубликовано: {published}; локальных расписаний сохранено: {preserved}; уже запланировано в Telegram: {nativePreserved}; возвращено в черновики: {drafts}; требуют внимания: {failed}.",
   "telegram.posts.support.rescheduleError":
     "Не удалось перепланировать публикации. Неподтверждённые расписания Telegram не удалялись.",
   "telegram.posts.support.rescheduleProgress":
@@ -231,6 +231,8 @@ const messages = {
   "telegram.posts.support.alreadyPublished": "Уже опубликована в Telegram",
   "telegram.posts.support.localSchedulePreserved":
     "Локальное расписание сохранено без изменений",
+  "telegram.posts.support.nativeSchedulePreserved":
+    "Уже запланирована в Telegram; без изменений",
   "telegram.posts.support.reconcilingTelegram":
     "Сверяем публикации с Telegram…",
   "telegram.posts.support.removingOldSchedule":

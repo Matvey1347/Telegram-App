@@ -58,6 +58,7 @@ export function RescheduleChannelPostsButton({
         returnedToDraftCount: 0,
         alreadyPublishedCount: 0,
         locallyScheduledCount: 0,
+        nativelyScheduledCount: 0,
         failedCount: 0,
         failedPostIds: [] as string[],
       };
@@ -108,6 +109,7 @@ export function RescheduleChannelPostsButton({
         aggregate.returnedToDraftCount += result.returnedToDraftCount;
         aggregate.alreadyPublishedCount += result.alreadyPublishedCount;
         aggregate.locallyScheduledCount += result.locallyScheduledCount;
+        aggregate.nativelyScheduledCount += result.nativelyScheduledCount ?? 0;
         aggregate.failedCount += result.failedCount;
         aggregate.failedPostIds.push(...result.failedPostIds);
         nextPostIndex.current = start + batch.length;
@@ -141,6 +143,7 @@ export function RescheduleChannelPostsButton({
           drafts: result.returnedToDraftCount,
           published: result.alreadyPublishedCount,
           preserved: result.locallyScheduledCount,
+          nativePreserved: result.nativelyScheduledCount,
           failed: result.failedCount,
         }),
         result.failedCount ? "error" : "success",
@@ -236,6 +239,7 @@ export function RescheduleChannelPostsButton({
                       "DRAFTED",
                       "ALREADY_PUBLISHED",
                       "LOCAL_SCHEDULE_PRESERVED",
+                      "NATIVE_SCHEDULE_PRESERVED",
                     ].includes(item.stage) ? (
                     <Check
                       size={16}
@@ -312,6 +316,7 @@ function progressStageLabel(
     LOADING_LOCAL_SCHEDULE: "telegram.posts.support.loadingLocalSchedule",
     LOADING_TELEGRAM_SCHEDULE: "telegram.posts.support.loadingTelegramSchedule",
     LOCAL_SCHEDULE_PRESERVED: "telegram.posts.support.localSchedulePreserved",
+    NATIVE_SCHEDULE_PRESERVED: "telegram.posts.support.nativeSchedulePreserved",
     RECONCILING_TELEGRAM: "telegram.posts.support.reconcilingTelegram",
     REMOVING_OLD_SCHEDULE: "telegram.posts.support.removingOldSchedule",
     SCHEDULING_AGAIN: "telegram.posts.support.schedulingAgain",

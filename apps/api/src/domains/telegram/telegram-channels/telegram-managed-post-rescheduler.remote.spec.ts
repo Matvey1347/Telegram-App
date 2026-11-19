@@ -1,5 +1,6 @@
 import {
   assertRescheduleActive,
+  cancelPreviousNativeSchedule,
   rescheduleContext,
   loadTelegramPublishedHistory,
   loadTelegramScheduledQueues,
@@ -61,7 +62,9 @@ describe('rescheduler request-scoped Telegram snapshots', () => {
     const onProgress = jest.fn();
     Object.assign(input, { onProgress });
     const queues = await loadTelegramScheduledQueues(h.deps, input);
-    expect(onProgress.mock.calls.every(([, current]) => current === 0)).toBe(true);
+    expect(onProgress.mock.calls.every(([, current]) => current === 0)).toBe(
+      true,
+    );
     expect(queues.remoteScheduledCount).toBe(1);
     expect(queues.accountContexts.get('sender')!.scheduledMessages).toEqual([
       { id: 'scheduled-1' },
@@ -211,6 +214,48 @@ describe('rescheduler request-scoped Telegram snapshots', () => {
 });
 
 describe('native reschedule deadline admission', () => {
+  it('does not delete schedule IDs proven absent for this claimed post', async () => {
+    const count = jest.fn().mockResolvedValue(1);
+    const deleteScheduledPost = jest.fn();
+    const connectedAccount = jest.fn();
+    const onCancel = jest.fn();
+    const result = await rescheduleContext.run(
+      {
+        owner: 'owner',
+        signal: new AbortController().signal,
+        confirmedMissingScheduleFor: 'post',
+      },
+      () =>
+        cancelPreviousNativeSchedule(
+          {
+            prisma: { telegramManagedPost: { count } } as never,
+            access: { connectedAccount } as never,
+            mtprotoClient: { deleteScheduledPost } as never,
+          },
+          {
+            workspaceId: 'workspace',
+            channelId: 'channel',
+            channel: channelReference,
+            post: {
+              id: 'post',
+              status: 'SCHEDULED',
+              sourceId: 'sender',
+              sourceType: 'MTPROTO',
+              telegramScheduledMessageIds: ['absent-id'],
+            },
+            sourceId: 'sender',
+            account: {} as never,
+            onCancel,
+          },
+        ),
+    );
+    expect(result).toBe(false);
+    expect(count).toHaveBeenCalledTimes(1);
+    expect(deleteScheduledPost).not.toHaveBeenCalled();
+    expect(connectedAccount).not.toHaveBeenCalled();
+    expect(onCancel).not.toHaveBeenCalled();
+  });
+
   it('rejects an elapsed target before reading ownership', async () => {
     const count = jest.fn().mockResolvedValue(1);
     const prisma = { telegramManagedPost: { count } };

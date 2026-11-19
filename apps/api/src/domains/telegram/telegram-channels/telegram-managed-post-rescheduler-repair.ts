@@ -97,13 +97,12 @@ export function overlappingNativeSchedules(posts: TelegramManagedPost[]) {
   for (const post of posts) {
     if (post.scheduleMode === 'LOCAL') continue;
     for (const id of new Set(post.telegramScheduledMessageIds)) {
-      const key = `${post.sourceId ?? ''}:${id}`;
-      const owner = ownerByRemoteId.get(key);
+      const owner = ownerByRemoteId.get(id);
       if (owner && owner !== post.id) {
         overlapping.add(owner);
         overlapping.add(post.id);
       }
-      ownerByRemoteId.set(key, post.id);
+      ownerByRemoteId.set(id, post.id);
     }
   }
   return overlapping;
@@ -180,4 +179,33 @@ export function ordinaryScheduledPostWhere(
     mutualPromotionDelivery: { is: null },
     ...(postIds ? { id: { in: postIds } } : {}),
   };
+}
+
+/** Preserve confirmed schedules without claims, media preparation or remote writes. */
+export function preservedScheduleStage(
+  post: TelegramManagedPost,
+  context: ReschedulerAccountContext | undefined,
+  overlapping: boolean,
+): 'LOCAL_SCHEDULE_PRESERVED' | 'NATIVE_SCHEDULE_PRESERVED' | undefined {
+  if (!post.scheduledAt || post.scheduledAt.getTime() <= Date.now()) return;
+  if (post.scheduleMode === 'LOCAL') return 'LOCAL_SCHEDULE_PRESERVED';
+  if (
+    overlapping ||
+    !post.sourceId ||
+    !context?.scheduledMessages ||
+    context.error ||
+    !post.telegramScheduledMessageIds.length
+  )
+    return;
+  const planned = Math.floor(post.scheduledAt.getTime() / 1_000);
+  const messages = new Map(
+    context.scheduledMessages.map((message) => [message.id, message]),
+  );
+  if (
+    post.telegramScheduledMessageIds.every((id) => {
+      const date = messages.get(id)?.date;
+      return date && Math.floor(new Date(date).getTime() / 1_000) === planned;
+    })
+  )
+    return 'NATIVE_SCHEDULE_PRESERVED';
 }

@@ -133,6 +133,7 @@ export type RescheduleChannelScheduledPostsResult = {
   returnedToDraftCount: number;
   alreadyPublishedCount: number;
   locallyScheduledCount: number;
+  nativelyScheduledCount?: number;
   failedCount: number;
   failedPostIds: string[];
   results?: RescheduleChannelScheduledPostProgress[];
@@ -152,6 +153,7 @@ export type RescheduleChannelScheduledPostProgress = {
     | "LOADING_LOCAL_SCHEDULE"
     | "LOADING_TELEGRAM_SCHEDULE"
     | "LOCAL_SCHEDULE_PRESERVED"
+    | "NATIVE_SCHEDULE_PRESERVED"
     | "RECONCILING_TELEGRAM"
     | "REMOVING_OLD_SCHEDULE"
     | "SCHEDULING_AGAIN"

@@ -80,6 +80,40 @@ describe("reschedule results", () => {
     );
   });
 
+  it("shows 72 preserved Telegram schedules as successful without counting them as rescheduled", async () => {
+    const postIds = Array.from(
+      { length: 72 },
+      (_, index) => `preserved-${index}`,
+    );
+    mocks.plan.mockResolvedValue({ postIds });
+    mocks.execute.mockResolvedValue({
+      ...success,
+      rescheduledCount: 0,
+      nativelyScheduledCount: 72,
+      results: postIds.map((postId) => ({
+        postId,
+        title: `Confirmed ${postId}`,
+        stage: "NATIVE_SCHEDULE_PRESERVED",
+      })),
+    });
+    mountAndStart();
+    await waitFor(() =>
+      expect(mocks.toast).toHaveBeenCalledWith(
+        expect.stringContaining(
+          "Rescheduled: 0; already published: 0; local schedules preserved: 0; already scheduled in Telegram: 72;",
+        ),
+        "success",
+        9000,
+      ),
+    );
+    expect(
+      screen.getAllByText("Already scheduled in Telegram; left unchanged"),
+    ).toHaveLength(72);
+    expect(screen.getByText("Confirmed preserved-71")).toBeVisible();
+    expect(document.querySelectorAll(".lucide-check")).toHaveLength(72);
+    expect(mocks.execute).toHaveBeenCalledTimes(1);
+  });
+
   it("retains the same candidates after a network failure without loading a new plan", async () => {
     mocks.plan.mockResolvedValue({ postIds: ["one", "two"] });
     mocks.execute
@@ -93,6 +127,13 @@ describe("reschedule results", () => {
     await waitFor(() => expect(mocks.execute).toHaveBeenCalledTimes(2));
     expect(mocks.plan).toHaveBeenCalledTimes(1);
     expect(mocks.execute.mock.calls[1][1]).toEqual(["one", "two"]);
+    await waitFor(() =>
+      expect(mocks.toast).toHaveBeenCalledWith(
+        expect.stringContaining("already scheduled in Telegram: 0;"),
+        "success",
+        9000,
+      ),
+    );
   });
   it("keeps the modal and precise per-post errors visible and retries failed IDs", async () => {
     mocks.plan.mockResolvedValue({

@@ -51,6 +51,15 @@ Explicit retry IDs are deduplicated. Already-drafted or verified-published posts
 retain their completed outcomes. Failed, missing and out-of-scope IDs remain
 visible failures instead of silently disappearing from a successful empty batch.
 
+Confirmed future native messages with every stored ID present at the saved UTC
+second are preserved before claim admission. They produce the explicit
+`NATIVE_SCHEDULE_PRESERVED` outcome and additive `nativelyScheduledCount`, without
+claims, revisions, cancellation, image downloads or uploads. This prevents a
+healthy Telegram queue from depending again on an expired/oversized source image.
+Missing entries alone are repaired after complete absence checks; the exact-post
+claim context skips cancellation of IDs already proven absent. Remote ID aliases
+are rejected across all publishing accounts within the channel.
+
 The existing recovery controller, rescheduler and publisher remain the single
 workflow. Candidate reads and claim admission exclude ad placements, folder VP
 and batch deliveries. Final stream results include per-post outcomes; the modal

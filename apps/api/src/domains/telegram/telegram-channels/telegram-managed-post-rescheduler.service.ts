@@ -5,9 +5,9 @@ import {
   overlappingNativeSchedules,
   requestedRescheduleOutcomes,
   ordinaryScheduledPostWhere,
+  preservedScheduleStage,
 } from './telegram-managed-post-rescheduler-repair';
 import { Injectable } from '@nestjs/common';
-import { TelegramManagedPostStatus } from '@prisma/client';
 import type {
   RescheduleChannelScheduledPostsResult,
   RescheduleChannelScheduledPostProgress,
@@ -102,6 +102,7 @@ export class TelegramManagedPostReschedulerService {
       (item) => item.stage === 'ALREADY_PUBLISHED',
     ).length;
     let locallyScheduledCount = 0;
+    let nativelyScheduledCount = 0;
     const result = (): RescheduleChannelScheduledPostsResult => ({
       action: 'RESCHEDULE_CHANNEL_SCHEDULED_POSTS',
       channelId,
@@ -109,6 +110,7 @@ export class TelegramManagedPostReschedulerService {
       returnedToDraftCount,
       alreadyPublishedCount,
       locallyScheduledCount,
+      nativelyScheduledCount,
       failedCount: failedPostIds.length,
       failedPostIds,
       results,
@@ -144,6 +146,7 @@ export class TelegramManagedPostReschedulerService {
           'DRAFTED',
           'ALREADY_PUBLISHED',
           'LOCAL_SCHEDULE_PRESERVED',
+          'NATIVE_SCHEDULE_PRESERVED',
         ].includes(stage)
       )
         results.push(item);
@@ -196,34 +199,30 @@ export class TelegramManagedPostReschedulerService {
       const scheduledAt = post.scheduledAt;
       const scheduledIds = post.telegramScheduledMessageIds ?? [];
       const future = Boolean(scheduledAt && scheduledAt > now);
-      if (future && post.scheduleMode === 'LOCAL') {
-        locallyScheduledCount += 1;
-        progressFor(
-          current,
-          post,
-          'LOCAL_SCHEDULE_PRESERVED',
-          'This post uses the local scheduler and was left unchanged.',
-        );
+      const accountId = post.sourceId ?? '';
+      const accountContext = accountContexts.get(accountId);
+      const overlap = overlapping.has(post.id);
+      const preserved = preservedScheduleStage(post, accountContext, overlap);
+      if (preserved) {
+        if (preserved === 'LOCAL_SCHEDULE_PRESERVED')
+          locallyScheduledCount += 1;
+        else nativelyScheduledCount += 1;
+        progressFor(current, post, preserved);
         continue;
       }
       const owner = `reschedule:${randomUUID()}`;
       let claimed = false;
       let uncertain = false;
       try {
-        if (overlapping.has(post.id))
+        if (overlap)
           throw new Error(
             'Stored native schedule IDs overlap another candidate; reconcile identity before retrying.',
           );
         const admission = await this.prisma.telegramManagedPost.updateMany({
           where: {
             id: post.id,
-            workspaceId,
-            telegramChannelId: channelId,
-            status: TelegramManagedPostStatus.SCHEDULED,
+            ...ordinaryScheduledPostWhere(workspaceId, channelId),
             updatedAt: post.updatedAt,
-            adSalePlacements: { none: {} },
-            mutualPromotionDelivery: { is: null },
-            postBatchDelivery: { is: null },
             OR: [
               { deliveryClaimOwner: null },
               { deliveryClaimExpiresAt: { lte: new Date() } },
@@ -239,8 +238,6 @@ export class TelegramManagedPostReschedulerService {
             'Post changed or is already being processed. Refresh before retrying.',
           );
         claimed = true;
-        const accountId = post.sourceId ?? '';
-        const accountContext = accountContexts.get(accountId);
         if (future && post.scheduleMode !== 'LOCAL' && accountContext?.error) {
           failedPostIds.push(post.id);
           progressFor(
@@ -413,16 +410,10 @@ export class TelegramManagedPostReschedulerService {
           continue;
         }
 
-        if (!scheduledIds.length) {
-          failedPostIds.push(post.id);
-          progressFor(
-            current,
-            post,
-            'FAILED',
+        if (!scheduledIds.length)
+          throw new Error(
             'No stored Telegram scheduled-message IDs; left untouched to prevent a duplicate.',
           );
-          continue;
-        }
         if (!scheduledIds.every((id) => remoteScheduledIds.has(id))) {
           await assertMissingNativeScheduleRepairable({
             prisma: this.prisma,
@@ -440,7 +431,16 @@ export class TelegramManagedPostReschedulerService {
           );
         uncertain = true;
         await rescheduleContext.run(
-          { owner, signal: AbortSignal.timeout(60_000), scheduledAt },
+          {
+            owner,
+            signal: AbortSignal.timeout(60_000),
+            scheduledAt,
+            confirmedMissingScheduleFor: scheduledIds.every(
+              (id) => !remoteScheduledIds.has(id),
+            )
+              ? post.id
+              : undefined,
+          },
           () =>
             this.publication.publishManagedPost(
               workspaceId,

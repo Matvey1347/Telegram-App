@@ -239,6 +239,7 @@ export const rescheduleContext = new AsyncLocalStorage<{
   owner: string;
   signal: AbortSignal;
   scheduledAt?: Date;
+  confirmedMissingScheduleFor?: string;
 }>();
 export async function assertRescheduleActive(
   prisma: PrismaService,
@@ -300,6 +301,10 @@ export async function cancelPreviousNativeSchedule(
     (post.sourceId !== input.sourceId && post.sourceType !== 'MTPROTO')
   )
     return false;
+  if (rescheduleContext.getStore()?.confirmedMissingScheduleFor === post.id) {
+    await assertRescheduleActive(deps.prisma, post.id);
+    return false;
+  }
   const previousAccount =
     post.sourceId === input.sourceId
       ? input.account
