@@ -13,9 +13,8 @@ import type { TranslationKey } from "@/i18n/catalog";
 import { useAppToast } from "@/providers/toast-provider";
 import { invalidateManagedPostScheduleReads } from "./managed-post-cache";
 
-// A single post per request makes failures/retries idempotent and keeps each
-// streamed operation short enough to report actionable progress to the UI.
-const RESCHEDULE_BATCH_SIZE = 1;
+// Share one Telegram queue/history snapshot across a bounded operation.
+const RESCHEDULE_BATCH_SIZE = 100;
 
 export function RescheduleChannelPostsButton({
   channelId,
@@ -49,6 +48,9 @@ export function RescheduleChannelPostsButton({
         setProgressTotal(plan.postIds.length);
       }
       const postIds = pendingPostIds.current;
+      setProgressTotal(postIds.length);
+      setProgressCurrent(nextPostIndex.current);
+      setLastHeartbeatAt(null);
       const aggregate = {
         action: "RESCHEDULE_CHANNEL_SCHEDULED_POSTS" as const,
         channelId,
@@ -89,11 +91,18 @@ export function RescheduleChannelPostsButton({
             },
             { onHeartbeat: () => setLastHeartbeatAt(Date.now()) },
           );
-        if (result.results?.length) setProgress((current) => {
-          const outcomes = new Map(current.filter((entry) => entry.postId).map((entry) => [entry.postId, entry]));
-          result.results!.forEach((entry) => outcomes.set(entry.postId, entry));
-          return [...outcomes.values()];
-        });
+        if (result.results?.length)
+          setProgress((current) => {
+            const outcomes = new Map(
+              current
+                .filter((entry) => entry.postId)
+                .map((entry) => [entry.postId, entry]),
+            );
+            result.results!.forEach((entry) =>
+              outcomes.set(entry.postId, entry),
+            );
+            return [...outcomes.values()];
+          });
         setProgressCurrent(start + batch.length);
         aggregate.rescheduledCount += result.rescheduledCount;
         aggregate.returnedToDraftCount += result.returnedToDraftCount;
@@ -155,7 +164,9 @@ export function RescheduleChannelPostsButton({
       </Button>
       <Modal
         open={open}
-        onClose={() => { if (!reschedule.isPending) setOpen(false); }}
+        onClose={() => {
+          if (!reschedule.isPending) setOpen(false);
+        }}
         title={t("telegram.posts.support.rescheduleAll")}
         size="sm"
       >
@@ -167,7 +178,9 @@ export function RescheduleChannelPostsButton({
           </p>
           {reschedule.error ? (
             <p className="text-sm text-rose-300">
-              {reschedule.error instanceof Error ? reschedule.error.message : t("telegram.posts.support.rescheduleError")}
+              {reschedule.error instanceof Error
+                ? reschedule.error.message
+                : t("telegram.posts.support.rescheduleError")}
             </p>
           ) : null}
           {progress.length > 0 || reschedule.isPending ? (

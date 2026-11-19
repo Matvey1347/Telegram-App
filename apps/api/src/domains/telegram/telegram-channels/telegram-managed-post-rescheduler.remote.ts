@@ -8,12 +8,16 @@ type RemotePost = {
   sourceId: string | null;
   scheduleMode: string | null;
   scheduledAt: Date | null;
+  createdAt?: Date;
   telegramScheduledMessageIds: string[];
 };
 
 export type ReschedulerAccountContext = {
   credentials?: ReturnType<TelegramChannelAccessService['accountCredentials']>;
   scheduledIds: Set<string>;
+  scheduledMessages?: Awaited<
+    ReturnType<TelegramMtprotoClient['getScheduledHistory']>
+  >;
   error?: string;
 };
 
@@ -67,15 +71,10 @@ export async function loadTelegramScheduledQueues(
       const senderPosts = nativePosts.filter(
         (post) => (post.sourceId ?? '') === accountId,
       );
-      const scheduledMessageIds = [
-        ...new Set(
-          senderPosts.flatMap((post) => post.telegramScheduledMessageIds),
-        ),
-      ];
       input.onProgress?.(
         {
           stage: 'LOADING_TELEGRAM_SCHEDULE',
-          message: `Checking ${scheduledMessageIds.length} stored Telegram schedule IDs for sender ${accountIndex + 1} of ${accountIds.length}.`,
+          message: `Reading the complete Telegram scheduled queue for sender ${accountIndex + 1} of ${accountIds.length}.`,
         },
         checkedPostCount,
         input.total,
@@ -86,65 +85,27 @@ export async function loadTelegramScheduledQueues(
         accountId || undefined,
       );
       const credentials = deps.access.accountCredentials(account);
-      const scheduledIds = new Set<string>();
-      // Keep each Telegram lookup small. A single large GetScheduledMessages
-      // request can exceed the MTProto read deadline on busy channels and
-      // would otherwise stall the whole reconciliation before any post is
-      // processed.
-      const telegramLookupBatchSize = 5;
-      const messageIdBatches = Array.from(
-        {
-          length: Math.ceil(
-            scheduledMessageIds.length / telegramLookupBatchSize,
-          ),
-        },
-        (_, index) =>
-          scheduledMessageIds.slice(
-            index * telegramLookupBatchSize,
-            index * telegramLookupBatchSize + telegramLookupBatchSize,
-          ),
+      const remoteScheduled = await deps.mtprotoClient.getScheduledHistory({
+        ...credentials,
+        channel: input.channelReference,
+      });
+      const scheduledIds = new Set(
+        remoteScheduled.map((message) => message.id),
       );
-      const checkedMessageIds = new Set<string>();
-      for (const [batchIndex, messageIds] of messageIdBatches.entries()) {
-        const remoteScheduled =
-          await deps.mtprotoClient.getScheduledMessagesByIds({
-            ...credentials,
-            channel: input.channelReference,
-            messageIds,
-          });
-        remoteScheduledCount += remoteScheduled.length;
-        remoteScheduled.forEach((message) => scheduledIds.add(message.id));
-        messageIds.forEach((id) => checkedMessageIds.add(id));
-        const checkedPosts = senderPosts.filter(
-          (post) =>
-            post.telegramScheduledMessageIds.length > 0 &&
-            post.telegramScheduledMessageIds.every((id) =>
-              checkedMessageIds.has(id),
-            ),
-        ).length;
-        input.onProgress?.(
-          {
-            stage: 'LOADING_TELEGRAM_SCHEDULE',
-            message: `Checked Telegram schedule IDs for sender ${accountIndex + 1} of ${accountIds.length}, batch ${batchIndex + 1} of ${messageIdBatches.length} (${scheduledIds.size} still scheduled).`,
-          },
-          checkedPostCount + checkedPosts,
-          input.total,
-        );
-      }
+      remoteScheduledCount += scheduledIds.size;
       checkedPostCount += senderPosts.length;
-      if (messageIdBatches.length === 0) {
-        input.onProgress?.(
-          {
-            stage: 'LOADING_TELEGRAM_SCHEDULE',
-            message: `Sender ${accountIndex + 1} of ${accountIds.length} has no stored Telegram schedule IDs to check.`,
-          },
-          checkedPostCount,
-          input.total,
-        );
-      }
+      input.onProgress?.(
+        {
+          stage: 'LOADING_TELEGRAM_SCHEDULE',
+          message: `Read sender ${accountIndex + 1} of ${accountIds.length}: ${scheduledIds.size} messages are scheduled in Telegram.`,
+        },
+        checkedPostCount,
+        input.total,
+      );
       accountContexts.set(accountId, {
         credentials,
         scheduledIds,
+        scheduledMessages: remoteScheduled,
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
@@ -201,7 +162,7 @@ export async function loadTelegramPublishedHistory(
     return { publishedByAccount, publishedHistoryErrors };
 
   const earliestDue = input.overduePosts
-    .map((post) => post.scheduledAt)
+    .map((post) => post.createdAt ?? post.scheduledAt)
     .filter((value): value is Date => value instanceof Date)
     .sort((left, right) => left.getTime() - right.getTime())[0];
   const overdueAccountIds = [
@@ -210,40 +171,48 @@ export async function loadTelegramPublishedHistory(
   input.onProgress?.(
     {
       stage: 'RECONCILING_TELEGRAM',
-      message: `Checking ${input.overduePosts.length} overdue posts for actual publication in Telegram.`,
+      message: `Checking published history for ${input.overduePosts.length} overdue or missing scheduled posts.`,
     },
     0,
     input.total,
   );
 
+  // Queue ownership stays account-specific. Published channel history may be
+  // shared when unavailable senders fall back to the same connected reader.
+  // This cache lives only for this explicit reconciliation operation.
+  const historyByReader = new Map<
+    string,
+    ReturnType<TelegramMtprotoClient['getManagedPostMessages']>
+  >();
   for (const [accountIndex, accountId] of overdueAccountIds.entries()) {
     const context = input.accountContexts.get(accountId);
     if (!context?.credentials) {
       if (context?.error) publishedHistoryErrors.set(accountId, context.error);
       continue;
     }
-    const overdueIds = [
-      ...new Set(
-        input.overduePosts
-          .filter((post) => (post.sourceId ?? '') === accountId)
-          .flatMap((post) => post.telegramScheduledMessageIds),
-      ),
-    ];
     try {
-      const remotePublished = await deps.mtprotoClient.getManagedPostMessages({
-        ...context.credentials,
-        channel: input.channelReference,
-        publishedMessageIds: overdueIds,
-        scheduledMessageIds: overdueIds,
-        ...(earliestDue
-          ? {
-              recentPublishedFrom: new Date(
-                earliestDue.getTime() - 6 * 60 * 60_000,
-              ),
-              recentPublishedUntil: input.now,
-            }
-          : {}),
-      });
+      const readerKey = context.credentials.session;
+      let history = historyByReader.get(readerKey);
+      if (!history) {
+        history = deps.mtprotoClient.getManagedPostMessages({
+          ...context.credentials,
+          channel: input.channelReference,
+          // Scheduled message IDs use an account queue namespace. They cannot
+          // be used as published IDs, and the queue snapshot is already loaded.
+          publishedMessageIds: [],
+          scheduledMessageIds: [],
+          ...(earliestDue
+            ? {
+                recentPublishedFrom: new Date(
+                  earliestDue.getTime() - 6 * 60 * 60_000,
+                ),
+                recentPublishedUntil: input.now,
+              }
+            : {}),
+        });
+        historyByReader.set(readerKey, history);
+      }
+      const remotePublished = await history;
       publishedByAccount.set(accountId, remotePublished);
       input.onProgress?.(
         {
@@ -274,6 +243,7 @@ export async function loadTelegramPublishedHistory(
 export const rescheduleContext = new AsyncLocalStorage<{
   owner: string;
   signal: AbortSignal;
+  scheduledAt?: Date;
 }>();
 export async function assertRescheduleActive(
   prisma: PrismaService,
@@ -282,6 +252,10 @@ export async function assertRescheduleActive(
   const context = rescheduleContext.getStore();
   if (!context) return;
   context.signal.throwIfAborted();
+  if (context.scheduledAt && context.scheduledAt.getTime() <= Date.now())
+    throw new Error(
+      'Native reschedule time has elapsed; refresh before retrying',
+    );
   const owned = await prisma.telegramManagedPost.count({
     where: {
       id: postId,
@@ -291,6 +265,10 @@ export async function assertRescheduleActive(
     },
   });
   context.signal.throwIfAborted();
+  if (context.scheduledAt && context.scheduledAt.getTime() <= Date.now())
+    throw new Error(
+      'Native reschedule time has elapsed; refresh before retrying',
+    );
   if (owned !== 1)
     throw new Error(
       'Rescheduling ownership expired; inspect Telegram before retrying',

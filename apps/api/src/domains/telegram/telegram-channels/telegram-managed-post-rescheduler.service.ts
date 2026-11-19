@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { assertMissingNativeScheduleRepairable, historyCandidatesForReschedule, overlappingNativeSchedules } from './telegram-managed-post-rescheduler-repair';
 import { Injectable } from '@nestjs/common';
 import { TelegramManagedPostStatus } from '@prisma/client';
 import type {
@@ -159,13 +160,12 @@ export class TelegramManagedPostReschedulerService {
         },
       );
     const now = new Date();
-    const overduePosts = posts.filter(
-      (post) => !post.scheduledAt || post.scheduledAt <= now,
-    );
+    const overduePosts = historyCandidatesForReschedule(posts, accountContexts, now);
+    const overlapping = overlappingNativeSchedules(posts);
     onProgress?.(
       {
         stage: 'RECONCILING_TELEGRAM',
-        message: `Telegram returned ${remoteScheduledCount} scheduled messages across ${accountIds.length} publishing accounts; checking ${overduePosts.length} overdue posts for publication.`,
+        message: `Telegram returned ${remoteScheduledCount} scheduled messages across ${accountIds.length} publishing accounts; checking ${overduePosts.length} posts for publication.`,
       },
       0,
       total,
@@ -202,6 +202,7 @@ export class TelegramManagedPostReschedulerService {
       let claimed = false;
       let uncertain = false;
       try {
+        if (overlapping.has(post.id)) throw new Error('Stored native schedule IDs overlap another candidate; reconcile identity before retrying.');
         const admission = await this.prisma.telegramManagedPost.updateMany({
           where: {
             id: post.id,
@@ -411,22 +412,18 @@ export class TelegramManagedPostReschedulerService {
           );
           continue;
         }
-        if (
-          scheduledIds.length &&
-          !scheduledIds.every((id) => remoteScheduledIds.has(id))
-        ) {
-          failedPostIds.push(post.id);
-          progressFor(
-            current,
-            post,
-            'FAILED',
-            'Telegram no longer confirms every stored scheduled message ID; left untouched to prevent a duplicate.',
-          );
-          continue;
+        if (!scheduledIds.every((id) => remoteScheduledIds.has(id))) {
+          await assertMissingNativeScheduleRepairable({
+            prisma: this.prisma, identity: this.identity, post,
+            context: accountContext, workspaceId, channelId,
+            history: publishedByAccount.get(accountId),
+          });
         }
+        if (!scheduledAt || scheduledAt.getTime() <= Date.now())
+          throw new Error('Schedule deadline passed during reconciliation; refresh before retrying.');
         uncertain = true;
         await rescheduleContext.run(
-          { owner, signal: AbortSignal.timeout(60_000) },
+          { owner, signal: AbortSignal.timeout(60_000), scheduledAt },
           () =>
             this.publication.publishManagedPost(
               workspaceId,

@@ -4,6 +4,27 @@ import {
 } from './telegram-publication-deadline';
 
 describe('publication transport cancellation', () => {
+  it('does not send when a future schedule expires during media preparation', async () => {
+    const clock = jest.spyOn(Date, 'now').mockReturnValue(1000);
+    const send = jest.fn();
+    const close = jest.fn().mockResolvedValue(undefined);
+    try {
+      await expect(withTelegramPublicationDeadline({
+        timeoutMs: 60_000,
+        scheduleAt: new Date(2000),
+        create: async () => ({}),
+        close,
+        run: async (_client, checkpoint) => {
+          clock.mockReturnValue(2001);
+          checkpoint();
+          send();
+        },
+      })).rejects.toThrow('schedule time elapsed');
+      expect(send).not.toHaveBeenCalled();
+      expect(close).toHaveBeenCalledTimes(1);
+    } finally { clock.mockRestore(); }
+  });
+
   it('times out read operations while connecting and aborts the MTProto session', async () => {
     let observedSignal: AbortSignal | undefined;
     let release!: () => void;

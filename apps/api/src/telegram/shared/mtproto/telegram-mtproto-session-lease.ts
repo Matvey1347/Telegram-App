@@ -18,7 +18,9 @@ function sessionQueueKey(session: string) {
  */
 export async function acquireTelegramMtprotoSessionLease(
   session: string | undefined,
+  signal?: AbortSignal,
 ): Promise<ReleaseLease> {
+  signal?.throwIfAborted();
   if (!session) return () => undefined;
 
   const key = sessionQueueKey(session);
@@ -29,10 +31,8 @@ export async function acquireTelegramMtprotoSessionLease(
   });
   const queued = previous.then(() => turn);
   sessionQueues.set(key, queued);
-  await previous;
-
   let released = false;
-  return () => {
+  const release = () => {
     if (released) return;
     released = true;
     resolveTurn();
@@ -40,4 +40,30 @@ export async function acquireTelegramMtprotoSessionLease(
       if (sessionQueues.get(key) === queued) sessionQueues.delete(key);
     });
   };
+  try {
+    // Cancellation skips only this waiter's turn. The predecessor still owns
+    // the session until it closes; successors must remain behind it.
+    await new Promise<void>((resolve, reject) => {
+      const onAbort = () => {
+        signal?.removeEventListener('abort', onAbort);
+        const reason: unknown = signal?.reason;
+        reject(
+          reason instanceof Error
+            ? reason
+            : new Error('Telegram session wait cancelled'),
+        );
+      };
+      signal?.addEventListener('abort', onAbort, { once: true });
+      void previous.then(() => {
+        signal?.removeEventListener('abort', onAbort);
+        resolve();
+      });
+      if (signal?.aborted) onAbort();
+    });
+    signal?.throwIfAborted();
+    return release;
+  } catch (error) {
+    release();
+    throw error;
+  }
 }

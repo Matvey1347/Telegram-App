@@ -40,7 +40,10 @@ export async function createTelegramMtprotoSession(
     error.name = 'AbortError';
     throw error;
   }
-  const releaseLease = await acquireTelegramMtprotoSessionLease(session);
+  const releaseLease = await acquireTelegramMtprotoSessionLease(
+    session,
+    signal,
+  );
   if (signal?.aborted) {
     releaseLease();
     const error = new Error('Telegram MTProto connection was cancelled');

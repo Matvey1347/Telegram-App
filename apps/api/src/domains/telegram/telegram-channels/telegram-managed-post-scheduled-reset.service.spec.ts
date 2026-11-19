@@ -94,6 +94,7 @@ function harness(options?: {
         return Promise.resolve(postsAfterSync);
       }),
     },
+    telegramManagedPostSendOperation: { count: jest.fn().mockResolvedValue(0) },
     $transaction: jest
       .fn()
       .mockImplementation((callback: (client: typeof tx) => Promise<number>) =>
@@ -112,6 +113,7 @@ function harness(options?: {
     getManagedPostMessages: jest.fn().mockResolvedValue({
       published: [],
       recentPublished: [],
+      recentPublishedComplete: true,
       scheduled: [],
     }),
     deleteScheduledPost: jest.fn().mockResolvedValue(undefined),
@@ -151,6 +153,7 @@ function harness(options?: {
   };
   const identity = {
     findPublishedIdentity: jest.fn().mockReturnValue(null),
+    normalizedPlainText: (value: string) => value.toLowerCase().replace(/\s+/g, ' ').trim(),
   };
   const rescheduler = new TelegramManagedPostReschedulerService(
     prisma as never,
@@ -196,6 +199,7 @@ describe('TelegramManagedPostScheduledResetService', () => {
     };
     const overdue = {
       ...scheduledPost('overdue'),
+      telegramScheduledMessageIds: ['102'],
       scheduledAt: new Date(Date.now() - 60_000),
       origin: 'MANUAL',
     };
@@ -280,6 +284,7 @@ describe('TelegramManagedPostScheduledResetService', () => {
         { id: '101', date: new Date(Date.now() - 30_000).toISOString() },
       ],
       recentPublished: [],
+      recentPublishedComplete: true,
       scheduled: [],
     });
 
@@ -318,7 +323,7 @@ describe('TelegramManagedPostScheduledResetService', () => {
       (item) => progress.push(item.stage),
     );
 
-    expect(mtproto.getScheduledMessagesByIds).not.toHaveBeenCalled();
+    expect(mtproto.getScheduledHistory).not.toHaveBeenCalled();
     expect(publication.publishManagedPost).not.toHaveBeenCalled();
     expect(result.locallyScheduledCount).toBe(1);
     expect(progress).toContain('LOCAL_SCHEDULE_PRESERVED');
@@ -381,7 +386,7 @@ describe('TelegramManagedPostScheduledResetService', () => {
     const { service, mtproto, publication } = harness({
       posts: [unavailableSenderPost, availableSenderPost],
     });
-    mtproto.getScheduledMessagesByIds.mockRejectedValueOnce(
+    mtproto.getScheduledHistory.mockRejectedValueOnce(
       new Error('Sender session unavailable'),
     );
 
@@ -390,7 +395,7 @@ describe('TelegramManagedPostScheduledResetService', () => {
       'channel-1',
     );
 
-    expect(mtproto.getScheduledMessagesByIds).toHaveBeenCalledTimes(2);
+    expect(mtproto.getScheduledHistory).toHaveBeenCalledTimes(2);
     expect(publication.publishManagedPost).toHaveBeenCalledWith(
       'workspace-1',
       'channel-1',
@@ -419,7 +424,7 @@ describe('TelegramManagedPostScheduledResetService', () => {
 
   it('does not draft an overdue post just because bounded history contains no match', async () => {
     const { service, mtproto, publication, updateInputs } = harness();
-    mtproto.getScheduledMessagesByIds.mockResolvedValue([]);
+    mtproto.getScheduledHistory.mockResolvedValue([]);
     const result = await service.rescheduleChannelScheduledPosts('user-1', 'channel-1');
     expect(result.failedCount).toBe(1);
     expect(result.results?.[0].message).toContain('not proven absent');
@@ -437,19 +442,125 @@ describe('TelegramManagedPostScheduledResetService', () => {
 
   it('reports blocked original sender instead of treating another account queue as cancellation proof', async () => {
     const { service, mtproto, publication } = harness({ posts: [{ ...scheduledPost(), scheduledAt: new Date(Date.now() + 60_000) }] });
-    mtproto.getScheduledMessagesByIds.mockRejectedValue(new Error('AUTH_KEY_UNREGISTERED'));
+    mtproto.getScheduledHistory.mockRejectedValue(new Error('AUTH_KEY_UNREGISTERED'));
     const result = await service.rescheduleChannelScheduledPosts('user-1', 'channel-1');
     expect(result.failedCount).toBe(1);
     expect(result.results?.[0].message).toContain('AUTH_KEY_UNREGISTERED');
     expect(publication.publishManagedPost).not.toHaveBeenCalled();
   });
 
-  it('rechecks the native queue on repeated successful requests instead of replaying an old snapshot', async () => {
+  it('rechecks the native queue before restoring a subsequently missing future schedule', async () => {
     const { service, mtproto, publication } = harness({ posts: [{ ...scheduledPost(), scheduledAt: new Date(Date.now() + 60_000) }] });
     expect((await service.rescheduleChannelScheduledPosts('user-1', 'channel-1')).rescheduledCount).toBe(1);
-    mtproto.getScheduledMessagesByIds.mockResolvedValue([]);
-    expect((await service.rescheduleChannelScheduledPosts('user-1', 'channel-1')).failedCount).toBe(1);
+    mtproto.getScheduledHistory.mockResolvedValue([]);
+    expect((await service.rescheduleChannelScheduledPosts('user-1', 'channel-1')).rescheduledCount).toBe(1);
+    expect(publication.publishManagedPost).toHaveBeenCalledTimes(2);
+    expect(mtproto.getScheduledHistory).toHaveBeenCalledTimes(2);
+  });
+
+  it('restores a missing future native schedule after one full original queue read', async () => {
+    const future = { ...scheduledPost(), scheduledAt: new Date(Date.now() + 120_000) };
+    const { service, mtproto, publication, prisma } = harness({ posts: [future] });
+    mtproto.getScheduledHistory.mockResolvedValue([]);
+    const result = await service.rescheduleChannelScheduledPosts('user-1', 'channel-1');
+    expect(result).toMatchObject({ rescheduledCount: 1, failedCount: 0 });
+    expect(mtproto.getScheduledHistory).toHaveBeenCalledTimes(1);
+    expect(mtproto.getScheduledMessagesByIds).not.toHaveBeenCalled();
+    expect(mtproto.getManagedPostMessages).toHaveBeenCalledTimes(1);
+    expect(prisma.telegramManagedPostSendOperation.count).toHaveBeenCalledWith({
+      where: { postId: future.id, workspaceId: 'workspace-1', channelId: 'channel-1' },
+    });
     expect(publication.publishManagedPost).toHaveBeenCalledTimes(1);
+  });
+
+  it('blocks an early Send Now publication regardless of its original future schedule', async () => {
+    const future = { ...scheduledPost(), scheduledAt: new Date(Date.now() + 10 * 86_400_000) };
+    const { service, mtproto, publication } = harness({ posts: [future] });
+    mtproto.getScheduledHistory.mockResolvedValue([]);
+    mtproto.getManagedPostMessages.mockResolvedValue({ published: [], scheduled: [],
+      recentPublishedComplete: true,
+      recentPublished: [{ id: '999', text: 'Body', hasMedia: false, date: new Date().toISOString() }],
+    } as never);
+    const result = await service.rescheduleChannelScheduledPosts('user-1', 'channel-1');
+    expect(result.results?.[0].message).toContain('already published');
+    expect(publication.publishManagedPost).not.toHaveBeenCalled();
+  });
+
+  it('blocks a missing future schedule when published history hits its bounded cap', async () => {
+    const future = { ...scheduledPost(), scheduledAt: new Date(Date.now() + 120_000) };
+    const { service, mtproto, publication } = harness({ posts: [future] });
+    mtproto.getScheduledHistory.mockResolvedValue([]);
+    mtproto.getManagedPostMessages.mockResolvedValue({ published: [], scheduled: [], recentPublished: [], recentPublishedComplete: false } as never);
+    const result = await service.rescheduleChannelScheduledPosts('user-1', 'channel-1');
+    expect(result.results?.[0].message).toContain('history is incomplete');
+    expect(publication.publishManagedPost).not.toHaveBeenCalled();
+  });
+
+  it('rejects both candidates that reference the same sender queue ID', async () => {
+    const future = { ...scheduledPost('first'), scheduledAt: new Date(Date.now() + 120_000) };
+    const second = { ...future, id: 'second' };
+    const { service, publication, prisma } = harness({ posts: [future, second] });
+    const result = await service.rescheduleChannelScheduledPosts('user-1', 'channel-1');
+    expect(result.failedCount).toBe(2);
+    expect(result.results?.every((item) => item.message?.includes('overlap'))).toBe(true);
+    expect(publication.publishManagedPost).not.toHaveBeenCalled();
+    expect(prisma.telegramManagedPost.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('does not use a default account queue to prove absence for a missing original sender', async () => {
+    const future = { ...scheduledPost(), sourceId: null as unknown as string, scheduledAt: new Date(Date.now() + 120_000) };
+    const { service, mtproto, publication } = harness({ posts: [future] });
+    mtproto.getScheduledHistory.mockResolvedValue([]);
+    const result = await service.rescheduleChannelScheduledPosts('user-1', 'channel-1');
+    expect(result.results?.[0].message).toContain('Original sender');
+    expect(publication.publishManagedPost).not.toHaveBeenCalled();
+  });
+
+  it('blocks partial native schedules without replacing or cancelling their surviving parts', async () => {
+    const future = { ...scheduledPost(), scheduledAt: new Date(Date.now() + 120_000), telegramScheduledMessageIds: ['101', '103'] };
+    const { service, publication, mtproto } = harness({ posts: [future] });
+    const result = await service.rescheduleChannelScheduledPosts('user-1', 'channel-1');
+    expect(result.results?.[0].message).toContain('Only part');
+    expect(publication.publishManagedPost).not.toHaveBeenCalled();
+    expect(mtproto.deleteScheduledPost).not.toHaveBeenCalled();
+  });
+
+  it('blocks orphan matching scheduled content under new Telegram IDs', async () => {
+    const future = { ...scheduledPost(), scheduledAt: new Date(Date.now() + 120_000) };
+    const { service, mtproto, publication } = harness({ posts: [future] });
+    mtproto.getScheduledHistory.mockResolvedValue([{ id: '999', text: ' Body ' }] as never);
+    const result = await service.rescheduleChannelScheduledPosts('user-1', 'channel-1');
+    expect(result.results?.[0].message).toContain('matching unlinked');
+    expect(publication.publishManagedPost).not.toHaveBeenCalled();
+  });
+
+  it.each(['journal', 'published-id', 'attempt'])('blocks missing schedule recovery with %s delivery evidence', async (evidence) => {
+    const future = { ...scheduledPost(), scheduledAt: new Date(Date.now() + 120_000),
+      ...(evidence === 'published-id' ? { telegramMessageIds: ['999'] } : {}),
+      ...(evidence === 'attempt' ? { deliveryAttemptCount: 1 } : {}),
+    };
+    const { service, mtproto, publication, prisma } = harness({ posts: [future] });
+    mtproto.getScheduledHistory.mockResolvedValue([]);
+    if (evidence === 'journal') prisma.telegramManagedPostSendOperation.count.mockResolvedValue(1);
+    const result = await service.rescheduleChannelScheduledPosts('user-1', 'channel-1');
+    expect(result.results?.[0].message).toContain('delivery evidence');
+    expect(publication.publishManagedPost).not.toHaveBeenCalled();
+  });
+
+  it('does not turn a future schedule into an immediate send when admission crosses its deadline', async () => {
+    jest.useFakeTimers();
+    try {
+      const future = { ...scheduledPost(), scheduledAt: new Date(Date.now() + 1_000) };
+      const { service, mtproto, publication, prisma } = harness({ posts: [future] });
+      mtproto.getScheduledHistory.mockResolvedValue([]);
+      prisma.telegramManagedPostSendOperation.count.mockImplementation(async () => {
+        jest.setSystemTime(Date.now() + 2_000);
+        return 0;
+      });
+      const result = await service.rescheduleChannelScheduledPosts('user-1', 'channel-1');
+      expect(result.results?.[0].message).toContain('deadline passed');
+      expect(publication.publishManagedPost).not.toHaveBeenCalled();
+    } finally { jest.useRealTimers(); }
   });
 
   it('deletes every remote scheduled message and resets channel posts to clean drafts', async () => {
