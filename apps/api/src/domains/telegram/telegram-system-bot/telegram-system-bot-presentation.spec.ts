@@ -37,6 +37,27 @@ describe('Telegram System Bot presentation', () => {
     ).toContain('🏦 Main: 125.5 USD');
   });
 
+  it('uses the selected channel custom emoji rather than a photo placeholder', () => {
+    const result = renderSystemBotStats('Workspace', {
+      topOwnChannels: [
+        {
+          title: 'News & views',
+          subscribers: 250,
+          photoUrl: 'https://example.test/avatar.png',
+          iconPresentation: {
+            type: 'unicode',
+            value: '📢',
+            telegramCustomEmojiId: '42',
+          },
+        },
+      ],
+    });
+    expect(result).toContain(
+      '<tg-emoji emoji-id="42">📢</tg-emoji> News &amp; views: 250 subscribers',
+    );
+    expect(result).not.toContain('🖼️');
+  });
+
   it('renders safe structured HTML for workspace statistics', () => {
     const result = renderSystemBotStats('Sales <EU>', {
       primaryCurrency: 'USD',

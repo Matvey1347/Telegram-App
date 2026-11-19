@@ -57,7 +57,11 @@ export type TelegramSystemBotAdSaleOptions = {
     iconPresentation?: ResolvedEmoji | null;
   }>;
   members?: Array<{ id: string; name: string }>;
-  channels?: Array<{ id: string; title: string }>;
+  channels?: Array<{
+    id: string;
+    title: string;
+    presentationIcon?: { emoji: string | null } | null;
+  }>;
   networks?: Array<{
     id: string;
     name: string;

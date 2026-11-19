@@ -6,6 +6,7 @@ import {
 
 export type ChannelSettingsDraft = {
   presentationIconId: string;
+  presentationIconDirty?: boolean;
   description: string;
   tgStatUrl: string;
   publicInviteLinkId: string;
@@ -34,6 +35,7 @@ export function createChannelSettingsDraft(
 ): ChannelSettingsDraft {
   return {
     presentationIconId: channel.presentationIconId || "",
+    presentationIconDirty: false,
     description: channel.shortDescription || "",
     tgStatUrl: channel.tgStatUrl || "",
     publicInviteLinkId: channel.publicInviteLinkId || "",
@@ -71,7 +73,7 @@ export function buildChannelSettingsPayload(draft: ChannelSettingsDraft) {
   const seedValue = (value: string) =>
     draft.seedDisabled ? 0 : nonNegative(value);
   return {
-    presentationIconId: draft.presentationIconId || null,
+    ...(draft.presentationIconDirty ? { presentationIconId: draft.presentationIconId || null } : {}),
     shortDescription: draft.description.trim() || null,
     tgStatUrl: draft.tgStatUrl.trim() || null,
     publicInviteLinkId: draft.publicInviteLinkId || null,

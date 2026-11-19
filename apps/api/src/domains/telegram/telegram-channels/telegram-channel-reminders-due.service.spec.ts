@@ -55,7 +55,7 @@ describe('channel post reminders', () => {
     expect(delivery.deliver).toHaveBeenCalledWith(
       expect.objectContaining({
         title: 'Нет запланированных постов на сегодня',
-        body: '• one\n• two',
+        body: '• 📢 one\n• 📢 two',
         memberId: 'member',
       }),
     );
@@ -65,6 +65,18 @@ describe('channel post reminders', () => {
       expect.objectContaining({
         data: { nextDueAt: new Date('2026-11-03T20:00:00Z') },
       }),
+    );
+  });
+  it('uses a custom icon Unicode ALT in plain notification bodies', async () => {
+    const { service, delivery, prisma } = setup();
+    const rows = await prisma.telegramChannelReminderAssignment.findMany();
+    for (const row of rows)
+      Object.assign(row.channel, {
+        presentationIcon: { emoji: '![🌍](tg://emoji?id=123)' },
+      });
+    await service.processDueActions(now);
+    expect(delivery.deliver).toHaveBeenCalledWith(
+      expect.objectContaining({ body: '• 🌍 one\n• 🌍 two' }),
     );
   });
   it('keeps work due when delivery fails so scheduler can retry', async () => {

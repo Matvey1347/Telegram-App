@@ -1,3 +1,4 @@
+import { iconToResolvedEmoji } from '../../../common/icons/resolved-emoji';
 import {
   BadRequestException,
   Injectable,
@@ -56,6 +57,8 @@ export class TelegramAiPostingService {
         description: true,
         shortDescription: true,
         photoUrl: true,
+        inviteLink: true,
+        presentationIcon: true,
       },
     });
     if (!channel) throw new NotFoundException('Telegram channel not found');
@@ -99,7 +102,7 @@ export class TelegramAiPostingService {
       'mediaPreferences', 'imageAvoidances', 'useChannelAvatarInMedia',
     ];
     return {
-      channel,
+      channel: { ...channel, presentationIcon: undefined, presentationIconPresentation: iconToResolvedEmoji(channel.presentationIcon) },
       mediaPreferenceIcons: await resolveAiPostingPreferenceIcons(
         this.prisma,
         workspaceId,

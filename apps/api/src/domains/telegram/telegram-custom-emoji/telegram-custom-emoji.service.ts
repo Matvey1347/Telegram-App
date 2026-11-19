@@ -17,6 +17,7 @@ import { normalizeTelegramCustomEmojiPackSource } from '@api/telegram/shared/mar
 import { parseTelegramCustomEmojiDocumentId } from '@api/telegram/shared/markup/telegram-custom-emoji-pack';
 import { TelegramMtprotoClient } from '@api/telegram/shared/mtproto/telegram-mtproto.client';
 import { TelegramCustomEmojiStorageService } from './telegram-custom-emoji-storage.service';
+import { ChannelAvatarEmojiDocumentsService } from './channel-avatar-emoji-documents.service';
 
 const packSelect = {
   id: true,
@@ -51,6 +52,7 @@ export class TelegramCustomEmojiService {
     private readonly encryption: TokenEncryptionService,
     private readonly mtproto: TelegramMtprotoClient,
     private readonly storage: TelegramCustomEmojiStorageService,
+    private readonly avatarDocuments: ChannelAvatarEmojiDocumentsService,
   ) {}
 
   private mapPack(pack: PackRow): TelegramCustomEmojiPackSummary {
@@ -111,12 +113,15 @@ export class TelegramCustomEmojiService {
           .filter((value) => /^\d{1,20}$/.test(value)),
       ),
     ].slice(0, 100);
-    let response = await this.list(userId);
-    const knownDocumentIds = new Set(
-      response.packs.flatMap((pack) =>
-        pack.emojis.map((emoji) => emoji.documentId),
-      ),
+    const workspaceId =
+      await this.workspaceService.resolveWorkspaceIdForUser(userId);
+    const avatarPacks = await this.avatarDocuments.resolve(
+      workspaceId,
+      documentIds,
     );
+    let response = {
+      packs: [...(await this.list(userId)).packs, ...avatarPacks],
+    };
     let loaded = 0;
     let failed = 0;
     for (const [index, documentId] of documentIds.entries()) {
@@ -145,12 +150,8 @@ export class TelegramCustomEmojiService {
         continue;
       }
       try {
-        response = await this.importPack(userId, { source: documentId });
-        response.packs.forEach((pack) =>
-          pack.emojis.forEach((emoji) =>
-            knownDocumentIds.add(emoji.documentId),
-          ),
-        );
+        const imported = await this.importPack(userId, { source: documentId });
+        response = { packs: [...imported.packs, ...avatarPacks] };
         const pack = response.packs.find((candidate) =>
           candidate.emojis.some((emoji) => emoji.documentId === documentId),
         );
@@ -211,6 +212,10 @@ export class TelegramCustomEmojiService {
     const requestedShortName = documentId
       ? null
       : normalizeTelegramCustomEmojiPackSource(input.source);
+    await this.avatarDocuments.assertImportable({
+      documentId,
+      shortName: requestedShortName,
+    });
     if (requestedShortName) {
       const existing = await this.prisma.telegramCustomEmojiPack.findUnique({
         where: {
@@ -257,6 +262,9 @@ export class TelegramCustomEmojiService {
         iv: account.sessionIv!,
         authTag: account.sessionAuthTag!,
       }),
+    });
+    await this.avatarDocuments.assertImportable({
+      shortName: resolved.shortName,
     });
     if (!resolved.documents.length)
       throw new BadRequestException(
@@ -313,39 +321,41 @@ export class TelegramCustomEmojiService {
         await tx.telegramCustomEmoji.deleteMany({
           where: {
             packId: pack.id,
-            ...(documentIds.length ? { documentId: { notIn: documentIds } } : {}),
+            ...(documentIds.length
+              ? { documentId: { notIn: documentIds } }
+              : {}),
           },
         });
       }
       const emojiRows = resolved.documents.map((emoji, position) => {
-          const prefix = `telegram-custom-emoji/${workspaceId}/${resolved.shortName}/${emoji.documentId}`;
-          const ext =
-            emoji.kind === 'VIDEO'
-              ? 'webm'
-              : emoji.kind === 'ANIMATED'
-                ? 'tgs'
-                : 'webp';
-          const data = {
-            alt: emoji.alt,
-            mimeType: emoji.mimeType,
-            kind: emoji.kind,
-            isFree: emoji.isFree,
-            needsRepainting: emoji.needsRepainting,
-            position,
-            assetKey:
-              emoji.kind === 'ANIMATED' ? null : `${prefix}/original.${ext}`,
-            assetUrl:
-              emoji.kind === 'ANIMATED'
-                ? null
-                : (urls.get(`${prefix}/original.${ext}`) ?? null),
-            renderAssetKey:
-              emoji.kind === 'ANIMATED' ? `${prefix}/render.json` : null,
-            renderAssetUrl:
-              emoji.kind === 'ANIMATED'
-                ? (urls.get(`${prefix}/render.json`) ?? null)
-                : null,
-          };
-          return { packId: pack.id, documentId: emoji.documentId, ...data };
+        const prefix = `telegram-custom-emoji/${workspaceId}/${resolved.shortName}/${emoji.documentId}`;
+        const ext =
+          emoji.kind === 'VIDEO'
+            ? 'webm'
+            : emoji.kind === 'ANIMATED'
+              ? 'tgs'
+              : 'webp';
+        const data = {
+          alt: emoji.alt,
+          mimeType: emoji.mimeType,
+          kind: emoji.kind,
+          isFree: emoji.isFree,
+          needsRepainting: emoji.needsRepainting,
+          position,
+          assetKey:
+            emoji.kind === 'ANIMATED' ? null : `${prefix}/original.${ext}`,
+          assetUrl:
+            emoji.kind === 'ANIMATED'
+              ? null
+              : (urls.get(`${prefix}/original.${ext}`) ?? null),
+          renderAssetKey:
+            emoji.kind === 'ANIMATED' ? `${prefix}/render.json` : null,
+          renderAssetUrl:
+            emoji.kind === 'ANIMATED'
+              ? (urls.get(`${prefix}/render.json`) ?? null)
+              : null,
+        };
+        return { packId: pack.id, documentId: emoji.documentId, ...data };
       });
       if (refresh) {
         for (const row of emojiRows) {
@@ -357,7 +367,10 @@ export class TelegramCustomEmojiService {
           });
         }
       } else {
-        await tx.telegramCustomEmoji.createMany({ data: emojiRows, skipDuplicates: true });
+        await tx.telegramCustomEmoji.createMany({
+          data: emojiRows,
+          skipDuplicates: true,
+        });
       }
     });
     return this.list(userId);

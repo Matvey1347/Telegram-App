@@ -45,6 +45,48 @@ export function storedTelegramIconPresentation(
   return { type: 'unicode', value };
 }
 
+/** An Icon's canonical source is data, never trusted Telegram HTML. */
+export function storedTelegramIconText(
+  source: string | null | undefined,
+  fallback: string,
+) {
+  const icon = storedTelegramIconPresentation(source, fallback);
+  return icon.type === 'unicode' ? icon.value : fallback;
+}
+
+export function storedTelegramIconHtml(
+  source: string | null | undefined,
+  fallback: string,
+  customEmojiSupported = true,
+) {
+  const icon = storedTelegramIconPresentation(source, fallback);
+  const escape = (value: string) =>
+    value.replace(
+      /[&<>"']/g,
+      (character) =>
+        ({
+          '&': '&amp;',
+          '<': '&lt;',
+          '>': '&gt;',
+          '"': '&quot;',
+          "'": '&#39;',
+        })[character]!,
+    );
+  if (icon.type !== 'unicode') return escape(fallback);
+  const alt = escape(icon.value);
+  return customEmojiSupported && icon.telegramCustomEmojiId
+    ? `<tg-emoji emoji-id="${icon.telegramCustomEmojiId}">${alt}</tg-emoji>`
+    : alt;
+}
+
+/** Preserve ALT and every other entity when a destination rejects custom emoji. */
+export function telegramCustomEmojiHtmlFallback(html: string) {
+  return html.replace(
+    /<tg-emoji\s+emoji-id="[0-9]+">([\s\S]*?)<\/tg-emoji>/gi,
+    '$1',
+  );
+}
+
 export function telegramIconSourceFromText(
   message: TelegramBotIconTextMessage,
 ) {

@@ -1,3 +1,4 @@
+import { ChannelAvatarEmojiService } from './channel-avatar-emoji.service';
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import {
   TelegramChannelDataType,
@@ -8,6 +9,7 @@ import { PrismaService } from '../../../prisma/prisma.service';
 import {
   canonicalTelegramInviteLink,
   parseTelegramImportInput,
+  telegramChannelRawPermissions,
   type ResolvedTelegramEntity,
 } from '@api/telegram/shared/imports/telegram-import.helpers';
 import { TelegramMtprotoClient } from '@api/telegram/shared/mtproto/telegram-mtproto.client';
@@ -64,6 +66,7 @@ export class TelegramChannelImportService {
     private readonly telegramBroadcastStatsService: TelegramBroadcastStatsService,
     private readonly telegramChannelImportPreparationService: TelegramChannelImportPreparationService,
     private readonly telegramPostGroupStore: TelegramPostGroupStore,
+    private readonly avatarEmojis?: ChannelAvatarEmojiService,
   ) {}
   private readonly logger = new Logger('TelegramChannelsService');
 
@@ -292,6 +295,22 @@ export class TelegramChannelImportService {
       );
       return persisted;
     });
+    if (info.isCreator !== undefined || info.adminRights !== undefined) {
+      const rawPermissions = telegramChannelRawPermissions(info);
+      const normalized =
+        this.sourceAccessService.normalizeMtprotoPermissions(rawPermissions);
+      await this.sourceAccessService.upsertAccess({
+        workspaceId,
+        channelId: channel.id,
+        sourceId: account.id,
+        sourceType: TelegramSourceType.MTPROTO,
+        role: normalized.role,
+        permissions: normalized.permissions,
+        rawPermissions,
+      });
+      if (normalized.role === 'OWNER')
+        await this.avatarEmojis?.enqueueInitial(workspaceId, channel.id);
+    }
     await this.sourceAccessService.recordDataSource({
       workspaceId,
       channelId: channel.id,

@@ -1,3 +1,4 @@
+import { ChannelAvatarEmojiService } from '../channel-avatar-emoji.service';
 import { TelegramManagedPostDeliveryDispatcherService } from '../telegram-managed-post-delivery-dispatcher.service';
 import { TelegramManagedPostSendJournalService } from '../telegram-managed-post-send-journal.service';
 import { CurrencyConversionService } from '../../../../common/currency-conversion.service';
@@ -187,6 +188,7 @@ export function createTelegramChannelsTestHarness(
   };
   const instances = new Map<unknown, unknown>([
     [PrismaService, prisma],
+    [ChannelAvatarEmojiService, { enqueue: jest.fn().mockResolvedValue(undefined), enqueueInitial: jest.fn().mockResolvedValue(undefined) }],
     [
       TelegramManagedPostDeliveryDispatcherService,
       { dispatch: jest.fn().mockResolvedValue(true) },

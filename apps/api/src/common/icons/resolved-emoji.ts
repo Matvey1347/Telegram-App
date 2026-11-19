@@ -29,8 +29,10 @@ export function iconToResolvedEmoji(
     return presentation.type === 'unicode' && presentation.telegramCustomEmojiId
       ? {
           ...presentation,
-          telegramCustomEmojiKind: telegramAsset?.kind ?? null,
-          telegramCustomEmojiAssetUrl: telegramAsset?.assetUrl ?? null,
+          telegramCustomEmojiKind:
+            telegramAsset?.kind ?? (icon.imageUrl ? 'STATIC' : null),
+          telegramCustomEmojiAssetUrl:
+            telegramAsset?.assetUrl ?? icon.imageUrl ?? null,
           telegramCustomEmojiRenderAssetUrl:
             telegramAsset?.renderAssetUrl ?? null,
         }

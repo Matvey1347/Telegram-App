@@ -20,8 +20,13 @@ import {
   type TelegramSystemBotCardButton,
 } from './telegram-system-bot-post-preview';
 import type { TelegramSystemBotPostFlowOptions } from './telegram-system-bot-post-flow.options';
+import { storedTelegramIconText } from '@api/telegram/shared/bot/telegram-bot-icon-source';
 
-type ChannelOption = { id: string; title: string };
+type ChannelOption = {
+  id: string;
+  title: string;
+  presentationIcon?: { emoji: string | null } | null;
+};
 type NetworkOption = { id: string; name: string; channelCount: number };
 
 export async function resolveTelegramSystemBotPostCard(input: {
@@ -153,7 +158,7 @@ export function renderTelegramSystemBotPostCard(input: {
           ],
           ...compactSystemBotInlineKeyboard(
             (input.channels ?? []).map((channel, index) => ({
-              text: `${selectedIds.has(channel.id) ? '☑️' : '☐'} ${channel.title}`,
+              text: `${selectedIds.has(channel.id) ? '☑️' : '☐'} ${storedTelegramIconText(channel.presentationIcon?.emoji, '📢')} ${channel.title}`,
               callback_data: `${prefix}target.toggle.channel.${index}`,
             })),
           ),

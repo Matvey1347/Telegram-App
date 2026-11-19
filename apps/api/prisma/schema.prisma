@@ -1689,6 +1689,13 @@ model TelegramChannel {
   tgStatUrl                    String?
   publicInviteLinkId           String?
   presentationIconId           String?
+  avatarEmojiIconId            String?
+  avatarEmojiHash              String?
+  avatarEmojiStatus            String                         @default("PENDING")
+  avatarEmojiError             String?
+  avatarEmojiManual            Boolean                        @default(false)
+  avatarEmojiRetryAt           DateTime?
+  avatarEmojiAttempts          Int                            @default(0)
   defaultInviteLinkId          String?
   botInviteLinkId              String?
   broadcastInviteLinkId        String?
@@ -1753,6 +1760,7 @@ model TelegramChannel {
   assignedMember             WorkspaceMember?    @relation("TelegramChannelAssignedMember", fields: [assignedMemberId], references: [id], onDelete: SetNull)
   createdByUser              User?               @relation("TelegramChannelCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
   purchaseTransaction        Transaction?        @relation("TelegramChannelPurchaseTransaction", fields: [purchaseTransactionId], references: [id], onDelete: SetNull)
+  avatarEmojiIcon           Icon? @relation("TelegramChannelAvatarEmojiIcon", fields: [avatarEmojiIconId], references: [id], onDelete: SetNull)
   presentationIcon           Icon?               @relation("TelegramChannelPresentationIcon", fields: [presentationIconId], references: [id], onDelete: SetNull)
   defaultInviteLink          TelegramInviteLink? @relation("TelegramChannelDefaultInviteLink", fields: [defaultInviteLinkId], references: [id], onDelete: SetNull)
   publicInviteLink           TelegramInviteLink? @relation("TelegramChannelPublicInviteLink", fields: [publicInviteLinkId], references: [id], onDelete: SetNull)
@@ -1818,6 +1826,8 @@ model TelegramChannel {
   @@index([workspaceId, username])
   @@index([workspaceId, telegramChatId])
   @@index([workspaceId, assignedMemberId])
+  @@index([avatarEmojiIconId])
+  @@index([avatarEmojiRetryAt])
   @@index([presentationIconId])
   @@index([defaultInviteLinkId])
   @@index([botInviteLinkId])
@@ -6400,6 +6410,7 @@ model Icon {
   adHypotheses                     AdHypothesis[]
   telegramChannelTimePosts         TelegramChannelTimePost[]
   telegramChannelNetworks          TelegramChannelNetwork[]
+  telegramChannelAvatarEmojiIcons TelegramChannel[] @relation("TelegramChannelAvatarEmojiIcon")
   telegramChannelPresentationIcons TelegramChannel[]                 @relation("TelegramChannelPresentationIcon")
   telegramChannelMessageTemplates  TelegramChannelMessageTemplate[]
   telegramAdvertiserAvatars        TelegramAdvertiser[]             @relation("TelegramAdvertiserAvatarIcon")
@@ -6905,4 +6916,36 @@ model TelegramCrmDeletedMessage {
   account TelegramUserAccountIntegration @relation(fields: [mtprotoAccountId], references: [id], onDelete: Cascade)
   @@id([mtprotoAccountId, telegramMessageId])
   @@index([workspaceId, mtprotoAccountId])
+}
+
+/// System-owned global sets, deliberately separate from workspace-imported packs.
+model ChannelAvatarEmojiPack {
+  id        Int @id
+  shortName String @unique
+  assets    ChannelAvatarEmojiAsset[]
+  createdAt DateTime @default(now())
+}
+
+/// Immutable content-addressed Telegram documents. Old IDs must remain valid.
+model ChannelAvatarEmojiAsset {
+  hash          String @id
+  imageUrl      String @db.Text
+  packId        Int?
+  fileId        String?
+  fileUniqueId  String?
+  customEmojiId String? @unique
+  pendingDocumentIds String[] @default([])
+  remotePending Boolean @default(false)
+  pack          ChannelAvatarEmojiPack? @relation(fields: [packId], references: [id])
+  createdAt     DateTime @default(now())
+  @@index([packId])
+  @@index([remotePending])
+}
+
+/// One bounded publisher lease/cooldown across replicas and all workspaces.
+model ChannelAvatarEmojiPublisher {
+  id         String @id
+  leaseToken String?
+  leaseUntil DateTime?
+  retryAt    DateTime?
 }

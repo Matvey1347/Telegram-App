@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => ({
   startOperation: vi.fn(),
   succeed: vi.fn(),
   fail: vi.fn(),
+  updateQuiet: vi.fn(),
 }));
 
 vi.mock("@/lib/api", async (importOriginal) => {
@@ -32,11 +33,12 @@ vi.mock("@/lib/api", async (importOriginal) => {
     telegramChannelsApi: {
       ...actual.telegramChannelsApi,
       registerInviteLink: mocks.registerInviteLink,
+      updateQuiet: mocks.updateQuiet,
     },
   };
 });
 vi.mock("@/components/icons/icon-picker", () => ({
-  IconPicker: () => <button type="button">Choose emoji</button>,
+  IconPicker: ({ onChange }: { onChange: (value: string) => void }) => <button type="button" onClick={() => onChange("chosen-manual-icon")}>Choose emoji</button>,
 }));
 vi.mock("@/components/ui/primitives", async (importOriginal) => {
   const actual =
@@ -115,6 +117,7 @@ describe("ChannelPresentationSettingsModal", () => {
     });
     mocks.succeed.mockReset();
     mocks.fail.mockReset();
+    mocks.updateQuiet.mockReset().mockResolvedValue({ id: "channel-1" });
   });
 
   it("edits the short channel description in Appearance", () => {
@@ -141,6 +144,27 @@ describe("ChannelPresentationSettingsModal", () => {
     expect(
       screen.getByText("Invite link for audience transfer"),
     ).toBeInTheDocument();
+  });
+
+  it("marks only an explicit picker choice as dirty in the embedded draft", () => {
+    const { onDraftChange } = renderModal();
+    fireEvent.click(screen.getByRole("button", { name: "Choose emoji" }));
+    expect(onDraftChange).toHaveBeenCalledWith({ presentationIconId: "chosen-manual-icon", presentationIconDirty: true });
+  });
+
+  it.each([false, true])("standalone save includes the icon only after an explicit picker choice (changed=%s)", async (changed) => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(<QueryClientProvider client={client}>
+      <ChannelPresentationSettingsModal channel={{ id: "channel-1", title: "Science", isActive: true }} onClose={vi.fn()} />
+    </QueryClientProvider>);
+    if (changed) fireEvent.click(screen.getByRole("button", { name: "Choose emoji" }));
+    fireEvent.change(screen.getByPlaceholderText("A short description shown in generated channel lists"), { target: { value: "Description changed while avatar generated" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(mocks.updateQuiet).toHaveBeenCalled());
+    const payload = mocks.updateQuiet.mock.calls[0][1];
+    expect(payload.shortDescription).toBe("Description changed while avatar generated");
+    if (changed) expect(payload.presentationIconId).toBe("chosen-manual-icon");
+    else expect(payload).not.toHaveProperty("presentationIconId");
   });
 
   it("keeps legacy purpose links when a new primary link is chosen", () => {

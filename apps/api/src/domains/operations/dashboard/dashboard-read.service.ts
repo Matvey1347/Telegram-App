@@ -202,6 +202,9 @@ export class DashboardReadService {
               title: true,
               username: true,
               photoUrl: true,
+              presentationIcon: {
+                select: { id: true, type: true, name: true, emoji: true },
+              },
               currentSubscribersCount: true,
               isActive: true,
               purchaseTransaction: access.finance

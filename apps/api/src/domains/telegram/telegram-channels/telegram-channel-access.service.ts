@@ -1,3 +1,4 @@
+import { telegramAccountCredentials, type EncryptedTelegramAccountCredentials } from '@api/telegram/shared/mtproto/telegram-account-credentials';
 import {
   BadRequestException,
   Injectable,
@@ -573,28 +574,8 @@ export class TelegramChannelAccessService {
     return best?.sourceId;
   }
 
-  public accountCredentials(account: {
-    apiId: string;
-    apiHashEncrypted: string;
-    apiHashIv: string;
-    apiHashAuthTag: string;
-    sessionEncrypted: string | null;
-    sessionIv: string | null;
-    sessionAuthTag: string | null;
-  }) {
-    return {
-      apiId: account.apiId,
-      apiHash: this.encryptionService.decrypt({
-        encrypted: account.apiHashEncrypted,
-        iv: account.apiHashIv,
-        authTag: account.apiHashAuthTag,
-      }),
-      session: this.encryptionService.decrypt({
-        encrypted: account.sessionEncrypted || '',
-        iv: account.sessionIv || '',
-        authTag: account.sessionAuthTag || '',
-      }),
-    };
+  public accountCredentials(account: EncryptedTelegramAccountCredentials) {
+    return telegramAccountCredentials(this.encryptionService, account);
   }
 
   public async refreshMtprotoAccountCapabilities(account: {

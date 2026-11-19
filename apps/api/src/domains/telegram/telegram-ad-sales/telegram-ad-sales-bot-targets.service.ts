@@ -44,7 +44,13 @@ export class TelegramAdSalesBotTargetsService {
         },
         orderBy: [{ title: 'asc' }, { id: 'asc' }],
         take: TELEGRAM_AD_SALES_BOT_TARGET_LIMIT,
-        select: { id: true, title: true, username: true, photoUrl: true },
+        select: {
+          id: true,
+          title: true,
+          username: true,
+          photoUrl: true,
+          presentationIcon: { select: { emoji: true } },
+        },
       }),
       this.prisma.telegramChannelNetwork.findMany({
         where: { workspaceId: membership.workspaceId },

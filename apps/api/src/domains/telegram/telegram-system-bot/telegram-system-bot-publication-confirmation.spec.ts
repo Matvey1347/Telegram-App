@@ -9,6 +9,32 @@ const channel = {
 };
 
 describe('renderPublicationConfirmation', () => {
+  it.each(['5368324170671202286', '77'])(
+    'renders selected channel custom emoji %s for every confirmation consumer',
+    (id) => {
+      const text = renderPublicationConfirmation({
+        state: 'scheduled',
+        channels: [
+          {
+            ...channel,
+            presentationIcon: { emoji: `![📢](tg://emoji?id=${id})` },
+          },
+        ],
+        timezone: 'Europe/Kyiv',
+        groups: [
+          {
+            title: 'Campaign',
+            placements: [{ telegramChannelId: channel.id }],
+          },
+        ],
+      });
+      expect(text).toContain(
+        `<a href="https://t.me/public"><tg-emoji emoji-id="${id}">📢</tg-emoji> <b>`,
+      );
+      expect(text).not.toContain('tg://emoji');
+    },
+  );
+
   it('uses the confirmed publication time and compact shared delivery details', () => {
     const text = renderPublicationConfirmation({
       state: 'published',

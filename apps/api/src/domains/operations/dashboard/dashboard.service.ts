@@ -529,6 +529,7 @@ export class DashboardService {
             title: channel.title,
             username: channel.username,
             photoUrl: channel.photoUrl,
+            iconPresentation: iconToResolvedEmoji(channel.presentationIcon),
             subscribers: Number(
               latest?.subscribersCount ?? channel.currentSubscribersCount ?? 0,
             ),

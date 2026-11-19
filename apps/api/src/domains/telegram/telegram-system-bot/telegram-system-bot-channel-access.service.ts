@@ -12,6 +12,7 @@ import {
 import { TelegramSystemBotConfigService } from './telegram-system-bot-config.service';
 import { compactSystemBotInlineKeyboard } from './telegram-system-bot-inline-keyboard';
 import { formatSystemBotDate } from './telegram-system-bot-menu';
+import { storedTelegramIconText } from '@api/telegram/shared/bot/telegram-bot-icon-source';
 
 type MembershipUpdate = {
   chat?: {
@@ -59,6 +60,7 @@ export class TelegramSystemBotChannelAccessService {
         title: true,
         username: true,
         photoUrl: true,
+        presentationIcon: { select: { emoji: true } },
         isActive: true,
         currentSubscribersCount: true,
       },
@@ -71,7 +73,7 @@ export class TelegramSystemBotChannelAccessService {
       reply_markup: {
         inline_keyboard: compactSystemBotInlineKeyboard(
           channels.map((channel) => ({
-            text: `${channel.isActive ? '🟢' : '⚪'} ${channel.title}`,
+            text: `${channel.isActive ? '🟢' : '⚪'} ${storedTelegramIconText(channel.presentationIcon?.emoji, '📢')} ${channel.title}`,
             callback_data: `channel:view:${channel.id}`,
           })),
           { columns: 2, limit: 100 },
@@ -88,7 +90,7 @@ export class TelegramSystemBotChannelAccessService {
   ) {
     const channel = await this.requireChannel(workspaceId, channelId);
     const text = [
-      `📢 ${channel.title}`,
+      `${storedTelegramIconText(channel.presentationIcon?.emoji, '📢')} ${channel.title}`,
       channel.username ? `@${channel.username.replace(/^@/, '')}` : null,
       channel.telegramChatId ? `ID: ${channel.telegramChatId}` : null,
       `Status: ${channel.isActive ? 'active' : 'inactive'}`,
@@ -222,6 +224,7 @@ export class TelegramSystemBotChannelAccessService {
         telegramChatId: true,
         accessMode: true,
         photoUrl: true,
+        presentationIcon: { select: { emoji: true } },
         isActive: true,
         currentSubscribersCount: true,
         lastPublicSyncedAt: true,

@@ -21,6 +21,8 @@ import {
   telegramChannelsApi,
 } from "@/lib/api";
 import { AiPostingChat } from "./ai-posting-chat";
+import { ChannelEndingSignatureButton } from "./channel-ending-signature-button";
+import type { ChannelEndingSignatureSource } from "./channel-ending-signature";
 import { useEndingEmojiPacks } from "./use-ending-emoji-packs";
 import { aiPostingPreferenceIcons } from "./ai-posting-entity-icons";
 import { AiPostingImagesSection } from "./ai-posting-images-section";
@@ -91,7 +93,7 @@ const initial: Config = {
 const key = (id: string) => ["telegram-ai-posting", id] as const;
 type SettingsResponse = {
   mediaPreferenceIcons?: Record<string, ResolvedEmoji>;
-  channel?: { photoUrl?: string | null };
+  channel?: ChannelEndingSignatureSource & { photoUrl?: string | null };
   configuration: Config;
   mode: "TEST" | "REVIEW";
   draftExpirationDays: number;
@@ -306,7 +308,7 @@ export function AiPostingPage({
                   {config.historyMode === "since" && <FormField label="Начальная дата"><DateInput type="date" value={config.historyFrom} onChange={(e) => patch({ historyFrom: e.target.value })} /></FormField>}
                   <ToggleRow checked={config.variedLength} onChange={(variedLength) => patch({ variedLength })} label="Автоопределять длину публикации" />
                   <FormField label="Эмодзи в публикациях"><CustomSelect value={config.emojiPolicy} onChange={(emojiPolicy) => patch({ emojiPolicy: emojiPolicy as Config["emojiPolicy"] })} options={[{ value: "start", label: "Один уместный эмодзи в начале" }, { value: "contextual", label: "Уместные эмодзи по тексту" }]} /></FormField>
-                  <FormField label="Постоянная концовка"><div className="relative min-h-[60px] rounded-md border border-neutral-700 bg-neutral-900 py-2 pl-3 pr-12 focus-within:border-blue-500 [&_[role=textbox]]:min-h-[40px]"><EditableTelegramPreviewText value={config.ending} onChange={(ending) => patch({ ending })} customEmojiPacks={endingEmojiPacks.data?.packs ?? []} ariaLabel="Постоянная концовка" /><div className="absolute right-2 top-2"><Tooltip content="Вставить Premium-эмодзи"><button type="button" aria-label="Вставить Premium-эмодзи" onClick={() => { setEndingPremiumPickerOpen(true); setEndingPremiumEmojiRequested(true); }} className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-neutral-700 bg-neutral-800 text-neutral-200 hover:bg-neutral-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"><Sparkles size={16}/></button></Tooltip></div></div><p className="text-xs text-neutral-500">Аватар можно добавить как custom emoji в Telegram.</p></FormField>
+                  <FormField label="Постоянная концовка"><div className="relative min-h-[60px] rounded-md border border-neutral-700 bg-neutral-900 py-2 pl-3 pr-12 focus-within:border-blue-500 [&_[role=textbox]]:min-h-[40px]"><EditableTelegramPreviewText value={config.ending} onChange={(ending) => patch({ ending })} customEmojiPacks={endingEmoji.packs} ariaLabel="Постоянная концовка" /><div className="absolute right-2 top-2"><Tooltip content="Вставить Premium-эмодзи"><button type="button" aria-label="Вставить Premium-эмодзи" onClick={() => { setEndingPremiumPickerOpen(true); setEndingPremiumEmojiRequested(true); }} className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-neutral-700 bg-neutral-800 text-neutral-200 hover:bg-neutral-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"><Sparkles size={16}/></button></Tooltip></div></div><ChannelEndingSignatureButton ending={config.ending} channel={{ title: channelTitle, ...settings.data?.channel }} onChange={(ending) => patch({ ending })} /></FormField>
                   <FormField label="Хэштеги"><CustomSelect ariaLabel="Хэштеги" value={config.hashtags} onChange={(hashtags) => patch({ hashtags })} options={[{ value: "disabled", label: "Отключены" }, { value: "start", label: "В начале публикации" }, { value: "end", label: "В конце публикации" }, { value: "ending_inline", label: "Один хэштег рядом с концовкой" }]} /></FormField>
                 </Card>
               </div>

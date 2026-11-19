@@ -1,3 +1,4 @@
+import { ChannelAvatarEmojiService } from './channel-avatar-emoji.service';
 import {
   BadRequestException,
   Injectable,
@@ -25,6 +26,7 @@ export class TelegramChannelLifecycleService {
     private readonly telegramChannelSchemaCompatibilityService: TelegramChannelSchemaCompatibilityService,
     private readonly telegramChannelCatalogService: TelegramChannelCatalogService,
     private readonly telegramPostGroupStore: TelegramPostGroupStore,
+    private readonly avatarEmojis?: ChannelAvatarEmojiService,
   ) {}
 
   /**
@@ -129,6 +131,7 @@ export class TelegramChannelLifecycleService {
       );
       return created;
     });
+    await this.avatarEmojis?.enqueue(workspaceId, channel.id);
     notifyScheduledTaskDueWorkChanged(`workspace-auto-sync:${workspaceId}`);
     return channel;
   }
@@ -306,6 +309,7 @@ export class TelegramChannelLifecycleService {
         where: { id },
         data: {
           ...channelUpdateData,
+          ...(dto.presentationIconId !== undefined && dto.presentationIconId !== existing.presentationIconId ? { avatarEmojiManual: true } : {}),
           acquisitionType: importPolicy.acquisitionType,
           postsSyncFrom: importPolicy.postsSyncFrom,
           inviteLinksSyncFrom: importPolicy.inviteLinksSyncFrom,

@@ -110,6 +110,23 @@ describe('TelegramSystemBotChannelAccessService', () => {
     ]);
   });
 
+  it('uses the selected icon Unicode ALT in plain channel choices', async () => {
+    const { service, prisma, api } = harness();
+    prisma.telegramChannel.findMany.mockResolvedValue([
+      {
+        id: 'channel-1',
+        title: 'News',
+        isActive: true,
+        presentationIcon: { emoji: '![🌍](tg://emoji?id=123)' },
+      },
+    ]);
+    await service.list('44', 'workspace-1');
+    const button =
+      api.sendMessage.mock.calls[0][1].reply_markup.inline_keyboard[0][0];
+    expect(button.text).toBe('🟢 🌍 News');
+    expect(button.text).not.toContain('tg://emoji');
+  });
+
   it('audits local and production bots but persists only selected environment access', async () => {
     const { service, prisma, api, sourceAccess } = harness();
     prisma.telegramChannel.findFirstOrThrow.mockResolvedValue({

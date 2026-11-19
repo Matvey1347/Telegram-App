@@ -31,15 +31,17 @@ export function patchTelegramChannelCaches(
   patch: ChannelPatch,
   { invalidateNetworks = false }: { invalidateNetworks?: boolean } = {},
 ) {
-  queryClient.setQueriesData<ChannelListCache>(
-    { queryKey: telegramChannelKeys.lists() },
-    (current) =>
-      updateCachedList(current, (channels) =>
-        channels.map((channel) =>
-          channel.id === patch.id ? mergeChannel(channel, patch) : channel,
+  for (const queryKey of [telegramChannelKeys.lists(), telegramChannelKeys.cardLists()]) {
+    queryClient.setQueriesData<ChannelListCache>(
+      { queryKey },
+      (current) =>
+        updateCachedList(current, (channels) =>
+          channels.map((channel) =>
+            channel.id === patch.id ? mergeChannel(channel, patch) : channel,
+          ),
         ),
-      ),
-  );
+    );
+  }
   queryClient.setQueryData<TelegramChannel>(
     telegramChannelKeys.detail(patch.id),
     (channel) => (channel ? mergeChannel(channel, patch) : channel),

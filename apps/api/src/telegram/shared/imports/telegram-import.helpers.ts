@@ -18,6 +18,8 @@ export type TelegramImportInput =
 
 export type ResolvedTelegramEntity = {
   kind: 'channel' | 'person';
+  isCreator?: boolean;
+  adminRights?: Record<string, unknown> | null;
   telegramChatId: string;
   title: string;
   username: string | null;
@@ -299,5 +301,16 @@ export function resolveTelegramTitleCandidates<T>(
       kind: candidate.kind,
     })),
     exact: true,
+  };
+}
+
+/** Preserve actual MTProto creator/admin evidence; linked administrators are not owners. */
+export function telegramChannelRawPermissions(channel: {
+  isCreator?: boolean;
+  adminRights?: Record<string, unknown> | null;
+}) {
+  return {
+    isCreator: Boolean(channel.isCreator),
+    adminRights: channel.adminRights || null,
   };
 }

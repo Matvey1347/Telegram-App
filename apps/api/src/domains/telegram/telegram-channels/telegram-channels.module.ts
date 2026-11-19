@@ -1,3 +1,10 @@
+import { ChannelAvatarEmojiProcessorService } from './channel-avatar-emoji-processor.service';
+import { ChannelAvatarEmojiController } from './channel-avatar-emoji.controller';
+import { ChannelAvatarEmojiService } from './channel-avatar-emoji.service';
+import { ChannelAvatarEmojiPublisherService } from './channel-avatar-emoji-publisher.service';
+import { ChannelAvatarEmojiWorkerService } from './channel-avatar-emoji-worker.service';
+import { ChannelAvatarEmojiApi } from '@api/telegram/shared/emoji/channel-avatar-emoji-api';
+import { ChannelAvatarPhotoService } from '@api/telegram/shared/emoji/channel-avatar-photo.service';
 import { TelegramManagedPostDeliveryAlertsService } from './telegram-managed-post-delivery-alerts.service';
 import { TelegramManagedPostDeliveryDispatcherService } from './telegram-managed-post-delivery-dispatcher.service';
 import { TelegramManagedPostSendJournalService } from './telegram-managed-post-send-journal.service';
@@ -140,6 +147,7 @@ import { TelegramChannelTrafficAttributionService } from './telegram-channel-tra
     AiModule,
   ],
   controllers: [
+    ChannelAvatarEmojiController,
     TelegramChannelsController,
     TelegramAiPostingController,
     TelegramAiPostingChatController,
@@ -158,6 +166,12 @@ import { TelegramChannelTrafficAttributionService } from './telegram-channel-tra
     TelegramPostBatchesController,
   ],
   providers: [
+    ChannelAvatarEmojiService,
+    ChannelAvatarEmojiProcessorService,
+    ChannelAvatarEmojiPublisherService,
+    ChannelAvatarEmojiWorkerService,
+    ChannelAvatarEmojiApi,
+    ChannelAvatarPhotoService,
     TelegramChannelsService,
     TelegramAiPostingService,
     TelegramAiPostingContentModelService,
@@ -277,6 +291,7 @@ import { TelegramChannelTrafficAttributionService } from './telegram-channel-tra
     TelegramPostBatchPublicationRunnerService,
   ],
   exports: [
+    ChannelAvatarEmojiProcessorService,
     TelegramChannelRemindersDueService,
     TelegramChannelsService,
     TelegramChannelAnalyticsService,
