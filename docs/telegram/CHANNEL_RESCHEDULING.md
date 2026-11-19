@@ -288,3 +288,14 @@ Manual QA: refresh the channel page, inspect planned dates, run the reschedule
 button, wait for completion, and verify the new IDs through the priority account.
 After an interrupted request, inspect the durable receipt before retrying; a
 completed ACK with stale projection is recovery work, not permission to resend.
+
+Release verification: runtime source commit `b7f481b1`; Railway deployment
+`a6d5b019-7aae-488d-94af-9ad62c7cc557` SUCCESS; Vercel deployment
+`dpl_7HZbkrNdamQ1tcUffsPqkNHykBd3` READY, aliased to nexeloq.com and
+www.nexeloq.com. API health and both web origins returned HTTP 200. The native
+recovery migration is finished in Neon with no rollback. A fresh post-deployment
+queue read again verified 45/47 ordinary schedules with zero discrepancies.
+API build, web typecheck and 72 targeted regressions passed. The aggregate
+release check retains 27 existing architectural violations; no protected-branch
+push or guard bypass was performed. Deployment used explicit source uploads.
+Recovery ports 3003/3004/4003 have no task-owned listeners.
