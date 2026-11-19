@@ -1,3 +1,4 @@
+import { normalizeManagedPostMarkup } from './telegram-managed-post-identity-text';
 import {
   TelegramManagedPostRemoteStatus,
   TelegramManagedPostStatus,
@@ -524,6 +525,20 @@ describe('TelegramManagedPostScheduledResetService', () => {
     mtproto.getManagedPostMessages.mockResolvedValue({ published: [], scheduled: [],
       recentPublishedComplete: true,
       recentPublished: [{ id: '999', text: 'Body', hasMedia: false, date: new Date().toISOString() }],
+    } as never);
+    const result = await service.rescheduleChannelScheduledPosts('user-1', 'channel-1');
+    expect(result.results?.[0].message).toContain('already published');
+    expect(publication.publishManagedPost).not.toHaveBeenCalled();
+  });
+
+  it('blocks early published template content containing literal underscore placeholders', async () => {
+    const future = { ...scheduledPost(), scheduledAt: new Date(Date.now() + 120_000),
+      text: '**Invoice** №___: [details](https://example.com/invoice)' };
+    const { service, mtproto, publication, identity } = harness({ posts: [future] });
+    identity.normalizedPlainText = normalizeManagedPostMarkup;
+    mtproto.getScheduledHistory.mockResolvedValue([]);
+    mtproto.getManagedPostMessages.mockResolvedValue({ published: [], scheduled: [], recentPublishedComplete: true,
+      recentPublished: [{ id: '999', text: 'Invoice №___: details', hasMedia: false, date: new Date().toISOString() }],
     } as never);
     const result = await service.rescheduleChannelScheduledPosts('user-1', 'channel-1');
     expect(result.results?.[0].message).toContain('already published');

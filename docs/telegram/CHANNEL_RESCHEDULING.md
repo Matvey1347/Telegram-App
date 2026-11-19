@@ -27,7 +27,7 @@ still scale with changed posts. Railway process/RAM baseline is unchanged;
 bounded request memory holds at most the operation candidates, queue and 500
 history messages. History beyond that cap fails closed for missing-future repair.
 
-Release and production execution verification are pending for this revision.
+Bulk/session/snapshot recovery is deployed and production-verified below. The final plaintext-normalization regression is being released separately.
 
 The incident also exposed an exclusive-session deadlock: a live CRM connection
 held the account lease for its entire lifetime, while channel operations waited
@@ -90,7 +90,7 @@ existing per-account queue batches, 100 claims and at most 100 replacement
 operations plus cancellation/media work. Leases add claim/release writes only
 during an explicit operation; idle Neon and Railway work is unchanged.
 
-## Verification status
+## Historical verification — 2026-11-17
 
 Local focused API and frontend tests, API/web type checks and builds passed.
 The architecture check retains repository-wide violations, including existing
@@ -100,7 +100,7 @@ Public health returned 200; the protected plan endpoint returned 401 without
 credentials. These checks do not verify an authenticated reschedule or this
 unreleased implementation.
 
-## Remaining acceptance checks
+## Historical acceptance notes — 2026-11-17
 
 Provide explicit private test channel/workspace IDs and protected credentials.
 Schedule ordinary text/media posts plus an ad and VP control. Run the existing
@@ -119,3 +119,50 @@ result. Both fixtures were deleted through the canonical API (HTTP 200);
 no test deals were created. This does not establish successful Telegram
 rescheduling. The source changes have not been deployed; do not describe
 production as fixed.
+
+## Production verification — 2026-11-19
+
+Clean release branch: `codex/channel-recovery-production`, independent of the
+unreleased avatar work in the original checkout. Deployment
+`b34b58bc-1c12-4b8b-ade2-0291bc35ee65` (`d8084a90`) reached SUCCESS and health HTTP 200.
+A complete read-only Telegram snapshot and scoped database inventory agree:
+67 future native posts/messages, no orphan IDs, aliases, dated failures or
+content/date mismatches. Together with today's confirmed publication they cover
+34 days, November 19–December 22, two posts per day in Europe/Warsaw. Regular slots
+are 08:10 / 19:10; today's catch-up slot was 10:10. Telegram message 5234 was observed
+published at 09:10:33Z (10:10:33 Warsaw), then synchronized to the managed post.
+The evening native slot is 18:10Z (19:10 Warsaw).
+
+Thirteen genuinely absent failed schedules were restored through the canonical
+API after complete queue/history checks. One failed record already matched
+Telegram message 5233 from November18; it was linked/verified, never resent.
+The existing manual-link endpoint retained its old future timestamp; a bounded
+workspace/channel/ID/status/message-ID guarded metadata update corrected only
+that ordinary post's publication timestamp to the observed 18:49:45Z. It excludes
+ads, VP and batch deliveries. Subsequent API verification reports VERIFIED.
+An unused draft fills that already-published content's November 20 evening slot.
+
+The real batch then preserved 66 confirmed schedules and restored one missing
+native entry in 17,540 ms, with zero failures. A second complete batch preserved
+all 67 in 5,985 ms, performed no replacements and returned zero failures.
+
+Validation: API/web builds and types, targeted UI tests, snapshot/recovery tests,
+transport/CRM sharing tests and publication deadline regressions passed. Full
+API tests retain 14 unrelated failing suites; general lint/architecture/release
+checks retain existing repository debt. AI dry-run/execute/check passed with
+zero pending receipts; no unknown reserve was invented or released. No main,
+master or production Git ref was pushed while the general release gate fails.
+The explicit production deployment uses the clean reviewed release branch.
+
+Manual QA reproduction: open Telegram → Scheduled Messages for this channel;
+check today's 19:10 Warsaw slot and two slots per day through December 22. Open
+message 5234 to confirm the morning publication. Run the existing reschedule
+modal again: confirmed entries must show native preservation, with zero sends,
+zero removals and zero errors. Do not use the older media-import sync stream
+as a read-only verification operation.
+
+Telegram visible text is not managed markup: literal placeholders such as
+`№___` must survive comparison. The final regression decodes stored markup
+once and only normalizes whitespace/case in already-visible remote text.
+This prevents a published template post from remaining falsely scheduled or
+being replaced after an early manual publication.

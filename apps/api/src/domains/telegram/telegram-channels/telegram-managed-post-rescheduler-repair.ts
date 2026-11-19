@@ -1,3 +1,4 @@
+import { normalizeTelegramPlainText } from './telegram-managed-post-identity-text';
 import type { RescheduleChannelScheduledPostProgress } from '@telegram-system/shared';
 import type { Prisma, TelegramManagedPost } from '@prisma/client';
 import type { TelegramMtprotoClient } from '@api/telegram/shared/mtproto/telegram-mtproto.client';
@@ -52,7 +53,7 @@ export async function assertMissingNativeScheduleRepairable(input: {
     );
   const expected = input.identity.normalizedPlainText(post.text || '');
   const matchingContent = (message: { text: string; hasMedia: boolean }) => {
-    const visible = input.identity.normalizedPlainText(message.text || '');
+    const visible = normalizeTelegramPlainText(message.text || '');
     // Include partial text: a previous multipart schedule may have survived
     // with new IDs. Ambiguous content is a reason to inspect, never to replay.
     return expected && visible
