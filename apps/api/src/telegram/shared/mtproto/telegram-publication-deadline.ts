@@ -17,7 +17,9 @@ export async function withTelegramPublicationDeadline<TClient, TResult>(input: {
       : (closing ??= input.close(client));
   const checkpoint = () => {
     if (input.scheduleAt && input.scheduleAt.getTime() <= Date.now())
-      throw new Error('Telegram schedule time elapsed; reconcile the remote outcome before rescheduling');
+      throw new Error(
+        'Telegram schedule time elapsed; reconcile the remote outcome before rescheduling',
+      );
     if (controller.signal.aborted)
       throw new Error(
         deadlineReached

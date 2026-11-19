@@ -16,6 +16,7 @@ import { JwtAuthGuard } from '../../../common/jwt-auth.guard';
 import { StreamResponseService } from '../../../common/stream/stream-response.service';
 import { TelegramManagedPostScheduledResetService } from './telegram-managed-post-scheduled-reset.service';
 import { TelegramManagedPostRescheduleBatchDto } from './telegram-managed-post-reschedule-batch.dto';
+import { TelegramManagedPostRecoverySnapshotService } from './telegram-managed-post-recovery-snapshot.service';
 
 @UseGuards(JwtAuthGuard)
 @Controller('telegram-channels')
@@ -23,7 +24,16 @@ export class TelegramManagedPostRecoveryController {
   constructor(
     private readonly scheduledReset: TelegramManagedPostScheduledResetService,
     private readonly streams: StreamResponseService,
+    private readonly snapshot: TelegramManagedPostRecoverySnapshotService,
   ) {}
+
+  @Get(':id/recovery-managed-posts-snapshot')
+  recoverySnapshot(
+    @CurrentUser() user: JwtUser,
+    @Param('id') channelId: string,
+  ) {
+    return this.snapshot.snapshot(user.sub, channelId);
+  }
 
   @Post(':id/managed-posts/reset-scheduled-to-drafts')
   resetScheduledToDrafts(

@@ -39,6 +39,18 @@ connection must await confirmed shutdown. Unconfirmed shutdown retains ownership
 Read cleanup has a five-second waiting bound without releasing the live lease.
 This reuses the existing CRM socket and adds no idle socket, timer or DB work.
 
+The authenticated `GET :id/recovery-managed-posts-snapshot` returns bounded
+read-only evidence: each connected linked sender's full queue, one published
+history, explicit per-account errors and its completeness flag. It never runs
+the legacy scheduled-media import. It uses three scoped reads plus the existing
+workspace lookup, one Telegram queue request per linked account, and one history
+request; 100 independently inspected channels scale to 100 such operations,
+without background work. Do not interpret a failed queue as empty.
+
+Explicit retry IDs are deduplicated. Already-drafted or verified-published posts
+retain their completed outcomes. Failed, missing and out-of-scope IDs remain
+visible failures instead of silently disappearing from a successful empty batch.
+
 The existing recovery controller, rescheduler and publisher remain the single
 workflow. Candidate reads and claim admission exclude ad placements, folder VP
 and batch deliveries. Final stream results include per-post outcomes; the modal

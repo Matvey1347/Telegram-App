@@ -110,6 +110,7 @@ import { TelegramSystemPostGroupsService } from './telegram-system-post-groups.s
 import { TelegramManagedPostRecoveryController } from './telegram-managed-post-recovery.controller';
 import { TelegramManagedPostScheduledResetService } from './telegram-managed-post-scheduled-reset.service';
 import { TelegramManagedPostReschedulerService } from './telegram-managed-post-rescheduler.service';
+import { TelegramManagedPostRecoverySnapshotService } from './telegram-managed-post-recovery-snapshot.service';
 import { TelegramPostCalendarPlannerController } from './telegram-post-calendar-planner.controller';
 import { TelegramChannelBoundedReadsController } from './telegram-channel-bounded-reads.controller';
 import { TelegramManagedPostLookupService } from './telegram-managed-post-lookup.service';
@@ -231,6 +232,7 @@ import { TelegramChannelTrafficAttributionService } from './telegram-channel-tra
     TelegramManagedPostHistoryService,
     TelegramManagedPostScheduledResetService,
     TelegramManagedPostReschedulerService,
+    TelegramManagedPostRecoverySnapshotService,
     TelegramManagedPostPublicationService,
     TelegramManagedPostPublisherService,
     TelegramManagedPostDeliveryDispatcherService,
