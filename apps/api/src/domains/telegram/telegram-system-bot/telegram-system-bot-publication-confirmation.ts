@@ -1,3 +1,5 @@
+import { storedTelegramIconHtml } from '@api/telegram/shared/bot/telegram-bot-icon-source';
+
 export type PublicationConfirmationChannel = {
   id: string;
   title: string;
@@ -192,7 +194,7 @@ function dateOrNull(value: string | Date | null | undefined) {
 function channelPresentation(
   channel: PublicationConfirmationChannel | undefined,
 ) {
-  const icon = escapeHtml(channel?.presentationIcon?.emoji || '📢');
+  const icon = storedTelegramIconHtml(channel?.presentationIcon?.emoji, '📢');
   const title = `<b>${escapeHtml(stripTitleEmoji(channel?.title ?? 'Недоступний канал'))}</b>`;
   const url = channel?.publicInviteLink?.url ?? channel?.defaultInviteLink?.url;
   return url

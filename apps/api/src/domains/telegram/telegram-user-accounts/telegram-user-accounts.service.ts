@@ -1,3 +1,5 @@
+import { ChannelAvatarEmojiProcessorService } from '../telegram-channels/channel-avatar-emoji-processor.service';
+import { telegramChannelRawPermissions } from '@api/telegram/shared/imports/telegram-import.helpers';
 import {
   BadRequestException,
   HttpException,
@@ -91,6 +93,7 @@ export class TelegramUserAccountsService {
       new TelegramAccountRuntimeNotifier(),
     ),
     private readonly runtimeNotifier: TelegramAccountRuntimeNotifier = new TelegramAccountRuntimeNotifier(),
+    private readonly avatarEmojis?: ChannelAvatarEmojiProcessorService,
   ) {}
 
   private async notifyProgress(
@@ -170,21 +173,11 @@ export class TelegramUserAccountsService {
     );
   }
 
-  private channelRawPermissions(channel: {
-    isCreator?: boolean;
-    adminRights?: Record<string, unknown> | null;
-  }) {
-    return {
-      isCreator: Boolean(channel.isCreator),
-      adminRights: channel.adminRights || null,
-    };
-  }
-
   private channelAccessPayload(channel: {
     isCreator?: boolean;
     adminRights?: Record<string, unknown> | null;
   }) {
-    const rawPermissions = this.channelRawPermissions(channel);
+    const rawPermissions = telegramChannelRawPermissions(channel);
     const normalized =
       this.sourceAccessService.normalizeMtprotoPermissions(rawPermissions);
     return { rawPermissions, normalized };
@@ -790,6 +783,7 @@ export class TelegramUserAccountsService {
         permissions: normalized.permissions,
         rawPermissions,
       });
+      if (normalized.role === 'OWNER') await this.avatarEmojis?.enqueueInitial(workspaceId, telegramChannelId);
     }
 
     return {
@@ -966,6 +960,7 @@ export class TelegramUserAccountsService {
         permissions: normalized.permissions,
         rawPermissions,
       });
+      if (normalized.role === 'OWNER') await this.avatarEmojis?.enqueueInitial(workspaceId, workspaceChannel.id);
       await this.sourceAccessService.recordDataSource({
         workspaceId,
         channelId: workspaceChannel.id,

@@ -10,6 +10,7 @@ import {
 } from '../telegram-ad-sales/domain/timezone';
 import { TelegramChannelBookingReadService } from './telegram-channel-booking-read.service';
 import { CHANNEL_REMINDERS_TASK_KEY } from './telegram-channel-reminders.service';
+import { storedTelegramIconText } from '@api/telegram/shared/bot/telegram-bot-icon-source';
 
 const DAY = 86400000;
 const BATCH_SIZE = 500;
@@ -60,6 +61,7 @@ export class TelegramChannelRemindersDueService {
         channel: {
           select: {
             title: true,
+            presentationIcon: { select: { emoji: true } },
             isActive: true,
             archivedAt: true,
             assignedMemberId: true,
@@ -151,7 +153,7 @@ export class TelegramChannelRemindersDueService {
           };
           message.channels.push({
             id: row.channelId,
-            title: row.channel.title,
+            title: `${storedTelegramIconText(row.channel.presentationIcon?.emoji, '📢')} ${row.channel.title}`,
           });
           messages.set(key, message);
         }

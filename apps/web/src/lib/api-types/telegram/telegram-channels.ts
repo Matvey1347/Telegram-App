@@ -15,6 +15,7 @@ import type {
   TelegramChannelTrafficAttributionPreview,
   TelegramChannelSystemBotConnection,
   TelegramPublishingCapabilities,
+  TelegramChannelAvatarEmojiState,
 } from "@telegram-system/shared";
 
 export type TelegramChannelAdAnalysisStatus =
@@ -76,7 +77,7 @@ export type TelegramChannelTimePost = {
   iconId?: string | null;
   iconPresentation?: ResolvedEmoji | null;
 };
-export type TelegramChannel = EntityAssignment & {
+export type TelegramChannel = EntityAssignment & TelegramChannelAvatarEmojiState & {
   id: string;
   title: string;
   username?: string;

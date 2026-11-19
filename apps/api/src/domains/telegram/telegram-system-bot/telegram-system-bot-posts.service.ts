@@ -3,6 +3,7 @@ import { ModuleRef } from '@nestjs/core';
 import { TelegramManagedPostStatus } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { TelegramBotApiClient } from '@api/telegram/shared/bot/telegram-bot-api.client';
+import { storedTelegramIconText } from '@api/telegram/shared/bot/telegram-bot-icon-source';
 import { TelegramSystemBotConfigService } from './telegram-system-bot-config.service';
 import { formatSystemBotDate } from './telegram-system-bot-menu';
 import type { TelegramSystemBotPostFlowScope } from './telegram-system-bot-post-flow.types';
@@ -133,7 +134,7 @@ export class TelegramSystemBotPostsService {
             ],
             ...channels.map((channel, index) => [
               {
-                text: `${selectedMask & (1 << index) ? '☑️' : '☐'} ${channel.title}`,
+                text: `${selectedMask & (1 << index) ? '☑️' : '☐'} ${storedTelegramIconText(channel.presentationIcon?.emoji, '📢')} ${channel.title}`,
                 callback_data: `posts:calendar:select:${selectedMask ^ (1 << index)}`,
               },
             ]),

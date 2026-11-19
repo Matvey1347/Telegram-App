@@ -48,7 +48,8 @@
     "hooks:install": "git config core.hooksPath .githooks",
     "release:check": "pnpm ai:sync:check && pnpm check:changed",
     "production:ads": "node scripts/production-ads.mjs",
-    "archive": "zip -r -y telegram-system.zip . -x 'telegram-system.zip' 'node_modules/*' '*/node_modules/*' '.next/*' '*/.next/*' 'dist/*' '*/dist/*' '.codex/tmp/*' '.codex/tmp/**' '*/coverage/*' 'coverage/*' '*/.turbo/*' '.turbo/*' '*/tsconfig.tsbuildinfo' '*/.DS_Store' '.DS_Store' '.env' '*/.env' '.env.local' '*/.env.local' '.git/*'"
+    "archive": "zip -r -y telegram-system.zip . -x 'telegram-system.zip' 'node_modules/*' '*/node_modules/*' '.next/*' '*/.next/*' 'dist/*' '*/dist/*' '.codex/tmp/*' '.codex/tmp/**' '*/coverage/*' 'coverage/*' '*/.turbo/*' '.turbo/*' '*/tsconfig.tsbuildinfo' '*/.DS_Store' '.DS_Store' '.env' '*/.env' '.env.local' '*/.env.local' '.git/*'",
+    "avatar-emoji": "pnpm --filter api avatar-emoji"
   },
   "packageManager": "pnpm@9.0.0",
   "devDependencies": {

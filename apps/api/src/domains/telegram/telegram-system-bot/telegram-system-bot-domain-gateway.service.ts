@@ -32,6 +32,7 @@ export class TelegramSystemBotDomainGatewayService {
         title: true,
         username: true,
         photoUrl: true,
+        presentationIcon: { select: { emoji: true } },
         isActive: true,
         lastPublicSyncedAt: true,
         currentSubscribersCount: true,

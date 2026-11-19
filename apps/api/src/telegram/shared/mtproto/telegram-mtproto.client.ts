@@ -1051,6 +1051,8 @@ export class TelegramMtprotoClient {
     );
     return {
       kind: this.entityKind(entity),
+      isCreator: Boolean('creator' in entity && entity.creator),
+      adminRights: this.toJsonSafe(('adminRights' in entity && entity.adminRights) || null) as Record<string, unknown> | null,
       telegramChatId: this.entityIdToString(entity),
       title: this.entityTitle(entity) || username || fallbackRef,
       username,

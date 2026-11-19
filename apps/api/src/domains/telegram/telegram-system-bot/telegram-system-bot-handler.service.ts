@@ -1,5 +1,6 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { TelegramBotApiClient } from '@api/telegram/shared/bot/telegram-bot-api.client';
+import { sendTelegramCustomEmojiHtml } from '@api/telegram/shared/bot/telegram-custom-emoji-html-send';
 import { TelegramSystemBotConfigService } from './telegram-system-bot-config.service';
 import { TelegramSystemBotConnectionsService } from './telegram-system-bot-connections.service';
 import { TelegramSystemBotNotificationConnectionsService } from './telegram-system-bot-notification-connections.service';
@@ -563,11 +564,15 @@ export class TelegramSystemBotHandlerService {
     workspaceName: string,
   ) {
     const summary = await this.domain.stats(workspaceId);
-    return this.api.sendMessage(this.config.token!, {
-      chat_id: chatId,
-      text: renderSystemBotStats(workspaceName, summary),
-      parse_mode: 'HTML',
-    });
+    return sendTelegramCustomEmojiHtml(
+      renderSystemBotStats(workspaceName, summary),
+      (text) =>
+        this.api.sendMessage(this.config.token!, {
+          chat_id: chatId,
+          text,
+          parse_mode: 'HTML',
+        }),
+    );
   }
 }
 

@@ -8,6 +8,7 @@ import {
   telegramBotApiActionRow,
 } from '@api/telegram/shared/bot/telegram-bot-action-buttons';
 import { systemBotEmoji } from './telegram-system-bot-presentation';
+import { storedTelegramIconText } from '@api/telegram/shared/bot/telegram-bot-icon-source';
 import type {
   TelegramSystemBotAdSaleOptions,
   TelegramSystemBotAdSalePayload,
@@ -257,7 +258,7 @@ function targetCard(
   );
   const channels = compactSystemBotInlineKeyboard(
     (options.channels ?? []).map((item, index) => ({
-      text: `${selected.has(item.id) ? '✓ ' : ''}${item.title}`,
+      text: `${selected.has(item.id) ? '✓ ' : ''}${storedTelegramIconText(item.presentationIcon?.emoji, '📢')} ${item.title}`,
       callback_data: `${prefix}target.channel.${index}`,
     })),
   );

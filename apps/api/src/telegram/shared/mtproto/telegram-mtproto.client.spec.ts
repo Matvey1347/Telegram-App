@@ -223,6 +223,7 @@ describe('TelegramMtprotoClient import resolution', () => {
       title: 'Public Channel',
       accessHash: '1' as any,
       broadcast: true,
+      creator: true,
       megagroup: false,
       username: 'public_channel',
     } as unknown as any);
@@ -252,6 +253,8 @@ describe('TelegramMtprotoClient import resolution', () => {
 
     expect(result).toMatchObject({
       kind: 'channel',
+      isCreator: true,
+      adminRights: null,
       telegramChatId: '123456',
       title: 'Public Channel',
       username: 'public_channel',

@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { TelegramSystemBotHandlerService } from './telegram-system-bot-handler.service';
 import { sanitizeOperationalError } from '../../../common/security/operational-error';
+import { sendTelegramCustomEmojiHtml } from '@api/telegram/shared/bot/telegram-custom-emoji-html-send';
 
 @Injectable()
 export class TelegramSystemBotNotificationsService {
@@ -26,7 +27,7 @@ export class TelegramSystemBotNotificationsService {
     });
     if (!workspace?.telegramNotificationUserChatId)
       return { status: 'NOT_CONNECTED' as const };
-    return this.handler.sendSystemMessage({
+    return this.sendMessage({
       chatId: workspace.telegramNotificationUserChatId,
       text: input.text,
       parseMode: input.parseMode,
@@ -40,11 +41,23 @@ export class TelegramSystemBotNotificationsService {
     });
     if (!workspace?.telegramNotificationChatId)
       return { status: 'NOT_CONNECTED' as const };
-    return this.handler.sendSystemMessage({
+    return this.sendMessage({
       chatId: workspace.telegramNotificationChatId,
       text,
       parseMode,
     });
+  }
+
+  private async sendMessage(input: {
+    chatId: string;
+    text: string;
+    parseMode?: string;
+  }) {
+    const send = (text: string) =>
+      this.handler.sendSystemMessage({ ...input, text });
+    return input.parseMode === 'HTML'
+      ? sendTelegramCustomEmojiHtml(input.text, send)
+      : send(input.text);
   }
 
   async notify(input: {

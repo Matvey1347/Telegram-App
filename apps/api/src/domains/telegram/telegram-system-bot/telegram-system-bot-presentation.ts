@@ -1,4 +1,6 @@
 import type { ResolvedEmoji } from '@telegram-system/shared';
+import { storedTelegramIconHtml } from '@api/telegram/shared/bot/telegram-bot-icon-source';
+import { renderTelegramCustomEmojiToken } from '@api/telegram/shared/markup/telegram-custom-emoji-markup';
 
 export function systemBotEmoji(
   presentation: ResolvedEmoji | null | undefined,
@@ -42,6 +44,7 @@ type SystemBotStatsSummary = {
     title: string;
     subscribers: number;
     photoUrl?: string | null;
+    iconPresentation?: ResolvedEmoji | null;
   }>;
 };
 
@@ -119,9 +122,22 @@ export function renderSystemBotStats(
         .slice(0, 5)
         .map(
           (channel) =>
-            `${channel.photoUrl ? '🖼️' : '📢'} ${escapeHtml(channel.title)}: ${formatNumber(channel.subscribers)} subscribers`,
+            `${systemBotEmojiHtml(channel.iconPresentation, '📢')} ${escapeHtml(channel.title)}: ${formatNumber(channel.subscribers)} subscribers`,
         ),
     );
   }
   return lines.join('\n');
+}
+
+function systemBotEmojiHtml(
+  icon: ResolvedEmoji | null | undefined,
+  fallback: string,
+) {
+  const source =
+    icon?.type === 'unicode'
+      ? icon.telegramCustomEmojiId
+        ? renderTelegramCustomEmojiToken(icon.value, icon.telegramCustomEmojiId)
+        : icon.value
+      : null;
+  return storedTelegramIconHtml(source, fallback);
 }

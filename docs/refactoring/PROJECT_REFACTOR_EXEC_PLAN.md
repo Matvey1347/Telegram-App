@@ -2313,3 +2313,31 @@ Release decision remains **NO-GO**: focused API138 suites/1083 tests and web55 f
 - The Personal Account profile now dynamically loads `IconPicker` only when its profile form is rendered. Password-only visits no longer include the large icon-selection module in their static import graph. Account-workspace tests (6), Web typecheck and production build pass; focused ESLint reports the component's pre-existing set-state-in-effect error and image-element warning, with no finding on the new dynamic import.
 - VP channel-scope selectors in Publication Calendar and Cross Promotion now use a compact workspace-scoped network-options endpoint (network ID/name/icon plus channel IDs) instead of fetching full network cards with financial/audience analytics. The existing full endpoint remains for network cards. The options query uses the persisted one-day network cache, and existing `networkKeys.list()` prefix invalidations also invalidate it after network/channel mutations. The selector read is bounded to three workspace-level queries (workspace exclusions, network memberships, eligible owned channels), with no per-network/per-channel request fan-out; a 100-channel regression confirms the channel rows are fetched in one batch. API network suites pass (16), Calendar editor tests pass (2), Cross Promotion lazy-loading test passes, API client/cache policy tests pass (47), shared typecheck/build, API build, Web typecheck and production Web build pass. Focused lint reports four existing hook-rule diagnostics in the connected Cross Promotion components; they are on unchanged logic. `git diff --check` passes. Runtime payload bytes are not measurable without the authenticated workspace data.
 - Final repository verification for this pass: Web production build, API build, Web typecheck, and `git diff --check` pass. Full Web run: 380/394 files pass, 1,951/1,970 tests pass; the 19 remaining failures are in Consumer Finance, navigation, legacy template/Telegram avatar, Ad Sale lifecycle, and stale Mutual Promotion UI assertions. Full API run: 537 passed, 25 failed, 16 skipped; failures remain in 13 Telegram/System Bot/Finance/identity suites. Focused Lead Discovery/History/Qualification/Review suites pass (47 tests); the Discovery/source-table pair passes (18 tests); roles lazy-loading/permission tests pass (3 tests). Full Web lint remains at 141 errors/164 warnings in the existing repository; focused lint on the added cache and Lead Discovery changes passes. Architecture check still reports unrelated legacy over-limit files and source growth elsewhere; the modified Network detail route is back within its 217-line allowance. No new polling or background jobs were added. Chrome currently has an authenticated workspace session, but the available browser automation surface does not expose it (`createBrowserTab("chrome", ...)` reports Chrome unavailable); the active tab contains ongoing ad-sales work and was left untouched. A separate authenticated calendar before/after capture is therefore still unavailable; code-level cache and request-count regressions are verified, while live latency improvement remains unmeasured.
+
+
+### 2026-11-18 — Channel avatar emoji uses existing System Bot
+
+- Grace mapped request-scoped avatar orchestration; the cohesive processor now
+  owns existing enqueue/process behavior and is reused by HTTP, the due worker
+  and bounded one-shot maintenance without starting AppModule.
+- Dedicated Emoji Bot configuration was removed. TelegramSystemBotConfigService
+  selects LOCAL/PRODUCTION credentials, verifies identity and separates immutable
+  asset versions by environment/bot. Only workspace MTPROTO OWNER evidence admits
+  generation; administrative access alone is insufficient.
+- Migration preserves old packs/documents/Icons and manual choices; dry-run,
+  cursor continuation, exact workspace and authoritative readback are covered.
+  Production was inspected read-only and no production migration was applied.
+- Parnas reports new production files below 400 lines. Turing reviewed boundaries,
+  identity separation, ownership, claim guards and migration idempotency; its
+  cursor, verification and cleanup findings were addressed. Repository-wide
+  architecture failures remain existing debt; no ceiling was raised.
+
+- Real LOCAL Telegram validation exposed PNG-upload versus installed-emoji file
+  identity changes and lossy WebP conversion. A tracked reconciliation migration
+  now stores pre-mutation document snapshots; confirmed installed IDs replace
+  upload identity, UNKNOWN never resends, and orphan pending assets reconcile
+  from immutable bytes independently of current channel state. Both LOCAL
+  bindings, actual custom_emoji entities, transparent 100×100 documents and
+  unchanged-image reuse were verified; the user confirmed round rendering.
+  Initial redundant LOCAL test copies were retained and inventoried. Production
+  remains read-only with zero legacy bindings; explicit rollout approval is pending.

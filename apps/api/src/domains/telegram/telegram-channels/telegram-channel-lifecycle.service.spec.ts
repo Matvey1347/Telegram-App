@@ -127,6 +127,7 @@ describe('TelegramChannelLifecycleService system groups', () => {
         systemBotPosts: { id: 'system-bot-posts-group-1' },
       }),
     };
+    const avatarEmojis = { enqueue: jest.fn().mockResolvedValue(undefined) };
     const service = new TelegramChannelLifecycleService(
       prisma as never,
       workspaceService as never,
@@ -135,6 +136,7 @@ describe('TelegramChannelLifecycleService system groups', () => {
       {} as never,
       {} as never,
       groups as never,
+      avatarEmojis as never,
     );
 
     await service.create('user-1', {
@@ -143,6 +145,7 @@ describe('TelegramChannelLifecycleService system groups', () => {
       assignedMemberId: null,
     });
 
+    expect(avatarEmojis.enqueue).toHaveBeenCalledWith('workspace-1', 'channel-1');
     expect(groups.ensureRequiredChannelSystemGroups).toHaveBeenCalledWith(
       tx,
       'workspace-1',
@@ -400,5 +403,55 @@ describe('TelegramChannelLifecycleService system groups', () => {
         baselineRequestedCount: 0,
       },
     });
+  });
+});
+
+
+describe('channel manual emoji selection', () => {
+  it('records a changed selection as manual and validates it within the workspace', async () => {
+    const update = jest.fn().mockResolvedValue({ id: 'channel' });
+    const icon = { findFirst: jest.fn().mockResolvedValue({ id: 'chosen' }) };
+    const tx = { telegramChannel: { update } };
+    const prisma = {
+      icon,
+      $transaction: (work: (client: typeof tx) => Promise<unknown>) => work(tx),
+    };
+    const catalog = {
+      findOne: jest
+        .fn()
+        .mockResolvedValue({
+          id: 'channel',
+          presentationIconId: 'avatar',
+          targetCpa: null,
+          stopCpaFrom: null,
+        }),
+    };
+    const service = new TelegramChannelLifecycleService(
+      prisma as never,
+      {} as never,
+      { workspace: jest.fn().mockResolvedValue('workspace') } as never,
+      { resolveImportPolicy: jest.fn().mockResolvedValue({}) } as never,
+      {} as never,
+      catalog as never,
+      {} as never,
+    );
+    await service.update('user', 'channel', { presentationIconId: 'chosen' });
+    expect(icon.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          id: 'chosen',
+          type: 'emoji',
+          OR: [{ workspaceId: 'workspace' }, { workspaceId: null }],
+        },
+      }),
+    );
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          presentationIconId: 'chosen',
+          avatarEmojiManual: true,
+        }),
+      }),
+    );
   });
 });

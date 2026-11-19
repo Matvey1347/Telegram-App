@@ -33,14 +33,19 @@ function setup() {
   const encryption = { decrypt: jest.fn().mockReturnValue('decrypted') };
   const mtproto = { getCustomEmojiPack: jest.fn() };
   const storage = { uploadMany: jest.fn() };
+  const avatarDocuments = {
+    resolve: jest.fn().mockResolvedValue([]),
+    assertImportable: jest.fn().mockResolvedValue(undefined),
+  };
   const service = new TelegramCustomEmojiService(
     prisma as never,
     workspaces as never,
     encryption as never,
     mtproto as never,
     storage as never,
+    avatarDocuments as never,
   );
-  return { encryption, mtproto, prisma, service, storage, tx };
+  return { encryption, mtproto, prisma, service, storage, tx, avatarDocuments };
 }
 
 describe('TelegramCustomEmojiService workspace scope', () => {
@@ -265,33 +270,55 @@ describe('TelegramCustomEmojiService workspace scope', () => {
       telegramLink: 'https://t.me/addemoji/workspace_pack',
     });
     prisma.telegramCustomEmojiPack.findUnique.mockResolvedValue({
-      id: 'pack-1', archivedAt: null,
+      id: 'pack-1',
+      archivedAt: null,
     });
     prisma.telegramUserAccountIntegration.findFirst.mockResolvedValue({
       apiId: 123,
-      apiHashEncrypted: 'hash', apiHashIv: 'hash-iv', apiHashAuthTag: 'hash-tag',
-      sessionEncrypted: 'session', sessionIv: 'session-iv', sessionAuthTag: 'session-tag',
+      apiHashEncrypted: 'hash',
+      apiHashIv: 'hash-iv',
+      apiHashAuthTag: 'hash-tag',
+      sessionEncrypted: 'session',
+      sessionIv: 'session-iv',
+      sessionAuthTag: 'session-tag',
     });
     mtproto.getCustomEmojiPack.mockResolvedValue({
-      shortName: 'workspace_pack', title: 'Workspace Pack updated', telegramSetId: 'set-1',
-      documents: [{
-        documentId: 'emoji-new', alt: '✨', mimeType: 'image/webp', kind: 'STATIC',
-        isFree: false, needsRepainting: false, originalAsset: Buffer.from('asset'),
-      }],
+      shortName: 'workspace_pack',
+      title: 'Workspace Pack updated',
+      telegramSetId: 'set-1',
+      documents: [
+        {
+          documentId: 'emoji-new',
+          alt: '✨',
+          mimeType: 'image/webp',
+          kind: 'STATIC',
+          isFree: false,
+          needsRepainting: false,
+          originalAsset: Buffer.from('asset'),
+        },
+      ],
     });
     storage.uploadMany.mockResolvedValue(new Map());
 
     await service.refreshPack('user-1', 'pack-1');
 
-    expect(prisma.telegramCustomEmojiPack.findFirst).toHaveBeenCalledWith(expect.objectContaining({
-      where: { id: 'pack-1', workspaceId: 'workspace-1', archivedAt: null },
-    }));
-    expect(tx.telegramCustomEmoji.deleteMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { packId: 'pack-1', documentId: { notIn: ['emoji-new'] } },
-    }));
-    expect(tx.telegramCustomEmoji.upsert).toHaveBeenCalledWith(expect.objectContaining({
-      where: { packId_documentId: { packId: 'pack-1', documentId: 'emoji-new' } },
-    }));
+    expect(prisma.telegramCustomEmojiPack.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'pack-1', workspaceId: 'workspace-1', archivedAt: null },
+      }),
+    );
+    expect(tx.telegramCustomEmoji.deleteMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { packId: 'pack-1', documentId: { notIn: ['emoji-new'] } },
+      }),
+    );
+    expect(tx.telegramCustomEmoji.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          packId_documentId: { packId: 'pack-1', documentId: 'emoji-new' },
+        },
+      }),
+    );
     expect(tx.telegramCustomEmoji.createMany).not.toHaveBeenCalled();
   });
 

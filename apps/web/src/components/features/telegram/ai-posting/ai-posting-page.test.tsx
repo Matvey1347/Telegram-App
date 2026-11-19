@@ -13,6 +13,7 @@ vi.mock("@/lib/api", () => ({
   telegramChannelsApi: {
     postGroupSummaries: vi.fn().mockResolvedValue([]),
     customEmojiPacks: vi.fn().mockResolvedValue({ packs: [] }),
+    resolveCustomEmojiDocuments: vi.fn().mockResolvedValue({ packs: [] }),
   },
 }));
 vi.mock("@/providers/toast-provider", () => ({
@@ -125,6 +126,32 @@ describe("AiPostingPage", () => {
           audience: "Readers",
         }),
       }),
+    ));
+  });
+
+  it("inserts the selected channel icon and link into the saved ending without overwriting text", async () => {
+    mocks.get.mockImplementation(async (url?: string) => {
+      if (url?.endsWith("/chat") || url?.includes("/test-runs")) return { data: [] };
+      return { data: {
+        ...settings,
+        configuration: { ...settings.configuration, ending: "Авторская подпись" },
+        channel: {
+          title: "Science",
+          username: "science_channel",
+          presentationIconPresentation: { type: "unicode", value: "📣", telegramCustomEmojiId: "987654321" },
+        },
+      } };
+    });
+    renderPage();
+    fireEvent.click(await screen.findByRole("link", { name: "Как писать" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Добавить иконку и ссылку канала" }));
+    expect(screen.getByRole("button", { name: "Подпись канала уже добавлена" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Сохранить настройки" }));
+    await waitFor(() => expect(mocks.put).toHaveBeenCalledWith(
+      expect.stringContaining("/ai-posting"),
+      expect.objectContaining({ configuration: expect.objectContaining({
+        ending: "Авторская подпись\n\n![📣](tg://emoji?id=987654321) [Science](https://t.me/science_channel)",
+      }) }),
     ));
   });
 });

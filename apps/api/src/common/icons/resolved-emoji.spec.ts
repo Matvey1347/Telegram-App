@@ -57,6 +57,23 @@ describe('iconToResolvedEmoji', () => {
     });
   });
 
+  it('hydrates the generated avatar preview without a rendering-time lookup', () => {
+    expect(
+      iconToResolvedEmoji({
+        id: 'generated',
+        type: 'emoji',
+        emoji: '![📢](tg://emoji?id=12345)',
+        imageUrl: 'data:image/png;base64,YQ==',
+      }),
+    ).toMatchObject({
+      type: 'unicode',
+      value: '📢',
+      telegramCustomEmojiId: '12345',
+      telegramCustomEmojiKind: 'STATIC',
+      telegramCustomEmojiAssetUrl: 'data:image/png;base64,YQ==',
+    });
+  });
+
   it('returns null for incomplete icons', () => {
     expect(
       iconToResolvedEmoji({

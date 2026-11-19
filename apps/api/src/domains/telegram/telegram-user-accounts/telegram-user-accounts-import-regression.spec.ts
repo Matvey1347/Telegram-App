@@ -13,6 +13,7 @@ function setup(
     username: string | null;
     telegramChatId: string | null;
   } | null,
+  isCreator = true,
 ) {
   const saved = existing ? { ...existing, ...policy } : null;
   const channel = {
@@ -51,12 +52,13 @@ function setup(
   const sourceAccess = {
     normalizeMtprotoPermissions: jest
       .fn()
-      .mockReturnValue({ role: 'OWNER', permissions: {} }),
+      .mockReturnValue({ role: isCreator ? 'OWNER' : 'ADMIN', permissions: {} }),
     canBeUsedForAnalytics: jest.fn().mockReturnValue(true),
     upsertAccess: jest.fn().mockResolvedValue({}),
     recordDataSource: jest.fn().mockResolvedValue({}),
   };
   const syncNow = jest.fn().mockResolvedValue(undefined);
+  const avatarEmojis = { enqueueInitial: jest.fn().mockResolvedValue(undefined) };
   const service = new TelegramUserAccountsService(
     prisma as never,
     {
@@ -69,7 +71,7 @@ function setup(
           id: '-100123',
           title: 'Current channel',
           username: 'current_name',
-          isCreator: true,
+          isCreator,
           adminRights: null,
         },
       ]),
@@ -81,8 +83,9 @@ function setup(
     {} as never,
     {} as never,
     { writeStructured: jest.fn() } as never,
+    undefined, undefined, undefined, avatarEmojis as never,
   );
-  return { service, prisma, importPolicy, saved, syncNow };
+  return { service, prisma, importPolicy, saved, syncNow, avatarEmojis, sourceAccess };
 }
 describe('typed Telegram channel import read model', () => {
   it.each([
@@ -133,4 +136,13 @@ describe('typed Telegram channel import read model', () => {
     expect(f.prisma.telegramChannel.create).not.toHaveBeenCalled();
     expect(f.syncNow).not.toHaveBeenCalled();
   });
+  it.each([true, false])('admits avatar creation only after owner access is persisted (creator=%s)', async (isCreator) => {
+    const f = setup(null, isCreator);
+    await f.service.importChannels('user', 'account', { channels: [{ telegramChannelId: '-100123' }] });
+    if (isCreator) {
+      expect(f.avatarEmojis.enqueueInitial).toHaveBeenCalledWith('workspace', 'existing-channel');
+      expect(f.sourceAccess.upsertAccess.mock.invocationCallOrder[0]).toBeLessThan(f.avatarEmojis.enqueueInitial.mock.invocationCallOrder[0]);
+    } else expect(f.avatarEmojis.enqueueInitial).not.toHaveBeenCalled();
+  });
+
 });
