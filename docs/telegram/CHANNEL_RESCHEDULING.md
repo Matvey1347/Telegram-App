@@ -178,6 +178,19 @@ started. All local verification commands have finished.
 The 09:50 UTC read found two newly added native messages (5026/5027), absent
 from the earlier 09:12 snapshot and from all channel managed-post records. Their
 November 20 slots are 12:10 and 17:10 Europe/Warsaw. One visible message is channel
-promotion copy. They are not duplicates or replacements sent by recovery; they
-remain untouched pending the owner's classification. All 67 regular future
+promotion copy. They are not duplicates or replacements sent by recovery. The owner confirmed
+these are separate advertising/manual posts; they remain untouched. All 67 regular future
 posts still match IDs, content and UTC dates, with no aliases or dated failures.
+
+Owner follow-up: preserve advertising and manually created messages from the
+other service. Production configuration confirms `tgManage770` is connected,
+active, publication-enabled and the sole priority publisher. The publishing
+capabilities endpoint selects its source ID with `isFallback:false`; the
+selector's 12 regression tests pass. Existing accepted schedules retain their
+original source metadata (15 current regular schedules use tgManage770, 52 the
+previous account), while new/recovered native sends prefer tgManage770. No
+healthy message was cancelled merely to change metadata. All 67 regular posts
+were positively verified by ID, UTC date and content through tgManage770's
+complete queue. A secondary-account queue read failed on this observation; no
+absence/replacement was inferred from that error. The priority account's queue
+and history succeeded.
