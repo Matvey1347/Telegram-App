@@ -69,8 +69,8 @@ Dataset: [60 synthetic scenarios](evaluation-scenarios.json). It includes psycho
 Offline, no credentials/network:
 
 ```sh
-node scripts/ai-lead-qualification-benchmark.mjs
-node --test scripts/ai-lead-qualification-benchmark.test.mjs
+node scripts/qa/crm-ai/ai-lead-qualification-benchmark.mjs
+node --test scripts/qa/crm-ai/ai-lead-qualification-benchmark.test.mjs
 pnpm --filter api test -- --runInBand lead-qualification-evaluation
 ```
 
@@ -79,7 +79,7 @@ Live is voluntary and requires a migrated staging build, approved synthetic/perm
 Configure backend-only shell variables `CRM_LEAD_BENCHMARK_BASE_URL`, `CRM_LEAD_BENCHMARK_TOKEN`, `CRM_LEAD_BENCHMARK_WORKSPACE_ID` and `CRM_LEAD_BENCHMARK_ALLOW_PAID=APPROVED_SYNTHETIC_STAGING_AND_PAID_CALLS`. Only local or explicitly staging-labelled HTTPS origins are accepted; redirects are rejected. Start with one case:
 
 ```sh
-node scripts/ai-lead-qualification-benchmark.mjs --live --stage qualification --mapping /private/seeded-candidates.json --output /private/qualification-report.json --limit 1
+node scripts/qa/crm-ai/ai-lead-qualification-benchmark.mjs --live --stage qualification --mapping /private/seeded-candidates.json --output /private/qualification-report.json --limit 1
 ```
 
 Run `--stage draft` separately only for independently human-qualified candidates. Calls are serial, bounded1..60, with no retries, fallback model, automatic follow-on draft, approval, CRM creation or send. UNKNOWN/FAILED/unpriced outcomes stop the run. Reports are private0600 and `modelQualityApproved` stays false. Score the rubric manually; no live invocation was performed for this delivery.

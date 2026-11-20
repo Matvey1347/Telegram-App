@@ -94,10 +94,10 @@ Idle and100-channel estimate: zero Copilot execution/read/write/provider work pe
 
 ## Voluntary live quality benchmark
 
-Offline: `node scripts/ai-sales-copilot-benchmark.mjs` validates48 scenarios without network. Safety harness: `node --test scripts/ai-sales-copilot-benchmark.test.mjs`.
+Offline: `node scripts/qa/crm-ai/ai-sales-copilot-benchmark.mjs` validates48 scenarios without network. Safety harness: `node --test scripts/qa/crm-ai/ai-sales-copilot-benchmark.test.mjs`.
 
 Live prerequisites: valid migrated staging build, approved synthetic seeded conversations representing the scenario data, reviewed source grants, provider key/model access, category flags/budgets and an expressly authorized spend. Prepare a private JSON mapping with `syntheticDataApproved:true`, matching `workspaceId` and `cases` keyed by dataset scenario IDs; each case has `conversationId`, `productIds`, `processingReference`, optional `includeNotes`/`processingBasis`. The script does not seed, modify customer history, approve drafts or send Telegram messages.
 
-Set backend-stage API URL/token/workspace only in the shell environment: CRM_COPILOT_BENCHMARK_BASE_URL, CRM_COPILOT_BENCHMARK_TOKEN, CRM_COPILOT_BENCHMARK_WORKSPACE_ID, CRM_COPILOT_BENCHMARK_ALLOW_PAID=`APPROVED_SYNTHETIC_STAGING_AND_PAID_CALLS`. URL must be local or explicitly staging-labelled HTTPS. Then invoke `node scripts/ai-sales-copilot-benchmark.mjs --live --mapping /private/seeded-mapping.json --output /private/quality-report.json --limit 1`.
+Set backend-stage API URL/token/workspace only in the shell environment: CRM_COPILOT_BENCHMARK_BASE_URL, CRM_COPILOT_BENCHMARK_TOKEN, CRM_COPILOT_BENCHMARK_WORKSPACE_ID, CRM_COPILOT_BENCHMARK_ALLOW_PAID=`APPROVED_SYNTHETIC_STAGING_AND_PAID_CALLS`. URL must be local or explicitly staging-labelled HTTPS. Then invoke `node scripts/qa/crm-ai/ai-sales-copilot-benchmark.mjs --live --mapping /private/seeded-mapping.json --output /private/quality-report.json --limit 1`.
 
 Calls are serial, bounded1..48, no automatic retry/model fallback and stop on rejection/unknown charges. Output file permissions0600; keep it private and score against the rubric manually. Do not commit tokens or reports with real personal data. No live invocation was performed for this delivery. Enable a real manager cohort only after source/privacy approval, valid build/migration integration and human-reviewed quality results. Rollout/rollback are in the architecture plan.

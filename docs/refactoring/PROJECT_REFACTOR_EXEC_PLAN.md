@@ -1,5 +1,11 @@
 # Project Refactor ExecPlan
 
+## 2026-11-20 Script layout and large-file decomposition
+
+See [refactor status](REFACTOR_STATUS.md) for the pre-change architecture
+baseline, independent commit slices and verification results. The first slice
+moves the CRM AI QA benchmarks and retains their operator entry points.
+
 ## 2026-11-19 Channel publication recovery
 
 Grace traced the one-post request waterfall and the CRM-held exclusive Telegram
