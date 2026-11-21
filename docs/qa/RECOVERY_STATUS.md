@@ -232,3 +232,11 @@ install, offline tooling, deployment tests, strict architecture и
 сборки API и web. В исходном checkout собраны также оба Finance-хоста.
 Docker context содержит исходники, миграции и env templates, а
 приватный corpus, реальные env и графовые кеши исключены.
+
+## Повторная проверка перед выпуском
+
+Типизация аналитики канала и исправления React lint в расчёте доступных
+слотов, предпросмотре цены и репортёре ошибок сократили web lint с 110 до
+86 ошибок. Web typecheck, Next.js build и 44 адресных теста прошли. Новый
+`release:check` прошёл AI-сверку и архитектуру, затем остановился на
+web lint. Production Neon, Railway и Vercel не менялись.

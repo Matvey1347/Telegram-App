@@ -57,8 +57,9 @@ export function useChannelAnalyticsReport(id: string, queries: ReportQueries) {
   const visiblePosts = useMemo(
     () =>
       posts.filter(
-        (post: any) =>
-          String(post?.text || "").trim().length > 0 || post?.hasMedia,
+        (post) =>
+          String(post?.text || "").trim().length > 0 ||
+          (post && "hasMedia" in post && Boolean(post.hasMedia)),
       ),
     [posts],
   );
@@ -71,7 +72,7 @@ export function useChannelAnalyticsReport(id: string, queries: ReportQueries) {
     [campaignsData?.items],
   );
   const latestSnapshot = data?.channelStatsSnapshot as
-    | ({ syncedAt?: string; normalizedStats?: any } & Record<string, unknown>)
+    | ({ syncedAt?: string; normalizedStats?: unknown } & Record<string, unknown>)
     | null
     | undefined;
   const mtprotoStats = latestSnapshot?.normalizedStats as
@@ -118,7 +119,7 @@ export function useChannelAnalyticsReport(id: string, queries: ReportQueries) {
 
   const computed = useMemo(() => {
     const analyticsPosts = posts.filter(
-      (post: any) => !post.excludeFromAnalytics,
+      (post) => !post.excludeFromAnalytics,
     );
     const summaryPostsTotal = toNumber(data?.summary?.postsTotal);
     const telegramPostsStoredTotal = toNumber(
@@ -139,46 +140,46 @@ export function useChannelAnalyticsReport(id: string, queries: ReportQueries) {
     const hasLoadedPostMetrics = analyticsPosts.length > 0;
     const viewsTotal = hasLoadedPostMetrics
       ? analyticsPosts.reduce(
-          (sum: number, post: any) => sum + toNumber(post.viewsCount),
+          (sum: number, post) => sum + toNumber(post.viewsCount),
           0,
         )
       : summaryViewsTotal;
     const forwardsTotal = hasLoadedPostMetrics
       ? analyticsPosts.reduce(
-          (sum: number, post: any) => sum + toNumber(post.forwardsCount),
+          (sum: number, post) => sum + toNumber(post.forwardsCount),
           0,
         )
       : summaryForwardsTotal;
     const reactionsTotal = hasLoadedPostMetrics
       ? analyticsPosts.reduce(
-          (sum: number, post: any) => sum + toNumber(post.reactionsCount),
+          (sum: number, post) => sum + toNumber(post.reactionsCount),
           0,
         )
       : summaryReactionsTotal;
     const adjustedViewsTotal = hasLoadedPostMetrics
       ? analyticsPosts.reduce(
-          (sum: number, post: any) =>
+          (sum: number, post) =>
             sum + adjustedPostViews(post, ownViewsPerPost),
           0,
         )
       : summaryViewsTotal;
     const adjustedReactionsTotal = hasLoadedPostMetrics
       ? analyticsPosts.reduce(
-          (sum: number, post: any) =>
+          (sum: number, post) =>
             sum + adjustedPostReactions(post, ownReactionsPerPost),
           0,
         )
       : summaryReactionsTotal;
     const commentsTotal = hasLoadedPostMetrics
       ? analyticsPosts.reduce(
-          (sum: number, post: any) => sum + toNumber(post.commentsCount),
+          (sum: number, post) => sum + toNumber(post.commentsCount),
           0,
         )
       : summaryCommentsTotal;
     const viewedPosts = analyticsPosts.filter(
-      (post: any) => adjustedPostViews(post, ownViewsPerPost) > 0,
+      (post) => adjustedPostViews(post, ownViewsPerPost) > 0,
     );
-    const eligiblePosts = analyticsPosts.filter((post: any) => {
+    const eligiblePosts = analyticsPosts.filter((post) => {
       const ageMs = Date.now() - new Date(post.postDate).getTime();
       return (
         ageMs >= 24 * 3600 * 1000 &&
@@ -200,7 +201,7 @@ export function useChannelAnalyticsReport(id: string, queries: ReportQueries) {
         : null;
     const averageEligibleViews = eligiblePosts.length
       ? eligiblePosts.reduce(
-          (sum: number, post: any) =>
+          (sum: number, post) =>
             sum + adjustedPostViews(post, ownViewsPerPost),
           0,
         ) / eligiblePosts.length
@@ -217,14 +218,14 @@ export function useChannelAnalyticsReport(id: string, queries: ReportQueries) {
       viewsTotal > 0 ? (forwardsTotal / viewsTotal) * 100 : null;
     const joinedFromLinks = inviteLinks.length
       ? inviteLinks.reduce(
-          (sum: number, link: any) =>
+          (sum: number, link) =>
             sum + toNumber(link.joinedCount) + toNumber(link.requestedCount),
           0,
         )
       : summaryJoinedHistoricalByLinks + summaryRequestedJoinsTotal;
     const adSpend = campaigns.length
       ? campaigns.reduce(
-          (sum: number, campaign: any) =>
+          (sum: number, campaign) =>
             sum + toNumber(campaign.costAmount ?? campaign.price),
           0,
         )
@@ -369,7 +370,7 @@ export function useChannelAnalyticsReport(id: string, queries: ReportQueries) {
   const topInviteLinks = useMemo(
     () =>
       [...inviteLinks].sort(
-        (a: any, b: any) =>
+        (a, b) =>
           toNumber(b.joinedCount) +
           toNumber(b.requestedCount) -
           toNumber(a.joinedCount) -
@@ -379,7 +380,7 @@ export function useChannelAnalyticsReport(id: string, queries: ReportQueries) {
   );
   const campaignRows = useMemo(
     () =>
-      campaigns.filter((campaign: any) => {
+      campaigns.filter((campaign) => {
         const linkedChannelId =
           campaign.telegramChannelId ||
           campaign.ownTelegramChannelId ||

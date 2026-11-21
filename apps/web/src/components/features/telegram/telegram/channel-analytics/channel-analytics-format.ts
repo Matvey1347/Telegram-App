@@ -16,7 +16,10 @@ export function toNumber(value: unknown) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-export function adjustedPostViews(post: any, ownViewsPerPost: number) {
+export function adjustedPostViews(
+  post: { viewsCount?: unknown; manualOwnViews?: unknown },
+  ownViewsPerPost: number,
+) {
   return Math.max(
     0,
     toNumber(post.viewsCount) -
@@ -25,7 +28,10 @@ export function adjustedPostViews(post: any, ownViewsPerPost: number) {
   );
 }
 
-export function adjustedPostReactions(post: any, ownReactionsPerPost: number) {
+export function adjustedPostReactions(
+  post: { reactionsCount?: unknown; manualOwnReactions?: unknown },
+  ownReactionsPerPost: number,
+) {
   return Math.max(
     0,
     toNumber(post.reactionsCount) -

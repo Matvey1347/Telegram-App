@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronDown, ExternalLink, Eye, Radio, Users } from "lucide-react";
 import type {
@@ -77,17 +77,15 @@ export function CrossPromotionPlacementSettings({
   const slotDates = channelIds
     .map((channelId) => validDateKey(value.dates?.[channelId] ?? defaultDate))
     .filter((date): date is string => Boolean(date));
-  const slotRange = useMemo(() => {
-    const dates = [...new Set(slotDates)].sort();
-    const first = dates[0] ?? fallbackSlotDate;
-    const last = dates.at(-1) ?? fallbackSlotDate;
-    return {
-      from: new Date(`${first}T00:00:00.000Z`).toISOString(),
-      to: new Date(
-        new Date(`${last}T00:00:00.000Z`).getTime() + 2 * 86_400_000,
-      ).toISOString(),
-    };
-  }, [fallbackSlotDate, slotDates.join("|")]);
+  const orderedDates = [...slotDates].sort();
+  const first = orderedDates[0] ?? fallbackSlotDate;
+  const last = orderedDates.at(-1) ?? fallbackSlotDate;
+  const slotRange = {
+    from: new Date(`${first}T00:00:00.000Z`).toISOString(),
+    to: new Date(
+      new Date(`${last}T00:00:00.000Z`).getTime() + 2 * 86_400_000,
+    ).toISOString(),
+  };
   const slotOccurrences = useQuery({
     queryKey: telegramPublicationScheduleKeys.occurrencesByChannels(
       [...channelIds].sort(),

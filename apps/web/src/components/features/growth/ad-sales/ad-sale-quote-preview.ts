@@ -2,6 +2,7 @@
 
 import {
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -140,9 +141,11 @@ export function useAdSaleQuotePreview({
   const quoteRequestsRef = useRef(quoteRequests);
   const productsByChannelIdRef = useRef(productsByChannelId);
   const requestPreviewRef = useRef(requestPreview);
-  quoteRequestsRef.current = quoteRequests;
-  productsByChannelIdRef.current = productsByChannelId;
-  requestPreviewRef.current = requestPreview;
+  useLayoutEffect(() => {
+    quoteRequestsRef.current = quoteRequests;
+    productsByChannelIdRef.current = productsByChannelId;
+    requestPreviewRef.current = requestPreview;
+  }, [productsByChannelId, quoteRequests, requestPreview]);
   const requestKey = useMemo(
     () =>
       open && quoteRequests.length

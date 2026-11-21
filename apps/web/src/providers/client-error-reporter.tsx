@@ -10,10 +10,14 @@ const MAX_EVENTS_PER_WINDOW = 10;
 export function ClientErrorReporter({ children }: PropsWithChildren) {
   const pathname = usePathname();
   const sentRef = useRef<Map<string, number>>(new Map());
-  const counterRef = useRef({ startedAt: Date.now(), count: 0 });
+  const counterRef = useRef({ startedAt: 0, count: 0 });
   const selfReportingRef = useRef(false);
 
   useEffect(() => {
+    if (counterRef.current.startedAt === 0) {
+      counterRef.current.startedAt = Date.now();
+    }
+
     const shouldThrottle = () => {
       const now = Date.now();
       if (now - counterRef.current.startedAt > DEDUPE_WINDOW_MS) {
