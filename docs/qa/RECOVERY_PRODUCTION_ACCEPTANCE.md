@@ -1,17 +1,48 @@
 # Production acceptance · Nexeloq and Groshly
 
-**2026-11-21 UTC · BLOCKED before release.** Working tree on
+**2026-11-21 UTC · Production rollout verified.** Both Railway services and
+both Vercel projects serve release source
+`1b03856fa0d6464f7963205251ac8e2e49438df1`. The corresponding migrations
+are applied on Nexeloq Neon.
+
+| Surface | Active artifact | Public verification |
+| --- | --- | --- |
+| Railway Nexeloq API | `f56de7c2-c0e8-4aa5-947d-2ea78ce08a29`, SUCCESS, image `sha256:25897b3cd299e5cd0baa3d49bf5b91bdda5eab195af5062b4f3bd93b2150c175` | `/api/health` and `/api/telegram-operator-contract` returned 200. Transport version is 1. |
+| Railway Finance API | `2116c1d7-eabf-4418-a6c6-25734e3df073`, SUCCESS, image `sha256:a7ea24bec89f556d4b20da4860500cb1204b0e29c0256011592678e8ff956116` | `/api/health` and `/api/health/ready` returned 200. The separate Finance DB already had all seven migrations. |
+| Vercel Nexeloq | `dpl_FZvXsgUs2yjPa6N1GAPvANwMK8sN`, READY | `nexeloq.com` and `www.nexeloq.com` point to the new release. |
+| Vercel Groshly | `dpl_6wpoiEfyGrCTtCFJcN5ymGdnuSH6`, READY | `groshly.nexeloq.com` points to the new release. Its Finance context matched the Nexeloq API and the signed-out session endpoint returned 200. |
+| Neon Nexeloq | 359 completed migrations, zero pending or unfinished | All three `20261121` migrations completed through Railway predeploy. Independent read-only checks verified the recorded checksums and the 13 affected column definitions. |
+
+Production used explicit source uploads. The AI dry-run, execute and gate
+found zero pending receipts. The aggregate `release:check` failed because of
+79 web lint errors. CI reports API and web lint debt without failing those
+jobs. Strict architecture, i18n, typechecks, builds, artifact checks, 65
+deployment tests, 4,344 Nexeloq API tests, 2,110 Nexeloq web tests, 53 Finance
+API tests, and 419 Groshly web tests passed. The targeted publication suite
+passed 202 tests and the disposable PostgreSQL suite passed all 14 integration
+tests. The first web run exposed a timing-sensitive favicon test. The isolated
+file and the full web rerun passed with the same source.
+
+Chrome loaded both production login pages with HTTP 200 and no page,
+request, or console errors in the smoke-test window. The Finance webhook
+read returned the same Telegram HTTP 401 observed before rollout.
+Authenticated Finance login requires a working Finance bot credential.
+Live publication acceptance requires authorized private test fixtures.
+
+## Pre-release evidence
+
+**2026-11-21 UTC · Snapshot before rollout.** Working tree on
 `codex/channel-avatar-custom-emoji` at
 `8363f61db2b96484b2561162f5ff4f715931cb1d`.
 GitHub `Matvey1347/Telegram-App` main was observed at
 `8ad8b3ec33b44a5530ba71758c3f4f08f91937ca`. The working diff remains open
 and the release candidate is unsealed. No production service was changed.
 
-## Actual deployments and rollback targets
+### Previous deployment artifacts
 
 Railway project **ALL API** and the Vercel production aliases were checked
-through their deployment metadata. Retain the currently served artifacts as
-the code rollback targets for the next release. Credentials and the Finance
+through their deployment metadata. An API rollback must support nullable
+invite snapshot counters before it serves traffic. Credentials and the Finance
 webhook's full URL are omitted.
 
 | Service | Active artifact on 2026-11-21 | Origin |
