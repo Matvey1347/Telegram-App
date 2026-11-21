@@ -22,7 +22,7 @@ function setup() {
       update: jest.fn(),
     },
     telegramSystemBotWorkflow: { findFirst: jest.fn().mockResolvedValue(null) },
-    $queryRaw: jest.fn(),
+    $executeRaw: jest.fn().mockResolvedValue(0),
     $transaction: jest.fn((work: (tx: unknown) => unknown) => work(prisma)),
   } as any;
   const transactions = { create: jest.fn().mockResolvedValue({ id: 'tx-1' }) };
@@ -73,7 +73,7 @@ describe('TelegramSystemBotFinanceService', () => {
     });
 
     expect(transactions.create).not.toHaveBeenCalled();
-    expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
+    expect(prisma.$executeRaw).toHaveBeenCalledTimes(1);
   });
 
   it('atomically rejects Finance while a website or legacy batch import owns the interaction slot', async () => {

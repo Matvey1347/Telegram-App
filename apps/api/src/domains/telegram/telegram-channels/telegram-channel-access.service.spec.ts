@@ -217,45 +217,27 @@ describe('TelegramChannelAccessService production bot access', () => {
 });
 
 describe('TelegramChannelAccessService MTProto account selection', () => {
-  it('skips a revoked older admin link and selects a connected account', async () => {
+  it('uses the selected source and does not fall back to a stored admin link', async () => {
     const prisma = {
-      telegramChannelAdminLink: {
-        findFirst: jest.fn().mockResolvedValue({
-          telegramUserAccountIntegrationId: 'connected-account',
-        }),
-      },
+      telegramChannelAdminLink: { findFirst: jest.fn() },
       telegramUserAccountIntegration: {
         findFirst: jest.fn().mockResolvedValue({
-          id: 'connected-account',
-          status: 'connected',
-          isActive: true,
+          id: 'connected-account', status: 'connected', isActive: true,
         }),
       },
     };
+    const sourceAccess = {
+      bestMtprotoSource: jest.fn().mockResolvedValue({ sourceId: 'connected-account' }),
+    };
     const service = new TelegramChannelAccessService(
-      prisma as never,
-      {} as never,
-      {} as never,
-      {} as never,
-      {} as never,
-      {} as never,
-      {} as never,
-      {} as never,
+      prisma as never, {} as never, {} as never, sourceAccess as never,
+      {} as never, {} as never, {} as never, {} as never,
     );
-
-    await expect(
-      service.connectedAccount('workspace-1', 'channel-1'),
-    ).resolves.toEqual(expect.objectContaining({ id: 'connected-account' }));
-    expect(prisma.telegramChannelAdminLink.findFirst).toHaveBeenCalledWith({
-      where: {
-        workspaceId: 'workspace-1',
-        telegramChannelId: 'channel-1',
-        telegramUserAccountIntegration: {
-          isActive: true,
-          status: 'connected',
-        },
-      },
-      orderBy: { createdAt: 'asc' },
-    });
+    await expect(service.connectedAccount('workspace-1', 'channel-1'))
+      .resolves.toEqual(expect.objectContaining({ id: 'connected-account' }));
+    sourceAccess.bestMtprotoSource.mockResolvedValueOnce(null);
+    await expect(service.connectedAccount('workspace-1', 'channel-1'))
+      .rejects.toThrow('No connected Telegram user account');
+    expect(prisma.telegramChannelAdminLink.findFirst).not.toHaveBeenCalled();
   });
 });

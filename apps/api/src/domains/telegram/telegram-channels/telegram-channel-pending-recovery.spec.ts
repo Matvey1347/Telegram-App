@@ -15,7 +15,7 @@ function harness(alternateCount: number | null, alternateChat = '123') {
     channelIdentityPatch: jest.fn().mockImplementation((info) => info.pendingJoinRequestsCount == null ? {} : { pendingJoinRequestsCount: info.pendingJoinRequestsCount }),
     sourceDisplayName: jest.fn().mockReturnValue('Primary'),
   };
-  const service = new TelegramChannelHistoricalSyncService(prisma as never, mtproto as never, sources as never, {} as never, access as never, {} as never, {} as never, {} as never, {} as never, {} as never);
+  const service = new TelegramChannelHistoricalSyncService(prisma as never, mtproto as never, sources as never, { normalizeChatId: (id: string) => id } as never, access as never, {} as never, {} as never, {} as never, {} as never, {} as never);
   return { service, prisma, mtproto, sources, access };
 }
 

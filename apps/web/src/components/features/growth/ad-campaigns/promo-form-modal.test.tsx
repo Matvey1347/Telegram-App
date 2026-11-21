@@ -177,9 +177,9 @@ describe("PromoFormModal", () => {
     const titleRow =
       screen.getByText("Internal title").parentElement?.parentElement;
     const channelRow = screen.getByText("Channel").parentElement?.parentElement;
-    expect(titleRow).toBe(channelRow);
-    expect(titleRow).not.toBe(emojiRow);
-    expect(titleRow).toHaveClass("md:grid-cols-2");
+    expect(titleRow).toBe(emojiRow);
+    expect(titleRow).not.toBe(channelRow);
+    expect(titleRow).toHaveClass("sm:grid-cols-[auto_minmax(0,1fr)]");
     expect(
       screen.queryByTestId("telegram-text-editor"),
     ).not.toBeInTheDocument();

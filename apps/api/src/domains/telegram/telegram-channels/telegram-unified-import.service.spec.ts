@@ -186,7 +186,7 @@ describe('TelegramUnifiedImportService', () => {
           before: 'Old hypothesis',
           after: 'New hypothesis',
         },
-        { field: 'status', before: 'ACTIVE', after: 'COMPLETED' },
+        { field: 'status', before: 'ACTIVE', after: 'SUCCESSFUL' },
       ]),
     );
     expect(preview.sections[2].items[0].changes).toEqual(

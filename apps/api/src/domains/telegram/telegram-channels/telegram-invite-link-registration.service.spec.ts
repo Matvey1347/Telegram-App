@@ -1,4 +1,5 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { InviteCreationAccessLost } from '@api/telegram/shared/invites/telegram-invite-link-creator.service';
 import { TelegramInviteLinkRegistrationService } from './telegram-invite-link-registration.service';
 
 describe('TelegramInviteLinkRegistrationService', () => {
@@ -38,6 +39,7 @@ describe('TelegramInviteLinkRegistrationService', () => {
         ? overrides.foundChannel
         : channel;
     const prisma = {
+      telegramInviteLink: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
       telegramChannel: {
         findFirst: jest.fn().mockResolvedValue(foundChannel),
       },
@@ -68,12 +70,13 @@ describe('TelegramInviteLinkRegistrationService', () => {
     const inviteSync = {
       persistInviteLinkFromRemote: jest
         .fn()
-        .mockResolvedValue({ upserted: { id: 'stored-link' } }),
+        .mockResolvedValue({ upserted: { id: 'stored-link', joinedCount: remote.usage, requestedCount: remote.requested } }),
     };
     const inviteCreator = {
       create: jest.fn().mockResolvedValue(overrides?.remote ?? remote),
     };
     const sourceAccess = {
+      scoreSource: jest.fn().mockReturnValue(0),
       sourcesForChannel: jest.fn().mockResolvedValue([
         {
           sourceId: 'account-1',
@@ -163,6 +166,8 @@ describe('TelegramInviteLinkRegistrationService', () => {
       }),
     ).resolves.toEqual({
       id: 'stored-link',
+      joinedCount: 3,
+      requestedCount: 0,
       name: 'Legacy link',
       url: 'https://t.me/+valid',
       creatorTelegramUserId: '42',
@@ -205,4 +210,29 @@ describe('TelegramInviteLinkRegistrationService', () => {
       }),
     );
   });
+  it('tries the other connected invite reader after the first loses access', async () => {
+    const { service, mtproto, sourceAccess, inviteSync } = createService();
+    sourceAccess.sourcesForChannel.mockResolvedValue(['former-owner', 'current-owner'].map((sourceId) => ({
+      sourceId, sourceType: 'MTPROTO', permissions: { canManageInviteLinks: true },
+    })));
+    mtproto.getChannelInviteLink.mockRejectedValueOnce(new Error('CHAT_ADMIN_REQUIRED'));
+    await expect(service.register('user-1', channel.id, remote.url)).resolves.toMatchObject({ id: 'stored-link' });
+    expect(mtproto.getChannelInviteLink).toHaveBeenCalledTimes(2);
+    expect(inviteSync.persistInviteLinkFromRemote).toHaveBeenCalledTimes(1);
+  });
+
+
+  it.each([true, false])('fails over creation only on definite preflight denial (%p)', async (preflight) => {
+    const { service, inviteCreator, sourceAccess } = createService();
+    sourceAccess.sourcesForChannel.mockResolvedValue(['former-owner', 'new-owner'].map((sourceId) => ({
+      sourceId, sourceType: 'MTPROTO', permissions: { canManageInviteLinks: true },
+    })));
+    inviteCreator.create.mockRejectedValueOnce(preflight
+      ? new InviteCreationAccessLost() : new Error('Export result unknown'));
+    const result = service.create('user-1', channel.id, { title: 'Fixture' });
+    if (preflight) await expect(result).resolves.toMatchObject({ id: 'stored-link' });
+    else await expect(result).rejects.toThrow('Export result unknown');
+    expect(inviteCreator.create).toHaveBeenCalledTimes(preflight ? 2 : 1);
+  });
+
 });

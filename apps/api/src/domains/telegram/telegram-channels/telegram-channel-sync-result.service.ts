@@ -34,7 +34,6 @@ export class TelegramChannelSyncResultService {
     workspaceId: string;
     userId: string;
     channelId: string;
-    account: { id: string };
   }) {
     const {
       onProgress,
@@ -54,7 +53,6 @@ export class TelegramChannelSyncResultService {
       workspaceId,
       userId,
       channelId,
-      account,
     } = params;
     await this.support.notifyTaskProgress(
       onProgress,
@@ -64,12 +62,8 @@ export class TelegramChannelSyncResultService {
     );
     const requiredStepNames = new Set<string>();
     if (selection.syncIncludePublicInfo) requiredStepNames.add('channel_info');
-    if (
-      selection.syncIncludeInviteLinks ||
-      selection.syncIncludeHistoricalPosts
-    ) {
-      requiredStepNames.add('historical_posts');
-    }
+    if (selection.syncIncludeHistoricalPosts) requiredStepNames.add('historical_posts');
+    if (selection.syncIncludeInviteLinks) requiredStepNames.add('invite_links');
     if (selection.syncIncludePostMetrics) requiredStepNames.add('post_metrics');
     const requiredSteps = steps.filter((step) =>
       requiredStepNames.has(step.step),
@@ -82,7 +76,8 @@ export class TelegramChannelSyncResultService {
     );
     const hasOptionalFailure = steps.some((step) => step.status === 'failed');
     const hasOptionalPartial = steps.some((step) => step.status === 'partial');
-    const overallStatus = hasRequiredFailure
+    const hasUsefulResult = steps.some((step) => step.status === 'success' || step.status === 'partial');
+    const overallStatus = hasRequiredFailure && !hasUsefulResult
       ? 'failed'
       : hasRequiredPartial || hasOptionalFailure || hasOptionalPartial
         ? 'partial'
@@ -119,7 +114,7 @@ export class TelegramChannelSyncResultService {
       workspaceId,
       userId,
       durationMs: Date.now() - startedAt,
-      metadata: { channelId, sourceAccountId: account.id, steps },
+      metadata: { channelId, steps },
     });
     this.support.invalidateTelegramChannelReadCache(userId, workspaceId);
     return result;

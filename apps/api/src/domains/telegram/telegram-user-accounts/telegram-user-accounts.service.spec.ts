@@ -578,3 +578,54 @@ describe('TelegramUserAccountsService account checks', () => {
     );
   });
 });
+
+describe('OT-06 — dialog refresh for a former owner', () => {
+  it.each([true, false])('only invalidates missing role and admin link on a complete scan (%p)', async (complete) => {
+    const account = {
+      id: 'former-owner',
+      workspaceId: 'workspace',
+      apiId: '1',
+      sessionEncrypted: 'synthetic',
+      sessionIv: 'synthetic',
+      sessionAuthTag: 'synthetic',
+    };
+    const adminLinks = new Set(['channel']);
+    const sourceRows = new Map([['channel', { role: 'OWNER', canManageInviteLinks: true }]]);
+    const prisma = {
+      telegramUserAccountIntegration: {
+        findFirst: jest.fn().mockResolvedValue(account),
+        update: jest.fn(),
+      },
+      telegramChannel: {
+        findMany: jest.fn().mockResolvedValue([{ id: 'channel', telegramChatId: '524' }]),
+      },
+      telegramChannelAdminLink: {
+        deleteMany: jest.fn(async () => adminLinks.clear()),
+      },
+      telegramChannelSourceAccess: {
+        deleteMany: jest.fn(async () => sourceRows.clear()),
+        updateMany: jest.fn(async () => sourceRows.set('channel', { role: 'UNKNOWN', canManageInviteLinks: false })),
+      },
+      $transaction: jest.fn(async (callback) => callback(prisma)),
+    };
+    const service = new TelegramUserAccountsService(
+      prisma as never,
+      { resolveWorkspaceIdForUser: jest.fn().mockResolvedValue('workspace') } as never,
+      { decrypt: jest.fn().mockReturnValue('synthetic') } as never,
+      {
+        getAdminChannelsWithProfile: jest.fn().mockResolvedValue({
+          channels: [],
+          complete,
+          profile: { id: 'former-user', capabilities: {} },
+        }),
+      } as never,
+      {} as never, {} as never,
+      { upsertAccess: jest.fn() } as never,
+      {} as never, {} as never, {} as never, {} as never,
+    );
+
+    await expect(service.syncDialogs('user', account.id)).resolves.toMatchObject({ matchedChannels: 0 });
+    expect(adminLinks.size).toBe(complete ? 0 : 1);
+    expect(sourceRows.has('channel')).toBe(!complete);
+  });
+});

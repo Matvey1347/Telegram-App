@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { WorkspaceService } from '../../../common/workspace.service';
 import { PrismaService } from '../../../prisma/prisma.service';
@@ -27,7 +28,7 @@ export class AdCampaignInviteWindowsService {
     await this.context(userId, campaignId);
     return this.prisma.adCampaignInviteLinkWindow.findMany({
       where: { adCampaignId: campaignId, inviteLink: { adCampaignId: campaignId } },
-      select: { inviteLinkId: true, fromDate: true, timezone: true, joinedCount: true, pendingCount: true, computedAt: true },
+      select: { inviteLinkId: true, fromDate: true, timezone: true, joinedCount: true, pendingCount: true, computedAt: true, lastAttemptAt: true, lastAttemptStatus: true, lastAttemptReason: true },
     });
   }
 
@@ -60,10 +61,11 @@ export class AdCampaignInviteWindowsService {
         }
         if (old?.fromDate === entry.fromDate && old.timezone === timezone) continue;
         changed.push(entry.inviteLinkId);
+        const configurationToken = randomUUID();
         await tx.adCampaignInviteLinkWindow.upsert({
           where: { adCampaignId_inviteLinkId: { adCampaignId: campaignId, inviteLinkId: entry.inviteLinkId } },
-          create: { adCampaignId: campaignId, inviteLinkId: entry.inviteLinkId, fromDate: entry.fromDate, timezone },
-          update: { fromDate: entry.fromDate, timezone, joinedCount: null, pendingCount: null, computedAt: null },
+          create: { adCampaignId: campaignId, inviteLinkId: entry.inviteLinkId, fromDate: entry.fromDate, timezone, configurationToken },
+          update: { fromDate: entry.fromDate, timezone, configurationToken, joinedCount: null, pendingCount: null, computedAt: null, lastAttemptAt: null, lastAttemptToken: null, lastAttemptStatus: null, lastAttemptReason: null },
         });
       }
     });
@@ -73,28 +75,52 @@ export class AdCampaignInviteWindowsService {
 
   async refresh(userId: string, campaignId: string, onlyIds?: string[]) {
     const { campaign } = await this.context(userId, campaignId);
-    const windows = await this.list(userId, campaignId);
+    const windows = await this.prisma.adCampaignInviteLinkWindow.findMany({ where: { adCampaignId: campaignId } });
     const byLink = new Map(campaign.inviteLinks.map((link) => [link.id, link]));
     const failed: string[] = [];
     for (const window of windows) {
       if (onlyIds && !onlyIds.includes(window.inviteLinkId)) continue;
       const link = byLink.get(window.inviteLinkId);
       if (!link) continue;
+      const observedUntil = new Date();
+      const lastAttemptToken = randomUUID();
+      const identity = {
+        id: window.id,
+        adCampaignId: campaignId,
+        inviteLinkId: link.id,
+        configurationToken: window.configurationToken,
+        inviteLink: { adCampaignId: campaignId, url: link.url, telegramChannelId: link.telegramChannelId },
+      };
+      const reserved = await this.prisma.adCampaignInviteLinkWindow.updateMany({
+        where: { ...identity, lastAttemptToken: window.lastAttemptToken },
+        data: { lastAttemptAt: observedUntil, lastAttemptToken, lastAttemptStatus: 'RUNNING', lastAttemptReason: null },
+      });
+      if (reserved.count !== 1) continue;
+
+      let joinedCount: number | null = null;
+      let pendingCount: number | null = null;
+      let reason: string | null = null;
       try {
         const from = zonedDateTimeToUtc(window.fromDate, '00:00', window.timezone);
-        const result = await this.registration.register(userId, link.telegramChannelId, link.url, { from, until: new Date(), includePending: true });
-        if (result.joinedWithinPeriod == null || result.pendingWithinPeriod == null) throw new Error('Incomplete Telegram data');
-        await this.prisma.adCampaignInviteLinkWindow.updateMany({
-          where: { adCampaignId: campaignId, inviteLinkId: link.id, fromDate: window.fromDate, timezone: window.timezone, inviteLink: { adCampaignId: campaignId } },
-          data: { joinedCount: result.joinedWithinPeriod, pendingCount: result.pendingWithinPeriod, computedAt: new Date() },
-        });
+        const result = await this.registration.register(userId, link.telegramChannelId, link.url, { from, until: observedUntil, includePending: true });
+        joinedCount = result.joinedWithinPeriod;
+        pendingCount = result.pendingWithinPeriod ?? null;
+        if (joinedCount == null || pendingCount == null) reason = 'INCOMPLETE_TELEGRAM_DATA';
       } catch {
-        failed.push(link.id);
-        await this.prisma.adCampaignInviteLinkWindow.updateMany({
-          where: { adCampaignId: campaignId, inviteLinkId: link.id, fromDate: window.fromDate, timezone: window.timezone },
-          data: { joinedCount: null, pendingCount: null, computedAt: null },
-        });
+        reason = 'TELEGRAM_REFRESH_FAILED';
       }
+      const complete = joinedCount != null && pendingCount != null;
+      const saved = await this.prisma.adCampaignInviteLinkWindow.updateMany({
+        where: { ...identity, lastAttemptToken },
+        data: {
+          ...(joinedCount == null ? {} : { joinedCount }),
+          ...(pendingCount == null ? {} : { pendingCount }),
+          ...(complete ? { computedAt: observedUntil } : {}),
+          lastAttemptStatus: complete ? 'SUCCESS' : joinedCount != null || pendingCount != null ? 'PARTIAL' : 'FAILED',
+          lastAttemptReason: reason,
+        },
+      });
+      if (saved.count === 1 && !complete) failed.push(link.id);
     }
     return failed;
   }

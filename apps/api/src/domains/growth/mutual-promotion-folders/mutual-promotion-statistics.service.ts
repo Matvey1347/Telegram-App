@@ -65,9 +65,7 @@ export class MutualPromotionStatisticsService {
         ? Math.max(0, inviteJoinedAtEnd - row.inviteJoinedAtStart)
         : null;
     const requestedCount =
-      row.inviteRequestedAtStart == null && inviteRequestedAtEnd == null
-        ? 0
-        : row.inviteRequestedAtStart !== null && inviteRequestedAtEnd != null
+      row.inviteRequestedAtStart !== null && inviteRequestedAtEnd != null
           ? Math.max(0, inviteRequestedAtEnd - row.inviteRequestedAtStart)
           : null;
     const acquiredCount =
@@ -96,18 +94,14 @@ export class MutualPromotionStatisticsService {
       row.finalCapturedAt &&
       row.inviteJoinedAtStart !== null &&
       row.inviteJoinedAtEnd !== null &&
-      ((row.inviteRequestedAtStart == null &&
-        row.inviteRequestedAtEnd == null) ||
-        (row.inviteRequestedAtStart !== null &&
-          row.inviteRequestedAtEnd !== null));
+      row.inviteRequestedAtStart !== null && row.inviteRequestedAtEnd !== null;
     const audienceBoundariesComplete =
       row.subscribersAtStart !== null && row.subscribersAtEnd !== null;
     const currentInviteCountersComplete =
       row.baselineCapturedAt &&
       row.inviteJoinedAtStart !== null &&
       inviteJoinedAtEnd != null &&
-      ((row.inviteRequestedAtStart == null && inviteRequestedAtEnd == null) ||
-        (row.inviteRequestedAtStart !== null && inviteRequestedAtEnd != null));
+      row.inviteRequestedAtStart !== null && inviteRequestedAtEnd != null;
     const currentAudienceCountersComplete =
       row.subscribersAtStart !== null && subscribersAtEnd != null;
     return {

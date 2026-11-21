@@ -1,13 +1,13 @@
+import { managedPostDeliveryContext } from './telegram-managed-post-delivery-context';
+import { randomUUID } from 'node:crypto';
 import { telegramPostsBadRequest } from './telegram-posts.errors';
-import type { TelegramChannelAccessService } from './telegram-channel-access.service';
 import type { Prisma, TelegramManagedPost } from '@prisma/client';
 import type { TelegramMtprotoClient } from '@api/telegram/shared/mtproto/telegram-mtproto.client';
 import type { PrismaService } from '../../../prisma/prisma.service';
-import { nativeScheduleContentMatches } from './telegram-managed-post-rescheduler-repair';
+import { nativeScheduleContentMatches, ordinaryScheduledPostWhere } from './telegram-managed-post-rescheduler-repair';
 import {
   assertRescheduleActive,
   rescheduleContext,
-  cancelPreviousNativeSchedule,
 } from './telegram-managed-post-rescheduler.remote';
 import type { TelegramManagedPostNativeRecoveryStore } from './telegram-managed-post-native-recovery.store';
 
@@ -41,6 +41,7 @@ export async function publishNativeReplacement(input: {
     ...identity,
     sourceId: input.sourceId,
     scheduledAt: input.params.scheduleAt,
+    ...(context.ordinaryReplacement ? { previousScheduledAt: input.post.scheduledAt, previousSourceId: input.post.sourceId } : {}),
     oldMessageIds: input.post.telegramScheduledMessageIds,
   });
   const ids = await input.mtproto.publishPost({
@@ -55,15 +56,25 @@ export async function publishNativeReplacement(input: {
       context.replacementFor === input.post.id
         ? {
             messageIds: input.post.telegramScheduledMessageIds,
+            requireCancellationAcknowledgement: context.ordinaryReplacement,
+            previousScheduledAt: context.ordinaryReplacement ? input.post.scheduledAt! : undefined,
             validate: (messages) => {
-              if (!nativeScheduleContentMatches(input.post, messages))
+              if (!nativeScheduleContentMatches(input.post, messages) ||
+                (context.ordinaryReplacement && (!input.post.scheduledAt ||
+                  messages.some((message) => !message.date ||
+                    Math.floor(new Date(message.date).getTime() / 1000) !==
+                    Math.floor(input.post.scheduledAt!.getTime() / 1000)))))
                 throw new Error(
                   'Scheduled post identity changed; no schedule was cancelled',
                 );
             },
             beforeChange: async () => {
               await assertRescheduleActive(input.prisma, input.post.id);
-              await input.store.start(identity);
+              const previous = context.ordinaryReplacement
+                ? { scheduledAt: input.post.scheduledAt!, updatedAt: input.post.updatedAt, sourceId: input.sourceId }
+                : undefined;
+              if (previous) await input.store.start(identity, previous);
+              else await input.store.start(identity);
               input.onCancel();
             },
             afterCancel: () => input.store.cancelled(identity),
@@ -120,7 +131,6 @@ export async function recoverAcknowledgedNativeReplacement(input: {
   owner: string;
   snapshots: Array<Parameters<typeof nativeScheduleContentMatches>[1]>;
 }) {
-  if (!input.post.lastError) return false;
   const receipt =
     await input.prisma.telegramManagedPostNativeRecovery.findFirst({
       where: {
@@ -132,6 +142,7 @@ export async function recoverAcknowledgedNativeReplacement(input: {
   if (!receipt || receipt.status !== 'ACKED') return false;
   if (
     receipt.sourceId === input.post.sourceId &&
+    input.post.scheduledAt?.getTime() === receipt.scheduledAt.getTime() &&
     JSON.stringify(receipt.newMessageIds) ===
       JSON.stringify(input.post.telegramScheduledMessageIds)
   )
@@ -165,11 +176,12 @@ export async function recoverAcknowledgedNativeReplacement(input: {
       workspaceId: input.post.workspaceId,
       telegramChannelId: input.post.telegramChannelId,
       status: 'SCHEDULED',
-      scheduledAt: receipt.scheduledAt,
+      scheduledAt: input.post.scheduledAt,
       deliveryClaimOwner: input.owner,
       deliveryClaimExpiresAt: { gt: new Date() },
     },
     data: {
+      scheduledAt: receipt.scheduledAt,
       telegramScheduledMessageIds: receipt.newMessageIds,
       sourceId: receipt.sourceId,
       sourceType: 'MTPROTO',
@@ -191,44 +203,15 @@ export async function recoverAcknowledgedNativeReplacement(input: {
 
 /** Shared native publication branch; replacement never opens the obsolete sender. */
 export async function publishNativeManagedPost(
-  input: Parameters<typeof publishNativeReplacement>[0] & {
-    access: TelegramChannelAccessService;
-    account: Awaited<
-      ReturnType<TelegramChannelAccessService['connectedAccount']>
-    >;
-    onCancellationConfirmed: () => void;
-  },
+  input: Parameters<typeof publishNativeReplacement>[0],
 ) {
   if (
     rescheduleContext.getStore()?.replacementFor === input.post.id ||
     rescheduleContext.getStore()?.confirmedMissingScheduleFor === input.post.id
   )
     return publishNativeReplacement(input);
-  if (
-    input.params.scheduleAt &&
-    (await cancelPreviousNativeSchedule(
-      {
-        prisma: input.prisma,
-        access: input.access,
-        mtprotoClient: input.mtproto,
-      },
-      {
-        workspaceId: input.post.workspaceId,
-        channelId: input.post.telegramChannelId,
-        channel: {
-          username: input.params.channel?.username ?? null,
-          telegramChatId: input.params.channel?.telegramChatId ?? null,
-          inviteLink: input.params.channel?.inviteLink ?? null,
-          telegramAccessHash: input.params.channel?.telegramAccessHash ?? null,
-        },
-        post: input.post,
-        sourceId: input.sourceId,
-        account: input.account,
-        onCancel: input.onCancel,
-      },
-    ))
-  )
-    input.onCancellationConfirmed();
+  if (input.post.status === 'SCHEDULED' && input.post.telegramScheduledMessageIds.length)
+    throw new Error('Existing native schedule requires protected replacement');
   await assertRescheduleActive(input.prisma, input.post.id);
   return input.mtproto.publishPost(input.params);
 }
@@ -248,6 +231,7 @@ export function managedPostPublicationProjectionWhere(
   post: Pick<TelegramManagedPost, 'id' | 'workspaceId' | 'telegramChannelId'>,
 ): Prisma.TelegramManagedPostWhereUniqueInput {
   const context = rescheduleContext.getStore();
+  const delivery = managedPostDeliveryContext.getStore();
   return {
     id: post.id,
     workspaceId: post.workspaceId,
@@ -258,6 +242,64 @@ export function managedPostPublicationProjectionWhere(
           deliveryClaimOwner: context.owner,
           deliveryClaimExpiresAt: { gt: new Date() },
         }
-      : {}),
+      : delivery?.owner.startsWith('operator:') ? {
+          status: 'PUBLISHING', deliveryClaimOwner: delivery.owner,
+          deliveryClaimExpiresAt: { gt: new Date() },
+        } : {}),
   };
+}
+
+export async function withOrdinaryNativeReplacement<T>(input: {
+  prisma: PrismaService;
+  post: TelegramManagedPost;
+  telegramChatId: string | null;
+  scheduleAt?: Date;
+  publish: (scheduleAt: Date) => Promise<T>;
+}) {
+  const { prisma, post, scheduleAt, telegramChatId } = input;
+  if (!scheduleAt || scheduleAt <= new Date() || !post.scheduledAt ||
+      post.scheduledAt <= new Date() || post.sourceType !== 'MTPROTO' ||
+      !post.sourceId || !post.telegramScheduledMessageIds.length ||
+      post.origin !== 'SYSTEM' || post.telegramLinkSource !== 'AUTO' ||
+      post.remoteImportKey || !telegramChatId)
+    throw telegramPostsBadRequest('TELEGRAM_POST_NOT_SCHEDULED', 'Existing native schedule requires reconciliation');
+  const owner = `reschedule:${randomUUID()}`;
+  const scope = { id: post.id, workspaceId: post.workspaceId, telegramChannelId: post.telegramChannelId };
+  const admitted = await prisma.telegramManagedPost.updateMany({
+    where: {
+      ...ordinaryScheduledPostWhere(post.workspaceId, post.telegramChannelId),
+      ...scope, updatedAt: post.updatedAt,
+      deliveryClaimOwner: null, sendOperations: { none: {} },
+      OR: [
+        { nativeRecovery: { is: null } },
+        { nativeRecovery: { is: { status: { in: ['ACKED', 'PREPARED', 'REJECTED'] } } } },
+      ],
+    },
+    data: { deliveryClaimOwner: owner, deliveryClaimExpiresAt: new Date(Date.now() + 120_000) },
+  });
+  if (admitted.count !== 1) throw new Error('The native schedule changed or is already claimed');
+  let projected = false;
+  try {
+    const result = await rescheduleContext.run(
+      { owner, scheduledAt: scheduleAt, replacementFor: post.id,
+        ordinaryReplacement: true, signal: AbortSignal.timeout(60_000) },
+      () => input.publish(scheduleAt),
+    );
+    projected = true;
+    return result;
+  } finally {
+    await prisma.telegramManagedPost.updateMany({
+      where: {
+        ...scope, deliveryClaimOwner: owner,
+        ...(projected ? {} : {
+          OR: [
+            { nativeRecovery: { is: null } },
+            { nativeRecovery: { is: { owner: { not: owner } } } },
+            { nativeRecovery: { is: { status: { in: ['PREPARED', 'REJECTED'] } } } },
+          ],
+        }),
+      },
+      data: { deliveryClaimOwner: null, deliveryClaimExpiresAt: null },
+    }).catch(() => undefined); // A failed cleanup must retain the evidence and original operation outcome.
+  }
 }

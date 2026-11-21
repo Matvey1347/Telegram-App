@@ -12,11 +12,7 @@ export class FinanceConsumerRuntimeEnvironmentService {
     return configuredTelegramBotRuntimeEnvironment();
   }
 
-  /**
-   * The local Finance profile is the source of truth for the bot a browser
-   * login opens. Runtime database data is still used for token validation,
-   * but its cached username must not send a user to a replaced bot.
-   */
+  /** Optional LOCAL profile selector. Authentication uses the selected DB runtime credential. */
   browserLoginBotUsername(): string | null {
     const value = this.config
       .get<string>("FINANCE_BROWSER_LOGIN_BOT_USERNAME")

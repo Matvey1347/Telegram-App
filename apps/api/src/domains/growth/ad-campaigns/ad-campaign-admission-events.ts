@@ -80,7 +80,7 @@ export async function loadAdmissionInviteSnapshotsByCampaign(
     joinedCount: true,
     requestedCount: true,
   } as const;
-  const rows: ScopedAdmissionInviteSnapshot[] = params.fromExclusive
+  const rows = params.fromExclusive
     ? (
         await Promise.all([
           prisma.$queryRaw<ScopedAdmissionInviteSnapshot[]>(Prisma.sql`
@@ -95,6 +95,7 @@ export async function loadAdmissionInviteSnapshotsByCampaign(
               AND snapshot."telegramChannelId" = ${params.telegramChannelId}
               AND snapshot."adCampaignId" IN (${Prisma.join(params.campaignIds)})
               AND snapshot."inviteLinkId" IN (${Prisma.join(params.inviteLinkIds)})
+              AND snapshot."joinedCount" IS NOT NULL AND snapshot."requestedCount" IS NOT NULL
               AND snapshot."syncedAt" <= ${params.fromExclusive}
             ORDER BY snapshot."inviteLinkId" ASC,
               snapshot."syncedAt" DESC,
@@ -141,9 +142,10 @@ export async function loadAdmissionInviteSnapshotsByCampaign(
   );
   const grouped = new Map<string, AdmissionInviteSnapshot[]>();
   for (const row of rows) {
+    if (row.joinedCount == null || row.requestedCount == null) continue;
     if (!row.adCampaignId) continue;
     const snapshots = grouped.get(row.adCampaignId) ?? [];
-    snapshots.push(row);
+    snapshots.push({ ...row, joinedCount: row.joinedCount, requestedCount: row.requestedCount });
     grouped.set(row.adCampaignId, snapshots);
   }
   return grouped;

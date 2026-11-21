@@ -1,4 +1,5 @@
 "use client";
+import { useFinanceBrandDevelopment } from "@consumer-finance/web/provider/finance-brand-environment";
 
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -48,6 +49,7 @@ export function ConsumerFinanceLogin({
     return () => { active = false; };
   }, []);
   const branding = useFinanceBotBranding(botId);
+  const brandDevelopment = useFinanceBrandDevelopment();
   useEffect(() => {
     if (!preferencesReady) return;
     window.localStorage.setItem("groshly-language", locale);
@@ -58,8 +60,9 @@ export function ConsumerFinanceLogin({
       theme,
       locale,
       locale === "en" ? "Sign in to Groshly" : "Увійти в Groshly",
+      brandDevelopment,
     );
-  }, [locale, theme, preferencesReady]);
+  }, [locale, theme, preferencesReady, brandDevelopment]);
   const t = financeLandingCopy(locale);
   const [waiting, setWaiting] = useState(false);
   const completedToken = useRef<string | null>(null);

@@ -7,17 +7,11 @@ import {
   BotBillingConnectionStatus,
   BotBillingInterval,
   BotBillingProvider,
-  BotBillingProviderMode,
-  BotSubscriptionSource,
   BotSubscriptionStatus,
-  Prisma,
   TelegramBotApplicationType,
-  TelegramBotRuntimeEnvironment,
   WorkspaceRole,
 } from '@prisma/client';
 import type {
-  BotBillingOverviewView,
-  BotBillingProviderConfigView,
   BotBillingSubscriberPage,
   BotBillingUserPage,
 } from '@telegram-system/shared';
@@ -40,12 +34,12 @@ import type { CreateBillingCouponDto } from './dto';
 import { StripeBillingProvider } from './stripe-billing.provider';
 import { TelegramBotApiClient } from '@api/telegram/shared/bot/telegram-bot-api.client';
 import { BotBillingAnalyticsService } from './bot-billing-analytics.service';
-import {
-  isProductionEnvironment,
-  telegramBotRuntimeEnvironmentName,
-} from '../../../config/deployment-config';
+import { isProductionEnvironment } from '../../../config/deployment-config';
+import { BotBillingProviderSettings } from './bot-billing-provider-settings';
+import { BotBillingCheckout } from './bot-billing-checkout';
+import { BotBillingReadModels } from './bot-billing-read-models';
 
-type Provider = 'STRIPE' | 'TELEGRAM_STARS';
+type Provider = BotBillingProvider;
 type Mode = 'TEST' | 'LIVE';
 
 export type FixedBillingCatalogDefinition = {
@@ -56,17 +50,12 @@ export type FixedBillingCatalogDefinition = {
   interval: BotBillingInterval;
 };
 
-function supportLocale(
-  profileLocale?: string | null,
-  telegramLocale?: string | null,
-): 'en' | 'uk' | 'ru' {
-  const locale = (profileLocale || telegramLocale || 'en')
-    .toLowerCase()
-    .split(/[-_]/u)[0];
-  return locale === 'uk' || locale === 'ru' ? locale : 'en';
-}
 @Injectable()
 export class BotBillingService {
+  private readonly providerSettings: BotBillingProviderSettings;
+  private readonly checkout: BotBillingCheckout;
+  private readonly readModels: BotBillingReadModels;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly workspace: WorkspaceService,
@@ -75,7 +64,28 @@ export class BotBillingService {
     private readonly stripe: StripeBillingProvider,
     private readonly botApi: TelegramBotApiClient,
     private readonly analytics: BotBillingAnalyticsService,
-  ) {}
+  ) {
+    this.providerSettings = new BotBillingProviderSettings(
+      prisma,
+      encryption,
+      stripe,
+      this.admin.bind(this),
+      this.bot.bind(this),
+      this.audit.bind(this),
+    );
+    this.checkout = new BotBillingCheckout(
+      prisma,
+      encryption,
+      stripe,
+      botApi,
+      this.bot.bind(this),
+    );
+    this.readModels = new BotBillingReadModels(
+      prisma,
+      analytics,
+      this.bot.bind(this),
+    );
+  }
 
   private async admin(userId: string) {
     return this.workspace.requireWorkspaceRole(userId, [
@@ -105,150 +115,27 @@ export class BotBillingService {
       );
   }
 
-  private mask(value?: string | null) {
-    if (!value) return null;
-    return value.length <= 8
-      ? '••••'
-      : `${value.slice(0, 4)}••••${value.slice(-4)}`;
+  providerResolution(userId: string, botIntegrationId: string) {
+    return this.providerSettings.providerResolution(userId, botIntegrationId);
   }
 
-  private toProviderView(
-    row: {
-      provider: BotBillingProvider;
-      mode: BotBillingProviderMode;
-      connectionStatus: BotBillingConnectionStatus;
-      publicKey: string | null;
-      publicKeyMasked: string | null;
-      secretKeyEncrypted: string | null;
-      webhookSecretEncrypted: string | null;
-      lastCheckedAt: Date | null;
-      lastValidationError: string | null;
-    } | null,
-    provider: Provider,
-    mode: Mode,
-    source: BotBillingProviderConfigView['source'],
-  ): BotBillingProviderConfigView {
-    return {
-      provider,
-      mode,
-      source,
-      status: row?.connectionStatus || 'NOT_CONFIGURED',
-      publicKeyConfigured: Boolean(row?.publicKey || row?.publicKeyMasked),
-      publicKeyMasked: row?.publicKeyMasked || null,
-      secretKeyConfigured: Boolean(row?.secretKeyEncrypted),
-      webhookSecretConfigured: Boolean(row?.webhookSecretEncrypted),
-      lastCheckedAt: row?.lastCheckedAt?.toISOString() || null,
-      lastValidationError: row?.lastValidationError || null,
-      capabilities: BILLING_PROVIDER_CAPABILITIES[provider],
-    };
+  workspaceProviderResolution(userId: string) {
+    return this.providerSettings.workspaceProviderResolution(userId);
   }
 
-  private nonBlank(value: string | undefined) {
-    return value?.trim() || undefined;
-  }
-
-  private validateStripeCredential(
-    value: string,
-    mode: Mode,
-    kind: 'public' | 'secret' | 'webhook',
-  ) {
-    const valid =
-      kind === 'webhook'
-        ? /^whsec_[A-Za-z0-9]+$/.test(value)
-        : kind === 'public'
-          ? new RegExp(`^pk_${mode.toLowerCase()}_[A-Za-z0-9]+$`).test(value)
-          : new RegExp(`^(?:sk|rk)_${mode.toLowerCase()}_[A-Za-z0-9]+$`).test(
-              value,
-            );
-    if (!valid)
-      throw new BadRequestException(
-        kind === 'webhook'
-          ? 'Stripe webhook signing secret is invalid'
-          : `Stripe ${kind} key does not match ${mode} mode`,
-      );
-  }
-
-  async providerResolution(userId: string, botIntegrationId: string) {
-    const bot = await this.bot(userId, botIntegrationId);
-    const rows = await this.prisma.botBillingProviderConfig.findMany({
-      where: {
-        workspaceId: bot.workspaceId,
-        OR: [{ botIntegrationId }, { botIntegrationId: null }],
-      },
-    });
-    return (['STRIPE', 'TELEGRAM_STARS'] as const).flatMap((provider) =>
-      (['TEST', 'LIVE'] as const).map((mode) => {
-        const override = rows.find(
-          (row) =>
-            row.provider === provider &&
-            row.mode === mode &&
-            row.botIntegrationId === botIntegrationId,
-        );
-        const defaultConfig = rows.find(
-          (row) =>
-            row.provider === provider &&
-            row.mode === mode &&
-            row.botIntegrationId === null,
-        );
-        return this.toProviderView(
-          override || defaultConfig || null,
-          provider,
-          mode,
-          override
-            ? 'BOT_OVERRIDE'
-            : defaultConfig
-              ? 'WORKSPACE_DEFAULT'
-              : 'NONE',
-        );
-      }),
-    );
-  }
-
-  async workspaceProviderResolution(userId: string) {
-    const membership = await this.admin(userId);
-    const rows = await this.prisma.botBillingProviderConfig.findMany({
-      where: { workspaceId: membership.workspaceId, botIntegrationId: null },
-      orderBy: { createdAt: 'desc' },
-    });
-    return (['STRIPE', 'TELEGRAM_STARS'] as const).flatMap((provider) =>
-      (['TEST', 'LIVE'] as const).map((mode) => {
-        const row = rows.find(
-          (item) => item.provider === provider && item.mode === mode,
-        );
-        return this.toProviderView(
-          row || null,
-          provider,
-          mode,
-          row ? 'WORKSPACE_DEFAULT' : 'NONE',
-        );
-      }),
-    );
-  }
-
-  async removeWorkspaceProviderDefault(
+  removeWorkspaceProviderDefault(
     userId: string,
     provider: Provider,
     mode: Mode,
   ) {
-    const membership = await this.admin(userId);
-    await this.prisma.botBillingProviderConfig.deleteMany({
-      where: {
-        workspaceId: membership.workspaceId,
-        botIntegrationId: null,
-        provider,
-        mode,
-      },
-    });
-    this.audit(
-      membership.workspaceId,
+    return this.providerSettings.removeWorkspaceProviderDefault(
       userId,
-      'billing.workspace_provider_disabled',
-      { provider, mode },
+      provider,
+      mode,
     );
-    return this.toProviderView(null, provider, mode, 'NONE');
   }
 
-  async saveProviderConfig(
+  saveProviderConfig(
     userId: string,
     input: {
       botIntegrationId?: string;
@@ -257,184 +144,20 @@ export class BotBillingService {
       dto: UpsertBillingProviderConfigDto;
     },
   ) {
-    const membership = await this.admin(userId);
-    if (input.botIntegrationId) await this.bot(userId, input.botIntegrationId);
-    const data = input.dto;
-    const secretValue = this.nonBlank(data.secretKey);
-    const webhookValue = this.nonBlank(data.webhookSecret);
-    const publicKey = this.nonBlank(data.publicKey);
-    if (input.provider === 'STRIPE') {
-      if (secretValue)
-        this.validateStripeCredential(secretValue, input.mode, 'secret');
-      if (webhookValue)
-        this.validateStripeCredential(webhookValue, input.mode, 'webhook');
-      if (publicKey)
-        this.validateStripeCredential(publicKey, input.mode, 'public');
-    }
-    const secret = secretValue
-      ? this.encryption.encrypt(secretValue)
-      : undefined;
-    const webhook = webhookValue
-      ? this.encryption.encrypt(webhookValue)
-      : undefined;
-    const identity = {
-      workspaceId: membership.workspaceId,
-      botIntegrationId: input.botIntegrationId || null,
-      provider: input.provider,
-      mode: input.mode,
-    };
-    const values = {
-      ...(secret
-        ? {
-            secretKeyEncrypted: secret.encrypted,
-            secretKeyIv: secret.iv,
-            secretKeyAuthTag: secret.authTag,
-          }
-        : {}),
-      ...(webhook
-        ? {
-            webhookSecretEncrypted: webhook.encrypted,
-            webhookSecretIv: webhook.iv,
-            webhookSecretAuthTag: webhook.authTag,
-          }
-        : {}),
-      ...(publicKey
-        ? { publicKey, publicKeyMasked: this.mask(publicKey) }
-        : {}),
-      connectionStatus: BotBillingConnectionStatus.NOT_CONFIGURED,
-      lastValidationError: null,
-    };
-    const existing = await this.prisma.botBillingProviderConfig.findFirst({
-      where: identity,
-    });
-    // A first override inherits the complete resolved default. Blank inputs
-    // therefore preserve effective credentials instead of shadowing them.
-    const inherited =
-      !existing && input.botIntegrationId
-        ? await this.prisma.botBillingProviderConfig.findFirst({
-            where: {
-              workspaceId: membership.workspaceId,
-              botIntegrationId: null,
-              provider: input.provider,
-              mode: input.mode,
-            },
-            orderBy: { createdAt: 'desc' },
-          })
-        : null;
-    let config = existing
-      ? await this.prisma.botBillingProviderConfig.update({
-          where: { id: existing.id },
-          data: values,
-        })
-      : await this.prisma.botBillingProviderConfig.create({
-          data: {
-            ...identity,
-            ...(inherited
-              ? {
-                  secretKeyEncrypted: inherited.secretKeyEncrypted,
-                  secretKeyIv: inherited.secretKeyIv,
-                  secretKeyAuthTag: inherited.secretKeyAuthTag,
-                  webhookSecretEncrypted: inherited.webhookSecretEncrypted,
-                  webhookSecretIv: inherited.webhookSecretIv,
-                  webhookSecretAuthTag: inherited.webhookSecretAuthTag,
-                  publicKey: inherited.publicKey,
-                  publicKeyMasked: inherited.publicKeyMasked,
-                }
-              : {}),
-            ...values,
-          },
-        });
-    if (input.provider === 'STRIPE') {
-      if (
-        !config.secretKeyEncrypted ||
-        !config.secretKeyIv ||
-        !config.secretKeyAuthTag ||
-        !config.webhookSecretEncrypted ||
-        !config.webhookSecretIv ||
-        !config.webhookSecretAuthTag
-      ) {
-        config = await this.prisma.botBillingProviderConfig.update({
-          where: { id: config.id },
-          data: {
-            connectionStatus: BotBillingConnectionStatus.NOT_CONFIGURED,
-            lastCheckedAt: new Date(),
-            lastValidationError: !config.secretKeyEncrypted
-              ? 'Stripe secret key is required'
-              : 'Stripe webhook secret is required',
-          },
-        });
-      } else {
-        const key = this.encryption.decrypt({
-          encrypted: config.secretKeyEncrypted,
-          iv: config.secretKeyIv,
-          authTag: config.secretKeyAuthTag,
-        });
-        const validation = await this.stripe.validateKey(key, input.mode);
-        config = await this.prisma.botBillingProviderConfig.update({
-          where: { id: config.id },
-          data: {
-            connectionStatus: validation.status,
-            lastCheckedAt: new Date(),
-            lastValidationError: validation.error,
-          },
-        });
-      }
-    }
-    if (input.provider === 'TELEGRAM_STARS')
-      config = await this.prisma.botBillingProviderConfig.update({
-        where: { id: config.id },
-        data: {
-          connectionStatus: BotBillingConnectionStatus.CONNECTED,
-          lastCheckedAt: new Date(),
-          lastValidationError: null,
-        },
-      });
-    this.audit(
-      membership.workspaceId,
-      userId,
-      'billing.provider_config_changed',
-      {
-        provider: input.provider,
-        mode: input.mode,
-        botIntegrationId: input.botIntegrationId || null,
-      },
-    );
-    return this.toProviderView(
-      config,
-      input.provider,
-      input.mode,
-      input.botIntegrationId ? 'BOT_OVERRIDE' : 'WORKSPACE_DEFAULT',
-    );
+    return this.providerSettings.saveProviderConfig(userId, input);
   }
 
-  async useWorkspaceProviderDefault(
+  useWorkspaceProviderDefault(
     userId: string,
     botIntegrationId: string,
     provider: Provider,
     mode: Mode,
   ) {
-    const bot = await this.bot(userId, botIntegrationId);
-    await this.prisma.botBillingProviderConfig.deleteMany({
-      where: { workspaceId: bot.workspaceId, botIntegrationId, provider, mode },
-    });
-    const fallback = await this.prisma.botBillingProviderConfig.findFirst({
-      where: {
-        workspaceId: bot.workspaceId,
-        botIntegrationId: null,
-        provider,
-        mode,
-      },
-    });
-    this.audit(bot.workspaceId, userId, 'billing.provider_override_reset', {
-      provider,
-      mode,
+    return this.providerSettings.useWorkspaceProviderDefault(
+      userId,
       botIntegrationId,
-    });
-    return this.toProviderView(
-      fallback,
       provider,
       mode,
-      fallback ? 'WORKSPACE_DEFAULT' : 'NONE',
     );
   }
 
@@ -663,7 +386,7 @@ export class BotBillingService {
     return { plans, subscriptions: entitlement, providers: available };
   }
 
-  async createStripeCheckout(input: {
+  createStripeCheckout(input: {
     botIntegrationId: string;
     telegramBotUserId: string;
     priceId: string;
@@ -672,137 +395,7 @@ export class BotBillingService {
     successUrl: string;
     cancelUrl: string;
   }) {
-    const mode = isProductionEnvironment()
-      ? BotBillingProviderMode.LIVE
-      : input.requestedMode || BotBillingProviderMode.LIVE;
-    const price = await this.prisma.botPlanPrice.findFirst({
-      where: {
-        id: input.priceId,
-        isActive: true,
-        isPublic: true,
-        plan: { botIntegrationId: input.botIntegrationId, isActive: true },
-      },
-      include: { plan: true },
-    });
-    if (!price) throw new NotFoundException('Public billing price not found');
-    const subscriber = await this.prisma.telegramBotUser.findFirst({
-      where: {
-        id: input.telegramBotUserId,
-        botIntegrationId: input.botIntegrationId,
-      },
-      select: { id: true, workspaceId: true },
-    });
-    if (!subscriber || subscriber.workspaceId !== price.plan.workspaceId)
-      throw new NotFoundException('Billing subscriber not found');
-    const coupon = input.couponCode
-      ? await this.validCoupon({
-          botIntegrationId: input.botIntegrationId,
-          telegramBotUserId: subscriber.id,
-          planId: price.planId,
-          priceId: price.id,
-          currency: price.currency,
-          code: input.couponCode,
-        })
-      : null;
-    const stripeConfigId = await this.stripe.configId(
-      input.botIntegrationId,
-      mode,
-    );
-    const syncedPriceId = this.providerPriceId(
-      price.providerPriceIdentity,
-      mode,
-      stripeConfigId,
-    );
-    const providerPriceId =
-      syncedPriceId ||
-      (await this.stripe.ensurePrice({
-        botIntegrationId: input.botIntegrationId,
-        mode,
-        plan: price.plan,
-        price,
-      }));
-    const promotionCodeId = coupon
-      ? this.providerPromotionCode(
-          coupon.providerCouponIdentity,
-          mode,
-          stripeConfigId,
-        )
-      : null;
-    if (coupon && !promotionCodeId)
-      throw new BadRequestException(
-        'Coupon is not synchronized with the selected Stripe mode',
-      );
-    const customerId = await this.stripe.customer({
-      botIntegrationId: input.botIntegrationId,
-      workspaceId: subscriber.workspaceId,
-      telegramBotUserId: subscriber.id,
-      mode,
-    });
-    const subscription = await this.prisma.botSubscription.create({
-      data: {
-        workspaceId: subscriber.workspaceId,
-        botIntegrationId: input.botIntegrationId,
-        telegramBotUserId: subscriber.id,
-        planId: price.planId,
-        planPriceId: price.id,
-        source: 'STRIPE',
-        status: 'INCOMPLETE',
-        currency: price.currency,
-        interval: price.interval,
-        amountMinor: price.amountMinor,
-        priceVersion: price.version,
-        providerCustomerId: customerId,
-      },
-    });
-    try {
-      const checkout = await this.stripe.checkout({
-        botIntegrationId: input.botIntegrationId,
-        mode,
-        customerId,
-        priceId: providerPriceId,
-        subscriptionId: subscription.id,
-        successUrl: input.successUrl,
-        cancelUrl: input.cancelUrl,
-        discount: promotionCodeId ? { code: promotionCodeId } : undefined,
-      });
-      if (coupon)
-        await this.prisma.botCouponRedemption.create({
-          data: {
-            couponId: coupon.id,
-            telegramBotUserId: subscriber.id,
-            planPriceId: price.id,
-            subscriptionId: subscription.id,
-            idempotencyKey: `checkout:${subscription.id}`,
-          },
-        });
-      return { ...checkout, subscriptionId: subscription.id };
-    } catch (error) {
-      await this.prisma.botSubscription.delete({
-        where: { id: subscription.id },
-      });
-      throw error;
-    }
-  }
-
-  private providerPriceId(
-    value: Prisma.JsonValue | null,
-    mode: BotBillingProviderMode,
-    configId: string,
-  ) {
-    if (!value || typeof value !== 'object' || Array.isArray(value))
-      return null;
-    const stripe = (value as Record<string, unknown>).STRIPE;
-    const entry =
-      stripe && typeof stripe === 'object' && !Array.isArray(stripe)
-        ? (stripe as Record<string, unknown>)[mode]
-        : null;
-    return entry &&
-      typeof entry === 'object' &&
-      !Array.isArray(entry) &&
-      (entry as Record<string, unknown>).configId === configId &&
-      typeof (entry as Record<string, unknown>).priceId === 'string'
-      ? (entry as Record<string, string>).priceId
-      : null;
+    return this.checkout.createStripeCheckout(input);
   }
 
   async syncFixedCatalog(
@@ -920,324 +513,55 @@ export class BotBillingService {
     return result;
   }
 
-  private providerPromotionCode(
-    value: Prisma.JsonValue | null,
-    mode: BotBillingProviderMode,
-    configId?: string,
-  ) {
-    if (!value || typeof value !== 'object' || Array.isArray(value))
-      return null;
-    const stripe = (value as Record<string, unknown>).STRIPE;
-    if (!stripe || typeof stripe !== 'object' || Array.isArray(stripe))
-      return null;
-    const entry = (stripe as Record<string, unknown>)[mode];
-    return entry &&
-      typeof entry === 'object' &&
-      !Array.isArray(entry) &&
-      (!configId || (entry as Record<string, unknown>).configId === configId) &&
-      typeof (entry as Record<string, unknown>).promotionCodeId === 'string'
-      ? (entry as Record<string, string>).promotionCodeId
-      : null;
-  }
-
-  async syncCouponToStripe(
+  syncCouponToStripe(
     userId: string,
     botIntegrationId: string,
     couponId: string,
     mode: Mode = 'LIVE',
   ) {
-    const bot = await this.bot(userId, botIntegrationId);
-    const coupon = await this.prisma.botCoupon.findFirst({
-      where: { id: couponId, workspaceId: bot.workspaceId, botIntegrationId },
-    });
-    if (!coupon) throw new NotFoundException('Billing coupon not found');
-    const configId = await this.stripe.configId(botIntegrationId, mode);
-    const existing = this.providerPromotionCode(
-      coupon.providerCouponIdentity,
-      mode,
-      configId,
-    );
-    if (existing) return coupon;
-    const identity = await this.stripe.createCoupon({
+    return this.checkout.syncCouponToStripe(
+      userId,
       botIntegrationId,
-      mode: mode,
-      couponId: coupon.id,
-      code: coupon.code,
-      percentOff: coupon.percentOff,
-      amountOffMinor: coupon.amountOffMinor,
-      currency: coupon.currency,
-      maxRedemptions: coupon.maxRedemptions,
-      expiresAt: coupon.expiresAt,
-    });
-    const current =
-      coupon.providerCouponIdentity &&
-      typeof coupon.providerCouponIdentity === 'object' &&
-      !Array.isArray(coupon.providerCouponIdentity)
-        ? (coupon.providerCouponIdentity as Record<string, unknown>)
-        : {};
-    return this.prisma.botCoupon.update({
-      where: { id: coupon.id },
-      data: {
-        providerCouponIdentity: {
-          ...current,
-          STRIPE: {
-            ...((current.STRIPE as Record<string, unknown>) || {}),
-            [mode]: identity,
-          },
-        } as Prisma.InputJsonValue,
-      },
-    });
+      couponId,
+      mode,
+    );
   }
 
-  async setStripeAutoRenewal(input: {
+  setStripeAutoRenewal(input: {
     botIntegrationId: string;
     telegramBotUserId: string;
     cancelAtPeriodEnd: boolean;
   }) {
-    const subscription = await this.prisma.botSubscription.findFirst({
-      where: {
-        botIntegrationId: input.botIntegrationId,
-        telegramBotUserId: input.telegramBotUserId,
-        source: BotSubscriptionSource.STRIPE,
-        status: {
-          in: [BotSubscriptionStatus.ACTIVE, BotSubscriptionStatus.PAST_DUE],
-        },
-        providerSubscription: { is: { provider: BotBillingProvider.STRIPE } },
-      },
-      orderBy: { createdAt: 'desc' },
-      include: { providerSubscription: true },
-    });
-    if (!subscription?.providerSubscription)
-      throw new NotFoundException('Active Stripe subscription not found');
-    const result = await this.stripe.setCancelAtPeriodEnd({
-      botIntegrationId: input.botIntegrationId,
-      mode: subscription.providerSubscription.mode,
-      providerSubscriptionId:
-        subscription.providerSubscription.providerSubscriptionId,
-      cancelAtPeriodEnd: input.cancelAtPeriodEnd,
-    });
-    return this.prisma.botSubscription.update({
-      where: { id: subscription.id },
-      data: {
-        cancelAtPeriodEnd: result.cancelAtPeriodEnd,
-        currentPeriodEnd: result.currentPeriodEnd
-          ? new Date(result.currentPeriodEnd * 1000)
-          : subscription.currentPeriodEnd,
-      },
-    });
+    return this.checkout.setStripeAutoRenewal(input);
   }
 
-  async stripePortal(input: {
+  stripePortal(input: {
     botIntegrationId: string;
     telegramBotUserId: string;
     returnUrl: string;
   }) {
-    const customer = await this.prisma.botProviderCustomer.findFirst({
-      where: {
-        botIntegrationId: input.botIntegrationId,
-        telegramBotUserId: input.telegramBotUserId,
-        provider: BotBillingProvider.STRIPE,
-      },
-      orderBy: { updatedAt: 'desc' },
-    });
-    if (!customer) throw new NotFoundException('Stripe customer not found');
-    return {
-      url: await this.stripe.portal({
-        botIntegrationId: input.botIntegrationId,
-        mode: customer.mode,
-        customerId: customer.providerCustomerId,
-        returnUrl: input.returnUrl,
-      }),
-    };
+    return this.checkout.stripePortal(input);
   }
 
-  private async validCoupon(input: {
-    botIntegrationId: string;
-    telegramBotUserId: string;
-    planId: string;
-    priceId: string;
-    currency: string;
-    code: string;
-  }) {
-    const now = new Date();
-    const coupon = await this.prisma.botCoupon.findFirst({
-      where: {
-        botIntegrationId: input.botIntegrationId,
-        code: input.code.trim().toUpperCase(),
-        isActive: true,
-      },
-    });
-    if (
-      !coupon ||
-      (coupon.startsAt && coupon.startsAt > now) ||
-      (coupon.expiresAt && coupon.expiresAt <= now) ||
-      (coupon.planId && coupon.planId !== input.planId) ||
-      (coupon.amountOffMinor && coupon.currency !== input.currency)
-    )
-      throw new BadRequestException('Coupon is invalid for this price');
-    const [uses, existing, paid] = await Promise.all([
-      this.prisma.botCouponRedemption.count({ where: { couponId: coupon.id } }),
-      this.prisma.botCouponRedemption.findFirst({
-        where: {
-          couponId: coupon.id,
-          telegramBotUserId: input.telegramBotUserId,
-          planPriceId: input.priceId,
-        },
-      }),
-      coupon.newUsersOnly
-        ? this.prisma.botSubscription.count({
-            where: {
-              botIntegrationId: input.botIntegrationId,
-              telegramBotUserId: input.telegramBotUserId,
-              status: { in: ['ACTIVE', 'CANCELED', 'PAST_DUE'] },
-            },
-          })
-        : Promise.resolve(0),
-    ]);
-    if (
-      existing ||
-      (coupon.maxRedemptions && uses >= coupon.maxRedemptions) ||
-      paid
-    )
-      throw new BadRequestException('Coupon redemption is not eligible');
-    return coupon;
-  }
-
-  async createStarsCheckout(input: {
+  createStarsCheckout(input: {
     botIntegrationId: string;
     telegramBotUserId: string;
     priceId: string;
   }) {
-    const price = await this.prisma.botPlanPrice.findFirst({
-      where: {
-        id: input.priceId,
-        currency: 'XTR',
-        interval: 'MONTH',
-        isActive: true,
-        isPublic: true,
-        plan: { botIntegrationId: input.botIntegrationId, isActive: true },
-      },
-      include: { plan: true },
-    });
-    if (!price || price.amountMinor > 10000)
-      throw new NotFoundException('Public monthly Stars price not found');
-    const starConfigs = await this.prisma.botBillingProviderConfig.findMany({
-      where: {
-        workspaceId: price.plan.workspaceId,
-        provider: 'TELEGRAM_STARS',
-        mode: 'LIVE',
-        connectionStatus: 'CONNECTED',
-        OR: [
-          { botIntegrationId: input.botIntegrationId },
-          { botIntegrationId: null },
-        ],
-      },
-    });
-    const config =
-      starConfigs.find(
-        (item) => item.botIntegrationId === input.botIntegrationId,
-      ) || starConfigs.find((item) => item.botIntegrationId === null);
-    if (!config) throw new BadRequestException('Telegram Stars is not enabled');
-    const configuredEnvironment = telegramBotRuntimeEnvironmentName();
-    const environment =
-      configuredEnvironment === 'LOCAL'
-        ? TelegramBotRuntimeEnvironment.LOCAL
-        : configuredEnvironment === 'PRODUCTION' || isProductionEnvironment()
-          ? TelegramBotRuntimeEnvironment.PRODUCTION
-          : null;
-    const bot = environment
-      ? await this.prisma.telegramBotRuntimeInstance.findFirst({
-          where: {
-            botIntegrationId: input.botIntegrationId,
-            workspaceId: price.plan.workspaceId,
-            environment,
-            runtimeStatus: 'ACTIVE',
-          },
-          select: {
-            botTokenEncrypted: true,
-            botTokenIv: true,
-            botTokenAuthTag: true,
-          },
-        })
-      : null;
-    const subscriber = await this.prisma.telegramBotUser.findFirst({
-      where: {
-        id: input.telegramBotUserId,
-        botIntegrationId: input.botIntegrationId,
-        workspaceId: price.plan.workspaceId,
-      },
-    });
-    if (!bot || !subscriber)
-      throw new NotFoundException('Billing subscriber not found');
-    const subscription = await this.prisma.botSubscription.create({
-      data: {
-        workspaceId: price.plan.workspaceId,
-        botIntegrationId: input.botIntegrationId,
-        telegramBotUserId: subscriber.id,
-        planId: price.planId,
-        planPriceId: price.id,
-        source: 'TELEGRAM_STARS',
-        status: 'INCOMPLETE',
-        currency: 'XTR',
-        interval: 'MONTH',
-        amountMinor: price.amountMinor,
-        priceVersion: price.version,
-      },
-    });
-    const token = this.encryption.decrypt({
-      encrypted: bot.botTokenEncrypted,
-      iv: bot.botTokenIv,
-      authTag: bot.botTokenAuthTag,
-    });
-    try {
-      const url = await this.botApi.createInvoiceLink(token, {
-        title: price.plan.name.slice(0, 32),
-        description: (
-          price.plan.description || 'Finance Pro monthly subscription'
-        ).slice(0, 255),
-        payload: `fin_sub:${subscription.id}`,
-        currency: 'XTR',
-        prices: [{ label: price.plan.name, amount: price.amountMinor }],
-        subscription_period: 2592000,
-      });
-      return { subscriptionId: subscription.id, url };
-    } catch (error) {
-      await this.prisma.botSubscription.delete({
-        where: { id: subscription.id },
-      });
-      throw error;
-    }
+    return this.checkout.createStarsCheckout(input);
   }
 
-  async validateStarsPreCheckout(input: {
+  validateStarsPreCheckout(input: {
     botIntegrationId: string;
     telegramBotUserId: string;
     payload?: string;
     currency?: string;
     totalAmount?: number;
   }) {
-    const id = input.payload?.startsWith('fin_sub:')
-      ? input.payload.slice(8)
-      : '';
-    const subscription = id
-      ? await this.prisma.botSubscription.findFirst({
-          where: {
-            id,
-            botIntegrationId: input.botIntegrationId,
-            telegramBotUserId: input.telegramBotUserId,
-            source: 'TELEGRAM_STARS',
-            status: 'INCOMPLETE',
-          },
-        })
-      : null;
-    return Boolean(
-      subscription &&
-      input.currency === 'XTR' &&
-      subscription.amountMinor === input.totalAmount,
-    );
+    return this.checkout.validateStarsPreCheckout(input);
   }
 
-  async processStarsPayment(input: {
+  processStarsPayment(input: {
     botIntegrationId: string;
     telegramBotUserId: string;
     payment: {
@@ -1248,72 +572,7 @@ export class BotBillingService {
       subscription_expiration_date?: number;
     };
   }) {
-    const id = input.payment.invoice_payload?.startsWith('fin_sub:')
-      ? input.payment.invoice_payload.slice(8)
-      : '';
-    const chargeId = input.payment.telegram_payment_charge_id;
-    if (!id || !chargeId || input.payment.currency !== 'XTR')
-      throw new BadRequestException('Invalid Telegram Stars payment');
-    const subscription = await this.prisma.botSubscription.findFirst({
-      where: {
-        id,
-        botIntegrationId: input.botIntegrationId,
-        telegramBotUserId: input.telegramBotUserId,
-        source: 'TELEGRAM_STARS',
-        amountMinor: input.payment.total_amount,
-      },
-    });
-    if (!subscription)
-      throw new BadRequestException(
-        'Telegram Stars payment does not match a subscription',
-      );
-    const duplicate = await this.prisma.botBillingEvent.findFirst({
-      where: {
-        provider: 'TELEGRAM_STARS',
-        mode: 'LIVE',
-        providerEventId: chargeId,
-      },
-    });
-    if (duplicate) return { activated: true, duplicate: true };
-    const end = input.payment.subscription_expiration_date
-      ? new Date(input.payment.subscription_expiration_date * 1000)
-      : new Date(Date.now() + 2592000 * 1000);
-    await this.prisma.$transaction(async (tx) => {
-      await tx.botSubscription.update({
-        where: { id: subscription.id },
-        data: {
-          status: 'ACTIVE',
-          providerSubscriptionId: chargeId,
-          currentPeriodStart: new Date(),
-          currentPeriodEnd: end,
-        },
-      });
-      await tx.botProviderSubscription.upsert({
-        where: { subscriptionId: subscription.id },
-        update: { providerStatus: 'ACTIVE', lastSyncedAt: new Date() },
-        create: {
-          subscriptionId: subscription.id,
-          provider: 'TELEGRAM_STARS',
-          mode: 'LIVE',
-          providerSubscriptionId: chargeId,
-          providerStatus: 'ACTIVE',
-        },
-      });
-      await tx.botBillingEvent.create({
-        data: {
-          workspaceId: subscription.workspaceId,
-          botIntegrationId: subscription.botIntegrationId,
-          subscriptionId: subscription.id,
-          provider: 'TELEGRAM_STARS',
-          mode: 'LIVE',
-          providerEventId: chargeId,
-          type: 'PAYMENT_SUCCEEDED',
-          amountMinor: input.payment.total_amount,
-          currency: 'XTR',
-        },
-      });
-    });
-    return { activated: true, duplicate: false };
+    return this.checkout.processStarsPayment(input);
   }
 
   async revokeGrant(
@@ -1404,420 +663,36 @@ export class BotBillingService {
     }
   }
 
-  async overview(
+  overview(
     userId: string,
     botIntegrationId: string,
-    _environment: 'LOCAL' | 'PRODUCTION' = 'PRODUCTION',
+    environment: 'LOCAL' | 'PRODUCTION' = 'PRODUCTION',
   ) {
-    const bot = await this.bot(userId, botIntegrationId);
-    const [
-      subscriptionMetrics,
-      registeredUsers,
-      revenue,
-      recentEvents,
-      recentSubscriptions,
-      aiUsage,
-    ] = await Promise.all([
-      this.prisma.botSubscription.findMany({
-        where: { botIntegrationId, workspaceId: bot.workspaceId },
-        select: {
-          telegramBotUserId: true,
-          source: true,
-          status: true,
-          currency: true,
-          interval: true,
-          amountMinor: true,
-          currentPeriodEnd: true,
-          providerSubscription: { select: { mode: true } },
-        },
-      }),
-      this.prisma.telegramBotUser.count({
-        where: { botIntegrationId, workspaceId: bot.workspaceId },
-      }),
-      this.prisma.botBillingEvent.groupBy({
-        by: ['currency'],
-        where: {
-          botIntegrationId,
-          workspaceId: bot.workspaceId,
-          type: 'PAYMENT_SUCCEEDED',
-          mode: BotBillingProviderMode.LIVE,
-        },
-        _sum: { amountMinor: true },
-      }),
-      this.prisma.botBillingEvent.findMany({
-        where: {
-          botIntegrationId,
-          workspaceId: bot.workspaceId,
-          type: { in: ['PAYMENT_SUCCEEDED', 'PAYMENT_FAILED'] },
-        },
-        orderBy: { occurredAt: 'desc' },
-        take: 12,
-        select: {
-          id: true,
-          type: true,
-          occurredAt: true,
-          subscriptionId: true,
-          amountMinor: true,
-          currency: true,
-          subscription: {
-            select: {
-              telegramBotUser: {
-                select: {
-                  id: true,
-                  telegramUserId: true,
-                  username: true,
-                  firstName: true,
-                },
-              },
-              plan: { select: { id: true, name: true } },
-            },
-          },
-        },
-      }),
-      this.prisma.botSubscription.findMany({
-        where: { botIntegrationId, workspaceId: bot.workspaceId },
-        orderBy: { createdAt: 'desc' },
-        take: 8,
-        select: {
-          id: true,
-          createdAt: true,
-          amountMinor: true,
-          currency: true,
-          telegramBotUser: {
-            select: {
-              id: true,
-              telegramUserId: true,
-              username: true,
-              firstName: true,
-            },
-          },
-          plan: { select: { id: true, name: true } },
-        },
-      }),
-      this.analytics.aiUsage(bot.workspaceId, botIntegrationId),
-    ]);
-    const analytics = this.analytics.calculate(
-      registeredUsers,
-      subscriptionMetrics,
-    );
-    analytics.collectedRevenue = revenue.map((row) => ({
-      currency: row.currency,
-      amountMinor: row._sum.amountMinor || 0,
-    }));
-    const recentActivity = [
-      ...recentEvents.map((event) => ({
-        id: event.id,
-        type:
-          event.type === 'PAYMENT_SUCCEEDED'
-            ? ('PAYMENT_SUCCEEDED' as const)
-            : ('PAYMENT_FAILED' as const),
-        occurredAt: event.occurredAt,
-        subscriptionId: event.subscriptionId,
-        amountMinor: event.amountMinor,
-        currency: event.currency,
-        subscriber: event.subscription?.telegramBotUser || null,
-        plan: event.subscription?.plan || null,
-      })),
-      ...recentSubscriptions.map((subscription) => ({
-        id: `subscription:${subscription.id}`,
-        type: 'SUBSCRIPTION' as const,
-        occurredAt: subscription.createdAt,
-        subscriptionId: subscription.id,
-        amountMinor: subscription.amountMinor,
-        currency: subscription.currency,
-        subscriber: subscription.telegramBotUser,
-        plan: subscription.plan,
-      })),
-    ]
-      .sort(
-        (left, right) => right.occurredAt.getTime() - left.occurredAt.getTime(),
-      )
-      .slice(0, 16);
-    return {
-      analytics: {
-        ...analytics,
-        conversionRate: registeredUsers
-          ? analytics.paidUsers / registeredUsers
-          : 0,
-      },
-      aiUsage,
-      recentActivity: recentActivity.map((item) => ({
-        ...item,
-        occurredAt: item.occurredAt.toISOString(),
-      })),
-    } satisfies BotBillingOverviewView;
+    return this.readModels.overview(userId, botIntegrationId, environment);
   }
 
-  async plans(userId: string, botIntegrationId: string) {
-    const bot = await this.bot(userId, botIntegrationId);
-    return this.prisma.botSubscriptionPlan.findMany({
-      where: { botIntegrationId, workspaceId: bot.workspaceId },
-      select: {
-        id: true,
-        code: true,
-        name: true,
-        description: true,
-        isActive: true,
-        createdAt: true,
-        prices: {
-          select: {
-            id: true,
-            currency: true,
-            interval: true,
-            amountMinor: true,
-            version: true,
-            isPublic: true,
-            isActive: true,
-          },
-          orderBy: [
-            { currency: 'asc' },
-            { interval: 'asc' },
-            { version: 'desc' },
-          ],
-        },
-      },
-      orderBy: { createdAt: 'asc' },
-    });
+  plans(userId: string, botIntegrationId: string) {
+    return this.readModels.plans(userId, botIntegrationId);
   }
 
-  async coupons(userId: string, botIntegrationId: string) {
-    const bot = await this.bot(userId, botIntegrationId);
-    const rows = await this.prisma.botCoupon.findMany({
-      where: { botIntegrationId, workspaceId: bot.workspaceId },
-      select: {
-        id: true,
-        code: true,
-        planId: true,
-        percentOff: true,
-        amountOffMinor: true,
-        currency: true,
-        startsAt: true,
-        expiresAt: true,
-        maxRedemptions: true,
-        newUsersOnly: true,
-        isActive: true,
-        createdAt: true,
-        plan: { select: { id: true, name: true } },
-        _count: { select: { redemptions: true } },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
-    return rows.map(({ _count, ...row }) => ({
-      ...row,
-      redemptionCount: _count.redemptions,
-    }));
+  coupons(userId: string, botIntegrationId: string) {
+    return this.readModels.coupons(userId, botIntegrationId);
   }
 
-  async subscribers(
+  subscribers(
     userId: string,
     botIntegrationId: string,
     query: BillingSubscribersQueryDto,
   ): Promise<BotBillingSubscriberPage> {
-    const bot = await this.bot(userId, botIntegrationId);
-    const limit = Math.min(query.limit || 25, 100);
-    const where = {
-      workspaceId: bot.workspaceId,
-      botIntegrationId,
-      ...(query.status ? { status: query.status } : {}),
-      ...(query.source ? { source: query.source } : {}),
-      ...(query.planId ? { planId: query.planId } : {}),
-      ...(query.provider
-        ? {
-            providerSubscription: {
-              is: { provider: query.provider },
-            },
-          }
-        : {}),
-      ...(query.search?.trim()
-        ? {
-            telegramBotUser: {
-              is: {
-                ...(query.search?.trim()
-                  ? {
-                      OR: [
-                        {
-                          username: {
-                            contains: query.search.trim(),
-                            mode: 'insensitive' as const,
-                          },
-                        },
-                        {
-                          firstName: {
-                            contains: query.search.trim(),
-                            mode: 'insensitive' as const,
-                          },
-                        },
-                        { telegramUserId: { contains: query.search.trim() } },
-                      ],
-                    }
-                  : {}),
-              },
-            },
-          }
-        : {}),
-    };
-    const rows = await this.prisma.botSubscription.findMany({
-      where,
-      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-      take: limit + 1,
-      ...(query.cursor ? { cursor: { id: query.cursor }, skip: 1 } : {}),
-      select: {
-        id: true,
-        source: true,
-        status: true,
-        amountMinor: true,
-        currency: true,
-        interval: true,
-        currentPeriodStart: true,
-        currentPeriodEnd: true,
-        cancelAtPeriodEnd: true,
-        createdAt: true,
-        telegramBotUser: {
-          select: {
-            id: true,
-            telegramUserId: true,
-            username: true,
-            firstName: true,
-          },
-        },
-        plan: { select: { id: true, name: true } },
-        providerSubscription: { select: { provider: true } },
-      },
-    });
-    const page = rows.slice(0, limit);
-    return {
-      items: page.map((row) => ({
-        id: row.id,
-        user: row.telegramBotUser,
-        plan: row.plan,
-        amountMinor: row.amountMinor,
-        currency: row.currency,
-        interval: row.interval,
-        source: row.source,
-        provider: row.providerSubscription?.provider || null,
-        status: row.status,
-        currentPeriodStart: row.currentPeriodStart?.toISOString() || null,
-        currentPeriodEnd: row.currentPeriodEnd?.toISOString() || null,
-        cancelAtPeriodEnd: row.cancelAtPeriodEnd,
-        createdAt: row.createdAt.toISOString(),
-      })),
-      nextCursor: rows.length > limit ? page.at(-1)?.id || null : null,
-    };
+    return this.readModels.subscribers(userId, botIntegrationId, query);
   }
 
-  async users(
+  users(
     userId: string,
     botIntegrationId: string,
     query: BillingUsersQueryDto,
   ): Promise<BotBillingUserPage> {
-    const bot = await this.bot(userId, botIntegrationId);
-    const limit = Math.min(query.limit || 25, 100);
-    const rows = await this.prisma.telegramBotUser.findMany({
-      where: {
-        workspaceId: bot.workspaceId,
-        botIntegrationId,
-        ...(query.search?.trim()
-          ? {
-              OR: [
-                {
-                  username: {
-                    contains: query.search.trim(),
-                    mode: 'insensitive',
-                  },
-                },
-                {
-                  firstName: {
-                    contains: query.search.trim(),
-                    mode: 'insensitive',
-                  },
-                },
-                {
-                  lastName: {
-                    contains: query.search.trim(),
-                    mode: 'insensitive',
-                  },
-                },
-                { telegramUserId: { contains: query.search.trim() } },
-              ],
-            }
-          : {}),
-      },
-      orderBy: [{ lastInteractionAt: 'desc' }, { id: 'desc' }],
-      take: limit + 1,
-      ...(query.cursor ? { cursor: { id: query.cursor }, skip: 1 } : {}),
-      select: {
-        id: true,
-        telegramUserId: true,
-        username: true,
-        firstName: true,
-        lastName: true,
-        languageCode: true,
-        firstSeenAt: true,
-        lastInteractionAt: true,
-        runtimeInstance: { select: { environment: true } },
-        financeProfiles: {
-          where: { botIntegrationId },
-          take: 1,
-          select: {
-            id: true,
-            locale: true,
-            defaultCurrency: true,
-            timezone: true,
-            onboardingCompletedAt: true,
-          },
-        },
-        billingSubscriptions: {
-          orderBy: { createdAt: 'desc' },
-          take: 1,
-          select: {
-            id: true,
-            status: true,
-            source: true,
-            currentPeriodEnd: true,
-            plan: { select: { id: true, name: true, code: true } },
-          },
-        },
-      },
-    });
-    const page = rows.slice(0, limit);
-    return {
-      items: page.map(
-        ({
-          financeProfiles,
-          billingSubscriptions,
-          runtimeInstance,
-          ...row
-        }) => ({
-          ...row,
-          environment: runtimeInstance!.environment,
-          firstSeenAt: row.firstSeenAt.toISOString(),
-          lastInteractionAt: row.lastInteractionAt.toISOString(),
-          profile: financeProfiles[0]
-            ? {
-                id: financeProfiles[0].id,
-                locale: supportLocale(
-                  financeProfiles[0].locale,
-                  row.languageCode,
-                ),
-                defaultCurrency: financeProfiles[0].defaultCurrency,
-                timezone: financeProfiles[0].timezone,
-                onboardingCompleted: Boolean(
-                  financeProfiles[0].onboardingCompletedAt,
-                ),
-              }
-            : null,
-          subscription: billingSubscriptions[0]
-            ? {
-                ...billingSubscriptions[0],
-                currentPeriodEnd:
-                  billingSubscriptions[0].currentPeriodEnd?.toISOString() ||
-                  null,
-              }
-            : null,
-        }),
-      ),
-      nextCursor: rows.length > limit ? page.at(-1)?.id || null : null,
-    };
+    return this.readModels.users(userId, botIntegrationId, query);
   }
 
   async updateFinanceSupportProfile(

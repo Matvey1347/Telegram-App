@@ -678,10 +678,10 @@ export function createTelegramChannelsApi({
           `/telegram-channels/${channelId}/managed-posts/${postId}/return-to-draft`,
         )
       ).data,
-    resetChannelScheduledPostsToDrafts: async (channelId: string) =>
+    resetChannelScheduledPostsToDrafts: async (channelId: string, postIds: string[]) =>
       (
         await api.post<ResetChannelScheduledPostsResult>(
-          `/telegram-channels/${channelId}/managed-posts/reset-scheduled-to-drafts`,
+          `/telegram-channels/${channelId}/managed-posts/reset-scheduled-to-drafts`, { postIds },
         )
       ).data,
     rescheduleChannelScheduledPosts: async (

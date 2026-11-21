@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConsumerFinanceAccount } from "@telegram-system/shared";
 import { FinanceAccounts, FinanceAccountsScreen } from "@consumer-finance/web/components/accounts/finance-accounts";
@@ -71,7 +71,7 @@ describe("FinanceAccounts list", () => {
     expect(onEdit).toHaveBeenCalledWith("account-1");
   });
 
-  it("archives only after typed confirmation", async () => {
+  it("archives only after confirmation", async () => {
     api.archiveAccount.mockResolvedValue({
       ...account,
       archivedAt: "2026-08-21T00:00:00.000Z",
@@ -81,10 +81,12 @@ describe("FinanceAccounts list", () => {
     fireEvent.click(
       screen.getByRole("button", { name: "Archive account: Daily card" }),
     );
-    fireEvent.change(screen.getByPlaceholderText("Daily card"), {
-      target: { value: "Daily card" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Archive" }));
+    const confirmation = () => within(screen.getByRole("dialog", { name: "Confirm action" }));
+    expect(confirmation().getByText("Daily card")).toBeVisible();
+    fireEvent.click(confirmation().getByRole("button", { name: "Cancel" }));
+    expect(api.archiveAccount).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Archive account: Daily card" }));
+    fireEvent.click(confirmation().getByRole("button", { name: "Archive" }));
 
     await waitFor(() => expect(api.archiveAccount).toHaveBeenCalledOnce());
     expect(api.archiveAccount).toHaveBeenCalledWith("bot", "account-1");

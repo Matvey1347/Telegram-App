@@ -27,7 +27,7 @@ export function useAdCampaignMutations() {
   const { pushToast } = useAppToast();
   const saveWindows = async (id: string, windows: Array<{ inviteLinkId: string; fromDate: string | null }>) => {
     const result = await adCampaignsApi.setInviteLinkWindows(id, windows);
-    await queryClient.invalidateQueries({ queryKey: ["ad-campaign-invite-windows", id] });
+    await queryClient.invalidateQueries({ queryKey: adCampaignKeys.inviteLinkWindows(id) });
     if (result.failed.length) pushToast("Даты сохранены, но Telegram не вернул данные по некоторым ссылкам. Обновите ссылки позже.", "info");
   };
   const invalidateAffected = () =>

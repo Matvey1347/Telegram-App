@@ -4,15 +4,15 @@ import { useEffect } from "react";
 
 import { financeBrandIcon } from "@consumer-finance/web/lib/finance-brand-icon";
 
-const iconUrl = financeBrandIcon("light");
-const darkIconUrl = financeBrandIcon("dark");
+import { useFinanceBrandDevelopment } from "@consumer-finance/web/provider/finance-brand-environment";
 
 export function applyFinanceDocumentMetadata(
   theme: "light" | "dark",
   locale: "uk" | "ru" | "en",
   title: string,
+  development = false,
 ) {
-  const icon = `${financeBrandIcon(theme)}?theme=${theme}&v=2`;
+  const icon = `${financeBrandIcon(theme, development)}?theme=${theme}&v=2`;
   document.title = title;
   document.documentElement.lang = locale;
   document
@@ -30,6 +30,9 @@ export function applyFinanceDocumentMetadata(
 }
 
 export function useFinanceBotBranding(botId: string, applyBranding = true) {
+  const development = useFinanceBrandDevelopment();
+  const iconUrl = financeBrandIcon("light", development);
+  const darkIconUrl = financeBrandIcon("dark", development);
   useEffect(() => {
     if (!applyBranding) return;
     let manifest = document.head.querySelector<HTMLLinkElement>('link[rel="manifest"]');

@@ -8,6 +8,7 @@ import {
   SyncingState,
   WaitingState,
 } from "@consumer-finance/web/components/ui/finance-surfaces";
+import { FinanceStateIllustration } from "@consumer-finance/web/components/ui/finance-state-illustration";
 import { FinanceVisualContextProvider } from "@consumer-finance/web/components/ui/finance-visual-context";
 
 describe("Finance state illustration system", () => {
@@ -36,9 +37,9 @@ describe("Finance state illustration system", () => {
     ["empty", EmptyState],
     ["error", ErrorState],
   ] as const)(
-    "renders the %s state with the light Groshly visual",
+    "renders the %s feedback copy and a light Groshly illustration when requested",
     (state, State) => {
-      render(<State text={`${state} copy`} context="transfers" />);
+      render(<><State text={`${state} copy`} context="transfers" /><FinanceStateIllustration state={state} context="transfers" /></>);
 
       expect(screen.getByText(`${state} copy`)).toBeInTheDocument();
       expect(
@@ -56,26 +57,26 @@ describe("Finance state illustration system", () => {
     render(
       <FinanceVisualContextProvider value="investments">
         <ErrorState text="Could not load investments" />
+        <LoadingState text="Loading investments" />
       </FinanceVisualContextProvider>,
     );
 
     expect(screen.getByRole("alert")).toHaveTextContent(
       "Could not load investments",
     );
-    expect(
-      document.querySelector("[data-finance-context='investments']"),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveAttribute("aria-live", "assertive");
+    expect(screen.getByRole("status").querySelector("[data-finance-context='investments']")).toBeInTheDocument();
   });
 
   it("keeps the visual context while using focused SVG scenes", () => {
     const { rerender } = render(
-      <EmptyState text="No transfers" context="transfers" />,
+      <FinanceStateIllustration state="empty" context="transfers" />,
     );
     expect(
       document.querySelector("[data-finance-context='transfers']"),
     ).toHaveAttribute("data-finance-visual-kind", "flow");
 
-    rerender(<EmptyState text="No analytics" context="analytics" />);
+    rerender(<FinanceStateIllustration state="empty" context="analytics" />);
     expect(
       document.querySelector("[data-finance-context='analytics']"),
     ).toHaveAttribute("data-finance-visual-kind", "growth");
@@ -83,7 +84,7 @@ describe("Finance state illustration system", () => {
 
   it("keeps every illustration full-width with its copy below it", () => {
     const { rerender } = render(
-      <EmptyState text="No transfers" context="transfers" />,
+      <><FinanceStateIllustration state="empty" context="transfers" /><EmptyState text="No transfers" /></>,
     );
     expect(document.querySelector("[data-finance-state='empty']")).toHaveClass(
       "w-full",
@@ -96,7 +97,7 @@ describe("Finance state illustration system", () => {
       document.querySelector("[data-finance-feedback='empty']"),
     ).toHaveClass("w-full", "flex-col");
 
-    rerender(<SavingState text="Saving" context="accounts" compact />);
+    rerender(<><FinanceStateIllustration state="saving" context="accounts" compact /><SavingState text="Saving" compact /></>);
     expect(
       document.querySelector("[data-finance-state='saving']"),
     ).toHaveAttribute("data-finance-compact", "true");
@@ -122,7 +123,7 @@ describe("Finance state illustration system", () => {
     expect(screen.getByRole("status")).toHaveClass("min-h-48", "flex-col");
   });
 
-  it("uses one money loader for loading and focused scenes for empty states", () => {
+  it("uses one money loader only while the feedback surface is loading", () => {
     const { rerender } = render(
       <LoadingState text="Loading transfers" context="transfers" />,
     );
@@ -133,16 +134,13 @@ describe("Finance state illustration system", () => {
     ).toBeInTheDocument();
 
     rerender(<EmptyState text="No reminders" context="reminders" />);
-    expect(
-      document.querySelector("[data-finance-scene='reminders']"),
-    ).toBeInTheDocument();
-    expect(
-      document.querySelector("[data-finance-state-mark='empty']"),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("No reminders");
+    expect(document.querySelector("[data-finance-money-loader]")).toBeNull();
+    expect(document.querySelector("[data-finance-scene='reminders']")).toBeNull();
   });
 
   it.each(contexts)("renders a dedicated %s scene", (context) => {
-    render(<EmptyState text="Empty" context={context} />);
+    render(<FinanceStateIllustration state="empty" context={context} />);
 
     expect(
       document.querySelector(`[data-finance-scene='${context}']`),
@@ -174,12 +172,12 @@ describe("Finance state illustration system", () => {
     ).toBeInTheDocument();
     expect(document.querySelector("img")).toBeNull();
 
-    rerender(<EmptyState text="Empty" context="analytics" />);
+    rerender(<FinanceStateIllustration state="empty" context="analytics" />);
     expect(
       document.querySelector("[data-finance-state-mark='empty']"),
     ).toBeInTheDocument();
 
-    rerender(<ErrorState text="Error" context="analytics" />);
+    rerender(<FinanceStateIllustration state="error" context="analytics" />);
     expect(
       document.querySelector("[data-finance-state-mark='error']"),
     ).toBeInTheDocument();

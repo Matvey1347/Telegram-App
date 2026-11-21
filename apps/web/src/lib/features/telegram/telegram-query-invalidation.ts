@@ -129,6 +129,7 @@ export async function invalidateTelegramAccessQueries(
 export async function invalidateTelegramChannelQueries(
   queryClient: QueryClient,
   channelId: string,
+  { sourceAccessChanged = false }: { sourceAccessChanged?: boolean } = {},
 ) {
   await Promise.all([
     queryClient.invalidateQueries({ queryKey: telegramChannelKeys.lists() }),
@@ -150,6 +151,10 @@ export async function invalidateTelegramChannelQueries(
     queryClient.invalidateQueries({
       queryKey: telegramChannelKeys.analyticsSources(channelId),
     }),
+    ...(sourceAccessChanged ? [
+      queryClient.invalidateQueries({ queryKey: [...telegramChannelKeys.sources(), channelId] }),
+      queryClient.invalidateQueries({ queryKey: telegramChannelKeys.publishingCapabilities() }),
+    ] : []),
     queryClient.invalidateQueries({
       queryKey: telegramChannelKeys.audience(channelId),
     }),

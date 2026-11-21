@@ -1,122 +1,79 @@
 # Codex production workflow
 
-Local development continues to use `DATABASE_URL` from `.env` and the Docker
-database on `localhost:5433` (`pnpm dev:nexeloq`). The advertising recovery workflow is a
-one-shot client of the authenticated production API. It never reads a database
-URL, starts NestJS, loads workers, or runs Prisma migrations.
+Use `pnpm dev:local` for ordinary development and local Compose data. Use
+`pnpm dev:prod-ui --live` to compare the local frontend with the deployed API.
+Use `pnpm dev:prod-operator --live` to exercise local publication logic with
+the selected production records and the existing Railway Telegram runtime.
+The [local and production setup](setup/LOCAL_PRODUCTION_WORKFLOWS.md) covers
+commands, private profile, supported routes and browser verification.
 
-## Production Read
+## Edit and test before deployment
 
-Provide `PRODUCTION_API_URL` (HTTPS production API origin) and
-`PRODUCTION_API_TOKEN` through the protected shell environment; do not paste
-tokens into commands or chat. Inspect a deal and its placements, publication
-state, channel identifiers and Telegram links:
+1. Prepare one private fixture channel and one ordinary managed post. For
+   Ad Sales also configure the exact deal and placement with its attached
+   managed post. Assign a connected Telegram actor for that channel through
+   normal production configuration.
+2. Make the business or formatter change locally. Start or sequentially
+   restart the operator. The launcher verifies target fingerprint, restricted
+   role, schema, named owner, workspace, channel, optional placement and
+   Railway transport version before serving requests.
+3. Sign in normally and open the local post editor or selected deal. Confirm
+   the exact revision. The local Nest handler runs the canonical publisher
+   and placement transition. Railway accepts only the already prepared,
+   journal-bound Bot API or MTProto operation. It checks the actor, content
+   hash, claim and current revision, then records the Telegram acknowledgement
+   in PostgreSQL before returning. The normal deployed publish endpoint is
+   outside the operator path.
+4. Verify the actual payload and message IDs against Telegram and reload the
+   post, deal and channel calendar. Disconnections leave a durable fence.
+   Complete ACKs can be projected locally without a send. Uncertain outcomes
+   stay blocked pending reconciliation. Before another local restart, let the
+   previous request finish or record its receipt state.
+5. Run the normal code and release gates. When an authorized release is due,
+   follow the repository AI sync gate, `pnpm release:check` and the Railway
+   deployment procedure. Verify the deployed version using live UI. A local
+   formatter change in a supported use case needs no matching production
+   rollout before the operator test.
+
+## First release of the transport
+
+Prompt 4 deploys the bootstrap and performs the live check. Apply the
+additive operator receipt migration `20261121122000_operator_send_receipts`
+before the Railway code that reads the new nullable fields. The operator
+candidate also requires the earlier local recovery schema, including
+`20261121120000_campaign_invite_window_attempt` and
+`20261121121000_invite_counter_observations`. Drain older snapshot readers
+before enabling writes that store nullable invite observations.
+
+The cloud slice consists of the transport-v1 metadata endpoint,
+`operator-send`, the exact-ID publication evidence read, and the existing
+native recovery transport with pinned-sender and cancellation-ACK checks.
+Deploy their module registration, shared journal and publisher fencing, and
+generated Prisma client together. It uses the existing Telegram runtime,
+JWT policy and database. No new service, webhook, background job or session
+is involved. The candidate launcher fails before binding its gateway if
+these dependencies are unavailable. Keep compatibility with the existing
+live API while the nullable receipt columns are present.
+
+## One-shot recovery against deployed logic
+
+`pnpm production:ads` remains a separate deployed-API client for a specific
+existing placement. Supply `PRODUCTION_API_URL` and `PRODUCTION_API_TOKEN`
+through the protected environment. It previews by default.
 
 ```sh
 pnpm production:ads read --sale-id '<deal-id>'
-```
-
-The command is GET-only and prints a limited operational summary. It does not
-search across arbitrary tables; use the API's existing scoped deal read.
-
-## Production Execute
-
-First preview exactly one placement. The default is dry-run:
-
-```sh
 pnpm production:ads recover --sale-id '<deal-id>' --placement-id '<placement-id>'
 ```
 
-Review the deal, channel, current status and scheduled time. To publish, invoke
-the command again with the exact IDs and confirmation phrase:
+Only when the preview admits the exact action, pass `--execute` and the
+printed confirmation. Use `PUBLISH SALE <deal-id> PLACEMENT <placement-id>`
+for a new send or `RECONCILE SALE <deal-id> PLACEMENT <placement-id>` when
+the publication already exists. This path verifies Telegram evidence and
+rereads the result. The localhost alias `pnpm production:recovery --live`
+uses the same request-only operator launcher as `pnpm dev:prod-operator --live`.
 
-```sh
-pnpm production:ads recover --sale-id '<deal-id>' --placement-id '<placement-id>' \
-  --execute --confirm 'PUBLISH SALE <deal-id> PLACEMENT <placement-id>'
-```
-
-This makes one call to the existing ad-sale publish endpoint, which delegates
-to the canonical managed-post publication service and Telegram integration.
-The tool rereads the deal and reports the placement DB status, Telegram message
-IDs/URLs and any error. A network error is an uncertain outcome: reread the
-deal before any retry. If Telegram publication evidence already exists, the
-tool never sends it again. For an acknowledged publication with a stale deal
-placement, preview prints a separate `RECONCILE` confirmation. Execution first
-verifies the message through Telegram managed-post identity reconciliation,
-then syncs the confirmed placement status and deletion deadline in the database.
-Partial or uncertain send evidence is blocked for manual investigation.
-
-```sh
-pnpm production:ads recover --sale-id '<deal-id>' --placement-id '<placement-id>' \
-  --execute --confirm 'RECONCILE SALE <deal-id> PLACEMENT <placement-id>'
-```
-
-No database schema changes or production migrations are part of this workflow.
-Do not start the ordinary local API with production configuration. Use only the
-scoped request-only localhost recovery host below when testing current recovery code. Keep the production
-token in the protected environment and rotate/revoke it through the normal
-credential process.
-
-
-## Localhost channel recovery against production
-
-Use this development-only host to test current frontend, rescheduler, publisher,
-claims and Prisma orchestration against production without booting AppModule,
-cron tasks, bot polling, CRM, migrations or unrelated workers. Normal local
-startup must continue using the local database.
-
-```sh
-pnpm production:recovery --channel-id '<channel-id>' --workspace-id '<workspace-id>' --env-file '/private/path/.env'
-```
-
-The private ignored environment file supplies DATABASE_URL_PRODUCTION,
-JWT_SECRET and BOT_TOKEN_ENCRYPTION_KEY plus existing media storage settings.
-Do not put their values in commands. The launcher checks channel membership in a
-read-only transaction and creates a two-hour owner session in memory. It never
-rewrites the ordinary DATABASE_URL file. API4003, web gateway3003 and Next3004
-bind loopback; alternate ports use --api-port/--web-port. Open the printed
-localhost /__recovery/start URL: credentials never appear in that URL or terminal
-output. Private startup logs live in ignored .codex/tmp with mode0600. Close the
-tab and stop the command with Ctrl+C after QA; its own child processes stop.
-The browser token expires after two hours and is scoped by the local host to the
-selected workspace/channel. This is an operator tool for trusted local machines.
-
-Only the selected channel's plan, snapshot and reschedule stream execute
-locally. Other authenticated GET requests relay to production for the real UI
-read models; all unrelated writes are rejected. The actual existing reschedule
-button and its batch contract are used, rather than a substitute test button.
-
-MTProto remains with its cloud session owner: never reuse the cloud StringSession
-from a local physical connection or stop the publication runtime to test locally.
-A narrow authenticated recovery-transport endpoint resolves credentials in the
-cloud and supports queue/history/profile reads and claimed native delete/send.
-Only account IDs and rendered post payload cross HTTPS; no Telegram session or
-API hash crosses it. The bridge must be deployed once before first use. Local
-rescheduler/publisher edits after that require only a local restart, not a deploy.
-
-Each mutation requires the exact live ordinary-post claim and stored schedule,
-excludes advertising/VP/batches, and checks stored media/IDs. Server transport is
-cancelled by request disconnect, claim expiry or60 seconds. No mutation request
-is retried automatically. Lost acknowledgements remain uncertain and retain the
-local orchestrator's claim for reconciliation; waiting timeout is not proof of
-non-delivery. A positive alternate-admin snapshot can identify exact old native entries for
-claimed recreation through the priority account; its omissions never prove the
-original sender has no schedule. Native recreation uses a combined transport
-operation that prepares existing Telegram media before cancelling old IDs and
-persists accepted new IDs before replying. The additive native-recovery table
-retains one latest generation per post; unknown outcomes cannot replay.
-
-Runtime cost: explicit button only, no new idle polling, recurring jobs, durable
-telemetry or retention table. One HTTPS hop per actual Telegram operation, one
-queue read per sender/session and shared bounded publication history. At100
-channels work scales with100 explicit operations, not a background fan-out;
-unchanged schedules cause no claim/media/write work. Existing cloud connection
-pool and Railway service are reused. No new always-on Railway service is added.
-
-Manual QA: record ordinary posts plus ad/VP/batch rows and external native
-messages before clicking; open the scoped localhost page, click reschedule,
-observe terminal counts/errors, reread DB and Telegram and compare IDs, instants,
-content/media plus every protected schedule. Test repeat preservation, missing
-schedule repair, partial/ambiguous rejection and lost-response no-replay through
-regression tests. Verify deployed version separately before saying the production
-button is fixed. Never infer production readiness from mocked tests alone.
+To add another operator use case, select one canonical business entry point,
+pin each object boundary, and add a specific transport operation only if the
+existing I/O contract cannot serve it. Prove revision fencing, uncertainty
+handling and authoritative rereads before adding the route to the gateway.

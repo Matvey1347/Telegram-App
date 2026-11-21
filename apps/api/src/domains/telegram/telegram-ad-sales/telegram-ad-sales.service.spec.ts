@@ -759,7 +759,7 @@ describe('TelegramAdSalesService', () => {
         placements: [
           makePlacement({
             publishedAt: null,
-            managedPost: { id: 'managed-post-1', telegramMessageIds: [] },
+            managedPost: { id: 'managed-post-1', telegramMessageIds: [], telegramScheduledMessageIds: [] },
             telegramPost: { id: 'telegram-post-1', telegramMessageId: '42' },
           }),
         ],
@@ -802,7 +802,7 @@ describe('TelegramAdSalesService', () => {
           makePlacement({
             publishedAt: new Date('2026-08-22T09:00:00.000Z'),
             deletedAt: null,
-            managedPost: { id: 'managed-post-1', telegramMessageIds: ['42'] },
+            managedPost: { id: 'managed-post-1', telegramMessageIds: ['42'], telegramScheduledMessageIds: [] },
           }),
         ],
       }),
@@ -818,6 +818,32 @@ describe('TelegramAdSalesService', () => {
     expect(prisma.$transaction).not.toHaveBeenCalled();
     expect(prisma.telegramAdSale.delete).not.toHaveBeenCalled();
     expect(prisma.transaction.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it('consumes the native cancellation acknowledgement before deleting a sale', async () => {
+    const { service, prisma, telegramChannelsService } = createService();
+    const claim = 'native-cancel-acked:fixture';
+    prisma.telegramAdSale.findFirst.mockResolvedValue(makeSale({
+      advertiserId: null,
+      placements: [makePlacement({
+        publishedAt: null,
+        managedPost: { id: 'managed-post-1', telegramMessageIds: [], telegramScheduledMessageIds: ['81'] },
+      })],
+    }));
+    telegramChannelsService.cancelScheduledManagedPost.mockResolvedValue(claim);
+    prisma.telegramManagedPost.update.mockRejectedValueOnce(new Error('Claim changed'));
+
+    await expect(service.deleteSale('user-1', 'sale-1')).rejects.toThrow('Claim changed');
+    expect(prisma.telegramAdSale.delete).not.toHaveBeenCalled();
+
+    await expect(service.deleteSale('user-1', 'sale-1')).resolves.toMatchObject({ id: 'sale-1' });
+    expect(prisma.telegramManagedPost.update).toHaveBeenLastCalledWith({
+      where: { id: 'managed-post-1', workspaceId: 'ws-1', deliveryClaimOwner: claim },
+      data: { deliveryClaimOwner: null, deliveryClaimExpiresAt: null },
+    });
+    expect(prisma.telegramManagedPost.deleteMany).toHaveBeenCalledWith({
+      where: { workspaceId: 'ws-1', id: { in: ['managed-post-1'] } },
+    });
   });
 
   it('creates and links an advertiser when the client id is null but creation is requested', async () => {
@@ -3845,6 +3871,7 @@ describe('TelegramAdSalesService', () => {
         telegramPostId: 'telegram-post-1',
       },
     });
+    prisma.telegramAdSalePlacement.updateMany.mockResolvedValue({ count: 1 });
     jest.spyOn(service, 'getSale').mockResolvedValue({ id: 'sale-1' } as any);
 
     await service.reconcilePublishedPlacement('user-1', 'sale-1', 'placement-1');
@@ -3855,7 +3882,7 @@ describe('TelegramAdSalesService', () => {
           id: 'placement-1',
           workspaceId: 'ws-1',
           telegramAdSaleId: 'sale-1',
-          status: { not: TelegramAdPlacementStatus.PUBLISHED },
+          status: { in: ['DRAFT', 'RESERVED', 'SCHEDULED'] },
         }),
         data: expect.objectContaining({
           status: TelegramAdPlacementStatus.PUBLISHED,

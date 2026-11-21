@@ -1,3 +1,4 @@
+import { hasBothInviteCounters } from './telegram-invite-counter-observations';
 import { Injectable, NotFoundException } from '@nestjs/common';
 import type {
   CrossPromotionTargetInput,
@@ -126,7 +127,7 @@ export class TelegramChannelTrafficAttributionService {
     }
     const points = [
       ...buildTrafficAttributionHistoryPoints(
-        rows,
+        rows.filter(hasBothInviteCounters),
         links,
         prepared.linkKinds,
         now,
@@ -186,7 +187,7 @@ export class TelegramChannelTrafficAttributionService {
       items,
       points: [
         ...buildTrafficAttributionHistoryPoints(
-          rows,
+          rows.filter(hasBothInviteCounters),
           links,
           prepared.linkKinds,
           now,
@@ -549,8 +550,8 @@ export class TelegramChannelTrafficAttributionService {
       from,
       now,
     );
-    const snapshotsByLink = new Map<string, typeof snapshots>();
-    for (const snapshot of snapshots)
+    const snapshotsByLink = new Map<string, Array<(typeof snapshots)[number] & { joinedCount: number; requestedCount: number }>>();
+    for (const snapshot of snapshots.filter(hasBothInviteCounters))
       addToMap(snapshotsByLink, snapshot.inviteLinkId, snapshot);
     const startsAt = from.toISOString();
     const endsAt = now.toISOString();

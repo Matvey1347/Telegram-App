@@ -1,6 +1,6 @@
 import { publicFinanceWebEnvironment } from "@finance-web/config/public-env";
 import { resolve } from "node:path";
-import { localDatabaseEnvironment } from "../../../../../../scripts/dev-database-environment.mjs";
+import { localDatabaseEnvironment } from "../../../../../../scripts/dev/dev-database-environment.mjs";
 
 export function FinanceDatabaseEnvironmentBadge() {
   if (!publicFinanceWebEnvironment.isDevelopment) return null;

@@ -1,4 +1,4 @@
-import { financeBrandIcon } from "@consumer-finance/web/lib/finance-brand-icon";
+import { financeBrandIcon } from "@finance-web/lib/finance-brand-icon";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 

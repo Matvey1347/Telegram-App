@@ -33,7 +33,8 @@ describe("Groshly special transactions", () => {
     const view = render(<App initialData={data} onOpenInvestment={detail} />);
     fireEvent.click(screen.getByRole("link", { name: /Investments/ }));
     fireEvent.click(screen.getByRole("button", { name: /Fund/ }));
-    await waitFor(() => expect(window.location.search).toContain("investment=asset"));
+    fireEvent.click(screen.getByRole("button", { name: "Open full details" }));
+    await waitFor(() => expect(new URLSearchParams(window.location.search).get("investment")).toBe("asset"));
     view.unmount();
     render(<App initialData={data} onOpenInvestment={detail} />);
     await waitFor(() => expect(screen.getByText("Investment details")).toBeInTheDocument());
@@ -51,7 +52,7 @@ describe("Groshly special transactions", () => {
     render(<App initialData={data} onSaveInvestmentMovement={save} />);
     fireEvent.click(screen.getByRole("link", { name: /Investments/ }));
     fireEvent.click(screen.getByRole("button", { name: /Fund/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Contribute" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add contribution" }));
     fireEvent.change(screen.getByRole("textbox", { name: "ACCOUNT AMOUNT" }), { target: { value: "25" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
     expect(screen.getByText("Saving operation")).toBeInTheDocument();
@@ -70,11 +71,12 @@ describe("Groshly special transactions", () => {
     render(<App initialData={data} onSaveInvestmentMovement={save} />);
     fireEvent.click(screen.getByRole("link", { name: /Investments/ }));
     fireEvent.click(screen.getByRole("button", { name: /Fund/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Contribute" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add contribution" }));
     fireEvent.change(screen.getByRole("textbox", { name: "ACCOUNT AMOUNT" }), { target: { value: "25" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => expect(screen.getByText("Could not save the operation. Please try again.")).toBeInTheDocument());
-    fireEvent.click(screen.getByRole("button", { name: "Contribute" }));
+    fireEvent.click(screen.getByRole("button", { name: /Fund/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Add contribution" }));
     fireEvent.change(screen.getByRole("textbox", { name: "ACCOUNT AMOUNT" }), { target: { value: "25" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => expect(save).toHaveBeenCalledTimes(2));
@@ -88,7 +90,7 @@ describe("Groshly special transactions", () => {
     render(<App initialData={data} onSaveInvestmentMovement={save} />);
     fireEvent.click(screen.getByRole("link", { name: /Investments/ }));
     fireEvent.click(screen.getByRole("button", { name: /Fund/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Contribute" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add contribution" }));
     fireEvent.click(screen.getByRole("button", { name: "Select account" }));
     fireEvent.click(screen.getByRole("button", { name: /Доларові заощадження/ }));
     fireEvent.change(screen.getByRole("textbox", { name: "ACCOUNT AMOUNT" }), { target: { value: "25" } });

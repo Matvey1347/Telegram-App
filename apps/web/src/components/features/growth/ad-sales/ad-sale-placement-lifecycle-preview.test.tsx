@@ -10,6 +10,7 @@ describe("AdSalePlacementLifecyclePreview", () => {
     vi.setSystemTime(new Date("2026-08-30T12:00:00.000Z"));
     const pending = {
       id: "placement",
+      managedPostId: "managed-post",
       telegramChannelId: "channel",
       scheduledAt: "2026-08-30T11:00:00.000Z",
       publishedAt: null,

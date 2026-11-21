@@ -1,35 +1,27 @@
 import { Injectable } from '@nestjs/common';
-import {
-  TelegramManagedPostIdVerificationStatus,
-  TelegramManagedPostLinkSource,
-  TelegramManagedPostRemoteStatus,
-  TelegramManagedPostStatus,
-} from '@prisma/client';
+import type { Prisma } from '@prisma/client';
 import type {
   RescheduleChannelScheduledPostsResult,
   RescheduleChannelScheduledPostProgress,
   ResetChannelScheduledPostsResult,
 } from '@telegram-system/shared';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { TelegramMtprotoClient } from '@api/telegram/shared/mtproto/telegram-mtproto.client';
-import { TelegramChannelAccessService } from './telegram-channel-access.service';
 import { TelegramChannelsSupportService } from './telegram-channels-support.service';
 import { TelegramManagedPostRevisionStore } from './telegram-managed-post-revision.store';
-import { TelegramManagedPostRemoteSyncService } from './telegram-managed-post-remote-sync.service';
 import { TelegramPostGroupsService } from './telegram-post-groups.service';
 import { telegramChannelNotFound } from './telegram-posts.errors';
+import { ordinaryScheduledPostWhere } from './telegram-managed-post-rescheduler-repair';
+import { TelegramManagedPostPublicationService } from './telegram-managed-post-publication.service';
 import { TelegramManagedPostReschedulerService } from './telegram-managed-post-rescheduler.service';
 
 @Injectable()
 export class TelegramManagedPostScheduledResetService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly mtprotoClient: TelegramMtprotoClient,
     private readonly support: TelegramChannelsSupportService,
-    private readonly access: TelegramChannelAccessService,
     private readonly revisions: TelegramManagedPostRevisionStore,
     private readonly groups: TelegramPostGroupsService,
-    private readonly remoteSync: TelegramManagedPostRemoteSyncService,
+    private readonly publication: TelegramManagedPostPublicationService,
     private readonly rescheduler: TelegramManagedPostReschedulerService,
   ) {}
 
@@ -58,123 +50,108 @@ export class TelegramManagedPostScheduledResetService {
   async resetChannelScheduledPosts(
     userId: string,
     channelId: string,
+    postIds: string[] = [],
   ): Promise<ResetChannelScheduledPostsResult> {
-    // Telegram can publish a native scheduled message before our local state is
-    // refreshed. Reconcile first so a now-published post keeps its real message
-    // IDs and is excluded from the destructive scheduled-message reset below.
-    await this.remoteSync.syncManagedPosts(userId, channelId);
-
     const workspaceId = await this.support.workspace(userId);
     const channel = await this.prisma.telegramChannel.findFirst({
       where: { id: channelId, workspaceId, isActive: true },
-      select: {
-        id: true,
-        username: true,
-        telegramChatId: true,
-        inviteLink: true,
-        telegramAccessHash: true,
-      },
+      select: { id: true },
     });
     if (!channel) throw telegramChannelNotFound();
-
-    const posts = await this.prisma.telegramManagedPost.findMany({
-      where: {
-        workspaceId,
-        telegramChannelId: channelId,
-        status: TelegramManagedPostStatus.SCHEDULED,
-        postBatchDelivery: { is: null },
-      },
-      orderBy: { createdAt: 'asc' },
-    });
-    const account = await this.access.connectedAccount(workspaceId, channelId);
-    const channelReference = this.access.mtprotoChannelReference(channel);
-    const credentials = this.access.accountCredentials(account);
-    const remoteScheduled = await this.mtprotoClient.getScheduledHistory({
-      ...credentials,
-      channel: channelReference,
-    });
-    const remoteMessageIds = [
-      ...new Set(remoteScheduled.map((message) => message.id).filter(Boolean)),
-    ];
-
-    if (remoteMessageIds.length) {
-      await this.mtprotoClient.deleteScheduledPost({
-        ...credentials,
-        channel: channelReference,
-        messageIds: remoteMessageIds,
-      });
-    }
-
-    if (!posts.length) {
-      return {
-        action: 'RESET_CHANNEL_SCHEDULED_TO_DRAFT',
-        channelId,
-        remoteScheduledDeletedCount: remoteMessageIds.length,
-        postsReturnedToDraftCount: 0,
-        postIds: [],
-      };
-    }
-
-    const postIds = posts.map((post) => post.id);
-    const affectedGroupIds = [
-      ...new Set(posts.flatMap((post) => (post.groupId ? [post.groupId] : []))),
-    ];
-    const resetAt = new Date();
-    const postsReturnedToDraftCount = await this.prisma.$transaction(
-      async (tx) => {
-        await this.revisions.createManagedPostRevisions(
-          tx,
-          posts,
-          'before_channel_scheduled_reset',
-          userId,
-        );
-        const updated = await tx.telegramManagedPost.updateMany({
-          where: {
-            id: { in: postIds },
-            workspaceId,
-            telegramChannelId: channelId,
-            status: TelegramManagedPostStatus.SCHEDULED,
-          },
-          data: {
-            remoteImportKey: null,
-            status: TelegramManagedPostStatus.DRAFT,
-            scheduledAt: null,
-            scheduleMode: null,
-            publishedAt: null,
-            telegramScheduledMessageIds: [],
-            telegramMessageIds: [],
-            telegramMessageUrls: [],
-            telegramIdVerificationStatus:
-              TelegramManagedPostIdVerificationStatus.UNVERIFIED,
-            telegramLinkSource: TelegramManagedPostLinkSource.AUTO,
-            telegramIdVerifiedAt: null,
-            telegramIdLastCheckedAt: null,
-            telegramRemoteStatus: TelegramManagedPostRemoteStatus.NONE,
-            lastTelegramSyncedAt: resetAt,
-            lastTelegramSyncNote:
-              'All channel scheduled messages were deleted in Telegram and returned to drafts.',
-            sourceType: null,
-            sourceId: null,
-            sourceWasPremium: null,
-            captionLengthMaxUsed: null,
-            messageLengthMaxUsed: null,
-            publishMode: null,
-            lastError: null,
-          },
-        });
-        for (const groupId of affectedGroupIds) {
-          await this.groups.normalizePostGroupNumbering(tx, groupId);
-        }
-        return updated.count;
-      },
-    );
-
-    return {
+    const selected = [...new Set(postIds)];
+    const eligible: Prisma.TelegramManagedPostWhereInput = {
+      ...ordinaryScheduledPostWhere(workspaceId, channelId),
+      origin: 'SYSTEM',
+      remoteImportKey: null,
+      telegramLinkSource: 'AUTO',
+      telegramPostId: null,
+      telegramMessageIds: { isEmpty: true },
+      deliveryAttemptCount: 0,
+      sendOperations: { none: {} },
+      OR: [
+        { nativeRecovery: { is: null } },
+        { scheduleMode: 'TELEGRAM_NATIVE', nativeRecovery: { is: { status: 'ACKED' } } },
+      ],
+    };
+    const posts = selected.length
+      ? await this.prisma.telegramManagedPost.findMany({
+          where: { ...eligible, id: { in: selected } },
+          include: { telegramChannel: true },
+        })
+      : [];
+    const byId = new Map(posts.map((post) => [post.id, post]));
+    const result: ResetChannelScheduledPostsResult = {
       action: 'RESET_CHANNEL_SCHEDULED_TO_DRAFT',
       channelId,
-      remoteScheduledDeletedCount: remoteMessageIds.length,
-      postsReturnedToDraftCount,
-      postIds,
+      remoteScheduledDeletedCount: 0,
+      postsReturnedToDraftCount: 0,
+      postIds: [],
+      results: [],
     };
+    for (const postId of selected) {
+      const post = byId.get(postId);
+      const localOnly = post?.scheduleMode === 'LOCAL' && post.telegramRemoteStatus === 'NONE' &&
+        !post.telegramScheduledMessageIds.length && !post.deliveryClaimOwner;
+      const native = post?.scheduleMode === 'TELEGRAM_NATIVE' && post.telegramRemoteStatus === 'SCHEDULED' &&
+        post.telegramScheduledMessageIds.length > 0 &&
+        (!post.deliveryClaimOwner || post.deliveryClaimOwner.startsWith('native-cancel-acked:'));
+      if (!post || (!localOnly && !native)) {
+        result.results.push({ postId, status: 'SKIPPED', reason: 'Not an eligible ordinary schedule', remoteDeletedCount: 0 });
+        continue;
+      }
+      let remoteDeletedCount = 0;
+      try {
+        const owner = native ? await this.publication.cancelScheduledManagedPost(workspaceId, post) : null;
+        if (native && !owner) throw new Error('Telegram cancellation was not acknowledged');
+        remoteDeletedCount = owner && owner !== post.deliveryClaimOwner ? post.telegramScheduledMessageIds.length : 0;
+        result.remoteScheduledDeletedCount += remoteDeletedCount;
+        await this.prisma.$transaction(async (tx) => {
+          const updated = await tx.telegramManagedPost.updateMany({
+            where: {
+              ...eligible,
+              id: postId,
+              ...(owner ? {} : { updatedAt: post.updatedAt }),
+              scheduleMode: post.scheduleMode,
+              scheduledAt: post.scheduledAt,
+              sourceId: post.sourceId,
+              sourceType: post.sourceType,
+              telegramScheduledMessageIds: { equals: post.telegramScheduledMessageIds },
+              deliveryClaimOwner: owner,
+            },
+            data: {
+              status: 'DRAFT',
+              scheduledAt: null,
+              scheduleMode: null,
+              publicationSlotId: null,
+              telegramScheduledMessageIds: [],
+              telegramRemoteStatus: 'NONE',
+              deliveryClaimOwner: null,
+              deliveryClaimExpiresAt: null,
+              deliveryNextAttemptAt: null,
+              sourceId: null,
+              sourceType: null,
+              publishMode: null,
+              lastError: null,
+              lastTelegramSyncNote: owner ? 'Telegram cancellation acknowledged.' : 'Local schedule cleared.',
+            },
+          });
+          if (updated.count !== 1) throw new Error('The schedule changed before reset; reconcile before retrying');
+          await this.revisions.createManagedPostRevisions(tx, [post], 'before_channel_scheduled_reset', userId);
+          if (post.groupId) await this.groups.normalizePostGroupNumbering(tx, post.groupId);
+        });
+        result.postIds.push(postId);
+        result.postsReturnedToDraftCount += 1;
+        result.results.push({ postId, status: 'DRAFTED', remoteDeletedCount });
+      } catch (error) {
+        result.results.push({
+          postId,
+          status: 'FAILED',
+          reason: error instanceof Error ? error.message : 'Could not reset the schedule',
+          remoteDeletedCount,
+        });
+      }
+    }
+    if (selected.length) this.support.invalidateTelegramChannelReadCache(userId, workspaceId);
+    return result;
   }
 }

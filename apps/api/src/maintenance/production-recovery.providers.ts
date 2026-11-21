@@ -6,8 +6,12 @@ import { TokenEncryptionService } from '../common/security/token-encryption.serv
 import { B2ObjectStorageService } from '../common/object-storage/b2-object-storage.service';
 import { CurrencyConversionService } from '../common/currency-conversion.service';
 import { HistoricalExchangeRateService } from '../common/historical-exchange-rate.service';
-import { JwtStrategy } from '../domains/identity/auth/jwt.strategy';
-import { JwtAuthGuard } from '../common/jwt-auth.guard';
+import { ProductionRecoveryAdmission } from './production-recovery-admission';
+import {
+  RecoveryChannelAccess,
+  RecoverySchemaCompatibility,
+  unavailableRecoveryCredential,
+} from './production-recovery-adapters';
 import { StreamResponseService } from '../common/stream/stream-response.service';
 import { TelegramMtprotoClient } from '../telegram/shared/mtproto/telegram-mtproto.client';
 import { ProductionRecoveryMtprotoRelay } from '../telegram/shared/mtproto/production-recovery-mtproto-relay';
@@ -34,16 +38,37 @@ import { TelegramChannelAnalyticsService } from '../domains/telegram/telegram-ch
 import { TelegramChannelFinancialReadService } from '../domains/telegram/telegram-channels/telegram-channel-financial-read.service';
 import { TelegramChannelAdPricingReadService } from '../domains/telegram/telegram-channels/telegram-channel-ad-pricing-read.service';
 
+import { TelegramManagedPostCommandService } from '../domains/telegram/telegram-channels/telegram-managed-post-command.service';
+import { TelegramManagedPostHistoryService } from '../domains/telegram/telegram-channels/telegram-managed-post-history.service';
+import { TelegramManagedPostEditTransportService } from '../domains/telegram/telegram-channels/telegram-managed-post-edit-transport.service';
+import { TelegramChannelCatalogService } from '../domains/telegram/telegram-channels/telegram-channel-catalog.service';
+import { TelegramChannelBookingReadService } from '../domains/telegram/telegram-channels/telegram-channel-booking-read.service';
+import { TelegramChannelAudienceTrendReadService } from '../domains/telegram/telegram-channels/telegram-channel-audience-trend-read.service';
+import { TelegramChannelTrafficAttributionService } from '../domains/telegram/telegram-channels/telegram-channel-traffic-attribution.service';
+import { TelegramChannelTrafficAttributionReadService } from '../domains/telegram/telegram-channels/telegram-channel-traffic-attribution-read.service';
+
+import { ProductionOperatorBotRelay } from '../telegram/shared/mtproto/production-operator-send-relay';
+import { ProductionOperatorPublicationService } from './production-operator-publication.service';
+import { TelegramManagedPostQueryService } from '../domains/telegram/telegram-channels/telegram-managed-post-query.service';
+import { TelegramManagedPostSyntheticReadService } from '../domains/telegram/telegram-channels/telegram-managed-post-synthetic-read.service';
+import { TelegramPostGroupSummaryReadService } from '../domains/telegram/telegram-channels/telegram-post-group-summary-read.service';
+import { TelegramManagedPostCalendarService } from '../domains/telegram/telegram-channels/telegram-managed-post-calendar.service';
+
 /** Explicit request-only closure: no domain module or worker bootstrap imports. */
 export const productionRecoveryProviders = [
   WorkspaceService,
   ResponseCacheService,
-  TokenEncryptionService,
+  {
+    provide: TokenEncryptionService,
+    useValue: {
+      decrypt: unavailableRecoveryCredential,
+      encrypt: unavailableRecoveryCredential,
+    },
+  },
   B2ObjectStorageService,
   CurrencyConversionService,
   HistoricalExchangeRateService,
-  JwtStrategy,
-  JwtAuthGuard,
+  ProductionRecoveryAdmission,
   StreamResponseService,
   {
     provide: ApplicationLoggerService,
@@ -52,13 +77,18 @@ export const productionRecoveryProviders = [
     useValue: { writeStructured: () => undefined },
   },
   { provide: TelegramMtprotoClient, useClass: ProductionRecoveryMtprotoRelay },
-  TelegramBotApiClient,
+  { provide: TelegramBotApiClient, useClass: ProductionOperatorBotRelay },
+  ProductionOperatorPublicationService,
+  TelegramManagedPostQueryService,
+  TelegramManagedPostSyntheticReadService,
+  TelegramManagedPostCalendarService,
+  TelegramPostGroupSummaryReadService,
   TelegramSourceAccessService,
   TelegramSystemBotConfigService,
   TelegramManagedPostReschedulerService,
   TelegramManagedPostRecoverySnapshotService,
   TelegramChannelsSupportService,
-  TelegramChannelAccessService,
+  { provide: TelegramChannelAccessService, useClass: RecoveryChannelAccess },
   TelegramManagedPostRevisionStore,
   TelegramPostGroupsService,
   TelegramManagedPostPublicationService,
@@ -69,10 +99,24 @@ export const productionRecoveryProviders = [
   TelegramManagedPostGroupPresentationService,
   TelegramManagedPostSendJournalService,
   TelegramManagedPostMediaStorageService,
-  TelegramManagedPostPremiumEmojiRepairService,
-  TelegramChannelSchemaCompatibilityService,
+  {
+    provide: TelegramManagedPostPremiumEmojiRepairService,
+    useValue: { restoreCustomEmojiAfterBotDelivery: async () => undefined },
+  },
+  {
+    provide: TelegramChannelSchemaCompatibilityService,
+    useClass: RecoverySchemaCompatibility,
+  },
   TelegramPostGroupStore,
   TelegramChannelAnalyticsService,
   TelegramChannelFinancialReadService,
   TelegramChannelAdPricingReadService,
+  TelegramManagedPostCommandService,
+  TelegramManagedPostHistoryService,
+  TelegramManagedPostEditTransportService,
+  TelegramChannelCatalogService,
+  TelegramChannelBookingReadService,
+  TelegramChannelAudienceTrendReadService,
+  TelegramChannelTrafficAttributionService,
+  TelegramChannelTrafficAttributionReadService,
 ];

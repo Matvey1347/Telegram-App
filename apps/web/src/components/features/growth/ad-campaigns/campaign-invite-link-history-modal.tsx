@@ -37,15 +37,15 @@ function drawdownValueClass(value: number) {
 }
 
 function hasVisibleInviteLinkHistory(summary: {
-  currentJoinedCount: number;
-  currentRequestedCount: number;
+  currentJoinedCount: number | null;
+  currentRequestedCount: number | null;
   peakJoinedCount: number;
   peakRequestedCount?: number;
   drawdownFromPeak: number;
 }) {
   return (
-    summary.currentJoinedCount > 0 ||
-    summary.currentRequestedCount > 0 ||
+    (summary.currentJoinedCount ?? 0) > 0 ||
+    (summary.currentRequestedCount ?? 0) > 0 ||
     summary.peakJoinedCount > 0 ||
     Number(summary.peakRequestedCount || 0) > 0 ||
     summary.drawdownFromPeak > 0

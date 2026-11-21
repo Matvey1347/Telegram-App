@@ -1,6 +1,7 @@
 import { render, waitFor } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { applyFinanceDocumentMetadata, useFinanceBotBranding } from "@consumer-finance/web/components/hooks/use-finance-bot-branding";
+import { FinanceBrandEnvironment } from "@consumer-finance/web/provider/finance-brand-environment";
 
 function BrandingImage() {
   const branding = useFinanceBotBranding("finance bot");
@@ -13,6 +14,17 @@ describe("useFinanceBotBranding", () => {
     expect(container.querySelector("span")).toHaveAttribute("data-logo-url", "/brand/groshly-icon-transparent.png");
     expect(container.querySelector("span")).toHaveAttribute("data-dark-url", "/brand/groshly-dark-icon.png");
     expect(container.querySelector("span")).toHaveAttribute("data-favicon-url", "/brand/groshly-dark-icon.png");
+  });
+
+  it("uses development assets when the host selects them", () => {
+    const { container } = render(
+      <FinanceBrandEnvironment.Provider value>
+        <BrandingImage />
+      </FinanceBrandEnvironment.Provider>,
+    );
+    const image = container.querySelector("span");
+    expect(image).toHaveAttribute("data-logo-url", "/brand/groshly-dev-icon-transparent.png");
+    expect(image).toHaveAttribute("data-favicon-url", "/brand/groshly-dev-dark-icon.png");
   });
 
   it("replaces stale browser icons with the transparent icon for the selected theme", () => {

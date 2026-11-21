@@ -1,3 +1,4 @@
+import { resolve } from "node:path";
 import type { NextConfig } from "next";
 
 function configuredDevHostname(value: string | undefined) {
@@ -23,29 +24,26 @@ function configuredApiProxy(value: string | undefined) {
   }
 }
 
+const localApiProxy = process.env.FINANCE_API_PROXY === "true";
 const apiProxy = configuredApiProxy(process.env.FINANCE_API_PROXY_URL);
+const apiTarget = process.env.NODE_ENV === "development" && localApiProxy
+  ? "http://127.0.0.1:4001"
+  : apiProxy ?? (localApiProxy ? "http://127.0.0.1:4001" : undefined);
 
 const nextConfig: NextConfig = {
   devIndicators: false,
+  turbopack: { root: resolve(__dirname, "../../../..") },
   allowedDevOrigins: [
     "localhost",
     "127.0.0.1",
     ...(gatewayHostname ? [gatewayHostname] : []),
   ],
   async rewrites() {
-    if (apiProxy) {
-      return [
-        {
-          source: "/api/:path*",
-          destination: `${apiProxy}/api/:path*`,
-        },
-      ];
-    }
-    if (process.env.FINANCE_API_PROXY !== "true") return [];
+    if (!apiTarget) return [];
     return [
       {
         source: "/api/:path*",
-        destination: "http://127.0.0.1:4001/api/:path*",
+        destination: `${apiTarget}/api/:path*`,
       },
     ];
   },

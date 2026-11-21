@@ -1,4 +1,4 @@
-import { TelegramPostsPageClient } from "../../page";
+import { TelegramPostsPageClient } from "@/components/features/telegram/telegram/posts-workspace/telegram-posts-page-client";
 
 export default async function TelegramPostsHypothesesPage({
   params,

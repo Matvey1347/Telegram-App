@@ -1,4 +1,5 @@
 "use client";
+import { useFinanceBrandDevelopment } from "@consumer-finance/web/provider/finance-brand-environment";
 
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -50,6 +51,7 @@ const subscribeToStaticBrowserState = () => () => undefined;
 export function ConsumerFinanceApp({ botId }: { botId: string }) {
   const queryClient = useQueryClient();
   const branding = useFinanceBotBranding(botId);
+  const brandDevelopment = useFinanceBrandDevelopment();
   const localeStorageKey = `consumer-finance-locale:${botId}`;
   const bootstrap = useTelegramMiniAppBootstrap();
   const session = useQuery({
@@ -303,8 +305,9 @@ export function ConsumerFinanceApp({ botId }: { botId: string }) {
         : locale === "ru"
           ? "Groshly — личные финансы"
           : "Groshly — особисті фінанси",
+      brandDevelopment,
     );
-  }, [locale, profile]);
+  }, [locale, profile, brandDevelopment]);
 
   useEffect(() => {
     const syncLocation = () => {

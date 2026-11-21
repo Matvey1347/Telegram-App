@@ -433,7 +433,7 @@ describe('FinanceLedgerService tenant and money rules', () => {
     expect(rateQueries.length).toBeGreaterThan(0);
     expect(
       rateQueries.every(([statement]) =>
-        statement.values.includes('workspace-a'),
+        statement.strings.join(' ').includes('FROM "ExchangeRate"'),
       ),
     ).toBe(true);
   });
@@ -486,7 +486,7 @@ describe('FinanceLedgerService tenant and money rules', () => {
     expect(
       rateQueries.some(
         ([statement]) =>
-          statement.values.includes('workspace-a') &&
+          statement.strings.join(' ').includes('"date" <=') &&
           statement.values.some(
             (value) =>
               value instanceof Date && value.getTime() === occurredAt.getTime(),

@@ -12,8 +12,7 @@ describe("Finance PWA manifest", () => {
     expect(value.display).toBe("standalone");
     expect(value.icons).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ src: "/brand/nexeloq-pwa-192.png" }),
-        expect.objectContaining({ src: "/brand/nexeloq-pwa-512.png" }),
+        expect.objectContaining({ src: "/brand/groshly-icon.png", sizes: "512x512" }),
       ]),
     );
   });

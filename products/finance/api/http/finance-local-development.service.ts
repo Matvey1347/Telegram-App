@@ -1,4 +1,6 @@
 import {
+  BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -7,7 +9,9 @@ import { ConfigService } from "@nestjs/config";
 import {
   TelegramBotApplicationType,
   TelegramBotRuntimeEnvironment,
+  TelegramBotRuntimeStatus,
 } from "@prisma/client";
+import { TelegramBotApiClient, TelegramBotApiError } from "@api/telegram/shared/bot/telegram-bot-api.client";
 import { timingSafeEqual } from "crypto";
 import { PrismaService } from "@api/prisma/prisma.service";
 import { deploymentValue } from "@api/config/deployment-config";
@@ -22,6 +26,7 @@ export class FinanceLocalDevelopmentService {
     private readonly prisma: PrismaService,
     private readonly runtime: TelegramBotRuntimeService,
     private readonly environments: FinanceConsumerRuntimeEnvironmentService,
+    private readonly botApi: TelegramBotApiClient,
   ) {}
 
   async synchronize(secret: string | undefined) {
@@ -37,6 +42,25 @@ export class FinanceLocalDevelopmentService {
         "Finance LOCAL bot credentials are unavailable",
       );
     }
+    const identity = await this.botApi.getMe(token).catch((error: unknown) => {
+      if (error instanceof TelegramBotApiError && error.errorCode === 401) {
+        throw new BadRequestException("Telegram rejected FINANCE_BOT_LOCAL_TOKEN (401)");
+      }
+      throw error;
+    });
+    if (identity.username?.toLowerCase() !== username) {
+      throw new ConflictException("Finance LOCAL token does not match the configured username");
+    }
+    const productionBot = await this.prisma.telegramBotRuntimeInstance.findFirst({
+      where: {
+        environment: TelegramBotRuntimeEnvironment.PRODUCTION,
+        botId: String(identity.id),
+      },
+      select: { id: true },
+    });
+    if (productionBot || (await this.botApi.getWebhookInfo(token)).url) {
+      throw new ConflictException("Finance LOCAL bot is already assigned to production or has a webhook owner");
+    }
     const integrations = await this.prisma.telegramBotIntegration.findMany({
       where: {
         applicationType: TelegramBotApplicationType.FINANCE,
@@ -45,7 +69,7 @@ export class FinanceLocalDevelopmentService {
       select: {
         id: true,
         runtimeInstances: {
-          select: { environment: true },
+          select: { environment: true, botId: true, runtimeStatus: true },
         },
       },
       take: 3,
@@ -83,7 +107,7 @@ export class FinanceLocalDevelopmentService {
         },
         select: {
           id: true,
-          runtimeInstances: { select: { environment: true } },
+          runtimeInstances: { select: { environment: true, botId: true, runtimeStatus: true } },
         },
       });
     }
@@ -92,12 +116,19 @@ export class FinanceLocalDevelopmentService {
         "Exactly one production-backed Finance integration must be configured for LOCAL development",
       );
     }
+    const local = integration.runtimeInstances.find(
+      (runtime) => runtime.environment === TelegramBotRuntimeEnvironment.LOCAL,
+    );
+    if (local && (local.runtimeStatus === TelegramBotRuntimeStatus.STARTING ||
+      (local.runtimeStatus === TelegramBotRuntimeStatus.ACTIVE && local.botId !== String(identity.id)))) {
+      throw new ConflictException("Stop the previous Finance LOCAL runtime before replacing its credentials");
+    }
     const runtime = await this.runtime.configureRuntime({
       botIntegrationId: integration.id,
       environment: TelegramBotRuntimeEnvironment.LOCAL,
       token,
     });
-    return { username: runtime.username, synchronized: true };
+    return { username: runtime.username, botIntegrationId: integration.id, synchronized: true };
   }
 
   private assertAuthorized(secret: string | undefined) {

@@ -15,7 +15,7 @@ export function InviteLinksTable({ links }: { links: TelegramInviteLink[] }) {
   const visibleLinks = links.filter((link) => {
     const totalAttributed =
       Number(link.joinedCount || 0) + Number(link.requestedCount || 0);
-    return link.name !== "Imported MTProto link" || totalAttributed > 0;
+    return link.name !== "Imported MTProto link" || totalAttributed > 0 || link.joinedObserved === false || link.requestedObserved === false;
   });
 
   if (!visibleLinks.length) return <EmptyState text="No invite links yet." />;

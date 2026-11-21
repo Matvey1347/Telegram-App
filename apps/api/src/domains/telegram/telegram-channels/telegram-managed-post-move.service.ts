@@ -1,5 +1,5 @@
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
-import { TelegramManagedPostStatus, TelegramSourceType } from '@prisma/client';
+import { TelegramManagedPostStatus } from '@prisma/client';
 import type { BulkActionResultItem } from '@telegram-system/shared';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { TelegramMtprotoClient } from '@api/telegram/shared/mtproto/telegram-mtproto.client';
@@ -82,24 +82,9 @@ export class TelegramManagedPostMoveService {
     if (!post) throw managedPostNotFound();
     const previousStatus = post.status;
     const transition = movedPostState(previousStatus);
-    let cancellationError: string | null = null;
-
-    if (
-      previousStatus === TelegramManagedPostStatus.SCHEDULED &&
-      post.telegramScheduledMessageIds.length
-    ) {
-      try {
-        await this.telegramManagedPostPublicationService.cancelScheduledManagedPost(
-          workspaceId,
-          post,
-        );
-      } catch (error) {
-        cancellationError =
-          error instanceof Error
-            ? error.message
-            : 'Could not cancel the old scheduled message';
-      }
-    }
+    const cancellation = previousStatus === TelegramManagedPostStatus.SCHEDULED
+      ? await this.telegramManagedPostPublicationService.cancelScheduledManagedPost(workspaceId, post)
+      : undefined;
 
     await this.prisma.$transaction(async (tx) => {
       await this.telegramManagedPostRevisionStore.createManagedPostRevision(
@@ -109,18 +94,13 @@ export class TelegramManagedPostMoveService {
         actorUserId,
       );
       await tx.telegramManagedPost.update({
-        where: { id: post.id },
+        where: { id: post.id, workspaceId, status: previousStatus, deliveryClaimOwner: cancellation ?? null },
         data: {
           telegramChannelId: targetTelegramChannelId,
-          ...movedPostDatabaseState(
-            previousStatus,
-            post.scheduledAt,
-            keepGroup,
-            cancellationError,
-          ),
-          telegramScheduledMessageIds: cancellationError
-            ? post.telegramScheduledMessageIds
-            : [],
+          deliveryClaimOwner: null,
+          deliveryClaimExpiresAt: null,
+          ...movedPostDatabaseState(previousStatus, post.scheduledAt, keepGroup, null),
+          telegramScheduledMessageIds: [],
         },
       });
       if (post.groupId) {
@@ -130,26 +110,6 @@ export class TelegramManagedPostMoveService {
         );
       }
     });
-
-    if (cancellationError) {
-      const failedPost = await this.prisma.telegramManagedPost.findUnique({
-        where: { id: post.id },
-        include: this.managedPostInclude,
-      });
-      return {
-        post: failedPost,
-        result: {
-          postId: post.id,
-          title: post.title,
-          previousStatus,
-          newStatus: TelegramManagedPostStatus.FAILED,
-          scheduledAt: post.scheduledAt?.toISOString() ?? null,
-          action: 'SCHEDULE_CANCEL_FAILED',
-          success: false,
-          error: cancellationError,
-        },
-      };
-    }
 
     if (
       previousStatus === TelegramManagedPostStatus.SCHEDULED &&
@@ -442,36 +402,9 @@ export class TelegramManagedPostMoveService {
       include: { telegramChannel: true },
     });
     if (!post) throw managedPostNotFound();
-    if (
-      post.status === 'SCHEDULED' &&
-      post.telegramScheduledMessageIds.length
-    ) {
-      if (post.sourceType !== TelegramSourceType.MTPROTO || !post.sourceId) {
-        throw telegramPostsBadRequest(
-          'TELEGRAM_POST_NOT_SCHEDULED',
-          'Scheduled post has no MTProto source and cannot be cancelled safely',
-        );
-      }
-      const account = await this.telegramChannelAccessService.connectedAccount(
-        workspaceId,
-        channelId,
-        post.sourceId,
-      );
-      const channelReference =
-        this.telegramChannelAccessService.mtprotoChannelReference(
-          post.telegramChannel,
-        );
-      if (!channelReference.telegramChatId && !channelReference.username)
-        throw telegramPostsBadRequest(
-          'TELEGRAM_POST_TELEGRAM_REFERENCE_MISSING',
-          'Channel has no Telegram reference',
-        );
-      await this.mtprotoClient.deleteScheduledPost({
-        ...this.telegramChannelAccessService.accountCredentials(account),
-        channel: channelReference,
-        messageIds: post.telegramScheduledMessageIds,
-      });
-    }
+    const deleteClaim = post.status === 'SCHEDULED'
+      ? await this.telegramManagedPostPublicationService.cancelScheduledManagedPost(workspaceId, post)
+      : undefined;
     return this.prisma.$transaction(async (tx) => {
       await this.telegramManagedPostRevisionStore.createManagedPostRevision(
         tx,
@@ -480,7 +413,7 @@ export class TelegramManagedPostMoveService {
         userId,
       );
       const deleted = await tx.telegramManagedPost.delete({
-        where: { id: postId },
+        where: { id: postId, workspaceId, telegramChannelId: channelId, status: post.status, deliveryClaimOwner: deleteClaim ?? null },
       });
       if (post.groupId) {
         await this.telegramPostGroupsService.normalizePostGroupNumbering(

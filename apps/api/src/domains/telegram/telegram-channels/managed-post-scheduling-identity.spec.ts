@@ -125,25 +125,14 @@ describe('Telegram managed post scheduled identity', () => {
     expect(wake).toHaveBeenCalledWith('telegram.managed_posts.reconcile_due');
   });
 
-  it('deletes old scheduled ids when updating a scheduled post', async () => {
-    const { service, update, mtproto } = setup(
-      TelegramManagedPostStatus.SCHEDULED,
-      ['101'],
-    );
-    await service.scheduleManagedPost('user', 'channel', 'post', {
+  it('does not cancel or send when an existing native schedule has no verified ownership', async () => {
+    const { service, update, mtproto } = setup(TelegramManagedPostStatus.SCHEDULED, ['101']);
+    await expect(service.scheduleManagedPost('user', 'channel', 'post', {
       scheduledAt: '2026-08-10T12:00:00.000Z',
-    });
-    expect(mtproto.deleteScheduledPost).toHaveBeenCalledWith(
-      expect.objectContaining({ messageIds: ['101'] }),
-    );
-    expect(update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          telegramScheduledMessageIds: ['2806'],
-          telegramMessageIds: [],
-        }),
-      }),
-    );
+    })).rejects.toThrow('Existing native schedule requires reconciliation');
+    expect(mtproto.deleteScheduledPost).not.toHaveBeenCalled();
+    expect(mtproto.publishPost).not.toHaveBeenCalled();
+    expect(update).not.toHaveBeenCalled();
   });
 
   it('does not report success when Telegram returns no scheduled message id', async () => {

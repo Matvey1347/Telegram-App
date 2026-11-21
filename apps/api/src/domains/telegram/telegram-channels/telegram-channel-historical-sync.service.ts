@@ -74,16 +74,27 @@ export class TelegramChannelHistoricalSyncService {
       ...this.telegramChannelAccessService.accountCredentials(account),
       channel: channelReference,
     });
-    if (info.kind !== 'channel') {
+    if (info.kind !== 'channel' || (channel.telegramChatId &&
+      this.telegramChannelsSupportService.normalizeChatId(channel.telegramChatId) !==
+      this.telegramChannelsSupportService.normalizeChatId(info.telegramChatId))) {
       return {
         updated: false,
-        reason: 'Resolved Telegram entity is not a channel',
+        reason: 'Resolved Telegram entity does not match this channel',
       };
+    }
+    if (info.isCreator !== undefined || info.adminRights !== undefined) {
+      const rawPermissions = { isCreator: Boolean(info.isCreator), adminRights: info.adminRights ?? null, canViewStats: info.canViewStats ?? null };
+      const access = this.sourceAccessService.normalizeMtprotoPermissions(rawPermissions);
+      await this.sourceAccessService.upsertAccess({
+        workspaceId, channelId, sourceId: account.id, sourceType: TelegramSourceType.MTPROTO,
+        ...access, rawPermissions,
+      });
     }
     let pendingJoinRequestsSourceId = account.id;
     if (info.pendingJoinRequestsCount == null) {
       const alternatives = (await this.sourceAccessService.sourcesForChannel(workspaceId, channelId))
-        .filter((source) => source.sourceType === TelegramSourceType.MTPROTO && source.sourceId !== account.id && source.permissions.canManageInviteLinks)
+        .filter((source) => source.sourceType === TelegramSourceType.MTPROTO && source.sourceId !== account.id)
+        .sort((a, b) => Number(b.permissions.canManageInviteLinks) - Number(a.permissions.canManageInviteLinks))
         .slice(0, 2);
       for (const source of alternatives) {
         try {
@@ -101,9 +112,10 @@ export class TelegramChannelHistoricalSyncService {
       }
     }
     const updated = await this.prisma.telegramChannel.update({
-      where: { id: channelId },
+      where: { id: channelId, workspaceId, telegramChatId: channel.telegramChatId },
       data: {
         ...this.telegramChannelAccessService.channelIdentityPatch(info),
+        ...(channel.telegramChatId ? { telegramChatId: channel.telegramChatId } : {}),
         lastPublicSyncedAt: new Date(),
       },
     });
@@ -120,8 +132,8 @@ export class TelegramChannelHistoricalSyncService {
         source: 'sync_public_channel_info',
         subscribersCount: updated.currentSubscribersCount,
         pendingJoinRequestsVerified: info.pendingJoinRequestsCount != null,
-      pendingJoinRequestsError: info.pendingJoinRequestsError ?? null,
-      pendingJoinRequestsSourceId,
+        pendingJoinRequestsError: info.pendingJoinRequestsError ?? null,
+        pendingJoinRequestsSourceId,
       },
     });
     return {
@@ -176,8 +188,8 @@ export class TelegramChannelHistoricalSyncService {
               id: string;
               telegramChannelId: string;
               adCampaignId: string | null;
-              joinedCount: number;
-              requestedCount: number;
+              joinedCount: number | null;
+              requestedCount: number | null;
               isRevoked: boolean;
             }
           >(),
@@ -186,6 +198,8 @@ export class TelegramChannelHistoricalSyncService {
     const historical = await this.mtprotoClient.getChannelHistorical({
       ...this.telegramChannelAccessService.accountCredentials(account),
       channel: channelReference,
+      syncPosts: dto.syncPosts === true,
+      syncInviteLinks: dto.syncInviteLinks === true,
       postLimit: dto.postLimit || this.defaultPostSyncLimit,
       postsFrom: channel.postsSyncFrom ?? null,
       inviteLinksCreatedFrom: channel.inviteLinksSyncFrom ?? null,
@@ -233,12 +247,12 @@ export class TelegramChannelHistoricalSyncService {
                 persisted.upserted.adCampaignId,
               );
             }
-            liveInviteLinkSync.persistedLinksById.set(persisted.upserted.id, {
+            if (persisted.joinedObservation != null || persisted.requestedObservation != null) liveInviteLinkSync.persistedLinksById.set(persisted.upserted.id, {
               id: persisted.upserted.id,
               telegramChannelId: persisted.upserted.telegramChannelId,
               adCampaignId: persisted.upserted.adCampaignId ?? null,
-              joinedCount: Number(persisted.upserted.joinedCount || 0),
-              requestedCount: Number(persisted.upserted.requestedCount || 0),
+              joinedCount: persisted.joinedObservation,
+              requestedCount: persisted.requestedObservation,
               isRevoked: Boolean(persisted.upserted.isRevoked),
             });
           }
@@ -255,6 +269,7 @@ export class TelegramChannelHistoricalSyncService {
         workspaceId,
         channelId,
         historical.channel,
+        channel.telegramChatId,
       );
     }
     let imported = 0;
@@ -272,9 +287,8 @@ export class TelegramChannelHistoricalSyncService {
       const remote = historical?.inviteLinksDetailed
         ? {
             scope: historical.inviteLinksScope ?? 'ALL_ADMINS',
-            expectedTotalLinks:
-              historical.inviteLinksExpectedTotal ??
-              historical.inviteLinksDetailed.length,
+            expectedTotalLinks: historical.inviteLinksExpectedTotal ?? null,
+            pendingJoinRequestsCount: historical.pendingJoinRequestsCount,
             admins: [],
             links: historical.inviteLinksDetailed,
             warnings: historical.inviteLinkWarnings ?? [],
@@ -316,12 +330,12 @@ export class TelegramChannelHistoricalSyncService {
               persisted.upserted.adCampaignId,
             );
           }
-          liveInviteLinkSync.persistedLinksById.set(persisted.upserted.id, {
+          if (persisted.joinedObservation != null || persisted.requestedObservation != null) liveInviteLinkSync.persistedLinksById.set(persisted.upserted.id, {
             id: persisted.upserted.id,
             telegramChannelId: persisted.upserted.telegramChannelId,
             adCampaignId: persisted.upserted.adCampaignId ?? null,
-            joinedCount: Number(persisted.upserted.joinedCount || 0),
-            requestedCount: Number(persisted.upserted.requestedCount || 0),
+            joinedCount: persisted.joinedObservation,
+            requestedCount: persisted.requestedObservation,
             isRevoked: Boolean(persisted.upserted.isRevoked),
           });
         }

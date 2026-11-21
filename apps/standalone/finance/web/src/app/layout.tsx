@@ -1,4 +1,5 @@
-import { financeBrandIcon } from "@consumer-finance/web/lib/finance-brand-icon";
+import { financeBrandIcon } from "@finance-web/lib/finance-brand-icon";
+import { publicFinanceWebEnvironment } from "@finance-web/config/public-env";
 import type { Metadata, Viewport } from "next";
 import { TelegramWebAppSdk } from "@finance-web/components/telegram/telegram-web-app-sdk";
 import { FinanceDatabaseEnvironmentBadge } from "@finance-web/components/finance-database-environment-badge";
@@ -48,7 +49,7 @@ export default function RootLayout({
         <TelegramWebAppSdk />
       </head>
       <body>
-        <ConsumerFinanceProvider>{children}</ConsumerFinanceProvider>
+        <ConsumerFinanceProvider development={publicFinanceWebEnvironment.isDevelopment}>{children}</ConsumerFinanceProvider>
         <FinanceDatabaseEnvironmentBadge />
       </body>
     </html>

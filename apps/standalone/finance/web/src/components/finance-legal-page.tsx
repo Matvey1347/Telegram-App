@@ -1,9 +1,10 @@
 "use client";
-import { financeBrandIcon } from "@consumer-finance/web/lib/finance-brand-icon";
+import { financeBrandIcon } from "@finance-web/lib/finance-brand-icon";
 
 import { useEffect, useState } from "react";
 import { Moon, Sun } from "lucide-react";
 import Link from "next/link";
+import { publicFinanceWebEnvironment } from "@finance-web/config/public-env";
 import { applyFinanceDocumentMetadata } from "@consumer-finance/web/components/hooks/use-finance-bot-branding";
 
 type Locale = "uk" | "en";
@@ -83,6 +84,7 @@ export function FinanceLegalPage({ kind, initialLocale = "uk", initialTheme = "l
       locale === "en"
         ? kind === "terms" ? "Terms & Conditions — Groshly" : "Privacy Policy — Groshly"
         : kind === "terms" ? "Умови використання — Groshly" : "Політика конфіденційності — Groshly",
+      publicFinanceWebEnvironment.isDevelopment,
     );
   }, [kind, locale, theme]);
   const content = copy[locale][kind];

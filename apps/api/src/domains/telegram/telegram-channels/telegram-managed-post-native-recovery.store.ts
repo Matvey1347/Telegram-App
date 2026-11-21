@@ -12,6 +12,8 @@ export type NativeRecoveryPrepareInput = NativeRecoveryIdentity & {
   sourceId: string;
   scheduledAt: Date;
   oldMessageIds: string[];
+  previousScheduledAt?: Date | null;
+  previousSourceId?: string | null;
 };
 
 const sameIds = (left: string[], right: string[]) =>
@@ -59,7 +61,9 @@ export class TelegramManagedPostNativeRecoveryStore {
         });
         if (
           !post?.scheduledAt ||
-          post.scheduledAt.getTime() !== input.scheduledAt.getTime() ||
+          post.scheduledAt.getTime() !== (input.previousScheduledAt ?? input.scheduledAt).getTime() ||
+          (input.previousSourceId !== undefined &&
+            (post.sourceId !== input.previousSourceId || input.sourceId !== input.previousSourceId)) ||
           !sameIds(post.telegramScheduledMessageIds, input.oldMessageIds)
         )
           throw conflict();
@@ -131,13 +135,17 @@ export class TelegramManagedPostNativeRecoveryStore {
     }
   }
 
-  async start(input: NativeRecoveryIdentity) {
+  async start(input: NativeRecoveryIdentity, previous?: {
+    scheduledAt: Date;
+    updatedAt: Date;
+    sourceId: string;
+  }) {
     try {
       const row = await this.prisma.telegramManagedPostNativeRecovery.findFirst(
         { where: { ...this.scope(input), status: 'PREPARED' } },
       );
       const now = new Date();
-      if (!row || row.scheduledAt <= now) throw conflict();
+      if (!row || row.scheduledAt <= now || (previous && previous.scheduledAt <= now)) throw conflict();
       const updated =
         await this.prisma.telegramManagedPostNativeRecovery.updateMany({
           where: {
@@ -147,7 +155,8 @@ export class TelegramManagedPostNativeRecoveryStore {
             post: {
               is: {
                 ...this.livePost(input, now),
-                scheduledAt: row.scheduledAt,
+                scheduledAt: previous?.scheduledAt ?? row.scheduledAt,
+                ...(previous ? { updatedAt: previous.updatedAt, sourceId: previous.sourceId } : {}),
                 telegramScheduledMessageIds: { equals: row.oldMessageIds },
               },
             },

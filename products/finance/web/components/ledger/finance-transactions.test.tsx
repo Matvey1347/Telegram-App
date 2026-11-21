@@ -120,7 +120,7 @@ describe("FinanceTransactions receipt detail", () => {
     const { container } = renderTransactions("telegram", "ru");
 
     fireEvent.click(await screen.findByRole("button", { name: /^Фильтры/ }));
-    const period = screen.getByRole("button", { name: /01\.09\.2026/ });
+    const period = screen.getByRole("button", { name: /^01\.\d{2}\.\d{4} - \d{2}\.\d{2}\.\d{4}$/ });
     fireEvent.click(period);
 
     const calendar = screen.getByRole("dialog", {

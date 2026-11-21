@@ -44,8 +44,10 @@ export class TelegramChannelAdmissionSyncService {
         telegramChannelId: params.channelId,
         syncStartedAt: params.syncStartedAt,
         syncCompletedAt: new Date(),
-        inviteLinksSynced: Boolean(params.selection.syncIncludeInviteLinks),
-        postMetricsSynced: Boolean(params.selection.syncIncludePostMetrics),
+        inviteLinksSynced: Boolean(params.selection.syncIncludeInviteLinks) &&
+          params.steps.some((step) => step.step === 'invite_links' && step.status === 'success'),
+        postMetricsSynced: Boolean(params.selection.syncIncludePostMetrics) &&
+          params.steps.some((step) => step.step === 'post_metrics' && step.status === 'success'),
         backfill: (backfillParams) =>
           this.backfill.backfillChannelCampaigns(backfillParams),
       });

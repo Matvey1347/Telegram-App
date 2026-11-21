@@ -597,6 +597,9 @@ describe('CrossPromotionPlansService', () => {
 
   it('returns grouped placements when a future scheduled promotion is edited', async () => {
     const { service, prisma } = setup();
+    prisma.telegramManagedPost.findMany.mockResolvedValueOnce([
+      { id: 'post-1' },
+    ]);
     prisma.crossPromotionPlan.findFirst.mockResolvedValueOnce({
       id: 'plan-1',
       status: 'SCHEDULED',

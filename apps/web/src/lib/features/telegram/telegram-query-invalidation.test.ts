@@ -1,4 +1,4 @@
-import { QueryClient } from "@tanstack/react-query";
+import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
 import { dashboardKeys, networkKeys, telegramAccountKeys, telegramChannelKeys, telegramPostKeys, telegramPublicationScheduleKeys } from "@/lib/query-keys";
 import type { TelegramUserAccount } from "@/lib/api-types/telegram/telegram-sources";
@@ -101,6 +101,34 @@ describe("reconcileTelegramChannelSettings", () => {
 });
 
 describe("invalidateTelegramChannelQueries", () => {
+  it("refreshes the synced channel's invite creator options after role discovery", async () => {
+    const client = new QueryClient();
+    const synced = [...telegramChannelKeys.sources(), "channel-1"];
+    const other = [...telegramChannelKeys.sources(), "channel-2"];
+    client.setQueryData(synced, ["old-actor"]);
+    client.setQueryData(other, ["other-actor"]);
+
+    await invalidateTelegramChannelQueries(client, "channel-1", { sourceAccessChanged: true });
+
+    expect(client.getQueryState(synced)?.isInvalidated).toBe(true);
+    expect(client.getQueryState(other)?.isInvalidated).toBe(false);
+  });
+
+  it("refetches publishing capabilities observed by an active consumer", async () => {
+    const client = new QueryClient();
+    const queryKey = telegramChannelKeys.publishingCapabilities();
+    client.setQueryData(queryKey, { canPost: false });
+    const observer = new QueryObserver(client, {
+      queryKey, queryFn: async () => ({ canPost: true }), staleTime: Infinity,
+    });
+    const unsubscribe = observer.subscribe(() => undefined);
+    expect(observer.getCurrentResult().data).toEqual({ canPost: false });
+    await invalidateTelegramChannelQueries(client, "channel-1", { sourceAccessChanged: true });
+    expect(observer.getCurrentResult().data).toEqual({ canPost: true });
+    unsubscribe();
+    client.clear();
+  });
+
   it("marks the rendered lifecycle card cache stale after a channel publication", async () => {
     const client = new QueryClient();
     const dashboardKey = dashboardKeys.summary(

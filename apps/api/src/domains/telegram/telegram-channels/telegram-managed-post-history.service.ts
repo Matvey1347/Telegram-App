@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { ConflictException, Injectable } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import {
   TelegramManagedPostIdVerificationStatus,
@@ -140,8 +140,10 @@ export class TelegramManagedPostHistoryService {
           telegramChannelId: channelId,
         },
       ),
-    ])) as [ManagedPostRevisionSource | null, ManagedPostRevisionRecord | null];
+    ])) as [(ManagedPostRevisionSource & { deliveryClaimOwner: string | null }) | null, ManagedPostRevisionRecord | null];
     if (!post) throw managedPostNotFound();
+    if (post.deliveryClaimOwner || post.telegramScheduledMessageIds?.length)
+      throw new ConflictException('Resolve the Telegram schedule before restoring a revision.');
     if (!revision)
       throw telegramPostsNotFound(
         'TELEGRAM_MANAGED_POST_NOT_FOUND',
@@ -155,7 +157,10 @@ export class TelegramManagedPostHistoryService {
         userId,
       );
       const restored = await tx.telegramManagedPost.update({
-        where: { id: postId },
+        where: {
+          id: postId, workspaceId, telegramChannelId: channelId, status: post.status,
+          deliveryClaimOwner: null, telegramScheduledMessageIds: { isEmpty: true },
+        },
         data: {
           title: revision.groupId
             ? stripLegacyGroupedPostTitlePrefix(
@@ -224,6 +229,7 @@ export class TelegramManagedPostHistoryService {
     channelId: string,
     postId: string,
     dto: UpdateTelegramManagedPostDto,
+    options?: { draftOnly: true; expectedRevision?: Date; placementId?: string; saleId?: string },
   ) {
     const workspaceId =
       await this.telegramChannelsSupportService.workspace(userId);
@@ -232,10 +238,36 @@ export class TelegramManagedPostHistoryService {
       channelId,
       postIds: [postId],
     });
+    const editableDraft = options?.draftOnly
+      ? {
+          OR: [
+            { status: TelegramManagedPostStatus.DRAFT, scheduledAt: null },
+            ...(options.placementId ? [{ status: TelegramManagedPostStatus.SCHEDULED, scheduleMode: 'LOCAL' }] : []),
+          ],
+          publishedAt: null,
+          telegramScheduledMessageIds: { isEmpty: true as const },
+          telegramMessageIds: { isEmpty: true as const },
+          telegramRemoteStatus: TelegramManagedPostRemoteStatus.NONE,
+          deliveryClaimOwner: null,
+          postBatchDelivery: { is: null },
+          origin: 'SYSTEM' as const,
+          remoteImportKey: null,
+          sendOperations: { none: {} },
+          ...(options.expectedRevision ? { updatedAt: options.expectedRevision } : {}),
+          adSalePlacements: options.placementId ? {
+            every: { id: options.placementId },
+            some: { id: options.placementId, telegramAdSaleId: options.saleId,
+              status: { in: ['DRAFT', 'RESERVED', 'SCHEDULED'] as ('DRAFT' | 'RESERVED' | 'SCHEDULED')[] } },
+          } : { none: {} },
+          mutualPromotionDelivery: { is: null },
+        }
+      : undefined;
     const post = await this.prisma.telegramManagedPost.findFirst({
-      where: { id: postId, workspaceId, telegramChannelId: channelId },
+      where: { id: postId, workspaceId, telegramChannelId: channelId, ...editableDraft },
     });
     if (!post) throw managedPostNotFound();
+    if (post.deliveryClaimOwner && !post.deliveryClaimOwner.startsWith('native-cancel-acked:'))
+      throw new ConflictException('Telegram delivery or cancellation is active. Reconcile before editing.');
     if (dto.title !== undefined && !dto.title.trim())
       throw telegramPostsBadRequest(
         'TELEGRAM_POST_TITLE_REQUIRED',
@@ -289,6 +321,7 @@ export class TelegramManagedPostHistoryService {
           ReturnType<TelegramSourceAccessService['sourcesForChannel']>
         >[number]
       | undefined;
+    let cancellation: string | undefined;
     if (convertsNativeScheduleToLocal) {
       localBotSource = (
         await this.sourceAccessService.sourcesForChannel(workspaceId, channelId)
@@ -305,7 +338,7 @@ export class TelegramManagedPostHistoryService {
       }
       // The native copy must be gone before the managed post becomes local,
       // otherwise it would publish without buttons alongside the Bot delivery.
-      await this.telegramManagedPostPublicationService.cancelScheduledManagedPost(
+      cancellation = await this.telegramManagedPostPublicationService.cancelScheduledManagedPost(
         workspaceId,
         {
           ...post,
@@ -343,7 +376,7 @@ export class TelegramManagedPostHistoryService {
       (dto.text !== undefined ||
         dto.buttonRows !== undefined ||
         nextMedia !== undefined) &&
-      canEditRemoteTelegramText &&
+      canEditRemoteTelegramText && !convertsNativeScheduleToLocal &&
       channel
         ? await this.telegramManagedPostEditTransportService.editManagedPostTextInTelegram(
             {
@@ -359,7 +392,7 @@ export class TelegramManagedPostHistoryService {
             },
           )
         : null;
-    const updatedPost = await this.prisma.$transaction(async (tx) => {
+    const update = this.prisma.$transaction(async (tx) => {
       await this.telegramManagedPostRevisionStore.createManagedPostRevision(
         tx,
         post,
@@ -367,13 +400,20 @@ export class TelegramManagedPostHistoryService {
         userId,
       );
       return tx.telegramManagedPost.update({
-        where: { id: postId },
+        where: {
+          id: postId, workspaceId, telegramChannelId: channelId,
+          status: post.status, deliveryClaimOwner: cancellation ?? null,
+          scheduledAt: post.scheduledAt,
+          ...(cancellation ? {} : { updatedAt: post.updatedAt }),
+          ...(editableDraft && { ...editableDraft, workspaceId, telegramChannelId: channelId, updatedAt: post.updatedAt }),
+        },
         data: {
           title: dto.title?.trim(),
           text: dto.text,
           imageUrls: nextMedia?.imageUrls,
           mediaItems: nextMedia?.mediaItems,
           buttonRows: dto.buttonRows === undefined ? undefined : nextButtonRows,
+          ...(cancellation && { deliveryClaimOwner: null, deliveryClaimExpiresAt: null }),
           scheduleMode: convertsNativeScheduleToLocal ? 'LOCAL' : undefined,
           telegramRemoteStatus: convertsNativeScheduleToLocal
             ? TelegramManagedPostRemoteStatus.NONE
@@ -421,6 +461,18 @@ export class TelegramManagedPostHistoryService {
         },
         include: this.managedPostInclude,
       });
+    });
+    const updatedPost = await update.catch((error: unknown) => {
+      if (
+        editableDraft &&
+        typeof error === 'object' &&
+        error &&
+        'code' in error &&
+        error.code === 'P2025'
+      ) {
+        throw new ConflictException('Draft changed while saving. Reload the editor.');
+      }
+      throw error;
     });
     const [hydrated] =
       await this.telegramManagedPostGroupPresentationService.attachManagedPostIcons(

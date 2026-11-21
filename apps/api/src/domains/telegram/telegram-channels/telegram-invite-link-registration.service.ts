@@ -11,7 +11,7 @@ import { TelegramChannelAccessService } from './telegram-channel-access.service'
 import { TelegramInviteAttributionService } from './telegram-invite-attribution.service';
 import { TelegramInviteSyncService } from './telegram-invite-sync.service';
 import { TelegramSourceAccessService } from '@api/telegram/shared/imports/telegram-source-access.service';
-import { TelegramInviteLinkCreatorService } from '@api/telegram/shared/invites/telegram-invite-link-creator.service';
+import { InviteCreationAccessLost, TelegramInviteLinkCreatorService } from '@api/telegram/shared/invites/telegram-invite-link-creator.service';
 
 @Injectable()
 export class TelegramInviteLinkRegistrationService {
@@ -46,24 +46,43 @@ export class TelegramInviteLinkRegistrationService {
     });
     if (!channel) throw new NotFoundException('Telegram channel not found');
 
-    const preferredAccountId = await this.access.bestMtprotoAccountId(
-      workspaceId,
-      channelId,
-      TelegramChannelDataType.INVITE_LINKS,
-    );
-    const account = await this.access.connectedAccount(
-      workspaceId,
-      channelId,
-      preferredAccountId,
-    );
-    const remote = await this.mtproto.getChannelInviteLink({
-      ...this.access.accountCredentials(account),
-      channel,
-      inviteLink,
-      joinedFrom: period?.from,
-      joinedUntil: period?.until,
-      ...(period?.includePending ? { includePendingSince: true } : {}),
-    });
+    const sources = await this.accessSources(workspaceId, channelId);
+    const candidates = [...sources].sort((left, right) =>
+      this.sourceAccess.scoreSource(right, TelegramChannelDataType.INVITE_LINKS) -
+      this.sourceAccess.scoreSource(left, TelegramChannelDataType.INVITE_LINKS),
+    ).slice(0, 3);
+    let remote: Awaited<ReturnType<TelegramMtprotoClient['getChannelInviteLink']>> | undefined;
+    for (const candidate of candidates) {
+      try {
+        const account = await this.access.connectedAccount(workspaceId, channelId, candidate.sourceId);
+        const result = await this.mtproto.getChannelInviteLink({
+          ...this.access.accountCredentials(account), channel, inviteLink,
+          joinedFrom: period?.from, joinedUntil: period?.until,
+          includePendingSince: period?.includePending,
+        });
+        remote = period ? {
+          ...result,
+          joinedWithinPeriod: result.joinedWithinPeriod ?? remote?.joinedWithinPeriod ?? null,
+          pendingWithinPeriod: result.pendingWithinPeriod ?? remote?.pendingWithinPeriod ?? null,
+        } : result;
+        if (!period || result.revoked || (result.expireDate && result.expireDate <= new Date()) ||
+            (remote.joinedWithinPeriod != null && (!period.includePending || remote.pendingWithinPeriod != null))) break;
+      } catch {
+        // Only a read is retried. ExportChatInvite is never repeated here.
+      }
+    }
+    if (!remote) {
+      await this.prisma.telegramInviteLink.updateMany({
+        where: {
+          workspaceId, telegramChannelId: channelId, url: inviteLink,
+          OR: [{ joinedObserved: true }, { joinedObserved: null }, { requestedObserved: true }, { requestedObserved: null }],
+        },
+        data: { joinedObserved: false, requestedObserved: false },
+      });
+      throw new BadRequestException(
+        'The connected accounts could not read this invite link. Refresh channel access or create a new link.',
+      );
+    }
     if (
       remote.revoked ||
       (remote.expireDate && remote.expireDate.getTime() <= Date.now())
@@ -91,8 +110,8 @@ export class TelegramInviteLinkRegistrationService {
       name: remote.title || 'Imported MTProto link',
       url: remote.url,
       workspaceId,
-      currentJoinedCount: remote.usage,
-      currentRequestedCount: remote.requested,
+      currentJoinedCount: remote.usageObserved === false ? null : persisted.upserted.joinedCount,
+      currentRequestedCount: remote.requestedObserved === false ? null : persisted.upserted.requestedCount,
       joinedWithinPeriod: remote.joinedWithinPeriod ?? null,
       ...(period?.includePending ? { pendingWithinPeriod: remote.pendingWithinPeriod ?? null } : {}),
     };
@@ -126,12 +145,15 @@ export class TelegramInviteLinkRegistrationService {
     });
     if (!channel) throw new NotFoundException('Telegram channel not found');
 
-    const sources = await this.accessSources(workspaceId, channelId);
+    const sources = (await this.accessSources(workspaceId, channelId)).sort((left, right) =>
+      this.sourceAccess.scoreSource(right, TelegramChannelDataType.INVITE_LINKS) -
+      this.sourceAccess.scoreSource(left, TelegramChannelDataType.INVITE_LINKS),
+    );
     const requestedAccountId = input.mtprotoAccountId?.trim();
-    const source = requestedAccountId
-      ? sources.find((item) => item.sourceId === requestedAccountId)
-      : sources[0];
-    if (!source) {
+    const candidates = requestedAccountId
+      ? sources.filter((item) => item.sourceId === requestedAccountId)
+      : sources.slice(0, 3);
+    if (!candidates.length) {
       throw new BadRequestException(
         'Select a connected MTProto account that manages invite links for this channel.',
       );
@@ -142,20 +164,26 @@ export class TelegramInviteLinkRegistrationService {
         'The invite link expiry must be in the future.',
       );
     }
-    const account = await this.access.connectedAccount(
-      workspaceId,
-      channelId,
-      source.sourceId,
-    );
-    const remote = await this.inviteCreator.create({
-      ...this.access.accountCredentials(account),
-      channel,
-      title,
-      requestNeeded: input.requestNeeded !== false,
-      expiresAt,
-      usageLimit: input.usageLimit,
-      monthlyFeeStars: input.monthlyFeeStars,
-    });
+    let remote: Awaited<ReturnType<TelegramInviteLinkCreatorService['create']>> | undefined;
+    for (const source of candidates) {
+      const account = await this.access.connectedAccount(workspaceId, channelId, source.sourceId).catch((error: unknown) => {
+        if (requestedAccountId) throw error;
+        return null;
+      });
+      if (!account) continue;
+      try {
+        remote = await this.inviteCreator.create({
+          ...this.access.accountCredentials(account), channel, title,
+          requestNeeded: input.requestNeeded !== false,
+          expiresAt, usageLimit: input.usageLimit, monthlyFeeStars: input.monthlyFeeStars,
+        });
+        break;
+      } catch (error) {
+        // This exception occurs before ExportChatInvite. Ambiguous RPC results stop here.
+        if (!(error instanceof InviteCreationAccessLost) || requestedAccountId) throw error;
+      }
+    }
+    if (!remote) throw new InviteCreationAccessLost();
     const maps = await this.attribution.buildInviteAttributionMaps(workspaceId);
     const persisted = await this.inviteSync.persistInviteLinkFromRemote({
       workspaceId,
@@ -190,8 +218,7 @@ export class TelegramInviteLinkRegistrationService {
     );
     return sources.filter(
       (source) =>
-        source.sourceType === TelegramSourceType.MTPROTO &&
-        source.permissions.canManageInviteLinks,
+        source.sourceType === TelegramSourceType.MTPROTO,
     );
   }
 }

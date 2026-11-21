@@ -1,3 +1,4 @@
+import { publicWebEnvironment } from "@/config/public-env";
 import type { Metadata } from "next";
 import { ConsumerFinanceProvider } from "@consumer-finance/web/provider/consumer-finance-provider";
 
@@ -16,5 +17,5 @@ export default function ConsumerFinanceLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return <ConsumerFinanceProvider>{children}</ConsumerFinanceProvider>;
+  return <ConsumerFinanceProvider development={publicWebEnvironment.isDevelopment}>{children}</ConsumerFinanceProvider>;
 }

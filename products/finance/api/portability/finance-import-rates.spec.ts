@@ -118,14 +118,15 @@ describe('prepareFinanceImportRates', () => {
       .calls as unknown as Array<
       [
         {
-          workspaceId: string;
           dates: Date[];
           currencies: string[];
         },
       ]
     >;
     const backfillInput = backfillCalls[0][0];
-    expect(backfillInput.workspaceId).toBe('workspace-1');
+    expect(conversion.prepareHistoricalRateSources).toHaveBeenLastCalledWith(
+      'workspace-1', [new Date(date)],
+    );
     expect(backfillInput.dates).toEqual([new Date(date)]);
     expect([...backfillInput.currencies].sort()).toEqual(['PLN', 'USD']);
     expect(conversion.prepareHistoricalRateSources).toHaveBeenCalledTimes(2);

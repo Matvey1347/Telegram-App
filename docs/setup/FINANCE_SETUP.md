@@ -1,132 +1,93 @@
-# Finance: isolated local and deployment setup
+# Finance / Groshly setup
 
-Finance is a separate deployable foundation. Its hosts are `apps/standalone/finance/api`
-and `apps/standalone/finance/web`; `products/finance` remains the product implementation.
-Finance owns separate selected LOCAL and PRODUCTION Telegram bot credentials.
-The browser uses the Finance root URL; the selected bot identity is server-side
-and never appears in a public route. Remaining legacy UI/API compatibility and
-billing migration are tracked in `docs/refactoring/FINANCE_INDEPENDENCE_CONTRACT.md`.
+Groshly has its own web host in `apps/standalone/finance/web`. Today its full
+consumer API and Telegram dispatcher run in the Nexeloq Nest host
+(`apps/api`), with implementation in `products/finance`. The Groshly web origin
+proxies `/api/finance/context` and `/api/finance-bots/:id/*` to that host. Browser
+and Mini App use the bot-scoped Finance consumer cookie. No Nexeloq admin login
+is needed.
 
-## Local profiles and commands
+The existing consumer tables, logical bot ID, profile IDs, ledger and billing
+records are in the compatibility host's `DATABASE_URL`. The standalone
+`finance-api` host uses `FINANCE_DATABASE_URL` and has its own analytics and
+foundation routes. See the [independence contract](../refactoring/FINANCE_INDEPENDENCE_CONTRACT.md).
 
-Keep Nexeloq values in the existing root `.env`. Do not add a `FINANCE_*` key
-there. Create one ignored Finance product profile from its template:
+## Local commands
 
-```sh
-cp products/finance/.env.example products/finance/.env.local
-pnpm env:check
-```
+Use the repository pnpm version and locked dependencies. Start the checkout's
+Docker Compose PostgreSQL and configure root `.env` with a local
+`DATABASE_URL` on port 5433. Use an existing local snapshot if you need
+previous Finance data. See [local databases](../local-development-database.md).
 
-`FINANCE_DATABASE_URL` must point to a dedicated disposable local database or
-dedicated Finance Neon database, never to Nexeloq `DATABASE_URL`. Generate
-independent 32+ character secrets. `NEXT_PUBLIC_*` is public and must never
-contain a secret. Configure `FINANCE_BOT_LOCAL_*` and
-`FINANCE_BOT_PRODUCTION_*` with two distinct BotFather bots; never reuse a
-System Bot token.
+| Command | Processes | Ports |
+| --- | --- | --- |
+| `pnpm dev:finance` or `pnpm --filter @telegram-system/finance dev` | Groshly Web and consumer compatibility API | 3001, 4001 |
+| `pnpm dev:nexeloq` | Nexeloq Web and API | 3000, 4000 |
+| `pnpm dev:all` | Both web hosts and their APIs | 3000, 4000, 3001, 4001 |
+| `pnpm dev:finance:tunnel` | Groshly Web/API, LOCAL Finance bot, Cloudflare Quick Tunnel | 3001, 4001, gateway 4100 |
+| `pnpm dev:all:tunnel` | Both web/API pairs, two Quick Tunnels, LOCAL Finance and System bots | 3000, 4000, 3001, 4001 |
 
-| Command                                                            | Processes                                                            | Ports                            |
-| ------------------------------------------------------------------ | -------------------------------------------------------------------- | -------------------------------- |
-| `pnpm dev:nexeloq`                                                 | Nexeloq Web + API                                                    | 3000 + 4000                      |
-| `pnpm dev:finance` or `pnpm --filter @telegram-system/finance dev` | Finance Web, compatibility API, and standalone Finance analytics API | 3001 + 4001 + 4002               |
-| `pnpm dev:all`                                                     | Nexeloq Web/API plus all three Finance hosts                         | 3000 + 4000 + 3001 + 4001 + 4002 |
-| `pnpm dev:all:tunnel`                                              | All local hosts plus a Cloudflare Quick Tunnel for each web app      | 3000 + 4000 + 3001 + 4001 + 4002 |
-| `pnpm dev:finance:tunnel`                                          | Finance Web, APIs, and LOCAL Finance bot via HTTPS tunnel            | 3001 + 4001 + 4002               |
+These commands check the effective `DATABASE_URL`, its local Compose binding
+and their listener ports before migration. They run
+`pnpm --filter api run db:deploy:safe` on that database before starting either
+API. This applies pending Nexeloq schema migrations and checks the resulting
+schema. The dedicated tunnel launcher retries failed database preparation.
+Stop an existing launcher in its own terminal before starting another on the
+same ports. A port conflict fails before migration.
 
-Each command checks its target ports first and terminates its child process
-group on Ctrl-C. Tunnel commands first stop this workspace's existing local
-development listeners and wait for those ports to clear. A listener outside
-this workspace is left running and reported as a port conflict. The Finance
-command does not apply migrations automatically.
-With a dedicated development database, explicitly run
-`pnpm --filter finance-api prisma:migrate:deploy` after reviewing the migration.
+Check Finance at `http://localhost:3001/health` and
+`http://localhost:3001/api/health`. The proxied
+`http://localhost:3001/api/finance/context` additionally requires a configured
+LOCAL Finance runtime in the snapshot. Port 4000 can remain offline in
+Finance-only mode. Direct development of the independent analytics API and
+its separate database migrations are outside these commands.
 
-## Local terminal status
+## LOCAL Telegram acceptance
 
-The local launchers present a compact service dashboard instead of forwarding
-interleaved Next, Nest, Prisma, and package-manager output. `pnpm dev:all`
-shows Nexeloq and Finance in separate columns; each API, analytics host, and
-web host moves from waiting to starting to ready only after its health endpoint
-responds. Tunnel commands use the same status format for the gateway,
-Cloudflare URL, and LOCAL bot activation. A child failure prints the affected
-service and a bounded diagnostic excerpt; routine compiler banners, request
-logs, and dependency notices do not flood the terminal.
+Copy `products/finance/.env.example` to the ignored
+`products/finance/.env.local` if needed. Set
+`FINANCE_BOT_RUNTIME_ENVIRONMENT=LOCAL`, `FINANCE_BOT_LOCAL_USERNAME`, and
+`FINANCE_BOT_LOCAL_TOKEN` for a distinct BotFather test bot. Keep production
+secrets in their production configuration. Install `cloudflared` and stop the
+previous LOCAL webhook owner before running `pnpm dev:finance:tunnel`.
 
-`pnpm dev:all:tunnel` creates one temporary `trycloudflare.com` URL for
-Nexeloq Web and one for Finance Web. Each public web app proxies its own
-`/api` requests to its local API. It does not activate Telegram runtimes or
-change webhooks; use the product-specific bot tunnel commands for that.
+The tunnel reads the configured LOCAL token, verifies the Telegram username
+and requires any previous webhook owner to release it. It attaches the LOCAL
+runtime to the existing Finance integration on the local snapshot, using that
+integration's ID for browser data and Mini App authentication. If the snapshot
+has no Finance integration, the existing bootstrap uses
+`FINANCE_BOT_DASHBOARD_WORKSPACE_ID` from the API environment. The launcher
+activates and cleans up only the selected LOCAL runtime. Ordinary
+`pnpm dev:finance` does not reconcile Telegram webhooks.
 
-Finance Web opens at `http://localhost:3001/`, without a bot ID in the URL.
-The local command deliberately disables standalone-host webhook reconciliation:
-Telegram webhook activation is explicit and available only through
-`pnpm dev:finance:tunnel`, so an ordinary browser-development session never
-points a LOCAL bot at a stale deployed URL.
-Its production origins are `https://groshly.nexeloq.com/` and
-`https://api.groshly.nexeloq.com/` when provisioned. Check `/api/health` and
-`/api/health/ready`, then stop `pnpm dev:nexeloq` and repeat the Finance health
-request.
+1. Open `/login` on the emitted HTTPS origin. Open the Telegram link, then
+   press **Start** in that bot chat. Verify the same profile after reload,
+   then log out and repeat the login.
+2. Send bare `/start` and open the Mini App from the bot menu. Verify the
+   same profile and invoke **Accounts** or another read-only bot command.
+3. In that local profile, create one marked ledger record, reload and verify
+   it exists exactly once. Remove the test record if it was created on a
+   valuable local snapshot.
+4. Stop the launcher with Ctrl-C. Check webhook cleanup and that ports 3001,
+   4001 and 4100 are released.
 
-## Existing Finance data migration
+## Production acceptance preparation
 
-Before initializing or copying into the Finance database, run the read-only
-inventory:
+Current Railway services are **Nexeloq API** (`api.nexeloq.com`) and the
+standalone **Finance API** (`api.groshly.nexeloq.com`). Prepare the Groshly
+web build with `NEXT_PUBLIC_FINANCE_API_URL=/api` and an HTTPS
+`FINANCE_API_PROXY_URL` pointing to the verified compatibility API.
+For the current topology that API is Nexeloq, whose
+`TELEGRAM_BOT_RUNTIME_ENVIRONMENT` must select `PRODUCTION`. Keep the existing
+`DATABASE_URL` and session/token encryption configuration. Record the
+production bot's current webhook owner and destination before any change. Only
+one host can own a token's webhook. For rollback, restore the recorded proxy
+target and the prior owner and webhook configuration. Deploy and verify the
+selected version in the production acceptance task.
 
-```sh
-pnpm --filter finance-api migration:plan
-```
-
-It reads the root Nexeloq `.env` database and `products/finance/.env.local`
-database independently, verifies that their connection URLs differ, and prints
-only table names, column names, and row counts. It never prints credentials or
-row contents and never writes to either database.
-
-Do not run `prisma:migrate:deploy` or any copy command against the Finance
-database until a source backup location/reference and a restored-staging
-rehearsal have been agreed. The target schema must first represent every
-legacy Finance relation; copying only profiles, accounts, and transactions
-would silently discard categories, payments, investments, and other records.
-
-## Telegram local test boundary
-
-`pnpm dev:finance:tunnel` starts Finance API on port 4001 and Finance Web on
-port 3001, opens a Cloudflare HTTPS tunnel through a local gateway, and performs
-one explicit activation of the selected LOCAL Finance runtime. The command uses
-the selected username from `products/finance/.env.local`; it does not select
-the System Bot or a production Finance runtime. On Ctrl-C it performs one
-bounded LOCAL cleanup request that removes the local webhook and Mini App
-links. Use a local/test bot only; production tokens and URLs must never be
-reused locally.
-
-## Railway and Neon
-
-Create separate Railway services (or projects), using the indicated config path:
-
-| Service     | Config                          | Health              | Required variables                                                                                   |
-| ----------- | ------------------------------- | ------------------- | ---------------------------------------------------------------------------------------------------- | ---------------------- |
-| Nexeloq     | root `railway.json`             | `/api/health`       | existing Nexeloq profile only                                                                        |
-| Finance API | `apps/standalone/finance/api/railway.json` | `/api/health/ready` | `FINANCE_DATABASE_URL`, signing keys, `FINANCE_API_PUBLIC_URL`, and one selected `FINANCE*BOT*{LOCAL | PRODUCTION}\_\*` group |
-| Finance Web | `apps/standalone/finance/web/railway.json` | `/health`           | a deliberate same-origin API gateway or a future CORS/auth contract                                  |
-
-Set each service's config path in Railway instead of changing the root Nexeloq
-manifest. Finance API runs its own `prisma:migrate:deploy` predeploy command;
-take a backup, rehearse on staging, and retain a rollback plan before allowing
-it against any shared environment. Confirm the Finance URL resolves to a
-different Neon project/database and that neither connection URL equals Nexeloq's.
-
-The Finance Web manifest builds with `/api`, but a deployed web service needs a
-same-origin reverse proxy to Finance API before it is user-ready. Direct public
-cross-origin API use is intentionally not enabled because the current API has
-no CORS/browser-session contract. Do not deploy the web service as a claimed
-working customer application until that boundary is implemented and tested.
-
-## BotFather and team workflow
-
-Create separate LOCAL and PRODUCTION bots in BotFather; record their tokens only
-in `products/finance/.env.local` locally or in Finance's Railway service
-variables, never in a browser variable or root `.env`. Use the Finance root
-Mini App URL, not `/finance/<botId>`.
-
-For parallel work, open two VS Code windows from two Git worktrees: one for
-Nexeloq and one for Finance. Give each its own `products/finance/.env.local`,
-database, ports and test bot. Never copy a
-production token, connection string, or webhook secret into the other worktree.
+The standalone API remains independent of the customer path during recovery.
+Before any future data cutover, run the read-only
+`pnpm --filter finance-api migration:plan`, verify source/destination identity,
+take a restorable backup, and rehearse against staging. The target schema must
+represent all required Finance relations before copying data or changing the
+webhook owner.

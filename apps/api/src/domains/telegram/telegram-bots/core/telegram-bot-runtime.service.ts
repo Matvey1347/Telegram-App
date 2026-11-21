@@ -12,10 +12,9 @@ import {
   TelegramBotApplicationType,
   TelegramBotRuntimeEnvironment,
   TelegramBotRuntimeStatus,
-  TelegramBotUpdateStatus,
   TelegramBotWebhookStatus,
 } from '@prisma/client';
-import { randomBytes, timingSafeEqual } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import { sanitizeOperationalError } from '../../../../common/security/operational-error';
 import { TokenEncryptionService } from '../../../../common/security/token-encryption.service';
 import { PrismaService } from '../../../../prisma/prisma.service';
@@ -36,6 +35,7 @@ import {
   deploymentValue,
   publicApiOrigin,
 } from '../../../../config/deployment-config';
+import { dispatchTelegramBotWebhook } from './telegram-bot-webhook-dispatch';
 import { assertSafeTelegramWebhookBase } from './telegram-bot-webhook-url';
 
 @Injectable()
@@ -400,70 +400,20 @@ export class TelegramBotRuntimeService implements OnModuleInit {
     secretHeader: string | undefined,
     update: TelegramBotWebhookUpdate,
   ) {
-    const startedAt = Date.now();
-    const entry = await this.registry.resolve(
-      runtimeId,
+    return dispatchTelegramBotWebhook(
+      {
+        prisma: this.prisma,
+        encryption: this.encryption,
+        dispatcher: this.dispatcher,
+        registry: this.registry,
+        executionContext: this.executionContext,
+        logger: this.logger,
+      },
       this.requiredEnvironment(),
-    );
-    if (!entry) throw new NotFoundException('Telegram bot runtime not found');
-    this.assertWebhook(entry, secretHeader);
-    if (update.update_id == null) {
-      throw new BadRequestException('Telegram update_id is required');
-    }
-    const claimed = await this.claimUpdate(
-      entry,
-      String(update.update_id),
+      runtimeId,
+      secretHeader,
       update,
     );
-    if (claimed.duplicate) return { ok: true, duplicate: true };
-    const claimedAt = Date.now();
-    try {
-      const result = await this.executionContext.run(runtimeId, () =>
-        this.dispatcher.dispatch({
-          bot: entry.runtime.botIntegration,
-          runtime: entry.runtime,
-          token: entry.token,
-          update,
-          updateLogId: claimed.log.id,
-        }),
-      );
-      const status = result.handled
-        ? TelegramBotUpdateStatus.PROCESSED
-        : TelegramBotUpdateStatus.SKIPPED;
-      const dispatchedAt = Date.now();
-      await this.prisma.telegramBotUpdateLog.update({
-        where: { id: claimed.log.id },
-        data: { status, processedAt: new Date(), error: null },
-      });
-      const totalMs = Date.now() - startedAt;
-      if (totalMs >= 1_000)
-        this.logger.warn(
-          JSON.stringify({
-            event: 'telegram_bot.slow_webhook',
-            runtimeId,
-            applicationType: entry.runtime.botIntegration.applicationType,
-            claimMs: claimedAt - startedAt,
-            dispatchMs: dispatchedAt - claimedAt,
-            finalizeMs: Date.now() - dispatchedAt,
-            totalMs,
-          }),
-        );
-      return { ok: true, duplicate: false, status };
-    } catch (error) {
-      await this.prisma.telegramBotUpdateLog.update({
-        where: { id: claimed.log.id },
-        data: {
-          status: TelegramBotUpdateStatus.FAILED,
-          processedAt: new Date(),
-          error: sanitizeOperationalError(error),
-        },
-      });
-      return {
-        ok: false,
-        duplicate: false,
-        status: TelegramBotUpdateStatus.FAILED,
-      };
-    }
   }
 
   private async reconcileStartupRuntime(entry: RegisteredTelegramBotRuntime) {
@@ -681,102 +631,6 @@ export class TelegramBotRuntimeService implements OnModuleInit {
         };
   }
 
-  private async claimUpdate(
-    entry: RegisteredTelegramBotRuntime,
-    updateId: string,
-    update: TelegramBotWebhookUpdate,
-  ) {
-    try {
-      const log = await this.prisma.telegramBotUpdateLog.create({
-        data: {
-          workspaceId: entry.runtime.botIntegration.workspaceId,
-          botIntegrationId: entry.runtime.botIntegrationId,
-          runtimeInstanceId: entry.runtime.id,
-          updateId,
-          updateType: this.updateType(update),
-          status: TelegramBotUpdateStatus.PROCESSING,
-        },
-      });
-      return { log, duplicate: false };
-    } catch (error) {
-      if (
-        !(error instanceof Prisma.PrismaClientKnownRequestError) ||
-        error.code !== 'P2002'
-      ) {
-        throw error;
-      }
-      const log = await this.prisma.telegramBotUpdateLog.findUnique({
-        where: {
-          runtimeInstanceId_updateId: {
-            runtimeInstanceId: entry.runtime.id,
-            updateId,
-          },
-        },
-      });
-      if (!log) throw error;
-      if (log.status !== TelegramBotUpdateStatus.PROCESSING) {
-        return { log, duplicate: true };
-      }
-      const reclaimed = await this.prisma.telegramBotUpdateLog.updateMany({
-        where: {
-          id: log.id,
-          status: TelegramBotUpdateStatus.PROCESSING,
-          updatedAt: { lt: new Date(Date.now() - 5 * 60_000) },
-        },
-        data: { processedAt: null, error: null },
-      });
-      return { log, duplicate: reclaimed.count !== 1 };
-    }
-  }
-
-  private assertWebhook(
-    entry: RegisteredTelegramBotRuntime,
-    candidate: string | undefined,
-  ) {
-    const { runtime } = entry;
-    if (
-      (runtime.runtimeStatus !== TelegramBotRuntimeStatus.ACTIVE &&
-        runtime.runtimeStatus !== TelegramBotRuntimeStatus.STARTING) ||
-      !runtime.botIntegration.isActive ||
-      runtime.botIntegration.applicationType === TelegramBotApplicationType.NONE
-    ) {
-      throw new ForbiddenException('Telegram bot runtime is not active');
-    }
-    if (!candidate)
-      throw new ForbiddenException('Invalid Telegram webhook secret');
-    const actual = Buffer.from(candidate);
-    const credentials = [
-      {
-        encrypted: runtime.webhookSecretEncrypted,
-        iv: runtime.webhookSecretIv,
-        authTag: runtime.webhookSecretAuthTag,
-      },
-      {
-        encrypted: runtime.pendingWebhookSecretEncrypted,
-        iv: runtime.pendingWebhookSecretIv,
-        authTag: runtime.pendingWebhookSecretAuthTag,
-      },
-    ];
-    for (const credential of credentials) {
-      if (!credential.encrypted || !credential.iv || !credential.authTag)
-        continue;
-      const expected = Buffer.from(
-        this.encryption.decrypt({
-          encrypted: credential.encrypted,
-          iv: credential.iv,
-          authTag: credential.authTag,
-        }),
-      );
-      if (
-        expected.length === actual.length &&
-        timingSafeEqual(expected, actual)
-      ) {
-        return;
-      }
-    }
-    throw new ForbiddenException('Invalid Telegram webhook secret');
-  }
-
   private findRuntime(
     botIntegrationId: string,
     environment: TelegramBotRuntimeEnvironment,
@@ -853,14 +707,6 @@ export class TelegramBotRuntimeService implements OnModuleInit {
 
   private webhookUrl(info: Record<string, unknown> | null) {
     return typeof info?.url === 'string' ? info.url : null;
-  }
-
-  private updateType(update: TelegramBotWebhookUpdate) {
-    if (update.message) return 'message';
-    if (update.callback_query) return 'callback_query';
-    if (update.pre_checkout_query) return 'pre_checkout_query';
-    if (update.chat_join_request) return 'chat_join_request';
-    return 'unknown';
   }
 
   private maskToken(token: string) {

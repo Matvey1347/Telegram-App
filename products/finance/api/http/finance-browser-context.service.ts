@@ -20,6 +20,7 @@ export class FinanceBrowserContextService {
         "Finance bot runtime is not enabled in this process",
       );
     }
+    const localUsername = environment === "LOCAL" ? this.environments.browserLoginBotUsername() : null;
     const bot = await this.prisma.telegramBotIntegration.findFirst({
       where: {
         applicationType: TelegramBotApplicationType.FINANCE,
@@ -27,6 +28,9 @@ export class FinanceBrowserContextService {
         runtimeInstances: {
           some: {
             environment,
+            ...(localUsername
+              ? { username: { equals: localUsername, mode: "insensitive" } }
+              : {}),
             ...(environment === "LOCAL"
               ? {}
               : { runtimeStatus: TelegramBotRuntimeStatus.ACTIVE }),

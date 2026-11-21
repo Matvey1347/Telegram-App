@@ -62,7 +62,7 @@ describe("TelegramPostsHeaderWorkflows", () => {
     ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", {
-        name: "Return all scheduled posts to drafts",
+        name: "Return selected scheduled posts to drafts",
       }),
     ).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Mass Publications" }));

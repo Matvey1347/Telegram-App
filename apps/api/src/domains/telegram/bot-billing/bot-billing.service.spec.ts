@@ -14,6 +14,13 @@ function setup() {
     telegramBotRuntimeInstance: {
       findFirst: jest.fn().mockResolvedValue(null),
     },
+    aiUsageEvent: {
+      aggregate: jest.fn().mockResolvedValue({
+        _count: { _all: 0, estimatedCostMicros: 0 },
+        _sum: {},
+      }),
+      groupBy: jest.fn().mockResolvedValue([]),
+    },
     botSubscriptionPlan: { findMany: jest.fn().mockResolvedValue([]) },
     botCoupon: { findMany: jest.fn().mockResolvedValue([]) },
     botSubscription: { findMany: jest.fn() },
@@ -53,6 +60,7 @@ describe('BotBillingService overview', () => {
         return Promise.resolve(
           Array.from({ length: 225 }, (_, index) => ({
             telegramBotUserId: `user-${index}`,
+            source: 'STRIPE',
             status: 'ACTIVE',
             currency: 'USD',
             interval: 'MONTH',
@@ -88,9 +96,10 @@ describe('BotBillingService overview', () => {
     });
   });
 
-  it('keeps local runtime data out of production analytics', async () => {
+  it('reads subscriptions, payment events, and AI receipts in the selected runtime', async () => {
     const { prisma, service } = setup();
     prisma.botSubscription.findMany.mockResolvedValue([]);
+    prisma.telegramBotRuntimeInstance.findFirst.mockResolvedValue({ id: 'local-runtime' });
 
     await service.overview('owner-1', 'bot-1', 'LOCAL');
 
@@ -101,6 +110,18 @@ describe('BotBillingService overview', () => {
             runtimeInstance: { is: { environment: 'LOCAL' } },
           },
         }),
+      }),
+    );
+    expect(prisma.botBillingEvent.groupBy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          subscription: { is: { telegramBotUser: { runtimeInstance: { is: { environment: 'LOCAL' } } } } },
+        }),
+      }),
+    );
+    expect(prisma.aiUsageEvent.aggregate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ runtimeInstanceId: { in: ['local-runtime'] } }),
       }),
     );
   });

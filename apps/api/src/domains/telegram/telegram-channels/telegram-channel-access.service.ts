@@ -401,12 +401,19 @@ export class TelegramChannelAccessService {
   public async persistResolvedChannelIdentity(
     workspaceId: string,
     channelId: string,
+
     info?: ResolvedTelegramEntity | null,
+    expectedChatId?: string | null,
   ) {
-    if (!info || !info.telegramChatId) return null;
+    if (!info?.telegramChatId) return null;
+    if (expectedChatId &&
+      this.telegramChannelsSupportService.normalizeChatId(info.telegramChatId) !==
+      this.telegramChannelsSupportService.normalizeChatId(expectedChatId))
+      throw new BadRequestException('Resolved Telegram channel ID differs from the stored channel');
+
     return this.prisma.telegramChannel.update({
-      where: { id: channelId, workspaceId },
-      data: this.channelIdentityPatch(info),
+      where: { id: channelId, workspaceId, telegramChatId: expectedChatId },
+      data: { ...this.channelIdentityPatch(info), ...(expectedChatId ? { telegramChatId: expectedChatId } : {}) },
     });
   }
 
@@ -510,21 +517,9 @@ export class TelegramChannelAccessService {
     channelId: string,
     requestedAccountId?: string,
   ) {
-    const linkedAdmin = requestedAccountId
-      ? null
-      : await this.prisma.telegramChannelAdminLink.findFirst({
-          where: {
-            workspaceId,
-            telegramChannelId: channelId,
-            telegramUserAccountIntegration: {
-              isActive: true,
-              status: TelegramUserAccountStatus.connected,
-            },
-          },
-          orderBy: { createdAt: 'asc' },
-        });
-    const accountId =
-      requestedAccountId || linkedAdmin?.telegramUserAccountIntegrationId;
+    const accountId = requestedAccountId ?? await this.bestMtprotoAccountId(
+      workspaceId, channelId, TelegramChannelDataType.POSTS,
+    );
     if (!accountId) {
       throw new BadRequestException(
         'No connected Telegram user account selected for MTProto sync',
@@ -550,13 +545,9 @@ export class TelegramChannelAccessService {
     const source = selectManagedPostPublishingSource(sources, {
       requiresBotApi: false,
     });
-    return this.connectedAccount(
-      workspaceId,
-      channelId,
-      source?.sourceType === TelegramSourceType.MTPROTO
-        ? source.sourceId
-        : undefined,
-    );
+    if (source?.sourceType !== TelegramSourceType.MTPROTO)
+      throw new BadRequestException('No MTProto recovery source is available');
+    return this.connectedAccount(workspaceId, channelId, source.sourceId);
   }
 
   public sourceDisplayName(account: {
@@ -593,6 +584,58 @@ export class TelegramChannelAccessService {
       dataType,
     );
     return best?.sourceId;
+  }
+
+  async verifiedSyncAccount(
+    workspaceId: string,
+    channel: { id: string; telegramChatId: string | null; username: string | null },
+    dataType: TelegramChannelDataType,
+    requestedAccountId?: string,
+    accessReads = new Map<string, Promise<ResolvedTelegramEntity>>(),
+  ) {
+    const sources = (await this.sourceAccessService.sourcesForChannel(workspaceId, channel.id))
+      .filter((source) => source.sourceType === TelegramSourceType.MTPROTO);
+    const permission = dataType === TelegramChannelDataType.INVITE_LINKS ? 'canManageInviteLinks' :
+      dataType === TelegramChannelDataType.STATS ? 'canViewStats' : undefined;
+    const score = (source: (typeof sources)[number]) =>
+      this.sourceAccessService.scoreSource(source, dataType) +
+      (permission && source.permissions[permission] ? 200 : 0);
+    const candidates = requestedAccountId ? [requestedAccountId] :
+      sources.sort((a, b) => score(b) - score(a)).slice(0, 3).map((source) => source.sourceId);
+    for (const id of candidates) {
+      try {
+        const account = await this.connectedAccount(workspaceId, channel.id, id);
+        let observed = accessReads.get(id);
+        const needsAccessWrite = !observed;
+        if (!observed) {
+          observed = this.mtprotoClient.getPublicChannelInfo({
+            ...this.accountCredentials(account), channel: this.mtprotoChannelReference(channel),
+            accessOnly: true,
+          });
+          accessReads.set(id, observed);
+        }
+        const info = await observed;
+        if (info.kind !== 'channel' || (channel.telegramChatId &&
+          this.telegramChannelsSupportService.normalizeChatId(info.telegramChatId) !==
+          this.telegramChannelsSupportService.normalizeChatId(channel.telegramChatId))) continue;
+        const rawPermissions = { isCreator: Boolean(info.isCreator), adminRights: info.adminRights ?? null, canViewStats: info.canViewStats ?? null };
+        const access = this.sourceAccessService.normalizeMtprotoPermissions(rawPermissions);
+        const prior = sources.find((source) => source.sourceId === id);
+        if (needsAccessWrite && (prior?.role !== access.role ||
+          Object.entries(access.permissions).some(([key, value]) => prior.permissions[key] !== value))) {
+          await this.sourceAccessService.upsertAccess({
+            workspaceId, channelId: channel.id, sourceId: id, sourceType: TelegramSourceType.MTPROTO,
+            ...access, rawPermissions,
+          });
+        }
+        if (dataType === TelegramChannelDataType.INVITE_LINKS && !access.permissions.canManageInviteLinks) continue;
+        if (dataType === TelegramChannelDataType.STATS && info.canViewStats !== true) continue;
+        return account;
+      } catch {
+        // A failed lookup does not prove access was revoked.
+      }
+    }
+    throw new BadRequestException(`No connected Telegram account verified for ${dataType}`);
   }
 
   public accountCredentials(account: EncryptedTelegramAccountCredentials) {

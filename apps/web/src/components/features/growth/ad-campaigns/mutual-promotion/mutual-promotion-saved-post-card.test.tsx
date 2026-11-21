@@ -73,7 +73,9 @@ describe("MutualPromotionSavedPostCard", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Edit publication 1" }));
     fireEvent.click(screen.getByRole("button", { name: /Edit content:/ }));
-    fireEvent.click(screen.getByRole("button", { name: "08.09.2026" }));
+    const date = screen.getByRole("button", { name: "Select Publication date" });
+    expect(date).toHaveTextContent("08.09.2026");
+    fireEvent.click(date);
     fireEvent.click(screen.getAllByRole("button", { name: "9" })[0]);
     fireEvent.change(screen.getByLabelText("Time"), {
       target: { value: "20:30" },

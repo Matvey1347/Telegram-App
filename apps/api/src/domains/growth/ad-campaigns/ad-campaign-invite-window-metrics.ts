@@ -1,15 +1,29 @@
+type InviteLinkCounters = {
+  id: string;
+  joinedCount: number;
+  requestedCount: number;
+  joinedObserved?: boolean | null;
+  requestedObserved?: boolean | null;
+  joinedObservedAt?: Date | null;
+  requestedObservedAt?: Date | null;
+  lastSyncedAt?: Date | null;
+};
+
 export function campaignInviteWindowMetrics(
-  links: Array<{ id: string; joinedCount: number; requestedCount: number }>,
+  links: InviteLinkCounters[],
   windows: Array<{ inviteLinkId: string; joinedCount: number | null; pendingCount: number | null }>,
 ) {
   const byLink = new Map(windows.map((window) => [window.inviteLinkId, window]));
-  let joined = 0;
-  let pending = 0;
+  let joined: number | null = 0;
+  let pending: number | null = 0;
   for (const link of links) {
     const window = byLink.get(link.id);
-    if (window && (window.joinedCount == null || window.pendingCount == null)) return null;
-    joined += window ? window.joinedCount! : link.joinedCount;
-    pending += window ? window.pendingCount! : link.requestedCount;
+    const joinedValue = window ? window.joinedCount :
+      link.joinedObserved !== undefined && !link.joinedObserved && !link.joinedObservedAt && !link.lastSyncedAt ? null : link.joinedCount;
+    const pendingValue = window ? window.pendingCount :
+      link.requestedObserved !== undefined && !link.requestedObserved && !link.requestedObservedAt && !link.lastSyncedAt ? null : link.requestedCount;
+    joined = joined == null || joinedValue == null ? null : joined + joinedValue;
+    pending = pending == null || pendingValue == null ? null : pending + pendingValue;
   }
   return { joined, pending };
 }

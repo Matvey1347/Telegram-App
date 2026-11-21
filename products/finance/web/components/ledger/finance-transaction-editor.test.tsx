@@ -363,7 +363,7 @@ describe("FinanceTransactionEditor", () => {
     fireEvent.click(screen.getByRole("button", { name: "Add person" }));
     expect(screen.getAllByRole("button", { name: "Remove" })).toHaveLength(1);
     expect(screen.getByRole("button", { name: "Remove" })).toHaveClass(
-      "bg-red-600",
+      "text-[#a74343]",
     );
     fireEvent.click(screen.getByRole("button", { name: "Remove" }));
     expect(

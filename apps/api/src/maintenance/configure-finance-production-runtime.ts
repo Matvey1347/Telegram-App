@@ -1,4 +1,5 @@
 import { NestFactory } from '@nestjs/core';
+import { ConfigService } from '@nestjs/config';
 import {
   TelegramBotRuntimeEnvironment,
   TelegramBotWebhookStatus,
@@ -6,8 +7,8 @@ import {
 import { AppModule } from '../app.module';
 import { TelegramBotRuntimeService } from '../domains/telegram/telegram-bots/core/telegram-bot-runtime.service';
 
-function required(name: string) {
-  const value = process.env[name]?.trim();
+function required(config: ConfigService, name: string) {
+  const value = config.get<string>(name)?.trim();
   if (!value) throw new Error(`${name} is required`);
   return value;
 }
@@ -47,9 +48,10 @@ async function run() {
   });
   try {
     const runtime = await app.resolve(TelegramBotRuntimeService);
+    const config = app.get(ConfigService);
     const summary = await configureFinanceProductionRuntime(runtime, {
-      botIntegrationId: required('FINANCE_BOT_INTEGRATION_ID'),
-      token: required('FINANCE_PRODUCTION_RUNTIME_TOKEN'),
+      botIntegrationId: required(config, 'FINANCE_BOT_INTEGRATION_ID'),
+      token: required(config, 'FINANCE_PRODUCTION_RUNTIME_TOKEN'),
     });
     process.stdout.write(`${JSON.stringify(summary)}\n`);
   } finally {
@@ -58,10 +60,8 @@ async function run() {
 }
 
 if (require.main === module) {
-  run().catch((error) => {
-    process.stderr.write(
-      `Finance production runtime configuration failed: ${error instanceof Error ? error.message : 'unknown error'}\n`,
-    );
+  run().catch(() => {
+    process.stderr.write('Finance production runtime configuration failed. Check protected settings and runtime status.\n');
     process.exitCode = 1;
   });
 }

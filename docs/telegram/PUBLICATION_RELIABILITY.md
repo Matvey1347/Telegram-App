@@ -52,6 +52,14 @@ other definite 4xx responses become actionable BLOCKED failures. Network failure
 remote identity reconciliation, never blind resend. Authenticated manual retry
 can reset only definite rejected operations in its workspace/channel.
 
+For ordinary posts, replace a native schedule only under its scoped claim and
+through the original sender. Check the stored channel, IDs, content and prior
+schedule before deleting, and require Telegram's acknowledgement for those
+exact IDs before sending the replacement. A timeout or an empty queue seen by
+another reader cannot clear an unresolved claim. Channel reset takes explicit
+post IDs and reports each item separately. An empty selection performs zero
+remote mutations. This flow does not own advertising or VP posts.
+
 Per-post claims and a dispatch context fence replace whole-batch waiting.
 A 30-second dispatch deadline aborts the transport and fences preparation that
 resumes later. Fencing is rechecked after the database ownership read and before

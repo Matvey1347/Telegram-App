@@ -6,6 +6,13 @@ See [refactor status](REFACTOR_STATUS.md) for the pre-change architecture
 baseline, independent commit slices and verification results. The first slice
 moves the CRM AI QA benchmarks and retains their operator entry points.
 
+The subsequent recovery slice groups dev, deployment, database, production,
+quality, AI, QA and asset tools and verifies them from a source ZIP. The
+architecture splits separate API reads and commands, Telegram transport,
+and web route composition from feature hooks and UI. The strict file-size
+and boundary check passes with the original hard limits. See the
+[recovery journal](../qa/RECOVERY_STATUS.md) for verification and release status.
+
 ## 2026-11-19 Channel publication recovery
 
 Grace traced the one-post request waterfall and the CRM-held exclusive Telegram
@@ -2407,3 +2414,35 @@ branch push or guard bypass was performed. Task-owned local servers were stopped
 and the temporary browser session was logged out. Runtime work adds no idle
 polling, recurring jobs or persistent sockets; queue reads are batched per account
 and channel, writes remain per claimed post, receipts are bounded to one per post.
+
+### 2026-11-20 — Local development profiles and scoped production access
+
+- Added a Docker target gate before ordinary Nexeloq database preparation and
+  a loopback production UI gateway for the deployed API.
+- Reused the request-only recovery module for named operator admission, scoped
+  draft work and Telegram schedule recovery through the existing Railway relay.
+  The module does not start the regular API or any publication worker.
+- Kept immediate publication on the deployed API in both live modes. Testing
+  local immediate-publication code still requires a compatible cloud transport
+  contract. See [Local development and production workflows](../setup/LOCAL_PRODUCTION_WORKFLOWS.md).
+
+### 2026-11-20 — Telegram channel ownership transfer follow-up
+
+- The MTProto resolver validates the stored canonical channel ID before
+  returning a peer. Account dialog refresh matches by canonical ID first.
+  Full refresh reconciles account access and admin links in one transaction.
+- Invite reads use capability-scoped candidates. Link creation can switch
+  actors only after definitive rejection before ExportChatInvite. Invite
+  pagination and campaign-window importers preserve incomplete results as
+  partial/unknown. Campaign refresh retains the last confirmed window.
+- History and invite selection flags reach the MTProto adapter. Invite denial
+  is reported separately from successfully read history. Removed request-time
+  DDL for invite counters and from the channel analytics service.
+- One-shot native cancellation uses the existing per-post claim fields, the
+  pinned sender, a complete queue read and exact Telegram ID acknowledgement.
+  A non-expiring claim fences uncertain outcomes. Acknowledged claims are
+  consumed by the caller's DB transition. Existing send journals, ad/VP
+  scheduler lanes and ownership-transfer recovery keep their own contracts.
+- Disposable PostgreSQL, mocked Telegram and browser query-cache tests are
+  used for verification. Current scope and live limitations are recorded in
+  [owner-transfer diagnosis](../qa/telegram-owner-transfer/DIAGNOSIS.md).

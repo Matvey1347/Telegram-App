@@ -100,6 +100,7 @@ describe('TelegramSystemBot Posts routing', () => {
 
     expect(test.postFlow.begin).toHaveBeenCalledWith(
       expect.objectContaining({ workspaceId: 'workspace-1' }),
+      77,
     );
     expect(test.posts.callback).toHaveBeenCalledWith(
       expect.objectContaining({ workspaceId: 'workspace-1' }),

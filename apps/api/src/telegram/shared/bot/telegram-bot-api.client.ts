@@ -473,16 +473,19 @@ export class TelegramBotApiClient {
     method: string,
     body: Record<string, unknown>,
     httpMethod: 'GET' | 'POST' = 'POST',
+    cancellation?: AbortSignal,
   ): Promise<TResult> {
     const url = new URL(`https://api.telegram.org/bot${token}/${method}`);
+    const timeout = AbortSignal.timeout(15_000);
+    const signal = cancellation ? AbortSignal.any([timeout, cancellation]) : timeout;
     const init: RequestInit =
       httpMethod === 'GET'
-        ? { signal: AbortSignal.timeout(15_000) }
+        ? { signal }
         : {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body),
-            signal: AbortSignal.timeout(15_000),
+            signal,
           };
     if (httpMethod === 'GET') {
       for (const [key, value] of Object.entries(body)) {

@@ -1,4 +1,4 @@
-import { Body, Controller, Headers, Param, Post } from '@nestjs/common';
+import { Body, Controller, Headers, Param, Post, Query } from '@nestjs/common';
 import { TelegramBotRuntimeService } from './telegram-bot-runtime.service';
 import { TelegramBotLocalDevelopmentService } from './telegram-bot-local-development.service';
 import type { TelegramBotWebhookUpdate } from './telegram-bot-update.types';
@@ -13,15 +13,17 @@ export class TelegramBotRuntimeController {
   @Post('local-development/start')
   startLocalDevelopment(
     @Headers('x-local-dev-control-secret') secret: string | undefined,
+    @Query('botIntegrationId') botIntegrationId?: string,
   ) {
-    return this.localDevelopment.start(secret);
+    return this.localDevelopment.start(secret, botIntegrationId);
   }
 
   @Post('local-development/stop')
   stopLocalDevelopment(
     @Headers('x-local-dev-control-secret') secret: string | undefined,
+    @Query('botIntegrationId') botIntegrationId?: string,
   ) {
-    return this.localDevelopment.stop(secret);
+    return this.localDevelopment.stop(secret, botIntegrationId);
   }
 
   @Post(':id/webhook')

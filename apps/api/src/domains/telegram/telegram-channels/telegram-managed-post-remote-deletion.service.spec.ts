@@ -97,7 +97,7 @@ describe('TelegramManagedPostRemoteDeletionService', () => {
     });
   });
 
-  it('falls back to a capable MTProto source when bot deletion fails', async () => {
+  it('does not switch from the selected bot after a failed deletion request', async () => {
     prisma.telegramManagedPost.findMany.mockResolvedValue([
       post('post-1', ['11']),
     ]);
@@ -113,14 +113,8 @@ describe('TelegramManagedPostRemoteDeletionService', () => {
       managedPostIds: ['post-1'],
     });
 
-    expect(mtproto.deletePublishedMessages).toHaveBeenCalledWith({
-      apiId: '1',
-      apiHash: 'hash',
-      session: 'session',
-      channel: { telegramChatId: '123' },
-      messageIds: ['11'],
-    });
-    expect(result.failed).toBe(0);
+    expect(mtproto.deletePublishedMessages).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ deleted: 0, failed: 1 });
   });
 
   it('isolates an invalid MTProto id so valid posts in the same batch are deleted', async () => {

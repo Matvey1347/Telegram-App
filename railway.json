@@ -20,7 +20,7 @@
   },
   "deploy": {
     "preDeployCommand": "pnpm --filter api run db:deploy:safe",
-    "startCommand": "node scripts/start-railway.mjs",
+    "startCommand": "node scripts/deployment/start-railway.mjs",
     "healthcheckPath": "/api/health",
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 10

@@ -108,6 +108,7 @@ export class ResponseCacheInterceptor implements NestInterceptor {
   private isNeverCached(url: string) {
     if (url.includes('/health')) return true;
     if (this.isAuthMutation(url)) return true;
+    if (/\/operator-publication-evidence(?:\/|$)/u.test(url)) return true;
     if (
       /^\/(?:api\/)?(?:telegram-crm|telegram-ad-sales)(?:\?|\/|$)/.test(url) ||
       /^\/(?:api\/)?operations\/ai(?:\?|\/|$)/.test(url) ||

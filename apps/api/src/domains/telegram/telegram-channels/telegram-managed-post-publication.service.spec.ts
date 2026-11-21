@@ -74,7 +74,7 @@ describe('TelegramManagedPostPublicationService failure persistence', () => {
         workspaceId: 'workspace-1',
         telegramChannelId: 'channel-1',
         OR: expect.arrayContaining([
-          { status: TelegramManagedPostStatus.PUBLISHING },
+          { status: TelegramManagedPostStatus.PUBLISHING, deliveryClaimOwner: null },
         ]),
       }),
       data: {

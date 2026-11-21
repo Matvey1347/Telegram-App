@@ -25,6 +25,7 @@ export class TelegramManagedPostCalendarService {
     userId: string,
     channelId: string,
     query: ManagedPostsCalendarQueryDto,
+    { authoritative = false } = {},
   ): Promise<TelegramManagedPostCalendarResult> {
     const workspaceId =
       await this.telegramChannelsSupportService.workspace(userId);
@@ -56,115 +57,113 @@ export class TelegramManagedPostCalendarService {
 
     const fromIso = from.toISOString();
     const toIso = to.toISOString();
-    return this.responseCache.getOrSet(
-      this.telegramChannelsSupportService.managedPostsCalendarCacheKey(
-        userId,
-        workspaceId,
-        channelId,
-        fromIso,
-        toIso,
-      ),
-      15_000,
-      async () => {
-        const calendarWhere: Prisma.TelegramManagedPostWhereInput = {
+    const read = async (): Promise<TelegramManagedPostCalendarResult> => {
+    const calendarWhere: Prisma.TelegramManagedPostWhereInput = {
+      workspaceId,
+      telegramChannelId: channelId,
+      OR: [
+        {
+          status: TelegramManagedPostStatus.SCHEDULED,
+          scheduledAt: { gte: from, lte: to },
+        },
+        ...(publishedRangeEnd >= from
+          ? [
+              {
+                status: TelegramManagedPostStatus.PUBLISHED,
+                publishedAt: { gte: from, lte: publishedRangeEnd },
+              } satisfies Prisma.TelegramManagedPostWhereInput,
+            ]
+          : []),
+      ],
+    };
+    const items = await this.prisma.telegramManagedPost.findMany({
+      where: calendarWhere,
+      orderBy: [
+        { scheduledAt: 'asc' },
+        { publishedAt: 'asc' },
+        { createdAt: 'asc' },
+      ],
+      include: {
+        assignedMember: WorkspaceService.assignedMemberInclude,
+        group: { select: { id: true, title: true, icon: true } },
+      },
+    });
+
+    const [futureScheduledTotal, lastScheduled] = await Promise.all([
+      this.prisma.telegramManagedPost.count({
+        where: {
           workspaceId,
           telegramChannelId: channelId,
-          OR: [
-            {
-              status: TelegramManagedPostStatus.SCHEDULED,
-              scheduledAt: { gte: from, lte: to },
-            },
-            ...(publishedRangeEnd >= from
-              ? [
-                  {
-                    status: TelegramManagedPostStatus.PUBLISHED,
-                    publishedAt: { gte: from, lte: publishedRangeEnd },
-                  } satisfies Prisma.TelegramManagedPostWhereInput,
-                ]
-              : []),
-          ],
-        };
-        const items = await this.prisma.telegramManagedPost.findMany({
-          where: calendarWhere,
-          orderBy: [
-            { scheduledAt: 'asc' },
-            { publishedAt: 'asc' },
-            { createdAt: 'asc' },
-          ],
-          include: {
-            assignedMember: WorkspaceService.assignedMemberInclude,
-            group: { select: { id: true, title: true, icon: true } },
-          },
-        });
+          status: TelegramManagedPostStatus.SCHEDULED,
+          scheduledAt: { gt: new Date() },
+        },
+      }),
+      this.prisma.telegramManagedPost.findFirst({
+        where: {
+          workspaceId,
+          telegramChannelId: channelId,
+          status: TelegramManagedPostStatus.SCHEDULED,
+          scheduledAt: { gt: new Date() },
+        },
+        orderBy: { scheduledAt: 'desc' },
+        select: { scheduledAt: true },
+      }),
+    ]);
 
-        const [futureScheduledTotal, lastScheduled] = await Promise.all([
-          this.prisma.telegramManagedPost.count({
-            where: {
-              workspaceId,
-              telegramChannelId: channelId,
-              status: TelegramManagedPostStatus.SCHEDULED,
-              scheduledAt: { gt: new Date() },
-            },
-          }),
-          this.prisma.telegramManagedPost.findFirst({
-            where: {
-              workspaceId,
-              telegramChannelId: channelId,
-              status: TelegramManagedPostStatus.SCHEDULED,
-              scheduledAt: { gt: new Date() },
-            },
-            orderBy: { scheduledAt: 'desc' },
-            select: { scheduledAt: true },
-          }),
-        ]);
-
-        return {
-          from: fromIso,
-          to: toIso,
-          items: items.map((item) => ({
-            id: item.id,
-            telegramChannelId: item.telegramChannelId,
-            title: item.title,
-            text: item.text,
-            status: item.status as 'SCHEDULED' | 'PUBLISHED',
-            scheduledAt: item.scheduledAt?.toISOString() ?? null,
-            publishedAt: item.publishedAt?.toISOString() ?? null,
-            origin: item.origin,
-            telegramRemoteStatus: item.telegramRemoteStatus,
-            telegramMessageUrls: item.telegramMessageUrls,
-            telegramIdVerificationStatus: item.telegramIdVerificationStatus,
-            telegramLinkSource: item.telegramLinkSource,
-            hasMedia:
-              normalizeTelegramPostMediaItems(item.mediaItems, item.imageUrls)
-                .length > 0,
-            plannerFormatId: item.plannerFormatId,
-            plannerSlotId: item.plannerSlotId,
-            plannerRunId: item.plannerRunId,
-            plannerPlannedAt: item.plannerPlannedAt?.toISOString() ?? null,
-            plannerProvenance: item.plannerProvenance,
-            isAutoPlanned: Boolean(item.plannerRunId && item.plannerSlotId),
-            group: item.group,
-            assignedMember: {
-              id: item.assignedMember.id,
-              workspaceId: item.assignedMember.workspaceId,
-              name: item.assignedMember.user?.name ?? item.assignedMember.id,
-              email: item.assignedMember.user?.email ?? null,
-              photoUrl: item.assignedMember.avatarIcon?.imageUrl ?? null,
-              role: item.assignedMember.role,
-            },
-          })),
-          summary: {
-            scheduledInRange: items.filter(
-              (item) => item.status === 'SCHEDULED',
-            ).length,
-            publishedInRange: items.filter(
-              (item) => item.status === 'PUBLISHED',
-            ).length,
-            futureScheduledTotal,
-            lastScheduledAt: lastScheduled?.scheduledAt?.toISOString() ?? null,
-          },
-        };
+    return {
+      from: fromIso,
+      to: toIso,
+      items: items.map((item) => ({
+        id: item.id,
+        telegramChannelId: item.telegramChannelId,
+        title: item.title,
+        text: item.text,
+        status: item.status as 'SCHEDULED' | 'PUBLISHED',
+        scheduledAt: item.scheduledAt?.toISOString() ?? null,
+        publishedAt: item.publishedAt?.toISOString() ?? null,
+        origin: item.origin,
+        telegramRemoteStatus: item.telegramRemoteStatus,
+        telegramMessageUrls: item.telegramMessageUrls,
+        telegramIdVerificationStatus: item.telegramIdVerificationStatus,
+        telegramLinkSource: item.telegramLinkSource,
+        hasMedia:
+          normalizeTelegramPostMediaItems(item.mediaItems, item.imageUrls)
+            .length > 0,
+        plannerFormatId: item.plannerFormatId,
+        plannerSlotId: item.plannerSlotId,
+        plannerRunId: item.plannerRunId,
+        plannerPlannedAt: item.plannerPlannedAt?.toISOString() ?? null,
+        plannerProvenance: item.plannerProvenance,
+        isAutoPlanned: Boolean(item.plannerRunId && item.plannerSlotId),
+        group: item.group,
+        assignedMember: {
+          id: item.assignedMember.id,
+          workspaceId: item.assignedMember.workspaceId,
+          name: item.assignedMember.user?.name ?? item.assignedMember.id,
+          email: item.assignedMember.user?.email ?? null,
+          photoUrl: item.assignedMember.avatarIcon?.imageUrl ?? null,
+          role: item.assignedMember.role,
+        },
+      })),
+      summary: {
+        scheduledInRange: items.filter(
+          (item) => item.status === 'SCHEDULED',
+        ).length,
+        publishedInRange: items.filter(
+          (item) => item.status === 'PUBLISHED',
+        ).length,
+        futureScheduledTotal,
+        lastScheduledAt: lastScheduled?.scheduledAt?.toISOString() ?? null,
       },
+    };
+    };
+    if (authoritative) return read();
+    return this.responseCache.getOrSet(
+      this.telegramChannelsSupportService.managedPostsCalendarCacheKey(
+        userId, workspaceId, channelId, fromIso, toIso,
+      ),
+      15_000,
+      read,
     );
   }
 }

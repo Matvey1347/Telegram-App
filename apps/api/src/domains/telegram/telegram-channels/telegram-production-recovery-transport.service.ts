@@ -10,7 +10,6 @@ import { TelegramChannelAccessService } from './telegram-channel-access.service'
 import { TelegramChannelsSupportService } from './telegram-channels-support.service';
 import {
   assertExistingNativeScheduleIdentity,
-  nativeScheduleContentMatches,
   ordinaryScheduledPostWhere,
 } from './telegram-managed-post-rescheduler-repair';
 import {
@@ -47,6 +46,8 @@ export class TelegramProductionRecoveryTransportService {
     cancellation: AbortSignal,
   ) {
     this.validateEnvelope(input);
+    if (input.operation === 'delete')
+      throw new RecoveryRequestError('Standalone deletion is disabled. Use the acknowledged native replacement flow.');
     const workspaceId = await this.support.workspace(userId);
     const channel = await this.prisma.telegramChannel.findFirst({
       where: { id: channelId, workspaceId, isActive: true },
@@ -91,7 +92,7 @@ export class TelegramProductionRecoveryTransportService {
         channelId,
         input.accountId,
       );
-      const mutation = ['delete', 'publish', 'replace'].includes(
+      const mutation = ['publish', 'replace'].includes(
         input.operation,
       );
       if (
@@ -142,7 +143,6 @@ export class TelegramProductionRecoveryTransportService {
               recentPublishedUntil: until,
             });
           }
-          case 'delete':
           case 'replace':
           case 'publish': {
             const post = await this.claimedPost(workspaceId, channelId, input);
@@ -166,60 +166,6 @@ export class TelegramProductionRecoveryTransportService {
                 },
                 async () => {
                   await assertRescheduleActive(this.prisma, post.id);
-                  if (input.operation === 'delete') {
-                    const ids = input.messageIds;
-                    if (
-                      !ids?.length ||
-                      ids.some(
-                        (id) => !post.telegramScheduledMessageIds.includes(id),
-                      )
-                    )
-                      throw new RecoveryConflictError(
-                        'Recovery deletion must reference the original sender and stored scheduled IDs',
-                      );
-                    if (input.accountId !== post.sourceId) {
-                      if (
-                        scheduledAt > new Date() ||
-                        !source?.canDeleteMessages ||
-                        new Set(ids).size !== ids.length ||
-                        ids.length !== post.telegramScheduledMessageIds.length
-                      )
-                        throw new RecoveryConflictError(
-                          'Alternate recovery deletion requires an overdue complete schedule and deletion permission',
-                        );
-                      const proof =
-                        await this.mtproto.getScheduledMessagesByIds({
-                          ...credentials,
-                          channel: channelReference,
-                          messageIds: ids,
-                        });
-                      if (!nativeScheduleContentMatches(post, proof))
-                        throw new RecoveryConflictError(
-                          'Overdue recovery IDs do not match the complete stored post',
-                        );
-                      const foreign =
-                        await this.prisma.telegramManagedPost.findFirst({
-                          where: {
-                            workspaceId,
-                            telegramChannelId: channelId,
-                            id: { not: post.id },
-                            status: { in: ['SCHEDULED', 'PUBLISHING'] },
-                            telegramScheduledMessageIds: { hasSome: ids },
-                          },
-                          select: { id: true },
-                        });
-                      if (foreign)
-                        throw new RecoveryConflictError(
-                          'Recovery scheduled IDs overlap another managed post',
-                        );
-                      await assertRescheduleActive(this.prisma, post.id);
-                    }
-                    return this.mtproto.deleteScheduledPost({
-                      ...credentials,
-                      channel: channelReference,
-                      messageIds: [...new Set(ids)],
-                    });
-                  }
                   if (scheduledAt <= new Date())
                     throw new RecoveryConflictError(
                       'Recovery publication deadline elapsed',
@@ -260,6 +206,7 @@ export class TelegramProductionRecoveryTransportService {
                   if (input.operation === 'replace') {
                     const ids = input.messageIds;
                     if (
+                      input.accountId !== post.sourceId ||
                       !ids?.length ||
                       new Set(ids).size !== ids.length ||
                       ids.length !== post.telegramScheduledMessageIds.length ||
@@ -297,6 +244,8 @@ export class TelegramProductionRecoveryTransportService {
                       ? {
                           replacement: {
                             messageIds: input.messageIds!,
+                            previousScheduledAt: scheduledAt,
+                            requireCancellationAcknowledgement: true,
                             validate: (remote) => {
                               const scheduledIds = new Set(
                                 remote.map((message) => message.id),
@@ -309,6 +258,9 @@ export class TelegramProductionRecoveryTransportService {
                                 throw new RecoveryConflictError(
                                   'Recovery replacement requires every stored schedule to remain present',
                                 );
+                              if (remote.some(({ date }) => !date ||
+                                  Math.floor(new Date(date).getTime() / 1000) !== Math.floor(scheduledAt.getTime() / 1000)))
+                                throw new RecoveryConflictError('Recovery replacement requires the original scheduled time');
                               assertExistingNativeScheduleIdentity(post, {
                                 scheduledMessages: remote,
                                 scheduledIds,

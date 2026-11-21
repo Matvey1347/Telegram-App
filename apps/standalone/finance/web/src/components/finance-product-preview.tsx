@@ -1,5 +1,5 @@
 "use client";
-import { financeBrandIcon } from "@consumer-finance/web/lib/finance-brand-icon";
+import { financeBrandIcon } from "@finance-web/lib/finance-brand-icon";
 
 import { GroshlyApp } from "@finance-web/groshly/main";
 import { initial } from "@finance-web/groshly/data";

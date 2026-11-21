@@ -40,13 +40,21 @@ export class TelegramBotLocalDevelopmentService {
     private readonly runtime: TelegramBotRuntimeService,
   ) {}
 
-  async start(secret: string | undefined) {
+  async start(secret: string | undefined, botIntegrationId?: string) {
     this.assertAuthorized(secret);
-    await this.runtime.reconcileLocalDevelopment();
-    await this.refreshChangedFinanceKeyboards();
+    if (botIntegrationId) {
+      await this.runtime.enableRuntime({
+        botIntegrationId,
+        environment: TelegramBotRuntimeEnvironment.LOCAL,
+      });
+    } else {
+      await this.runtime.reconcileLocalDevelopment();
+    }
+    await this.refreshChangedFinanceKeyboards(botIntegrationId);
     const runtimes = await this.prisma.telegramBotRuntimeInstance.findMany({
       where: {
         environment: TelegramBotRuntimeEnvironment.LOCAL,
+        ...(botIntegrationId ? { botIntegrationId } : {}),
         botIntegration: {
           isActive: true,
           applicationType: { not: TelegramBotApplicationType.NONE },
@@ -96,11 +104,12 @@ export class TelegramBotLocalDevelopmentService {
     };
   }
 
-  async stop(secret: string | undefined) {
+  async stop(secret: string | undefined, botIntegrationId?: string) {
     this.assertAuthorized(secret);
     const runtimes = await this.prisma.telegramBotRuntimeInstance.findMany({
       where: {
         environment: TelegramBotRuntimeEnvironment.LOCAL,
+        ...(botIntegrationId ? { botIntegrationId } : {}),
         runtimeStatus: { not: TelegramBotRuntimeStatus.DISABLED },
       },
       include: {
@@ -120,6 +129,14 @@ export class TelegramBotLocalDevelopmentService {
     const results: Array<{ id: string; telegramCleanupFailed: boolean }> = [];
     for (const runtime of runtimes) {
       const token = this.decryptToken(runtime);
+      if (botIntegrationId) {
+        const webhook = await this.botApi.getWebhookInfo(token);
+        if (webhook.url && webhook.url !== this.runtime.webhookUrlFor(runtime.id)) {
+          throw new ServiceUnavailableException(
+            'Telegram webhook belongs to another development host',
+          );
+        }
+      }
       let telegramCleanupFailed = false;
       if (
         runtime.botIntegration.applicationType ===
@@ -206,12 +223,13 @@ export class TelegramBotLocalDevelopmentService {
     return { stopped: results.length, runtimes: results };
   }
 
-  private async refreshChangedFinanceKeyboards() {
+  private async refreshChangedFinanceKeyboards(botIntegrationId?: string) {
     const financePresentation = this.financePresentation();
     if (!financePresentation.localDevelopmentActive!()) return;
     const runtimes = await this.prisma.telegramBotRuntimeInstance.findMany({
       where: {
         environment: TelegramBotRuntimeEnvironment.LOCAL,
+        ...(botIntegrationId ? { botIntegrationId } : {}),
         runtimeStatus: TelegramBotRuntimeStatus.ACTIVE,
         lastRuntimeError: null,
         botIntegration: {

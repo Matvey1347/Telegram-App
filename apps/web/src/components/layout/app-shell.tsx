@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { publicWebEnvironment } from "@/config/public-env";
 import dynamic from "next/dynamic";
 import { PropsWithChildren, useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
@@ -349,7 +350,7 @@ export function AppShell({ children }: PropsWithChildren) {
               <LanguageSwitcher />
               <NotificationCenter
                 workspaceId={activeWorkspaceId}
-                enabled={canViewNotifications}
+                enabled={canViewNotifications && publicWebEnvironment.liveMode !== "operator"}
                 compact
               />
               <GlobalRefreshButton

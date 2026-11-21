@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events';
-import { ForbiddenException, MethodNotAllowedException } from '@nestjs/common';
-import type { Request, Response } from 'express';
+import { BadRequestException, ForbiddenException } from '@nestjs/common';
+import type { Response } from 'express';
 import type { RescheduleChannelScheduledPostProgress } from '@telegram-system/shared';
 import { RequestContextService } from '../common/request-context/request-context.service';
 import { StreamResponseService } from '../common/stream/stream-response.service';
@@ -10,8 +10,7 @@ jest.mock('../config/production-recovery-config', () => ({
   productionRecoveryConfig: () => ({
     channelId: 'channel-selected',
     workspaceId: 'workspace-selected',
-    productionApiOrigin: 'https://api.example.test',
-    productionApiToken: 'privileged-token-must-not-be-forwarded',
+    userId: 'user-member',
   }),
 }));
 
@@ -45,21 +44,28 @@ function harness() {
   };
   const snapshot = { snapshot: jest.fn() };
   const workspace = {
-    resolveWorkspaceIdForUser: jest
+    requireWorkspaceRole: jest
       .fn()
-      .mockResolvedValue('workspace-selected'),
+      .mockResolvedValue({ workspaceId: 'workspace-selected' }),
   };
   const streams = new StreamResponseService(
     { writeStructured: jest.fn() } as never,
     new RequestContextService(),
   );
+  const commands = { createManagedPost: jest.fn() };
+  const history = { updateManagedPost: jest.fn() };
   const controller = new ProductionRecoveryController(
     rescheduler as never,
     snapshot as never,
     streams,
     workspace as never,
+    commands as never,
+    history as never,
+    {} as never, {} as never, {} as never, {} as never, {} as never,
+    { postRevision: async () => ({ revision: "2026-11-21T08:00:00.000Z" }), selectedPlacementForPost: async () => undefined } as never,
+    {} as never,
   );
-  return { controller, rescheduler, snapshot, workspace };
+  return { controller, rescheduler, snapshot, workspace, commands, history };
 }
 
 describe('ProductionRecoveryController', () => {
@@ -94,7 +100,9 @@ describe('ProductionRecoveryController', () => {
 
   it('rejects a different workspace before starting the recovery stream', async () => {
     const { controller, rescheduler, workspace } = harness();
-    workspace.resolveWorkspaceIdForUser.mockResolvedValue('workspace-other');
+    workspace.requireWorkspaceRole.mockResolvedValue({
+      workspaceId: 'workspace-other',
+    });
     const { response, chunks } = responseHarness();
     await expect(
       controller.reschedule(
@@ -188,80 +196,44 @@ describe('ProductionRecoveryController', () => {
     expect(response.writableEnded).toBe(true);
   });
 
-  it.each(['POST', 'PUT', 'PATCH', 'DELETE'])(
-    'does not proxy unrelated %s mutations',
-    async (method) => {
-      const { controller } = harness();
-      const fetchSpy = jest.spyOn(globalThis, 'fetch');
-      await expect(
-        controller.readOnlyFallback(
-          user,
-          { method } as Request,
-          responseHarness().response,
-        ),
-      ).rejects.toBeInstanceOf(MethodNotAllowedException);
-      expect(fetchSpy).not.toHaveBeenCalled();
-    },
-  );
+  it('requires a named owner and nonempty exact recovery targets', async () => {
+    const { controller, rescheduler } = harness();
+    const { response } = responseHarness();
+    await expect(
+      controller.plan({ ...user, sub: 'different-user' }, 'channel-selected'),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(
+      controller.reschedule(
+        user,
+        'channel-selected',
+        { postIds: [] },
+        response,
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(rescheduler.rescheduleChannelScheduledPosts).not.toHaveBeenCalled();
+  });
 
-  it.each([
-    '//attacker.example/api/user',
-    '/outside-api',
-    '/api/../outside-api',
-  ])(
-    'rejects unsafe read path %p before forwarding authorization',
-    async (originalUrl) => {
-      const { controller } = harness();
-      const fetchSpy = jest.spyOn(globalThis, 'fetch');
-      await expect(
-        controller.readOnlyFallback(
-          user,
-          {
-            method: 'GET',
-            originalUrl,
-            headers: { authorization: 'Bearer browser-token' },
-          } as Request,
-          responseHarness().response,
-        ),
-      ).rejects.toBeInstanceOf(ForbiddenException);
-      expect(fetchSpy).not.toHaveBeenCalled();
-    },
-  );
-
-  it('forwards scoped reads with browser authorization and does not follow redirects', async () => {
-    const { controller } = harness();
-    const { response, chunks, headers } = responseHarness();
-    const fetchSpy = jest.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new globalThis.Response('{"id":"channel-selected"}', {
-        status: 200,
-        headers: { 'content-type': 'application/json' },
-      }),
-    );
-    await controller.readOnlyFallback(
-      user,
-      {
-        method: 'GET',
-        originalUrl: '/api/telegram-channels?active=true',
-        headers: {
-          authorization: 'Bearer browser-token',
-          accept: 'application/json',
-        },
-      } as Request,
-      response,
-    );
-    const [url, options] = fetchSpy.mock.calls[0];
-    expect((url as URL).href).toBe(
-      'https://api.example.test/api/telegram-channels?active=true',
-    );
-    expect(options).toMatchObject({
-      method: 'GET',
-      redirect: 'manual',
-      headers: {
-        Authorization: 'Bearer browser-token',
-        'X-Workspace-Id': 'workspace-selected',
-      },
+  it('delegates drafts to the canonical commands and enforces draft-only editing', async () => {
+    const { controller, commands, history } = harness();
+    commands.createManagedPost.mockResolvedValue({ id: 'draft' });
+    history.updateManagedPost.mockResolvedValue({
+      id: 'draft',
+      title: 'Changed',
     });
-    expect(chunks).toEqual(['{"id":"channel-selected"}']);
-    expect(headers.get('Cache-Control')).toBe('no-store');
+    await expect(
+      controller.createDraft(user, 'channel-selected', { title: 'Draft' }),
+    ).resolves.toEqual({ id: 'draft' });
+    await expect(
+      controller.updateDraft(user, 'channel-selected', 'draft', {
+        title: 'Changed',
+      }, '2026-11-21T08:00:00.000Z'),
+    ).resolves.toMatchObject({ title: 'Changed' });
+    expect(history.updateManagedPost).toHaveBeenCalledWith(
+      user.sub,
+      'channel-selected',
+      'draft',
+      { title: 'Changed' },
+      expect.objectContaining({ draftOnly: true }),
+    );
   });
 });

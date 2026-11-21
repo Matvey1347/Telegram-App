@@ -201,9 +201,9 @@ export type MutualPromotionAttributionHistory = {
   endsAtSource: "FINAL_CAPTURE" | "NEXT_FOLDER" | "CURRENT_TIME";
   points: Array<{
     at: string;
-    joinedCount: number;
-    requestedCount: number;
-    acquiredCount: number;
+    joinedCount: number | null;
+    requestedCount: number | null;
+    acquiredCount: number | null;
     unsubscribedCount: number | null;
     audienceDelta: number | null;
   }>;

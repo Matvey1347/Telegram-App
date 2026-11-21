@@ -1,7 +1,7 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { TelegramBot } from "@/lib/api";
+import { api, type TelegramBot } from "@/lib/api";
 import { TelegramBotCard } from "./telegram-bot-card";
 
 function bot(
@@ -139,25 +139,36 @@ describe("TelegramBotCard", () => {
     ).toBeInTheDocument();
   });
 
-  it("renders the selected runtime avatar pulled from Telegram", () => {
-    const financeBot = bot("FINANCE");
-    financeBot.runtimes[0].avatarUrl =
-      "https://api.example/avatar/runtime-1?v=1";
-    render(
-      <TelegramBotCard
-        bot={financeBot}
-        checkingEnvironment={null}
-        onCheck={vi.fn()}
-        onRequestDelete={vi.fn()}
-        onSwitch={vi.fn()}
-        onConfigureRuntime={vi.fn()}
-      />,
-    );
-    expect(
-      document.querySelector(
-        'img[src="https://api.example/avatar/runtime-1?v=1"]',
-      ),
-    ).toBeInTheDocument();
+  it("fetches and renders the selected runtime avatar through the API", async () => {
+    const accessBot = bot("NONE");
+    const avatarUrl = "/telegram-bots/runtime-1/avatar?v=1";
+    accessBot.runtimes[0].avatarUrl = avatarUrl;
+    const fetchAvatar = vi.spyOn(api, "get").mockResolvedValue({ data: new Blob() });
+    vi.stubGlobal("URL", class extends URL {
+      static createObjectURL() { return "blob:runtime-avatar"; }
+    });
+    try {
+      render(
+        <TelegramBotCard
+          bot={accessBot}
+          checkingEnvironment={null}
+          onCheck={vi.fn()}
+          onRequestDelete={vi.fn()}
+          onSwitch={vi.fn()}
+          onConfigureRuntime={vi.fn()}
+        />,
+      );
+      expect(fetchAvatar).toHaveBeenCalledWith(
+        avatarUrl,
+        expect.objectContaining({ responseType: "blob" }),
+      );
+      await waitFor(() =>
+        expect(document.querySelector('img[src="blob:runtime-avatar"]')).toBeInTheDocument(),
+      );
+    } finally {
+      fetchAvatar.mockRestore();
+      vi.unstubAllGlobals();
+    }
   });
 
   it("shows one stopped status when the runtime and webhook are stopped", () => {

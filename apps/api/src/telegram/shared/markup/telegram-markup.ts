@@ -160,16 +160,15 @@ export function telegramMarkupToHtml(raw: string, rich = false) {
     return `\uE000${index}\uE001`;
   };
   const render = (source: string): string => {
-    // A legacy importer escaped the delimiters of Telegram <code> entities.
-    // That made the local preview look formatted while the Bot API received
-    // literal backticks. Restore the intended managed-code syntax first.
+    // The legacy importer wrapped multiline code in escaped inline delimiters.
+    // Keep that compatibility while preserving literal inline backticks.
     const normalizedRaw = source
-      .replace(/\\`([\s\S]*?)\\`/g, (_match, code: string) =>
-        /[\r\n]/.test(code)
-          ? `\`\`\`\n${code.replace(/\r\n?/g, '\n')}\`\`\``
-          : `\`${code}\``,
-      )
-      .replace(/\r\n?/g, '\n');
+      .replace(/\r\n?/g, '\n')
+      .replace(
+        /\\`([^`]*?)\\`/g,
+        (match, code: string) =>
+          code.includes('\n') ? `\`\`\`\n${code}\`\`\`` : match,
+      );
 
     // Imported Telegram text is escaped before managed-markup delimiters are
     // added. Resolve those escapes first so literal **, [], ||, and backticks

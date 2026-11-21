@@ -5,9 +5,9 @@ Executed locally on2026-11-01 using PostgreSQL17. No production/staging database
 Reproduce:
 
 ```sh
-node --test scripts/verify-crm-migrations.test.mjs
-node scripts/verify-crm-migrations.mjs --audit-only
-node scripts/verify-crm-migrations.mjs --disposable-local
+node --test scripts/db/verify-crm-migrations.test.mjs
+node scripts/db/verify-crm-migrations.mjs --audit-only
+node scripts/db/verify-crm-migrations.mjs --disposable-local
 ```
 
 The current script expects PostgreSQL17 binaries at `/opt/homebrew/opt/postgresql@17/bin`. It refuses external URL/config CLI arguments. `--audit-only` reads repository SQL only. The disposable run currently returns exit1 because the clean chain genuinely fails; this is not a successful overall migration gate.

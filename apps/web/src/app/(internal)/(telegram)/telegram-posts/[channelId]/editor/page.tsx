@@ -1,13 +1,7 @@
 "use client";
 
-import type { ReactElement } from "react";
 import { useParams } from "next/navigation";
-import TelegramPostsPageModule from "../../page";
-
-const TelegramPostsPageClient = TelegramPostsPageModule as (props: {
-  routeChannelId?: string;
-  routePostView: "editor";
-}) => ReactElement;
+import { TelegramPostsPageClient } from "@/components/features/telegram/telegram/posts-workspace/telegram-posts-page-client";
 
 function routeParam(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;

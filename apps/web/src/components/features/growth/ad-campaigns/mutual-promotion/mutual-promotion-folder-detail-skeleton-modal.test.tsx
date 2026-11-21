@@ -13,7 +13,7 @@ describe("MutualPromotionFolderDetailSkeletonModal", () => {
       />,
     );
 
-    expect(screen.getByRole("dialog")).toHaveClass("max-w-[1280px]");
+    expect(screen.getByRole("dialog")).toHaveClass("!max-w-[1280px]");
     expect(screen.getByText("September exchange")).toBeVisible();
     expect(
       screen.getByRole("status", { name: "Loading folder details…" }),

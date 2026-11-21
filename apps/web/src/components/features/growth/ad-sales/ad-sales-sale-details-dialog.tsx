@@ -333,6 +333,8 @@ export function AdSalesSaleDetailsDialog({
           await telegramAdSalesApi.schedulePlacement(sale.id, placementId, {});
         } else if (action === "publish" && placementId) {
           await telegramAdSalesApi.publishPlacement(sale.id, placementId, {});
+        } else if (action === "reconcile-published" && placementId) {
+          await telegramAdSalesApi.reconcilePublishedPlacement(sale.id, placementId);
         } else if (action === "reschedule" && placementId) {
           await telegramAdSalesApi.reschedulePlacement(sale.id, placementId, {
             scheduledAt: placement.scheduledAt,

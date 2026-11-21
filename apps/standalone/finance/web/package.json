@@ -9,7 +9,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest",
-    "prebuild": "node ../../../../scripts/sync-finance-brand-assets.mjs"
+    "prebuild": "node ../../../../scripts/build/assets/sync-finance-brand-assets.mjs"
   },
   "dependencies": {
     "@emoji-mart/data": "^1.2.1",

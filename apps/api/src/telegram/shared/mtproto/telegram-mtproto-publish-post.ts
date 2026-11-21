@@ -6,6 +6,7 @@ import { normalizeTelegramPostMediaItems } from '@telegram-system/shared';
 import { telegramHtmlToGramJsAlbumHtml } from '../markup/telegram-markup';
 import { downloadTelegramPublishMotion } from './telegram-mtproto-publish-image';
 import { withTelegramPublicationDeadline } from './telegram-publication-deadline';
+import { assertScheduledCancellationAck } from './telegram-scheduled-cancellation-ack';
 import type {
   StoredTelegramChannelReference,
   TelegramScheduledMessage,
@@ -30,6 +31,8 @@ export type TelegramPublishPostParams = {
   beforeSend?: () => Promise<void>;
   replacement?: {
     messageIds: string[];
+    requireCancellationAcknowledgement?: boolean;
+    previousScheduledAt?: Date;
     validate: (messages: TelegramScheduledMessage[]) => void;
     beforeChange: () => Promise<void>;
     afterCancel?: () => Promise<void>;
@@ -79,6 +82,8 @@ export function publishTelegramPost(
       const entity = resolved
         ? resolved.entity
         : await client.getEntity(params.channelRef as string);
+      if (entity instanceof Api.Channel && entity.broadcast && !entity.creator && !entity.adminRights?.postMessages)
+        throw new Error('The selected Telegram account no longer has posting rights');
       checkpoint();
       const schedule = params.scheduleAt
         ? Math.floor(params.scheduleAt.getTime() / 1000)
@@ -114,6 +119,11 @@ export function publishTelegramPost(
           );
         replacementPeer =
           resolved?.peer ?? (await client.getInputEntity(entity as never));
+        if (params.replacement.requireCancellationAcknowledgement &&
+          (!(entity instanceof Api.Channel) ||
+            (!entity.creator && !entity.adminRights?.deleteMessages) ||
+            (!entity.creator && !entity.adminRights?.postMessages)))
+          throw new Error('The original Telegram sender no longer has replacement permissions');
         const previous = await client.invoke(
           new Api.messages.GetScheduledMessages({
             peer: replacementPeer,
@@ -191,12 +201,16 @@ export function publishTelegramPost(
       if (params.replacement) {
         await params.replacement.beforeChange();
         checkpoint();
-        await client.invoke(
+        if (params.replacement.previousScheduledAt && params.replacement.previousScheduledAt <= new Date())
+          throw new Error('Original Telegram schedule reached its deadline before cancellation');
+        const deletion = await client.invoke(
           new Api.messages.DeleteScheduledMessages({
             peer: replacementPeer!,
             id: params.replacement.messageIds.map(Number),
           }),
         );
+        if (params.replacement.requireCancellationAcknowledgement)
+          assertScheduledCancellationAck(deletion, replacementPeer!, params.replacement.messageIds);
         await params.replacement.afterCancel?.();
         checkpoint();
       }

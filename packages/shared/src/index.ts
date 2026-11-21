@@ -67,3 +67,4 @@ export * from './types/crm-instagram-contacts';
 export * from "./types/telegram-chat-actions";
 export * from "./types/telegram-ai-posting";
 export type { TelegramChannelAvatarEmojiState } from "./types/telegram-channel-avatar-emoji";
+export * from "./types/telegram-invite-observations";

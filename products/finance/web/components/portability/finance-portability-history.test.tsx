@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { FinancePortabilityHistory } from "@consumer-finance/web/components/portability/finance-portability-history";
 
@@ -74,12 +74,12 @@ describe("FinancePortabilityHistory", () => {
       screen.getByText(/Import · Replace all · backup.json/i),
     ).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Roll back import" }));
-    fireEvent.change(screen.getByPlaceholderText("ROLLBACK"), {
-      target: { value: "ROLLBACK" },
-    });
-    fireEvent.click(
-      screen.getAllByRole("button", { name: "Roll back import" })[1],
-    );
+    const confirmation = () => within(screen.getByRole("dialog", { name: "Confirm action" }));
+    expect(confirmation().getByText("ROLLBACK")).toBeVisible();
+    fireEvent.click(confirmation().getByRole("button", { name: "Cancel" }));
+    expect(api.rollbackImport).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Roll back import" }));
+    fireEvent.click(confirmation().getByRole("button", { name: "Roll back import" }));
 
     await waitFor(() =>
       expect(api.rollbackImport).toHaveBeenCalledWith("bot-1", "import-1"),

@@ -279,7 +279,10 @@ describe('TelegramChannelsService updateManagedPost', () => {
       }),
     );
     expect(prisma.telegramManagedPost.update).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: post.id } }),
+      expect.objectContaining({ where: expect.objectContaining({
+        id: post.id, workspaceId: 'workspace', telegramChannelId: 'channel',
+        status: TelegramManagedPostStatus.SCHEDULED, deliveryClaimOwner: null,
+      }) }),
     );
   });
 

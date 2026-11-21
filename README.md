@@ -38,7 +38,7 @@ they do not create product-specific agents.
 3. `pnpm db:migrate`
 4. `pnpm dev` (starts the API and frontend locally, with HMR)
 
-`pnpm dev` starts API and frontend directly, without `scripts/dev-tunnel.mjs` or a public tunnel; browser requests use `http://localhost:4000/api`. It explicitly disables workspace-bot and System Bot runtime startup side effects; Telegram-backed Finance consumer authentication is available through `pnpm dev:bots`.
+`pnpm dev` starts API and frontend directly, without `scripts/dev/dev-tunnel.mjs` or a public tunnel; browser requests use `http://localhost:4000/api`. It explicitly disables workspace-bot and System Bot runtime startup side effects; Telegram-backed Finance consumer authentication is available through `pnpm dev:bots`.
 
 ### Local Telegram development
 

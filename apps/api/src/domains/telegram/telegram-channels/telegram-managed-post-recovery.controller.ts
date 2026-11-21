@@ -39,8 +39,9 @@ export class TelegramManagedPostRecoveryController {
   resetScheduledToDrafts(
     @CurrentUser() user: JwtUser,
     @Param('id') channelId: string,
+    @Body() body: TelegramManagedPostRescheduleBatchDto,
   ) {
-    return this.scheduledReset.resetChannelScheduledPosts(user.sub, channelId);
+    return this.scheduledReset.resetChannelScheduledPosts(user.sub, channelId, body?.postIds);
   }
 
   @Post(':id/managed-posts/reschedule-all')

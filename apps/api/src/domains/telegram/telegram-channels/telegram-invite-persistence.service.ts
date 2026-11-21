@@ -32,6 +32,10 @@ export class TelegramInvitePersistenceService {
     expireDate: true,
     memberLimit: true,
     joinedCount: true,
+    joinedObserved: true,
+    requestedObserved: true,
+    joinedObservedAt: true,
+    requestedObservedAt: true,
     peakAttributedCount: true,
     isRevoked: true,
     lastSyncedAt: true,
@@ -70,6 +74,10 @@ export class TelegramInvitePersistenceService {
     telegramChannelId: true,
     adCampaignId: true,
     joinedCount: true,
+    joinedObserved: true,
+    requestedObserved: true,
+    joinedObservedAt: true,
+    requestedObservedAt: true,
     requestedCount: true,
     peakAttributedCount: true,
     isRevoked: true,
@@ -80,8 +88,6 @@ export class TelegramInvitePersistenceService {
   private telegramInviteLinkRequestedCountColumnAvailable: boolean | null =
     null;
 
-  private ensureTelegramInviteLinkRequestedCountColumnPromise: Promise<boolean> | null =
-    null;
 
   public isRequestedCountUnsupportedPrismaError(error: unknown) {
     const message =
@@ -138,35 +144,7 @@ export class TelegramInvitePersistenceService {
   }
 
   public async ensureTelegramInviteLinkRequestedCountColumnAvailable() {
-    if (!this.supportsTelegramInviteLinkRequestedCount()) {
-      return false;
-    }
-    if (this.telegramInviteLinkRequestedCountColumnAvailable === true) {
-      return true;
-    }
-    if (this.ensureTelegramInviteLinkRequestedCountColumnPromise) {
-      return this.ensureTelegramInviteLinkRequestedCountColumnPromise;
-    }
-    this.ensureTelegramInviteLinkRequestedCountColumnPromise = (async () => {
-      if (typeof this.prisma.$executeRawUnsafe !== 'function') {
-        return false;
-      }
-      await this.prisma.$executeRawUnsafe(`
-          ALTER TABLE "TelegramInviteLink"
-          ADD COLUMN IF NOT EXISTS "requestedCount" INTEGER NOT NULL DEFAULT 0
-        `);
-      this.telegramInviteLinkRequestedCountColumnAvailable = true;
-      this.logger.warn(
-        'TelegramInviteLink.requestedCount column was missing and was created automatically for compatibility.',
-      );
-      return true;
-    })();
-    try {
-      await this.ensureTelegramInviteLinkRequestedCountColumnPromise;
-    } finally {
-      this.ensureTelegramInviteLinkRequestedCountColumnPromise = null;
-    }
-    return Boolean(this.telegramInviteLinkRequestedCountColumnAvailable);
+    return false; // The checked-in migration is the sole DDL owner.
   }
 
   public canWriteTelegramInviteLinkRequestedCount() {

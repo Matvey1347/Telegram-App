@@ -21,7 +21,6 @@ export function MutualPromotionAttributionChart({
   if (!history || history.points.length < 2) return null;
   const chartData = history.points.map((point) => ({
     ...point,
-    acquiredCount: point.acquiredCount ?? point.joinedCount,
     timestamp: new Date(point.at).getTime(),
   }));
 
@@ -76,6 +75,15 @@ export function MutualPromotionAttributionChart({
                 borderRadius: 8,
                 fontSize: 12,
               }}
+            />
+            <Line
+              type="monotone"
+              dataKey="joinedCount"
+              name="Joined"
+              stroke="#60a5fa"
+              strokeWidth={2}
+              dot={false}
+              isAnimationActive={false}
             />
             <Line
               type="monotone"

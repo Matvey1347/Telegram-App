@@ -9,6 +9,7 @@ import {
 import { createSyncStoragePersister } from "@tanstack/query-sync-storage-persister";
 import { type PropsWithChildren, useEffect, useState } from "react";
 import { FinanceFeedbackProvider } from "@consumer-finance/web/components/ui/finance-feedback";
+import { FinanceBrandEnvironment } from "./finance-brand-environment";
 import financeStyles from "@consumer-finance/web/components/ui/finance-ui.module.css";
 import { registerFinanceServiceWorker } from "@finance-web/lib/pwa/service-worker";
 
@@ -88,7 +89,7 @@ function restorePersistedConsumerFinanceQueryCache(queryClient: QueryClient) {
 }
 
 /** Consumer Finance owns a bot-scoped persisted read cache and local feedback UI. */
-export function ConsumerFinanceProvider({ children }: PropsWithChildren) {
+export function ConsumerFinanceProvider({ children, development = false }: PropsWithChildren<{ development?: boolean }>) {
   const [queryClient] = useState(() => {
     const client = new QueryClient({
         defaultOptions: {
@@ -145,7 +146,9 @@ export function ConsumerFinanceProvider({ children }: PropsWithChildren) {
         data-consumer-finance-theme="neutral-blue"
         className={`${financeStyles.themeRoot} min-h-full bg-neutral-950 text-white`}
       >
-        <FinanceFeedbackProvider>{children}</FinanceFeedbackProvider>
+        <FinanceBrandEnvironment.Provider value={development}>
+          <FinanceFeedbackProvider>{children}</FinanceFeedbackProvider>
+        </FinanceBrandEnvironment.Provider>
       </div>
     </QueryClientProvider>
   );

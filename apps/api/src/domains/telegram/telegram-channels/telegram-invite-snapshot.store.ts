@@ -12,9 +12,6 @@ export class TelegramInviteSnapshotStore {
     | 'available'
     | 'missing' = 'unknown';
 
-  private ensureTelegramInviteLinkSnapshotStoragePromise: Promise<boolean> | null =
-    null;
-
   public isInviteLinkSnapshotStorageMissing(error: unknown) {
     if (!(error instanceof Prisma.PrismaClientKnownRequestError)) return false;
     if (error.code === 'P2021') return true;
@@ -34,103 +31,6 @@ export class TelegramInviteSnapshotStore {
     return originalCode === '42P01';
   }
 
-  public async ensureTelegramInviteLinkSnapshotStorageAvailable() {
-    if (this.telegramInviteLinkSnapshotStorageState === 'available') {
-      return true;
-    }
-    if (this.ensureTelegramInviteLinkSnapshotStoragePromise) {
-      return this.ensureTelegramInviteLinkSnapshotStoragePromise;
-    }
-    this.ensureTelegramInviteLinkSnapshotStoragePromise = (async () => {
-      if (typeof this.prisma.$executeRawUnsafe !== 'function') {
-        return false;
-      }
-      await this.prisma.$executeRawUnsafe(`
-          CREATE TABLE IF NOT EXISTS "TelegramInviteLinkSnapshot" (
-            "id" TEXT NOT NULL,
-            "workspaceId" TEXT NOT NULL,
-            "telegramChannelId" TEXT NOT NULL,
-            "inviteLinkId" TEXT NOT NULL,
-            "adCampaignId" TEXT,
-            "syncedAt" TIMESTAMP(3) NOT NULL,
-            "joinedCount" INTEGER NOT NULL DEFAULT 0,
-            "requestedCount" INTEGER NOT NULL DEFAULT 0,
-            "isRevoked" BOOLEAN NOT NULL DEFAULT false,
-            "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            CONSTRAINT "TelegramInviteLinkSnapshot_pkey" PRIMARY KEY ("id")
-          )
-        `);
-      await this.prisma.$executeRawUnsafe(`
-          CREATE UNIQUE INDEX IF NOT EXISTS "TelegramInviteLinkSnapshot_inviteLinkId_syncedAt_key"
-          ON "TelegramInviteLinkSnapshot"("inviteLinkId", "syncedAt")
-        `);
-      await this.prisma.$executeRawUnsafe(`
-          CREATE INDEX IF NOT EXISTS "TelegramInviteLinkSnapshot_workspaceId_telegramChannelId_syncedAt_idx"
-          ON "TelegramInviteLinkSnapshot"("workspaceId", "telegramChannelId", "syncedAt")
-        `);
-      await this.prisma.$executeRawUnsafe(`
-          CREATE INDEX IF NOT EXISTS "TelegramInviteLinkSnapshot_workspaceId_adCampaignId_syncedAt_idx"
-          ON "TelegramInviteLinkSnapshot"("workspaceId", "adCampaignId", "syncedAt")
-        `);
-      await this.prisma.$executeRawUnsafe(`
-          CREATE INDEX IF NOT EXISTS "TelegramInviteLinkSnapshot_workspaceId_inviteLinkId_syncedAt_idx"
-          ON "TelegramInviteLinkSnapshot"("workspaceId", "inviteLinkId", "syncedAt")
-        `);
-      await this.prisma.$executeRawUnsafe(`
-          DO $$
-          BEGIN
-            IF NOT EXISTS (
-              SELECT 1 FROM pg_constraint
-              WHERE conname = 'TelegramInviteLinkSnapshot_workspaceId_fkey'
-            ) THEN
-              ALTER TABLE "TelegramInviteLinkSnapshot"
-              ADD CONSTRAINT "TelegramInviteLinkSnapshot_workspaceId_fkey"
-              FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id")
-              ON DELETE CASCADE ON UPDATE CASCADE;
-            END IF;
-            IF NOT EXISTS (
-              SELECT 1 FROM pg_constraint
-              WHERE conname = 'TelegramInviteLinkSnapshot_telegramChannelId_fkey'
-            ) THEN
-              ALTER TABLE "TelegramInviteLinkSnapshot"
-              ADD CONSTRAINT "TelegramInviteLinkSnapshot_telegramChannelId_fkey"
-              FOREIGN KEY ("telegramChannelId") REFERENCES "TelegramChannel"("id")
-              ON DELETE CASCADE ON UPDATE CASCADE;
-            END IF;
-            IF NOT EXISTS (
-              SELECT 1 FROM pg_constraint
-              WHERE conname = 'TelegramInviteLinkSnapshot_inviteLinkId_fkey'
-            ) THEN
-              ALTER TABLE "TelegramInviteLinkSnapshot"
-              ADD CONSTRAINT "TelegramInviteLinkSnapshot_inviteLinkId_fkey"
-              FOREIGN KEY ("inviteLinkId") REFERENCES "TelegramInviteLink"("id")
-              ON DELETE CASCADE ON UPDATE CASCADE;
-            END IF;
-            IF NOT EXISTS (
-              SELECT 1 FROM pg_constraint
-              WHERE conname = 'TelegramInviteLinkSnapshot_adCampaignId_fkey'
-            ) THEN
-              ALTER TABLE "TelegramInviteLinkSnapshot"
-              ADD CONSTRAINT "TelegramInviteLinkSnapshot_adCampaignId_fkey"
-              FOREIGN KEY ("adCampaignId") REFERENCES "AdCampaign"("id")
-              ON DELETE SET NULL ON UPDATE CASCADE;
-            END IF;
-          END
-          $$;
-        `);
-      this.telegramInviteLinkSnapshotStorageState = 'available';
-      this.logger.warn(
-        'TelegramInviteLinkSnapshot table was missing in the database and was created automatically for compatibility.',
-      );
-      return true;
-    })();
-    try {
-      return await this.ensureTelegramInviteLinkSnapshotStoragePromise;
-    } finally {
-      this.ensureTelegramInviteLinkSnapshotStoragePromise = null;
-    }
-  }
-
   public inviteLinkSyntheticHistoryPoint(params: {
     syncedAt?: Date | null;
     joinedCount?: number | null;
@@ -139,8 +39,8 @@ export class TelegramInviteSnapshotStore {
   }) {
     return {
       syncedAt: params.syncedAt ?? new Date(),
-      joinedCount: Number(params.joinedCount ?? 0),
-      requestedCount: Number(params.requestedCount ?? 0),
+      joinedCount: params.joinedCount ?? null,
+      requestedCount: params.requestedCount ?? null,
       isRevoked: Boolean(params.isRevoked),
     };
   }
@@ -148,8 +48,8 @@ export class TelegramInviteSnapshotStore {
   public appendCurrentInviteLinkHistoryRowIfChanged<
     T extends {
       syncedAt: Date;
-      joinedCount: number;
-      requestedCount: number;
+      joinedCount: number | null;
+      requestedCount: number | null;
       isRevoked?: boolean | null;
     },
   >(
@@ -161,14 +61,14 @@ export class TelegramInviteSnapshotStore {
       isRevoked?: boolean | null;
     },
   ) {
-    const currentJoinedCount = Number(current.joinedCount ?? 0);
-    const currentRequestedCount = Number(current.requestedCount ?? 0);
+    const currentJoinedCount = current.joinedCount ?? null;
+    const currentRequestedCount = current.requestedCount ?? null;
     const currentRevoked = Boolean(current.isRevoked);
     const latest = rows[rows.length - 1] ?? null;
     if (
       latest &&
-      Number(latest.joinedCount || 0) === currentJoinedCount &&
-      Number(latest.requestedCount || 0) === currentRequestedCount &&
+      latest.joinedCount === currentJoinedCount &&
+      latest.requestedCount === currentRequestedCount &&
       Boolean(latest.isRevoked) === currentRevoked
     ) {
       return rows;
@@ -205,16 +105,7 @@ export class TelegramInviteSnapshotStore {
     } catch (error) {
       if (!this.isInviteLinkSnapshotStorageMissing(error)) throw error;
       this.telegramInviteLinkSnapshotStorageState = 'missing';
-      const repaired =
-        await this.ensureTelegramInviteLinkSnapshotStorageAvailable();
-      if (!repaired) return [];
-      const rows = await this.prisma.telegramInviteLinkSnapshot.findMany({
-        where: params.where,
-        orderBy: params.orderBy,
-        take: params.take,
-      });
-      this.telegramInviteLinkSnapshotStorageState = 'available';
-      return rows;
+      return [];
     }
   }
 
@@ -226,8 +117,8 @@ export class TelegramInviteSnapshotStore {
       id: string;
       telegramChannelId: string;
       adCampaignId: string | null;
-      joinedCount: number;
-      requestedCount: number;
+      joinedCount: number | null;
+      requestedCount: number | null;
       isRevoked: boolean;
     }>;
   }) {
@@ -241,8 +132,8 @@ export class TelegramInviteSnapshotStore {
           inviteLinkId: link.id,
           adCampaignId: link.adCampaignId ?? null,
           syncedAt: params.syncedAt,
-          joinedCount: Number(link.joinedCount || 0),
-          requestedCount: Number(link.requestedCount || 0),
+          joinedCount: link.joinedCount,
+          requestedCount: link.requestedCount,
           isRevoked: Boolean(link.isRevoked),
         })),
         skipDuplicates: true,
@@ -251,28 +142,9 @@ export class TelegramInviteSnapshotStore {
     } catch (error) {
       if (!this.isInviteLinkSnapshotStorageMissing(error)) throw error;
       this.telegramInviteLinkSnapshotStorageState = 'missing';
-      const repaired =
-        await this.ensureTelegramInviteLinkSnapshotStorageAvailable();
-      if (!repaired) {
-        this.logger.warn(
-          'TelegramInviteLinkSnapshot table is missing; invite-link history snapshots are skipped until migrations are applied.',
-        );
-        return;
-      }
-      await this.prisma.telegramInviteLinkSnapshot.createMany({
-        data: params.links.map((link) => ({
-          workspaceId: params.workspaceId,
-          telegramChannelId: params.channelId,
-          inviteLinkId: link.id,
-          adCampaignId: link.adCampaignId ?? null,
-          syncedAt: params.syncedAt,
-          joinedCount: Number(link.joinedCount || 0),
-          requestedCount: Number(link.requestedCount || 0),
-          isRevoked: Boolean(link.isRevoked),
-        })),
-        skipDuplicates: true,
-      });
-      this.telegramInviteLinkSnapshotStorageState = 'available';
+      this.logger.warn(
+        'TelegramInviteLinkSnapshot is unavailable. Apply the migration before syncing invite history.',
+      );
     }
   }
 }

@@ -244,11 +244,10 @@ export class TelegramChannelsSupportService {
   }
 
   public syncSelectionTotalSteps(selection: TelegramChannelSyncSelection) {
-    const includesHistorical =
-      selection.syncIncludeInviteLinks || selection.syncIncludeHistoricalPosts;
     return (
       Number(selection.syncIncludePublicInfo) +
-      Number(includesHistorical) +
+      Number(selection.syncIncludeInviteLinks) +
+      Number(selection.syncIncludeHistoricalPosts) +
       Number(selection.syncIncludePostMetrics) +
       Number(selection.syncIncludeOlderPosts) +
       Number(selection.syncIncludeChannelStats) +

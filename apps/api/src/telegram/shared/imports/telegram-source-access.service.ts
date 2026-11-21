@@ -107,7 +107,8 @@ export class TelegramSourceAccessService {
         canManageInviteLinks: Boolean(
           raw?.isCreator || adminRights?.inviteUsers,
         ),
-        canViewStats: Boolean(raw?.isCreator || adminRights),
+        canViewStats: typeof raw?.canViewStats === 'boolean'
+          ? raw.canViewStats : Boolean(raw?.isCreator || adminRights),
       },
     };
   }
@@ -159,8 +160,8 @@ export class TelegramSourceAccessService {
     );
   }
 
-  async upsertAccess(input: AccessInput) {
-    return this.prisma.telegramChannelSourceAccess.upsert({
+  async upsertAccess(input: AccessInput, tx: Pick<PrismaService, 'telegramChannelSourceAccess'> = this.prisma, checkedAt = new Date()) {
+    return tx.telegramChannelSourceAccess.upsert({
       where: {
         channelId_sourceId_sourceType: {
           channelId: input.channelId,
@@ -176,13 +177,13 @@ export class TelegramSourceAccessService {
         role: input.role,
         ...input.permissions,
         rawPermissions: input.rawPermissions as Prisma.InputJsonValue,
-        lastCheckedAt: new Date(),
+        lastCheckedAt: checkedAt,
       },
       update: {
         role: input.role,
         ...input.permissions,
         rawPermissions: input.rawPermissions as Prisma.InputJsonValue,
-        lastCheckedAt: new Date(),
+        lastCheckedAt: checkedAt,
       },
     });
   }
@@ -690,7 +691,9 @@ export class TelegramSourceAccessService {
       .filter(
         (source) =>
           source.sourceType === TelegramSourceType.MTPROTO &&
-          source.canBeUsedForAnalytics,
+          source.canBeUsedForAnalytics &&
+          (dataType !== TelegramChannelDataType.INVITE_LINKS || source.permissions.canManageInviteLinks) &&
+          (dataType !== TelegramChannelDataType.STATS || source.permissions.canViewStats),
       )
       .sort(
         (left, right) =>

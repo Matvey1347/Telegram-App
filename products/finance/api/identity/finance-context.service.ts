@@ -72,8 +72,7 @@ export class FinanceContextService {
     const { runtime } = await this.selectedRuntime(botIntegrationId, {
       allowDisabledLocalBrowserRuntime: true,
     });
-    const username =
-      this.environments.browserLoginBotUsername() ?? runtime.username;
+    const username = runtime.username;
     if (!username)
       throw new NotFoundException("Finance bot browser login is unavailable");
     return { username };
@@ -91,6 +90,7 @@ export class FinanceContextService {
         "Finance bot runtime is not enabled in this process",
       );
     }
+    const localUsername = environment === "LOCAL" ? this.environments.browserLoginBotUsername() : null;
     const bot = await this.prisma.telegramBotIntegration.findFirst({
       where: {
         id: botIntegrationId,
@@ -101,10 +101,15 @@ export class FinanceContextService {
         id: true,
         workspaceId: true,
         runtimeInstances: {
-          where:
-            options.allowDisabledLocalBrowserRuntime && environment === "LOCAL"
-              ? { environment }
-              : { environment, runtimeStatus: "ACTIVE" },
+          where: {
+            environment,
+            ...(options.allowDisabledLocalBrowserRuntime && environment === "LOCAL"
+              ? {}
+              : { runtimeStatus: "ACTIVE" }),
+            ...(localUsername
+              ? { username: { equals: localUsername, mode: "insensitive" } }
+              : {}),
+          },
           select: {
             id: true,
             username: true,

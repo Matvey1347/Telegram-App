@@ -166,7 +166,6 @@ describe('MutualPromotionCommandService', () => {
       expect.objectContaining({
         data: expect.objectContaining({
           inviteJoinedAtStart: 2,
-          inviteRequestedAtStart: 0,
           baselineCapturedAt: startsAt,
         }),
       }),

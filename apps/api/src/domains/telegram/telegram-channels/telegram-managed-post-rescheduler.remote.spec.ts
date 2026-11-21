@@ -1,6 +1,6 @@
+import { publishNativeManagedPost } from './telegram-managed-post-native-replacement';
 import {
   assertRescheduleActive,
-  cancelPreviousNativeSchedule,
   rescheduleContext,
   loadTelegramPublishedHistory,
   loadTelegramScheduledQueues,
@@ -352,46 +352,31 @@ describe('rescheduler request-scoped Telegram snapshots', () => {
 });
 
 describe('native reschedule deadline admission', () => {
-  it('does not delete schedule IDs proven absent for this claimed post', async () => {
-    const count = jest.fn().mockResolvedValue(1);
-    const deleteScheduledPost = jest.fn();
-    const connectedAccount = jest.fn();
-    const onCancel = jest.fn();
+  it('journals a confirmed-missing recreation immediately before send', async () => {
+    const scheduledAt = new Date(Date.now() + 60_000);
+    const start = jest.fn();
+    const acknowledged = jest.fn();
+    const publishPost = jest.fn(async (request) => {
+      expect(request.replacement).toBeUndefined();
+      expect(start).not.toHaveBeenCalled();
+      await request.beforeSend();
+      return ['42'];
+    });
     const result = await rescheduleContext.run(
-      {
-        owner: 'owner',
-        signal: new AbortController().signal,
-        confirmedMissingScheduleFor: 'post',
-      },
-      () =>
-        cancelPreviousNativeSchedule(
-          {
-            prisma: { telegramManagedPost: { count } } as never,
-            access: { connectedAccount } as never,
-            mtprotoClient: { deleteScheduledPost } as never,
-          },
-          {
-            workspaceId: 'workspace',
-            channelId: 'channel',
-            channel: channelReference,
-            post: {
-              id: 'post',
-              status: 'SCHEDULED',
-              sourceId: 'sender',
-              sourceType: 'MTPROTO',
-              telegramScheduledMessageIds: ['absent-id'],
-            },
-            sourceId: 'sender',
-            account: {} as never,
-            onCancel,
-          },
-        ),
+      { owner: 'owner', signal: new AbortController().signal, confirmedMissingScheduleFor: 'post', scheduledAt },
+      () => publishNativeManagedPost({
+        prisma: { telegramManagedPost: { count: jest.fn().mockResolvedValue(1) } } as never,
+        mtproto: { publishPost } as never,
+        store: { prepare: jest.fn(), start, acknowledged } as never,
+        post: { id: 'post', workspaceId: 'workspace', telegramChannelId: 'channel', telegramScheduledMessageIds: ['17'] } as never,
+        sourceId: 'sender',
+        params: { scheduleAt: scheduledAt } as never,
+        onCancel: jest.fn(),
+      }),
     );
-    expect(result).toBe(false);
-    expect(count).toHaveBeenCalledTimes(1);
-    expect(deleteScheduledPost).not.toHaveBeenCalled();
-    expect(connectedAccount).not.toHaveBeenCalled();
-    expect(onCancel).not.toHaveBeenCalled();
+    expect(result).toEqual(['42']);
+    expect(start).toHaveBeenCalledWith(expect.objectContaining({ postId: 'post', owner: 'owner' }));
+    expect(acknowledged).toHaveBeenCalledWith(expect.objectContaining({ newMessageIds: ['42'] }));
   });
 
   it('rejects an elapsed target before reading ownership', async () => {

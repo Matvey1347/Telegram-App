@@ -10,7 +10,11 @@ RUN corepack enable
 
 COPY . .
 
-RUN pnpm install --frozen-lockfile
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends python3 make g++ \
+    && npm_config_nodedir=/usr/local pnpm install --frozen-lockfile \
+    && apt-get purge -y --auto-remove python3 make g++ \
+    && rm -rf /var/lib/apt/lists/*
 
 RUN pnpm --filter finance-api prisma:generate \
     && pnpm --filter finance-api build

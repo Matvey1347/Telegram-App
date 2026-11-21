@@ -14,12 +14,14 @@ import {
 import type { InviteLinkHistoryPoint, InviteLinkHistorySummary } from "@/lib/api";
 
 function formatNumber(value: unknown) {
-  const parsed = Number(value ?? 0);
+  if (value == null) return "—";
+  const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed.toLocaleString() : "0";
 }
 
 function formatPercent(value: unknown) {
-  const parsed = Number(value ?? 0);
+  if (value == null) return "—";
+  const parsed = Number(value);
   return Number.isFinite(parsed) ? `${parsed.toFixed(1)}%` : "0.0%";
 }
 
@@ -46,8 +48,8 @@ function hasVisibleInviteLinkHistory(
   summary: InviteLinkHistorySummary,
 ) {
   if (
-    summary.currentJoinedCount > 0 ||
-    summary.currentRequestedCount > 0 ||
+    (summary.currentJoinedCount ?? 0) > 0 ||
+    (summary.currentRequestedCount ?? 0) > 0 ||
     summary.peakJoinedCount > 0 ||
     summary.peakRequestedCount > 0 ||
     summary.drawdownFromPeak > 0
@@ -88,7 +90,7 @@ export function InviteLinkHistoryPanel({
   const showPeak = summary.peakJoinedCount !== summary.currentJoinedCount;
   const showAttributedPeak =
     summary.peakTotalAttributed !== summary.currentTotalAttributed;
-  const showPending = summary.currentRequestedCount > 0;
+  const showPending = (summary.currentRequestedCount ?? 0) > 0;
   const showDrop = summary.drawdownFromPeak > 0;
 
   return (

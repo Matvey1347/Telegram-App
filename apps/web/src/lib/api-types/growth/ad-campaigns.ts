@@ -1,3 +1,4 @@
+import type { CampaignInviteWindow } from "@telegram-system/shared";
 import type { Currency, Icon, ResolvedEmoji, WorkspaceMember } from "../core";
 import type { TelegramChannel } from "../telegram/telegram-channels";
 import type {
@@ -202,7 +203,7 @@ export type AdCampaign = AdCampaignAnalyticsFields & {
   promoIds?: string[];
   telegramInviteLinkId?: string | null;
   inviteLinkIds?: string[];
-  inviteLinkWindows?: Array<{ inviteLinkId: string; fromDate: string; joinedCount?: number | null; pendingCount?: number | null; computedAt?: string | null }>;
+  inviteLinkWindows?: CampaignInviteWindow[];
   periodCountsUnavailable?: boolean;
   botInviteLinkIds?: string[];
   trackingLinkKind?: string;
@@ -275,9 +276,9 @@ export type AdCampaign = AdCampaignAnalyticsFields & {
   inviteLinkHistorySummary?: AdCampaignInviteLinkHistory["summary"] | null;
   admissionViewAnalytics?: AdCampaignAdmissionViewAnalytics | null;
   analytics?: {
-    joinedCount: number;
-    requestedCount?: number;
-    attributedCount?: number;
+    joinedCount: number | null;
+    requestedCount?: number | null;
+    attributedCount?: number | null;
     leftCount: number;
     netGrowth: number;
     costPerJoinedSubscriber?: number | null;

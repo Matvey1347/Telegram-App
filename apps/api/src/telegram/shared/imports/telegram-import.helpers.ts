@@ -20,6 +20,7 @@ export type ResolvedTelegramEntity = {
   kind: 'channel' | 'person';
   isCreator?: boolean;
   adminRights?: Record<string, unknown> | null;
+  canViewStats?: boolean | null;
   telegramChatId: string;
   title: string;
   username: string | null;

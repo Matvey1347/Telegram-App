@@ -61,6 +61,7 @@ describe('TelegramPostCalendarPlannerService', () => {
         update: jest.fn(),
         findFirst: jest.fn(),
       },
+      telegramAiPostingSettings: { findFirst: jest.fn().mockResolvedValue(null) },
       telegramManagedPost: {
         findMany: jest.fn().mockImplementation(async (args) => {
           if (args?.select?.scheduledAt) return [];

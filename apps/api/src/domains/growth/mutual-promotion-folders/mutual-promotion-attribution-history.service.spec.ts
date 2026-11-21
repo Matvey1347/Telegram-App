@@ -158,6 +158,21 @@ describe('MutualPromotionAttributionHistoryService', () => {
     );
   });
 
+  it('retains a joined series without presenting unknown requests as zero', async () => {
+    const prisma = {
+      mutualPromotionFolder: { findFirst: jest.fn().mockResolvedValue(null) },
+      telegramInviteLinkSnapshot: { findMany: jest.fn().mockResolvedValue([]) },
+      telegramChannelAudienceSnapshot: { findMany: jest.fn().mockResolvedValue([]) },
+    };
+    const result = await new MutualPromotionAttributionHistoryService(prisma as never).load({
+      workspaceId: 'workspace-1', folderId: 'folder-1', folderStartsAt: participant.baselineCapturedAt,
+      participants: [{ ...participant, inviteRequestedAtStart: null }],
+    });
+    expect(result.get('participant-1')?.points.at(-1)).toMatchObject({
+      joinedCount: 5, requestedCount: null, acquiredCount: null, unsubscribedCount: null,
+    });
+  });
+
   it('freezes completed-folder history at the saved final boundary', async () => {
     const finalCapturedAt = new Date('2026-09-06T08:00:00.000Z');
     const afterFinal = new Date('2026-09-07T08:00:00.000Z');

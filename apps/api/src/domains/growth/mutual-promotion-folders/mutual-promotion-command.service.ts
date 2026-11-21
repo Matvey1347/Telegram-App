@@ -81,22 +81,23 @@ export class MutualPromotionCommandService {
       );
       // Older paid-only folders became ACTIVE before their start counters were
       // captured. Restore only the missing baseline: historical joined users
-      // are counted by Telegram for the folder interval; join requests are
-      // cumulative, so the safe legacy baseline is zero.
+      // are counted by Telegram for the folder interval. The historical
+      // pending baseline is not reconstructible from the current queue.
       if (
         participant.role === 'PAID' &&
         participant.folder.status === 'ACTIVE' &&
-        !participant.baselineCapturedAt
+        !participant.baselineCapturedAt &&
+        refreshed.currentJoinedCount != null &&
+        refreshed.joinedWithinPeriod != null
       ) {
         await this.prisma.mutualPromotionFolderParticipant.updateMany({
-          where: { id: participant.id, baselineCapturedAt: null },
+          where: { id: participant.id, baselineCapturedAt: null, inviteJoinedAtStart: null },
           data: {
             inviteJoinedAtStart: Math.max(
               0,
               refreshed.currentJoinedCount -
-                (refreshed.joinedWithinPeriod ?? 0),
+                refreshed.joinedWithinPeriod,
             ),
-            inviteRequestedAtStart: 0,
             baselineCapturedAt: participant.folder.startsAt,
           },
         });

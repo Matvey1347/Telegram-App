@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { publicWebEnvironment } from "@/config/public-env";
 import { telegramSystemBotApi } from "@/lib/api";
 
 let lastSyncedWorkspaceId = "";
@@ -54,7 +55,7 @@ export function useSystemBotWorkspaceSync(
   }, [selectWebsiteWorkspace, workspaceId]);
 
   useEffect(() => {
-    if (!workspaceId) return;
+    if (!workspaceId || publicWebEnvironment.liveMode) return;
     const request = syncWorkspaceSelection(workspaceId).finally(() => {
       if (websiteSyncInFlight.current === request)
         websiteSyncInFlight.current = null;
@@ -63,6 +64,7 @@ export function useSystemBotWorkspaceSync(
   }, [workspaceId]);
 
   useEffect(() => {
+    if (publicWebEnvironment.liveMode) return;
     let stopped = false;
     const reconcileFromBot = () => {
       if (stopped) return;

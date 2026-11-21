@@ -1,4 +1,5 @@
 import {
+  TelegramChannelDataType,
   TelegramInviteLinkCreatorMatchSource,
   TelegramManagedPostRemoteStatus,
   TelegramManagedPostStatus,
@@ -52,7 +53,7 @@ describe('TelegramChannelsService characterization seams', () => {
       });
       service['syncSelectionHasAnyEnabled'] = jest.fn().mockReturnValue(true);
       service['syncSelectionTotalSteps'] = jest.fn().mockReturnValue(4);
-      service['bestMtprotoAccountId'] = jest.fn().mockResolvedValue('account');
+      service['verifiedSyncAccount'] = jest.fn(async (_workspace, _channel, type) => ({ id: String(type) }));
       service['connectedAccount'] = jest
         .fn()
         .mockResolvedValue({ id: 'account' });
@@ -63,17 +64,17 @@ describe('TelegramChannelsService characterization seams', () => {
     it('continues optional failures in order and reports a partial sync', async () => {
       const { service, clearByPrefix } = setupSync();
       const calls: string[] = [];
-      service['syncHistorical'] = jest.fn().mockImplementation(async () => {
-        calls.push('historical');
+      service['syncHistorical'] = jest.fn().mockImplementation(async (_user, _channel, dto) => {
+        calls.push(dto.telegramUserAccountId);
         return {
           imported: 1,
           updated: 2,
           postsUpdated: 3,
-          inviteLinksScope: 'PARTIAL_ADMINS',
+          inviteLinksScope: dto.syncInviteLinks ? 'PARTIAL_ADMINS' : undefined,
         };
       });
-      service['syncBroadcastStats'] = jest.fn().mockImplementation(async () => {
-        calls.push('stats');
+      service['syncBroadcastStats'] = jest.fn().mockImplementation(async (_user, _channel, dto) => {
+        calls.push(dto.telegramUserAccountId);
         throw new Error('stats unavailable');
       });
       service['syncManagedPosts'] = jest.fn().mockImplementation(async () => {
@@ -83,10 +84,11 @@ describe('TelegramChannelsService characterization seams', () => {
 
       const result = await service.syncNow('user', 'channel');
 
-      expect(calls).toEqual(['historical', 'stats', 'managed']);
+      expect(calls).toEqual([TelegramChannelDataType.POSTS, TelegramChannelDataType.INVITE_LINKS, TelegramChannelDataType.STATS, 'managed']);
       expect(result.status).toBe('partial');
       expect(result.steps.map((step) => [step.step, step.status])).toEqual([
-        ['historical_posts', 'partial'],
+        ['historical_posts', 'success'],
+        ['invite_links', 'partial'],
         ['broadcast_stats', 'failed'],
         ['managed_posts', 'skipped'],
         ['admission_analytics', 'skipped'],
@@ -94,18 +96,17 @@ describe('TelegramChannelsService characterization seams', () => {
       expect(clearByPrefix).toHaveBeenCalled();
     });
 
-    it('stops immediately when a required historical sync fails', async () => {
+    it('continues independent stages and invalidates reads after a history failure', async () => {
       const { service, clearByPrefix } = setupSync();
       const failure = new Error('history failed');
       service['syncHistorical'] = jest.fn().mockRejectedValue(failure);
       service['syncBroadcastStats'] = jest.fn();
       service['syncManagedPosts'] = jest.fn();
 
-      await expect(service.syncNow('user', 'channel')).rejects.toBe(failure);
-
-      expect(service['syncBroadcastStats']).not.toHaveBeenCalled();
-      expect(service['syncManagedPosts']).not.toHaveBeenCalled();
-      expect(clearByPrefix).not.toHaveBeenCalled();
+      expect(await service.syncNow('user', 'channel')).toMatchObject({ status: 'partial' });
+      expect(service['syncBroadcastStats']).toHaveBeenCalled();
+      expect(service['syncManagedPosts']).toHaveBeenCalled();
+      expect(clearByPrefix).toHaveBeenCalled();
     });
 
     it('does not duplicate an audience snapshot created by post metrics', async () => {
@@ -302,7 +303,7 @@ describe('TelegramChannelsService characterization seams', () => {
 
       expect(publishPost).toHaveBeenCalledTimes(1);
       expect(failureUpdate).toHaveBeenLastCalledWith({
-        where: { id: 'post' },
+        where: { id: 'post', workspaceId: 'workspace', telegramChannelId: 'channel' },
         data: expect.objectContaining({
           status: TelegramManagedPostStatus.FAILED,
           telegramRemoteStatus: TelegramManagedPostRemoteStatus.UNKNOWN,

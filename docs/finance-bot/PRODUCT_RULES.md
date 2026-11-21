@@ -179,7 +179,7 @@ brighter green dark variants are used for logos inside dark UI. The higher
 resolution `groshly-white.png`, `groshly-dev-white.png`, `groshly-dark-ui.png`,
 and `groshly-dev-dark-ui.png` are editable source renditions.
 
-`node scripts/sync-finance-brand-assets.mjs` copies the deployment icons to
+`node scripts/build/assets/sync-finance-brand-assets.mjs` copies the deployment icons to
 both web hosts before their builds. The standalone web host also keeps the
 192 px PWA variants in this folder. When replacing an icon, update its 192 px
 variant, then run the sync script. Finance bot profile photos are reconciled

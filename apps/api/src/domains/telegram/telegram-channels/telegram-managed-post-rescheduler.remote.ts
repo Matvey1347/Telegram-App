@@ -128,10 +128,10 @@ export async function loadTelegramScheduledQueues(
       confirmationAccountId: readerId,
     };
     if (
-      confirmation &&
+      confirmation && readerId !== accountId &&
       senderPosts.every(
         (post) =>
-          post.scheduleMode !== 'LOCAL' &&
+          post.scheduleMode !== 'LOCAL' && post.scheduledAt && post.scheduledAt > new Date() &&
           nativeScheduleContentMatches(post, confirmation),
       )
     ) {
@@ -305,6 +305,7 @@ export const rescheduleContext = new AsyncLocalStorage<{
   scheduledAt?: Date;
   confirmedMissingScheduleFor?: string;
   replacementFor?: string;
+  ordinaryReplacement?: boolean;
 }>();
 export async function assertRescheduleActive(
   prisma: PrismaService,
@@ -334,56 +335,4 @@ export async function assertRescheduleActive(
     throw new Error(
       'Rescheduling ownership expired; inspect Telegram before retrying',
     );
-}
-
-/** Original account owns the native queue, including when a new publisher is selected. */
-export async function cancelPreviousNativeSchedule(
-  deps: RemoteDependencies & { prisma: PrismaService },
-  input: {
-    workspaceId: string;
-    channelId: string;
-    channel: ReturnType<
-      TelegramChannelAccessService['mtprotoChannelReference']
-    >;
-    post: {
-      id: string;
-      status: string;
-      sourceId: string | null;
-      sourceType: string | null;
-      telegramScheduledMessageIds: string[];
-    };
-    sourceId: string;
-    account: Awaited<
-      ReturnType<TelegramChannelAccessService['connectedAccount']>
-    >;
-    onCancel: () => void;
-  },
-) {
-  const { post } = input;
-  if (
-    post.status !== 'SCHEDULED' ||
-    !post.telegramScheduledMessageIds.length ||
-    (post.sourceId !== input.sourceId && post.sourceType !== 'MTPROTO')
-  )
-    return false;
-  if (rescheduleContext.getStore()?.confirmedMissingScheduleFor === post.id) {
-    await assertRescheduleActive(deps.prisma, post.id);
-    return false;
-  }
-  const previousAccount =
-    post.sourceId === input.sourceId
-      ? input.account
-      : await deps.access.connectedAccount(
-          input.workspaceId,
-          input.channelId,
-          post.sourceId ?? undefined,
-        );
-  await assertRescheduleActive(deps.prisma, post.id);
-  input.onCancel();
-  await deps.mtprotoClient.deleteScheduledPost({
-    ...deps.access.accountCredentials(previousAccount),
-    channel: input.channel,
-    messageIds: post.telegramScheduledMessageIds,
-  });
-  return true;
 }

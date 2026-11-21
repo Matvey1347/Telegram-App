@@ -158,7 +158,7 @@ describe("FinanceAccountEditor", () => {
     api.updateAccount.mockResolvedValue({ ...imageAccount, name: "Primary" });
     renderEditor({ account: imageAccount, creating: false });
 
-    expect(screen.getByDisplayValue("USD")).toHaveAttribute("readonly");
+    expect(screen.getByDisplayValue("USD")).toBeInTheDocument();
 
     fireEvent.change(screen.getByDisplayValue("Daily card"), {
       target: { value: "Primary" },
@@ -169,6 +169,7 @@ describe("FinanceAccountEditor", () => {
     expect(api.updateAccount).toHaveBeenCalledWith("bot", "account-1", {
       name: "Primary",
       type: "CARD",
+      currency: "USD",
     });
   });
 

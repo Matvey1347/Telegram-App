@@ -19,7 +19,8 @@ import {
 } from "@/lib/api";
 
 function formatNumber(value: unknown) {
-  const parsed = Number(value ?? 0);
+  if (value == null) return "—";
+  const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed.toLocaleString() : "0";
 }
 
@@ -32,7 +33,8 @@ function creatorLabel(link: TelegramInviteLink) {
 }
 
 function formatPercent(value: unknown) {
-  const parsed = Number(value ?? 0);
+  if (value == null) return "—";
+  const parsed = Number(value);
   return Number.isFinite(parsed) ? `${parsed.toFixed(1)}%` : "0.0%";
 }
 
@@ -61,8 +63,8 @@ function hasVisibleInviteLinkHistory(
 ) {
   if (!summary) return false;
   if (
-    summary.currentJoinedCount > 0 ||
-    summary.currentRequestedCount > 0 ||
+    (summary.currentJoinedCount ?? 0) > 0 ||
+    (summary.currentRequestedCount ?? 0) > 0 ||
     summary.peakJoinedCount > 0 ||
     summary.peakRequestedCount > 0 ||
     summary.drawdownFromPeak > 0
@@ -190,8 +192,10 @@ export function InviteLinkPreviewCard({
 }) {
   const joinedCount = Number(link.joinedCount || 0);
   const requestedCount = Number(link.requestedCount || 0);
-  const showJoined = joinedCount > 0;
-  const showRequested = requestedCount > 0;
+  const joinedUnknown = link.joinedObserved !== undefined && !link.joinedObserved && !link.joinedObservedAt && !link.lastSyncedAt;
+  const requestedUnknown = link.requestedObserved !== undefined && !link.requestedObserved && !link.requestedObservedAt && !link.lastSyncedAt;
+  const showJoined = joinedCount > 0 || joinedUnknown || link.joinedObserved === false;
+  const showRequested = requestedCount > 0 || requestedUnknown || link.requestedObserved === false;
   const showSingleZero = !showJoined && !showRequested;
   const resolvedHistory = history ?? link.history ?? null;
   const campaignHref =
@@ -275,18 +279,18 @@ export function InviteLinkPreviewCard({
               {showJoined ? (
                 <div>
                   <p className="text-base font-semibold leading-none">
-                    {formatNumber(joinedCount)}
+                    {joinedUnknown ? "—" : formatNumber(joinedCount)}
                   </p>
-                  <p className="mt-0.5 text-[11px] text-slate-400">joined</p>
+                  <p className="mt-0.5 text-[11px] text-slate-400">joined{link.joinedObserved === false && !joinedUnknown ? " (last known)" : ""}</p>
                 </div>
               ) : null}
               {showRequested ? (
                 <div>
                   <p className="text-base font-semibold leading-none text-amber-200">
-                    {formatNumber(requestedCount)}
+                    {requestedUnknown ? "—" : formatNumber(requestedCount)}
                   </p>
                   <p className="mt-0.5 whitespace-nowrap text-[11px] text-slate-400">
-                    pending requests
+                    pending requests{link.requestedObserved === false && !requestedUnknown ? " (last known)" : ""}
                   </p>
                 </div>
               ) : null}

@@ -1,5 +1,15 @@
 # Finance independence contract
 
+## Consumer recovery path
+
+Groshly Web currently uses same-origin `/api` through the complete
+`apps/api` consumer compatibility host. That host provides
+`/finance/context`, `/finance-bots/:id/*` and the Telegram update dispatcher
+against its existing `DATABASE_URL`. It continues to own the consumer bot
+webhook and records until the cutover criteria below are met. The standalone
+API's separate `FINANCE_DATABASE_URL` and incomplete update dispatcher are
+outside this recovery path.
+
 ## Target boundary
 
 `apps/standalone/finance/api` and `apps/standalone/finance/web` are Finance-only hosts in this

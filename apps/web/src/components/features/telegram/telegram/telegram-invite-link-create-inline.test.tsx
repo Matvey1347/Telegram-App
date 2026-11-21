@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeAll, describe, expect, it, vi } from "vitest";
+import { telegramChannelKeys } from "@/lib/query-keys";
 import { TelegramInviteLinkCreateInline } from "./telegram-invite-link-create-inline";
 
 const mocks = vi.hoisted(() => ({
@@ -25,7 +26,7 @@ beforeAll(() => {
 });
 
 describe("TelegramInviteLinkCreateInline", () => {
-  it("immediately supplies selector presentation from the chosen account", async () => {
+  it("uses the chosen actor for the request and selector after a source refetch", async () => {
     mocks.sources.mockResolvedValue([
       {
         sourceId: "account-1",
@@ -35,14 +36,18 @@ describe("TelegramInviteLinkCreateInline", () => {
         permissions: { canManageInviteLinks: true },
       },
     ]);
-    mocks.createInviteLink.mockResolvedValue({
+    const created = {
       id: "created-link",
       telegramChannelId: "channel-1",
       name: "",
       url: "https://t.me/+created",
       creatorUsername: null,
       creatorPhotoUrl: null,
-    });
+    };
+    let finishRequest!: (value: typeof created) => void;
+    mocks.createInviteLink.mockReturnValueOnce(
+      new Promise<typeof created>((resolve) => { finishRequest = resolve; }),
+    );
     const onCreated = vi.fn();
     const client = new QueryClient({
       defaultOptions: {
@@ -69,6 +74,15 @@ describe("TelegramInviteLinkCreateInline", () => {
     const submit = screen.getByRole("button", { name: "Create and select" });
     await waitFor(() => expect(submit).toBeEnabled());
     fireEvent.click(submit);
+    await waitFor(() =>
+      expect(mocks.createInviteLink).toHaveBeenCalledWith(
+        "channel-1",
+        expect.objectContaining({ mtprotoAccountId: "account-1" }),
+      ),
+    );
+    act(() => client.setQueryData([...telegramChannelKeys.sources(), "channel-1"], []));
+    await screen.findByText("No connected MTProto account can manage invite links for this channel.");
+    await act(async () => { finishRequest(created); });
 
     await waitFor(() =>
       expect(onCreated).toHaveBeenCalledWith(

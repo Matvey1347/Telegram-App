@@ -11,7 +11,7 @@ describe('campaignInviteWindowMetrics', () => {
   });
 
   it('does not fall back to lifetime counts when Telegram did not return complete data', () => {
-    expect(campaignInviteWindowMetrics(links, [{ inviteLinkId: 'one', joinedCount: null, pendingCount: 5 }])).toBeNull();
+    expect(campaignInviteWindowMetrics(links, [{ inviteLinkId: 'one', joinedCount: null, pendingCount: 5 }])).toEqual({ joined: null, pending: 8 });
   });
 
   it('preserves an exact zero for a selected interval', () => {

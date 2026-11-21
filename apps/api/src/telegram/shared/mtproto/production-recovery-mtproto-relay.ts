@@ -1,61 +1,20 @@
-import { createHash } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { TokenEncryptionService } from '../../../common/security/token-encryption.service';
 import { productionRecoveryConfig } from '../../../config/production-recovery-config';
 import { rescheduleContext } from '../../../domains/telegram/telegram-channels/telegram-managed-post-rescheduler.remote';
-import { telegramAccountCredentials } from './telegram-account-credentials';
+import {
+  recoveryAccountMarker,
+  recoveryAuthorization,
+} from './production-recovery-relay-context';
+import { relayOperatorSend } from './production-operator-send-relay';
 import type { TelegramMtprotoClient } from './telegram-mtproto.client';
 
 type Credentials = { apiId: string; apiHash: string; session: string };
-const digest = (value: Credentials) =>
-  createHash('sha256')
-    .update(JSON.stringify([value.apiId, value.apiHash, value.session]))
-    .digest('hex');
-
 /** Development-only transport: business logic and claims remain in localhost. */
 @Injectable()
 export class ProductionRecoveryMtprotoRelay {
   private readonly config = productionRecoveryConfig();
-  private accounts?: Promise<Map<string, string>>;
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly encryption: TokenEncryptionService,
-  ) {}
-
-  private async accountId(credentials: Credentials) {
-    this.accounts ??= (async () => {
-      const links = await this.prisma.telegramChannelAdminLink.findMany({
-        where: {
-          workspaceId: this.config.workspaceId,
-          telegramChannelId: this.config.channelId,
-        },
-        include: { telegramUserAccountIntegration: true },
-      });
-      const accounts = new Map<string, string>();
-      for (const { telegramUserAccountIntegration: account } of links) {
-        if (
-          account.workspaceId !== this.config.workspaceId ||
-          !account.isActive ||
-          account.status !== 'connected'
-        )
-          continue;
-        try {
-          accounts.set(
-            digest(telegramAccountCredentials(this.encryption, account)),
-            account.id,
-          );
-        } catch {
-          /* An unreadable account cannot authorize a transport request. */
-        }
-      }
-      return accounts;
-    })();
-    const accountId = (await this.accounts).get(digest(credentials));
-    if (!accountId)
-      throw new Error('Account is outside the configured recovery channel');
-    return accountId;
-  }
+  constructor(private readonly prisma: PrismaService) {}
 
   private async request<T>(
     operation: string,
@@ -65,9 +24,20 @@ export class ProductionRecoveryMtprotoRelay {
     signal?: AbortSignal,
   ): Promise<T> {
     const context = rescheduleContext.getStore();
+    const authorization = recoveryAuthorization.getStore();
+    if (
+      !authorization ||
+      params.apiHash !== recoveryAccountMarker ||
+      params.apiId !== '0' ||
+      !/^[A-Za-z0-9_-]{1,100}$/.test(params.session)
+    ) {
+      throw new Error(
+        'Recovery relay requires an admitted operator and linked account ID',
+      );
+    }
     const request: Record<string, unknown> = {
       operation,
-      accountId: await this.accountId(params),
+      accountId: params.session,
       ...body,
     };
     if (mutation) {
@@ -94,8 +64,9 @@ export class ProductionRecoveryMtprotoRelay {
       `${this.config.productionApiOrigin}/telegram-channels/${this.config.channelId}/recovery-transport`,
       {
         method: 'POST',
+        redirect: 'error',
         headers: {
-          authorization: `Bearer ${this.config.productionApiToken}`,
+          authorization,
           'x-workspace-id': this.config.workspaceId,
           'content-type': 'application/json',
         },
@@ -124,6 +95,7 @@ export class ProductionRecoveryMtprotoRelay {
   getScheduledHistory(
     params: Parameters<TelegramMtprotoClient['getScheduledHistory']>[0],
   ) {
+    if (params.requireDeletionAccess) throw new Error('Interactive cancellation requires the deployed Telegram owner.');
     return this.request<
       Awaited<ReturnType<TelegramMtprotoClient['getScheduledHistory']>>
     >('scheduled', params);
@@ -158,8 +130,6 @@ export class ProductionRecoveryMtprotoRelay {
     );
   }
   publishPost(params: Parameters<TelegramMtprotoClient['publishPost']>[0]) {
-    if (!params.scheduleAt)
-      throw new Error('Local recovery only permits future native schedules');
     const {
       html,
       textHtmlParts,
@@ -168,6 +138,14 @@ export class ProductionRecoveryMtprotoRelay {
       imageUrls,
       mediaItems,
     } = params;
+    if (!params.scheduleAt) {
+      if (params.apiHash !== recoveryAccountMarker)
+        throw new Error('An admitted MTProto actor is required');
+      return relayOperatorSend<string[]>(params.session, 'mtproto', {
+        html, textHtmlParts, captionHtml, followupHtmlParts, imageUrls, mediaItems,
+        channelId: this.config.channelId,
+      });
+    }
     return this.request<string[]>(
       params.replacement ? 'replace' : 'publish',
       params,

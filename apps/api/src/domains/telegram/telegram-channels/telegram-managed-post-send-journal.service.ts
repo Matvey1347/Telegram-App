@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { TelegramSourceType } from '@prisma/client';
 import { createHash } from 'crypto';
+import { AsyncLocalStorage } from 'node:async_hooks';
+import { productionOperatorRequest } from '@api/telegram/shared/mtproto/production-recovery-relay-context';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { assertManagedPostDeliveryActive } from './telegram-managed-post-delivery-context';
 
@@ -13,6 +15,11 @@ export type ManagedPostSendInput = {
   ordinal: number;
   payloadHash: string;
 };
+
+export const journaledTelegramSend = new AsyncLocalStorage<{
+  operationId: string;
+  input: ManagedPostSendInput;
+}>();
 
 type Rejection = {
   confirmedRejection?: boolean;
@@ -92,7 +99,7 @@ export class TelegramManagedPostSendJournalService {
         workspaceId: input.workspaceId,
         telegramChannelId: input.channelId,
       },
-      select: { id: true },
+      select: { id: true, updatedAt: true },
     });
     if (!post) throw new Error('Telegram send operation workspace mismatch');
     await this.prisma.telegramManagedPostSendOperation.createMany({
@@ -131,6 +138,7 @@ export class TelegramManagedPostSendJournalService {
         data: {
           status: 'STARTED',
           startedAt: now,
+          ...(productionOperatorRequest.getStore() ? { relayStartedAt: null, relayPostRevision: post.updatedAt } : {}),
           retryAt: null,
           errorCode: null,
           attemptCount: { increment: 1 },
@@ -154,7 +162,15 @@ export class TelegramManagedPostSendJournalService {
           errorCode: null,
         },
       });
-    if (result.count !== 1) throw new AmbiguousManagedPostSendError(key);
+    if (result.count === 1) return;
+    if (productionOperatorRequest.getStore()) {
+      const stored = await this.prisma.telegramManagedPostSendOperation.findFirst({
+        where: { id: key, status: 'ACKED', messageIds: { equals: messageIds } },
+        select: { id: true },
+      });
+      if (stored) return;
+    }
+    throw new AmbiguousManagedPostSendError(key);
   }
 
   async rejected(key: string, error: Rejection) {
@@ -210,6 +226,17 @@ export class TelegramManagedPostSendJournalService {
     call: () => Promise<T>,
     extract: (result: T) => string[],
   ) {
+    const operator = productionOperatorRequest.getStore();
+    if (operator?.acknowledgedActor) {
+      await assertManagedPostDeliveryActive(this.prisma, input.postId);
+      const receipt = await this.prisma.telegramManagedPostSendOperation.findFirst({
+        where: { ...input, status: 'ACKED' },
+        select: { messageIds: true },
+      });
+      if (!receipt || !operator.remainingAckOrdinals?.delete(input.ordinal))
+        throw new Error('The current rendered operation has no acknowledged receipt');
+      return receipt.messageIds;
+    }
     const attempt = await this.begin(input);
     if (attempt.acknowledged) return attempt.messageIds;
     // A failed fence before invoking the transport is a definite non-send.
@@ -223,7 +250,7 @@ export class TelegramManagedPostSendJournalService {
       throw error;
     }
     try {
-      const ids = extract(await call());
+      const ids = extract(await journaledTelegramSend.run({ operationId: attempt.key, input }, call));
       await this.confirmed(attempt.key, ids);
       return ids;
     } catch (error) {

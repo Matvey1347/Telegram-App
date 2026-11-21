@@ -210,7 +210,7 @@ const messages = {
   "telegram.posts.support.fileReadError": "Не удалось прочитать файл.",
   "telegram.posts.support.importGroups": "Импорт групп",
   "telegram.posts.support.promptCopied": "Инструкция скопирована.",
-  "telegram.posts.support.returnDrafts": "Вернуть всё в черновики",
+  "telegram.posts.support.returnDrafts": "Вернуть выбранные публикации в черновики",
   "telegram.posts.support.rescheduleAll":
     "Перепланировать запланированные публикации",
   "telegram.posts.support.rescheduling": "Перепланируем…",
@@ -245,7 +245,7 @@ const messages = {
   "telegram.posts.support.reschedulePostFailed":
     "Не удалось обработать публикацию",
   "telegram.posts.support.returnDraftsDescription":
-    "Все сообщения, запланированные в этом Telegram-канале, будут удалены безвозвратно. Запланированные публикации в Telegram System станут чистыми черновиками и потеряют ID и ссылки сообщений Telegram. Опубликованные сообщения не изменятся.",
+    "Удаляет локальное расписание и отменяет подтверждённое расписание Telegram для выбранных обычных публикаций.",
   "telegram.posts.support.noPostsAvailable":
     "Нет публикаций, которые можно добавить.",
   "telegram.posts.support.addSelected": "Добавить выбранные",

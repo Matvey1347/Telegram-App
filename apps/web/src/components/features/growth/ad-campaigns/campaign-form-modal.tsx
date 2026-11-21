@@ -29,7 +29,7 @@ import {
 } from "@/components/ui/primitives";
 import { useWorkspaceModalDrafts } from "@/hooks/use-workspace-modal-drafts";
 import { selectedWorkspaceDraftScope } from "@/lib/workspace-modal-drafts";
-import { memberKeys } from "@/lib/query-keys";
+import { adCampaignKeys, memberKeys } from "@/lib/query-keys";
 import {
   formatAdCampaignLocalDate as formatLocalDate,
   toAdCampaignInputDate as toInputDate,
@@ -249,7 +249,7 @@ export function CampaignModal({
   const selectedPromoIds = watch("promoIds") || [];
   const selectedInviteLinkIds = watch("inviteLinkIds") || [];
   const inviteLinkWindows = watch("inviteLinkWindows") || {};
-  const windowsQuery = useQuery({ queryKey: ["ad-campaign-invite-windows", initial?.id], queryFn: () => adCampaignsApi.inviteLinkWindows(initial!.id!), enabled: open && Boolean(initial?.id), staleTime: 0 });
+  const windowsQuery = useQuery({ queryKey: adCampaignKeys.inviteLinkWindows(initial?.id), queryFn: () => adCampaignsApi.inviteLinkWindows(initial!.id!), enabled: open && Boolean(initial?.id), staleTime: 0 });
   const selectedTrackingChannelIds = watch("trackingChannelIds") || [];
   const trackingLinkKind = watch("trackingLinkKind") || "BOT";
   const trackCrossChannelRequests = watch("trackCrossChannelRequests") || false;
@@ -614,6 +614,13 @@ export function CampaignModal({
             {...register("telegramChannelId", { required: true })}
           />
           <input type="hidden" {...register("accountId")} />
+          {windowsQuery.data?.map((window) => (
+            <p key={window.inviteLinkId} className="text-sm text-neutral-400">
+              {window.fromDate} · {window.computedAt
+                ? `Подтверждено Telegram: ${new Date(window.computedAt).toLocaleString()}`
+                : "Telegram ещё не подтвердил данные за этот период"}
+            </p>
+          ))}
           {windowsQuery.isError && <p role="alert" className="text-sm text-red-400">Не удалось загрузить даты ссылок. Закройте окно и попробуйте снова.</p>}
           <div className="flex justify-end gap-2">
             <Button variant="secondary" type="button" onClick={onClose}>

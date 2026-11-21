@@ -8,6 +8,12 @@ import {
   type TelegramInviteLinksResult,
 } from '@api/telegram/shared/mtproto/telegram-mtproto.client';
 
+export class InviteCreationAccessLost extends BadRequestException {
+  constructor() {
+    super('The selected Telegram account no longer has permission to create invite links.');
+  }
+}
+
 @Injectable()
 export class TelegramInviteLinkCreatorService {
   constructor(private readonly mtproto: TelegramMtprotoClient) {}
@@ -29,6 +35,9 @@ export class TelegramInviteLinkCreatorService {
         client,
         params.channel,
       );
+      if (!resolved.channel.isCreator && !resolved.channel.adminRights?.inviteUsers) {
+        throw new InviteCreationAccessLost();
+      }
       let response: unknown;
       try {
         const subscriptionPricing = params.monthlyFeeStars

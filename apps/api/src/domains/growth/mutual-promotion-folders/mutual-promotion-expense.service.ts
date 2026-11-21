@@ -107,7 +107,7 @@ export class MutualPromotionExpenseService {
             in: participants.map((participant) => participant.inviteLinkId),
           },
         },
-        select: { id: true, joinedCount: true, requestedCount: true },
+        select: { id: true, joinedCount: true, requestedCount: true, joinedObserved: true, requestedObserved: true, lastSyncedAt: true },
       });
       const counters = new Map(links.map((link) => [link.id, link]));
       await Promise.all(
@@ -119,8 +119,8 @@ export class MutualPromotionExpenseService {
               id: createdByChannelId.get(participant.telegramChannelId)!.id,
             },
             data: {
-              inviteJoinedAtStart: link.joinedCount,
-              inviteRequestedAtStart: link.requestedCount,
+              inviteJoinedAtStart: link.joinedObserved ?? Boolean(link.lastSyncedAt) ? link.joinedCount : null,
+              inviteRequestedAtStart: link.requestedObserved ?? Boolean(link.lastSyncedAt) ? link.requestedCount : null,
               baselineCapturedAt: new Date(),
             },
           });

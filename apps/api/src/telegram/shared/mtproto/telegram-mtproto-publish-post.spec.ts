@@ -107,6 +107,18 @@ function harness(messages: Api.TypeMessage[] = [rawMessage()]) {
 }
 
 describe('prepared native schedule replacement', () => {
+  it('does not publish when the resolved broadcast channel no longer grants posting rights', async () => {
+    const h = harness();
+    h.params.replacement = undefined;
+    h.deps.resolve.mockResolvedValue({ entity: new Api.Channel({
+      id: returnBigInt(42), broadcast: true, title: 'Fixture', date: 0,
+      photo: new Api.ChatPhotoEmpty(),
+    }), peer });
+    await expect(publishTelegramPost(h.deps, h.params)).rejects.toThrow('posting rights');
+    expect(h.sendFile).not.toHaveBeenCalled();
+    expect(h.deps.sendText).not.toHaveBeenCalled();
+  });
+
   it('reuses photo references on the selected account, cancels only exact old IDs and returns new IDs', async () => {
     const h = harness();
     await expect(publishTelegramPost(h.deps, h.params)).resolves.toEqual([
@@ -130,6 +142,29 @@ describe('prepared native schedule replacement', () => {
       }),
     );
     expect(h.deps.close).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([true, false])('requires confirmed deletion for ordinary replacement (ack = %p)', async (ack) => {
+    const h = harness();
+    h.params.replacement!.requireCancellationAcknowledgement = true;
+    h.deps.resolve.mockResolvedValue({ entity: new Api.Channel({
+      id: returnBigInt(42), creator: true, title: 'Fixture', date: 0,
+      photo: new Api.ChatPhotoEmpty(),
+    }), peer });
+    h.invoke.mockImplementation(async (request) => {
+      if (request instanceof Api.messages.GetScheduledMessages) return { messages: [rawMessage()] };
+      return ack ? new Api.UpdateShort({ date: 1, update: new Api.UpdateDeleteScheduledMessages({
+        peer: new Api.PeerChannel({ channelId: returnBigInt(42) }), messages: [101],
+      }) }) : {};
+    });
+    if (ack) {
+      await expect(publishTelegramPost(h.deps, h.params)).resolves.toEqual(['202']);
+      expect(h.sendFile).toHaveBeenCalledTimes(1);
+    } else {
+      await expect(publishTelegramPost(h.deps, h.params)).rejects.toThrow('did not acknowledge');
+      expect(h.sendFile).not.toHaveBeenCalled();
+      expect(h.params.replacement!.afterCancel).not.toHaveBeenCalled();
+    }
   });
 
   it('reuses native document references for stored video media without downloads', async () => {

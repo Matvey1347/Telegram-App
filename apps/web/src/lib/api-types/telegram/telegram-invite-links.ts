@@ -1,7 +1,8 @@
+import type { TelegramInviteCounterObservation } from "@telegram-system/shared";
 import type { MemberSummary } from "../core";
 import type { AdCampaign } from "../growth/ad-campaigns";
 
-export type TelegramInviteLink = {
+export type TelegramInviteLink = TelegramInviteCounterObservation & {
   id: string;
   telegramChannelId: string;
   adCampaignId?: string;
@@ -9,6 +10,7 @@ export type TelegramInviteLink = {
   url: string;
   joinedCount: number;
   requestedCount: number;
+  lastSyncedAt?: string | null;
   isRevoked: boolean;
   isPublicForChannel?: boolean;
   isDefaultForChannel?: boolean;
@@ -58,18 +60,18 @@ export type TelegramInviteLinkOption = Pick<
 >;
 export type InviteLinkHistoryPoint = {
   syncedAt: string;
-  joinedCount: number;
-  requestedCount: number;
-  totalAttributed: number;
+  joinedCount: number | null;
+  requestedCount: number | null;
+  totalAttributed: number | null;
   peakJoinedCount: number;
-  drawdownFromPeak: number;
-  drawdownPercent: number;
+  drawdownFromPeak: number | null;
+  drawdownPercent: number | null;
   isRevoked?: boolean;
 };
 export type InviteLinkHistorySummary = {
-  currentJoinedCount: number;
-  currentRequestedCount: number;
-  currentTotalAttributed: number;
+  currentJoinedCount: number | null;
+  currentRequestedCount: number | null;
+  currentTotalAttributed: number | null;
   peakJoinedCount: number;
   peakRequestedCount: number;
   peakTotalAttributed: number;

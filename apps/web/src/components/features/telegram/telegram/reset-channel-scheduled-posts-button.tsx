@@ -15,11 +15,13 @@ import { safeApiErrorMessage } from "@/i18n/error-localization";
 export function ResetChannelScheduledPostsButton({
   channelId,
   channelTitle,
+  postIds = [],
   onCompleted,
   presentation = "button",
 }: {
   channelId: string;
   channelTitle: string;
+  postIds?: string[];
   onCompleted?: () => void;
   presentation?: "button" | "menu";
 }) {
@@ -29,7 +31,7 @@ export function ResetChannelScheduledPostsButton({
   const [confirmationOpen, setConfirmationOpen] = useState(false);
   const resetScheduled = useMutation({
     mutationFn: () =>
-      telegramChannelsApi.resetChannelScheduledPostsToDrafts(channelId),
+      telegramChannelsApi.resetChannelScheduledPostsToDrafts(channelId, postIds),
     onSuccess: async (result) => {
       await Promise.all([
         queryClient.invalidateQueries({
@@ -47,13 +49,14 @@ export function ResetChannelScheduledPostsButton({
         }),
       ]);
       onCompleted?.();
+      const unresolved = result.results?.filter((item) => item.status !== "DRAFTED") ?? [];
       const deleted = result.remoteScheduledDeletedCount;
       const returned = result.postsReturnedToDraftCount;
       pushToast(
-        deleted || returned
+        unresolved.length ? t("telegram.posts.support.reschedulePostFailed") + " · " + unresolved.length : deleted || returned
           ? t("telegram.posts.support.resetResult", { deleted, returned })
           : t("telegram.posts.support.resetEmpty"),
-        "success",
+        unresolved.length ? "info" : "success",
         7000,
       );
     },

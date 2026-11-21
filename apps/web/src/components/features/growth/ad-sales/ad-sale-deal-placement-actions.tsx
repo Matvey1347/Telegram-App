@@ -5,6 +5,7 @@ import type { TelegramAdProduct, TelegramAdSale } from "@telegram-system/shared"
 import { Pencil, Settings2 } from "lucide-react";
 import { Button, CustomSelect, DateInput, TimeInput } from "@/components/ui/primitives";
 import { isValidTimeInputValue } from "@/components/ui/time-input";
+import { publicWebEnvironment } from "@/config/public-env";
 import { commonAdSaleFormats } from "./ad-sale-placement-draft";
 import { channelLocalDateKey, channelLocalTime } from "@/lib/features/growth/telegram-ad-sales";
 
@@ -14,21 +15,27 @@ export type AdSaleApplyAllChanges = {
   time?: string;
 };
 
+type OperatorPlacementAction = "publish" | "reconcile-published";
+
 export function AdSaleDealPlacementActions({
   sale,
   productsByChannelId,
   saving,
   onApplyAll,
   onSharedPost,
+  onOperatorAction,
 }: {
   sale: TelegramAdSale;
   productsByChannelId: Record<string, TelegramAdProduct[]>;
   saving: boolean;
   onApplyAll: (changes: AdSaleApplyAllChanges) => Promise<void>;
   onSharedPost?: () => void;
+  onOperatorAction?: (action: OperatorPlacementAction, placement: TelegramAdSale["placements"][number]) => Promise<void>;
 }) {
   const [formatName, setFormatName] = useState("");
   const firstPlacement = sale.placements[0];
+  const [operatorError, setOperatorError] = useState("");
+  const [operatorBusy, setOperatorBusy] = useState(false);
   const [date, setDate] = useState(() =>
     firstPlacement
       ? channelLocalDateKey(firstPlacement.scheduledAt, firstPlacement.timezone)
@@ -68,6 +75,33 @@ export function AdSaleDealPlacementActions({
     );
   const selectedFormat = formatName || commonSelectedFormat;
   const hasChanges = Boolean(formatName || dateChanged || timeChanged);
+
+  if (publicWebEnvironment.liveMode === "operator") {
+    const post = firstPlacement?.managedPost;
+    if (sale.placements.length !== 1 || !post || !onOperatorAction) return null;
+    const editable = post.status === "DRAFT" || post.status === "SCHEDULED";
+    const action = editable ? "publish" : "reconcile-published";
+    const submit = async () => {
+      setOperatorBusy(true);
+      setOperatorError("");
+      try {
+        await onOperatorAction(action, firstPlacement);
+      } catch (error) {
+        setOperatorError(error instanceof Error ? error.message : "Operator action failed.");
+      } finally {
+        setOperatorBusy(false);
+      }
+    };
+    return (
+      <div className="flex flex-wrap items-center gap-2">
+        {editable && onSharedPost && <Button onClick={onSharedPost}>Edit selected post</Button>}
+        <Button disabled={operatorBusy} onClick={() => void submit()}>
+          {editable ? "Publish selected placement" : "Reconcile publication"}
+        </Button>
+        {operatorError && <p role="alert">{operatorError}</p>}
+      </div>
+    );
+  }
 
   return (
     <div className="flex w-full flex-col gap-2">

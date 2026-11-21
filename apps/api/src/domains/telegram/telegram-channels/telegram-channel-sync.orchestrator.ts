@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { TelegramChannelDataType } from '@prisma/client';
+import type { ResolvedTelegramEntity } from '@api/telegram/shared/imports/telegram-import.helpers';
 import type { SyncStepResult } from '@telegram-system/shared';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { ApplicationLoggerService } from '../../operations/application-logs/application-logger.service';
@@ -69,16 +70,16 @@ export class TelegramChannelSyncOrchestrator {
     }
     const totalSteps =
       this.telegramChannelsSupportService.syncSelectionTotalSteps(selection);
-    const account = await this.telegramChannelAccessService.connectedAccount(
-      workspaceId,
-      channelId,
-      dto.telegramUserAccountId ||
-        (await this.telegramChannelAccessService.bestMtprotoAccountId(
-          workspaceId,
-          channelId,
-          TelegramChannelDataType.STATS,
-        )),
-    );
+    const accessReads = new Map<string, Promise<ResolvedTelegramEntity>>();
+    const verified = new Map<TelegramChannelDataType, ReturnType<TelegramChannelAccessService['verifiedSyncAccount']>>();
+    const accountFor = (type: TelegramChannelDataType) => {
+      let account = verified.get(type);
+      if (!account) {
+        account = this.telegramChannelAccessService.verifiedSyncAccount(workspaceId, channel, type, dto.telegramUserAccountId, accessReads);
+        verified.set(type, account);
+      }
+      return account;
+    };
     this.applicationLogger.info({
       kind: 'integration',
       source: 'TelegramChannelsService',
@@ -88,7 +89,6 @@ export class TelegramChannelSyncOrchestrator {
       userId,
       metadata: {
         channelId,
-        sourceAccountId: account.id,
         selection,
       },
     });
@@ -126,8 +126,9 @@ export class TelegramChannelSyncOrchestrator {
           await this.telegramChannelHistoricalSyncService.syncPublicChannelInfo(
             workspaceId,
             channelId,
-            account,
+            await accountFor(TelegramChannelDataType.CHANNEL_INFO),
           );
+        if (publicInfo?.updated === false) throw new Error(publicInfo.reason);
         steps.push(
           publicInfo?.pendingJoinRequestsVerified === false
             ? this.telegramChannelsSupportService.syncStepPartial('channel_info', publicInfoStartedAt,
@@ -149,63 +150,60 @@ export class TelegramChannelSyncOrchestrator {
             'Failed to refresh channel info',
           ),
         );
-        throw error;
       }
     }
-    if (
-      selection.syncIncludeInviteLinks ||
-      selection.syncIncludeHistoricalPosts
-    ) {
+    for (const [enabled, inviteLinks, dataType, step] of [
+      [selection.syncIncludeHistoricalPosts, false, TelegramChannelDataType.POSTS, 'historical_posts'],
+      [selection.syncIncludeInviteLinks, true, TelegramChannelDataType.INVITE_LINKS, 'invite_links'],
+    ] as const) {
+      if (!enabled) continue;
       const currentStep = nextProgressStep();
       await this.telegramChannelsSupportService.notifyTaskProgress(
         onProgress,
         currentStep,
         totalSteps,
-        'Importing posts and invite links',
+        inviteLinks ? 'Importing invite links' : 'Importing historical posts',
       );
       const historicalStartedAt = Date.now();
       try {
-        historical =
+        const stageResult =
           await this.telegramChannelHistoricalSyncService.syncHistorical(
             userId,
             channelId,
             {
-              telegramUserAccountId: account.id,
-              syncInviteLinks: selection.syncIncludeInviteLinks,
-              syncPosts: selection.syncIncludeHistoricalPosts,
+              telegramUserAccountId: (await accountFor(dataType)).id,
+              syncInviteLinks: inviteLinks,
+              syncPosts: !inviteLinks,
               postLimit,
             },
             onProgress,
             { current: currentStep, total: totalSteps },
           );
+        historical = inviteLinks
+          ? { ...historical, ...stageResult, postsUpdated: historical?.postsUpdated ?? 0 }
+          : { ...stageResult, ...historical, postsUpdated: stageResult?.postsUpdated ?? 0 };
         const historicalMetadata = {
-          importedInviteLinks: historical?.imported ?? 0,
-          updatedInviteLinks: historical?.updated ?? 0,
-          postsUpdated: historical?.postsUpdated ?? 0,
-          inviteLinksScope: historical?.inviteLinksScope ?? null,
+          importedInviteLinks: stageResult?.imported ?? 0,
+          updatedInviteLinks: stageResult?.updated ?? 0,
+          postsUpdated: stageResult?.postsUpdated ?? 0,
+          inviteLinksScope: stageResult?.inviteLinksScope ?? null,
           inviteLinksExpectedTotal:
-            historical?.inviteLinksExpectedTotal ?? null,
-          inviteLinksFetchedTotal: historical?.inviteLinksFetchedTotal ?? 0,
-          inviteLinksMissingTotal: historical?.inviteLinksMissingTotal ?? 0,
-          inviteLinkWarnings: historical?.inviteLinkWarnings ?? [],
+            stageResult?.inviteLinksExpectedTotal ?? null,
+          inviteLinksFetchedTotal: stageResult?.inviteLinksFetchedTotal ?? 0,
+          inviteLinksMissingTotal: stageResult?.inviteLinksMissingTotal ?? null,
+          inviteLinkWarnings: stageResult?.inviteLinkWarnings ?? [],
         };
-        const historicalMessage =
-          selection.syncIncludeInviteLinks &&
-          selection.syncIncludeHistoricalPosts
-            ? 'Posts and invite links synced'
-            : selection.syncIncludeInviteLinks
-              ? 'Invite links synced'
-              : 'Historical posts synced';
+        const historicalMessage = inviteLinks ? 'Invite links synced' : 'Historical posts synced';
         steps.push(
-          historical?.inviteLinksScope === 'PARTIAL_ADMINS'
+          stageResult?.inviteLinksScope === 'PARTIAL_ADMINS'
             ? this.telegramChannelsSupportService.syncStepPartial(
-                'historical_posts',
+                step,
                 historicalStartedAt,
-                'Posts synced, but invite-link sync completed partially',
+                'Invite-link visibility is partial',
                 historicalMetadata,
               )
             : this.telegramChannelsSupportService.syncStepSuccess(
-                'historical_posts',
+                step,
                 historicalStartedAt,
                 historicalMessage,
                 historicalMetadata,
@@ -214,14 +212,13 @@ export class TelegramChannelSyncOrchestrator {
       } catch (error) {
         steps.push(
           this.telegramChannelsSupportService.syncStepFailure(
-            'historical_posts',
+            step,
             historicalStartedAt,
             error,
             'HISTORICAL_SYNC_FAILED',
             'Failed to sync historical Telegram data',
           ),
         );
-        throw error;
       }
     }
     if (selection.syncIncludePostMetrics) {
@@ -239,7 +236,7 @@ export class TelegramChannelSyncOrchestrator {
             userId,
             channelId,
             {
-              telegramUserAccountId: account.id,
+              telegramUserAccountId: (await accountFor(TelegramChannelDataType.POSTS)).id,
               postLimit,
             },
             onProgress,
@@ -263,10 +260,6 @@ export class TelegramChannelSyncOrchestrator {
             'Failed to sync post metrics',
           ),
         );
-        // A separately selected audience snapshot can still succeed when the
-        // post-metrics transport is unavailable. Preserve the old fail-fast
-        // behavior when no independent follow-up was requested.
-        if (!selection.syncIncludeAudienceSnapshot) throw error;
       }
     }
     if (selection.syncIncludeOlderPosts) {
@@ -278,35 +271,42 @@ export class TelegramChannelSyncOrchestrator {
         'Backfilling older post metrics',
       );
       const olderPostsStartedAt = Date.now();
-      olderPostsBackfill =
-        await this.telegramPostMetricsService.syncOlderPostsMetricsBackfillForWorkspace(
-          workspaceId,
-          channelId,
-          {
-            telegramUserAccountId: account.id,
-            maxPages:
-              postLimit === this.initialPostBackfillLimit
-                ? this.olderPostBackfillMaxPages
-                : 1,
-          },
+      try {
+        olderPostsBackfill =
+          await this.telegramPostMetricsService.syncOlderPostsMetricsBackfillForWorkspace(
+            workspaceId,
+            channelId,
+            {
+              telegramUserAccountId: (await accountFor(TelegramChannelDataType.POSTS)).id,
+              maxPages:
+                postLimit === this.initialPostBackfillLimit
+                  ? this.olderPostBackfillMaxPages
+                  : 1,
+            },
+          );
+        steps.push(
+          olderPostsBackfill?.syncedPosts
+            ? this.telegramChannelsSupportService.syncStepSuccess(
+                'older_post_backfill',
+                olderPostsStartedAt,
+                'Older post metrics backfilled',
+                {
+                  syncedPosts: olderPostsBackfill.syncedPosts,
+                  pagesFetched: olderPostsBackfill.pagesFetched ?? 0,
+                },
+              )
+            : this.telegramChannelsSupportService.syncStepSkipped(
+                'older_post_backfill',
+                olderPostsStartedAt,
+                'No older posts were available for backfill',
+              ),
         );
-      steps.push(
-        olderPostsBackfill?.syncedPosts
-          ? this.telegramChannelsSupportService.syncStepSuccess(
-              'older_post_backfill',
-              olderPostsStartedAt,
-              'Older post metrics backfilled',
-              {
-                syncedPosts: olderPostsBackfill.syncedPosts,
-                pagesFetched: olderPostsBackfill.pagesFetched ?? 0,
-              },
-            )
-          : this.telegramChannelsSupportService.syncStepSkipped(
-              'older_post_backfill',
-              olderPostsStartedAt,
-              'No older posts were available for backfill',
-            ),
-      );
+      } catch (error) {
+        steps.push(this.telegramChannelsSupportService.syncStepFailure(
+          'older_post_backfill', olderPostsStartedAt, error,
+          'OLDER_POSTS_FAILED', 'Failed to backfill older posts',
+        ));
+      }
     }
     if (selection.syncIncludeChannelStats) {
       const currentStep = nextProgressStep();
@@ -323,7 +323,7 @@ export class TelegramChannelSyncOrchestrator {
             userId,
             channelId,
             {
-              telegramUserAccountId: account.id,
+              telegramUserAccountId: (await accountFor(TelegramChannelDataType.STATS)).id,
             },
           );
         const statsStatus =
@@ -456,7 +456,6 @@ export class TelegramChannelSyncOrchestrator {
       workspaceId,
       userId,
       channelId,
-      account,
     });
   }
 }

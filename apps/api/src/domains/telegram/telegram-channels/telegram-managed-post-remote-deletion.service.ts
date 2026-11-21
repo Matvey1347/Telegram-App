@@ -380,7 +380,6 @@ export class TelegramManagedPostRemoteDeletionService {
           channelId,
           channel: sourcePosts[0].telegramChannel,
           source,
-          sources,
           rawMessageIds: sourcePosts.flatMap((post) => post.telegramMessageIds),
         });
         for (const post of sourcePosts) {

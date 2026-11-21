@@ -2,6 +2,7 @@ node_modules
 .next
 dist
 build
+!/scripts/build/
 .env
 .env.local
 .env.*.local
@@ -20,3 +21,6 @@ coverage
 apps/api/prisma/migrations/dev.db
 .vercel
 .env*
+
+# Local source archives
+/telegram-system.zip

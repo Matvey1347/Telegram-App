@@ -93,6 +93,7 @@ const CAMPAIGN_LIST_SELECT = {
       url: true,
       joinedCount: true,
       requestedCount: true,
+      joinedObservedAt: true, requestedObservedAt: true, joinedObserved: true, requestedObserved: true,
       isRevoked: true,
       lastSyncedAt: true,
       creatorUsername: true,
@@ -101,7 +102,7 @@ const CAMPAIGN_LIST_SELECT = {
       creatorPhotoUrl: true,
     },
   },
-  inviteLinkWindows: { select: { inviteLinkId: true, fromDate: true, joinedCount: true, pendingCount: true, computedAt: true } },
+  inviteLinkWindows: { select: { inviteLinkId: true, fromDate: true, joinedCount: true, pendingCount: true, computedAt: true, lastAttemptAt: true, lastAttemptStatus: true, lastAttemptReason: true } },
   botInviteLinks: {
     select: {
       kind: true,
@@ -488,7 +489,7 @@ export class AdCampaignListReadService {
         };
         addPoint(entry.startsAt, entry.baselineJoined, entry.baselineRequested);
         for (const snapshot of snapshotsForEntry) {
-          if (snapshot.syncedAt > entry.startsAt) {
+          if (snapshot.syncedAt > entry.startsAt && snapshot.joinedCount != null && snapshot.requestedCount != null) {
             addPoint(
               snapshot.syncedAt,
               snapshot.joinedCount,
@@ -581,9 +582,11 @@ export class AdCampaignListReadService {
     const attributionCount =
       row.advertisingTelegramChannels.length + row.advertisingChannels.length;
     const counts = campaignInviteWindowMetrics(row.inviteLinks, row.inviteLinkWindows);
-    const unavailable = counts === null;
-    const effectiveJoined = row.inviteLinks.length ? counts?.joined ?? 0 : row.joinedCount;
-    const requestedCount = counts?.pending ?? 0;
+    const unavailable = counts.joined == null || counts.pending == null;
+    const effectiveJoined = row.inviteLinks.length ? counts?.joined ?? null : row.joinedCount;
+    const requestedCount = counts.pending;
+    const attributedCount = effectiveJoined == null || requestedCount == null
+      ? null : effectiveJoined + requestedCount;
     const costAmount = Number(row.price);
     return {
       ...row,
@@ -623,14 +626,14 @@ export class AdCampaignListReadService {
       analytics: {
         joinedCount: effectiveJoined,
         requestedCount,
-        attributedCount: effectiveJoined + requestedCount,
+        attributedCount,
         leftCount: row.leftCount,
         netGrowth: row.netGrowthCount,
         costAmount,
         currency: row.currency,
         costPerJoinedSubscriber:
-          effectiveJoined + requestedCount > 0
-            ? costAmount / (effectiveJoined + requestedCount)
+          attributedCount != null && attributedCount > 0
+            ? costAmount / attributedCount
             : null,
         costPerNetSubscriber: null,
         attributionSource: 'mtproto_invite_link_usage',

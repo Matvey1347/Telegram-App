@@ -11,7 +11,7 @@ describe('AdCampaignInviteWindowsService', () => {
     prisma = {
       adCampaign: { findFirst: jest.fn().mockResolvedValue(campaign) },
       adCampaignInviteLinkWindow: {
-        findMany: jest.fn().mockResolvedValue([]), deleteMany: jest.fn(), upsert: jest.fn(), updateMany: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([]), deleteMany: jest.fn(), upsert: jest.fn(), updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
       $transaction: jest.fn(async (callback) => callback(prisma)),
     };
@@ -39,6 +39,38 @@ describe('AdCampaignInviteWindowsService', () => {
     prisma.adCampaignInviteLinkWindow.findMany.mockResolvedValue([{ inviteLinkId: 'a', fromDate: '2026-11-12', timezone: 'Europe/Kyiv' }]);
     registration.register.mockResolvedValue({ joinedWithinPeriod: 10, pendingWithinPeriod: null });
     expect(await service.refresh('user', 'c')).toEqual(['a']);
-    expect(prisma.adCampaignInviteLinkWindow.updateMany).toHaveBeenCalledWith(expect.objectContaining({ data: { joinedCount: null, pendingCount: null, computedAt: null } }));
+    expect(prisma.adCampaignInviteLinkWindow.updateMany).toHaveBeenLastCalledWith(expect.objectContaining({ data: expect.objectContaining({ joinedCount: 10, lastAttemptStatus: 'PARTIAL' }) }));
+  });
+});
+
+describe('OT-04 — refresh after ownership changes', () => {
+  it.each(['permission error', 'incomplete importers'] as const)('retains an existing verified window on %s', async (failure) => {
+    const window = {
+      inviteLinkId: 'window-link',
+      fromDate: '2026-11-12',
+      timezone: 'Europe/Warsaw',
+      joinedCount: 12,
+      pendingCount: 3,
+      computedAt: new Date('2026-11-14T12:00:00Z'),
+    };
+    const prisma = {
+      adCampaign: { findFirst: jest.fn().mockResolvedValue({
+        id: 'campaign-fixture',
+        inviteLinks: [{ id: window.inviteLinkId, url: 'fixture-invite', telegramChannelId: 'fixture-channel' }],
+      }) },
+      adCampaignInviteLinkWindow: {
+        findMany: jest.fn().mockResolvedValue([window]),
+        updateMany: jest.fn(async ({ data }) => { Object.assign(window, data); return { count: 1 }; }),
+      },
+    };
+    const register = failure === 'permission error'
+      ? jest.fn().mockRejectedValue(new Error('CHAT_ADMIN_REQUIRED'))
+      : jest.fn().mockResolvedValue({ joinedWithinPeriod: 12, pendingWithinPeriod: null });
+    const service = new AdCampaignInviteWindowsService(prisma as never, {
+      resolveWorkspaceIdForUser: jest.fn().mockResolvedValue('fixture-workspace'),
+    } as never, { register } as never);
+
+    expect(await service.refresh('actor', 'campaign-fixture')).toEqual([window.inviteLinkId]);
+    expect(window).toMatchObject({ joinedCount: 12, pendingCount: 3, computedAt: new Date('2026-11-14T12:00:00Z') });
   });
 });

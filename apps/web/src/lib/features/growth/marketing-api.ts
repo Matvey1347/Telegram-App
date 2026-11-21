@@ -1,3 +1,4 @@
+import type { CampaignInviteWindow } from "@telegram-system/shared";
 import type { AxiosInstance, AxiosRequestConfig } from "axios";
 import type { PaginatedResponse } from "@telegram-system/shared";
 import type {
@@ -88,7 +89,7 @@ export function createMarketingApi({
     create: campaignCrud.create,
     update: campaignCrud.update,
     remove: campaignCrud.remove,
-    inviteLinkWindows: async (id: string) => (await api.get<Array<{ inviteLinkId: string; fromDate: string }>>(`/ad-campaigns/${id}/invite-link-windows`, { headers: { "X-Bypass-Response-Cache": "true" } })).data,
+    inviteLinkWindows: async (id: string) => (await api.get<CampaignInviteWindow[]>(`/ad-campaigns/${id}/invite-link-windows`, { headers: { "X-Bypass-Response-Cache": "true" } })).data,
     setInviteLinkWindows: async (id: string, windows: Array<{ inviteLinkId: string; fromDate?: string | null }>) =>
       (await api.put<{ failed: string[] }>(`/ad-campaigns/${id}/invite-link-windows`, { windows }, quietMutationConfig)).data,
     refreshInviteLinkWindows: async (id: string) =>

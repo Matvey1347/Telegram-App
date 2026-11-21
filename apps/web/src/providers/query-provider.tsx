@@ -12,6 +12,7 @@ import {
   queryRetryDelay,
   shouldRetryQuery,
 } from "@/lib/http/development-query-retry";
+import { publicWebEnvironment } from "@/config/public-env";
 import { accountKeys, workspaceKeys } from "@/lib/query-keys";
 
 const PERSISTED_QUERY_KEYS = [
@@ -307,7 +308,7 @@ export function createAppQueryClient() {
 export function QueryProvider({ children }: PropsWithChildren) {
   const [queryClient] = useState(createAppQueryClient);
   const [persister] = useState(() =>
-    typeof window === "undefined"
+    typeof window === "undefined" || publicWebEnvironment.liveMode
       ? null
       : createSyncStoragePersister({
           storage: window.localStorage,

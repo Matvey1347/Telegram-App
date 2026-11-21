@@ -16,8 +16,14 @@ export class MutualPromotionBoundaryService {
       await tx.$executeRaw(Prisma.sql`
         UPDATE "MutualPromotionFolderParticipant" participant
         SET "subscribersAtStart" = channel."currentSubscribersCount",
-            "inviteJoinedAtStart" = invite."joinedCount",
-            "inviteRequestedAtStart" = invite."requestedCount",
+            "inviteJoinedAtStart" = COALESCE(participant."inviteJoinedAtStart",
+              CASE WHEN invite."joinedObserved" IS TRUE OR
+                (invite."joinedObserved" IS NULL AND invite."lastSyncedAt" IS NOT NULL)
+              THEN invite."joinedCount" END),
+            "inviteRequestedAtStart" = COALESCE(participant."inviteRequestedAtStart",
+              CASE WHEN invite."requestedObserved" IS TRUE OR
+                (invite."requestedObserved" IS NULL AND invite."lastSyncedAt" IS NOT NULL)
+              THEN invite."requestedCount" END),
             "baselineCapturedAt" = ${capturedAt},
             "updatedAt" = ${capturedAt}
         FROM "TelegramChannel" channel, "TelegramInviteLink" invite
@@ -62,8 +68,14 @@ export class MutualPromotionBoundaryService {
       await tx.$executeRaw(Prisma.sql`
         UPDATE "MutualPromotionFolderParticipant" participant
         SET "subscribersAtEnd" = channel."currentSubscribersCount",
-            "inviteJoinedAtEnd" = invite."joinedCount",
-            "inviteRequestedAtEnd" = invite."requestedCount",
+            "inviteJoinedAtEnd" = COALESCE(participant."inviteJoinedAtEnd",
+              CASE WHEN invite."joinedObserved" IS TRUE OR
+                (invite."joinedObserved" IS NULL AND invite."lastSyncedAt" IS NOT NULL)
+              THEN invite."joinedCount" END),
+            "inviteRequestedAtEnd" = COALESCE(participant."inviteRequestedAtEnd",
+              CASE WHEN invite."requestedObserved" IS TRUE OR
+                (invite."requestedObserved" IS NULL AND invite."lastSyncedAt" IS NOT NULL)
+              THEN invite."requestedCount" END),
             "finalCapturedAt" = ${capturedAt},
             "updatedAt" = ${capturedAt}
         FROM "TelegramChannel" channel, "TelegramInviteLink" invite

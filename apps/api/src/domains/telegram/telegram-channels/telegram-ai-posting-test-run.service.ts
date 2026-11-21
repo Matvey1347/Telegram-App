@@ -15,7 +15,10 @@ import { TelegramAiPostingImageService } from './telegram-ai-posting-image.servi
 import { saveRejectedTelegramAiPostingImage } from './telegram-ai-posting-image-avoidance.store';
 import { TelegramAiPostingStructureService } from './telegram-ai-posting-structure.service';
 import { telegramHtmlToManagedMarkup } from '@api/telegram/shared/markup/telegram-markup';
-import { applyTelegramAiPostingTestRunFormatting, preserveTelegramAiPostingReferences } from './telegram-ai-posting-test-run-format';
+import {
+  applyTelegramAiPostingTestRunFormatting,
+  preserveTelegramAiPostingReferences,
+} from './telegram-ai-posting-test-run-format';
 import {
   parseTelegramAiPostingJson,
   telegramAiPostingOperationFromError,
@@ -31,45 +34,12 @@ import {
   resolveTelegramAiPostingMediaPreference,
 } from './telegram-ai-posting-media-preferences';
 
-type Run = {
-  stage: string;
-  attempt: number;
-  operationId: string;
-  category: string;
-  model: string;
-  status: string;
-  actualCost: string | null;
-  pricingStatus: string;
-  inputTokens: number | null;
-  outputTokens: number | null;
-};
-type TestPublication = {
-  topic: string;
-  title: string;
-  text: string;
-  imagePrompt: string;
-  mediaPreference?: { id: string; name: string } | null;
-  imageUrl: string | null;
-  imageSourceId: string | null;
-  mediaReadiness?: 'READY' | 'MISSING' | 'FAILED';
-  mediaFailureCode?: string;
-  imageCostUnknown?: boolean;
-  ownerEdited?: boolean;
-  format: string;
-  category: string;
-  editorialMetadata?: {
-    sphere: { id: string; name: string; emoji: string; tier: string } | null;
-    rubric: { id: string; name: string; emoji: string } | null;
-    length: { id: string; name: string; emoji: string } | null;
-  };
-  reviewNotes: string[];
-  costs: Record<string, string | null>;
-  operations: Run[];
-  ideaSources: unknown[];
-  status: string;
-  rejectionReason: string | null;
-  savedPostId: string | null;
-};
+import {
+  addKnownCost,
+  writeTelegramAiPostingTestRun,
+  type TelegramAiPostingTestRunOperation as Run,
+  type TestPublication,
+} from './telegram-ai-posting-test-run.store';
 
 @Injectable()
 export class TelegramAiPostingTestRunService {
@@ -249,7 +219,8 @@ export class TelegramAiPostingTestRunService {
         typeof result.result !== 'object'
       ) {
         item.operations.push(operation);
-        await this.writeTestRun(
+        await writeTelegramAiPostingTestRun(
+          this.prisma,
           run.id,
           workspaceId,
           expectedVersion,
@@ -260,7 +231,16 @@ export class TelegramAiPostingTestRunService {
         );
         throw new BadGatewayException('AI_POSTING_TEXT_REGENERATION_FAILED');
       }
-      const rewritten = 'text' in result.result ? result.result as { title?: unknown; text?: unknown; imagePrompt?: unknown } : parseTelegramAiPostingJson((result.result as { reply?: string }).reply ?? '');
+      const rewritten =
+        'text' in result.result
+          ? (result.result as {
+              title?: unknown;
+              text?: unknown;
+              imagePrompt?: unknown;
+            })
+          : parseTelegramAiPostingJson(
+              (result.result as { reply?: string }).reply ?? '',
+            );
       if (
         !rewritten ||
         typeof rewritten.title !== 'string' ||
@@ -268,7 +248,8 @@ export class TelegramAiPostingTestRunService {
         !rewritten.text.trim()
       ) {
         item.operations.push(operation);
-        await this.writeTestRun(
+        await writeTelegramAiPostingTestRun(
+          this.prisma,
           run.id,
           workspaceId,
           expectedVersion,
@@ -281,7 +262,12 @@ export class TelegramAiPostingTestRunService {
       }
       item.title = rewritten.title.trim();
       item.text = applyTelegramAiPostingTestRunFormatting(
-        preserveTelegramAiPostingReferences(rewritten.text, item.text, config, value),
+        preserveTelegramAiPostingReferences(
+          rewritten.text,
+          item.text,
+          config,
+          value,
+        ),
         config,
       );
       if (item.text.length > (item.imageUrl ? 1024 : 4096))
@@ -330,7 +316,8 @@ export class TelegramAiPostingTestRunService {
         typeof reviewResult.result !== 'object'
       ) {
         item.operations.push(operation, reviewOperation);
-        await this.writeTestRun(
+        await writeTelegramAiPostingTestRun(
+          this.prisma,
           run.id,
           workspaceId,
           expectedVersion,
@@ -346,7 +333,8 @@ export class TelegramAiPostingTestRunService {
       );
       if (!verdict || verdict.approved !== true) {
         item.operations.push(operation, reviewOperation);
-        await this.writeTestRun(
+        await writeTelegramAiPostingTestRun(
+          this.prisma,
           run.id,
           workspaceId,
           expectedVersion,
@@ -371,17 +359,34 @@ export class TelegramAiPostingTestRunService {
         reviewResult.operation.actualCost,
         reviewResult.operation.pricingStatus,
       );
-      await this.writeTestRun(
+      await writeTelegramAiPostingTestRun(
+        this.prisma,
         run.id,
         workspaceId,
         expectedVersion,
         publications,
         runs,
-        (Array.isArray(run.failures) && run.failures.length) || publications.some((post) => (post.mediaReadiness ?? (post.imageUrl ? 'READY' : 'MISSING')) !== 'READY') ? 'PARTIAL' : 'COMPLETED',
+        (Array.isArray(run.failures) && run.failures.length) ||
+          publications.some(
+            (post) =>
+              (post.mediaReadiness ?? (post.imageUrl ? 'READY' : 'MISSING')) !==
+              'READY',
+          )
+          ? 'PARTIAL'
+          : 'COMPLETED',
         sourceDiagnostics,
       );
       return {
-        ...run, status: (Array.isArray(run.failures) && run.failures.length) || publications.some((post) => (post.mediaReadiness ?? (post.imageUrl ? 'READY' : 'MISSING')) !== 'READY') ? 'PARTIAL' : 'COMPLETED',
+        ...run,
+        status:
+          (Array.isArray(run.failures) && run.failures.length) ||
+          publications.some(
+            (post) =>
+              (post.mediaReadiness ?? (post.imageUrl ? 'READY' : 'MISSING')) !==
+              'READY',
+          )
+            ? 'PARTIAL'
+            : 'COMPLETED',
         version: expectedVersion + 1,
         publications,
         sourceDiagnostics,
@@ -451,8 +456,7 @@ export class TelegramAiPostingTestRunService {
           channelId,
           topic: item.topic,
           imageMode: 'ai',
-          referenceImageUrls:
-            preference?.references ?? [],
+          referenceImageUrls: preference?.references ?? [],
           channelAvatarUrl: settings.telegramChannel?.photoUrl,
           imageCandidates: [],
           prompt: [
@@ -489,7 +493,8 @@ export class TelegramAiPostingTestRunService {
             failedOperation.actualCost,
             failedOperation.pricingStatus,
           );
-          await this.writeTestRun(
+          await writeTelegramAiPostingTestRun(
+            this.prisma,
             run.id,
             workspaceId,
             expectedVersion,
@@ -521,7 +526,8 @@ export class TelegramAiPostingTestRunService {
           : (resolved.readiness ?? 'FAILED');
         item.mediaFailureCode =
           resolved.failureCode ?? 'AI_POSTING_IMAGE_REGENERATION_FAILED';
-        await this.writeTestRun(
+        await writeTelegramAiPostingTestRun(
+          this.prisma,
           run.id,
           workspaceId,
           expectedVersion,
@@ -544,7 +550,8 @@ export class TelegramAiPostingTestRunService {
         run.failures,
         item.topic,
       );
-      await this.writeTestRun(
+      await writeTelegramAiPostingTestRun(
+        this.prisma,
         run.id,
         workspaceId,
         expectedVersion,
@@ -764,66 +771,4 @@ export class TelegramAiPostingTestRunService {
       sourceDiagnostics,
     };
   }
-
-  private async writeTestRun(
-    id: string,
-    workspaceId: string,
-    version: number,
-    publications: TestPublication[],
-    operations: Run[],
-    status: string,
-    sourceDiagnostics: ReturnType<
-      typeof decodeAiPostingRunPublications
-    >['sourceDiagnostics'],
-    failures?: unknown[],
-  ) {
-    const cost = (stage: string): Prisma.Decimal | null => {
-      const matching = operations.filter(
-        (operation) => operation.stage === stage,
-      );
-      if (
-        matching.some(
-          (operation) =>
-            operation.actualCost === null &&
-            operation.pricingStatus !== 'NOT_SENT',
-        )
-      )
-        return null;
-      return matching.reduce(
-        (total, operation) => total.add(operation.actualCost ?? 0),
-        new Prisma.Decimal(0),
-      );
-    };
-    const changed = await this.prisma.telegramAiPostingTestRun.updateMany({
-      where: { id, workspaceId, version },
-      data: {
-        publications: encodeAiPostingRunPublications(
-          publications,
-          sourceDiagnostics,
-        ),
-        operations: operations,
-        ...(failures ? { failures: failures as Prisma.InputJsonArray } : {}),
-        planningCost: cost('planning'),
-        textCost: cost('text'),
-        imageCost: publications.some((item) => item.imageCostUnknown)
-          ? null
-          : cost('image'),
-        reviewCost: cost('review'),
-        status,
-        version: { increment: 1 },
-      },
-    });
-    if (!changed.count)
-      throw new ConflictException('AI_POSTING_TEST_RUN_CHANGED');
-  }
-}
-
-function addKnownCost(
-  current: string | null,
-  next: string | null,
-  pricingStatus: string,
-) {
-  if (current === null || (next === null && pricingStatus !== 'NOT_SENT'))
-    return null;
-  return new Prisma.Decimal(current).add(next ?? 0).toString();
 }

@@ -9,6 +9,10 @@ import { TelegramAdSalesEditWorkflowService } from './telegram-ad-sales-edit-wor
 import { TelegramAdSalesCrmAdvertisersService } from './telegram-ad-sales-crm-advertisers.service';
 import { TelegramAdSalesCrmSettingsService } from './telegram-ad-sales-crm-settings.service';
 import { TelegramAdSalesController } from './telegram-ad-sales.controller';
+import { TelegramAdSalesCatalogController } from './telegram-ad-sales-catalog.controller';
+import { TelegramAdSalesAnalyticsController } from './telegram-ad-sales-analytics.controller';
+import { TelegramAdSalesCrmController } from './telegram-ad-sales-crm.controller';
+import { TelegramAdSalesPlacementController } from './telegram-ad-sales-placement.controller';
 import { TelegramAdSalesReadController } from './telegram-ad-sales-read.controller';
 import { TelegramAdSalesPaymentsController } from './telegram-ad-sales-payments.controller';
 import { TelegramAdSalesService } from './telegram-ad-sales.service';
@@ -46,6 +50,10 @@ import { TelegramAdSalesDraftsController } from './telegram-ad-sales-drafts.cont
     TelegramAdSalesReadController,
     TelegramAdSalesPaymentsController,
     TelegramAdSalesDraftsController,
+    TelegramAdSalesCatalogController,
+    TelegramAdSalesAnalyticsController,
+    TelegramAdSalesCrmController,
+    TelegramAdSalesPlacementController,
     TelegramAdSalesController,
   ],
   providers: [

@@ -32,20 +32,11 @@ export function useCampaignInviteLinkRefresh() {
       const failedWindows = campaign.inviteLinkWindows?.length ? await adCampaignsApi.refreshInviteLinkWindows(campaign.id) : [];
       return { ...result, failedWindows };
     },
-    onSuccess: async (result) => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: adCampaignKeys.list() }),
-        queryClient.invalidateQueries({
-          queryKey: telegramChannelKeys.lists(),
-        }),
-        queryClient.invalidateQueries({
-          queryKey: telegramChannelKeys.cardLists(),
-        }),
-      ]);
+    onSuccess: (result) => {
       const failed = result.failedLinks.length + result.failedWindows.length;
       pushToast(
         failed
-          ? `Updated ${result.refreshedLinks} of ${result.totalLinks} invite links. ${failed} failed: ${result.failedLinks[0]?.message ?? "check Telegram access"}`
+          ? `Updated ${result.refreshedLinks} of ${result.totalLinks} invite links. ${failed} failed: ${result.failedLinks[0]?.message ?? "Telegram data unavailable. Last confirmed window metrics are retained"}`
           : `Updated ${result.refreshedLinks} of ${result.totalLinks} invite links.`,
         failed ? "info" : "success",
       );
@@ -57,7 +48,23 @@ export function useCampaignInviteLinkRefresh() {
           : "Failed to refresh invite-link data.",
         "error",
       ),
-    onSettled: () => setProgress(null),
+    onSettled: async (_result, _error, campaign) => {
+      setProgress(null);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: adCampaignKeys.list() }),
+        queryClient.invalidateQueries({ queryKey: adCampaignKeys.inviteLinkWindows(campaign.id) }),
+        queryClient.invalidateQueries({ queryKey: adCampaignKeys.inviteLinkHistory(campaign.id) }),
+        ...(campaign.ownTelegramChannelId ? [
+          queryClient.invalidateQueries({ queryKey: telegramChannelKeys.inviteLinks(campaign.ownTelegramChannelId) }),
+        ] : []),
+        queryClient.invalidateQueries({
+          queryKey: telegramChannelKeys.lists(),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: telegramChannelKeys.cardLists(),
+        }),
+      ]);
+    },
   });
 
   return {

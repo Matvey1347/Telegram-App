@@ -84,7 +84,8 @@ describe('TelegramChannelsService managed post history', () => {
     ]);
   });
 
-  it('restores a revision into draft and keeps a backup of the current state', async () => {
+  it.each(['published', 'native schedule', 'active cancellation'] as const)(
+    'restores a backup only when the current state allows it (%s)', async (state) => {
     const currentPost = {
       id: 'post-1',
       workspaceId: 'workspace-1',
@@ -92,7 +93,9 @@ describe('TelegramChannelsService managed post history', () => {
       title: 'Current title',
       text: 'Current text',
       imageUrls: ['https://example.com/current.png'],
-      status: TelegramManagedPostStatus.PUBLISHED,
+      status: state === 'published' ? TelegramManagedPostStatus.PUBLISHED : TelegramManagedPostStatus.SCHEDULED,
+      telegramScheduledMessageIds: state === 'native schedule' ? ['17'] : [],
+      deliveryClaimOwner: state === 'active cancellation' ? 'native-cancel:fixture' : null,
       scheduledAt: null,
       publishedAt: new Date('2026-07-14T08:00:00.000Z'),
       telegramMessageIds: ['10'],
@@ -216,12 +219,18 @@ describe('TelegramChannelsService managed post history', () => {
     service['workspace'] = jest.fn().mockResolvedValue('workspace-1');
     service['findOne'] = jest.fn().mockResolvedValue({ id: 'channel-1' });
 
-    const restored = await service.restoreManagedPostRevision(
+    const restoration = service.restoreManagedPostRevision(
       'user',
       'channel-1',
       'post-1',
       'revision-1',
     );
+    if (state !== 'published') {
+      await expect(restoration).rejects.toThrow('Resolve the Telegram schedule');
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+      return;
+    }
+    const restored = await restoration;
 
     expect(createRevision).toHaveBeenCalledWith(
       expect.objectContaining({

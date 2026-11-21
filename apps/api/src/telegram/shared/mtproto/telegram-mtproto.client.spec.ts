@@ -146,6 +146,7 @@ describe('TelegramMtprotoClient import resolution', () => {
       }
       if (request instanceof Api.messages.GetChatInviteImporters) {
         return {
+          count: 3,
           importers: [
             { userId: returnBigInt('100'), date: 1_735_776_000 },
             { userId: returnBigInt('101'), date: 1_735_689_600 },
@@ -618,7 +619,7 @@ describe('TelegramMtprotoClient import resolution', () => {
     ).rejects.toThrow(ConflictException);
   });
 
-  it('resolves a private channel by dialog id when the stored username is stale', async () => {
+  it('uses the canonical stored peer before scanning dialogs when the username is stale', async () => {
     const entity = new Api.Channel({
       id: '9901' as any,
       title: 'Private after rename',
@@ -673,10 +674,10 @@ describe('TelegramMtprotoClient import resolution', () => {
       postLimit: 1,
     });
 
-    expect(fakeClient.getDialogs).toHaveBeenCalled();
+    expect(fakeClient.getDialogs).not.toHaveBeenCalled();
     expect(result.channel?.username).toBeNull();
     expect(result.channel?.telegramChatId).toBe('9901');
-    expect(result.channel?.resolvedBy).toBe('dialog-id');
+    expect(result.channel?.resolvedBy).toBe('stored-peer');
   });
 
   it('does not submit an invite request when a private invite is unresolved', async () => {
@@ -800,6 +801,7 @@ describe('TelegramMtprotoClient import resolution', () => {
         };
       }
       if (request instanceof Api.messages.GetExportedChatInvites) {
+        if (request.revoked) return { count: 0, invites: [], users: [] };
         const adminId =
           request.adminId instanceof Api.InputUserSelf
             ? '100'
@@ -1047,6 +1049,7 @@ describe('TelegramMtprotoClient import resolution', () => {
         };
       }
       if (request instanceof Api.messages.GetExportedChatInvites) {
+        if (request.revoked) return { count: 0, invites: [], users: [] };
         const adminId =
           request.adminId instanceof Api.InputUserSelf
             ? '100'
@@ -1179,6 +1182,7 @@ describe('TelegramMtprotoClient import resolution', () => {
         };
       }
       if (request instanceof Api.messages.GetExportedChatInvites) {
+        if (request.revoked) return { count: 0, invites: [], users: [] };
         expect(request.adminId).toBeInstanceOf(Api.InputUser);
         expect(
           (request.adminId as Api.InputUser).accessHash?.constructor?.name,
@@ -1277,6 +1281,7 @@ describe('TelegramMtprotoClient import resolution', () => {
         };
       }
       if (request instanceof Api.messages.GetExportedChatInvites) {
+        if (request.revoked) return { count: 0, invites: [], users: [] };
         if (request.adminId instanceof Api.InputUserEmpty) {
           return {
             invites: [

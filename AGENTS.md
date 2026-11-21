@@ -38,7 +38,7 @@
 - After implementation, the tech lead verifies integration, workspace isolation, query invalidation, tests and docs.
 - Architecture-foundation/refactor tasks start with Grace Explorer read-only analysis and finish with Turing Review read-only integration review. The main agent owns final boundary decisions.
 - Significant performance/refactor work follows this read/write lifecycle: Grace Explorer maps actual runtime paths; Knuth Performance audits cost and scaling; Parnas Structure checks existing file-size boundaries before edits; the main integrator fixes contracts and assigns non-overlapping backend/frontend files to Linus Backend and Ada Frontend; Parnas reruns the structural check; Turing Review performs the final read-only integration review.
-- Grace, Knuth, Parnas and Turing are development-only, read-only agents. They must not become application processes, add production telemetry, or create Neon/Railway work. Knuth recommendations remain subject to `docs/runtime-cost-efficiency.md` and `docs/frontend-cache-efficiency.md`; Parnas uses `scripts/check-architecture.mjs` and never raises a threshold or shrinking-only baseline.
+- Grace, Knuth, Parnas and Turing are development-only, read-only agents. They must not become application processes, add production telemetry, or create Neon/Railway work. Knuth recommendations remain subject to `docs/runtime-cost-efficiency.md` and `docs/frontend-cache-efficiency.md`; Parnas uses `scripts/quality/check-architecture.mjs` and never raises a threshold or shrinking-only baseline.
 
 ## Product boundaries
 
@@ -231,7 +231,7 @@ A change is not done until:
 - `pnpm architecture:check` warns above 500 lines and enforces hard policy above 800 lines.
 - App Router `page.tsx` files must trend below 300 lines and should only read params/search params and render feature containers.
 - API compatibility facades must trend below 400 lines; type barrels/index files below 250 lines; UI barrels below 150 lines.
-- Existing files above these limits are transitional debt only. They are tracked in `scripts/check-architecture.mjs` as shrinking-only baseline entries and must never grow.
+- Existing files above these limits are transitional debt only. They are tracked in `scripts/quality/check-architecture.mjs` as shrinking-only baseline entries and must never grow.
 - Legacy ceilings must equal the current violation size. When debt shrinks, lower or remove the stale ceiling in the same change; the checker fails stale allowances so files cannot silently regrow.
 - `ARCHITECTURE_STRICT=1 pnpm architecture:check` is the final gate: no transitional baseline, no god-file exceptions.
 - Significant refactors must reduce or remove transitional baseline entries instead of adding new ones.

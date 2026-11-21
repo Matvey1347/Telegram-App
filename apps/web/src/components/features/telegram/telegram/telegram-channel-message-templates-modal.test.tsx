@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { TelegramChannelMessageTemplatesModal } from "./telegram-channel-message-templates-modal";
@@ -9,6 +9,7 @@ import {
   TELEGRAM_MESSAGE_TEMPLATE_DRAFT_NAMESPACE,
 } from "./telegram-channel-message-template-draft";
 import { writeWorkspaceModalDraft } from "@/lib/workspace-modal-drafts";
+import { renderWithI18n } from "@/test/render-with-i18n";
 
 const mocks = vi.hoisted(() => ({
   list: vi.fn(),
@@ -75,7 +76,7 @@ function renderModal({
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
-  return render(
+  return renderWithI18n(
     <QueryClientProvider client={client}>
       <TelegramChannelMessageTemplatesModal
         channels={channels}
@@ -84,6 +85,13 @@ function renderModal({
       />
     </QueryClientProvider>,
   );
+}
+
+async function openAllChannelsActions(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(await screen.findByRole("button", {
+    name: "Template actions for All Channels",
+  }));
+  return within(screen.getByRole("menu"));
 }
 
 beforeEach(() => {
@@ -161,15 +169,12 @@ describe("TelegramChannelMessageTemplatesModal", () => {
     renderModal();
 
     expect(await screen.findByText("🧾")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Edit template" })).toHaveClass(
-      "border-neutral-700",
-    );
-    expect(screen.getByRole("button", { name: "Delete template" })).toHaveClass(
-      "border-red-700",
-    );
+    const actions = await openAllChannelsActions(user);
+    expect(actions.getByRole("menuitem", { name: "Edit All Channels" })).toBeVisible();
+    expect(actions.getByRole("menuitem", { name: "Delete All Channels" })).toBeVisible();
 
     await user.click(
-      screen.getByRole("button", {
+      actions.getByRole("menuitem", {
         name: "Send All Channels to System Bot",
       }),
     );
@@ -214,9 +219,8 @@ describe("TelegramChannelMessageTemplatesModal", () => {
     const user = userEvent.setup();
     renderModal();
 
-    await user.click(
-      await screen.findByRole("button", { name: "Duplicate All Channels" }),
-    );
+    const actions = await openAllChannelsActions(user);
+    await user.click(actions.getByRole("menuitem", { name: "Duplicate All Channels" }));
 
     expect(screen.getByDisplayValue("All Channels copy")).toBeVisible();
     expect(screen.getByText("Draft saved automatically")).toBeVisible();
@@ -229,9 +233,8 @@ describe("TelegramChannelMessageTemplatesModal", () => {
       channels: [{ id: "channel-1", title: "Channel One" } as TelegramChannel],
     });
 
-    await user.click(
-      await screen.findByRole("button", { name: "Edit template" }),
-    );
+    const actions = await openAllChannelsActions(user);
+    await user.click(actions.getByRole("menuitem", { name: "Edit All Channels" }));
 
     expect(
       screen.getByRole("status", { name: "Loading message template preview" }),
@@ -253,9 +256,8 @@ describe("TelegramChannelMessageTemplatesModal", () => {
     mocks.remove.mockResolvedValue({ success: true });
     renderModal();
 
-    await user.click(
-      await screen.findByRole("button", { name: "Delete template" }),
-    );
+    const actions = await openAllChannelsActions(user);
+    await user.click(actions.getByRole("menuitem", { name: "Delete All Channels" }));
     expect(mocks.remove).not.toHaveBeenCalled();
 
     const confirmation = screen.getByRole("dialog", {

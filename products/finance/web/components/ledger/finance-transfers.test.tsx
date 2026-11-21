@@ -140,9 +140,7 @@ describe("FinanceTransfers account prerequisite", () => {
     expect(
       await screen.findByPlaceholderText("Search description"),
     ).toBeInTheDocument();
-    expect(
-      document.querySelector("[data-finance-scene='transfers']"),
-    ).toBeInTheDocument();
+    expect(screen.getByText("No matching transfers.")).toBeVisible();
     expect(
       screen.queryByRole("button", { name: "Create second account" }),
     ).not.toBeInTheDocument();

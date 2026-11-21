@@ -57,6 +57,7 @@ describe("MutualPromotionFolderDetailModal", () => {
 
   it("offers invite-link editing for an active folder", () => {
     const onEditInviteLinks = vi.fn();
+    const onEdit = vi.fn();
     render(
       <MutualPromotionFolderDetailModal
         open
@@ -82,7 +83,7 @@ describe("MutualPromotionFolderDetailModal", () => {
         mutating={false}
         actionError={null}
         onClose={vi.fn()}
-        onEdit={vi.fn()}
+        onEdit={onEdit}
         onEditInviteLinks={onEditInviteLinks}
         onActivate={vi.fn()}
         onCancel={vi.fn()}
@@ -95,6 +96,8 @@ describe("MutualPromotionFolderDetailModal", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Edit invite links" }));
     expect(onEditInviteLinks).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByRole("button", { name: "Rename folder" }));
+    expect(onEdit).toHaveBeenCalledOnce();
     expect(screen.getByText("Active")).toHaveClass(
       "border-emerald-600/70",
       "bg-emerald-950/80",

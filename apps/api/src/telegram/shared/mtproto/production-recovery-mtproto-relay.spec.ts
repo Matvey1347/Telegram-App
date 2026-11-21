@@ -1,54 +1,39 @@
 import { ProductionRecoveryMtprotoRelay } from './production-recovery-mtproto-relay';
 import { rescheduleContext } from '../../../domains/telegram/telegram-channels/telegram-managed-post-rescheduler.remote';
 import type { PrismaService } from '../../../prisma/prisma.service';
-import type { TokenEncryptionService } from '../../../common/security/token-encryption.service';
+import {
+  recoveryAccountMarker,
+  recoveryAuthorization,
+} from './production-recovery-relay-context';
 
 jest.mock('../../../config/production-recovery-config', () => ({
   productionRecoveryConfig: () => ({
     workspaceId: 'workspace',
     channelId: 'channel',
     productionApiOrigin: 'https://owner.example/api',
-    productionApiToken: 'fixture-token',
   }),
 }));
 
 describe('localhost owner transport', () => {
   const credentials = {
-    apiId: '123',
-    apiHash: 'fixture-hash',
-    session: 'fixture-session',
+    apiId: '0',
+    apiHash: recoveryAccountMarker,
+    session: 'account',
   };
   const scheduledAt = new Date(Date.now() + 600_000);
   const originalFetch = global.fetch;
   const harness = () => {
     const prisma = {
-      telegramChannelAdminLink: {
-        findMany: jest.fn().mockResolvedValue([
-          {
-            telegramUserAccountIntegration: {
-              id: 'account',
-              workspaceId: 'workspace',
-              isActive: true,
-              status: 'connected',
-              apiId: '123',
-              apiHashEncrypted: 'fixture-hash',
-              sessionEncrypted: 'fixture-session',
-            },
-          },
-        ]),
-      },
       telegramManagedPost: {
         findFirst: jest.fn().mockResolvedValue({ id: 'post', scheduledAt }),
       },
     };
-    const encryption = {
-      decrypt: ({ encrypted }: { encrypted: string }) => encrypted,
-    };
     return new ProductionRecoveryMtprotoRelay(
       prisma as unknown as PrismaService,
-      encryption as unknown as TokenEncryptionService,
     );
   };
+  const admitted = <T>(action: () => T) =>
+    recoveryAuthorization.run('Bearer fixture-token', action);
   afterEach(() => {
     global.fetch = originalFetch;
   });
@@ -61,15 +46,38 @@ describe('localhost owner transport', () => {
     global.fetch = fetch;
     const relay = harness();
     await expect(
-      relay.getScheduledHistory({ ...credentials, channelRef: '@ignored' }),
+      admitted(() =>
+        relay.getScheduledHistory({ ...credentials, channelRef: '@ignored' }),
+      ),
     ).resolves.toEqual([{ id: '42' }]);
     const options = (fetch.mock.calls as unknown[][])[0][1] as RequestInit;
     expect(JSON.parse(options.body as string)).toEqual({
       operation: 'scheduled',
       accountId: 'account',
     });
-    expect(options.body).not.toContain(credentials.session);
-    expect(options.body).not.toContain(credentials.apiHash);
+    expect(options.body).not.toContain(recoveryAccountMarker);
+    expect(options.headers).toMatchObject({
+      authorization: 'Bearer fixture-token',
+    });
+  });
+
+  it('rejects requests outside the admitted browser context or with raw account credentials', async () => {
+    const fetch = jest.fn();
+    global.fetch = fetch;
+    const relay = harness();
+    await expect(
+      relay.getScheduledHistory({ ...credentials, channelRef: '@ignored' }),
+    ).rejects.toThrow('admitted operator');
+    await expect(
+      admitted(() =>
+        relay.getScheduledHistory({
+          ...credentials,
+          apiHash: 'mock-raw-value',
+          channelRef: '@ignored',
+        }),
+      ),
+    ).rejects.toThrow('linked account ID');
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   it('never retries a lost mutation response and leaves the claim to its caller', async () => {
@@ -79,16 +87,18 @@ describe('localhost owner transport', () => {
     global.fetch = fetch;
     const relay = harness();
     await expect(
-      rescheduleContext.run(
-        { owner: 'claim', signal: new AbortController().signal },
-        () =>
-          relay.publishPost({
-            ...credentials,
-            channelRef: '@ignored',
-            html: 'Body',
-            imageUrls: [],
-            scheduleAt: scheduledAt,
-          }),
+      admitted(() =>
+        rescheduleContext.run(
+          { owner: 'claim', signal: new AbortController().signal },
+          () =>
+            relay.publishPost({
+              ...credentials,
+              channelRef: '@ignored',
+              html: 'Body',
+              imageUrls: [],
+              scheduleAt: scheduledAt,
+            }),
+        ),
       ),
     ).rejects.toThrow('Connection reset');
     expect(fetch).toHaveBeenCalledTimes(1);
@@ -105,7 +115,9 @@ describe('localhost owner transport', () => {
     const fetch = jest.fn();
     global.fetch = fetch;
     await expect(
-      harness().deleteScheduledPost({ ...credentials, messageIds: ['42'] }),
+      admitted(() =>
+        harness().deleteScheduledPost({ ...credentials, messageIds: ['42'] }),
+      ),
     ).rejects.toThrow('active reschedule claim');
     expect(fetch).not.toHaveBeenCalled();
   });
@@ -119,21 +131,23 @@ describe('localhost owner transport', () => {
     const beforeChange = jest.fn();
     const validate = jest.fn();
     const afterCancel = jest.fn();
-    const result = await rescheduleContext.run(
-      { owner: 'claim', signal: new AbortController().signal },
-      () =>
-        harness().publishPost({
-          ...credentials,
-          html: 'Body',
-          imageUrls: [],
-          scheduleAt: scheduledAt,
-          replacement: {
-            messageIds: ['old-id'],
-            beforeChange,
-            validate,
-            afterCancel,
-          },
-        }),
+    const result = await admitted(() =>
+      rescheduleContext.run(
+        { owner: 'claim', signal: new AbortController().signal },
+        () =>
+          harness().publishPost({
+            ...credentials,
+            html: 'Body',
+            imageUrls: [],
+            scheduleAt: scheduledAt,
+            replacement: {
+              messageIds: ['old-id'],
+              beforeChange,
+              validate,
+              afterCancel,
+            },
+          }),
+      ),
     );
     expect(result).toEqual(['replacement-id']);
     expect(fetch).toHaveBeenCalledTimes(1);
@@ -150,6 +164,6 @@ describe('localhost owner transport', () => {
     expect(beforeChange).not.toHaveBeenCalled();
     expect(validate).not.toHaveBeenCalled();
     expect(afterCancel).not.toHaveBeenCalled();
-    expect(options.body).not.toContain(credentials.session);
+    expect(options.body).not.toContain(recoveryAccountMarker);
   });
 });

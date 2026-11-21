@@ -2,7 +2,12 @@ import { BadGatewayException, ConflictException } from '@nestjs/common';
 import { TelegramAiPostingGeneratorService } from './telegram-ai-posting-generator.service';
 import { TelegramAiPostingTestRunService } from './telegram-ai-posting-test-run.service';
 import { renderTelegramAiPostingText } from './telegram-ai-posting-render';
-import { parseTelegramAiPostingDraft } from './telegram-ai-posting-json';
+import { telegramAiPostingPlanPrompt } from './telegram-ai-posting-topic-plan';
+import { telegramAiPostingGenerationFailures } from './telegram-ai-posting-generation-outcome';
+import {
+  parseTelegramAiPostingJson,
+  parseTelegramAiPostingDraft,
+} from './telegram-ai-posting-json';
 
 describe('TelegramAiPostingGeneratorService', () => {
   const workspace = {
@@ -62,7 +67,9 @@ describe('TelegramAiPostingGeneratorService', () => {
   );
   beforeEach(() => {
     jest.clearAllMocks();
-    prisma.telegramAiPostingTestRun.aggregate.mockResolvedValue({ _sum: { requestedCount: 0 } });
+    prisma.telegramAiPostingTestRun.aggregate.mockResolvedValue({
+      _sum: { requestedCount: 0 },
+    });
     images.prepareReferenceSheet.mockResolvedValue({
       image: null,
       failed: false,
@@ -81,7 +88,7 @@ describe('TelegramAiPostingGeneratorService', () => {
 
   it('bounds planning context while retaining channel rules and source context', () => {
     const bulky = 'Текст'.repeat(12000);
-    const prompt = (service as any).planPrompt(
+    const prompt = telegramAiPostingPlanPrompt(
       {
         channelDescription: 'Business',
         rules: [{ active: true, text: 'Use examples' }],
@@ -92,7 +99,7 @@ describe('TelegramAiPostingGeneratorService', () => {
         sourceContexts: [{ text: bulky }],
         existingPosts: [{ title: bulky }],
         history: [],
-      },
+      } as never,
       bulky,
       1,
       [{ topic: bulky, title: bulky, text: bulky }],
@@ -104,21 +111,15 @@ describe('TelegramAiPostingGeneratorService', () => {
 
   it('parses a JSON object surrounded by model commentary', () => {
     expect(
-      (service as any).parseJson(
+      parseTelegramAiPostingJson(
         'Result:\n{"approved":true,"reasons":[]}\nDone.',
       ),
     ).toEqual({ approved: true, reasons: [] });
   });
 
   it('parses a JSON object returned as an encoded JSON string', () => {
-    const parseJson = (value: string) =>
-      (
-        service as unknown as {
-          parseJson: (input: string) => Record<string, unknown> | null;
-        }
-      ).parseJson(value);
     expect(
-      parseJson(
+      parseTelegramAiPostingJson(
         JSON.stringify(
           JSON.stringify({ title: 'A topic', text: 'A useful post' }),
         ),
@@ -174,7 +175,7 @@ describe('TelegramAiPostingGeneratorService', () => {
       ],
     });
 
-    expect((service as any).errorFailures(error)).toEqual([
+    expect(telegramAiPostingGenerationFailures(error)).toEqual([
       {
         topic: 'A topic',
         code: 'AI_POSTING_REVIEW_REJECTED',
@@ -317,8 +318,22 @@ describe('TelegramAiPostingGeneratorService', () => {
         ],
         imageMode: 'found',
         mediaPreferences: [
-          { id: 'photo', name: 'Minimalist photography', emoji: '📷', description: '', references: [], purpose: 'BOTH' },
-          { id: 'drawn', name: 'Drawn abstraction', emoji: '🎨', description: '', references: [], purpose: 'BOTH' },
+          {
+            id: 'photo',
+            name: 'Minimalist photography',
+            emoji: '📷',
+            description: '',
+            references: [],
+            purpose: 'BOTH',
+          },
+          {
+            id: 'drawn',
+            name: 'Drawn abstraction',
+            emoji: '🎨',
+            description: '',
+            references: [],
+            purpose: 'BOTH',
+          },
         ],
         formats: ['Known group'],
         categories: ['Known hypothesis'],
@@ -329,7 +344,9 @@ describe('TelegramAiPostingGeneratorService', () => {
     });
     sources.collect.mockResolvedValue({
       editorialProfile: { language: 'English' },
-      sourceContexts: ['[website site-1] source: https://example.test/article Verified company fact'],
+      sourceContexts: [
+        '[website site-1] source: https://example.test/article Verified company fact',
+      ],
       existingPosts: [],
       history: [],
       imageCandidates: [],
@@ -449,8 +466,12 @@ describe('TelegramAiPostingGeneratorService', () => {
     expect(gateway.execute.mock.calls[2][0].input).toContain(
       'Proposed authored post text (without configured ending or hashtags): **A useful** post',
     );
-    expect(gateway.execute.mock.calls[1][0].input).toContain('Verified company fact');
-    expect(gateway.execute.mock.calls[2][0].input).toContain('Verified company fact');
+    expect(gateway.execute.mock.calls[1][0].input).toContain(
+      'Verified company fact',
+    );
+    expect(gateway.execute.mock.calls[2][0].input).toContain(
+      'Verified company fact',
+    );
     expect(gateway.execute.mock.calls[2][0].input).not.toContain('Test !');
     expect(result.generated[0].text).toContain(
       'Test ! ![👤](tg://emoji?id=6030537299408725010)',
@@ -511,7 +532,16 @@ describe('TelegramAiPostingGeneratorService', () => {
     prisma.telegramAiPostingSettings.findFirst.mockResolvedValue({
       configuration: {
         imageMode: 'ai',
-        mediaPreferences: [{ id: 'reference-style', name: 'Reference style', emoji: '🎨', description: '', references: ['https://media.example/reference.jpg'], purpose: 'GENERATION' }],
+        mediaPreferences: [
+          {
+            id: 'reference-style',
+            name: 'Reference style',
+            emoji: '🎨',
+            description: '',
+            references: ['https://media.example/reference.jpg'],
+            purpose: 'GENERATION',
+          },
+        ],
         useChannelAvatarInMedia: true,
         emojiPolicy: 'start',
         hashtags: 'disabled',

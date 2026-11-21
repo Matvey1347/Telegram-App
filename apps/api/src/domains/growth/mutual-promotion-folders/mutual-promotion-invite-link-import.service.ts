@@ -26,6 +26,7 @@ export class MutualPromotionInviteLinkImportService {
     if (
       dto.folderId &&
       from &&
+      registered.currentJoinedCount != null &&
       typeof registered.joinedWithinPeriod === 'number'
     ) {
       const joinedAtStart = Math.max(
@@ -38,6 +39,8 @@ export class MutualPromotionInviteLinkImportService {
           folderId: dto.folderId,
           telegramChannelId: dto.telegramChannelId,
           inviteLinkId: registered.id,
+          inviteJoinedAtStart: null,
+          baselineCapturedAt: null,
         },
         data: {
           inviteJoinedAtStart: joinedAtStart,

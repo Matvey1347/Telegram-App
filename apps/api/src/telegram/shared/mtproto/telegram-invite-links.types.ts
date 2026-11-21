@@ -2,7 +2,7 @@ export type TelegramInviteLinksResult = {
   scope: 'ALL_ADMINS' | 'PARTIAL_ADMINS';
   /** Authoritative channel-wide queue; null/absent means not verified. */
   pendingJoinRequestsCount?: number | null;
-  expectedTotalLinks: number;
+  expectedTotalLinks: number | null;
   admins: Array<{
     telegramUserId: string;
     username: string | null;
@@ -26,6 +26,8 @@ export type TelegramInviteLinksResult = {
     usageLimit: number | null;
     usage: number;
     requested: number;
+    usageObserved?: boolean;
+    requestedObserved?: boolean;
     requestNeeded: boolean;
     permanent: boolean;
     revoked: boolean;

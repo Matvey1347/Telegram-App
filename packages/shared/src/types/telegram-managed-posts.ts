@@ -124,6 +124,12 @@ export type ResetChannelScheduledPostsResult = {
   remoteScheduledDeletedCount: number;
   postsReturnedToDraftCount: number;
   postIds: string[];
+  results: Array<{
+    postId: string;
+    status: "DRAFTED" | "SKIPPED" | "FAILED";
+    remoteDeletedCount: number;
+    reason?: string;
+  }>;
 };
 
 export type RescheduleChannelScheduledPostsResult = {

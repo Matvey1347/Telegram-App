@@ -1,7 +1,8 @@
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import type { NextFunction, Request, Response } from 'express';
+import { recoveryAuthorization } from '../telegram/shared/mtproto/production-recovery-relay-context';
 import type { NestExpressApplication } from '@nestjs/platform-express';
-import { apiCorsAllowedHeaders } from '../common/http/cors-origins';
 import { productionRecoveryConfig } from '../config/production-recovery-config';
 import { ProductionRecoveryModule } from './production-recovery.module';
 
@@ -9,46 +10,12 @@ async function bootstrap() {
   const config = productionRecoveryConfig();
   const app = await NestFactory.create<NestExpressApplication>(
     ProductionRecoveryModule,
-    { logger: false },
+    { logger: false, abortOnError: false },
   );
-  app.use(
-    (
-      request: {
-        method: string;
-        url: string;
-        headers: Record<string, unknown>;
-      },
-      response: {
-        statusCode: number;
-        once(event: string, callback: () => void): void;
-      },
-      next: () => void,
-    ) => {
-      response.once('finish', () => {
-        if (response.statusCode >= 400)
-          process.stdout.write(
-            JSON.stringify({
-              event: 'local_recovery_http_error',
-              method: request.method,
-              path: request.url.split('?')[0],
-              status: response.statusCode,
-              hasAuthorization: Boolean(request.headers.authorization),
-            }) + '\n',
-          );
-      });
-      next();
-    },
+  app.use((request: Request, _response: Response, next: NextFunction) =>
+    recoveryAuthorization.run(request.headers.authorization ?? '', next),
   );
   app.useBodyParser('json', { limit: '8mb' });
-  app.enableCors({
-    origin: [
-      `http://localhost:${config.webPort}`,
-      `http://127.0.0.1:${config.webPort}`,
-    ],
-    credentials: true,
-    allowedHeaders: [...apiCorsAllowedHeaders],
-    methods: ['GET', 'POST', 'OPTIONS'],
-  });
   app.setGlobalPrefix('api');
   app.useGlobalPipes(
     new ValidationPipe({

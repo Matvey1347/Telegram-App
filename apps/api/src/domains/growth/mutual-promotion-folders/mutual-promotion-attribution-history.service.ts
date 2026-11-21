@@ -16,13 +16,17 @@ type HistoryParticipant = {
   baselineCapturedAt: Date | null;
   finalCapturedAt: Date | null;
   telegramChannel: { currentSubscribersCount: number | null };
-  inviteLink: { joinedCount: number; requestedCount: number };
+  inviteLink: {
+    joinedCount: number; requestedCount: number;
+    joinedObserved?: boolean | null; requestedObserved?: boolean | null;
+    lastSyncedAt?: Date | null;
+  };
 };
 
 type CounterEvent = {
   at: Date;
-  inviteJoined?: number;
-  inviteRequested?: number;
+  inviteJoined?: number | null;
+  inviteRequested?: number | null;
   subscribers?: number;
 };
 
@@ -115,8 +119,8 @@ export class MutualPromotionAttributionHistoryService {
       const events = inviteEvents.get(row.inviteLinkId) ?? [];
       events.push({
         at: row.syncedAt,
-        inviteJoined: row.joinedCount,
-        inviteRequested: row.requestedCount,
+        inviteJoined: row.joinedCount ?? undefined,
+        inviteRequested: row.requestedCount ?? undefined,
       });
       inviteEvents.set(row.inviteLinkId, events);
     }
@@ -138,10 +142,10 @@ export class MutualPromotionAttributionHistoryService {
         const events: CounterEvent[] = [
           { at: participantStart },
           ...(inviteEvents.get(participant.inviteLinkId) ?? []).filter(
-            (event) => event.at <= endsAt,
+            (event) => event.at >= participantStart && event.at <= endsAt,
           ),
           ...(audienceEvents.get(participant.telegramChannelId) ?? []).filter(
-            (event) => event.at <= endsAt,
+            (event) => event.at >= participantStart && event.at <= endsAt,
           ),
         ];
         if (
@@ -150,16 +154,16 @@ export class MutualPromotionAttributionHistoryService {
         ) {
           events.push({
             at: participant.finalCapturedAt,
-            inviteJoined: participant.inviteJoinedAtEnd ?? undefined,
-            inviteRequested: participant.inviteRequestedAtEnd ?? undefined,
+            inviteJoined: participant.inviteJoinedAtEnd,
+            inviteRequested: participant.inviteRequestedAtEnd,
             subscribers: participant.subscribersAtEnd ?? undefined,
           });
         }
         if (participant.finalCapturedAt == null && !nextFolder) {
           events.push({
             at: endsAt,
-            inviteJoined: participant.inviteLink.joinedCount,
-            inviteRequested: participant.inviteLink.requestedCount,
+            inviteJoined: participant.inviteLink.joinedObserved === false || (participant.inviteLink.joinedObserved === null && !participant.inviteLink.lastSyncedAt) ? undefined : participant.inviteLink.joinedCount,
+            inviteRequested: participant.inviteLink.requestedObserved === false || (participant.inviteLink.requestedObserved === null && !participant.inviteLink.lastSyncedAt) ? undefined : participant.inviteLink.requestedCount,
             subscribers:
               participant.telegramChannel.currentSubscribersCount ?? undefined,
           });
@@ -173,9 +177,8 @@ export class MutualPromotionAttributionHistoryService {
         for (const event of events) {
           const previous = mergedEvents.at(-1);
           if (previous?.at.getTime() === event.at.getTime()) {
-            previous.inviteJoined = event.inviteJoined ?? previous.inviteJoined;
-            previous.inviteRequested =
-              event.inviteRequested ?? previous.inviteRequested;
+            if (event.inviteJoined !== undefined) previous.inviteJoined = event.inviteJoined;
+            if (event.inviteRequested !== undefined) previous.inviteRequested = event.inviteRequested;
             previous.subscribers = event.subscribers ?? previous.subscribers;
           } else {
             mergedEvents.push({ ...event });
@@ -183,31 +186,29 @@ export class MutualPromotionAttributionHistoryService {
         }
 
         let inviteJoined = participant.inviteJoinedAtStart;
-        let inviteRequested = participant.inviteRequestedAtStart ?? 0;
+        const requestedBaseline = participant.inviteRequestedAtStart;
+        let inviteRequested = requestedBaseline;
         let subscribers = participant.subscribersAtStart;
         const hasInviteBaseline = inviteJoined != null;
         const hasAudienceBaseline = subscribers != null;
         const points = hasInviteBaseline
           ? mergedEvents.map((event) => {
-              inviteJoined = event.inviteJoined ?? inviteJoined;
-              inviteRequested = event.inviteRequested ?? inviteRequested;
+              if (event.inviteJoined !== undefined) inviteJoined = event.inviteJoined;
+              if (event.inviteRequested !== undefined) inviteRequested = event.inviteRequested;
               subscribers = event.subscribers ?? subscribers;
-              const joinedCount = Math.max(
-                0,
-                (inviteJoined ?? participant.inviteJoinedAtStart ?? 0) -
-                  (participant.inviteJoinedAtStart ?? 0),
-              );
+              const joinedCount = inviteJoined == null || participant.inviteJoinedAtStart == null
+                ? null : Math.max(0, inviteJoined - participant.inviteJoinedAtStart);
               const audienceDelta =
                 participant.role === 'PUBLISHER' && hasAudienceBaseline
                   ? (subscribers ?? participant.subscribersAtStart ?? 0) -
                     (participant.subscribersAtStart ?? 0)
                   : null;
-              const requestedCount = Math.max(
-                0,
-                (inviteRequested ?? participant.inviteRequestedAtStart ?? 0) -
-                  (participant.inviteRequestedAtStart ?? 0),
-              );
-              const acquiredCount = joinedCount + requestedCount;
+              const requestedCount =
+                requestedBaseline == null || inviteRequested == null
+                  ? null
+                  : Math.max(0, inviteRequested - requestedBaseline);
+              const acquiredCount =
+                requestedCount == null || joinedCount == null ? null : joinedCount + requestedCount;
               return {
                 at: event.at.toISOString(),
                 joinedCount,
@@ -215,7 +216,7 @@ export class MutualPromotionAttributionHistoryService {
                 acquiredCount,
                 audienceDelta,
                 unsubscribedCount:
-                  audienceDelta == null
+                  audienceDelta == null || acquiredCount == null
                     ? null
                     : Math.max(0, acquiredCount - audienceDelta),
               };

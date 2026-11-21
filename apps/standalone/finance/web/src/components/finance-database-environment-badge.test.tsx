@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 const { environment, detectDatabase } = vi.hoisted(() => ({ environment: { isDevelopment: true, databaseEnvironment: "local" as string | undefined }, detectDatabase: vi.fn(() => "local") }));
 vi.mock("@finance-web/config/public-env", () => ({ publicFinanceWebEnvironment: environment }));
-vi.mock("../../../../../../scripts/dev-database-environment.mjs", () => ({ localDatabaseEnvironment: detectDatabase }));
+vi.mock("../../../../../../scripts/dev/dev-database-environment.mjs", () => ({ localDatabaseEnvironment: detectDatabase }));
 import { FinanceDatabaseEnvironmentBadge } from "./finance-database-environment-badge";
 
 describe("FinanceDatabaseEnvironmentBadge", () => {

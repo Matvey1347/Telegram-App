@@ -1,4 +1,4 @@
-import { financeBrandIcon } from "@consumer-finance/web/lib/finance-brand-icon";
+import { financeBrandIcon } from "@finance-web/lib/finance-brand-icon";
 import type { Metadata } from "next";
 import { FinanceRootApp } from "@finance-web/components/finance-root-app";
 import { cookies } from "next/headers";

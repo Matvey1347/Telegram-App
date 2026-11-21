@@ -111,71 +111,13 @@ function fixture() {
 }
 
 describe('production recovery scoped Telegram transport', () => {
-  const overdueDeletionFixture = () => {
+  it.each(['account', 'alternate'])('rejects standalone deletion for %s before a Telegram call', async (accountId) => {
     const f = fixture();
-    f.post.scheduledAt = new Date(Date.now() - 3600_000);
-    Object.assign(f.request, {
-      operation: 'delete',
-      accountId: 'priority-account',
-      messageIds: ['17'],
-      scheduleAt: f.post.scheduledAt.toISOString(),
-    });
-    f.prisma.telegramManagedPost.findFirst
-      .mockResolvedValueOnce(f.post)
-      .mockResolvedValueOnce(null);
-    return f;
-  };
-
-  it('retires an overdue complete schedule through an alternate verified editor without sending', async () => {
-    const f = overdueDeletionFixture();
-    await expect(f.execute()).resolves.toBeUndefined();
-    expect(f.mtproto.getScheduledMessagesByIds).toHaveBeenCalledWith(
-      expect.objectContaining({ messageIds: ['17'] }),
-    );
-    expect(f.mtproto.deleteScheduledPost).toHaveBeenCalledWith(
-      expect.objectContaining({ messageIds: ['17'] }),
-    );
-    expect(f.mtproto.publishPost).not.toHaveBeenCalled();
-    expect(f.nativeStore.start).not.toHaveBeenCalled();
-  });
-
-  it('rejects future cross-account deletion rather than bypassing combined replacement', async () => {
-    const f = fixture();
-    Object.assign(f.request, {
-      operation: 'delete',
-      accountId: 'priority-account',
-      messageIds: ['17'],
-    });
-    await expect(f.execute()).rejects.toThrow('overdue complete schedule');
+    Object.assign(f.request, { operation: 'delete', accountId, messageIds: ['17'] });
+    await expect(f.execute()).rejects.toThrow('Standalone deletion is disabled');
     expect(f.mtproto.getScheduledMessagesByIds).not.toHaveBeenCalled();
     expect(f.mtproto.deleteScheduledPost).not.toHaveBeenCalled();
-  });
-
-  it('rejects overdue alternate deletion when current Telegram IDs belong to different content', async () => {
-    const f = overdueDeletionFixture();
-    f.mtproto.getScheduledMessagesByIds.mockResolvedValue([
-      {
-        id: '17',
-        text: 'Advertising',
-        html: 'Advertising',
-        hasMedia: false,
-        mediaKind: null,
-        groupedId: null,
-        date: new Date().toISOString(),
-      },
-    ]);
-    await expect(f.execute()).rejects.toThrow('do not match');
-    expect(f.mtproto.deleteScheduledPost).not.toHaveBeenCalled();
-  });
-
-  it('does not delete an overdue ID aliased by a foreign advertising post', async () => {
-    const f = overdueDeletionFixture();
-    f.prisma.telegramManagedPost.findFirst
-      .mockReset()
-      .mockResolvedValueOnce(f.post)
-      .mockResolvedValueOnce({ id: 'foreign-ad' });
-    await expect(f.execute()).rejects.toThrow('overlap another managed post');
-    expect(f.mtproto.deleteScheduledPost).not.toHaveBeenCalled();
+    expect(f.nativeStore.start).not.toHaveBeenCalled();
   });
 
   it('starts a missing-schedule send only through the post-preparation callback', async () => {
@@ -205,11 +147,11 @@ describe('production recovery scoped Telegram transport', () => {
   const replacementFixture = () => {
     const f = fixture();
     f.request.operation = 'replace';
-    f.request.accountId = 'priority-account';
+    f.request.accountId = f.post.sourceId;
     f.request.messageIds = ['17'];
     f.nativeStore.read.mockResolvedValue({
       owner: 'reschedule:owner',
-      sourceId: 'priority-account',
+      sourceId: f.post.sourceId,
       scheduledAt: f.post.scheduledAt,
       oldMessageIds: ['17'],
     });
@@ -237,6 +179,7 @@ describe('production recovery scoped Telegram transport', () => {
     f.mtproto.publishPost.mockImplementation(
       async (params: Parameters<TelegramMtprotoClient['publishPost']>[0]) => {
         const replacement = params.replacement!;
+        expect(replacement.requireCancellationAcknowledgement).toBe(true);
         replacement.validate([
           {
             id: '17',
@@ -578,13 +521,6 @@ describe('production recovery scoped Telegram transport', () => {
       recentPublishedFrom: new Date(from),
       recentPublishedUntil: new Date(until),
     });
-  });
-  it('refuses deletes outside stored IDs or original sender', async () => {
-    const f = fixture();
-    f.request.operation = 'delete';
-    f.request.messageIds = ['99'];
-    await expect(f.execute()).rejects.toBeInstanceOf(ConflictException);
-    expect(f.mtproto.deleteScheduledPost).not.toHaveBeenCalled();
   });
   it('only accepts media already present on the stored post', async () => {
     const f = fixture();

@@ -3,10 +3,9 @@ import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { config } from 'dotenv';
 
-config({
-  path: '../../.env',
-  quiet: true,
-});
+if (process.env.PRODUCTION_RECOVERY_ENABLED !== 'true') {
+  config({ path: '../../.env', quiet: true });
+}
 
 @Injectable()
 export class PrismaService

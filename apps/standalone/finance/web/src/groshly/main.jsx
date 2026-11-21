@@ -7,8 +7,9 @@ import{analyticsAmount,analyticsDescriptor,analyticsRows,economicAmount}from'./a
 import{writeFinanceRateCache}from'./rate-cache';
 import{FinanceBillingPanel}from'../components/finance-billing-panel';
 import{normalizeFinanceScreen}from'./finance-screen-route';
+import{publicFinanceWebEnvironment}from'@finance-web/config/public-env';
 import{applyFinanceDocumentMetadata}from'@consumer-finance/web/components/hooks/use-finance-bot-branding';
-import{financeBrandIcon}from'@consumer-finance/web/lib/finance-brand-icon';
+import{financeBrandIcon}from'@finance-web/lib/finance-brand-icon';
 const GroshlyEmojiPicker=React.lazy(()=>import('../components/groshly-emoji-picker').then(m=>({default:m.GroshlyEmojiPicker})));
 const E=({size=20,...props})=><Sparkles size={size} {...props}/>;
 const noop=()=>{};
@@ -278,7 +279,7 @@ export function GroshlyApp({initialData,financeBotId,financeIdentityScope,financ
  useEffect(()=>{if(initialData)setData(previous=>previewScreen?initialData:({...initialData,theme:previous.theme,lang:previous.lang,currency:previous.currency,hidden:previous.hidden,investments:(initialData.investments||[]).map(row=>({...row,events:(previous.investments||[]).find(old=>old.id===row.id)?.events||row.events}))}))},[initialData]);
  useEffect(()=>{if(page!=='analytics'){analyticsCursorRef.current=null;return}const cursor=data.cursors?.transactions;if(!cursor||!onLoadMore||analyticsCursorRef.current===cursor)return;analyticsCursorRef.current=cursor;setAnalyticsLoading(true);void onLoadMore('analytics').then(snapshot=>{analyticsCursorRef.current=snapshot.cursors?.transactions||null;setData(snapshot)}).catch(()=>notify(t('Не вдалося завантажити всі операції для графіка','Could not load all chart transactions'))).finally(()=>setAnalyticsLoading(false))},[page,data.cursors?.transactions,onLoadMore,notify,t]);
  useEffect(()=>{if(previewScreen)return;if(!initialData)saveStore(data);localStorage.setItem('groshly-language',data.lang);localStorage.setItem('groshly-theme',data.theme)},[data,initialData,previewScreen]);
- useEffect(()=>{if(previewScreen)return;const title=data.lang==='en'?'Groshly — Personal Finance':data.lang==='ru'?'Groshly — личные финансы':'Groshly — особисті фінанси';applyFinanceDocumentMetadata(data.theme==='dark'?'dark':'light',data.lang==='en'?'en':data.lang==='ru'?'ru':'uk',title)},[data.lang,data.theme,previewScreen]);
+ useEffect(()=>{if(previewScreen)return;const title=data.lang==='en'?'Groshly — Personal Finance':data.lang==='ru'?'Groshly — личные финансы':'Groshly — особисті фінанси';applyFinanceDocumentMetadata(data.theme==='dark'?'dark':'light',data.lang==='en'?'en':data.lang==='ru'?'ru':'uk',title,publicFinanceWebEnvironment.isDevelopment)},[data.lang,data.theme,previewScreen]);
  // Pull-to-refresh uses a real in-flow reveal area, never a floating toast covering content.
  const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
  const setPullHeight=(height,phase)=>{const slot=pullSlot.current;if(!slot)return;slot.dataset.phase=phase;slot.style.height=`${Math.max(0,height)}px`;slot.style.setProperty('--pull-visible',height>=64?'1':'0')};

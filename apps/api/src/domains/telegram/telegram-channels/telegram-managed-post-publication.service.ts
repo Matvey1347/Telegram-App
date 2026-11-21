@@ -1,4 +1,6 @@
+import { productionOperatorRequest } from '@api/telegram/shared/mtproto/production-recovery-relay-context';
 import { managedPostDeliveryContext } from './telegram-managed-post-delivery-context';
+import { randomUUID } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import {
   TelegramManagedPostIdVerificationStatus,
@@ -27,6 +29,8 @@ import {
   telegramPostsBadRequest,
 } from './telegram-posts.errors';
 import { requireNonBatchManagedPosts } from './telegram-managed-post-ownership';
+import { nativeScheduleContentMatches } from './telegram-managed-post-rescheduler-repair';
+import type { TelegramManagedPost } from '@prisma/client';
 import { publicationScheduleTimeAtInstant } from './telegram-publication-schedule-times';
 
 @Injectable()
@@ -128,13 +132,9 @@ export class TelegramManagedPostPublicationService {
             workspaceId,
             telegramChannelId: channelId,
             OR: [
-              { status: TelegramManagedPostStatus.DRAFT },
-              { status: TelegramManagedPostStatus.FAILED },
-              { status: TelegramManagedPostStatus.PUBLISHING },
-              {
-                status: TelegramManagedPostStatus.SCHEDULED,
-                scheduleMode: 'LOCAL',
-              },
+              { status: TelegramManagedPostStatus.DRAFT, deliveryClaimOwner: null },
+              { status: TelegramManagedPostStatus.FAILED, deliveryClaimOwner: managedPostDeliveryContext.getStore()?.owner ?? null },
+              { status: TelegramManagedPostStatus.PUBLISHING, deliveryClaimOwner: managedPostDeliveryContext.getStore()?.owner ?? null },
             ],
           },
           data: {
@@ -216,7 +216,7 @@ export class TelegramManagedPostPublicationService {
       await this.telegramChannelsSupportService.workspace(userId);
     // An authenticated manual retry can reset a definite rejection. Accepted
     // and uncertain operations remain protected against duplicate publication.
-    await this.prisma.telegramManagedPostSendOperation.deleteMany({
+    if (!productionOperatorRequest.getStore()) await this.prisma.telegramManagedPostSendOperation.deleteMany({
       where: {
         postId,
         workspaceId,
@@ -355,29 +355,25 @@ export class TelegramManagedPostPublicationService {
 
   public async cancelScheduledManagedPost(
     workspaceId: string,
-    post: {
-      telegramChannelId: string;
-      sourceType: TelegramSourceType | null;
-      sourceId: string | null;
-      telegramScheduledMessageIds: string[];
-      telegramChannel: {
-        username: string | null;
-        telegramChatId: string | null;
-      };
+    post: Pick<TelegramManagedPost, 'id' | 'telegramChannelId' | 'sourceType' | 'sourceId' |
+      'telegramScheduledMessageIds' | 'scheduledAt' | 'text' | 'imageUrls' | 'mediaItems'> & {
+      updatedAt?: Date;
+      scheduleMode?: string | null;
+      telegramRemoteStatus?: TelegramManagedPostRemoteStatus;
+      telegramChannel: { username: string | null; telegramChatId: string | null };
     },
   ) {
-    if (!post.telegramScheduledMessageIds.length) return;
+    if (!post.telegramScheduledMessageIds.length) {
+      if (post.scheduleMode === 'TELEGRAM_NATIVE' || post.telegramRemoteStatus === 'UNKNOWN')
+        throw new Error('Native schedule has no verified Telegram IDs; reconcile before cancellation');
+      return;
+    }
     if (post.sourceType !== TelegramSourceType.MTPROTO || !post.sourceId) {
       throw telegramPostsBadRequest(
         'TELEGRAM_POST_NOT_SCHEDULED',
         'Scheduled post has no MTProto source and cannot be cancelled safely',
       );
     }
-    const account = await this.telegramChannelAccessService.connectedAccount(
-      workspaceId,
-      post.telegramChannelId,
-      post.sourceId,
-    );
     const channelReference =
       this.telegramChannelAccessService.mtprotoChannelReference(
         post.telegramChannel,
@@ -387,11 +383,96 @@ export class TelegramManagedPostPublicationService {
         'TELEGRAM_POST_TELEGRAM_REFERENCE_MISSING',
         'Scheduled post channel has no Telegram reference',
       );
-    await this.mtprotoClient.deleteScheduledPost({
-      ...this.telegramChannelAccessService.accountCredentials(account),
-      channel: channelReference,
-      messageIds: post.telegramScheduledMessageIds,
+    const scheduleAt = post.scheduledAt;
+    if (!channelReference.telegramChatId || !scheduleAt)
+      throw new Error('The original future Telegram schedule must be verified before cancellation.');
+    const owner = `native-cancel:${randomUUID()}`;
+    const acknowledgedOwner = owner.replace('native-cancel:', 'native-cancel-acked:');
+    const where = {
+      id: post.id, workspaceId, telegramChannelId: post.telegramChannelId,
+    };
+    const scheduledIdentity = {
+      ...where, status: TelegramManagedPostStatus.SCHEDULED, scheduledAt: scheduleAt,
+      sourceId: post.sourceId, sourceType: TelegramSourceType.MTPROTO,
+      telegramScheduledMessageIds: { equals: post.telegramScheduledMessageIds },
+    };
+    const readAcknowledgement = async () => (
+      await this.prisma.telegramManagedPost.findFirst({
+        where: { ...scheduledIdentity, deliveryClaimOwner: { startsWith: 'native-cancel-acked:' } },
+        select: { deliveryClaimOwner: true },
+      })
+    )?.deliveryClaimOwner;
+    if (scheduleAt.getTime() <= Date.now()) {
+      const previous = await readAcknowledgement();
+      if (previous) return previous;
+      throw new Error('The original future Telegram schedule must be verified before cancellation.');
+    }
+    const claim = await this.prisma.telegramManagedPost.updateMany({
+      where: {
+        ...scheduledIdentity,
+        ...(post.updatedAt ? { updatedAt: post.updatedAt } : {}),
+        deliveryClaimOwner: null,
+        sendOperations: { none: {} },
+        OR: [
+          { nativeRecovery: { is: null } },
+          { nativeRecovery: { is: {
+            status: 'ACKED', scheduledAt: scheduleAt, sourceId: post.sourceId,
+            newMessageIds: { equals: post.telegramScheduledMessageIds },
+          } } },
+        ],
+      },
+      data: { deliveryClaimOwner: owner, deliveryClaimExpiresAt: new Date('9999-12-31T00:00:00Z') },
     });
+    if (claim.count !== 1) {
+      const previous = await readAcknowledgement();
+      if (previous) return previous;
+      throw new Error('The Telegram cancellation is active or requires reconciliation.');
+    }
+    let started = false;
+    try {
+      const overlapping = await this.prisma.telegramManagedPost.findFirst({
+        where: { workspaceId, telegramChannelId: post.telegramChannelId, id: { not: post.id },
+          telegramScheduledMessageIds: { hasSome: post.telegramScheduledMessageIds } },
+        select: { id: true },
+      });
+      if (overlapping) throw new Error('Telegram scheduled IDs are shared by multiple posts. Reconcile before cancellation.');
+      const account = await this.telegramChannelAccessService.connectedAccount(
+        workspaceId,
+        post.telegramChannelId,
+        post.sourceId,
+      );
+      const credentials = this.telegramChannelAccessService.accountCredentials(account);
+      const queue = await this.mtprotoClient.getScheduledHistory({
+        ...credentials, channel: channelReference, requireDeletionAccess: true,
+      });
+      const planned = Math.floor(scheduleAt.getTime() / 1000);
+      if (!nativeScheduleContentMatches(post, queue) ||
+          !post.telegramScheduledMessageIds.every((id) => {
+            const date = queue.find((message) => message.id === id)?.date;
+            return date && Math.floor(new Date(date).getTime() / 1000) === planned;
+          })) {
+        throw new Error('The original Telegram schedule could not be verified. Reconcile before cancellation.');
+      }
+      started = true;
+      await this.mtprotoClient.deleteScheduledPost({
+        ...credentials, channel: channelReference,
+        messageIds: post.telegramScheduledMessageIds, scheduleAt,
+      });
+      const ack = await this.prisma.telegramManagedPost.updateMany({
+        where: { ...scheduledIdentity, deliveryClaimOwner: owner },
+        data: { deliveryClaimOwner: acknowledgedOwner },
+      });
+      if (ack.count !== 1) throw new Error('The Telegram cancellation requires reconciliation.');
+      return acknowledgedOwner;
+    } finally {
+      // A missing acknowledgement permanently fences automatic cancellation retries.
+      if (!started) {
+        await this.prisma.telegramManagedPost.updateMany({
+          where: { ...where, deliveryClaimOwner: owner },
+          data: { deliveryClaimOwner: null, deliveryClaimExpiresAt: null },
+        });
+      }
+    }
   }
 
   async returnManagedPostToDraft(
@@ -423,7 +504,7 @@ export class TelegramManagedPostPublicationService {
         'Posts created in Telegram cannot be returned to draft from the editor',
       );
     }
-    await this.cancelScheduledManagedPost(workspaceId, post);
+    const cancellation = await this.cancelScheduledManagedPost(workspaceId, post);
     const draftPost = await this.prisma.$transaction(async (tx) => {
       await this.telegramManagedPostRevisionStore.createManagedPostRevision(
         tx,
@@ -432,11 +513,20 @@ export class TelegramManagedPostPublicationService {
         userId,
       );
       const updated = await tx.telegramManagedPost.update({
-        where: { id: postId },
+        where: {
+          id: postId, workspaceId, telegramChannelId: channelId, status: post.status,
+          scheduledAt: post.scheduledAt, sourceId: post.sourceId,
+          telegramScheduledMessageIds: { equals: post.telegramScheduledMessageIds },
+          ...(cancellation ? {} : { updatedAt: post.updatedAt }),
+          deliveryClaimOwner: cancellation ?? null,
+        },
         data: {
           status: TelegramManagedPostStatus.DRAFT,
+          deliveryClaimOwner: null,
+          deliveryClaimExpiresAt: null,
           telegramRemoteStatus: TelegramManagedPostRemoteStatus.NONE,
           scheduledAt: null,
+          scheduleMode: null,
           publicationSlotId: null,
           publishedAt: null,
           telegramScheduledMessageIds: [],

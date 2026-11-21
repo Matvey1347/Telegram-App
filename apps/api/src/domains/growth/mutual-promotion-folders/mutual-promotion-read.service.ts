@@ -47,6 +47,7 @@ const detailInclude = {
           url: true,
           joinedCount: true,
           requestedCount: true,
+          joinedObserved: true, requestedObserved: true, lastSyncedAt: true,
           creatorTelegramUserId: true,
           creatorUsername: true,
           creatorFirstName: true,
@@ -146,7 +147,7 @@ export class MutualPromotionReadService {
                 },
               },
               inviteLink: {
-                select: { joinedCount: true, requestedCount: true },
+                select: { joinedCount: true, requestedCount: true, joinedObserved: true, requestedObserved: true, lastSyncedAt: true },
               },
               expense: {
                 include: { account: { select: { name: true } } },
@@ -191,8 +192,8 @@ export class MutualPromotionReadService {
             ...participant,
             currentSubscribersCount:
               participant.telegramChannel.currentSubscribersCount,
-            currentInviteJoinedCount: participant.inviteLink.joinedCount,
-            currentInviteRequestedCount: participant.inviteLink.requestedCount,
+            currentInviteJoinedCount: participant.inviteLink.joinedObserved === false || (participant.inviteLink.joinedObserved === null && !participant.inviteLink.lastSyncedAt) ? null : participant.inviteLink.joinedCount,
+            currentInviteRequestedCount: participant.inviteLink.requestedObserved === false || (participant.inviteLink.requestedObserved === null && !participant.inviteLink.lastSyncedAt) ? null : participant.inviteLink.requestedCount,
           },
           { useCurrentCounters: row.status === 'ACTIVE' },
         ),
@@ -286,8 +287,8 @@ export class MutualPromotionReadService {
             ...participant,
             currentSubscribersCount:
               participant.telegramChannel.currentSubscribersCount,
-            currentInviteJoinedCount: participant.inviteLink.joinedCount,
-            currentInviteRequestedCount: participant.inviteLink.requestedCount,
+            currentInviteJoinedCount: participant.inviteLink.joinedObserved === false || (participant.inviteLink.joinedObserved === null && !participant.inviteLink.lastSyncedAt) ? null : participant.inviteLink.joinedCount,
+            currentInviteRequestedCount: participant.inviteLink.requestedObserved === false || (participant.inviteLink.requestedObserved === null && !participant.inviteLink.lastSyncedAt) ? null : participant.inviteLink.requestedCount,
           },
           { useCurrentCounters: row.status === 'ACTIVE' },
         ),
@@ -341,8 +342,8 @@ export class MutualPromotionReadService {
               ...participant,
               currentSubscribersCount:
                 participant.telegramChannel.currentSubscribersCount,
-              currentInviteJoinedCount: inviteLink.joinedCount,
-              currentInviteRequestedCount: inviteLink.requestedCount,
+              currentInviteJoinedCount: inviteLink.joinedObserved === false || (inviteLink.joinedObserved === null && !inviteLink.lastSyncedAt) ? null : inviteLink.joinedCount,
+              currentInviteRequestedCount: inviteLink.requestedObserved === false || (inviteLink.requestedObserved === null && !inviteLink.lastSyncedAt) ? null : inviteLink.requestedCount,
             },
             { useCurrentCounters: row.status === 'ACTIVE' },
           ),

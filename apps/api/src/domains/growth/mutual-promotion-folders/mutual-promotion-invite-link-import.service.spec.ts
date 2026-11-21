@@ -101,6 +101,8 @@ describe('MutualPromotionInviteLinkImportService', () => {
         folderId: 'folder-1',
         telegramChannelId: 'channel-1',
         inviteLinkId: 'link-1',
+        inviteJoinedAtStart: null,
+        baselineCapturedAt: null,
       },
       data: {
         inviteJoinedAtStart: 74,

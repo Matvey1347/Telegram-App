@@ -1,12 +1,13 @@
-import { render, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
+import { renderWithI18n } from "@/test/render-with-i18n";
 import { AdCampaignSortMenu } from "./ad-campaign-sort-menu";
 
 describe("AdCampaignSortMenu", () => {
   it("selects a field and preserves direction, then toggles direction", async () => {
     const onChange = vi.fn();
-    render(<AdCampaignSortMenu value="date_desc" onChange={onChange} />);
+    renderWithI18n(<AdCampaignSortMenu value="date_desc" onChange={onChange} />);
 
     await userEvent.click(
       screen.getByRole("button", { name: "Sort campaigns by" }),

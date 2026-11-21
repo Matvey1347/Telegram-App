@@ -82,7 +82,7 @@ function setup() {
 describe('TelegramSystemBotPostFlowService groups', () => {
   it('defaults a selected channel to the System Bot posts group', async () => {
     const { service, workflows, groups } = setup();
-    workflows.get.mockResolvedValue(workflow('CHOOSE_CHANNEL', { content }));
+    workflows.get.mockResolvedValue(workflow('CHOOSE_CHANNEL', {}));
     workflows.transition.mockImplementation(({ step, payload }) =>
       workflow(step, payload, 3),
     );
@@ -95,7 +95,7 @@ describe('TelegramSystemBotPostFlowService groups', () => {
     );
     expect(workflows.transition).toHaveBeenCalledWith(
       expect.objectContaining({
-        step: 'CHOOSE_ACTION',
+        step: 'AWAIT_CONTENT',
         payload: expect.objectContaining({
           groupId: 'system-group',
           groupTitle: 'System Bot posts',

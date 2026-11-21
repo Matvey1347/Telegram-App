@@ -61,8 +61,7 @@ describe('Telegram System Bot handler option layouts', () => {
     await service.handle(message('/workspace'));
 
     expect(
-      api.sendMessage.mock.calls
-        .at(-1)[1]
+      api.sendMessage.mock.calls[0][1]
         .reply_markup.inline_keyboard.map((row: unknown[]) => row.length),
     ).toEqual([2, 2, 1, 2]);
   });

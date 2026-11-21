@@ -47,6 +47,7 @@ describe('TelegramBotLocalDevelopmentService', () => {
     sendMessage: jest.fn().mockResolvedValue({ message_id: 1 }),
     setChatMenuButton: jest.fn().mockResolvedValue(true),
     deleteWebhook: jest.fn().mockResolvedValue(true),
+    getWebhookInfo: jest.fn().mockResolvedValue({ url: '' }),
     deleteMessage: jest.fn().mockResolvedValue(true),
   } as any;
   const environment = { current: jest.fn() } as any;
@@ -94,6 +95,7 @@ describe('TelegramBotLocalDevelopmentService', () => {
   } as any;
   const runtimeService = {
     reconcileLocalDevelopment: jest.fn().mockResolvedValue(undefined),
+    webhookUrlFor: jest.fn().mockReturnValue('https://new.trycloudflare.com/api/webhook'),
   } as any;
   let service: TelegramBotLocalDevelopmentService;
   const previousUrl = process.env.FRONTEND_URL;
@@ -264,6 +266,26 @@ describe('TelegramBotLocalDevelopmentService', () => {
         }),
       }),
     );
+  });
+
+  it('scopes shutdown to the requested LOCAL integration and protects a different owner', async () => {
+    prisma.telegramBotRuntimeInstance.findMany.mockResolvedValue([runtime]);
+    api.getWebhookInfo.mockResolvedValueOnce({ url: 'https://other.example/webhook' });
+
+    await expect(service.stop('control-secret', 'finance-1')).rejects.toThrow(
+      'Telegram webhook belongs to another development host',
+    );
+
+    expect(prisma.telegramBotRuntimeInstance.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          botIntegrationId: 'finance-1',
+          environment: TelegramBotRuntimeEnvironment.LOCAL,
+        }),
+      }),
+    );
+    expect(api.deleteWebhook).not.toHaveBeenCalled();
+    expect(prisma.telegramBotRuntimeInstance.update).not.toHaveBeenCalled();
   });
 
   it('cannot run without the per-process secret', async () => {

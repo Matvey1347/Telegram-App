@@ -183,7 +183,6 @@ export class TelegramPostGroupsService {
   async postGroups(userId: string, query: PostGroupsQueryDto) {
     const workspaceId =
       await this.telegramChannelsSupportService.workspace(userId);
-    await this.telegramChannelSchemaCompatibilityService.ensurePostGroupSystemColumnsAvailable();
     if (query.telegramChannelId) {
       const channel = await this.prisma.telegramChannel.findFirst({
         where: {
@@ -191,24 +190,9 @@ export class TelegramPostGroupsService {
           workspaceId,
           isActive: true,
         },
-        select: { id: true, assignedMemberId: true },
+        select: { id: true },
       });
       if (!channel) throw telegramChannelNotFound();
-      await this.telegramPostGroupStore.ensureRequiredChannelSystemGroups(
-        this.prisma,
-        workspaceId,
-        query.telegramChannelId,
-        channel.assignedMemberId ?? null,
-      );
-      await this.telegramPostGroupStore.ensureTelegramImportedSystemGroup(
-        workspaceId,
-        query.telegramChannelId,
-        channel.assignedMemberId ?? null,
-      );
-      await this.telegramPostGroupStore.normalizeChannelPostGroupNumberingOnRead(
-        workspaceId,
-        query.telegramChannelId,
-      );
     }
     const where = {
       workspaceId,
@@ -260,6 +244,30 @@ export class TelegramPostGroupsService {
       totalItems,
       pagination,
     );
+  }
+
+  async repairChannelSystemGroups(userId: string, channelId: string) {
+    const { workspaceId } = await this.workspaceService.requireWorkspaceRole(userId, ['owner']);
+    const channel = await this.prisma.telegramChannel.findFirst({
+      where: { id: channelId, workspaceId, isActive: true },
+      select: { assignedMemberId: true },
+    });
+    if (!channel) throw telegramChannelNotFound();
+    const { assignedMemberId } = channel;
+    await this.telegramPostGroupStore.ensureRequiredChannelSystemGroups(
+      this.prisma,
+      workspaceId,
+      channelId,
+      assignedMemberId,
+    );
+    await this.telegramPostGroupStore.ensureTelegramImportedSystemGroup(
+      workspaceId,
+      channelId,
+      assignedMemberId,
+    );
+    await this.telegramPostGroupStore.normalizeChannelPostGroupNumberingOnRead(workspaceId, channelId);
+    this.telegramChannelsSupportService.invalidateTelegramChannelReadCache(userId, workspaceId);
+    return { repaired: true };
   }
 
   async postGroup(userId: string, groupId: string) {

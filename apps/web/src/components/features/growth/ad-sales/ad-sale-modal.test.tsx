@@ -668,7 +668,9 @@ describe("AdSaleModal", () => {
         screen.getAllByRole("button", { name: /Actions for Example channel/ }),
       ).toHaveLength(2),
     );
-    fireEvent.click(screen.getByRole("button", { name: "Create sale" }));
+    const createSale = screen.getByRole("button", { name: "Create sale" });
+    await waitFor(() => expect(createSale).toBeEnabled());
+    fireEvent.click(createSale);
     await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
     expect(
       onSubmit.mock.calls[0][0].placements.map(

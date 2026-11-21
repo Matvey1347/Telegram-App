@@ -1,69 +1,35 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import type { CrossPromotionSchedulingProgress } from '@telegram-system/shared';
 import { TelegramChannelsService } from '../../telegram/telegram-channels/telegram-channels.service';
 import { TelegramSystemPostGroupsService } from '../../telegram/telegram-channels/telegram-system-post-groups.service';
-import type { CreateTelegramManagedPostDto } from '../../telegram/telegram-channels/dto';
-import type {
-  CrossPromotionChannelPlacementInput,
-  CrossPromotionPublicationItem,
-} from '@telegram-system/shared';
 import { CreateCrossPromotionPlanDto } from './dto';
 import { CrossPromotionPlansService } from './cross-promotion-plans.service';
 import { TelegramManagedPostRemoteDeletionService } from '../../telegram/telegram-channels/telegram-managed-post-remote-deletion.service';
-
-type Progress = (
-  item: CrossPromotionSchedulingProgress,
-  current: number,
-  total: number,
-) => void;
-type ScheduledPost = {
-  telegramChannelId: string;
-  managedPostId: string;
-  postGroupId?: string | null;
-  publicationId?: string | null;
-};
-
-type PublisherPublication = CrossPromotionPublicationItem;
-
-function publisherPublications(
-  dto: CreateCrossPromotionPlanDto,
-): PublisherPublication[] {
-  const configured = dto.publicationPost.publisherPublications;
-  if (configured?.length) return configured;
-  return [
-    {
-      id: 'legacy-publisher-publication',
-      post: dto.publicationPost,
-      placements:
-        dto.publicationPost.publisherPlacements ??
-        dto.publisherChannelIds.map((telegramChannelId) => ({
-          telegramChannelId,
-          scheduledAt: dto.scheduledAt,
-        })),
-    },
-  ];
-}
-
-/**
- * The plan-level timestamp is a display/tracking anchor.  Telegram posts are
- * actually scheduled from the per-publisher placements, which may override
- * that default date and time.  Do not reject a valid future placement merely
- * because an old default timestamp was left on the plan.
- */
-function publisherScheduleTimes(dto: CreateCrossPromotionPlanDto) {
-  return publisherPublications(dto)
-    .flatMap((publication) => publication.placements)
-    .map((placement) => Date.parse(placement.scheduledAt ?? dto.scheduledAt));
-}
+import {
+  managedPostPayload,
+  publisherPublications,
+  publisherScheduleTimes,
+  withImmediatePublisherTimes,
+  type Progress,
+  type ScheduledPost,
+} from './cross-promotion-placement-input';
+import { CrossPromotionPlacementPublisher } from './cross-promotion-placement-publisher';
 
 @Injectable()
 export class CrossPromotionPlanSchedulingService {
+  private readonly placementPublisher: CrossPromotionPlacementPublisher;
+
   constructor(
     private readonly plans: CrossPromotionPlansService,
     private readonly telegramChannels: TelegramChannelsService,
     private readonly systemPostGroups: TelegramSystemPostGroupsService,
     private readonly remoteDeletion: TelegramManagedPostRemoteDeletionService,
-  ) {}
+  ) {
+    this.placementPublisher = new CrossPromotionPlacementPublisher(
+      plans,
+      telegramChannels,
+      systemPostGroups,
+    );
+  }
 
   async remove(userId: string, id: string) {
     const context = await this.plans.removalContext(userId, id);
@@ -104,7 +70,7 @@ export class CrossPromotionPlanSchedulingService {
       await this.plans.validateForScheduling(userId, dto);
       const plan = await this.plans.create(userId, dto);
       planId = plan.id;
-      await this.schedulePosts(
+      await this.placementPublisher.schedulePosts(
         userId,
         dto,
         createdPosts,
@@ -165,7 +131,7 @@ export class CrossPromotionPlanSchedulingService {
       total,
     );
     try {
-      await this.schedulePosts(
+      await this.placementPublisher.schedulePosts(
         userId,
         context.dto,
         posts,
@@ -270,7 +236,7 @@ export class CrossPromotionPlanSchedulingService {
           placement.managedPostId,
         );
       }
-      await this.schedulePosts(
+      await this.placementPublisher.schedulePosts(
         userId,
         dto,
         createdPosts,
@@ -294,7 +260,12 @@ export class CrossPromotionPlanSchedulingService {
       );
       return saved;
     } catch (error) {
-      await this.rollback(userId, createdPosts, onProgress, total);
+      await this.placementPublisher.rollback(
+        userId,
+        createdPosts,
+        onProgress,
+        total,
+      );
       await this.plans
         .markRescheduling(
           userId,
@@ -318,7 +289,7 @@ export class CrossPromotionPlanSchedulingService {
     signal: AbortSignal,
   ) {
     const now = new Date().toISOString();
-    const immediate = this.withImmediatePublisherTimes(dto, now);
+    const immediate = withImmediatePublisherTimes(dto, now);
     const total = publisherScheduleTimes(immediate).length + 2;
     const createdPosts: ScheduledPost[] = [];
     onProgress(
@@ -373,7 +344,7 @@ export class CrossPromotionPlanSchedulingService {
           placement.managedPostId,
         );
       }
-      await this.publishPostsNow(
+      await this.placementPublisher.publishPostsNow(
         userId,
         immediate,
         createdPosts,
@@ -395,7 +366,12 @@ export class CrossPromotionPlanSchedulingService {
       );
       return saved;
     } catch (error) {
-      await this.rollback(userId, createdPosts, onProgress, total);
+      await this.placementPublisher.rollback(
+        userId,
+        createdPosts,
+        onProgress,
+        total,
+      );
       await this.plans
         .markRescheduling(
           userId,
@@ -459,7 +435,7 @@ export class CrossPromotionPlanSchedulingService {
         'A partner-post time cannot be changed in place. Replace the publication to create a new Telegram schedule.',
       );
     }
-    const nextPost = this.managedPostPayload(dto, publication.post);
+    const nextPost = managedPostPayload(dto, publication.post);
     const existingPosts = new Map(
       (
         await this.plans.managedPostsForPublicationUpdate(
@@ -565,7 +541,7 @@ export class CrossPromotionPlanSchedulingService {
     const remotePostIds = context.remotePostIds.filter((item) =>
       previousIds.has(item),
     );
-    const immediate = this.withImmediatePublisherTimes(
+    const immediate = withImmediatePublisherTimes(
       {
         ...dto,
         publicationPost: {
@@ -600,7 +576,7 @@ export class CrossPromotionPlanSchedulingService {
           );
         }
       }
-      await this.publishPostsNow(
+      await this.placementPublisher.publishPostsNow(
         userId,
         immediate,
         createdPosts,
@@ -617,7 +593,12 @@ export class CrossPromotionPlanSchedulingService {
         'ACTIVE',
       );
     } catch (error) {
-      await this.rollback(userId, createdPosts, onProgress, total);
+      await this.placementPublisher.rollback(
+        userId,
+        createdPosts,
+        onProgress,
+        total,
+      );
       throw error;
     }
   }
@@ -728,7 +709,7 @@ export class CrossPromotionPlanSchedulingService {
       const post = await this.telegramChannels.createManagedPost(
         userId,
         channelId,
-        this.managedPostPayload(dto, publication.post, nextPlacement),
+        managedPostPayload(dto, publication.post, nextPlacement),
         { groupId: group.id },
       );
       await this.telegramChannels.scheduleManagedPost(
@@ -762,222 +743,6 @@ export class CrossPromotionPlanSchedulingService {
         )
         .catch(() => undefined);
       throw error;
-    }
-  }
-
-  private async schedulePosts(
-    userId: string,
-    dto: CreateCrossPromotionPlanDto,
-    createdPosts: ScheduledPost[],
-    onProgress: Progress,
-    total: number,
-    signal: AbortSignal,
-    validate = true,
-    onPlacementSaved?: (placement: ScheduledPost) => Promise<void>,
-  ) {
-    if (validate) await this.plans.validateForScheduling(userId, dto);
-    const scheduledPublicationKeys = new Set(
-      createdPosts.map(
-        (post) => `${post.publicationId}:${post.telegramChannelId}`,
-      ),
-    );
-    const usesPublicationItems = Boolean(
-      dto.publicationPost.publisherPublications?.length,
-    );
-    const publications = publisherPublications(dto);
-    const scheduled = publications.flatMap((publication) =>
-      publication.placements.map((placement) => ({ publication, placement })),
-    );
-    for (const [index, item] of scheduled.entries()) {
-      const { publication, placement } = item;
-      const channelId = placement.telegramChannelId;
-      const publicationId = usesPublicationItems ? publication.id : undefined;
-      const key = `${publicationId}:${channelId}`;
-      if (scheduledPublicationKeys.has(key)) continue;
-      signal.throwIfAborted();
-      const group = await this.systemPostGroups.ensureMutualPromotionGroup(
-        userId,
-        channelId,
-      );
-      const post = await this.telegramChannels.createManagedPost(
-        userId,
-        channelId,
-        this.managedPostPayload(dto, publication.post, placement),
-        { groupId: group.id },
-      );
-      const scheduledPost: ScheduledPost = {
-        telegramChannelId: channelId,
-        managedPostId: post.id,
-        postGroupId: group.id,
-        ...(publicationId ? { publicationId } : {}),
-      };
-      createdPosts.push(scheduledPost);
-      await onPlacementSaved?.(scheduledPost);
-      await this.telegramChannels.scheduleManagedPost(
-        userId,
-        channelId,
-        post.id,
-        { scheduledAt: placement?.scheduledAt ?? dto.scheduledAt },
-      );
-      onProgress(
-        {
-          phase: 'SCHEDULING',
-          message: `Scheduled ${index + 1} of ${scheduled.length} posts`,
-          telegramChannelId: channelId,
-          success: true,
-        },
-        index + 1,
-        total,
-      );
-    }
-  }
-
-  private async publishPostsNow(
-    userId: string,
-    dto: CreateCrossPromotionPlanDto,
-    createdPosts: ScheduledPost[],
-    onProgress: Progress,
-    total: number,
-    signal: AbortSignal,
-  ) {
-    const publications = publisherPublications(dto);
-    const items = publications.flatMap((publication) =>
-      publication.placements.map((placement) => ({ publication, placement })),
-    );
-    for (const [index, { publication, placement }] of items.entries()) {
-      signal.throwIfAborted();
-      const group = await this.systemPostGroups.ensureMutualPromotionGroup(
-        userId,
-        placement.telegramChannelId,
-      );
-      const post = await this.telegramChannels.createManagedPost(
-        userId,
-        placement.telegramChannelId,
-        this.managedPostPayload(dto, publication.post, placement),
-        { groupId: group.id },
-      );
-      await this.telegramChannels.publishManagedPostNow(
-        userId,
-        placement.telegramChannelId,
-        post.id,
-        {},
-      );
-      createdPosts.push({
-        telegramChannelId: placement.telegramChannelId,
-        managedPostId: post.id,
-        postGroupId: group.id,
-        ...(dto.publicationPost.publisherPublications?.length
-          ? { publicationId: publication.id }
-          : {}),
-      });
-      onProgress(
-        {
-          phase: 'SCHEDULING',
-          message: `Published ${index + 1} of ${items.length} posts`,
-          telegramChannelId: placement.telegramChannelId,
-          success: true,
-        },
-        index + 1,
-        total,
-      );
-    }
-  }
-
-  private withImmediatePublisherTimes(
-    dto: CreateCrossPromotionPlanDto,
-    scheduledAt: string,
-  ): CreateCrossPromotionPlanDto {
-    const replace = (placement: CrossPromotionChannelPlacementInput) => {
-      const previousAt = Date.parse(placement.scheduledAt);
-      const previousDeleteAt = placement.deleteAt
-        ? Date.parse(placement.deleteAt)
-        : NaN;
-      const deleteAt =
-        Number.isFinite(previousAt) && Number.isFinite(previousDeleteAt)
-          ? new Date(
-              Date.parse(scheduledAt) + (previousDeleteAt - previousAt),
-            ).toISOString()
-          : null;
-      return { ...placement, scheduledAt, deleteAt };
-    };
-    return {
-      ...dto,
-      scheduledAt,
-      publicationPost: {
-        ...dto.publicationPost,
-        publisherPlacements:
-          dto.publicationPost.publisherPlacements?.map(replace),
-        publisherPublications: dto.publicationPost.publisherPublications?.map(
-          (publication) => ({
-            ...publication,
-            placements: publication.placements.map(replace),
-          }),
-        ),
-      },
-    };
-  }
-
-  private managedPostPayload(
-    dto: CreateCrossPromotionPlanDto,
-    post: CreateCrossPromotionPlanDto['publicationPost'],
-    placement?: CrossPromotionChannelPlacementInput,
-  ): CreateTelegramManagedPostDto {
-    return {
-      title: post.title?.trim() || dto.title.trim(),
-      text: post.text ?? '',
-      imageUrls: post.imageUrls ?? [],
-      mediaItems: post.mediaItems ?? [],
-      buttonRows: (post.buttonRows ?? []).map((row) =>
-        row.map((button) => ({
-          text: button.text,
-          url: button.url,
-          style: button.style ?? 'default',
-        })),
-      ),
-      deleteAfterHours: this.deleteAfterHours(placement),
-    };
-  }
-
-  private deleteAfterHours(
-    placement?: CrossPromotionChannelPlacementInput,
-  ): 24 | 48 | 72 | null | undefined {
-    if (!placement?.deleteAt) return null;
-    const scheduledAt = Date.parse(placement.scheduledAt);
-    const deleteAt = Date.parse(placement.deleteAt);
-    if (!Number.isFinite(scheduledAt) || !Number.isFinite(deleteAt))
-      return null;
-    const hours = Math.round((deleteAt - scheduledAt) / 3_600_000);
-    return hours === 24 || hours === 48 || hours === 72 ? hours : null;
-  }
-
-  private async rollback(
-    userId: string,
-    posts: ScheduledPost[],
-    onProgress: Progress,
-    total: number,
-  ) {
-    for (const post of [...posts].reverse()) {
-      try {
-        await this.telegramChannels.deleteManagedPost(
-          userId,
-          post.telegramChannelId,
-          post.managedPostId,
-        );
-      } catch {
-        // Preserve the original scheduling error. Failed cleanup remains visible
-        // as a managed post and can be handled from Telegram Posts.
-      }
-    }
-    if (posts.length) {
-      onProgress(
-        {
-          phase: 'ROLLING_BACK',
-          message: 'Scheduling failed; created posts were rolled back',
-          success: false,
-        },
-        Math.min(posts.length, total),
-        total,
-      );
     }
   }
 }

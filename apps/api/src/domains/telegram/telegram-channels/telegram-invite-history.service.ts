@@ -19,25 +19,25 @@ export class TelegramInviteHistoryService {
   public inviteLinkHistoryPoints<
     T extends {
       syncedAt: Date;
-      joinedCount: number;
-      requestedCount: number;
+      joinedCount: number | null;
+      requestedCount: number | null;
       isRevoked?: boolean | null;
     },
   >(rows: T[]) {
     let peakJoinedCount = 0;
     let peakTotalAttributed = 0;
     return rows.map((row) => {
-      const joinedCount = Number(row.joinedCount || 0);
-      const requestedCount = Number(row.requestedCount || 0);
-      const totalAttributed = joinedCount + requestedCount;
-      peakJoinedCount = Math.max(peakJoinedCount, joinedCount);
-      peakTotalAttributed = Math.max(peakTotalAttributed, totalAttributed);
-      const drawdownFromPeak = Math.max(
+      const joinedCount = row.joinedCount;
+      const requestedCount = row.requestedCount;
+      const totalAttributed = joinedCount == null || requestedCount == null ? null : joinedCount + requestedCount;
+      peakJoinedCount = Math.max(peakJoinedCount, joinedCount ?? 0);
+      peakTotalAttributed = Math.max(peakTotalAttributed, totalAttributed ?? 0);
+      const drawdownFromPeak = totalAttributed == null ? null : Math.max(
         0,
         peakTotalAttributed - totalAttributed,
       );
       const drawdownPercent =
-        peakTotalAttributed > 0
+        drawdownFromPeak == null ? null : peakTotalAttributed > 0
           ? (drawdownFromPeak / peakTotalAttributed) * 100
           : 0;
       return {
@@ -55,12 +55,12 @@ export class TelegramInviteHistoryService {
 
   public inviteLinkHistorySummary<
     T extends {
-      joinedCount: number;
-      requestedCount: number;
-      totalAttributed: number;
+      joinedCount: number | null;
+      requestedCount: number | null;
+      totalAttributed: number | null;
       peakJoinedCount: number;
-      drawdownFromPeak: number;
-      drawdownPercent: number;
+      drawdownFromPeak: number | null;
+      drawdownPercent: number | null;
     },
   >(points: T[]) {
     const current = points[points.length - 1] ?? null;
@@ -77,11 +77,9 @@ export class TelegramInviteHistoryService {
       0,
     );
     return {
-      currentJoinedCount: Number(current?.joinedCount || 0),
-      currentRequestedCount: Number(current?.requestedCount || 0),
-      currentTotalAttributed:
-        Number(current?.joinedCount || 0) +
-        Number(current?.requestedCount || 0),
+      currentJoinedCount: current?.joinedCount ?? null,
+      currentRequestedCount: current?.requestedCount ?? null,
+      currentTotalAttributed: current?.totalAttributed ?? null,
       peakJoinedCount,
       peakRequestedCount,
       peakTotalAttributed,
@@ -93,7 +91,7 @@ export class TelegramInviteHistoryService {
 
   public buildInviteLinkHistoryPayload(
     inviteLink: {
-      joinedCount: number;
+      joinedCount: number | null;
       requestedCount?: number | null;
       isRevoked: boolean;
       lastSyncedAt?: Date | null;
@@ -102,8 +100,8 @@ export class TelegramInviteHistoryService {
     } & Record<string, unknown>,
     rowsAsc: Array<{
       syncedAt: Date;
-      joinedCount: number;
-      requestedCount: number;
+      joinedCount: number | null;
+      requestedCount: number | null;
       isRevoked?: boolean | null;
     }>,
     limit = 120,
@@ -115,8 +113,8 @@ export class TelegramInviteHistoryService {
           inviteLink.lastSyncedAt ??
           inviteLink.updatedAt ??
           inviteLink.createdAt,
-        joinedCount: inviteLink.joinedCount,
-        requestedCount: inviteLink.requestedCount,
+        joinedCount: inviteLink.joinedObserved === false ? null : inviteLink.joinedCount,
+        requestedCount: inviteLink.requestedObserved === false ? null : inviteLink.requestedCount,
         isRevoked: inviteLink.isRevoked,
       })
       .slice(-maxPoints);
@@ -129,8 +127,8 @@ export class TelegramInviteHistoryService {
                 inviteLink.lastSyncedAt ??
                 inviteLink.updatedAt ??
                 inviteLink.createdAt,
-              joinedCount: inviteLink.joinedCount,
-              requestedCount: inviteLink.requestedCount,
+              joinedCount: inviteLink.joinedObserved === false ? null : inviteLink.joinedCount,
+              requestedCount: inviteLink.requestedObserved === false ? null : inviteLink.requestedCount,
               isRevoked: inviteLink.isRevoked,
             }),
           ],
@@ -153,7 +151,7 @@ export class TelegramInviteHistoryService {
         id: string;
         name: string | null;
         url: string;
-        joinedCount: number;
+        joinedCount: number | null;
         requestedCount?: number | null;
         isRevoked: boolean;
         lastSyncedAt?: Date | null;
@@ -164,8 +162,8 @@ export class TelegramInviteHistoryService {
     rowsAsc: Array<{
       inviteLinkId: string;
       syncedAt: Date;
-      joinedCount: number;
-      requestedCount: number;
+      joinedCount: number | null;
+      requestedCount: number | null;
       isRevoked?: boolean | null;
     }>,
     limit = 120,
@@ -175,8 +173,8 @@ export class TelegramInviteHistoryService {
       string,
       {
         syncedAt: Date;
-        joinedCount: number;
-        requestedCount: number;
+        joinedCount: number | null;
+        requestedCount: number | null;
         isRevoked: boolean;
       }
     >();
@@ -189,8 +187,8 @@ export class TelegramInviteHistoryService {
         requestedCount: 0,
         isRevoked: true,
       };
-      current.joinedCount += Number(row.joinedCount || 0);
-      current.requestedCount += Number(row.requestedCount || 0);
+      current.joinedCount = current.joinedCount == null || row.joinedCount == null ? null : current.joinedCount + row.joinedCount;
+      current.requestedCount = current.requestedCount == null || row.requestedCount == null ? null : current.requestedCount + row.requestedCount;
       current.isRevoked = current.isRevoked && Boolean(row.isRevoked);
       aggregateBySync.set(key, current);
     }
@@ -221,8 +219,8 @@ export class TelegramInviteHistoryService {
       string,
       Array<{
         syncedAt: Date;
-        joinedCount: number;
-        requestedCount: number;
+        joinedCount: number | null;
+        requestedCount: number | null;
         isRevoked: boolean;
       }>
     >();
@@ -230,8 +228,8 @@ export class TelegramInviteHistoryService {
       const list = perLinkRows.get(row.inviteLinkId) ?? [];
       list.push({
         syncedAt: row.syncedAt,
-        joinedCount: Number(row.joinedCount || 0),
-        requestedCount: Number(row.requestedCount || 0),
+        joinedCount: row.joinedCount,
+        requestedCount: row.requestedCount,
         isRevoked: Boolean(row.isRevoked),
       });
       perLinkRows.set(row.inviteLinkId, list);
@@ -291,7 +289,7 @@ export class TelegramInviteHistoryService {
         id: string;
         name: string | null;
         url: string;
-        joinedCount: number;
+        joinedCount: number | null;
         requestedCount?: number | null;
         isRevoked: boolean;
         lastSyncedAt?: Date | null;
@@ -314,8 +312,8 @@ export class TelegramInviteHistoryService {
       adCampaignId: string | null;
       inviteLinkId: string;
       syncedAt: Date;
-      joinedCount: number;
-      requestedCount: number;
+      joinedCount: number | null;
+      requestedCount: number | null;
       isRevoked: boolean | null;
     }> = [];
     if (this.telegramInviteLinkSnapshotStorageState !== 'missing') {
@@ -395,7 +393,7 @@ export class TelegramInviteHistoryService {
     T extends {
       id: string;
       telegramChannelId: string;
-      joinedCount: number;
+      joinedCount: number | null;
       requestedCount?: number | null;
       isRevoked: boolean;
       lastSyncedAt?: Date | null;
@@ -425,8 +423,8 @@ export class TelegramInviteHistoryService {
       string,
       Array<{
         syncedAt: Date;
-        joinedCount: number;
-        requestedCount: number;
+        joinedCount: number | null;
+        requestedCount: number | null;
         isRevoked?: boolean | null;
       }>
     >();
@@ -434,8 +432,8 @@ export class TelegramInviteHistoryService {
       const list = rowsByInviteLinkId.get(row.inviteLinkId) ?? [];
       list.push({
         syncedAt: row.syncedAt,
-        joinedCount: Number(row.joinedCount || 0),
-        requestedCount: Number(row.requestedCount || 0),
+        joinedCount: row.joinedCount,
+        requestedCount: row.requestedCount,
         isRevoked: Boolean(row.isRevoked),
       });
       rowsByInviteLinkId.set(row.inviteLinkId, list);

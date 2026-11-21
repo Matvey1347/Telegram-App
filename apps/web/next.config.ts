@@ -13,7 +13,11 @@ const gatewayHostname = configuredDevHostname(
   process.env.NEXT_ALLOWED_DEV_ORIGIN,
 );
 
+const liveMode = process.env.NEXT_PUBLIC_NEXELOQ_LIVE_MODE;
 const nextConfig: NextConfig = {
+  ...((liveMode === "ui" || liveMode === "operator") && process.env.NODE_ENV === "development"
+    ? { distDir: `.next/live-${liveMode}` }
+    : {}),
   // The floating Next.js development badge overlaps Mini App navigation and
   // is not part of the product UI.
   devIndicators: false,

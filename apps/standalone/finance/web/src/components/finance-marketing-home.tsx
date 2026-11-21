@@ -1,9 +1,10 @@
 "use client";
-import { financeBrandIcon } from "@consumer-finance/web/lib/finance-brand-icon";
+import { financeBrandIcon } from "@finance-web/lib/finance-brand-icon";
 
 import { useEffect, useState } from "react";
 import { ConsumerFinanceLanding } from "@consumer-finance/web/components/app/consumer-finance-landing";
 import { consumerFinanceAuthApi } from "@consumer-finance/web/lib/api/consumer-finance-auth-api";
+import { publicFinanceWebEnvironment } from "@finance-web/config/public-env";
 import { applyFinanceDocumentMetadata } from "@consumer-finance/web/components/hooks/use-finance-bot-branding";
 
 type Locale = "uk" | "en";
@@ -24,6 +25,7 @@ export function FinanceMarketingHome({ initialLocale, initialTheme }: { initialL
       locale === "en"
         ? "Groshly — Personal Finance"
         : "Groshly — особисті фінанси в Telegram і браузері",
+      publicFinanceWebEnvironment.isDevelopment,
     );
   }, [locale, theme]);
   useEffect(() => {

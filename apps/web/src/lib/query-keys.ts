@@ -278,6 +278,7 @@ export const adCampaignKeys = {
   list: () => ["ad-campaigns"] as const,
   admissionViewAnalytics: (campaignId?: string) =>
     ["ad-campaign-admission-view-analytics", campaignId] as const,
+  inviteLinkWindows: (campaignId?: string) => ["ad-campaign-invite-windows", campaignId] as const,
   inviteLinkHistory: (campaignId?: string) =>
     ["campaign-invite-link-history", campaignId] as const,
 };

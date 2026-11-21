@@ -89,13 +89,26 @@ export class BotBillingAnalyticsService {
     };
   }
 
-  async aiUsage(workspaceId: string, botIntegrationId: string) {
+  async aiUsage(
+    workspaceId: string,
+    botIntegrationId: string,
+    environment?: 'LOCAL' | 'PRODUCTION',
+  ) {
+    const runtime = environment
+      ? await this.prisma.telegramBotRuntimeInstance.findFirst({
+          where: { workspaceId, botIntegrationId, environment },
+          select: { id: true },
+        })
+      : null;
     const periodStart = new Date(
       Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1),
     );
     const where = {
       workspaceId,
       botIntegrationId,
+      ...(environment
+        ? { runtimeInstanceId: { in: runtime ? [runtime.id] : [] } }
+        : {}),
       createdAt: { gte: periodStart },
       status: { not: 'PENDING' },
     };

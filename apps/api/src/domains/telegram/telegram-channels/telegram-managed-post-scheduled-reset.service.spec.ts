@@ -18,7 +18,7 @@ function scheduledPost(id = 'post-1') {
     imageUrls: [] as string[],
     buttonRows: null,
     origin: 'SYSTEM',
-    remoteImportKey: `remote-${id}`,
+    remoteImportKey: `remote-${id}` as string | null,
     jsonImportKey: null,
     status: TelegramManagedPostStatus.SCHEDULED,
     scheduledAt: new Date('2026-09-01T08:00:00.000Z'),
@@ -31,7 +31,7 @@ function scheduledPost(id = 'post-1') {
     telegramLinkSource: 'AUTO',
     telegramIdVerifiedAt: new Date('2026-08-25T08:00:00.000Z'),
     telegramIdLastCheckedAt: new Date('2026-08-25T08:00:00.000Z'),
-    telegramRemoteStatus: TelegramManagedPostRemoteStatus.SCHEDULED,
+    telegramRemoteStatus: TelegramManagedPostRemoteStatus.SCHEDULED as TelegramManagedPostRemoteStatus,
     lastTelegramSyncedAt: null,
     lastTelegramSyncNote: null,
     sourceType: TelegramSourceType.MTPROTO,
@@ -176,17 +176,13 @@ function harness(options?: {
     publication as never,
     identity as never,
   );
+  const cancellation = { cancelScheduledManagedPost: jest.fn().mockResolvedValue('native-cancel-acked:fixture') };
   const service = new TelegramManagedPostScheduledResetService(
-    prisma as never,
-    mtproto as never,
-    support as never,
-    access as never,
-    revisions as never,
-    groups as never,
-    remoteSync as never,
-    rescheduler,
+    prisma as never, support as never, revisions as never, groups as never,
+    cancellation as never, rescheduler,
   );
   return {
+    cancellation,
     service,
     access,
     prisma,
@@ -203,7 +199,7 @@ function harness(options?: {
 }
 
 describe('TelegramManagedPostScheduledResetService', () => {
-  it('reschedules future posts and returns overdue unpublished posts to drafts', async () => {
+  it('reschedules future posts and leaves uncertain overdue native schedules untouched', async () => {
     const future = {
       ...scheduledPost('future'),
       scheduledAt: new Date(Date.now() + 60_000),
@@ -228,11 +224,6 @@ describe('TelegramManagedPostScheduledResetService', () => {
         return Promise.resolve({ id: 'rescheduled' });
       },
     );
-    mtproto.deleteScheduledPost.mockImplementation(() => {
-      expect(rescheduleContext.getStore()?.owner).toMatch(/^reschedule:/);
-      expect(rescheduleContext.getStore()?.signal.aborted).toBe(false);
-      return Promise.resolve();
-    });
     const result = await service.rescheduleChannelScheduledPosts(
       'user-1',
       'channel-1',
@@ -262,8 +253,8 @@ describe('TelegramManagedPostScheduledResetService', () => {
     expect(publication.returnManagedPostToDraft).not.toHaveBeenCalled();
     expect(result).toMatchObject({
       rescheduledCount: 1,
-      returnedToDraftCount: 1,
-      failedCount: 0,
+      returnedToDraftCount: 0,
+      failedCount: 1,
     });
     expect(progress).toEqual(
       expect.arrayContaining([
@@ -272,11 +263,11 @@ describe('TelegramManagedPostScheduledResetService', () => {
         'future:REMOVING_OLD_SCHEDULE',
         'future:SCHEDULING_AGAIN',
         'future:RESCHEDULED',
-        'overdue:RETURNING_TO_DRAFT',
-        'overdue:DRAFTED',
+        'overdue:FAILED',
       ]),
     );
     expect(result.alreadyPublishedCount).toBe(0);
+    expect(mtproto.deleteScheduledPost).not.toHaveBeenCalled();
     expect(progressCounts).toContainEqual([0, 2]);
     expect(progressCounts).toContainEqual([1, 2]);
     expect(progressCounts).toContainEqual([2, 2]);
@@ -300,6 +291,7 @@ describe('TelegramManagedPostScheduledResetService', () => {
     const { service, identity, mtproto, publication, updateInputs } = harness({
       posts: [overdue],
     });
+    mtproto.getScheduledHistory.mockResolvedValue([]);
     mtproto.getManagedPostMessages.mockResolvedValue({
       published: [
         { id: '101', date: new Date(Date.now() - 30_000).toISOString() },
@@ -493,7 +485,7 @@ describe('TelegramManagedPostScheduledResetService', () => {
       'channel-1',
     );
     expect(result.failedCount).toBe(1);
-    expect(result.results?.[0].message).toContain('not proven absent');
+    expect(result.results?.[0].message).toContain('Reconcile publication');
     expect(publication.returnManagedPostToDraft).not.toHaveBeenCalled();
     expect(updateInputs).toEqual([]);
   });
@@ -1074,135 +1066,39 @@ describe('TelegramManagedPostScheduledResetService', () => {
     });
   });
 
-  it('deletes every remote scheduled message and resets channel posts to clean drafts', async () => {
-    const second = { ...scheduledPost('post-2'), groupId: null };
-    const {
-      service,
-      prisma,
-      tx,
-      mtproto,
-      revisions,
-      groups,
-      remoteSync,
-      updateInputs,
-    } = harness({ posts: [scheduledPost(), second] });
-
-    const result = await service.resetChannelScheduledPosts(
-      'user-1',
-      'channel-1',
-    );
-
-    expect(prisma.telegramChannel.findFirst).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: {
-          id: 'channel-1',
-          workspaceId: 'workspace-1',
-          isActive: true,
-        },
-      }),
-    );
-    expect(remoteSync.syncManagedPosts).toHaveBeenCalledWith(
-      'user-1',
-      'channel-1',
-    );
-    expect(mtproto.deleteScheduledPost).toHaveBeenCalledWith(
-      expect.objectContaining({ messageIds: ['101', '102'] }),
-    );
-    expect(revisions.createManagedPostRevisions).toHaveBeenCalledWith(
-      tx,
-      expect.arrayContaining([
-        expect.objectContaining({ id: 'post-1' }),
-        expect.objectContaining({ id: 'post-2' }),
-      ]),
-      'before_channel_scheduled_reset',
-      'user-1',
-    );
-    const updateInput = updateInputs[0];
-    expect(updateInput.where).toEqual({
-      id: { in: ['post-1', 'post-2'] },
-      workspaceId: 'workspace-1',
-      telegramChannelId: 'channel-1',
-      status: TelegramManagedPostStatus.SCHEDULED,
+  it('makes no storage or Telegram mutation for an empty selection', async () => {
+    const { service, prisma, remoteSync, cancellation } = harness();
+    expect(await service.resetChannelScheduledPosts('user-1', 'channel-1', [])).toMatchObject({
+      postsReturnedToDraftCount: 0, remoteScheduledDeletedCount: 0, results: [],
     });
-    expect(updateInput.data).toMatchObject({
-      remoteImportKey: null,
-      status: TelegramManagedPostStatus.DRAFT,
-      scheduledAt: null,
-      scheduleMode: null,
-      telegramScheduledMessageIds: [],
-      telegramMessageIds: [],
-      telegramMessageUrls: [],
-      telegramRemoteStatus: TelegramManagedPostRemoteStatus.NONE,
-      sourceType: null,
-      sourceId: null,
-      sourceWasPremium: null,
-      publishMode: null,
-      lastError: null,
-    });
-    expect(groups.normalizePostGroupNumbering).toHaveBeenCalledWith(
-      tx,
-      'group-1',
-    );
-    expect(result).toEqual({
-      action: 'RESET_CHANNEL_SCHEDULED_TO_DRAFT',
-      channelId: 'channel-1',
-      remoteScheduledDeletedCount: 2,
-      postsReturnedToDraftCount: 2,
-      postIds: ['post-1', 'post-2'],
-    });
-  });
-
-  it('reconciles Telegram first and preserves posts that became published', async () => {
-    const stillScheduled = scheduledPost('post-2');
-    const { service, prisma, revisions, updateInputs } = harness({
-      posts: [scheduledPost(), stillScheduled],
-      postsAfterSync: [stillScheduled],
-    });
-
-    const result = await service.resetChannelScheduledPosts(
-      'user-1',
-      'channel-1',
-    );
-
-    expect(prisma.telegramManagedPost.findMany).toHaveBeenCalledTimes(1);
-    expect(revisions.createManagedPostRevisions).toHaveBeenCalledWith(
-      expect.anything(),
-      [expect.objectContaining({ id: 'post-2' })],
-      'before_channel_scheduled_reset',
-      'user-1',
-    );
-    expect(updateInputs[0]?.where).toMatchObject({
-      id: { in: ['post-2'] },
-      status: TelegramManagedPostStatus.SCHEDULED,
-    });
-    expect(result.postIds).toEqual(['post-2']);
-  });
-
-  it('does not change local posts when Telegram cancellation fails', async () => {
-    const { service, prisma, mtproto } = harness();
-    mtproto.deleteScheduledPost.mockRejectedValue(
-      new Error('AUTH_KEY_UNREGISTERED'),
-    );
-
-    await expect(
-      service.resetChannelScheduledPosts('user-1', 'channel-1'),
-    ).rejects.toThrow('AUTH_KEY_UNREGISTERED');
-
+    expect(prisma.telegramManagedPost.findMany).not.toHaveBeenCalled();
     expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(remoteSync.syncManagedPosts).not.toHaveBeenCalled();
+    expect(cancellation.cancelScheduledManagedPost).not.toHaveBeenCalled();
   });
 
-  it('cleans local scheduled state even when Telegram has no queued messages', async () => {
-    const { service, mtproto, tx } = harness();
-    mtproto.getScheduledHistory.mockResolvedValue([]);
+  it('only cancels selected native IDs and uses CAS for selected local work', async () => {
+    const native = { ...scheduledPost(), remoteImportKey: null, telegramMessageIds: [], telegramMessageUrls: [] };
+    const local = { ...scheduledPost('local'), scheduleMode: 'LOCAL', remoteImportKey: null,
+      telegramRemoteStatus: TelegramManagedPostRemoteStatus.NONE, telegramScheduledMessageIds: [], telegramMessageIds: [] };
+    const { service, cancellation, updateInputs, remoteSync } = harness({ posts: [native, local] });
+    const result = await service.resetChannelScheduledPosts('user-1', 'channel-1', ['post-1', 'local', 'foreign']);
+    expect(cancellation.cancelScheduledManagedPost).toHaveBeenCalledTimes(1);
+    expect(cancellation.cancelScheduledManagedPost).toHaveBeenCalledWith('workspace-1', expect.objectContaining({
+      telegramScheduledMessageIds: ['101'],
+    }));
+    expect(updateInputs[0].where).toMatchObject({ id: 'post-1', deliveryClaimOwner: 'native-cancel-acked:fixture' });
+    expect(updateInputs[1].where).toMatchObject({ id: 'local', deliveryClaimOwner: null, updatedAt: local.updatedAt });
+    expect(result.results.map(({ status }) => status)).toEqual(['DRAFTED', 'DRAFTED', 'SKIPPED']);
+    expect(remoteSync.syncManagedPosts).not.toHaveBeenCalled();
+  });
 
-    const result = await service.resetChannelScheduledPosts(
-      'user-1',
-      'channel-1',
-    );
-
-    expect(mtproto.deleteScheduledPost).not.toHaveBeenCalled();
-    expect(tx.telegramManagedPost.updateMany).toHaveBeenCalled();
-    expect(result.remoteScheduledDeletedCount).toBe(0);
-    expect(result.postsReturnedToDraftCount).toBe(1);
+  it('reports a denied remote cancellation without a draft write', async () => {
+    const native = { ...scheduledPost(), remoteImportKey: null, telegramMessageIds: [] };
+    const { service, cancellation, prisma } = harness({ posts: [native] });
+    cancellation.cancelScheduledManagedPost.mockRejectedValue(new Error('ACK lost'));
+    const result = await service.resetChannelScheduledPosts('user-1', 'channel-1', ['post-1']);
+    expect(result.results[0]).toMatchObject({ status: 'FAILED', reason: 'ACK lost', remoteDeletedCount: 0 });
+    expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 });

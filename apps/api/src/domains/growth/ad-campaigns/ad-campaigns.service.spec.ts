@@ -1,3 +1,4 @@
+import { shapeAdmissionViewAnalytics } from './ad-campaign-admission-view-read';
 import { AdCampaignsService } from './ad-campaigns.service';
 import { AdCampaignListReadService } from './ad-campaign-list-read.service';
 
@@ -341,8 +342,18 @@ describe('AdCampaignsService campaign creation without a cost', () => {
       adCampaign: {
         create: jest.fn().mockResolvedValue({ id: 'campaign-1' }),
       },
+      telegramChannel: { findMany: jest.fn().mockResolvedValue([]) },
+      advertisingSource: { findMany: jest.fn().mockResolvedValue([]) },
+      telegramInviteLink: { updateMany: jest.fn() },
+      adCampaignPromo: { deleteMany: jest.fn() },
+      adCampaignBotInviteLink: {
+        findMany: jest.fn().mockResolvedValue([]),
+        deleteMany: jest.fn(),
+      },
+      transaction: { upsert: jest.fn() },
     };
     const prisma = {
+      $queryRaw: jest.fn().mockResolvedValue([]),
       $transaction: jest.fn(async (callback) => callback(tx)),
     };
     const analytics = { recalculateCampaignAnalytics: jest.fn() };
@@ -358,30 +369,6 @@ describe('AdCampaignsService campaign creation without a cost', () => {
       {} as never,
       analytics as never,
     );
-    jest
-      .spyOn(service as any, 'ensurePromosBelongToChannel')
-      .mockResolvedValue(undefined);
-    jest
-      .spyOn(service as any, 'ensureInviteLinksBelongToChannel')
-      .mockResolvedValue(undefined);
-    jest
-      .spyOn(service as any, 'ensureAdvertisingSources')
-      .mockResolvedValue({ channelIds: [], sourceIds: [] });
-    jest
-      .spyOn(service as any, 'generateCampaignTitle')
-      .mockResolvedValue('Campaign');
-    jest
-      .spyOn(service as any, 'replaceCampaignPromos')
-      .mockResolvedValue(undefined);
-    jest
-      .spyOn(service as any, 'replaceCampaignInviteLinks')
-      .mockResolvedValue(undefined);
-    jest
-      .spyOn(service as any, 'replaceCampaignTrackingInviteLinks')
-      .mockResolvedValue(undefined);
-    const syncExpense = jest
-      .spyOn(service as any, 'syncExpenseTransaction')
-      .mockResolvedValue(undefined);
     jest.spyOn(service, 'findOne').mockResolvedValue({ id: 'campaign-1' });
 
     await expect(
@@ -397,7 +384,7 @@ describe('AdCampaignsService campaign creation without a cost', () => {
         accountId: null,
       }),
     });
-    expect(syncExpense).not.toHaveBeenCalled();
+    expect(tx.transaction.upsert).not.toHaveBeenCalled();
     expect(analytics.recalculateCampaignAnalytics).toHaveBeenCalledWith(
       'workspace-1',
       'campaign-1',
@@ -550,16 +537,9 @@ describe('AdCampaignListReadService bot request performance', () => {
   });
 });
 
-describe('AdCampaignsService admission analytics summary', () => {
+describe('campaign admission analytics summary', () => {
   it('uses the largest admission cohort instead of a later small delta', () => {
-    const service = new AdCampaignsService(
-      {} as never,
-      {} as never,
-      {} as never,
-      {} as never,
-    ) as any;
-
-    const summary = service.shapeAdmissionViewAnalytics(
+    const summary = shapeAdmissionViewAnalytics(
       [
         {
           id: 'initial',
@@ -596,9 +576,11 @@ describe('AdCampaignsService admission analytics summary', () => {
       113,
     );
 
-    expect(summary.latestBatch.id).toBe('initial');
-    expect(summary.latestBatch.baselineAvgViews).toBe(12.25);
-    expect(summary.latestBatch.currentAvgViews).toBe(26.75);
-    expect(summary.latestBatch.cumulativeAvgViewsUplift).toBe(12.75);
+    expect(summary.latestBatch).toMatchObject({
+      id: 'initial',
+      baselineAvgViews: 12.25,
+      currentAvgViews: 26.75,
+      cumulativeAvgViewsUplift: 12.75,
+    });
   });
 });

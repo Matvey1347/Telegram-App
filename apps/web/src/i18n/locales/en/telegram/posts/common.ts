@@ -198,7 +198,7 @@ const messages = {
   "telegram.posts.support.fileReadError": "Could not read this file.",
   "telegram.posts.support.importGroups": "Import groups",
   "telegram.posts.support.promptCopied": "Prompt copied.",
-  "telegram.posts.support.returnDrafts": "Return all scheduled posts to drafts",
+  "telegram.posts.support.returnDrafts": "Return selected scheduled posts to drafts",
   "telegram.posts.support.rescheduleAll": "Reschedule all scheduled posts",
   "telegram.posts.support.rescheduling": "Rescheduling…",
   "telegram.posts.support.rescheduleConfirm":
@@ -231,7 +231,7 @@ const messages = {
   "telegram.posts.support.returnedToDraft": "Returned to drafts",
   "telegram.posts.support.reschedulePostFailed": "Could not process this post",
   "telegram.posts.support.returnDraftsDescription":
-    "This permanently deletes every scheduled message currently queued in this Telegram channel. All scheduled posts in Telegram System will become clean drafts and lose their Telegram message IDs and links. Published messages are not affected.",
+    "Clears local schedules and cancels confirmed Telegram schedules for the selected ordinary posts.",
   "telegram.posts.support.noPostsAvailable": "No posts available to add.",
   "telegram.posts.support.addSelected": "Add selected",
   "telegram.posts.support.planNotScheduled":

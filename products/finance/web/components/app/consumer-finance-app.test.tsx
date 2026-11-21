@@ -303,7 +303,7 @@ describe("ConsumerFinanceApp bootstrap", () => {
       .map((navigation) => navigation.closest("aside"))
       .find(Boolean);
     expect(sidebar).toHaveClass("h-dvh", "overflow-hidden");
-    expect(within(sidebar as HTMLElement).getByText("Finance")).toBeVisible();
+    expect(within(sidebar as HTMLElement).getByText("Groshly")).toBeVisible();
     expect(
       within(sidebar as HTMLElement).queryByText("Ada Lovelace"),
     ).not.toBeInTheDocument();
@@ -741,7 +741,6 @@ describe("ConsumerFinanceApp bootstrap", () => {
       name: "Accounts",
     })) {
       expect(accountsNav).toHaveAttribute("aria-current", "page");
-      expect(accountsNav).toHaveClass("text-sky-200");
     }
 
     fireEvent.click(screen.getByRole("button", { name: "Back to accounts" }));

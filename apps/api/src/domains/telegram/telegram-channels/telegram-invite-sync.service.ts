@@ -42,6 +42,9 @@ export class TelegramInviteSyncService {
     createdBy: true,
     adCampaignId: true,
     peakAttributedCount: true,
+    joinedCount: true,
+    requestedCount: true,
+    creatorTelegramUserId: true,
   } as const;
 
   public async persistInviteLinkFromRemote(params: {
@@ -77,9 +80,15 @@ export class TelegramInviteSyncService {
       },
       select: this.inviteLinkSyncExistingSelect,
     });
-    const currentAttributedCount =
-      Math.max(0, Number(params.link.usage) || 0) +
-      Math.max(0, Number(params.link.requested) || 0);
+    const joinedCount = params.link.usageObserved === false ? existing?.joinedCount : params.link.usage;
+    const requestedCount = params.link.requestedObserved === false ? existing?.requestedCount : params.link.requested;
+    const joinedObserved = params.link.usageObserved !== false;
+    const requestedObserved = params.link.requestedObserved !== false;
+    const countersConfirmed = joinedObserved && requestedObserved;
+    const observedAt = new Date();
+    const currentAttributedCount = (joinedCount ?? 0) + (requestedCount ?? 0);
+    const preserveCreator = existing?.creatorTelegramUserId === params.link.telegramCreatorUserId &&
+      !params.link.creatorUsername && !params.link.creatorFirstName && !params.link.creatorLastName && !params.link.creatorPhotoUrl;
     const payload = {
       name: params.link.title || existing?.name || 'Imported MTProto link',
       // A link can be used by a promo, mutual promotion, or campaign and a
@@ -98,14 +107,18 @@ export class TelegramInviteSyncService {
       createsJoinRequest: params.link.requestNeeded,
       expireDate: params.link.expireDate,
       memberLimit: params.link.usageLimit,
-      joinedCount: params.link.usage,
-      requestedCount: params.link.requested,
+      joinedCount,
+      requestedCount,
       peakAttributedCount: Math.max(
         Number(existing?.peakAttributedCount ?? 0),
         currentAttributedCount,
       ),
       isRevoked: params.link.revoked,
-      lastSyncedAt: new Date(),
+      lastSyncedAt: countersConfirmed ? observedAt : undefined,
+      joinedObserved,
+      requestedObserved,
+      joinedObservedAt: joinedObserved ? observedAt : undefined,
+      requestedObservedAt: requestedObserved ? observedAt : undefined,
       creatorTelegramUserId: params.link.telegramCreatorUserId,
       creatorUsername: attribution.creatorUsername,
       creatorFirstName: params.link.creatorFirstName,
@@ -129,7 +142,16 @@ export class TelegramInviteSyncService {
             url: params.link.url,
             ...payload,
           },
-          update: payload,
+          update: {
+            ...payload,
+            ...(preserveCreator ? {
+              creatorUsername: undefined, creatorFirstName: undefined,
+              creatorLastName: undefined, creatorPhotoUrl: undefined,
+              creatorMemberId: undefined, creatorMatchSource: undefined,
+            } : {}),
+            ...(params.link.usageObserved === false ? { joinedCount: undefined } : {}),
+            ...(params.link.requestedObserved === false ? { requestedCount: undefined } : {}),
+          },
         },
       );
 
@@ -149,6 +171,8 @@ export class TelegramInviteSyncService {
     return {
       existing,
       upserted,
+      joinedObservation: joinedObserved ? params.link.usage : null,
+      requestedObservation: requestedObserved ? params.link.requested : null,
       matchedMember: Boolean(attribution.creatorMemberId),
       unresolved:
         attribution.creatorMatchSource ===
@@ -204,14 +228,12 @@ export class TelegramInviteSyncService {
     }
 
     const status =
-      params.remote.scope === 'ALL_ADMINS'
+      params.remote.scope === 'ALL_ADMINS' && params.remote.expectedTotalLinks != null
         ? TelegramDataSourceStatus.SUCCESS
         : TelegramDataSourceStatus.PARTIAL;
     const fetchedTotalLinks = params.remote.links.length;
-    const missingTotalLinks = Math.max(
-      0,
-      (params.remote.expectedTotalLinks ?? 0) - fetchedTotalLinks,
-    );
+    const missingTotalLinks = params.remote.expectedTotalLinks == null ? null :
+      Math.max(0, params.remote.expectedTotalLinks - fetchedTotalLinks);
     // Invite requested counters are link-specific and may omit revoked/deleted
     // links or pending metadata. They must never overwrite the channel queue.
     const pendingJoinRequestsCount = params.remote.pendingJoinRequestsCount;
@@ -246,6 +268,9 @@ export class TelegramInviteSyncService {
       sourceType: TelegramSourceType.MTPROTO,
       dataType: TelegramChannelDataType.INVITE_LINKS,
       status,
+      errorMessage: status === TelegramDataSourceStatus.PARTIAL
+        ? 'Telegram invite visibility is partial. Previously known links are retained.'
+        : null,
       sourceDisplayName: this.telegramChannelAccessService.sourceDisplayName(
         params.account,
       ),
@@ -325,8 +350,8 @@ export class TelegramInviteSyncService {
       id: string;
       telegramChannelId: string;
       adCampaignId: string | null;
-      joinedCount: number;
-      requestedCount: number;
+      joinedCount: number | null;
+      requestedCount: number | null;
       isRevoked: boolean;
     }> = [];
     const syncedAt = new Date();
@@ -373,12 +398,12 @@ export class TelegramInviteSyncService {
       if (persisted.upserted.adCampaignId) {
         affectedCampaignIds.add(persisted.upserted.adCampaignId);
       }
-      persistedLinks.push({
+      if (persisted.joinedObservation != null || persisted.requestedObservation != null) persistedLinks.push({
         id: persisted.upserted.id,
         telegramChannelId: persisted.upserted.telegramChannelId,
         adCampaignId: persisted.upserted.adCampaignId ?? null,
-        joinedCount: persisted.upserted.joinedCount,
-        requestedCount: persisted.upserted.requestedCount,
+        joinedCount: persisted.joinedObservation,
+        requestedCount: persisted.requestedObservation,
         isRevoked: persisted.upserted.isRevoked,
       });
     }

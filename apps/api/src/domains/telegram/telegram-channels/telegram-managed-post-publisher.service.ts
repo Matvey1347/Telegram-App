@@ -1,6 +1,7 @@
 import { TelegramManagedPostNativeRecoveryStore } from './telegram-managed-post-native-recovery.store';
 import {
   publishNativeManagedPost,
+  withOrdinaryNativeReplacement,
   rethrowNativeReplacementFailure,
   managedPostPublicationProjectionWhere,
 } from './telegram-managed-post-native-replacement';
@@ -9,10 +10,12 @@ import {
   rescheduleContext,
 } from './telegram-managed-post-rescheduler.remote';
 import { managedPostPublisherInclude } from './managed-post-publisher-read-model';
+import { productionOperatorRequest } from '@api/telegram/shared/mtproto/production-recovery-relay-context';
 import { managedPostDeliveryContext } from './telegram-managed-post-delivery-context';
 import { TelegramManagedPostSendJournalService } from './telegram-managed-post-send-journal.service';
 import { BadRequestException, Injectable } from '@nestjs/common';
 import {
+  Prisma,
   TelegramManagedPostIdVerificationStatus,
   TelegramManagedPostLinkSource,
   TelegramManagedPostRemoteStatus,
@@ -86,7 +89,6 @@ export class TelegramManagedPostPublisherService {
     private readonly telegramManagedPostPremiumEmojiRepairService: TelegramManagedPostPremiumEmojiRepairService,
     private readonly nativeRecovery: TelegramManagedPostNativeRecoveryStore,
   ) {}
-
   public async publishManagedPost(
     workspaceId: string,
     channelId: string,
@@ -99,7 +101,7 @@ export class TelegramManagedPostPublisherService {
       stage: 'REMOVING_OLD_SCHEDULE' | 'SCHEDULING_AGAIN',
       message?: string,
     ) => void,
-  ) {
+  ): Promise<Prisma.TelegramManagedPostGetPayload<{ include: typeof managedPostPublisherInclude }>> {
     const [foundPost, channel, initialSources] = await Promise.all([
       this.prisma.telegramManagedPost.findFirst({
         where: { id: postId, workspaceId, telegramChannelId: channelId },
@@ -117,19 +119,29 @@ export class TelegramManagedPostPublisherService {
           : 'TELEGRAM_CHANNEL_NOT_FOUND',
         'Post or channel not found',
       );
-    if (foundPost.status === TelegramManagedPostStatus.PUBLISHED) {
-      throw telegramPostsBadRequest(
-        'TELEGRAM_POST_PUBLISH_FAILED',
-        'This post is already published; create a new post for another publication',
-      );
+    if (foundPost.deliveryClaimOwner?.startsWith('operator:') && managedPostDeliveryContext.getStore()?.owner !== foundPost.deliveryClaimOwner)
+      throw telegramPostsBadRequest('TELEGRAM_POST_PUBLISH_FAILED', 'This publication is owned by a production operator operation.');
+    if (foundPost.status === TelegramManagedPostStatus.PUBLISHED || foundPost.deliveryClaimOwner?.startsWith('native-cancel'))
+      throw telegramPostsBadRequest('TELEGRAM_POST_PUBLISH_FAILED',
+        foundPost.status === TelegramManagedPostStatus.PUBLISHED
+          ? 'This post is already published; create a new post for another publication'
+          : 'Reconcile the pending Telegram cancellation before publishing.');
+    if (!rescheduleContext.getStore() && foundPost.status === 'SCHEDULED' &&
+        (foundPost.scheduleMode === 'TELEGRAM_NATIVE' || foundPost.telegramScheduledMessageIds.length)) {
+      return withOrdinaryNativeReplacement({
+        prisma: this.prisma, post: foundPost, scheduleAt, telegramChatId: channel.telegramChatId,
+        publish: (next) => this.publishManagedPost(workspaceId, channelId, postId, next,
+          longTextMode, actorUserId, true, onRescheduleProgress),
+      });
     }
-    const { _count, ...postRecord } = foundPost;
-    let post = postRecord;
+    let { _count, ...post } = foundPost;
     let mediaItems = normalizeTelegramPostMediaItems(
       post.mediaItems,
       post.imageUrls,
     );
-    let sources = initialSources;
+    const operator = productionOperatorRequest.getStore();
+    const actor = operator?.acknowledgedActor;
+    let sources = actor ? initialSources.filter((item) => item.sourceId === actor.id && item.sourceType === actor.type) : initialSources;
     if (!post.text?.trim() && !mediaItems.length)
       throw telegramPostsBadRequest(
         'TELEGRAM_POST_CONTENT_REQUIRED',
@@ -157,25 +169,21 @@ export class TelegramManagedPostPublisherService {
           hasInlineButtons: Boolean(buttonRows.length),
           requiresRichMessage,
         });
-    const preferredBotSourceId = undefined;
     let source = selectManagedPostPublishingSource(sources, {
       preferredMtprotoSourceId: sources.find((item) => item.isPriorityPublisher)
         ?.sourceId,
       existingScheduledSourceId:
         scheduleAt && post.status === 'SCHEDULED' ? post.sourceId : null,
       requiresBotApi,
-      preferredBotSourceId,
     });
+    if (rescheduleContext.getStore()?.replacementFor === post.id) {
+      source = selectManagedPostPublishingSource(
+        sources.filter((candidate) => candidate.sourceId === post.sourceId && candidate.sourceType === TelegramSourceType.MTPROTO),
+        { requiresBotApi: false },
+      );
+    }
     if (requiresBotApi && !source) {
-      await (preferredBotSourceId
-        ? this.telegramChannelAccessService.refreshProductionBotPublishingAccess(
-            workspaceId,
-            channel,
-          )
-        : this.telegramChannelAccessService.refreshSystemBotPublishingAccess(
-            workspaceId,
-            channel,
-          ));
+      await this.telegramChannelAccessService.refreshSystemBotPublishingAccess(workspaceId, channel);
       sources = await this.sourceAccessService.sourcesForChannel(
         workspaceId,
         channelId,
@@ -187,8 +195,7 @@ export class TelegramManagedPostPublisherService {
         existingScheduledSourceId:
           scheduleAt && post.status === 'SCHEDULED' ? post.sourceId : null,
         requiresBotApi: true,
-        preferredBotSourceId,
-      });
+        });
     }
     if (requiresBotApi && !source) {
       throw telegramPostsBadRequest(
@@ -289,7 +296,6 @@ export class TelegramManagedPostPublisherService {
       sourceType: source.sourceType,
       sourceId: source.sourceId,
     });
-    let previousScheduledMessageCancelled = false;
     let repairEmoji: (() => Promise<unknown>) | undefined;
     try {
       const mediaItemsBeforeStorage = mediaItems;
@@ -428,14 +434,9 @@ export class TelegramManagedPostPublisherService {
             prisma: this.prisma,
             mtproto: this.mtprotoClient,
             store: this.nativeRecovery,
-            access: this.telegramChannelAccessService,
-            account,
             post,
             sourceId: source.sourceId,
             onCancel: () => onRescheduleProgress?.('REMOVING_OLD_SCHEDULE'),
-            onCancellationConfirmed: () => {
-              previousScheduledMessageCancelled = true;
-            },
             params: {
               ...this.telegramChannelAccessService.accountCredentials(account),
               channel: channelReference,
@@ -573,10 +574,7 @@ export class TelegramManagedPostPublisherService {
           }
         }
         const journaledMessageIds =
-          post.status === TelegramManagedPostStatus.FAILED ||
-          post.status === TelegramManagedPostStatus.PUBLISHING
-            ? post.telegramMessageIds
-            : [];
+          !actor && ['FAILED', 'PUBLISHING'].includes(post.status) ? post.telegramMessageIds : [];
         const replyMarkupIncludedOnSend =
           replyMarkupIncludedOnMedia ||
           includeReplyMarkupInBotDelivery(operations, inlineKeyboard);
@@ -602,7 +600,7 @@ export class TelegramManagedPostPublisherService {
           call,
           persist: async (messageIds) => {
             await this.prisma.telegramManagedPost.update({
-              where: { id: post.id },
+              where: managedPostPublicationProjectionWhere(post),
               data: {
                 telegramMessageIds: messageIds,
                 telegramRemoteStatus: TelegramManagedPostRemoteStatus.UNKNOWN,
@@ -612,7 +610,7 @@ export class TelegramManagedPostPublisherService {
             });
           },
           ...(buttonRows.length &&
-          (!replyMarkupIncludedOnSend || finalOperationAlreadyJournaled)
+          (!replyMarkupIncludedOnSend || (!operator && finalOperationAlreadyJournaled))
             ? {
                 applyReplyMarkup: async (lastMessageId: string) => {
                   await this.botApiClient.editMessageReplyMarkup(token, {
@@ -649,6 +647,7 @@ export class TelegramManagedPostPublisherService {
             : 'Telegram did not confirm the published post.',
         );
       }
+      if (operator?.remainingAckOrdinals?.size) throw new Error('The current render does not cover all acknowledged operations');
       const publishedUrls = scheduleAt
         ? []
         : this.telegramChannelAccessService.telegramMessageUrlsForPost(
@@ -768,18 +767,11 @@ export class TelegramManagedPostPublisherService {
           });
         }
         await tx.telegramManagedPost.update({
-          where: { id: post.id },
+          where: managedPostPublicationProjectionWhere(post),
           data: {
             status: 'FAILED',
-            telegramRemoteStatus: previousScheduledMessageCancelled
-              ? TelegramManagedPostRemoteStatus.MISSING
-              : TelegramManagedPostRemoteStatus.UNKNOWN,
+            telegramRemoteStatus: TelegramManagedPostRemoteStatus.UNKNOWN,
             lastError: publicMessage,
-            telegramScheduledMessageIds: previousScheduledMessageCancelled
-              ? []
-              : undefined,
-            sourceType: previousScheduledMessageCancelled ? null : undefined,
-            sourceId: previousScheduledMessageCancelled ? null : undefined,
           },
         });
         if (post.groupId) {

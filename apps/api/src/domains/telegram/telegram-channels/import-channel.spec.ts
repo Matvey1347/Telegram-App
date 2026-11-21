@@ -13,6 +13,7 @@ import {
 describe('TelegramChannelsService importChannel', () => {
   const prisma = {
     $transaction: jest.fn(),
+    $queryRaw: jest.fn().mockResolvedValue([{ available: true }]),
   };
   const workspaceService = {
     resolveWorkspaceIdForUser: jest.fn(),

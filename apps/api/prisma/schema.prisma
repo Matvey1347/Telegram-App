@@ -3608,6 +3608,11 @@ model AdCampaignInviteLinkWindow {
   joinedCount    Int?
   pendingCount   Int?
   computedAt     DateTime?
+  configurationToken String?
+  lastAttemptAt  DateTime?
+  lastAttemptToken String?
+  lastAttemptStatus String?
+  lastAttemptReason String?
   adCampaign     AdCampaign @relation(fields: [adCampaignId], references: [id], onDelete: Cascade)
   inviteLink     TelegramInviteLink @relation(fields: [inviteLinkId], references: [id], onDelete: Cascade)
 
@@ -3919,6 +3924,10 @@ model TelegramInviteLink {
   memberLimit           Int?
   joinedCount           Int                                   @default(0)
   requestedCount        Int                                   @default(0)
+  joinedObservedAt       DateTime?
+  requestedObservedAt    DateTime?
+  joinedObserved         Boolean?
+  requestedObserved      Boolean?
   peakAttributedCount   Int                                   @default(0)
   isRevoked             Boolean                               @default(false)
   lastSyncedAt          DateTime?
@@ -3962,8 +3971,8 @@ model TelegramInviteLinkSnapshot {
   inviteLinkId      String
   adCampaignId      String?
   syncedAt          DateTime
-  joinedCount       Int      @default(0)
-  requestedCount    Int      @default(0)
+  joinedCount       Int?
+  requestedCount    Int?
   isRevoked         Boolean  @default(false)
 
   workspace       Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
@@ -6090,6 +6099,8 @@ model TelegramManagedPostSendOperation {
   retryAt           DateTime?
   errorCode         Int?
   startedAt         DateTime?
+  relayStartedAt    DateTime?
+  relayPostRevision DateTime?
   confirmedAt       DateTime?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt

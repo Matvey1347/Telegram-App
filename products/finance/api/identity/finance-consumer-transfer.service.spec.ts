@@ -179,7 +179,10 @@ describe('FinanceConsumerTransferService', () => {
       botIntegration: { workspaceId: 'workspace-1' },
       telegramUser: { telegramChatId: '123' },
     };
-    const transaction = (profile: typeof approvedProfile | null) => {
+    const transaction = (
+      profile: typeof approvedProfile | null,
+      state: { expiresAt?: Date; consumedAt?: Date } = {},
+    ) => {
       const tx = {
         financeBrowserLoginChallenge: {
           findUnique: jest.fn().mockResolvedValue({
@@ -188,6 +191,7 @@ describe('FinanceConsumerTransferService', () => {
             expiresAt: new Date(Date.now() + 60_000),
             consumedAt: null,
             approvedProfile: profile,
+            ...state,
           }),
           updateMany: jest.fn().mockResolvedValue({ count: 1 }),
         },
@@ -215,15 +219,16 @@ describe('FinanceConsumerTransferService', () => {
       }),
     );
 
-    const wrongBot = transaction({
-      ...approvedProfile,
-      botIntegrationId: 'other-bot',
-    });
-    await expect(
-      wrongBot.service.consumeBrowserLogin('a'.repeat(32), 'bot-1'),
-    ).resolves.toEqual({ status: 'expired' });
-    expect(
-      wrongBot.tx.financeBrowserLoginChallenge.updateMany,
-    ).not.toHaveBeenCalled();
+    const rejected = [
+      transaction({ ...approvedProfile, botIntegrationId: 'other-bot' }),
+      transaction(approvedProfile, { expiresAt: new Date(Date.now() - 1_000) }),
+      transaction(approvedProfile, { consumedAt: new Date() }),
+    ];
+    for (const { service, tx } of rejected) {
+      await expect(
+        service.consumeBrowserLogin('a'.repeat(32), 'bot-1'),
+      ).resolves.toEqual({ status: 'expired' });
+      expect(tx.financeBrowserLoginChallenge.updateMany).not.toHaveBeenCalled();
+    }
   });
 });

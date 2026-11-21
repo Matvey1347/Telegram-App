@@ -175,7 +175,7 @@ export function MutualPromotionFolderDetailModal({
           <div className="flex flex-wrap gap-2">
             {editable ? (
               <Button type="button" variant="secondary" onClick={onEdit}>
-                <Pencil size={16} /> Edit setup
+                <Pencil size={16} /> {folder.status === "DRAFT" ? "Edit setup" : "Rename folder"}
               </Button>
             ) : null}
             {["SCHEDULED", "ACTIVE"].includes(folder.status) ? (

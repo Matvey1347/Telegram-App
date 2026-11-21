@@ -21,7 +21,7 @@ describe('TelegramChannelsService returnManagedPostToDraft', () => {
       imageUrls: [],
       origin: 'SYSTEM',
       status: TelegramManagedPostStatus.SCHEDULED,
-      scheduledAt: new Date('2026-07-29T09:00:00.000Z'),
+      scheduledAt: new Date(Math.floor(Date.now() / 1000) * 1000 + 300_000),
       publishedAt: null,
       telegramScheduledMessageIds: ['101'],
       telegramMessageIds: [],
@@ -62,13 +62,14 @@ describe('TelegramChannelsService returnManagedPostToDraft', () => {
     });
     const prisma = {
       telegramManagedPost: {
-        findFirst: jest.fn().mockResolvedValue(scheduledPost),
+        findFirst: jest.fn().mockResolvedValueOnce(scheduledPost).mockResolvedValue(null),
         findUnique: jest.fn().mockResolvedValue({
           ...scheduledPost,
           status: TelegramManagedPostStatus.DRAFT,
           statusPosition: null,
         }),
         update,
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
       telegramManagedPostRevision: {
         create: createRevision,
@@ -82,6 +83,9 @@ describe('TelegramChannelsService returnManagedPostToDraft', () => {
         .mockImplementation(async (callback) => callback(prisma)),
     };
     const mtprotoClient = {
+      getScheduledHistory: jest.fn().mockResolvedValue([
+        { id: '101', text: scheduledPost.text, mediaKind: null, date: scheduledPost.scheduledAt.toISOString() },
+      ]),
       deleteScheduledPost: jest.fn().mockResolvedValue(undefined),
     };
     const service = createTelegramChannelsTestHarness(
@@ -130,6 +134,7 @@ describe('TelegramChannelsService returnManagedPostToDraft', () => {
     );
     expect(update).toHaveBeenCalledWith(
       expect.objectContaining({
+        where: expect.objectContaining({ deliveryClaimOwner: expect.stringMatching(/^native-cancel-acked:/) }),
         data: expect.objectContaining({
           status: TelegramManagedPostStatus.DRAFT,
           telegramRemoteStatus: TelegramManagedPostRemoteStatus.NONE,

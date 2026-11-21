@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useState } from "react";
 import { GroshlyFinanceApp } from "@finance-web/components/groshly-finance-app";
 import { GroshlyLoadingScreen } from "@finance-web/components/groshly-loading-screen";
 import { ConsumerFinanceLogin } from "@consumer-finance/web/components/app/consumer-finance-login";
@@ -12,11 +12,6 @@ type FinanceContextState =
   | { status: "ready"; financeBotId: string }
   | { status: "error" };
 
-const FINANCE_CONTEXT_CACHE_KEY = "finance-active-bot-id";
-
-const subscribeToCachedContext = () => () => undefined;
-const cachedFinanceContext = () => window.localStorage.getItem(FINANCE_CONTEXT_CACHE_KEY)?.trim() || null;
-
 function readFinanceContext(value: unknown): FinanceContext | null {
   if (!value || typeof value !== "object") return null;
   const financeBotId = (value as { financeBotId?: unknown }).financeBotId;
@@ -26,38 +21,26 @@ function readFinanceContext(value: unknown): FinanceContext | null {
 }
 
 export function FinanceRootApp({ botId, entry = "app", initialLocale = "uk", initialTheme = "light" }: { botId?: string; entry?: "app" | "login"; initialLocale?: "uk" | "en"; initialTheme?: "light" | "dark" } = {}) {
-  const cachedBotId = useSyncExternalStore(subscribeToCachedContext, cachedFinanceContext, () => null);
   const [state, setState] = useState<FinanceContextState>(() =>
     botId ? { status: "ready", financeBotId: botId } : { status: "loading" },
   );
   useEffect(() => {
-    if (botId) {
-      window.localStorage.setItem(FINANCE_CONTEXT_CACHE_KEY, botId);
-      return;
-    }
+    if (botId) return;
     const controller = new AbortController();
 
-    // This ID is public routing/configuration metadata, not finance data or a
-    // credential. Using the last known active bot lets the persisted Finance
-    // snapshot render before the optional configuration check comes back.
-    const cachedBotId = window.localStorage
-      .getItem(FINANCE_CONTEXT_CACHE_KEY)
-      ?.trim();
     async function loadContext() {
       try {
         const response = await fetch("/api/finance/context", {
           credentials: "include",
+          cache: "no-store",
           signal: controller.signal,
         });
         const context = response.ok ? readFinanceContext(await response.json()) : null;
         if (!context) throw new Error("Finance context is unavailable");
-        window.localStorage.setItem(FINANCE_CONTEXT_CACHE_KEY, context.financeBotId);
+        if (controller.signal.aborted) return;
         setState({ status: "ready", financeBotId: context.financeBotId });
       } catch {
-        // A cached route is still safe to use if the lightweight background
-        // check is temporarily unavailable. The actual Finance API remains
-        // authenticated and validates every data request.
-        if (!controller.signal.aborted && !cachedBotId) setState({ status: "error" });
+        if (!controller.signal.aborted) setState({ status: "error" });
       }
     }
 
@@ -65,11 +48,11 @@ export function FinanceRootApp({ botId, entry = "app", initialLocale = "uk", ini
     return () => controller.abort();
   }, [botId]);
 
-  if (state.status === "ready" || (state.status === "loading" && cachedBotId)) {
-    const activeBotId = state.status === "ready" ? state.financeBotId : cachedBotId!;
+  const activeBotId = botId ?? (state.status === "ready" ? state.financeBotId : undefined);
+  if (activeBotId) {
     return entry === "login"
-      ? <ConsumerFinanceLogin botId={activeBotId} initialLocale={initialLocale} initialTheme={initialTheme} onAuthenticated={() => window.location.replace("/app")} />
-      : <GroshlyFinanceApp botId={activeBotId} />;
+      ? <ConsumerFinanceLogin key={activeBotId} botId={activeBotId} initialLocale={initialLocale} initialTheme={initialTheme} onAuthenticated={() => window.location.replace("/app")} />
+      : <GroshlyFinanceApp key={activeBotId} botId={activeBotId} />;
   }
 
   if (state.status === "loading") {

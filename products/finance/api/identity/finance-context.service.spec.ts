@@ -293,15 +293,26 @@ describe("FinanceContextService consumer bootstrap persistence", () => {
     );
   });
 
-  it("uses the Finance profile bot username for the browser login link", async () => {
-    const { service, environments } = setup();
-    environments.browserLoginBotUsername.mockReturnValue(
-      "smart_budgeting_test_bot",
-    );
+  it("uses the persisted LOCAL runtime username and applies the profile as a selector", async () => {
+    const { service, prisma, environments } = setup();
+    environments.current.mockReturnValue("LOCAL");
+    environments.browserLoginBotUsername.mockReturnValue("finance_bot");
 
     await expect(service.browserLoginConfig("bot-1")).resolves.toEqual({
-      username: "smart_budgeting_test_bot",
+      username: "finance_bot",
     });
+    expect(prisma.telegramBotIntegration.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        select: expect.objectContaining({
+          runtimeInstances: expect.objectContaining({
+            where: {
+              environment: "LOCAL",
+              username: { equals: "finance_bot", mode: "insensitive" },
+            },
+          }),
+        }),
+      }),
+    );
   });
 
   it("resolves Mini App initData and browser Telegram Login to one bot-scoped Finance profile", async () => {

@@ -91,14 +91,22 @@ export class TelegramManagedPostGroupBulkService {
       const previousStatus = post.status;
       try {
         if (previousStatus === TelegramManagedPostStatus.SCHEDULED) {
-          await this.telegramManagedPostPublicationService.cancelScheduledManagedPost(
+          const cancellation = await this.telegramManagedPostPublicationService.cancelScheduledManagedPost(
             workspaceId,
             post,
           );
           await this.prisma.telegramManagedPost.update({
-            where: { id: post.id },
+            where: {
+              id: post.id, workspaceId, telegramChannelId: group.telegramChannelId, groupId,
+              status: previousStatus, scheduledAt: post.scheduledAt, sourceId: post.sourceId,
+              telegramScheduledMessageIds: { equals: post.telegramScheduledMessageIds },
+              ...(cancellation ? {} : { updatedAt: post.updatedAt }),
+              deliveryClaimOwner: cancellation ?? null,
+            },
             data: {
               status: TelegramManagedPostStatus.DRAFT,
+              deliveryClaimOwner: null,
+              deliveryClaimExpiresAt: null,
               telegramRemoteStatus: TelegramManagedPostRemoteStatus.NONE,
               scheduledAt: null,
               telegramScheduledMessageIds: [],
@@ -140,12 +148,9 @@ export class TelegramManagedPostGroupBulkService {
       } catch (error) {
         const message =
           error instanceof Error ? error.message : 'Could not publish post';
-        await this.prisma.telegramManagedPost.update({
-          where: { id: post.id },
-          data: {
-            status: TelegramManagedPostStatus.FAILED,
-            lastError: message,
-          },
+        const current = await this.prisma.telegramManagedPost.findFirst({
+          where: { id: post.id, workspaceId, telegramChannelId: group.telegramChannelId },
+          select: { status: true, scheduledAt: true },
         });
         await this.appendBulkResult(
           results,
@@ -155,8 +160,8 @@ export class TelegramManagedPostGroupBulkService {
             index,
             total,
             previousStatus,
-            newStatus: TelegramManagedPostStatus.FAILED,
-            scheduledAt: null,
+            newStatus: current?.status ?? previousStatus,
+            scheduledAt: current?.scheduledAt?.toISOString() ?? null,
             action: 'FAILED',
             success: false,
             message: `Post ${index}/${total} failed: ${message}`,
@@ -220,16 +225,25 @@ export class TelegramManagedPostGroupBulkService {
         continue;
       }
       try {
+        let cancellation: string | undefined;
         if (previousStatus === TelegramManagedPostStatus.SCHEDULED) {
-          await this.telegramManagedPostPublicationService.cancelScheduledManagedPost(
+          cancellation = await this.telegramManagedPostPublicationService.cancelScheduledManagedPost(
             workspaceId,
             post,
           );
         }
         await this.prisma.telegramManagedPost.update({
-          where: { id: post.id },
+          where: {
+              id: post.id, workspaceId, telegramChannelId: group.telegramChannelId, groupId,
+              status: previousStatus, scheduledAt: post.scheduledAt, sourceId: post.sourceId,
+              telegramScheduledMessageIds: { equals: post.telegramScheduledMessageIds },
+              ...(cancellation ? {} : { updatedAt: post.updatedAt }),
+              deliveryClaimOwner: cancellation ?? null,
+            },
           data: {
             status: TelegramManagedPostStatus.DRAFT,
+            deliveryClaimOwner: null,
+            deliveryClaimExpiresAt: null,
             telegramRemoteStatus: TelegramManagedPostRemoteStatus.NONE,
             scheduledAt: null,
             publishedAt: null,

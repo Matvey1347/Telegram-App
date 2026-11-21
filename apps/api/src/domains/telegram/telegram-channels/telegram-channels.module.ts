@@ -1,5 +1,6 @@
 import { TelegramManagedPostNativeRecoveryStore } from './telegram-managed-post-native-recovery.store';
-import { TelegramProductionRecoveryTransportController } from './telegram-production-recovery-transport.controller';
+import { TelegramOperatorSendService } from './telegram-operator-send.service';
+import { TelegramOperatorContractController, TelegramProductionRecoveryTransportController } from './telegram-production-recovery-transport.controller';
 import { TelegramProductionRecoveryTransportService } from './telegram-production-recovery-transport.service';
 import { ChannelAvatarEmojiProcessorService } from './channel-avatar-emoji-processor.service';
 import { ChannelAvatarEmojiController } from './channel-avatar-emoji.controller';
@@ -18,6 +19,7 @@ import { TelegramChannelRemindersController } from './telegram-channel-reminders
 import { TelegramChannelRemindersService } from './telegram-channel-reminders.service';
 import { TelegramChannelRemindersDueService } from './telegram-channel-reminders-due.service';
 import { TelegramChannelsController } from './telegram-channels.controller';
+import { TelegramChannelPostGroupsController } from './telegram-channel-post-groups.controller';
 import { TelegramAiPostingController } from './telegram-ai-posting.controller';
 import { TelegramAiPostingChatController } from './telegram-ai-posting-chat.controller';
 import { TelegramAiPostingChatService } from './telegram-ai-posting-chat.service';
@@ -152,7 +154,9 @@ import { TelegramChannelTrafficAttributionService } from './telegram-channel-tra
   ],
   controllers: [
     TelegramProductionRecoveryTransportController,
+    TelegramOperatorContractController,
     ChannelAvatarEmojiController,
+    TelegramChannelPostGroupsController,
     TelegramChannelsController,
     TelegramAiPostingController,
     TelegramAiPostingChatController,
@@ -173,6 +177,7 @@ import { TelegramChannelTrafficAttributionService } from './telegram-channel-tra
   providers: [
     TelegramManagedPostNativeRecoveryStore,
     TelegramProductionRecoveryTransportService,
+    TelegramOperatorSendService,
     ChannelAvatarEmojiService,
     ChannelAvatarEmojiProcessorService,
     ChannelAvatarEmojiPublisherService,

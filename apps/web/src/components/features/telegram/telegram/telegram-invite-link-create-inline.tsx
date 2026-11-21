@@ -146,11 +146,48 @@ export function TelegramInviteLinkCreateInline({
     if (!accountId && accounts[0]?.sourceId) setAccountId(accounts[0].sourceId);
   }, [accountId, accounts]);
   const create = useMutation({
-    mutationFn: () =>
-      telegramChannelsApi.createInviteLink(channelId, {
+    mutationFn: (submission: {
+      channelId: string;
+      request: Parameters<typeof telegramChannelsApi.createInviteLink>[1];
+      creatorUsername: string;
+      creatorPhotoUrl?: string | null;
+    }) =>
+      telegramChannelsApi.createInviteLink(submission.channelId, submission.request),
+    onSuccess: (link, submission) => {
+      // During rolling upgrades the create endpoint can omit presentation.
+      // Use the submitted actor even if the account query changed in flight.
+      const immediatelySelectableLink: TelegramInviteLink = {
+        ...link,
+        name: link.name || submission.request.title,
+        creatorUsername: link.creatorUsername ?? submission.creatorUsername,
+        creatorPhotoUrl: link.creatorPhotoUrl ?? submission.creatorPhotoUrl ?? null,
+      };
+      queryClient.setQueryData<TelegramInviteLinkOption[]>(
+        telegramChannelKeys.inviteLinkInitial(
+          submission.channelId,
+          immediatelySelectableLink.id,
+        ),
+        [immediatelySelectableLink],
+      );
+      onCreated(immediatelySelectableLink);
+      setTitle("");
+      setOpen(false);
+      void queryClient.invalidateQueries({
+        queryKey: telegramChannelKeys.inviteLinks(submission.channelId),
+        refetchType: "none",
+      });
+    },
+  });
+  function submit() {
+    if (!selectedAccount) return;
+    create.mutate({
+      channelId,
+      creatorUsername: selectedAccount.displayName.replace(/^@/, ""),
+      creatorPhotoUrl: selectedAccount.avatarUrl,
+      request: {
         title: title.trim(),
         requestNeeded,
-        ...(accountId ? { mtprotoAccountId: accountId } : {}),
+        mtprotoAccountId: selectedAccount.sourceId,
         ...(timeLimitPreset < 3 && expiryDate && expiryTime
           ? { expiresAt: new Date(`${expiryDate}T${expiryTime}`).toISOString() }
           : {}),
@@ -160,39 +197,9 @@ export function TelegramInviteLinkCreateInline({
         ...(monthlyFeeEnabled && Number(monthlyFeeStars) > 0
           ? { monthlyFeeStars: Number(monthlyFeeStars) }
           : {}),
-      }),
-    onSuccess: (link) => {
-      // Newer API responses include the MTProto creator presentation. Keep a
-      // client-side fallback from the account the user chose so the selector
-      // remains complete while an older API instance is rolling out.
-      const immediatelySelectableLink: TelegramInviteLink = {
-        ...link,
-        name: link.name || title.trim(),
-        creatorUsername:
-          link.creatorUsername ??
-          selectedAccount?.displayName.replace(/^@/, "") ??
-          null,
-        creatorPhotoUrl:
-          link.creatorPhotoUrl ?? selectedAccount?.avatarUrl ?? null,
-      };
-      // The create response is authoritative. Select it immediately instead
-      // of waiting for an invite-link collection refresh.
-      queryClient.setQueryData<TelegramInviteLinkOption[]>(
-        telegramChannelKeys.inviteLinkInitial(
-          channelId,
-          immediatelySelectableLink.id,
-        ),
-        [immediatelySelectableLink],
-      );
-      onCreated(immediatelySelectableLink);
-      setTitle("");
-      setOpen(false);
-      void queryClient.invalidateQueries({
-        queryKey: telegramChannelKeys.inviteLinks(channelId),
-        refetchType: "none",
-      });
-    },
-  });
+      },
+    });
+  }
 
   if (!open && controlledOpen === undefined) {
     return (
@@ -375,12 +382,12 @@ export function TelegramInviteLinkCreateInline({
           type="button"
           disabled={
             !title.trim() ||
-            !accountId ||
+            !selectedAccount ||
             create.isPending ||
             hasInvalidEnabledNumber ||
             (timeLimitPreset < 3 && (!expiryDate || !expiryTime))
           }
-          onClick={() => create.mutate()}
+          onClick={submit}
         >
           {create.isPending ? "Creating in Telegram…" : "Create and select"}
         </Button>

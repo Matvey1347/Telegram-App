@@ -15,10 +15,11 @@ jobs:
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm architecture:check
+      - run: ARCHITECTURE_STRICT=1 pnpm architecture:check
+      - run: pnpm test:tooling
 
   shared-checks:
     runs-on: ubuntu-latest
@@ -27,19 +28,33 @@ jobs:
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @telegram-system/shared lint
       - run: pnpm --filter @telegram-system/shared typecheck
       - run: pnpm --filter @telegram-system/shared build
+      - run: node scripts/deployment/check-railway-build.mjs shared
 
   api-checks:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: telegram_system_qa_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d telegram_system_qa_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     env:
-      # Prisma config resolves DATABASE_URL while loading, even though
-      # `prisma generate` does not connect to the database.
-      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/telegram_system_ci?schema=public
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/telegram_system_qa_ci?schema=public
+      PUBLICATION_TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/telegram_system_qa_ci?schema=public
       JWT_SECRET: ci-only-jwt-secret
       BOT_TOKEN_ENCRYPTION_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
     steps:
@@ -47,16 +62,19 @@ jobs:
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20.19.0
+          node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm db:generate
-      - run: pnpm --filter api test -- --runInBand
+      - run: pnpm db:deploy:safe
+      - run: pnpm --filter api typecheck
+      - run: pnpm --filter api exec jest --runInBand
       - name: API lint (legacy debt report)
         continue-on-error: true
         run: pnpm --filter api lint
       - run: pnpm --filter api build
       - run: pnpm test:deployment
+      - run: node scripts/deployment/check-railway-build.mjs api
 
   prisma-baseline:
     runs-on: ubuntu-latest
@@ -81,7 +99,7 @@ jobs:
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm db:deploy:safe
@@ -109,7 +127,7 @@ jobs:
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm db:generate
@@ -118,5 +136,43 @@ jobs:
         continue-on-error: true
         run: pnpm --filter web lint
       - run: pnpm --filter web typecheck
-      - run: pnpm --filter web test -- --run
-      - run: pnpm --filter web build
+      - run: pnpm --filter web exec vitest run
+      - run: NEXT_PUBLIC_API_URL=/api RAILWAY_API_PROXY=true pnpm --filter web build
+      - run: node scripts/deployment/check-railway-build.mjs web
+
+  finance-checks:
+    runs-on: ubuntu-latest
+    env:
+      FINANCE_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/finance_ci?schema=public
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: finance_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d finance_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter finance-api prisma:generate
+      - run: pnpm --filter finance-api prisma:validate
+      - run: pnpm --filter finance-api prisma:migrate:deploy
+      - run: pnpm --filter finance-api typecheck
+      - run: pnpm --filter finance-api test
+      - run: pnpm --filter finance-api build
+      - run: pnpm --filter @telegram-system/finance-web typecheck
+      - run: pnpm --filter @telegram-system/finance-web exec vitest run
+      - run: NEXT_PUBLIC_FINANCE_API_URL=/api pnpm --filter @telegram-system/finance-web build
+      - run: node scripts/deployment/check-railway-build.mjs finance-api finance-web

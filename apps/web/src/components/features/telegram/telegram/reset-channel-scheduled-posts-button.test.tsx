@@ -39,7 +39,7 @@ describe("ResetChannelScheduledPostsButton", () => {
     );
 
     const action = screen.getByRole("menuitem", {
-      name: "Return all scheduled posts to drafts",
+      name: "Return selected scheduled posts to drafts",
     });
     expect(action.querySelector("svg")).toHaveAttribute("width", "17");
     expect(action.querySelector("svg")).toHaveAttribute("height", "17");
@@ -61,6 +61,7 @@ describe("ResetChannelScheduledPostsButton", () => {
         <ResetChannelScheduledPostsButton
           channelId="channel-1"
           channelTitle="Mentor"
+          postIds={["post-1", "post-2"]}
           onCompleted={onCompleted}
         />
       </QueryClientProvider>,
@@ -68,18 +69,18 @@ describe("ResetChannelScheduledPostsButton", () => {
 
     fireEvent.click(
       screen.getByRole("button", {
-        name: "Return all scheduled posts to drafts",
+        name: "Return selected scheduled posts to drafts",
       }),
     );
     expect(resetScheduled).not.toHaveBeenCalled();
     fireEvent.click(
       within(screen.getByRole("dialog")).getByRole("button", {
-        name: "Return all scheduled posts to drafts",
+        name: "Return selected scheduled posts to drafts",
       }),
     );
 
     await waitFor(() =>
-      expect(resetScheduled).toHaveBeenCalledWith("channel-1"),
+      expect(resetScheduled).toHaveBeenCalledWith("channel-1", ["post-1", "post-2"]),
     );
     await waitFor(() => expect(onCompleted).toHaveBeenCalled());
     expect(invalidate).toHaveBeenCalledWith({
@@ -108,12 +109,12 @@ describe("ResetChannelScheduledPostsButton", () => {
 
     fireEvent.click(
       screen.getByRole("button", {
-        name: "Return all scheduled posts to drafts",
+        name: "Return selected scheduled posts to drafts",
       }),
     );
     fireEvent.click(
       within(screen.getByRole("dialog")).getByRole("button", {
-        name: "Return all scheduled posts to drafts",
+        name: "Return selected scheduled posts to drafts",
       }),
     );
 
@@ -126,7 +127,7 @@ describe("ResetChannelScheduledPostsButton", () => {
     );
     expect(
       screen.getByRole("button", {
-        name: "Return all scheduled posts to drafts",
+        name: "Return selected scheduled posts to drafts",
       }),
     ).toBeEnabled();
   });

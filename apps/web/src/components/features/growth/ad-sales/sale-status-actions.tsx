@@ -15,6 +15,7 @@ export type SaleActionKey =
   | "attach-post"
   | "schedule"
   | "publish"
+  | "reconcile-published"
   | "complete-permanent"
   | "reschedule";
 

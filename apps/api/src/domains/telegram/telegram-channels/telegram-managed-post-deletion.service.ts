@@ -85,11 +85,12 @@ export class TelegramManagedPostDeletionService {
       }
       const previousStatus = post.status;
       try {
+        let cancellation: string | undefined;
         if (
           post.status === TelegramManagedPostStatus.SCHEDULED &&
           post.telegramScheduledMessageIds.length
         ) {
-          await this.telegramManagedPostPublicationService.cancelScheduledManagedPost(
+          cancellation = await this.telegramManagedPostPublicationService.cancelScheduledManagedPost(
             workspaceId,
             post,
           );
@@ -101,7 +102,7 @@ export class TelegramManagedPostDeletionService {
             'before_delete',
             userId,
           );
-          await tx.telegramManagedPost.delete({ where: { id: post.id } });
+          await tx.telegramManagedPost.delete({ where: { id: post.id, workspaceId, status: previousStatus, deliveryClaimOwner: cancellation ?? null } });
         });
         if (post.groupId) affectedGroupIds.add(post.groupId);
         await this.appendBulkResult(

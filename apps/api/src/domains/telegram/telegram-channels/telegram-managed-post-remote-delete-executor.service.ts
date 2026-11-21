@@ -33,7 +33,6 @@ export class TelegramManagedPostRemoteDeleteExecutor {
     channelId: string;
     channel: DeletionChannel;
     source: ManagedPostDeletionSource;
-    sources: ManagedPostDeletionSource[];
     rawMessageIds: string[];
   }) {
     const messageIds = [
@@ -42,23 +41,8 @@ export class TelegramManagedPostRemoteDeleteExecutor {
     const noFailures = new Map<number, string>();
     if (!messageIds.length) return noFailures;
     if (input.source.sourceType === TelegramSourceType.BOT) {
-      try {
-        await this.deleteViaBot(
-          input.workspaceId,
-          input.channel,
-          input.source.sourceId,
-          messageIds,
-        );
-        return noFailures;
-      } catch (error) {
-        const fallback = input.sources.find(
-          (source) =>
-            source.sourceType === TelegramSourceType.MTPROTO &&
-            source.permissions.canDeleteMessages,
-        );
-        if (!fallback) throw error;
-        return this.deleteViaMtprotoWithIsolation(input, fallback, messageIds);
-      }
+      await this.deleteViaBot(input.workspaceId, input.channel, input.source.sourceId, messageIds);
+      return noFailures;
     }
     return this.deleteViaMtprotoWithIsolation(input, input.source, messageIds);
   }
