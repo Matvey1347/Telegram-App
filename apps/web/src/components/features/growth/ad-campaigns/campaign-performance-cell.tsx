@@ -12,6 +12,7 @@ import { formatMoney } from "@/lib/features/finance/money";
 import type {
   AdCampaign,
   AdCampaignKpiStatus,
+  CurrencySettings,
   TelegramChannel,
 } from "@/lib/api";
 import {
@@ -106,7 +107,7 @@ export function PerformanceCell({
   pending: number;
   attributed: number;
   left: number;
-  moneySettings: any;
+  moneySettings?: Pick<CurrencySettings, "currencyDisplayMode">;
   kpiStatus: AdCampaignKpiStatus;
   metrics: Array<{ label: string; value: string }>;
   onShowKpiTooltip: (

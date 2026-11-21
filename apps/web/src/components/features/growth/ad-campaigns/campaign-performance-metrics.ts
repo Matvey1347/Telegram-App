@@ -1,5 +1,5 @@
 import { convertMoney } from "@/lib/features/finance/money";
-import type { AdCampaign, AdCampaignKpiStatus } from "@/lib/api";
+import type { AdCampaign, AdCampaignKpiStatus, ExchangeRate } from "@/lib/api";
 
 export function formatMetric(value: unknown, decimals = 0) {
   if (value == null || !Number.isFinite(Number(value))) return "-";
@@ -61,7 +61,7 @@ function calculatedKpiStatus(
 export function effectiveCampaignKpiStatus(
   campaign: AdCampaign,
   costPerJoined: number | null,
-  rates: any[] | undefined,
+  rates: ExchangeRate[] | undefined,
 ): AdCampaignKpiStatus {
   const kpiCurrency = campaign.telegramChannel?.kpiCurrency;
   const cpaInKpiCurrency = kpiCurrency
@@ -78,22 +78,22 @@ export function campaignMetrics(campaign: AdCampaign) {
   const metrics = [
     {
       label: "New subs",
-      value: (campaign as any)?.newSubscribers,
+      value: campaign.newSubscribers,
       format: (value: unknown) => formatMetric(value),
     },
     {
       label: "Raw uplift",
-      value: (campaign as any)?.rawActiveSubscribersFromAd,
+      value: campaign.rawActiveSubscribersFromAd,
       format: (value: unknown) => formatMetric(value),
     },
     {
       label: "Active CPA",
-      value: (campaign as any)?.cappedActiveCpa ?? (campaign as any)?.activeCpa,
+      value: campaign.cappedActiveCpa ?? campaign.activeCpa,
       format: (value: unknown) => formatMetric(value, 2),
     },
     {
       label: "Retention 7d",
-      value: (campaign as any)?.retention7d,
+      value: campaign.retention7d,
       format: (value: unknown) => formatPercent(value),
     },
   ];
