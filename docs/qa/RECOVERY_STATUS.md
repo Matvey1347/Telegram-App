@@ -240,3 +240,19 @@ Docker context содержит исходники, миграции и env temp
 86 ошибок. Web typecheck, Next.js build и 44 адресных теста прошли. Новый
 `release:check` прошёл AI-сверку и архитектуру, затем остановился на
 web lint. Production Neon, Railway и Vercel не менялись.
+
+## Проверка production-миграций · 21 ноября 2026
+
+На Neon в режиме чтения подтверждены 356 применённых миграций и три
+ожидающие из candidate `baeb08d8`. Незавершённых миграций нет.
+Подтверждён Railway predeploy `pnpm --filter api run db:deploy:safe`.
+Strict architecture прошёл по 2 266 файлам. Повторный `release:check`
+остановился на прежних 86 ошибках web lint. Миграции и production deploy
+ожидают прохождения gate. Особенно важна совместимость прежних readers
+со snapshot counters, которые после обновления могут содержать null.
+
+Во время проверки в 20:52–20:53 UTC обе страницы входа и readiness
+standalone Groshly ответили HTTP 200. Nexeloq API сначала превысил лимит
+ожидания, затем вернул HTTP 500 на /api/health. Railway зарегистрировал
+ошибку proxy для этого endpoint. Причина недоступности backend пока
+не установлена. Проверка проходила на ранее развёрнутой версии.
