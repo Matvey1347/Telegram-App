@@ -69,6 +69,8 @@ jobs:
       - run: pnpm db:deploy:safe
       - run: pnpm --filter api typecheck
       - run: pnpm --filter api exec jest --runInBand
+        env:
+          FINANCE_WEB_PUBLIC_URL: https://finance.example.test
       - name: API lint (legacy debt report)
         continue-on-error: true
         run: pnpm --filter api lint
@@ -137,6 +139,8 @@ jobs:
         run: pnpm --filter web lint
       - run: pnpm --filter web typecheck
       - run: pnpm --filter web exec vitest run
+        env:
+          TZ: Europe/Warsaw
       - run: NEXT_PUBLIC_API_URL=/api RAILWAY_API_PROXY=true pnpm --filter web build
       - run: node scripts/deployment/check-railway-build.mjs web
 
