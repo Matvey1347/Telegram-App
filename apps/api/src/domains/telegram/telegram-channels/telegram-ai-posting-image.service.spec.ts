@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { telegramAiPostingImageIdentity } from './telegram-ai-posting-image-identity';
 import sharp from 'sharp';
 import {
   ConflictException,
@@ -72,15 +73,15 @@ describe('TelegramAiPostingImageService', () => {
     );
   });
 
-  it('gives the private women’s channel the documentary brief even without a username', () => {
+  it('prioritizes the references over the post setting and channel fallback', () => {
     const input = { topic: 'An awkward conversation', prompt: 'A photo in a kitchen', channelTitle: 'Жіноча сила🍃' };
     const prompt = buildTelegramAiPostingImagePrompt(input, true);
     expect(prompt).toContain('A photo in a kitchen');
-    expect(prompt).toContain('attached reference');
-    expect(prompt).toContain('unposed, everyday documentary frame');
-    expect(prompt).toContain('natural skin texture');
-    expect(buildTelegramAiPostingImagePrompt({ ...input, channelTitle: 'Other channel' }, false))
-      .not.toContain('everyday documentary frame');
+    expect(prompt).toContain('reference sheet as the primary visual direction');
+    expect(prompt).toContain('movement, light, color or monochrome treatment');
+    expect(prompt).toContain('Do not add dialogue bubbles');
+    expect(prompt).not.toContain('everyday documentary frame');
+    expect(buildTelegramAiPostingImagePrompt(input, false)).toContain('everyday documentary frame');
   });
 
   it('does not store an image whose bytes already appeared in this run', async () => {
@@ -108,6 +109,139 @@ describe('TelegramAiPostingImageService', () => {
       1,
     );
     expect(gateway.execute).not.toHaveBeenCalled();
+  });
+
+  it('uses a found image only after reviewing the shortlist against the references', async () => {
+    const second = await sharp({
+      create: { width: 480, height: 480, channels: 3, background: '#a86543' },
+    }).png().toBuffer();
+    const candidates = [
+      { url: 'https://example.org/unrelated.png', sourceId: 'openverse', sourceType: 'image-search' },
+      { url: 'https://example.org/matching.png', sourceId: 'openverse', sourceType: 'image-search' },
+    ];
+    sources.searchOpenImages.mockResolvedValue(candidates);
+    sources.downloadImage.mockResolvedValueOnce(imageBytes).mockResolvedValueOnce(second);
+    gateway.execute.mockResolvedValueOnce({
+      operation: { ...operation(), category: 'TELEGRAM_POSTING_REVIEW' },
+      result: { reply: '{"candidateIndex":2,"candidateObservation":"Photo of outdoor movement","referenceDirection":"Backlit documentary movement"}' },
+    });
+    const referenceImage = await sharp(imageBytes).jpeg().toBuffer();
+
+    const result = await service.resolve({
+      ...request('hybrid'),
+      referenceImage,
+      preferencePurpose: 'BOTH',
+      visualPreference: 'Natural light and movement',
+      searchQuery: 'woman walking evening street film photography',
+    });
+
+    expect(result).toMatchObject({ image: { sourceId: 'openverse' }, searchOperation: { category: 'TELEGRAM_POSTING_REVIEW' } });
+    expect(sources.searchOpenImages).toHaveBeenCalledWith('woman walking evening street film photography', 1);
+    expect(gateway.execute).toHaveBeenCalledTimes(1);
+    expect(gateway.execute).toHaveBeenCalledWith(expect.objectContaining({
+      category: 'TELEGRAM_POSTING_REVIEW',
+      image: { mime: 'image/jpeg', data: expect.any(Buffer) },
+    }));
+    expect(media.persistImageBytes).toHaveBeenCalledWith([{ bytes: second, contentType: 'image/png' }]);
+  });
+
+  it('generates from the references when search results do not match', async () => {
+    sources.searchOpenImages.mockResolvedValue([
+      { url: 'https://example.org/unrelated.png', sourceId: 'openverse', sourceType: 'image-search' },
+    ]);
+    gateway.execute.mockResolvedValueOnce({
+      operation: { ...operation(), category: 'TELEGRAM_POSTING_REVIEW' },
+      result: { reply: '{"candidateIndex":0,"referenceDirection":"Wide framing and evening backlight"}' },
+    });
+    const referenceImage = await sharp(imageBytes).jpeg().toBuffer();
+    const result = await service.resolve({ ...request('hybrid'), referenceImage, preferencePurpose: 'BOTH' });
+    expect(result).toMatchObject({
+      image: { sourceId: 'openai-image-generation' },
+      searchOperation: { category: 'TELEGRAM_POSTING_REVIEW' },
+      operation: { category: 'TELEGRAM_POSTING_IMAGE' },
+    });
+    expect(gateway.execute).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      category: 'TELEGRAM_POSTING_IMAGE',
+      input: expect.stringContaining('Wide framing and evening backlight'),
+      image: { mime: 'image/jpeg', data: referenceImage },
+    }));
+  });
+
+  it('uses the search brief to find a stock alternative without calling generation', async () => {
+    sources.searchOpenImages.mockResolvedValueOnce([]).mockResolvedValueOnce([
+      { url: 'https://example.org/dancer.png', sourceId: 'openverse', sourceType: 'image-search' },
+    ]);
+    gateway.execute.mockResolvedValueOnce({
+      operation: { ...operation(), category: 'TELEGRAM_POSTING_REVIEW' },
+      result: { reply: '{"candidateIndex":1,"candidateObservation":"Documentary photo of a woman dancing"}' },
+    });
+
+    const result = await service.resolve({
+      ...request('hybrid'),
+      searchQuery: 'woman dancing at dusk',
+      searchDescription: 'Prefer documentary photos like «woman dancing rain». Reject portraits.',
+      generationDescription: 'Use a wide shot in monochrome.',
+    });
+
+    expect(sources.searchOpenImages).toHaveBeenNthCalledWith(2, 'woman dancing rain', 1);
+    expect(gateway.execute).toHaveBeenCalledTimes(1);
+    expect(gateway.execute).toHaveBeenCalledWith(expect.objectContaining({
+      category: 'TELEGRAM_POSTING_REVIEW',
+      input: expect.stringContaining('Reject portraits'),
+    }));
+    expect(gateway.execute.mock.calls[0][0].input).not.toContain('wide shot in monochrome');
+    expect(result.image?.sourceId).toBe('openverse');
+  });
+
+  it('uses a chosen attachment and generation brief when no stock candidates are viable', async () => {
+    const referenceImage = await sharp({
+      create: { width: 1024, height: 1024, channels: 3, background: '#a86543' },
+    }).jpeg().toBuffer();
+    gateway.execute.mockResolvedValueOnce({
+      operation: { ...operation(), category: 'TELEGRAM_POSTING_REVIEW' },
+      result: { reply: '{"candidateIndex":0,"referenceIndex":2,"referenceDirection":"Backlit full-body motion"}' },
+    });
+    const result = await service.resolve({
+      ...request('hybrid'),
+      referenceImage,
+      referenceGrid: { columns: 2, tileSize: 512, count: 2 },
+      searchDescription: 'Look for documentary photos.',
+      generationDescription: 'Use visible film grain and a wide frame.',
+    });
+
+    expect(result.readiness).toBe('READY');
+    const generation = gateway.execute.mock.calls[1][0];
+    expect(generation).toMatchObject({
+      category: 'TELEGRAM_POSTING_IMAGE',
+      input: expect.stringContaining('Use visible film grain and a wide frame.'),
+    });
+    expect(generation.input).toContain('Backlit full-body motion');
+    expect(generation.input).not.toContain('Look for documentary photos');
+    expect(await sharp(generation.image.data).metadata()).toMatchObject({ width: 512, height: 512 });
+  });
+
+  it('leaves a hybrid search-only publication without media when there is no verified source', async () => {
+    const result = await service.resolve({ ...request('hybrid'), preferencePurpose: 'SEARCH' });
+    expect(result).toMatchObject({ readiness: 'MISSING', image: null });
+    expect(gateway.execute).not.toHaveBeenCalled();
+  });
+
+  it('rejects a re-encoded copy in search and tries the next result', async () => {
+    const copy = await sharp(imageBytes).resize(500).jpeg({ quality: 45 }).toBuffer();
+    const fresh = await sharp({
+      create: { width: 400, height: 400, channels: 3, background: '#a86543' },
+    }).png().toBuffer();
+    sources.downloadImage.mockResolvedValueOnce(copy).mockResolvedValueOnce(fresh);
+    const usedImages = new Set([(await telegramAiPostingImageIdentity(imageBytes)).visualFingerprint]);
+    const result = await service.resolve({
+      ...request('found', [
+        { url: 'https://source.example/copy.jpg', sourceId: 'copy', sourceType: 'website' },
+        { url: 'https://source.example/fresh.png', sourceId: 'fresh', sourceType: 'website' },
+      ]),
+      usedImages,
+    });
+    expect(result.image?.sourceId).toBe('fresh');
+    expect(media.persistImageBytes).toHaveBeenCalledWith([{ bytes: fresh, contentType: 'image/png' }]);
   });
 
   it('falls back to AI when search fails and still searches every hybrid publication', async () => {
@@ -293,6 +427,15 @@ describe('TelegramAiPostingImageService', () => {
       height: 1024,
       format: 'jpeg',
     });
+  });
+
+  it('keeps the healthy references when another attachment cannot be downloaded', async () => {
+    sources.downloadImage.mockRejectedValueOnce(new Error('unavailable'));
+    const result = await service.prepareReferenceSheet([
+      'https://cdn.example/broken.jpg', 'https://cdn.example/valid.jpg',
+    ]);
+    expect(result.failed).toBe(false);
+    expect(result.image).toBeInstanceOf(Buffer);
   });
 
   it('does not call the image provider when configured references are unavailable', async () => {

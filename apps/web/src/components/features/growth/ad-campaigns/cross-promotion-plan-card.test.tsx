@@ -112,6 +112,24 @@ describe("CrossPromotionPlanCard", () => {
     expect(screen.getByText("VP")).toBeInTheDocument();
   });
 
+  it.each(["DIRECT_MUTUAL", "OWN_CHANNELS"] as const)(
+    "keeps the date beside the title and the channel, metrics and promo in one row for %s",
+    (kind) => {
+      render(<CrossPromotionPlanCard plan={{ ...plan, kind }} onEdit={vi.fn()} onDelete={vi.fn()} />);
+      const heading = screen.getByRole("heading", { name: plan.title });
+      const date = screen.getByText(formatDateTime(plan.scheduledAt, undefined, "Europe/Kyiv"));
+      expect(heading.parentElement?.nextElementSibling).toBe(date);
+      expect(date).toHaveAttribute("datetime", plan.scheduledAt);
+      const channel = screen.getByText("Mentor");
+      const row = channel.parentElement?.parentElement;
+      expect(screen.getByRole("img", { name: "During placement: +13" }).parentElement).toBe(row);
+      expect(screen.getByRole("img", { name: "Actual views: 120" }).parentElement).toBe(row);
+      expect(screen.getByText("Calm mind")).toHaveClass("truncate");
+      expect(screen.getByText("Calm mind").parentElement?.parentElement).toBe(row);
+      expect(screen.queryByText(/promoted/i)).not.toBeInTheDocument();
+    },
+  );
+
   it("renders only the publications owned by our workspace", () => {
     const onEdit = vi.fn();
     const onDelete = vi.fn();
@@ -129,10 +147,10 @@ describe("CrossPromotionPlanCard", () => {
     );
     expect(screen.getByText("🤝")).toBeInTheDocument();
     expect(screen.getByText("Scheduled")).toBeInTheDocument();
-    expect(screen.getByText("My channels")).toBeInTheDocument();
+    expect(screen.queryByText("My channels")).not.toBeInTheDocument();
     expect(screen.queryByText("Partner channels")).not.toBeInTheDocument();
     expect(screen.getByText("Mentor")).toBeInTheDocument();
-    expect(screen.getByText("✨ Promoted")).toBeInTheDocument();
+    expect(screen.queryByText(/promoted/i)).not.toBeInTheDocument();
     expect(screen.getByRole("img", { name: "During placement: +13" })).toHaveAttribute("title", "During placement: +13");
     expect(screen.getByText("+13")).toBeInTheDocument();
     expect(screen.queryByText(/total on link/)).not.toBeInTheDocument();
@@ -274,11 +292,30 @@ describe("CrossPromotionPlanCard", () => {
       />,
     );
 
-    expect(screen.getByText("My Channel")).toBeInTheDocument();
+    expect(screen.getByText("My channels")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "My channels: 1" })).toBeInTheDocument();
     expect(screen.queryByText("Partner channels")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Partner channels/ })).not.toBeInTheDocument();
     expect(screen.getByRole("img", { name: "During placement: +13" })).toBeInTheDocument();
+  });
+
+  it("identifies still-published posts on a completed own-channel promotion", () => {
+    render(
+      <CrossPromotionPlanCard
+        plan={{
+          ...plan,
+          kind: "OWN_CHANNELS",
+          status: "COMPLETED",
+          placementPostIds: [{ telegramChannelId: "mine-1", managedPostId: "post-1", isPublishedInTelegram: true }],
+        }}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("Posts remain published")).toBeVisible();
+    expect(screen.getByRole("button", { name: "My channels: 1" })).toBeVisible();
+    expect(screen.getByText("Mentor").parentElement).toHaveClass("border");
+    expect(screen.getByText("Calm mind").parentElement).toHaveClass("border");
   });
 
   it("shows the actual own-channel placement time instead of a stale plan time", () => {

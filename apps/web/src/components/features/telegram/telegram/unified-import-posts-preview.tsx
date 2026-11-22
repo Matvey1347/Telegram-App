@@ -88,6 +88,9 @@ export function UnifiedImportPostsPreview({
     ? selectedRowIndex
     : (resolvedVisibleRows[0] ?? 0);
   const selectedPost = editablePosts[resolvedSelectedIndex];
+  const selectedPreview = previewItems.find((item) => item.ref === selectedPost?.ref);
+  const editorial = selectedPreview?.editorial;
+  const legacy = Boolean(manifest.groups?.length || manifest.hypotheses?.length);
   const selectedSchedule = (manifest.schedule ?? []).find(
     (item) =>
       item.action !== "UNSCHEDULE" && item.postRef === selectedPost?.ref,
@@ -211,9 +214,19 @@ export function UnifiedImportPostsPreview({
             </>
           }
           selectedRowDetails={
-            <UnifiedImportItemChanges
-              item={previewItems.find((item) => item.ref === selectedPost?.ref)}
-            />
+            <>
+              {editorial?.description ? (
+                <p className="rounded-md border border-neutral-800 px-3 py-2 text-sm text-neutral-200">
+                  {editorial.description}
+                  {editorial.createsSphere ? ` · ${t("telegram.posts.import.createsSphere")}` : ""}
+                  {editorial.createsRubric ? ` · ${t("telegram.posts.import.createsRubric")}` : ""}
+                </p>
+              ) : null}
+              {selectedPreview?.errors.map((error) => (
+                <p key={error} role="alert" className="text-sm text-rose-300">{error}</p>
+              ))}
+              <UnifiedImportItemChanges item={selectedPreview} />
+            </>
           }
           scheduleValue={selectedSchedule}
           disabled={disabled}
@@ -224,7 +237,7 @@ export function UnifiedImportPostsPreview({
           captionLengthMax={captionLengthMax}
           messageLengthMax={messageLengthMax}
           referencedPosts={referencedPosts.data?.items ?? []}
-          groupOptions={groupOptions}
+          groupOptions={legacy ? groupOptions : []}
           hypothesisOptions={(manifest.hypotheses ?? [])
             .filter((hypothesis) => hypothesis.action !== "DELETE")
             .map((hypothesis) => ({
@@ -241,7 +254,7 @@ export function UnifiedImportPostsPreview({
             setSelectedRowIndex(Math.max(0, index - 1));
           }}
           onSelectRow={setSelectedRowIndex}
-          onUpdateHypotheses={(index, hypothesisRefs) => {
+          onUpdateHypotheses={legacy ? (index, hypothesisRefs) => {
             const posts = [...(manifest.posts ?? [])];
             const target = editablePosts[index];
             const manifestIndex = posts.findIndex(
@@ -250,7 +263,7 @@ export function UnifiedImportPostsPreview({
             if (manifestIndex < 0) return;
             posts[manifestIndex] = { ...posts[manifestIndex], hypothesisRefs };
             onChange({ ...manifest, posts });
-          }}
+          } : undefined}
           onScheduleChange={(index, value) => {
             const target = editablePosts[index];
             if (!target) return;

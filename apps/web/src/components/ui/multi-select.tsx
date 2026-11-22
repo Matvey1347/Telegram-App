@@ -27,6 +27,7 @@ export function MultiSelect({
   onChange,
   options,
   placeholder,
+  placeholderClassName,
   searchPlaceholder,
   disabled = false,
   className = "",
@@ -44,6 +45,7 @@ export function MultiSelect({
   onChange: (value: string[]) => void;
   options: MultiSelectOption[];
   placeholder?: string;
+  placeholderClassName?: string;
   searchPlaceholder?: string;
   disabled?: boolean;
   className?: string;
@@ -191,7 +193,7 @@ export function MultiSelect({
               ))
             )
           ) : (
-            <span className="text-neutral-400">{resolvedPlaceholder}</span>
+            <span className={`text-neutral-400 ${placeholderClassName ?? ""}`}>{resolvedPlaceholder}</span>
           )}
         </span>
         <ChevronDown size={16} className="shrink-0 text-neutral-400" />

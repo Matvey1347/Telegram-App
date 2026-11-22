@@ -33,6 +33,8 @@ import {
 import { resolveUnifiedImportHypothesisIconId } from './telegram-unified-import-icon';
 import { normalizeUnifiedImportManifest } from './telegram-unified-import-normalize';
 
+import { readImportedEditorialCatalog } from './telegram-unified-import-editorial';
+
 type SectionKey = TelegramUnifiedImportSectionResult['key'];
 
 export function unifiedImportHash(manifest: TelegramUnifiedImportManifest) {
@@ -77,6 +79,7 @@ export class TelegramUnifiedImportService {
     const workspaceId = await this.context(userId, channelId);
     if (manifest.version !== 1)
       throw new BadRequestException('Unsupported unified import version');
+    const editorialUpdates = manifest.posts?.some((row) => row.editorial && row.action === 'UPDATE');
     const deleteGroups = manifest.delete?.groups ?? [];
     const deleteHypotheses = manifest.delete?.hypotheses ?? [];
     const deletePosts = manifest.delete?.posts ?? [];
@@ -104,6 +107,7 @@ export class TelegramUnifiedImportService {
       existingHypotheses,
       existingSlots,
       scheduleAssignment,
+      editorialCatalog,
     ] = await Promise.all([
       groupIds.length
         ? this.prisma.postGroup.findMany({
@@ -130,6 +134,13 @@ export class TelegramUnifiedImportService {
               icon: true,
               status: true,
               scheduledAt: true,
+              ...(editorialUpdates && {
+                origin: true,
+                group: { select: { isSystem: true, systemKey: true } },
+                postBatchDelivery: { select: { id: true } },
+                mutualPromotionDelivery: { select: { id: true } },
+                _count: { select: { adSalePlacements: true } },
+              }),
               publicationSlot: {
                 select: { id: true, kind: true, title: true },
               },
@@ -167,6 +178,9 @@ export class TelegramUnifiedImportService {
           selectedSlots: { select: { slotId: true } },
         },
       }),
+      manifest.posts?.some((post) => post.editorial)
+        ? readImportedEditorialCatalog(this.prisma, workspaceId, channelId)
+        : undefined,
     ]);
     const iconIds = [
       ...(manifest.posts ?? []).map((post) => post.icon),
@@ -198,6 +212,7 @@ export class TelegramUnifiedImportService {
       existingHypotheses,
       existingSlots,
       scheduleAssignment,
+      editorialCatalog,
       iconPresentationsById: new Map(
         icons.flatMap((icon) => {
           const presentation = iconToResolvedEmoji(icon);
@@ -478,6 +493,7 @@ export class TelegramUnifiedImportService {
             },
             {
               groupId: row.groupRef ? resolveRef(row.groupRef, 'group') : null,
+              ...(row.editorial && { editorial: row.editorial }),
             },
           );
           row.id = value.id;
@@ -495,12 +511,19 @@ export class TelegramUnifiedImportService {
             );
           results.posts.created++;
         } else if (row.action === 'UPDATE') {
-          await this.history.updateManagedPost(userId, channelId, row.id!, {
+          const dto = {
             title: row.title,
             icon: row.icon,
             text: row.text ?? undefined,
             imageUrls: row.imageUrls,
-          });
+          };
+          if (row.editorial) {
+            await this.history.updateManagedPost(userId, channelId, row.id!, dto, {
+              draftOnly: true, editorial: row.editorial,
+            });
+          } else {
+            await this.history.updateManagedPost(userId, channelId, row.id!, dto);
+          }
           refs.set(row.ref, row.id!);
           if (row.hypothesisRefs)
             await this.hypotheses.setPostHypotheses(

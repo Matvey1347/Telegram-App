@@ -1,0 +1,435 @@
+"use client";
+
+import { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type {
+  CreateMutualPromotionFolderPayload,
+  CreateMutualPromotionPostPayload,
+  MutualPromotionExpensePayload,
+  MutualPromotionFolderDetail,
+  UpdateMutualPromotionPostPayload,
+} from "@telegram-system/shared";
+import { accountsApi, authApi, telegramChannelsApi, telegramSystemBotApi } from "@/lib/api";
+import { mutualPromotionFoldersApi } from "@/lib/features/growth/mutual-promotion-folders-api";
+import {
+  accountKeys,
+  authKeys,
+  mutualPromotionFolderKeys,
+  telegramChannelKeys,
+  telegramSystemBotKeys,
+} from "@/lib/query-keys";
+import { Button, ErrorState, FormError, FormField, Input, Modal } from "@/components/ui/primitives";
+import { MutualPromotionFolderFormModal } from "./mutual-promotion-folder-form-modal";
+import { MutualPromotionFolderDetailModal } from "./mutual-promotion-folder-detail-modal";
+import { MutualPromotionFolderDetailSkeletonModal } from "./mutual-promotion-folder-detail-skeleton-modal";
+import { MutualPromotionInviteLinksEditor } from "./mutual-promotion-invite-links-editor";
+import { useAppToast } from "@/providers/toast-provider";
+import {
+  invalidateMutualPromotionFinance,
+  reconcileMutualPromotionFolder,
+} from "./mutual-promotion-finance-cache";
+
+export type PromotionFolderFlow =
+  | { kind: "create"; initialDraftId?: string | null }
+  | { kind: "detail"; folderId: string; title?: string }
+  | { kind: "delete"; folderId: string; title: string };
+
+export function MutualPromotionFolderModals({
+  flow,
+  onBack,
+  onClose,
+}: {
+  flow: PromotionFolderFlow;
+  onBack?: () => void;
+  onClose: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const { setProgress } = useAppToast();
+  const [formOpen, setFormOpen] = useState(flow.kind === "create");
+  const [editingFolder, setEditingFolder] = useState<MutualPromotionFolderDetail | null>(null);
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(
+    flow.kind === "detail" ? flow.folderId : null,
+  );
+  const [inviteLinksEditorOpen, setInviteLinksEditorOpen] = useState(false);
+  const [renameFolder, setRenameFolder] = useState<{
+    id: string;
+    title: string;
+  } | null>(null);
+  const detailQuery = useQuery({
+    queryKey: mutualPromotionFolderKeys.detail(selectedFolderId ?? ""),
+    queryFn: () => mutualPromotionFoldersApi.get(selectedFolderId!),
+    enabled: Boolean(selectedFolderId),
+  });
+  const resourcesEnabled = formOpen || Boolean(selectedFolderId);
+  const meQuery = useQuery({
+    queryKey: authKeys.me(),
+    queryFn: authApi.me,
+    enabled: resourcesEnabled,
+    staleTime: 5 * 60_000,
+  });
+  const workspaceTimezone = meQuery.data?.workspace.timezone || "Europe/Warsaw";
+  const channelsQuery = useQuery({
+    queryKey: telegramChannelKeys.select({ owned: true }),
+    queryFn: () => telegramChannelsApi.select({ owned: true }),
+    enabled: resourcesEnabled,
+  });
+  const accountsQuery = useQuery({
+    queryKey: accountKeys.accounts(),
+    queryFn: accountsApi.list,
+    enabled: resourcesEnabled,
+    staleTime: 60_000,
+  });
+  const systemBotQuery = useQuery({
+    queryKey: telegramSystemBotKeys.connection(),
+    queryFn: telegramSystemBotApi.connection,
+    enabled: Boolean(selectedFolderId),
+    staleTime: 60_000,
+    refetchOnWindowFocus: "always",
+  });
+
+  const reconcile = (folder: MutualPromotionFolderDetail, financeChanged = false) =>
+    reconcileMutualPromotionFolder(queryClient, folder, financeChanged);
+
+  const saveMutation = useMutation({
+    mutationFn: async (payload: CreateMutualPromotionFolderPayload) =>
+      editingFolder
+        ? mutualPromotionFoldersApi.update(editingFolder.id, payload)
+        : mutualPromotionFoldersApi.create(payload),
+    onSuccess: async (folder) => {
+      await reconcile(
+        folder,
+        Boolean(
+          folder.participants.some((participant) => participant.expense) ||
+          editingFolder?.participants.some((participant) => participant.expense),
+        ),
+      );
+      setFormOpen(false);
+      setEditingFolder(null);
+      setSelectedFolderId(folder.id);
+    },
+  });
+  const renameMutation = useMutation({
+    mutationFn: ({ id, title }: { id: string; title: string }) =>
+      mutualPromotionFoldersApi.updateTitle(id, { title }),
+    onSuccess: async (folder) => {
+      await reconcile(folder);
+      setRenameFolder(null);
+      setSelectedFolderId(folder.id);
+    },
+  });
+  const closeRename = () => {
+    if (renameMutation.isPending) return;
+    renameMutation.reset();
+    if (renameFolder) setSelectedFolderId(renameFolder.id);
+    setRenameFolder(null);
+  };
+  const activateMutation = useMutation({
+    mutationFn: async ({ folderId, expectedTotal }: { folderId: string; expectedTotal: number }) => {
+      if (expectedTotal === 0) {
+        return mutualPromotionFoldersApi.activate(folderId, () => undefined);
+      }
+      const progressId = `mutual-promotion-activation:${folderId}`;
+      let successCount = 0;
+      let failedCount = 0;
+      let total = expectedTotal;
+      setProgress({
+        id: progressId,
+        title: "Activating mutual-promotion folder",
+        current: 0,
+        total,
+        successCount,
+        failedCount,
+        message: `Preparing ${total} channel publications…`,
+        iconEmoji: "🤝",
+      });
+      try {
+        const result = await mutualPromotionFoldersApi.activate(folderId, (item, current, streamTotal) => {
+          total = streamTotal;
+          if (item.status === "SCHEDULED" && item.success) successCount += 1;
+          if (item.status === "FAILED") failedCount += 1;
+          setProgress({
+            id: progressId,
+            title: "Activating mutual-promotion folder",
+            current,
+            total,
+            successCount,
+            failedCount,
+            message: item.message,
+            iconEmoji: "🤝",
+          });
+        });
+        setProgress({
+          id: progressId,
+          title: "Mutual-promotion folder activated",
+          current: total,
+          total,
+          completed: true,
+          successCount: result.successCount,
+          failedCount: result.failedCount,
+          skippedCount: 0,
+          message: `${result.successCount}/${total} channel publications scheduled successfully.`,
+          iconEmoji: "🤝",
+        });
+        return result;
+      } catch (error) {
+        setProgress({
+          id: progressId,
+          title: "Folder activation finished with errors",
+          current: successCount + failedCount,
+          total,
+          completed: true,
+          successCount,
+          failedCount: Math.max(1, failedCount),
+          skippedCount: Math.max(0, total - successCount - Math.max(1, failedCount)),
+          message: `${successCount} successful · ${Math.max(1, failedCount)} failed`,
+          iconEmoji: "🤝",
+        });
+        throw error;
+      }
+    },
+    onSuccess: ({ folder }) => reconcile(folder),
+  });
+  const cancelMutation = useMutation({
+    mutationFn: (folderId: string) => mutualPromotionFoldersApi.cancel(folderId),
+    onSuccess: (folder) => reconcile(folder),
+  });
+  const deleteMutation = useMutation({
+    mutationFn: (folderId: string) => mutualPromotionFoldersApi.remove(folderId),
+    onSuccess: async ({ id }) => {
+      const deletedFolder = queryClient.getQueryData<MutualPromotionFolderDetail>(
+        mutualPromotionFolderKeys.detail(id),
+      );
+      queryClient.removeQueries({ queryKey: mutualPromotionFolderKeys.detail(id), exact: true });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: [...mutualPromotionFolderKeys.all, "list"] }),
+        queryClient.invalidateQueries({
+          queryKey: telegramChannelKeys.lists(),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: telegramChannelKeys.cardLists(),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: telegramChannelKeys.trafficAttributions(),
+        }),
+        ...(deletedFolder?.participants.some((participant) => participant.expense)
+          ? [invalidateMutualPromotionFinance(queryClient, deletedFolder)]
+          : []),
+      ]);
+    },
+  });
+  const addPostMutation = useMutation({
+    mutationFn: ({ folderId, payload }: { folderId: string; payload: CreateMutualPromotionPostPayload }) =>
+      mutualPromotionFoldersApi.addPost(folderId, payload),
+    onSuccess: (folder) => reconcile(folder),
+  });
+  const removePostMutation = useMutation({
+    mutationFn: ({ folderId, postId }: { folderId: string; postId: string }) =>
+      mutualPromotionFoldersApi.removePost(folderId, postId),
+    onSuccess: (folder) => reconcile(folder),
+  });
+  const updatePostMutation = useMutation({
+    mutationFn: ({
+      folderId,
+      postId,
+      payload,
+    }: {
+      folderId: string;
+      postId: string;
+      payload: UpdateMutualPromotionPostPayload;
+    }) => mutualPromotionFoldersApi.updatePost(folderId, postId, payload),
+    onSuccess: (folder) => reconcile(folder),
+  });
+  const expenseMutation = useMutation({
+    mutationFn: ({
+      folderId,
+      participantId,
+      payload,
+    }: {
+      folderId: string;
+      participantId: string;
+      payload: MutualPromotionExpensePayload;
+    }) => mutualPromotionFoldersApi.upsertExpense(folderId, participantId, payload),
+    onSuccess: (folder) => reconcile(folder, true),
+  });
+
+  const folder = detailQuery.data?.id === selectedFolderId ? detailQuery.data : null;
+  const selectedFolderTitle = flow.kind === "detail" ? flow.title : undefined;
+  const mutating =
+    activateMutation.isPending ||
+    cancelMutation.isPending ||
+    addPostMutation.isPending ||
+    updatePostMutation.isPending ||
+    removePostMutation.isPending ||
+    expenseMutation.isPending;
+  const actionError =
+    activateMutation.isError ||
+    cancelMutation.isError ||
+    updatePostMutation.isError ||
+    removePostMutation.isError ||
+    expenseMutation.isError
+      ? "The folder action could not be completed. Check its current status and try again."
+      : null;
+  return (
+    <>
+      {formOpen ? (
+        <MutualPromotionFolderFormModal
+          key={`${editingFolder?.id ?? "new"}:${workspaceTimezone}`}
+          open
+          folder={editingFolder}
+          onBack={!editingFolder ? onBack : undefined}
+          initialDraftId={flow.kind === "create" && !editingFolder ? flow.initialDraftId : undefined}
+          timezone={workspaceTimezone}
+          channels={channelsQuery.data ?? []}
+          accounts={accountsQuery.data ?? []}
+          resourcesLoading={meQuery.isLoading || channelsQuery.isLoading || accountsQuery.isLoading}
+          resourcesError={meQuery.isError || channelsQuery.isError || accountsQuery.isError}
+          saving={saveMutation.isPending}
+          onClose={() => {
+            setFormOpen(false);
+            setEditingFolder(null);
+            onClose();
+          }}
+          onSubmit={(payload) => saveMutation.mutateAsync(payload).then(() => undefined)}
+        />
+      ) : null}
+
+      <MutualPromotionFolderDetailSkeletonModal
+        open={Boolean(selectedFolderId && !folder && (detailQuery.isLoading || detailQuery.isFetching))}
+        title={selectedFolderTitle}
+        onClose={onClose}
+      />
+      <Modal
+        open={Boolean(selectedFolderId && detailQuery.isError)}
+        onClose={onClose}
+        title="Folder unavailable"
+        size="sm"
+      >
+        <ErrorState text="Could not load this mutual-promotion folder." />
+        <div className="mt-4 flex justify-end">
+          <Button type="button" variant="secondary" onClick={onClose}>
+            Close
+          </Button>
+        </div>
+      </Modal>
+      <MutualPromotionFolderDetailModal
+        key={selectedFolderId ?? "closed"}
+        open={Boolean(selectedFolderId && folder && !inviteLinksEditorOpen)}
+        folder={folder}
+        timezone={workspaceTimezone}
+        accounts={accountsQuery.data ?? []}
+        botConnected={systemBotQuery.data?.connected ?? false}
+        botUsername={systemBotQuery.data?.botUsername ?? null}
+        workspaceId={systemBotQuery.data?.currentWorkspaceId}
+        mutating={mutating}
+        actionError={actionError}
+        onClose={() => {
+          setInviteLinksEditorOpen(false);
+          onClose();
+        }}
+        onEdit={() => {
+          if (!folder) return;
+          if (folder.status !== "DRAFT") {
+            setRenameFolder({ id: folder.id, title: folder.title });
+            setSelectedFolderId(null);
+            return;
+          }
+          setEditingFolder(folder);
+          setSelectedFolderId(null);
+          setFormOpen(true);
+        }}
+        onEditInviteLinks={() => {
+          setInviteLinksEditorOpen(true);
+        }}
+        onActivate={() =>
+          activateMutation
+            .mutateAsync({
+              folderId: folder!.id,
+              expectedTotal: folder!.postCount * folder!.publisherCount,
+            })
+            .then(() => undefined)
+        }
+        onCancel={() => cancelMutation.mutateAsync(folder!.id).then(() => undefined)}
+        onAddPost={(payload) =>
+          addPostMutation.mutateAsync({ folderId: folder!.id, payload }).then(() => undefined)
+        }
+        onUpdatePost={(postId, payload) =>
+          updatePostMutation.mutateAsync({ folderId: folder!.id, postId, payload }).then(() => undefined)
+        }
+        onRemovePost={(postId) =>
+          removePostMutation.mutateAsync({ folderId: folder!.id, postId }).then(() => undefined)
+        }
+        onSaveExpense={(participantId, payload) =>
+          expenseMutation.mutateAsync({ folderId: folder!.id, participantId, payload }).then(() => undefined)
+        }
+      />
+      <Modal open={Boolean(renameFolder)} onClose={closeRename} title="Rename folder" size="sm">
+        <FormField label="Folder title" required>
+          <Input
+            autoFocus
+            aria-label="Folder title"
+            value={renameFolder?.title ?? ""}
+            onChange={(event) =>
+              setRenameFolder((current) => (current ? { ...current, title: event.target.value } : current))
+            }
+          />
+        </FormField>
+        <p className="mt-2 text-xs text-neutral-500">
+          This only changes the name. Publications, participants, expenses and invitation statistics stay
+          unchanged.
+        </p>
+        {renameMutation.isError ? <FormError message="Could not rename the folder." /> : null}
+        <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <Button type="button" variant="secondary" onClick={closeRename} disabled={renameMutation.isPending}>
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            disabled={renameMutation.isPending || !renameFolder?.title.trim()}
+            onClick={() => {
+              if (!renameFolder) return;
+              renameMutation.mutate(renameFolder);
+            }}
+          >
+            {renameMutation.isPending ? "Saving…" : "Save name"}
+          </Button>
+        </div>
+      </Modal>
+      {inviteLinksEditorOpen ? (
+        <MutualPromotionInviteLinksEditor
+          folder={folder}
+          open
+          onClose={() => setInviteLinksEditorOpen(false)}
+          onSaved={reconcile}
+        />
+      ) : null}
+      {flow.kind === "delete" ? (
+        <Modal
+          open
+          title="Delete folder"
+          onClose={() => {
+            if (!deleteMutation.isPending) onClose();
+          }}
+          size="sm"
+        >
+          <p className="text-sm text-neutral-300">Delete {flow.title}?</p>
+          <p className="mt-2 text-sm text-amber-300">
+            Published and scheduled Telegram copies will be removed first.
+          </p>
+          {deleteMutation.isError ? <FormError message="Could not delete the folder." /> : null}
+          <div className="mt-4 flex justify-end gap-2">
+            <Button variant="secondary" disabled={deleteMutation.isPending} onClick={onClose}>
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              disabled={deleteMutation.isPending}
+              onClick={() => deleteMutation.mutate(flow.folderId, { onSuccess: onClose })}
+            >
+              {deleteMutation.isPending ? "Deleting…" : "Delete folder"}
+            </Button>
+          </div>
+        </Modal>
+      ) : null}
+    </>
+  );
+}

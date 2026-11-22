@@ -233,6 +233,7 @@ export class UpdateCrmAccountCapabilitiesDto {
   @IsOptional() @IsBoolean() crmSyncEnabled?: boolean;
   @IsOptional() @IsBoolean() crmSendEnabled?: boolean;
   @IsOptional() @IsBoolean() mtprotoPublishingEnabled?: boolean;
+  @IsOptional() @IsBoolean() isPreferredInviteLinkAccount?: boolean;
 }
 
 /** Internal-only input used by sync/sending adapters in later stages. */

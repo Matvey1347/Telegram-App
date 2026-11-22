@@ -18,7 +18,7 @@ describe("reconcileMutualPromotionFolder", () => {
     const client = new QueryClient();
     const invalidate = vi.spyOn(client, "invalidateQueries");
 
-    await reconcileMutualPromotionFolder(client, folder, { page: 1, pageSize: 100 });
+    await reconcileMutualPromotionFolder(client, folder);
     expect(invalidate).not.toHaveBeenCalledWith({
       queryKey: accountKeys.transactions(),
     });
@@ -27,7 +27,6 @@ describe("reconcileMutualPromotionFolder", () => {
     await reconcileMutualPromotionFolder(
       client,
       folder,
-      { page: 1, pageSize: 100 },
       true,
     );
     expect(invalidate).toHaveBeenCalledWith({ queryKey: accountKeys.accounts() });

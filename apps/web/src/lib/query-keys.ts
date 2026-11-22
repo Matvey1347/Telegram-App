@@ -157,6 +157,7 @@ export const telegramChannelKeys = {
 };
 
 export const telegramAiPostingKeys = {
+  settings: (channelId: string) => ["telegram-ai-posting", channelId] as const,
   sourceChannels: (channelId: string) =>
     ["telegram-ai-posting", channelId, "source-channels"] as const,
   analytics: (channelId: string, from: string, to: string) =>

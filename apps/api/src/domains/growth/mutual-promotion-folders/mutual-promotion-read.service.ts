@@ -80,6 +80,16 @@ const detailInclude = {
   },
 } satisfies Prisma.MutualPromotionFolderInclude;
 
+function folderDisplayStatus(
+  folder: Pick<MutualPromotionFolderListItem, 'status'> & { startsAt: Date; endsAt: Date },
+  now: Date,
+): MutualPromotionFolderListItem['status'] {
+  if (folder.status === 'DRAFT' || folder.status === 'CANCELLED' || folder.status === 'COMPLETED') return folder.status;
+  if (folder.status === 'DELETING' || folder.endsAt <= now) return 'COMPLETED';
+  if (folder.status === 'ACTIVE' && folder.startsAt > now) return 'SCHEDULED';
+  return folder.status;
+}
+
 @Injectable()
 export class MutualPromotionReadService {
   constructor(
@@ -100,19 +110,29 @@ export class MutualPromotionReadService {
     const workspaceId = await this.workspace(userId);
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 10;
-    const statusGroups: Record<
-      MutualPromotionFolderListStatus,
-      Prisma.MutualPromotionFolderScalarWhereInput['status']
-    > = {
-      ACTIVE: { in: ['ACTIVE', 'DELETING'] },
-      SCHEDULED: { in: ['DRAFT', 'SCHEDULED'] },
-      COMPLETED: { in: ['COMPLETED', 'CANCELLED'] },
+    const now = new Date();
+    const statusFilters: Record<MutualPromotionFolderListStatus, Prisma.MutualPromotionFolderWhereInput> = {
+      ACTIVE: { status: 'ACTIVE', startsAt: { lte: now }, endsAt: { gt: now } },
+      SCHEDULED: {
+        OR: [
+          { status: 'DRAFT' },
+          { status: 'SCHEDULED', endsAt: { gt: now } },
+          { status: 'ACTIVE', startsAt: { gt: now }, endsAt: { gt: now } },
+        ],
+      },
+      COMPLETED: {
+        OR: [
+          { status: { in: ['COMPLETED', 'CANCELLED', 'DELETING'] } },
+          { status: { in: ['ACTIVE', 'SCHEDULED'] }, endsAt: { lte: now } },
+        ],
+      },
     };
     const status = query.status ?? 'ACTIVE';
-    const where = { workspaceId, status: statusGroups[status] };
-    const [rows, totalItems, statusCounts] = await Promise.all([
+    const count = (tab: MutualPromotionFolderListStatus) =>
+      this.prisma.mutualPromotionFolder.count({ where: { workspaceId, ...statusFilters[tab] } });
+    const [rows, active, scheduled, completed] = await Promise.all([
       this.prisma.mutualPromotionFolder.findMany({
-        where,
+        where: { workspaceId, ...statusFilters[status] },
         orderBy: [{ startsAt: 'desc' }, { id: 'desc' }],
         skip: (page - 1) * pageSize,
         take: pageSize,
@@ -156,21 +176,17 @@ export class MutualPromotionReadService {
           },
         },
       }),
-      this.prisma.mutualPromotionFolder.count({ where }),
-      this.prisma.mutualPromotionFolder.groupBy({
-        by: ['status'],
-        where: { workspaceId },
-        _count: { _all: true },
-      }),
+      count('ACTIVE'),
+      count('SCHEDULED'),
+      count('COMPLETED'),
     ]);
-    const countsByStatus = new Map(
-      statusCounts.map((item) => [item.status, item._count._all]),
-    );
+    const statusCounts = { ACTIVE: active, SCHEDULED: scheduled, COMPLETED: completed };
+    const totalItems = statusCounts[status];
     const items = rows.map((row) => ({
       id: row.id,
       title: row.title,
       titleTemplate: row.titleTemplate,
-      status: row.status,
+      status: folderDisplayStatus(row, now),
       startsAt: row.startsAt.toISOString(),
       endsAt: row.endsAt.toISOString(),
       notes: row.notes,
@@ -195,7 +211,7 @@ export class MutualPromotionReadService {
             currentInviteJoinedCount: participant.inviteLink.joinedObserved === false || (participant.inviteLink.joinedObserved === null && !participant.inviteLink.lastSyncedAt) ? null : participant.inviteLink.joinedCount,
             currentInviteRequestedCount: participant.inviteLink.requestedObserved === false || (participant.inviteLink.requestedObserved === null && !participant.inviteLink.lastSyncedAt) ? null : participant.inviteLink.requestedCount,
           },
-          { useCurrentCounters: row.status === 'ACTIVE' },
+          { useCurrentCounters: folderDisplayStatus(row, now) === 'ACTIVE' },
         ),
       })),
       createdAt: row.createdAt.toISOString(),
@@ -212,17 +228,7 @@ export class MutualPromotionReadService {
         hasNextPage: page < totalPages,
         hasPreviousPage: page > 1,
       },
-      statusCounts: {
-        ACTIVE:
-          (countsByStatus.get('ACTIVE') ?? 0) +
-          (countsByStatus.get('DELETING') ?? 0),
-        SCHEDULED:
-          (countsByStatus.get('DRAFT') ?? 0) +
-          (countsByStatus.get('SCHEDULED') ?? 0),
-        COMPLETED:
-          (countsByStatus.get('COMPLETED') ?? 0) +
-          (countsByStatus.get('CANCELLED') ?? 0),
-      },
+      statusCounts,
     };
   }
 
@@ -259,6 +265,7 @@ export class MutualPromotionReadService {
     const inviteLinkById = new Map(
       hydratedInviteLinks.map((inviteLink) => [inviteLink.id, inviteLink]),
     );
+    const status = folderDisplayStatus(row, new Date());
     const publisherCount = row.participants.filter(
       (item) => item.role === 'PUBLISHER',
     ).length;
@@ -266,7 +273,7 @@ export class MutualPromotionReadService {
       id: row.id,
       title: row.title,
       titleTemplate: row.titleTemplate,
-      status: row.status,
+      status,
       startsAt: row.startsAt.toISOString(),
       endsAt: row.endsAt.toISOString(),
       notes: row.notes,
@@ -290,7 +297,7 @@ export class MutualPromotionReadService {
             currentInviteJoinedCount: participant.inviteLink.joinedObserved === false || (participant.inviteLink.joinedObserved === null && !participant.inviteLink.lastSyncedAt) ? null : participant.inviteLink.joinedCount,
             currentInviteRequestedCount: participant.inviteLink.requestedObserved === false || (participant.inviteLink.requestedObserved === null && !participant.inviteLink.lastSyncedAt) ? null : participant.inviteLink.requestedCount,
           },
-          { useCurrentCounters: row.status === 'ACTIVE' },
+          { useCurrentCounters: status === 'ACTIVE' },
         ),
       })),
       participants: row.participants.map((participant) => {
@@ -345,7 +352,7 @@ export class MutualPromotionReadService {
               currentInviteJoinedCount: inviteLink.joinedObserved === false || (inviteLink.joinedObserved === null && !inviteLink.lastSyncedAt) ? null : inviteLink.joinedCount,
               currentInviteRequestedCount: inviteLink.requestedObserved === false || (inviteLink.requestedObserved === null && !inviteLink.lastSyncedAt) ? null : inviteLink.requestedCount,
             },
-            { useCurrentCounters: row.status === 'ACTIVE' },
+            { useCurrentCounters: status === 'ACTIVE' },
           ),
           attributionHistory: attributionHistory.get(participant.id)!,
         };

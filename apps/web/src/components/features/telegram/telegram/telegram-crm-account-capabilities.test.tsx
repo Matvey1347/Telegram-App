@@ -109,4 +109,33 @@ describe("TelegramCrmAccountCapabilitiesModal", () => {
       }),
     );
   });
+
+  it("saves the invite-link default independently of publishing", async () => {
+    mocks.getCapabilities.mockResolvedValue({
+      accountId: account.id,
+      crmSyncEnabled: true,
+      crmSendEnabled: false,
+      mtprotoPublishingEnabled: false,
+      isPreferredInviteLinkAccount: false,
+    });
+    mocks.updateCapabilities.mockResolvedValue({
+      accountId: account.id,
+      crmSyncEnabled: true,
+      crmSendEnabled: false,
+      mtprotoPublishingEnabled: false,
+      isPreferredInviteLinkAccount: true,
+    });
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <TelegramCrmAccountCapabilitiesModal account={account} open onClose={vi.fn()} />
+      </QueryClientProvider>,
+    );
+
+    expect(screen.getByRole("dialog", { name: "Settings · @crm_owner" })).toBeVisible();
+    const toggle = screen.getByRole("button", { name: "Default account for invite links" });
+    await waitFor(() => expect(toggle).toBeEnabled());
+    fireEvent.click(toggle);
+    await waitFor(() => expect(toggle).toHaveAttribute("aria-pressed", "true"));
+    expect(mocks.updateCapabilities).toHaveBeenCalledWith(account.id, { isPreferredInviteLinkAccount: true });
+  });
 });

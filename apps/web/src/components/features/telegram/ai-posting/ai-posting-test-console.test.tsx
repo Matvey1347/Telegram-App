@@ -214,7 +214,7 @@ describe("AiPostingTestConsole", () => {
     finish?.({ status: "COMPLETED" });
   });
 
-  it("shows each completed publication before the batch stream finishes", async () => {
+  it("keeps streaming previews after a skipped slot, with only arrows and a counter", async () => {
     let emit: ((item: Record<string, unknown>, current: number, total: number) => void) | undefined;
     let finish: ((value: unknown) => void) | undefined;
     vi.mocked(streamProgressAction).mockImplementation(
@@ -227,7 +227,7 @@ describe("AiPostingTestConsole", () => {
       <AiPostingTestConsole
         channelId="channel-1"
         channelTitle="Channel"
-        dailyPostCount={2}
+        dailyPostCount={4}
         settingsReady
       />,
     );
@@ -255,8 +255,65 @@ describe("AiPostingTestConsole", () => {
       },
     }, 4, 17);
     expect(await screen.findByText("First publication appears immediately")).toBeInTheDocument();
+    emit?.({
+      stage: "publication",
+      status: "COMPLETED",
+      runId: "live-run",
+      publicationIndex: 2,
+      publication: { ...previewRun().publications[0], text: "Third publication after a gap" },
+    }, 8, 33);
+    expect(screen.queryByRole("group", { name: "Публикации запуска" })).not.toBeInTheDocument();
+    const next = screen.getByRole("button", { name: "Следующая публикация" });
+    fireEvent.click(next);
+    expect(screen.getByText("Публикация 2 из 4")).toBeInTheDocument();
+    expect(screen.getByText("Публикация ещё обрабатывается")).toBeInTheDocument();
+    fireEvent.click(next);
+    expect(await screen.findByText("Third publication after a gap")).toBeInTheDocument();
     expect(finish).toBeDefined();
     finish?.({ generated: [] });
+  });
+
+  it("offers to recreate an empty text in its original batch", async () => {
+    const preview = previewRun();
+    const run: TestRun = {
+      ...preview,
+      sourceDiagnostics: undefined,
+      status: "PARTIAL",
+      requestedCount: 2,
+      publications: [{ ...preview.publications[0], publicationIndex: 0 }],
+      failures: [{ publicationIndex: 1, topic: "An unfinished topic", code: "AI_POSTING_TEXT_EMPTY" }],
+      operations: [{ publicationIndex: 1, stage: "text", status: "SUCCEEDED", actualCost: "0.02" }],
+    };
+    vi.mocked(api.get).mockResolvedValue({ data: [run] });
+    renderWithProviders(
+      <AiPostingTestConsole channelId="channel-1" channelTitle="Channel" settingsReady />,
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Следующая публикация" }));
+    expect(screen.getByText("Текст пустой.")).toBeInTheDocument();
+    expect(screen.getByText("Расходы на попытки: $0.02")).toBeInTheDocument();
+    expect(screen.getByText("Публикация 2 из 2")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Пересоздать текст" }));
+    await waitFor(() => expect(streamProgressAction).toHaveBeenCalledWith(
+      `/telegram-channels/channel-1/ai-posting/test-runs/${run.id}/regenerate-failure/stream`,
+      { failureIndex: 0, expectedVersion: run.version },
+      expect.any(Function),
+    ));
+  });
+
+  it("shows completion as a green badge beside the run date and keeps the generator compact", async () => {
+    const run = previewRun();
+    vi.mocked(api.get).mockResolvedValue({ data: [run] });
+    renderWithProviders(
+      <AiPostingTestConsole channelId="channel-1" channelTitle="Channel" settingsReady />,
+    );
+
+    const badge = await screen.findByText("Completed");
+    const date = screen.getByText(new Date(run.createdAt).toLocaleString());
+    expect(badge).toHaveClass("bg-emerald-950", "text-emerald-300");
+    expect(badge.querySelector(".lucide-circle-check")).toBeInTheDocument();
+    expect(date.parentElement?.nextElementSibling).toBe(badge);
+    expect(screen.queryByText(/Публикации останутся в тестовом запуске/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Пачки сохраняются в истории/)).not.toBeInTheDocument();
   });
 
   it("keeps the latest run visible, collapses prior runs and clears them on request", async () => {
@@ -963,6 +1020,8 @@ describe("AiPostingTestConsole", () => {
       />,
     );
 
+    fireEvent.click(await screen.findByRole("button", { name: "Следующая публикация" }));
+
     fireEvent.click(
       await screen.findByRole("button", {
         name: "Повторить генерацию (новый запуск)",
@@ -977,6 +1036,37 @@ describe("AiPostingTestConsole", () => {
       ),
     );
   });
+  it("shows all four positions in a legacy partial run, including media and text failures", async () => {
+    const base = previewRun();
+    const draft = base.publications[0];
+    vi.mocked(api.get).mockResolvedValue({ data: [{
+      ...base,
+      requestedCount: 4,
+      status: "PARTIAL",
+      publications: [
+        { ...draft, topic: "Text 1", mediaReadiness: "FAILED", imageUrl: null, mediaFailureCode: "AI_POSTING_IMAGE_STORAGE_UPLOAD_FAILED_TOO_BUSY" },
+        { ...draft, topic: "Text 2", mediaReadiness: "FAILED", imageUrl: null, mediaFailureCode: "AI_POSTING_IMAGE_PROVIDER_FAILED" },
+        { ...draft, topic: "Text 3", mediaReadiness: "READY", imageUrl: "https://media.example/third.jpg" },
+      ],
+      failures: [
+        { topic: "Text 1", code: "AI_POSTING_IMAGE_STORAGE_UPLOAD_FAILED_TOO_BUSY" },
+        { topic: "Text 2", code: "AI_POSTING_IMAGE_PROVIDER_FAILED" },
+        { topic: "Text 4", code: "AI_POSTING_REVIEW_REJECTED", reasons: ["Editorial review failed"] },
+      ],
+    }] });
+    renderWithProviders(<AiPostingTestConsole channelId="channel-1" channelTitle="Channel" settingsReady />);
+    expect(await screen.findByText("Partial")).toHaveClass("text-rose-300");
+    expect(await screen.findByText("Публикация 1 из 4")).toBeInTheDocument();
+    expect(screen.getByText(/Хранилище было перегружено/)).toBeInTheDocument();
+    const next = screen.getByRole("button", { name: "Следующая публикация" });
+    fireEvent.click(next);
+    fireEvent.click(next);
+    expect(screen.getByText("Идея: Text 3")).toBeInTheDocument();
+    fireEvent.click(next);
+    expect(screen.getByText("Не создана публикация «Text 4»")).toBeInTheDocument();
+    expect(screen.getByText("Editorial review failed")).toBeInTheDocument();
+  });
+
   it("allows retry when a run failed before a topic was selected", async () => {
     vi.mocked(api.get).mockResolvedValue({
       data: [

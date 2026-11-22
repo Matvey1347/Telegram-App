@@ -21,6 +21,7 @@ import {
   type WorkspaceFormDraft,
 } from "@/hooks/use-workspace-modal-drafts";
 import { selectedWorkspaceDraftScope } from "@/lib/workspace-modal-drafts";
+import { promotionDraftNamespace } from "./promotion-draft-namespace";
 import {
   emptyCrossPromotionPost as emptyPost,
   hasMeaningfulCrossPromotionDraft,
@@ -40,10 +41,12 @@ export function useCrossPromotionDraftState({
   open,
   initial,
   kind,
+  initialDraftId,
 }: {
   open: boolean;
   initial: CrossPromotionPlan | null;
   kind: CrossPromotionPlanKind;
+  initialDraftId?: string | null;
 }) {
   const [iconId, setIconId] = useState<string | null>(null);
   const [iconPresentation, setIconPresentation] =
@@ -114,7 +117,7 @@ export function useCrossPromotionDraftState({
     [],
   );
   useEffect(() => {
-    if (!open) return;
+    if (!open || !initial) return;
     let cancelled = false;
     queueMicrotask(() => {
       if (cancelled) return;
@@ -270,10 +273,11 @@ export function useCrossPromotionDraftState({
     };
   }, [timezone]);
   const drafts = useWorkspaceModalDrafts<CrossPromotionModalDraft>({
-    namespace: `ads:cross-promotion:${kind}:draft`,
+    namespace: promotionDraftNamespace(kind),
     workspaceId: selectedWorkspaceDraftScope(),
     schemaVersion: 1,
-    open,
+    initialDraftId,
+    open: open && !meQuery.isLoading,
     enabled: !initial,
     value: draftValue,
     preview: { title: title || "Untitled placement", icon: iconPresentation },

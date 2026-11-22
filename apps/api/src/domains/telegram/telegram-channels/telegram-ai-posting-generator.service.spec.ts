@@ -14,6 +14,7 @@ describe('TelegramAiPostingGeneratorService', () => {
     resolveWorkspaceIdForUser: jest.fn().mockResolvedValue('ws-1'),
   };
   const prisma = {
+    $executeRaw: jest.fn().mockResolvedValue(0),
     telegramChannel: { findFirst: jest.fn() },
     telegramPost: { findMany: jest.fn() },
     telegramAiPostingSettings: {
@@ -66,6 +67,7 @@ describe('TelegramAiPostingGeneratorService', () => {
   );
   beforeEach(() => {
     jest.clearAllMocks();
+    prisma.$transaction.mockImplementation((callback) => callback(prisma));
     prisma.telegramAiPostingTestRun.aggregate.mockResolvedValue({
       _sum: { requestedCount: 0 },
     });
@@ -697,10 +699,12 @@ describe('TelegramAiPostingGeneratorService', () => {
     const replies = [
       '{"topics":["A distinct editorial topic"]}',
       '{}',
-      '{"title":"A title","text":"A short caption","imagePrompt":"Editorial illustration","imageSearchQuery":"illustration","imageStyleIndex":0,"format":"standard","category":"general"}',
+      { title: 'A title', text: 'A short caption with "quotes".', imagePrompt: 'Editorial illustration', imageSearchQuery: 'illustration', imageStyleIndex: 0 },
       '{"approved":true,"reasons":[]}',
     ];
-    gateway.execute.mockImplementation((request: { category: string }) => ({
+    gateway.execute.mockImplementation((request: { category: string }) => {
+      const body = replies.shift();
+      return ({
       operation: {
         operationId: `op-${gateway.execute.mock.calls.length}`,
         category: request.category,
@@ -711,8 +715,9 @@ describe('TelegramAiPostingGeneratorService', () => {
         inputTokens: 10,
         outputTokens: 10,
       },
-      result: { reply: replies.shift() },
-    }));
+      result: typeof body === 'string' ? { reply: body } : body,
+      });
+    });
     images.resolve.mockResolvedValue({
       image: {
         url: 'https://media.example/generated.jpg',
@@ -729,6 +734,7 @@ describe('TelegramAiPostingGeneratorService', () => {
       ([request]) => request.category === 'TELEGRAM_POSTING_TEXT',
     );
     expect(textRequests).toHaveLength(2);
+    expect(textRequests.every(([request]) => request.postingDraft === true)).toBe(true);
     expect(textRequests[1][0].input).toContain('Revise the previous draft');
   });
 
@@ -1343,6 +1349,63 @@ describe('TelegramAiPostingGeneratorService', () => {
     );
   });
 
+  it('recreates just the empty text slot in place and includes all billed attempts', async () => {
+    const { telegramAiPostingTestRun } = prisma;
+    telegramAiPostingTestRun.updateMany.mockResolvedValue({ count: 1 });
+    prisma.telegramAiPostingSettings.findFirst.mockResolvedValue({
+      configuration: { language: 'en', imageMode: 'hybrid', hybridSearchPercent: 70 },
+      configurationVersion: 1,
+    });
+    sources.collect.mockResolvedValue({
+      editorialProfile: { language: 'English' }, sourceContexts: [],
+      existingPosts: [], history: [], imageCandidates: [], sourceRefs: [],
+    });
+    planningContext.read.mockResolvedValue({ schedule: null, hypotheses: [] });
+    images.resolve.mockResolvedValue({
+      image: { url: 'https://media.example/approved.jpg', sourceId: 'openverse' },
+      readiness: 'READY',
+    });
+    let repair = false;
+    let draftAttempts = 0;
+    gateway.execute.mockImplementation(({ category }: { category: string }) => ({
+      operation: {
+        operationId: `op-${gateway.execute.mock.calls.length}`, category, model: 'test-model',
+        status: 'SUCCEEDED', actualCost: '0.01', pricingStatus: 'PRICED',
+      },
+      result: { reply: category === 'TELEGRAM_POSTING_PLAN'
+        ? '{"topics":["First editorial topic","Second editorial topic"]}'
+        : category === 'TELEGRAM_POSTING_REVIEW'
+          ? '{"approved":true,"reasons":[]}'
+          : repair ? '{"title":"Recovered","text":"A newly written caption."}'
+            : draftAttempts++ === 0 ? '{"title":"First","text":"A different caption."}'
+              : '{"title":"Second","text":"  "}' },
+    }));
+
+    const initial = await service.generate('user-1', 'channel-1', 2);
+    expect(initial.failures).toEqual([
+      expect.objectContaining({ publicationIndex: 1, code: 'AI_POSTING_TEXT_EMPTY' }),
+    ]);
+    const stored = telegramAiPostingTestRun.update.mock.calls.at(-1)![0].data;
+    repair = true;
+    const result = await service.generate(
+      'user-1', 'channel-1', 1, 'MANUAL', undefined, undefined, 'Second editorial topic',
+      { id: initial.runId, version: initial.version, publicationIndex: 1,
+        failureIndex: 0, requestedCount: 2, ...stored },
+    );
+    expect(result.failures).toEqual([]);
+    expect(telegramAiPostingTestRun.create).toHaveBeenCalledTimes(1);
+    expect(gateway.execute.mock.calls.filter(([request]) => request.category === 'TELEGRAM_POSTING_PLAN')).toHaveLength(1);
+    const settled = telegramAiPostingTestRun.updateMany.mock.calls.at(-1)![0].data;
+    expect(settled.status).toBe('COMPLETED');
+    expect(settled.publications.items).toEqual([
+      expect.objectContaining({ publicationIndex: 0, title: 'First' }),
+      expect.objectContaining({
+        publicationIndex: 1, title: 'Recovered',
+        costs: { planning: '0.005', text: '0.04', review: '0.01', image: '0' },
+      }),
+    ]);
+  });
+
   it('uses references attached to the preference selected for that draft', async () => {
     prisma.telegramAiPostingSettings.findFirst.mockResolvedValue({
       configuration: {
@@ -1417,7 +1480,7 @@ describe('TelegramAiPostingGeneratorService', () => {
     ]);
     expect(images.resolve).toHaveBeenCalledWith(
       expect.objectContaining({
-        imageMode: 'hybrid',
+        imageMode: 'found',
         referenceImage: Buffer.from('selected-preference-reference'),
       }),
     );

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import type {
   CreateMutualPromotionFolderPayload,
@@ -19,6 +19,7 @@ import {
   FormError,
   LoadingState,
   Modal,
+  ModalBackButton,
 } from "@/components/ui/primitives";
 import {
   emptyFolderDraft,
@@ -32,6 +33,7 @@ import { MutualPromotionParticipantsEditor } from "./mutual-promotion-participan
 import { ModalDraftPicker } from "@/components/ui/modal-draft-picker";
 import { useWorkspaceModalDrafts } from "@/hooks/use-workspace-modal-drafts";
 import { selectedWorkspaceDraftScope } from "@/lib/workspace-modal-drafts";
+import { promotionDraftNamespace } from "../promotion-draft-namespace";
 import { MutualPromotionFolderDetails } from "./mutual-promotion-folder-details";
 
 function validateDraft(draft: FolderDraft, timezone: string) {
@@ -116,6 +118,8 @@ export function toPayload(
 export function MutualPromotionFolderFormModal({
   open,
   folder,
+  onBack,
+  initialDraftId,
   timezone,
   channels,
   accounts,
@@ -127,6 +131,8 @@ export function MutualPromotionFolderFormModal({
 }: {
   open: boolean;
   folder: MutualPromotionFolderDetail | null;
+  onBack?: () => void;
+  initialDraftId?: string | null;
   timezone: string;
   channels: TelegramChannel[];
   accounts: Account[];
@@ -140,16 +146,6 @@ export function MutualPromotionFolderFormModal({
     folder ? folderDetailToDraft(folder, timezone) : emptyFolderDraft(timezone),
   );
   const [error, setError] = useState<string | null>(null);
-  useEffect(() => {
-    if (!open) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setDraft(
-      folder
-        ? folderDetailToDraft(folder, timezone)
-        : emptyFolderDraft(timezone),
-    );
-    setError(null);
-  }, [folder, open, timezone]);
   const createInitialDraft = useCallback(
     () =>
       folder
@@ -169,9 +165,10 @@ export function MutualPromotionFolderFormModal({
   const modalDrafts = useWorkspaceModalDrafts<FolderDraft>({
     namespace: folder
       ? `mutual-promotion-folder:edit:${folder.id}:draft`
-      : "mutual-promotion-folder:draft",
+      : promotionDraftNamespace("FOLDER"),
     workspaceId: selectedWorkspaceDraftScope(),
     schemaVersion: 1,
+    initialDraftId,
     open,
     enabled: true,
     value: draft,
@@ -309,6 +306,9 @@ export function MutualPromotionFolderFormModal({
       title={
         folder ? "Edit mutual-promotion folder" : "New mutual-promotion folder"
       }
+      leadingHeaderAction={
+        onBack && !saving ? <ModalBackButton label="Back to promotion types" onClick={onBack} /> : null
+      }
       size="xl"
     >
       {modalDrafts.pendingDrafts.length ? (
@@ -380,11 +380,14 @@ export function MutualPromotionFolderFormModal({
             <Button
               type="button"
               variant="secondary"
-              onClick={onClose}
-              disabled={saving}
+              onClick={() => {
+                if (!folder) modalDrafts.showDraftPicker();
+                onClose();
+              }}
+              disabled={saving || Boolean(!folder && (!modalDrafts.currentDraft || !isMeaningfulDraft(draft)))}
               className="w-full sm:w-auto"
             >
-              Cancel
+              {folder ? "Cancel" : "Save draft"}
             </Button>
             <Button
               type="button"

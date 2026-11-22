@@ -1,98 +1,64 @@
-import type {
-  CrossPromotionPlanKind,
-  ResolvedEmoji,
-  TelegramAdvertiser,
-} from "@telegram-system/shared";
-import { Button, FormField, Input } from "@/components/ui/primitives";
+import type { CrossPromotionPlanKind, ResolvedEmoji, TelegramAdvertiser } from "@telegram-system/shared";
+import { FormField, Input } from "@/components/ui/primitives";
 import { IconPicker } from "@/components/icons/icon-picker";
 import { CrmClientField } from "../crm/crm-client-field";
 import { Folder, Network, Repeat2 } from "lucide-react";
 import { useOptionalI18n } from "@/providers/i18n-provider";
 
-export function CrossPromotionKindChoice({
-  kind,
-  onChange,
-  onFolderSelect,
-}: {
-  kind: CrossPromotionPlanKind;
-  onChange: (kind: CrossPromotionPlanKind) => void;
-  onFolderSelect?: () => void;
+export type PromotionKind = CrossPromotionPlanKind | "FOLDER";
+
+const promotionKinds = {
+  DIRECT_MUTUAL: { icon: Repeat2, label: "VP", tone: "bg-violet-950/70 text-violet-200" },
+  OWN_CHANNELS: { icon: Network, label: "My channels", tone: "bg-sky-950/70 text-sky-200" },
+  FOLDER: { icon: Folder, label: "Folder", tone: "bg-amber-950/70 text-amber-200" },
+};
+
+export function PromotionTypeBadge({ kind }: { kind: PromotionKind }) {
+  const i18n = useOptionalI18n();
+  const { icon: Icon, label, tone } = promotionKinds[kind];
+  return (
+    <span
+      className={`inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${tone}`}
+    >
+      <Icon size={12} aria-hidden="true" />
+      {(kind === "FOLDER"
+        ? i18n?.t("ads.folder_badge")
+        : kind === "OWN_CHANNELS"
+          ? i18n?.t("ads.section_own")
+          : null) ?? label}
+    </span>
+  );
+}
+
+export function CrossPromotionKindChoice({ kind, onSelect }: {
+  kind?: PromotionKind;
+  onSelect: (kind: PromotionKind) => void;
 }) {
   const i18n = useOptionalI18n();
   const options = [
-    {
-      kind: "DIRECT_MUTUAL" as const,
-      icon: Repeat2,
-      title: i18n?.t("ads.promotion_mutual_title") ?? "Mutual promotion",
-      description: i18n?.t("ads.promotion_mutual_help") ?? "Exchange promotion with another channel or partner.",
-    },
-    {
-      kind: "OWN_CHANNELS" as const,
-      icon: Network,
-      title: i18n?.t("ads.promotion_own_title") ?? "Promote my channels",
-      description: i18n?.t("ads.promotion_own_help") ?? "Promote your channels across your own network.",
-    },
-    {
-      kind: "FOLDER" as const,
-      icon: Folder,
-      title: i18n?.t("ads.promotion_folder_title") ?? "Folder promotion",
-      description: i18n?.t("ads.promotion_folder_help") ?? "Coordinate posts across a group of channels.",
-    },
-  ];
+    { kind: "DIRECT_MUTUAL", title: i18n?.t("ads.promotion_mutual_title") ?? "Mutual promotion" },
+    { kind: "OWN_CHANNELS", title: i18n?.t("ads.section_own") ?? "My channels" },
+    { kind: "FOLDER", title: i18n?.t("ads.folder_badge") ?? "Folder" },
+  ] as const;
+
   return (
-    <div role="radiogroup" aria-label={i18n?.t("ads.promotion_type") ?? "Promotion type"} className="grid gap-2 sm:grid-cols-3">
+    <div className="grid gap-2 sm:grid-cols-3">
       {options.map((option) => {
-        const Icon = option.icon;
-        const selected = kind === option.kind;
+        const Icon = promotionKinds[option.kind].icon;
         return (
           <button
             key={option.kind}
             type="button"
-            role="radio"
-            aria-checked={selected}
-            onClick={() => option.kind === "FOLDER" ? onFolderSelect?.() : onChange(option.kind)}
-            className={`flex min-w-0 items-center gap-3 rounded-xl border px-4 py-3 text-left transition ${selected ? "border-blue-500 bg-blue-950/35" : "border-neutral-800 bg-neutral-950/50 hover:border-neutral-600"}`}
+            onClick={() => onSelect(option.kind)}
+            aria-pressed={kind === option.kind}
+            className={`inline-flex min-h-10 items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium ${kind === option.kind ? "border-blue-500 bg-blue-950/40 text-blue-200" : "border-neutral-800 bg-neutral-950/50 text-neutral-200 hover:border-neutral-600 hover:bg-neutral-800"}`}
           >
-            <span className={`grid size-10 shrink-0 place-items-center rounded-lg ${selected ? "bg-blue-600 text-white" : "bg-neutral-800 text-neutral-300"}`}><Icon size={18} /></span>
-            <span className="min-w-0">
-              <span className="block font-semibold text-white">{option.title}</span>
-              <span className="mt-0.5 block text-sm text-neutral-400">{option.description}</span>
-            </span>
+            <Icon size={16} aria-hidden="true" />
+            {option.title}
           </button>
         );
       })}
     </div>
-  );
-}
-
-export function CrossPromotionCreateSteps({
-  kind,
-  activeStep,
-  onChange,
-}: {
-  kind: CrossPromotionPlanKind;
-  activeStep: number;
-  onChange: (step: number) => void;
-}) {
-  const labels =
-    kind === "DIRECT_MUTUAL"
-      ? ["Participants", "My side", "Partner side", "Review"]
-      : ["Campaign", "My channels", "Placements", "Review"];
-  return (
-    <nav aria-label="Promotion setup steps" className="grid grid-cols-4 gap-2">
-      {labels.map((label, index) => (
-        <button
-          key={label}
-          type="button"
-          aria-current={activeStep === index ? "step" : undefined}
-          onClick={() => onChange(index)}
-          className={`rounded-lg border px-2 py-2 text-xs transition sm:px-3 sm:text-sm ${activeStep === index ? "border-blue-500 bg-blue-950/40 text-blue-200" : "border-neutral-800 text-neutral-500 hover:border-neutral-600 hover:text-neutral-200"}`}
-        >
-          <span className="mr-1.5 text-neutral-500">{index + 1}</span>
-          {label}
-        </button>
-      ))}
-    </nav>
   );
 }
 
@@ -125,10 +91,7 @@ export function CrossPromotionIdentityStep({
     photoUrl?: string | null;
   } | null;
   kind: CrossPromotionPlanKind;
-  onIconChange: (
-    iconId: string | null,
-    presentation: ResolvedEmoji | null,
-  ) => void;
+  onIconChange: (iconId: string | null, presentation: ResolvedEmoji | null) => void;
   onTitleChange: (title: string) => void;
   onContactChange: (value: string) => void;
   onTelegramChange: (value: string) => void;
@@ -137,15 +100,13 @@ export function CrossPromotionIdentityStep({
 }) {
   return (
     <section className="space-y-4">
-      <div className="grid gap-3 md:grid-cols-[auto_minmax(0,1fr)]">
+      <div className="grid grid-cols-[auto_minmax(0,1fr)] items-end gap-2 sm:gap-3">
         <FormField label="Emoji">
           <IconPicker
             compact
             iconId={iconId}
             icon={iconPresentation}
-            onChange={(value, presentation) =>
-              onIconChange(value, presentation ?? null)
-            }
+            onChange={(value, presentation) => onIconChange(value, presentation ?? null)}
             buttonLabel="Add emoji"
             iconOnly
           />
@@ -169,43 +130,11 @@ export function CrossPromotionIdentityStep({
             onSelect={onAdvertiserChange}
             onSearchAdvertisers={onSearchAdvertisers}
           />
-          <p className="text-xs text-neutral-500">
-            The partner is optional and can be added after you save the
-            campaign.
-            {partnerTelegram && partnerTelegram !== partnerContact
-              ? ` Telegram: ${partnerTelegram}`
-              : ""}
-          </p>
+          {partnerTelegram && partnerTelegram !== partnerContact ? (
+            <p className="text-xs text-neutral-500">Telegram: {partnerTelegram}</p>
+          ) : null}
         </>
       ) : null}
     </section>
-  );
-}
-
-export function CrossPromotionCreateNavigation({
-  activeStep,
-  onChange,
-}: {
-  activeStep: number;
-  onChange: (step: number) => void;
-}) {
-  if (activeStep >= 3) return null;
-  return (
-    <div className="flex justify-between gap-2 border-t border-neutral-800 pt-4">
-      <Button
-        type="button"
-        variant="secondary"
-        disabled={activeStep === 0}
-        onClick={() => onChange(Math.max(0, activeStep - 1))}
-      >
-        Back
-      </Button>
-      <Button
-        type="button"
-        onClick={() => onChange(Math.min(3, activeStep + 1))}
-      >
-        Continue
-      </Button>
-    </div>
   );
 }

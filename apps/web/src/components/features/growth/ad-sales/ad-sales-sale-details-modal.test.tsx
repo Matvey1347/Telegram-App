@@ -116,7 +116,7 @@ describe("SaleDetailsModal", () => {
       screen.getByText("Choose the placement you want to edit."),
     ).toBeTruthy();
     expect(
-      screen.getByText("Format 2/48 · Auto-delete after 48h"),
+      screen.getByText("Format 2/48"),
     ).toBeTruthy();
     expect(screen.getByText("Scheduled 25/08/2026, 18:00")).toBeTruthy();
     expect(
@@ -898,9 +898,13 @@ describe("SaleDetailsModal", () => {
       />,
     );
 
-    expect(screen.getByText("Automatically deleted")).toHaveClass(
-      "text-neutral-500",
-    );
+    const deletion = screen.getByText("Automatically deleted");
+    expect(deletion).toHaveClass("text-neutral-500");
+    const details = screen.getByText("Format 2/48").parentElement;
+    expect(details).toContainElement(deletion);
+    expect(details).toHaveTextContent(/25\/08\/2026.*→.*26\/08\/2026/);
+    expect(screen.queryByText("Original campaign text")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Auto-delete after/)).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Open in system/ })).toBeTruthy();
     expect(screen.queryByRole("link", { name: /Open in Telegram/ })).toBeNull();
   });

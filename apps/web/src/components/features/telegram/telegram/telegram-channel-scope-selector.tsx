@@ -82,6 +82,7 @@ export function TelegramChannelScopeSelector({
   onChannelsChange,
   label = "Channel source",
   channelsPlaceholder = "Choose channels",
+  channelsPlaceholderClassName,
   networkLabel = "Network",
   channelsLabel = "Channels",
   networkPlaceholder = "Choose network",
@@ -97,6 +98,7 @@ export function TelegramChannelScopeSelector({
   onChannelsChange: (channelIds: string[]) => void;
   label?: string;
   channelsPlaceholder?: string;
+  channelsPlaceholderClassName?: string;
   networkLabel?: string;
   channelsLabel?: string;
   networkPlaceholder?: string;
@@ -141,6 +143,7 @@ export function TelegramChannelScopeSelector({
             value={selectedChannelIds}
             onChange={onChannelsChange}
             placeholder={channelsPlaceholder}
+            placeholderClassName={channelsPlaceholderClassName}
             options={channels.map((channel) => ({
               value: channel.id,
               label: channel.username

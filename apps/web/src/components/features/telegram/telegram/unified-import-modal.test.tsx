@@ -217,7 +217,9 @@ describe("UnifiedImportModal", () => {
     expect(downloadedText.startsWith(TELEGRAM_UNIFIED_IMPORT_INSTRUCTION)).toBe(
       true,
     );
-    expect(downloadedText).toContain('"placementMode": "CUSTOM"');
+    expect(downloadedText).toContain('"placementMode":"CUSTOM"');
+    expect(downloadedText).toContain('"editorial": {');
+    expect(downloadedText).not.toContain('"hypotheses":');
     expect(downloadedText).toContain(
       "CUSTOM планирует публикацию на произвольные будущие дату и время",
     );

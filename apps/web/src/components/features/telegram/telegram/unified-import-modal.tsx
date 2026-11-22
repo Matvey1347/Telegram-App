@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { CheckCircle2, Download, LoaderCircle } from "lucide-react";
+import { CheckCircle2, Copy, Download, LoaderCircle } from "lucide-react";
 import {
   buildTelegramGptContextFilename,
   TELEGRAM_UNIFIED_IMPORT_INSTRUCTION,
@@ -281,7 +281,7 @@ export function UnifiedImportModal({
       size="xl"
     >
       <div className="space-y-4">
-        <div>
+        <div className="flex flex-wrap gap-2">
           <Button
             type="button"
             variant="secondary"
@@ -295,8 +295,17 @@ export function UnifiedImportModal({
             )}
             {t("telegram.posts.import.unifiedCopyAndDownload")}
           </Button>
+          <Button type="button" variant="secondary" onClick={() => {
+            void navigator.clipboard.writeText(TELEGRAM_UNIFIED_IMPORT_INSTRUCTION).then(
+              () => pushToast(t("telegram.posts.import.dataCopied"), "success"),
+              () => pushToast(t("telegram.posts.import.unifiedContextError"), "error"),
+            );
+          }}>
+            <Copy size={16} /> {t("telegram.posts.import.copyEditorialInstructions")}
+          </Button>
         </div>
         <ManagedPostsImportSource
+          jsonOnly
           content={raw}
           fileName={fileName}
           disabled={applyBusy}

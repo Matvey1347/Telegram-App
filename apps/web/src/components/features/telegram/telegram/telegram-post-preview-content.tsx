@@ -110,8 +110,6 @@ export function previewHtml(
       pack.emojis.map((emoji) => [emoji.documentId, emoji] as const),
     ),
   );
-  const customEmojiInlineStyle =
-    "display:inline-block;width:1em;height:1em;max-width:1em;max-height:1em;vertical-align:-0.1em;object-fit:contain";
   const normalizedRaw = raw.replace(
     /\\`([\s\S]*?)\\`/g,
     (_match, code: string) =>
@@ -142,11 +140,11 @@ export function previewHtml(
         const label = escapeHtml(alt);
         const media = emoji
           ? emoji.kind === "VIDEO" && emoji.assetUrl
-            ? `<video src="${escapeHtml(emoji.assetUrl)}" style="${customEmojiInlineStyle}" autoplay loop muted playsinline aria-label="${label}"></video>`
+            ? `<video src="${escapeHtml(emoji.assetUrl)}" autoplay loop muted playsinline aria-label="${label}"></video>`
             : emoji.kind === "STATIC" && emoji.assetUrl
-              ? `<img src="${escapeHtml(emoji.assetUrl)}" style="${customEmojiInlineStyle}" alt="${label}">`
+              ? `<img src="${escapeHtml(emoji.assetUrl)}" alt="${label}">`
               : emoji.kind === "ANIMATED" && emoji.renderAssetUrl
-                ? `<span class="tg-custom-emoji-lottie" style="${customEmojiInlineStyle}" data-lottie-url="${escapeHtml(emoji.renderAssetUrl)}" aria-label="${label}">${label}</span>`
+                ? `<span class="tg-custom-emoji-lottie" data-lottie-url="${escapeHtml(emoji.renderAssetUrl)}" aria-label="${label}">${label}</span>`
                 : label
           : label;
         return token(

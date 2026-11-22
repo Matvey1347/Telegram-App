@@ -9,8 +9,10 @@ import {
   Res,
   UseGuards,
 } from '@nestjs/common';
+import { TELEGRAM_AI_POSTING_MAX_MEDIA_GUIDANCE_LENGTH, TELEGRAM_AI_POSTING_MAX_MEDIA_REFERENCES, type TelegramAiPostingReferenceAnalysisInput } from '@telegram-system/shared';
+import { TelegramAiPostingReferenceAnalysisService } from './telegram-ai-posting-reference-analysis.service';
 import type { Response } from 'express';
-import { IsIn, IsInt, IsObject, IsOptional, IsString, Max, Min } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsIn, IsInt, IsObject, IsOptional, IsString, IsUrl, Max, MaxLength, Min } from 'class-validator';
 import {
   CurrentUser,
   type JwtUser,
@@ -21,6 +23,16 @@ import { TelegramAiPostingGeneratorService } from './telegram-ai-posting-generat
 import { TelegramAiPostingTestRunService } from './telegram-ai-posting-test-run.service';
 import { TelegramAiPostingFailedRetryService } from './telegram-ai-posting-failed-retry.service';
 import { StreamResponseService } from '../../../common/stream/stream-response.service';
+
+class AnalyzeReferencesDto implements TelegramAiPostingReferenceAnalysisInput {
+  @IsString() @MaxLength(80) name!: string;
+  @IsString() @MaxLength(500) description!: string;
+  @IsString() @MaxLength(TELEGRAM_AI_POSTING_MAX_MEDIA_GUIDANCE_LENGTH) generationDescription!: string;
+  @IsString() @MaxLength(TELEGRAM_AI_POSTING_MAX_MEDIA_GUIDANCE_LENGTH) searchDescription!: string;
+  @IsArray() @ArrayMinSize(1) @ArrayMaxSize(TELEGRAM_AI_POSTING_MAX_MEDIA_REFERENCES)
+  @IsUrl({ protocols: ['https', 'http'], require_protocol: true, disallow_auth: true }, { each: true })
+  references!: string[];
+}
 
 class SaveTelegramAiPostingDto {
   @IsObject() configuration!: Record<string, unknown>;
@@ -67,6 +79,7 @@ export class TelegramAiPostingController {
     private readonly testRuns: TelegramAiPostingTestRunService,
     private readonly failedRetry: TelegramAiPostingFailedRetryService,
     private readonly streams: StreamResponseService,
+    private readonly referenceAnalysis: TelegramAiPostingReferenceAnalysisService,
   ) {}
   @Get() get(@CurrentUser() user: JwtUser, @Param('channelId') id: string) {
     return this.service.get(user.sub, id);
@@ -87,6 +100,10 @@ export class TelegramAiPostingController {
   ) {
     return this.service.save(user.sub, id, dto);
   }
+  @Post('media-preferences/analyze-references')
+  analyzeReferences(@CurrentUser() user: JwtUser, @Param('channelId') id: string, @Body() dto: AnalyzeReferencesDto) {
+    return this.referenceAnalysis.analyze(user.sub, id, dto);
+  }
   @Post('generate') generate(
     @CurrentUser() user: JwtUser,
     @Param('channelId') id: string,
@@ -102,6 +119,7 @@ export class TelegramAiPostingController {
   ) {
     return this.streams.stream(response, {
       eventPrefix: 'telegram_ai_posting.generate',
+      heartbeatIntervalMs: 15_000,
       action: (onProgress) =>
         this.generator.generate(user.sub, id, dto.count, 'MANUAL', undefined, onProgress),
     });
@@ -127,6 +145,7 @@ export class TelegramAiPostingController {
   ) {
     return this.streams.stream(response, {
       eventPrefix: 'telegram_ai_posting.retry_failed_publication',
+      heartbeatIntervalMs: 15_000,
       action: (onProgress) =>
         this.failedRetry.regenerateFailedPublication(
           user.sub,

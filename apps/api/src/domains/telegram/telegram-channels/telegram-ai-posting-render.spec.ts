@@ -1,3 +1,5 @@
+import { appendChannelEndingSignature } from '@telegram-system/shared';
+import { telegramMarkupToHtml } from '@api/telegram/shared/markup/telegram-markup';
 import {
   renderTelegramAiPostingText,
   validateTelegramAiPostingCaption,
@@ -86,6 +88,22 @@ describe('Telegram AI posting renderer', () => {
       '__курсив__ ++подчёркивание++ ![x](tg://emoji?id=42) [ссылка](https://t.me/example)';
     expect(renderTelegramAiPostingText('Текст', { ending })).toBe(
       `Текст\n\n${ending}`,
+    );
+  });
+
+  it('keeps two spaces between the default custom emoji and channel link in Telegram HTML', () => {
+    const ending = appendChannelEndingSignature('', {
+      title: 'Жіноча сила',
+      username: 'women_power',
+      presentationIconPresentation: {
+        type: 'unicode',
+        value: '🍃',
+        telegramCustomEmojiId: '42',
+      },
+    });
+    const caption = renderTelegramAiPostingText('Текст', { ending });
+    expect(telegramMarkupToHtml(caption)).toContain(
+      '<tg-emoji emoji-id="42">🍃</tg-emoji>  <a href="https://t.me/women_power">Жіноча сила</a>',
     );
   });
 

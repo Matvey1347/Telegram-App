@@ -348,6 +348,30 @@ describe('AI locked admission and settlement', () => {
       ),
     ).toHaveLength(2);
   });
+  it('admits an image-based posting review only with posting context', async () => {
+    const h = harness();
+    h.workspace.dailyBudget = decimal('1');
+    Object.assign(h.config, h.registry.category('TELEGRAM_POSTING_REVIEW'), {
+      enabled: true,
+      maxRequestCost: decimal('1'),
+    });
+    const request: AiExecutionRequest = {
+      ...h.request(),
+      category: 'TELEGRAM_POSTING_REVIEW',
+      businessObjectId: 'channel-1',
+      image: { mime: 'image/jpeg', data: Buffer.from([255, 216, 255, 1]) },
+    };
+    await expect(h.admission.admit(request)).rejects.toThrow('AI_REQUEST_INVALID');
+    await expect(h.admission.admit({
+      ...request,
+      aiPosting: { channelId: 'channel-1', postingMode: 'TEST' },
+    })).resolves.toMatchObject({
+      operation: {
+        category: 'TELEGRAM_POSTING_REVIEW',
+        configurationSnapshot: { schemaId: 'telegram_posting_visual_review_v1' },
+      },
+    });
+  });
   it('blocks a 31st media operation even when budget remains', async () => {
     const h = harness();
     h.tx.$queryRaw.mockResolvedValue([

@@ -1,9 +1,11 @@
-import { TELEGRAM_AI_POSTING_MAX_MEDIA_REFERENCES } from "@telegram-system/shared";
+import { TELEGRAM_AI_POSTING_MAX_MEDIA_GUIDANCE_LENGTH, TELEGRAM_AI_POSTING_MAX_MEDIA_REFERENCES } from "@telegram-system/shared";
 
 export type AiPostingMediaPreference = {
   id: string;
   name: string;
   description: string;
+  generationDescription?: string;
+  searchDescription?: string;
   emoji: string;
   emojiIconId?: string;
   references: string[];
@@ -35,6 +37,12 @@ export function normalizeAiPostingMediaPreferences(config: {
             typeof item.description === "string"
               ? item.description.slice(0, 500)
               : "",
+          generationDescription: typeof item.generationDescription === "string"
+            ? item.generationDescription.trim().slice(0, TELEGRAM_AI_POSTING_MAX_MEDIA_GUIDANCE_LENGTH)
+            : undefined,
+          searchDescription: typeof item.searchDescription === "string"
+            ? item.searchDescription.trim().slice(0, TELEGRAM_AI_POSTING_MAX_MEDIA_GUIDANCE_LENGTH)
+            : undefined,
           emoji:
             typeof item.emoji === "string" && item.emoji.trim()
               ? item.emoji.trim().slice(0, 16)

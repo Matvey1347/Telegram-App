@@ -1,5 +1,7 @@
 "use client";
 
+import { DEFAULT_TELEGRAM_AI_POSTING_SEARCH_PERCENT } from "@telegram-system/shared";
+
 import {
   Button,
   Card,
@@ -15,7 +17,10 @@ import { AiPostingMediaPreferenceEditor } from "./ai-posting-media-preference-ed
 import type { AiPostingMediaPreference } from "./ai-posting-media-preferences";
 
 export function AiPostingImagesSection({
+  channelId,
   mode,
+  hybridSearchPercent = DEFAULT_TELEGRAM_AI_POSTING_SEARCH_PERCENT,
+  onHybridSearchPercent,
   preferences,
   avoidances,
   channelAvatarUrl,
@@ -32,7 +37,10 @@ export function AiPostingImagesSection({
   onWatermarkSize,
   onWatermarkOpacity,
 }: {
+  channelId?: string;
   mode: string;
+  hybridSearchPercent?: number;
+  onHybridSearchPercent?: (value: number) => void;
   preferences: AiPostingMediaPreference[];
   avoidances: string[];
   channelAvatarUrl: string | null;
@@ -79,9 +87,22 @@ export function AiPostingImagesSection({
         {mode === "ai"
           ? "Каждая новая публикация получает новое AI-медиа. Кнопка «Новое медиа» меняет только открытую публикацию; прежнее визуальное направление запоминается и исключается из будущих запросов."
           : mode === "hybrid"
-            ? "Сначала ищем подходящее изображение в открытом каталоге Openverse. Если подходящего не найдётся, создаём новое с помощью AI. Кнопка «Новое медиа» создаёт AI-замену только для открытой публикации."
+            ? "Доли распределяются между публикациями. Если поиск не найдёт подходящее изображение, текст сохранится и медиа можно будет добавить отдельно."
             : "Для новых публикаций выбираются медиа из включённых источников и открытого каталога. Кнопка «Новое медиа» создаёт AI-замену только для открытой публикации."}
       </p>
+      {mode === "hybrid" && (
+        <div className="rounded-lg border border-neutral-800 p-3">
+          <MediaPercentSlider
+            label="Поиск изображений"
+            value={hybridSearchPercent}
+            min={0}
+            max={100}
+            step={1}
+            onChange={onHybridSearchPercent}
+            complement="AI-генерация"
+          />
+        </div>
+      )}
       <ToggleRow
         checked={useChannelAvatarInMedia}
         onChange={onUseChannelAvatarInMedia}
@@ -98,8 +119,8 @@ export function AiPostingImagesSection({
       </p>
       {useChannelAvatarInMedia ? (
         <div className="grid gap-3 rounded-lg border border-blue-900/70 bg-blue-950/20 p-3 sm:grid-cols-2">
-          <WatermarkSlider label="Размер водяного знака" value={watermarkSize} min={5} max={30} step={1} onChange={onWatermarkSize} />
-          <WatermarkSlider label="Непрозрачность водяного знака" value={watermarkOpacity} min={10} max={100} step={5} onChange={onWatermarkOpacity} />
+          <MediaPercentSlider label="Размер водяного знака" value={watermarkSize} min={5} max={30} step={1} onChange={onWatermarkSize} />
+          <MediaPercentSlider label="Непрозрачность водяного знака" value={watermarkOpacity} min={10} max={100} step={5} onChange={onWatermarkOpacity} />
           {(["X", "Y"] as const).map((axis) => (
             <label key={axis} className="space-y-1 text-sm">
               <span>{axis} (%)</span>
@@ -125,6 +146,7 @@ export function AiPostingImagesSection({
         </div>
       ) : null}
       <AiPostingMediaPreferenceEditor
+        channelId={channelId}
         preferences={preferences}
         onChange={onPreferences}
       />
@@ -170,19 +192,20 @@ export function AiPostingImagesSection({
   );
 }
 
-function WatermarkSlider({ label, value, min, max, step, onChange }: {
+function MediaPercentSlider({ label, value, min, max, step, onChange, complement }: {
   label: string;
   value: number;
   min: number;
   max: number;
   step: number;
   onChange?: (value: number) => void;
+  complement?: string;
 }) {
   return (
     <div className="min-w-0 text-sm">
-      <div className="flex justify-between gap-2">
-        <span>{label}</span>
-        <span className="text-blue-200">{value}%</span>
+      <div className="flex flex-wrap justify-between gap-2">
+        <span>{label} <span className="text-blue-200">{value}%</span></span>
+        {complement && <span>{complement} {100 - value}%</span>}
       </div>
       <Slider.Root value={[value]} min={min} max={max} step={step}
         onValueChange={([next]) => onChange?.(next)}

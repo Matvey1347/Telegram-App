@@ -1,74 +1,122 @@
 import { CrossPromotionPlanReadService } from './cross-promotion-plan-read.service';
 
 describe('CrossPromotionPlanReadService', () => {
-  it('keeps an own-channel placement scheduled until Telegram confirms a published message', async () => {
-    const managedPosts = [
-      {
-        id: 'post-1',
-        telegramChannelId: 'channel-1',
-        telegramMessageIds: [] as string[],
-        telegramRemoteStatus: 'PUBLISHED',
-      },
-    ];
-    const service = new CrossPromotionPlanReadService({
-      telegramChannel: { findMany: jest.fn().mockResolvedValue([]) },
-      promo: { findMany: jest.fn().mockResolvedValue([]) },
-      telegramInviteLink: { findMany: jest.fn().mockResolvedValue([]) },
-      telegramInviteLinkSnapshot: { findMany: jest.fn().mockResolvedValue([]) },
-      telegramChannelAudienceSnapshot: {
-        findMany: jest.fn().mockResolvedValue([]),
-      },
-      telegramManagedPost: {
-        findMany: jest
-          .fn()
-          .mockImplementation(() => Promise.resolve(managedPosts)),
-      },
-      telegramPost: { findMany: jest.fn().mockResolvedValue([]) },
-    } as never);
-    const plan = {
-      id: 'plan-1',
-      workspaceId: 'workspace-1',
-      createdByUserId: 'user-1',
-      kind: 'OWN_CHANNELS',
-      title: 'Own channels',
-      advertiserId: null,
-      status: 'SCHEDULED',
-      publisherChannelIds: ['channel-1'],
-      partnerChannelIds: [],
-      targets: [],
-      publicationPost: { title: '', text: '', imageUrls: [], buttonRows: [] },
-      scheduledAt: new Date('2020-01-01T08:10:00.000Z'),
-      trackingEndsAt: null,
-      nextDueAt: null,
-      baselineTargetCounters: [],
-      baselinePublisherSubscribers: [],
-      placementPostIds: [
-        { telegramChannelId: 'channel-1', managedPostId: 'post-1' },
-      ],
-      createdAt: new Date('2020-01-01T08:00:00.000Z'),
-      updatedAt: new Date('2020-01-01T08:00:00.000Z'),
-    } as Record<string, unknown>;
+  it.each(['OWN_CHANNELS', 'DIRECT_MUTUAL'])(
+    'keeps a %s placement scheduled until Telegram confirms a published message',
+    async (kind) => {
+      const managedPosts = [
+        {
+          id: 'post-1',
+          telegramChannelId: 'channel-1',
+          telegramMessageIds: [] as string[],
+          telegramRemoteStatus: 'PUBLISHED',
+          publishedAt: null as Date | null,
+        },
+      ];
+      const service = new CrossPromotionPlanReadService({
+        telegramChannel: { findMany: jest.fn().mockResolvedValue([]) },
+        promo: { findMany: jest.fn().mockResolvedValue([]) },
+        telegramInviteLink: { findMany: jest.fn().mockResolvedValue([]) },
+        telegramInviteLinkSnapshot: {
+          findMany: jest.fn().mockResolvedValue([]),
+        },
+        telegramChannelAudienceSnapshot: {
+          findMany: jest.fn().mockResolvedValue([]),
+        },
+        telegramManagedPost: {
+          findMany: jest
+            .fn()
+            .mockImplementation(() => Promise.resolve(managedPosts)),
+        },
+        telegramPost: { findMany: jest.fn().mockResolvedValue([]) },
+      } as never);
+      const plan = {
+        id: 'plan-1',
+        workspaceId: 'workspace-1',
+        createdByUserId: 'user-1',
+        kind,
+        title: 'Own channels',
+        advertiserId: null,
+        status: 'SCHEDULED',
+        publisherChannelIds: ['channel-1'],
+        partnerChannelIds: [],
+        targets: [],
+        publicationPost: { title: '', text: '', imageUrls: [], buttonRows: [] },
+        scheduledAt: new Date('2020-01-01T08:10:00.000Z'),
+        trackingEndsAt: null,
+        nextDueAt: null,
+        baselineTargetCounters: [],
+        baselinePublisherSubscribers: [],
+        placementPostIds: [
+          { telegramChannelId: 'channel-1', managedPostId: 'post-1' },
+        ],
+        createdAt: new Date('2020-01-01T08:00:00.000Z'),
+        updatedAt: new Date('2020-01-01T08:00:00.000Z'),
+      } as Record<string, unknown>;
 
-    expect((await service.shape('workspace-1', plan as never)).status).toBe(
-      'SCHEDULED',
-    );
-    expect(
-      (
-        await service.shape('workspace-1', {
+      expect((await service.shape('workspace-1', plan as never)).status).toBe(
+        'SCHEDULED',
+      );
+      expect(
+        (
+          await service.shape('workspace-1', {
+            ...plan,
+            status: 'ACTIVE',
+          } as never)
+        ).status,
+      ).toBe('SCHEDULED');
+      managedPosts[0].telegramMessageIds.push('42');
+      const expectedStatus = kind === 'OWN_CHANNELS' ? 'COMPLETED' : 'ACTIVE';
+      expect((await service.shape('workspace-1', plan as never)).status).toBe(
+        expectedStatus,
+      );
+      if (kind === 'OWN_CHANNELS') {
+        managedPosts[0].publishedAt = new Date(Date.now() - 23 * 60 * 60 * 1000);
+        expect((await service.shape('workspace-1', plan as never)).status).toBe(
+          'ACTIVE',
+        );
+        managedPosts[0].publishedAt = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        expect((await service.shape('workspace-1', plan as never)).status).toBe(
+          'COMPLETED',
+        );
+        managedPosts[0].publishedAt = null;
+      }
+      // A Telegram copy can remain visible after campaign tracking ends.
+      for (const status of ['ACTIVE', 'COMPLETED']) {
+        const result = await service.shape('workspace-1', {
           ...plan,
-          status: 'ACTIVE',
-        } as never)
-      ).status,
-    ).toBe('SCHEDULED');
-    managedPosts[0].telegramMessageIds.push('42');
-    expect((await service.shape('workspace-1', plan as never)).status).toBe(
-      'ACTIVE',
-    );
-    managedPosts[0].telegramRemoteStatus = 'AUTO_DELETED';
-    expect((await service.shape('workspace-1', plan as never)).status).toBe(
-      'SCHEDULED',
-    );
-  });
+          status,
+          trackingEndsAt: new Date('2020-01-03T08:10:00.000Z'),
+        } as never);
+        expect(result.status).toBe('COMPLETED');
+        expect(result.placementPostIds[0].isPublishedInTelegram).toBe(true);
+      }
+      const legacyEndedPlacement = await service.shape('workspace-1', {
+        ...plan,
+        status: 'ACTIVE',
+        publicationPost: {
+          ...(plan.publicationPost as object),
+          publisherPublications: [{
+            id: 'promotion-1',
+            placements: [{
+              telegramChannelId: 'channel-1',
+              scheduledAt: '2020-01-01T08:10:00.000Z',
+              deleteAt: '2020-01-03T08:10:00.000Z',
+            }],
+          }],
+        },
+      } as never);
+      expect(legacyEndedPlacement.status).toBe('COMPLETED');
+      expect((await service.shape('workspace-1', {
+        ...plan,
+        status: 'COMPLETED',
+      } as never)).status).toBe('COMPLETED');
+      managedPosts[0].telegramRemoteStatus = 'AUTO_DELETED';
+      expect((await service.shape('workspace-1', plan as never)).status).toBe(
+        'SCHEDULED',
+      );
+    },
+  );
 
   it('does not show stale message views before a future placement starts', async () => {
     const service = new CrossPromotionPlanReadService({
@@ -136,6 +184,7 @@ describe('CrossPromotionPlanReadService', () => {
       updatedAt: new Date('2026-09-28T10:00:00.000Z'),
     } as never);
 
+    expect(result.status).toBe('SCHEDULED');
     expect(result.publisherResults[0].postViews).toBeNull();
   });
 

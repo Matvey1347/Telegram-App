@@ -75,6 +75,14 @@ function shape(properties: Record<string, unknown>) {
     additionalProperties: false,
   };
 }
+export const TELEGRAM_POSTING_DRAFT_SCHEMA_ID = 'telegram_posting_draft_v1';
+const POSTING_DRAFT_SCHEMA = shape({
+  title: { type: 'string' },
+  text: { type: 'string' },
+  imageStyleIndex: { type: 'integer' },
+  imagePrompt: { type: 'string' },
+  imageSearchQuery: { type: 'string' },
+});
 const SCHEMAS: Record<
   AiCategory,
   {
@@ -117,6 +125,7 @@ export class AiModelRegistry {
       sourceUrl: 'https://developers.openai.com/api/docs/pricing',
     };
   }
+  private readonly postingDraftValidator = new Ajv({ strict: true }).compile(POSTING_DRAFT_SCHEMA);
   private readonly revisionDraftValidator = new Ajv({ strict: true }).compile(REVISION_DRAFT_SCHEMA);
   private readonly chatPlanValidator = new Ajv({ strict: true, allowUnionTypes: true }).compile(CHAT_PLAN_SCHEMA);
   private readonly mediaValidator = new Ajv({ strict: true }).compile(
@@ -139,7 +148,12 @@ export class AiModelRegistry {
     const imageModel = modelId.startsWith('gpt-image-');
     return category === 'TELEGRAM_POSTING_IMAGE' ? imageModel : !imageModel;
   }
-  schema(category: AiCategory, media = false, chatPlan = false, revisionDraft = false) {
+  schema(category: AiCategory, media = false, chatPlan = false, revisionDraft = false, postingDraft = false) {
+    if (postingDraft) {
+      if (category !== 'TELEGRAM_POSTING_TEXT' || media || chatPlan || revisionDraft)
+        throw new Error('AI_POSTING_DRAFT_CATEGORY_INVALID');
+      return { id: TELEGRAM_POSTING_DRAFT_SCHEMA_ID, jsonSchema: structuredClone(POSTING_DRAFT_SCHEMA) };
+    }
     if (revisionDraft) {
       if (category !== 'TELEGRAM_POSTING_TEXT' || media || chatPlan) throw new Error('AI_REVISION_DRAFT_CATEGORY_INVALID');
       return { id: 'telegram_posting_revision_v1', jsonSchema: structuredClone(REVISION_DRAFT_SCHEMA) };
@@ -154,6 +168,8 @@ export class AiModelRegistry {
           id: 'telegram_posting_chat_vision_v1',
           jsonSchema: structuredClone(SCHEMAS[category]),
         };
+      if (category === 'TELEGRAM_POSTING_REVIEW')
+        return { id: 'telegram_posting_visual_review_v1', jsonSchema: structuredClone(SCHEMAS[category]) };
       if (category !== 'LEAD_AD_CLASSIFICATION')
         throw new Error('AI_MEDIA_CATEGORY_INVALID');
       return {
@@ -166,10 +182,12 @@ export class AiModelRegistry {
       jsonSchema: structuredClone(SCHEMAS[category]),
     };
   }
-  validate(category: AiCategory, value: unknown, media = false, chatPlan = false, revisionDraft = false): boolean {
+  validate(category: AiCategory, value: unknown, media = false, chatPlan = false, revisionDraft = false, postingDraft = false): boolean {
+    if (postingDraft)
+      return category === 'TELEGRAM_POSTING_TEXT' && !media && !chatPlan && !revisionDraft && this.postingDraftValidator(value) === true;
     if (revisionDraft) return category === 'TELEGRAM_POSTING_TEXT' && !media && !chatPlan && this.revisionDraftValidator(value) === true;
     if (chatPlan) return category === 'TELEGRAM_POSTING_PLAN' && !media && this.chatPlanValidator(value) === true;
-    if (media && category === 'TELEGRAM_POSTING_PLAN')
+    if (media && (category === 'TELEGRAM_POSTING_PLAN' || category === 'TELEGRAM_POSTING_REVIEW'))
       return this.validators.get(category)?.(value) === true;
     if (media)
       return (

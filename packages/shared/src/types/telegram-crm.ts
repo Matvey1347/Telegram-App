@@ -1,3 +1,4 @@
+import type { TelegramInviteLinkAccountPreference } from "./telegram-capabilities";
 import type { PaginatedResponse } from "../pagination";
 import type { ResolvedEmoji } from "./resolved-emoji";
 
@@ -421,7 +422,7 @@ export type CrmUnreadSummary = {
   inbox: number;
 };
 
-export type CrmAccountCapabilities = {
+export type CrmAccountCapabilities = TelegramInviteLinkAccountPreference & {
   accountId: string;
   crmSyncEnabled: boolean;
   crmSendEnabled: boolean;

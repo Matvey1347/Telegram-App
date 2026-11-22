@@ -1,5 +1,6 @@
 import {
   TELEGRAM_UNIFIED_IMPORT_VERSION,
+  type TelegramUnifiedImportEditorial,
   type TelegramUnifiedImportManifest,
 } from "@telegram-system/shared";
 
@@ -20,6 +21,28 @@ function stringList(value: unknown) {
   return Array.isArray(value)
     ? value.filter((item): item is string => typeof item === "string")
     : [];
+}
+
+function parseEditorial(
+  value: unknown,
+  index: number,
+): TelegramUnifiedImportEditorial | undefined {
+  if (value === undefined) return undefined;
+  const row = value as Partial<TelegramUnifiedImportEditorial> | null;
+  if (
+    !row ||
+    typeof row !== "object" ||
+    Array.isArray(row) ||
+    typeof row.sphere !== "string" ||
+    !row.sphere.trim() ||
+    typeof row.rubric !== "string" ||
+    !row.rubric.trim()
+  ) {
+    throw new Error(
+      `У публикации ${index + 1} укажите сферу и рубрику в editorial.`,
+    );
+  }
+  return { ...row, sphere: row.sphere, rubric: row.rubric };
 }
 
 /**
@@ -46,6 +69,7 @@ function manifestFromPostArray(
     }
     refs.add(ref);
     const action = stringValue(source.action);
+    const editorial = parseEditorial(source.editorial, index);
     const normalizedAction: "CREATE" | "UPDATE" | "DELETE" =
       action === "UPDATE" || action === "DELETE" ? action : "CREATE";
     return {
@@ -61,6 +85,7 @@ function manifestFromPostArray(
         : {}),
       imageUrls: stringList(source.imageUrls ?? source.urls),
       imageSearch: stringList(source.imageSearch),
+      ...(editorial && { editorial }),
       ...(typeof source.groupRef === "string" || source.groupRef === null
         ? { groupRef: source.groupRef }
         : {}),
@@ -115,5 +140,8 @@ export function parseUnifiedImportManifest(
       }
     }
   }
+  manifest.posts?.forEach((post, index) =>
+    parseEditorial(post?.editorial, index),
+  );
   return manifest as TelegramUnifiedImportManifest;
 }

@@ -30,6 +30,7 @@ import { TelegramAiPostingGeneratorService } from './telegram-ai-posting-generat
 import { TelegramAiPostingSourceService } from './telegram-ai-posting-source.service';
 import { TelegramAiPostingContentModelService } from './telegram-ai-posting-content-model.service';
 import { TelegramAiPostingStructureService } from './telegram-ai-posting-structure.service';
+import { TelegramAiPostingReferenceAnalysisService } from './telegram-ai-posting-reference-analysis.service';
 import { TelegramAiPostingImageService } from './telegram-ai-posting-image.service';
 import { TelegramAiPostingTestRunService } from './telegram-ai-posting-test-run.service';
 import { TelegramAiPostingRuleFeedbackService } from './telegram-ai-posting-rule-feedback.service';
@@ -195,6 +196,7 @@ import { TelegramChannelTrafficAttributionService } from './telegram-channel-tra
     TelegramAiPostingSourceService,
     TelegramAiPostingStructureService,
     TelegramAiPostingImageService,
+    TelegramAiPostingReferenceAnalysisService,
     TelegramAiPostingTestRunService,
     TelegramAiPostingRuleFeedbackService,
     TelegramAiPostingFailedRetryService,

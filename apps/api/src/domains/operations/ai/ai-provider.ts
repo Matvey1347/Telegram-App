@@ -4,7 +4,7 @@ import type {
   AiTokenUsage,
 } from '@telegram-system/shared';
 import { AiDeploymentConfig } from './ai-deployment-config.service';
-import { AiModelRegistry } from './ai-model-registry';
+import { AiModelRegistry, TELEGRAM_POSTING_DRAFT_SCHEMA_ID } from './ai-model-registry';
 import { aiRecord, parseUsage } from './ai-pricing';
 
 export type AiProviderOutcome = {
@@ -127,7 +127,7 @@ export class AiProvider {
         !(
           (config.category === 'LEAD_AD_CLASSIFICATION' &&
             config.modelId === 'gpt-5.4-mini-2026-03-17') ||
-          (config.category === 'TELEGRAM_POSTING_PLAN' &&
+          ((config.category === 'TELEGRAM_POSTING_PLAN' || config.category === 'TELEGRAM_POSTING_REVIEW') &&
             config.modelId === 'gpt-5.4-mini-2026-03-17') ||
           config.category === 'TELEGRAM_POSTING_IMAGE'
         )
@@ -182,7 +182,8 @@ export class AiProvider {
           errorCategory: null,
         };
       }
-      const schema = this.registry.schema(config.category, Boolean(image), chatPlan, revisionDraft);
+      const postingDraft = config.schemaId === TELEGRAM_POSTING_DRAFT_SCHEMA_ID;
+      const schema = this.registry.schema(config.category, Boolean(image), chatPlan, revisionDraft, postingDraft);
       const payload = {
         model: config.modelId,
         input: image
@@ -277,7 +278,7 @@ export class AiProvider {
       } catch {
         return { ...metadata, errorCategory: 'OUTPUT_INVALID_JSON' };
       }
-      if (!this.registry.validate(config.category, result, Boolean(image), chatPlan, revisionDraft))
+      if (!this.registry.validate(config.category, result, Boolean(image), chatPlan, revisionDraft, postingDraft))
         return { ...metadata, errorCategory: 'OUTPUT_SCHEMA_INVALID' };
       return { ...metadata, result, errorCategory: null };
     } catch {

@@ -5,13 +5,11 @@ import type { CrossPromotionPlan } from "@telegram-system/shared";
 import { IconAvatar } from "@/components/icons/icon-avatar";
 import { TelegramChannelAvatarList } from "@/components/features/telegram/telegram/telegram-channel-avatar-list";
 import { TelegramEntityAvatar } from "@/components/features/telegram/telegram/telegram-entity-avatar";
-import {
-  CardActionsMenu,
-  CardMenuAction,
-} from "@/components/ui/card-actions-menu";
+import { CardActionsMenu, CardMenuAction } from "@/components/ui/card-actions-menu";
 import { formatDateTime } from "@/lib/date-format";
-import { useWorkspaceTimezone } from "@/hooks/use-workspace-timezone";
 import { useOptionalI18n } from "@/providers/i18n-provider";
+import { useWorkspaceTimezone } from "@/hooks/use-workspace-timezone";
+import { PromotionTypeBadge } from "./cross-promotion-create-steps";
 import { MutualPromotionFolderStatusBadge } from "./mutual-promotion/mutual-promotion-folder-status-badge";
 
 export function CrossPromotionPlanCard({
@@ -35,74 +33,66 @@ export function CrossPromotionPlanCard({
 }) {
   const workspaceTimezone = useWorkspaceTimezone();
   const i18n = useOptionalI18n();
+  const ownPromotion = plan.kind === "OWN_CHANNELS";
   const publishingChannels = plan.publisherResults.map((channel) => ({
     id: channel.telegramChannelId,
     title: channel.title,
     photoUrl: channel.photoUrl,
   }));
-  const publisherPublicationCount =
-    plan.publicationPost.publisherPublications?.length ?? 1;
   const canEdit = plan.status !== "CANCELLED";
   const advertiser = advertiserPresentation(plan.advertiser);
-  const placementTimes = plan.kind === "OWN_CHANNELS"
-    ? (plan.publicationPost.publisherPlacements ?? []).map((placement) => placement.scheduledAt)
-    : [];
+  const publisherPlacements = plan.publicationPost.publisherPublications?.length
+    ? plan.publicationPost.publisherPublications.flatMap((publication) => publication.placements)
+    : (plan.publicationPost.publisherPlacements ?? []);
+  const placementTimes = ownPromotion ? publisherPlacements.map(({ scheduledAt }) => scheduledAt) : [];
+  const postsKept =
+    ownPromotion &&
+    plan.status === "COMPLETED" &&
+    publisherPlacements.every(({ deleteAt }) => !deleteAt) &&
+    plan.placementPostIds?.some(({ isPublishedInTelegram }) => isPublishedInTelegram);
   const cardScheduledAt = placementTimes.length
-    ? placementTimes.reduce((earliest, current) => Date.parse(current) < Date.parse(earliest) ? current : earliest)
+    ? placementTimes.reduce((earliest, current) =>
+        Date.parse(current) < Date.parse(earliest) ? current : earliest,
+      )
     : plan.scheduledAt;
-  const publisherViews = sumKnown(
-    plan.publisherResults.map((channel) => channel.postViews),
-  );
+  const publisherViews = sumKnown(plan.publisherResults.map((channel) => channel.postViews));
+
+  const channelList = publishingChannels.length ? (
+    <TelegramChannelAvatarList channels={publishingChannels} ariaLabel={`My channels: ${publishingChannels.length}`} />
+  ) : null;
 
   return (
-    <article className="group relative break-inside-avoid rounded-2xl border border-neutral-800 bg-neutral-950/80 transition duration-200 hover:border-neutral-700">
-      <div className="p-4 pb-0">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="flex min-w-0 items-center gap-2">
-              <IconAvatar
-                icon={plan.iconPresentation}
-                label={plan.title}
-                size="xs"
-                className="rounded-full"
-              />
-              <h2 className="truncate font-semibold text-white">
-                {plan.title}
-              </h2>
-              <span
-                className={`shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${plan.kind === "DIRECT_MUTUAL" ? "bg-violet-950/70 text-violet-200" : "bg-sky-950/70 text-sky-200"}`}
-              >
-                {plan.kind === "DIRECT_MUTUAL" ? "VP" : "My Channel"}
-              </span>
+    <article className="group relative break-inside-avoid rounded-2xl border border-neutral-800 bg-neutral-950/80 pb-3 transition duration-200 hover:border-neutral-700">
+      <div className="px-3 pt-3">
+        <div className={ownPromotion
+          ? "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-1.5 lg:grid-cols-[minmax(0,1fr)_auto_auto_auto]"
+          : "flex items-start justify-between gap-3"
+        }>
+          <div className={ownPromotion ? "contents" : "flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 sm:flex-nowrap"}>
+            <div className="flex w-full min-w-0 items-center gap-2 sm:w-auto">
+              <IconAvatar icon={plan.iconPresentation} label={plan.title} size="xs" className="shrink-0 rounded-full" />
+              <h2 className="truncate font-semibold text-white" title={plan.title}>{plan.title}</h2>
+              <PromotionTypeBadge kind={plan.kind} />
             </div>
-            <p className="mt-1.5 flex items-center gap-1.5 text-[11px] text-neutral-400">
-              <CalendarClock size={14} />{" "}
+            <time
+              dateTime={cardScheduledAt}
+              className={`flex shrink-0 items-center gap-1 whitespace-nowrap text-[11px] text-neutral-400 ${ownPromotion ? "col-start-1 row-start-2 lg:col-start-2 lg:row-start-1" : ""}`}
+            >
+              <CalendarClock size={13} aria-hidden="true" />
               {formatDateTime(cardScheduledAt, undefined, workspaceTimezone)}
-            </p>
-            {plan.advertiser ? (
-              <div className="mt-2 flex items-center gap-2">
-                <TelegramEntityAvatar
-                  imageUrl={advertiser.photoUrl}
-                  kind="person"
-                  alt={plan.advertiser.displayName}
-                  size="sm"
-                />
-                <span className="truncate text-xs text-neutral-200">
-                  {advertiser.label}
-                </span>
-              </div>
-            ) : null}
+            </time>
           </div>
-          <div className="flex shrink-0 items-start gap-1">
+          {ownPromotion && channelList ? (
+            <div className="col-start-2 row-start-2 justify-self-end lg:col-start-3 lg:row-start-1">
+              {channelList}
+            </div>
+          ) : null}
+          <div className={`flex shrink-0 items-center gap-1 ${ownPromotion ? "col-start-2 row-start-1 justify-self-end lg:col-start-4" : ""}`}>
             <MutualPromotionFolderStatusBadge status={plan.status} />
             <CardActionsMenu label={`Actions for ${plan.title}`}>
               {canEdit ? (
                 <CardMenuAction
-                  label={
-                    plan.status === "DRAFT" && !plan.lastError
-                      ? "Continue draft"
-                      : "Edit promotion"
-                  }
+                  label={plan.status === "DRAFT" && !plan.lastError ? "Continue draft" : "Edit promotion"}
                   icon={<Pencil size={16} />}
                   onClick={() => onEdit(plan)}
                 />
@@ -129,75 +119,76 @@ export function CrossPromotionPlanCard({
                   onClick={() => onRefreshInviteLinks(plan)}
                 />
               ) : null}
-              <CardMenuAction
-                danger
-                label="Delete"
-                icon={<Trash2 size={16} />}
-                onClick={onDelete}
-              />
+              <CardMenuAction danger label="Delete" icon={<Trash2 size={16} />} onClick={onDelete} />
             </CardActionsMenu>
           </div>
         </div>
-      </div>
-
-      <div className="mx-4 mt-2 rounded-lg border border-white/5 bg-black/25 py-1">
-        <ChannelMetric channels={publishingChannels} label={i18n?.t("ads.section_own") ?? "My channels"} publicationCount={publisherPublicationCount} />
+        {!ownPromotion && (plan.advertiser || channelList) ? (
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+            {plan.advertiser ? (
+              <div className="flex min-w-0 items-center gap-2">
+                <TelegramEntityAvatar
+                  imageUrl={advertiser.photoUrl}
+                  kind="person"
+                  alt={plan.advertiser.displayName}
+                  size="xs"
+                />
+                <span className="truncate text-xs text-neutral-200">{advertiser.label}</span>
+              </div>
+            ) : null}
+            {channelList}
+          </div>
+        ) : null}
+        {postsKept ? (
+          <p className="mt-1 text-[11px] text-neutral-400">
+            {i18n?.t("ads.promotion_posts_kept") ?? "Posts remain published"}
+          </p>
+        ) : null}
       </div>
 
       {plan.status === "DRAFT" ? (
         <div
           className={`mx-4 mt-3 rounded-lg border p-3 text-xs ${plan.lastError ? "border-rose-900/70 bg-rose-950/20 text-rose-200" : "border-blue-900/70 bg-blue-950/20 text-blue-100"}`}
         >
-          <p className="font-medium">
-            {plan.lastError ? "This placement was not scheduled." : "Saved draft."}
-          </p>
+          <p className="font-medium">{plan.lastError ? "This placement was not scheduled." : "Saved draft."}</p>
           <p className={plan.lastError ? "mt-1 text-rose-300/80" : "mt-1 text-blue-200/80"}>
             {plan.lastError || "Continue it from any device, or delete the draft when it is no longer needed."}
           </p>
         </div>
       ) : null}
 
-      <div className="mx-4 mb-4 mt-3 overflow-hidden rounded-lg border border-neutral-800 bg-black/20">
-        {plan.targetResults.map((target) => (
-          <div
-            key={`target:${target.telegramChannelId}:${target.inviteLinkId}`}
-            className="px-2.5 py-2"
-          >
-            <ChannelIdentity
-              title={target.title}
-              photoUrl={target.photoUrl}
-              badge="✨ Promoted"
-              badgeClassName="bg-emerald-950 text-emerald-300"
-            />
-            <div className="mt-1.5 grid grid-cols-3 gap-x-3 gap-y-2 pl-7 text-[10px] sm:grid-cols-[auto_auto_auto_minmax(0,1fr)] sm:items-end sm:gap-y-0">
+      {plan.targetResults.length ? (
+        <div className="mx-3 mt-2 divide-y divide-neutral-800 overflow-hidden rounded-lg border border-neutral-800 bg-black/20">
+          {plan.targetResults.map((target) => (
+            <div
+              key={`target:${target.telegramChannelId}:${target.inviteLinkId}`}
+              className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto_auto_minmax(0,1.2fr)] items-center gap-1.5 px-2.5 py-1.5 text-xs sm:gap-3"
+            >
+              <div className="flex min-w-0 items-center gap-1 rounded-md border border-neutral-700 bg-neutral-900 px-1.5 py-0.5" title={target.title}>
+                <TelegramEntityAvatar imageUrl={target.photoUrl} kind="channel" alt="" size="xs" />
+                <span className="truncate font-medium text-neutral-100">{target.title}</span>
+              </div>
               <Stat
                 label="During placement"
                 icon={UserPlus}
-                value={`+${(
-                  target.joinedCount + target.requestedCount
-                ).toLocaleString()}`}
+                value={`+${(target.joinedCount + target.requestedCount).toLocaleString()}`}
                 tone="text-emerald-300"
               />
               <Stat
                 label="Actual views"
                 icon={Eye}
-                value={
-                  publisherViews == null ? "—" : publisherViews.toLocaleString()
-                }
+                value={publisherViews == null ? "—" : publisherViews.toLocaleString()}
               />
-              <div className="col-span-3 min-w-0 sm:col-span-1">
-                <PromoLink
-                  promoId={target.promoId}
-                  icon={target.promoIconPresentation}
-                  title={target.promoTitle}
-                  onOpenPromo={onOpenPromo}
-                />
-              </div>
+              <PromoLink
+                promoId={target.promoId}
+                icon={target.promoIconPresentation}
+                title={target.promoTitle}
+                onOpenPromo={onOpenPromo}
+              />
             </div>
-          </div>
-        ))}
-      </div>
-
+          ))}
+        </div>
+      ) : null}
     </article>
   );
 }
@@ -230,7 +221,7 @@ function PromoLink({
     </>
   );
   const className =
-    "flex min-w-0 items-center gap-1.5 truncate text-left text-neutral-200";
+    "flex min-w-0 items-center gap-1 truncate rounded-md border border-neutral-700 bg-neutral-900 px-1.5 py-0.5 text-left text-neutral-200";
   return promoId && onOpenPromo ? (
     <button
       type="button"
@@ -241,7 +232,7 @@ function PromoLink({
       {content}
     </button>
   ) : (
-    <div className={className}>{content}</div>
+    <div className={className} title={title}>{content}</div>
   );
 }
 
@@ -263,60 +254,6 @@ function advertiserPresentation(advertiser: CrossPromotionPlan["advertiser"]) {
       advertiser.photoUrl ||
       (username ? `https://t.me/i/userpic/320/${username}.jpg` : null),
   };
-}
-
-function ChannelIdentity({
-  title,
-  photoUrl,
-  badge,
-  badgeClassName,
-}: {
-  title: string;
-  photoUrl: string | null;
-  badge: string;
-  badgeClassName: string;
-}) {
-  return (
-    <div className="flex min-w-0 items-center gap-2">
-      <TelegramEntityAvatar
-        imageUrl={photoUrl}
-        kind="channel"
-        alt=""
-        size="xs"
-      />
-      <span className="min-w-0 flex-1 truncate text-xs font-medium text-neutral-100">
-        {title}
-      </span>
-      <span
-        className={`rounded-full px-2 py-0.5 text-[10px] ${badgeClassName}`}
-      >
-        {badge}
-      </span>
-    </div>
-  );
-}
-
-function ChannelMetric({
-  channels,
-  label,
-  publicationCount = 1,
-}: {
-  channels: Array<{ id: string; title: string; photoUrl: string | null }>;
-  label: string;
-  publicationCount?: number;
-}) {
-  return (
-    <div className="flex min-w-0 flex-col items-center justify-center">
-      <TelegramChannelAvatarList
-        channels={channels}
-        ariaLabel={`${label}: ${channels.length}`}
-      />
-      <p className="mt-0.5 text-[11px] text-neutral-500">
-        {label}
-        {publicationCount > 1 ? ` · ${publicationCount} publications` : ""}
-      </p>
-    </div>
-  );
 }
 
 function Stat({

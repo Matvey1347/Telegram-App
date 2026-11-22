@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { TelegramAiPostingStructureService } from './telegram-ai-posting-structure.service';
 import { TelegramAiPostingTestRunService } from './telegram-ai-posting-test-run.service';
 
+import { resolveImportedEditorial } from './telegram-unified-import-editorial';
 import { readManagedDraftEditorialPairs } from './telegram-managed-draft-editorial';
 
 const databaseUrl = process.env.AI_POSTING_TEST_DATABASE_URL ?? '';
@@ -105,6 +106,33 @@ const isDisposableLocalDatabase = (() => {
       await prisma.workspace.deleteMany({ where: { id: workspaceId } });
       await prisma.user.deleteMany({ where: { id: userId } });
       await prisma.$disconnect();
+    });
+
+    it('reuses imported spheres and rubrics for multiple drafts in the same channel', async () => {
+      const input = { sphere: 'Everyday wellbeing', rubric: 'Practice notes' };
+      const save = (editorial: typeof input) => prisma.$transaction(async (tx) => {
+        const classification = await resolveImportedEditorial(tx, workspaceId, channelId, editorial);
+        return tx.telegramManagedPost.create({
+          data: {
+            ...classification,
+            workspaceId,
+            telegramChannelId: channelId,
+            assignedMemberId: memberId,
+            title: 'Import fixture',
+          },
+        });
+      });
+      const [first, second] = await Promise.all([
+        save(input),
+        save({ sphere: ' everyday   WELLBEING ', rubric: 'PRACTICE NOTES' }),
+      ]);
+      expect(first.aiPostingSphereId).toBeTruthy();
+      expect(first.aiPostingRubricId).toBeTruthy();
+      expect(second.aiPostingSphereId).toBe(first.aiPostingSphereId);
+      expect(second.aiPostingRubricId).toBe(first.aiPostingRubricId);
+      expect(await prisma.telegramAiPostingSphere.count({
+        where: { workspaceId, telegramChannelId: channelId, name: { equals: input.sphere, mode: 'insensitive' } },
+      })).toBe(1);
     });
 
     it('creates real channel records and deduplicates names', async () => {

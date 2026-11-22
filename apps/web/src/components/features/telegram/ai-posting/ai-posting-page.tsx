@@ -13,7 +13,7 @@ import {
   Modal,
 } from "@/components/ui/primitives";
 import { DateInput } from "@/components/ui/date-inputs";
-import { telegramChannelKeys, telegramPostKeys } from "@/lib/query-keys";
+import { telegramAiPostingKeys, telegramChannelKeys, telegramPostKeys } from "@/lib/query-keys";
 import { api, telegramChannelsApi } from "@/lib/api";
 import { AiPostingChat } from "./ai-posting-chat";
 import { appendChannelEndingSignature } from "./channel-ending-signature";
@@ -45,7 +45,7 @@ import {
 import { TelegramCustomEmojiPacksModal } from "../telegram/telegram-custom-emoji-packs-modal";
 import { EditableTelegramPreviewText } from "../telegram/telegram-post-preview";
 import { workspaceKeys } from "@/lib/query-keys";
-import type { ResolvedEmoji } from "@telegram-system/shared";
+import { DEFAULT_TELEGRAM_AI_POSTING_SEARCH_PERCENT, type ResolvedEmoji } from "@telegram-system/shared";
 import type { TelegramChannelSelectOption } from "@/lib/api-types/telegram/telegram-channels";
 
 type Config = {
@@ -59,6 +59,7 @@ type Config = {
   ending: string;
   hashtags: string;
   imageMode: string;
+  hybridSearchPercent?: number;
   mediaPreferences?: AiPostingMediaPreference[];
   spheres: AiPostingSphere[];
   rubrics: AiPostingRubric[];
@@ -81,6 +82,7 @@ const initial: Config = {
   ending: "",
   hashtags: "disabled",
   imageMode: "ai",
+  hybridSearchPercent: DEFAULT_TELEGRAM_AI_POSTING_SEARCH_PERCENT,
   mediaPreferences: [],
   spheres: [],
   rubrics: [],
@@ -103,6 +105,7 @@ function comparableConfig(value?: Config): Config {
     ending: config.ending ?? "",
     hashtags: config.hashtags ?? "disabled",
     imageMode: config.imageMode ?? "ai",
+    hybridSearchPercent: config.hybridSearchPercent ?? DEFAULT_TELEGRAM_AI_POSTING_SEARCH_PERCENT,
     mediaPreferences: normalizeAiPostingMediaPreferences(config),
     spheres: config.spheres ?? [],
     rubrics: config.rubrics ?? [],
@@ -121,7 +124,7 @@ export function isAiPostingConfigDirty(current?: Config, saved?: Config) {
     JSON.stringify(comparableConfig(saved))
   );
 }
-const key = (id: string) => ["telegram-ai-posting", id] as const;
+const key = telegramAiPostingKeys.settings;
 type SettingsResponse = {
   mediaPreferenceIcons?: Record<string, ResolvedEmoji>;
   channel?: ChannelEndingSignatureSource & { photoUrl?: string | null };
@@ -530,7 +533,10 @@ export function AiPostingPage({
               <div hidden={settingsTab !== "images"}>
                 <AiPostingImagesSection
                   key={channelId}
+                  channelId={channelId}
                   mode={config.imageMode}
+                  hybridSearchPercent={effectiveConfig.hybridSearchPercent}
+                  onHybridSearchPercent={(hybridSearchPercent) => patch({ hybridSearchPercent })}
                   preferences={effectiveConfig.mediaPreferences}
                   avoidances={config.imageAvoidances ?? []}
                   channelAvatarUrl={

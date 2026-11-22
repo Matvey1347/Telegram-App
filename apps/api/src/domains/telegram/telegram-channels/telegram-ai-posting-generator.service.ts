@@ -1,8 +1,5 @@
 import {
-  BadGatewayException,
-  ConflictException,
-  Injectable,
-  NotFoundException,
+  BadGatewayException, ConflictException, Injectable,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import type { AiCategory } from '@telegram-system/shared';
@@ -43,6 +40,11 @@ import {
 } from './telegram-ai-posting-topic-plan';
 import { telegramAiPostingOperationFromError } from './telegram-ai-posting-test-run-errors';
 import { appendChannelEndingSignature } from '@telegram-system/shared';
+import {
+  claimTelegramAiPostingRetrySlot, createTelegramAiPostingGenerationRun, readTelegramAiPostingGenerationSettings,
+  settleTelegramAiPostingRetrySlot, type TelegramAiPostingRetrySlot,
+} from './telegram-ai-posting-generation-store';
+import { telegramAiPostingHybridMediaMode } from './telegram-ai-posting-hybrid-media';
 import { iconToResolvedEmoji } from '../../../common/icons/resolved-emoji';
 const normalize = (value: string) =>
   value
@@ -74,6 +76,7 @@ export class TelegramAiPostingGeneratorService {
       total: number,
     ) => void,
     topicOverride?: string,
+    retrySlot?: TelegramAiPostingRetrySlot,
   ) {
     if (
       !Number.isInteger(count) ||
@@ -82,51 +85,41 @@ export class TelegramAiPostingGeneratorService {
     )
       throw new ConflictException('AI_POSTING_COUNT_INVALID');
     const workspaceId = await this.workspace.resolveWorkspaceIdForUser(userId);
-    const [channel, settings] = await Promise.all([
-      this.prisma.telegramChannel.findFirst({
-        where: { id: channelId, workspaceId },
-        select: {
-          language: true,
-          photoUrl: true,
-          title: true,
-          username: true,
-          description: true,
-          inviteLink: true,
-          defaultInviteLink: { select: { url: true, isRevoked: true } },
-          publicInviteLink: { select: { url: true, isRevoked: true } },
-          presentationIcon: true,
-        },
-      }),
-      this.prisma.telegramAiPostingSettings.findFirst({
-        where: { workspaceId, telegramChannelId: channelId },
-        select: {
-          configuration: true,
-          configurationVersion: true,
-          aiDailyBudget: true,
-          aiMonthlyBudget: true,
-        },
-      }),
-    ]);
-    if (!settings) throw new NotFoundException('AI_POSTING_SETTINGS_REQUIRED');
-    const previousGeneratedCount =
-      await this.prisma.telegramAiPostingTestRun.aggregate({
-        where: { workspaceId, telegramChannelId: channelId },
-        _sum: { requestedCount: true },
-      });
-    const run = await this.prisma.telegramAiPostingTestRun.create({
-      data: {
-        workspaceId,
-        telegramChannelId: channelId,
-        requestedCount: count,
+    const { channel, settings } = await readTelegramAiPostingGenerationSettings(this.prisma, workspaceId, channelId);
+    const run = retrySlot
+      ? { ...await claimTelegramAiPostingRetrySlot(this.prisma, workspaceId, channelId, retrySlot), editorialOffset: 0 }
+      : await createTelegramAiPostingGenerationRun(
+          this.prisma, workspaceId, channelId, count, settings.configurationVersion,
+          (settings.configuration as { imageMode?: string } | null)?.imageMode === 'hybrid',
+        );
+    if (retrySlot) {
+      const result = await this.generateRunContent(
+        userId, channelId, 1, workspaceId, settings, mode, run.id, undefined,
+        onProgress, channel?.language ?? '', channel?.photoUrl ?? null,
+        topicOverride, 0, channel, retrySlot,
+      ).catch((error: unknown): Awaited<ReturnType<typeof this.generateRunContent>> => ({
+        generated: [],
+        requested: 1,
         settingsVersion: settings.configurationVersion,
-        status: 'RUNNING',
-        publications: [],
-        failures: [],
-        operations: [],
-        feedback: [],
-      },
-      select: { id: true, version: true },
-    });
+        sourceDiagnostics: telegramAiPostingSourceDiagnosticsFromError(error),
+        unknownImageCost: false,
+        failures: telegramAiPostingGenerationFailures(error).map((failure) => ({
+          ...failure, publicationIndex: retrySlot.publicationIndex,
+          topic: topicOverride ?? '',
+        })),
+        operations: (error as { postingOperations?: Run[] } | null)?.postingOperations ?? [],
+      }));
+      const settlement = await settleTelegramAiPostingRetrySlot(
+        this.prisma, workspaceId, retrySlot,
+        result.generated[0] && { ...result.generated[0], status: 'PENDING', savedPostId: null, rejectionReason: null },
+        result.operations, result.failures.map((failure) => ({
+          ...failure, publicationIndex: retrySlot.publicationIndex,
+          ...(!result.generated.length ? { retryText: true } : {}),
+          ...(retrySlot.imageMode ? { imageMode: retrySlot.imageMode } : {}),
+        })),
+      );
+      return { ...result, ...settlement, runId: run.id, version: run.version + 1 };
+    }
     try {
       const result = await this.generateRunContent(
         userId,
@@ -141,7 +134,7 @@ export class TelegramAiPostingGeneratorService {
         channel?.language ?? '',
         channel?.photoUrl ?? null,
         topicOverride,
-        previousGeneratedCount._sum.requestedCount ?? 0,
+        run.editorialOffset,
         channel,
       );
       const publications = result.generated.map((item) => ({
@@ -234,6 +227,7 @@ export class TelegramAiPostingGeneratorService {
       publicInviteLink: { url: string; isRevoked: boolean } | null;
       presentationIcon: any;
     } | null,
+    retrySlot?: TelegramAiPostingRetrySlot,
   ) {
     const config = settings.configuration as Record<string, any>;
     const sphereSources = (Array.isArray(config.spheres) ? config.spheres : [])
@@ -308,7 +302,7 @@ export class TelegramAiPostingGeneratorService {
         detectTelegramAiPostingLanguage(sourceContext.history) ||
         telegramAiPostingLanguageName(sourceContext.editorialProfile.language),
     };
-    const calendar = await this.planningContext.read(
+    const calendar = topicOverride ? null : await this.planningContext.read(
       userId,
       workspaceId,
       channelId,
@@ -394,6 +388,7 @@ export class TelegramAiPostingGeneratorService {
       category: AiCategory,
       prompt: string,
       attempt = 1,
+      postingDraft = false,
     ) => {
       const operationId = `${new Date().toISOString().slice(0, 10)}:${randomUUID()}`;
       const operationIndex = operations.length;
@@ -415,7 +410,7 @@ export class TelegramAiPostingGeneratorService {
       operations.push(pendingOperation);
       await this.prisma.telegramAiPostingTestRun.updateMany({
         where: { id: testRunId, workspaceId, status: 'RUNNING' },
-        data: { operations },
+        data: { operations: [...(retrySlot?.operations ?? []), ...operations] },
       });
       activeProgress = {
         stage,
@@ -434,6 +429,7 @@ export class TelegramAiPostingGeneratorService {
           operationId,
           mode,
           input: prompt,
+          ...(postingDraft ? { postingDraft } : {}),
           businessObjectId: channelId,
           aiPosting: {
             channelId,
@@ -460,7 +456,7 @@ export class TelegramAiPostingGeneratorService {
         };
         await this.prisma.telegramAiPostingTestRun.updateMany({
           where: { id: testRunId, workspaceId, status: 'RUNNING' },
-          data: { operations },
+          data: { operations: [...(retrySlot?.operations ?? []), ...operations] },
         });
         finishProgress('FAILED', attempt);
         throw error;
@@ -483,7 +479,7 @@ export class TelegramAiPostingGeneratorService {
       };
       await this.prisma.telegramAiPostingTestRun.updateMany({
         where: { id: testRunId, workspaceId, status: 'RUNNING' },
-        data: { operations },
+        data: { operations: [...(retrySlot?.operations ?? []), ...operations] },
       });
       // A completed, validated model response is still usable when the
       // provider omits token usage. Settlement marks it UNKNOWN and retains
@@ -503,7 +499,14 @@ export class TelegramAiPostingGeneratorService {
           `AI_POSTING_${stage.toUpperCase()}_${operation.errorCategory ?? operation.status}`,
         );
       }
-      const reply = (result.result as { reply?: unknown }).reply;
+      const wrappedReply = (result.result as { reply?: unknown }).reply;
+      const reply = postingDraft && wrappedReply === undefined
+        ? JSON.stringify(result.result)
+        : wrappedReply;
+      if (postingDraft && typeof reply === 'string' && !reply.trim()) {
+        finishProgress('FAILED', attempt);
+        return '{"text":""}';
+      }
       if (typeof reply !== 'string' || !reply.trim()) {
         finishProgress('FAILED', attempt);
         throw new BadGatewayException(
@@ -515,7 +518,7 @@ export class TelegramAiPostingGeneratorService {
     };
     try {
       const topics: string[] = topicOverride ? [topicOverride] : [];
-      if (!topicOverride) {
+      if (!topicOverride && calendar) {
         const planning = telegramAiPostingPlanningContextText(calendar);
         const planReply = await invoke(
           'planning',
@@ -556,26 +559,14 @@ export class TelegramAiPostingGeneratorService {
           ? this.images.prepareChannelAvatar(channelPhotoUrl)
           : Promise.resolve(null),
       ]);
-      const results: Array<{
-        title: string;
-        text: string;
-        format: string;
-        category: string;
-        imageUrl: string | null;
-        imageSourceId: string | null;
-        imageFingerprint?: string | null;
-        imageOriginalUrl?: string | null;
-        mediaPreference: { id: string; name: string } | null;
-        mediaReadiness: 'READY' | 'MISSING' | 'FAILED';
-        mediaFailureCode?: string;
-        imageCostUnknown: boolean;
-        reviewNotes: string[];
-        costs: Record<string, string | null>;
-        operations: Run[];
+      const results: Array<Awaited<ReturnType<typeof generateTelegramAiPostingDraft>> & {
+        publicationIndex: number;
       }> = [];
       const failures: Array<{
+        publicationIndex: number;
         topic: string;
         code: string;
+        imageMode?: 'found' | 'ai';
         reasons?: string[];
       }> = [];
       const planningCost = operations.find(
@@ -587,9 +578,15 @@ export class TelegramAiPostingGeneratorService {
             .toDecimalPlaces(12, Prisma.Decimal.ROUND_UP)
             .toString()
         : null;
-      for (const [publicationIndex, topic] of topics
+      for (const [offset, topic] of topics
         .slice(0, count)
         .entries()) {
+        const publicationIndex = retrySlot?.publicationIndex ?? offset;
+        const imageMode = generationConfig.imageMode === 'hybrid'
+          ? retrySlot?.imageMode ?? telegramAiPostingHybridMediaMode(
+              editorialOffset + publicationIndex, generationConfig.hybridSearchPercent,
+            )
+          : undefined;
         try {
           activePublicationIndex = publicationIndex;
           const spheres = (
@@ -664,6 +661,7 @@ export class TelegramAiPostingGeneratorService {
               channelUsername: channel?.username,
               channelTitle: channel?.title,
               topic,
+              imageMode,
               config: { ...generationConfig, editorialSelection },
               referenceImage: reference.image,
               referenceImageFailed: reference.failed,
@@ -677,7 +675,7 @@ export class TelegramAiPostingGeneratorService {
               watermarkOpacityPercent: Number(generationConfig.channelAvatarWatermarkOpacity) || 100,
               context: publicationContext,
               usedImages: new Set(results.flatMap((item) =>
-                [item.imageFingerprint, item.imageOriginalUrl].filter((key): key is string => Boolean(key)),
+                [item.imageFingerprint, item.imageVisualFingerprint, item.imageOriginalUrl].filter((key): key is string => Boolean(key)),
               )),
               planningCost: allocatedPlanningCost,
               previousFormats: results.map((item) => item.format),
@@ -701,7 +699,7 @@ export class TelegramAiPostingGeneratorService {
             generated.mediaReadiness === 'READY' ? 'COMPLETED' : 'FAILED',
             1,
           );
-          results.push(generated);
+          results.push({ ...generated, publicationIndex });
           onProgress?.(
             {
               stage: 'publication',
@@ -710,6 +708,7 @@ export class TelegramAiPostingGeneratorService {
               publicationIndex,
               publication: {
                 ...generated,
+                publicationIndex,
                 status: 'PENDING',
                 rejectionReason: null,
                 savedPostId: null,
@@ -720,6 +719,7 @@ export class TelegramAiPostingGeneratorService {
           );
           if (generated.mediaReadiness !== 'READY')
             failures.push({
+              publicationIndex,
               topic,
               code: generated.mediaFailureCode ?? 'AI_POSTING_IMAGE_MISSING',
             });
@@ -744,10 +744,13 @@ export class TelegramAiPostingGeneratorService {
           }
           const failedOperation =
             telegramAiPostingOperationFromError<Run>(error);
-          if (failedOperation) operations.push(failedOperation);
+          if (failedOperation && !operations.some((item) => item.operationId === failedOperation.operationId))
+            operations.push({ ...failedOperation, publicationIndex });
           failures.push({
+            publicationIndex,
             topic,
             code: telegramAiPostingGenerationErrorCode(error),
+            ...(imageMode ? { imageMode } : {}),
             ...(telegramAiPostingGenerationErrorReasons(error).length
               ? { reasons: telegramAiPostingGenerationErrorReasons(error) }
               : {}),

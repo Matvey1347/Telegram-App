@@ -9,6 +9,13 @@ export type TelegramUnifiedImportDeleteTarget = {
   imported?: boolean;
 };
 
+export type TelegramUnifiedImportEditorial = {
+  sphere: string;
+  rubric: string;
+  sphereDescription?: string;
+  rubricDescription?: string;
+};
+
 export type TelegramUnifiedImportManifest = {
   version: typeof TELEGRAM_UNIFIED_IMPORT_VERSION;
   groups?: Array<{
@@ -36,6 +43,7 @@ export type TelegramUnifiedImportManifest = {
     text?: string | null;
     imageUrls?: string[];
     imageSearch?: string[];
+    editorial?: TelegramUnifiedImportEditorial;
     groupRef?: string | null;
     hypothesisRefs?: string[];
     imported?: boolean;
@@ -67,6 +75,11 @@ export type TelegramUnifiedImportPreviewItem = {
   icon?: string | null;
   iconPresentation?: ResolvedEmoji | null;
   description?: string | null;
+  editorial?: {
+    description: string | null;
+    createsSphere?: boolean;
+    createsRubric?: boolean;
+  } | null;
   text?: string | null;
   imageUrls?: string[];
   scheduledAt?: string | null;

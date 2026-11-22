@@ -1,5 +1,6 @@
 "use client";
 
+import { Save } from "lucide-react";
 import type { CrossPromotionPlan } from "@telegram-system/shared";
 import { Button, Tooltip } from "@/components/ui/primitives";
 import type { CrossPromotionModalMode } from "./cross-promotion-modal-title";
@@ -55,10 +56,12 @@ export function CrossPromotionPlanActions({
           dates and times.
         </div>
       ) : null}
-      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-        <Button type="button" variant="secondary" onClick={onClose}>
-          Cancel
-        </Button>
+      <div className={mode === "create"
+        ? "grid grid-flow-col auto-cols-fr gap-2 [&>button]:whitespace-normal [&>button]:px-2"
+        : "flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"}>
+        {mode === "edit" ? (
+          <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
+        ) : null}
         {!status || status === "DRAFT" ? (
           <Button
             type="button"
@@ -66,6 +69,7 @@ export function CrossPromotionPlanActions({
             disabled={saving || savingDraft}
             onClick={onSaveDraft}
           >
+            <Save size={16} aria-hidden="true" />
             {savingDraft
               ? status === "DRAFT"
                 ? "Updating draft…"
@@ -75,7 +79,7 @@ export function CrossPromotionPlanActions({
                 : "Save draft"}
           </Button>
         ) : null}
-        {onUpdateDetails ? (
+        {mode === "edit" && onUpdateDetails ? (
           <Button
             type="button"
             variant="secondary"
@@ -86,7 +90,7 @@ export function CrossPromotionPlanActions({
             {saving ? "Updating…" : "Update details"}
           </Button>
         ) : null}
-        {onReplaceAndPublishNow && !hasMultiplePublisherPosts ? (
+        {mode === "edit" && onReplaceAndPublishNow && !hasMultiplePublisherPosts ? (
           <Tooltip
             content={
               status === "DRAFT"
@@ -110,7 +114,7 @@ export function CrossPromotionPlanActions({
         {status === "DRAFT" ? (
           <Button
             type="button"
-            className="w-full sm:w-auto"
+            className={mode === "edit" ? "w-full sm:w-auto" : "w-full"}
             disabled={saving || savingDraft || requiresRepublish}
             onClick={onSubmit}
           >
@@ -119,7 +123,7 @@ export function CrossPromotionPlanActions({
         ) : (
           <Button
             type="button"
-            className="w-full sm:w-auto"
+            className={mode === "edit" ? "w-full sm:w-auto" : "w-full"}
             disabled={saving || savingDraft || requiresRepublish}
             onClick={onSubmit}
           >
@@ -133,7 +137,7 @@ export function CrossPromotionPlanActions({
                   : requiresRepublish
                     ? "Republish required"
                     : "Update mutual promotion"
-                : "Create and schedule"}
+                : "Create"}
           </Button>
         )}
       </div>

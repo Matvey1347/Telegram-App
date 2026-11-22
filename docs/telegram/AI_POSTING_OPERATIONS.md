@@ -61,6 +61,14 @@ Autopilot creates and schedules ordinary `TelegramManagedPost` records through t
 
 Analytics use the detailed `AiOperation` ledger, filtered by workspace, channel, date, mode, and AI category. The selectable range is limited to 90 days, matching the detailed-operation retention policy. Planning cost is allocated across the preview publications for per-post display while the underlying planning operation is counted once in aggregate ledger spend. Failed and retried operations remain part of spend when the provider reports a charge.
 
+### Media preferences and image sources
+
+Search and Hybrid modes try Openverse, with Wikimedia Commons as a fallback for empty or unavailable catalog results. Catalog results are restricted to public-domain or CC0 media. A selected preference supplies a general concept, a dedicated keyword and selection brief for search, a dedicated composition brief for generation, and up to eight references according to its Search, Generation or Both setting. In Hybrid mode, a Generation-only preference goes directly to generation. Available reference attachments are reused for a batch. If every configured attachment fails, the applicable media path reports a reference error.
+
+When references are available for search, up to three viable images enter one metered visual review. The review can select a matching image or reject the shortlist. Search can try a second query taken from an example in the search brief. Hybrid mode falls back to reference-guided generation when a preference allows generation and search finds no match. A Search-only preference leaves media empty when no usable asset is found. For references with a generation brief, the visual review can select a single reference for the edit request and describe the framing, light and texture even when the shortlist is empty. The channel's existing URL and SHA-256 checks remain in use. New AI Posting images also store a visual fingerprint in run history to recognize resized or re-encoded copies.
+
+An image search uses up to two keyword queries, two catalogs per query, and six candidate downloads when visual references or a search brief are present. Only one shortlist review and one generation can run per publication attempt, through the existing AI budget and usage ledger. This path adds no polling, timers or background database writes.
+
 ## Verification
 
 The production UI is available at `https://www.nexeloq.com/ai-posting`. Sign
@@ -86,3 +94,25 @@ For manual QA, configure one development channel and a low test budget, generate
 Сообщения чата сохраняются для рабочего пространства и канала. При открытии загружаются последние 100 сообщений; модели передаются последние 19 и новое сообщение. Сообщение и ответ сохраняются вместе после успешного ответа, до удаления канала или рабочего пространства. Чат принимает изображение или голосовое сообщение: сохраняются описание или расшифровка, а не исходный файл. Временная запись вложения доступна только тому же пользователю, каналу и рабочему пространству в течение 24 часов; просроченные записи очищаются порциями при последующих загрузках в этой области.
 
 По явному запросу с названием компании чат ищет её через Wikidata, проверяет официальный HTTPS-сайт и доступную на нём страницу новостей, затем создаёт или повторно использует рубрику и подключает найденные источники. Поиск не охватывает независимые СМИ и не проверяет права на изображения. Выбранную публикацию можно сгенерировать и изменить по текстовым или голосовым правкам; описание прикреплённого изображения передаётся как контекст. Операции внешнего поиска, анализа и генерации запускаются только по запросу пользователя, учитываются существующим AI-учётом и ограничены размерами и числом запросов. При простое дополнительных таймеров, опроса, записей и нагрузки на Neon/Railway нет. Для 100 каналов нагрузка растёт по числу одновременно активных запросов, а не по числу подключённых каналов; существующие ограничения источников и размеров ответов сохраняются.
+
+The media preference editor keeps the shared concept visible and has separate
+Generation and Search controls for their respective briefs. A successful
+batch upload sends one metered vision request with the current reference set
+(up to eight images) and updates both briefs in the open editor. Saving commits
+the references and edited briefs through the existing settings flow. Opening
+the editor makes no AI request. If an attachment is unavailable or the AI
+response is incomplete, the editor keeps the reference list and previous
+briefs and offers an explicit retry.
+
+Test run history keeps the requested position of each result. A draft with
+failed media keeps its text preview and shows the media failure in that
+position. A position rejected during editorial review shows the recorded
+reason and the explicit new-run retry action. Positions from older batches
+are reconstructed from the stored draft order and unmatched failures.
+
+Batch drafting requests a provider-validated response with separate text and
+media fields. The existing editorial review still runs on the authored text.
+Generation streams send a keepalive every 15 seconds until the request ends.
+If the connection closes while work is in progress, history can be refreshed
+without starting another batch. The live preview keeps the original position
+of each result when a slot between two drafts is still empty or has failed.

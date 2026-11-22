@@ -10,7 +10,6 @@ import {
 export async function reconcileMutualPromotionFolder(
   queryClient: QueryClient,
   folder: MutualPromotionFolderDetail,
-  _listParams: { page: number; pageSize: number; status?: string },
   financeChanged = false,
 ) {
   queryClient.setQueryData(mutualPromotionFolderKeys.detail(folder.id), folder);

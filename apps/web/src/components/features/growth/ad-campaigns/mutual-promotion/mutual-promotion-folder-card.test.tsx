@@ -1,3 +1,4 @@
+import type { MutualPromotionFolderListItem } from "@telegram-system/shared";
 import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
@@ -160,23 +161,6 @@ describe("MutualPromotionFolderCard", () => {
     expect(onOpen).toHaveBeenCalledTimes(1);
 
     await user.click(
-      screen.getByRole("button", { name: "View 2 publishers channels" }),
-    );
-    expect(onOpen).toHaveBeenCalledTimes(1);
-    expect(
-      screen.getByRole("menu", { name: "Publishers channels" }),
-    ).toBeInTheDocument();
-
-    await user.click(document.body);
-    expect(
-      screen.queryByRole("menu", { name: "Publishers channels" }),
-    ).not.toBeInTheDocument();
-
-    await user.click(
-      screen.getByRole("button", { name: "View 2 publishers channels" }),
-    );
-
-    await user.click(
       within(screen.getByLabelText("Channel performance")).getByText(
         "Channel One",
       ),
@@ -184,13 +168,13 @@ describe("MutualPromotionFolderCard", () => {
     expect(onOpen).toHaveBeenCalledTimes(1);
   });
 
-  it("shows role avatars in the metrics and opens compact role popovers", async () => {
+  it("shows each role and its metrics with subscriber-price details", async () => {
     const user = userEvent.setup();
     render(<MutualPromotionFolderCard folder={folder} onOpen={vi.fn()} />);
 
     expect(screen.getByText("Active")).toHaveClass("text-emerald-200");
     expect(screen.getByRole("article").className).not.toContain("shadow-[");
-    expect(screen.getAllByRole("img")).toHaveLength(4);
+    expect(screen.getAllByRole("presentation")).toHaveLength(4);
     const performance = screen.getByLabelText("Channel performance");
     expect(within(performance).getByText("+6")).toBeInTheDocument();
     expect(within(performance).queryByText("33")).not.toBeInTheDocument();
@@ -207,7 +191,7 @@ describe("MutualPromotionFolderCard", () => {
       within(performance).queryByText("Link total (joined + requests)"),
     ).not.toBeInTheDocument();
     expect(
-      within(performance).getAllByText("Folder (joined + requests)"),
+      within(performance).getAllByText("Joined + requests"),
     ).toHaveLength(4);
     expect(
       within(performance).getAllByText("Estimated unsubscribes ≈"),
@@ -220,7 +204,7 @@ describe("MutualPromotionFolderCard", () => {
     expect(screen.getByText("ok 9.00–12.00 UAH")).toBeInTheDocument();
     expect(screen.getByText("stop from 12.00 UAH")).toBeInTheDocument();
     expect(screen.getByText("08/09/2026, 19:00").parentElement).toHaveClass(
-      "whitespace-nowrap",
+      "flex-wrap",
     );
     expect(
       screen.getByRole("button", { name: "Open folder September campaign" }),
@@ -231,51 +215,20 @@ describe("MutualPromotionFolderCard", () => {
       }),
     ).toBeNull();
 
-    await user.click(
-      screen.getByRole("button", { name: "View 2 publishers channels" }),
-    );
-
-    const publisherMenu = screen.getByRole("menu", {
-      name: "Publishers channels",
-    });
-    expect(within(publisherMenu).getByText("Channel One")).toBeTruthy();
-    expect(within(publisherMenu).getByText("Channel Four")).toBeTruthy();
-    expect(within(publisherMenu).queryByText("Channel Two")).toBeNull();
-
-    await user.click(
-      screen.getByRole("button", { name: "View 2 paid channels" }),
-    );
-
-    const paidMenu = screen.getByRole("menu", { name: "Paid channels" });
-    expect(within(paidMenu).getByText("Channel Two")).toBeTruthy();
-    expect(within(paidMenu).getByText("Channel Three")).toBeTruthy();
-    expect(within(paidMenu).queryByText("Channel One")).toBeNull();
+    expect(screen.queryByText("Posts")).not.toBeInTheDocument();
+    expect(screen.queryByText("Publishers")).not.toBeInTheDocument();
   });
 
-  it("uses the Deals countdown presentation and changes phase color", () => {
-    const { rerender } = render(
+  it("shows the period once and omits a redundant completed status", () => {
+    render(
       <MutualPromotionFolderCard
-        folder={folder}
-        now={new Date("2026-09-08T16:00:00.000Z").getTime()}
+        folder={{ ...(folder as MutualPromotionFolderListItem), title: "Network // 2026-09-08 — 2026-09-10", status: "COMPLETED" }}
         onOpen={vi.fn()}
       />,
     );
-
-    expect(screen.getByText("Starts in 01:00:00")).toHaveClass(
-      "text-sky-400",
-      "font-mono",
-      "tabular-nums",
-    );
-
-    rerender(
-      <MutualPromotionFolderCard
-        folder={folder}
-        now={new Date("2026-09-09T20:00:00.000Z").getTime()}
-        onOpen={vi.fn()}
-      />,
-    );
-    expect(screen.getByText("Ends in 1d 00:00:00")).toHaveClass(
-      "text-amber-300",
-    );
+    expect(screen.getByRole("heading", { name: "Network" })).toBeInTheDocument();
+    expect(screen.getByText("08/09/2026, 19:00")).toBeInTheDocument();
+    expect(screen.queryByText("Completed")).not.toBeInTheDocument();
+    expect(screen.queryByText("Active")).not.toBeInTheDocument();
   });
 });

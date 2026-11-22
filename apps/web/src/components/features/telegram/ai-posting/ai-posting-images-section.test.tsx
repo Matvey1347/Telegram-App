@@ -1,12 +1,13 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AiPostingImagesSection } from "./ai-posting-images-section";
 import type { AiPostingMediaPreference } from "./ai-posting-media-preferences";
 
-const mocks = vi.hoisted(() => ({ upload: vi.fn(), pushToast: vi.fn() }));
+const mocks = vi.hoisted(() => ({ upload: vi.fn(), pushToast: vi.fn(), analyze: vi.fn() }));
 vi.mock("@/lib/api", () => ({
+  api: { post: mocks.analyze },
   telegramChannelsApi: { uploadManagedPostMedia: mocks.upload },
 }));
 vi.mock("@/providers/toast-provider", () => ({
@@ -82,6 +83,25 @@ describe("AiPostingImagesSection", () => {
     });
   });
 
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("shows both hybrid shares and changes the search share by keyboard", async () => {
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    const user = userEvent.setup();
+    const change = vi.fn();
+    renderSection({ mode: "hybrid", onHybridSearchPercent: change });
+    const slider = screen.getByRole("slider", { name: "Поиск изображений" });
+    expect(slider).toHaveAttribute("aria-valuenow", "70");
+    expect(screen.getByText("AI-генерация 30%")).toBeInTheDocument();
+    slider.focus();
+    await user.keyboard("{ArrowRight}");
+    expect(change).toHaveBeenCalledWith(71);
+  });
+
   it("adds a named preference with the shared emoji picker", async () => {
     const user = userEvent.setup();
     const onPreferences = vi.fn();
@@ -91,9 +111,12 @@ describe("AiPostingImagesSection", () => {
     );
     await user.type(screen.getByLabelText("Название предпочтения"), "Фото");
     await user.type(
-      screen.getByLabelText("Описание предпочтения"),
+      screen.getByLabelText("Общая концепция"),
       "Тёплая палитра",
     );
+    await user.type(screen.getByLabelText("Для генерации"), "Мягкий боковой свет");
+    await user.click(screen.getByRole("button", { name: "Поиск" }));
+    await user.type(screen.getByLabelText("Для поиска"), "Фотография в движении");
     await user.click(
       screen.getByRole("button", { name: "Выбрать эмодзи предпочтения" }),
     );
@@ -102,6 +125,8 @@ describe("AiPostingImagesSection", () => {
       expect.objectContaining({
         name: "Фото",
         description: "Тёплая палитра",
+        generationDescription: "Мягкий боковой свет",
+        searchDescription: "Фотография в движении",
         emoji: "💠",
         emojiIconId: "premium-emoji-id",
         references: [],
@@ -135,6 +160,56 @@ describe("AiPostingImagesSection", () => {
       screen.getByRole("button", { name: "Добавлять аватар канала на медиа" }),
     );
     expect(onUseChannelAvatarInMedia).toHaveBeenCalledWith(true);
+  });
+
+  it("automatically updates both guidance fields after a reference upload", async () => {
+    const user = userEvent.setup();
+    const onPreferences = vi.fn();
+    mocks.analyze.mockResolvedValueOnce({
+      data: { generationDescription: "Рассеянный свет", searchDescription: "Искать кадры с плёнки" },
+    });
+    renderSection({ channelId: "channel-1", onPreferences });
+    await user.click(screen.getByRole("button", { name: "Редактировать предпочтение 1" }));
+    fireEvent.paste(screen.getByRole("region", { name: "Область референсов для предпочтения" }), {
+      clipboardData: { files: [new File(["ref"], "one.png", { type: "image/png" })] },
+    });
+    await waitFor(() => expect(screen.getByLabelText("Для генерации")).toHaveValue("Рассеянный свет"));
+    expect(screen.getByLabelText("Общая концепция")).toHaveValue(preference.description);
+    expect(screen.queryByLabelText("Для поиска")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Поиск" }));
+    expect(screen.getByLabelText("Для поиска")).toHaveValue("Искать кадры с плёнки");
+    expect(mocks.analyze).toHaveBeenCalledTimes(1);
+    expect(mocks.analyze).toHaveBeenCalledWith(
+      "/telegram-channels/channel-1/ai-posting/media-preferences/analyze-references",
+      expect.objectContaining({ references: ["https://media.example/ref.jpg"], description: preference.description }),
+    );
+    await user.click(screen.getByRole("button", { name: "Сохранить" }));
+    expect(onPreferences).toHaveBeenCalledWith([expect.objectContaining({
+      generationDescription: "Рассеянный свет",
+      searchDescription: "Искать кадры с плёнки",
+    })]);
+  });
+
+  it("keeps references and previous guidance when analysis fails", async () => {
+    const user = userEvent.setup();
+    const onPreferences = vi.fn();
+    mocks.analyze.mockRejectedValueOnce(new Error("Unavailable"));
+    renderSection({
+      channelId: "channel-1",
+      preferences: [{ ...preference, generationDescription: "Сохранённое описание" }],
+      onPreferences,
+    });
+    await user.click(screen.getByRole("button", { name: "Редактировать предпочтение 1" }));
+    fireEvent.paste(screen.getByRole("region", { name: "Область референсов для предпочтения" }), {
+      clipboardData: { files: [new File(["ref"], "one.png", { type: "image/png" })] },
+    });
+    expect(await screen.findByRole("button", { name: "Повторить анализ" })).toBeEnabled();
+    expect(screen.getByLabelText("Для генерации")).toHaveValue("Сохранённое описание");
+    await user.click(screen.getByRole("button", { name: "Сохранить" }));
+    expect(onPreferences).toHaveBeenCalledWith([expect.objectContaining({
+      references: ["https://media.example/ref.jpg"],
+      generationDescription: "Сохранённое описание",
+    })]);
   });
 
   it("accepts eight reference images and bounds further uploads", async () => {

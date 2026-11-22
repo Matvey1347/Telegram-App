@@ -353,6 +353,7 @@ export class TelegramSourceAccessService {
             row.sourceType === TelegramSourceType.MTPROTO
               ? account?.mtprotoPublishingEnabled !== false
               : null,
+          isPreferredInviteLinkAccount: Boolean(account?.isPreferredInviteLinkAccount),
           isPriorityPublisher:
             row.sourceType === TelegramSourceType.MTPROTO
               ? Boolean(account?.isPriorityPublisher)

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as Slider from "@radix-ui/react-slider";
 import { CirclePlus } from "lucide-react";
@@ -108,12 +108,13 @@ export function TelegramInviteLinkCreateInline({
   const queryClient = useQueryClient();
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
   const open = controlledOpen ?? uncontrolledOpen;
+  const [accountId, setAccountId] = useState("");
   const setOpen = (next: boolean) => {
+    if (!next) setAccountId("");
     if (controlledOpen === undefined) setUncontrolledOpen(next);
     onOpenChange?.(next);
   };
   const [title, setTitle] = useState("");
-  const [accountId, setAccountId] = useState("");
   const [requestNeeded, setRequestNeeded] = useState(true);
   const [monthlyFeeEnabled, setMonthlyFeeEnabled] = useState(false);
   const [monthlyFeeStars, setMonthlyFeeStars] = useState("");
@@ -139,12 +140,9 @@ export function TelegramInviteLinkCreateInline({
         .map((source) => [source.sourceId, source]),
     ).values(),
   ];
-  const selectedAccount = accounts.find(
-    (account) => account.sourceId === accountId,
-  );
-  useEffect(() => {
-    if (!accountId && accounts[0]?.sourceId) setAccountId(accounts[0].sourceId);
-  }, [accountId, accounts]);
+  const selectedAccount = accounts.find((account) => account.sourceId === accountId)
+    ?? accounts.find((account) => account.isPreferredInviteLinkAccount)
+    ?? accounts[0];
   const create = useMutation({
     mutationFn: (submission: {
       channelId: string;
@@ -249,7 +247,7 @@ export function TelegramInviteLinkCreateInline({
       </FormField>
       <FormField label="MTProto account" required>
         <CustomSelect
-          value={accountId}
+          value={selectedAccount?.sourceId ?? ""}
           onChange={setAccountId}
           disabled={sources.isLoading || create.isPending || !accounts.length}
           placeholder={

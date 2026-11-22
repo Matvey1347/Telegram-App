@@ -11,10 +11,10 @@ import { allowedSaleActions, type SaleActionKey } from "./sale-status-actions";
 import { CustomSelect, FormField, IconButton, Skeleton } from "@/components/ui/primitives";
 import type { Account, TelegramChannel } from "@/lib/api";
 import { buildTelegramPostsUrl } from "@/lib/features/telegram/telegram-posts-url";
-import { hasLinkedPlacementPost } from "./ad-placement-lifecycle";
+import { LifecycleCountdown } from "@/components/ui/lifecycle-countdown";
 import { isValidZonedDateTimeInput, zonedDateTimeToUtc } from "@/lib/features/growth/telegram-ad-sales";
 import { formatDateTime } from "@/lib/date-format";
-import { placementFormatLabel, placementRunWindow } from "./ad-placement-lifecycle";
+import { hasLinkedPlacementPost, placementFormatLabel, placementRunWindow, placementTimer } from "./ad-placement-lifecycle";
 import { AdSalePostMetrics, PostMetrics } from "./ad-sale-post-metrics";
 import { AdSaleDealPlacementActions } from "./ad-sale-deal-placement-actions";
 import type { AdSaleApplyAllChanges } from "./ad-sale-deal-placement-actions";
@@ -23,7 +23,7 @@ import { DealFinanceTransaction } from "./deal-finance-transaction";
 import { nativeAdSalePayment } from "./ad-sale-native-payment";
 import { formatCompactMoney } from "@/lib/features/finance/money";
 import { AdSalePlacementValue } from "./ad-sale-placement-value";
-import { PlacementDeletionCountdown, SaveFooter, type PaymentDraft, type PlacementDraft } from "./ad-sales-sale-detail-editors";
+import { SaveFooter, type PaymentDraft, type PlacementDraft } from "./ad-sales-sale-detail-editors";
 
 export function DealDetailsSkeleton() {
   return (
@@ -207,6 +207,8 @@ export function DealOverview(props: {
               ? zonedDateTimeToUtc(draft.date, draft.time, draft.timezone).toISOString()
               : placement.scheduledAt;
             const p = { ...placement, scheduledAt };
+            const format = product?.name ?? placementFormatLabel(p);
+            const timer = linked ? placementTimer(p, now) : null;
             return (
             <div
               key={p.id}
@@ -220,7 +222,7 @@ export function DealOverview(props: {
                   props.onPlacement(p.id);
                 }
               }}
-              className={`cursor-pointer rounded-xl border border-neutral-800 bg-neutral-950 text-left transition hover:border-neutral-700 ${linked ? "p-4 sm:p-5" : "px-3 py-2.5"}`}
+              className="cursor-pointer rounded-xl border border-neutral-800 bg-neutral-950 px-3 py-2.5 text-left transition hover:border-neutral-700"
             >
               <div className="flex justify-between gap-3">
                 <div className="min-w-0">
@@ -241,22 +243,6 @@ export function DealOverview(props: {
                         "Telegram channel"}
                     </span>
                   </div>
-                  <p className="mt-1 flex items-center gap-1.5 text-xs text-neutral-500">
-                    <CalendarDays size={13} />
-                    {placementRunWindow(p) ??
-                      `Scheduled ${formatDateTime(p.scheduledAt, undefined, p.timezone)}`}
-                  </p>
-                  {linked ? <PlacementDeletionCountdown placement={p} now={now} /> : null}
-                  {product || placementFormatLabel(p) ? (
-                    <p className="mt-1 text-xs text-neutral-400">
-                      Format {product?.name ?? placementFormatLabel(p)}
-                      {linked && ((product?.isPermanent ?? p.isPermanentSnapshot)
-                        ? " · Permanent"
-                        : (product ? product.deleteAfterHours : p.deleteAfterHoursSnapshot) != null
-                          ? ` · Auto-delete after ${product ? product.deleteAfterHours : p.deleteAfterHoursSnapshot}h`
-                          : " · No auto-delete")}
-                    </p>
-                  ) : null}
                 </div>
                 <IconButton
                   type="button"
@@ -267,19 +253,21 @@ export function DealOverview(props: {
                   }}
                 />
               </div>
-              {linked && p.managedPost?.text ? (
-                <p className="mt-3 line-clamp-4 whitespace-pre-wrap break-words rounded-lg bg-neutral-900/70 px-3 py-2 text-sm text-neutral-300">
-                  {p.managedPost.text}
-                </p>
-              ) : null}
-              {linked ? <div className="mt-4 flex min-w-0 flex-col gap-2 border-t border-neutral-800 pt-3 text-sm sm:flex-row sm:items-start sm:justify-between">
+              <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                <span className="inline-flex items-center gap-1.5 text-neutral-500">
+                  <CalendarDays size={13} className="shrink-0" aria-hidden="true" />
+                  {placementRunWindow(p) ??
+                    `Scheduled ${formatDateTime(p.scheduledAt, undefined, p.timezone)}`}
+                </span>
+                {format ? <span className="text-neutral-400">Format {format}</span> : null}
+                {timer ? <LifecycleCountdown value={timer} /> : null}
+              </div>
+              {linked ? <div className="mt-2 flex min-w-0 flex-wrap items-start justify-between gap-2 border-t border-neutral-800 pt-2 text-sm">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                    <span className="text-emerald-400">
-                      {p.publishedAt || p.telegramPostId
-                        ? "Post published"
-                        : "Post configured"}
-                    </span>
+                    {timer?.phase !== "complete" && (p.publishedAt || p.telegramPostId) ? (
+                      <span className="text-emerald-400">Post published</span>
+                    ) : null}
                     {p.managedPostId ||
                     p.telegramPostUrl ||
                     p.managedPost?.telegramMessageUrls[0] ? (
@@ -297,7 +285,7 @@ export function DealOverview(props: {
                             Open in system <ExternalLink size={12} />
                           </a>
                         ) : null}
-                        {!p.deletedAt &&
+                        {timer?.phase !== "complete" &&
                         (p.telegramPostUrl ??
                           p.managedPost?.telegramMessageUrls[0]) ? (
                           <a
@@ -318,7 +306,7 @@ export function DealOverview(props: {
                   </div>
                   {p.telegramPost ? (
                     <PostMetrics
-                      className="mt-2"
+                      className="mt-1"
                       views={p.telegramPost.viewsCount}
                       reactions={p.telegramPost.reactionsCount}
                       forwards={p.telegramPost.forwardsCount}

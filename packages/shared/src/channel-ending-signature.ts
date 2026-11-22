@@ -59,5 +59,5 @@ export function appendChannelEndingSignature(ending: string, channel: ChannelEnd
     ? `![${fallback}](tg://emoji?id=${icon.telegramCustomEmojiId})`
     : fallback;
   const title = (channel.title || channel.username || 'Канал').replace(/[\[\]\r\n]/g, ' ');
-  return `${ending}${ending ? '\n\n' : ''}${emoji} [${title}](${link})`;
+  return `${ending}${ending ? '\n\n' : ''}${emoji}  [${title}](${link})`;
 }

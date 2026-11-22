@@ -1,4 +1,13 @@
+export const DEFAULT_TELEGRAM_AI_POSTING_SEARCH_PERCENT = 70;
+
+export function isTelegramAiPostingEmptyTextFailure(failure: { code: string; reasons?: string[] }) {
+  return failure.code === 'AI_POSTING_TEXT_EMPTY' ||
+    (failure.code === 'AI_POSTING_DRAFT_INVALID' &&
+      failure.reasons?.some((reason) => reason.includes('непустой текст публикации')));
+}
+
 export const TELEGRAM_AI_POSTING_MAX_MEDIA_REFERENCES = 8;
+export const TELEGRAM_AI_POSTING_MAX_MEDIA_GUIDANCE_LENGTH = 1200;
 export const TELEGRAM_AI_POSTING_MAX_REFERENCE_IMAGE_BYTES = 10 * 1024 * 1024;
 
 export type TelegramAiPostingChatMessage = { id?: string; replyToMessageId?: string | null; role: 'user' | 'assistant'; text: string; suggestedTopic?: string };
@@ -54,3 +63,53 @@ export type TelegramAiPostingDraftClassification = {
   rubricId: string;
   lengthId?: string | null;
 };
+
+export type TelegramAiPostingMediaGuidance = {
+  searchDescription: string;
+  generationDescription: string;
+};
+
+export type TelegramAiPostingReferenceAnalysisInput = {
+  name: string;
+  description: string;
+  references: string[];
+} & TelegramAiPostingMediaGuidance;
+
+type RunSlot = {
+  publicationIndex?: number;
+  failureIndex?: number;
+};
+
+export function telegramAiPostingRunSlots(run: {
+  requestedCount?: number;
+  publications?: Array<{ publicationIndex?: number; topic?: string; mediaReadiness?: string } | null>;
+  failures?: Array<{ publicationIndex?: number; topic?: string }>;
+}): RunSlot[] {
+  const publications = run.publications ?? [];
+  const failures = run.failures ?? [];
+  const uncreated = failures.flatMap((failure, index) =>
+    publications.some((post) =>
+      post && (typeof failure.publicationIndex === "number" && typeof post.publicationIndex === "number"
+        ? post.publicationIndex === failure.publicationIndex
+        : post.topic === failure.topic && post.mediaReadiness !== "READY"),
+    ) ? [] : [index],
+  );
+  const entries = [
+    ...publications.flatMap((post, publicationIndex) =>
+      post ? [{ slot: post.publicationIndex, entry: { publicationIndex } }] : [],
+    ),
+    ...uncreated.map((failureIndex) => ({ slot: failures[failureIndex].publicationIndex, entry: { failureIndex } })),
+  ];
+  const slots: Array<RunSlot | undefined> = Array.from({
+    length: Math.max(run.requestedCount ?? 0, entries.length),
+  });
+  const pending: RunSlot[] = [];
+  for (const { slot, entry } of entries) {
+    if (slot !== undefined && Number.isInteger(slot) && slot >= 0 && slot < slots.length && !slots[slot]) {
+      slots[slot] = entry;
+    } else {
+      pending.push(entry);
+    }
+  }
+  return slots.map((slot) => slot ?? pending.shift() ?? {});
+}

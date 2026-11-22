@@ -31,6 +31,7 @@ describe("parseUnifiedImportManifest", () => {
           text: "Warm text",
           icon: "🌞",
           urls: ["https://i.pinimg.com/example.jpg"],
+          editorial: { sphere: "Health", rubric: "Daily practice" },
         },
         {
           title: "Evening post",
@@ -49,6 +50,7 @@ describe("parseUnifiedImportManifest", () => {
           title: "Morning post",
           icon: "🌞",
           imageUrls: ["https://i.pinimg.com/example.jpg"],
+          editorial: { sphere: "Health", rubric: "Daily practice" },
           imported: false,
           approved: false,
         }),
@@ -67,26 +69,15 @@ describe("parseUnifiedImportManifest", () => {
     );
   });
 
-  it("documents one complete manifest with every supported section", () => {
-    expect(TELEGRAM_UNIFIED_IMPORT_INSTRUCTION).toContain(
-      "ТОЧНЫЙ ФОРМАТ ОТВЕТА",
-    );
-    expect(TELEGRAM_UNIFIED_IMPORT_INSTRUCTION).toContain('"groups": [');
-    expect(TELEGRAM_UNIFIED_IMPORT_INSTRUCTION).toContain('"hypotheses": [');
-    expect(TELEGRAM_UNIFIED_IMPORT_INSTRUCTION).toContain('"posts": [');
-    expect(TELEGRAM_UNIFIED_IMPORT_INSTRUCTION).toContain('"schedule": [');
-    expect(TELEGRAM_UNIFIED_IMPORT_INSTRUCTION).toContain('"icon": "🧠"');
-    expect(TELEGRAM_UNIFIED_IMPORT_INSTRUCTION).toContain('"icon": "✍️"');
-    expect(TELEGRAM_UNIFIED_IMPORT_INSTRUCTION).toContain('"imported": false');
-    expect(TELEGRAM_UNIFIED_IMPORT_INSTRUCTION).toContain('"approved": false');
+  it("documents the editorial import with scheduling and deletion", () => {
+    expect(TELEGRAM_UNIFIED_IMPORT_INSTRUCTION).toContain('"editorial": {');
+    expect(TELEGRAM_UNIFIED_IMPORT_INSTRUCTION).toContain('"sphere":');
+    expect(TELEGRAM_UNIFIED_IMPORT_INSTRUCTION).toContain('"rubric":');
+    expect(TELEGRAM_UNIFIED_IMPORT_INSTRUCTION).not.toContain('"groups":');
+    expect(TELEGRAM_UNIFIED_IMPORT_INSTRUCTION).not.toContain('"hypotheses":');
+    expect(TELEGRAM_UNIFIED_IMPORT_INSTRUCTION).toContain('"delete": { "posts": [] }');
     expect(TELEGRAM_UNIFIED_IMPORT_INSTRUCTION).toContain(
       'массив schedule обязан содержать ровно N отдельных операций SCHEDULE',
-    );
-    expect(TELEGRAM_UNIFIED_IMPORT_INSTRUCTION).toContain(
-      '"placementMode":"CUSTOM","scheduledAt":"2026-09-20T09:02:00+02:00"',
-    );
-    expect(TELEGRAM_UNIFIED_IMPORT_INSTRUCTION).toContain(
-      '"delete":{"groups":[{"id":"точный id группы"}]',
     );
   });
 

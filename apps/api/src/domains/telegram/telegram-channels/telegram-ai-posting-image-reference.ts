@@ -4,41 +4,48 @@ import {
   TELEGRAM_AI_POSTING_MAX_REFERENCE_IMAGE_BYTES,
 } from '@telegram-system/shared';
 
+export type TelegramAiPostingReferences = {
+  image: Buffer | null;
+  failed: boolean;
+  grid?: { columns: number; tileSize: number; count: number };
+};
+
 export async function createTelegramAiPostingReferenceSheet(
   urls: string[],
   download: (url: string) => Promise<Buffer>,
 ) {
+  return (await prepareTelegramAiPostingReferences(urls, download)).image;
+}
+
+export async function prepareTelegramAiPostingReferences(
+  urls: string[],
+  download: (url: string) => Promise<Buffer>,
+): Promise<TelegramAiPostingReferences> {
   const selected = urls.slice(0, TELEGRAM_AI_POSTING_MAX_MEDIA_REFERENCES);
-  if (!selected.length) return null;
-  const inputs = await Promise.all(selected.map(download));
-  if (
-    inputs.some(
-      (bytes) =>
-        !bytes.length || bytes.length > TELEGRAM_AI_POSTING_MAX_REFERENCE_IMAGE_BYTES,
-    )
-  )
-    throw new Error('AI_POSTING_IMAGE_REFERENCE_INVALID');
+  if (!selected.length) return { image: null, failed: false };
   const columns = selected.length === 1 ? 1 : selected.length <= 4 ? 2 : 3;
   const tileSize = columns === 1 ? 1024 : 512;
   const canvasSize = tileSize * columns;
-  const tiles = await Promise.all(
-    inputs.map((bytes) =>
-      sharp(bytes, { limitInputPixels: 40_000_000 })
+  const results = await Promise.allSettled(
+    selected.map(async (url) => {
+      const bytes = await download(url);
+      if (!bytes.length || bytes.length > TELEGRAM_AI_POSTING_MAX_REFERENCE_IMAGE_BYTES)
+        throw new Error('AI_POSTING_IMAGE_REFERENCE_INVALID');
+      return sharp(bytes, { limitInputPixels: 40_000_000 })
         .rotate()
-        .resize(tileSize, tileSize, {
-          fit: 'contain',
-          background: { r: 244, g: 244, b: 244, alpha: 1 },
-        })
-        .jpeg({ quality: 78, mozjpeg: true })
-        .toBuffer(),
-    ),
+        .resize(tileSize, tileSize, { fit: 'contain', background: '#f4f4f4' })
+        .jpeg({ quality: 85, mozjpeg: true })
+        .toBuffer();
+    }),
   );
+  const tiles = results.flatMap((result) => result.status === 'fulfilled' ? [result.value] : []);
+  if (!tiles.length) throw new Error('AI_POSTING_IMAGE_REFERENCE_INVALID');
   const composites = tiles.map((input, index) => ({
     input,
     left: (index % columns) * tileSize,
     top: Math.floor(index / columns) * tileSize,
   }));
-  return sharp({
+  const image = await sharp({
     create: {
       width: canvasSize,
       height: canvasSize,
@@ -49,6 +56,71 @@ export async function createTelegramAiPostingReferenceSheet(
     .composite(composites)
     .jpeg({ quality: 78, mozjpeg: true })
     .toBuffer();
+  return { image, failed: false, grid: { columns, tileSize, count: tiles.length } };
+}
+
+export async function extractTelegramAiPostingReference(
+  image: Buffer,
+  grid: TelegramAiPostingReferences['grid'],
+  index: unknown,
+): Promise<Buffer | null> {
+  if (!grid || typeof index !== 'number' || !Number.isInteger(index) || index < 1 || index > grid.count)
+    return null;
+  const { columns, tileSize } = grid;
+  return sharp(image).extract({
+    left: ((index - 1) % columns) * tileSize,
+    top: Math.floor((index - 1) / columns) * tileSize,
+    width: tileSize,
+    height: tileSize,
+  }).trim({ background: '#f4f4f4', threshold: 8 }).jpeg({ quality: 92 }).toBuffer();
+}
+
+export async function createTelegramAiPostingSearchReviewSheet(
+  reference: Buffer | null,
+  candidates: Buffer[],
+  grid?: TelegramAiPostingReferences['grid'],
+) {
+  const tileSize = 320;
+  const width = tileSize * 3;
+  const labelHeight = 32;
+  const stripHeight = candidates.length ? tileSize + labelHeight : 0;
+  const label = (value: string, labelWidth: number) => Buffer.from(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${labelWidth}" height="${labelHeight}"><rect width="100%" height="100%" fill="#222"/><text x="12" y="22" font-family="sans-serif" font-size="17" fill="#fff">${value}</text></svg>`,
+  );
+  const panels = (await Promise.all(candidates.map(async (bytes, index) => {
+    const left = index * tileSize;
+    return [
+      { input: label(`CANDIDATE ${index + 1}`, tileSize), top: 0, left },
+      {
+        input: await sharp(bytes).rotate().resize(tileSize, tileSize, {
+          fit: 'contain', background: '#e5e5e5',
+        }).jpeg().toBuffer(),
+        top: labelHeight,
+        left,
+      },
+    ];
+  }))).flat();
+  if (reference) {
+    panels.push({ input: label('REFERENCES - NOT CANDIDATES', width), top: stripHeight, left: 0 });
+    panels.push({
+      input: await sharp(reference).resize(width, width, { fit: 'contain', background: '#f4f4f4' }).jpeg().toBuffer(),
+      top: stripHeight + labelHeight,
+      left: 0,
+    });
+    if (grid) {
+      const referenceTileSize = width / grid.columns;
+      for (let index = 0; index < grid.count; index += 1) {
+        panels.push({
+          input: label(`REF ${index + 1}`, 75),
+          top: stripHeight + labelHeight + Math.floor(index / grid.columns) * referenceTileSize,
+          left: (index % grid.columns) * referenceTileSize,
+        });
+      }
+    }
+  }
+  return sharp({
+    create: { width, height: stripHeight + (reference ? width + labelHeight : 0), channels: 3, background: '#e5e5e5' },
+  }).composite(panels).jpeg({ quality: 83 }).toBuffer();
 }
 
 export async function addTelegramAiPostingAvatarWatermark(

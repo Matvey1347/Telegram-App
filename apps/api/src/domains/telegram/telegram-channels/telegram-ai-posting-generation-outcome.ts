@@ -101,8 +101,17 @@ export function telegramAiPostingGenerationFailures(error: unknown) {
           )
           .slice(0, MAX_TELEGRAM_AI_POSTING_BATCH_SIZE)
           .map((failure) => ({
+            ...(typeof failure.publicationIndex === 'number' &&
+              Number.isInteger(failure.publicationIndex) &&
+              failure.publicationIndex >= 0 &&
+              failure.publicationIndex < MAX_TELEGRAM_AI_POSTING_BATCH_SIZE
+              ? { publicationIndex: failure.publicationIndex }
+              : {}),
             ...(typeof failure.topic === 'string'
               ? { topic: failure.topic.slice(0, 200) }
+              : {}),
+            ...(failure.imageMode === 'found' || failure.imageMode === 'ai'
+              ? { imageMode: failure.imageMode }
               : {}),
             code:
               typeof failure.code === 'string'

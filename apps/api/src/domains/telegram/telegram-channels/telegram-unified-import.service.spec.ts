@@ -1,3 +1,4 @@
+import type { TelegramUnifiedImportManifest } from '@telegram-system/shared';
 import {
   TelegramUnifiedImportService,
   unifiedImportHash,
@@ -8,6 +9,8 @@ describe('TelegramUnifiedImportService', () => {
     telegramChannel: {
       findFirst: jest.fn().mockResolvedValue({ id: 'channel-1' }),
     },
+    telegramAiPostingSphere: { findMany: jest.fn().mockResolvedValue([]) },
+    telegramAiPostingRubric: { findMany: jest.fn().mockResolvedValue([]) },
     postGroup: { findMany: jest.fn().mockResolvedValue([]) },
     telegramManagedPost: { findMany: jest.fn().mockResolvedValue([]) },
     telegramContentHypothesis: {
@@ -85,6 +88,38 @@ describe('TelegramUnifiedImportService', () => {
     moves.deleteManagedPost.mockReset();
     publication.scheduleManagedPost.mockReset();
     publication.returnManagedPostToDraft.mockReset();
+  });
+
+  it('previews new editorial entities and passes classification to draft creation', async () => {
+    const editorial = { sphere: 'Health', rubric: 'Daily practice' };
+    const manifest: TelegramUnifiedImportManifest = {
+      version: 1,
+      posts: [{ ref: 'draft', action: 'CREATE', title: 'Daily routines', editorial }],
+    };
+    const preview = await service.preview('user-1', 'channel-1', manifest);
+    expect(preview.valid).toBe(true);
+    expect(preview.sections.find((section) => section.key === 'posts')?.items[0]?.editorial)
+      .toMatchObject({ description: 'Health → Daily practice', createsSphere: true, createsRubric: true });
+    expect(commands.createManagedPost).not.toHaveBeenCalled();
+    commands.createManagedPost.mockResolvedValue({ id: 'created-draft' });
+    const applied = await service.apply('user-1', 'channel-1', manifest, preview.manifestHash);
+    expect(commands.createManagedPost).toHaveBeenCalledWith(
+      'user-1', 'channel-1', expect.objectContaining({ title: 'Daily routines' }),
+      { groupId: null, editorial },
+    );
+    expect(applied.manifest.posts?.[0]).toMatchObject({ id: 'created-draft', imported: true, editorial });
+  });
+
+  it('rejects editorial reassignment of scheduled publications at preview', async () => {
+    prisma.telegramManagedPost.findMany.mockResolvedValueOnce([{ id: 'scheduled', status: 'SCHEDULED' }]);
+    const preview = await service.preview('user-1', 'channel-1', {
+      version: 1,
+      posts: [{
+        ref: 'scheduled', id: 'scheduled', action: 'UPDATE',
+        editorial: { sphere: 'News', rubric: 'Digest' },
+      }],
+    });
+    expect(preview.valid).toBe(false);
   });
 
   it('previews each section independently without writing', async () => {

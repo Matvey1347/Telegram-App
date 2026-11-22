@@ -37,6 +37,7 @@ describe("CommonAdSlotOptions", () => {
         <CommonAdSlotOptions
           channelIds={["b", "a"]}
           date="2026-09-22"
+          hideHeading
           selectedTime=""
           onSelect={onSelect}
         />
@@ -53,6 +54,7 @@ describe("CommonAdSlotOptions", () => {
     fireEvent.click(
       screen.getByRole("button", { name: /10:00.*Available in all channels/ }),
     );
+    expect(screen.queryByText("Advertising slots · 2026-09-22")).not.toBeInTheDocument();
     expect(onSelect).toHaveBeenCalledWith("10:00");
     expect(load).toHaveBeenCalledTimes(1);
   });

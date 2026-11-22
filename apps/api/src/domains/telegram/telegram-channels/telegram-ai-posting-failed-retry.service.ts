@@ -3,6 +3,9 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { isTelegramAiPostingEmptyTextFailure, telegramAiPostingRunSlots } from '@telegram-system/shared';
+import { decodeAiPostingRunPublications } from './telegram-ai-posting-run-data';
+import type { TelegramAiPostingRetrySlot } from './telegram-ai-posting-generation-store';
 import { WorkspaceService } from '../../../common/workspace.service';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { TelegramAiPostingGeneratorService } from './telegram-ai-posting-generator.service';
@@ -31,24 +34,38 @@ export class TelegramAiPostingFailedRetryService {
     const workspaceId = await this.workspace.resolveWorkspaceIdForUser(userId);
     const run = await this.prisma.telegramAiPostingTestRun.findFirst({
       where: { id: runId, workspaceId, telegramChannelId: channelId },
-      select: { version: true, failures: true },
+      select: { version: true, status: true, failures: true, requestedCount: true, publications: true, operations: true },
     });
     if (!run) throw new NotFoundException('AI Posting test run not found');
-    if (run.version !== expectedVersion)
+    if (run.version !== expectedVersion || run.status === 'RUNNING')
       throw new ConflictException('AI_POSTING_TEST_RUN_CHANGED');
     const failures = Array.isArray(run.failures) ? run.failures : [];
     const failure = failures[failureIndex];
     if (!failure || typeof failure !== 'object' || Array.isArray(failure))
       throw new NotFoundException('AI_POSTING_FAILURE_NOT_RETRYABLE');
-    const topic =
-      failure &&
-      typeof failure === 'object' &&
-      !Array.isArray(failure) &&
-      'topic' in failure &&
-      typeof failure.topic === 'string'
-        ? failure.topic.trim().slice(0, 200)
-        : '';
-
+    const topic = typeof failure.topic === 'string' ? failure.topic.trim().slice(0, 200) : '';
+    const reasons = Array.isArray(failure.reasons)
+      ? failure.reasons.filter((reason): reason is string => typeof reason === 'string')
+      : undefined;
+    if (topic && (failure.retryText === true || isTelegramAiPostingEmptyTextFailure({ code: String(failure.code), reasons }))) {
+      const publicationIndex = telegramAiPostingRunSlots({
+        requestedCount: run.requestedCount,
+        publications: decodeAiPostingRunPublications(run.publications).publications as Parameters<typeof telegramAiPostingRunSlots>[0]['publications'],
+        failures: failures as Parameters<typeof telegramAiPostingRunSlots>[0]['failures'],
+      }).findIndex((slot) => slot.failureIndex === failureIndex);
+      if (publicationIndex < 0 || publicationIndex >= run.requestedCount)
+        throw new NotFoundException('AI_POSTING_FAILURE_NOT_RETRYABLE');
+      const slot: TelegramAiPostingRetrySlot = {
+        ...run,
+        id: runId,
+        failures,
+        operations: Array.isArray(run.operations) ? run.operations as unknown as TelegramAiPostingRetrySlot['operations'] : [],
+        failureIndex,
+        publicationIndex,
+        imageMode: failure.imageMode === 'found' || failure.imageMode === 'ai' ? failure.imageMode : undefined,
+      };
+      return this.generator.generate(userId, channelId, 1, 'MANUAL', undefined, onProgress, topic, slot);
+    }
     return this.generator.generate(
       userId,
       channelId,

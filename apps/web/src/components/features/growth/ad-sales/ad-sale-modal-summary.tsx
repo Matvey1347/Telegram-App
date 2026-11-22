@@ -16,7 +16,6 @@ export function AdSaleModalSummary({
   amount,
   currency,
   submissionError,
-  children,
 }: {
   advertiser: string;
   clientAvatarUrl?: string | null;
@@ -28,7 +27,6 @@ export function AdSaleModalSummary({
   amount: number;
   currency: string;
   submissionError: string | null;
-  children?: ReactNode;
 }) {
   const visibleScheduleGroups = scheduleGroups ?? (dateLabel
     ? [{ date: dateLabel, time: "Not set" }]
@@ -39,7 +37,7 @@ export function AdSaleModalSummary({
     maximumFractionDigits: 2,
   }).format(amount);
   return (
-    <aside className="contents lg:sticky lg:top-2 lg:block lg:rounded-2xl lg:border lg:border-neutral-800 lg:bg-neutral-950/70 lg:p-5">
+    <aside className="hidden lg:sticky lg:top-2 lg:block lg:rounded-2xl lg:border lg:border-neutral-800 lg:bg-neutral-950/70 lg:p-5">
       <div className="hidden items-center justify-between gap-2 lg:flex">
         <h3 className="text-base font-semibold text-white">Sale summary</h3>
         <span className="inline-flex items-center gap-2 rounded-full border border-neutral-800 px-2 py-1 text-[11px] text-neutral-400">
@@ -91,13 +89,6 @@ export function AdSaleModalSummary({
         <p className="hidden rounded-lg border border-rose-800 bg-rose-950/30 p-2 text-xs text-rose-200 lg:mt-3 lg:block">
           {submissionError}
         </p>
-      ) : null}
-      {children ? (
-      <div className="fixed inset-x-0 bottom-0 z-40 flex items-center justify-end gap-2 border-t border-neutral-800 bg-neutral-900/95 px-2 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-2xl backdrop-blur sm:px-5 lg:static lg:mt-5 lg:flex lg:flex-row lg:flex-wrap lg:justify-end lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:backdrop-blur-none">
-          <div className="flex min-w-0 shrink items-center gap-2 [&>button]:min-w-0 [&>button]:px-2.5 [&>button]:text-sm sm:[&>button]:px-4 sm:[&>button]:text-base">
-            {children}
-          </div>
-        </div>
       ) : null}
     </aside>
   );

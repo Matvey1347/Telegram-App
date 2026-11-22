@@ -118,6 +118,7 @@ export function CommonAdSlotOptions({
   occurrencesByChannel,
   loading = false,
   action,
+  hideHeading = false,
 }: {
   channelIds: string[];
   date?: string;
@@ -128,6 +129,7 @@ export function CommonAdSlotOptions({
   occurrencesByChannel?: Record<string, TelegramPublicationSlotOccurrence[]>;
   loading?: boolean;
   action?: ReactNode;
+  hideHeading?: boolean;
 }) {
   const ids = useMemo(() => [...new Set(channelIds)].sort(), [channelIds]);
   const selectedDates = useMemo(
@@ -158,10 +160,14 @@ export function CommonAdSlotOptions({
   if (!ids.length || !selectedDates.length) return null;
   return (
     <div className="space-y-2">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-xs text-neutral-500">{isSharedDates ? "Common advertising slots · all selected dates" : `Advertising slots · ${selectedDates[0]}`}</p>
-        {action}
-      </div>
+      {!hideHeading || action ? (
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          {!hideHeading ? (
+            <p className="text-xs text-neutral-500">{isSharedDates ? "Common advertising slots · all selected dates" : `Advertising slots · ${selectedDates[0]}`}</p>
+          ) : null}
+          {action}
+        </div>
+      ) : null}
       {loading || (occurrencesByChannel === undefined && query.isPending) ? (
         <p className="text-xs text-neutral-400">Loading slots…</p>
       ) : null}

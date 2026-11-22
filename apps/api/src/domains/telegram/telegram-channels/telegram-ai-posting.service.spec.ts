@@ -74,6 +74,14 @@ describe('TelegramAiPostingService', () => {
     );
   });
 
+  it.each([-1, 100.5, '70', 101])('rejects the invalid hybrid share %p before writing settings', async (hybridSearchPercent) => {
+    prisma.telegramChannel.findFirst.mockResolvedValue({ id: 'channel-a' });
+    await expect(service.save('user-a', 'channel-a', {
+      configuration: { historyMode: 'all', hashtags: 'disabled', imageMode: 'hybrid', hybridSearchPercent },
+    })).rejects.toThrow('AI_POSTING_SEARCH_PERCENT_INVALID');
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
   it('rejects a since-history setting without a valid date', async () => {
     prisma.telegramChannel.findFirst.mockResolvedValue({
       id: 'channel-a',

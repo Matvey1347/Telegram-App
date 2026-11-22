@@ -14,6 +14,7 @@ export const crmAccountSelect = {
   crmSyncEnabled: true,
   crmSendEnabled: true,
   mtprotoPublishingEnabled: true,
+  isPreferredInviteLinkAccount: true,
 } satisfies Prisma.TelegramUserAccountIntegrationSelect;
 
 export type CrmAccountRow = Prisma.TelegramUserAccountIntegrationGetPayload<{

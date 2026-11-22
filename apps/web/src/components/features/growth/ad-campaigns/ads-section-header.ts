@@ -1,6 +1,6 @@
 import type { AdsSection } from "./ads-section-tabs";
 
-export type AdsSectionHeaderKey = AdsSection | "mutual-folders";
+export type AdsSectionHeaderKey = AdsSection;
 
 const headers: Record<
   AdsSectionHeaderKey,
@@ -25,16 +25,10 @@ const headers: Record<
     actionLabel: "Create promo",
   },
   "mutual-promotion": {
-    title: "Direct mutual promotion",
+    title: "Mutual promotion",
     subtitle:
-      "Exchange placements, schedule partner posts, and compare joins with donor-channel losses.",
+      "Manage partner exchanges, own-channel promotions, and folders in one place.",
     actionLabel: "New placement",
-  },
-  "mutual-folders": {
-    title: "Mutual-promotion folders",
-    subtitle:
-      "Coordinate shared publication schedules, invite-link attribution, and paid participation across channels.",
-    actionLabel: "Create folder",
   },
   "own-promotion": {
     title: "Own-channel promotion",

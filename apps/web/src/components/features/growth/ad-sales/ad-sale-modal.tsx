@@ -19,6 +19,7 @@ import { AdSaleSharedPost } from "./ad-sale-shared-post";
 import { AdSaleClientField } from "./ad-sale-client-field";
 import { applyProductToPlacement } from "./ad-sale-placement-draft";
 import { AdSalePlacementCard } from "./ad-sale-placement-card";
+import { FormSectionNumber } from "../form-section-number";
 import { AdSaleModalSummary } from "./ad-sale-modal-summary";
 import { addAdSalePlacementDate } from "@/lib/features/growth/ad-sales-bulk-date-builder";
 import { Plus, Save } from "lucide-react";
@@ -187,6 +188,31 @@ export function AdSaleModal(props: AdSaleModalProps) {
           : null
         }
         size="2xl"
+        extraViewportSpace
+        footer={!pendingDrafts.length ? (
+          <div className="grid grid-flow-col auto-cols-fr gap-2 [&>button]:whitespace-normal [&>button]:px-2">
+            {onSaveDraft ? (
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={busy || savingDraft}
+                onClick={() => void saveDraft()}
+              >
+                <Save size={16} aria-hidden="true" />
+                {savingDraft ? "Saving draft…" : "Save draft"}
+              </Button>
+            ) : null}
+            <Button
+              type="button"
+              onClick={() => void createSale()}
+              disabled={busy || !canSubmit}
+              aria-label={submissionError ? "Retry sale creation" : "Create sale"}
+            >
+              <Plus size={16} aria-hidden="true" />
+              {submissionError ? "Retry" : "Create sale"}
+            </Button>
+          </div>
+        ) : undefined}
       >
         {pendingDrafts.length ? (
           <ModalDraftPicker
@@ -206,7 +232,7 @@ export function AdSaleModal(props: AdSaleModalProps) {
           />
         ) : (
           <>
-            <div className="grid min-w-0 gap-4 pb-24 lg:grid-cols-[minmax(0,1fr)_300px] lg:items-start lg:pb-0">
+            <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_300px] lg:items-start">
               <div className="flex min-w-0 flex-col gap-4">
                 <section className="order-1 min-w-0 space-y-3 rounded-xl border border-neutral-800 bg-neutral-900/50 p-4">
                   <SectionHeading
@@ -526,30 +552,7 @@ export function AdSaleModal(props: AdSaleModalProps) {
                 amount={paymentAmount}
                 currency={paymentCurrency}
                 submissionError={submissionError}
-              >
-                {onSaveDraft ? (
-                  <Button
-                    variant="secondary"
-                    disabled={busy || savingDraft}
-                    onClick={() => void saveDraft()}
-                  aria-label={savingDraft ? "Saving draft" : "Save draft"}
-                  >
-                    <Save size={16} className="size-4 shrink-0" aria-hidden="true" />
-                    <span className="min-[381px]:hidden">{savingDraft ? "Saving" : "Save"}</span>
-                    <span className="hidden min-[381px]:inline">{savingDraft ? "Saving…" : "Save draft"}</span>
-                  </Button>
-                ) : null}
-                <Button
-                  onClick={() => void createSale()}
-                  disabled={busy || !canSubmit}
-                  className="whitespace-nowrap"
-                  aria-label={submissionError ? "Retry sale creation" : "Create sale"}
-                >
-                  <Plus size={16} className="size-4 shrink-0" aria-hidden="true" />
-                  <span className="min-[381px]:hidden">{submissionError ? "Retry" : "Create"}</span>
-                  <span className="hidden min-[381px]:inline">{submissionError ? "Retry" : "Create sale"}</span>
-                </Button>
-              </AdSaleModalSummary>
+              />
             </div>
 
             {submissionError ? (
@@ -585,9 +588,7 @@ function SectionHeading({
 }) {
   return (
     <div className="flex min-w-0 items-center gap-4">
-      <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-blue-950/60 text-sm font-semibold text-blue-300">
-        {number}
-      </span>
+      <FormSectionNumber>{number}</FormSectionNumber>
       <h3 className="min-w-0 text-sm font-semibold text-white">{title}</h3>
     </div>
   );

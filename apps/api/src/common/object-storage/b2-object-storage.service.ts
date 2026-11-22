@@ -1,6 +1,7 @@
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { createHash } from 'node:crypto';
+import { createHash, randomInt } from 'node:crypto';
+import { setTimeout as delay } from 'node:timers/promises';
 
 type B2Context = {
   apiUrl: string;
@@ -102,7 +103,7 @@ export class B2ObjectStorageService {
     if (await this.objectExists(context, key)) {
       return { url: this.publicUrl(context, key), uploaded: false };
     }
-    for (let attempt = 0; attempt < 3; attempt++) {
+    for (let attempt = 0; attempt < 5; attempt++) {
       const uploadUrlResponse = await fetch(
         `${context.apiUrl}/b2api/v2/b2_get_upload_url`,
         {
@@ -141,14 +142,22 @@ export class B2ObjectStorageService {
       const body: unknown = await upload.json().catch(() => null);
       const code = body && typeof body === 'object' && 'code' in body && typeof body.code === 'string'
         && /^[a-z_]{1,40}$/.test(body.code) ? body.code : 'unknown';
-      const retryable = upload.status >= 500 || upload.status === 429 ||
+      const congested = code === 'too_busy' || upload.status === 429 || upload.status === 503;
+      const retryable = congested || upload.status >= 500 ||
         code === 'expired_auth_token' || code === 'bad_auth_token';
-      if (!retryable || attempt === 2) {
+      if (!retryable || attempt >= (congested ? 4 : 2)) {
         throw new InternalServerErrorException({
           message: 'Failed to persist immutable object.',
           storageStatus: upload.status,
           storageCode: code,
         });
+      }
+      if (congested) {
+        const retryAfter = upload.headers?.get('retry-after');
+        const delayMs = retryAfter && /^\d+$/u.test(retryAfter)
+          ? Math.min(Number(retryAfter) * 1_000, 2_000)
+          : 250 * 2 ** attempt + randomInt(150);
+        await delay(delayMs);
       }
       // Resolve uncertain upload outcomes before taking a fresh upload URL.
       if (await this.objectExists(context, key))

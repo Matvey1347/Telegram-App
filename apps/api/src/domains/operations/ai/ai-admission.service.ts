@@ -12,7 +12,7 @@ import type {
 } from '@telegram-system/shared';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { acquirePostgresTransactionLock } from '../../../prisma/postgres-advisory-lock';
-import { AiModelRegistry } from './ai-model-registry';
+import { AiModelRegistry, TELEGRAM_POSTING_DRAFT_SCHEMA_ID } from './ai-model-registry';
 import { AiDeploymentConfig } from './ai-deployment-config.service';
 import { budgetPeriods, reservationCost } from './ai-pricing';
 import { aiTranscriptionWavSeconds } from './ai-transcription-audio';
@@ -28,6 +28,7 @@ export type AiExecutionRequest = {
   image?: { mime: 'image/jpeg'; data: Buffer };
   chatPlan?: boolean;
   revisionDraft?: boolean;
+  postingDraft?: boolean;
   audio?: { mime: 'audio/wav'; data: Buffer };
   /** Restricts this experimental manual media batch to one approved source. */
   mediaPilotSourceId?: string;
@@ -59,6 +60,7 @@ export const operationFingerprint = (request: AiExecutionRequest) =>
         request.input,
         request.chatPlan === true,
         request.revisionDraft === true,
+        ...(request.postingDraft ? [TELEGRAM_POSTING_DRAFT_SCHEMA_ID] : []),
         request.businessObjectId ?? null,
         request.aiPosting
           ? {
@@ -148,6 +150,16 @@ export class AiAdmissionService {
         request.chatPlan)
     )
       throw new BadRequestException('AI_REVISION_DRAFT_INVALID');
+    if (
+      request.postingDraft &&
+      (request.category !== 'TELEGRAM_POSTING_TEXT' ||
+        !request.aiPosting ||
+        request.image ||
+        request.audio ||
+        request.chatPlan ||
+        request.revisionDraft)
+    )
+      throw new BadRequestException('AI_POSTING_DRAFT_CATEGORY_INVALID');
     const audioInvalid =
       request.audio !== undefined &&
       (request.category !== 'TELEGRAM_POSTING_PLAN' ||
@@ -164,12 +176,15 @@ export class AiAdmissionService {
         'LEAD_AD_CLASSIFICATION',
         'TELEGRAM_POSTING_IMAGE',
         'TELEGRAM_POSTING_PLAN',
+        'TELEGRAM_POSTING_REVIEW',
       ].includes(request.category) ||
         (request.category === 'TELEGRAM_POSTING_PLAN' &&
           (request.mode !== 'MANUAL' ||
             !request.aiPosting ||
             request.durableVersion !== undefined ||
             request.mediaPilotSourceId !== undefined)) ||
+        (request.category === 'TELEGRAM_POSTING_REVIEW' &&
+          (!request.aiPosting || request.durableVersion !== undefined || request.mediaPilotSourceId !== undefined)) ||
         (request.category === 'LEAD_AD_CLASSIFICATION' &&
           request.durableVersion !== 'lead-media-vision-v1') ||
         (request.category === 'TELEGRAM_POSTING_IMAGE' &&
@@ -297,7 +312,17 @@ export class AiAdmissionService {
                 schemaId: this.registry.schema(request.category, true).id,
                 promptVersion: 'telegram-posting-chat-vision-v1',
               }
-            : configured;
+            : request.image && request.category === 'TELEGRAM_POSTING_REVIEW'
+              ? {
+                  ...configured,
+                  modelId: 'gpt-5.4-mini-2026-03-17',
+                  schemaId: this.registry.schema(request.category, true).id,
+                  promptVersion: 'telegram-posting-visual-review-v1',
+                  maxOutputTokens: Math.min(configured.maxOutputTokens, 180),
+                }
+              : request.postingDraft
+                ? { ...configured, schemaId: TELEGRAM_POSTING_DRAFT_SCHEMA_ID, promptVersion: 'telegram-posting-draft-v1' }
+                : configured;
       if (
         !this.deployment.enabled ||
         !this.deployment.configured ||

@@ -1,5 +1,7 @@
 "use client";
 
+import { isTelegramAiPostingEmptyTextFailure } from "@telegram-system/shared";
+
 import type { AiPostingWatermarkPreviewSettings } from "./ai-posting-watermark-preview";
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -124,13 +126,17 @@ export function AiPostingTestConsole({
             item.runId &&
             item.publicationIndex !== undefined
           ) {
+            const { publication: draft, publicationIndex, runId } = item;
             setLiveRun((previous) => {
-              const sameRun = previous?.id === item.runId;
-              const publications =
-                sameRun && previous ? [...previous.publications] : [];
-              publications[item.publicationIndex!] = item.publication!;
+              const sameRun = previous?.id === runId;
+              const publications = [
+                ...(sameRun && previous
+                  ? previous.publications.filter((post) => post.publicationIndex !== publicationIndex)
+                  : []),
+                { ...draft, publicationIndex },
+              ].sort((a, b) => (a.publicationIndex ?? 0) - (b.publicationIndex ?? 0));
               return {
-                id: item.runId!,
+                id: runId,
                 version: 1,
                 status: "RUNNING",
                 settingsVersion: 0,
@@ -249,9 +255,11 @@ export function AiPostingTestConsole({
       run: TestRun;
       failureIndex: number;
     }) => {
+      const failure = run.failures[failureIndex];
+      const retryText = Boolean(failure?.topic && (failure.retryText || isTelegramAiPostingEmptyTextFailure(failure)));
       setGenerationProgress({
         count: 1,
-        stages: { "0:planning": "RUNNING" },
+        stages: retryText ? { "0:planning": "COMPLETED", "0:text": "RUNNING" } : { "0:planning": "RUNNING" },
         complete: 0,
         failed: false,
         current: 0,
@@ -260,11 +268,11 @@ export function AiPostingTestConsole({
       });
       generationOperation.current = startOperation({
         id: `ai-posting-retry:${channelId}:${run.id}:${failureIndex}:${Date.now()}`,
-        title: "Перегенерация публикации",
-        message: "Подготавливаю публикацию…",
+        title: retryText ? "Пересоздание текста" : "Перегенерация публикации",
+        message: retryText ? "Пишу текст по сохранённой теме…" : "Подготавливаю публикацию…",
       });
       return streamProgressAction<
-        TestRun,
+        TestRun & { retryFailures?: TestRun["failures"] },
         {
           stage: string;
           status: string;
@@ -290,8 +298,7 @@ export function AiPostingTestConsole({
                   ...previous,
                   stages: {
                     ...previous.stages,
-                    [`${item.publicationIndex ?? 0}:${item.stage}`]:
-                      item.status,
+                    [`0:${item.stage}`]: item.status,
                   },
                   complete:
                     item.stage === "image" && item.status === "COMPLETED"
@@ -310,7 +317,7 @@ export function AiPostingTestConsole({
       );
     },
     onSuccess: async (result) => {
-      const failed = (result.failures?.length ?? 0) > 0;
+      const failed = (result.retryFailures ?? result.failures ?? []).length > 0;
       setGenerationProgress((previous) =>
         previous ? { ...previous, complete: failed ? 0 : 1, failed } : previous,
       );
@@ -322,8 +329,8 @@ export function AiPostingTestConsole({
           ? "Публикация подготовлена не полностью"
           : "Публикация перегенерирована",
         message: failed
-          ? "Проверьте ошибку в новом варианте."
-          : "Новый вариант появился в истории генераций.",
+          ? "Подробности доступны в истории запуска."
+          : result.retryFailures ? "Текст обновлён в исходной публикации." : "Новый вариант появился в истории генераций.",
       });
       generationOperation.current = null;
       await client.invalidateQueries({
@@ -656,10 +663,15 @@ export function AiPostingTestConsole({
       <AiPostingTestConsoleError code={errorCode} status={errorStatus} />
       {!generate.isPending &&
         (runs.data ?? []).some((run) => run.status === "RUNNING") && (
-          <p role="status" className="text-sm text-amber-200">
-            В истории есть незавершённый запуск. Завершённые этапы и причины
-            ошибок сохранены ниже; повторная генерация создаст новый запуск.
-          </p>
+          <div className="flex flex-wrap items-center gap-2 text-sm text-amber-200">
+            <p role="status">
+              Запуск ещё не завершён. Сервер может продолжать обработку после закрытия соединения.
+            </p>
+            <Button type="button" variant="secondary" disabled={runs.isFetching}
+              onClick={() => void runs.refetch()}>
+              Обновить статус
+            </Button>
+          </div>
         )}
       {runs.isLoading && (
         <div className="rounded-lg border border-neutral-800 p-4 text-sm text-neutral-400">
@@ -674,7 +686,7 @@ export function AiPostingTestConsole({
           Не удалось загрузить историю тестов.
         </div>
       )}
-      {[...(liveRun ? [liveRun] : []), ...displayedRuns].map((run) => (
+      {[...(liveRun ? [liveRun] : []), ...displayedRuns.filter((run) => run.id !== liveRun?.id)].map((run) => (
         <AiPostingTestRunCard
           key={run.id}
           run={run}

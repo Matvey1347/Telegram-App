@@ -33,6 +33,7 @@ export function ManagedPostsImportSource({
   onFile,
   onClear,
   onCopyContent,
+  jsonOnly = false,
 }: {
   content: string;
   fileName: string | null;
@@ -41,8 +42,12 @@ export function ManagedPostsImportSource({
   onFile: (file: File) => void;
   onClear: () => void;
   onCopyContent: () => void;
+  jsonOnly?: boolean;
 }) {
   const { t } = useI18n();
+  const acceptedFiles = jsonOnly
+    ? ".json,.txt,application/json,text/plain"
+    : ".json,.csv,.tsv,.txt,application/json,text/csv,text/tab-separated-values,text/plain";
   const [dragging, setDragging] = useState(false);
   const emptyFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -99,7 +104,7 @@ export function ManagedPostsImportSource({
                   <RotateCcw size={12} /> {t("telegram.posts.import.replace")}
                   <input
                     type="file"
-                    accept=".json,.csv,.tsv,.txt,application/json,text/csv,text/tab-separated-values,text/plain"
+                    accept={acceptedFiles}
                     className="sr-only"
                     disabled={disabled}
                     onChange={(event) => {
@@ -158,7 +163,7 @@ export function ManagedPostsImportSource({
               <Upload size={14} /> {t("telegram.posts.import.chooseFile")}
             </button>
             <span className="text-xs text-neutral-500">
-              {t("telegram.posts.import.fileTypes")}
+              {t(jsonOnly ? "telegram.posts.import.unifiedFileTypes" : "telegram.posts.import.fileTypes")}
             </span>
             <span className="inline-flex items-center gap-1 text-xs text-blue-300">
               {t("telegram.posts.import.pasteHint")}
@@ -166,7 +171,7 @@ export function ManagedPostsImportSource({
             <input
               ref={emptyFileInputRef}
               type="file"
-              accept=".json,.csv,.tsv,.txt,application/json,text/csv,text/tab-separated-values,text/plain"
+              accept={acceptedFiles}
               className="sr-only"
               disabled={disabled}
               onChange={(event) => {

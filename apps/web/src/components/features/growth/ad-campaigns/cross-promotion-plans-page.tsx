@@ -1,11 +1,10 @@
 "use client";
 
 import { type ReactNode, useEffect, useRef, useState } from "react";
-import Link from "next/link";
+import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
-import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Folder } from "lucide-react";
+import { Plus } from "lucide-react";
 import { useOptionalI18n } from "@/providers/i18n-provider";
 import type {
   CreateCrossPromotionPlanPayload,
@@ -13,20 +12,9 @@ import type {
   CrossPromotionPlanKind,
   MutualPromotionFolderListStatus,
 } from "@telegram-system/shared";
-import {
-  promosApi,
-  telegramChannelNetworksApi,
-  telegramChannelsApi,
-} from "@/lib/api";
-import {
-  networkKeys,
-  telegramChannelKeys,
-  telegramPublicationScheduleKeys,
-} from "@/lib/query-keys";
-import {
-  crossPromotionPlanKeys,
-  crossPromotionPlansApi,
-} from "@/lib/features/growth/cross-promotion-plans-api";
+import { promosApi, telegramChannelNetworksApi, telegramChannelsApi } from "@/lib/api";
+import { networkKeys, telegramChannelKeys, telegramPublicationScheduleKeys } from "@/lib/query-keys";
+import { crossPromotionPlanKeys, crossPromotionPlansApi } from "@/lib/features/growth/cross-promotion-plans-api";
 import { mutualPromotionFoldersApi } from "@/lib/features/growth/mutual-promotion-folders-api";
 import { mutualPromotionFolderKeys } from "@/lib/query-keys";
 import { AppShell } from "@/components/layout/app-shell";
@@ -41,6 +29,7 @@ import {
 } from "@/components/ui/primitives";
 import { CrossPromotionPlanModal } from "./cross-promotion-plan-modal";
 import { CrossPromotionPlanCard } from "./cross-promotion-plan-card";
+import { reconcileMutualPromotionFolder } from "./mutual-promotion/mutual-promotion-finance-cache";
 import { MutualPromotionFolderCard } from "./mutual-promotion/mutual-promotion-folder-card";
 import { PromoFormModal } from "./promo-form-modal";
 import { adsSectionHeader } from "./ads-section-header";
@@ -52,17 +41,24 @@ import {
   type CrossPromotionPlanTab,
 } from "./cross-promotion-plan-status-tabs";
 
+import { CrossPromotionKindChoice, PromotionTypeBadge, type PromotionKind } from "./cross-promotion-create-steps";
+
+import type { PromotionFolderFlow } from "./mutual-promotion/mutual-promotion-folder-modals";
+
+import { CrossPromotionDraftChooser } from "./cross-promotion-draft-chooser";
+
+const FolderModals = dynamic(() =>
+  import("./mutual-promotion/mutual-promotion-folder-modals").then((module) => module.MutualPromotionFolderModals),
+);
+
 export function CrossPromotionPlansPage({
   kind,
   sectionTabs,
-  mutualModeTabs,
 }: {
   kind: CrossPromotionPlanKind;
   sectionTabs: ReactNode;
-  mutualModeTabs?: ReactNode;
 }) {
   const searchParams = useSearchParams();
-  const router = useRouter();
   const i18n = useOptionalI18n();
   const requestedPlanId = searchParams.get("planId");
   const openedPlanIdRef = useRef<string | null>(null);
@@ -72,26 +68,48 @@ export function CrossPromotionPlansPage({
       queryKey: telegramPublicationScheduleKeys.calendarRoot(),
     });
   const { startOperation } = useAppToast();
+  const [folderFlow, setFolderFlow] = useState<PromotionFolderFlow | null>(() => {
+    const folderId = searchParams.get("folderId");
+    if (folderId) return { kind: "detail", folderId };
+    return searchParams.get("mode") === "folders" && searchParams.get("create") === "1"
+      ? { kind: "create" }
+      : null;
+  });
+  const [choosingKind, setChoosingKind] = useState(false);
+  const [selectedCreationKind, setSelectedCreationKind] = useState<PromotionKind>("DIRECT_MUTUAL");
+  const [initialDraftId, setInitialDraftId] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [modalKind, setModalKind] = useState(kind);
-  const [editingPlan, setEditingPlan] = useState<CrossPromotionPlan | null>(
-    null,
-  );
+  const [editingPlan, setEditingPlan] = useState<CrossPromotionPlan | null>(null);
+  const returnToKindChoice = () => {
+    setOpen(false);
+    setFolderFlow(null);
+    setChoosingKind(true);
+  };
+  const openCreation = (draftId: string | null) => {
+    setChoosingKind(false);
+    if (selectedCreationKind === "FOLDER") {
+      setFolderFlow({ kind: "create", initialDraftId: draftId });
+      return;
+    }
+    setInitialDraftId(draftId);
+    setModalKind(selectedCreationKind);
+    setOpen(true);
+  };
   const [deletePlan, setDeletePlan] = useState<CrossPromotionPlan | null>(null);
   const [previewPromoId, setPreviewPromoId] = useState<string | null>(null);
-  const [botNotificationPlan, setBotNotificationPlan] =
-    useState<CrossPromotionPlan | null>(null);
+  const [botNotificationPlan, setBotNotificationPlan] = useState<CrossPromotionPlan | null>(null);
   const [planTab, setPlanTab] = useState<CrossPromotionPlanTab>("ACTIVE");
   const plansQuery = useQuery({
     queryKey: crossPromotionPlanKeys.combined,
     queryFn: crossPromotionPlansApi.listAll,
   });
-  const folderStatus: MutualPromotionFolderListStatus | null =
-    planTab === "ACTIVE" ? "ACTIVE" : planTab === "SCHEDULED" ? "SCHEDULED" : planTab === "COMPLETED" ? "COMPLETED" : null;
+  const folderStatus: MutualPromotionFolderListStatus = planTab === "DRAFT" ? "ACTIVE" : planTab;
+  const folderListParams = { page: 1, pageSize: 100, status: folderStatus };
   const foldersQuery = useQuery({
-    queryKey: mutualPromotionFolderKeys.list({ page: 1, pageSize: 100, status: folderStatus ?? "ACTIVE" }),
-    queryFn: () => mutualPromotionFoldersApi.list({ page: 1, pageSize: 100, ...(folderStatus ? { status: folderStatus } : {}) }),
-    enabled: folderStatus !== null,
+    queryKey: mutualPromotionFolderKeys.list(folderListParams),
+    queryFn: () => mutualPromotionFoldersApi.list(folderListParams),
+    enabled: planTab !== "DRAFT",
   });
   useEffect(() => {
     if (!requestedPlanId || openedPlanIdRef.current === requestedPlanId) return;
@@ -461,6 +479,10 @@ export function CrossPromotionPlansPage({
     mutationFn: (plan: CrossPromotionPlan) =>
       crossPromotionPlansApi.sendToBot(plan.id),
   });
+  const refreshFolderLinks = useMutation({
+    mutationFn: (id: string) => mutualPromotionFoldersApi.refreshInviteLinkData(id),
+    onSuccess: (folder) => reconcileMutualPromotionFolder(qc, folder),
+  });
   const refreshInviteLinksMutation = useMutation({
     mutationFn: (id: string) =>
       crossPromotionPlansApi.refreshInviteLinkData(id),
@@ -481,7 +503,7 @@ export function CrossPromotionPlansPage({
   // hides real placements behind an "Integrations" list.
   const plans = plansQuery.data ?? [];
   const visiblePlans = plansForCrossPromotionTab(plans, planTab);
-  const visibleFolders = foldersQuery.data?.items ?? [];
+  const visibleFolders = planTab === "DRAFT" ? [] : (foldersQuery.data?.items ?? []);
   return (
     <AppShell>
       <PageHeader
@@ -491,8 +513,8 @@ export function CrossPromotionPlansPage({
           <Button
             onClick={() => {
               setEditingPlan(null);
-              setModalKind(kind);
-              setOpen(true);
+              setSelectedCreationKind("DIRECT_MUTUAL");
+              setChoosingKind(true);
             }}
           >
             <Plus size={16} /> {header.actionLabel}
@@ -500,64 +522,88 @@ export function CrossPromotionPlansPage({
         }
       />
       {sectionTabs}
-      {mutualModeTabs}
       <CrossPromotionPlanStatusTabs
         plans={plans}
+        folderCounts={foldersQuery.data?.statusCounts}
         value={planTab}
         onChange={setPlanTab}
         ariaLabel="Promotion status"
       />
       <div className="mt-4">
-        {plansQuery.isLoading ? (
+        {refreshFolderLinks.isError ? <ErrorState text="Could not refresh the folder invite links." /> : null}
+        {plansQuery.isError ? <ErrorState text="Could not load promotion placements." /> : null}
+        {planTab !== "DRAFT" && foldersQuery.isError ? (
+          <ErrorState text="Could not load promotion folders." />
+        ) : null}
+        {plansQuery.isLoading || (planTab !== "DRAFT" && foldersQuery.isLoading) ? (
           <LoadingState />
-        ) : plansQuery.isError ? (
-          <ErrorState text="Could not load promotion placements." />
         ) : !visiblePlans.length && !visibleFolders.length ? (
-          <EmptyState
-            text={`No ${planTab.toLowerCase()} promotions.`}
-          />
+          !plansQuery.isError && (planTab === "DRAFT" || !foldersQuery.isError) ? (
+            <EmptyState text={`No ${planTab.toLowerCase()} promotions.`} />
+          ) : null
         ) : (
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+          <div className="columns-1 gap-3 xl:columns-2">
             {visibleFolders.map((folder) => (
-              <div key={`folder:${folder.id}`}>
+              <div key={`folder:${folder.id}`} className="mb-3 break-inside-avoid">
                 <MutualPromotionFolderCard
                   folder={folder}
-                  typeBadge={<span className="shrink-0 rounded-md bg-amber-950/80 px-2 py-1 text-[10px] font-semibold text-amber-200">{i18n?.t("ads.folder_badge") ?? "Folder"}</span>}
-                  onOpen={() => router.push(`/ad-campaigns?section=mutual-promotion&mode=folders&folderId=${encodeURIComponent(folder.id)}`)}
+                  typeBadge={<PromotionTypeBadge kind="FOLDER" />}
+                  onOpen={() => setFolderFlow({ kind: "detail", folderId: folder.id, title: folder.title })}
+                  onDelete={() => setFolderFlow({ kind: "delete", folderId: folder.id, title: folder.title })}
+                  onRefreshInviteLinks={() => refreshFolderLinks.mutate(folder.id)}
+                  refreshingInviteLinks={
+                    refreshFolderLinks.isPending && refreshFolderLinks.variables === folder.id
+                  }
                 />
               </div>
             ))}
             {visiblePlans.map((plan) => (
-              <CrossPromotionPlanCard
-                key={plan.id}
-                plan={plan}
-                onEdit={(source) => {
-                  setEditingPlan(source);
-                  setModalKind(source.kind);
-                  setOpen(true);
-                }}
-                onDelete={() => setDeletePlan(plan)}
-                onResume={(source) => resumeMutation.mutate(source)}
-                onSendToBot={setBotNotificationPlan}
-                onOpenPromo={setPreviewPromoId}
-                onRefreshInviteLinks={(source) =>
-                  refreshInviteLinksMutation.mutate(source.id)
-                }
-                refreshingInviteLinks={
-                  refreshInviteLinksMutation.isPending &&
-                  refreshInviteLinksMutation.variables === plan.id
-                }
-              />
+              <div key={plan.id} className="mb-3 break-inside-avoid">
+                <CrossPromotionPlanCard
+                  plan={plan}
+                  onEdit={(source) => {
+                    setEditingPlan(source);
+                    setModalKind(source.kind);
+                    setOpen(true);
+                  }}
+                  onDelete={() => setDeletePlan(plan)}
+                  onResume={(source) => resumeMutation.mutate(source)}
+                  onSendToBot={setBotNotificationPlan}
+                  onOpenPromo={setPreviewPromoId}
+                  onRefreshInviteLinks={(source) => refreshInviteLinksMutation.mutate(source.id)}
+                  refreshingInviteLinks={
+                    refreshInviteLinksMutation.isPending && refreshInviteLinksMutation.variables === plan.id
+                  }
+                />
+              </div>
             ))}
           </div>
         )}
       </div>
+      <Modal
+        open={choosingKind}
+        title={i18n?.t("ads.promotion_type") ?? "Promotion type"}
+        onClose={() => setChoosingKind(false)}
+      >
+        <div className="space-y-4">
+          <CrossPromotionKindChoice kind={selectedCreationKind} onSelect={setSelectedCreationKind} />
+          <CrossPromotionDraftChooser kind={selectedCreationKind} onOpen={openCreation} />
+        </div>
+      </Modal>
+      {folderFlow ? (
+        <FolderModals
+          key={folderFlow.kind === "create" ? "create" : `${folderFlow.kind}:${folderFlow.folderId}`}
+          flow={folderFlow}
+          onClose={() => setFolderFlow(null)}
+          onBack={folderFlow.kind === "create" ? returnToKindChoice : undefined}
+        />
+      ) : null}
       <CrossPromotionPlanModal
-        open={open}
+        open={open && !folderFlow}
         kind={modalKind}
-        onKindChange={setModalKind}
-        onCreateFolder={() => router.push("/ad-campaigns?section=mutual-promotion&mode=folders&create=1")}
+        onBack={!editingPlan ? returnToKindChoice : undefined}
         initial={editingPlan}
+        initialDraftId={editingPlan ? undefined : initialDraftId}
         mode={editingPlan ? "edit" : "create"}
         channels={channelsQuery.data ?? []}
         networks={networksQuery.data ?? []}
@@ -576,43 +622,29 @@ export function CrossPromotionPlansPage({
           setEditingPlan(null);
         }}
         onSubmit={(payload) => saveMutation.mutateAsync(payload)}
-        onReplaceAndPublishNow={(payload) =>
-          replaceAndPublishNowMutation.mutateAsync(payload)
-        }
+        onReplaceAndPublishNow={(payload) => replaceAndPublishNowMutation.mutateAsync(payload)}
         onUpdatePublicationInTelegram={(publicationId, payload) =>
           updatePublicationMutation.mutateAsync({ publicationId, payload })
         }
         onReplacePublicationAndPublishNow={(publicationId, payload) =>
           replacePublicationMutation.mutateAsync({ publicationId, payload })
         }
-        onUpdatePublicationChannelSchedule={(
-          publicationId,
-          channelId,
-          payload,
-        ) =>
+        onUpdatePublicationChannelSchedule={(publicationId, channelId, payload) =>
           updatePublicationChannelMutation.mutateAsync({
             publicationId,
             channelId,
             payload,
           })
         }
-        onReplacePublicationChannelSchedule={(
-          publicationId,
-          channelId,
-          payload,
-        ) =>
+        onReplacePublicationChannelSchedule={(publicationId, channelId, payload) =>
           replacePublicationChannelMutation.mutateAsync({
             publicationId,
             channelId,
             payload,
           })
         }
-        onSaveDraft={(draft, id) =>
-          saveDraftMutation.mutateAsync({ draft, id })
-        }
-        onUpdateDetails={(details) =>
-          updateDetailsMutation.mutateAsync(details)
-        }
+        onSaveDraft={(draft, id) => saveDraftMutation.mutateAsync({ draft, id })}
+        onUpdateDetails={(details) => updateDetailsMutation.mutateAsync(details)}
       />
       <PromoFormModal
         open={Boolean(previewPromoQuery.data)}
@@ -691,25 +723,5 @@ export function CrossPromotionPlansPage({
         </div>
       </Modal>
     </AppShell>
-  );
-}
-
-export function MutualPromotionModeTabs({
-  mode,
-}: {
-  mode?: "direct" | "folders" | "own";
-}) {
-  const i18n = useOptionalI18n();
-  const foldersActive = mode === "folders";
-  return (
-    <div className="mb-5">
-      <Link
-        href="/ad-campaigns?section=mutual-promotion&mode=folders"
-        aria-current={foldersActive ? "page" : undefined}
-        className={`inline-flex items-center gap-2 text-sm ${foldersActive ? "text-blue-300" : "text-neutral-400 hover:text-neutral-200"}`}
-      >
-        <Folder size={15} /> {i18n?.t("ads.folders") ?? "Folders"}
-      </Link>
-    </div>
   );
 }

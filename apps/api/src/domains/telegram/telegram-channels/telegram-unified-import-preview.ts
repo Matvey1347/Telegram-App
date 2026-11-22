@@ -1,3 +1,4 @@
+import { previewImportedEditorial, type readImportedEditorialCatalog } from './telegram-unified-import-editorial';
 import type {
   ResolvedEmoji,
   TelegramUnifiedImportManifest,
@@ -19,6 +20,11 @@ type PreviewScope = {
     imageUrls?: string[];
     icon?: string | null;
     status?: string;
+    origin?: string;
+    group?: { isSystem: boolean; systemKey: string | null } | null;
+    postBatchDelivery?: { id: string } | null;
+    mutualPromotionDelivery?: { id: string } | null;
+    _count?: { adSalePlacements: number };
     scheduledAt?: Date | string | null;
     publicationSlot?: {
       id: string;
@@ -45,6 +51,7 @@ type PreviewScope = {
     selectionMode: string;
     selectedSlots: Array<{ slotId: string }>;
   } | null;
+  editorialCatalog?: Awaited<ReturnType<typeof readImportedEditorialCatalog>>;
   iconPresentationsById?: Map<string, ResolvedEmoji>;
 };
 
@@ -109,6 +116,7 @@ const previewItem = (
     | 'slotKind'
     | 'slotTitle'
     | 'changes'
+    | 'editorial'
   >,
 ): TelegramUnifiedImportPreviewItem => ({
   ref,
@@ -426,6 +434,7 @@ export function buildUnifiedImportPreviewSections(
       items: [
         ...(manifest.posts ?? []).map((row) => {
           const existing = row.id ? postsById.get(row.id) : undefined;
+          const editorial = row.editorial ? previewImportedEditorial(row.editorial, scope.editorialCatalog) : null;
           return previewItem(
             row.ref,
             row.action,
@@ -433,6 +442,18 @@ export function buildUnifiedImportPreviewSections(
             row.imported
               ? []
               : [
+                  ...(editorial?.errors ?? []),
+                  ...(editorial && (row.action === 'DELETE' || row.groupRef || row.hypothesisRefs?.length)
+                    ? ['Editorial classification is only available for draft creation or update']
+                    : []),
+                  ...(editorial && row.action === 'UPDATE' && existing &&
+                    (existing.status !== 'DRAFT' || existing.scheduledAt ||
+                      (existing.origin && existing.origin !== 'SYSTEM') ||
+                      existing.group?.isSystem || existing.group?.systemKey ||
+                      existing.postBatchDelivery || existing.mutualPromotionDelivery ||
+                      existing._count?.adSalePlacements)
+                    ? ['Editorial classification can only be assigned to an ordinary draft']
+                    : []),
                   ...(duplicateRefs.has(row.ref) ? ['Duplicate ref'] : []),
                   ...(row.action === 'CREATE' && !row.title?.trim()
                     ? ['title is required for CREATE']
@@ -471,6 +492,7 @@ export function buildUnifiedImportPreviewSections(
               : row.action === 'UPDATE'
                 ? {
                     entityId: row.id,
+                    editorial,
                     iconPresentation: postIconPresentation(
                       row.icon ?? existing?.icon,
                     ),
@@ -498,6 +520,7 @@ export function buildUnifiedImportPreviewSections(
                     ]),
                   }
                 : {
+                    editorial,
                     iconPresentation: postIconPresentation(row.icon),
                   },
           );

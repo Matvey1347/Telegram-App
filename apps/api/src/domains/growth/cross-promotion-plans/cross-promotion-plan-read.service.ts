@@ -9,6 +9,10 @@ import {
   type ResolvedEmojiIconSource,
 } from '../../../common/icons/resolved-emoji';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { publisherPlacements } from './cross-promotion-plan-input';
+
+// Permanent Telegram posts can outlive the campaign shown in the promotion inbox.
+const OWN_PROMOTION_ACTIVITY_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 type CounterBaseline = {
   inviteLinkId: string;
@@ -211,6 +215,7 @@ export class CrossPromotionPlanReadService {
           telegramChannelId: true,
           telegramMessageIds: true,
           telegramRemoteStatus: true,
+          publishedAt: true,
         },
       }),
       advertiserIds.length
@@ -312,6 +317,7 @@ export class CrossPromotionPlanReadService {
     const channelById = new Map(
       channels.map((channel) => [channel.id, channel]),
     );
+    const managedPostById = new Map(managedPosts.map((post) => [post.id, post]));
     const publishedManagedPostIds = new Set(
       managedPosts
         .filter(
@@ -336,6 +342,7 @@ export class CrossPromotionPlanReadService {
       ]),
     );
     const iconById = new Map(icons.map((icon) => [icon.id, icon] as const));
+    const now = Date.now();
     return rows.map((row) => {
       const targets = targetsByPlan.get(row.id) ?? [];
       const baselines = json<CounterBaseline[]>(row.baselineTargetCounters, []);
@@ -361,16 +368,68 @@ export class CrossPromotionPlanReadService {
         publishedManagedPostIds.has(placement.managedPostId),
       );
       const hasLiveOwnPlacement = placements.some((placement) => {
-        const managedPost = managedPosts.find(
-          (post) => post.id === placement.managedPostId,
-        );
+        const managedPost = managedPostById.get(placement.managedPostId);
         return Boolean(
           managedPost && managedPost.telegramRemoteStatus !== 'AUTO_DELETED',
         );
       });
+      const partnerPlacements = publicationPost.partnerPublications?.length
+        ? publicationPost.partnerPublications.flatMap((publication) => publication.placements)
+        : (publicationPost.partnerPlacements ?? []);
+      const hasLivePartnerPlacement = partnerPlacements.some((placement) =>
+        Date.parse(placement.scheduledAt) <= now &&
+        (!placement.deleteAt || Date.parse(placement.deleteAt) > now),
+      );
+      const configuredPlacements = publisherPlacements(publicationPost);
+      const publicationHasStarted = configuredPlacements.length
+        ? configuredPlacements.some(
+            (placement) => Date.parse(placement.scheduledAt) <= now,
+          )
+        : row.scheduledAt.getTime() <= now;
+      const hasActivePlacement =
+        (ownPlacementPublished && publicationHasStarted) ||
+        hasLivePartnerPlacement;
+      const campaignPlacements = [...configuredPlacements, ...partnerPlacements];
+      const allPlacementsEnded =
+        campaignPlacements.length > 0 &&
+        campaignPlacements.every(
+          ({ deleteAt }) => deleteAt && Date.parse(deleteAt) <= now,
+        );
+      let ownCampaignWindowEnded = false;
+      if (
+        boundary == null &&
+        row.kind === 'OWN_CHANNELS' &&
+        ownPlacementPublished &&
+        campaignPlacements.every(({ deleteAt }) => !deleteAt)
+      ) {
+        let lastPublicationAt = row.scheduledAt.getTime();
+        for (const { scheduledAt } of configuredPlacements) {
+          const scheduledTime = Date.parse(scheduledAt);
+          if (Number.isFinite(scheduledTime)) {
+            lastPublicationAt = Math.max(lastPublicationAt, scheduledTime);
+          }
+        }
+        for (const { managedPostId } of placements) {
+          const publishedAt = managedPostById.get(managedPostId)?.publishedAt;
+          if (publishedAt) {
+            lastPublicationAt = Math.max(lastPublicationAt, publishedAt.getTime());
+          }
+        }
+        ownCampaignWindowEnded =
+          lastPublicationAt + OWN_PROMOTION_ACTIVITY_WINDOW_MS <= now;
+      }
+      const isTrackedPlacement =
+        row.status === 'ACTIVE' || row.status === 'SCHEDULED';
+      const trackingEnded =
+        isTrackedPlacement &&
+        (row.status === 'ACTIVE' || hasActivePlacement) &&
+        (boundary == null
+          ? allPlacementsEnded || ownCampaignWindowEnded
+          : boundary <= now);
+
       const historicalDraft =
         row.status === 'DRAFT' &&
-        new Date(row.scheduledAt).getTime() <= Date.now() &&
+        row.scheduledAt.getTime() <= now &&
         baselines.length > 0;
       const linkAtEnd = (id: string, boundaryAt: number | null = boundary) => {
         if (boundaryAt == null) return null;
@@ -404,21 +463,13 @@ export class CrossPromotionPlanReadService {
             );
       return {
         ...row,
-        status: historicalDraft
+        status: historicalDraft || trackingEnded
           ? 'COMPLETED'
-          : row.status === 'ACTIVE' && !hasLiveOwnPlacement
+          : row.status === 'ACTIVE' && !hasLiveOwnPlacement && !partnerPlacements.length
             ? 'DRAFT'
-            : row.status === 'COMPLETED' && hasLiveOwnPlacement
-              ? 'ACTIVE'
-              : row.kind === 'OWN_CHANNELS' &&
-                  (row.status === 'SCHEDULED' || row.status === 'ACTIVE')
-                ? ownPlacementPublished
-                  ? 'ACTIVE'
-                  : 'SCHEDULED'
-                : row.status === 'SCHEDULED' &&
-                    new Date(row.scheduledAt).getTime() <= Date.now()
-                  ? 'ACTIVE'
-                  : row.status,
+            : isTrackedPlacement
+              ? (hasActivePlacement ? 'ACTIVE' : 'SCHEDULED')
+              : row.status,
         lastError: historicalDraft ? null : row.lastError,
         advertiser: row.advertiserId
           ? (advertiserById.get(row.advertiserId) ?? null)
@@ -489,13 +540,7 @@ export class CrossPromotionPlanReadService {
               (placement) => placement.managedPostId === post.id,
             ),
           );
-          const scheduledTimes = (
-            publicationPost.publisherPublications?.length
-              ? publicationPost.publisherPublications.flatMap(
-                  (publication) => publication.placements,
-                )
-              : (publicationPost.publisherPlacements ?? [])
-          )
+          const scheduledTimes = configuredPlacements
             .filter((placement) => placement.telegramChannelId === channelId)
             .map((placement) => Date.parse(placement.scheduledAt))
             .filter(Number.isFinite);
@@ -503,7 +548,7 @@ export class CrossPromotionPlanReadService {
           // Telegram has not published this placement yet. Never present that
           // as an actual campaign reach before its configured publication time.
           const publicationHasStarted =
-            !scheduledTimes.length || Math.min(...scheduledTimes) <= Date.now();
+            !scheduledTimes.length || Math.min(...scheduledTimes) <= now;
           const publishedRows = telegramPosts.filter(
             (post) =>
               post.telegramChannelId === channelId &&

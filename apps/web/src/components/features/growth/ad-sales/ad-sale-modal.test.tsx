@@ -149,7 +149,11 @@ describe("AdSaleModal", () => {
     expect(screen.queryByRole("button", { name: /Actions for/ })).toBeNull();
     expect(screen.queryByText("How should we handle the advertising post?")).toBeNull();
     expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
-    expect(screen.getByRole("button", { name: "Save draft" }).querySelector("svg")).toBeInTheDocument();
+    const save = screen.getByRole("button", { name: "Save draft" });
+    const create = screen.getByRole("button", { name: "Create sale" });
+    expect(save.querySelector("svg")).toBeInTheDocument();
+    expect(save.closest("footer")).toContainElement(create);
+    expect(save.parentElement).toBe(create.parentElement);
     expect(screen.getByRole("switch", { name: "Advertising post" })).toHaveAttribute("aria-checked", "true");
   });
 

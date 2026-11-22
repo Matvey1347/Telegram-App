@@ -3,6 +3,8 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { TelegramUserAccountStatus } from '@prisma/client';
+import { acquirePostgresTransactionLock } from '../../../prisma/postgres-advisory-lock';
 import type { CrmAccountCapabilities } from '@telegram-system/shared';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { WorkspaceAuthorizationService } from '../../workspace/workspace-authorization/workspace-authorization.service';
@@ -56,11 +58,13 @@ export class TelegramCrmAccountCapabilitiesService {
     if (
       dto.crmSyncEnabled === undefined &&
       dto.crmSendEnabled === undefined &&
-      dto.mtprotoPublishingEnabled === undefined
+      dto.mtprotoPublishingEnabled === undefined &&
+      dto.isPreferredInviteLinkAccount === undefined
     ) {
       throw new BadRequestException('No account capability changes');
     }
-    if (!Object.keys(data).length) return this.map(account);
+    const preferred = dto.isPreferredInviteLinkAccount;
+    if (!Object.keys(data).length && preferred === undefined) return this.map(account);
     if (data.crmSendEnabled === false) {
       const defaultSettings =
         await this.prisma.telegramAdCrmWorkspaceSettings.findFirst({
@@ -76,12 +80,29 @@ export class TelegramCrmAccountCapabilitiesService {
         );
       }
     }
-    const updated = await this.prisma.telegramUserAccountIntegration.update({
-      where: { id: account.id },
-      data,
-      select: crmAccountSelect,
-    });
-    this.runtimeNotifier.wake({
+    const where = { id: accountId, workspaceId: access.workspaceId };
+    const updated = preferred === undefined
+      ? await this.prisma.telegramUserAccountIntegration.update({ where, data, select: crmAccountSelect })
+      : await this.prisma.$transaction(async (tx) => {
+        await acquirePostgresTransactionLock(tx, `mtproto-invite-account:${access.workspaceId}`);
+        const current = await tx.telegramUserAccountIntegration.findUnique({ where, select: crmAccountSelect });
+        if (!current) throw new NotFoundException('Telegram user account not found');
+        if (preferred && (!current.isActive || current.status !== TelegramUserAccountStatus.connected ||
+          !current.sessionEncrypted || !current.sessionIv || !current.sessionAuthTag))
+          throw new BadRequestException('Connect and activate this account before selecting it for invite links.');
+        if (preferred === current.isPreferredInviteLinkAccount && !Object.keys(data).length)
+          return current;
+        if (preferred) await tx.telegramUserAccountIntegration.updateMany({
+          where: { workspaceId: access.workspaceId, isPreferredInviteLinkAccount: true, id: { not: accountId } },
+          data: { isPreferredInviteLinkAccount: false },
+        });
+        return tx.telegramUserAccountIntegration.update({
+          where,
+          data: { ...data, isPreferredInviteLinkAccount: preferred },
+          select: crmAccountSelect,
+        });
+      });
+    if (Object.keys(data).length) this.runtimeNotifier.wake({
       workspaceId: access.workspaceId,
       accountId,
       reason: 'capability',
@@ -107,6 +128,7 @@ export class TelegramCrmAccountCapabilitiesService {
       crmSyncEnabled: account.crmSyncEnabled,
       crmSendEnabled: account.crmSendEnabled,
       mtprotoPublishingEnabled: account.mtprotoPublishingEnabled,
+      isPreferredInviteLinkAccount: account.isPreferredInviteLinkAccount,
     };
   }
 }

@@ -1198,6 +1198,7 @@ model TelegramUserAccountIntegration {
   crmSendEnabled            Boolean                   @default(false)
   mtprotoPublishingEnabled  Boolean                   @default(true)
   isPriorityPublisher       Boolean                   @default(false)
+  isPreferredInviteLinkAccount Boolean                 @default(false)
   sessionEncrypted          String?
   sessionIv                 String?
   sessionAuthTag            String?

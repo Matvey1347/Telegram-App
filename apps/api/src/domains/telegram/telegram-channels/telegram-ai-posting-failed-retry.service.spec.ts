@@ -50,7 +50,7 @@ describe('TelegramAiPostingFailedRetryService', () => {
         workspaceId: 'workspace-a',
         telegramChannelId: 'channel-a',
       },
-      select: { version: true, failures: true },
+      select: expect.objectContaining({ version: true, failures: true, operations: true }),
     });
     expect(generator.generate).toHaveBeenCalledWith(
       'user-a',
@@ -60,6 +60,19 @@ describe('TelegramAiPostingFailedRetryService', () => {
       undefined,
       onProgress,
       'A channel specific topic',
+    );
+  });
+
+  it('routes historic blank-text failures to the same saved slot', async () => {
+    prisma.telegramAiPostingTestRun.findFirst.mockResolvedValue({
+      version: 2, requestedCount: 4, status: 'PARTIAL', publications: [], operations: [],
+      failures: [{ code: 'AI_POSTING_DRAFT_INVALID', topic: 'A distinct topic',
+        publicationIndex: 2, reasons: ['Ответ должен содержать непустой текст публикации.'] }],
+    });
+    await service.regenerateFailedPublication('user-a', 'channel-a', 'run-a', 0, 2);
+    expect(generator.generate).toHaveBeenCalledWith(
+      'user-a', 'channel-a', 1, 'MANUAL', undefined, undefined, 'A distinct topic',
+      expect.objectContaining({ id: 'run-a', version: 2, failureIndex: 0, publicationIndex: 2 }),
     );
   });
 

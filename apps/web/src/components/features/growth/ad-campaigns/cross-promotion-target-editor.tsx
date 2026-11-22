@@ -139,7 +139,7 @@ export function CrossPromotionTargetEditor({
         </div>
       ) : null}
       <div
-        className={`grid gap-3 ${
+        className={`grid min-w-0 grid-cols-1 gap-3 ${
           showPromo
             ? trailing
               ? "lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]"
@@ -209,8 +209,7 @@ export function CrossPromotionTargetEditor({
           </FormField>
           <Button
             type="button"
-            variant="secondary"
-            className="mt-2 w-full"
+            className="mt-2 w-full whitespace-normal px-2"
             onClick={() => setCreatingInviteLink(true)}
           >
             Create a new invite link

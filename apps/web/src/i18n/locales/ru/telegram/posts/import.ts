@@ -127,6 +127,10 @@ const messages = {
   "telegram.posts.import.unifiedTitle": "Импорт",
   "telegram.posts.import.unifiedUpload": "Загрузить JSON",
   "telegram.posts.import.unifiedCopyPrompt": "Скопировать общую инструкцию",
+  "telegram.posts.import.unifiedFileTypes": "JSON-файл или JSON-текст из буфера",
+  "telegram.posts.import.copyEditorialInstructions": "Копировать инструкцию",
+  "telegram.posts.import.createsSphere": "Новая сфера",
+  "telegram.posts.import.createsRubric": "Новая рубрика",
   "telegram.posts.import.unifiedCopyAndDownload":
     "Скачать инструкцию и полный контекст",
   "telegram.posts.import.unifiedContextReady":

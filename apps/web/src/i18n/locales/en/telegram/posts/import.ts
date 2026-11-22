@@ -122,6 +122,10 @@ const messages = {
   "telegram.posts.import.unifiedTitle": "Import",
   "telegram.posts.import.unifiedUpload": "Upload JSON",
   "telegram.posts.import.unifiedCopyPrompt": "Copy unified instructions",
+  "telegram.posts.import.unifiedFileTypes": "JSON file or pasted JSON text",
+  "telegram.posts.import.copyEditorialInstructions": "Copy instructions",
+  "telegram.posts.import.createsSphere": "New sphere",
+  "telegram.posts.import.createsRubric": "New rubric",
   "telegram.posts.import.unifiedCopyAndDownload":
     "Download instruction + full context",
   "telegram.posts.import.unifiedContextReady":

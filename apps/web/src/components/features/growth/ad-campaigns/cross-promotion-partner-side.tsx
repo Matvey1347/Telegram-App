@@ -1,5 +1,6 @@
 "use client";
 
+import { FormSectionNumber } from "../form-section-number";
 import { useEffect } from "react";
 import { Bot, ChevronDown, Plus, Send, Trash2 } from "lucide-react";
 import type {
@@ -135,12 +136,11 @@ export function CrossPromotionPartnerSide({
         aria-expanded={expanded}
         onClick={() => onExpandedChange(!expanded)}
       >
-        <span>
-          <h3 className="font-semibold text-white">Partner side</h3>
-          <p className="text-xs text-neutral-400">
-            Optional now — add the client and their publication later, when they
-            are ready to place your promo.
-          </p>
+        <span className="flex min-w-0 items-center gap-3">
+          <FormSectionNumber>3</FormSectionNumber>
+          <span>
+            <span className="block font-semibold text-white">Partner side</span>
+          </span>
         </span>
         <ChevronDown
           size={18}
@@ -180,15 +180,10 @@ export function CrossPromotionPartnerSide({
               placeholder="Select partner channels"
               searchPlaceholder="Search channels"
             />
-            <p className="mt-1 text-xs text-neutral-500">
-              Choose channels where the partner will publish your promotion. You
-              can leave this empty and configure it later.
-            </p>
           </FormField>
           {partnerIds.length ? (
             <CrossPromotionPlacementSettings
               title="Formats in partner channels"
-              description="Set the planned publication date, time, and format for every partner channel."
               channelIds={partnerIds}
               channels={channels}
               productsByChannelId={productsByChannelId}
@@ -211,7 +206,7 @@ export function CrossPromotionPartnerSide({
           ) : null}
           {targets.length ? (
             <>
-              <div className="grid gap-3">
+              <div className="grid min-w-0 grid-cols-1 gap-3">
                 {targets.map((target, index) => {
                   const channel = channels.find(
                     (item) => item.id === target.telegramChannelId,
@@ -220,9 +215,9 @@ export function CrossPromotionPartnerSide({
                   return (
                     <section
                       key={`${channel.id}-${index}`}
-                      className="space-y-3 border-t border-neutral-800 pt-3 sm:rounded-xl sm:border sm:bg-neutral-950/55 sm:p-3"
+                      className="min-w-0 space-y-3 border-t border-neutral-800 pt-3 sm:rounded-xl sm:border sm:bg-neutral-950/55 sm:p-3"
                     >
-                      <div className="grid items-end gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+                      <div className="grid min-w-0 grid-cols-1 items-end gap-3 [&>*]:min-w-0 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
                         <FormField label="My channel being promoted" required>
                           <CustomSelect
                             value={target.telegramChannelId}
@@ -245,7 +240,7 @@ export function CrossPromotionPartnerSide({
                           />
                         </FormField>
                         <FormField label="My promo source" required>
-                          <div className="flex h-[42px] items-center rounded-lg border border-neutral-700 bg-neutral-950 px-2">
+                          <div className="flex min-h-[42px] min-w-0 items-center rounded-lg border border-neutral-700 bg-neutral-950 px-1 [&>div]:min-w-0 [&>div]:shrink [&_button]:h-auto [&_button]:min-h-6 [&_button]:whitespace-normal sm:px-2">
                             <SegmentedControl
                               value={outboundMode}
                               onChange={onOutboundModeChange}
@@ -317,19 +312,15 @@ export function CrossPromotionPartnerSide({
                 })}
               </div>
               {outboundMode === "CUSTOM" ? (
-                <section className="space-y-3 border-t border-neutral-800 pt-3 sm:rounded-xl sm:border sm:bg-neutral-950/55 sm:p-3">
+                <section className="min-w-0 space-y-3 border-t border-neutral-800 pt-3 sm:rounded-xl sm:border sm:bg-neutral-950/55 sm:p-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
                       <h4 className="text-sm font-semibold text-white">
                         My custom promo
                       </h4>
-                      <p className="text-xs text-neutral-500">
-                        Forward it through the system bot or compose it here.
-                      </p>
                     </div>
                     <Button
                       type="button"
-                      variant="secondary"
                       disabled={
                         !botConnected ||
                         importStatus === "working" ||

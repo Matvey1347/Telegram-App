@@ -134,12 +134,17 @@ Before adding a primitive or domain wrapper, search for an existing selector, da
 
 - Use `TelegramInviteLinkOptionLabel` for purpose icons in selected values and option rows. Its purpose text is hidden on small screens while each icon retains an accessible label.
 - Offer “Verify and add this invite link” for a typed Telegram invite URL. Use `useRegisterTelegramInviteLink` or the existing verified import flow so the server checks that the link belongs to the selected channel before selecting it.
+- The shared invite-link creation form selects the workspace’s preferred MTProto account when it has invite-link access to the selected channel. The user can select any other eligible account. Configure the default in the account’s Settings.
 
 ### `AdSaleModal`
 
 - Import: `@/components/features/growth/ad-sales/ad-sale-modal`
 - Use for ad sale creation/editing.
 - Existing tests cover selected post loading, format pricing and selector retry behavior.
+
+### `CrossPromotionPlanSummary`
+
+The desktop VP form summarizes placement counts and available format estimates for each side. Additional partner posts count as separate placements. Recorded conversion is shown for completed own-channel promotions with one tracking link and observed views.
 
 ### `CommonAdSlotOptions`
 

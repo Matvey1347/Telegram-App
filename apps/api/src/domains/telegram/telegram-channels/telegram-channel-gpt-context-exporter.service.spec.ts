@@ -47,6 +47,12 @@ function setup(
     telegramCustomEmojiPack: {
       findMany: jest.fn().mockResolvedValue([]),
     },
+    telegramAiPostingSphere: { findMany: jest.fn().mockResolvedValue([
+      { id: 'sphere-1', name: 'Wellbeing', parentId: null, description: 'Everyday habits' },
+    ]) },
+    telegramAiPostingRubric: { findMany: jest.fn().mockResolvedValue([
+      { id: 'rubric-1', name: 'Practical guides', sphereId: 'sphere-1', description: '', goal: '' },
+    ]) },
     postGroup: { findMany: jest.fn().mockResolvedValue([]) },
     $queryRaw: jest
       .fn()
@@ -469,19 +475,20 @@ describe('TelegramChannelGptContextExporter', () => {
     expect(result.filename).toMatch(/^CH_\d{2}-\d{2}\.txt$/);
     expect(text.startsWith(TELEGRAM_UNIFIED_IMPORT_INSTRUCTION)).toBe(true);
     expect(text).toContain('ТОЧНЫЙ ФОРМАТ ОТВЕТА');
-    expect(text).toContain('"groups": [');
+    expect(text).toContain('EDITORIAL TAXONOMY');
+    expect(text).toContain('"name": "Practical guides"');
+    expect(text).not.toContain('POST GROUPS');
+    expect(text).not.toContain('CONTENT HYPOTHESES');
+    expect(text).not.toContain('group_id:');
     expect(text).toContain('"icon": "✍️"');
-    expect(text).toContain('"placementMode": "CUSTOM"');
+    expect(text).toContain('"placementMode":"CUSTOM"');
     expect(text).toContain(
       'CUSTOM планирует публикацию на произвольные будущие дату и время',
     );
-    expect(text).toContain('"delete":{"groups":[{"id":"точный id группы"}]');
+    expect(text).toContain('"delete": { "posts": [] }');
     expect(text).toContain('Не используй прошедшие и занятые даты/слоты');
     expect(text).toContain('ПОЛНЫЙ КОНТЕКСТ КАНАЛА');
     expect(text).toContain('CHANNEL');
-    expect(text).toContain(
-      '{"version":1,"groups":[],"hypotheses":[],"posts":[],"schedule":[],"delete":{"groups":[],"hypotheses":[],"posts":[]}}',
-    );
     expect(text.indexOf('PUBLICATION SLOTS')).toBeLessThan(
       text.indexOf('ALL FORMATTING'),
     );

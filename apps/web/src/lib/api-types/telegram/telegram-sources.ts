@@ -1,7 +1,7 @@
 import type { WorkspaceMember } from "../core";
-import type { TelegramBotIntegrationView } from "@telegram-system/shared";
+import type { TelegramBotIntegrationView, TelegramInviteLinkAccountPreference } from "@telegram-system/shared";
 
-export type TelegramUserAccount = {
+export type TelegramUserAccount = TelegramInviteLinkAccountPreference & {
   id: string;
   label: string;
   apiId: string;
@@ -99,7 +99,7 @@ export type TelegramUserAccountSyncDialogsResponse = {
   syncedChannels?: TelegramSyncedDialogChannel[];
   availableChannels?: TelegramSyncedDialogChannel[];
 };
-export type TelegramChannelSourceAccess = {
+export type TelegramChannelSourceAccess = TelegramInviteLinkAccountPreference & {
   sourceId: string;
   sourceType: TelegramSourceType;
   displayName: string;

@@ -3,7 +3,10 @@ import { MutualPromotionReadService } from './mutual-promotion-read.service';
 import { MutualPromotionStatisticsService } from './mutual-promotion-statistics.service';
 
 describe('MutualPromotionReadService', () => {
+  afterEach(() => jest.useRealTimers());
+
   it('includes compact channel summaries in the folder list', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-09-09T08:00:00.000Z'));
     const prisma = {
       mutualPromotionFolder: {
         findMany: jest.fn().mockResolvedValue([
@@ -56,12 +59,11 @@ describe('MutualPromotionReadService', () => {
             ],
           },
         ]),
-        count: jest.fn().mockResolvedValue(1),
-        groupBy: jest.fn().mockResolvedValue([
-          { status: 'ACTIVE', _count: { _all: 1 } },
-          { status: 'SCHEDULED', _count: { _all: 2 } },
-          { status: 'COMPLETED', _count: { _all: 3 } },
-        ]),
+        count: jest
+          .fn()
+          .mockResolvedValueOnce(1)
+          .mockResolvedValueOnce(2)
+          .mockResolvedValueOnce(3),
       },
     };
     const service = new MutualPromotionReadService(
@@ -105,7 +107,9 @@ describe('MutualPromotionReadService', () => {
       expect.objectContaining({
         where: {
           workspaceId: 'workspace-1',
-          status: { in: ['ACTIVE', 'DELETING'] },
+          status: 'ACTIVE',
+          startsAt: { lte: new Date('2026-09-09T08:00:00.000Z') },
+          endsAt: { gt: new Date('2026-09-09T08:00:00.000Z') },
         },
         include: expect.objectContaining({
           participants: expect.objectContaining({
@@ -123,6 +127,60 @@ describe('MutualPromotionReadService', () => {
       SCHEDULED: 2,
       COMPLETED: 3,
     });
+  });
+
+  it('lists a folder whose period ended in Completed even if its stored status is Active', async () => {
+    const endsAt = new Date('2026-11-20T12:00:00.000Z');
+    jest.useFakeTimers().setSystemTime(endsAt);
+    const findMany = jest.fn().mockResolvedValue([
+      {
+        id: 'expired-folder',
+        status: 'ACTIVE',
+        title: 'Folder',
+        startsAt: new Date('2026-11-19T12:00:00.000Z'),
+        endsAt,
+        participants: [],
+        _count: { posts: 0, participants: 0 },
+        createdAt: endsAt,
+        updatedAt: endsAt,
+      },
+    ]);
+    const count = jest
+      .fn()
+      .mockResolvedValueOnce(0)
+      .mockResolvedValueOnce(0)
+      .mockResolvedValueOnce(1);
+    const service = new MutualPromotionReadService(
+      { mutualPromotionFolder: { findMany, count } } as never,
+      {
+        resolveWorkspaceIdForUser: jest.fn().mockResolvedValue('workspace-1'),
+      } as never,
+      new MutualPromotionStatisticsService(),
+      {} as never,
+    );
+
+    const result = await service.list('user-1', { status: 'COMPLETED' });
+
+    expect(result.items[0].status).toBe('COMPLETED');
+    expect(result.statusCounts).toEqual({
+      ACTIVE: 0,
+      SCHEDULED: 0,
+      COMPLETED: 1,
+    });
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          workspaceId: 'workspace-1',
+          OR: [
+            { status: { in: ['COMPLETED', 'CANCELLED', 'DELETING'] } },
+            {
+              status: { in: ['ACTIVE', 'SCHEDULED'] },
+              endsAt: { lte: endsAt },
+            },
+          ],
+        },
+      }),
+    );
   });
 
   it('loads every preferred folder link and falls back to the main link', async () => {

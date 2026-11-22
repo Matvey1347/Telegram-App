@@ -1,5 +1,6 @@
 "use client";
 
+import { crossPromotionPlacementProduct } from "./cross-promotion-plan-summary";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type {
@@ -49,8 +50,8 @@ const hasInlineButtons = (post: TelegramSystemBotPostDraft | undefined) =>
 export function CrossPromotionPlanModal({
   open,
   kind,
-  onKindChange,
-  onCreateFolder,
+  onBack,
+  initialDraftId,
   initial,
   mode = "create",
   channels,
@@ -69,8 +70,8 @@ export function CrossPromotionPlanModal({
 }: {
   open: boolean;
   kind: CrossPromotionPlanKind;
-  onKindChange?: (kind: CrossPromotionPlanKind) => void;
-  onCreateFolder?: () => void;
+  onBack?: () => void;
+  initialDraftId?: string | null;
   initial: CrossPromotionPlan | null;
   mode?: CrossPromotionModalMode;
   channels: TelegramChannel[];
@@ -114,6 +115,7 @@ export function CrossPromotionPlanModal({
     open,
     initial,
     kind,
+    initialDraftId,
   });
   const {
     iconId,
@@ -344,9 +346,7 @@ export function CrossPromotionPlanModal({
     defaultPlacementDate: string,
   ) => {
     const formatId = settings.formatIds[channelId] ?? "";
-    const product = (productsByChannelId[channelId] ?? []).find(
-      (item) => item.id === formatId,
-    );
+    const product = crossPromotionPlacementProduct(productsByChannelId, channelId, formatId);
     const scheduledAt = zonedDateTimeToUtc(
       settings.dates?.[channelId] || defaultPlacementDate,
       settings.times[channelId] || time,
@@ -660,8 +660,7 @@ export function CrossPromotionPlanModal({
       <CrossPromotionPlanView
         open={open}
         kind={kind}
-        onKindChange={onKindChange}
-        onCreateFolder={onCreateFolder}
+        onBack={onBack}
         initial={initial}
         mode={mode}
         loading={loading}

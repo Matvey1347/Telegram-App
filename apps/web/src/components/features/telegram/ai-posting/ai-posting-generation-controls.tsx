@@ -28,14 +28,6 @@ export function AiPostingGenerationControls({
           <h2 id="ai-posting-test-title" className="text-lg font-semibold">
             Тестирование AI Posting
           </h2>
-          <p className="text-sm text-neutral-400">
-            Публикации останутся в тестовом запуске, пока вы явно не сохраните
-            черновик.
-          </p>
-          <p className="mt-1 text-xs text-neutral-500">
-            Пачки сохраняются в истории ниже. Текст можно править прямо в
-            превью, а заметки к тексту и медиа задаются отдельно.
-          </p>
         </div>
         <div className="flex w-full flex-wrap items-end gap-2">
           <label className="w-24 text-xs text-neutral-400">

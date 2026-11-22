@@ -72,7 +72,7 @@ export function TelegramMtprotoAccountCard({
                 onClick={onSync}
               />
               <TelegramCardMenuAction
-                label="Publishing settings"
+                label="Settings"
                 icon={<Settings2 size={17} />}
                 onClick={() => setCapabilitiesOpen(true)}
               />

@@ -123,3 +123,19 @@ Updated: 2026-11-14
   cost attribution; the current migration only reserves the research-cost field.
 - [ ] Add regression coverage and manually review responsive/UI flows. API build,
   web typecheck and Prisma validation/generation currently pass.
+
+### Hybrid media and text recovery
+
+Hybrid mode stores the channel's search share in `hybridSearchPercent`. Old
+settings use 70%. The share assigns image work to search or AI generation
+before media processing and carries the rounding remainder across batches.
+Search assignments keep their text when the image search finds no suitable
+result. Manual media replacement remains available for those publications.
+
+An empty draft can be retried from its slot in the original review batch.
+Its topic stays the same, other publications remain intact, and the usage
+ledger receipts for the initial attempts and the retry contribute to that
+publication's cost. Unknown charges remain unpriced. Neither path adds polling
+or scheduled jobs. Hybrid allocation uses one short channel-scoped transaction
+per run. Recovery reuses the existing run, checks, and media path without
+running topic planning again.

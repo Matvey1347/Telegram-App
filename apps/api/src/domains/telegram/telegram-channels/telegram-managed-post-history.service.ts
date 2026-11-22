@@ -1,3 +1,5 @@
+import type { TelegramUnifiedImportEditorial } from '@telegram-system/shared';
+import { resolveImportedEditorial } from './telegram-unified-import-editorial';
 import { ConflictException, Injectable } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import {
@@ -229,7 +231,7 @@ export class TelegramManagedPostHistoryService {
     channelId: string,
     postId: string,
     dto: UpdateTelegramManagedPostDto,
-    options?: { draftOnly: true; expectedRevision?: Date; placementId?: string; saleId?: string },
+    options?: { draftOnly: true; editorial?: TelegramUnifiedImportEditorial; expectedRevision?: Date; placementId?: string; saleId?: string },
   ) {
     const workspaceId =
       await this.telegramChannelsSupportService.workspace(userId);
@@ -251,6 +253,12 @@ export class TelegramManagedPostHistoryService {
           deliveryClaimOwner: null,
           postBatchDelivery: { is: null },
           origin: 'SYSTEM' as const,
+          ...(options.editorial ? {
+            AND: [{ OR: [
+              { groupId: null },
+              { group: { is: { isSystem: false, systemKey: null } } },
+            ] }],
+          } : {}),
           remoteImportKey: null,
           sendOperations: { none: {} },
           ...(options.expectedRevision ? { updatedAt: options.expectedRevision } : {}),
@@ -399,6 +407,9 @@ export class TelegramManagedPostHistoryService {
         'before_update',
         userId,
       );
+      const editorial = options?.editorial
+        ? await resolveImportedEditorial(tx, workspaceId, channelId, options.editorial)
+        : undefined;
       return tx.telegramManagedPost.update({
         where: {
           id: postId, workspaceId, telegramChannelId: channelId,
@@ -408,6 +419,12 @@ export class TelegramManagedPostHistoryService {
           ...(editableDraft && { ...editableDraft, workspaceId, telegramChannelId: channelId, updatedAt: post.updatedAt }),
         },
         data: {
+          ...editorial,
+          ...(editorial &&
+            editorial.aiPostingSphereId === post.aiPostingSphereId &&
+            editorial.aiPostingRubricId === post.aiPostingRubricId
+            ? { aiPostingLengthId: post.aiPostingLengthId }
+            : {}),
           title: dto.title?.trim(),
           text: dto.text,
           imageUrls: nextMedia?.imageUrls,

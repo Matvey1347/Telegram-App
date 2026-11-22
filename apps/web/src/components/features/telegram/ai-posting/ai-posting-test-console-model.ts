@@ -1,6 +1,7 @@
 import type { AiPostingFeedbackSuggestion } from "./ai-posting-feedback-suggestion";
 
 export type Publication = {
+  publicationIndex?: number;
   topic: string;
   title: string;
   text: string;
@@ -50,7 +51,7 @@ export type TestRun = {
   publications: Publication[];
   generated?: Publication[];
   sourceDiagnostics?: SourceDiagnostic[];
-  failures: Array<{ topic?: string; code: string; reasons?: string[] }>;
+  failures: Array<{ publicationIndex?: number; topic?: string; code: string; reasons?: string[]; retryText?: boolean }>;
   feedback: Array<
     AiPostingFeedbackSuggestion & { feedback: string; status: string }
   >;
@@ -62,6 +63,8 @@ export type TestRun = {
     stage: string;
     status: string;
     publicationIndex?: number;
+    actualCost?: string | null;
+    pricingStatus?: string;
   }>;
 };
 
@@ -83,7 +86,7 @@ export const generationStageLabel: Record<string, string> = {
 
 export function failureStageLabel(code: string) {
   if (/^AI_POSTING_PLANNING_/.test(code)) return "план тем";
-  if (/^AI_POSTING_TEXT_/.test(code)) return "генерация текста";
+  if (code === "AI_POSTING_DRAFT_INVALID" || /^AI_POSTING_TEXT_/.test(code)) return "генерация текста";
   if (/^AI_POSTING_REVIEW_/.test(code)) return "проверка текста";
   if (/^AI_POSTING_IMAGE_/.test(code)) return "подготовка медиа";
   if (code === "AI_POSTING_TOPIC_REPETITION") return "подбор тем";
@@ -91,6 +94,7 @@ export function failureStageLabel(code: string) {
 }
 
 export const failureMessage: Record<string, string> = {
+  AI_POSTING_TEXT_EMPTY: "Текст пустой.",
   AI_POSTING_DRAFT_INVALID:
     "Модель вернула ответ не в формате публикации. Текст не был сохранён.",
   AI_POSTING_TOPIC_REPETITION:
@@ -111,6 +115,7 @@ export const failureMessage: Record<string, string> = {
   AI_POSTING_IMAGE_AVATAR_UNAVAILABLE:
     "Не удалось загрузить аватар канала для изображения. Проверьте аватар канала и повторите создание медиа.",
   AI_POSTING_IMAGE_PROVIDER_FAILED: "Не удалось создать медиа у AI-провайдера.",
+  AI_POSTING_IMAGE_STORAGE_UPLOAD_FAILED_TOO_BUSY: "Хранилище было перегружено. Текст готов, изображение не сохранилось.",
   AI_POSTING_IMAGE_DUPLICATE: "Это изображение уже использовалось в канале. Создайте новое медиа.",
   AI_POSTING_IMAGE_STORAGE_FAILED: "Не удалось сохранить медиа в медиатеке.",
   AI_POSTING_IMAGE_STORAGE_CONFIG_MISSING:
@@ -217,6 +222,14 @@ export function totalCost(costs: Record<string, string | null>) {
   if (values.some((value) => value === null || value === undefined))
     return null;
   return addDecimalStrings(values as string[]);
+}
+
+export function failedPublicationCost(run: TestRun, index: number) {
+  const operations = run.operations?.filter((operation) => operation.publicationIndex === index);
+  if (!operations?.length) return undefined;
+  return operations.some((operation) => operation.actualCost == null && operation.pricingStatus !== "NOT_SENT")
+    ? null
+    : addDecimalStrings(operations.map((operation) => operation.actualCost ?? "0"));
 }
 
 function addDecimalStrings(values: string[]) {

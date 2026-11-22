@@ -53,7 +53,7 @@ export function CrossPromotionPlacementSettings({
   formatErrorChannelIds = [],
 }: {
   title: string;
-  description: string;
+  description?: string;
   channelIds: string[];
   channels: TelegramChannel[];
   productsByChannelId: Record<string, TelegramAdProduct[]>;
@@ -195,9 +195,7 @@ export function CrossPromotionPlacementSettings({
           <span className="flex items-center gap-2 text-sm font-semibold text-white">
             <Radio size={15} className="text-blue-300" /> {title}
           </span>
-          <span className="mt-1 block text-xs text-neutral-500">
-            {description}
-          </span>
+          {description ? <span className="mt-1 block text-xs text-neutral-500">{description}</span> : null}
         </span>
         <ChevronDown
           size={18}
@@ -237,6 +235,7 @@ export function CrossPromotionPlacementSettings({
                 <CommonAdSlotOptions
                   channelIds={channelIds}
                   date={defaultDate}
+                  hideHeading
                   selectedTime={commonTime}
                   onSelect={setAllTimes}
                   occurrencesByChannel={occurrencesByChannel}

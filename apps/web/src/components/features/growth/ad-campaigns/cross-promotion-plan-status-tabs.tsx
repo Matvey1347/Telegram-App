@@ -63,11 +63,13 @@ export function plansForCrossPromotionTab(
 
 export function CrossPromotionPlanStatusTabs({
   plans,
+  folderCounts,
   value,
   onChange,
   ariaLabel = "Promotion status",
 }: {
   plans: CrossPromotionPlan[];
+  folderCounts?: Partial<Record<CrossPromotionPlanTab, number>>;
   value: CrossPromotionPlanTab;
   onChange: (value: CrossPromotionPlanTab) => void;
   ariaLabel?: string;
@@ -81,7 +83,7 @@ export function CrossPromotionPlanStatusTabs({
     >
       {crossPromotionPlanTabDefinitions.map((tab) => {
         const active = tab.value === value;
-        const count = plans.filter((plan) => tab.statuses.includes(plan.status)).length;
+        const count = plansForCrossPromotionTab(plans, tab.value).length + (folderCounts?.[tab.value] ?? 0);
         const Icon = tab.icon;
         return (
           <button

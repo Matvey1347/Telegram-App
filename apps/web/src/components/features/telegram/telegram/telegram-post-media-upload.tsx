@@ -250,6 +250,7 @@ export function TelegramPostMediaUpload({
                 <button
                   type="button"
                   aria-label={removeLabel}
+                  disabled={locked}
                   onClick={() =>
                     onChange(value.filter((_, position) => position !== index))
                   }

@@ -351,6 +351,7 @@ export function ManagedPostsImportWorkspace({
               </FormField>
             </div>
 
+            {groupOptions.length || onUpdateHypotheses ? (
             <div className="grid gap-3 md:grid-cols-2">
               <FormField label={t("telegram.posts.import.postGroup")}>
                 <CustomSelect
@@ -395,6 +396,7 @@ export function ManagedPostsImportWorkspace({
                 </FormField>
               ) : null}
             </div>
+            ) : null}
             <div className="grid gap-3 md:grid-cols-2">
               <FormField label={t("telegram.posts.import.date")}>
                 <DateInput

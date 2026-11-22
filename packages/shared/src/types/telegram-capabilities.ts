@@ -1,3 +1,7 @@
+export type TelegramInviteLinkAccountPreference = {
+  isPreferredInviteLinkAccount?: boolean;
+};
+
 export type TelegramAccountCapabilities = {
   isPremium: boolean;
   captionLengthMax: number;

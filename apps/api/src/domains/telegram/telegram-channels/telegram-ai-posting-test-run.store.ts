@@ -19,13 +19,16 @@ export type TelegramAiPostingTestRunOperation = {
   outputTokens: number | null;
 };
 export type TestPublication = {
+  publicationIndex?: number;
   topic: string;
   title: string;
   text: string;
   imagePrompt: string;
+  imageSearchQuery?: string;
   mediaPreference?: { id: string; name: string } | null;
   imageUrl: string | null;
   imageFingerprint?: string | null;
+  imageVisualFingerprint?: string | null;
   imageOriginalUrl?: string | null;
   imagePreviewUrl?: string | null;
   imageSourceId: string | null;

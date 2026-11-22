@@ -26,10 +26,18 @@ beforeAll(() => {
 });
 
 describe("TelegramInviteLinkCreateInline", () => {
-  it("uses the chosen actor for the request and selector after a source refetch", async () => {
+  it.each([true, false])("uses the default when eligible and falls back otherwise (eligible: %s)", async (eligible) => {
     mocks.sources.mockResolvedValue([
       {
+        sourceId: "other",
+        sourceType: "MTPROTO",
+        displayName: "@other",
+        isPreferredInviteLinkAccount: !eligible,
+        permissions: { canManageInviteLinks: eligible },
+      },
+      {
         sourceId: "account-1",
+        isPreferredInviteLinkAccount: eligible,
         sourceType: "MTPROTO",
         displayName: "@creator",
         avatarUrl: "https://cdn.test/creator.jpg",
@@ -75,7 +83,7 @@ describe("TelegramInviteLinkCreateInline", () => {
     await waitFor(() => expect(submit).toBeEnabled());
     fireEvent.click(submit);
     await waitFor(() =>
-      expect(mocks.createInviteLink).toHaveBeenCalledWith(
+      expect(mocks.createInviteLink).toHaveBeenLastCalledWith(
         "channel-1",
         expect.objectContaining({ mtprotoAccountId: "account-1" }),
       ),

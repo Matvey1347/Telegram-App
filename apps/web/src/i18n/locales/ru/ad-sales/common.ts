@@ -34,6 +34,7 @@ const messages = {
 
   "ads.filters": "Фильтры",
   "ads.direct_exchange": "Прямой обмен",
+  "ads.promotion_posts_kept": "Посты остаются опубликованными",
   "ads.promotion_type": "Тип продвижения",
   "ads.promotion_mutual_title": "Взаимопиар",
   "ads.promotion_mutual_help": "Обмен рекламой с другим каналом или партнёром.",

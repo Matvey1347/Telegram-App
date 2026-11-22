@@ -1,7 +1,13 @@
 "use client";
 
-import { TELEGRAM_AI_POSTING_MAX_MEDIA_REFERENCES, TELEGRAM_AI_POSTING_MAX_REFERENCE_IMAGE_BYTES } from "@telegram-system/shared";
-import { useState } from "react";
+import {
+  TELEGRAM_AI_POSTING_MAX_MEDIA_GUIDANCE_LENGTH,
+  TELEGRAM_AI_POSTING_MAX_MEDIA_REFERENCES,
+  TELEGRAM_AI_POSTING_MAX_REFERENCE_IMAGE_BYTES,
+  type TelegramAiPostingMediaGuidance,
+  type TelegramAiPostingReferenceAnalysisInput,
+} from "@telegram-system/shared";
+import { useRef, useState } from "react";
 import { Pencil, Plus, X } from "lucide-react";
 import { IconAvatar } from "@/components/icons/icon-avatar";
 import { IconPicker } from "@/components/icons/icon-picker";
@@ -13,6 +19,8 @@ import {
   Textarea,
 } from "@/components/ui/primitives";
 import { TelegramPostMediaUpload } from "../telegram/telegram-post-media-upload";
+import { SegmentedControl } from "@/components/ui/segmented-control";
+import { api } from "@/lib/api";
 import type { AiPostingMediaPreference } from "./ai-posting-media-preferences";
 
 function newId() {
@@ -25,22 +33,60 @@ const blankPreference = (): AiPostingMediaPreference => ({
   id: "",
   name: "",
   description: "",
+  generationDescription: "",
+  searchDescription: "",
   emoji: "🎨",
   references: [],
   purpose: "BOTH",
 });
 
 export function AiPostingMediaPreferenceEditor({
+  channelId,
   preferences,
   onChange,
 }: {
+  channelId?: string;
   preferences: AiPostingMediaPreference[];
   onChange: (value: AiPostingMediaPreference[]) => void;
 }) {
   const [draft, setDraft] = useState<AiPostingMediaPreference | null>(null);
+  const [guidanceTab, setGuidanceTab] = useState<keyof TelegramAiPostingMediaGuidance>("generationDescription");
+  const [analysisStatus, setAnalysisStatus] = useState<"idle" | "pending" | "complete" | "failed">("idle");
+  const [uploading, setUploading] = useState(false);
+  const request = useRef(0);
+  const analyzing = analysisStatus === "pending";
+  const open = (preference: AiPostingMediaPreference | null) => {
+    request.current += 1;
+    setAnalysisStatus("idle");
+    setGuidanceTab("generationDescription");
+    setDraft(preference);
+  };
   const isEditing = Boolean(draft?.id);
   const updateDraft = (patch: Partial<AiPostingMediaPreference>) =>
     setDraft((current) => (current ? { ...current, ...patch } : current));
+  const analyze = async (preference: AiPostingMediaPreference) => {
+    if (!channelId || !preference.references.length) return;
+    const sequence = ++request.current;
+    setAnalysisStatus("pending");
+    const body: TelegramAiPostingReferenceAnalysisInput = {
+      name: preference.name.trim(),
+      description: preference.description,
+      references: preference.references,
+      generationDescription: preference.generationDescription ?? "",
+      searchDescription: preference.searchDescription ?? "",
+    };
+    try {
+      const response = await api.post<TelegramAiPostingMediaGuidance>(
+        `/telegram-channels/${channelId}/ai-posting/media-preferences/analyze-references`,
+        body,
+      );
+      if (request.current !== sequence) return;
+      updateDraft(response.data);
+      setAnalysisStatus("complete");
+    } catch {
+      if (request.current === sequence) setAnalysisStatus("failed");
+    }
+  };
   const save = () => {
     if (!draft?.name.trim()) return;
     const value = {
@@ -53,7 +99,7 @@ export function AiPostingMediaPreferenceEditor({
         ? preferences.map((item) => (item.id === draft.id ? value : item))
         : [...preferences, value],
     );
-    setDraft(null);
+    open(null);
   };
 
   return (
@@ -65,7 +111,7 @@ export function AiPostingMediaPreferenceEditor({
         <Button
           type="button"
           disabled={preferences.length >= 10}
-          onClick={() => setDraft(blankPreference())}
+          onClick={() => open(blankPreference())}
         >
           <Plus size={15} /> Добавить предпочтение
         </Button>
@@ -144,7 +190,7 @@ export function AiPostingMediaPreferenceEditor({
               <Button
                 type="button"
                 className="h-8 w-8 !p-0"
-                onClick={() => setDraft({ ...preference })}
+                onClick={() => open({ ...preference })}
                 aria-label={`Редактировать предпочтение ${index + 1}`}
                 title="Редактировать"
               >
@@ -172,7 +218,7 @@ export function AiPostingMediaPreferenceEditor({
           className="fixed inset-0 z-[90] flex items-center justify-center bg-black/70 p-4"
           role="presentation"
           onMouseDown={(event) => {
-            if (event.target === event.currentTarget) setDraft(null);
+            if (event.target === event.currentTarget && !uploading) open(null);
           }}
         >
           <section
@@ -194,7 +240,8 @@ export function AiPostingMediaPreferenceEditor({
                 type="button"
                 aria-label="Закрыть"
                 title="Закрыть"
-                onClick={() => setDraft(null)}
+                disabled={uploading}
+                onClick={() => open(null)}
               >
                 <X size={16} />
               </IconButton>
@@ -229,6 +276,7 @@ export function AiPostingMediaPreferenceEditor({
               <FormField label="Название предпочтения">
                 <Input
                   aria-label="Название предпочтения"
+                  disabled={uploading || analyzing}
                   value={draft.name}
                   onChange={(event) =>
                     updateDraft({ name: event.target.value })
@@ -238,18 +286,43 @@ export function AiPostingMediaPreferenceEditor({
                 />
               </FormField>
             </div>
-            <FormField label="Описание">
+            <FormField label="Общая концепция">
               <Textarea
-                aria-label="Описание предпочтения"
+                aria-label="Общая концепция"
+                disabled={uploading || analyzing}
                 value={draft.description}
                 onChange={(event) =>
                   updateDraft({ description: event.target.value })
                 }
                 maxLength={500}
                 rows={3}
-                placeholder="Палитра, композиция и детали, которые хочется видеть"
+                placeholder="Какие сюжеты и настроение подходят этому предпочтению"
               />
             </FormField>
+            <div className="space-y-2">
+              <SegmentedControl
+                ariaLabel="Описания для медиа"
+                value={guidanceTab}
+                options={[
+                  { value: "generationDescription", label: "Генерация" },
+                  { value: "searchDescription", label: "Поиск" },
+                ]}
+                onChange={setGuidanceTab}
+              />
+              <FormField label={guidanceTab === "generationDescription" ? "Для генерации" : "Для поиска"}>
+                <Textarea
+                  aria-label={guidanceTab === "generationDescription" ? "Для генерации" : "Для поиска"}
+                  disabled={uploading || analyzing}
+                  value={draft[guidanceTab] ?? ""}
+                  onChange={(event) => updateDraft({ [guidanceTab]: event.target.value })}
+                  maxLength={TELEGRAM_AI_POSTING_MAX_MEDIA_GUIDANCE_LENGTH}
+                  rows={4}
+                  placeholder={guidanceTab === "generationDescription"
+                    ? "Как использовать референсы, выбрать ракурс, свет и фактуру"
+                    : "Как выглядит подходящее фото, что отсеять и какие запросы попробовать"}
+                />
+              </FormField>
+            </div>
             <FormField label="Использовать предпочтение для">
               <div className="grid grid-cols-3 gap-1 rounded-lg border border-neutral-800 bg-neutral-950 p-1">
                 {(
@@ -285,9 +358,18 @@ export function AiPostingMediaPreferenceEditor({
                   kind: "PHOTO" as const,
                   url,
                 }))}
-                onChange={(items) =>
-                  updateDraft({ references: items.map((item) => item.url) })
-                }
+                disabled={analyzing}
+                onUploadingChange={setUploading}
+                onChange={(items) => {
+                  const references = items.map((item) => item.url);
+                  const next = { ...draft, references };
+                  updateDraft({ references });
+                  if (references.some((url) => !draft.references.includes(url))) {
+                    void analyze(next);
+                  } else {
+                    setAnalysisStatus("idle");
+                  }
+                }}
                 allowedKinds={["PHOTO"]}
                 maxItems={TELEGRAM_AI_POSTING_MAX_MEDIA_REFERENCES}
                 maxFileSizeBytes={TELEGRAM_AI_POSTING_MAX_REFERENCE_IMAGE_BYTES}
@@ -299,18 +381,31 @@ export function AiPostingMediaPreferenceEditor({
                 removeLabel="Удалить референс"
                 showUrlInput={false}
               />
+              {analysisStatus !== "idle" && (
+                <p role="status" className={analysisStatus === "failed" ? "mt-2 text-sm text-rose-300" : "mt-2 text-sm text-neutral-300"}>
+                  {analyzing ? "ИИ анализирует референсы…" : analysisStatus === "complete"
+                    ? "ИИ обновил описания для генерации и поиска."
+                    : "Анализ не завершился. Референсы и прежние описания сохранены в форме."}
+                </p>
+              )}
+              {channelId && draft.references.length > 0 && !analyzing && (
+                <Button className="mt-2 !px-2 !py-1.5 text-xs" variant="secondary" disabled={uploading} onClick={() => void analyze(draft)}>
+                  {analysisStatus === "failed" ? "Повторить анализ" : "Обновить описания по референсам"}
+                </Button>
+              )}
             </div>
             <footer className="flex justify-end gap-2 border-t border-neutral-800 pt-4">
               <Button
                 type="button"
                 variant="secondary"
-                onClick={() => setDraft(null)}
+                disabled={uploading}
+                onClick={() => open(null)}
               >
                 Отмена
               </Button>
               <Button
                 type="button"
-                disabled={!draft.name.trim()}
+                disabled={!draft.name.trim() || uploading || analyzing}
                 onClick={save}
               >
                 {isEditing ? "Сохранить" : "Добавить"}

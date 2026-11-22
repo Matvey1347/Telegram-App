@@ -7,7 +7,7 @@ import { authApi, telegramUserAccountsApi } from "@/lib/api";
 import { Modal, ToggleRow } from "@/components/ui/primitives";
 import { telegramCrmApi } from "@/lib/features/growth/telegram-crm-api";
 import { telegramCrmKeys } from "@/lib/features/growth/telegram-crm-query";
-import { authKeys, telegramAccountKeys } from "@/lib/query-keys";
+import { authKeys, telegramAccountKeys, telegramChannelKeys } from "@/lib/query-keys";
 import { crmPermissions } from "@/components/features/growth/ad-sales/crm/crm-permissions";
 
 const capabilityRows = [
@@ -46,12 +46,13 @@ export function TelegramCrmAccountCapabilitiesModal({
       crmSyncEnabled: account.crmSyncEnabled,
       crmSendEnabled: account.crmSendEnabled,
       mtprotoPublishingEnabled: account.mtprotoPublishingEnabled,
+      isPreferredInviteLinkAccount: account.isPreferredInviteLinkAccount,
     },
   });
   const update = useMutation({
     mutationFn: (payload: Partial<Omit<CrmAccountCapabilities, "accountId">>) =>
       telegramCrmApi.updateAccountCapabilities(account.id, payload),
-    onSuccess: (next) => {
+    onSuccess: (next, changes) => {
       queryClient.setQueryData(
         telegramCrmKeys.accountCapabilities(account.id),
         next,
@@ -60,9 +61,25 @@ export function TelegramCrmAccountCapabilitiesModal({
         telegramAccountKeys.accounts(),
         (current = []) =>
           current.map((item) =>
-            item.id === account.id ? { ...item, ...next } : item,
+            item.id === account.id
+              ? { ...item, ...next }
+              : changes.isPreferredInviteLinkAccount === true
+                ? { ...item, isPreferredInviteLinkAccount: false }
+                : item,
           ),
       );
+      if (changes.isPreferredInviteLinkAccount !== undefined) {
+        if (next.isPreferredInviteLinkAccount) {
+          const accounts = queryClient.getQueryData<TelegramUserAccount[]>(telegramAccountKeys.accounts()) ?? [];
+          for (const item of accounts) {
+            if (item.id !== account.id) queryClient.setQueryData<CrmAccountCapabilities>(
+              telegramCrmKeys.accountCapabilities(item.id),
+              (previous) => previous ? { ...previous, isPreferredInviteLinkAccount: false } : previous,
+            );
+          }
+        }
+        void queryClient.invalidateQueries({ queryKey: telegramChannelKeys.sources() });
+      }
     },
   });
   const priorityUpdate = useMutation({
@@ -90,7 +107,7 @@ export function TelegramCrmAccountCapabilitiesModal({
     <Modal
       open={open}
       onClose={onClose}
-      title={`Publishing · ${accountDisplayName(account)}`}
+      title={`Settings · ${accountDisplayName(account)}`}
       size="md"
     >
       {account.status !== "connected" ? (
@@ -124,6 +141,12 @@ export function TelegramCrmAccountCapabilitiesModal({
               !account.mtprotoPublishingEnabled
             }
             onChange={(checked) => priorityUpdate.mutate(checked)}
+          />
+          <ToggleRow
+            checked={Boolean(values.isPreferredInviteLinkAccount)}
+            label="Default account for invite links"
+            disabled={!editable || pending || !account.isActive}
+            onChange={(checked) => update.mutate({ isPreferredInviteLinkAccount: checked })}
           />
           {capabilities.error || update.error || priorityUpdate.error ? (
             <p className="text-sm text-rose-300">

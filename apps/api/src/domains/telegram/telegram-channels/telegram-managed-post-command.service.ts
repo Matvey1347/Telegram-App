@@ -23,6 +23,9 @@ import {
   telegramPostsNotFound,
 } from './telegram-posts.errors';
 
+import { resolveImportedEditorial } from './telegram-unified-import-editorial';
+import type { TelegramUnifiedImportEditorial } from '@telegram-system/shared';
+
 @Injectable()
 export class TelegramManagedPostCommandService {
   constructor(
@@ -237,7 +240,7 @@ export class TelegramManagedPostCommandService {
     userId: string,
     channelId: string,
     dto: CreateTelegramManagedPostDto,
-    options: { groupId?: string | null } = {},
+    options: { groupId?: string | null; editorial?: TelegramUnifiedImportEditorial } = {},
   ) {
     const prepared = await this.prepareManagedPostCreate(
       userId,
@@ -245,12 +248,15 @@ export class TelegramManagedPostCommandService {
       dto,
     );
     const create = async (
-      client: Prisma.TransactionClient | PrismaService,
+      client: Prisma.TransactionClient,
       groupId?: string | null,
       groupPosition?: number | null,
     ) => {
       const created = await this.createManagedPostRecord(client, {
         ...prepared,
+        ...(options.editorial && await resolveImportedEditorial(
+          client, prepared.workspaceId, channelId, options.editorial,
+        )),
         groupId,
         groupPosition,
       });

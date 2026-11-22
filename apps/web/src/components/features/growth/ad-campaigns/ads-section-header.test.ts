@@ -15,12 +15,9 @@ describe("adsSectionHeader", () => {
     ).toBe(3);
   });
 
-  it("keeps direct, folder, and own-channel promotion headers distinct", () => {
+  it("uses a combined mutual-promotion title", () => {
     expect(adsSectionHeader("mutual-promotion").title).toBe(
-      "Direct mutual promotion",
-    );
-    expect(adsSectionHeader("mutual-folders").actionLabel).toBe(
-      "Create folder",
+      "Mutual promotion",
     );
     expect(adsSectionHeader("own-promotion").title).toBe(
       "Own-channel promotion",

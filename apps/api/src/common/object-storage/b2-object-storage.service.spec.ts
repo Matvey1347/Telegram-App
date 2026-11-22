@@ -19,7 +19,7 @@ describe('B2ObjectStorageService', () => {
 
   beforeEach(() => jest.restoreAllMocks());
 
-  function mockB2(existingKeys = new Set<string>(), firstUploadStatus?: number) {
+  function mockB2(existingKeys = new Set<string>(), rejections: Array<{ status: number; code: string }> = []) {
     const uploadedKeys: string[] = [];
     jest.spyOn(global, 'fetch').mockImplementation(async (input, init) => {
       const url = String(input);
@@ -54,8 +54,12 @@ describe('B2ObjectStorageService', () => {
             String((init?.headers as Record<string, string>)['X-Bz-File-Name']),
           ),
         );
-        if (uploadedKeys.length === 1 && firstUploadStatus)
-          return { ...jsonResponse({ code: 'service_unavailable' }, false), status: firstUploadStatus } as Response;
+        const rejection = rejections[uploadedKeys.length - 1];
+        if (rejection)
+          return Response.json({ code: rejection.code }, {
+            status: rejection.status,
+            headers: { 'retry-after': '0' },
+          });
         return jsonResponse({});
       }
       throw new Error(`Unexpected fetch: ${url}`);
@@ -96,7 +100,7 @@ describe('B2ObjectStorageService', () => {
   });
 
   it('requests a fresh upload URL after a transient rejection', async () => {
-    const uploads = mockB2(new Set(), 503);
+    const uploads = mockB2(new Set(), [{ status: 503, code: 'service_unavailable' }]);
     const service = new B2ObjectStorageService(config as never);
     const result = await service.persistImmutableImages([
       { bytes: Buffer.from('jpeg-bytes'), mimeType: 'image/jpeg' },
@@ -106,6 +110,23 @@ describe('B2ObjectStorageService', () => {
     expect(jest.mocked(fetch).mock.calls.filter(([url]) =>
       String(url).includes('b2_get_upload_url'),
     )).toHaveLength(2);
+  });
+
+  it('recovers from repeated congestion using fresh targets and the same immutable key', async () => {
+    const uploads = mockB2(new Set(), Array.from({ length: 3 }, () => ({
+      status: 503,
+      code: 'too_busy',
+    })));
+    const service = new B2ObjectStorageService(config as never);
+
+    expect((await service.persistImmutableImages([
+      { bytes: Buffer.from('jpeg-bytes'), mimeType: 'image/jpeg' },
+    ])).uploaded).toBe(1);
+    expect(uploads).toHaveLength(4);
+    expect(new Set(uploads).size).toBe(1);
+    expect(jest.mocked(fetch).mock.calls.filter(([url]) =>
+      String(url).includes('b2_get_upload_url'),
+    )).toHaveLength(4);
   });
 
   it('deduplicates equal bytes within one operation while preserving image slots', async () => {

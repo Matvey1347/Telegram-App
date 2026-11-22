@@ -90,6 +90,12 @@ recoverable edit drafts. While disabled, initialization and every session
 action are inert, so calling `createNewDraft` cannot accidentally persist an
 existing entity as a local draft.
 
+When a preceding screen contains the draft picker, read the same workspace
+collection with `useWorkspaceModalDraftList` and key the picker by workspace
+and namespace. Pass the selected ID as `initialDraftId` to the form's draft
+session. Pass `null` for Create new, or leave it undefined to use the form's
+own draft picker. Starting a clean form keeps saved drafts in that collection.
+
 ## Required tests
 
 Cover the observable feature behavior: untouched seed, close/reopen restore,

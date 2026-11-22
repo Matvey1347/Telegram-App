@@ -58,6 +58,30 @@ describe('AiProvider image generation', () => {
     );
   });
 
+  it('transports the visual search shortlist through the metered review category', async () => {
+    const review = { reply: '{"candidateIndex":1,"referenceDirection":"Natural backlight"}' };
+    const fetch = jest.spyOn(global, 'fetch')
+      .mockResolvedValueOnce(new Response(JSON.stringify({ input_tokens: 400 })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        status: 'completed',
+        output: [{ content: [{ type: 'output_text', text: JSON.stringify(review) }] }],
+        usage: { input_tokens: 400, output_tokens: 20, total_tokens: 420 },
+      })));
+    const result = await provider.execute(
+      'Select a matching photograph',
+      registry.category('TELEGRAM_POSTING_REVIEW'),
+      undefined,
+      undefined,
+      { mime: 'image/jpeg', data: Buffer.from([0xff, 0xd8, 0xff]) },
+    );
+    expect(result).toMatchObject({ result: review, errorCategory: null });
+    expect(fetch).toHaveBeenNthCalledWith(
+      2,
+      'https://api.openai.com/v1/responses',
+      expect.objectContaining({ body: expect.stringContaining('telegram_posting_visual_review_v1') }),
+    );
+  });
+
   it('uses the OpenAI image edit route when a visual reference is attached', async () => {
     const fetch = jest
       .spyOn(global, 'fetch')

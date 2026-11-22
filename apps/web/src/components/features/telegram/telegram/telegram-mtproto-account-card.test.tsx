@@ -50,7 +50,7 @@ describe("TelegramMtprotoAccountCard capabilities", () => {
       screen.getByRole("button", { name: "Actions for @publisher" }),
     );
     fireEvent.click(
-      screen.getByRole("menuitem", { name: "Publishing settings" }),
+      screen.getByRole("menuitem", { name: "Settings" }),
     );
 
     expect(screen.getByRole("dialog")).toHaveTextContent("Capability settings");

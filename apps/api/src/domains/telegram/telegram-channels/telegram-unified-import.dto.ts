@@ -5,6 +5,7 @@ import {
   IsBoolean,
   IsIn,
   IsInt,
+  IsObject,
   IsOptional,
   IsString,
   MaxLength,
@@ -45,6 +46,13 @@ class HypothesisRowDto {
   @Type(() => HypothesisValueDto)
   value?: HypothesisValueDto;
 }
+class EditorialDto {
+  @IsString() @MaxLength(120) sphere!: string;
+  @IsString() @MaxLength(120) rubric!: string;
+  @IsOptional() @IsString() @MaxLength(2000) sphereDescription?: string;
+  @IsOptional() @IsString() @MaxLength(2000) rubricDescription?: string;
+}
+
 class PostRowDto {
   @IsString() @MaxLength(100) ref!: string;
   @IsIn(['CREATE', 'UPDATE', 'DELETE']) action!: 'CREATE' | 'UPDATE' | 'DELETE';
@@ -62,6 +70,8 @@ class PostRowDto {
   @ArrayMaxSize(20)
   @IsString({ each: true })
   imageSearch?: string[];
+  @IsOptional() @IsObject() @ValidateNested() @Type(() => EditorialDto)
+  editorial?: EditorialDto;
   @IsOptional() @IsString() groupRef?: string | null;
   @IsOptional()
   @IsArray()

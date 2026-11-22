@@ -34,6 +34,7 @@ type DraftOptions<T> = {
   value: T;
   createInitialValue: () => T;
   schemaVersion: number;
+  initialDraftId?: string | null;
   normalize?: (
     value: unknown,
     sourceSchemaVersion: number,
@@ -71,7 +72,19 @@ function initializeDraftSession<T>(
   ready: MutableRefObject<boolean>,
   setPending: Dispatch<SetStateAction<WorkspaceFormDraft<T>[]>>,
   setCurrent: Dispatch<SetStateAction<WorkspaceFormDraft<T> | null>>,
+  initialDraftId?: string | null,
 ) {
+  if (initialDraftId !== undefined) {
+    const draft = initialDraftId === null
+      ? undefined
+      : readWorkspaceModalDrafts(window.localStorage, config).find(({ id }) => id === initialDraftId);
+    const value = draft?.form ?? latest.current.createInitialValue();
+    setCurrent(draft ?? newEnvelope(value, schemaVersion));
+    setPending([]);
+    ready.current = true;
+    latest.current.onRestore(value, draft);
+    return;
+  }
   const drafts = readWorkspaceModalDrafts(window.localStorage, config).map(
     (draft) => {
       if (draft.preview || !latest.current.previewFor) return draft;
@@ -97,6 +110,7 @@ export function useWorkspaceModalDrafts<T>(options: DraftOptions<T>) {
     value,
     createInitialValue,
     schemaVersion,
+    initialDraftId,
     normalize,
     legacyNamespaces,
     legacyKeys,
@@ -163,8 +177,9 @@ export function useWorkspaceModalDrafts<T>(options: DraftOptions<T>) {
       readyRef,
       setPendingDrafts,
       setCurrentDraft,
+      initialDraftId,
     );
-  }, [config, enabled, open, schemaVersion]);
+  }, [config, enabled, initialDraftId, open, schemaVersion]);
 
   const previewJson = JSON.stringify(previewFor?.(value) ?? preview);
   const resolvedPreview = useMemo<WorkspaceDraftPreview | undefined>(
@@ -263,5 +278,20 @@ export function useWorkspaceModalDrafts<T>(options: DraftOptions<T>) {
     createNewDraft: startCleanDraft,
     clearCurrentDraft,
     showDraftPicker,
+  };
+}
+
+
+// The caller keys this picker by type and workspace so each inbox starts from storage.
+export function useWorkspaceModalDraftList<T>(config: WorkspaceDraftStorageConfig<T>) {
+  const [drafts, setDrafts] = useState(() =>
+    typeof window === "undefined" ? [] : readWorkspaceModalDrafts(window.localStorage, config),
+  );
+  return {
+    drafts,
+    deleteDraft: (draft: WorkspaceFormDraft<T>) => {
+      removeWorkspaceModalDraft(window.localStorage, config, draft.id);
+      setDrafts((current) => current.filter(({ id }) => id !== draft.id));
+    },
   };
 }

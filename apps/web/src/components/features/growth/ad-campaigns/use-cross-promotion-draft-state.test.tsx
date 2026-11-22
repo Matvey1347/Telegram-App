@@ -92,7 +92,8 @@ describe("useCrossPromotionDraftState", () => {
   it.each(["DIRECT_MUTUAL", "OWN_CHANNELS"] as const)(
     "restores a %s draft through the shared session",
     async (kind) => {
-      store(kind);
+      store("DIRECT_MUTUAL");
+      store("OWN_CHANNELS");
       const state = renderHook(
         () => useCrossPromotionDraftState({ open: true, initial: null, kind }),
         { wrapper },
@@ -118,4 +119,19 @@ describe("useCrossPromotionDraftState", () => {
       }
     },
   );
+  it("opens the selected draft directly and starts a clean form without deleting it", async () => {
+    store("OWN_CHANNELS");
+    const { result, rerender } = renderHook(
+      ({ initialDraftId }: { initialDraftId: string | null }) =>
+        useCrossPromotionDraftState({ open: true, initial: null, kind: "OWN_CHANNELS", initialDraftId }),
+      { wrapper, initialProps: { initialDraftId: "OWN_CHANNELS-draft" as string | null } },
+    );
+    await waitFor(() => expect(result.current.title).toBe("OWN_CHANNELS restored"));
+    expect(result.current.drafts.pendingDrafts).toEqual([]);
+    rerender({ initialDraftId: null });
+    await waitFor(() => expect(result.current.title).toBe(""));
+    expect(result.current.drafts.pendingDrafts).toEqual([]);
+    expect(localStorage.getItem("ads:cross-promotion:OWN_CHANNELS:draft:default")).toContain("OWN_CHANNELS restored");
+  });
+
 });

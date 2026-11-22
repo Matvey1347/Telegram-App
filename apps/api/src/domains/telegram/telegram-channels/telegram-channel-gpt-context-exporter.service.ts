@@ -1,3 +1,4 @@
+import { readImportedEditorialCatalog } from './telegram-unified-import-editorial';
 import { Injectable, NotFoundException } from '@nestjs/common';
 import {
   Prisma,
@@ -76,7 +77,7 @@ export class TelegramChannelGptContextExporter {
   }
 
   async exportUnifiedImportContext(userId: string, channelId: string) {
-    const context = await this.export(userId, channelId);
+    const context = await this.export(userId, channelId, true);
     return {
       buffer: Buffer.concat([
         Buffer.from(
@@ -380,7 +381,7 @@ export class TelegramChannelGptContextExporter {
     );
   }
 
-  async export(userId: string, channelId: string) {
+  async export(userId: string, channelId: string, editorialImport = false) {
     const workspaceId = await this.workspaces.resolveWorkspaceIdForUser(userId);
     const [
       channel,
@@ -388,6 +389,7 @@ export class TelegramChannelGptContextExporter {
       telegramPosts,
       links,
       groups,
+      taxonomy,
       subscriberCountByTelegramPostId,
       planningContext,
     ] = await Promise.all([
@@ -410,6 +412,7 @@ export class TelegramChannelGptContextExporter {
           title: true,
           status: true,
           groupId: true,
+          ...(editorialImport && { aiPostingSphereId: true, aiPostingRubricId: true }),
           imageUrls: true,
           text: true,
           createdAt: true,
@@ -438,13 +441,14 @@ export class TelegramChannelGptContextExporter {
         },
         orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       }),
-      this.prisma.postGroup.findMany({
+      editorialImport ? [] : this.prisma.postGroup.findMany({
         where: { workspaceId, telegramChannelId: channelId },
         select: { id: true, title: true },
         orderBy: { title: 'asc' },
       }),
+      editorialImport ? readImportedEditorialCatalog(this.prisma, workspaceId, channelId) : null,
       this.subscriberCountsAtPublication(workspaceId, channelId),
-      this.planningContext.read(userId, workspaceId, channelId),
+      this.planningContext.read(userId, workspaceId, channelId, !editorialImport),
     ]);
     if (!channel) throw new NotFoundException('Telegram channel not found.');
 
@@ -501,6 +505,8 @@ export class TelegramChannelGptContextExporter {
       );
     const permanentMediaUrls = (urls: string[] | undefined) =>
       (urls ?? []).filter((url) => /^https?:\/\//i.test(url));
+    const spheresById = new Map(taxonomy?.spheres.map((row) => [row.id, row.name]));
+    const rubricsById = new Map(taxonomy?.rubrics.map((row) => [row.id, row.name]));
     const managedPostBlocks = managedPosts.map((post) => {
       const linkedTelegramPosts = this.linkedTelegramMessageIds(post).flatMap(
         (messageId) => {
@@ -523,7 +529,7 @@ export class TelegramChannelGptContextExporter {
         .sort((left, right) => left.getTime() - right.getTime())[0];
       const publishedAt = post.publishedAt ?? linkedPublishedAt ?? null;
       const imageUrls = permanentMediaUrls(post.imageUrls);
-      return `POST\nid: ${post.id}\nreference: tg-post:${post.id}\ntitle: ${post.title}\nstatus: ${post.status}\npublished_at: ${publishedAt?.toISOString() ?? 'null'}\nscheduled_at: ${post.scheduledAt?.toISOString() ?? 'null'}\ngroup_id: ${post.groupId ?? 'null'}\ngroup_title: ${post.groupId ? (groupTitleById.get(post.groupId) ?? 'unknown') : 'Ungrouped'}\nimages:\n${imageUrls.length ? imageUrls.map((url) => `- ${url}`).join('\n') : '[]'}\nengagement:\n${metrics.length ? metrics.join('\n---\n') : 'unavailable'}\ntext:\n${post.text || ''}`;
+      return `POST\nid: ${post.id}\nreference: tg-post:${post.id}\ntitle: ${post.title}\nstatus: ${post.status}\npublished_at: ${publishedAt?.toISOString() ?? 'null'}\nscheduled_at: ${post.scheduledAt?.toISOString() ?? 'null'}${editorialImport ? `\nsphere: ${spheresById.get(post.aiPostingSphereId ?? '') ?? 'null'}\nrubric: ${rubricsById.get(post.aiPostingRubricId ?? '') ?? 'null'}` : `\ngroup_id: ${post.groupId ?? 'null'}\ngroup_title: ${post.groupId ? (groupTitleById.get(post.groupId) ?? 'unknown') : 'Ungrouped'}`}\nimages:\n${imageUrls.length ? imageUrls.map((url) => `- ${url}`).join('\n') : '[]'}\nengagement:\n${metrics.length ? metrics.join('\n---\n') : 'unavailable'}\ntext:\n${post.text || ''}`;
     });
     const importedPostBlocks = typedTelegramPosts
       .filter((post) => !matchedTelegramPostIds.has(post.id))
@@ -533,7 +539,7 @@ export class TelegramChannelGptContextExporter {
         const mediaContext = mediaUrls.length
           ? mediaUrls.map((mediaUrl) => `- ${mediaUrl}`).join('\n')
           : '[]';
-        return `POST\nid: telegram-post:${post.id}\nreference: telegram-source-post:${post.id}\ntitle: ${telegramPostTitle(post)}\nstatus: PUBLISHED\npublished_at: ${post.postDate.toISOString()}\nscheduled_at: null\ngroup_id: null\ngroup_title: Ungrouped\nsource: synchronized_telegram\nmedia_kind: ${post.mediaKind ?? 'none'}\nmedia_urls:\n${mediaContext}\nengagement:\n${this.metricContext(engagementFor(post), url)}\ntext:\n${post.text || post.formattedText || ''}`;
+        return `POST\nid: telegram-post:${post.id}\nreference: telegram-source-post:${post.id}\ntitle: ${telegramPostTitle(post)}\nstatus: PUBLISHED\npublished_at: ${post.postDate.toISOString()}\nscheduled_at: null${editorialImport ? "" : `\ngroup_id: null\ngroup_title: Ungrouped`}\nsource: synchronized_telegram\nmedia_kind: ${post.mediaKind ?? 'none'}\nmedia_urls:\n${mediaContext}\nengagement:\n${this.metricContext(engagementFor(post), url)}\ntext:\n${post.text || post.formattedText || ''}`;
       });
 
     const exportedAt = new Date();
@@ -562,6 +568,20 @@ export class TelegramChannelGptContextExporter {
         ),
       ]),
       '',
+      ...(taxonomy ? [
+        'EDITORIAL TAXONOMY',
+        JSON.stringify({
+          spheres: taxonomy.spheres.map(({ id, parentId, ...sphere }) => ({
+            ...sphere,
+            parent: parentId ? spheresById.get(parentId) : null,
+          })),
+          rubrics: taxonomy.rubrics.map(({ id, sphereId, ...rubric }) => ({
+            ...rubric,
+            sphere: sphereId ? spheresById.get(sphereId) : null,
+          })),
+        }, null, 2),
+        '',
+      ] : [
       'POST GROUPS',
       ...(groupSummaryLines.length ? groupSummaryLines : ['[]']),
       '',
@@ -572,6 +592,7 @@ export class TelegramChannelGptContextExporter {
       'Return one version 1 JSON manifest with groups, hypotheses, posts, schedule, and the root delete object. CREATE rows use stable refs so posts can reference groups/hypotheses created in the same manifest. Post and hypothesis emoji are passed as icon, never iconId. SCHEDULE must use postRef for a post in this manifest or postId for an existing post, plus an exact assigned slotId and ISO scheduledAt matching that slot. UNSCHEDULE must use the exact ID of an existing SCHEDULED post and returns it to DRAFT. Never invent an existing database ID.',
       '{"version":1,"groups":[],"hypotheses":[],"posts":[],"schedule":[],"delete":{"groups":[],"hypotheses":[],"posts":[]}}',
       '',
+      ]),
       'ALL POSTS',
       ...managedPostBlocks,
       ...importedPostBlocks,

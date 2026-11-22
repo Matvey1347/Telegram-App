@@ -16,11 +16,7 @@ function AdCampaignSectionSkeleton() {
     searchParams.get("section"),
     searchParams.get("view"),
   );
-  const headerKey =
-    section === "mutual-promotion" && searchParams.get("mode") === "folders"
-      ? "mutual-folders"
-      : section;
-  const header = adsSectionHeader(headerKey);
+  const header = adsSectionHeader(section);
 
   return (
     <AppShell>
@@ -46,13 +42,6 @@ function AdCampaignSectionSkeleton() {
   );
 }
 
-const LazyMutualPromotionFoldersPage = dynamic(
-  () =>
-    import("@/components/features/growth/ad-campaigns/mutual-promotion/mutual-promotion-folders-page").then(
-      (module) => module.MutualPromotionFoldersPage,
-    ),
-  { loading: () => <AdCampaignSectionSkeleton /> },
-);
 const LazyCrossPromotionPlansPage = dynamic(
   () =>
     import("@/components/features/growth/ad-campaigns/cross-promotion-plans-page").then(
@@ -75,20 +64,10 @@ export default function AdsPage() {
       trailing={showFilterToggle ? <AdsFilterButton presentation={filterPresentation} desktopOpen={filtersOpen} toggleDesktop={toggleFilters} /> : undefined}
     />
   );
-  const mutualMode = searchParams.get("mode") === "folders" ? "folders" : "direct";
-  return section === "mutual-promotion" && mutualMode === "folders" ? (
-    <LazyMutualPromotionFoldersPage
-      sectionTabs={
-        <>
-          {sectionTabs}
-        </>
-      }
-    />
-  ) : section === "mutual-promotion" || section === "own-promotion" ? (
+  return section === "mutual-promotion" || section === "own-promotion" ? (
     <LazyCrossPromotionPlansPage
       kind="DIRECT_MUTUAL"
       sectionTabs={sectionTabs}
-      mutualModeTabs={null}
     />
   ) : (
     <AdCampaignsPage sectionTabs={sectionTabs} topSection={section} filtersOpen={filtersOpen} filterPresentation={filterPresentation} />

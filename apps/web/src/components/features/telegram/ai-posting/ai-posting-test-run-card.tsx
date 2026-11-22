@@ -6,12 +6,11 @@ import type {
   ResolvedEmoji,
   TelegramCustomEmojiPackSummary,
 } from "@telegram-system/shared";
-import { CheckCircle2, CircleX, Clock3, RotateCcw } from "lucide-react";
+import { CheckCircle2, CircleX, Clock3 } from "lucide-react";
 import { Button, Card, StatusPill } from "@/components/ui/primitives";
 import {
-  failureMessage,
-  failureStageLabel,
   money,
+  totalCost,
   type TestRun,
 } from "./ai-posting-test-console-model";
 import { AiPostingDictation } from "./ai-posting-dictation";
@@ -100,56 +99,23 @@ export function AiPostingTestRunCard({
         <div className="flex items-center gap-2">
           <Clock3 size={15} />
           <strong>{new Date(run.createdAt).toLocaleString()}</strong>
-          {run.status.toUpperCase() === "COMPLETED" ? (
-            <CheckCircle2 size={15} className="text-emerald-400" aria-hidden />
-          ) : ["FAILED", "PARTIAL"].includes(run.status.toUpperCase()) ? (
-            <CircleX size={15} className="text-rose-400" aria-hidden />
-          ) : null}
-          <StatusPill value={run.status.toLowerCase()} />
         </div>
+        {run.status.toUpperCase() === "COMPLETED" ? (
+          <span className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-emerald-800 bg-emerald-950 px-2.5 py-0.5 text-xs font-medium text-emerald-300">
+            <CheckCircle2 size={14} aria-hidden="true" />
+            Completed
+          </span>
+        ) : (
+          ["FAILED", "PARTIAL"].includes(run.status.toUpperCase()) ? (
+            <span className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-rose-800 bg-rose-950 px-2.5 py-0.5 text-xs font-medium text-rose-300">
+              <CircleX size={14} aria-hidden="true" />
+              {run.status.toUpperCase() === "PARTIAL" ? "Partial" : "Failed"}
+            </span>
+          ) : (
+            <StatusPill value={run.status.toLowerCase()} />
+          )
+        )}
       </header>
-
-      {run.failures?.map((failure, index) => {
-        const publicationIndex = run.publications.findIndex(
-          (post) =>
-            post.topic === failure.topic && post.mediaReadiness !== "READY",
-        );
-        if (
-          publicationIndex >= 0 &&
-          (failure.code.startsWith("AI_POSTING_IMAGE_") ||
-            failure.code === "AI_REQUEST_BUDGET_EXCEEDED")
-        )
-          return null;
-        return (
-          <div
-            key={`${failure.code}-${index}`}
-            className="rounded-md border border-amber-900/70 bg-amber-950/20 p-3 text-sm text-amber-200"
-          >
-            <p className="font-medium">
-              {failure.topic
-                ? `Не создана публикация «${failure.topic}»`
-                : "Запуск завершился с ошибкой"}
-              <span className="ml-1 text-xs font-normal text-amber-100/75">
-                Этап: {failureStageLabel(failure.code)}
-              </span>
-            </p>
-            <p className="mt-1">
-              {failure.reasons?.length
-                ? failure.reasons.join("; ")
-                : (failureMessage[failure.code] ??
-                  `Не удалось подготовить публикацию (${failure.code}).`)}
-            </p>
-            <Button
-              variant="primary"
-              className="mt-3"
-              disabled={retryPending}
-              onClick={() => onRegenerateFailure(run, index)}
-            >
-              <RotateCcw size={15} /> Повторить генерацию (новый запуск)
-            </Button>
-          </div>
-        );
-      })}
 
       <AiPostingPublicationCarousel
         key={run.id}
@@ -161,6 +127,8 @@ export function AiPostingTestRunCard({
         customEmojiPacks={customEmojiPacks}
         categoryIcons={categoryIcons}
         preferenceIcons={preferenceIcons}
+        retryPending={retryPending}
+        onRegenerateFailure={onRegenerateFailure}
         editsOpen={editsOpen}
         onToggleEdits={() => setEditsOpen((open) => !open)}
         edits={edits}
@@ -177,12 +145,7 @@ export function AiPostingTestRunCard({
         onRememberImageRule={onRememberImageRule}
       />
 
-      <footer className="flex flex-wrap gap-4 border-t border-neutral-800 pt-3 text-xs text-neutral-400">
-        <span>Планирование: {run.planningCost ?? "—"}</span>
-        <span>Текст: {run.textCost ?? "—"}</span>
-        <span>Медиа: {money(run.imageCost)}</span>
-        <span>Проверки: {run.reviewCost ?? "—"}</span>
-      </footer>
+      <RunCosts run={run} />
       {(editsOpen || run.publications.length === 0) && (
         <div className="space-y-3 border-t border-neutral-800 pt-3">
           <AiPostingDictation
@@ -212,5 +175,26 @@ export function AiPostingTestRunCard({
         </div>
       )}
     </Card>
+  );
+}
+
+
+function RunCosts({ run }: { run: TestRun }) {
+  const total = totalCost({
+    planning: run.planningCost ?? null,
+    text: run.textCost ?? null,
+    image: run.imageCost ?? null,
+    review: run.reviewCost ?? null,
+  });
+  return (
+    <footer className="flex flex-wrap gap-x-4 gap-y-2 border-t border-neutral-800 pt-3 text-xs text-neutral-400">
+      <strong className="text-neutral-200">
+        Итого за запуск: {total === null ? "есть неподтверждённые расходы" : money(total)}
+      </strong>
+      <span>Планирование: {money(run.planningCost)}</span>
+      <span>Текст: {money(run.textCost)}</span>
+      <span>Медиа: {money(run.imageCost)}</span>
+      <span>Проверки: {money(run.reviewCost)}</span>
+    </footer>
   );
 }

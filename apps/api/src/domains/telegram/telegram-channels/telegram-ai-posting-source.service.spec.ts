@@ -42,6 +42,32 @@ describe('TelegramAiPostingSourceService', () => {
     expect(fetch.mock.calls[0][0]).toContain('license=cc0%2Cpdm');
   });
 
+  it('falls back to Wikimedia Commons and excludes images requiring attribution', async () => {
+    const { service } = make();
+    const photo = (url: string, license: string, attribution = 'false') => ({
+      imageinfo: [{
+        mime: 'image/jpeg',
+        thumburl: url,
+        extmetadata: { License: { value: license }, AttributionRequired: { value: attribution } },
+      }],
+    });
+    const fetch = jest.spyOn(service as any, 'fetchPublic')
+      .mockRejectedValueOnce(new Error('timeout'))
+      .mockResolvedValueOnce(Buffer.from(JSON.stringify({
+        query: { pages: [
+          photo('https://upload.wikimedia.org/photo.jpg', 'cc-zero'),
+          photo('https://upload.wikimedia.org/attribution.jpg', 'cc-by-sa-4.0', 'true'),
+          photo('https://untrusted.example/photo.jpg', 'pd'),
+        ] },
+      })));
+    await expect(service.searchOpenImages('woman dancing')).resolves.toEqual([{
+      url: 'https://upload.wikimedia.org/photo.jpg',
+      sourceId: 'wikimedia-commons',
+      sourceType: 'image-search',
+    }]);
+    expect(fetch.mock.calls[1][0]).toContain('https://commons.wikimedia.org/w/api.php?');
+  });
+
   it('checks that a feed is reachable and has entries', async () => {
     const { service } = make();
     jest

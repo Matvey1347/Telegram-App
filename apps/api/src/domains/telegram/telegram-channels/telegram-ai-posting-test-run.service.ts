@@ -155,7 +155,7 @@ export class TelegramAiPostingTestRunService {
       where: { id: runId, workspaceId, telegramChannelId: channelId },
     });
     if (!run) throw new NotFoundException('AI Posting test run not found');
-    if (run.version !== expectedVersion)
+    if (run.version !== expectedVersion || run.status === 'RUNNING')
       throw new ConflictException('AI_POSTING_TEST_RUN_CHANGED');
     const decoded = decodeAiPostingRunPublications(run.publications);
     const publications = decoded.publications.map((value) => {
@@ -474,14 +474,19 @@ export class TelegramAiPostingTestRunService {
           workspaceId,
           channelId,
           topic: item.topic,
-          imageMode: 'ai',
+          imageMode: config.imageMode === 'hybrid' ? 'hybrid' : 'ai',
           referenceImageUrls: preference?.references ?? [],
+          preferencePurpose: preference?.purpose,
+          visualPreference: preference?.description || preference?.name,
+          generationDescription: preference?.generationDescription,
+          searchDescription: preference?.searchDescription,
+          searchQuery: item.imageSearchQuery || [item.topic, preference?.name, typeof value === 'string' ? value.trim().slice(0, 100) : ''].filter(Boolean).join(' '),
           channelAvatarUrl: settings.telegramChannel?.photoUrl,
           channelUsername: settings.telegramChannel?.username,
           channelTitle: settings.telegramChannel?.title,
           imageCandidates: [],
           prompt: [
-            item.imagePrompt,
+            preference?.generationDescription ? item.imagePrompt.split(/\.?\s*Visual preference:/u, 1)[0] : item.imagePrompt,
             typeof value === 'string' ? value.trim().slice(0, 500) : '',
             nextAvoidances.length
               ? `Avoid similar compositions and visual directions: ${nextAvoidances.slice(-5).join('; ')}`
@@ -499,9 +504,9 @@ export class TelegramAiPostingTestRunService {
             channelId,
             testRunId: run.id,
             publicationIndex: index,
-            attempt:
-              item.operations.filter((operation) => operation.stage === 'image')
-                .length + 1,
+            attempt: Math.max(0, ...item.operations
+              .filter((operation) => operation.stage === 'image')
+              .map((operation) => operation.attempt)) + 1,
             postingMode: 'TEST',
             dailyBudget: null,
             monthlyBudget: settings.aiMonthlyBudget?.toString() ?? null,
@@ -532,13 +537,14 @@ export class TelegramAiPostingTestRunService {
         throw error;
       }
       const operations = run.operations as unknown as Run[];
-      if (resolved.operation) {
-        operations.push(resolved.operation);
-        item.operations.push(resolved.operation);
+      for (const operation of [resolved.searchOperation, resolved.operation]) {
+        if (!operation) continue;
+        operations.push(operation);
+        item.operations.push(operation);
         item.costs.image = addKnownCost(
           item.costs.image,
-          resolved.operation.actualCost,
-          resolved.operation.pricingStatus,
+          operation.actualCost,
+          operation.pricingStatus,
         );
       }
       if (resolved.costUnknown) {
@@ -568,6 +574,7 @@ export class TelegramAiPostingTestRunService {
       item.imageUrl = resolved.image.url;
       item.imageSourceId = resolved.image.sourceId;
       item.imageFingerprint = resolved.image.fingerprint ?? null;
+      item.imageVisualFingerprint = resolved.image.visualFingerprint ?? null;
       item.imageOriginalUrl = resolved.image.originalUrl ?? null;
       item.imagePreviewUrl = resolved.image.previewUrl ?? null;
       item.mediaReadiness = 'READY';

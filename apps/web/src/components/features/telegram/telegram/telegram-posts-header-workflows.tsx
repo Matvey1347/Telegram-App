@@ -6,7 +6,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import type { TelegramChannelSelectOption } from "@/lib/api-types/telegram/telegram-channels";
 import { Button, CustomSelect, PageHeader } from "@/components/ui/primitives";
 import { useI18n } from "@/providers/i18n-provider";
-import { telegramPostKeys } from "@/lib/query-keys";
+import { telegramAiPostingKeys, telegramPostKeys } from "@/lib/query-keys";
 import { ManagedPostsImportModal } from "./managed-posts-import-modal";
 import { PostGroupsImportModal } from "./post-groups-import-modal";
 import { ChannelReimportDeleteModal } from "./channel-reimport-delete-modal";
@@ -108,7 +108,7 @@ export function TelegramPostsHeaderWorkflows({
                 queryKey: telegramPostKeys.managedLists(activeChannel.id),
               }),
               queryClient.invalidateQueries({
-                queryKey: telegramPostKeys.postGroups(activeChannel.id),
+                queryKey: telegramAiPostingKeys.settings(activeChannel.id),
               }),
             ]);
           }}

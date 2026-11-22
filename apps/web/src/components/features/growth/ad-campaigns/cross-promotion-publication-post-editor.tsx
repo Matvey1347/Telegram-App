@@ -11,6 +11,7 @@ type FlowStatus = "idle" | "working" | "waiting" | "done";
 
 export function CrossPromotionPublicationPostEditor({
   title,
+  hideHeading = false,
   directMutual,
   post,
   publishingChannel,
@@ -26,6 +27,7 @@ export function CrossPromotionPublicationPostEditor({
   publishedMediaCount,
 }: {
   title?: string;
+  hideHeading?: boolean;
   directMutual: boolean;
   post: TelegramSystemBotPostDraft;
   publishingChannel?: TelegramChannel;
@@ -52,24 +54,20 @@ export function CrossPromotionPublicationPostEditor({
       <div
         className={`${expanded ? "mb-3" : ""} relative flex flex-wrap items-center justify-between gap-2 pr-10`}
       >
-        <div>
-          <h3 className="font-semibold text-white">
-            {title ?? (directMutual
-              ? "Partner post I publish"
-              : "Post published in my channels")}
-          </h3>
-          <p className="text-xs text-neutral-400">
-            {directMutual
-              ? "Forward the partner's advertising post through the bot or compose it manually."
-              : "Load the selected promo, then adjust this placement copy if needed."}
-          </p>
-        </div>
+        {!hideHeading ? (
+          <div>
+            <h3 className="font-semibold text-white">
+              {title ?? (directMutual
+                ? "Partner post I publish"
+                : "Post published in my channels")}
+            </h3>
+          </div>
+        ) : null}
         <div className="flex flex-wrap items-center gap-2">
           {directMutual ? (
             <>
               <Button
                 type="button"
-                variant="secondary"
                 onClick={() => {
                   setManuallyCollapsed(false);
                   setOpened(true);
@@ -84,7 +82,6 @@ export function CrossPromotionPublicationPostEditor({
               ) : null}
               <Button
                 type="button"
-                variant="secondary"
                 disabled={
                   !botConnected ||
                   importStatus === "working" ||
@@ -110,7 +107,6 @@ export function CrossPromotionPublicationPostEditor({
             <>
               <Button
                 type="button"
-                variant="secondary"
                 disabled={
                   !botConnected ||
                   importStatus === "working" ||

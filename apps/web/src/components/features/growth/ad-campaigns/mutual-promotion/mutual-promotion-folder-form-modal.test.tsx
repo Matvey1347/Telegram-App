@@ -9,12 +9,16 @@ import { emptyFolderDraft } from "./mutual-promotion-form-types";
 
 function renderModal(
   folder: Parameters<typeof MutualPromotionFolderFormModal>[0]["folder"] = null,
+  onBack?: () => void,
+  initialDraftId?: string | null,
 ) {
   return render(
     <QueryClientProvider client={new QueryClient()}>
       <MutualPromotionFolderFormModal
         open
         folder={folder}
+        onBack={onBack}
+        initialDraftId={initialDraftId}
         timezone="Europe/Warsaw"
         channels={[]}
         accounts={[]}
@@ -62,8 +66,9 @@ describe("MutualPromotionFolderFormModal drafts", () => {
     ).toBe(true);
   });
 
-  it("offers to continue every saved draft and restores its form", async () => {
-    const first = renderModal();
+  it("keeps folder drafts when going back and restores them on reentry", async () => {
+    const onBack = vi.fn();
+    const first = renderModal(null, onBack);
     fireEvent.change(screen.getByPlaceholderText("September // [date-range]"), {
       target: { value: "September exchange" },
     });
@@ -72,10 +77,13 @@ describe("MutualPromotionFolderFormModal drafts", () => {
         window.localStorage.getItem("mutual-promotion-folder:draft:default"),
       ).toContain("September exchange"),
     );
+    fireEvent.click(screen.getByRole("button", { name: "Back to promotion types" }));
+    expect(onBack).toHaveBeenCalledOnce();
     first.unmount();
 
-    renderModal();
+    renderModal(null, onBack);
     expect(await screen.findByText("September exchange")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Back to promotion types" })).toBeVisible();
     const continueButton = screen.getByRole("button", {
       name: "Continue draft September exchange",
     });
@@ -84,6 +92,23 @@ describe("MutualPromotionFolderFormModal drafts", () => {
     expect(
       screen.getByPlaceholderText("September // [date-range]"),
     ).toHaveValue("September exchange");
+  });
+
+  it("opens the chosen folder draft immediately and keeps it when opening a clean form", async () => {
+    const key = "mutual-promotion-folder:draft:default";
+    localStorage.setItem(key, JSON.stringify({ version: 3, drafts: [{
+      id: "chosen-folder-draft",
+      createdAt: "2026-11-20T10:00:00.000Z",
+      updatedAt: "2026-11-20T10:00:00.000Z",
+      schemaVersion: 1,
+      form: { ...emptyFolderDraft("Europe/Warsaw"), title: "Chosen folder" },
+    }] }));
+    const previous = renderModal(null, undefined, "chosen-folder-draft");
+    expect(screen.getByPlaceholderText("September // [date-range]")).toHaveValue("Chosen folder");
+    previous.unmount();
+    renderModal(null, undefined, null);
+    expect(screen.getByPlaceholderText("September // [date-range]")).toHaveValue("");
+    expect(localStorage.getItem(key)).toContain("Chosen folder");
   });
 
   it("deletes a draft without opening it", async () => {

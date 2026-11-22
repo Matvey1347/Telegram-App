@@ -1,5 +1,6 @@
 "use client";
 
+import { isTelegramAiPostingEmptyTextFailure, telegramAiPostingRunSlots } from "@telegram-system/shared";
 import { AiPostingWatermarkPreview, type AiPostingWatermarkPreviewSettings } from "./ai-posting-watermark-preview";
 import type {
   ResolvedEmoji,
@@ -11,6 +12,7 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
+  RotateCcw,
   ImagePlus,
   RotateCw,
   Save,
@@ -24,7 +26,9 @@ import { TelegramPostSendToBotButton } from "@/components/features/telegram/tele
 import { AiPostingDictation } from "./ai-posting-dictation";
 import { TelegramPostPreview } from "@/components/features/telegram/telegram/telegram-post-preview";
 import {
+  failedPublicationCost,
   failureMessage,
+  failureStageLabel,
   mediaReadiness,
   money,
   totalCost,
@@ -49,6 +53,8 @@ export function AiPostingPublicationCarousel({
   customEmojiPacks,
   categoryIcons,
   preferenceIcons,
+  retryPending,
+  onRegenerateFailure,
   editsOpen,
   onToggleEdits,
   edits,
@@ -72,6 +78,8 @@ export function AiPostingPublicationCarousel({
   customEmojiPacks?: TelegramCustomEmojiPackSummary[];
   categoryIcons?: Record<string, ResolvedEmoji>;
   preferenceIcons?: Record<string, ResolvedEmoji>;
+  retryPending: boolean;
+  onRegenerateFailure: (run: TestRun, failureIndex: number) => void;
   editsOpen: boolean;
   onToggleEdits: () => void;
   edits: Record<string, string>;
@@ -95,8 +103,12 @@ export function AiPostingPublicationCarousel({
   const [activeIndex, setActiveIndex] = useState(0);
   const [imageRuleError, setImageRuleError] = useState("");
   const publications = run.publications ?? [];
-  const index = Math.min(activeIndex, Math.max(0, publications.length - 1));
-  const post = publications[index];
+  const slots = telegramAiPostingRunSlots(run);
+  const currentSlot = Math.min(activeIndex, Math.max(0, slots.length - 1));
+  const slot = slots[currentSlot];
+  const index = slot?.publicationIndex ?? 0;
+  const post = slot?.publicationIndex === undefined ? undefined : publications[index];
+  const failure = slot?.failureIndex === undefined ? undefined : run.failures[slot.failureIndex];
   const key = `${run.id}:${index}`;
   const saved = post ? isSaved(post) : true;
   const botDraft = {
@@ -109,7 +121,60 @@ export function AiPostingPublicationCarousel({
   const totalPublicationCost = post ? totalCost(post.costs) : null;
   const disabled = pending || saved;
 
-  if (!post) return null;
+  if (!slots.length) return null;
+  const navigation = slots.length > 1 && (
+    <div className="flex items-center justify-between gap-2">
+      <Button variant="secondary" aria-label="Предыдущая публикация" disabled={currentSlot === 0}
+        onClick={() => setActiveIndex(currentSlot - 1)}>
+        <ChevronLeft size={16} />
+      </Button>
+      <span className="text-sm font-medium text-neutral-300" aria-live="polite">
+        Публикация {currentSlot + 1} из {slots.length}
+      </span>
+      <Button variant="secondary" aria-label="Следующая публикация" disabled={currentSlot >= slots.length - 1}
+        onClick={() => setActiveIndex(currentSlot + 1)}>
+        <ChevronRight size={16} />
+      </Button>
+    </div>
+  );
+
+  if (!post) {
+    const waiting = run.status === "RUNNING" && !failure;
+    const emptyText = failure ? isTelegramAiPostingEmptyTextFailure(failure) : false;
+    const canRetryText = (emptyText || failure?.retryText) && Boolean(failure?.topic);
+    const attemptCost = failure ? failedPublicationCost(run, currentSlot) : undefined;
+    return (
+      <section aria-label="Предпросмотр публикаций" className="space-y-3">
+        {navigation}
+        <div className={waiting
+          ? "rounded-md border border-neutral-800 p-3 text-sm text-neutral-300"
+          : "rounded-md border border-rose-900/70 bg-rose-950/20 p-3 text-sm text-rose-200"}>
+          <p className="font-medium">
+            {waiting ? "Публикация ещё обрабатывается" :
+              failure?.topic ? `Не создана публикация «${failure.topic}»` : "Публикация не создана"}
+          </p>
+          {failure && slot.failureIndex !== undefined && (
+            <>
+              <p className="mt-1 text-xs">Этап: {failureStageLabel(failure.code)}</p>
+              <p className="mt-1">
+                {emptyText ? "Текст пустой." : failure.reasons?.length ? failure.reasons.join("; ") :
+                  (failureMessage[failure.code] ?? `Не удалось подготовить публикацию (${failure.code}).`)}
+              </p>
+              {attemptCost !== undefined && (
+                <p className="mt-2 text-xs text-neutral-300">
+                  Расходы на попытки: {attemptCost === null ? "есть неподтверждённые расходы" : money(attemptCost)}
+                </p>
+              )}
+              <Button variant="primary" className="mt-3" disabled={retryPending || run.status === "RUNNING"}
+                onClick={() => onRegenerateFailure(run, slot.failureIndex!)}>
+                <RotateCcw size={15} /> {canRetryText ? "Пересоздать текст" : "Повторить генерацию (новый запуск)"}
+              </Button>
+            </>
+          )}
+        </div>
+      </section>
+    );
+  }
 
   const rememberAndRegenerateMedia = async () => {
     const correction = (imageFeedback[key] ?? "").trim();
@@ -127,38 +192,7 @@ export function AiPostingPublicationCarousel({
 
   return (
     <section aria-label="Предпросмотр публикаций" className="space-y-3">
-      {publications.length > 1 && (
-        <div className="flex items-center justify-between gap-2">
-          <Button
-            variant="secondary"
-            aria-label="Предыдущая публикация"
-            disabled={index <= 0}
-            onClick={() =>
-              setActiveIndex((current) => Math.max(0, current - 1))
-            }
-          >
-            <ChevronLeft size={16} />
-          </Button>
-          <span
-            className="text-sm font-medium text-neutral-300"
-            aria-live="polite"
-          >
-            Публикация {index + 1} из {publications.length}
-          </span>
-          <Button
-            variant="secondary"
-            aria-label="Следующая публикация"
-            disabled={index >= publications.length - 1}
-            onClick={() =>
-              setActiveIndex((current) =>
-                Math.min(publications.length - 1, current + 1),
-              )
-            }
-          >
-            <ChevronRight size={16} />
-          </Button>
-        </div>
-      )}
+      {navigation}
 
       <div className="grid min-w-0 gap-4 border-t border-neutral-800 pt-4">
         <div className="min-w-0">
@@ -241,9 +275,10 @@ export function AiPostingPublicationCarousel({
               className={`rounded-md border p-2 text-sm ${mediaReadiness(post) === "FAILED" ? "border-rose-900/70 bg-rose-950/20 text-rose-200" : "border-amber-900/70 bg-amber-950/20 text-amber-200"}`}
             >
               {mediaReadiness(post) === "FAILED"
-                ? (post.mediaFailureCode &&
-                    failureMessage[post.mediaFailureCode]) ||
-                  "Текст сохранён в превью. Медиа не готово; можно повторить подготовку явно."
+                ? (post.imageCostUnknown
+                    ? "AI-провайдер не подтвердил результат подготовки медиа. Текст сохранён."
+                    : (post.mediaFailureCode && failureMessage[post.mediaFailureCode]) ||
+                      "Текст сохранён. Не удалось подготовить медиа.")
                 : "Текст готов, но медиа не найдено. Превью неполное; подготовка доступна по кнопке."}
             </p>
           )}

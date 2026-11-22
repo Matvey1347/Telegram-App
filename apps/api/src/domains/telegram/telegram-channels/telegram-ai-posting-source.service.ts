@@ -493,13 +493,70 @@ export class TelegramAiPostingSourceService {
   }
 
   async searchOpenImages(query: string, page = 1): Promise<ImageCandidate[]> {
+    try {
+      const candidates = await this.searchOpenverse(query, page);
+      if (candidates.length) return candidates;
+    } catch {
+      // The second catalog can still supply licensed images.
+    }
+    const url = new URL('https://commons.wikimedia.org/w/api.php');
+    url.search = new URLSearchParams({
+      action: 'query',
+      format: 'json',
+      formatversion: '2',
+      generator: 'search',
+      gsrnamespace: '6',
+      gsrlimit: '12',
+      gsrsearch: `${query.slice(0, 180)} filetype:bitmap`,
+      prop: 'imageinfo',
+      iiprop: 'url|mime|extmetadata',
+      iiurlwidth: '960',
+      iiextmetadatafilter: 'License|AttributionRequired|Restrictions',
+    }).toString();
+    const data = JSON.parse(
+      (await this.fetchPublic(url.toString(), 512 * 1024, 4_000)).toString('utf8'),
+    ) as { query?: { pages?: Array<{ imageinfo?: Array<{
+      mime?: string;
+      url?: string;
+      thumburl?: string;
+      extmetadata?: Record<string, { value?: string }>;
+    }> }> } };
+    const pages = data.query?.pages;
+    if (!Array.isArray(pages)) return [];
+    return pages.flatMap((entry): ImageCandidate[] => {
+      const image = entry?.imageinfo?.[0];
+      const metadata = image?.extmetadata;
+      const license = String(metadata?.License?.value ?? '').toLowerCase();
+      if (
+        !image?.mime ||
+        !['image/jpeg', 'image/png', 'image/webp'].includes(image.mime) ||
+        !['pd', 'cc-zero', 'cc0', 'pdm'].includes(license) ||
+        metadata?.AttributionRequired?.value === 'true' ||
+        metadata?.Restrictions?.value
+      ) return [];
+      const value = image.thumburl ?? image.url;
+      if (typeof value !== 'string') return [];
+      try {
+        const media = new URL(value);
+        return media.protocol === 'https:' &&
+          media.hostname === 'upload.wikimedia.org' &&
+          !media.username && !media.password
+          ? [{ url: media.toString(), sourceId: 'wikimedia-commons', sourceType: 'image-search' }]
+          : [];
+      } catch {
+        return [];
+      }
+    }).slice(0, 6);
+  }
+
+  private async searchOpenverse(query: string, page: number): Promise<ImageCandidate[]> {
     const url = new URL('https://api.openverse.org/v1/images/');
     url.searchParams.set('q', query.slice(0, 200));
     url.searchParams.set('license', 'cc0,pdm');
     url.searchParams.set('page_size', '10');
     url.searchParams.set('page', String(Math.max(1, Math.min(3, page))));
     const data: unknown = JSON.parse(
-      (await this.fetchPublic(url.toString(), 512 * 1024)).toString('utf8'),
+      (await this.fetchPublic(url.toString(), 512 * 1024, 4_000)).toString('utf8'),
     );
     if (
       !data ||
@@ -538,7 +595,7 @@ export class TelegramAiPostingSourceService {
           return [];
         }
       })
-      .slice(0, 3);
+      .slice(0, 6);
   }
 
   async discoverNewsPages(homeUrl: string): Promise<string[]> {
@@ -551,13 +608,13 @@ export class TelegramAiPostingSourceService {
     } catch { return []; }
   }
 
-  async downloadImage(urlValue: string) {
-    const bytes = await this.fetchPublic(urlValue, 5 * 1024 * 1024);
+  async downloadImage(urlValue: string, maxBytes = 5 * 1024 * 1024) {
+    const bytes = await this.fetchPublic(urlValue, maxBytes);
     if (bytes.length < 256) throw new Error('AI_POSTING_IMAGE_EMPTY');
     return bytes;
   }
 
-  private async fetchPublic(value: string, limit: number) {
+  private async fetchPublic(value: string, limit: number, timeoutMs = 8_000) {
     const url = new URL(value);
     if (url.protocol !== 'https:' || url.username || url.password)
       throw new Error('AI_POSTING_SOURCE_URL_INVALID');
@@ -579,6 +636,7 @@ export class TelegramAiPostingSourceService {
           method: 'GET',
           servername: url.hostname,
           headers: {
+            'User-Agent': 'Nexeloq/1.0 (https://www.nexeloq.com)',
             Accept:
               'application/json,text/html,application/rss+xml,application/atom+xml,image/*',
           },
@@ -619,7 +677,7 @@ export class TelegramAiPostingSourceService {
           response.on('error', reject);
         },
       );
-      request.setTimeout(8000, () =>
+      request.setTimeout(timeoutMs, () =>
         request.destroy(new Error('AI_POSTING_SOURCE_TIMEOUT')),
       );
       request.on('error', reject);

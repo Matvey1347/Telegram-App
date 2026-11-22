@@ -32,6 +32,7 @@ const messages = {
 
   "ads.filters": "Filters",
   "ads.direct_exchange": "Direct exchange",
+  "ads.promotion_posts_kept": "Posts remain published",
   "ads.promotion_type": "Promotion type",
   "ads.promotion_mutual_title": "Mutual promotion",
   "ads.promotion_mutual_help": "Exchange promotion with another channel or partner.",
