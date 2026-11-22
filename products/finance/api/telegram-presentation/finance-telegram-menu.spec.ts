@@ -10,6 +10,11 @@ describe('Finance Telegram application URLs', () => {
   const previousFinanceUrl = process.env.FINANCE_WEB_PUBLIC_URL;
   const previousNodeEnv = process.env.NODE_ENV;
 
+  beforeEach(() => {
+    delete process.env.FRONTEND_URL;
+    delete process.env.FINANCE_WEB_PUBLIC_URL;
+  });
+
   afterEach(() => {
     if (previousFrontendUrl === undefined) delete process.env.FRONTEND_URL;
     else process.env.FRONTEND_URL = previousFrontendUrl;

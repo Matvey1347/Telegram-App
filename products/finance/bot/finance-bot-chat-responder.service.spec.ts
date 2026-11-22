@@ -19,10 +19,13 @@ describe('FinanceBotChatResponderService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    process.env.FRONTEND_URL = 'https://finance.example';
+    jest.replaceProperty(process, 'env', {
+      ...process.env,
+      FINANCE_WEB_PUBLIC_URL: 'https://finance.example',
+    });
   });
 
-  afterAll(() => delete process.env.FRONTEND_URL);
+  afterEach(() => jest.restoreAllMocks());
 
   it('updates the per-chat Mini App button together with the localized main menu', async () => {
     await responder.sendMainMenu(context, 'user-1', 'chat-1', 'ru');
