@@ -7,7 +7,15 @@ export function SourceChip({
   href,
   title,
 }: {
-  source: any;
+  source:
+    | {
+        title?: string | null;
+        name?: string | null;
+        photoUrl?: string | null;
+        imageUrl?: string | null;
+      }
+    | null
+    | undefined;
   fallback?: string;
   compact?: boolean;
   href?: string;
@@ -18,7 +26,7 @@ export function SourceChip({
     <>
       {source?.photoUrl || source?.imageUrl ? (
         <img
-          src={source.photoUrl || source.imageUrl}
+          src={source.photoUrl || source.imageUrl || undefined}
           alt=""
           className={`${compact ? "h-4 w-4" : "h-5 w-5"} shrink-0 rounded-full object-cover`}
         />

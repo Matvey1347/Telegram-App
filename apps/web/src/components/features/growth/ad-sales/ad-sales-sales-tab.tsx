@@ -121,8 +121,6 @@ export function SalesTab(props: {
   useEffect(() => {
     if (!botConfirmationSale) return;
     let active = true;
-    setBotText(null);
-    setBotError(false);
     telegramAdSalesApi
       .previewBotNotification(botConfirmationSale.id)
       .then((result) => {
@@ -208,9 +206,10 @@ export function SalesTab(props: {
                   const linkedPosts = sale.placements.filter(
                     hasLinkedPlacementPost,
                   ).length;
-                  const publicationEnabled = sale.placements.some((placement) =>
-                    hasLinkedPlacementPost(placement) ||
-                    Boolean(placement.scheduledManagedAt),
+                  const publicationEnabled = sale.placements.some(
+                    (placement) =>
+                      hasLinkedPlacementPost(placement) ||
+                      Boolean(placement.scheduledManagedAt),
                   );
                   const soldBy = sale.sellerMember ?? sale.assignedMember;
                   const hasMultiplePlacementOutputs =
@@ -245,7 +244,8 @@ export function SalesTab(props: {
                             </p>
                             {publicationEnabled ? (
                               <p className="mt-1 text-xs text-neutral-500">
-                                {linkedPosts}/{sale.placements.length} posts linked
+                                {linkedPosts}/{sale.placements.length} posts
+                                linked
                               </p>
                             ) : null}
                           </div>
@@ -352,6 +352,8 @@ export function SalesTab(props: {
                                 className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-neutral-200 hover:bg-neutral-800"
                                 onClick={() => {
                                   setMenuSaleId(null);
+                                  setBotText(null);
+                                  setBotError(false);
                                   setBotConfirmationSale(sale);
                                 }}
                               >
