@@ -223,8 +223,7 @@ describe("MutualPromotionPostImport", () => {
     fireEvent.click(
       screen.getByRole("button", { name: "Forward posts via bot" }),
     );
-    await screen.findByText(/Forward several posts in Telegram/);
-    fireEvent.focus(window);
+    fireEvent.click(await screen.findByRole("button", { name: "Check forwarded posts" }));
     const editors = await screen.findAllByRole("button", {
       name: /Edit imported post:/,
     });
@@ -291,6 +290,7 @@ describe("MutualPromotionPostImport", () => {
   });
 
   it("keeps a deliberately cleared imported batch empty", async () => {
+    vi.useFakeTimers();
     vi.mocked(
       telegramSystemBotApi.startPostImport,
     ).mockResolvedValue({ workflowId: "workflow-1", mode: "multiple" });
@@ -331,17 +331,19 @@ describe("MutualPromotionPostImport", () => {
       />,
     );
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "Forward posts via bot" }),
-    );
-    await screen.findByText(/Forward several posts in Telegram/);
-    fireEvent.focus(window);
-    await screen.findByText("Imported posts: 2");
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Forward posts via bot" }));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Check forwarded posts" }));
+    });
+    expect(screen.getByText("Imported posts: 2")).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Remove post 1" }));
     fireEvent.click(screen.getByRole("button", { name: "Remove post 1" }));
 
     expect(screen.getByText(/No imported posts are selected/)).toBeVisible();
     fireEvent.focus(window);
+    await act(async () => vi.advanceTimersByTimeAsync(3_000));
     expect(
       telegramSystemBotApi.readPostImport,
     ).toHaveBeenCalledTimes(1);
