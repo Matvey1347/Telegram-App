@@ -41,7 +41,6 @@ import {
   type TelegramAiPostingTestRunOperation as Run,
   type TestPublication,
 } from './telegram-ai-posting-test-run.store';
-
 @Injectable()
 export class TelegramAiPostingTestRunService {
   constructor(
