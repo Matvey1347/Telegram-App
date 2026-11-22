@@ -21,56 +21,78 @@ const emojiSizes = {
   lg: "text-3xl",
 } as const;
 
-export function IconAvatar({
-  icon,
-  label,
-  size = "sm",
-  className = "",
-  bordered = true,
-  decorative = false,
-}: {
+type IconAvatarProps = {
   icon?: ResolvedEmoji | null;
   label?: string;
   size?: keyof typeof sizes;
   className?: string;
   bordered?: boolean;
   decorative?: boolean;
-}) {
+};
+
+export function IconAvatar(props: IconAvatarProps) {
+  const icon = props.icon;
+  if (
+    icon?.type === "unicode" &&
+    icon.telegramCustomEmojiId &&
+    !icon.telegramCustomEmojiAssetUrl &&
+    !icon.telegramCustomEmojiRenderAssetUrl
+  ) {
+    return <UnresolvedCustomEmojiAvatar {...props} />;
+  }
+  return <IconAvatarView {...props} />;
+}
+
+function UnresolvedCustomEmojiAvatar(props: IconAvatarProps) {
+  const icon = props.icon;
   const customEmojiId =
     icon?.type === "unicode" ? icon.telegramCustomEmojiId : null;
   const customEmojiPacks = useQuery({
     queryKey: workspaceKeys.telegramCustomEmojiPacks(),
     queryFn: () => telegramChannelsApi.customEmojiPacks(),
-    enabled: Boolean(
-      customEmojiId &&
-        icon?.type === "unicode" &&
-        !icon.telegramCustomEmojiAssetUrl &&
-        !icon.telegramCustomEmojiRenderAssetUrl,
-    ),
     staleTime: 5 * 60_000,
   });
   const resolvedCustomEmoji = customEmojiId
-    ? (customEmojiPacks.data?.packs ?? []).flatMap((pack) => {
+    ? ((customEmojiPacks.data?.packs ?? []).flatMap((pack) => {
         const emoji = pack.emojis.find(
           (item) => item.documentId === customEmojiId,
         );
         return emoji
-          ? [{
-              type: "unicode" as const,
-              value: emoji.alt || "◇",
-              name: emoji.alt || pack.title,
-              telegramCustomEmojiId: emoji.documentId,
-              telegramCustomEmojiKind: emoji.kind,
-              telegramCustomEmojiAssetUrl: emoji.assetUrl,
-              telegramCustomEmojiRenderAssetUrl: emoji.renderAssetUrl,
-            }]
+          ? [
+              {
+                type: "unicode" as const,
+                value: emoji.alt || "◇",
+                name: emoji.alt || pack.title,
+                telegramCustomEmojiId: emoji.documentId,
+                telegramCustomEmojiKind: emoji.kind,
+                telegramCustomEmojiAssetUrl: emoji.assetUrl,
+                telegramCustomEmojiRenderAssetUrl: emoji.renderAssetUrl,
+              },
+            ]
           : [];
-      })[0] ?? null
+      })[0] ?? null)
     : null;
-  const displayIcon =
-    icon?.type === "unicode" && resolvedCustomEmoji
-      ? { ...icon, ...resolvedCustomEmoji }
-      : icon;
+  return (
+    <IconAvatarView
+      {...props}
+      icon={
+        icon?.type === "unicode" && resolvedCustomEmoji
+          ? { ...icon, ...resolvedCustomEmoji }
+          : icon
+      }
+    />
+  );
+}
+
+function IconAvatarView({
+  icon,
+  label,
+  size = "sm",
+  className = "",
+  bordered = true,
+  decorative = false,
+}: IconAvatarProps) {
+  const displayIcon = icon;
   const hasEmoji = displayIcon?.type === "unicode";
   const hasImage = displayIcon?.type === "image";
   const base = `inline-flex shrink-0 items-center justify-center overflow-hidden rounded-md ${
@@ -97,7 +119,10 @@ export function IconAvatar({
 
   if (displayIcon?.type === "unicode") {
     return (
-      <PremiumEmoji icon={displayIcon} className={`${base} ${emojiSizes[size]}`} />
+      <PremiumEmoji
+        icon={displayIcon}
+        className={`${base} ${emojiSizes[size]}`}
+      />
     );
   }
 
@@ -127,7 +152,11 @@ function AvatarImage({
       alt={alt}
       className={`${className} object-cover`}
       onLoad={(event) => {
-        if (event.currentTarget.naturalWidth <= 1 || event.currentTarget.naturalHeight <= 1) setFailed(true);
+        if (
+          event.currentTarget.naturalWidth <= 1 ||
+          event.currentTarget.naturalHeight <= 1
+        )
+          setFailed(true);
       }}
       onError={() => setFailed(true)}
     />

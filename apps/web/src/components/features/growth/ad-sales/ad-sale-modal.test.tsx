@@ -248,7 +248,7 @@ describe("AdSaleModal", () => {
 
   it("offers to continue an unfinished draft and restores its placement settings", async () => {
     const first = renderModal();
-    fireEvent.change(screen.getByRole("textbox", { name: "Time for all" }), {
+    fireEvent.change(screen.getByLabelText("Time"), {
       target: { value: "18:30" },
     });
     await waitFor(() =>
@@ -262,7 +262,7 @@ describe("AdSaleModal", () => {
     expect(await screen.findByText("Unfinished Ad Sale draft")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /Continue draft/ }));
 
-    expect(screen.getByRole("textbox", { name: "Time for all" })).toHaveValue(
+    expect(screen.getByLabelText("Time")).toHaveValue(
       "18:30",
     );
   });
@@ -611,7 +611,7 @@ describe("AdSaleModal", () => {
     await revealPlacements();
     await screen.findByText(/1\/24 · 125 UAH/);
 
-    fireEvent.change(screen.getByRole("textbox", { name: "Time for all" }), {
+    fireEvent.change(screen.getByLabelText("Time"), {
       target: { value: "18:30" },
     });
     expect(screen.getByText(/· 18:30 · 1\/24/)).toBeTruthy();
@@ -621,7 +621,7 @@ describe("AdSaleModal", () => {
     expect(
       screen.getByRole("button", { name: "Example channel" }),
     ).toBeTruthy();
-    expect(screen.getByRole("textbox", { name: "Time for all" })).toHaveValue(
+    expect(screen.getByLabelText("Time")).toHaveValue(
       "18:30",
     );
     expect(screen.getByText(/· 18:30 · 1\/24/)).toBeTruthy();
@@ -632,7 +632,7 @@ describe("AdSaleModal", () => {
     await revealPlacements();
     await screen.findByText(/1\/24 · 125 UAH/);
 
-    fireEvent.change(screen.getByRole("textbox", { name: "Time for all" }), {
+    fireEvent.change(screen.getByLabelText("Time"), {
       target: { value: "18:30" },
     });
     expect(screen.getByText(/· 18:30 · 1\/24/)).toBeTruthy();
@@ -687,7 +687,7 @@ describe("AdSaleModal", () => {
     expect(screen.queryByRole("button", { name: "Add date" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Add multiple dates" }));
 
-    fireEvent.change(screen.getByRole("textbox", { name: "Time for all" }), {
+    fireEvent.change(screen.getByLabelText("Time"), {
       target: { value: "18:30" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Format for all" }));

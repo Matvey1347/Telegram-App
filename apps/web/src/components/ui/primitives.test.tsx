@@ -124,7 +124,7 @@ describe("Modal", () => {
 
     expect(
       screen.getByRole("dialog", { name: "Replace active bot import?" }),
-    ).toHaveClass("!max-w-[400px]");
+    ).toHaveClass("!max-w-[min(400px,calc(100vw-2rem))]");
   });
 
   it("renders an action beside the dialog title", () => {

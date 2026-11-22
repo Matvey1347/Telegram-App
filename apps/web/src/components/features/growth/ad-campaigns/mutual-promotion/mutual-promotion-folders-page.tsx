@@ -69,10 +69,10 @@ export function MutualPromotionFoldersPage({
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const { setProgress } = useAppToast();
-  const [formOpen, setFormOpen] = useState(() => searchParams.get("create") === "1");
+  const [formOpen, setFormOpen] = useState(() => searchParams?.get("create") === "1");
   const [editingFolder, setEditingFolder] =
     useState<MutualPromotionFolderDetail | null>(null);
-  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(() => searchParams.get("folderId"));
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(() => searchParams?.get("folderId") ?? null);
   const [inviteLinksEditorOpen, setInviteLinksEditorOpen] = useState(false);
   const [deleteFolder, setDeleteFolder] = useState<{
     id: string;

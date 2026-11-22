@@ -82,7 +82,8 @@ export function ModalDraftPicker<T>({
             >
               <button
                 type="button"
-                aria-label={`Continue draft ${title}`}
+                aria-hidden="true"
+                tabIndex={-1}
                 onClick={() => onContinue(draft)}
                 className="absolute inset-0 z-0 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500"
               />

@@ -117,7 +117,7 @@ describe("internal transaction modal category fields", () => {
     vi.spyOn(telegramChannelsApi, "select").mockResolvedValue([]);
     renderModal();
 
-    expect(transactionDialog()).toHaveClass("!max-w-[400px]");
+    expect(transactionDialog()).toHaveClass("!max-w-[min(400px,calc(100vw-2rem))]");
     expect(transactionDialog()).not.toHaveClass("max-w-[1280px]");
   });
 

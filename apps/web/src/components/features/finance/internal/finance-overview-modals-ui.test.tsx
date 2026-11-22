@@ -82,7 +82,7 @@ describe("Finance overview modal layout", () => {
       />,
     );
 
-    expect(screen.getByRole("dialog")).toHaveClass("!max-w-[400px]");
+    expect(screen.getByRole("dialog")).toHaveClass("!max-w-[min(400px,calc(100vw-2rem))]");
     const fromRow = screen.getByTestId("transfer-from-row");
     const toRow = screen.getByTestId("transfer-to-row");
     expect(fromRow).toHaveClass("sm:grid-cols-[minmax(0,1fr)_160px]");
