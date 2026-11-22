@@ -15,7 +15,7 @@ describe("telegram channels route state", () => {
     expect(parseTelegramChannelsTab("networks")).toBe("networks");
   });
 
-  it("shows Network between Channels and Accounts in the primary tabs", () => {
+  it("shows Network between Channels and MTProto in the primary tabs", () => {
     expect(TELEGRAM_CHANNEL_TAB_OPTIONS.primary).toEqual([
       "channels",
       "networks",
@@ -25,6 +25,6 @@ describe("telegram channels route state", () => {
       TELEGRAM_CHANNEL_TAB_OPTIONS.primary.map(
         (tab) => TELEGRAM_CHANNEL_TAB_LABELS[tab],
       ),
-    ).toEqual(["Channels", "Network", "Accounts"]);
+    ).toEqual(["Channels", "Network", "MTProto"]);
   });
 });

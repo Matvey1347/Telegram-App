@@ -95,30 +95,18 @@ describe("CrmAccountSyncPanel", () => {
     });
   });
 
-  it("keeps source controls in a compact modal and explains daily sync", async () => {
+  it("shows source settings and explains daily sync", async () => {
     renderPanel();
 
-    expect(
-      await screen.findByRole("button", { name: "Manage sources" }),
-    ).toBeTruthy();
-    expect(screen.queryByText("1 selected · automatic sync daily")).toBeNull();
-    expect(screen.queryByText(/Selected MTProto accounts keep/)).toBeNull();
-
-    fireEvent.click(screen.getByRole("button", { name: "Manage sources" }));
-
-    expect(
-      screen.getByRole("dialog", { name: "Telegram CRM sources" }),
-    ).toBeTruthy();
-    expect(screen.getByText(/sync automatically once a day/)).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Sync" })).toBeEnabled();
+    expect(await screen.findByRole("heading", { name: "CRM source settings" })).toBeVisible();
+    expect(screen.getByText(/sync automatically once a day/)).toBeVisible();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Sync now" })).toBeEnabled());
   });
 
   it("runs manual sync only for the saved selected accounts", async () => {
     renderPanel();
-    fireEvent.click(
-      await screen.findByRole("button", { name: "Manage sources" }),
-    );
-    fireEvent.click(screen.getByRole("button", { name: "Sync" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Sync now" })).toBeEnabled());
+    fireEvent.click(screen.getByRole("button", { name: "Sync now" }));
 
     await waitFor(() =>
       expect(mocks.initialSync).toHaveBeenCalledWith("account-1"),
@@ -147,9 +135,6 @@ describe("CrmAccountSyncPanel", () => {
   it("offers only Telegram folder tags for the CRM import cohort", async () => {
     renderPanel();
     fireEvent.click(
-      await screen.findByRole("button", { name: "Manage sources" }),
-    );
-    fireEvent.click(
       await screen.findByRole("button", { name: "Select Telegram tags" }),
     );
 
@@ -160,17 +145,15 @@ describe("CrmAccountSyncPanel", () => {
   it("keeps a visible retry-safe alert when synchronization fails", async () => {
     mocks.initialSync.mockRejectedValueOnce(new Error("Telegram unavailable"));
     renderPanel();
-    fireEvent.click(
-      await screen.findByRole("button", { name: "Manage sources" }),
-    );
-    fireEvent.click(screen.getByRole("button", { name: "Sync" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Sync now" })).toBeEnabled());
+    fireEvent.click(screen.getByRole("button", { name: "Sync now" }));
 
     expect(
       await screen.findByText(
         "Conversation sync failed. You can safely retry it.",
       ),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Sync" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Sync now" })).toBeEnabled();
     expect(mocks.operationFail).toHaveBeenCalledWith(
       expect.objectContaining({
         message: "Conversation sync failed. You can safely retry it.",

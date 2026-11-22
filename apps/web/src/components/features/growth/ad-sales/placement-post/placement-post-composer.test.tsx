@@ -100,7 +100,7 @@ describe("PlacementPostComposer", () => {
       },
     });
 
-    expect(screen.getByText("Channel post")).toBeTruthy();
+    expect(screen.getByText("Advertising post")).toBeTruthy();
     expect(
       screen.queryByRole("switch", {
         name: "Create advertising post from scratch",

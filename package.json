@@ -50,7 +50,7 @@
     "ai:sync": "node scripts/ai/sync-local-ai-costs.mjs",
     "ai:sync:check": "node scripts/ai/sync-local-ai-costs.mjs --check",
     "hooks:install": "git config core.hooksPath .githooks",
-    "release:check": "pnpm ai:sync:check && pnpm check:changed",
+    "release:check": "pnpm ai:sync:check && node scripts/quality/check-changed.mjs --release",
     "production:ads": "node scripts/production/production-ads.mjs",
     "production:recovery": "node scripts/production/production-recovery.mjs",
     "archive": "python3 scripts/build/source-archive.py",

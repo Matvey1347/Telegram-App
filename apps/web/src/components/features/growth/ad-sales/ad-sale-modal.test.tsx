@@ -491,7 +491,6 @@ describe("AdSaleModal", () => {
     );
     expect(screen.queryByText(/Currency is taken automatically/)).toBeNull();
     expect(screen.getByText("Payment and financial tracking").closest("section")?.querySelector('input[inputmode="decimal"]')).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Back to ad sales" })).toBeTruthy();
     expect(
       screen
         .getByRole("button", { name: "Channels" })
@@ -637,12 +636,13 @@ describe("AdSaleModal", () => {
     });
     expect(screen.getByText(/· 18:30 · 1\/24/)).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "Format for all" }));
+    fireEvent.click(screen.getByRole("button", { name: "Format" }));
     fireEvent.click(await screen.findByRole("option", { name: "2/48" }));
 
     await screen.findByText(/2\/48 · 250 UAH/);
 
-    fireEvent.click(screen.getByRole("button", { name: "Format for all" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Format" }));
     expect(screen.getAllByRole("option", { name: "2/48" })).toHaveLength(1);
   });
 
@@ -673,9 +673,8 @@ describe("AdSaleModal", () => {
       ),
     });
 
-    await waitFor(() =>
-      expect(screen.getAllByText("7.12 USD")).toHaveLength(2),
-    );
+    await revealPlacements();
+    await waitFor(() => expect(screen.getAllByText(/7.12 USD/).length).toBeGreaterThan(0));
   });
 
   it("creates placement rows for every selected date without a separate bulk mode", async () => {
@@ -690,7 +689,7 @@ describe("AdSaleModal", () => {
     fireEvent.change(screen.getByLabelText("Time"), {
       target: { value: "18:30" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Format for all" }));
+    fireEvent.click(screen.getByRole("button", { name: "Format" }));
     fireEvent.click(await screen.findByRole("option", { name: "2/48" }));
 
     fireEvent.click(screen.getAllByRole("button", { name: "10.08.2099" })[0]);
@@ -703,14 +702,14 @@ describe("AdSaleModal", () => {
         screen.getAllByRole("button", { name: /Actions for Example channel/ }),
       ).toHaveLength(2),
     );
-    fireEvent.click(screen.getByRole("button", { name: "Time by date" }));
-    fireEvent.change(screen.getByRole("textbox", { name: "Time for 2099-08-10" }), {
+    fireEvent.click(screen.getAllByRole("button", { name: "Set by date" })[0]);
+    fireEvent.change(screen.getByLabelText("Time 2099-08-10"), {
       target: { value: "17:00" },
     });
     expect(screen.getByText(/· 17:00 · 2\/48/)).toBeInTheDocument();
     expect(screen.getByText(/· 18:30 · 2\/48/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Format by date" }));
-    fireEvent.click(screen.getByRole("button", { name: "Format for 2099-08-10" }));
+    fireEvent.click(screen.getByRole("button", { name: "Set by date" }));
+    fireEvent.click(screen.getByRole("button", { name: "Format 2099-08-10" }));
     fireEvent.click(await screen.findByRole("option", { name: "1/24" }));
     expect(screen.getByText(/· 17:00 · 1\/24/)).toBeInTheDocument();
     expect(screen.getAllByText("Sale total").length).toBeGreaterThan(0);

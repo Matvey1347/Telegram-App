@@ -236,7 +236,7 @@ describe("ChannelReminderModal", () => {
     expect(editButton.querySelector("svg")).toBeInTheDocument();
     expect(editButton.querySelector("svg")?.getAttribute("width")).toBe("20");
     const deleteButton = screen.getByRole("button", { name: "Delete Daily" });
-    expect(deleteButton.className).toContain("h-8 w-8");
+    expect(deleteButton.className).toContain("h-9 w-9");
     expect(deleteButton.querySelector("svg")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Manage channels" }));

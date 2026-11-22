@@ -41,29 +41,33 @@ export function TelegramPostsHeaderWorkflows({
         title={t("telegram.posts.title")}
         subtitle={t("telegram.posts.subtitle")}
         action={
-          activeChannel ? (
+          channels.length > 0 ? (
             <div className="flex w-full flex-wrap justify-end gap-2 sm:min-w-[720px]">
-              <div className="min-w-[260px] flex-1 [&>div>button]:h-[42px] [&>div>button]:min-h-0">
-                <CustomSelect
-                  uiLocale={locale}
-                  value={activeChannel.id}
-                  onChange={onChannelChange}
-                  options={channels.map((item) => ({
-                    value: item.id,
-                    label: item.title,
-                    iconUrl: item.photoUrl || undefined,
-                    iconFallback: item.title,
-                  }))}
-                />
-              </div>
-              <Button
-                type="button"
-                variant="secondary"
-                className="h-[42px] shrink-0"
-                onClick={() => onImportModeChange("unified")}
-              >
-                <Upload size={17} /> {t("common.import")}
-              </Button>
+              {activeChannel ? (
+                <>
+                  <div className="min-w-[260px] flex-1 [&>div>button]:h-[42px] [&>div>button]:min-h-0">
+                    <CustomSelect
+                      uiLocale={locale}
+                      value={activeChannel.id}
+                      onChange={onChannelChange}
+                      options={channels.map((item) => ({
+                        value: item.id,
+                        label: item.title,
+                        iconUrl: item.photoUrl || undefined,
+                        iconFallback: item.title,
+                      }))}
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="h-[42px] shrink-0"
+                    onClick={() => onImportModeChange("unified")}
+                  >
+                    <Upload size={17} /> {t("common.import")}
+                  </Button>
+                </>
+              ) : null}
               <Button
                 type="button"
                 className="h-[42px] shrink-0"

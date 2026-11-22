@@ -51,12 +51,14 @@ describe("TelegramPostsHeaderWorkflows", () => {
       </QueryClientProvider>,
     );
 
-    expect(screen.getByRole("button", { name: "Import" })).toBeVisible();
     expect(
-      screen.getByRole("button", {
+      screen.queryByRole("button", { name: "Import" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", {
         name: "Reschedule scheduled posts for channel-1",
       }),
-    ).toBeVisible();
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Context" }),
     ).not.toBeInTheDocument();
