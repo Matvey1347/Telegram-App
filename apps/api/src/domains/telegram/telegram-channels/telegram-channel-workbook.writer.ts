@@ -100,7 +100,6 @@ export class TelegramChannelWorkbookWriter {
       ['Photo URL', channel.photoUrl],
       ['Source type', channel.sourceType],
       ['Current subscribers', channel.currentSubscribersCount],
-      ['Seed subscribers', channel.seedSubscribersCount],
       ['Known fake subscribers', channel.knownFakeSubscribersCount],
       ['Own views per post', channel.ownViewsPerPost],
       ['Own reactions per post', channel.ownReactionsPerPost],

@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef, useState } from "react";
 import { Send } from "lucide-react";
 import type { TelegramSystemBotPostDraft } from "@telegram-system/shared";
 import { Button } from "@/components/ui/primitives";
@@ -9,17 +10,22 @@ import { useI18n } from "@/providers/i18n-provider";
 
 export function TelegramPostSendToBotButton({
   draft,
+  prepareDraft,
   disabled = false,
   recoveryKey = "telegram-post-editor-preview",
   variant = "secondary",
   className,
 }: {
   draft: TelegramSystemBotPostDraft;
+  prepareDraft?: () => Promise<TelegramSystemBotPostDraft>;
   disabled?: boolean;
   recoveryKey?: string;
   variant?: "primary" | "secondary";
   className?: string;
 }) {
+  const preparingRef = useRef(false);
+  const [preparing, setPreparing] = useState(false);
+  const [prepareError, setPrepareError] = useState("");
   const { t } = useI18n();
   const botFlow = useTelegramSystemBotPostFlow({
     mode: "single",
@@ -44,15 +50,29 @@ export function TelegramPostSendToBotButton({
         variant={variant}
         className={className}
         disabled={
-          disabled ||
+          disabled || preparing ||
           !hasContent ||
           hasInvalidInlineButtons ||
           botFlow.sendStatus === "working"
         }
-        onClick={() => void botFlow.send(draft)}
+        onClick={async () => {
+          if (preparingRef.current) return;
+          setPrepareError("");
+          if (!prepareDraft) return botFlow.send(draft);
+          preparingRef.current = true;
+          setPreparing(true);
+          try {
+            await botFlow.send(await prepareDraft());
+          } catch (error) {
+            setPrepareError(error instanceof Error ? error.message : t("telegram.posts.editor.sendToBotError"));
+          } finally {
+            preparingRef.current = false;
+            setPreparing(false);
+          }
+        }}
       >
         <Send size={15} />
-        {botFlow.sendStatus === "working"
+        {preparing || botFlow.sendStatus === "working"
           ? t("telegram.posts.editor.sendingToBot")
           : botFlow.sendStatus === "done"
             ? t("telegram.posts.editor.sentToBot")
@@ -62,9 +82,9 @@ export function TelegramPostSendToBotButton({
         <p className="col-span-full w-full text-right text-xs text-rose-400">
           {t("telegram.posts.editor.error.inlineButtonUrl")}
         </p>
-      ) : botFlow.error ? (
+      ) : prepareError || botFlow.error ? (
         <p className="col-span-full w-full text-right text-xs text-rose-400">
-          {botFlow.error}
+          {prepareError || botFlow.error}
         </p>
       ) : null}
     </div>

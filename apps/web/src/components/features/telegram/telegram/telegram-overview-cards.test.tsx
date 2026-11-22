@@ -6,7 +6,6 @@ import type { TelegramChannelNetwork } from "@/lib/api";
 import {
   sortNetworksBySize,
   TelegramNetworkCards,
-  TelegramPeopleCards,
 } from "./telegram-overview-cards";
 
 const { updateNetwork, pushToast } = vi.hoisted(() => ({
@@ -278,22 +277,5 @@ describe("telegram overview cards", () => {
       client.getQueryData<TelegramChannelNetwork[]>(networkKeys.list())?.[0]
         ?.iconId,
     ).toBe("icon-1");
-  });
-
-  it("renders people with the same card shell and moves delete into the actions menu", () => {
-    const person = {
-      id: "person-1",
-      title: "Matvii",
-      username: "matviikpr",
-      notes: "Priority contact",
-    };
-    const onDelete = vi.fn();
-    render(<TelegramPeopleCards people={[person]} onDelete={onDelete} />);
-
-    expect(screen.getByText("@matviikpr")).toBeInTheDocument();
-    expect(screen.getByText("Priority contact")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Actions for Matvii" }));
-    fireEvent.click(screen.getByRole("menuitem", { name: "Delete person" }));
-    expect(onDelete).toHaveBeenCalledWith(person);
   });
 });

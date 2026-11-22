@@ -8,7 +8,6 @@ import { AdCampaignsModule } from './domains/growth/ad-campaigns/ad-campaigns.mo
 import { AdHypothesesModule } from './domains/growth/ad-hypotheses/ad-hypotheses.module';
 import { MutualPromotionFoldersModule } from './domains/growth/mutual-promotion-folders/mutual-promotion-folders.module';
 import { CrossPromotionPlansModule } from './domains/growth/cross-promotion-plans/cross-promotion-plans.module';
-import { AdvertisingSourcesModule } from './domains/growth/advertising-sources/advertising-sources.module';
 import { AppController } from './app.controller';
 import { AuthModule } from './domains/identity/auth/auth.module';
 import { CommonModule } from './common/common.module';
@@ -67,7 +66,6 @@ import { TelegramChannelMessageTemplatesModule } from './domains/telegram/telegr
     TelegramChannelMessageTemplatesModule,
     TelegramChannelNetworksModule,
     PromosModule,
-    AdvertisingSourcesModule,
     AdCampaignsModule,
     AdHypothesesModule,
     MutualPromotionFoldersModule,

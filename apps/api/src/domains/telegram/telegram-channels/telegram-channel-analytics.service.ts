@@ -78,12 +78,8 @@ export class TelegramChannelAnalyticsService {
       0,
       Number(channel.knownFakeSubscribersCount || 0),
     );
-    const seedSubscribersCount = Math.max(
-      0,
-      Number(channel.seedSubscribersCount || 0),
-    );
     const {
-      effectiveSubscribers: effectiveSubscribersBeforeSeed,
+      effectiveSubscribers,
       subscriberBaseQuality,
       hasSubscriberBasePollution,
     } = calculateEffectiveSubscribers({
@@ -91,10 +87,6 @@ export class TelegramChannelAnalyticsService {
       knownFakeSubscribersCount,
       manualSubscriberBaseQuality: channel.subscriberBaseQuality,
     });
-    const effectiveSubscribers =
-      effectiveSubscribersBeforeSeed == null
-        ? null
-        : Math.max(0, effectiveSubscribersBeforeSeed - seedSubscribersCount);
     const rawActiveSubscribersEstimate =
       avgViewsAdjusted == null ? null : Math.round(avgViewsAdjusted);
     const rawViewRate =
@@ -138,7 +130,6 @@ export class TelegramChannelAnalyticsService {
       knownFakeSubscribersCount,
       effectiveSubscribersCount: effectiveSubscribers,
       subscriberBaseQuality,
-      seedSubscribersCount,
       ownViewsPerPost,
       ownReactionsPerPost,
       rawActiveSubscribersEstimate,

@@ -17,25 +17,47 @@ describe("CrmNavigation", () => {
   });
 
   it("uses one Ad Sales tab bar without CRM contact-view tabs", () => {
-    renderNavigation(<CrmNavigation canViewInbox canViewSales inboxUnread={3} />);
+    renderNavigation(
+      <CrmNavigation canViewInbox canViewSales inboxUnread={3} />,
+    );
 
     const nav = screen.getByRole("navigation", { name: "CRM navigation" });
     expect(nav.className).toContain("rounded-[18px]");
     expect(screen.getByRole("link", { name: "Clients" }).className).toContain(
       "after:bg-blue-500",
     );
-    expect(screen.getByRole("link", { name: /Inbox 3/ })).toHaveAttribute("href", "/ad-sales/inbox");
+    expect(screen.getByRole("link", { name: /Inbox 3/ })).toHaveAttribute(
+      "href",
+      "/ad-sales/inbox",
+    );
     expect(screen.queryByRole("link", { name: "All contacts" })).toBeNull();
     expect(screen.queryByText("Follow-up")).toBeNull();
     expect(screen.getByRole("link", { name: "Analytics" })).toBeTruthy();
   });
 
   it("does not expose tabs that the member cannot access", () => {
-    renderNavigation(<CrmNavigation canViewInbox={false} canViewSales={false} />);
+    renderNavigation(
+      <CrmNavigation canViewInbox={false} canViewSales={false} />,
+    );
 
     expect(screen.queryByRole("link", { name: /Inbox/ })).toBeNull();
     expect(screen.queryByRole("link", { name: "Deals" })).toBeNull();
     expect(screen.getByRole("link", { name: "Clients" })).toBeTruthy();
+  });
+
+  it("shows source configuration under the translated settings tab", () => {
+    renderNavigation(
+      <CrmNavigation
+        canViewInbox={false}
+        canViewSales={false}
+        canViewSettings
+      />,
+    );
+
+    expect(screen.getByRole("link", { name: "Settings" })).toHaveAttribute(
+      "href",
+      "/ad-sales/settings",
+    );
   });
 });
 

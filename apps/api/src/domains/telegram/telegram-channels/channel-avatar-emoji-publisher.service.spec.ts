@@ -55,9 +55,16 @@ function fixture() {
   const prisma = {
     channelAvatarEmojiAsset: {
       findFirst: jest.fn(
-        async ({ where }: { where: { hash: { not: string } } }) => {
+        async ({
+          where,
+        }: {
+          where: { hash?: { not: string }; packId?: number };
+        }) => {
           const row = [...assets.values()].find(
-            (asset) => asset.remotePending && asset.hash !== where.hash.not,
+            (asset) =>
+              asset.remotePending &&
+              asset.hash !== where.hash?.not &&
+              (where.packId === undefined || asset.packId === where.packId),
           );
           return row ? copy(row) : null;
         },
@@ -502,17 +509,24 @@ describe('ChannelAvatarEmojiPublisherService', () => {
     expect(f.api.addToPack).not.toHaveBeenCalled();
   });
 
-  it('blocks different assets while an earlier mutation needs reconciliation', async () => {
+  it('isolates an unresolved pack and publishes a different avatar without repeating the original send', async () => {
     const f = fixture();
     f.api.createPack.mockRejectedValueOnce(
       new AvatarEmojiApiError('Unknown remote outcome'),
     );
     await expect(f.service.publish(f.image())).rejects.toThrow('Unknown');
-    await expect(f.service.publish(f.image('content-b'))).rejects.toThrow(
-      'unconfirmed',
-    );
-    expect(f.assets.has(f.image('content-b').hash)).toBe(false);
-    expect(f.api.upload).toHaveBeenCalledTimes(1);
+    await expect(
+      f.service.publish(f.image('content-b')),
+    ).resolves.toMatchObject({
+      packId: 2,
+      createdDocument: true,
+    });
+    await expect(f.service.publish(f.image())).rejects.toThrow('unconfirmed');
+    expect(f.assets.get(f.image().hash)?.remotePending).toBe(true);
+    expect(f.api.createPack.mock.calls.map(([name]) => name)).toEqual([
+      'channelavatars1_by_servicebot',
+      'channelavatars2_by_servicebot',
+    ]);
   });
 
   it('clears a rejected mutation snapshot so it may be retried after Telegram cooldown', async () => {
@@ -530,6 +544,24 @@ describe('ChannelAvatarEmojiPublisherService', () => {
       createdDocument: true,
     });
     expect(f.api.createPack).toHaveBeenCalledTimes(2);
+  });
+
+  it('leaves the mutation pending if more than one remote document matches', async () => {
+    const f = fixture();
+    const create = f.api.createPack.getMockImplementation()!;
+    f.api.createPack.mockImplementationOnce(async (name, fileId) => {
+      await create(name, fileId);
+      const documents = f.remote.get(name)!;
+      documents.push({ ...documents[0], customEmojiId: '7000000000001234' });
+    });
+
+    await expect(f.service.publish(f.image())).rejects.toThrow(
+      'Multiple Telegram documents match',
+    );
+    expect(f.assets.get(f.image().hash)).toMatchObject({
+      customEmojiId: null,
+      remotePending: true,
+    });
   });
 
   it('does not adopt an unrelated document even if it appeared after the snapshot', async () => {

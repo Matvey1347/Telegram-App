@@ -7,6 +7,15 @@ import { formatDateTime } from "@/lib/date-format";
 vi.mock("@/hooks/use-workspace-timezone", () => ({
   useWorkspaceTimezone: () => "Europe/Kyiv",
 }));
+vi.mock("@/components/icons/icon-avatar", () => ({
+  IconAvatar: ({
+    label,
+    icon,
+  }: {
+    label: string;
+    icon?: { type?: string; value?: string } | null;
+  }) => <span>{icon?.type === "unicode" ? icon.value : label}</span>,
+}));
 
 const plan: CrossPromotionPlan = {
   id: "plan-1",
@@ -98,6 +107,11 @@ const plan: CrossPromotionPlan = {
 };
 
 describe("CrossPromotionPlanCard", () => {
+  it("labels direct exchanges as VP", () => {
+    render(<CrossPromotionPlanCard plan={plan} onEdit={vi.fn()} onDelete={vi.fn()} />);
+    expect(screen.getByText("VP")).toBeInTheDocument();
+  });
+
   it("renders only the publications owned by our workspace", () => {
     const onEdit = vi.fn();
     const onDelete = vi.fn();
@@ -260,6 +274,7 @@ describe("CrossPromotionPlanCard", () => {
       />,
     );
 
+    expect(screen.getByText("My Channel")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "My channels: 1" })).toBeInTheDocument();
     expect(screen.queryByText("Partner channels")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Partner channels/ })).not.toBeInTheDocument();

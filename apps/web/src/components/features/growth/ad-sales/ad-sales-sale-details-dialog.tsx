@@ -180,6 +180,16 @@ export function AdSalesSaleDetailsDialog({
             type: "update",
             sale: updatedSale,
           });
+          const datesSaved = draft.placements.every((requested) =>
+            updatedSale.placements.some(
+              (saved) =>
+                saved.id === requested.id &&
+                Date.parse(saved.scheduledAt) === Date.parse(requested.scheduledAt),
+            ),
+          );
+          if (!datesSaved) {
+            throw new Error("The server did not save the requested publication date.");
+          }
           await invalidateTelegramAdSalesDerivedQueries(queryClient, {
             availability: true,
             analytics: true,

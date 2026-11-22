@@ -3,13 +3,15 @@
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Repeat2, Folder, Network } from "lucide-react";
+import { Plus, Folder } from "lucide-react";
 import { useOptionalI18n } from "@/providers/i18n-provider";
 import type {
   CreateCrossPromotionPlanPayload,
   CrossPromotionPlan,
   CrossPromotionPlanKind,
+  MutualPromotionFolderListStatus,
 } from "@telegram-system/shared";
 import {
   promosApi,
@@ -25,6 +27,8 @@ import {
   crossPromotionPlanKeys,
   crossPromotionPlansApi,
 } from "@/lib/features/growth/cross-promotion-plans-api";
+import { mutualPromotionFoldersApi } from "@/lib/features/growth/mutual-promotion-folders-api";
+import { mutualPromotionFolderKeys } from "@/lib/query-keys";
 import { AppShell } from "@/components/layout/app-shell";
 import {
   Button,
@@ -37,6 +41,7 @@ import {
 } from "@/components/ui/primitives";
 import { CrossPromotionPlanModal } from "./cross-promotion-plan-modal";
 import { CrossPromotionPlanCard } from "./cross-promotion-plan-card";
+import { MutualPromotionFolderCard } from "./mutual-promotion/mutual-promotion-folder-card";
 import { PromoFormModal } from "./promo-form-modal";
 import { adsSectionHeader } from "./ads-section-header";
 import { shouldUpdateHistoricalPromotion } from "./cross-promotion-plan-save-mode";
@@ -57,6 +62,8 @@ export function CrossPromotionPlansPage({
   mutualModeTabs?: ReactNode;
 }) {
   const searchParams = useSearchParams();
+  const router = useRouter();
+  const i18n = useOptionalI18n();
   const requestedPlanId = searchParams.get("planId");
   const openedPlanIdRef = useRef<string | null>(null);
   const qc = useQueryClient();
@@ -66,6 +73,7 @@ export function CrossPromotionPlansPage({
     });
   const { startOperation } = useAppToast();
   const [open, setOpen] = useState(false);
+  const [modalKind, setModalKind] = useState(kind);
   const [editingPlan, setEditingPlan] = useState<CrossPromotionPlan | null>(
     null,
   );
@@ -75,16 +83,31 @@ export function CrossPromotionPlansPage({
     useState<CrossPromotionPlan | null>(null);
   const [planTab, setPlanTab] = useState<CrossPromotionPlanTab>("ACTIVE");
   const plansQuery = useQuery({
-    queryKey: crossPromotionPlanKeys.list(kind),
-    queryFn: () => crossPromotionPlansApi.list(kind),
+    queryKey: crossPromotionPlanKeys.combined,
+    queryFn: crossPromotionPlansApi.listAll,
+  });
+  const folderStatus: MutualPromotionFolderListStatus | null =
+    planTab === "ACTIVE" ? "ACTIVE" : planTab === "SCHEDULED" ? "SCHEDULED" : planTab === "COMPLETED" ? "COMPLETED" : null;
+  const foldersQuery = useQuery({
+    queryKey: mutualPromotionFolderKeys.list({ page: 1, pageSize: 100, status: folderStatus ?? "ACTIVE" }),
+    queryFn: () => mutualPromotionFoldersApi.list({ page: 1, pageSize: 100, ...(folderStatus ? { status: folderStatus } : {}) }),
+    enabled: folderStatus !== null,
   });
   useEffect(() => {
     if (!requestedPlanId || openedPlanIdRef.current === requestedPlanId) return;
     const plan = plansQuery.data?.find((item) => item.id === requestedPlanId);
     if (!plan) return;
     openedPlanIdRef.current = requestedPlanId;
-    setEditingPlan(plan);
-    setOpen(true);
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      setEditingPlan(plan);
+      setModalKind(plan.kind);
+      setOpen(true);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [plansQuery.data, requestedPlanId]);
   const channelsQuery = useQuery({
     queryKey: telegramChannelKeys.select(),
@@ -153,7 +176,7 @@ export function CrossPromotionPlansPage({
     },
     onSuccess: async () => {
       await Promise.all([
-        qc.invalidateQueries({ queryKey: crossPromotionPlanKeys.list(kind) }),
+        qc.invalidateQueries({ queryKey: crossPromotionPlanKeys.combined }),
         qc.invalidateQueries({ queryKey: telegramChannelKeys.lists() }),
         qc.invalidateQueries({ queryKey: telegramChannelKeys.cardLists() }),
         refreshCalendar(),
@@ -168,9 +191,9 @@ export function CrossPromotionPlansPage({
     // partial plan. Refresh it so the user can continue that exact plan
     // instead of submitting the browser draft as a duplicate.
     onError: async () => {
-      await qc.invalidateQueries({
-        queryKey: crossPromotionPlanKeys.list(kind),
-      });
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: crossPromotionPlanKeys.combined }),
+      ]);
     },
   });
   const saveDraftMutation = useMutation({
@@ -180,10 +203,10 @@ export function CrossPromotionPlansPage({
     }: {
       draft: Record<string, unknown>;
       id?: string;
-    }) => crossPromotionPlansApi.saveDraft(kind, draft, id),
+    }) => crossPromotionPlansApi.saveDraft(modalKind, draft, id),
     onSuccess: async () => {
       await qc.invalidateQueries({
-        queryKey: crossPromotionPlanKeys.list(kind),
+        queryKey: crossPromotionPlanKeys.combined,
       });
       setOpen(false);
       setEditingPlan(null);
@@ -200,7 +223,7 @@ export function CrossPromotionPlansPage({
     },
     onSuccess: (plan) => {
       qc.setQueryData<CrossPromotionPlan[]>(
-        crossPromotionPlanKeys.list(kind),
+        crossPromotionPlanKeys.combined,
         (current) =>
           current?.map((item) => (item.id === plan.id ? plan : item)) ?? [],
       );
@@ -242,7 +265,7 @@ export function CrossPromotionPlansPage({
     },
     onSuccess: async () => {
       await Promise.all([
-        qc.invalidateQueries({ queryKey: crossPromotionPlanKeys.list(kind) }),
+        qc.invalidateQueries({ queryKey: crossPromotionPlanKeys.combined }),
         qc.invalidateQueries({ queryKey: telegramChannelKeys.lists() }),
         qc.invalidateQueries({ queryKey: telegramChannelKeys.cardLists() }),
         refreshCalendar(),
@@ -297,7 +320,7 @@ export function CrossPromotionPlansPage({
       // visible and invites a duplicate update click.
       setEditingPlan(plan);
       await Promise.all([
-        qc.invalidateQueries({ queryKey: crossPromotionPlanKeys.list(kind) }),
+        qc.invalidateQueries({ queryKey: crossPromotionPlanKeys.combined }),
         qc.invalidateQueries({ queryKey: telegramChannelKeys.lists() }),
         qc.invalidateQueries({ queryKey: telegramChannelKeys.cardLists() }),
         refreshCalendar(),
@@ -322,7 +345,7 @@ export function CrossPromotionPlansPage({
     },
     onSuccess: async () => {
       await Promise.all([
-        qc.invalidateQueries({ queryKey: crossPromotionPlanKeys.list(kind) }),
+        qc.invalidateQueries({ queryKey: crossPromotionPlanKeys.combined }),
         qc.invalidateQueries({ queryKey: telegramChannelKeys.lists() }),
         qc.invalidateQueries({ queryKey: telegramChannelKeys.cardLists() }),
         refreshCalendar(),
@@ -350,7 +373,7 @@ export function CrossPromotionPlansPage({
     onSuccess: async (plan) => {
       setEditingPlan(plan);
       await Promise.all([
-        qc.invalidateQueries({ queryKey: crossPromotionPlanKeys.list(kind) }),
+        qc.invalidateQueries({ queryKey: crossPromotionPlanKeys.combined }),
         refreshCalendar(),
       ]);
     },
@@ -376,7 +399,7 @@ export function CrossPromotionPlansPage({
     onSuccess: async (plan) => {
       setEditingPlan(plan);
       await Promise.all([
-        qc.invalidateQueries({ queryKey: crossPromotionPlanKeys.list(kind) }),
+        qc.invalidateQueries({ queryKey: crossPromotionPlanKeys.combined }),
         refreshCalendar(),
       ]);
     },
@@ -385,7 +408,7 @@ export function CrossPromotionPlansPage({
     mutationFn: (id: string) => crossPromotionPlansApi.remove(id),
     onSuccess: ({ id }) => {
       qc.setQueryData<CrossPromotionPlan[]>(
-        crossPromotionPlanKeys.list(kind),
+        crossPromotionPlanKeys.combined,
         (current) => current?.filter((plan) => plan.id !== id) ?? [],
       );
       void Promise.all([
@@ -428,7 +451,7 @@ export function CrossPromotionPlansPage({
     onSettled: async () => {
       await Promise.all([
         qc.invalidateQueries({
-          queryKey: crossPromotionPlanKeys.list(kind),
+          queryKey: crossPromotionPlanKeys.combined,
         }),
         refreshCalendar(),
       ]);
@@ -443,7 +466,7 @@ export function CrossPromotionPlansPage({
       crossPromotionPlansApi.refreshInviteLinkData(id),
     onSuccess: async () => {
       await Promise.all([
-        qc.invalidateQueries({ queryKey: crossPromotionPlanKeys.list(kind) }),
+        qc.invalidateQueries({ queryKey: crossPromotionPlanKeys.combined }),
         qc.invalidateQueries({ queryKey: telegramChannelKeys.lists() }),
         qc.invalidateQueries({ queryKey: telegramChannelKeys.cardLists() }),
         qc.invalidateQueries({
@@ -452,14 +475,13 @@ export function CrossPromotionPlansPage({
       ]);
     },
   });
-  const header = adsSectionHeader(
-    kind === "DIRECT_MUTUAL" ? "mutual-promotion" : "own-promotion",
-  );
+  const header = adsSectionHeader("mutual-promotion");
   // A promotion is its own scheduling and tracking record. Do not collapse
   // records that happen to share an advertiser or partner channels: doing so
   // hides real placements behind an "Integrations" list.
   const plans = plansQuery.data ?? [];
   const visiblePlans = plansForCrossPromotionTab(plans, planTab);
+  const visibleFolders = foldersQuery.data?.items ?? [];
   return (
     <AppShell>
       <PageHeader
@@ -469,6 +491,7 @@ export function CrossPromotionPlansPage({
           <Button
             onClick={() => {
               setEditingPlan(null);
+              setModalKind(kind);
               setOpen(true);
             }}
           >
@@ -482,33 +505,35 @@ export function CrossPromotionPlansPage({
         plans={plans}
         value={planTab}
         onChange={setPlanTab}
-        ariaLabel={
-          kind === "DIRECT_MUTUAL"
-            ? "Direct exchange status"
-            : "Own-channel promotion status"
-        }
+        ariaLabel="Promotion status"
       />
       <div className="mt-4">
         {plansQuery.isLoading ? (
           <LoadingState />
         ) : plansQuery.isError ? (
           <ErrorState text="Could not load promotion placements." />
-        ) : !visiblePlans.length ? (
+        ) : !visiblePlans.length && !visibleFolders.length ? (
           <EmptyState
-            text={
-              kind === "DIRECT_MUTUAL"
-                ? `No ${planTab.toLowerCase()} direct exchanges.`
-                : `No ${planTab.toLowerCase()} own-channel placements.`
-            }
+            text={`No ${planTab.toLowerCase()} promotions.`}
           />
         ) : (
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+            {visibleFolders.map((folder) => (
+              <div key={`folder:${folder.id}`}>
+                <MutualPromotionFolderCard
+                  folder={folder}
+                  typeBadge={<span className="shrink-0 rounded-md bg-amber-950/80 px-2 py-1 text-[10px] font-semibold text-amber-200">{i18n?.t("ads.folder_badge") ?? "Folder"}</span>}
+                  onOpen={() => router.push(`/ad-campaigns?section=mutual-promotion&mode=folders&folderId=${encodeURIComponent(folder.id)}`)}
+                />
+              </div>
+            ))}
             {visiblePlans.map((plan) => (
               <CrossPromotionPlanCard
                 key={plan.id}
                 plan={plan}
                 onEdit={(source) => {
                   setEditingPlan(source);
+                  setModalKind(source.kind);
                   setOpen(true);
                 }}
                 onDelete={() => setDeletePlan(plan)}
@@ -529,7 +554,9 @@ export function CrossPromotionPlansPage({
       </div>
       <CrossPromotionPlanModal
         open={open}
-        kind={kind}
+        kind={modalKind}
+        onKindChange={setModalKind}
+        onCreateFolder={() => router.push("/ad-campaigns?section=mutual-promotion&mode=folders&create=1")}
         initial={editingPlan}
         mode={editingPlan ? "edit" : "create"}
         channels={channelsQuery.data ?? []}
@@ -600,7 +627,7 @@ export function CrossPromotionPlansPage({
           await Promise.all([
             qc.invalidateQueries({ queryKey: ["promos"] }),
             qc.invalidateQueries({
-              queryKey: crossPromotionPlanKeys.list(kind),
+              queryKey: crossPromotionPlanKeys.combined,
             }),
           ]);
           setPreviewPromoId(null);
@@ -670,23 +697,18 @@ export function CrossPromotionPlansPage({
 export function MutualPromotionModeTabs({
   mode,
 }: {
-  mode: "direct" | "folders" | "own";
+  mode?: "direct" | "folders" | "own";
 }) {
   const i18n = useOptionalI18n();
+  const foldersActive = mode === "folders";
   return (
-    <div className="mb-5 flex max-w-full gap-2 overflow-x-auto whitespace-nowrap">
-      <Link
-        href="/ad-campaigns?section=mutual-promotion&mode=direct"
-        className={`rounded-lg border px-3 py-2 text-sm ${mode === "direct" ? "border-blue-500 bg-blue-950/40 text-blue-200" : "border-neutral-800 text-neutral-400"}`}
-      >
-        <Repeat2 size={15} className="mr-1 inline" /> {i18n?.t("ads.direct_exchange") ?? "Direct exchange"}
-      </Link>
-      <Link href="/ad-campaigns?section=mutual-promotion&mode=own" className={`rounded-lg border px-3 py-2 text-sm ${mode === "own" ? "border-blue-500 bg-blue-950/40 text-blue-200" : "border-neutral-800 text-neutral-400"}`}><Network size={15} className="mr-1 inline" /> {i18n?.t("ads.section_own") ?? "Own channels"}</Link>
+    <div className="mb-5">
       <Link
         href="/ad-campaigns?section=mutual-promotion&mode=folders"
-        className={`rounded-lg border px-3 py-2 text-sm ${mode === "folders" ? "border-blue-500 bg-blue-950/40 text-blue-200" : "border-neutral-800 text-neutral-400"}`}
+        aria-current={foldersActive ? "page" : undefined}
+        className={`inline-flex items-center gap-2 text-sm ${foldersActive ? "text-blue-300" : "text-neutral-400 hover:text-neutral-200"}`}
       >
-        <Folder size={15} className="mr-1 inline" /> {i18n?.t("ads.folders") ?? "Folders"}
+        <Folder size={15} /> {i18n?.t("ads.folders") ?? "Folders"}
       </Link>
     </div>
   );

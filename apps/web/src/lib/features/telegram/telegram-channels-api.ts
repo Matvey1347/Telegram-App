@@ -1,5 +1,6 @@
 import type { AxiosInstance, AxiosRequestConfig } from "axios";
 import { createTelegramManagedPostsApi } from "./telegram-managed-posts-api";
+import { createTelegramInviteLinkMaintenanceApi } from "./telegram-invite-link-maintenance-api";
 import type {
   BulkActionResult,
   BulkActionResultItem,
@@ -95,9 +96,7 @@ type CrudFactory = <T>(path: string) => {
   remove: (id: string) => Promise<T>;
 };
 
-// Creating a link performs a real MTProto call and can take a few seconds.
-// Keep the mutation visible to the user instead of using the general quiet
-// mutation transport that is appropriate for background updates.
+// Keep the slow MTProto invite creation mutation visible to the user.
 const createInviteLinkFeedbackConfig = {
   feedback: {
     title: "Creating invite link",
@@ -106,7 +105,6 @@ const createInviteLinkFeedbackConfig = {
     errorMessage: "Telegram could not create the invite link.",
   },
 } as never;
-
 export function createTelegramChannelsApi({
   api,
   crud,
@@ -135,7 +133,7 @@ export function createTelegramChannelsApi({
   silentFeedbackConfig: AxiosRequestConfig;
   quietMutationConfig: AxiosRequestConfig;
 }) {
-  const telegramChannelsApi = {
+  const telegramChannelsApi = { ...createTelegramInviteLinkMaintenanceApi(api),
     previewUnifiedImport: async (
       channelId: string,
       manifest: TelegramUnifiedImportManifest,
@@ -183,15 +181,16 @@ export function createTelegramChannelsApi({
     listWithCounts: async (
       lifecycle: "active" | "test" | "archive" = "active",
       owned?: boolean,
+      fresh = false,
     ) =>
       (
         await api.get<TelegramChannelListResponse>("/telegram-channels", {
+          ...(fresh ? { headers: { "X-Bypass-Response-Cache": "1" } } : {}),
           params: {
             archived: lifecycle === "archive",
             test: lifecycle === "test",
             owned,
-            page: 1,
-            pageSize: 100,
+            page: 1, pageSize: 100,
           },
         })
       ).data,

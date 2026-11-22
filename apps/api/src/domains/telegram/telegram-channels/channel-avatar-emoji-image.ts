@@ -27,6 +27,15 @@ export async function channelAvatarEmojiImage(bytes: Buffer) {
   };
 }
 
+export function storedChannelAvatarBytes(photoUrl: string | null) {
+  if (!photoUrl || photoUrl.length > 7_000_000) return null;
+  const encoded =
+    /^data:image\/(?:png|jpe?g|webp);base64,([A-Za-z0-9+/=]+)$/i.exec(
+      photoUrl,
+    )?.[1];
+  return encoded ? Buffer.from(encoded, 'base64') : null;
+}
+
 /** Telegram converts PNG to WebP; compare pixels only for remote-operation reconciliation. */
 async function avatarPixels(bytes: Buffer) {
   const { data, info } = await sharp(bytes, { limitInputPixels: 40_000_000 })
@@ -65,6 +74,6 @@ export async function channelAvatarEmojiImagesMatch(
     }
   }
   return (
-    samples > 0 && absolute / samples <= 4 && Math.sqrt(squared / samples) <= 8
+    samples > 0 && absolute / samples <= 7 && Math.sqrt(squared / samples) <= 14
   );
 }

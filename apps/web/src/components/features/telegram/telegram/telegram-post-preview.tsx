@@ -31,6 +31,7 @@ type TelegramPostPreviewProps = {
   plainText?: string | null;
   formattedHtml?: string | null;
   imageUrls: string[];
+  mediaPreview?: import("react").ReactNode;
   mediaItems?: TelegramPostMediaItem[];
   hasMedia?: boolean;
   engagement?:
@@ -53,6 +54,7 @@ export function TelegramPostPreview({
   plainText,
   formattedHtml,
   imageUrls,
+  mediaPreview,
   mediaItems,
   hasMedia = false,
   engagement,
@@ -149,6 +151,7 @@ export function TelegramPostPreview({
                   text={message.text}
                   formattedHtml={index === 0 ? formattedHtml : null}
                   mediaItems={message.mediaItems}
+                  mediaPreview={index === 0 ? mediaPreview : undefined}
                   time={time}
                   editable={previewEditable && index === 0}
                   onTextChange={
@@ -189,6 +192,7 @@ export function TelegramPostPreview({
   );
 }
 function TelegramMessageBubble({
+  mediaPreview,
   text,
   formattedHtml,
   mediaItems,
@@ -202,6 +206,7 @@ function TelegramMessageBubble({
   text: string;
   formattedHtml?: string | null;
   mediaItems: TelegramPostMediaItem[];
+  mediaPreview?: import("react").ReactNode;
   time: string;
   editable?: boolean;
   onTextChange?: (value: string) => void;
@@ -212,9 +217,9 @@ function TelegramMessageBubble({
   const { t } = useI18n();
   return (
     <div className="telegram-message-bubble overflow-hidden rounded-[18px] rounded-bl-[5px] bg-[#182533] shadow-md">
-      {mediaItems.length ? (
+      {mediaPreview ?? (mediaItems.length ? (
         <TelegramPostMediaPreview mediaItems={mediaItems} />
-      ) : null}
+      ) : null)}
       {text.trim() ? (
         <div
           className={

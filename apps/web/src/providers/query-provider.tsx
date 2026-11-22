@@ -36,7 +36,6 @@ const PERSISTED_QUERY_KEYS = [
   "transaction-categories",
   "transaction-categories-admin",
   "telegram-channel-networks",
-  "advertising-people",
   "promos",
   "ad-campaigns",
   "ad-hypotheses",
@@ -79,7 +78,6 @@ const workspaceScopedQueryKeys = new Set<string>([
   "transaction-categories",
   "transaction-categories-admin",
   "telegram-channel-networks",
-  "advertising-people",
   "promos",
   "ad-campaigns",
   "ad-campaign",
@@ -296,11 +294,6 @@ export function createAppQueryClient() {
   });
   client.setQueryDefaults(["telegram-channels", "lifecycle-list"], {
     staleTime: dailyReadStaleTime,
-  });
-  // The compact advertising-people catalog is shared by Telegram Channels
-  // and campaign editors; its import/delete flows invalidate this read root.
-  client.setQueryDefaults(["advertising-people"], {
-    staleTime: 15 * 60_000,
   });
   return client;
 }

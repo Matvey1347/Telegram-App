@@ -3,15 +3,12 @@
 import { Download, MessagesSquare, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/primitives";
 import type {
-  TelegramAccountFilter,
   TelegramChannelsTab,
 } from "./telegram-channels-route-state";
 import { ChannelReminderAction } from "./channel-reminder-action";
-import { PublicationSchedulesAction } from "./publication-schedules-action";
 
 export function TelegramChannelsHeaderActions({
   tab,
-  accountFilter,
   hasChannels,
   onCreateNetwork,
   onConnectAccount,
@@ -21,7 +18,6 @@ export function TelegramChannelsHeaderActions({
   onImport,
 }: {
   tab: TelegramChannelsTab;
-  accountFilter: TelegramAccountFilter;
   hasChannels: boolean;
   onCreateNetwork: () => void;
   onConnectAccount: () => void;
@@ -33,13 +29,11 @@ export function TelegramChannelsHeaderActions({
   if (tab === "networks") {
     return <Button onClick={onCreateNetwork}>Create network</Button>;
   }
-  if (tab === "accounts" && accountFilter === "mtproto") {
+  if (tab === "accounts") {
     return <Button onClick={onConnectAccount}>Connect account</Button>;
   }
-  if (tab !== "channels") return <Button onClick={onImport}>Import</Button>;
   return (
     <div className="flex flex-wrap justify-end gap-2">
-      <PublicationSchedulesAction />
       <ChannelReminderAction />
       <Button
         type="button"

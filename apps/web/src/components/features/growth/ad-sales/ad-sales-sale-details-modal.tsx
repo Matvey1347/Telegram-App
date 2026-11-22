@@ -2,9 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { TelegramAdProduct, TelegramAdSale } from "@telegram-system/shared";
-import { ArrowLeft } from "lucide-react";
 import { type SaleActionKey } from "./sale-status-actions";
-import { Modal } from "@/components/ui/primitives";
+import { Modal, ModalBackButton } from "@/components/ui/primitives";
 import type { Account, TelegramChannel } from "@/lib/api";
 import { currenciesApi } from "@/lib/api";
 import { channelLocalDateKey, channelLocalTime, toNumber, zonedDateTimeToUtc } from "@/lib/features/growth/telegram-ad-sales";
@@ -155,16 +154,14 @@ export function SaleDetailsModal(props: {
           id: p.id,
           accountId: p.accountId,
           amount: p.amount,
-          currency:
-            props.accounts.find((a) => a.id === p.accountId)?.currency ??
-            p.currency,
+          currency: p.currency,
           paidDate: p.paidAt.slice(0, 10),
           paidTime: p.paidAt.slice(11, 16),
           notes: p.notes ?? "",
         })),
     );
     setInitializedSaleId(props.sale.id);
-  }, [props.accounts, props.open, props.sale]);
+  }, [props.open, props.sale]);
   if (!props.sale || initializedSaleId !== props.sale.id) {
     return (
       <Modal open={props.open} onClose={props.onClose} title="Deal" size="xl">
@@ -358,18 +355,13 @@ export function SaleDetailsModal(props: {
       size="xl"
       leadingHeaderAction={
         placement || sharedPostOpen ? (
-          <button
-            type="button"
-            aria-label="Back to deal"
-            title="Back to deal"
+          <ModalBackButton
+            label="Back to deal"
             onClick={() => {
               setSelectedId(null);
               setSharedPostOpen(false);
             }}
-            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-neutral-700 text-neutral-400 transition hover:bg-neutral-800 hover:text-white"
-          >
-            <ArrowLeft size={18} />
-          </button>
+          />
         ) : null
       }
     >

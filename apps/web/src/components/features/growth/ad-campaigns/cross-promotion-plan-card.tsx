@@ -69,6 +69,11 @@ export function CrossPromotionPlanCard({
               <h2 className="truncate font-semibold text-white">
                 {plan.title}
               </h2>
+              <span
+                className={`shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${plan.kind === "DIRECT_MUTUAL" ? "bg-violet-950/70 text-violet-200" : "bg-sky-950/70 text-sky-200"}`}
+              >
+                {plan.kind === "DIRECT_MUTUAL" ? "VP" : "My Channel"}
+              </span>
             </div>
             <p className="mt-1.5 flex items-center gap-1.5 text-[11px] text-neutral-400">
               <CalendarClock size={14} />{" "}

@@ -61,6 +61,7 @@ export function CrmClientField(props: {
   onTelegramChange: (value: string) => void;
   onSelect: (advertiser: TelegramAdvertiser | null) => void;
   onSearchAdvertisers: (query: string) => Promise<TelegramAdvertiser[]>;
+  resolveExistingOnNewContact?: boolean;
 }) {
   const [mode, setMode] = useState<"new" | "existing">(
     props.selectedAdvertiserId ? "existing" : "new",
@@ -77,7 +78,14 @@ export function CrmClientField(props: {
     setMode(props.selectedAdvertiserId ? "existing" : "new");
   }
 
-  const onSearchAdvertisers = props.onSearchAdvertisers;
+  const {
+    contact,
+    onSelect,
+    onContactChange,
+    onTelegramChange,
+    resolveExistingOnNewContact,
+    onSearchAdvertisers,
+  } = props;
   useEffect(() => {
     const query = search.trim();
     // Do not wake the CRM endpoint merely by opening the selector. A broad
@@ -116,6 +124,54 @@ export function CrmClientField(props: {
       window.clearTimeout(timeout);
     };
   }, [mode, onSearchAdvertisers, props.selectedAdvertiserId, search]);
+
+  useEffect(() => {
+    const username = canonicalTelegramUsername(contact);
+    if (
+      !resolveExistingOnNewContact ||
+      mode !== "new" ||
+      !username
+    ) {
+      return;
+    }
+    let active = true;
+    const timeout = window.setTimeout(() => {
+      void onSearchAdvertisers(username.slice(1))
+        .then((items) => {
+          if (!active) return;
+          const match = dedupeAdvertisersByTelegramIdentity(items).find(
+            (advertiser) =>
+              canonicalTelegramUsername(advertiser.telegramUsername ?? "") ===
+              username,
+          );
+          if (!match) return;
+          onSelect(match);
+          onContactChange(advertiserContact(match));
+          onTelegramChange(username);
+          setAdvertisers((current) =>
+            dedupeAdvertisersByTelegramIdentity([
+              match,
+              ...current.filter((item) => item.id !== match.id),
+            ]),
+          );
+          setSearch(username.slice(1));
+          setMode("existing");
+        })
+        .catch(() => undefined);
+    }, 300);
+    return () => {
+      active = false;
+      window.clearTimeout(timeout);
+    };
+  }, [
+    mode,
+    onSearchAdvertisers,
+    contact,
+    onContactChange,
+    onSelect,
+    onTelegramChange,
+    resolveExistingOnNewContact,
+  ]);
 
   const invalidUsername =
     mode === "new" &&

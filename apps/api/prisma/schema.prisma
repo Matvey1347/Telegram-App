@@ -1708,8 +1708,6 @@ model TelegramChannel {
   niche                        String?
   currentSubscribersCount      Int?
   pendingJoinRequestsCount     Int                            @default(0)
-  seedSubscribersCount         Int                            @default(0)
-  seedDisabled                 Boolean                        @default(false)
   activeSubscribersWindow      Int                            @default(5)
   knownFakeSubscribersCount    Int                            @default(0)
   ownViewsPerPost              Int                            @default(0)
@@ -1931,6 +1929,7 @@ model TelegramAiPostingSphere {
   parentId          String?
   name              String          @db.VarChar(120)
   emoji             String          @default("✨") @db.VarChar(32)
+  emojiIconId       String?         @db.VarChar(128)
   tier              String          @default("SECONDARY") @db.VarChar(16)
   description       String          @default("") @db.VarChar(2000)
   sources           Json            @default("[]")
@@ -1972,6 +1971,7 @@ model TelegramAiPostingRubric {
   sphereId          String?
   name              String          @db.VarChar(120)
   emoji             String          @default("📝") @db.VarChar(32)
+  emojiIconId       String?         @db.VarChar(128)
   description       String          @default("") @db.VarChar(2000)
   goal              String          @default("") @db.VarChar(1000)
   workspace         Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
@@ -2834,8 +2834,6 @@ model TelegramAdvertiser {
   ownerMemberId                      String?
   avatarIconId                       String?
   createdByUserId                    String?
-  manualInstagramContactAt DateTime?
-  manualInstagramReplyAt DateTime?
   lastContactAt                      DateTime?
   lastInboundAt                      DateTime?
   lastOutboundAt                     DateTime?

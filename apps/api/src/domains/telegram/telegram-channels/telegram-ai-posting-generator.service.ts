@@ -42,6 +42,8 @@ import {
   parseTelegramAiPostingTopics,
 } from './telegram-ai-posting-topic-plan';
 import { telegramAiPostingOperationFromError } from './telegram-ai-posting-test-run-errors';
+import { appendChannelEndingSignature } from '@telegram-system/shared';
+import { iconToResolvedEmoji } from '../../../common/icons/resolved-emoji';
 const normalize = (value: string) =>
   value
     .normalize('NFKD')
@@ -83,7 +85,17 @@ export class TelegramAiPostingGeneratorService {
     const [channel, settings] = await Promise.all([
       this.prisma.telegramChannel.findFirst({
         where: { id: channelId, workspaceId },
-        select: { language: true, photoUrl: true },
+        select: {
+          language: true,
+          photoUrl: true,
+          title: true,
+          username: true,
+          description: true,
+          inviteLink: true,
+          defaultInviteLink: { select: { url: true, isRevoked: true } },
+          publicInviteLink: { select: { url: true, isRevoked: true } },
+          presentationIcon: true,
+        },
       }),
       this.prisma.telegramAiPostingSettings.findFirst({
         where: { workspaceId, telegramChannelId: channelId },
@@ -130,6 +142,7 @@ export class TelegramAiPostingGeneratorService {
         channel?.photoUrl ?? null,
         topicOverride,
         previousGeneratedCount._sum.requestedCount ?? 0,
+        channel,
       );
       const publications = result.generated.map((item) => ({
         ...item,
@@ -212,6 +225,15 @@ export class TelegramAiPostingGeneratorService {
     channelPhotoUrl: string | null = null,
     topicOverride?: string,
     editorialOffset = 0,
+    channel?: {
+      title: string;
+      username: string | null;
+      description: string | null;
+      inviteLink: string | null;
+      defaultInviteLink: { url: string; isRevoked: boolean } | null;
+      publicInviteLink: { url: string; isRevoked: boolean } | null;
+      presentationIcon: any;
+    } | null,
   ) {
     const config = settings.configuration as Record<string, any>;
     const sphereSources = (Array.isArray(config.spheres) ? config.spheres : [])
@@ -265,6 +287,21 @@ export class TelegramAiPostingGeneratorService {
     );
     const generationConfig: Record<string, any> = {
       ...config,
+      ending: typeof config.ending === 'string' && config.ending.trim()
+        ? config.ending
+        : appendChannelEndingSignature('', {
+            title: channel?.title,
+            username: channel?.username,
+            mainInviteLink: channel?.defaultInviteLink?.isRevoked
+              ? null
+              : channel?.defaultInviteLink?.url,
+            publicInviteLink: channel?.publicInviteLink?.isRevoked
+              ? null
+              : channel?.publicInviteLink?.url,
+            inviteLink: channel?.inviteLink,
+            description: channel?.description,
+            presentationIconPresentation: iconToResolvedEmoji(channel?.presentationIcon ?? null),
+          }),
       learningBlock,
       language:
         detectedLanguage ||
@@ -524,6 +561,8 @@ export class TelegramAiPostingGeneratorService {
         category: string;
         imageUrl: string | null;
         imageSourceId: string | null;
+        imageFingerprint?: string | null;
+        imageOriginalUrl?: string | null;
         mediaPreference: { id: string; name: string } | null;
         mediaReadiness: 'READY' | 'MISSING' | 'FAILED';
         mediaFailureCode?: string;
@@ -627,7 +666,14 @@ export class TelegramAiPostingGeneratorService {
               channelAvatar,
               watermarkChannelAvatar:
                 generationConfig.useChannelAvatarInMedia === true,
+              watermarkSizePercent: Number(generationConfig.channelAvatarWatermarkSize) || 12,
+              watermarkX: Number(generationConfig.channelAvatarWatermarkX ?? 100),
+              watermarkY: Number(generationConfig.channelAvatarWatermarkY ?? 100),
+              watermarkOpacityPercent: Number(generationConfig.channelAvatarWatermarkOpacity) || 100,
               context: publicationContext,
+              usedImages: new Set(results.flatMap((item) =>
+                [item.imageFingerprint, item.imageOriginalUrl].filter((key): key is string => Boolean(key)),
+              )),
               planningCost: allocatedPlanningCost,
               previousFormats: results.map((item) => item.format),
               previousLengths: results.map((item) => [...item.text].length),

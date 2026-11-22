@@ -2,19 +2,21 @@
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { RefreshCw, Settings2 } from "lucide-react";
+import { CircleHelp, RefreshCw } from "lucide-react";
 import type { TelegramUserAccount } from "@/lib/api";
 import { telegramUserAccountsApi } from "@/lib/api";
-import { Button, Modal, MultiSelect } from "@/components/ui/primitives";
+import { Button, MultiSelect, Tooltip } from "@/components/ui/primitives";
 import { scheduledTaskKeys, telegramAccountKeys } from "@/lib/query-keys";
 import { telegramCrmApi } from "@/lib/features/growth/telegram-crm-api";
 import { telegramCrmKeys } from "@/lib/features/growth/telegram-crm-query";
 import { useAppToast } from "@/providers/toast-provider";
 import { TelegramEntityAvatar } from "@/components/features/telegram/telegram/telegram-entity-avatar";
 import { CrmTagMultiSelect } from "./crm-tag-multi-select";
+import { useOptionalI18n } from "@/providers/i18n-provider";
 
 export function CrmAccountSyncPanel({ canEdit }: { canEdit: boolean }) {
   const queryClient = useQueryClient();
+  const i18n = useOptionalI18n();
   const { startOperation } = useAppToast();
   const accounts = useQuery({
     queryKey: telegramAccountKeys.accounts(),
@@ -29,16 +31,13 @@ export function CrmAccountSyncPanel({ canEdit }: { canEdit: boolean }) {
     .map((item) => item.id);
   const [selectedDraft, setSelectedDraft] = useState<string[] | null>(null);
   const selected = selectedDraft ?? savedSelected;
-  const [open, setOpen] = useState(false);
   const settings = useQuery({
     queryKey: telegramCrmKeys.settings(),
     queryFn: () => telegramCrmApi.getSettings(),
-    enabled: open,
   });
   const tags = useQuery({
     queryKey: telegramCrmKeys.tags(),
     queryFn: ({ signal }) => telegramCrmApi.listTags(signal),
-    enabled: open,
   });
   const [purchaseTagDraft, setPurchaseTagDraft] = useState<string[] | null>(
     null,
@@ -71,6 +70,9 @@ export function CrmAccountSyncPanel({ canEdit }: { canEdit: boolean }) {
       return { changed };
     },
     onSuccess: async () => {
+      setSelectedDraft(null);
+      setPurchaseTagDraft(null);
+      setImportTagDraft(null);
       queryClient.setQueryData<TelegramUserAccount[]>(
         telegramAccountKeys.accounts(),
         (current = []) =>
@@ -174,37 +176,35 @@ export function CrmAccountSyncPanel({ canEdit }: { canEdit: boolean }) {
     importTagDraft !== null;
 
   return (
-    <>
-      <Button
-        variant="secondary"
-        className="h-11 rounded-xl border border-neutral-700 bg-neutral-900 px-4 hover:bg-neutral-800"
-        onClick={() => {
-          void accounts.refetch();
-          setOpen(true);
-        }}
-        disabled={!canEdit}
-      >
-        <Settings2 size={17} />
-        Manage sources
-      </Button>
-      <Modal
-        open={open}
-        onClose={() => {
-          if (save.isPending || sync.isPending) return;
-          setSelectedDraft(null);
-          setPurchaseTagDraft(null);
-          setImportTagDraft(null);
-          setOpen(false);
-        }}
-        title="Telegram CRM sources"
-        size="sm"
-        allowOverflow
-      >
-        <p className="mb-3 text-sm text-neutral-400">
-          Selected MTProto accounts keep live updates enabled and sync
-          automatically once a day. Manual imports run sequentially.
-        </p>
+    <section className="rounded-2xl border border-neutral-800 bg-neutral-950/60 p-5">
+      <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold text-white">
+            {i18n?.t("crm.settings.title") ?? "CRM source settings"}
+          </h2>
+          <p className="mt-1 max-w-3xl text-sm text-neutral-400">
+            {i18n?.t("crm.settings.sync_help") ??
+              "Selected MTProto accounts keep live updates enabled and sync automatically once a day. Manual imports run sequentially."}
+          </p>
+        </div>
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={() => void accounts.refetch()}
+          disabled={accounts.isFetching}
+        >
+          <RefreshCw
+            size={16}
+            className={accounts.isFetching ? "animate-spin" : ""}
+          />
+          {i18n?.t("crm.settings.refresh_accounts") ?? "Refresh accounts"}
+        </Button>
+      </div>
+      <div className="grid gap-5 xl:grid-cols-3">
         <div className="min-w-0">
+          <label className="mb-2 block text-sm font-medium text-white">
+            {i18n?.t("crm.settings.accounts") ?? "MTProto accounts"}
+          </label>
           <MultiSelect
             value={selected}
             onChange={setSelectedDraft}
@@ -227,20 +227,36 @@ export function CrmAccountSyncPanel({ canEdit }: { canEdit: boolean }) {
             }))}
             placeholder={
               accounts.isLoading
-                ? "Loading accounts…"
-                : "Select MTProto accounts"
+                ? (i18n?.t("crm.settings.loading_accounts") ??
+                  "Loading accounts…")
+                : (i18n?.t("crm.settings.select_accounts") ??
+                  "Select MTProto accounts")
             }
-            allSelectedLabel="All connected accounts"
+            allSelectedLabel={
+              i18n?.t("crm.settings.all_accounts") ?? "All connected accounts"
+            }
           />
         </div>
-        <div className="mt-3">
-          <label className="mb-1 block text-sm font-medium text-white">
-            Import tags
-          </label>
-          <p className="mb-2 text-xs text-neutral-500">
-            Only contacts in these Telegram folders are shown as CRM clients and
-            counted in analytics.
-          </p>
+        <div>
+          <div className="mb-1 flex items-center gap-1.5 text-sm font-medium text-white">
+            <span>{i18n?.t("crm.settings.import_tags") ?? "Import tags"}</span>
+            <Tooltip
+              content={
+                i18n?.t("crm.settings.import_tags_help") ??
+                "Only contacts in these Telegram folders are shown as CRM clients and counted in analytics."
+              }
+              side="top"
+              align="left"
+            >
+              <button
+                type="button"
+                aria-label={`${i18n?.t("crm.settings.import_tags") ?? "Import tags"} info`}
+                className="inline-flex text-neutral-500 transition hover:text-neutral-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              >
+                <CircleHelp size={15} aria-hidden="true" />
+              </button>
+            </Tooltip>
+          </div>
           <CrmTagMultiSelect
             value={importTagIds}
             onChange={(value) => {
@@ -259,19 +275,35 @@ export function CrmAccountSyncPanel({ canEdit }: { canEdit: boolean }) {
               tag.systemKey?.startsWith("TELEGRAM_FOLDER:"),
             )}
             placeholder={
-              tags.isLoading ? "Loading Telegram tags…" : "Select Telegram tags"
+              tags.isLoading
+                ? (i18n?.t("crm.settings.loading_telegram_tags") ??
+                  "Loading Telegram tags…")
+                : (i18n?.t("crm.settings.select_telegram_tags") ??
+                  "Select Telegram tags")
             }
             compactSelectedAfter={null}
           />
         </div>
-        <div className="mt-3">
-          <label className="mb-1 block text-sm font-medium text-white">
-            Purchase tag
-          </label>
-          <p className="mb-2 text-xs text-neutral-500">
-            Applied automatically to buyers. A Telegram-folder tag also moves
-            their Telegram chat into that folder.
-          </p>
+        <div>
+          <div className="mb-1 flex items-center gap-1.5 text-sm font-medium text-white">
+            <span>{i18n?.t("crm.settings.purchase_tag") ?? "Purchase tag"}</span>
+            <Tooltip
+              content={
+                i18n?.t("crm.settings.purchase_tag_help") ??
+                "Applied automatically to buyers. A Telegram-folder tag also moves their Telegram chat into that folder."
+              }
+              side="top"
+              align="left"
+            >
+              <button
+                type="button"
+                aria-label={`${i18n?.t("crm.settings.purchase_tag") ?? "Purchase tag"} info`}
+                className="inline-flex text-neutral-500 transition hover:text-neutral-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              >
+                <CircleHelp size={15} aria-hidden="true" />
+              </button>
+            </Tooltip>
+          </div>
           <CrmTagMultiSelect
             value={purchaseTagId}
             onChange={(value) => setPurchaseTagDraft(value.slice(-1))}
@@ -285,43 +317,77 @@ export function CrmAccountSyncPanel({ canEdit }: { canEdit: boolean }) {
             tags={(tags.data ?? []).filter((tag) =>
               importTagIds.includes(tag.id),
             )}
-            placeholder={tags.isLoading ? "Loading tags…" : "Select tags"}
+            placeholder={
+              tags.isLoading
+                ? (i18n?.t("crm.settings.loading_tags") ?? "Loading tags…")
+                : (i18n?.t("crm.settings.select_tags") ?? "Select tags")
+            }
           />
         </div>
-        <div className="mt-4 flex justify-end">
-          <Button
-            disabled={
-              !canEdit ||
-              save.isPending ||
-              sync.isPending ||
-              accounts.isLoading ||
-              !selected.length
-            }
-            onClick={() => sync.mutate()}
-          >
-            <RefreshCw
-              size={16}
-              className={sync.isPending ? "animate-spin" : ""}
-            />
-            {sync.isPending ? "Syncing…" : "Sync"}
-          </Button>
-        </div>
-        {!accounts.isLoading && !connected.length ? (
-          <p className="mt-3 text-sm text-amber-300">
-            Connect an MTProto account in Telegram resources first.
-          </p>
-        ) : null}
-        {save.error ? (
-          <p className="mt-3 text-sm text-rose-300">
-            CRM sources could not be saved.
-          </p>
-        ) : null}
-        {sync.error ? (
-          <p className="mt-3 text-sm text-rose-300">
-            Conversation sync failed. You can safely retry it.
-          </p>
-        ) : null}
-      </Modal>
-    </>
+      </div>
+      {!accounts.isLoading && !connected.length ? (
+        <p className="mt-4 text-sm text-amber-300">
+          {i18n?.t("crm.settings.no_account") ??
+            "Connect an MTProto account in Telegram resources first."}
+        </p>
+      ) : null}
+      {settings.isError || tags.isError || accounts.isError ? (
+        <p role="alert" className="mt-4 text-sm text-rose-300">
+          {i18n?.t("crm.settings.load_error") ??
+            "CRM source settings could not be loaded. Refresh and try again."}
+        </p>
+      ) : null}
+      <div className="mt-6 flex flex-wrap justify-end gap-2 border-t border-neutral-800 pt-4">
+        <Button
+          type="button"
+          variant="secondary"
+          disabled={
+            !canEdit ||
+            !hasUnsavedChanges ||
+            save.isPending ||
+            sync.isPending ||
+            accounts.isLoading
+          }
+          onClick={() => save.mutate()}
+        >
+          {save.isPending
+            ? (i18n?.t("crm.settings.saving") ?? "Saving…")
+            : (i18n?.t("crm.settings.save") ?? "Save settings")}
+        </Button>
+        <Button
+          type="button"
+          disabled={
+            !canEdit ||
+            save.isPending ||
+            sync.isPending ||
+            accounts.isLoading ||
+            !selected.length
+          }
+          onClick={() => sync.mutate()}
+        >
+          <RefreshCw
+            size={16}
+            className={sync.isPending ? "animate-spin" : ""}
+          />
+          {sync.isPending
+            ? (i18n?.t("crm.settings.syncing") ?? "Syncing…")
+            : hasUnsavedChanges
+              ? (i18n?.t("crm.settings.save_sync") ?? "Save and sync")
+              : (i18n?.t("crm.settings.sync") ?? "Sync now")}
+        </Button>
+      </div>
+      {save.error ? (
+        <p className="mt-3 text-sm text-rose-300">
+          {i18n?.t("crm.settings.save_error") ??
+            "CRM sources could not be saved."}
+        </p>
+      ) : null}
+      {sync.error ? (
+        <p className="mt-3 text-sm text-rose-300">
+          {i18n?.t("crm.settings.sync_error") ??
+            "Conversation sync failed. You can safely retry it."}
+        </p>
+      ) : null}
+    </section>
   );
 }

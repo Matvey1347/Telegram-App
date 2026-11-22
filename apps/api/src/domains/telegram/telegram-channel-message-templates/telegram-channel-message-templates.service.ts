@@ -338,7 +338,18 @@ export class TelegramChannelMessageTemplatesService {
         networkMembers: {
           select: {
             network: {
-              select: { name: true, icon: { select: { emoji: true } } },
+              select: {
+                name: true,
+                icon: {
+                  select: {
+                    id: true,
+                    type: true,
+                    name: true,
+                    emoji: true,
+                    imageUrl: true,
+                  },
+                },
+              },
             },
           },
           orderBy: { network: { name: 'asc' } },
@@ -418,6 +429,7 @@ export class TelegramChannelMessageTemplatesService {
           networkGroups: (channel.networkMembers ?? []).map((member) => ({
             name: member.network.name,
             emojiSource: member.network.icon?.emoji || null,
+            iconPresentation: iconToResolvedEmoji(member.network.icon),
           })),
           viewsPerPost:
             channel.ownViewsPerPost > 0

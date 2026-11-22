@@ -98,7 +98,7 @@ export function useTelegramInviteLinkOptions({
   }, [allQuery.data, initialQuery.data, normalizedChannelId, seedLinks]);
   const requestAll = useCallback(
     () => setExpandedChannelId(normalizedChannelId),
-    [normalizedChannelId],
+    [normalizedChannelId, setExpandedChannelId],
   );
   const initialLink =
     seedLinks.find(

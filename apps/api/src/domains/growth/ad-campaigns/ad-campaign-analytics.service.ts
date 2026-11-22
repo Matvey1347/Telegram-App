@@ -158,7 +158,7 @@ export class AdCampaignAnalyticsService {
     const avgViewsBefore = this.numberOrNull(campaign.avgViewsBefore);
     const avgViewsAfter = this.numberOrNull(campaign.avgViewsAfter);
     const {
-      effectiveSubscribers: effectiveSubscribersBeforeSeed,
+      effectiveSubscribers,
       subscriberBaseQuality,
       hasSubscriberBasePollution,
     } = calculateEffectiveSubscribers({
@@ -169,14 +169,6 @@ export class AdCampaignAnalyticsService {
       manualSubscriberBaseQuality:
         campaign.telegramChannel?.subscriberBaseQuality,
     });
-    const effectiveSubscribers =
-      effectiveSubscribersBeforeSeed == null
-        ? null
-        : Math.max(
-            0,
-            effectiveSubscribersBeforeSeed -
-              Number(campaign.telegramChannel?.seedSubscribersCount || 0),
-          );
 
     const newSubscribers =
       subscribersBefore != null && after24h != null

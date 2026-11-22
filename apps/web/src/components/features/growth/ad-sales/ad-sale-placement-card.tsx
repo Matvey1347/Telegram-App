@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, type Dispatch, type SetStateAction } from "react";
-import { FilePenLine, Link2, MoreHorizontal, Settings2 } from "lucide-react";
+import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
+import { FilePenLine, MoreHorizontal, Settings2 } from "lucide-react";
 import type { TelegramAdProduct } from "@telegram-system/shared";
 import type { TelegramChannel } from "@/lib/api";
 import {
@@ -27,6 +27,7 @@ import {
 import type { PlacementManagedPostDraft } from "./placement-post/placement-post-composer";
 import { renderAdSaleInviteLink } from "./ad-sale-invite-template";
 import { AdSalePlacementBotActions } from "./ad-sale-placement-bot-actions";
+import { AdSalePostLinkReplacer } from "./ad-sale-post-link-replacer";
 
 export function AdSalePlacementCard({
   placement,
@@ -37,6 +38,9 @@ export function AdSalePlacementCard({
   showPricing,
   sharedPostActive,
   individualPostMode,
+  postEnabled,
+  isFirstPlacement,
+  allDetailsOpen,
   systemBotConnected,
   systemBotUsername,
   workspaceId,
@@ -54,19 +58,36 @@ export function AdSalePlacementCard({
   showPricing: boolean;
   sharedPostActive: boolean;
   individualPostMode: boolean;
+  postEnabled: boolean;
+  isFirstPlacement: boolean;
+  allDetailsOpen: boolean;
   systemBotConnected?: boolean;
   systemBotUsername?: string | null;
   workspaceId?: string | null;
   publishedPosts: PublishedPostOption[];
   postsLoading: boolean;
   setPlacements: Dispatch<SetStateAction<SalePlacementDraft[]>>;
-  onLoadPublishedPosts: (telegramPostUrl?: string) => Promise<PublishedPostOption | null>;
+  onLoadPublishedPosts: (
+    telegramPostUrl?: string,
+  ) => Promise<PublishedPostOption | null>;
   onManualPriceEdit: () => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
-  const [postOpen, setPostOpen] = useState(false);
+  const [postOpenOverride, setPostOpenOverride] = useState<boolean | null>(
+    null,
+  );
   const [renderedAt] = useState(() => Date.now());
+  const postOpen =
+    postOpenOverride ?? (postEnabled && individualPostMode && isFirstPlacement);
+  const setPostOpen = (next: boolean | ((current: boolean) => boolean)) => {
+    setPostOpenOverride(typeof next === "function" ? next(postOpen) : next);
+  };
+  useEffect(() => {
+    // Apply the parent "expand/collapse all" action to this row.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setDetailsOpen(allDetailsOpen);
+  }, [allDetailsOpen]);
   const product = products.find((item) => item.id === placement.productId);
   const isPastPlacement =
     isValidZonedDateTimeInput(placement.date, placement.time) &&
@@ -130,14 +151,20 @@ export function AdSalePlacementCard({
             <div className="absolute bottom-9 right-0 z-30 min-w-48 rounded-lg border border-neutral-700 bg-neutral-950 p-1 shadow-2xl">
               <MenuButton
                 icon={Settings2}
-                onClick={() => runMenuAction(() => setDetailsOpen((value) => !value))}
+                onClick={() =>
+                  runMenuAction(() => setDetailsOpen((value) => !value))
+                }
               >
-                {detailsOpen ? "Hide channel settings" : "Edit channel settings"}
+                {detailsOpen
+                  ? "Hide channel settings"
+                  : "Edit channel settings"}
               </MenuButton>
-              {!isPastPlacement ? (
+              {postEnabled && !isPastPlacement ? (
                 <MenuButton
                   icon={FilePenLine}
-                  onClick={() => runMenuAction(() => setPostOpen((value) => !value))}
+                  onClick={() =>
+                    runMenuAction(() => setPostOpen((value) => !value))
+                  }
                 >
                   {postOpen
                     ? "Hide post"
@@ -151,8 +178,16 @@ export function AdSalePlacementCard({
         </div>
       </div>
 
-      {individualPostMode ? (
+      {postEnabled && individualPostMode ? (
         <div className="mt-3 flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            aria-expanded={postOpen}
+            onClick={() => setPostOpen((value) => !value)}
+            className="inline-flex h-8 items-center rounded-lg border border-neutral-700 bg-neutral-900 px-3 text-xs font-medium text-neutral-100 hover:bg-neutral-800"
+          >
+            {postOpen ? "Hide post editor" : "Edit post"}
+          </button>
           <AdSalePlacementBotActions
             placementKey={placement.key}
             channelTitle={channel?.title ?? "channel"}
@@ -214,35 +249,48 @@ export function AdSalePlacementCard({
               ))}
             </Select>
           </FormField>
-          {showPricing ? <FormField label="Price">
-            <div className="space-y-1">
-              <Input
-                value={placement.agreedPrice}
-                inputMode="decimal"
-                aria-describedby={priceLocked ? `${placement.key}-price-mode` : undefined}
-                onChange={(event) => {
-                  if (priceLocked) onManualPriceEdit();
-                  update((item) => ({
-                    ...item,
-                    agreedPrice: event.target.value,
-                    agreedPriceManuallyEdited: true,
-                  }));
-                }}
-              />
-              {priceLocked ? (
-                <p id={`${placement.key}-price-mode`} className="text-xs text-neutral-500">
-                  Editing switches pricing to Per channel.
+          {showPricing ? (
+            <FormField label="Price">
+              <div className="space-y-1">
+                <div className="relative min-w-0">
+                <Input
+                  value={placement.agreedPrice}
+                  inputMode="decimal"
+                  className="pr-16"
+                  aria-describedby={
+                    priceLocked ? `${placement.key}-price-mode` : undefined
+                  }
+                  onChange={(event) => {
+                    if (priceLocked) onManualPriceEdit();
+                    update((item) => ({
+                      ...item,
+                      agreedPrice: event.target.value,
+                      agreedPriceManuallyEdited: true,
+                    }));
+                  }}
+                />
+                <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-neutral-400">
+                  {currency}
+                </span>
+                </div>
+                {priceLocked ? (
+                  <p
+                    id={`${placement.key}-price-mode`}
+                    className="text-xs text-neutral-500"
+                  >
+                    Editing this placement updates the sale total.
+                  </p>
+                ) : null}
+                <p className="text-xs text-emerald-300">
+                  Recommended: {placement.recommendedPrice} {currency}
                 </p>
-              ) : null}
-              <p className="text-xs text-emerald-300">
-                Recommended: {placement.recommendedPrice} {currency}
-              </p>
-            </div>
-          </FormField> : null}
+              </div>
+            </FormField>
+          ) : null}
         </div>
       ) : null}
 
-      {showPostComposer ? (
+      {postEnabled && showPostComposer ? (
         <div className="mt-3 border-t border-neutral-800 pt-3">
           <PlacementPostComposer
             channelTitle={channel?.title ?? "Channel"}
@@ -257,6 +305,22 @@ export function AdSalePlacementCard({
             canCreate={!isPastPlacement}
             autoCreate={false}
             lockToDraft={sharedPostActive}
+            mediaFooter={
+              individualPostMode && placement.managedPostDraft ? (
+                <AdSalePostLinkReplacer
+                  draft={placementPostPreview ?? placement.managedPostDraft}
+                  label="Replace links for this channel"
+                  onReplace={(nextDraft) =>
+                    update((item) => ({
+                      ...item,
+                      managedPostDraft: nextDraft,
+                      inviteLinkUrl: "",
+                      telegramPostId: null,
+                    }))
+                  }
+                />
+              ) : null
+            }
             onLoadPublishedPosts={onLoadPublishedPosts}
             onChange={({ draft, telegramPostId, publishedAt }) =>
               update((item) => ({
@@ -277,37 +341,6 @@ export function AdSalePlacementCard({
               }))
             }
           />
-          {placement.managedPostDraft &&
-          promoContainsInviteToken(placement.managedPostDraft) ? (
-            <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
-              <FormField label="Invite link for this channel">
-                <Input
-                  value={placement.inviteLinkUrl ?? ""}
-                  onChange={(event) =>
-                    update((item) => ({
-                      ...item,
-                      inviteLinkUrl: event.target.value,
-                    }))
-                  }
-                  placeholder="https://t.me/+unique-invite"
-                />
-              </FormField>
-              <button
-                type="button"
-                onClick={() =>
-                  update((item) => ({
-                    ...item,
-                    managedPostDraft: item.managedPostDraft
-                      ? ({ ...item.managedPostDraft, ...replacePromoTelegramLinksWithToken(item.managedPostDraft) } as PlacementManagedPostDraft)
-                      : item.managedPostDraft,
-                  }))
-                }
-                className="inline-flex h-10 items-center justify-center gap-1 rounded-lg border border-neutral-700 bg-neutral-900 px-3 text-xs font-medium text-neutral-100 hover:bg-neutral-800"
-              >
-                <Link2 size={14} /> Replace links
-              </button>
-            </div>
-          ) : null}
         </div>
       ) : null}
 
@@ -335,7 +368,11 @@ function MenuButton({
       onClick={onClick}
       className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm text-neutral-200 hover:bg-neutral-800 hover:text-white"
     >
-      <Icon size={16} className="shrink-0 text-neutral-400" aria-hidden="true" />
+      <Icon
+        size={16}
+        className="shrink-0 text-neutral-400"
+        aria-hidden="true"
+      />
       {children}
     </button>
   );

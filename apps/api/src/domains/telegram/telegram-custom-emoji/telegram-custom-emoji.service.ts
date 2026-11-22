@@ -77,7 +77,13 @@ export class TelegramCustomEmojiService {
       select: packSelect,
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
     });
-    return { packs: packs.map((pack) => this.mapPack(pack)) };
+    const workspaceAvatarPacks = await this.avatarDocuments.list(workspaceId);
+    return {
+      packs: [
+        ...packs.map((pack) => this.mapPack(pack)),
+        ...workspaceAvatarPacks,
+      ],
+    };
   }
 
   /**
@@ -113,15 +119,10 @@ export class TelegramCustomEmojiService {
           .filter((value) => /^\d{1,20}$/.test(value)),
       ),
     ].slice(0, 100);
-    const workspaceId =
-      await this.workspaceService.resolveWorkspaceIdForUser(userId);
-    const avatarPacks = await this.avatarDocuments.resolve(
-      workspaceId,
-      documentIds,
+    let response = { packs: [...(await this.list(userId)).packs] };
+    const workspaceAvatarPacks = response.packs.filter((pack) =>
+      pack.id.startsWith('channel-avatar:'),
     );
-    let response = {
-      packs: [...(await this.list(userId)).packs, ...avatarPacks],
-    };
     let loaded = 0;
     let failed = 0;
     for (const [index, documentId] of documentIds.entries()) {
@@ -151,7 +152,15 @@ export class TelegramCustomEmojiService {
       }
       try {
         const imported = await this.importPack(userId, { source: documentId });
-        response = { packs: [...imported.packs, ...avatarPacks] };
+        response = {
+          packs: [
+            ...imported.packs,
+            ...workspaceAvatarPacks.filter(
+              (avatarPack) =>
+                !imported.packs.some((pack) => pack.id === avatarPack.id),
+            ),
+          ],
+        };
         const pack = response.packs.find((candidate) =>
           candidate.emojis.some((emoji) => emoji.documentId === documentId),
         );

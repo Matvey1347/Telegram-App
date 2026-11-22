@@ -9,6 +9,7 @@ import { channelAvatarEmojiImage } from './channel-avatar-emoji-image';
 type Row = {
   id: string;
   workspaceId: string;
+  photoUrl?: string;
   presentationIconId: string | null;
   avatarEmojiIconId: string | null;
   avatarEmojiHash: string | null;
@@ -482,7 +483,25 @@ describe('ChannelAvatarEmojiService', () => {
     });
     expect(f.publisher.publish).not.toHaveBeenCalled();
   });
-  it.each(['ADMIN', 'MEMBER', 'UNKNOWN', 'EXTERNAL'])(
+  it('generates for a linked administrator from the stored avatar when the session is unavailable', async () => {
+    const f = fixture(photo);
+    f.row.sourceAccesses[0].role = 'ADMIN';
+    f.row.photoUrl = `data:image/png;base64,${photo.toString('base64')}`;
+    f.prisma.telegramUserAccountIntegration.findFirst.mockResolvedValueOnce(
+      null,
+    );
+
+    await expect(
+      f.service.process(f.row.workspaceId, f.row.id, {
+        admit: true,
+        scheduleRetry: false,
+      }),
+    ).resolves.toMatchObject({ status: 'READY' });
+    expect(f.photos.download).not.toHaveBeenCalled();
+    expect(f.publisher.publish).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['MEMBER', 'UNKNOWN', 'EXTERNAL'])(
     'never admits or processes %s-only channels',
     async (role) => {
       const f = fixture(photo);
@@ -653,7 +672,7 @@ describe('ChannelAvatarEmojiService', () => {
     expect(f.publisher.publish).not.toHaveBeenCalled();
   });
 
-  it('does not restart ready channels or admit administrator-only channels during repeated synchronization', async () => {
+  it('does not restart ready channels and admits a linked administrator', async () => {
     const f = fixture(photo);
     Object.assign(f.row, {
       avatarEmojiStatus: 'READY',
@@ -669,7 +688,7 @@ describe('ChannelAvatarEmojiService', () => {
     });
     f.row.sourceAccesses[0].role = 'ADMIN';
     await f.service.enqueueInitial(f.row.workspaceId, f.row.id);
-    expect(f.row.avatarEmojiRetryAt).toBeNull();
+    expect(f.row.avatarEmojiRetryAt).toBeInstanceOf(Date);
     expect(f.publisher.publish).not.toHaveBeenCalled();
   });
 });

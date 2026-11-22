@@ -22,6 +22,7 @@ import type { ChannelSettingsDraft } from "./channel-settings-draft";
 import { useTelegramInviteLinkOptions } from "@/lib/features/telegram/use-telegram-invite-link-options";
 import { useRegisterTelegramInviteLink } from "@/lib/features/telegram/use-register-telegram-invite-link";
 import { ChannelInviteLinkSelectField } from "./channel-invite-link-select-field";
+import { TelegramInviteLinkMaintenanceModal } from "./telegram-invite-link-maintenance-modal";
 
 export function ChannelPresentationSettingsModal({
   channel,
@@ -53,6 +54,7 @@ export function ChannelPresentationSettingsModal({
     folderDefaultInviteLinkIds: channel.folderDefaultInviteLinkIds ?? [],
     mutualPromotionInviteLinkIds: channel.mutualPromotionInviteLinkIds ?? [],
   });
+  const [refreshLinksOpen, setRefreshLinksOpen] = useState(false);
   const values = draft ?? localDraft;
   const update = (patch: Partial<ChannelSettingsDraft>) => {
     if (onDraftChange) onDraftChange(patch);
@@ -254,10 +256,10 @@ export function ChannelPresentationSettingsModal({
         <Textarea
           value={values.description}
           maxLength={240}
-          rows={4}
+          rows={2}
           onChange={(event) => update({ description: event.target.value })}
           placeholder="A short description shown in generated channel lists"
-          className="min-h-24 resize-y whitespace-pre-wrap"
+          className="min-h-16 resize-y whitespace-pre-wrap"
         />
         <p className="mt-1 text-right text-xs text-neutral-500">
           {values.description.length}/240
@@ -271,7 +273,16 @@ export function ChannelPresentationSettingsModal({
           placeholder="https://tgstat.com/channel/..."
         />
       </FormField>
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="flex justify-end">
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={() => setRefreshLinksOpen(true)}
+        >
+          Check and refresh assigned links
+        </Button>
+      </div>
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         <ChannelInviteLinkSelectField
           label="Public channel link"
           value={values.publicInviteLinkId}
@@ -403,12 +414,22 @@ export function ChannelPresentationSettingsModal({
       ) : null}
     </div>
   );
-  return embedded ? (
-    content
-  ) : (
-    <Modal open onClose={onClose} title="Channel appearance" size="sm">
-      {content}
-    </Modal>
+  return (
+    <>
+      {embedded ? (
+        content
+      ) : (
+        <Modal open onClose={onClose} title="Channel appearance" size="sm">
+          {content}
+        </Modal>
+      )}
+      <TelegramInviteLinkMaintenanceModal
+        channelId={channel.id}
+        open={refreshLinksOpen}
+        onClose={() => setRefreshLinksOpen(false)}
+        onAssignments={(assignments) => update(assignments as Partial<ChannelSettingsDraft>)}
+      />
+    </>
   );
 }
 

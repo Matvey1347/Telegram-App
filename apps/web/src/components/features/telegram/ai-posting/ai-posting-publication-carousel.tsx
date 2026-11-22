@@ -1,9 +1,11 @@
 "use client";
 
+import { AiPostingWatermarkPreview, type AiPostingWatermarkPreviewSettings } from "./ai-posting-watermark-preview";
 import type {
   ResolvedEmoji,
   TelegramCustomEmojiPackSummary,
 } from "@telegram-system/shared";
+import { api } from "@/lib/api";
 import { useState } from "react";
 import {
   Check,
@@ -40,7 +42,10 @@ type ReviewAction =
 
 export function AiPostingPublicationCarousel({
   run,
+  channelId,
   channelTitle,
+  channelPhotoUrl,
+  watermarkPreview,
   customEmojiPacks,
   categoryIcons,
   preferenceIcons,
@@ -60,7 +65,10 @@ export function AiPostingPublicationCarousel({
   onRememberImageRule,
 }: {
   run: TestRun;
+  channelId?: string;
   channelTitle: string;
+  channelPhotoUrl?: string | null;
+  watermarkPreview?: AiPostingWatermarkPreviewSettings;
   customEmojiPacks?: TelegramCustomEmojiPackSummary[];
   categoryIcons?: Record<string, ResolvedEmoji>;
   preferenceIcons?: Record<string, ResolvedEmoji>;
@@ -91,6 +99,12 @@ export function AiPostingPublicationCarousel({
   const post = publications[index];
   const key = `${run.id}:${index}`;
   const saved = post ? isSaved(post) : true;
+  const botDraft = {
+    title: post?.title ?? "",
+    text: edits[key] ?? post?.text ?? "",
+    imageUrls: post?.imageUrl ? [post.imageUrl] : [],
+    buttonRows: [],
+  };
   const changedText = post ? hasUnsavedText(run, index, post) : false;
   const totalPublicationCost = post ? totalCost(post.costs) : null;
   const disabled = pending || saved;
@@ -150,9 +164,18 @@ export function AiPostingPublicationCarousel({
         <div className="min-w-0">
           <TelegramPostPreview
             channelTitle={channelTitle}
+            channelPhotoUrl={channelPhotoUrl}
             customEmojiPacks={customEmojiPacks}
             text={edits[key] ?? post.text}
             imageUrls={post.imageUrl ? [post.imageUrl] : []}
+            mediaPreview={post.imageUrl && watermarkPreview ? (
+              <AiPostingWatermarkPreview
+                imageUrl={post.imagePreviewUrl || post.imageUrl}
+                legacy={!post.imagePreviewUrl}
+                avatarUrl={channelPhotoUrl}
+                settings={watermarkPreview}
+              />
+            ) : undefined}
             onTextChange={
               saved ? undefined : (value) => onTextChange(key, value)
             }
@@ -279,12 +302,21 @@ export function AiPostingPublicationCarousel({
               recoveryKey={`ai-posting-preview:${run.id}:${index}`}
               variant="primary"
               className="min-h-10 w-full whitespace-normal"
-              draft={{
-                title: post.title,
-                text: edits[key] ?? post.text,
-                imageUrls: post.imageUrl ? [post.imageUrl] : [],
-                buttonRows: [],
-              }}
+              draft={botDraft}
+              prepareDraft={channelId && post.imageUrl && watermarkPreview ? async () => {
+                if (!post.imagePreviewUrl)
+                  throw new Error("У этого фото нет оригинала без водяного знака. Обновите медиа, чтобы отправить его с новым знаком.");
+                const { enabled, size, opacity, x, y } = watermarkPreview;
+                try {
+                  const { data } = await api.post<{ imageUrl: string }>(
+                    `/telegram-channels/${channelId}/ai-posting/test-runs/${run.id}/bot-image`,
+                    { index, enabled, size, opacity, x, y },
+                  );
+                  return { ...botDraft, imageUrls: [data.imageUrl] };
+                } catch {
+                  throw new Error("Не удалось подготовить изображение с текущим водяным знаком.");
+                }
+              } : undefined}
               disabled={pending}
             />
             <Button

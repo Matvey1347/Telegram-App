@@ -60,11 +60,38 @@ describe("IconPicker", () => {
 
     render(
       <QueryClientProvider client={client}>
-        <IconPicker compact buttonLabel="⚡" onChange={vi.fn()} onEmojiChange={vi.fn()} />
+        <IconPicker
+          compact
+          buttonLabel="⚡"
+          onChange={vi.fn()}
+          onEmojiChange={vi.fn()}
+        />
       </QueryClientProvider>,
     );
 
     expect(screen.getByRole("button")).toHaveTextContent("⚡");
     expect(screen.getByRole("button")).not.toHaveTextContent("+");
+  });
+
+  it("uses a plus glyph for an empty emoji-only trigger and keeps its accessible label", () => {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+
+    render(
+      <QueryClientProvider client={client}>
+        <IconPicker
+          compact
+          iconOnly
+          buttonLabel="Add emoji"
+          ariaLabel="Choose emoji"
+          onChange={vi.fn()}
+        />
+      </QueryClientProvider>,
+    );
+
+    const button = screen.getByRole("button", { name: "Choose emoji" });
+    expect(button.querySelector("svg")).toBeInTheDocument();
+    expect(button).not.toHaveTextContent("Add emoji");
   });
 });

@@ -1,24 +1,25 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { RotateCw } from "lucide-react";
 import { Button, Card, Input } from "@/components/ui/primitives";
 
 export function AiPostingGenerationControls({
-  dailyPostCount,
   requestedCount,
   pending,
   busy = false,
   settingsReady,
   onCountChange,
   onGenerate,
+  historyAction,
 }: {
-  dailyPostCount: number;
   requestedCount: string;
   pending: boolean;
   busy?: boolean;
   settingsReady: boolean;
   onCountChange: (value: string) => void;
   onGenerate: () => void;
+  historyAction?: ReactNode;
 }) {
   return (
     <>
@@ -36,7 +37,7 @@ export function AiPostingGenerationControls({
             превью, а заметки к тексту и медиа задаются отдельно.
           </p>
         </div>
-        <div className="flex items-end gap-2">
+        <div className="flex w-full flex-wrap items-end gap-2">
           <label className="w-24 text-xs text-neutral-400">
             Число постов
             <Input
@@ -57,12 +58,9 @@ export function AiPostingGenerationControls({
               <>
                 <RotateCw size={16} className="animate-spin" /> Генерируем…
               </>
-            ) : Number(requestedCount) === dailyPostCount ? (
-              "Сгенерировать на день"
-            ) : (
-              `Сгенерировать · ${requestedCount} ${Number(requestedCount) === 1 ? "публикацию" : Number(requestedCount) < 5 ? "публикации" : "публикаций"}`
-            )}
+            ) : "Сгенерировать"}
           </Button>
+          {historyAction && <div className="ml-auto">{historyAction}</div>}
         </div>
       </Card>
       {!settingsReady && (

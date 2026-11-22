@@ -1,16 +1,16 @@
 "use client";
 
-import { useState, type Dispatch, type SetStateAction } from "react";
+import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
 import type { TelegramChannel } from "@/lib/api";
-import { Button, FormField, Input, Tooltip } from "@/components/ui/primitives";
+import { Button } from "@/components/ui/primitives";
 import { channelLocalDateKey } from "@/lib/features/growth/telegram-ad-sales";
 import type { SalePlacementDraft } from "./ad-sale-types";
 import { PlacementPostComposer } from "./placement-post/placement-post-composer";
 import { hasPlacementPostContent } from "./placement-post/placement-post-content";
 import { useTelegramSystemBotPostFlow } from "@/hooks/use-telegram-system-bot-post-flow";
-import { replacePromoTelegramLinksWithToken } from "../ad-campaigns/promo-invite-template";
 import type { PlacementManagedPostDraft } from "./placement-post/placement-post-composer";
 import { renderAdSaleBotPreview } from "./ad-sale-invite-template";
+import { AdSalePostLinkReplacer } from "./ad-sale-post-link-replacer";
 
 export function AdSaleSharedPost({
   placements,
@@ -19,8 +19,8 @@ export function AdSaleSharedPost({
   systemBotConnected,
   systemBotUsername,
   workspaceId,
-  onModeChange,
   setPlacements,
+  onConfigureSeparatePosts,
 }: {
   placements: SalePlacementDraft[];
   channels: TelegramChannel[];
@@ -28,25 +28,46 @@ export function AdSaleSharedPost({
   systemBotConnected?: boolean;
   systemBotUsername?: string | null;
   workspaceId?: string | null;
-  onModeChange: (mode: "shared" | "individual") => void;
   setPlacements: Dispatch<SetStateAction<SalePlacementDraft[]>>;
+  onConfigureSeparatePosts?: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [pendingSharedDraft, setPendingSharedDraft] =
+    useState<PlacementManagedPostDraft | null>(null);
   const first = placements[0];
   const channel = channels.find((item) => item.id === first?.channelId);
-  const draft = placements.find(
+  const placementDraft = placements.find(
     (item) => item.managedPostDraft,
   )?.managedPostDraft;
-  const draftHasContent = placements.every((placement) =>
-    hasPlacementPostContent(placement.managedPostDraft),
-  );
-  const commonInviteLink =
-    placements.length &&
-    placements.every(
-      (placement) => placement.inviteLinkUrl === placements[0]?.inviteLinkUrl,
-    )
-      ? (placements[0]?.inviteLinkUrl ?? "")
-      : "";
+  const draft = placementDraft ?? pendingSharedDraft;
+  const draftHasContent = placements.length
+    ? placements.every((placement) => hasPlacementPostContent(placement.managedPostDraft))
+    : hasPlacementPostContent(pendingSharedDraft);
+  const updateSharedDraft = (
+    nextDraft: PlacementManagedPostDraft | null,
+    clearInviteLinks = false,
+  ) => {
+    if (!placements.length) {
+      setPendingSharedDraft(nextDraft);
+      return;
+    }
+    setPlacements((current) => current.map((placement) => ({
+      ...placement,
+      managedPostDraft: nextDraft,
+      ...(clearInviteLinks ? { inviteLinkUrl: "" } : {}),
+      telegramPostId: null,
+    })));
+  };
+  useEffect(() => {
+    if (!pendingSharedDraft || !placements.length) return;
+    setPlacements((current) => current.map((placement) => ({
+      ...placement,
+      managedPostDraft: pendingSharedDraft,
+      telegramPostId: null,
+    })));
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setPendingSharedDraft(null);
+  }, [pendingSharedDraft, placements.length, setPlacements]);
   const allFuture = placements.every(
     (placement) =>
       placement.date >= channelLocalDateKey(new Date(), placement.timezone),
@@ -62,13 +83,7 @@ export function AdSaleSharedPost({
     botUsername: systemBotUsername,
     onImported: (importedDraft) => {
       setExpanded(true);
-      setPlacements((current) =>
-        current.map((placement) => ({
-          ...placement,
-          managedPostDraft: importedDraft,
-          telegramPostId: null,
-        })),
-      );
+      updateSharedDraft(importedDraft);
     },
     previewDraft: draft
       ? renderAdSaleBotPreview(draft, previewInviteLink)
@@ -79,7 +94,6 @@ export function AdSaleSharedPost({
       preview: "Could not send the post to the bot. Try again.",
     },
   });
-  if (!placements.length) return null;
   const isSinglePlacement = placements.length === 1;
   const normalizedSystemBotUsername = systemBotUsername
     ?.trim()
@@ -91,35 +105,12 @@ export function AdSaleSharedPost({
     <section className="rounded-xl border border-blue-900/70 bg-blue-950/20 p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <div className="flex items-center gap-2">
-            <p className="text-sm font-medium text-white">Advertising post</p>
-            {!isSinglePlacement ? (
-              <Tooltip
-                align="left"
-                content="On: one shared post is published to every channel (copies can be edited later). Off: each channel has its own post, with separate send-to-bot and import-from-bot actions."
-              >
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={mode === "shared"}
-                  aria-label="Use one advertising post for all channels"
-                  onClick={() =>
-                    onModeChange(mode === "shared" ? "individual" : "shared")
-                  }
-                  className={`relative inline-flex h-5 w-9 items-center rounded-full border transition ${mode === "shared" ? "border-blue-500/70 bg-blue-500/30" : "border-neutral-700 bg-neutral-900"}`}
-                >
-                  <span
-                    className={`absolute h-3.5 w-3.5 rounded-full bg-white transition ${mode === "shared" ? "left-[17px]" : "left-1"}`}
-                  />
-                </button>
-              </Tooltip>
-            ) : null}
-          </div>
+          <p className="text-sm font-medium text-white">{mode === "shared" ? "Shared post" : "Separate posts"}</p>
           <p className="text-xs text-neutral-400">
             {isSinglePlacement
               ? "Create or import the post that will be published in this channel."
               : mode === "shared"
-                ? "One shared post is used for every channel; each copy can be edited later. Turn off to configure and import posts separately per channel."
+                ? "One shared post is used for every channel; each copy can be edited later."
                 : "Configure every channel separately."}
           </p>
         </div>
@@ -156,6 +147,15 @@ export function AdSaleSharedPost({
             >
               {draftHasContent ? "✅ Edit shared post" : "Create shared post"}
             </Button>
+          ) : null}
+          {mode === "individual" ? (
+            <a
+              href="#ad-sale-placements"
+              onClick={onConfigureSeparatePosts}
+              className="inline-flex h-8 items-center rounded-lg border border-neutral-700 bg-neutral-900 px-3 text-xs font-medium text-blue-200 transition hover:border-blue-700 hover:bg-blue-950/40"
+            >
+              Configure posts per channel
+            </a>
           ) : null}
           {mode === "shared" && systemBotConnected === true ? (
             <Button
@@ -218,60 +218,22 @@ export function AdSaleSharedPost({
             publishedPosts={[]}
             postsLoading={false}
             canCreate={allFuture}
-            autoCreate={allFuture}
+            autoCreate={allFuture && placements.length > 0}
             lockToDraft
-            onLoadPublishedPosts={() => undefined}
-            onChange={({ draft: nextDraft }) =>
-              setPlacements((current) =>
-                current.map((placement) => ({
-                  ...placement,
-                  managedPostDraft: nextDraft ?? null,
-                  telegramPostId: null,
-                })),
-              )
-            }
-          />
-          {draft ? (
-            <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
-              <FormField label="Invite link for all channels">
-                <Input
-                  value={commonInviteLink}
-                  onChange={(event) => {
-                    const inviteLinkUrl = event.target.value;
-                    setPlacements((current) =>
-                      current.map((placement) => ({
-                        ...placement,
-                        inviteLinkUrl,
-                      })),
-                    );
-                  }}
-                  placeholder="https://t.me/+invite"
+            mediaFooter={
+              draft ? (
+                <AdSalePostLinkReplacer
+                  draft={draft}
+                  label="Replace links for all channels"
+                  onReplace={(nextDraft) =>
+                    updateSharedDraft(nextDraft as PlacementManagedPostDraft, true)
+                  }
                 />
-              </FormField>
-              <Button
-                type="button"
-                variant="secondary"
-                disabled={!hasPlacementPostContent(draft)}
-                onClick={() =>
-                  setPlacements((current) =>
-                    current.map((placement) => ({
-                      ...placement,
-                      managedPostDraft: placement.managedPostDraft
-                        ? ({
-                            ...placement.managedPostDraft,
-                            ...replacePromoTelegramLinksWithToken(
-                              placement.managedPostDraft,
-                            ),
-                          } as PlacementManagedPostDraft)
-                        : placement.managedPostDraft,
-                    })),
-                  )
-                }
-              >
-                Replace links with {"{{invite_link}}"}
-              </Button>
-            </div>
-          ) : null}
+              ) : null
+            }
+            onLoadPublishedPosts={() => undefined}
+            onChange={({ draft: nextDraft }) => updateSharedDraft(nextDraft ?? null)}
+          />
         </div>
       ) : null}
     </section>

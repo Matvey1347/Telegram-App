@@ -8,15 +8,8 @@ import type {
 } from "@telegram-system/shared";
 import { Button, CustomSelect, Input } from "@/components/ui/primitives";
 import { telegramAdSalesApi } from "@/lib/api";
-import {
-  safeContactUrl,
-  safeInstagramProfile,
-} from "./manual/safe-contact-url";
-import { ManualContactPanel } from "./manual/manual-contact-panel";
-import { InstagramMethodEditor } from "./manual/instagram-method-editor";
+import { safeContactUrl } from "./manual/safe-contact-url";
 import { telegramCrmKeys } from "@/lib/features/growth/telegram-crm-query";
-import { crmManualKeys } from "@/lib/features/growth/crm-manual-api";
-import { crmManualApi } from "@/lib/features/growth/crm-manual-api";
 import { authApi } from "@/lib/api";
 import { authKeys } from "@/lib/query-keys";
 import {
@@ -64,7 +57,6 @@ export function CrmContactChannels({
     queryFn: authApi.me,
     staleTime: 300000,
   });
-  const [instagramForm, setInstagramForm] = useState(false);
   const details = useQuery({
     queryKey: [
       "telegram-advertiser",
@@ -107,23 +99,6 @@ export function CrmContactChannels({
       void refresh();
     },
   });
-  const instagram = useMutation({
-    mutationFn: (input: Parameters<typeof crmManualApi.addInstagram>[1]) =>
-      crmManualApi.addInstagram(contactId, input),
-    onSuccess: async (view) => {
-      if (me.data?.workspace.id) {
-        queryClient.setQueryData(
-          crmManualKeys.workflow(me.data.workspace.id, contactId),
-          view,
-        );
-        void queryClient.invalidateQueries({
-          queryKey: crmManualKeys.lists(me.data.workspace.id),
-        });
-      }
-      setInstagramForm(false);
-      await refresh();
-    },
-  });
   const setPrimary = useMutation({
     mutationFn: (channelId: string) =>
       telegramAdSalesApi.setPrimaryAdvertiserContact(contactId, channelId),
@@ -162,14 +137,7 @@ export function CrmContactChannels({
       <div className="space-y-2">
         {contactChannels.map((contact) => {
           const item = presentation(contact);
-          const legacyInstagram =
-            contact.type === "OTHER" && contact.label === "Instagram";
-          const href =
-            contact.type === "INSTAGRAM" && contact.instagram
-              ? safeInstagramProfile(contact.instagram)
-              : legacyInstagram
-                ? undefined
-                : safeContactUrl(contact.type, contact.value);
+          const href = safeContactUrl(contact.type, contact.value);
           return (
             <div
               key={contact.id}
@@ -195,21 +163,6 @@ export function CrmContactChannels({
                 ) : (
                   <span>{contact.value}</span>
                 )}
-                {legacyInstagram ? (
-                  <>
-                    <p className="text-xs text-amber-200">
-                      Legacy Instagram · unverified identity
-                    </p>
-                    {canEdit ? (
-                      <Button
-                        variant="secondary"
-                        onClick={() => setInstagramForm(true)}
-                      >
-                        Review and add typed Instagram
-                      </Button>
-                    ) : null}
-                  </>
-                ) : null}
               </div>
               <Button
                 type="button"
@@ -242,44 +195,13 @@ export function CrmContactChannels({
           Add detected Telegram explicitly
         </Button>
       ) : null}
-      {contactChannels.some((c) => c.type === "INSTAGRAM") &&
-      me.data?.workspace.id ? (
-        <ManualContactPanel
-          workspace={me.data.workspace.id}
-          contactId={contactId}
-          compact
-        />
-      ) : null}
-      {canEdit && selected?.label === "Instagram" ? (
-        <CustomSelect
-          value={selected.label}
-          onChange={setChannelLabel}
-          ariaLabel="Contact channel"
-          searchable={false}
-          options={availableChannels.map((item) => ({
-            value: item.label,
-            label: item.label,
-            icon: (
-              <CrmContactChannelMark channel={item.label} className="h-5 w-5" />
-            ),
-          }))}
-        />
-      ) : null}
-      {canEdit && (instagramForm || selected?.label === "Instagram") ? (
-        <InstagramMethodEditor
-          pending={instagram.isPending}
-          onSave={async (input) => {
-            await instagram.mutateAsync(input);
-          }}
-        />
-      ) : null}
-      {instagram.isError || add.isError || setPrimary.isError ? (
+      {add.isError || setPrimary.isError ? (
         <p role="alert" className="text-xs text-amber-200">
           Contact change failed. Review identity conflicts, workspace
           permissions and retry.
         </p>
       ) : null}
-      {canEdit && selected && selected.label !== "Instagram" ? (
+      {canEdit && selected ? (
         <div className="grid gap-2 sm:grid-cols-[150px_minmax(0,1fr)_auto]">
           <CustomSelect
             value={selected.label}

@@ -76,12 +76,6 @@ export class UpdateTelegramChannelDto {
   @IsOptional()
   @Type(() => Number)
   @IsInt()
-  @Min(0)
-  seedSubscribersCount?: number;
-  @IsOptional() @IsBoolean() seedDisabled?: boolean;
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
   @Min(1)
   activeSubscribersWindow?: number;
   @IsOptional()

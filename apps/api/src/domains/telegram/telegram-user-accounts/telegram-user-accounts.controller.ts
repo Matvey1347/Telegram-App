@@ -120,13 +120,13 @@ export class TelegramUserAccountsController {
     @CurrentUser() user: JwtUser,
     @Param('id') id: string,
   ) {
-    return this.service.check(user.sub, id);
+    return this.service.check(user.sub, id, true);
   }
   @Post(':id/sync-dialogs') syncDialogs(
     @CurrentUser() user: JwtUser,
     @Param('id') id: string,
   ) {
-    return this.service.syncDialogs(user.sub, id);
+    return this.service.syncDialogs(user.sub, id, undefined, true);
   }
   @Post(':id/sync-dialogs-stream') syncDialogsStream(
     @CurrentUser() user: JwtUser,
@@ -135,7 +135,7 @@ export class TelegramUserAccountsController {
   ) {
     return this.streamAction(
       res,
-      (onProgress) => this.service.syncDialogs(user.sub, id, onProgress),
+      (onProgress) => this.service.syncDialogs(user.sub, id, onProgress, true),
       'telegram_user_account.sync_dialogs_stream',
     );
   }

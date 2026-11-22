@@ -32,7 +32,7 @@ export async function avatarEmojiInventory(
       (SELECT count(*)::int FROM "TelegramChannel" remaining WHERE remaining."workspaceId" = ${workspaceId} AND remaining."id" > ${after ?? ''}) AS "remainingCount",
       c."id", c."title", NULLIF(c."photoUrl", '') IS NOT NULL AS "hasStoredAvatar",
       EXISTS(SELECT 1 FROM "TelegramChannelSourceAccess" a WHERE a."workspaceId" = c."workspaceId"
-        AND a."channelId" = c."id" AND a."sourceType" = 'MTPROTO' AND a."role" = 'OWNER') AS "owned",
+        AND a."channelId" = c."id" AND a."sourceType" = 'MTPROTO' AND a."role" IN ('OWNER', 'ADMIN')) AS "owned",
       to_jsonb(c)->>'avatarEmojiIconId' AS "avatarEmojiIconId",
       to_jsonb(c)->>'avatarEmojiHash' AS "avatarEmojiHash",
       to_jsonb(c)->>'avatarEmojiStatus' AS "avatarEmojiStatus",

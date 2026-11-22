@@ -63,20 +63,6 @@ export function getChannelSettingsCompletion(
       positive(draft?.targetCpa ?? channel.targetCpa),
       positive(draft?.stopCpaFrom ?? channel.stopCpaFrom),
     ]),
-    seed:
-      (draft?.seedDisabled ?? channel.seedDisabled)
-        ? "complete"
-        : completionFromValues([
-            positive(
-              draft?.seedSubscribersCount ?? channel.seedSubscribersCount,
-            ),
-            positive(
-              draft?.knownFakeSubscribersCount ??
-                channel.knownFakeSubscribersCount,
-            ),
-            positive(draft?.ownViewsPerPost ?? channel.ownViewsPerPost),
-            positive(draft?.ownReactionsPerPost ?? channel.ownReactionsPerPost),
-          ]),
     bot: botConnection?.connected
       ? "complete"
       : botConnection &&
@@ -107,7 +93,6 @@ export function getOverallChannelSettingsCompletion(
     completion.appearance,
     completion.economics,
     scheduleStatus,
-    completion.seed,
     ...(includeBot ? [completion.bot] : []),
     completion.sources,
   ];

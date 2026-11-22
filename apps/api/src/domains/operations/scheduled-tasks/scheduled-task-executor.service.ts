@@ -1,6 +1,5 @@
 import { notifyScheduledTaskDueWorkChanged } from '../../../common/scheduled-task-wake-notifier';
 import { TelegramCrmChatReceipts } from '../../telegram/telegram-crm/telegram-crm-chat-receipts.service';
-import { TelegramCrmManualRetentionService } from '../../telegram/telegram-crm/telegram-crm-manual-retention.service';
 import { TelegramLeadRetentionService } from '../../telegram/telegram-crm/lead-discovery/lead-retention.service';
 import { TelegramCrmAiDraftRetentionService } from '../../telegram/telegram-crm/telegram-crm-ai-draft-retention.service';
 import { AiUsageRetentionService } from '../ai/ai-usage-retention.service';
@@ -191,43 +190,35 @@ export class ScheduledTaskExecutorService {
       return { summary: `Deleted ${result.deletedCount} expired logs.` };
     },
     'operational_history.cleanup': async () => {
-      const [result, ai, drafts, leads, manualActivities, chatReceipts] =
-        await Promise.all([
-          (await this.retentionService()).cleanup(),
-          (
-            await this.moduleRef.resolve(AiUsageRetentionService, undefined, {
-              strict: false,
-            })
-          ).cleanup(),
-          (
-            await this.moduleRef.resolve(
-              TelegramCrmAiDraftRetentionService,
-              undefined,
-              { strict: false },
-            )
-          ).cleanup(),
-          (
-            await this.moduleRef.resolve(
-              TelegramLeadRetentionService,
-              undefined,
-              { strict: false },
-            )
-          ).cleanup(),
-          (
-            await this.moduleRef.resolve(
-              TelegramCrmManualRetentionService,
-              undefined,
-              { strict: false },
-            )
-          ).cleanup(),
-          (
-            await this.moduleRef.resolve(TelegramCrmChatReceipts, undefined, {
-              strict: false,
-            })
-          ).cleanup(),
-        ]);
+      const [result, ai, drafts, leads, chatReceipts] = await Promise.all([
+        (await this.retentionService()).cleanup(),
+        (
+          await this.moduleRef.resolve(AiUsageRetentionService, undefined, {
+            strict: false,
+          })
+        ).cleanup(),
+        (
+          await this.moduleRef.resolve(
+            TelegramCrmAiDraftRetentionService,
+            undefined,
+            { strict: false },
+          )
+        ).cleanup(),
+        (
+          await this.moduleRef.resolve(
+            TelegramLeadRetentionService,
+            undefined,
+            { strict: false },
+          )
+        ).cleanup(),
+        (
+          await this.moduleRef.resolve(TelegramCrmChatReceipts, undefined, {
+            strict: false,
+          })
+        ).cleanup(),
+      ]);
       return {
-        summary: `Deleted ${result.updateLogs} bot updates, ${result.deliveries} deliveries, ${result.scheduledTaskRuns} task runs, and ${result.systemBotUpdateLogs} system bot updates; AI retention removed ${ai.operations} operations, ${ai.daily} daily counters, and ${ai.budgetPeriods} budget periods; removed ${drafts} expired CRM AI drafts; removed ${leads.observations} lead observations and ${leads.candidates} transient candidates, ${leads.qualifications} qualifications and ${leads.drafts} candidate drafts; removed ${manualActivities} old manual Instagram activities; removed ${chatReceipts} expired chat action receipts.`,
+        summary: `Deleted ${result.updateLogs} bot updates, ${result.deliveries} deliveries, ${result.scheduledTaskRuns} task runs, and ${result.systemBotUpdateLogs} system bot updates; AI retention removed ${ai.operations} operations, ${ai.daily} daily counters, and ${ai.budgetPeriods} budget periods; removed ${drafts} expired CRM AI drafts; removed ${leads.observations} lead observations and ${leads.candidates} transient candidates, ${leads.qualifications} qualifications and ${leads.drafts} candidate drafts; removed ${chatReceipts} expired chat action receipts.`,
       };
     },
   } satisfies Record<

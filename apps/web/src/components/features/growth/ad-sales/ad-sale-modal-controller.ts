@@ -41,7 +41,9 @@ export function useAdSaleModalController(options: AdSaleModalProps) {
     defaultCurrency, workspaceTimezone,
     onLoadPublishedPosts, onRequestQuotePreview, onSubmit,
   } = options;
-  const [postMode, setPostMode] = useState<"shared" | "individual">("shared");
+  const [postMode, setPostMode] = useState<"shared" | "individual" | "none">(
+    "shared",
+  );
   const [placements, setPlacements] = useState<SalePlacementDraft[]>([]);
   const paymentAmount = useMemo(
     () =>
@@ -73,6 +75,7 @@ export function useAdSaleModalController(options: AdSaleModalProps) {
     currentDraft,
     restoreDraft,
     continueDraft, deleteDraft, createNewDraft,
+    showDraftPicker,
   } = useAdSaleModalSession(options, {
     postMode,
     setPostMode,
@@ -294,6 +297,7 @@ export function useAdSaleModalController(options: AdSaleModalProps) {
     ) &&
     placements.every(
       (placement) =>
+        postMode === "none" ||
         !placement.managedPostDraft ||
         !promoContainsInviteToken(placement.managedPostDraft) ||
         Boolean(placement.inviteLinkUrl?.trim()),
@@ -343,19 +347,27 @@ export function useAdSaleModalController(options: AdSaleModalProps) {
           ).toISOString(),
           timezone: placement.timezone,
           agreedPrice: financeSkipped ? 0 : toNumber(placement.agreedPrice),
-          recommendedPrice: financeSkipped ? 0 : toNumber(placement.recommendedPrice),
+          recommendedPrice: financeSkipped
+            ? 0
+            : toNumber(placement.recommendedPrice),
           minimumPrice: financeSkipped ? 0 : toNumber(placement.minimumPrice),
           expectedViews: placement.expectedViews ?? 0,
           pricingMode: placement.pricingMode,
           manualPriceReason: placement.manualPriceReason.trim() || undefined,
-          telegramPostId: placement.telegramPostId ?? null,
-          managedPostDraft: hasPlacementPostContent(placement.managedPostDraft)
-            ? renderAdSaleInviteLink(
-                placement.managedPostDraft!,
-                placement.inviteLinkUrl ?? "",
-              )
-            : null,
-          inviteLinkUrl: placement.inviteLinkUrl?.trim() || undefined,
+          telegramPostId:
+            postMode === "none" ? null : (placement.telegramPostId ?? null),
+          managedPostDraft:
+            postMode !== "none" &&
+            hasPlacementPostContent(placement.managedPostDraft)
+              ? renderAdSaleInviteLink(
+                  placement.managedPostDraft!,
+                  placement.inviteLinkUrl ?? "",
+                )
+              : null,
+          inviteLinkUrl:
+            postMode === "none"
+              ? undefined
+              : placement.inviteLinkUrl?.trim() || undefined,
         })),
       });
       if (result.conflicts?.length) {
@@ -417,6 +429,6 @@ export function useAdSaleModalController(options: AdSaleModalProps) {
     effectiveChannelIds, paymentCurrency, commonTime, commonFormats, commonFormatName,
     productsByChannelId,
     loadPublishedPosts, canSubmit, submit, sharedPostActive, continueDraft, deleteDraft,
-    createNewDraft, currentDraft, restoreDraft,
+    createNewDraft, showDraftPicker, currentDraft, restoreDraft,
   };
 }

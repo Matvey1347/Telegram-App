@@ -53,9 +53,12 @@ describe("AdSalePlacementCard bot actions", () => {
         products={[]}
         currency="UAH"
         priceLocked={false}
-        showPricing={false}
+        showPricing
         sharedPostActive={false}
         individualPostMode
+        postEnabled
+        isFirstPlacement={false}
+        allDetailsOpen={false}
         systemBotConnected
         systemBotUsername="system_bot"
         workspaceId="workspace-1"
@@ -70,6 +73,9 @@ describe("AdSalePlacementCard bot actions", () => {
     expect(
       screen.getByRole("button", { name: "Send current post to bot" }),
     ).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: "Actions for Channel one" }));
+    fireEvent.click(screen.getByRole("button", { name: "Edit channel settings" }));
+    expect(screen.getByText("UAH")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Send from bot" }));
 
     await waitFor(() =>

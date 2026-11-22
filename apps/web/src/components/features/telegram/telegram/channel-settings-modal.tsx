@@ -10,7 +10,6 @@ import {
   CircleCheck,
   CircleDotDashed,
   Palette,
-  Sprout,
   CalendarClock,
 } from "lucide-react";
 import type { CurrencySettings, TelegramChannel } from "@/lib/api";
@@ -26,9 +25,7 @@ import {
 import {
   Button,
   FormField,
-  Input,
   Modal,
-  ToggleRow,
 } from "@/components/ui/primitives";
 import { TelegramEntityAvatar } from "./telegram-entity-avatar";
 import { ChannelEconomicsEditor } from "./channel-economics-editor";
@@ -56,7 +53,6 @@ import {
 type SettingsTab =
   | "appearance"
   | "economics"
-  | "seed"
   | "bot"
   | "sources"
   | "schedule";
@@ -65,7 +61,6 @@ const tabs = [
   { id: "appearance", label: "Appearance", icon: Palette },
   { id: "economics", label: "Economics", icon: ChartNoAxesCombined },
   { id: "schedule", label: "Schedule", icon: CalendarClock },
-  { id: "seed", label: "Seed", icon: Sprout },
   { id: "bot", label: "Bot", icon: Bot },
   { id: "sources", label: "Sources", icon: Cable },
 ] as const;
@@ -205,6 +200,28 @@ export function ChannelSettingsModal({
       title="Channel settings"
       titleIcon={featureModalIcon("channel-settings")}
       size="xl"
+      footer={(
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="secondary" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            disabled={
+              save.isPending ||
+              registerPending ||
+              (activeTab === "schedule" &&
+                publicationScheduleDraft !== null &&
+                (!publicationScheduleDraft.scheduleId ||
+                  publicationScheduleDraft.selectedSlotIds.length === 0)) ||
+              channelSettingsDraftIsInvalid(draft)
+            }
+            onClick={() => save.mutate()}
+          >
+            {save.isPending ? "Saving…" : "Save"}
+          </Button>
+        </div>
+      )}
     >
       <div className="mb-4 flex items-center gap-3 rounded-xl border border-neutral-800 bg-neutral-950/50 p-3">
         <TelegramEntityAvatar
@@ -296,9 +313,6 @@ export function ChannelSettingsModal({
           embedded
         />
       ) : null}
-      {activeTab === "seed" ? (
-        <ChannelSeedSettings draft={draft} onDraftChange={updateDraft} />
-      ) : null}
       {activeTab === "bot" && canManageBot ? (
         <ChannelSystemBotAccessModal
           channel={channel}
@@ -326,105 +340,6 @@ export function ChannelSettingsModal({
           onChange={setPublicationScheduleDraft}
         />
       ) : null}
-      <div className="mt-5 flex justify-end gap-2 border-t border-neutral-800 pt-4">
-        <Button type="button" variant="secondary" onClick={onClose}>
-          Cancel
-        </Button>
-        <Button
-          type="button"
-          disabled={
-            save.isPending ||
-            registerPending ||
-            (activeTab === "schedule" &&
-              publicationScheduleDraft !== null &&
-              (!publicationScheduleDraft.scheduleId ||
-                publicationScheduleDraft.selectedSlotIds.length === 0)) ||
-            channelSettingsDraftIsInvalid(draft)
-          }
-          onClick={() => save.mutate()}
-        >
-          {save.isPending ? "Saving…" : "Save"}
-        </Button>
-      </div>
     </Modal>
-  );
-}
-
-function ChannelSeedSettings({
-  draft,
-  onDraftChange,
-}: {
-  draft: ChannelSettingsDraft;
-  onDraftChange: (patch: Partial<ChannelSettingsDraft>) => void;
-}) {
-  return (
-    <div className="space-y-4">
-      <p className="text-sm text-neutral-400">
-        Values subtracted from subscriber and post metrics before analytics are
-        calculated.
-      </p>
-      <ToggleRow
-        checked={draft.seedDisabled}
-        onChange={(seedDisabled) => onDraftChange({ seedDisabled })}
-        label="No seed"
-        description="This channel has no seed audience or artificial starting activity."
-      />
-      {!draft.seedDisabled ? (
-        <div className="grid gap-3 sm:grid-cols-2">
-          <SeedField
-            label="Own / seed subscribers"
-            value={draft.seedSubscribersCount}
-            onChange={(seedSubscribersCount) =>
-              onDraftChange({ seedSubscribersCount })
-            }
-          />
-          <SeedField
-            label="Known fake subscribers"
-            value={draft.knownFakeSubscribersCount}
-            onChange={(knownFakeSubscribersCount) =>
-              onDraftChange({ knownFakeSubscribersCount })
-            }
-          />
-          <SeedField
-            label="Own views per post"
-            value={draft.ownViewsPerPost}
-            onChange={(ownViewsPerPost) => onDraftChange({ ownViewsPerPost })}
-          />
-          <SeedField
-            label="Own reactions per post"
-            value={draft.ownReactionsPerPost}
-            onChange={(ownReactionsPerPost) =>
-              onDraftChange({ ownReactionsPerPost })
-            }
-          />
-        </div>
-      ) : (
-        <p className="rounded-lg border border-emerald-900/60 bg-emerald-950/20 p-3 text-sm text-emerald-200">
-          Seed adjustments will be saved as zero and this section will be marked
-          as configured.
-        </p>
-      )}
-    </div>
-  );
-}
-
-function SeedField({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-}) {
-  return (
-    <FormField label={label}>
-      <Input
-        type="number"
-        min={0}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-      />
-    </FormField>
   );
 }

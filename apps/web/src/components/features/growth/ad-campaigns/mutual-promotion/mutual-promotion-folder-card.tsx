@@ -22,6 +22,7 @@ import {
 
 export function MutualPromotionFolderCard({
   folder,
+  typeBadge,
   onOpen,
   onEdit,
   onRefreshInviteLinks,
@@ -30,6 +31,7 @@ export function MutualPromotionFolderCard({
   now,
 }: {
   folder: MutualPromotionFolderListItem;
+  typeBadge?: ReactNode;
   onOpen: () => void;
   onEdit?: () => void;
   onRefreshInviteLinks?: () => void;
@@ -57,9 +59,12 @@ export function MutualPromotionFolderCard({
       <div className="pointer-events-none relative z-10 p-4 pb-0">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <h3 className="truncate text-base font-semibold text-white">
-              {folder.title}
-            </h3>
+            <div className="flex min-w-0 items-center gap-2">
+              <h3 className="truncate text-base font-semibold text-white">
+                {folder.title}
+              </h3>
+              {typeBadge}
+            </div>
             <p className="mt-1.5 flex items-center gap-1.5 whitespace-nowrap text-[11px] text-neutral-400">
               <CalendarClock size={14} className="shrink-0" />
               <span>{formatDateTime(folder.startsAt)}</span>

@@ -138,6 +138,15 @@ export class TelegramAiPostingController {
         ),
     });
   }
+  @Post('test-runs/:runId/bot-image') prepareBotImage(
+    @CurrentUser() user: JwtUser,
+    @Param('channelId') channelId: string,
+    @Param('runId') runId: string,
+    @Body() input: Parameters<TelegramAiPostingTestRunService['prepareBotImage']>[3],
+  ) {
+    return this.testRuns.prepareBotImage(user.sub, channelId, runId, input);
+  }
+
   @Post('test-runs/:runId/review') review(
     @CurrentUser() user: JwtUser,
     @Param('channelId') id: string,

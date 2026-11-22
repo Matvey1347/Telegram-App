@@ -58,6 +58,7 @@ export function GroupFormModal({
             iconId={icon}
             onChange={setIcon}
             buttonLabel={t("telegram.posts.icon.addIcon")}
+            iconOnly
           />
         </FormField>
         <FormField label={t("telegram.posts.groups.description")}>

@@ -106,7 +106,6 @@ describe("ChannelActionsMenu", () => {
             adBaseCpm: 100,
             targetCpa: 10,
             stopCpaFrom: 20,
-            seedDisabled: true,
             preview: {
               hasPublicationSchedule: true,
               sourcesCount: 1,

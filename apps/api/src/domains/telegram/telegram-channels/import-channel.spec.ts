@@ -31,6 +31,11 @@ describe('TelegramChannelsService importChannel', () => {
   };
   const sourceAccessService = {
     recordDataSource: jest.fn(),
+    normalizeMtprotoPermissions: jest.fn(() => ({
+      role: 'ADMIN',
+      permissions: {},
+    })),
+    upsertAccess: jest.fn(),
   };
   const analyticsService = {};
 
@@ -80,9 +85,28 @@ describe('TelegramChannelsService importChannel', () => {
       } as never);
   });
 
+  it.each(['channel', 'person'] as const)(
+    'rejects an unmanaged Telegram %s before writing an import',
+    async (kind) => {
+      mtprotoClient.getPublicChannelInfo.mockResolvedValue(
+        buildResolvedTelegramEntity({
+          kind,
+          isCreator: false,
+          adminRights: null,
+        }),
+      );
+
+      await expect(
+        service.importChannel('user-1', { input: '@unmanaged_source' }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    },
+  );
+
   it('imports an invite-resolved channel, stores inviteLink and backfill metadata', async () => {
     mtprotoClient.getPublicChannelInfo.mockResolvedValue(
       buildResolvedTelegramEntity({
+        isCreator: true,
         telegramChatId: '123456',
         title: 'Смак Життя',
         username: null,
@@ -142,6 +166,7 @@ describe('TelegramChannelsService importChannel', () => {
   it('updates an existing canonical channel instead of creating a duplicate', async () => {
     mtprotoClient.findAccessibleChannelInfoByTitle.mockResolvedValue(
       buildResolvedTelegramEntity({
+        isCreator: true,
         telegramChatId: '123456',
         title: 'Смак Життя',
         username: 'smak_zhyttia',
@@ -177,6 +202,7 @@ describe('TelegramChannelsService importChannel', () => {
   it('keeps the same channel row when a public channel becomes private', async () => {
     mtprotoClient.getPublicChannelInfo.mockResolvedValue(
       buildResolvedTelegramEntity({
+        isCreator: true,
         telegramChatId: '123456',
         title: 'Смак Життя',
         username: null,
@@ -265,6 +291,7 @@ describe('TelegramChannelsService importChannel', () => {
     });
     mtprotoClient.joinPrivateChannelByInvite.mockResolvedValue(
       buildResolvedTelegramEntity({
+        isCreator: true,
         telegramChatId: '445566',
         title: 'Private channel',
         username: null,
@@ -340,6 +367,7 @@ describe('TelegramChannelsService importChannel', () => {
       .mockRejectedValueOnce(new Error('406: AUTH_KEY_DUPLICATED'))
       .mockResolvedValueOnce(
         buildResolvedTelegramEntity({
+          isCreator: true,
           telegramChatId: '1885418686',
           title: 'Етикет_ка',
           username: 'etiket_k',

@@ -3,7 +3,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTelegramChannelLifecycleMutations } from "@/components/features/telegram/telegram/use-telegram-channel-lifecycle-mutations";
 import {
-  advertisingChannelsApi,
   syncTelegramChannelNowWithProgress,
   telegramChannelNetworksApi,
   telegramChannelsApi,
@@ -21,13 +20,10 @@ import {
 } from "@/lib/features/telegram/telegram-channel-cache";
 import { invalidateTelegramChannelQueries } from "@/lib/features/telegram/telegram-query-invalidation";
 import {
-  type TelegramAccountFilter as AccountFilter,
-  type TelegramChannelOwnershipFilter as ChannelFilter,
   type TelegramChannelsTab as TelegramTab,
 } from "@/components/features/telegram/telegram/telegram-channels-route-state";
 import {
   requestErrorMessage,
-  isOwnChannel,
   isPersonSource,
   summarizeSync,
 } from "./telegram-channels-workspace-utils";
@@ -37,7 +33,6 @@ export function useTelegramChannelsWorkspaceMutations({
   setAnalysisEditor,
   setDeletingAnalysis,
   setDeleting,
-  setDeletingPerson,
   setNetworkFormOpen,
   setEditingNetwork,
   setDeletingNetwork,
@@ -48,15 +43,12 @@ export function useTelegramChannelsWorkspaceMutations({
   setAnalysisEditor: (value: null) => void;
   setDeletingAnalysis: (value: null) => void;
   setDeleting: (value: null) => void;
-  setDeletingPerson: (value: null) => void;
   setNetworkFormOpen: (value: boolean) => void;
   setEditingNetwork: (value: null) => void;
   setDeletingNetwork: (value: null) => void;
   setSyncTargetChannel: (value: null) => void;
   updateTabs: (next: {
     tab?: TelegramTab;
-    channelFilter?: ChannelFilter;
-    accountFilter?: AccountFilter;
   }) => void;
 }) {
   const queryClient = useQueryClient();
@@ -116,23 +108,12 @@ export function useTelegramChannelsWorkspaceMutations({
         throw error;
       }
     },
-    onSuccess: async (source: ImportedTelegramSource) => {
+    onSuccess: (source: ImportedTelegramSource) => {
       if (!isPersonSource(source)) {
         prependTelegramChannelToCaches(queryClient, source);
       }
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["advertising-people"] }),
-      ]);
       setImportOpen(false);
-      if (isPersonSource(source)) {
-        updateTabs({ tab: "accounts", accountFilter: "people" });
-      } else {
-        updateTabs({
-          tab: "channels",
-          channelFilter:
-            "adminLinks" in source && isOwnChannel(source) ? "own" : "external",
-        });
-      }
+      updateTabs({ tab: "channels" });
     },
     onError: (requestError: unknown) =>
       pushToast(
@@ -220,19 +201,6 @@ export function useTelegramChannelsWorkspaceMutations({
     moveToTestMutation,
     moveToActiveMutation,
   } = useTelegramChannelLifecycleMutations();
-  const deletePersonMutation = useMutation({
-    mutationFn: (id: string) => advertisingChannelsApi.remove(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["advertising-people"] });
-      setDeletingPerson(null);
-      pushToast("Person deleted.", "success");
-    },
-    onError: (requestError: unknown) =>
-      pushToast(
-        requestErrorMessage(requestError, "Failed to delete person."),
-        "error",
-      ),
-  });
   const createNetworkMutation = useMutation({
     mutationFn: telegramChannelNetworksApi.create,
     onSuccess: () => {
@@ -375,7 +343,6 @@ export function useTelegramChannelsWorkspaceMutations({
     restoreMutation,
     moveToTestMutation,
     moveToActiveMutation,
-    deletePersonMutation,
     createNetworkMutation,
     updateNetworkMutation,
     deleteNetworkMutation,

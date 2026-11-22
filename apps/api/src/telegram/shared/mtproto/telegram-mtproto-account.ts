@@ -284,11 +284,14 @@ export class TelegramMtprotoAccounts {
     }
   }
 
-  async getAdminChannelsWithProfile(params: {
-    apiId: string;
-    apiHash: string;
-    session: string;
-  }) {
+  async getAdminChannelsWithProfile(
+    params: {
+      apiId: string;
+      apiHash: string;
+      session: string;
+    },
+    options: { includeChannelPhotos?: boolean } = {},
+  ) {
     const client = await this.context.createClient(params);
     try {
       const [dialogs, profile] = await Promise.all([
@@ -304,9 +307,10 @@ export class TelegramMtprotoAccounts {
         id: String(d.id),
         title: d.title || 'Untitled',
         username: d.entity?.username || null,
-        photoUrl: d.entity?.photo
-          ? await this.context.profilePhotoDataUrl(client, d.entity, false)
-          : null,
+        photoUrl:
+          options.includeChannelPhotos !== false && d.entity?.photo
+            ? await this.context.profilePhotoDataUrl(client, d.entity, false)
+            : null,
         isCreator: !!d.entity?.creator,
         adminRights: this.context.toJsonSafe(d.entity?.adminRights) as Record<
           string,

@@ -13,7 +13,6 @@ import {
 } from '@api/telegram/shared/emoji/channel-avatar-emoji-api';
 import { TelegramSystemBotConfigService } from '../domains/telegram/telegram-system-bot/telegram-system-bot-config.service';
 import { channelAvatarEmojiImage } from '../domains/telegram/telegram-channels/channel-avatar-emoji-image';
-import { channelAvatarEmojiOwnedChannelWhere } from '../domains/telegram/telegram-channels/channel-avatar-emoji-ownership';
 import type { AvatarEmojiMaintenanceOptions } from '../config/channel-avatar-emoji-maintenance';
 
 /** Verifies LOCAL owner bindings and real Telegram emoji; no production changes or user sessions. */
@@ -30,7 +29,14 @@ export async function runAvatarEmojiSmoke(
     throw new AvatarEmojiApiError('Smoke requires LOCAL System Bot.');
   const channels = await prisma.telegramChannel.findMany({
     where: {
-      ...channelAvatarEmojiOwnedChannelWhere(options.workspaceId),
+      workspaceId: options.workspaceId,
+      sourceAccesses: {
+        some: {
+          workspaceId: options.workspaceId,
+          sourceType: 'MTPROTO',
+          role: 'OWNER',
+        },
+      },
       photoUrl: { not: null },
     },
     select: { id: true, photoUrl: true },

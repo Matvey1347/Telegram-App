@@ -15,6 +15,7 @@ import {
 } from '../../../common/current-user.decorator';
 import { JwtAuthGuard } from '../../../common/jwt-auth.guard';
 import { TelegramInviteLinkRegistrationService } from './telegram-invite-link-registration.service';
+import { TelegramInviteLinkMaintenanceService } from './telegram-invite-link-maintenance.service';
 
 class RegisterTelegramChannelInviteLinkDto {
   @IsString() @MaxLength(512) url!: string;
@@ -29,11 +30,16 @@ class CreateTelegramChannelInviteLinkDto {
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) monthlyFeeStars?: number;
 }
 
+class RefreshTelegramChannelInviteLinksDto {
+  @IsString() @MaxLength(128) mtprotoAccountId!: string;
+}
+
 @UseGuards(JwtAuthGuard)
 @Controller('telegram-channels')
 export class TelegramChannelInviteLinkRegistrationController {
   constructor(
     private readonly registration: TelegramInviteLinkRegistrationService,
+    private readonly maintenance: TelegramInviteLinkMaintenanceService,
   ) {}
 
   @Post(':id/invite-links/register')
@@ -52,5 +58,14 @@ export class TelegramChannelInviteLinkRegistrationController {
     @Body() dto: CreateTelegramChannelInviteLinkDto,
   ) {
     return this.registration.create(user.sub, id, dto);
+  }
+
+  @Post(':id/invite-links/refresh-inactive')
+  refreshInactive(
+    @CurrentUser() user: JwtUser,
+    @Param('id') id: string,
+    @Body() dto: RefreshTelegramChannelInviteLinksDto,
+  ) {
+    return this.maintenance.refreshInactive(user.sub, id, dto.mtprotoAccountId);
   }
 }

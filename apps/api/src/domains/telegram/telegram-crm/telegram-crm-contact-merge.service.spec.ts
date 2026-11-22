@@ -21,8 +21,6 @@ const contact = (id: string, overrides: Record<string, unknown> = {}) => ({
   archivedAt: null,
   ownerMemberId: 'member-1',
   lastContactAt: null,
-  manualInstagramContactAt: null,
-  manualInstagramReplyAt: null,
   lastInboundAt: null,
   lastOutboundAt: null,
   lastPurchaseAt: null,
@@ -49,7 +47,6 @@ describe('TelegramCrmContactMergeService', () => {
     async (targetStatus, sourceStatus) => {
       const target = contact('target', {
         companyName: 'Keep target',
-        manualInstagramContactAt: new Date('2030-01-02T00:00:00Z'),
         manualSalesStatus: targetStatus,
         totalSalesCount: 1,
         completedSalesCount: 1,
@@ -58,8 +55,6 @@ describe('TelegramCrmContactMergeService', () => {
       });
       const source = contact('source', {
         companyName: 'Source conflict',
-        manualInstagramContactAt: new Date('2030-01-01T00:00:00Z'),
-        manualInstagramReplyAt: new Date('2030-01-03T00:00:00Z'),
         manualSalesStatus: sourceStatus,
         telegramUsername: 'fill_from_source',
         totalSalesCount: 3,
@@ -151,8 +146,6 @@ describe('TelegramCrmContactMergeService', () => {
           companyName: 'Keep target',
           telegramUsername: 'fill_from_source',
           manualSalesStatus: 'DO_NOT_CONTACT',
-          manualInstagramContactAt: new Date('2030-01-02T00:00:00Z'),
-          manualInstagramReplyAt: new Date('2030-01-03T00:00:00Z'),
           totalSalesCount: 4,
           totalRevenueInPrimaryCurrency: new Prisma.Decimal(400),
           averageOrderValueInPrimaryCurrency: new Prisma.Decimal(100),

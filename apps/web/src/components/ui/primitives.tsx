@@ -1,6 +1,7 @@
 "use client";
 
 export { Modal } from "./modal";
+export { ModalBackButton } from "./modal-back-button";
 export { MasonryGrid } from "./masonry-grid";
 export {
   TimeInput,

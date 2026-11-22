@@ -8,7 +8,6 @@ describe("TelegramChannelsHeaderActions", () => {
     render(
       <TelegramChannelsHeaderActions
         tab="channels"
-        accountFilter="mtproto"
         hasChannels
         onCreateNetwork={vi.fn()}
         onConnectAccount={vi.fn()}
@@ -20,8 +19,8 @@ describe("TelegramChannelsHeaderActions", () => {
     );
     screen.getByRole("button", { name: "Message templates" }).click();
     expect(openTemplates).toHaveBeenCalledOnce();
+    expect(screen.queryByRole("button", { name: "Schedules" })).not.toBeInTheDocument();
     for (const name of [
-      "Schedules",
       "Message templates",
       "Sync all channels",
       "Export",

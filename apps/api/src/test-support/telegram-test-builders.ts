@@ -173,6 +173,8 @@ export function buildResolvedTelegramEntity(
         ? `https://t.me/+resolved_${numeric}`
         : overrides.inviteLink,
     joinedByInvite: overrides.joinedByInvite ?? false,
+    isCreator: overrides.isCreator,
+    adminRights: overrides.adminRights,
     accessMode: overrides.accessMode || 'PUBLIC',
     requiresJoinRequest: overrides.requiresJoinRequest ?? false,
   };

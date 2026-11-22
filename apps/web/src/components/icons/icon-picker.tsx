@@ -6,13 +6,32 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { LoaderCircle, Plus, Search, Upload } from "lucide-react";
 import { iconsApi, type Icon, type ResolvedEmoji } from "@/lib/api";
 import { iconToResolvedEmoji } from "@/lib/resolved-emoji";
-import { emojiCategoryLabels, emojiIcons, type EmojiCategory, type EmojiIcon } from "@/lib/emoji-icons";
+import {
+  emojiCategoryLabels,
+  emojiIcons,
+  type EmojiCategory,
+  type EmojiIcon,
+} from "@/lib/emoji-icons";
 import { Button, Input } from "@/components/ui/primitives";
 import { IconAvatar } from "./icon-avatar";
-import { clipboardImageFile, IconImageUploadPanel, type IconUploadPreview } from "./icon-image-upload-panel";
-import { emojiLocalizedSearchTerms, uiCopy, type UiLocale } from "@/lib/ui-i18n";
+import {
+  clipboardImageFile,
+  IconImageUploadPanel,
+  type IconUploadPreview,
+} from "./icon-image-upload-panel";
+import {
+  emojiLocalizedSearchTerms,
+  uiCopy,
+  type UiLocale,
+} from "@/lib/ui-i18n";
 import { useOptionalI18n } from "@/providers/i18n-provider";
-import { IconPickerBrowser, type IconSection, type RecentIcon, type RecentSavedIcon, type RecentStandardIcon } from "./icon-picker-browser";
+import {
+  IconPickerBrowser,
+  type IconSection,
+  type RecentIcon,
+  type RecentSavedIcon,
+  type RecentStandardIcon,
+} from "./icon-picker-browser";
 
 type IconPickerProps = {
   iconId?: string | null;
@@ -20,6 +39,7 @@ type IconPickerProps = {
   onChange: (iconId: string | null, icon?: ResolvedEmoji | null) => void;
   onEmojiChange?: (emoji: string | null) => void;
   buttonLabel?: string;
+  iconOnly?: boolean;
   ariaLabel?: string;
   className?: string;
   iconClassName?: string;
@@ -94,6 +114,7 @@ export function IconPicker({
   onChange,
   onEmojiChange,
   buttonLabel,
+  iconOnly = false,
   ariaLabel,
   className = "",
   iconClassName = "",
@@ -459,14 +480,6 @@ export function IconPicker({
     createEmojiMutation.mutate(item);
   };
 
-  const selectRecentStandard = (item: RecentStandardIcon) => {
-    selectEmoji(item);
-  };
-
-  const selectStandardIcon = (item: EmojiIcon) => {
-    selectEmoji(item);
-  };
-
   const selectRecentSaved = (item: RecentSavedIcon) => {
     setOptimisticIcon(item.icon);
     qc.setQueryData(["icon", item.icon.id], item.icon);
@@ -595,12 +608,17 @@ export function IconPicker({
             bordered={!(compact || bare)}
             className={`${bare ? "!h-5 !w-5 !bg-transparent !border-0 !rounded-none !text-base" : ""} ${iconClassName}`}
           />
-        ) : compact && buttonLabel ? (
-          <span aria-hidden="true" className={`text-base leading-none ${iconClassName}`}>{buttonLabel}</span>
+        ) : compact && buttonLabel && !iconOnly ? (
+          <span
+            aria-hidden="true"
+            className={`text-base leading-none ${iconClassName}`}
+          >
+            {buttonLabel}
+          </span>
         ) : (
           <Plus size={bare ? 14 : 16} />
         )}
-        {!compact && !bare ? (
+        {!compact && !bare && !iconOnly ? (
           <span>{currentIcon ? ui.changeIcon : resolvedButtonLabel}</span>
         ) : null}
       </button>
@@ -701,7 +719,6 @@ export function IconPicker({
                 </div>
 
                 {tab === "icons" ? (
-
                   <IconPickerBrowser
                     scrollAreaRef={scrollAreaRef}
                     setSectionRef={(section, node) => {
@@ -720,13 +737,13 @@ export function IconPicker({
                     scrollToSection={scrollToSection}
                     selectCustomIcon={selectCustomIcon}
                     selectRecentSaved={selectRecentSaved}
-                    selectRecentStandard={selectRecentStandard}
-                    selectStandardIcon={selectStandardIcon}
+                    selectRecentStandard={selectEmoji}
+                    selectStandardIcon={selectEmoji}
                     standardIconsReady={standardIconsReady}
                     standardRecent={standardRecent}
                     totalSearchResults={totalSearchResults}
                   />
-) : null}
+                ) : null}
 
                 {tab === "upload" ? (
                   <IconImageUploadPanel

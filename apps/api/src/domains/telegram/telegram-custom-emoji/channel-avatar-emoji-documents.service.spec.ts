@@ -8,7 +8,7 @@ type Asset = {
   imageUrl: string;
   pack: { id: number; shortName: string };
 };
-type Icon = { workspaceId: string; name: string; emoji: string };
+type Icon = { id: string; workspaceId: string; name: string; emoji: string };
 
 function setup() {
   const assets: Asset[] = [
@@ -33,22 +33,31 @@ function setup() {
   ];
   const icons: Icon[] = [
     {
+      id: 'icon-old-photo',
       workspaceId: 'workspace-a',
       name: 'channel-avatar:old-photo',
       emoji: '![📢](tg://emoji?id=501234567890001)',
     },
     {
+      id: 'icon-new-photo',
       workspaceId: 'workspace-a',
       name: 'channel-avatar:new-photo',
       emoji: '![📢](tg://emoji?id=501234567890002)',
     },
     {
+      id: 'icon-foreign-photo',
       workspaceId: 'workspace-b',
       name: 'channel-avatar:foreign-photo',
       emoji: '![📢](tg://emoji?id=501234567890003)',
     },
   ];
   const prisma = {
+    telegramChannel: {
+      findMany: jest.fn().mockResolvedValue([
+        { avatarEmojiIconId: 'icon-old-photo', presentationIconId: null },
+        { avatarEmojiIconId: 'icon-new-photo', presentationIconId: null },
+      ]),
+    },
     channelAvatarEmojiAsset: {
       findMany: jest.fn(
         ({ where }: { where: { customEmojiId: { in: string[] } } }) =>
@@ -82,13 +91,21 @@ function setup() {
         ({
           where,
         }: {
-          where: { workspaceId: string; name: { in: string[] } };
+          where: {
+            workspaceId: string;
+            id?: { in: string[] };
+            name?: { in?: string[]; startsWith?: string };
+          };
         }) =>
           Promise.resolve(
             icons.filter(
               (icon) =>
                 icon.workspaceId === where.workspaceId &&
-                where.name.in.includes(icon.name),
+                (where.id?.in.includes(icon.id) ??
+                  where.name?.in?.includes(icon.name) ??
+                  (where.name?.startsWith
+                    ? icon.name.startsWith(where.name.startsWith)
+                    : false)),
             ),
           ),
       ),
@@ -150,20 +167,38 @@ describe('System channel avatar emoji document separation', () => {
     expect(prisma.telegramCustomEmojiPack.upsert).not.toHaveBeenCalled();
   });
 
+  it('lists only channel-avatar emoji icons owned by the current workspace', async () => {
+    const { documents, assets, prisma } = setup();
+    const packs = await documents.list('workspace-a');
+    expect(packs).toHaveLength(1);
+    expect(packs[0].emojis.map((emoji) => emoji.documentId)).toEqual(
+      assets.slice(0, 2).map((asset) => asset.customEmojiId),
+    );
+    const iconQuery = prisma.icon.findMany.mock.calls[0]?.[0] as unknown;
+    expect(iconQuery).toMatchObject({
+      where: {
+        workspaceId: 'workspace-a',
+        id: { in: ['icon-old-photo', 'icon-new-photo'] },
+      },
+    });
+  });
+
   it('continues to resolve a historical avatar from its retained Icon after the current avatar changes', async () => {
     const { service, assets, prisma } = setup();
     // Both version Icons are retained; no current channel pointer is consulted.
     const result = await service.resolveDocuments('user-a', [
       assets[0].customEmojiId,
     ]);
-    expect(result.packs[0].emojis).toHaveLength(1);
+    expect(result.packs[0].emojis).toHaveLength(2);
     expect(result.packs[0].emojis[0].documentId).toBe(assets[0].customEmojiId);
-    expect(prisma.icon.findMany).toHaveBeenCalledWith(
+    expect(prisma.icon.findMany).toHaveBeenLastCalledWith(
       expect.objectContaining({
         where: {
           workspaceId: 'workspace-a',
           type: 'emoji',
-          name: { in: ['channel-avatar:old-photo'] },
+          name: {
+            in: ['channel-avatar:old-photo', 'channel-avatar:new-photo'],
+          },
         },
       }),
     );
@@ -174,7 +209,11 @@ describe('System channel avatar emoji document separation', () => {
     const result = await service.resolveDocuments('user-a', [
       assets[2].customEmojiId,
     ]);
-    expect(result).toMatchObject({ loaded: 0, failed: 1, packs: [] });
+    expect(result).toMatchObject({
+      loaded: 0,
+      failed: 1,
+      packs: [expect.objectContaining({ id: 'channel-avatar:1' })],
+    });
     expect(mtproto.getCustomEmojiPack).not.toHaveBeenCalled();
     expect(
       prisma.telegramUserAccountIntegration.findFirst,
@@ -195,11 +234,15 @@ describe('System channel avatar emoji document separation', () => {
     ).toEqual([]);
   });
 
-  it('keeps the ordinary pack list limited to user imports', async () => {
-    const { service, prisma } = setup();
-    await expect(service.list('user-a')).resolves.toEqual({ packs: [] });
-    expect(prisma.channelAvatarEmojiAsset.findMany).not.toHaveBeenCalled();
-    expect(prisma.icon.findMany).not.toHaveBeenCalled();
+  it('includes workspace channel avatar packs in the workspace picker response', async () => {
+    const { service, assets } = setup();
+    const result = await service.list('user-a');
+    expect(result.packs).toHaveLength(1);
+    expect(result.packs[0].id).toBe('channel-avatar:1');
+    expect(result.packs[0].emojis.map((emoji) => emoji.documentId)).toEqual([
+      assets[0].customEmojiId,
+      assets[1].customEmojiId,
+    ]);
   });
 
   it('retains virtual avatar summaries after an unrelated document import replaces the imported-pack response', async () => {

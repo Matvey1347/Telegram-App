@@ -16,6 +16,7 @@ import {
   Card,
   ConfirmDeleteModal,
   Modal,
+  ModalBackButton,
   canonicalizeTimeInputValue,
 } from "@/components/ui/primitives";
 import { useWorkspaceModalDrafts } from "@/hooks/use-workspace-modal-drafts";
@@ -137,6 +138,9 @@ export function PublicationSchedulesModal({
             : [...current, saved],
       );
       void queryClient.invalidateQueries({ queryKey: telegramPublicationScheduleKeys.all(), refetchType: "none" });
+      void queryClient.invalidateQueries({
+        queryKey: telegramPublicationScheduleKeys.calendarRoot(),
+      });
       if (!editingId) modalDrafts.clearCurrentDraft();
       pushToast(editingId ? "Schedule updated" : "Schedule created", "success");
       closeEditor();
@@ -157,6 +161,9 @@ export function PublicationSchedulesModal({
       void queryClient.invalidateQueries({
         queryKey: telegramPublicationScheduleKeys.all(),
         refetchType: "none",
+      });
+      void queryClient.invalidateQueries({
+        queryKey: telegramPublicationScheduleKeys.calendarRoot(),
       });
       closeEditor();
       pushToast("Schedule deleted", "success");
@@ -179,7 +186,7 @@ export function PublicationSchedulesModal({
         titleIcon={<CalendarClock size={19} aria-hidden="true" />}
         size="xl"
         leadingHeaderAction={editorOpen ? (
-          <Button type="button" variant="secondary" className="h-9 w-9 p-0" aria-label="Back to schedules" title="Back to schedules" onClick={closeEditor}>←</Button>
+          <ModalBackButton label="Back to schedules" onClick={closeEditor} />
         ) : undefined}
       >
         {editorOpen && !editingId && modalDrafts.pendingDrafts.length ? (

@@ -1,3 +1,4 @@
+import { runBounded } from '@api/common/run-bounded';
 import { NotFoundException } from '@nestjs/common';
 import { TelegramSourceType, TelegramUserAccountStatus } from '@prisma/client';
 import { normalizeTelegramChannelId } from '@api/telegram/shared/imports/telegram-post-url';
@@ -37,6 +38,7 @@ export async function syncTelegramUserAccountDialogs(
   workspaceId: string,
   id: string,
   onProgress?: TelegramUserAccountProgressCallback,
+  managedChannelIds?: readonly string[],
 ) {
   const account =
     await dependencies.prisma.telegramUserAccountIntegration.findFirst({
@@ -57,6 +59,7 @@ export async function syncTelegramUserAccountDialogs(
     3,
     'Loading admin channels from Telegram',
   );
+  const observedAt = new Date();
   const { channels, profile, complete } =
     await dependencies.mtprotoClient.getAdminChannelsWithProfile(
       decryptTelegramMtprotoCredentials(dependencies.encryptionService, {
@@ -65,6 +68,7 @@ export async function syncTelegramUserAccountDialogs(
         sessionIv: account.sessionIv,
         sessionAuthTag: account.sessionAuthTag,
       }),
+      { includeChannelPhotos: !managedChannelIds },
     );
 
   await notifyProgress(
@@ -74,7 +78,11 @@ export async function syncTelegramUserAccountDialogs(
     'Matching Telegram channels with workspace channels',
   );
   const workspaceChannels = await dependencies.prisma.telegramChannel.findMany({
-    where: { workspaceId, isActive: true },
+    where: {
+      workspaceId,
+      isActive: true,
+      ...(managedChannelIds ? { id: { in: [...managedChannelIds] } } : {}),
+    },
     select: { id: true, username: true, telegramChatId: true },
   });
   const channelByUsername = new Map(
@@ -135,34 +143,38 @@ export async function syncTelegramUserAccountDialogs(
 
   await notifyProgress(onProgress, 3, 3, 'Saving channel access links');
   await dependencies.prisma.$transaction(async (tx) => {
-    await tx.telegramUserAccountIntegration.update({
-      where: { id: account.id },
-      data: {
-        telegramUserId: profile.id,
-        username: profile.username,
-        firstName: profile.firstName,
-        lastName: profile.lastName,
-        photoUrl: profile.photoUrl ?? null,
-        nameColor: profile.nameColor ?? null,
-        label:
-          (profile.username &&
-            `@${String(profile.username).replace('@', '')}`) ||
-          profile.firstName ||
-          account.label,
-        lastSyncedAt: new Date(),
-        lastCheckedAt: new Date(),
-        status: TelegramUserAccountStatus.connected,
-        lastErrorMessage: null,
-        ...telegramAccountCapabilityUpdate(profile),
-      },
-    });
+    if (!managedChannelIds)
+      await tx.telegramUserAccountIntegration.update({
+        where: { id: account.id },
+        data: {
+          telegramUserId: profile.id,
+          username: profile.username,
+          firstName: profile.firstName,
+          lastName: profile.lastName,
+          photoUrl: profile.photoUrl ?? null,
+          nameColor: profile.nameColor ?? null,
+          label:
+            (profile.username &&
+              `@${String(profile.username).replace('@', '')}`) ||
+            profile.firstName ||
+            account.label,
+          lastSyncedAt: new Date(),
+          lastCheckedAt: new Date(),
+          status: TelegramUserAccountStatus.connected,
+          lastErrorMessage: null,
+          ...telegramAccountCapabilityUpdate(profile),
+        },
+      });
     const matchedIds = matchedChannels.map(({ id }) => id);
     if (complete) {
       await tx.telegramChannelAdminLink.deleteMany({
         where: {
           workspaceId,
           telegramUserAccountIntegrationId: account.id,
-          telegramChannelId: { notIn: matchedIds },
+          telegramChannelId: {
+            notIn: matchedIds,
+            ...(managedChannelIds ? { in: [...managedChannelIds] } : {}),
+          },
         },
       });
       await tx.telegramChannelSourceAccess.deleteMany({
@@ -170,7 +182,10 @@ export async function syncTelegramUserAccountDialogs(
           workspaceId,
           sourceId: account.id,
           sourceType: TelegramSourceType.MTPROTO,
-          channelId: { notIn: matchedIds },
+          channelId: {
+            notIn: matchedIds,
+            ...(managedChannelIds ? { in: [...managedChannelIds] } : {}),
+          },
         },
       });
     }
@@ -201,7 +216,31 @@ export async function syncTelegramUserAccountDialogs(
           rawPermissions,
         },
         tx,
+        observedAt,
       );
+      if (channel.isCreator) {
+        // A verified creator rules out an older creator claim for another account.
+        await tx.telegramChannelSourceAccess.updateMany({
+          where: {
+            workspaceId,
+            channelId,
+            sourceType: TelegramSourceType.MTPROTO,
+            sourceId: { not: account.id },
+            role: 'OWNER',
+            lastCheckedAt: { lt: observedAt },
+          },
+          data: {
+            role: 'UNKNOWN',
+            rawPermissions: { isCreator: false, adminRights: null },
+            canPostMessages: false,
+            canEditMessages: false,
+            canDeleteMessages: false,
+            canInviteUsers: false,
+            canManageInviteLinks: false,
+            canViewStats: false,
+          },
+        });
+      }
     }
   });
   for (const { channel, id: channelId } of matchedChannels) {
@@ -224,5 +263,73 @@ export async function syncTelegramUserAccountDialogs(
       matchedChannels.length > 0
         ? `Linked admin to ${matchedChannels.length} workspace channels`
         : 'No matching workspace channels by username',
+  };
+}
+
+/** Manual account sync also reconciles existing managed channels for connected peers. */
+export async function reconcileWorkspaceAccountDialogs(
+  dependencies: AccountDialogSyncDependencies,
+  workspaceId: string,
+  accountId: string,
+  onProgress?: TelegramUserAccountProgressCallback,
+) {
+  const [channels, peers] = await Promise.all([
+    dependencies.prisma.telegramChannel.findMany({
+      where: { workspaceId, isActive: true, adminLinks: { some: {} } },
+      select: { id: true },
+    }),
+    dependencies.prisma.telegramUserAccountIntegration.findMany({
+      where: {
+        workspaceId,
+        id: { not: accountId },
+        isActive: true,
+        status: TelegramUserAccountStatus.connected,
+        sessionEncrypted: { not: null },
+      },
+      select: { id: true },
+    }),
+  ]);
+  const result = await syncTelegramUserAccountDialogs(
+    dependencies,
+    workspaceId,
+    accountId,
+    onProgress,
+  );
+  if (!peers.length) return result;
+  const ids = [
+    ...new Set([
+      ...channels.map(({ id }) => id),
+      ...(result.syncedChannels ?? []).map(
+        ({ workspaceChannelId }) => workspaceChannelId,
+      ),
+    ]),
+  ];
+  if (!ids.length) return result;
+
+  await notifyProgress(
+    onProgress,
+    3,
+    3,
+    'Checking channel roles for connected accounts',
+  );
+  const outcomes = await runBounded(peers, 2, async ({ id }) => {
+    try {
+      return (
+        await syncTelegramUserAccountDialogs(
+          dependencies,
+          workspaceId,
+          id,
+          undefined,
+          ids,
+        )
+      ).success;
+    } catch {
+      return false;
+    }
+  });
+  const refreshed = outcomes.filter(Boolean).length;
+  return {
+    ...result,
+    message: `${result.message}. Checked roles for ${refreshed}/${peers.length} other accounts.`,
   };
 }

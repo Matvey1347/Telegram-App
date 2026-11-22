@@ -50,11 +50,16 @@ export async function createTelegramAiPostingReferenceSheet(
 export async function addTelegramAiPostingAvatarWatermark(
   imageBytes: Buffer,
   avatarBytes: Buffer,
+  sizePercent = 12,
+  opacityPercent = 100,
+  xPercent = 100,
+  yPercent = 100,
 ) {
   const metadata = await sharp(imageBytes).metadata();
   const width = metadata.width ?? 1024;
   const height = metadata.height ?? 1024;
-  const size = Math.max(64, Math.round(Math.min(width, height) * 0.12));
+  const size = Math.max(32, Math.round(Math.min(width, height) * Math.min(30, Math.max(5, sizePercent)) / 100));
+  const opacity = Math.min(100, Math.max(10, opacityPercent)) / 100;
   const margin = Math.max(20, Math.round(size * 0.16));
   const avatar = await sharp(avatarBytes, { limitInputPixels: 40_000_000 })
     .rotate()
@@ -70,14 +75,25 @@ export async function addTelegramAiPostingAvatarWatermark(
     .toBuffer();
   const ringSize = size + 8;
   const ring = Buffer.from(
-    `<svg width="${ringSize}" height="${ringSize}" xmlns="http://www.w3.org/2000/svg"><circle cx="${ringSize / 2}" cy="${ringSize / 2}" r="${size / 2 + 3}" fill="white"/></svg>`,
+    `<svg width="${ringSize}" height="${ringSize}" xmlns="http://www.w3.org/2000/svg"><circle cx="${ringSize / 2}" cy="${ringSize / 2}" r="${size / 2 + 3}" fill="white" fill-opacity="${opacity}"/></svg>`,
   );
-  const left = Math.max(0, width - ringSize - margin);
-  const top = Math.max(0, height - ringSize - margin);
+  const opacityMask = Buffer.from(
+    `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg"><rect width="100%" height="100%" fill="white" fill-opacity="${opacity}"/></svg>`,
+  );
+  const fadedAvatar = await sharp(roundAvatar)
+    .composite([{ input: opacityMask, blend: 'dest-in' }])
+    .png()
+    .toBuffer();
+  const position = (dimension: number, percent: number) =>
+    Math.min(margin, Math.max(0, dimension - ringSize)) +
+    Math.round(Math.max(0, dimension - ringSize - 2 * margin) *
+      (Number.isFinite(percent) ? Math.max(0, Math.min(100, percent)) : 100) / 100);
+  const left = position(width, xPercent);
+  const top = position(height, yPercent);
   return sharp(imageBytes)
     .composite([
       { input: ring, left, top },
-      { input: roundAvatar, left: left + 4, top: top + 4 },
+      { input: fadedAvatar, left: left + 4, top: top + 4 },
     ])
     .jpeg({ quality: 90, mozjpeg: true })
     .toBuffer();

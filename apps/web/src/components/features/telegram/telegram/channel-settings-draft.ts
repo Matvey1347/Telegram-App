@@ -21,11 +21,6 @@ export type ChannelSettingsDraft = {
   adBaseCurrency: string;
   targetCpa: string;
   stopCpaFrom: string;
-  seedDisabled: boolean;
-  seedSubscribersCount: string;
-  knownFakeSubscribersCount: string;
-  ownViewsPerPost: string;
-  ownReactionsPerPost: string;
   autoSyncEnabled: boolean;
   postSyncLimit: number;
 };
@@ -50,11 +45,6 @@ export function createChannelSettingsDraft(
     adBaseCurrency: channel.adBaseCurrency || channel.kpiCurrency || "USD",
     targetCpa: channel.targetCpa == null ? "" : String(channel.targetCpa),
     stopCpaFrom: channel.stopCpaFrom == null ? "" : String(channel.stopCpaFrom),
-    seedDisabled: channel.seedDisabled ?? false,
-    seedSubscribersCount: String(channel.seedSubscribersCount ?? 0),
-    knownFakeSubscribersCount: String(channel.knownFakeSubscribersCount ?? 0),
-    ownViewsPerPost: String(channel.ownViewsPerPost ?? 0),
-    ownReactionsPerPost: String(channel.ownReactionsPerPost ?? 0),
     autoSyncEnabled: channel.autoSyncEnabled ?? true,
     postSyncLimit:
       channel.postSyncLimit ?? DEFAULT_TELEGRAM_CHANNEL_POST_SYNC_LIMIT,
@@ -70,8 +60,6 @@ function optionalNumber(value: string) {
 }
 
 export function buildChannelSettingsPayload(draft: ChannelSettingsDraft) {
-  const seedValue = (value: string) =>
-    draft.seedDisabled ? 0 : nonNegative(value);
   return {
     ...(draft.presentationIconDirty ? { presentationIconId: draft.presentationIconId || null } : {}),
     shortDescription: draft.description.trim() || null,
@@ -89,11 +77,6 @@ export function buildChannelSettingsPayload(draft: ChannelSettingsDraft) {
     kpiCurrency: draft.adBaseCurrency,
     targetCpa: optionalNumber(draft.targetCpa),
     stopCpaFrom: optionalNumber(draft.stopCpaFrom),
-    seedDisabled: draft.seedDisabled,
-    seedSubscribersCount: seedValue(draft.seedSubscribersCount),
-    knownFakeSubscribersCount: seedValue(draft.knownFakeSubscribersCount),
-    ownViewsPerPost: seedValue(draft.ownViewsPerPost),
-    ownReactionsPerPost: seedValue(draft.ownReactionsPerPost),
     autoSyncEnabled: draft.autoSyncEnabled,
     postSyncLimit: draft.postSyncLimit,
   };

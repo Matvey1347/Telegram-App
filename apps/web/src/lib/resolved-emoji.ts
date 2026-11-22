@@ -7,10 +7,14 @@ export function iconToResolvedEmoji(
   if (icon.type === "unicode") return icon;
   if (icon.type === "image" && "url" in icon) return icon;
   if (icon.type === "emoji" && icon.emoji) {
+    const customEmoji = icon.emoji.match(
+      /^!\[([^\]\n]*)\]\(tg:\/\/emoji\?id=(\d+)\)$/,
+    );
     return {
       type: "unicode",
-      value: icon.emoji,
+      value: customEmoji?.[1] || icon.emoji,
       name: icon.name ?? null,
+      ...(customEmoji ? { telegramCustomEmojiId: customEmoji[2] } : {}),
     };
   }
   if (icon.type === "image" && icon.imageUrl) {

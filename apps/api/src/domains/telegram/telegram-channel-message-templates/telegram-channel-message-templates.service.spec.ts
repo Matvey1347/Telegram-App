@@ -191,7 +191,7 @@ describe('TelegramChannelMessageTemplatesService', () => {
           emoji: '💼',
           imageUrl: null,
         },
-        networkMembers: [{ network: { name: 'Business' } }],
+        networkMembers: [{ network: { name: 'Business', icon: null } }],
         inviteLinks: [
           { id: 'link-main', name: 'Main', url: 'https://t.me/+main' },
         ],
@@ -243,7 +243,9 @@ describe('TelegramChannelMessageTemplatesService', () => {
     expect(result.channels[0]).toEqual(
       expect.objectContaining({
         emojiSource: '💼',
-        networkGroups: [{ name: 'Business', emojiSource: null }],
+        networkGroups: [
+          { name: 'Business', emojiSource: null, iconPresentation: null },
+        ],
         viewsPerPost: 1_200,
         description: 'Short business description',
         products: [
@@ -297,20 +299,18 @@ describe('TelegramChannelMessageTemplatesService', () => {
       service.source('user-1', { templateId: 'template-1' }),
     ).rejects.toBeInstanceOf(NotFoundException);
 
-    expect(prisma.telegramChannel.findMany).toHaveBeenNthCalledWith(
-      1,
-      expect.objectContaining({
-        where: expect.objectContaining({
-          workspaceId: 'workspace-1',
-          networkMembers: { some: { networkId: 'network-1' } },
-        }),
-      }),
-    );
-    expect(prisma.telegramChannel.findMany).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({
-        where: expect.objectContaining({ id: { in: ['new-channel'] } }),
-      }),
-    );
+    const channelQueries = prisma.telegramChannel.findMany.mock
+      .calls as unknown as unknown[][];
+    const membershipQuery = channelQueries[0]?.[0];
+    expect(membershipQuery).toMatchObject({
+      where: {
+        workspaceId: 'workspace-1',
+        networkMembers: { some: { networkId: 'network-1' } },
+      },
+    });
+    const detailQuery = channelQueries[1]?.[0];
+    expect(detailQuery).toMatchObject({
+      where: { id: { in: ['new-channel'] } },
+    });
   });
 });

@@ -12,6 +12,7 @@ import {
   Users,
   Inbox,
   Radar,
+  Settings2,
 } from "lucide-react";
 import { CrmSaleReturnLink } from "./crm-sale-return-link";
 import { crmText } from "./crm-copy";
@@ -32,15 +33,23 @@ const primary = [
 export function CrmNavigation({
   canViewInbox,
   canViewSales,
+  canViewSettings,
   inboxUnread,
 }: {
   canViewInbox?: boolean;
   canViewSales?: boolean;
+  canViewSettings?: boolean;
   inboxUnread?: number;
 }) {
   const t = useLeadText();
-  const ru = useOptionalI18n()?.locale === "ru";
-  const navRu = { "nav.contacts": "Клиенты", "nav.deals": "Сделки", "nav.calendar": "Календарь", "nav.analytics": "Аналитика" } as const;
+  const i18n = useOptionalI18n();
+  const ru = i18n?.locale === "ru";
+  const navRu = {
+    "nav.contacts": "Клиенты",
+    "nav.deals": "Сделки",
+    "nav.calendar": "Календарь",
+    "nav.analytics": "Аналитика",
+  } as const;
   const pathname = usePathname();
   const tabsRef = useRef<HTMLDivElement>(null);
   const me = useQuery({
@@ -55,29 +64,64 @@ export function CrmNavigation({
     pathname === "/ad-sales" ||
     pathname.startsWith("/ad-sales/contacts") ||
     pathname.startsWith("/ad-sales/clients");
-  const showInbox = canViewInbox ?? (permissions.canViewOwn || permissions.canViewAll);
+  const showInbox =
+    canViewInbox ?? (permissions.canViewOwn || permissions.canViewAll);
   const showLeads = leadAccess(me.data?.workspace.access).view;
   useLayoutEffect(() => {
     const container = tabsRef.current;
-    const active = container?.querySelector<HTMLElement>('[aria-current="page"]');
+    const active = container?.querySelector<HTMLElement>(
+      '[aria-current="page"]',
+    );
     if (!container || !active) return;
     const left = active.offsetLeft;
     if (left < container.scrollLeft) container.scrollLeft = left;
-    else if (left + active.offsetWidth > container.scrollLeft + container.clientWidth)
+    else if (
+      left + active.offsetWidth >
+      container.scrollLeft + container.clientWidth
+    )
       container.scrollLeft = left + active.offsetWidth - container.clientWidth;
-  }, [pathname, showSales, showInbox, showLeads]);
+  }, [pathname, showSales, showInbox, showLeads, canViewSettings]);
   return (
     <nav
       aria-label="CRM navigation"
       className="mb-5 overflow-hidden rounded-[18px] border border-neutral-800 bg-[#111111]"
     >
       <div ref={tabsRef} className="relative flex overflow-x-auto px-2">
-        {showInbox ? <Link href="/ad-sales/inbox" aria-current={pathname.startsWith("/ad-sales/inbox") ? "page" : undefined} className={linkClass(pathname.startsWith("/ad-sales/inbox"))}><Inbox size={16} /><span>{ru ? "Входящие" : "Inbox"}</span>{inboxUnread ? <span className="rounded-full bg-blue-500/20 px-1.5 text-xs text-blue-200">{inboxUnread}</span> : null}</Link> : null}
-        {showLeads ? <Link href="/ad-sales/leads" aria-current={pathname.startsWith("/ad-sales/leads") ? "page" : undefined} className={linkClass(pathname.startsWith("/ad-sales/leads"))}><Radar size={16}/><span>{t("Lead Discovery")}</span></Link> : null}
+        {showInbox ? (
+          <Link
+            href="/ad-sales/inbox"
+            aria-current={
+              pathname.startsWith("/ad-sales/inbox") ? "page" : undefined
+            }
+            className={linkClass(pathname.startsWith("/ad-sales/inbox"))}
+          >
+            <Inbox size={16} />
+            <span>{ru ? "Входящие" : "Inbox"}</span>
+            {inboxUnread ? (
+              <span className="rounded-full bg-blue-500/20 px-1.5 text-xs text-blue-200">
+                {inboxUnread}
+              </span>
+            ) : null}
+          </Link>
+        ) : null}
+        {showLeads ? (
+          <Link
+            href="/ad-sales/leads"
+            aria-current={
+              pathname.startsWith("/ad-sales/leads") ? "page" : undefined
+            }
+            className={linkClass(pathname.startsWith("/ad-sales/leads"))}
+          >
+            <Radar size={16} />
+            <span>{t("Lead Discovery")}</span>
+          </Link>
+        ) : null}
         {primary
           .filter(
             ([copyKey]) =>
-              !["nav.deals", "nav.calendar", "nav.analytics"].includes(copyKey) || showSales,
+              !["nav.deals", "nav.calendar", "nav.analytics"].includes(
+                copyKey,
+              ) || showSales,
           )
           .map(([copyKey, href, Icon]) => {
             const active =
@@ -85,12 +129,29 @@ export function CrmNavigation({
                 ? contactsActive
                 : pathname === href || pathname.startsWith(`${href}/`);
             return (
-              <Link key={href} href={href} aria-current={active ? "page" : undefined} className={linkClass(active)}>
+              <Link
+                key={href}
+                href={href}
+                aria-current={active ? "page" : undefined}
+                className={linkClass(active)}
+              >
                 <Icon size={16} />
                 <span>{ru ? navRu[copyKey] : crmText(copyKey)}</span>
               </Link>
             );
           })}
+        {canViewSettings ? (
+          <Link
+            href="/ad-sales/settings"
+            aria-current={
+              pathname === "/ad-sales/settings" ? "page" : undefined
+            }
+            className={linkClass(pathname === "/ad-sales/settings")}
+          >
+            <Settings2 size={16} />
+            <span>{i18n?.t("crm.settings.nav") ?? "Settings"}</span>
+          </Link>
+        ) : null}
       </div>
       <CrmSaleReturnLink />
       <CrmAiUsage />

@@ -63,10 +63,6 @@ export function AudienceOverview({ audience }: { audience: any }) {
           value={formatNullableNumber(audience?.effectiveSubscribersCount)}
         />
         <SnapshotItem
-          label="Own / seed subscribers"
-          value={formatNumber(audience?.seedSubscribersCount)}
-        />
-        <SnapshotItem
           label="Own views per post"
           value={formatNumber(audience?.ownViewsPerPost)}
         />

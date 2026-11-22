@@ -111,6 +111,7 @@ function ContentHypothesisEditorModal({
             icon={icon}
             allowImages={false}
             buttonLabel={t("telegram.posts.icon.addEmoji")}
+            iconOnly
             onChange={(iconId, presentation) => {
               setDraft((current) => ({ ...current, iconId }));
               setIcon(presentation ?? null);

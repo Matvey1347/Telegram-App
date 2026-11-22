@@ -34,6 +34,23 @@ describe("TelegramPostSendToBotButton", () => {
     expect(telegramSystemBotApi.sendPostPreview).toHaveBeenCalledWith(draft);
   });
 
+  it("sends the prepared image in place of the stored image", async () => {
+    const prepared = { ...draft, imageUrls: ["https://cdn.test/updated.jpg"] };
+    render(<TelegramPostSendToBotButton draft={draft} prepareDraft={async () => prepared} />);
+    fireEvent.click(screen.getByRole("button", { name: "Send to bot" }));
+    expect(await screen.findByText("✓ Sent to bot")).toBeInTheDocument();
+    expect(telegramSystemBotApi.sendPostPreview).toHaveBeenCalledExactlyOnceWith(prepared);
+  });
+
+  it("does not send the stored image if preparation fails", async () => {
+    render(<TelegramPostSendToBotButton draft={draft} prepareDraft={async () => {
+      throw new Error("Photo preparation failed");
+    }} />);
+    fireEvent.click(screen.getByRole("button", { name: "Send to bot" }));
+    expect(await screen.findByText("Photo preparation failed")).toBeInTheDocument();
+    expect(telegramSystemBotApi.sendPostPreview).not.toHaveBeenCalled();
+  });
+
   it("supports a primary action while keeping the shared send behavior", () => {
     render(
       <TelegramPostSendToBotButton

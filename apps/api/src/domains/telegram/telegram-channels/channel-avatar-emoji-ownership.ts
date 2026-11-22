@@ -1,15 +1,15 @@
-/** A linked administrator is not evidence that this workspace owns a channel. */
-export function channelAvatarEmojiOwnerAccessWhere(workspaceId?: string) {
+/** Avatar presentation is available for channels managed in this workspace. */
+export function channelAvatarEmojiAdminAccessWhere(workspaceId?: string) {
   return {
     ...(workspaceId ? { workspaceId } : {}),
     sourceType: 'MTPROTO' as const,
-    role: 'OWNER' as const,
+    role: { in: ['OWNER', 'ADMIN'] as ('OWNER' | 'ADMIN')[] },
   };
 }
 
-export function channelAvatarEmojiOwnedChannelWhere(workspaceId: string) {
+export function channelAvatarEmojiManagedChannelWhere(workspaceId: string) {
   return {
     workspaceId,
-    sourceAccesses: { some: channelAvatarEmojiOwnerAccessWhere(workspaceId) },
+    sourceAccesses: { some: channelAvatarEmojiAdminAccessWhere(workspaceId) },
   };
 }

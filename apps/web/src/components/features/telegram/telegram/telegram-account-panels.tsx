@@ -86,7 +86,9 @@ export function MtprotoAccountsPanel({
   } = useQuery({
     queryKey: telegramAccountKeys.accounts(),
     queryFn: telegramUserAccountsApi.list,
-    staleTime: 24 * 60 * 60_000,
+    staleTime: 60_000,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
   });
 
   const startLoginMutation = useMutation({

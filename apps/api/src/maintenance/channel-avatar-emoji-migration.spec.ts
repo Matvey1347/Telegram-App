@@ -95,7 +95,7 @@ function fixture(channels: Channel[], schemaReady = true) {
             (role) =>
               role.workspaceId === row.workspaceId &&
               role.type === 'MTPROTO' &&
-              role.role === 'OWNER',
+              (role.role === 'OWNER' || role.role === 'ADMIN'),
           ),
         })),
       );
@@ -210,12 +210,12 @@ describe('one-shot channel avatar migration', () => {
       100,
     ]);
     expect(query[0].join('')).toContain('a."workspaceId" = c."workspaceId"');
-    expect(query[0].join('')).toContain('a."role" = \'OWNER\'');
+    expect(query[0].join('')).toContain(`a."role" IN ('OWNER', 'ADMIN')`);
     expect(f.processor.process).not.toHaveBeenCalled();
     expect(f.write).not.toHaveBeenCalled();
   });
 
-  it('skips administrator-only, external and foreign-workspace owner evidence', async () => {
+  it('includes linked administrators and excludes external and foreign evidence', async () => {
     const f = fixture([
       legacy('owner'),
       legacy('admin', {
@@ -232,16 +232,17 @@ describe('one-shot channel avatar migration', () => {
     const report = await f.run(options({ execute: true }));
     expect(report.counts).toMatchObject({
       considered: 5,
-      owned: 1,
-      processed: 1,
-      skipped: 4,
+      owned: 2,
+      processed: 2,
+      skipped: 3,
     });
     expect(f.processor.process.mock.calls.map((call) => call[1])).toEqual([
+      'admin',
       'owner',
     ]);
     expect(
       report.results.filter((row) => row.action === 'SKIP_NOT_OWNED'),
-    ).toHaveLength(4);
+    ).toHaveLength(3);
   });
 
   it('skips a current namespaced version and never creates it again on repeated runs', async () => {

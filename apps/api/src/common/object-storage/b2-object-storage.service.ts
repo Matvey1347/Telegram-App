@@ -102,46 +102,59 @@ export class B2ObjectStorageService {
     if (await this.objectExists(context, key)) {
       return { url: this.publicUrl(context, key), uploaded: false };
     }
-    const uploadUrlResponse = await fetch(
-      `${context.apiUrl}/b2api/v2/b2_get_upload_url`,
-      {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const uploadUrlResponse = await fetch(
+        `${context.apiUrl}/b2api/v2/b2_get_upload_url`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: context.authorizationToken,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ bucketId: context.bucketId }),
+        },
+      );
+      if (!uploadUrlResponse.ok) {
+        throw new InternalServerErrorException(
+          'Failed to prepare immutable object upload.',
+        );
+      }
+      const destination = (await uploadUrlResponse.json()) as {
+        uploadUrl: string;
+        authorizationToken: string;
+      };
+      const upload = await fetch(destination.uploadUrl, {
         method: 'POST',
         headers: {
-          Authorization: context.authorizationToken,
-          'Content-Type': 'application/json',
+          Authorization: destination.authorizationToken,
+          'X-Bz-File-Name': encodeURIComponent(key),
+          'Content-Type': mimeType,
+          'Content-Length': String(bytes.length),
+          'X-Bz-Content-Sha1': createHash('sha1').update(bytes).digest('hex'),
+          'X-Bz-Info-b2-cache-control': encodeURIComponent(
+            'public, max-age=31536000, immutable',
+          ),
         },
-        body: JSON.stringify({ bucketId: context.bucketId }),
-      },
-    );
-    if (!uploadUrlResponse.ok) {
-      throw new InternalServerErrorException(
-        'Failed to prepare immutable object upload.',
-      );
+        body: new Uint8Array(bytes),
+      });
+      if (upload.ok) return { url: this.publicUrl(context, key), uploaded: true };
+      const body: unknown = await upload.json().catch(() => null);
+      const code = body && typeof body === 'object' && 'code' in body && typeof body.code === 'string'
+        && /^[a-z_]{1,40}$/.test(body.code) ? body.code : 'unknown';
+      const retryable = upload.status >= 500 || upload.status === 429 ||
+        code === 'expired_auth_token' || code === 'bad_auth_token';
+      if (!retryable || attempt === 2) {
+        throw new InternalServerErrorException({
+          message: 'Failed to persist immutable object.',
+          storageStatus: upload.status,
+          storageCode: code,
+        });
+      }
+      // Resolve uncertain upload outcomes before taking a fresh upload URL.
+      if (await this.objectExists(context, key))
+        return { url: this.publicUrl(context, key), uploaded: true };
     }
-    const destination = (await uploadUrlResponse.json()) as {
-      uploadUrl: string;
-      authorizationToken: string;
-    };
-    const upload = await fetch(destination.uploadUrl, {
-      method: 'POST',
-      headers: {
-        Authorization: destination.authorizationToken,
-        'X-Bz-File-Name': encodeURIComponent(key),
-        'Content-Type': mimeType,
-        'Content-Length': String(bytes.length),
-        'X-Bz-Content-Sha1': 'do_not_verify',
-        'X-Bz-Info-b2-cache-control': encodeURIComponent(
-          'public, max-age=31536000, immutable',
-        ),
-      },
-      body: new Uint8Array(bytes),
-    });
-    if (!upload.ok) {
-      throw new InternalServerErrorException(
-        'Failed to persist immutable object.',
-      );
-    }
-    return { url: this.publicUrl(context, key), uploaded: true };
+    throw new InternalServerErrorException('Failed to persist immutable object.');
   }
 
   private async objectExists(context: B2Context, key: string) {

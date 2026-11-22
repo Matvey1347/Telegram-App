@@ -27,6 +27,8 @@ const defaults = {
   hashtags: 'disabled',
   imageMode: 'ai',
   useChannelAvatarInMedia: false,
+  channelAvatarWatermarkSize: 12,
+  channelAvatarWatermarkOpacity: 100,
 };
 const defaultLengths = [
   { id: 'ultra-short', name: 'Ультракороткая', emoji: '⚡', minCharacters: 0, maxCharacters: 99 },
@@ -58,6 +60,8 @@ export class TelegramAiPostingService {
         shortDescription: true,
         photoUrl: true,
         inviteLink: true,
+        defaultInviteLink: { select: { url: true, isRevoked: true } },
+        publicInviteLink: { select: { url: true, isRevoked: true } },
         presentationIcon: true,
       },
     });
@@ -100,13 +104,22 @@ export class TelegramAiPostingService {
       'historyMode', 'historyFrom', 'variedLength', 'emojiPolicy', 'ending',
       'hashtags', 'imageMode',
       'mediaPreferences', 'imageAvoidances', 'useChannelAvatarInMedia',
+      'channelAvatarWatermarkSize', 'channelAvatarWatermarkOpacity',
+      'channelAvatarWatermarkX', 'channelAvatarWatermarkY',
     ];
+    const { defaultInviteLink, publicInviteLink, ...channelData } = channel;
     return {
-      channel: { ...channel, presentationIcon: undefined, presentationIconPresentation: iconToResolvedEmoji(channel.presentationIcon) },
+      channel: {
+        ...channelData,
+        mainInviteLink: defaultInviteLink?.isRevoked ? null : defaultInviteLink?.url ?? null,
+        publicInviteLink: publicInviteLink?.isRevoked ? null : publicInviteLink?.url ?? null,
+        presentationIcon: undefined,
+        presentationIconPresentation: iconToResolvedEmoji(channel.presentationIcon),
+      },
       mediaPreferenceIcons: await resolveAiPostingPreferenceIcons(
         this.prisma,
         workspaceId,
-        stored,
+        { ...stored, spheres: editorial.spheres, rubrics: editorial.rubrics },
       ),
       detectedLanguage,
       configuration: {
@@ -312,6 +325,11 @@ export class TelegramAiPostingService {
       throw new BadRequestException('AI_POSTING_IMAGE_MODE_INVALID');
     if (configuration.useChannelAvatarInMedia !== undefined && typeof configuration.useChannelAvatarInMedia !== 'boolean')
       throw new BadRequestException('AI_POSTING_AVATAR_OPTION_INVALID');
+    const watermarkSize = configuration.channelAvatarWatermarkSize;
+    const watermarkOpacity = configuration.channelAvatarWatermarkOpacity;
+    if ((watermarkSize !== undefined && (!Number.isInteger(watermarkSize) || Number(watermarkSize) < 5 || Number(watermarkSize) > 30)) ||
+      (watermarkOpacity !== undefined && (!Number.isInteger(watermarkOpacity) || Number(watermarkOpacity) < 10 || Number(watermarkOpacity) > 100)))
+      throw new BadRequestException('AI_POSTING_AVATAR_OPTION_INVALID');
     if (configuration.mediaPreferences !== undefined && (!Array.isArray(configuration.mediaPreferences) || configuration.mediaPreferences.length > 10 || configuration.mediaPreferences.some((value) => {
       if (!value || typeof value !== 'object' || Array.isArray(value)) return true;
       const preference = value as Record<string, unknown>;
@@ -346,6 +364,10 @@ export class TelegramAiPostingService {
       }) : [],
       imageAvoidances: Array.isArray(configuration.imageAvoidances) ? configuration.imageAvoidances.filter((item): item is string => typeof item === 'string').slice(0, 100) : [],
       useChannelAvatarInMedia: configuration.useChannelAvatarInMedia === true,
+      channelAvatarWatermarkX: normalizeWatermarkPosition(configuration.channelAvatarWatermarkX),
+      channelAvatarWatermarkY: normalizeWatermarkPosition(configuration.channelAvatarWatermarkY),
+      channelAvatarWatermarkSize: Math.min(30, Math.max(5, Number(configuration.channelAvatarWatermarkSize) || 12)),
+      channelAvatarWatermarkOpacity: Math.min(100, Math.max(10, Number(configuration.channelAvatarWatermarkOpacity) || 100)),
       spheres: Array.isArray(configuration.spheres) ? configuration.spheres : [],
       rubrics: Array.isArray(configuration.rubrics) ? configuration.rubrics : [],
       lengths: Array.isArray(configuration.lengths) ? configuration.lengths.map((value) => {
@@ -371,4 +393,10 @@ export class TelegramAiPostingService {
     });
     return saved;
   }
+}
+
+function normalizeWatermarkPosition(value: unknown) {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.min(100, Math.max(0, value))
+    : 100;
 }

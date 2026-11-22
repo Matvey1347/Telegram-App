@@ -230,6 +230,7 @@ export function PlacementEditor(props: {
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
           <FormField label="Date">
             <DateInput
+              aria-label="Publication date"
               value={props.draft.date}
               onChange={(e) => props.onChange({ date: e.target.value })}
             />

@@ -3,6 +3,7 @@
 import { useState, type ReactNode } from "react";
 import { Archive, ArchiveRestore, Pencil, Send, Trash2 } from "lucide-react";
 import type { Promo } from "@/lib/api";
+import { normalizeTelegramPostMediaItems } from "@telegram-system/shared";
 import {
   CardActionsMenu,
   CardMenuAction,
@@ -30,6 +31,11 @@ export function PromoCard({
   const [quickSendOpen, setQuickSendOpen] = useState(false);
   const openingText =
     promo.previewText?.trim() || promo.plainText?.trim() || promo.text?.trim();
+  const mediaItems = normalizeTelegramPostMediaItems(
+    promo.mediaItems,
+    promo.imageUrls,
+  );
+  const previewMedia = mediaItems[0];
 
   return (
     <article className="group relative isolate min-h-48 overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-950/80 transition duration-200 hover:border-neutral-700">
@@ -52,7 +58,20 @@ export function PromoCard({
             {member}
           </div>
         ) : null}
-        {promo.previewImageUrl ? (
+        {previewMedia?.kind === "VIDEO" || previewMedia?.kind === "ANIMATION" ? (
+          <div className="relative mt-3 overflow-hidden rounded-xl border border-white/10 bg-neutral-900">
+            <video
+              src={previewMedia.url}
+              className="block h-auto max-h-72 w-full object-contain"
+              controls
+              playsInline
+              preload="metadata"
+            />
+            <span className="pointer-events-none absolute left-2 top-2 rounded bg-black/70 px-2 py-1 text-xs font-medium text-white">
+              Video preview
+            </span>
+          </div>
+        ) : promo.previewImageUrl ? (
           <div className="mt-3 overflow-hidden rounded-xl border border-white/10 bg-neutral-900">
             <img
               src={promo.previewImageUrl}

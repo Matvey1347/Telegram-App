@@ -11,16 +11,18 @@ export async function resolveAiPostingPreferenceIcons(
   const preferences = Array.isArray(configuration.mediaPreferences)
     ? configuration.mediaPreferences
     : [];
+  const spheres = Array.isArray(configuration.spheres) ? configuration.spheres : [];
+  const rubrics = Array.isArray(configuration.rubrics) ? configuration.rubrics : [];
   const ids = [
     ...new Set(
-      preferences.flatMap((entry) => {
+      [...preferences, ...spheres, ...rubrics].flatMap((entry) => {
         if (!entry || typeof entry !== 'object' || Array.isArray(entry))
           return [];
         const id = (entry as { emojiIconId?: unknown }).emojiIconId;
         return typeof id === 'string' && id ? [id] : [];
       }),
     ),
-  ].slice(0, 10);
+  ].slice(0, 250);
   if (!ids.length) return {};
   const icons = await prisma.icon.findMany({
     where: { id: { in: ids }, OR: [{ workspaceId }, { workspaceId: null }] },

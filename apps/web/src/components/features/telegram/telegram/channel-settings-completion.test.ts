@@ -20,7 +20,6 @@ describe("getOverallChannelSettingsCompletion", () => {
       adBaseCpm: 100,
       targetCpa: 10,
       stopCpaFrom: 20,
-      seedDisabled: true,
       preview: {
         hasPublicationSchedule: false,
         sourcesCount: 1,
@@ -28,7 +27,7 @@ describe("getOverallChannelSettingsCompletion", () => {
       },
     } as never;
 
-    expect(getOverallChannelSettingsCompletion(channel).percent).toBe(83);
+    expect(getOverallChannelSettingsCompletion(channel).percent).toBe(80);
     expect(
       getOverallChannelSettingsCompletion(channel, {
         scheduleStatus: "complete",
@@ -51,7 +50,6 @@ describe("getOverallChannelSettingsCompletion", () => {
       adBaseCpm: 100,
       targetCpa: 10,
       stopCpaFrom: 20,
-      seedDisabled: true,
       preview: {
         hasPublicationSchedule: true,
         sourcesCount: 1,

@@ -10,6 +10,8 @@ import {
 
 import { channelAvatarEmojiImagesMatch } from './channel-avatar-emoji-image';
 
+class AvatarEmojiReconciliationPending extends AvatarEmojiApiError {}
+
 /** Global serialized pack writer. No transaction spans a Telegram request. */
 @Injectable()
 export class ChannelAvatarEmojiPublisherService {
@@ -42,12 +44,22 @@ export class ChannelAvatarEmojiPublisherService {
     const candidates = stickers.filter(
       (sticker) => !before.has(sticker.customEmojiId),
     );
+    let match: AvatarEmojiSticker | undefined;
     for (const candidate of candidates.slice(0, 200)) {
       await assertLease();
       const bytes = await this.api.downloadSticker(candidate.fileId);
-      if (await channelAvatarEmojiImagesMatch(png, bytes)) return candidate;
+      if (await channelAvatarEmojiImagesMatch(png, bytes)) {
+        if (match) {
+          throw new AvatarEmojiReconciliationPending(
+            'Multiple Telegram documents match the pending avatar. Reconciliation requires review.',
+            60,
+          );
+        }
+        match = candidate;
+      }
     }
-    throw new AvatarEmojiApiError(
+    if (match) return match;
+    throw new AvatarEmojiReconciliationPending(
       'Telegram avatar mutation is still unconfirmed. Only reconciliation is allowed; no duplicate send was attempted.',
       60,
     );
@@ -166,7 +178,13 @@ export class ChannelAvatarEmojiPublisherService {
         where: { remotePending: true, hash: { not: assetHash } },
         orderBy: { createdAt: 'asc' },
       });
-      if (unresolved) await this.reconcileOtherPending(unresolved, assertLease);
+      if (unresolved && !saved?.remotePending) {
+        try {
+          await this.reconcileOtherPending(unresolved, assertLease);
+        } catch (error) {
+          if (!(error instanceof AvatarEmojiReconciliationPending)) throw error;
+        }
+      }
       let asset = await this.prisma.channelAvatarEmojiAsset.upsert({
         where: { hash: assetHash },
         create: { hash: assetHash, imageUrl: image.imageUrl },
@@ -208,6 +226,22 @@ export class ChannelAvatarEmojiPublisherService {
         throw new AvatarEmojiApiError(
           'Avatar asset belongs to a different Telegram bot.',
         );
+      if (!asset.remotePending) {
+        const pendingInPack =
+          await this.prisma.channelAvatarEmojiAsset.findFirst({
+            where: { remotePending: true, packId: pack.id },
+            select: { hash: true },
+          });
+        if (pendingInPack) {
+          const latest = await this.prisma.channelAvatarEmojiPack.findFirst({
+            orderBy: { id: 'desc' },
+          });
+          const id = (latest?.id ?? pack.id) + 1;
+          pack = await this.prisma.channelAvatarEmojiPack.create({
+            data: { id, shortName: this.api.packName(id) },
+          });
+        }
+      }
       await assertLease();
       let stickers = await this.api.getPack(pack.shortName);
       let match: AvatarEmojiSticker | undefined;
@@ -287,7 +321,11 @@ export class ChannelAvatarEmojiPublisherService {
       const confirmed = await this.confirmDocument(assetHash, pack.id, match);
       return { ...confirmed, createdDocument };
     } catch (error) {
-      if (error instanceof AvatarEmojiApiError && error.retryAfterSeconds) {
+      if (
+        error instanceof AvatarEmojiApiError &&
+        !(error instanceof AvatarEmojiReconciliationPending) &&
+        error.retryAfterSeconds
+      ) {
         await this.prisma.channelAvatarEmojiPublisher.updateMany({
           where: { id: 'global', leaseToken: token },
           data: {

@@ -311,6 +311,7 @@ function EmojiField({
         onChange={(icon) => onChange(icon)}
         onEmojiChange={(icon) => onChange(icon)}
         buttonLabel={t("telegram.posts.icon.addEmoji")}
+        iconOnly
         className="!h-9 !w-9"
         iconClassName="!h-6 !w-6 !bg-transparent"
       />

@@ -8,6 +8,7 @@ import { CrossPromotionPlansPage } from "./cross-promotion-plans-page";
 
 vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(),
+  useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
 }));
 vi.mock("@/components/layout/app-shell", () => ({
   AppShell: ({ children }: { children: React.ReactNode }) => <>{children}</>,
@@ -29,7 +30,7 @@ vi.mock("./cross-promotion-plan-card", () => ({
 
 describe("CrossPromotionPlansPage query loading", () => {
   beforeEach(() => {
-    vi.spyOn(crossPromotionPlansApi, "list").mockResolvedValue([]);
+    vi.spyOn(crossPromotionPlansApi, "listAll").mockResolvedValue([]);
     vi.spyOn(telegramChannelsApi, "select").mockResolvedValue([]);
     vi.spyOn(telegramChannelNetworksApi, "listOptions").mockResolvedValue([]);
   });
@@ -44,7 +45,7 @@ describe("CrossPromotionPlansPage query loading", () => {
         <CrossPromotionPlansPage kind="DIRECT_MUTUAL" sectionTabs={null} />
       </QueryClientProvider>,
     );
-    await waitFor(() => expect(crossPromotionPlansApi.list).toHaveBeenCalled());
+    await waitFor(() => expect(crossPromotionPlansApi.listAll).toHaveBeenCalled());
 
     expect(telegramChannelsApi.select).not.toHaveBeenCalled();
     expect(telegramChannelNetworksApi.listOptions).not.toHaveBeenCalled();

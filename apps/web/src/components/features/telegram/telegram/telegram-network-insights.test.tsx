@@ -89,7 +89,7 @@ const traffic: TelegramChannelTrafficAttributionPreview = {
 };
 
 describe("network insight summaries", () => {
-  it("shows network traffic with the same start/end audience table as a channel", () => {
+  it("shows network traffic with the same start/end audience table as a channel", async () => {
     render(
       <QueryClientProvider client={new QueryClient()}>
         <NetworkTrafficAttributionSummary
@@ -103,9 +103,11 @@ describe("network insight summaries", () => {
 
     const summary = screen.getByRole("button", {
       name: "Open traffic attribution for All",
-    });
+    }).closest("section");
     expect(summary).toHaveTextContent("Sep 10 – Oct 10");
     expect(summary).toHaveTextContent("SubsRequestsTotal");
+    expect(summary).not.toHaveTextContent("Sep 1010,00020010,200");
+    await userEvent.click(screen.getByRole("button", { name: "Show details" }));
     expect(summary).toHaveTextContent("Sep 1010,00020010,200");
     expect(summary).toHaveTextContent("Oct 109,94024210,182");
     expect(summary).toHaveTextContent("Difference-60+42-18");

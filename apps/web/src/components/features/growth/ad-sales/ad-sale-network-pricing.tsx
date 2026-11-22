@@ -8,7 +8,7 @@ import {
   type SetStateAction,
 } from "react";
 import { allocateTelegramAdSalesTotalPrice } from "@telegram-system/shared";
-import { Button, FormField, Input } from "@/components/ui/primitives";
+import { FormField, Input } from "@/components/ui/primitives";
 import { toNumber } from "@/lib/features/growth/telegram-ad-sales";
 import type { SalePlacementDraft } from "./ad-sale-types";
 
@@ -143,12 +143,13 @@ export function useAdSaleNetworkPricing({
     allocation,
     setTotalPrice: (value: string) => {
       setTotalEdited(true);
+      setMode("total");
       setTotalPrice(value);
       // For one channel, the total is the placement price. Previously this
       // field changed only the allocation target, leaving the actual placement
       // at its old quote; the mismatch correctly disabled Create sale but gave
       // the user no useful way to resolve it.
-      if (mode !== "total" || placements.length !== 1) return;
+      if (placements.length !== 1) return;
       setPlacements((current) => {
         const placement = current[0];
         if (!placement || placement.agreedPrice === value) return current;
@@ -173,7 +174,6 @@ export function AdSaleNetworkPricing({
   currency,
   placementCount,
   quotesReady,
-  onModeChange,
   onTotalPriceChange,
 }: {
   mode: "total" | "per-placement";
@@ -183,101 +183,31 @@ export function AdSaleNetworkPricing({
   currency: string;
   placementCount: number;
   quotesReady: boolean;
-  onModeChange: (mode: "total" | "per-placement") => void;
   onTotalPriceChange: (value: string) => void;
 }) {
-  const exact =
-    Math.round(toNumber(totalPrice) * 100) === Math.round(allocatedTotal * 100);
   return (
-    <section className="rounded-xl border border-neutral-800 bg-neutral-950/50 p-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <p className="text-sm font-medium text-white">
-            {placementCount === 1 ? "Channel sale price" : "Network sale price"}
-          </p>
-          <p className="text-xs text-neutral-400">
-            {placementCount === 1
-              ? "Set the agreed price for this channel."
-              : "The total is split by each placement's expected value (views × CPM)."}
-          </p>
-        </div>
-        {placementCount > 1 ? <div className="inline-grid shrink-0 grid-cols-2 rounded-md border border-neutral-700 bg-neutral-950 p-px">
-          <button
-            type="button"
-            aria-pressed={mode === "total"}
-            className={`h-6 rounded-[5px] px-2 text-[11px] font-medium leading-none transition ${
-              mode === "total"
-                ? "bg-blue-600 text-white shadow-sm"
-                : "text-neutral-400 hover:bg-neutral-800 hover:text-white"
-            }`}
-            onClick={() => onModeChange("total")}
-          >
-            One total
-          </button>
-          <button
-            type="button"
-            aria-pressed={mode === "per-placement"}
-            className={`h-6 rounded-[5px] px-2 text-[11px] font-medium leading-none transition ${
-              mode === "per-placement"
-                ? "bg-blue-600 text-white shadow-sm"
-                : "text-neutral-400 hover:bg-neutral-800 hover:text-white"
-            }`}
-            onClick={() => onModeChange("per-placement")}
-          >
-            Per channel
-          </button>
-        </div> : null}
-      </div>
-      {mode === "total" ? (
-        <div className="mt-2 grid gap-3 sm:grid-cols-3">
-          <FormField label={placementCount === 1 ? "Sale price" : "Sold total"} required>
-            <Input
-              value={totalPrice}
-              inputMode="decimal"
-              disabled={!quotesReady}
-              onChange={(event) => onTotalPriceChange(event.target.value)}
-            />
-          </FormField>
-          <Summary
-            label={quotesReady ? "Calculated total" : "Channel price quote"}
-            value={
-              quotesReady
-                ? `${recommendedTotal.toFixed(2)} ${currency}`
-                : `Refreshing prices in ${currency}…`
-            }
+    <section className="min-w-0">
+      <FormField label="Sale total" required>
+        <div className="relative">
+          <Input
+            value={mode === "per-placement" ? allocatedTotal.toFixed(2) : totalPrice}
+            inputMode="decimal"
+            disabled={!placementCount || !quotesReady}
+            onChange={(event) => onTotalPriceChange(event.target.value)}
+            className="pr-16"
           />
-          <Summary
-            label={quotesReady ? `Allocated to ${placementCount} placements` : "Allocation"}
-            value={
-              quotesReady
-                ? `${allocatedTotal.toFixed(2)} ${currency}`
-                : "Waiting for converted quotes…"
-            }
-            tone={quotesReady ? (exact ? "ok" : "error") : undefined}
-          />
+          <span className="pointer-events-none absolute inset-y-0 right-3 inline-flex items-center text-sm text-neutral-400">
+            {currency}
+          </span>
         </div>
-      ) : null}
+        <p className="mt-1 text-xs text-neutral-500" aria-live="polite">
+          {!placementCount
+            ? "Select placements to set the sale total."
+            : quotesReady
+              ? `Recommended price for ${placementCount} placement${placementCount === 1 ? "" : "s"}: ${recommendedTotal.toFixed(2)} ${currency}`
+              : "Calculating recommended price…"}
+        </p>
+      </FormField>
     </section>
-  );
-}
-
-function Summary({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: string;
-  tone?: "ok" | "error";
-}) {
-  return (
-    <div className="rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2">
-      <p className="text-xs text-neutral-500">{label}</p>
-      <p
-        className={`mt-1 font-medium tabular-nums ${tone === "error" ? "text-rose-300" : tone === "ok" ? "text-emerald-300" : "text-white"}`}
-      >
-        {value}
-      </p>
-    </div>
   );
 }

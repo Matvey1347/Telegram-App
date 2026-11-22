@@ -35,6 +35,7 @@ function setup() {
   const storage = { uploadMany: jest.fn() };
   const avatarDocuments = {
     resolve: jest.fn().mockResolvedValue([]),
+    list: jest.fn().mockResolvedValue([]),
     assertImportable: jest.fn().mockResolvedValue(undefined),
   };
   const service = new TelegramCustomEmojiService(

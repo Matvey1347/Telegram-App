@@ -102,8 +102,6 @@ export type TelegramChannel = EntityAssignment & TelegramChannelAvatarEmojiState
   language?: string;
   niche?: string;
   currentSubscribersCount?: number;
-  seedSubscribersCount?: number;
-  seedDisabled?: boolean;
   activeSubscribersWindow?: number;
   postSyncLimit?: number;
   knownFakeSubscribersCount?: number;

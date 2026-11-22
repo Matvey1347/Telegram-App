@@ -15,6 +15,7 @@ export type AiPostingSphere = {
   description: string;
   sources: string[];
   mediaPreferenceId: string | null;
+  emojiIconId?: string;
 };
 
 export type AiPostingRubric = {
@@ -25,6 +26,7 @@ export type AiPostingRubric = {
   description: string;
   goal: string;
   lengthIds: string[];
+  emojiIconId?: string;
 };
 
 export const DEFAULT_AI_POSTING_LENGTHS: AiPostingLength[] = [

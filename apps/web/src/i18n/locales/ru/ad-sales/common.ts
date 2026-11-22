@@ -23,13 +23,25 @@ const messages = {
   "ads.exclude_from_analytics": "Исключить",
   "ads.delete_campaign": "Удалить",
   "ads.open_campaign_trend": "Открыть динамику кампании",
-  "ads.cpa_is_inside_target_kpi_range": "Стоимость привлечения в целевом диапазоне KPI.",
-  "ads.cpa_is_inside_acceptable_kpi_range": "Стоимость привлечения в допустимом диапазоне KPI.",
-  "ads.cpa_is_inside_stop_kpi_range": "Стоимость привлечения в стоп-диапазоне KPI.",
-  "ads.kpi_range_or_enough_cpa_data_is_missing": "Не задан диапазон KPI или недостаточно данных.",
+  "ads.cpa_is_inside_target_kpi_range":
+    "Стоимость привлечения в целевом диапазоне KPI.",
+  "ads.cpa_is_inside_acceptable_kpi_range":
+    "Стоимость привлечения в допустимом диапазоне KPI.",
+  "ads.cpa_is_inside_stop_kpi_range":
+    "Стоимость привлечения в стоп-диапазоне KPI.",
+  "ads.kpi_range_or_enough_cpa_data_is_missing":
+    "Не задан диапазон KPI или недостаточно данных.",
 
   "ads.filters": "Фильтры",
   "ads.direct_exchange": "Прямой обмен",
+  "ads.promotion_type": "Тип продвижения",
+  "ads.promotion_mutual_title": "Взаимопиар",
+  "ads.promotion_mutual_help": "Обмен рекламой с другим каналом или партнёром.",
+  "ads.promotion_own_title": "Продвижение своих каналов",
+  "ads.promotion_own_help": "Продвигайте свои каналы в собственной сети.",
+  "ads.promotion_folder_title": "Продвижение по папке",
+  "ads.promotion_folder_help": "Координируйте публикации для группы каналов.",
+  "ads.folder_badge": "Папка",
   "ads.folders": "Папки",
   "ads.status_draft": "Черновики",
   "ads.status_active": "Активные",
@@ -63,11 +75,14 @@ const messages = {
   "ads.create_promo": "Создать промо",
   "ads.loading": "Загрузка результатов…",
   "ads.campaigns_title": "Рекламные кампании",
-  "ads.campaigns_subtitle": "Планируйте платные размещения, связывайте креативы и пригласительные ссылки и оценивайте привлечённую аудиторию.",
+  "ads.campaigns_subtitle":
+    "Планируйте платные размещения, связывайте креативы и пригласительные ссылки и оценивайте привлечённую аудиторию.",
   "ads.hypotheses_title": "Гипотезы",
-  "ads.hypotheses_subtitle": "Проверяйте креативные идеи и сравнивайте расходы, подписки, CPA и результаты.",
+  "ads.hypotheses_subtitle":
+    "Проверяйте креативные идеи и сравнивайте расходы, подписки, CPA и результаты.",
   "ads.promo_title": "Промо-креативы",
-  "ads.promo_subtitle": "Создавайте Telegram-креативы для повторного использования и проверяйте вступительный текст перед запуском кампаний.",
+  "ads.promo_subtitle":
+    "Создавайте Telegram-креативы для повторного использования и проверяйте вступительный текст перед запуском кампаний.",
   "leadQualification.a_versioned_review_aid_not_a_calibrated_purchase_probability_or_fraud_verdict":
     "Это версионируемая подсказка для проверки, а не вероятность покупки или заключение о мошенничестве.",
   "leadQualification.ai_discovered_sources_and_prepared_offers":
@@ -418,6 +433,38 @@ const messages = {
   "adSales.status.partiallyPaid": "Оплачено частично",
   "adSales.status.paid": "Оплачено",
   "adSales.status.overpaid": "Переплата",
+  "crm.settings.nav": "Настройки",
+  "crm.settings.title": "Настройки источников CRM",
+  "crm.settings.description": "Управление Telegram-аккаунтами и импортом CRM.",
+  "crm.settings.refresh_accounts": "Обновить аккаунты",
+  "crm.settings.accounts": "Аккаунты MTProto",
+  "crm.settings.loading_accounts": "Загрузка аккаунтов…",
+  "crm.settings.select_accounts": "Выберите аккаунты MTProto",
+  "crm.settings.all_accounts": "Все подключённые аккаунты",
+  "crm.settings.import_tags": "Теги импорта",
+  "crm.settings.import_tags_help":
+    "В CRM-клиенты и аналитику попадают только контакты из выбранных Telegram-папок.",
+  "crm.settings.loading_telegram_tags": "Загрузка Telegram-тегов…",
+  "crm.settings.select_telegram_tags": "Выберите Telegram-теги",
+  "crm.settings.purchase_tag": "Тег покупки",
+  "crm.settings.purchase_tag_help":
+    "Автоматически назначается покупателям. Telegram-тег папки также перемещает туда их чат.",
+  "crm.settings.loading_tags": "Загрузка тегов…",
+  "crm.settings.select_tags": "Выберите теги",
+  "crm.settings.no_account":
+    "Сначала подключите аккаунт MTProto в ресурсах Telegram.",
+  "crm.settings.sync_help":
+    "Для выбранных аккаунтов включены обновления и ежедневная синхронизация. Ручной импорт выполняется последовательно.",
+  "crm.settings.save": "Сохранить настройки",
+  "crm.settings.sync": "Синхронизировать",
+  "crm.settings.save_sync": "Сохранить и синхронизировать",
+  "crm.settings.saving": "Сохранение…",
+  "crm.settings.syncing": "Синхронизация…",
+  "crm.settings.load_error":
+    "Не удалось загрузить настройки источников CRM. Обновите страницу и повторите попытку.",
+  "crm.settings.save_error": "Не удалось сохранить источники CRM.",
+  "crm.settings.sync_error":
+    "Не удалось синхронизировать переписки. Можно безопасно повторить попытку.",
 } as const satisfies Record<keyof typeof en, string>;
 
 export default messages;

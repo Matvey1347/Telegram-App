@@ -117,6 +117,8 @@ describe("ChannelTrafficAttributionSummary", () => {
     expect(summary).not.toHaveTextContent("19%");
     expect(summary).not.toHaveTextContent("Channels");
     expect(screen.getByText("Sep 10 – Oct 10")).toBeInTheDocument();
+    expect(summary).not.toHaveTextContent("Sep 1024,000024,000");
+    await userEvent.click(screen.getByRole("button", { name: "Show details" }));
     expect(summary).toHaveTextContent("Sep 1024,000024,000");
     expect(summary).toHaveTextContent("Oct 1023,0001,00024,000");
     expect(summary).toHaveTextContent("Difference-1,000+1,0000");
@@ -205,7 +207,7 @@ describe("ChannelTrafficAttributionSummary", () => {
     expect(screen.getByText("10 USD")).toBeInTheDocument();
   });
 
-  it("uses zero for a missing request baseline so totals and growth remain visible", () => {
+  it("uses zero for a missing request baseline so totals and growth remain visible", async () => {
     render(
       <ChannelTrafficAttributionSummary
         channel={
@@ -270,6 +272,8 @@ describe("ChannelTrafficAttributionSummary", () => {
 
     const summary = screen.getByText("Traffic sources").closest("section");
     expect(screen.getByText("Sep 17 – Oct 10")).toBeInTheDocument();
+    expect(summary).not.toHaveTextContent("Sep 1724,875024,875");
+    await userEvent.click(screen.getByRole("button", { name: "Show details" }));
     expect(summary).toHaveTextContent("Sep 1724,875024,875");
     expect(summary).toHaveTextContent("Oct 1024,31661624,932");
     expect(summary).toHaveTextContent("Difference-559+616+57");

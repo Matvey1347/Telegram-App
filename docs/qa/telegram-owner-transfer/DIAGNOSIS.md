@@ -300,3 +300,20 @@ polling, таймеров, процессов и таблиц хранения �
   затронутых фикстур и тесты удаления сделки повторно прошли в профильном
   прогоне после исправления. Общий web lint завершился со 138 ошибками и
   171 предупреждением. Структурная проверка завершилась с 24 нарушениями.
+
+## Account sync and channel-card freshness
+
+An explicit MTProto account sync refreshes its own dialog inventory and checks
+already managed channels against the other connected accounts in the same
+workspace. Peer checks run two at a time and skip channel photo downloads.
+An incomplete dialog scan leaves missing rows alone. A verified new creator
+revokes older creator capabilities for other accounts until their actual roles
+can be read. Account-login synchronization keeps its single-account scope.
+
+Channel cards render their persisted response immediately. Opening the list
+revalidates that response against the API, and returning focus revalidates a
+stale list after one minute. Each refresh reads the existing list in one
+request. The existing full channel sync supplies overnight request counts for
+enabled channels. There are no new timers, per-channel browser requests,
+background Telegram scans, or retained records. A workspace with 100 visible
+channels still uses one paginated card request per refresh.

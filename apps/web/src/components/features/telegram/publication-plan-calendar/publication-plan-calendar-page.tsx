@@ -1,5 +1,6 @@
 "use client";
 
+import { PublicationSchedulesAction } from "../telegram/publication-schedules-action";
 import { useMemo, useState } from "react";
 import {
   CalendarDays,
@@ -153,8 +154,11 @@ export function PublicationPlanCalendarPage() {
     )[0];
     return schedule?.id ?? "";
   }, [schedulesQuery.data]);
-  const selectedScheduleId = scheduleId || defaultScheduleId;
-  const calendarRequestScheduleId = scheduleId || "__default__";
+  const explicitScheduleId = schedulesQuery.data?.some((schedule) => schedule.id === scheduleId)
+    ? scheduleId
+    : undefined;
+  const selectedScheduleId = explicitScheduleId || defaultScheduleId;
+  const calendarRequestScheduleId = explicitScheduleId || "__default__";
   const range = useMemo(() => rangeFor(view, cursor), [cursor, view]);
   const requestRange = useMemo(() => {
     const visibleDays = view === "month" ? monthGridDays(cursor) : null;
@@ -180,7 +184,7 @@ export function PublicationPlanCalendarPage() {
     ),
     queryFn: () =>
       telegramPublicationSchedulesApi.calendar(
-        scheduleId || undefined,
+        explicitScheduleId,
         requestRange,
       ),
     // Resolve the default schedule on the server while the selector list loads,
@@ -257,6 +261,7 @@ export function PublicationPlanCalendarPage() {
       <PageTabHead title="Publication calendar" emoji="🗓️" color="#2563eb" />
       <PageHeader
         title="Publication calendar"
+        action={<PublicationSchedulesAction />}
         subtitle="See advertising and VP occupancy in the selected publication plan."
       />
       <section className="mb-5 overflow-hidden rounded-[18px] border border-neutral-800 bg-[#111111]">

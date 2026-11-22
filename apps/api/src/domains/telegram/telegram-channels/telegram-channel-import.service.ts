@@ -101,11 +101,6 @@ export class TelegramChannelImportService {
             'Telegram did not return a valid channel after import.',
           );
         }
-        if (imported.kind === 'person') {
-          throw new BadRequestException(
-            'The Telegram reference resolves to a person, not a channel.',
-          );
-        }
         channels.push(imported);
         await onProgress?.(
           { input, success: true, channelId: imported.id },
@@ -196,15 +191,7 @@ export class TelegramChannelImportService {
       info.username,
     );
     if (info.kind === 'person') {
-      return this.telegramChannelImportPreparationService.upsertImportedPerson(
-        workspaceId,
-        {
-          title: info.title,
-          username,
-          description: info.description,
-          photoUrl: info.photoUrl,
-        },
-      );
+      throw new BadRequestException('Choose a Telegram channel to import.');
     }
     const telegramChatId = info.telegramChatId || null;
     const matchingChannels =
@@ -213,6 +200,15 @@ export class TelegramChannelImportService {
         username,
         telegramChatId,
       );
+    if (
+      !info.isCreator &&
+      !info.adminRights &&
+      !matchingChannels.some((channel) => (channel.adminLinks?.length ?? 0) > 0)
+    ) {
+      throw new BadRequestException(
+        'A connected Telegram account must be an administrator of the channel.',
+      );
+    }
     const existing =
       this.telegramChannelImportPreparationService.pickCanonicalChannel(
         matchingChannels,

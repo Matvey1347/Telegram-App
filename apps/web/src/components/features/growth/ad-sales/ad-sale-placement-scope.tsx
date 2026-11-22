@@ -1,6 +1,5 @@
 "use client";
 
-import type { ReactNode } from "react";
 import { useState } from "react";
 import { Plus } from "lucide-react";
 import type { TelegramChannel, TelegramChannelNetwork } from "@/lib/api";
@@ -11,6 +10,7 @@ import {
   type TelegramChannelScopeMode,
 } from "@/components/features/telegram/telegram/telegram-channel-scope-selector";
 import { CommonAdSlotOptions } from "../common-ad-slot-options";
+import type { SalePlacementDraft } from "./ad-sale-types";
 
 export type AdSaleScopeMode = TelegramChannelScopeMode;
 
@@ -38,11 +38,13 @@ export function AdSalePlacementScope({
   placementDates,
   commonTime,
   commonFormatName,
+  placements,
+  separateTimesByDate,
+  separateFormatsByDate,
   commonFormats,
   effectiveChannelIds,
   networks,
   channels,
-  networkPricing,
   onModeChange,
   onNetworkChange,
   onChannelsChange,
@@ -53,6 +55,10 @@ export function AdSalePlacementScope({
   onRemoveDate,
   onCommonTimeChange,
   onCommonFormatChange,
+  onDateTimeChange,
+  onDateFormatChange,
+  onSeparateTimesByDateChange,
+  onSeparateFormatsByDateChange,
 }: {
   mode: AdSaleScopeMode;
   selectedNetworkId: string;
@@ -61,11 +67,13 @@ export function AdSalePlacementScope({
   placementDates: string[];
   commonTime: string;
   commonFormatName: string;
+  placements: SalePlacementDraft[];
+  separateTimesByDate: boolean;
+  separateFormatsByDate: boolean;
   commonFormats: Array<{ id: string; name: string }>;
   effectiveChannelIds: string[];
   networks: TelegramChannelNetwork[];
   channels: TelegramChannel[];
-  networkPricing?: ReactNode;
   onModeChange: (mode: AdSaleScopeMode) => void;
   onNetworkChange: (networkId: string) => void;
   onChannelsChange: (channelIds: string[]) => void;
@@ -76,25 +84,34 @@ export function AdSalePlacementScope({
   onRemoveDate: (date: string) => void;
   onCommonTimeChange: (time: string) => void;
   onCommonFormatChange: (formatName: string) => void;
+  onDateTimeChange: (date: string, time: string) => void;
+  onDateFormatChange: (date: string, formatName: string) => void;
+  onSeparateTimesByDateChange: (separate: boolean) => void;
+  onSeparateFormatsByDateChange: (separate: boolean) => void;
 }) {
   const [multipleDates, setMultipleDates] = useState(placementDates.length > 1);
 
   return (
     <section className="space-y-3">
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(260px,1fr)_minmax(360px,1.6fr)_160px_minmax(190px,0.8fr)] xl:items-start">
-        <TelegramChannelScopeSelector
-          mode={mode}
-          selectedNetworkId={selectedNetworkId}
-          selectedChannelIds={selectedChannelIds}
-          networks={networks}
-          channels={channels}
-          onModeChange={onModeChange}
-          onNetworkChange={onNetworkChange}
-          onChannelsChange={onChannelsChange}
-          label="Placement source"
-        />
+      <div className="grid min-w-0 gap-3 lg:grid-cols-3 lg:items-start">
+        <div className="min-w-0 lg:col-span-3">
+          <TelegramChannelScopeSelector
+            mode={mode}
+            selectedNetworkId={selectedNetworkId}
+            selectedChannelIds={selectedChannelIds}
+            networks={networks}
+            channels={channels}
+            onModeChange={onModeChange}
+            onNetworkChange={onNetworkChange}
+            onChannelsChange={onChannelsChange}
+            label="Placement source"
+          />
+        </div>
         <div className="space-y-1">
-          <label className="flex h-7 items-center text-sm text-neutral-300" htmlFor="ad-sale-date-to-add">
+          <label
+            className="flex h-7 items-center text-sm text-neutral-300"
+            htmlFor="ad-sale-date-to-add"
+          >
             {multipleDates ? "Placement dates" : "Placement date"}
           </label>
           <div className="flex gap-2">
@@ -126,7 +143,10 @@ export function AdSalePlacementScope({
           {multipleDates ? (
             <div className="mt-2 flex flex-wrap gap-1.5">
               {placementDates.map((date) => (
-                <span key={date} className="inline-flex items-center gap-1 rounded-md border border-blue-800/70 bg-blue-950/30 px-2 py-1 text-xs text-blue-100">
+                <span
+                  key={date}
+                  className="inline-flex items-center gap-1 rounded-md border border-blue-800/70 bg-blue-950/30 px-2 py-1 text-xs text-blue-100"
+                >
                   {date}
                   <button
                     type="button"
@@ -161,48 +181,80 @@ export function AdSalePlacementScope({
           )}
         </div>
         <div className="min-w-0 space-y-2">
-          <label className="block space-y-1">
-            <span className="flex h-7 items-center text-sm text-neutral-300">
-              Time for all
-            </span>
-            <TimeInput
-              value={commonTime}
-              onChange={(event) => onCommonTimeChange(event.target.value)}
-              className="h-[42px]"
-            />
-          </label>
-          <CommonAdSlotOptions
-            channelIds={effectiveChannelIds}
-            date={placementDates[0] ?? ""}
-            selectedTime={commonTime}
-            onSelect={onCommonTimeChange}
-          />
           {placementDates.length > 1 ? (
-            <p className="text-xs text-neutral-500">
-              Status reflects the first selected date. You can change each
-              placement after adding the dates.
-            </p>
+            <div className="flex h-7 items-center justify-between gap-2">
+              <span className="text-sm text-neutral-300">Time</span>
+              <button type="button" onClick={() => onSeparateTimesByDateChange(!separateTimesByDate)} className="px-1 text-xs text-neutral-400 underline-offset-2 hover:text-neutral-200 hover:underline">
+                {separateTimesByDate ? "Use one time" : "Set by date"}
+              </button>
+            </div>
           ) : null}
+          {separateTimesByDate && placementDates.length > 1 ? (
+            <div className="space-y-3">
+              {placementDates.map((date) => {
+                const selectedTime = placements.find((item) => item.date === date)?.time ?? "12:00";
+                return (
+                  <div key={date} className="space-y-1">
+                    <label className="block space-y-1">
+                      <span className="sr-only">{date}</span>
+                      <TimeInput aria-label={`Time ${date}`} value={selectedTime} onChange={(event) => onDateTimeChange(date, event.target.value)} className="h-[42px]" />
+                    </label>
+                    <CommonAdSlotOptions channelIds={effectiveChannelIds} date={date} selectedTime={selectedTime} onSelect={(time) => onDateTimeChange(date, time)} />
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <>
+              <label className="block space-y-1">
+                {placementDates.length <= 1 ? <span className="flex h-7 items-center text-sm text-neutral-300">Time</span> : <span className="sr-only">Time</span>}
+                <TimeInput aria-label="Time" value={commonTime} onChange={(event) => onCommonTimeChange(event.target.value)} className="h-[42px]" />
+              </label>
+              <CommonAdSlotOptions
+                channelIds={effectiveChannelIds}
+                dates={placementDates}
+                selectedTime={commonTime}
+                onSelect={onCommonTimeChange}
+              />
+            </>
+          )}
         </div>
-        <label className="space-y-1">
-          <span className="flex h-7 items-center text-sm text-neutral-300">
-            Format for all
-          </span>
-          <Select
-            value={commonFormatName}
-            onChange={(event) => onCommonFormatChange(event.target.value)}
-            className="h-[42px]"
-          >
-            <option value="">Mixed / default</option>
-            {commonFormats.map((product) => (
-              <option key={product.id} value={product.name}>
-                {product.name}
-              </option>
-            ))}
-          </Select>
-        </label>
+        <div className="min-w-0 space-y-2">
+          {placementDates.length > 1 ? (
+            <div className="flex h-7 items-center justify-between gap-2">
+              <span className="text-sm text-neutral-300">Format</span>
+              <button type="button" onClick={() => onSeparateFormatsByDateChange(!separateFormatsByDate)} className="px-1 text-xs text-neutral-400 underline-offset-2 hover:text-neutral-200 hover:underline">
+                {separateFormatsByDate ? "Use one format" : "Set by date"}
+              </button>
+            </div>
+          ) : null}
+          {separateFormatsByDate && placementDates.length > 1 ? (
+            <div className="space-y-2">
+              {placementDates.map((date) => {
+                const names = placements.filter((item) => item.date === date).map((item) => commonFormats.find((product) => product.id === item.productId)?.name);
+                const value = names.length && names.every((name) => name === names[0]) ? names[0] ?? "" : "";
+                return (
+                  <label key={date} className="block space-y-1">
+                    <span className="sr-only">{date}</span>
+                    <Select aria-label={`Format ${date}`} value={value} onChange={(event) => onDateFormatChange(date, event.target.value)} className="h-[42px]">
+                      <option value="">Mixed / default</option>
+                      {commonFormats.map((product) => <option key={product.id} value={product.name}>{product.name}</option>)}
+                    </Select>
+                  </label>
+                );
+              })}
+            </div>
+          ) : (
+            <label className="block space-y-1">
+              {placementDates.length <= 1 ? <span className="flex h-7 items-center text-sm text-neutral-300">Format</span> : <span className="sr-only">Format</span>}
+              <Select aria-label="Format" value={commonFormatName} onChange={(event) => onCommonFormatChange(event.target.value)} className="h-[42px]">
+                <option value="">Mixed / default</option>
+                {commonFormats.map((product) => <option key={product.id} value={product.name}>{product.name}</option>)}
+              </Select>
+            </label>
+          )}
+        </div>
       </div>
-      {networkPricing}
     </section>
   );
 }

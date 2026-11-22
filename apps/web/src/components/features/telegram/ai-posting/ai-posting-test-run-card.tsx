@@ -1,16 +1,16 @@
 "use client";
 
+import type { AiPostingWatermarkPreviewSettings } from "./ai-posting-watermark-preview";
 import { useState } from "react";
 import type {
   ResolvedEmoji,
   TelegramCustomEmojiPackSummary,
 } from "@telegram-system/shared";
-import { Clock3, RotateCcw } from "lucide-react";
+import { CheckCircle2, CircleX, Clock3, RotateCcw } from "lucide-react";
 import { Button, Card, StatusPill } from "@/components/ui/primitives";
 import {
   failureMessage,
   failureStageLabel,
-  mediaReadiness,
   money,
   type TestRun,
 } from "./ai-posting-test-console-model";
@@ -34,7 +34,10 @@ type ActionInput = {
 
 export function AiPostingTestRunCard({
   run,
+  channelId,
   channelTitle,
+  channelPhotoUrl,
+  watermarkPreview,
   customEmojiPacks,
   categoryIcons,
   preferenceIcons,
@@ -60,7 +63,10 @@ export function AiPostingTestRunCard({
   onConfirmSuggestion,
 }: {
   run: TestRun;
+  channelId?: string;
   channelTitle: string;
+  channelPhotoUrl?: string | null;
+  watermarkPreview?: AiPostingWatermarkPreviewSettings;
   customEmojiPacks?: TelegramCustomEmojiPackSummary[];
   categoryIcons?: Record<string, ResolvedEmoji>;
   preferenceIcons?: Record<string, ResolvedEmoji>;
@@ -94,11 +100,13 @@ export function AiPostingTestRunCard({
         <div className="flex items-center gap-2">
           <Clock3 size={15} />
           <strong>{new Date(run.createdAt).toLocaleString()}</strong>
+          {run.status.toUpperCase() === "COMPLETED" ? (
+            <CheckCircle2 size={15} className="text-emerald-400" aria-hidden />
+          ) : ["FAILED", "PARTIAL"].includes(run.status.toUpperCase()) ? (
+            <CircleX size={15} className="text-rose-400" aria-hidden />
+          ) : null}
           <StatusPill value={run.status.toLowerCase()} />
         </div>
-        <span className="text-neutral-400">
-          Версия настроек {run.settingsVersion} · запуск v{run.version}
-        </span>
       </header>
 
       {run.failures?.map((failure, index) => {
@@ -143,22 +151,13 @@ export function AiPostingTestRunCard({
         );
       })}
 
-      {run.publications.length > 0 && (
-        <p
-          role="status"
-          className={`rounded-lg border p-3 text-sm ${run.publications.every((post) => mediaReadiness(post) === "READY") ? "border-emerald-900/70 bg-emerald-950/20 text-emerald-200" : "border-amber-900/70 bg-amber-950/20 text-amber-200"}`}
-        >
-          {run.publications.filter((post) => mediaReadiness(post) === "READY")
-            .length === run.publications.length
-            ? `Все ${run.publications.length} публикации готовы с медиа.`
-            : `${run.publications.filter((post) => mediaReadiness(post) === "READY").length} из ${run.publications.length} публикаций готовы с медиа.`}
-        </p>
-      )}
-
       <AiPostingPublicationCarousel
         key={run.id}
         run={run}
         channelTitle={channelTitle}
+        channelId={channelId}
+        channelPhotoUrl={channelPhotoUrl}
+        watermarkPreview={watermarkPreview}
         customEmojiPacks={customEmojiPacks}
         categoryIcons={categoryIcons}
         preferenceIcons={preferenceIcons}

@@ -66,7 +66,6 @@ describe("AdSaleSharedPost", () => {
         systemBotConnected
         systemBotUsername="@system_bot"
         workspaceId="workspace-1"
-        onModeChange={vi.fn()}
         setPlacements={vi.fn()}
       />,
     );
@@ -112,7 +111,6 @@ describe("AdSaleSharedPost", () => {
         systemBotConnected
         systemBotUsername="@system_bot"
         workspaceId="workspace-1"
-        onModeChange={vi.fn()}
         setPlacements={vi.fn()}
       />,
     );
@@ -159,7 +157,6 @@ describe("AdSaleSharedPost", () => {
         systemBotConnected
         systemBotUsername="@system_bot"
         workspaceId="workspace-1"
-        onModeChange={vi.fn()}
         setPlacements={vi.fn()}
       />,
     );
@@ -196,7 +193,6 @@ describe("AdSaleSharedPost", () => {
         systemBotConnected
         systemBotUsername="@system_bot"
         workspaceId="workspace-1"
-        onModeChange={vi.fn()}
         setPlacements={vi.fn()}
       />,
     );
@@ -229,7 +225,6 @@ describe("AdSaleSharedPost", () => {
         systemBotConnected
         systemBotUsername="@system_bot"
         workspaceId="workspace-1"
-        onModeChange={vi.fn()}
         setPlacements={vi.fn()}
       />,
     );
@@ -258,7 +253,6 @@ describe("AdSaleSharedPost", () => {
         systemBotConnected
         systemBotUsername="@system_bot"
         workspaceId="workspace-1"
-        onModeChange={vi.fn()}
         setPlacements={vi.fn()}
       />,
     );
@@ -299,7 +293,6 @@ describe("AdSaleSharedPost", () => {
         systemBotConnected
         systemBotUsername="@system_bot"
         workspaceId="workspace-1"
-        onModeChange={vi.fn()}
         setPlacements={setPlacements}
       />,
     );
@@ -323,24 +316,22 @@ describe("AdSaleSharedPost", () => {
     expect(importedDraftWasStored).toBe(true);
   });
 
-  it("lets the user start with a separate post for every channel", () => {
-    const onModeChange = vi.fn();
+  it("keeps workflow selection outside the post editor", () => {
     render(
       <AdSaleSharedPost
         placements={placements}
         channels={[{ id: "channel-1", title: "Main" }] as never}
         mode="shared"
-        onModeChange={onModeChange}
         setPlacements={vi.fn()}
       />,
     );
 
-    fireEvent.click(
-      screen.getByRole("switch", {
+    expect(screen.getByText("Shared post")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("switch", {
         name: "Use one advertising post for all channels",
       }),
-    );
-    expect(onModeChange).toHaveBeenCalledWith("individual");
+    ).toBeNull();
   });
 
   it("offers bot connection without preparing an import when disconnected", () => {
@@ -352,7 +343,6 @@ describe("AdSaleSharedPost", () => {
         systemBotConnected={false}
         systemBotUsername="@system_bot"
         workspaceId="workspace-1"
-        onModeChange={vi.fn()}
         setPlacements={vi.fn()}
       />,
     );
@@ -385,7 +375,6 @@ describe("AdSaleSharedPost", () => {
         }
         channels={[{ id: "channel-1", title: "Main" }] as never}
         mode="shared"
-        onModeChange={vi.fn()}
         setPlacements={vi.fn()}
       />,
     );

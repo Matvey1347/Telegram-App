@@ -14,7 +14,6 @@ import type {
   AdHypothesisDetail,
   AdHypothesisInviteLinkHistory,
   AdHypothesisSummary,
-  AdvertisingChannel,
   CreateAdHypothesisPayload,
   DailyAnalyticsSyncRun,
   PaginationParams,
@@ -41,14 +40,12 @@ type StreamProgressAction = <TResult, TItem>(
 
 export function createMarketingApi({
   api,
-  crud,
   quietCrud,
   getPaginated,
   quietMutationConfig,
   streamProgressAction,
 }: {
   api: AxiosInstance;
-  crud: CrudFactory;
   quietCrud: CrudFactory;
   getPaginated: PaginatedGetter;
   quietMutationConfig: AxiosRequestConfig;
@@ -80,9 +77,6 @@ export function createMarketingApi({
       ).data;
     },
   };
-  const advertisingChannelsApi = crud<AdvertisingChannel>(
-    "/advertising-channels",
-  );
   const campaignCrud = quietCrud<AdCampaign>("/ad-campaigns");
   const adCampaignsApi = {
     get: campaignCrud.get,
@@ -270,7 +264,6 @@ export function createMarketingApi({
 
   return {
     promosApi,
-    advertisingChannelsApi,
     adCampaignsApi,
     telegramSyncApi,
     adHypothesesApi,

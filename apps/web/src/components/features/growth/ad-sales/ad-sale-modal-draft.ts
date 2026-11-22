@@ -14,7 +14,7 @@ export type AdSaleModalDraft = {
   selectedChannelIds: string[];
   placementDateRange: { from: string; to: string };
   placementDates?: string[];
-  postMode: "shared" | "individual";
+  postMode: "shared" | "individual" | "none";
   placements: SalePlacementDraft[];
   networkPricingMode: "total" | "per-placement";
   networkTotalPrice: string;
@@ -44,9 +44,14 @@ export function normalizeAdSaleModalDraft(
     selectedChannelIds:
       draft.selectedChannelIds ?? placements.map((item) => item.channelId),
     placementDateRange: draft.placementDateRange ?? { from: "", to: "" },
-    placementDates: [...new Set(
-      draft.placementDates ?? expandAdSaleDateRange(draft.placementDateRange ?? { from: "", to: "" }),
-    )].sort(),
+    placementDates: [
+      ...new Set(
+        draft.placementDates ??
+          expandAdSaleDateRange(
+            draft.placementDateRange ?? { from: "", to: "" },
+          ),
+      ),
+    ].sort(),
     postMode: draft.postMode ?? "shared",
     placements,
     networkPricingMode: draft.networkPricingMode ?? "per-placement",
@@ -67,7 +72,8 @@ export function hasMeaningfulAdSaleDraft(
   draft: AdSaleModalDraft,
   initialValue?: AdSaleModalDraft | null,
 ) {
-  if (initialValue) return JSON.stringify(draft) !== JSON.stringify(initialValue);
+  if (initialValue)
+    return JSON.stringify(draft) !== JSON.stringify(initialValue);
   return Boolean(
     draft.advertiserContact.trim() ||
     draft.selectedNetworkId ||

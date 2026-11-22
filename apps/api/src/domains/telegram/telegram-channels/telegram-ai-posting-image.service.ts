@@ -1,6 +1,8 @@
-import { HttpException, Injectable } from '@nestjs/common';
-import { randomInt, randomUUID } from 'node:crypto';
+import { BadGatewayException, HttpException, Injectable, Optional } from '@nestjs/common';
+import { createHash, randomInt, randomUUID } from 'node:crypto';
 import sharp from 'sharp';
+import { PrismaService } from '../../../prisma/prisma.service';
+import { decodeAiPostingRunPublications } from './telegram-ai-posting-run-data';
 import { AiGateway } from '../../operations/ai/ai-gateway';
 import { TelegramManagedPostMediaStorageService } from './telegram-managed-post-media-storage.service';
 import { TelegramAiPostingSourceService } from './telegram-ai-posting-source.service';
@@ -25,12 +27,47 @@ type ImageOperation = {
 export type TelegramAiPostingMediaReadiness = 'READY' | 'MISSING' | 'FAILED';
 
 type ImageResolution = {
-  image: { url: string; sourceId: string } | null;
+  image: { url: string; sourceId: string; previewUrl?: string | null; fingerprint?: string; originalUrl?: string } | null;
   readiness: TelegramAiPostingMediaReadiness;
   failureCode?: string;
   operation?: ImageOperation;
   costUnknown?: boolean;
 };
+
+const storageFailureCodes: Record<string, string> = {
+  'B2 storage configuration is incomplete.':
+    'AI_POSTING_IMAGE_STORAGE_CONFIG_MISSING',
+  'Failed to authorize immutable object storage.':
+    'AI_POSTING_IMAGE_STORAGE_AUTH_FAILED',
+  'Failed to resolve immutable object storage bucket.':
+    'AI_POSTING_IMAGE_STORAGE_BUCKET_FAILED',
+  'Immutable object storage bucket was not found.':
+    'AI_POSTING_IMAGE_STORAGE_BUCKET_FAILED',
+  'Failed to check immutable object existence.':
+    'AI_POSTING_IMAGE_STORAGE_CHECK_FAILED',
+  'Failed to prepare immutable object upload.':
+    'AI_POSTING_IMAGE_STORAGE_UPLOAD_PREPARE_FAILED',
+  'Failed to persist immutable object.':
+    'AI_POSTING_IMAGE_STORAGE_UPLOAD_FAILED',
+  'Unsupported immutable image content type.':
+    'AI_POSTING_IMAGE_STORAGE_CONTENT_TYPE_UNSUPPORTED',
+};
+
+function imageStorageFailureCode(error: unknown) {
+  const response = error instanceof HttpException ? error.getResponse() : null;
+  if (response && typeof response === 'object' && 'storageCode' in response &&
+    typeof response.storageCode === 'string' && /^[a-z_]{1,40}$/.test(response.storageCode))
+    return `AI_POSTING_IMAGE_STORAGE_UPLOAD_FAILED_${response.storageCode.toUpperCase()}`;
+  const message =
+    typeof response === 'string'
+      ? response
+      : response && typeof response === 'object' && 'message' in response
+        ? (response as { message?: unknown }).message
+        : null;
+  return typeof message === 'string'
+    ? (storageFailureCodes[message] ?? 'AI_POSTING_IMAGE_STORAGE_FAILED')
+    : 'AI_POSTING_IMAGE_STORAGE_FAILED';
+}
 
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 
@@ -64,7 +101,23 @@ export class TelegramAiPostingImageService {
     private readonly gateway: AiGateway,
     private readonly sources: TelegramAiPostingSourceService,
     private readonly media: TelegramManagedPostMediaStorageService,
+    @Optional() private readonly prisma?: PrismaService,
   ) {}
+
+  async renderBotWatermark(url: string, avatarUrl: string | null | undefined, settings: {
+    size: number; opacity: number; x: number; y: number;
+  }) {
+    const avatar = await this.prepareChannelAvatar(avatarUrl);
+    if (!avatar) throw new BadGatewayException('AI_POSTING_IMAGE_AVATAR_UNAVAILABLE');
+    const original = await this.sources.downloadImage(url);
+    const bytes = await addTelegramAiPostingAvatarWatermark(
+      original, avatar, settings.size, settings.opacity, settings.x, settings.y,
+    );
+    const [result] = await this.media.persistImageBytes([{ bytes }]);
+    const imageUrl = normalizedPersistedImageUrl(result);
+    if (!imageUrl) throw new BadGatewayException('AI_POSTING_IMAGE_STORAGE_FAILED');
+    return imageUrl;
+  }
 
   async prepareReferenceSheet(urls: unknown) {
     const references = Array.isArray(urls)
@@ -116,12 +169,17 @@ export class TelegramAiPostingImageService {
     }>;
     prompt: string;
     searchQuery?: string;
+    usedImages?: ReadonlySet<string>;
     referenceImage?: Buffer | null;
     referenceImageFailed?: boolean;
     referenceImageUrls?: unknown;
     channelAvatar?: Buffer | null;
     channelAvatarUrl?: string | null;
     watermarkChannelAvatar?: boolean;
+    watermarkSizePercent?: number;
+    watermarkX?: number;
+    watermarkY?: number;
+    watermarkOpacityPercent?: number;
     mode?: 'MANUAL' | 'AUTOMATIC';
     aiPosting?: {
       channelId: string;
@@ -152,9 +210,9 @@ export class TelegramAiPostingImageService {
         readiness: 'FAILED',
         failureCode: 'AI_POSTING_IMAGE_AVATAR_UNAVAILABLE',
       };
-    const searchTurn =
-      input.imageMode === 'hybrid' &&
-      (input.aiPosting?.publicationIndex ?? 0) % 2 === 0;
+    const used = await this.usedChannelImages(input.workspaceId, input.channelId);
+    for (const key of input.usedImages ?? []) used.add(key);
+    const searchTurn = input.imageMode === 'hybrid';
     let candidates = input.imageCandidates;
     if (searchTurn) {
       try {
@@ -174,6 +232,7 @@ export class TelegramAiPostingImageService {
     }
     if (input.imageMode === 'found' || searchTurn) {
       for (const candidate of candidates.slice(0, 3)) {
+        if (candidate.sourceId === 'channel-history' || used.has(candidate.url)) continue;
         let bytes: Buffer;
         let metadata: Awaited<ReturnType<ReturnType<typeof sharp>['metadata']>>;
         try {
@@ -189,9 +248,18 @@ export class TelegramAiPostingImageService {
           // Unavailable, corrupted, unsupported, or unsuitable sources are skipped.
           continue;
         }
+        const fingerprint = createHash("sha256").update(bytes).digest("hex");
+        if (used.has(fingerprint)) continue;
         try {
           const brandedBytes = avatar
-            ? await addTelegramAiPostingAvatarWatermark(bytes, avatar)
+            ? await addTelegramAiPostingAvatarWatermark(
+                bytes,
+                avatar,
+                input.watermarkSizePercent,
+                input.watermarkOpacityPercent,
+                input.watermarkX,
+                input.watermarkY,
+              )
             : bytes;
           const [url] = await this.media.persistImageBytes([
             {
@@ -205,23 +273,35 @@ export class TelegramAiPostingImageService {
           ]);
           const persistedUrl = normalizedPersistedImageUrl(url);
           if (!persistedUrl) {
-            if (input.imageMode === 'hybrid') break;
             return {
               image: null,
               readiness: 'FAILED',
               failureCode: 'AI_POSTING_IMAGE_STORAGE_FAILED',
             };
           }
+          const previewUrl = input.aiPosting?.postingMode === "TEST" && !avatar
+            ? persistedUrl
+            : await this.originalPreview(input.aiPosting?.postingMode, avatar, bytes);
           return {
-            image: { url: persistedUrl, sourceId: candidate.sourceId },
+            image: {
+              url: persistedUrl,
+              sourceId: candidate.sourceId,
+              ...(this.prisma ? { fingerprint, originalUrl: candidate.url } : {}),
+              ...(previewUrl ? { previewUrl } : {}),
+            },
             readiness: 'READY',
           };
-        } catch {
-          if (input.imageMode === 'hybrid') break;
+        } catch (error) {
+          if (input.imageMode === 'hybrid')
+            return {
+              image: null,
+              readiness: 'FAILED',
+              failureCode: imageStorageFailureCode(error),
+            };
           return {
             image: null,
             readiness: 'FAILED',
-            failureCode: 'AI_POSTING_IMAGE_STORAGE_FAILED',
+            failureCode: imageStorageFailureCode(error),
           };
         }
       }
@@ -332,9 +412,19 @@ export class TelegramAiPostingImageService {
         failureCode: 'AI_POSTING_IMAGE_QUALITY_INVALID',
         operation,
       };
+    const fingerprint = createHash('sha256').update(bytes).digest('hex');
+    if (used.has(fingerprint))
+      return { image: null, readiness: 'FAILED', failureCode: 'AI_POSTING_IMAGE_DUPLICATE', operation };
     try {
       const brandedBytes = avatar
-        ? await addTelegramAiPostingAvatarWatermark(bytes, avatar)
+        ? await addTelegramAiPostingAvatarWatermark(
+            bytes,
+            avatar,
+            input.watermarkSizePercent,
+            input.watermarkOpacityPercent,
+            input.watermarkX,
+            input.watermarkY,
+          )
         : bytes;
       const [url] = await this.media.persistImageBytes([
         {
@@ -354,18 +444,66 @@ export class TelegramAiPostingImageService {
           failureCode: 'AI_POSTING_IMAGE_STORAGE_FAILED',
           operation,
         };
+      const previewUrl = input.aiPosting?.postingMode === "TEST" && !avatar
+            ? persistedUrl
+            : await this.originalPreview(input.aiPosting?.postingMode, avatar, bytes);
       return {
-        image: { url: persistedUrl, sourceId: 'openai-image-generation' },
+        image: {
+          url: persistedUrl,
+          sourceId: 'openai-image-generation',
+          ...(this.prisma ? { fingerprint } : {}),
+          ...(previewUrl ? { previewUrl } : {}),
+        },
         readiness: 'READY',
         operation,
       };
-    } catch {
+    } catch (error) {
       return {
         image: null,
         readiness: 'FAILED',
-        failureCode: 'AI_POSTING_IMAGE_STORAGE_FAILED',
+        failureCode: imageStorageFailureCode(error),
         operation,
       };
+    }
+  }
+
+  private async usedChannelImages(workspaceId: string, telegramChannelId: string) {
+    const used = new Set<string>();
+    if (!this.prisma) return used;
+    const where = { workspaceId, telegramChannelId };
+    const [posts, managed, runs] = await Promise.all([
+      this.prisma.telegramPost.findMany({ where, select: { imageUrls: true } }),
+      this.prisma.telegramManagedPost.findMany({ where, select: { imageUrls: true } }),
+      this.prisma.telegramAiPostingTestRun.findMany({ where, select: { publications: true } }),
+    ]);
+    const add = (value: unknown) => {
+      if (typeof value !== 'string' || !value) return;
+      used.add(value);
+      const hash = value.match(/\/([a-f0-9]{64})\.[a-z]+(?:[?#]|$)/i)?.[1];
+      if (hash) used.add(hash);
+    };
+    for (const post of [...posts, ...managed]) post.imageUrls.forEach(add);
+    for (const run of runs) {
+      for (const item of decodeAiPostingRunPublications(run.publications).publications) {
+        if (!item || typeof item !== 'object') continue;
+        const post = item as Record<string, unknown>;
+        for (const key of ['imageUrl', 'imagePreviewUrl', 'imageFingerprint', 'imageOriginalUrl']) add(post[key]);
+      }
+    }
+    return used;
+  }
+
+  private async originalPreview(
+    mode: string | undefined,
+    avatar: Buffer | null,
+    bytes: Buffer,
+  ): Promise<string | null> {
+    if (mode !== 'TEST' || !avatar) return null;
+    try {
+      const [url] = await this.media.persistImageBytes([{ bytes }]);
+      return normalizedPersistedImageUrl(url);
+    } catch {
+      return null;
     }
   }
 

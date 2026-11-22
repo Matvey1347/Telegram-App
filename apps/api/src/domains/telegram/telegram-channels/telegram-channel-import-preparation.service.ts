@@ -264,57 +264,6 @@ export class TelegramChannelImportPreparationService {
     });
   }
 
-  public async upsertImportedPerson(
-    workspaceId: string,
-    info: {
-      title: string;
-      username: string | null;
-      description?: string | null;
-      photoUrl?: string | null;
-    },
-  ) {
-    const existing = info.username
-      ? await this.prisma.advertisingSource.findFirst({
-          where: {
-            workspaceId,
-            type: { not: 'telegram_channel' },
-            telegramUsername: info.username,
-          },
-        })
-      : null;
-    const data = {
-      workspaceId,
-      name: info.title,
-      type: 'direct' as const,
-      url: info.username ? `https://t.me/${info.username}` : undefined,
-      telegramUsername: info.username || undefined,
-      description: info.description || undefined,
-      imageUrl: info.photoUrl || undefined,
-      subscribersCount: 0,
-    };
-    const row = existing
-      ? await this.prisma.advertisingSource.update({
-          where: { id: existing.id },
-          data,
-        })
-      : await this.prisma.advertisingSource.create({ data });
-    return {
-      id: row.id,
-      selectionId: `source:${row.id}`,
-      kind: 'person',
-      title: row.name,
-      telegramUrl: row.url,
-      username: row.telegramUsername,
-      contactInfo: row.contactInfo,
-      notes: row.notes,
-      imageUrl: row.imageUrl,
-      subscribersCount: 0,
-      channelTags: Array.isArray(row.channelTags) ? row.channelTags : [],
-      createdAt: row.createdAt,
-      updatedAt: row.updatedAt,
-    };
-  }
-
   public pickCanonicalChannel(
     channels: Array<{ id: string; adminLinks?: unknown[]; createdAt: Date }>,
   ) {

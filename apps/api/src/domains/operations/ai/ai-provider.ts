@@ -111,10 +111,15 @@ export class AiProvider {
           errorCategory: null,
         };
       }
+      const postingCategory =
+        config.category === 'TELEGRAM_POSTING_PLAN' ||
+        config.category === 'TELEGRAM_POSTING_TEXT' ||
+        config.category === 'TELEGRAM_POSTING_IMAGE';
       if (
+        !postingCategory &&
         Buffer.byteLength(input, 'utf8') +
           Buffer.byteLength(instructions ?? '', 'utf8') >
-        256 * 1024
+          256 * 1024
       )
         return empty('INPUT_TOO_LARGE');
       if (
@@ -233,7 +238,7 @@ export class AiProvider {
         counted.body.input_tokens < 0
       )
         return empty('TOKEN_COUNT_INVALID');
-      if (counted.body.input_tokens > config.maxInputTokens)
+      if (!postingCategory && counted.body.input_tokens > config.maxInputTokens)
         return empty('INPUT_TOKEN_LIMIT');
       if (controller.signal.aborted) return empty('ABORTED');
       generationStarted = true;

@@ -206,6 +206,7 @@ export function createTelegramSourcesApi({
       (
         await api.get<TelegramSourceChannelAccess[]>(
           `/telegram-user-accounts/${id}/channels`,
+          { headers: { "X-Bypass-Response-Cache": "1" } },
         )
       ).data,
   };

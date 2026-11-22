@@ -18,7 +18,6 @@ import {
 } from "@/lib/features/growth/lead-discovery-query";
 import { LeadPreparationProducts } from "./lead-preparation-products";
 import { LeadPreparationScore } from "./lead-preparation-score";
-import { ManualOfferReport } from "../manual/manual-offer-report";
 import { LeadCandidateDraft } from "./lead-candidate-draft";
 import { useQualificationText } from "./qualification-copy";
 export function LeadPreparation({
@@ -332,17 +331,6 @@ export function LeadPreparation({
                   onPatch={(action, text) => patch(d, action, text)}
                   onCopy={() => copy(d)}
                 />
-                {candidate.contactId &&
-                candidate.contacts.some(
-                  (v) => v.type === "INSTAGRAM" && v.confirmed,
-                ) ? (
-                  <ManualOfferReport
-                    workspace={candidate.workspaceId}
-                    contactId={candidate.contactId}
-                    candidateId={candidate.id}
-                    draft={d}
-                  />
-                ) : null}
               </div>
             ))}
           </section>

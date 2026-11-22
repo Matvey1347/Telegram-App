@@ -1,5 +1,10 @@
+import { createHash } from 'node:crypto';
 import sharp from 'sharp';
-import { ConflictException, ServiceUnavailableException } from '@nestjs/common';
+import {
+  ConflictException,
+  InternalServerErrorException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { TelegramAiPostingImageService } from './telegram-ai-posting-image.service';
 
 describe('TelegramAiPostingImageService', () => {
@@ -67,6 +72,16 @@ describe('TelegramAiPostingImageService', () => {
     );
   });
 
+  it('does not store an image whose bytes already appeared in this run', async () => {
+    const fingerprint = createHash('sha256').update(imageBytes).digest('hex');
+    const result = await service.resolve({
+      ...request('ai'),
+      usedImages: new Set([fingerprint]),
+    });
+    expect(result).toMatchObject({ readiness: 'FAILED', failureCode: 'AI_POSTING_IMAGE_DUPLICATE' });
+    expect(media.persistImageBytes).not.toHaveBeenCalled();
+  });
+
   it('searches across open image sources in hybrid mode and persists the result', async () => {
     sources.searchOpenImages.mockResolvedValue([
       {
@@ -84,7 +99,7 @@ describe('TelegramAiPostingImageService', () => {
     expect(gateway.execute).not.toHaveBeenCalled();
   });
 
-  it('falls back to AI when search fails and generates directly on alternating hybrid publications', async () => {
+  it('falls back to AI when search fails and still searches every hybrid publication', async () => {
     sources.searchOpenImages.mockRejectedValue(new Error('unavailable'));
     expect((await service.resolve(request('hybrid'))).image?.sourceId).toBe(
       'openai-image-generation',
@@ -99,7 +114,10 @@ describe('TelegramAiPostingImageService', () => {
         })
       ).image?.sourceId,
     ).toBe('openai-image-generation');
-    expect(sources.searchOpenImages).not.toHaveBeenCalled();
+    expect(sources.searchOpenImages).toHaveBeenCalledWith(
+      'A distinct topic',
+      1,
+    );
   });
 
   it('persists a valid found image and marks it ready', async () => {
@@ -360,6 +378,27 @@ describe('TelegramAiPostingImageService', () => {
       failureCode: 'AI_POSTING_IMAGE_STORAGE_FAILED',
       operation: { actualCost: '0.025' },
     });
+  });
+
+  it('reports the safe storage stage and does not pay for AI after a found image cannot be stored', async () => {
+    sources.searchOpenImages.mockResolvedValue([
+      {
+        url: 'https://example.org/image.png',
+        sourceId: 'openverse',
+        sourceType: 'image-search',
+      },
+    ]);
+    media.persistImageBytes.mockRejectedValue(
+      new InternalServerErrorException('Failed to persist immutable object.'),
+    );
+
+    const result = await service.resolve(request('hybrid'));
+
+    expect(result).toMatchObject({
+      readiness: 'FAILED',
+      failureCode: 'AI_POSTING_IMAGE_STORAGE_UPLOAD_FAILED',
+    });
+    expect(gateway.execute).not.toHaveBeenCalled();
   });
 
   it('falls back once in hybrid mode after all found candidates are rejected', async () => {

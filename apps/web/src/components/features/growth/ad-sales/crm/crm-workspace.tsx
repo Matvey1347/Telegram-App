@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { normalizeInstagramProfile } from "@telegram-system/shared";
 import { Plus } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -18,8 +18,6 @@ import {
   Textarea,
 } from "@/components/ui/primitives";
 import { telegramCrmKeys } from "@/lib/features/growth/telegram-crm-query";
-import Link from "next/link";
-import { ManualContacts } from "./manual/manual-contacts";
 import { CrmContactList } from "./crm-contact-list";
 import { CrmAccountSyncPanel } from "./crm-account-sync-panel";
 import { CrmInbox } from "./crm-inbox";
@@ -37,6 +35,7 @@ import { MemberSelect } from "@/components/features/workspace/member-select";
 import { CrmAnalytics } from "./crm-analytics";
 import { CrmAdSaleLauncher } from "./crm-ad-sale-launcher";
 import { useCrmInboxRealtime } from "@/lib/features/growth/use-crm-inbox-realtime";
+import { useOptionalI18n } from "@/providers/i18n-provider";
 
 export function CrmWorkspace({
   surface,
@@ -44,9 +43,8 @@ export function CrmWorkspace({
   surface: Exclude<AdSalesSurface, { kind: "legacy" }>;
 }) {
   const router = useRouter();
-  const manualMode = useSearchParams().get("manual") === "1";
+  const i18n = useOptionalI18n();
   const queryClient = useQueryClient();
-  const [manualContactOpen, setManualContactOpen] = useState(surface.kind === "contacts" && !!surface.contactId);
   const [addingClient, setAddingClient] = useState(false);
   const [addingSale, setAddingSale] = useState(false);
   const [clientForm, setClientForm] = useState({
@@ -83,7 +81,8 @@ export function CrmWorkspace({
   });
   const createClient = useMutation({
     mutationFn: () => {
-      if(newChannelName === "Instagram" && newChannelValue.trim()) normalizeInstagramProfile(newChannelValue);
+      if (newChannelName === "Instagram" && newChannelValue.trim())
+        normalizeInstagramProfile(newChannelValue);
       return telegramCrmApi.createContact({
         displayName: clientForm.displayName.trim(),
         telegramUsername:
@@ -131,14 +130,17 @@ export function CrmWorkspace({
       ? "CRM inbox"
       : surface.kind === "analytics"
         ? "CRM analytics"
-        : "CRM contacts";
+        : surface.kind === "settings"
+          ? (i18n?.t("crm.settings.nav") ?? "Settings")
+          : "CRM contacts";
   const subtitle =
     surface.kind === "inbox"
       ? "Telegram conversations, clients and follow-up."
       : surface.kind === "analytics"
         ? "Client growth, buyers, conversion, and average order value."
-        : manualMode
-          ? "Instagram profiles, manual communication and follow-up."
+        : surface.kind === "settings"
+          ? (i18n?.t("crm.settings.description") ??
+            "Manage Telegram accounts and CRM import settings.")
           : "Customer relationships and account-specific Telegram conversations.";
   if (!me.data)
     return (
@@ -157,31 +159,12 @@ export function CrmWorkspace({
   return (
     <AppShell>
       <PageTabHead title="CRM" emoji="💬" color="#0f766e" />
-      <div
-        className={
-          manualMode && manualContactOpen ? "hidden lg:block" : undefined
-        }
-      >
+      <div>
         <PageHeader
           title={title}
           subtitle={`${subtitle}${unread.data?.total ? ` ${unread.data.total} unread.` : ""}`}
           action={
             <div className="flex flex-wrap gap-2">
-              {surface.kind === "contacts" ? (
-                <Link
-                  className="inline-flex min-h-11 items-center text-sm text-blue-300"
-                  href={
-                    manualMode
-                      ? "/ad-sales/clients"
-                      : "/ad-sales/clients?manual=1"
-                  }
-                >
-                  {manualMode ? "All clients" : "Manual Instagram"}
-                </Link>
-              ) : null}
-              {surface.kind === "contacts" ? (
-                <CrmAccountSyncPanel canEdit={permissions.canEditAll} />
-              ) : null}
               {surface.kind === "contacts" &&
               (permissions.canEditOwn || permissions.canEditAll) ? (
                 <Button className="h-11" onClick={() => setAddingClient(true)}>
@@ -197,19 +180,14 @@ export function CrmWorkspace({
         <CrmNavigation
           canViewInbox={hasCrmView}
           canViewSales={canViewSales}
+          canViewSettings={hasCrmView}
           inboxUnread={unread.data?.inbox}
         />
       </div>
-      {surface.kind === "contacts" && manualMode ? (
-        <ManualContacts
-          key={me.data.workspace.id}
-          onContactOpenChange={setManualContactOpen}
-          workspace={me.data.workspace.id}
-          canCreate={permissions.canEditOwn || permissions.canEditAll}
-          initialContactId={surface.contactId}
-        />
+      {surface.kind === "settings" ? (
+        <CrmAccountSyncPanel canEdit={permissions.canEditAll} />
       ) : null}
-      {surface.kind === "contacts" && !manualMode ? (
+      {surface.kind === "contacts" ? (
         <CrmContactList
           initialContactId={surface.contactId}
           initialConversationId={surface.conversationId}

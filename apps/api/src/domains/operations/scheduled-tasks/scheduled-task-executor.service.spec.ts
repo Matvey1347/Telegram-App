@@ -1,5 +1,4 @@
 import { TelegramCrmChatReceipts } from '../../telegram/telegram-crm/telegram-crm-chat-receipts.service';
-import { TelegramCrmManualRetentionService } from '../../telegram/telegram-crm/telegram-crm-manual-retention.service';
 import { TelegramLeadRetentionService } from '../../telegram/telegram-crm/lead-discovery/lead-retention.service';
 import { TelegramCrmAiDraftRetentionService } from '../../telegram/telegram-crm/telegram-crm-ai-draft-retention.service';
 import { AiUsageRetentionService } from '../ai/ai-usage-retention.service';
@@ -96,10 +95,6 @@ describe('scheduled task registry executors', () => {
       [TelegramCrmAiDraftRetentionService, draftRetention],
       [TelegramLeadRetentionService, leadRetention],
       [TelegramCrmChatReceipts, { cleanup: jest.fn().mockResolvedValue(4) }],
-      [
-        TelegramCrmManualRetentionService,
-        { cleanup: jest.fn().mockResolvedValue(13) },
-      ],
       [CurrenciesService, {}],
       [TelegramAdSalesService, {}],
       [ApplicationLogsService, {}],

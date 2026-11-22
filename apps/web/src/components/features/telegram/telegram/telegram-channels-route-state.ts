@@ -11,7 +11,7 @@ export const TELEGRAM_CHANNEL_TAB_OPTIONS = {
 export const TELEGRAM_CHANNEL_TAB_LABELS = {
   channels: "Channels",
   networks: "Network",
-  accounts: "Accounts",
+  accounts: "MTProto",
 } as const satisfies Record<TelegramChannelsTab, string>;
 
 export const parseTelegramChannelsTab = (

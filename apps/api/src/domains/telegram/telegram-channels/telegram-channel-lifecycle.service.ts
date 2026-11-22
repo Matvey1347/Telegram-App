@@ -274,12 +274,6 @@ export class TelegramChannelLifecycleService {
     }
     const { timePosts: _timePosts, ...channelUpdateData } = dto;
     void _timePosts;
-    if (dto.seedDisabled) {
-      channelUpdateData.seedSubscribersCount = 0;
-      channelUpdateData.knownFakeSubscribersCount = 0;
-      channelUpdateData.ownViewsPerPost = 0;
-      channelUpdateData.ownReactionsPerPost = 0;
-    }
     const normalizedTimePosts = dto.timePosts?.map((item, index) => ({
       id: randomUUID(),
       title: String(item.title || '').trim(),

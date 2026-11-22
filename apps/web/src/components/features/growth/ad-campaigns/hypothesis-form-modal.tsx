@@ -256,6 +256,7 @@ export function HypothesisFormModal({
                   setDraftIconPresentation(presentation ?? null);
                 }}
                 buttonLabel="Add emoji"
+                iconOnly
               />
             </FormField>
             <FormField label="Member">

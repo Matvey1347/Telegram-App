@@ -1,4 +1,4 @@
-import { channelAvatarEmojiOwnedChannelWhere } from './channel-avatar-emoji-ownership';
+import { channelAvatarEmojiManagedChannelWhere } from './channel-avatar-emoji-ownership';
 import { Prisma } from '@prisma/client';
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { WorkspaceService } from '../../../common/workspace.service';
@@ -20,17 +20,17 @@ export class ChannelAvatarEmojiService {
     private readonly processor: ChannelAvatarEmojiProcessorService,
   ) {}
 
-  private async owned(userId: string, id: string) {
+  private async managed(userId: string, id: string) {
     const workspaceId = await this.workspace.resolveWorkspaceIdForUser(userId);
     const channel = await this.prisma.telegramChannel.findFirst({
-      where: { id, ...channelAvatarEmojiOwnedChannelWhere(workspaceId) },
+      where: { id, ...channelAvatarEmojiManagedChannelWhere(workspaceId) },
     });
     if (!channel) throw new NotFoundException('Telegram channel not found');
     return channel;
   }
 
   async refresh(userId: string, id: string): Promise<unknown> {
-    const channel = await this.owned(userId, id);
+    const channel = await this.managed(userId, id);
     // Reset bounded automatic retry admission only on an explicit command.
     await this.enqueue(channel.workspaceId, id, false);
     await this.process(channel.workspaceId, id);
@@ -39,7 +39,7 @@ export class ChannelAvatarEmojiService {
   }
 
   async restore(userId: string, id: string): Promise<unknown> {
-    const channel = await this.owned(userId, id);
+    const channel = await this.managed(userId, id);
     await this.prisma.$executeRaw(Prisma.sql`
       UPDATE "TelegramChannel"
       SET "avatarEmojiManual" = false, "presentationIconId" = "avatarEmojiIconId", "updatedAt" = NOW()
@@ -49,7 +49,7 @@ export class ChannelAvatarEmojiService {
           SELECT 1 FROM "TelegramChannelSourceAccess" access
           WHERE access."channelId" = "TelegramChannel"."id"
             AND access."workspaceId" = "TelegramChannel"."workspaceId"
-            AND access."sourceType" = 'MTPROTO' AND access."role" = 'OWNER'
+            AND access."sourceType" = 'MTPROTO' AND access."role" IN ('OWNER', 'ADMIN')
         )
     `);
     return this.catalog.findOne(userId, id);

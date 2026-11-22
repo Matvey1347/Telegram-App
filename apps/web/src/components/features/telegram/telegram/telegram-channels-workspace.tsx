@@ -14,10 +14,8 @@ import {
 } from "@/components/features/telegram/telegram/channel-sync-scope-modal";
 import { TelegramChannelsHeaderActions } from "@/components/features/telegram/telegram/telegram-channels-header-actions";
 import type { TelegramChannelExportSelection } from "@/components/features/telegram/telegram/telegram-channel-export-modal";
-import { TelegramPeopleCards } from "@/components/features/telegram/telegram/telegram-overview-cards";
 import {
   telegramChannelsApi,
-  type AdvertisingChannel,
   type TelegramChannel,
   type TelegramChannelAdAnalysis,
   type TelegramChannelNetwork,
@@ -31,14 +29,10 @@ import {
 } from "@/components/ui/primitives";
 import { useAppToast } from "@/providers/toast-provider";
 import {
-  parseTelegramAccountFilter as parseAccountFilter,
   parseTelegramChannelLifecycle as parseChannelLifecycleTab,
-  parseTelegramChannelOwnership as parseChannelFilter,
   TELEGRAM_CHANNEL_TAB_LABELS,
   TELEGRAM_CHANNEL_TAB_OPTIONS,
-  type TelegramAccountFilter as AccountFilter,
   type TelegramChannelLifecycleFilter as ChannelLifecycleTab,
-  type TelegramChannelOwnershipFilter as ChannelFilter,
   type TelegramChannelsTab as TelegramTab,
 } from "@/components/features/telegram/telegram/telegram-channels-route-state";
 import { usePersistedRouteTab } from "@/hooks/use-persisted-route-tab";
@@ -97,12 +91,9 @@ export function TelegramChannelsWorkspace() {
     allowedValues: TELEGRAM_CHANNEL_TAB_OPTIONS.all,
     defaultValue: "channels",
   });
-  const channelFilter = parseChannelFilter(searchParams.get("channelTab"));
   const lifecycleTab = parseChannelLifecycleTab(searchParams.get("lifecycle"));
-  const accountFilter = parseAccountFilter(searchParams.get("accountTab"));
   const [deleting, setDeleting] = useState<TelegramChannel | null>(null);
-  const [deletingPerson, setDeletingPerson] =
-    useState<AdvertisingChannel | null>(null);
+
   const [networkFormOpen, setNetworkFormOpen] = useState(false);
   const [editingNetwork, setEditingNetwork] =
     useState<TelegramChannelNetwork | null>(null);
@@ -124,15 +115,11 @@ export function TelegramChannelsWorkspace() {
   } | null>(null);
   const updateTabs = (next: {
     tab?: TelegramTab;
-    channelFilter?: ChannelFilter;
     lifecycle?: ChannelLifecycleTab;
-    accountFilter?: AccountFilter;
   }) => {
     const nextTab = next.tab || tab;
     setPersistedTab(nextTab, (params) => {
-      if (next.channelFilter) params.set("channelTab", next.channelFilter);
       if (next.lifecycle) params.set("lifecycle", next.lifecycle);
-      if (next.accountFilter) params.set("accountTab", next.accountFilter);
     });
   };
 
@@ -146,14 +133,9 @@ export function TelegramChannelsWorkspace() {
     networksError,
     currencySettings,
     rates,
-    people,
-    peopleLoading,
-    peopleError,
   } = useTelegramChannelsWorkspaceReads({
     tab,
     lifecycleTab,
-    channelFilter,
-    accountFilter,
     networkFormOpen,
     editingNetwork,
     messageTemplatesOpen,
@@ -168,7 +150,6 @@ export function TelegramChannelsWorkspace() {
     restoreMutation,
     moveToTestMutation,
     moveToActiveMutation,
-    deletePersonMutation,
     createNetworkMutation,
     updateNetworkMutation,
     deleteNetworkMutation,
@@ -178,7 +159,6 @@ export function TelegramChannelsWorkspace() {
     setAnalysisEditor,
     setDeletingAnalysis,
     setDeleting,
-    setDeletingPerson,
     setNetworkFormOpen,
     setEditingNetwork,
     setDeletingNetwork,
@@ -194,13 +174,10 @@ export function TelegramChannelsWorkspace() {
     [channels],
   );
   const hasLoadedChannels = Boolean(channels?.[0]);
-  const hasLoadedPeople = Boolean(people?.[0]);
   const channelsInitialLoading = channelsLoading && !hasLoadedChannels;
   const channelsInitialError = Boolean(channelsError) && !hasLoadedChannels;
-  const peopleInitialLoading = peopleLoading && !hasLoadedPeople;
-  const peopleInitialError = Boolean(peopleError) && !hasLoadedPeople;
   const emptyText =
-    channelFilter === "own" ? "No own channels" : "No external channels";
+    "No channels";
   const handleExport = async (selection: TelegramChannelExportSelection) => {
     const { channelIds, sections } = selection;
     const selectedChannels = (channels || []).filter((channel) =>
@@ -238,7 +215,6 @@ export function TelegramChannelsWorkspace() {
   const headerAction = (
     <TelegramChannelsHeaderActions
       tab={tab}
-      accountFilter={accountFilter}
       hasChannels={Boolean(channels?.length)}
       onCreateNetwork={() => {
         setEditingNetwork(null);
@@ -272,42 +248,23 @@ export function TelegramChannelsWorkspace() {
       </div>
       {tab === "channels" ? (
         <>
-          <div className="mb-5 flex gap-1 border-b border-neutral-800">
-            {(["own", "external"] as ChannelFilter[]).map((item) => (
+          <div className="mb-3 flex gap-1 border-b border-neutral-800" aria-label="Channel status">
+            {([
+              ["active", "Active", channelCounts?.active],
+              ["test", "For Test", channelCounts?.test],
+              ["archive", "Archive", channelCounts?.archived],
+            ] as const).map(([status, label, count]) => (
               <button
-                key={item}
+                key={status}
                 type="button"
-                className={`border-b-2 px-3 py-2 text-sm ${channelFilter === item ? "border-blue-500 text-white" : "border-transparent text-neutral-400 hover:text-white"}`}
-                onClick={() =>
-                  updateTabs({ tab: "channels", channelFilter: item })
-                }
+                aria-pressed={lifecycleTab === status}
+                className={`border-b-2 px-3 py-2 text-sm ${lifecycleTab === status ? "border-blue-500 text-white" : "border-transparent text-neutral-400 hover:text-white"}`}
+                onClick={() => updateTabs({ lifecycle: status })}
               >
-                {item === "own" ? "Our channels" : "External channels"}
+                {label} ({count ?? 0})
               </button>
             ))}
           </div>
-          {channelFilter === "own" ? (
-            <div className="mb-3 flex gap-1 border-b border-neutral-800">
-              {(["active", "test", "archive"] as ChannelLifecycleTab[]).map(
-                (item) => (
-                  <button
-                    key={item}
-                    type="button"
-                    className={`border-b-2 px-3 py-2 text-sm ${lifecycleTab === item ? "border-blue-500 text-white" : "border-transparent text-neutral-400 hover:text-white"}`}
-                    onClick={() =>
-                      updateTabs({ tab: "channels", lifecycle: item })
-                    }
-                  >
-                    {item === "active"
-                      ? `Active (${channelCounts?.active ?? 0})`
-                      : item === "test"
-                        ? `For Test (${channelCounts?.test ?? 0})`
-                        : `Archive (${channelCounts?.archived ?? 0})`}
-                  </button>
-                ),
-              )}
-            </div>
-          ) : null}
           {channelsInitialLoading ? <LoadingState /> : null}
           {channelsInitialError ? (
             <div className="text-red-300">Failed to load channels</div>
@@ -367,47 +324,10 @@ export function TelegramChannelsWorkspace() {
           onDelete={setDeletingNetwork}
         />
       ) : tab === "accounts" ? (
-        <>
-          <div className="mb-5 flex gap-1 border-b border-neutral-800">
-            {(["mtproto", "people"] as AccountFilter[]).map((item) => (
-              <button
-                key={item}
-                type="button"
-                className={`border-b-2 px-3 py-2 text-sm ${accountFilter === item ? "border-blue-500 text-white" : "border-transparent text-neutral-400 hover:text-white"}`}
-                onClick={() =>
-                  updateTabs({ tab: "accounts", accountFilter: item })
-                }
-              >
-                {item === "mtproto" ? "MTProto" : "People"}
-              </button>
-            ))}
-          </div>
-          {accountFilter === "mtproto" ? (
-            <MtprotoAccountsPanel
-              createOpen={mtprotoCreateOpen}
-              onCreateClose={() => setMtprotoCreateOpen(false)}
-            />
-          ) : null}
-          {accountFilter === "people" ? (
-            <>
-              {peopleInitialLoading ? <LoadingState /> : null}
-              {peopleInitialError ? (
-                <div className="text-red-300">Failed to load people</div>
-              ) : null}
-              <TelegramPeopleCards
-                people={people || []}
-                onDelete={(person) =>
-                  setDeletingPerson(person as AdvertisingChannel)
-                }
-              />
-              {!peopleInitialLoading &&
-              !peopleInitialError &&
-              !(people || []).length ? (
-                <EmptyState text="No people" />
-              ) : null}
-            </>
-          ) : null}
-        </>
+        <MtprotoAccountsPanel
+          createOpen={mtprotoCreateOpen}
+          onCreateClose={() => setMtprotoCreateOpen(false)}
+        />
       ) : null}
       <ImportChannelModal
         open={importOpen}
@@ -482,18 +402,6 @@ export function TelegramChannelsWorkspace() {
         onClose={() => setDeleting(null)}
         onConfirm={() =>
           deleting ? deleteMutation.mutateAsync(deleting.id) : undefined
-        }
-        label="Delete"
-      />
-      <ConfirmDeleteModal
-        open={!!deletingPerson}
-        entityName={deletingPerson?.title ?? ""}
-        description="This deletes the person from advertising sources."
-        onClose={() => setDeletingPerson(null)}
-        onConfirm={() =>
-          deletingPerson
-            ? deletePersonMutation.mutateAsync(deletingPerson.id)
-            : undefined
         }
         label="Delete"
       />

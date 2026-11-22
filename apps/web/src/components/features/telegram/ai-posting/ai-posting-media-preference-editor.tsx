@@ -2,17 +2,15 @@
 
 import { TELEGRAM_AI_POSTING_MAX_MEDIA_REFERENCES } from "@telegram-system/shared";
 import { useState } from "react";
-import { Info, Pencil, Plus, X } from "lucide-react";
+import { Pencil, Plus, X } from "lucide-react";
 import { IconAvatar } from "@/components/icons/icon-avatar";
 import { IconPicker } from "@/components/icons/icon-picker";
 import {
   Button,
-  Card,
   FormField,
   IconButton,
   Input,
   Textarea,
-  Tooltip,
 } from "@/components/ui/primitives";
 import { TelegramPostMediaUpload } from "../telegram/telegram-post-media-upload";
 import type { AiPostingMediaPreference } from "./ai-posting-media-preferences";
@@ -62,35 +60,10 @@ export function AiPostingMediaPreferenceEditor({
     <section className="space-y-3" aria-label="Предпочтения к медиа">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <div>
-            <h3 className="text-sm font-medium">Предпочтения к медиа</h3>
-            <p className="mt-1 text-xs text-neutral-400">
-              У каждого направления свои описание и референсы. AI выбирает
-              подходящее для темы.
-            </p>
-          </div>
-          <Tooltip
-            content={
-              <span className="block max-w-xs">
-                При генерации AI создаёт новое изображение, используя референсы
-                как ориентир, а не копируя их. В режиме «Найденные медиа»
-                референсы не влияют на поиск.
-              </span>
-            }
-          >
-            <span
-              tabIndex={0}
-              role="button"
-              aria-label="Как используются визуальные референсы"
-              className="inline-flex h-7 w-7 shrink-0 cursor-help items-center justify-center rounded-md text-neutral-400 hover:bg-neutral-800 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-            >
-              <Info size={15} />
-            </span>
-          </Tooltip>
+          <h3 className="text-sm font-medium">Предпочтения к медиа</h3>
         </div>
         <Button
           type="button"
-          variant="secondary"
           disabled={preferences.length >= 10}
           onClick={() => setDraft(blankPreference())}
         >
@@ -110,54 +83,77 @@ export function AiPostingMediaPreferenceEditor({
       ) : (
         <div className="grid gap-2 sm:grid-cols-2">
           {preferences.map((preference, index) => (
-            <Card
+            <div
               key={preference.id}
-              className="flex min-w-0 items-center gap-3 p-3"
+              className="flex min-h-[68px] min-w-0 items-center gap-2 rounded-lg border border-neutral-800 bg-neutral-950/60 px-2 py-1.5"
             >
               {preference.emojiIconId ? (
                 <IconPicker
                   iconId={preference.emojiIconId}
-                  onChange={() => undefined}
+                  onChange={(emojiIconId, icon) =>
+                    onChange(
+                      preferences.map((item) =>
+                        item.id === preference.id
+                          ? {
+                              ...item,
+                              emojiIconId: emojiIconId ?? undefined,
+                              emoji:
+                                icon?.type === "unicode"
+                                  ? icon.value
+                                  : item.emoji,
+                            }
+                          : item,
+                      ),
+                    )
+                  }
                   buttonLabel="Эмодзи предпочтения"
                   ariaLabel={`Эмодзи предпочтения ${index + 1}`}
-                  allowImages={false}
-                  disabled
+                  allowImages
                   compact
-                  className="!h-10 !w-10 !min-w-10 !p-1"
-                  iconClassName="!h-7 !w-7 !border-0 !bg-transparent"
+                  className="!h-8 !w-8 !min-w-8 !p-0.5"
+                  iconClassName="!h-6 !w-6 !border-0 !bg-transparent"
                 />
               ) : (
                 <IconAvatar
                   icon={{ type: "unicode", value: preference.emoji || "🎨" }}
                   label={preference.name}
-                  size="md"
+                  size="sm"
                   bordered={false}
                 />
               )}
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium text-white">
+                <p className="truncate text-xs font-semibold text-white">
                   {preference.name}
                 </p>
-                <span className="mt-0.5 inline-flex rounded bg-blue-950/70 px-1.5 py-0.5 text-[10px] text-blue-200">
-                  {preference.purpose === "SEARCH" ? "Для поиска" : preference.purpose === "GENERATION" ? "Для генерации" : "Поиск и генерация"}
-                </span>
-                <p className="truncate text-xs text-neutral-400">
-                  {preference.description || "Без описания"} ·{" "}
-                  {preference.references.length} референсов
-                </p>
+                <div className="mt-0.5 flex min-w-0 items-center gap-2">
+                  <span className="inline-flex rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] text-neutral-300">
+                    {preference.purpose === "SEARCH"
+                      ? "Для поиска"
+                      : preference.purpose === "GENERATION"
+                        ? "Для генерации"
+                        : "Поиск и генерация"}
+                  </span>
+                  <span
+                    className="shrink-0 text-[10px] text-neutral-500"
+                    aria-label={`${preference.references.length} референсов`}
+                  >
+                    {preference.references.length} реф.
+                  </span>
+                </div>
               </div>
               <Button
                 type="button"
-                className="h-10 w-10 !p-0"
+                className="h-8 w-8 !p-0"
                 onClick={() => setDraft({ ...preference })}
                 aria-label={`Редактировать предпочтение ${index + 1}`}
                 title="Редактировать"
               >
-                <Pencil size={16} />
+                <Pencil size={14} />
               </Button>
               <IconButton
                 type="button"
                 kind="delete"
+                className="!h-8 !w-8"
                 aria-label={`Удалить предпочтение ${index + 1}`}
                 title="Удалить предпочтение"
                 onClick={() =>
@@ -166,7 +162,7 @@ export function AiPostingMediaPreferenceEditor({
                   )
                 }
               />
-            </Card>
+            </div>
           ))}
         </div>
       )}
@@ -226,7 +222,7 @@ export function AiPostingMediaPreferenceEditor({
                   }
                   buttonLabel="Выбрать эмодзи"
                   ariaLabel="Выбрать эмодзи предпочтения"
-                  allowImages={false}
+                  allowImages
                   compact
                 />
               </div>
@@ -256,11 +252,13 @@ export function AiPostingMediaPreferenceEditor({
             </FormField>
             <FormField label="Использовать предпочтение для">
               <div className="grid grid-cols-3 gap-1 rounded-lg border border-neutral-800 bg-neutral-950 p-1">
-                {([
-                  ["SEARCH", "Поиска"],
-                  ["GENERATION", "Генерации"],
-                  ["BOTH", "Обоих"],
-                ] as const).map(([purpose, label]) => (
+                {(
+                  [
+                    ["SEARCH", "Поиска"],
+                    ["GENERATION", "Генерации"],
+                    ["BOTH", "Обоих"],
+                  ] as const
+                ).map(([purpose, label]) => (
                   <button
                     key={purpose}
                     type="button"

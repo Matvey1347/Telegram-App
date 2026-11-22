@@ -53,6 +53,27 @@ const promo = {
 } as const;
 
 describe("PromoCard", () => {
+  it("shows video media in the promo preview card", () => {
+    const { container } = render(
+      <PromoCard
+        promo={{
+          ...promo,
+          mediaItems: [
+            { kind: "VIDEO", url: "https://cdn.test/preview.mp4", mimeType: "video/mp4" },
+          ],
+        }}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+      />,
+    );
+
+    expect(container.querySelector("video")).toHaveAttribute(
+      "src",
+      "https://cdn.test/preview.mp4",
+    );
+    expect(container.querySelector("video")).toHaveAttribute("controls");
+  });
+
   it("shows the creative opening and keeps edit and delete in the overflow menu", async () => {
     const onEdit = vi.fn();
     const onDelete = vi.fn();

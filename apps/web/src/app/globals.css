@@ -46,6 +46,18 @@ body {
   overflow-x: hidden;
 }
 
+/* Shared modal action rows remain reachable while long forms scroll. Modal
+   footers added through the Modal slot are outside the body and need no rule. */
+[data-app-modal] [class*="border-t"]:has(> button) {
+  position: sticky;
+  z-index: 10;
+  bottom: 0;
+  margin-bottom: calc(-1 * max(0.75rem, env(safe-area-inset-bottom)));
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+  background: rgb(23 23 23 / 96%);
+  backdrop-filter: blur(8px);
+}
+
 :where(a, button, input, select, textarea, summary):focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 2px;

@@ -103,6 +103,7 @@ export function ChannelTrafficAttributionSummary({
   compact?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const summary = channel.preview?.trafficAttribution;
   if (!summary?.sources.length) return null;
   // A browser can receive a cached response from an API instance that has not
@@ -177,6 +178,17 @@ export function ChannelTrafficAttributionSummary({
               {channelSnapshotPeriod.label}
             </span>
           ) : null}
+          <button
+            type="button"
+            aria-expanded={expanded}
+            className="text-xs text-neutral-400 hover:text-white"
+            onClick={(event) => {
+              event.stopPropagation();
+              setExpanded((value) => !value);
+            }}
+          >
+            {expanded ? "Hide details" : "Show details"}
+          </button>
         </div>
         {subscriberChange != null ? (
           <span className="mt-1 block rounded border border-neutral-800/80 bg-neutral-950/40 px-1.5 py-1 text-[10px] tabular-nums">
@@ -185,6 +197,7 @@ export function ChannelTrafficAttributionSummary({
               <span className="text-right text-neutral-500">Subs</span>
               <span className="text-right text-neutral-500">Requests</span>
               <span className="text-right text-neutral-500">Total</span>
+              {expanded ? (<>
               <span className="text-neutral-500">{periodRow.start}</span>
               <span className="text-right text-neutral-200">
                 {number(trendMetrics!.subscribers!.previous)}
@@ -205,6 +218,7 @@ export function ChannelTrafficAttributionSummary({
               <span className="text-right text-neutral-200">
                 {totalCurrent != null ? number(totalCurrent) : "—"}
               </span>
+              </>) : null}
               <span className="text-neutral-500">Difference</span>
               <strong
                 className={`text-right ${subscriberChange > 0 ? "text-emerald-300" : subscriberChange < 0 ? "text-rose-300" : "text-neutral-300"}`}

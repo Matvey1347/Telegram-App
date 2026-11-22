@@ -108,6 +108,7 @@ export function PromoFormView(props: {
                 icon={p.icon}
                 onChange={p.onIconChange}
                 buttonLabel="Add emoji"
+                iconOnly
               />
             </FormField>
             <FormField label="Internal title" required>

@@ -1,4 +1,4 @@
-import { channelAvatarEmojiOwnerAccessWhere } from './channel-avatar-emoji-ownership';
+import { channelAvatarEmojiAdminAccessWhere } from './channel-avatar-emoji-ownership';
 import {
   Injectable,
   Logger,
@@ -51,7 +51,7 @@ export class ChannelAvatarEmojiWorkerService
         const next = await this.prisma.telegramChannel.findFirst({
           where: {
             avatarEmojiRetryAt: { not: null },
-            sourceAccesses: { some: channelAvatarEmojiOwnerAccessWhere() },
+            sourceAccesses: { some: channelAvatarEmojiAdminAccessWhere() },
           },
           orderBy: { avatarEmojiRetryAt: 'asc' },
           select: { id: true, workspaceId: true, avatarEmojiRetryAt: true },

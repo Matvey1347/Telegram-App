@@ -7,7 +7,10 @@ import {
   type Dispatch,
   type SetStateAction,
 } from "react";
-import type { TelegramAdSaleOrigin, TelegramAdvertiser } from "@telegram-system/shared";
+import type {
+  TelegramAdSaleOrigin,
+  TelegramAdvertiser,
+} from "@telegram-system/shared";
 import type { Account } from "@/lib/api";
 import type { useAdSaleNetworkPricing } from "./ad-sale-network-pricing";
 import { createPlacementDraft } from "./ad-sale-placement-draft";
@@ -40,8 +43,8 @@ export function defaultAdSaleAccountId(
 }
 
 type AdSalePlacementSession = {
-  postMode: "shared" | "individual";
-  setPostMode: Dispatch<SetStateAction<"shared" | "individual">>;
+  postMode: "shared" | "individual" | "none";
+  setPostMode: Dispatch<SetStateAction<"shared" | "individual" | "none">>;
   placements: SalePlacementDraft[];
   setPlacements: Dispatch<SetStateAction<SalePlacementDraft[]>>;
   networkPricing: ReturnType<typeof useAdSaleNetworkPricing>;
@@ -90,8 +93,7 @@ export function useAdSaleModalSession(
   const [selectedChannelIds, setSelectedChannelIds] = useState<string[]>([]);
   const [placementDateRange, setPlacementDateRange] = useState(() => {
     const initialDate =
-      initialScheduledAt?.slice(0, 10) ??
-      new Date().toISOString().slice(0, 10);
+      initialScheduledAt?.slice(0, 10) ?? new Date().toISOString().slice(0, 10);
     return { from: initialDate, to: initialDate };
   });
   const [placementDates, setPlacementDates] = useState<string[]>(() => [
@@ -185,14 +187,18 @@ export function useAdSaleModalSession(
       setSelectedNetworkId(draft.selectedNetworkId);
       setSelectedChannelIds(draft.selectedChannelIds);
       setPlacementDateRange(draft.placementDateRange);
-      setPlacementDates(draft.placementDates?.length ? draft.placementDates : [draft.placementDateRange.from].filter(Boolean));
+      setPlacementDates(
+        draft.placementDates?.length
+          ? draft.placementDates
+          : [draft.placementDateRange.from].filter(Boolean),
+      );
       setPostMode(draft.postMode);
       setPlacements(draft.placements);
       networkPricing.setMode(draft.networkPricingMode);
       networkPricing.setTotalPrice(draft.networkTotalPrice);
-    setSubmissionError("");
-    setPublishedPostsByPlacement({});
-    setPostsLoadingByPlacement({});
+      setSubmissionError("");
+      setPublishedPostsByPlacement({});
+      setPostsLoadingByPlacement({});
     },
     [initialAdvertiser, networkPricing, setPlacements, setPostMode],
   );
@@ -318,5 +324,6 @@ export function useAdSaleModalSession(
     continueDraft: drafts.continueDraft,
     deleteDraft: drafts.deleteDraft,
     createNewDraft: drafts.createNewDraft,
+    showDraftPicker: drafts.showDraftPicker,
   };
 }

@@ -8,7 +8,6 @@ export type TelegramChannelAudience = {
   knownFakeSubscribersCount?: number;
   effectiveSubscribersCount?: number | null;
   subscriberBaseQuality?: string | null;
-  seedSubscribersCount: number;
   ownViewsPerPost?: number;
   ownReactionsPerPost?: number;
   rawActiveSubscribersEstimate?: number | null;

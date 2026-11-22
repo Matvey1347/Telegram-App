@@ -202,7 +202,17 @@ export function DealOverview(props: {
           {props.sale.placements.map((p) => (
             <div
               key={p.id}
-              className="border-y border-neutral-800 py-4 text-left sm:rounded-xl sm:border sm:bg-neutral-950 sm:p-4"
+              role="button"
+              tabIndex={0}
+              onClick={() => props.onPlacement(p.id)}
+              onKeyDown={(event) => {
+                if (event.target !== event.currentTarget) return;
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  props.onPlacement(p.id);
+                }
+              }}
+              className="cursor-pointer border-y border-neutral-800 py-4 text-left transition hover:border-neutral-700 sm:rounded-xl sm:border sm:bg-neutral-950 sm:p-4"
             >
               <div className="flex justify-between gap-3">
                 <div className="min-w-0">
@@ -243,7 +253,10 @@ export function DealOverview(props: {
                 <IconButton
                   type="button"
                   aria-label={`Edit placement ${props.channels.get(p.telegramChannelId)?.title ?? "Telegram channel"}`}
-                  onClick={() => props.onPlacement(p.id)}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    props.onPlacement(p.id);
+                  }}
                 />
               </div>
               <div className="mt-4 flex min-w-0 flex-col gap-2 border-t border-neutral-800 pt-3 text-sm sm:flex-row sm:items-start sm:justify-between">
@@ -273,6 +286,7 @@ export function DealOverview(props: {
                               postId: p.managedPostId,
                               postView: "editor",
                             })}
+                            onClick={(event) => event.stopPropagation()}
                             className="inline-flex items-center gap-1 text-blue-400 hover:text-blue-300 hover:underline"
                           >
                             Open in system <ExternalLink size={12} />
@@ -288,6 +302,7 @@ export function DealOverview(props: {
                             }
                             target="_blank"
                             rel="noreferrer"
+                            onClick={(event) => event.stopPropagation()}
                             className="inline-flex items-center gap-1 text-blue-400 hover:text-blue-300 hover:underline"
                           >
                             Open in Telegram <ExternalLink size={12} />

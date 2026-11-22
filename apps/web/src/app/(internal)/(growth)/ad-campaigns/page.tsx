@@ -60,13 +60,6 @@ const LazyCrossPromotionPlansPage = dynamic(
     ),
   { loading: () => <AdCampaignSectionSkeleton /> },
 );
-const LazyMutualPromotionModeTabs = dynamic(
-  () =>
-    import("@/components/features/growth/ad-campaigns/cross-promotion-plans-page").then(
-      (module) => module.MutualPromotionModeTabs,
-    ),
-  { loading: () => null },
-);
 
 export default function AdsPage() {
   const searchParams = useSearchParams();
@@ -82,29 +75,22 @@ export default function AdsPage() {
       trailing={showFilterToggle ? <AdsFilterButton presentation={filterPresentation} desktopOpen={filtersOpen} toggleDesktop={toggleFilters} /> : undefined}
     />
   );
-  const mutualMode = section === "own-promotion" || searchParams.get("mode") === "own" ? "own" : searchParams.get("mode") === "folders" ? "folders" : "direct";
+  const mutualMode = searchParams.get("mode") === "folders" ? "folders" : "direct";
   return section === "mutual-promotion" && mutualMode === "folders" ? (
     <LazyMutualPromotionFoldersPage
       sectionTabs={
         <>
           {sectionTabs}
-          <LazyMutualPromotionModeTabs mode="folders" />
         </>
       }
     />
-  ) : section === "mutual-promotion" && mutualMode !== "own" ? (
+  ) : section === "mutual-promotion" || section === "own-promotion" ? (
     <LazyCrossPromotionPlansPage
       kind="DIRECT_MUTUAL"
       sectionTabs={sectionTabs}
-      mutualModeTabs={<LazyMutualPromotionModeTabs mode="direct" />}
-    />
-  ) : section === "own-promotion" || (section === "mutual-promotion" && mutualMode === "own") ? (
-    <LazyCrossPromotionPlansPage
-      kind="OWN_CHANNELS"
-      sectionTabs={sectionTabs}
-      mutualModeTabs={<LazyMutualPromotionModeTabs mode="own" />}
+      mutualModeTabs={null}
     />
   ) : (
-    <AdCampaignsPage sectionTabs={sectionTabs} topSection={section === "mutual-promotion" ? "campaigns" : section} filtersOpen={filtersOpen} filterPresentation={filterPresentation} />
+    <AdCampaignsPage sectionTabs={sectionTabs} topSection={section} filtersOpen={filtersOpen} filterPresentation={filterPresentation} />
   );
 }

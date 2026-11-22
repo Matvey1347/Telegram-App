@@ -95,7 +95,9 @@ export function PromoFormModal({
     setInviteLinkId(initial?.defaultInviteLinkId ?? "");
     setTitleValue(initial?.title ?? "");
     setPost(postFromPromo(initial));
-    setPostEditorExpanded(false);
+    // Existing promos should open with their creative visible for a quick
+    // preview. Keep the editor collapsed for a brand-new promo.
+    setPostEditorExpanded(Boolean(initial));
     setError("");
   }, [initial, open]);
 

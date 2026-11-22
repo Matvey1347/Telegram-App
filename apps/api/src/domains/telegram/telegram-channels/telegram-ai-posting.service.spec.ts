@@ -44,6 +44,8 @@ describe('TelegramAiPostingService', () => {
       description: null,
       shortDescription: null,
       photoUrl: null,
+      defaultInviteLink: { url: 'https://t.me/+mainInvite', isRevoked: false },
+      publicInviteLink: { url: 'https://t.me/public_channel', isRevoked: false },
     });
     prisma.telegramAiPostingSettings.findFirst.mockResolvedValue(null);
 
@@ -57,9 +59,17 @@ describe('TelegramAiPostingService', () => {
       rubrics: [],
     });
     expect(result.configuration.lengths).toHaveLength(4);
+    expect(result.channel).toMatchObject({
+      mainInviteLink: 'https://t.me/+mainInvite',
+      publicInviteLink: 'https://t.me/public_channel',
+    });
     expect(prisma.telegramChannel.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: 'channel-a', workspaceId: 'workspace-a' },
+        select: expect.objectContaining({
+          defaultInviteLink: { select: { url: true, isRevoked: true } },
+          publicInviteLink: { select: { url: true, isRevoked: true } },
+        }),
       }),
     );
   });

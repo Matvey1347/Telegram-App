@@ -78,6 +78,7 @@ export type TelegramMessageTemplateProduct = {
 export type TelegramMessageTemplateNetworkSource = {
   name: string;
   emojiSource: string | null;
+  iconPresentation?: ResolvedEmoji | null;
 };
 
 export type TelegramMessageTemplateChannelSource = {

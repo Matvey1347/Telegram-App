@@ -22,7 +22,9 @@ export const PUBLICATION_SLOT_KINDS: Array<{
   { value: "AD", label: "📣 Advertising / mutual promotion" },
 ];
 
-export function sortPublicationSlots<T extends { time: string }>(slots: readonly T[]): T[] {
+export function sortPublicationSlots<T extends { time: string }>(
+  slots: readonly T[],
+): T[] {
   return [...slots].sort((a, b) =>
     (canonicalizeTimeInputValue(a.time) ?? "99:99").localeCompare(
       canonicalizeTimeInputValue(b.time) ?? "99:99",
@@ -61,22 +63,28 @@ export function PublicationScheduleEditor({
             icon={icon}
             onChange={onIconChange}
             buttonLabel="Add emoji"
+            iconOnly
           />
         </FormField>
         <FormField label="Schedule name" required>
           <Input
             value={draft.name}
             placeholder="Main publication plan"
-            onChange={(event) => onChange({ ...draft, name: event.target.value })}
+            onChange={(event) =>
+              onChange({ ...draft, name: event.target.value })
+            }
           />
         </FormField>
       </div>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h3 className="font-semibold text-neutral-100">Daily publication slots</h3>
+          <h3 className="font-semibold text-neutral-100">
+            Daily publication slots
+          </h3>
           <p className="text-xs text-neutral-500">
             The plan describes the busiest channel. Other channels can use only
-            the slots they need. Optional regular slots can be skipped on some days.
+            the slots they need. Optional regular slots can be skipped on some
+            days.
           </p>
         </div>
         <Button
@@ -103,7 +111,9 @@ export function PublicationScheduleEditor({
             <Input
               aria-label={`Slot ${index + 1} title`}
               value={slot.title}
-              onChange={(event) => patchSlot(index, { title: event.target.value })}
+              onChange={(event) =>
+                patchSlot(index, { title: event.target.value })
+              }
             />
             <Select
               aria-label={`Slot ${index + 1} type`}
@@ -111,26 +121,45 @@ export function PublicationScheduleEditor({
               onChange={(event) =>
                 patchSlot(index, {
                   kind: event.target.value as TelegramPublicationSlotKind,
-                  isOptional: event.target.value === "CONTENT" ? slot.isOptional : false,
+                  isOptional:
+                    event.target.value === "CONTENT" ? slot.isOptional : false,
                 })
               }
             >
               {PUBLICATION_SLOT_KINDS.map((kind) => (
-                <option key={kind.value} value={kind.value}>{kind.label}</option>
+                <option key={kind.value} value={kind.value}>
+                  {kind.label}
+                </option>
               ))}
             </Select>
-            {slot.kind === "CONTENT" ? <Select aria-label={`Slot ${index + 1} requirement`} value={slot.isOptional ? "optional" : "required"} onChange={(event) => patchSlot(index, { isOptional: event.target.value === "optional" })}>
-              <option value="required">Required</option>
-              <option value="optional">Optional</option>
-            </Select> : <span aria-hidden="true" />}
+            {slot.kind === "CONTENT" ? (
+              <Select
+                aria-label={`Slot ${index + 1} requirement`}
+                value={slot.isOptional ? "optional" : "required"}
+                onChange={(event) =>
+                  patchSlot(index, {
+                    isOptional: event.target.value === "optional",
+                  })
+                }
+              >
+                <option value="required">Required</option>
+                <option value="optional">Optional</option>
+              </Select>
+            ) : (
+              <span aria-hidden="true" />
+            )}
             <TimeInput
               aria-label={`Slot ${index + 1} time`}
               value={slot.time}
-              onChange={(event) => patchSlot(index, { time: event.target.value })}
+              onChange={(event) =>
+                patchSlot(index, { time: event.target.value })
+              }
               onBlur={(event) => {
                 const time = canonicalizeTimeInputValue(event.target.value);
                 if (!time) return;
-                const slots = draft.slots.map((item, i) => i === index ? { ...item, time } : item);
+                const slots = draft.slots.map((item, i) =>
+                  i === index ? { ...item, time } : item,
+                );
                 onChange({ ...draft, slots: sortPublicationSlots(slots) });
               }}
             />

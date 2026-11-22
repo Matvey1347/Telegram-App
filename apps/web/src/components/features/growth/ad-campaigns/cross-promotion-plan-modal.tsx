@@ -49,6 +49,8 @@ const hasInlineButtons = (post: TelegramSystemBotPostDraft | undefined) =>
 export function CrossPromotionPlanModal({
   open,
   kind,
+  onKindChange,
+  onCreateFolder,
   initial,
   mode = "create",
   channels,
@@ -67,6 +69,8 @@ export function CrossPromotionPlanModal({
 }: {
   open: boolean;
   kind: CrossPromotionPlanKind;
+  onKindChange?: (kind: CrossPromotionPlanKind) => void;
+  onCreateFolder?: () => void;
   initial: CrossPromotionPlan | null;
   mode?: CrossPromotionModalMode;
   channels: TelegramChannel[];
@@ -134,7 +138,6 @@ export function CrossPromotionPlanModal({
     outboundPost,
     setOutboundPost,
     importedChannels,
-    setImportedChannels,
     setError,
     timezone,
     draftValue,
@@ -155,10 +158,15 @@ export function CrossPromotionPlanModal({
     new Map<string, { promo?: Promo; inviteLink?: TelegramInviteLinkOption }>(),
   );
   useEffect(() => {
-    if (open) {
-      resolvedTargets.current.clear();
-      setShowValidationErrors(false);
-    }
+    if (!open) return;
+    resolvedTargets.current.clear();
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) setShowValidationErrors(false);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [initial, open, timezone]);
 
   const allChannels = useMemo(
@@ -520,6 +528,8 @@ export function CrossPromotionPlanModal({
       ].flatMap((item) => {
         return item.deleteAt ? [new Date(item.deleteAt)] : [];
       });
+      const configuredTargets =
+        kind === "DIRECT_MUTUAL" && !partnerIds.length ? [] : targets;
       const payload = {
         kind,
         advertiserId: kind === "DIRECT_MUTUAL" ? advertiserId : null,
@@ -528,7 +538,7 @@ export function CrossPromotionPlanModal({
         title: title.trim(),
         publisherChannelIds: publisherIds,
         partnerChannelIds: kind === "DIRECT_MUTUAL" ? partnerIds : [],
-        targets,
+        targets: configuredTargets,
         publicationPost: {
           ...publicationPost,
           title: publicationPost.title.trim() || title.trim(),
@@ -537,7 +547,7 @@ export function CrossPromotionPlanModal({
           publisherPlacements,
           partnerPlacements,
           publisherPublications,
-          partnerPublications: targets.map((target, index) => {
+          partnerPublications: configuredTargets.map((target, index) => {
             const resolved = resolvedTarget(target, index);
             const generated =
               outboundMode === "PROMO" && resolved?.promo && resolved.inviteLink
@@ -555,7 +565,7 @@ export function CrossPromotionPlanModal({
           }),
           partnerPublicationPost: (() => {
             if (outboundMode === "CUSTOM") return outboundPost;
-            const first = targets[0];
+            const first = configuredTargets[0];
             const resolved = first ? resolvedTarget(first, 0) : undefined;
             return resolved?.promo && resolved.inviteLink
               ? renderSelectedPromoDraft(
@@ -650,6 +660,8 @@ export function CrossPromotionPlanModal({
       <CrossPromotionPlanView
         open={open}
         kind={kind}
+        onKindChange={onKindChange}
+        onCreateFolder={onCreateFolder}
         initial={initial}
         mode={mode}
         loading={loading}

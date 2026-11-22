@@ -78,9 +78,15 @@ export function ModalDraftPicker<T>({
           return (
             <div
               key={draft.id}
-              className="grid min-w-0 gap-3 rounded-lg border border-slate-800 px-3 py-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+              className="relative grid min-w-0 gap-3 rounded-lg border border-slate-800 px-3 py-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
             >
-              <div className="flex min-w-0 items-center gap-2.5">
+              <button
+                type="button"
+                aria-label={`Continue draft ${title}`}
+                onClick={() => onContinue(draft)}
+                className="absolute inset-0 z-0 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500"
+              />
+              <div className="pointer-events-none relative z-10 flex min-w-0 items-center gap-2.5">
                 {draft.preview?.icon ? (
                   <IconAvatar
                     icon={draft.preview.icon}
@@ -111,7 +117,7 @@ export function ModalDraftPicker<T>({
                   </p>
                 </div>
               </div>
-              <div className="flex shrink-0 justify-end gap-2">
+              <div className="relative z-10 flex shrink-0 justify-end gap-2">
                 <IconButton
                   type="button"
                   kind="delete"

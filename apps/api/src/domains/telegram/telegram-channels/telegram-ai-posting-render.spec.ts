@@ -10,6 +10,13 @@ describe('Telegram AI posting renderer', () => {
     expect(result).not.toMatch(/<\/?[a-z][^>]*>/i);
   });
 
+  it('keeps a multiword hashtag intact in the ending', () => {
+    expect(renderTelegramAiPostingText('Текст #психологія_та_стан', {
+      ending: 'Канал',
+      hashtags: 'ending_inline',
+    })).toBe('Текст\n\nКанал | #психологія_та_стан');
+  });
+
   it('adds a configured ending exactly once when the model omitted or included it', () => {
     const ending = '[Подписаться](https://t.me/example)';
     for (const text of ['Полезный текст', `Полезный текст\n\n${ending}`]) {

@@ -8,6 +8,42 @@ import { storedTelegramIconPresentation } from '@api/telegram/shared/bot/telegra
 export class ChannelAvatarEmojiDocumentsService {
   constructor(private readonly prisma: PrismaService) {}
 
+  async list(workspaceId: string): Promise<TelegramCustomEmojiPackSummary[]> {
+    const channels = await this.prisma.telegramChannel.findMany({
+      where: { workspaceId },
+      select: { avatarEmojiIconId: true, presentationIconId: true },
+    });
+    const iconIds = [
+      ...new Set(
+        channels.flatMap((channel) =>
+          [channel.avatarEmojiIconId, channel.presentationIconId].filter(
+            (id): id is string => Boolean(id),
+          ),
+        ),
+      ),
+    ];
+    if (!iconIds.length) return [];
+    const icons = await this.prisma.icon.findMany({
+      where: {
+        workspaceId,
+        id: { in: iconIds },
+        type: 'emoji',
+        emoji: { not: null },
+      },
+      select: { name: true, emoji: true },
+    });
+    const documentIds = icons
+      .map((icon) => {
+        if (!icon.emoji) return null;
+        const presentation = storedTelegramIconPresentation(icon.emoji, '📢');
+        return presentation.type === 'unicode'
+          ? presentation.telegramCustomEmojiId
+          : null;
+      })
+      .filter((id): id is string => Boolean(id));
+    return this.resolve(workspaceId, documentIds);
+  }
+
   async resolve(
     workspaceId: string,
     documentIds: string[],

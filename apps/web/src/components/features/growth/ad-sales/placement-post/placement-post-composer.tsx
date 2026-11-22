@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ExternalLink, Eye, Smile } from "lucide-react";
 import {
   type TelegramPostButtonRows,
@@ -31,6 +31,7 @@ export function PlacementPostComposer({
   autoCreate,
   lockToDraft = false,
   allowInlineButtonEditing = true,
+  mediaFooter,
   onLoadPublishedPosts,
   onChange,
 }: {
@@ -44,6 +45,7 @@ export function PlacementPostComposer({
   autoCreate: boolean;
   lockToDraft?: boolean;
   allowInlineButtonEditing?: boolean;
+  mediaFooter?: ReactNode;
   onLoadPublishedPosts: (
     telegramPostUrl?: string,
   ) => Promise<PublishedPostOption | null> | void;
@@ -112,7 +114,7 @@ export function PlacementPostComposer({
   }, [autoCreate, draft, onChange]);
 
   return (
-    <div className="space-y-3 rounded-lg border border-neutral-800 bg-neutral-950/40 p-3">
+    <div className="space-y-3 rounded-none border-0 bg-transparent p-0 sm:rounded-lg sm:border sm:border-neutral-800 sm:bg-neutral-950/40 sm:p-3">
       <div className="flex items-center gap-2">
         <p className="text-sm font-medium text-white">Advertising post</p>
         {!lockToDraft && canCreate ? (
@@ -147,7 +149,7 @@ export function PlacementPostComposer({
             </button>
           </Tooltip>
         ) : lockToDraft ? (
-          <span className="text-xs text-neutral-500">Channel post</span>
+          null
         ) : null}
       </div>
 
@@ -158,6 +160,7 @@ export function PlacementPostComposer({
           channelPhotoUrl={channelPhotoUrl}
           textPlaceholder="Write your Telegram post…"
           buttonEditing={allowInlineButtonEditing ? "enabled" : "disabled"}
+          mediaFooter={mediaFooter}
           onChange={(nextDraft) =>
             onChange({ draft: nextDraft, telegramPostId: null })
           }

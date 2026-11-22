@@ -66,6 +66,7 @@ export function useTelegramSystemBotPostFlow<
     latest.current = { mode, onImported, onPreviewSent, previewDraft };
   }, [mode, onImported, onPreviewSent, previewDraft]);
   const checkingRef = useRef(false);
+  const recoveryAttemptedWorkflowRef = useRef("");
   const pollDeadlineRef = useRef(0);
   const pollStartedAtRef = useRef(0);
   const workflowIdRef = useRef("");
@@ -179,15 +180,49 @@ export function useTelegramSystemBotPostFlow<
       }
       setImportStatus("waiting");
       return false;
-    } catch {
+    } catch (caught) {
       if (!isCurrent()) return false;
+      if (
+        axios.isAxiosError(caught) &&
+        caught.response?.status === 404 &&
+        importContext?.trim() &&
+        recoveryAttemptedWorkflowRef.current !== checkedWorkflowId
+      ) {
+        recoveryAttemptedWorkflowRef.current = checkedWorkflowId;
+        try {
+          const recovered =
+            await telegramSystemBotApi.recoverRecentPostImport(
+              importContext.trim(),
+            );
+          if (!isCurrent()) return false;
+          if (recovered?.ready) {
+            await latest.current.onImported?.(
+              importedValue(latest.current.mode, recovered.drafts),
+              checkedWorkflowId,
+            );
+            if (!isCurrent()) return false;
+            publishPollTerminal(
+              checkedKey,
+              pollInstanceId.current,
+              checkedWorkflowId,
+              "COMPLETED",
+            );
+            clearWorkflow("COMPLETED");
+            setImportStatus("done");
+            setError("");
+            return true;
+          }
+        } catch {
+          // Keep the active import visible so a later poll can retry recovery.
+        }
+      }
       setImportStatus("waiting");
       setError(readError ?? "Could not load the post from the system bot.");
       return false;
     } finally {
       checkingRef.current = false;
     }
-  }, [clearWorkflow, readError]);
+  }, [clearWorkflow, importContext, readError]);
 
   useEffect(() => {
     if (!enabled || !workflowId || importStatus === "done") return;
@@ -311,6 +346,7 @@ export function useTelegramSystemBotPostFlow<
       }
       if (!started.workflowId)
         throw new Error("Import workflow was not prepared");
+      recoveryAttemptedWorkflowRef.current = "";
       pollStartedAtRef.current = Date.now();
       pollDeadlineRef.current = Date.now() + 120_000;
       workflowIdRef.current = started.workflowId;

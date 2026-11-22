@@ -144,16 +144,16 @@ describe("PromoFormModal", () => {
     );
 
     fireEvent.click(
-      await screen.findByRole("button", {
+      (await screen.findAllByRole("button", {
         name: "Continue draft Restored promo",
-      }),
+      }))[0],
     );
     expect(screen.getByPlaceholderText("Promo title")).toHaveValue(
       "Restored promo",
     );
   });
 
-  it("shows every promo field immediately while keeping the post editor collapsed", async () => {
+  it("shows every promo field immediately and opens the creative editor for an existing promo", async () => {
     const client = new QueryClient({
       defaultOptions: { queries: { retry: false } },
     });
@@ -162,6 +162,7 @@ describe("PromoFormModal", () => {
         <PromoFormModal
           open
           title="Create Promo"
+          initial={{ id: "promo-1", telegramChannelId: "channel-1", title: "Existing promo", text: "Preview text", imageUrls: [], mediaItems: [], buttonRows: [], status: "draft" } as never}
           channels={[{ id: "channel-1", title: "Channel" } as never]}
           onClose={vi.fn()}
           onSubmit={vi.fn()}
@@ -170,25 +171,18 @@ describe("PromoFormModal", () => {
     );
 
     expect(screen.getByText("Internal title")).toBeVisible();
-    expect(screen.getByText("Channel")).toBeVisible();
+    expect(screen.getAllByText("Channel")[0]).toBeVisible();
     expect(screen.getByText("Member")).toBeVisible();
     expect(screen.getByText("Invite link")).toBeVisible();
     const emojiRow = screen.getByText("Emoji").parentElement?.parentElement;
     const titleRow =
       screen.getByText("Internal title").parentElement?.parentElement;
-    const channelRow = screen.getByText("Channel").parentElement?.parentElement;
+    const channelRow = screen.getAllByText("Channel")[0].parentElement?.parentElement;
     expect(titleRow).toBe(emojiRow);
     expect(titleRow).not.toBe(channelRow);
     expect(titleRow).toHaveClass("sm:grid-cols-[auto_minmax(0,1fr)]");
-    expect(
-      screen.queryByTestId("telegram-text-editor"),
-    ).not.toBeInTheDocument();
-
-    await userEvent.click(
-      screen.getByRole("button", { name: /Edit manually/ }),
-    );
-
     expect(screen.getByTestId("telegram-text-editor")).toBeInTheDocument();
+
     expect(
       screen.getByRole("button", {
         name: "Replace links with {{invite_link}}",
@@ -380,7 +374,7 @@ describe("PromoFormModal", () => {
     );
 
     const quickSend = await screen.findByRole("button", {
-      name: "Send to bot",
+      name: "Send promo to bot",
     });
     await waitFor(() => expect(quickSend).toBeEnabled());
     await userEvent.click(quickSend);

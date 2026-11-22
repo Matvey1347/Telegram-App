@@ -25,6 +25,9 @@ export type TestPublication = {
   imagePrompt: string;
   mediaPreference?: { id: string; name: string } | null;
   imageUrl: string | null;
+  imageFingerprint?: string | null;
+  imageOriginalUrl?: string | null;
+  imagePreviewUrl?: string | null;
   imageSourceId: string | null;
   mediaReadiness?: 'READY' | 'MISSING' | 'FAILED';
   mediaFailureCode?: string;

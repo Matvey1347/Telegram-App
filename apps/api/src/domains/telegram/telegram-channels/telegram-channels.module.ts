@@ -95,6 +95,7 @@ import { TelegramInvitePersistenceService } from './telegram-invite-persistence.
 import { TelegramInviteSnapshotStore } from './telegram-invite-snapshot.store';
 import { TelegramInviteSyncService } from './telegram-invite-sync.service';
 import { TelegramInviteLinkRegistrationService } from './telegram-invite-link-registration.service';
+import { TelegramInviteLinkMaintenanceService } from './telegram-invite-link-maintenance.service';
 import { TelegramInviteLinkCreatorService } from '@api/telegram/shared/invites/telegram-invite-link-creator.service';
 import { TelegramManagedPostBulkService } from './telegram-managed-post-bulk.service';
 import { TelegramManagedPostCommandService } from './telegram-managed-post-command.service';
@@ -223,6 +224,7 @@ import { TelegramChannelTrafficAttributionService } from './telegram-channel-tra
     TelegramInviteHistoryService,
     TelegramInviteSyncService,
     TelegramInviteLinkRegistrationService,
+    TelegramInviteLinkMaintenanceService,
     TelegramInviteLinkCreatorService,
     TelegramManagedPostPresentationService,
     TelegramManagedPostRevisionStore,
@@ -335,6 +337,7 @@ import { TelegramChannelTrafficAttributionService } from './telegram-channel-tra
     TelegramManagedPostRemoteDeletionService,
     TelegramBroadcastStatsService,
     TelegramInviteLinkRegistrationService,
+    TelegramInviteLinkMaintenanceService,
     TelegramPostBatchLifecycleService,
   ],
 })

@@ -1,3 +1,4 @@
+import { reconcileWorkspaceAccountDialogs } from './telegram-user-account-dialog-sync';
 import { ConflictException, HttpException, HttpStatus } from '@nestjs/common';
 import { TelegramUserAccountStatus } from '@prisma/client';
 import { TelegramUserAccountsService } from './telegram-user-accounts.service';
@@ -627,5 +628,64 @@ describe('OT-06 — dialog refresh for a former owner', () => {
     await expect(service.syncDialogs('user', account.id)).resolves.toMatchObject({ matchedChannels: 0 });
     expect(adminLinks.size).toBe(complete ? 0 : 1);
     expect(sourceRows.has('channel')).toBe(!complete);
+  });
+});
+
+describe('workspace ownership reconciliation', () => {
+  it('links a newly observed owner and removes stale creator privileges after an incomplete former-owner scan', async () => {
+    const account = {
+      workspaceId: 'workspace',
+      apiId: '1',
+      sessionEncrypted: 'fixture',
+      sessionIv: 'fixture',
+      sessionAuthTag: 'fixture',
+    };
+    const permissions = { canPostMessages: true, canManageInviteLinks: true };
+    const former = { id: 'former', role: 'OWNER', ...permissions };
+    const current = { id: 'successor', role: 'UNKNOWN' };
+    const prisma = {
+      telegramUserAccountIntegration: {
+        findMany: jest.fn().mockResolvedValue([{ id: current.id }]),
+        findFirst: jest.fn(async ({ where }) => ({ ...account, id: where.id, apiId: where.id === former.id ? '1' : '2' })),
+        update: jest.fn(),
+      },
+      telegramChannel: {
+        findMany: jest.fn().mockResolvedValue([{ id: 'managed-channel', telegramChatId: '524' }]),
+      },
+      telegramChannelAdminLink: { deleteMany: jest.fn(), createMany: jest.fn() },
+      telegramChannelSourceAccess: {
+        deleteMany: jest.fn(),
+        updateMany: jest.fn(async ({ where, data }) => {
+          if (where.sourceId.not !== former.id) Object.assign(former, data);
+        }),
+      },
+      $transaction: jest.fn(async (run) => run(prisma)),
+    };
+    const upsertAccess = jest.fn(async (input) => Object.assign(current, { role: input.role }));
+    const getAdminChannelsWithProfile = jest.fn(async ({ apiId }, _options: { includeChannelPhotos?: boolean }) => ({
+      complete: false,
+      profile: { id: apiId, capabilities: {} },
+      channels: apiId === '1' ? [] : [{ id: '-100524', title: 'Managed', isCreator: true }],
+    }));
+
+    const result = await reconcileWorkspaceAccountDialogs({
+      prisma,
+      encryptionService: { decrypt: jest.fn().mockReturnValue('fixture') },
+      mtprotoClient: { getAdminChannelsWithProfile },
+      sourceAccessService: {
+        upsertAccess,
+        normalizeMtprotoPermissions: jest.fn().mockReturnValue({ role: 'OWNER', permissions }),
+        canBeUsedForAnalytics: jest.fn().mockReturnValue(true),
+      },
+    } as never, 'workspace', former.id);
+
+    expect(result.message).toContain('1/1 other accounts');
+    expect(current.role).toBe('OWNER');
+    expect(former).toMatchObject({ role: 'UNKNOWN', canPostMessages: false, canManageInviteLinks: false });
+    expect(prisma.telegramChannelAdminLink.createMany.mock.calls[0][0].data).toEqual([
+      { workspaceId: 'workspace', telegramChannelId: 'managed-channel', telegramUserAccountIntegrationId: current.id, source: 'mtproto' },
+    ]);
+    expect(prisma.telegramChannelSourceAccess.deleteMany).not.toHaveBeenCalled();
+    expect(getAdminChannelsWithProfile.mock.calls[1]?.[1]).toEqual({ includeChannelPhotos: false });
   });
 });

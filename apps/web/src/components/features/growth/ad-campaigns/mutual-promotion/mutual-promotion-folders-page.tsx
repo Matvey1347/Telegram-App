@@ -1,6 +1,7 @@
 "use client";
 
 import { type ReactNode, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
 import type {
@@ -65,12 +66,13 @@ export function MutualPromotionFoldersPage({
 }: {
   sectionTabs?: ReactNode;
 }) {
+  const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const { setProgress } = useAppToast();
-  const [formOpen, setFormOpen] = useState(false);
+  const [formOpen, setFormOpen] = useState(() => searchParams.get("create") === "1");
   const [editingFolder, setEditingFolder] =
     useState<MutualPromotionFolderDetail | null>(null);
-  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(() => searchParams.get("folderId"));
   const [inviteLinksEditorOpen, setInviteLinksEditorOpen] = useState(false);
   const [deleteFolder, setDeleteFolder] = useState<{
     id: string;

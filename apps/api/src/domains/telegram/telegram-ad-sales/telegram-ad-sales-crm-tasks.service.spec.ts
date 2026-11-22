@@ -326,20 +326,15 @@ describe('locked canonical task ownership', () => {
   });
 });
 
-describe('manual Instagram follow-up operation receipt', () => {
+describe('CRM follow-up operation receipt', () => {
   beforeEach(() =>
     jest.useFakeTimers().setSystemTime(new Date('2030-02-10T12:00:00Z')),
   );
   afterEach(() => jest.useRealTimers());
-  it('creates once without a Telegram conversation and rejects key reuse with another date', async () => {
+  it('creates a follow-up without a Telegram conversation and rejects key reuse with another date', async () => {
     const f = setup();
     const operationId = '2030-02-10:6bc30dd6-05c7-4f2c-a4a8-4e9f7efde002';
     let receipt: unknown = null;
-    Object.assign(f.tx, {
-      telegramAdvertiserContact: {
-        findFirst: jest.fn().mockResolvedValue({ id: 'ig' }),
-      },
-    });
     Object.assign(f.tx.telegramAdvertiserTask, {
       findUnique: jest.fn().mockImplementation(() => receipt),
     });
@@ -353,9 +348,9 @@ describe('manual Instagram follow-up operation receipt', () => {
     const input = {
       type: 'FOLLOW_UP' as const,
       assignedMemberId: 'member-a',
-      title: 'Instagram follow-up',
+      title: 'Client follow-up',
       dueAt: '2030-02-11T12:00:00.000Z',
-      metadata: { origin: 'MANUAL_INSTAGRAM' },
+      metadata: { origin: 'CRM' },
     };
     await f.service.create('user-a', 'client-a', input, operationId);
     await f.service.create('user-a', 'client-a', input, operationId);

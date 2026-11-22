@@ -1,3 +1,7 @@
+import {
+  channelAvatarEmojiImage,
+  storedChannelAvatarBytes,
+} from '../domains/telegram/telegram-channels/channel-avatar-emoji-image';
 import { createHash } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { ChannelAvatarEmojiApi } from '@api/telegram/shared/emoji/channel-avatar-emoji-api';
@@ -12,7 +16,7 @@ import {
 export function avatarEmojiMigrationAction(
   row: AvatarEmojiInventoryRow,
   api: ChannelAvatarEmojiApi,
-  mode: 'migrate' | 'backfill',
+  mode: 'migrate' | 'backfill' | 'stored',
 ) {
   if (!row.owned) return 'SKIP_NOT_OWNED';
   const prefix = `channel-avatar:${api.assetKey('')}`;
@@ -26,6 +30,8 @@ export function avatarEmojiMigrationAction(
     return row.avatarEmojiIconId && row.generatedIconSource
       ? 'MIGRATE'
       : 'SKIP_NO_LEGACY_BINDING';
+  if (mode === 'stored')
+    return row.hasStoredAvatar ? 'STORED' : 'SKIP_NO_AVATAR';
   return row.avatarEmojiStatus === 'NO_AVATAR' && !row.hasStoredAvatar
     ? 'SKIP_NO_AVATAR'
     : 'BACKFILL';
@@ -103,6 +109,20 @@ export async function runAvatarEmojiMigration(
             png,
             imageUrl: asset.imageUrl,
           };
+        }
+        if (action === 'STORED') {
+          const channel = await prisma.telegramChannel.findFirst({
+            where: { id: row.id, workspaceId: options.workspaceId },
+            select: { photoUrl: true },
+          });
+          const bytes = storedChannelAvatarBytes(channel?.photoUrl ?? null);
+          if (!bytes) {
+            result.action = 'SKIP_NO_STORED_BYTES';
+            counts.skipped++;
+            results.push(result);
+            continue;
+          }
+          preparedImage = await channelAvatarEmojiImage(bytes);
         }
         const outcome = await processor.process(options.workspaceId, row.id, {
           admit: true,

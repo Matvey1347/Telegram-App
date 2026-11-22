@@ -25,7 +25,6 @@ import {
 import { formatLocalDate, toNumber } from "./channel-analytics-format";
 
 export type SettingsState = {
-  seedSubscribersCount: string;
   knownFakeSubscribersCount: string;
   ownViewsPerPost: string;
   ownReactionsPerPost: string;
@@ -104,7 +103,6 @@ export function useChannelAnalyticsQueries(id: string) {
     readStoredChannelSections(id),
   );
   const [settings, setSettings] = useState<SettingsState>({
-    seedSubscribersCount: "0",
     knownFakeSubscribersCount: "0",
     ownViewsPerPost: "0",
     ownReactionsPerPost: "0",
@@ -268,7 +266,6 @@ export function useChannelAnalyticsQueries(id: string) {
     setSyncSelection(syncSelectionFromChannel(source));
     setSyncPostLimit(source.postSyncLimit ?? 50);
     setSettings({
-      seedSubscribersCount: String(source.seedSubscribersCount ?? 0),
       knownFakeSubscribersCount: String(source.knownFakeSubscribersCount ?? 0),
       ownViewsPerPost: String(source.ownViewsPerPost ?? 0),
       ownReactionsPerPost: String(source.ownReactionsPerPost ?? 0),

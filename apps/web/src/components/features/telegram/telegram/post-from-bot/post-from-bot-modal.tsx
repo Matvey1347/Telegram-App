@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ArrowLeft, RefreshCw } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import {
   keepPreviousData,
   useMutation,
@@ -24,7 +24,7 @@ import {
 } from "@/lib/query-keys";
 import { telegramPostBatchesApi } from "@/lib/features/telegram/telegram-post-batches-api";
 import { invalidateManagedPostScheduleReads } from "../managed-post-cache";
-import { Button, LoadingState, Modal } from "@/components/ui/primitives";
+import { Button, LoadingState, Modal, ModalBackButton } from "@/components/ui/primitives";
 import { useI18n } from "@/providers/i18n-provider";
 import { PostBatchBrowser } from "./post-batch-browser";
 import { PostBatchDeliveries } from "./post-batch-deliveries";
@@ -339,14 +339,10 @@ export function PostFromBotModal({
         }
         size="xl"
         leadingHeaderAction={
-          <button
-            type="button"
+          <ModalBackButton
+            label={t("telegram.posts.batch.backToList")}
             onClick={closeEditor}
-            aria-label={t("telegram.posts.batch.backToList")}
-            className="rounded-lg border border-neutral-700 p-2 text-neutral-300 hover:bg-neutral-800 hover:text-white"
-          >
-            <ArrowLeft size={16} />
-          </button>
+          />
         }
       >
         <main className="min-w-0 space-y-4">

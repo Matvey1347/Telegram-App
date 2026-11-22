@@ -26,11 +26,11 @@ secrets in the existing protected environment, never in command arguments.
 
 ## Channel eligibility and normal flow
 
-Only a `TelegramChannelSourceAccess` with `sourceType=MTPROTO`, `role=OWNER`
-and the same workspace qualifies. Mere presence in a workspace and an admin
-link are insufficient. The restriction applies before enqueue, claim, photo
-lookup, upload and final binding; queued external/admin-only channels are not
-processed. Fresh photos use a connected owner account from that workspace.
+A workspace-scoped `TelegramChannelSourceAccess` with `sourceType=MTPROTO`
+and role `OWNER` or `ADMIN` qualifies. The same check applies before enqueue,
+claim, download and final binding. Use a connected administrator for a fresh
+photo. When that account is unavailable, an inline image saved for the channel
+can supply the avatar without another Telegram session.
 
 The shared image pipeline center-crops actual Telegram bytes to 100×100 and
 masks transparent round corners. Hashes prevent duplicate generation. Missing
@@ -57,7 +57,8 @@ publisher reconciles new documents against the persisted pre-mutation set and
 verifies their decoded image, allowing Telegram's observed lossy WebP conversion.
 Exact source SHA-256 still determines avatar versions. Confirmed installed IDs
 and file references are then stored. UNKNOWN outcomes are only reconciled,
-never resent, and block other new mutations until resolved; known cached
+never resent. The affected set accepts only reconciliation until the outcome
+is confirmed. Other avatars can publish to a separate set and known cached
 versions remain usable. Explicit rejections clear the unsent snapshot. When a later image arrives, an older pending asset is reconciled from its saved immutable bytes independently of channel ownership/deletion or avatar changes; no old send is repeated. A genuinely unresolved UNKNOWN after bounded retries needs operator reconciliation.
 
 Each new asset key is `environment:system_bot_username:image_hash`. Generated
@@ -84,7 +85,8 @@ pnpm avatar-emoji --workspace=WORKSPACE_ID --mode=backfill --dry-run
 ```
 
 `migrate` is the default mode and only plans existing generated bindings.
-`backfill` plans initial generation for eligible owner channels. Dry-run reports
+`backfill` plans initial generation for managed channels. `stored` uses only
+saved inline photos and never opens an MTProto session. Dry-run reports
 stored photo presence, not a fresh Telegram photo check. It works before the
 avatar schema is deployed and reports that prerequisite explicitly.
 
@@ -95,6 +97,7 @@ System Bot environment to match the target:
 ```bash
 pnpm avatar-emoji --workspace=WORKSPACE_ID --mode=migrate --execute
 pnpm avatar-emoji --production --workspace=WORKSPACE_ID --mode=migrate --execute
+pnpm avatar-emoji --production --workspace=WORKSPACE_ID --mode=stored --execute
 ```
 
 Fresh production `backfill --execute` is allowed only on the production host:
@@ -186,3 +189,21 @@ new/core avatar files pass ESLint and `pnpm env:check` passes. The full API suit
 still reproduces the 31 existing failures in 14 suites; repository-wide
 architecture checks remain blocked by existing unrelated violations. No server
 or watcher started for verification remains running.
+
+## Production activation · 2026-11-22
+
+The PRODUCTION System Bot created 11 avatar documents for the Business
+workspace in [channelavatars1_by_nexeloq_bot](https://t.me/addemoji/channelavatars1_by_nexeloq_bot).
+The one-shot stored-photo run opened no MTProto sessions. Verification read
+all 11 documents from the Telegram set and confirmed that all 11 production
+channels select their generated icons. Test 2 had no saved photo. The
+remaining catalog rows had no same-workspace MTProto administrator evidence.
+
+The DevBot sets were consolidated separately. The retained development set
+has eight confirmed channel-avatar bindings. Telegram acknowledged the
+deletions and stopped offering the retired public sets for installation.
+
+Railway production deployment `d1bd107e-6b2b-4760-9913-e0d0af653edf`
+is active and returned HTTP 200 on `/api/health`. The post-deploy database
+read confirmed 11 active bindings to the production set. The release
+contains the avatar changes only and reuses the existing database schema.

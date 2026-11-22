@@ -1,7 +1,7 @@
 import { createHash } from 'crypto';
 import {
-  channelAvatarEmojiOwnedChannelWhere,
-  channelAvatarEmojiOwnerAccessWhere,
+  channelAvatarEmojiManagedChannelWhere,
+  channelAvatarEmojiAdminAccessWhere,
 } from './channel-avatar-emoji-ownership';
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
@@ -15,7 +15,10 @@ import {
 import { telegramAccountCredentials } from '@api/telegram/shared/mtproto/telegram-account-credentials';
 import { renderTelegramCustomEmojiToken } from '@api/telegram/shared/markup/telegram-custom-emoji-markup';
 import { notifyScheduledTaskDueWorkChanged } from '../../../common/scheduled-task-wake-notifier';
-import { channelAvatarEmojiImage } from './channel-avatar-emoji-image';
+import {
+  channelAvatarEmojiImage,
+  storedChannelAvatarBytes,
+} from './channel-avatar-emoji-image';
 
 export type ChannelAvatarEmojiProcessOptions = {
   scheduleRetry?: boolean;
@@ -49,7 +52,7 @@ export class ChannelAvatarEmojiProcessorService {
     const admitted = await this.prisma.telegramChannel.updateMany({
       where: {
         id,
-        ...channelAvatarEmojiOwnedChannelWhere(workspaceId),
+        ...channelAvatarEmojiManagedChannelWhere(workspaceId),
         avatarEmojiIconId: null,
         avatarEmojiRetryAt: null,
         avatarEmojiStatus: 'PENDING',
@@ -68,7 +71,7 @@ export class ChannelAvatarEmojiProcessorService {
 
   async enqueue(workspaceId: string, id: string, wake = true) {
     const owned = await this.prisma.telegramChannel.findFirst({
-      where: { id, ...channelAvatarEmojiOwnedChannelWhere(workspaceId) },
+      where: { id, ...channelAvatarEmojiManagedChannelWhere(workspaceId) },
       select: { id: true },
     });
     if (!owned) return;
@@ -76,7 +79,7 @@ export class ChannelAvatarEmojiProcessorService {
     await this.prisma.telegramChannel.updateMany({
       where: {
         id,
-        ...channelAvatarEmojiOwnedChannelWhere(workspaceId),
+        ...channelAvatarEmojiManagedChannelWhere(workspaceId),
         OR: [
           { avatarEmojiStatus: { not: 'PENDING' } },
           { avatarEmojiRetryAt: null },
@@ -101,13 +104,13 @@ export class ChannelAvatarEmojiProcessorService {
     id: string,
     options: ChannelAvatarEmojiProcessOptions = {},
   ): Promise<ChannelAvatarEmojiProcessOutcome> {
-    const ownerWhere = channelAvatarEmojiOwnedChannelWhere(workspaceId);
+    const ownerWhere = channelAvatarEmojiManagedChannelWhere(workspaceId);
     const owned = await this.prisma.telegramChannel.findFirst({
       where: { id, ...ownerWhere },
       select: {
         id: true,
         sourceAccesses: {
-          where: channelAvatarEmojiOwnerAccessWhere(workspaceId),
+          where: channelAvatarEmojiAdminAccessWhere(workspaceId),
           select: { sourceId: true },
         },
       },
@@ -166,11 +169,24 @@ export class ChannelAvatarEmojiProcessorService {
             },
             orderBy: { updatedAt: 'desc' },
           });
-        if (!account) throw new Error('No connected Telegram owner account');
-        const bytes = await this.photos.download(
-          telegramAccountCredentials(this.encryption, account),
-          channel,
-        );
+        let bytes: Buffer | null;
+        if (account) {
+          try {
+            bytes = await this.photos.download(
+              telegramAccountCredentials(this.encryption, account),
+              channel,
+            );
+          } catch (error) {
+            bytes = storedChannelAvatarBytes(channel.photoUrl);
+            if (!bytes) throw error;
+          }
+        } else {
+          bytes = storedChannelAvatarBytes(channel.photoUrl);
+          if (!bytes)
+            throw new Error(
+              'No connected Telegram administrator or stored avatar',
+            );
+        }
         if (!bytes) {
           const completed = await this.prisma.$transaction(async (tx) => {
             await tx.telegramChannel.updateMany({

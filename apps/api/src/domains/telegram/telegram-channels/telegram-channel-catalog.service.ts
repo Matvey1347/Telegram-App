@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import type { TelegramPublishingCapabilities } from '@telegram-system/shared';
 import {
@@ -120,12 +120,10 @@ export class TelegramChannelCatalogService {
     const pagination = normalizePagination(query);
     const archivedAt = query.archived ? { not: null } : null;
     const isTest = query.archived ? false : query.test === true;
-    const ownership =
-      query.owned === true
-        ? { some: {} }
-        : query.owned === false
-          ? { none: {} }
-          : undefined;
+    if (query.owned === false) {
+      throw new BadRequestException('The external channel catalog has been removed.');
+    }
+    const ownership = query.owned === true ? { some: {} } : undefined;
     const where = {
       workspaceId,
       isActive: true,

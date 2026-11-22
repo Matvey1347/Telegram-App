@@ -1,6 +1,5 @@
 "use client";
 
-import { Button } from "@/components/ui/primitives";
 
 export type TelegramChannelMessageTemplateEditorSection =
   | "text"
@@ -19,36 +18,6 @@ const sections: Array<{
   { id: "views", label: "Views" },
   { id: "prices", label: "Prices" },
 ];
-
-export function TelegramChannelMessageTemplateEditorHeader({
-  onBack,
-  draftAutosaveEnabled,
-}: {
-  onBack: () => void;
-  draftAutosaveEnabled: boolean;
-}) {
-  return (
-    <div className="flex items-center justify-between gap-3">
-      <Button
-        type="button"
-        variant="secondary"
-        className="h-9 w-9 p-0"
-        aria-label="Back to templates"
-        title="Back to templates"
-        onClick={onBack}
-      >
-        <span aria-hidden className="text-xl leading-none">
-          ←
-        </span>
-      </Button>
-      <p className="text-xs text-neutral-500">
-        {draftAutosaveEnabled
-          ? "Draft saved automatically"
-          : "Changes are applied after saving"}
-      </p>
-    </div>
-  );
-}
 
 export function TelegramChannelMessageTemplateEditorTabs({
   value,

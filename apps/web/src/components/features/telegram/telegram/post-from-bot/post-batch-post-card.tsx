@@ -123,6 +123,7 @@ export function PostBatchPostCard({
                     iconId={post.iconId}
                     icon={post.iconPresentation}
                     buttonLabel={t("telegram.posts.icon.addEmoji")}
+                    iconOnly
                     className="!h-10 !w-10"
                     iconClassName="!h-7 !w-7 !bg-transparent"
                     onChange={(iconId, iconPresentation) =>

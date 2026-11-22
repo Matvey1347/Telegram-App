@@ -116,15 +116,6 @@ describe('ImportTelegramChannelsBatchDto', () => {
 });
 
 describe('UpdateTelegramChannelDto', () => {
-  it('accepts an explicit no-seed setting', () => {
-    const dto = plainToInstance(UpdateTelegramChannelDto, {
-      seedDisabled: true,
-    });
-
-    expect(dto.seedDisabled).toBe(true);
-    expect(validateSync(dto)).toEqual([]);
-  });
-
   it('accepts a saved post sync limit above 100', () => {
     const dto = plainToInstance(UpdateTelegramChannelDto, {
       postSyncLimit: '750',

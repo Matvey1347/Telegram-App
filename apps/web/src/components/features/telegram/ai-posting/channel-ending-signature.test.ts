@@ -22,4 +22,26 @@ describe("channel ending signature", () => {
     expect(appendChannelEndingSignature("Original", { inviteLink: "javascript:alert(1)" })).toBe("Original");
     expect(appendChannelEndingSignature("Original", { title: "No link" })).toBe("Original");
   });
+
+  it("prefers the configured main invite link, then falls back to public or description links", () => {
+    expect(appendChannelEndingSignature("", {
+      title: "Private channel",
+      username: "public_name",
+      mainInviteLink: "https://t.me/+mainInvite",
+    })).toContain("(https://t.me/+mainInvite)");
+    expect(appendChannelEndingSignature("", {
+      title: "Public channel",
+      username: null,
+      publicInviteLink: "https://t.me/open_channel",
+    })).toContain("(https://t.me/open_channel)");
+    expect(appendChannelEndingSignature("", {
+      title: "Description link",
+      description: "Join us: https://t.me/+fromDescription. More info.",
+    })).toContain("(https://t.me/+fromDescription)");
+    expect(appendChannelEndingSignature("", {
+      title: "Username fallback",
+      username: "public_name",
+      mainInviteLink: "not a Telegram URL",
+    })).toContain("(https://t.me/public_name)");
+  });
 });

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Save, Sparkles } from "lucide-react";
+import { Save, Pencil, RotateCcw } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Button,
@@ -9,19 +9,14 @@ import {
   CustomSelect,
   FormField,
   ToggleRow,
-  Tooltip,
   Textarea,
+  Modal,
 } from "@/components/ui/primitives";
 import { DateInput } from "@/components/ui/date-inputs";
-import {
-  telegramChannelKeys,
-} from "@/lib/query-keys";
-import {
-  api,
-  telegramChannelsApi,
-} from "@/lib/api";
+import { telegramChannelKeys } from "@/lib/query-keys";
+import { api, telegramChannelsApi } from "@/lib/api";
 import { AiPostingChat } from "./ai-posting-chat";
-import { ChannelEndingSignatureButton } from "./channel-ending-signature-button";
+import { appendChannelEndingSignature } from "./channel-ending-signature";
 import type { ChannelEndingSignatureSource } from "./channel-ending-signature";
 import { useEndingEmojiPacks } from "./use-ending-emoji-packs";
 import { aiPostingPreferenceIcons } from "./ai-posting-entity-icons";
@@ -41,17 +36,16 @@ import {
 import { AiPostingTestConsole } from "./ai-posting-test-console";
 import { AiPostingReviewQueue } from "./ai-posting-review-queue";
 import { AiPostingSettingsTransfer } from "./ai-posting-settings-transfer";
+import { RenderedPreviewText } from "@/components/features/telegram/telegram/telegram-post-preview-content";
+import { TelegramEntityAvatar } from "@/components/features/telegram/telegram/telegram-entity-avatar";
 import {
   AiPostingSettingsTabs,
   type AiPostingSettingsTab,
 } from "./ai-posting-settings-tabs";
-import { TelegramCustomEmojiPickerModal } from "../telegram/telegram-custom-emoji-picker-modal";
 import { TelegramCustomEmojiPacksModal } from "../telegram/telegram-custom-emoji-packs-modal";
 import { EditableTelegramPreviewText } from "../telegram/telegram-post-preview";
-import { customEmojiToken } from "../telegram/telegram-custom-emoji";
 import { workspaceKeys } from "@/lib/query-keys";
 import type { ResolvedEmoji } from "@telegram-system/shared";
-import type { TelegramCustomEmoji } from "@telegram-system/shared";
 import type { TelegramChannelSelectOption } from "@/lib/api-types/telegram/telegram-channels";
 
 type Config = {
@@ -71,6 +65,10 @@ type Config = {
   lengths: AiPostingLength[];
   imageAvoidances?: string[];
   useChannelAvatarInMedia: boolean;
+  channelAvatarWatermarkSize: number;
+  channelAvatarWatermarkOpacity: number;
+  channelAvatarWatermarkX?: number;
+  channelAvatarWatermarkY?: number;
 };
 const initial: Config = {
   language: "",
@@ -89,7 +87,40 @@ const initial: Config = {
   lengths: DEFAULT_AI_POSTING_LENGTHS,
   imageAvoidances: [],
   useChannelAvatarInMedia: false,
+  channelAvatarWatermarkSize: 12,
+  channelAvatarWatermarkOpacity: 100,
 };
+function comparableConfig(value?: Config): Config {
+  const config = value ?? initial;
+  return {
+    language: config.language ?? "",
+    topic: config.topic ?? "",
+    audience: config.audience ?? "",
+    historyMode: config.historyMode ?? "all",
+    historyFrom: config.historyFrom ?? "",
+    variedLength: config.variedLength ?? true,
+    emojiPolicy: config.emojiPolicy ?? "contextual",
+    ending: config.ending ?? "",
+    hashtags: config.hashtags ?? "disabled",
+    imageMode: config.imageMode ?? "ai",
+    mediaPreferences: normalizeAiPostingMediaPreferences(config),
+    spheres: config.spheres ?? [],
+    rubrics: config.rubrics ?? [],
+    lengths: config.lengths ?? DEFAULT_AI_POSTING_LENGTHS,
+    imageAvoidances: config.imageAvoidances ?? [],
+    useChannelAvatarInMedia: config.useChannelAvatarInMedia ?? false,
+    channelAvatarWatermarkSize: config.channelAvatarWatermarkSize ?? 12,
+    channelAvatarWatermarkOpacity: config.channelAvatarWatermarkOpacity ?? 100,
+    channelAvatarWatermarkX: config.channelAvatarWatermarkX ?? 100,
+    channelAvatarWatermarkY: config.channelAvatarWatermarkY ?? 100,
+  };
+}
+export function isAiPostingConfigDirty(current?: Config, saved?: Config) {
+  return (
+    JSON.stringify(comparableConfig(current)) !==
+    JSON.stringify(comparableConfig(saved))
+  );
+}
 const key = (id: string) => ["telegram-ai-posting", id] as const;
 type SettingsResponse = {
   mediaPreferenceIcons?: Record<string, ResolvedEmoji>;
@@ -110,12 +141,17 @@ export function AiPostingPage({
 }) {
   const client = useQueryClient();
   const [configs, setConfigs] = useState<Record<string, Config>>({});
-  const [settingsTab, setSettingsTab] =
-    useState<AiPostingSettingsTab>("idea");
+  const [settingsTab, setSettingsTab] = useState<AiPostingSettingsTab>("idea");
   useEffect(() => {
     const syncTabFromUrl = () => {
-      const requested = new URLSearchParams(window.location.search).get("aiPostingTab");
-      if (["chat", "idea", "writing", "images", "transfer"].includes(requested ?? "")) {
+      const requested = new URLSearchParams(window.location.search).get(
+        "aiPostingTab",
+      );
+      if (
+        ["chat", "idea", "writing", "images", "transfer"].includes(
+          requested ?? "",
+        )
+      ) {
         setSettingsTab(requested as AiPostingSettingsTab);
       } else {
         setSettingsTab("idea");
@@ -137,10 +173,9 @@ export function AiPostingPage({
     url.searchParams.set("aiPostingTab", tab);
     return `${url.pathname}${url.search}${url.hash}`;
   };
-  const [endingPremiumPickerOpen, setEndingPremiumPickerOpen] = useState(false);
+  const [endingEditorOpen, setEndingEditorOpen] = useState(false);
+  const [endingDraft, setEndingDraft] = useState("");
   const [endingEmojiPacksOpen, setEndingEmojiPacksOpen] = useState(false);
-  const [endingPremiumEmojiRequested, setEndingPremiumEmojiRequested] =
-    useState(false);
   const settings = useQuery<SettingsResponse>({
     queryKey: key(channelId),
     queryFn: async () =>
@@ -164,16 +199,25 @@ export function AiPostingPage({
       )
       ?.find((channel) => channel.id === channelId)?.photoUrl ?? null;
   const config = configs[channelId] ?? settings.data?.configuration ?? initial;
+  const baseEnding = appendChannelEndingSignature("", {
+    title: channelTitle,
+    ...settings.data?.channel,
+  });
+  const effectiveEnding = config.ending.trim() || baseEnding;
+  const endingPreview =
+    config.hashtags === "ending_inline" && effectiveEnding
+      ? `${effectiveEnding} | #хэштег`
+      : effectiveEnding;
   const endingEmojiPacks = useQuery({
     queryKey: workspaceKeys.telegramCustomEmojiPacks(),
     queryFn: () => telegramChannelsApi.customEmojiPacks(),
     enabled:
-      /!\[[^\]\n]*\]\(tg:\/\/emoji\?id=\d+\)/.test(config.ending) ||
+      /!\[[^\]\n]*\]\(tg:\/\/emoji\?id=\d+\)/.test(effectiveEnding) ||
       endingEmojiPacksOpen ||
-      (endingPremiumPickerOpen && endingPremiumEmojiRequested),
+      endingEditorOpen,
   });
   const endingEmoji = useEndingEmojiPacks(
-    config.ending,
+    effectiveEnding,
     endingEmojiPacks.data?.packs,
   );
   const effectiveConfig = {
@@ -229,7 +273,7 @@ export function AiPostingPage({
   };
   const settingsReady =
     Boolean(settings.data) &&
-    !Object.prototype.hasOwnProperty.call(configs, channelId) &&
+    !isAiPostingConfigDirty(effectiveConfig, settings.data?.configuration) &&
     !save.isPending;
   const section = "space-y-4 bg-neutral-900/60";
   return (
@@ -255,8 +299,26 @@ export function AiPostingPage({
                 key={channelId}
                 channelId={channelId}
                 channelTitle={channelTitle}
+                channelPhotoUrl={settings.data?.channel?.photoUrl ?? cachedChannelPhotoUrl}
+                watermarkPreview={{
+                  enabled: config.useChannelAvatarInMedia,
+                  size: config.channelAvatarWatermarkSize ?? 12,
+                  opacity: config.channelAvatarWatermarkOpacity ?? 100,
+                  x: config.channelAvatarWatermarkX ?? 100,
+                  y: config.channelAvatarWatermarkY ?? 100,
+                  legacySize: settings.data?.configuration.useChannelAvatarInMedia
+                    ? settings.data.configuration.channelAvatarWatermarkSize ?? 12
+                    : undefined,
+                  onPositionChange: (x, y) => patch({
+                    channelAvatarWatermarkX: x,
+                    channelAvatarWatermarkY: y,
+                  }),
+                }}
                 customEmojiPacks={endingEmoji.packs}
-                preferenceIcons={aiPostingPreferenceIcons(effectiveConfig.mediaPreferences, settings.data?.mediaPreferenceIcons)}
+                preferenceIcons={aiPostingPreferenceIcons(
+                  effectiveConfig.mediaPreferences,
+                  settings.data?.mediaPreferenceIcons,
+                )}
                 dailyPostCount={3}
                 settingsReady={settingsReady}
                 onRememberImageRule={rememberImageRule}
@@ -271,30 +333,69 @@ export function AiPostingPage({
                 onChange={changeSettingsTab}
                 hrefForTab={settingsTabHref}
               />
-              <div hidden={settingsTab !== "chat"}><AiPostingChat key={channelId} channelId={channelId} active={settingsTab === "chat"} settingsReady={settingsReady} /></div>
+              <div hidden={settingsTab !== "chat"}>
+                <AiPostingChat
+                  key={channelId}
+                  channelId={channelId}
+                  active={settingsTab === "chat"}
+                  settingsReady={settingsReady}
+                />
+              </div>
               <div hidden={settingsTab !== "idea"}>
                 <Card className={section}>
                   <h2 className="text-lg font-semibold">Идея канала</h2>
-                  <p className="text-sm text-neutral-400">Определите аудиторию и ценность канала. Язык задаёт язык публикаций.</p>
+                  <p className="text-sm text-neutral-400">
+                    Определите аудиторию и ценность канала. Язык задаёт язык
+                    публикаций.
+                  </p>
                   <div className="grid min-w-0 gap-3 md:grid-cols-2">
                     <FormField label="Для кого этот канал">
-                      <Textarea value={config.audience} onChange={(e) => patch({ audience: e.target.value })} rows={3} placeholder="Кому адресованы публикации и что важно этой аудитории" />
+                      <Textarea
+                        value={config.audience}
+                        onChange={(e) => patch({ audience: e.target.value })}
+                        rows={3}
+                        placeholder="Кому адресованы публикации и что важно этой аудитории"
+                      />
                     </FormField>
                     <FormField label="Что я хочу дать аудитории">
-                      <Textarea value={config.topic} onChange={(e) => patch({ topic: e.target.value })} rows={3} placeholder="Какую пользу, знания или эмоции должны получать читатели" />
+                      <Textarea
+                        value={config.topic}
+                        onChange={(e) => patch({ topic: e.target.value })}
+                        rows={3}
+                        placeholder="Какую пользу, знания или эмоции должны получать читатели"
+                      />
                     </FormField>
                   </div>
                   <FormField label="Язык">
-                    <CustomSelect value={config.language} onChange={(language) => patch({ language })} placeholder="Автоопределение из канала" options={[
-                      { value: "", label: `Автоопределение · ${({ ru: "🇷🇺 Русский", en: "🇬🇧 English", uk: "🇺🇦 Українська", de: "🇩🇪 Deutsch", es: "🇪🇸 Español" } as Record<string, string>)[settings.data?.detectedLanguage ?? ""] || "выберите язык вручную"}` },
-                      { value: "ru", label: "Русский", iconEmoji: "🇷🇺" }, { value: "en", label: "English", iconEmoji: "🇬🇧" }, { value: "uk", label: "Українська", iconEmoji: "🇺🇦" }, { value: "de", label: "Deutsch", iconEmoji: "🇩🇪" }, { value: "es", label: "Español", iconEmoji: "🇪🇸" },
-                    ]} />
+                    <CustomSelect
+                      value={config.language}
+                      onChange={(language) => patch({ language })}
+                      placeholder="Автоопределение из канала"
+                      options={[
+                        {
+                          value: "",
+                          label: `Автоопределение · ${({ ru: "🇷🇺 Русский", en: "🇬🇧 English", uk: "🇺🇦 Українська", de: "🇩🇪 Deutsch", es: "🇪🇸 Español" } as Record<string, string>)[settings.data?.detectedLanguage ?? ""] || "выберите язык вручную"}`,
+                        },
+                        { value: "ru", label: "Русский", iconEmoji: "🇷🇺" },
+                        { value: "en", label: "English", iconEmoji: "🇬🇧" },
+                        { value: "uk", label: "Українська", iconEmoji: "🇺🇦" },
+                        { value: "de", label: "Deutsch", iconEmoji: "🇩🇪" },
+                        { value: "es", label: "Español", iconEmoji: "🇪🇸" },
+                      ]}
+                    />
                   </FormField>
                   <AiPostingTaxonomyEditor
                     spheres={config.spheres ?? []}
                     rubrics={config.rubrics ?? []}
-                    lengths={config.lengths?.length ? config.lengths : DEFAULT_AI_POSTING_LENGTHS}
+                    lengths={
+                      config.lengths?.length
+                        ? config.lengths
+                        : DEFAULT_AI_POSTING_LENGTHS
+                    }
                     mediaPreferences={effectiveConfig.mediaPreferences ?? []}
+                    iconPresentations={
+                      settings.data?.mediaPreferenceIcons ?? {}
+                    }
                     onSpheres={(spheres) => patch({ spheres })}
                     onRubrics={(rubrics) => patch({ rubrics })}
                     onLengths={(lengths) => patch({ lengths })}
@@ -304,12 +405,125 @@ export function AiPostingPage({
               <div hidden={settingsTab !== "writing"}>
                 <Card className={section}>
                   <h2 className="text-lg font-semibold">Как писать</h2>
-                  <FormField label="Использование истории публикаций"><CustomSelect value={config.historyMode} onChange={(historyMode) => patch({ historyMode })} options={[{ value: "all", label: "Вся история" }, { value: "since", label: "С выбранной даты" }, { value: "none", label: "Не использовать" }]} /></FormField>
-                  {config.historyMode === "since" && <FormField label="Начальная дата"><DateInput type="date" value={config.historyFrom} onChange={(e) => patch({ historyFrom: e.target.value })} /></FormField>}
-                  <ToggleRow checked={config.variedLength} onChange={(variedLength) => patch({ variedLength })} label="Автоопределять длину публикации" />
-                  <FormField label="Эмодзи в публикациях"><CustomSelect value={config.emojiPolicy} onChange={(emojiPolicy) => patch({ emojiPolicy: emojiPolicy as Config["emojiPolicy"] })} options={[{ value: "start", label: "Один уместный эмодзи в начале" }, { value: "contextual", label: "Уместные эмодзи по тексту" }]} /></FormField>
-                  <FormField label="Постоянная концовка"><div className="relative min-h-[60px] rounded-md border border-neutral-700 bg-neutral-900 py-2 pl-3 pr-12 focus-within:border-blue-500 [&_[role=textbox]]:min-h-[40px]"><EditableTelegramPreviewText value={config.ending} onChange={(ending) => patch({ ending })} customEmojiPacks={endingEmoji.packs} ariaLabel="Постоянная концовка" /><div className="absolute right-2 top-2"><Tooltip content="Вставить Premium-эмодзи"><button type="button" aria-label="Вставить Premium-эмодзи" onClick={() => { setEndingPremiumPickerOpen(true); setEndingPremiumEmojiRequested(true); }} className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-neutral-700 bg-neutral-800 text-neutral-200 hover:bg-neutral-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"><Sparkles size={16}/></button></Tooltip></div></div><ChannelEndingSignatureButton ending={config.ending} channel={{ title: channelTitle, ...settings.data?.channel }} onChange={(ending) => patch({ ending })} /></FormField>
-                  <FormField label="Хэштеги"><CustomSelect ariaLabel="Хэштеги" value={config.hashtags} onChange={(hashtags) => patch({ hashtags })} options={[{ value: "disabled", label: "Отключены" }, { value: "start", label: "В начале публикации" }, { value: "end", label: "В конце публикации" }, { value: "ending_inline", label: "Один хэштег рядом с концовкой" }]} /></FormField>
+                  <FormField label="Использование истории публикаций">
+                    <CustomSelect
+                      value={config.historyMode}
+                      onChange={(historyMode) => patch({ historyMode })}
+                      options={[
+                        { value: "all", label: "Вся история" },
+                        { value: "since", label: "С выбранной даты" },
+                        { value: "none", label: "Не использовать" },
+                      ]}
+                    />
+                  </FormField>
+                  {config.historyMode === "since" && (
+                    <FormField label="Начальная дата">
+                      <DateInput
+                        type="date"
+                        value={config.historyFrom}
+                        onChange={(e) => patch({ historyFrom: e.target.value })}
+                      />
+                    </FormField>
+                  )}
+                  <ToggleRow
+                    checked={config.variedLength}
+                    onChange={(variedLength) => patch({ variedLength })}
+                    label="Автоопределять длину публикации"
+                  />
+                  <FormField label="Эмодзи в публикациях">
+                    <CustomSelect
+                      value={config.emojiPolicy}
+                      onChange={(emojiPolicy) =>
+                        patch({
+                          emojiPolicy: emojiPolicy as Config["emojiPolicy"],
+                        })
+                      }
+                      options={[
+                        {
+                          value: "start",
+                          label: "Один уместный эмодзи в начале",
+                        },
+                        {
+                          value: "contextual",
+                          label: "Уместные эмодзи в начале и по тексту",
+                        },
+                      ]}
+                    />
+                  </FormField>
+                  <FormField label="Постоянная концовка">
+                    <div className="space-y-3 rounded-lg border border-neutral-800 bg-neutral-950/70 p-3">
+                      <p className="text-xs text-neutral-400">
+                        Если пользовательская концовка пустая, публикация
+                        автоматически получает базовую концовку канала.
+                      </p>
+                      {effectiveEnding ? (
+                        <div className="overflow-hidden rounded-lg border border-[#263849] bg-[#0e1621]">
+                          <div className="flex items-center gap-2 border-b border-[#263849] bg-[#17212b] px-3 py-2">
+                            <TelegramEntityAvatar
+                              imageUrl={
+                                settings.data?.channel?.photoUrl ??
+                                cachedChannelPhotoUrl
+                              }
+                              kind="channel"
+                              alt={channelTitle}
+                              size="xs"
+                            />
+                            <span className="truncate text-xs font-medium text-white">
+                              {channelTitle}
+                            </span>
+                          </div>
+                          <div className="telegram-preview-wallpaper p-2.5">
+                            <div className="telegram-message-bubble overflow-hidden rounded-[18px] rounded-bl-[5px] bg-[#182533] px-3.5 py-3 shadow-md">
+                              <RenderedPreviewText
+                                text={endingPreview}
+                                customEmojiPacks={endingEmoji.packs}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="rounded-md border border-neutral-800 bg-neutral-900 px-3 py-3 text-sm text-neutral-400">
+                          У канала нет ссылки для базовой концовки.
+                        </div>
+                      )}
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          type="button"
+                          onClick={() => {
+                            setEndingDraft(config.ending || baseEnding);
+                            setEndingEditorOpen(true);
+                          }}
+                        >
+                          <Pencil size={15} /> Настроить концовку
+                        </Button>
+                        {config.ending ? (
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            onClick={() => patch({ ending: "" })}
+                          >
+                            <RotateCcw size={15} /> Вернуть базовую
+                          </Button>
+                        ) : null}
+                      </div>
+                    </div>
+                  </FormField>
+                  <FormField label="Хэштеги">
+                    <CustomSelect
+                      ariaLabel="Хэштеги"
+                      value={config.hashtags}
+                      onChange={(hashtags) => patch({ hashtags })}
+                      options={[
+                        { value: "disabled", label: "Отключены" },
+                        { value: "start", label: "В начале публикации" },
+                        { value: "end", label: "В конце публикации" },
+                        {
+                          value: "ending_inline",
+                          label: "Один хэштег рядом с концовкой",
+                        },
+                      ]}
+                    />
+                  </FormField>
                 </Card>
               </div>
               <div hidden={settingsTab !== "images"}>
@@ -322,6 +536,14 @@ export function AiPostingPage({
                     settings.data?.channel?.photoUrl ?? cachedChannelPhotoUrl
                   }
                   useChannelAvatarInMedia={config.useChannelAvatarInMedia}
+                  watermarkSize={config.channelAvatarWatermarkSize ?? 12}
+                  watermarkOpacity={config.channelAvatarWatermarkOpacity ?? 100}
+                  watermarkX={config.channelAvatarWatermarkX ?? 100}
+                  watermarkY={config.channelAvatarWatermarkY ?? 100}
+                  onWatermarkPosition={(x, y) => patch({
+                    channelAvatarWatermarkX: x,
+                    channelAvatarWatermarkY: y,
+                  })}
                   onMode={(imageMode) => patch({ imageMode })}
                   onPreferences={(mediaPreferences) =>
                     patch({ mediaPreferences })
@@ -330,25 +552,49 @@ export function AiPostingPage({
                   onUseChannelAvatarInMedia={(useChannelAvatarInMedia) =>
                     patch({ useChannelAvatarInMedia })
                   }
+                  onWatermarkSize={(channelAvatarWatermarkSize) =>
+                    patch({ channelAvatarWatermarkSize })
+                  }
+                  onWatermarkOpacity={(channelAvatarWatermarkOpacity) =>
+                    patch({ channelAvatarWatermarkOpacity })
+                  }
                 />
               </div>
               <div hidden={settingsTab !== "transfer"}>
                 <Card className={section}>
-                  <AiPostingSettingsTransfer channelId={channelId} configuration={effectiveConfig} onImported={async () => {
-                    setConfigs((current) => { const next = { ...current }; delete next[channelId]; return next; });
-                    await client.invalidateQueries({ queryKey: key(channelId) });
-                  }}/>
+                  <AiPostingSettingsTransfer
+                    channelId={channelId}
+                    configuration={effectiveConfig}
+                    onImported={async () => {
+                      setConfigs((current) => {
+                        const next = { ...current };
+                        delete next[channelId];
+                        return next;
+                      });
+                      await client.invalidateQueries({
+                        queryKey: key(channelId),
+                      });
+                    }}
+                  />
                 </Card>
               </div>
-              {settingsTab !== "chat" && settingsTab !== "transfer" ? <div className="flex justify-end border-t border-neutral-800 pt-3">
-                <Button
-                  disabled={save.isPending}
-                  onClick={() => save.mutate(effectiveConfig)}
-                >
-                  <Save size={16} />
-                  {save.isPending ? "Сохраняем…" : "Сохранить настройки"}
-                </Button>
-              </div> : null}
+              {settingsTab !== "chat" && settingsTab !== "transfer" ? (
+                <div className="flex justify-end border-t border-neutral-800 pt-3">
+                  <Button
+                    disabled={
+                      save.isPending ||
+                      !isAiPostingConfigDirty(
+                        effectiveConfig,
+                        settings.data?.configuration,
+                      )
+                    }
+                    onClick={() => save.mutate(effectiveConfig)}
+                  >
+                    <Save size={16} />
+                    {save.isPending ? "Сохраняем…" : "Сохранить настройки"}
+                  </Button>
+                </div>
+              ) : null}
               {save.isError && (
                 <p role="alert" className="text-sm text-rose-300">
                   Не удалось сохранить настройки.
@@ -358,30 +604,57 @@ export function AiPostingPage({
           </div>
         </>
       )}
-      {endingPremiumPickerOpen && (
-        <TelegramCustomEmojiPickerModal
-          open
-          onClose={() => setEndingPremiumPickerOpen(false)}
-          packs={endingEmojiPacks.data?.packs ?? []}
-          onSelect={(emoji: TelegramCustomEmoji) => {
-            const ending = config.ending.trimEnd();
-            patch({
-              ending: `${ending}${ending ? " " : ""}${customEmojiToken(emoji)}`,
-            });
-            setEndingPremiumPickerOpen(false);
-          }}
-          onSelectStandard={(emoji) => {
-            const ending = config.ending.trimEnd();
-            patch({ ending: `${ending}${ending ? " " : ""}${emoji}` });
-            setEndingPremiumPickerOpen(false);
-          }}
-          onPremiumTabOpen={() => setEndingPremiumEmojiRequested(true)}
-          onManage={() => setEndingEmojiPacksOpen(true)}
-          premiumLoading={endingEmojiPacks.isLoading}
-          premiumError={endingEmojiPacks.isError}
-          onRetryPremium={() => void endingEmojiPacks.refetch()}
-        />
-      )}
+      <Modal
+        open={endingEditorOpen}
+        onClose={() => setEndingEditorOpen(false)}
+        title="Редактор концовки"
+        size="xl"
+        footer={
+          <div className="flex flex-wrap justify-between gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setEndingEmojiPacksOpen(true)}
+            >
+              Управление наборами эмодзи
+            </Button>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setEndingEditorOpen(false)}
+              >
+                Отмена
+              </Button>
+              <Button
+                type="button"
+                onClick={() => {
+                  patch({
+                    ending: endingDraft === baseEnding ? "" : endingDraft,
+                  });
+                  setEndingEditorOpen(false);
+                }}
+              >
+                Сохранить концовку
+              </Button>
+            </div>
+          </div>
+        }
+      >
+        <p className="mb-3 text-sm text-neutral-400">
+          Форматирование, эмодзи и ссылки можно редактировать прямо в тексте.
+          Очистите поле и сохраните, чтобы снова использовать базовую концовку
+          канала.
+        </p>
+        <div className="min-h-40 rounded-lg border border-neutral-700 bg-neutral-950 p-3 [&_[role=textbox]]:min-h-32">
+          <EditableTelegramPreviewText
+            value={endingDraft}
+            onChange={setEndingDraft}
+            customEmojiPacks={endingEmoji.packs}
+            ariaLabel="Текст концовки"
+          />
+        </div>
+      </Modal>
       {endingEmojiPacksOpen && (
         <TelegramCustomEmojiPacksModal
           open

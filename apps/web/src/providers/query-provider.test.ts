@@ -58,9 +58,6 @@ describe("daily Telegram read cache policy", () => {
     expect(client.getQueryDefaults(["account-shell"]).staleTime).toBe(
       expectedStaleTime,
     );
-    expect(client.getQueryDefaults(["advertising-people"]).staleTime).toBe(
-      15 * 60_000,
-    );
     expect(client.getDefaultOptions().queries?.staleTime).toBe(4 * 60_000);
     client.clear();
   });
@@ -81,7 +78,6 @@ describe("workspace query isolation", () => {
     "telegram-publication-schedules",
     "dashboard-summary",
     "telegram-channel-reminders",
-    "advertising-people",
     "telegram-managed-post-history",
     "telegram-post-batches",
     "telegram-ad-baseline",
@@ -101,11 +97,6 @@ describe("workspace query isolation", () => {
       expect(isWorkspaceScopedQuery([root])).toBe(false);
     },
   );
-
-  it("persists the workspace-scoped advertising people catalog", () => {
-    expect(isPersistedQuery(["advertising-people"])).toBe(true);
-    expect(isWorkspaceScopedQuery(["advertising-people"])).toBe(true);
-  });
 
   it("never persists private Lead Discovery evidence in browser query storage", () => {
     expect(isPersistedQuery(["lead-discovery", "workspace-one", "feed"])).toBe(

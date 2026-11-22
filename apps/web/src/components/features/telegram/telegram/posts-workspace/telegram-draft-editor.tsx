@@ -253,6 +253,7 @@ export function TelegramDraftEditor({ model }: { model: Model }) {
               onChange={changePostIcon}
               onPendingChange={setIconPending}
               buttonLabel={t("telegram.posts.icon.addIcon")}
+              iconOnly
               compact
               className="!h-8 !w-8"
             />

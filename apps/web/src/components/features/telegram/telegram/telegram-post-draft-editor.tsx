@@ -60,6 +60,7 @@ export function TelegramPostDraftEditor({
   mediaAllowedKinds,
   mediaMaxItems,
   mediaNotice,
+  mediaFooter,
   titleField = "visible",
   textPlaceholder = "Write or edit the Telegram post…",
   previewDraft,
@@ -75,6 +76,7 @@ export function TelegramPostDraftEditor({
   mediaAllowedKinds?: import("@telegram-system/shared").TelegramPostMediaKind[];
   mediaMaxItems?: number;
   mediaNotice?: string;
+  mediaFooter?: ReactNode;
   titleField?: "visible" | "hidden";
   textPlaceholder?: string;
   previewDraft?: TelegramSystemBotPostDraft;
@@ -223,6 +225,7 @@ export function TelegramPostDraftEditor({
             allowedKinds={mediaAllowedKinds}
             maxItems={mediaMaxItems}
           />
+          {mediaFooter}
           {emojiProgress ? (
             <p className="-mt-2 text-xs text-muted-foreground" role="status">
               Premium emoji: {emojiProgress.loaded}/{emojiProgress.total} loaded

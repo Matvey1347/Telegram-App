@@ -13,13 +13,6 @@ import { TelegramCrmChatOperations } from './telegram-crm-chat-operations.servic
 import { TelegramCrmChatMedia } from './telegram-crm-chat-media.service';
 import { TelegramCrmChatTransferGuard } from './telegram-crm-chat-transfer.guard';
 import { TelegramCrmChatController } from './telegram-crm-chat.controller';
-import { TelegramCrmManualContactsController } from './telegram-crm-manual-contacts.controller';
-import { TelegramCrmManualRetentionService } from './telegram-crm-manual-retention.service';
-import { TelegramCrmManualFollowUpService } from './telegram-crm-manual-follow-up.service';
-import { TelegramCrmManualActivityService } from './telegram-crm-manual-activity.service';
-import { TelegramCrmInstagramIdentityService } from './telegram-crm-instagram-identity.service';
-import { TelegramCrmManualContactsCommandService } from './telegram-crm-manual-contacts-command.service';
-import { TelegramCrmManualContactsReadService } from './telegram-crm-manual-contacts-read.service';
 import { TelegramLeadPreparationController } from './lead-discovery/lead-preparation.controller';
 import { TelegramLeadPreparationQueueService } from './lead-discovery/lead-preparation-queue.service';
 import { TelegramLeadPreparationReadService } from './lead-discovery/lead-preparation-read.service';
@@ -113,7 +106,6 @@ import { TelegramCrmRuntimeLeaseService } from './telegram-crm-runtime-lease.ser
   imports: [OperationsNotificationsModule, AiModule],
   controllers: [
     TelegramCrmChatController,
-    TelegramCrmManualContactsController,
     TelegramLeadPreparationController,
     TelegramLeadDiscoveryController,
     TelegramCrmCopilotController,
@@ -138,12 +130,6 @@ import { TelegramCrmRuntimeLeaseService } from './telegram-crm-runtime-lease.ser
     TelegramCrmChatOperations,
     TelegramCrmChatMedia,
     TelegramCrmChatTransferGuard,
-    TelegramCrmManualContactsReadService,
-    TelegramCrmManualContactsCommandService,
-    TelegramCrmInstagramIdentityService,
-    TelegramCrmManualActivityService,
-    TelegramCrmManualFollowUpService,
-    TelegramCrmManualRetentionService,
 
     TelegramLeadPreparationContext,
     TelegramLeadQualificationService,
@@ -228,7 +214,6 @@ import { TelegramCrmRuntimeLeaseService } from './telegram-crm-runtime-lease.ser
     TelegramCrmRuntimeLeaseService,
   ],
   exports: [
-    TelegramCrmManualRetentionService,
     TelegramLeadRetentionService,
     TelegramCrmAiDraftRetentionService,
     TelegramAdSalesCrmTasksService,

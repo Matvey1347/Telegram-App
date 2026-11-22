@@ -24,12 +24,22 @@ const messages = {
   "ads.delete_campaign": "Delete campaign",
   "ads.open_campaign_trend": "Open campaign trend",
   "ads.cpa_is_inside_target_kpi_range": "CPA is inside target KPI range.",
-  "ads.cpa_is_inside_acceptable_kpi_range": "CPA is inside acceptable KPI range.",
+  "ads.cpa_is_inside_acceptable_kpi_range":
+    "CPA is inside acceptable KPI range.",
   "ads.cpa_is_inside_stop_kpi_range": "CPA is inside stop KPI range.",
-  "ads.kpi_range_or_enough_cpa_data_is_missing": "KPI range or enough CPA data is missing.",
+  "ads.kpi_range_or_enough_cpa_data_is_missing":
+    "KPI range or enough CPA data is missing.",
 
   "ads.filters": "Filters",
   "ads.direct_exchange": "Direct exchange",
+  "ads.promotion_type": "Promotion type",
+  "ads.promotion_mutual_title": "Mutual promotion",
+  "ads.promotion_mutual_help": "Exchange promotion with another channel or partner.",
+  "ads.promotion_own_title": "Promote my channels",
+  "ads.promotion_own_help": "Promote your channels across your own network.",
+  "ads.promotion_folder_title": "Folder promotion",
+  "ads.promotion_folder_help": "Coordinate posts across a group of channels.",
+  "ads.folder_badge": "Folder",
   "ads.folders": "Folders",
   "ads.status_draft": "Draft",
   "ads.status_active": "Active",
@@ -63,11 +73,14 @@ const messages = {
   "ads.create_promo": "Create promo",
   "ads.loading": "Loading results…",
   "ads.campaigns_title": "Ad campaigns",
-  "ads.campaigns_subtitle": "Plan paid placements, connect creatives and invite links, and measure acquisition performance.",
+  "ads.campaigns_subtitle":
+    "Plan paid placements, connect creatives and invite links, and measure acquisition performance.",
   "ads.hypotheses_title": "Hypotheses",
-  "ads.hypotheses_subtitle": "Test creative ideas and compare their spend, subscribers, CPA, and outcome.",
+  "ads.hypotheses_subtitle":
+    "Test creative ideas and compare their spend, subscribers, CPA, and outcome.",
   "ads.promo_title": "Promo creatives",
-  "ads.promo_subtitle": "Prepare reusable Telegram creatives and review their opening copy before using them in campaigns.",
+  "ads.promo_subtitle":
+    "Prepare reusable Telegram creatives and review their opening copy before using them in campaigns.",
   "leadQualification.a_versioned_review_aid_not_a_calibrated_purchase_probability_or_fraud_verdict":
     "A versioned review aid, not a calibrated purchase probability or fraud verdict.",
   "leadQualification.ai_discovered_sources_and_prepared_offers":
@@ -412,6 +425,39 @@ const messages = {
   "adSales.status.partiallyPaid": "Partially paid",
   "adSales.status.paid": "Paid",
   "adSales.status.overpaid": "Overpaid",
+  "crm.settings.nav": "Settings",
+  "crm.settings.title": "CRM source settings",
+  "crm.settings.description":
+    "Manage Telegram accounts and CRM import settings.",
+  "crm.settings.refresh_accounts": "Refresh accounts",
+  "crm.settings.accounts": "MTProto accounts",
+  "crm.settings.loading_accounts": "Loading accounts…",
+  "crm.settings.select_accounts": "Select MTProto accounts",
+  "crm.settings.all_accounts": "All connected accounts",
+  "crm.settings.import_tags": "Import tags",
+  "crm.settings.import_tags_help":
+    "Only contacts in these Telegram folders are shown as CRM clients and counted in analytics.",
+  "crm.settings.loading_telegram_tags": "Loading Telegram tags…",
+  "crm.settings.select_telegram_tags": "Select Telegram tags",
+  "crm.settings.purchase_tag": "Purchase tag",
+  "crm.settings.purchase_tag_help":
+    "Applied automatically to buyers. A Telegram-folder tag also moves their Telegram chat into that folder.",
+  "crm.settings.loading_tags": "Loading tags…",
+  "crm.settings.select_tags": "Select tags",
+  "crm.settings.no_account":
+    "Connect an MTProto account in Telegram resources first.",
+  "crm.settings.sync_help":
+    "Selected MTProto accounts keep live updates enabled and sync automatically once a day. Manual imports run sequentially.",
+  "crm.settings.save": "Save settings",
+  "crm.settings.sync": "Sync now",
+  "crm.settings.save_sync": "Save and sync",
+  "crm.settings.saving": "Saving…",
+  "crm.settings.syncing": "Syncing…",
+  "crm.settings.load_error":
+    "CRM source settings could not be loaded. Refresh and try again.",
+  "crm.settings.save_error": "CRM sources could not be saved.",
+  "crm.settings.sync_error":
+    "Conversation sync failed. You can safely retry it.",
 } as const satisfies TranslationCatalog;
 
 export default messages;

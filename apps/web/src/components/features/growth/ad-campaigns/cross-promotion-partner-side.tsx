@@ -17,6 +17,7 @@ import {
   Button,
   CustomSelect,
   FormField,
+  MultiSelect,
 } from "@/components/ui/primitives";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { MutualPromotionPostComposer } from "./mutual-promotion/mutual-promotion-post-composer";
@@ -32,9 +33,11 @@ type FlowStatus = "idle" | "working" | "waiting" | "done";
 export function CrossPromotionPartnerSide({
   expanded,
   onExpandedChange,
+  showPartnerIdentity = true,
   channels,
   ownChannels,
   partnerIds,
+  onPartnerIdsChange = () => undefined,
   partnerAdvertiserId,
   partnerClient,
   partnerContact,
@@ -66,9 +69,11 @@ export function CrossPromotionPartnerSide({
 }: {
   expanded: boolean;
   onExpandedChange: (expanded: boolean) => void;
+  showPartnerIdentity?: boolean;
   channels: TelegramChannel[];
   ownChannels: TelegramChannel[];
   partnerIds: string[];
+  onPartnerIdsChange?: (ids: string[]) => void;
   partnerAdvertiserId: string | null;
   partnerClient?: {
     id: string;
@@ -146,17 +151,40 @@ export function CrossPromotionPartnerSide({
       </button>
       {expanded ? (
         <>
-          <div className="grid items-end gap-3">
-            <CrmClientField
-              contact={partnerContact}
-              selectedAdvertiserId={partnerAdvertiserId}
-              selectedClient={partnerClient}
-              onContactChange={onPartnerContactChange}
-              onTelegramChange={onPartnerTelegramChange}
-              onSelect={onPartnerAdvertiserChange}
-              onSearchAdvertisers={onSearchAdvertisers}
+          {showPartnerIdentity ? (
+            <div className="grid items-end gap-3">
+              <CrmClientField
+                contact={partnerContact}
+                selectedAdvertiserId={partnerAdvertiserId}
+                selectedClient={partnerClient}
+                onContactChange={onPartnerContactChange}
+                onTelegramChange={onPartnerTelegramChange}
+                onSelect={onPartnerAdvertiserChange}
+                onSearchAdvertisers={onSearchAdvertisers}
+              />
+            </div>
+          ) : null}
+          <FormField label="Partner channels">
+            <MultiSelect
+              value={partnerIds}
+              onChange={onPartnerIdsChange}
+              options={channels.map((channel) => ({
+                value: channel.id,
+                label: channel.username
+                  ? `${channel.title} · @${channel.username}`
+                  : channel.title,
+                selectedLabel: channel.title,
+                iconUrl: channel.photoUrl,
+                iconFallback: channel.title,
+              }))}
+              placeholder="Select partner channels"
+              searchPlaceholder="Search channels"
             />
-          </div>
+            <p className="mt-1 text-xs text-neutral-500">
+              Choose channels where the partner will publish your promotion. You
+              can leave this empty and configure it later.
+            </p>
+          </FormField>
           {partnerIds.length ? (
             <CrossPromotionPlacementSettings
               title="Formats in partner channels"

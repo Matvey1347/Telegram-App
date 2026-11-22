@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Trash2 } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type {
   CurrencySettings,
@@ -12,25 +11,7 @@ import { telegramChannelNetworksApi } from "@/lib/api";
 import { MasonryGrid } from "@/components/ui/primitives";
 import { useAppToast } from "@/providers/toast-provider";
 import { networkKeys } from "@/lib/query-keys";
-import { ChannelPreview } from "./channel-preview";
-import {
-  TelegramCardActionsMenu,
-  TelegramCardMenuAction,
-} from "./telegram-card-actions-menu";
 import { TelegramNetworkCard } from "./telegram-network-card";
-
-type PersonCard = {
-  id: string;
-  selectionId?: string;
-  title: string;
-  username?: string;
-  contactInfo?: string;
-  notes?: string;
-  imageUrl?: string;
-};
-
-const cardClass =
-  "rounded-xl border border-neutral-800/80 bg-neutral-900/55 p-4 text-sm text-neutral-300";
 
 export function sortNetworksBySize(
   networks: TelegramChannelNetwork[],
@@ -119,49 +100,6 @@ export function TelegramNetworkCards({
             onEdit={() => onEdit(network)}
             onDelete={() => onDelete(network)}
           />
-        );
-      })}
-    </MasonryGrid>
-  );
-}
-
-export function TelegramPeopleCards({
-  people,
-  onDelete,
-}: {
-  people: PersonCard[];
-  onDelete: (person: PersonCard) => void;
-}) {
-  return (
-    <MasonryGrid>
-      {people.map((person) => {
-        const username = String(person.username || "").replace(/^@/, "");
-        return (
-          <article key={person.selectionId || person.id} className={cardClass}>
-            <ChannelPreview
-              channel={{ title: person.title, photoUrl: person.imageUrl }}
-              avatarKind="person"
-              subtitle={
-                person.contactInfo || (username ? `@${username}` : "Person")
-              }
-              rightAction={
-                <TelegramCardActionsMenu label={`Actions for ${person.title}`}>
-                  <TelegramCardMenuAction
-                    danger
-                    label="Delete person"
-                    icon={<Trash2 size={17} />}
-                    onClick={() => onDelete(person)}
-                  />
-                </TelegramCardActionsMenu>
-              }
-              className="!mb-0 !border-0 !bg-transparent !p-0"
-            />
-            {person.notes ? (
-              <p className="mt-4 line-clamp-3 border-t border-neutral-800 pt-3 text-sm text-neutral-400">
-                {person.notes}
-              </p>
-            ) : null}
-          </article>
         );
       })}
     </MasonryGrid>

@@ -72,8 +72,6 @@ export class TelegramCrmContactMergeService {
           archivedAt: true,
           ownerMemberId: true,
           lastContactAt: true,
-          manualInstagramContactAt: true,
-          manualInstagramReplyAt: true,
           lastInboundAt: true,
           lastOutboundAt: true,
           lastPurchaseAt: true,
@@ -220,14 +218,6 @@ export class TelegramCrmContactMergeService {
               ? 'DO_NOT_CONTACT'
               : (target.manualSalesStatus ?? source.manualSalesStatus ?? null),
           lastContactAt: latest(target.lastContactAt, source.lastContactAt),
-          manualInstagramContactAt: latest(
-            target.manualInstagramContactAt,
-            source.manualInstagramContactAt,
-          ),
-          manualInstagramReplyAt: latest(
-            target.manualInstagramReplyAt,
-            source.manualInstagramReplyAt,
-          ),
           lastInboundAt: latest(target.lastInboundAt, source.lastInboundAt),
           lastOutboundAt: latest(target.lastOutboundAt, source.lastOutboundAt),
           lastPurchaseAt: latest(target.lastPurchaseAt, source.lastPurchaseAt),

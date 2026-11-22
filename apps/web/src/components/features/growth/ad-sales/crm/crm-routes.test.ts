@@ -12,6 +12,9 @@ describe("resolveAdSalesSurface", () => {
     expect(
       resolveAdSalesSurface("/ad-sales/calendar", new URLSearchParams()),
     ).toEqual({ kind: "legacy" });
+    expect(
+      resolveAdSalesSurface("/ad-sales/settings", new URLSearchParams()),
+    ).toEqual({ kind: "settings" });
   });
 
   it("uses root and the clients alias for all contacts", () => {
@@ -20,6 +23,12 @@ describe("resolveAdSalesSurface", () => {
     });
     expect(
       resolveAdSalesSurface("/ad-sales/clients", new URLSearchParams()),
+    ).toEqual({ kind: "contacts" });
+    expect(
+      resolveAdSalesSurface(
+        "/ad-sales/clients",
+        new URLSearchParams("manual=1"),
+      ),
     ).toEqual({ kind: "contacts" });
   });
 
@@ -42,7 +51,11 @@ describe("resolveAdSalesSurface", () => {
     });
   });
 
-  it("opens direct clients without inventing a conversation",()=>{expect(resolveAdSalesSurface("/ad-sales/clients/manual-only-client")).toEqual({kind:"contacts",contactId:"manual-only-client"});});
+  it("opens direct clients without inventing a conversation", () => {
+    expect(
+      resolveAdSalesSurface("/ad-sales/clients/manual-only-client"),
+    ).toEqual({ kind: "contacts", contactId: "manual-only-client" });
+  });
 
   it("preserves an exact unassigned inbox thread deep link", () => {
     expect(

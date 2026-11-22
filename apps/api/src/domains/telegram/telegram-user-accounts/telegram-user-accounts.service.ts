@@ -54,7 +54,10 @@ import { type TelegramUserAccountProgressCallback } from './telegram-user-accoun
 import { syncDialogsThenWakeTelegramRuntime } from './telegram-user-account-login-runtime';
 
 import { importTelegramUserAccountChannels } from './telegram-user-account-channel-import';
-import { syncTelegramUserAccountDialogs } from './telegram-user-account-dialog-sync';
+import {
+  reconcileWorkspaceAccountDialogs,
+  syncTelegramUserAccountDialogs,
+} from './telegram-user-account-dialog-sync';
 
 type ProgressCallback = TelegramUserAccountProgressCallback;
 
@@ -541,7 +544,7 @@ export class TelegramUserAccountsService {
     );
   }
 
-  async check(userId: string, id: string) {
+  async check(userId: string, id: string, reconcileChannels = false) {
     const workspaceId = await this.getWorkspaceId(userId);
     const account = await this.prisma.telegramUserAccountIntegration.findFirst({
       where: { id, workspaceId },
@@ -581,12 +584,26 @@ export class TelegramUserAccountsService {
           createdByUser: WorkspaceService.createdByUserInclude,
         },
       }));
+    if (
+      reconcileChannels &&
+      row.status === TelegramUserAccountStatus.connected
+    ) {
+      await this.syncDialogs(userId, id, undefined, true);
+    }
     return safeTelegramUserAccount(row);
   }
 
-  async syncDialogs(userId: string, id: string, onProgress?: ProgressCallback) {
+  async syncDialogs(
+    userId: string,
+    id: string,
+    onProgress?: ProgressCallback,
+    reconcilePeers = false,
+  ) {
     const workspaceId = await this.getWorkspaceId(userId);
-    return syncTelegramUserAccountDialogs(
+    const sync = reconcilePeers
+      ? reconcileWorkspaceAccountDialogs
+      : syncTelegramUserAccountDialogs;
+    return sync(
       {
         prisma: this.prisma,
         mtprotoClient: this.mtprotoClient,

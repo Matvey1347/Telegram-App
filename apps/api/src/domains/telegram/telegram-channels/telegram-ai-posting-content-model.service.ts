@@ -68,7 +68,7 @@ export class TelegramAiPostingContentModelService {
         throw new BadRequestException('AI_POSTING_SPHERE_INVALID');
       return {
         id: id(item.id), parentId: item.parentId ? id(item.parentId) : null,
-        name: text(item.name, 120), emoji: text(item.emoji, 32, '✨'), tier,
+        name: text(item.name, 120), emoji: text(item.emoji, 32, '✨'), emojiIconId: text(item.emojiIconId, 128) || null, tier,
         description: text(item.description, 2000), sources,
         mediaPreferenceId: item.mediaPreferenceId ? id(item.mediaPreferenceId) : null,
       };
@@ -99,7 +99,7 @@ export class TelegramAiPostingContentModelService {
       if (lengthIds.some((lengthId) => !lengths.some((length) => length.id === lengthId)))
         throw new BadRequestException('AI_POSTING_RUBRIC_LENGTH_INVALID');
       return {
-        id: id(item.id), sphereId, name: text(item.name, 120), emoji: text(item.emoji, 32, '📝'),
+        id: id(item.id), sphereId, name: text(item.name, 120), emoji: text(item.emoji, 32, '📝'), emojiIconId: text(item.emojiIconId, 128) || null,
         description: text(item.description, 2000), goal: text(item.goal, 1000), lengthIds,
       };
     });

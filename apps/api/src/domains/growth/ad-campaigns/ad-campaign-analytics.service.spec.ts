@@ -24,7 +24,6 @@ describe('AdCampaignAnalyticsService', () => {
         kpiCurrency: 'UAH',
         targetCpa: 9,
         stopCpaFrom: 12,
-        seedSubscribersCount: 0,
         knownFakeSubscribersCount: 0,
         subscriberBaseQuality: 'normal',
       },

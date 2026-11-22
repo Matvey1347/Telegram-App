@@ -84,27 +84,6 @@ export async function validateCrmTaskLinks(
         'Reopen this client before scheduling follow-up',
       );
   }
-  if (
-    links.type === 'FOLLOW_UP' &&
-    (!links.status || ['OPEN', 'IN_PROGRESS'].includes(links.status)) &&
-    links.metadata &&
-    typeof links.metadata === 'object' &&
-    'origin' in links.metadata &&
-    links.metadata.origin === 'MANUAL_INSTAGRAM'
-  ) {
-    const method = await tx.telegramAdvertiserContact.findFirst({
-      where: {
-        workspaceId,
-        advertiserId: contactId,
-        type: 'INSTAGRAM',
-        identityState: 'ACTIVE',
-        ownershipConfirmedAt: { not: null },
-      },
-      select: { id: true },
-    });
-    if (!method)
-      throw new ConflictException('INSTAGRAM_IDENTITY_REVIEW_REQUIRED');
-  }
   const member = await tx.workspaceMember.findFirst({
     where: { id: links.assignedMemberId, workspaceId },
     select: { id: true },

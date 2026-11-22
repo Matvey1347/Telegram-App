@@ -470,12 +470,15 @@ export class TelegramMtprotoClient {
     return this.accounts.getAdminChannels(params);
   }
 
-  async getAdminChannelsWithProfile(params: {
-    apiId: string;
-    apiHash: string;
-    session: string;
-  }) {
-    return this.accounts.getAdminChannelsWithProfile(params);
+  async getAdminChannelsWithProfile(
+    params: {
+      apiId: string;
+      apiHash: string;
+      session: string;
+    },
+    options: { includeChannelPhotos?: boolean } = {},
+  ) {
+    return this.accounts.getAdminChannelsWithProfile(params, options);
   }
 
   async getPublicChannelInfo(params: {

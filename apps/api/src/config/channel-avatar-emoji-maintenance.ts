@@ -1,7 +1,7 @@
 import { config } from 'dotenv';
 
 export type AvatarEmojiMaintenanceOptions = {
-  mode: 'migrate' | 'backfill' | 'smoke';
+  mode: 'migrate' | 'backfill' | 'stored' | 'smoke';
   workspaceId: string;
   execute: boolean;
   production: boolean;
@@ -35,8 +35,13 @@ export function parseAvatarEmojiMaintenanceOptions(
   if (!workspaceId || !/^[a-zA-Z0-9_-]{1,100}$/.test(workspaceId))
     throw new Error('A precise --workspace=<id> is required.');
   const mode = value('mode') ?? 'migrate';
-  if (mode !== 'migrate' && mode !== 'backfill' && mode !== 'smoke')
-    throw new Error('Mode must be migrate, backfill or smoke.');
+  if (
+    mode !== 'migrate' &&
+    mode !== 'backfill' &&
+    mode !== 'stored' &&
+    mode !== 'smoke'
+  )
+    throw new Error('Mode must be migrate, backfill, stored or smoke.');
   const limit = Number(value('limit') ?? 100);
   if (!Number.isInteger(limit) || limit < 1 || limit > 1000)
     throw new Error('Limit must be 1–1000.');

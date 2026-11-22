@@ -1,5 +1,6 @@
 import {
   BadGatewayException,
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
@@ -116,6 +117,30 @@ export class TelegramAiPostingTestRunService {
       },
     });
     return { deletedCount: result.count };
+  }
+
+  async prepareBotImage(userId: string, channelId: string, runId: string, input: {
+    index: number; enabled: boolean; size: number; opacity: number; x: number; y: number;
+  }) {
+    const inRange = (value: unknown, min: number, max: number) =>
+      typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max;
+    if (!input || !Number.isInteger(input.index) || input.index < 0 ||
+      typeof input.enabled !== 'boolean' || !inRange(input.size, 5, 30) ||
+      !inRange(input.opacity, 10, 100) || !inRange(input.x, 0, 100) || !inRange(input.y, 0, 100))
+      throw new BadRequestException('Invalid watermark settings');
+
+    const workspaceId = await this.workspace.resolveWorkspaceIdForUser(userId);
+    const run = await this.prisma.telegramAiPostingTestRun.findFirst({
+      where: { id: runId, workspaceId, telegramChannelId: channelId },
+      select: { publications: true, telegramChannel: { select: { photoUrl: true } } },
+    });
+    const post = run && decodeAiPostingRunPublications(run.publications)
+      .publications[input.index] as TestPublication | undefined;
+    if (!post?.imageUrl) throw new NotFoundException('Publication image not found');
+    if (!post.imagePreviewUrl) throw new ConflictException('AI_POSTING_WATERMARK_ORIGINAL_MISSING');
+    return { imageUrl: input.enabled
+      ? await this.images.renderBotWatermark(post.imagePreviewUrl, run?.telegramChannel.photoUrl, input)
+      : post.imagePreviewUrl };
   }
 
   async reviewPublication(
@@ -469,6 +494,10 @@ export class TelegramAiPostingTestRunService {
             .filter(Boolean)
             .join('. '),
           watermarkChannelAvatar: config.useChannelAvatarInMedia === true,
+          watermarkSizePercent: Number(config.channelAvatarWatermarkSize) || 12,
+          watermarkX: Number(config.channelAvatarWatermarkX ?? 100),
+          watermarkY: Number(config.channelAvatarWatermarkY ?? 100),
+          watermarkOpacityPercent: Number(config.channelAvatarWatermarkOpacity) || 100,
           mode: 'MANUAL',
           aiPosting: {
             channelId,
@@ -542,6 +571,9 @@ export class TelegramAiPostingTestRunService {
         item.mediaPreference = { id: preference.id, name: preference.name };
       item.imageUrl = resolved.image.url;
       item.imageSourceId = resolved.image.sourceId;
+      item.imageFingerprint = resolved.image.fingerprint ?? null;
+      item.imageOriginalUrl = resolved.image.originalUrl ?? null;
+      item.imagePreviewUrl = resolved.image.previewUrl ?? null;
       item.mediaReadiness = 'READY';
       delete item.mediaFailureCode;
       item.status = 'PENDING';

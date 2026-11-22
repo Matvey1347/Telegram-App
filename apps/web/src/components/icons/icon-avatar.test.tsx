@@ -1,10 +1,26 @@
 import { fireEvent, render, screen } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import type { ReactNode } from "react";
 import { describe, expect, it } from "vitest";
+import { workspaceKeys } from "@/lib/query-keys";
 import { IconAvatar } from "./icon-avatar";
+
+function renderWithQuery(
+  ui: ReactNode,
+  packs?: Awaited<ReturnType<typeof import("@/lib/api").telegramChannelsApi.customEmojiPacks>>["packs"],
+) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  if (packs) {
+    client.setQueryData(workspaceKeys.telegramCustomEmojiPacks(), { packs });
+  }
+  return render(
+    <QueryClientProvider client={client}>{ui}</QueryClientProvider>,
+  );
+}
 
 describe("IconAvatar", () => {
   it("renders the saved Telegram Premium emoji animation instead of its fallback", () => {
-    const { container } = render(
+    const { container } = renderWithQuery(
       <IconAvatar
         label="Test workspace"
         icon={{
@@ -25,7 +41,7 @@ describe("IconAvatar", () => {
   });
 
   it("renders a static Telegram Premium emoji asset", () => {
-    render(
+    renderWithQuery(
       <IconAvatar
         icon={{
           type: "unicode",
@@ -43,8 +59,44 @@ describe("IconAvatar", () => {
     );
   });
 
+  it("resolves a channel avatar Premium emoji from the current workspace pack", () => {
+    renderWithQuery(
+      <IconAvatar
+        label="Channel"
+        icon={{ type: "unicode", value: "📣", telegramCustomEmojiId: "avatar-id" }}
+      />,
+      [
+        {
+          id: "channel-avatar:workspace",
+          shortName: "channelavatars_by_bot",
+          title: "Channel avatars",
+          telegramLink: "https://t.me/addemoji/channelavatars_by_bot",
+          emojis: [
+            {
+              id: "avatar-icon",
+              documentId: "avatar-id",
+              alt: "📣",
+              mimeType: "image/png",
+              kind: "STATIC",
+              isFree: false,
+              needsRepainting: false,
+              position: 0,
+              assetUrl: "https://cdn.example.test/channel.png",
+              renderAssetUrl: null,
+            },
+          ],
+        },
+      ],
+    );
+
+    expect(screen.getByRole("img")).toHaveAttribute(
+      "src",
+      "https://cdn.example.test/channel.png",
+    );
+  });
+
   it("keeps transparent image avatars free of the emoji fallback background", () => {
-    render(
+    renderWithQuery(
       <IconAvatar
         label="Custom image"
         icon={{
@@ -65,7 +117,7 @@ describe("IconAvatar", () => {
   });
 
   it("shows a fallback for a successfully loaded one-pixel Telegram placeholder", () => {
-    render(<IconAvatar label="Manager" icon={{ type: "image", id: "peer", url: "https://t.me/i/userpic/320/manager.jpg" }} />);
+    renderWithQuery(<IconAvatar label="Manager" icon={{ type: "image", id: "peer", url: "https://t.me/i/userpic/320/manager.jpg" }} />);
     const image = screen.getByRole("img", { name: "Manager" });
     Object.defineProperties(image, { naturalWidth: { value: 1 }, naturalHeight: { value: 1 } });
     fireEvent.load(image);
@@ -74,7 +126,7 @@ describe("IconAvatar", () => {
   });
 
   it("renders the standard fallback when an avatar URL cannot be loaded", () => {
-    render(
+    renderWithQuery(
       <IconAvatar
         label="Admin"
         icon={{

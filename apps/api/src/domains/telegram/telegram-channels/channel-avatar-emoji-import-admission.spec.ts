@@ -99,6 +99,9 @@ function accountSync(isCreator: boolean) {
           { id: 'channel', username: 'owned_channel', telegramChatId: '123' },
         ]),
     },
+    telegramChannelSourceAccess: {
+      updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+    },
     telegramChannelAdminLink: {
       deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
       createMany: jest.fn().mockResolvedValue({ count: 1 }),

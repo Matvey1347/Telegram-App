@@ -10,7 +10,8 @@ export type AdSalesSurface =
       conversationId: string | null;
       peerId: string | null;
     }
-  | { kind: "analytics" };
+  | { kind: "analytics" }
+  | { kind: "settings" };
 
 export function resolveAdSalesSurface(
   pathname: string,
@@ -20,11 +21,12 @@ export function resolveAdSalesSurface(
   if (
     pathname === "/ad-sales/sales" ||
     pathname === "/ad-sales/calendar" ||
-    pathname === "/ad-sales/analytics"
+    pathname === "/ad-sales/analytics" ||
+    pathname === "/ad-sales/settings"
   ) {
-    return pathname === "/ad-sales/analytics"
-      ? { kind: "analytics" }
-      : { kind: "legacy" };
+    if (pathname === "/ad-sales/analytics") return { kind: "analytics" };
+    if (pathname === "/ad-sales/settings") return { kind: "settings" };
+    return { kind: "legacy" };
   }
   if (pathname === "/ad-sales/inbox") {
     return {
@@ -44,5 +46,8 @@ export function resolveAdSalesSurface(
     };
   }
   const client = pathname.match(/^\/ad-sales\/(?:contacts|clients)\/([^/]+)$/);
-  return { kind: "contacts", ...(client ? {contactId:decodeURIComponent(client[1])} : {}) };
+  return {
+    kind: "contacts",
+    ...(client ? { contactId: decodeURIComponent(client[1]) } : {}),
+  };
 }

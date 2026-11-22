@@ -10,11 +10,13 @@ const basePath = "/cross-promotion-plans";
 
 export const crossPromotionPlanKeys = {
   all: ["cross-promotion-plans"] as const,
+  combined: ["cross-promotion-plans", "combined"] as const,
   list: (kind: CrossPromotionPlanKind) =>
     [...crossPromotionPlanKeys.all, kind] as const,
 };
 
 export const crossPromotionPlansApi = {
+  listAll: async () => (await api.get<CrossPromotionPlan[]>(basePath)).data,
   list: async (kind: CrossPromotionPlanKind) =>
     (await api.get<CrossPromotionPlan[]>(basePath, { params: { kind } })).data,
   saveDraft: async (

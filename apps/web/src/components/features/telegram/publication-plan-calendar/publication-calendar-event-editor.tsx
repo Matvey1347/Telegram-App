@@ -133,6 +133,9 @@ export function PublicationCalendarEventEditor({
       queryClient.invalidateQueries({
         queryKey: crossPromotionPlanKeys.list("DIRECT_MUTUAL"),
       }),
+      queryClient.invalidateQueries({
+        queryKey: crossPromotionPlanKeys.combined,
+      }),
       queryClient.invalidateQueries({ queryKey: telegramChannelKeys.lists() }),
       queryClient.invalidateQueries({
         queryKey: telegramChannelKeys.cardLists(),

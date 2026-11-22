@@ -86,6 +86,34 @@ describe('TelegramAiPostingGeneratorService', () => {
     expect(gateway.execute).not.toHaveBeenCalled();
   });
 
+  it('loads the assigned main invite link for the generated channel ending', async () => {
+    prisma.telegramChannel.findFirst.mockResolvedValue({
+      language: 'en',
+      photoUrl: null,
+      title: 'Private channel',
+      username: null,
+      description: null,
+      inviteLink: null,
+      defaultInviteLink: { url: 'https://t.me/+mainInvite', isRevoked: false },
+      publicInviteLink: null,
+      presentationIcon: null,
+    });
+    prisma.telegramAiPostingSettings.findFirst.mockResolvedValue(null);
+
+    await expect(service.generate('user-1', 'channel-1', 1)).rejects.toThrow();
+
+    expect(prisma.telegramChannel.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'channel-1', workspaceId: 'ws-1' },
+        select: expect.objectContaining({
+          defaultInviteLink: { select: { url: true, isRevoked: true } },
+          publicInviteLink: { select: { url: true, isRevoked: true } },
+        }),
+      }),
+    );
+    expect(gateway.execute).not.toHaveBeenCalled();
+  });
+
   it('bounds planning context while retaining channel rules and source context', () => {
     const bulky = 'Текст'.repeat(12000);
     const prompt = telegramAiPostingPlanPrompt(

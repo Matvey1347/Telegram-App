@@ -235,6 +235,38 @@ describe("SaleDetailsModal", () => {
     );
   });
 
+  it("saves the selected publication date after finance accounts refresh", async () => {
+    const user = userEvent.setup();
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    const props = {
+      open: true,
+      onClose: vi.fn(),
+      sale,
+      channels: [{ id: "channel-1", title: "Psychology" }] as never[],
+      productsByChannelId: {},
+      settings: undefined,
+      rates: undefined,
+      onSave,
+      onAction: vi.fn(),
+    };
+    const { rerender } = render(<SaleDetailsModal {...props} accounts={[]} />);
+    await user.click(screen.getByRole("button", { name: "Edit placement Psychology" }));
+    await user.click(screen.getByRole("button", { name: "Select Publication date" }));
+    await user.click(screen.getAllByRole("button", { name: /^26$/ })[0]);
+
+    rerender(<SaleDetailsModal {...props} accounts={[{ id: "finance-account" } as never]} />);
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+
+    expect(onSave).toHaveBeenCalledWith(
+      sale,
+      expect.objectContaining({
+        placements: [
+          expect.objectContaining({ scheduledAt: "2026-08-26T16:00:00.000Z" }),
+        ],
+      }),
+    );
+  });
+
   it("applies a changed common time to every placement in the deal", async () => {
     const user = userEvent.setup();
     const onSave = vi.fn().mockResolvedValue(undefined);

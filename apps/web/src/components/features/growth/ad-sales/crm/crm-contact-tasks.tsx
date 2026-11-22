@@ -2,7 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, BellRing, Plus } from "lucide-react";
+import { BellRing, Plus } from "lucide-react";
 import type { CrmContact } from "@telegram-system/shared";
 import {
   Button,
@@ -10,6 +10,7 @@ import {
   FormField,
   Input,
   Modal,
+  ModalBackButton,
   TimeInput,
   isValidTimeInputValue,
   localDateTimeInputToIso,
@@ -120,14 +121,7 @@ export function CrmContactTasks({
         size="sm"
         allowOverflow
         leadingHeaderAction={
-          <button
-            type="button"
-            aria-label="Back to tasks"
-            onClick={() => setCreating(false)}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-neutral-700 text-neutral-300 hover:bg-neutral-800"
-          >
-            <ArrowLeft size={17} />
-          </button>
+          <ModalBackButton label="Back to tasks" onClick={() => setCreating(false)} />
         }
       >
         <form onSubmit={submit} className="space-y-3">

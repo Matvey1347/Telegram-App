@@ -223,7 +223,8 @@ describe("TelegramChannelMessageTemplatesModal", () => {
     await user.click(actions.getByRole("menuitem", { name: "Duplicate All Channels" }));
 
     expect(screen.getByDisplayValue("All Channels copy")).toBeVisible();
-    expect(screen.getByText("Draft saved automatically")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Back to templates" })).toBeVisible();
+    expect(screen.queryByText("Draft saved automatically")).not.toBeInTheDocument();
   });
 
   it("shows only a preview skeleton and never creates a draft while editing a saved template", async () => {
@@ -239,7 +240,8 @@ describe("TelegramChannelMessageTemplatesModal", () => {
     expect(
       screen.getByRole("status", { name: "Loading message template preview" }),
     ).toBeVisible();
-    expect(screen.getByText("Changes are applied after saving")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Back to templates" })).toBeVisible();
+    expect(screen.queryByText("Changes are applied after saving")).not.toBeInTheDocument();
     expect(
       screen.queryByText("Draft saved automatically"),
     ).not.toBeInTheDocument();

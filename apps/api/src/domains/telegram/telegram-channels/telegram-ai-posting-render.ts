@@ -40,6 +40,9 @@ function renderInline(source: string): string {
       }
     },
   );
+  value = value.replace(/(?<![\p{L}\p{N}_])#\p{L}[\p{L}\p{N}_]*/gu, (tag) =>
+    protect(escapeHtml(tag.replace(/_+/g, "_").replace(/_$/, ""))),
+  );
   value = value.replace(/\*\*([^*\n]+)\*\*/g, (_match, text: string) =>
     protect(`<b>${renderInline(text)}</b>`),
   );

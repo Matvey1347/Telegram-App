@@ -1,6 +1,9 @@
 "use client";
 
 import type { ResolvedEmoji } from "@/lib/api";
+import { telegramChannelsApi } from "@/lib/api";
+import { workspaceKeys } from "@/lib/query-keys";
+import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { PremiumEmoji } from "./premium-emoji";
 
@@ -33,8 +36,43 @@ export function IconAvatar({
   bordered?: boolean;
   decorative?: boolean;
 }) {
-  const hasEmoji = icon?.type === "unicode";
-  const hasImage = icon?.type === "image";
+  const customEmojiId =
+    icon?.type === "unicode" ? icon.telegramCustomEmojiId : null;
+  const customEmojiPacks = useQuery({
+    queryKey: workspaceKeys.telegramCustomEmojiPacks(),
+    queryFn: () => telegramChannelsApi.customEmojiPacks(),
+    enabled: Boolean(
+      customEmojiId &&
+        icon?.type === "unicode" &&
+        !icon.telegramCustomEmojiAssetUrl &&
+        !icon.telegramCustomEmojiRenderAssetUrl,
+    ),
+    staleTime: 5 * 60_000,
+  });
+  const resolvedCustomEmoji = customEmojiId
+    ? (customEmojiPacks.data?.packs ?? []).flatMap((pack) => {
+        const emoji = pack.emojis.find(
+          (item) => item.documentId === customEmojiId,
+        );
+        return emoji
+          ? [{
+              type: "unicode" as const,
+              value: emoji.alt || "◇",
+              name: emoji.alt || pack.title,
+              telegramCustomEmojiId: emoji.documentId,
+              telegramCustomEmojiKind: emoji.kind,
+              telegramCustomEmojiAssetUrl: emoji.assetUrl,
+              telegramCustomEmojiRenderAssetUrl: emoji.renderAssetUrl,
+            }]
+          : [];
+      })[0] ?? null
+    : null;
+  const displayIcon =
+    icon?.type === "unicode" && resolvedCustomEmoji
+      ? { ...icon, ...resolvedCustomEmoji }
+      : icon;
+  const hasEmoji = displayIcon?.type === "unicode";
+  const hasImage = displayIcon?.type === "image";
   const base = `inline-flex shrink-0 items-center justify-center overflow-hidden rounded-md ${
     bordered && !hasEmoji && !hasImage ? "border border-neutral-700" : ""
   } ${
@@ -44,12 +82,12 @@ export function IconAvatar({
 
   const fallback = (Array.from(label?.trim() || "")[0] || "·").toUpperCase();
 
-  if (icon?.type === "image") {
+  if (displayIcon?.type === "image") {
     return (
       <AvatarImage
-        key={icon.url}
-        url={icon.url}
-        alt={decorative ? "" : (label ?? icon.name ?? "")}
+        key={displayIcon.url}
+        url={displayIcon.url}
+        alt={decorative ? "" : (label ?? displayIcon.name ?? "")}
         className={base}
         fallbackClassName={fallbackClassName}
         fallback={fallback}
@@ -57,9 +95,9 @@ export function IconAvatar({
     );
   }
 
-  if (icon?.type === "unicode") {
+  if (displayIcon?.type === "unicode") {
     return (
-      <PremiumEmoji icon={icon} className={`${base} ${emojiSizes[size]}`} />
+      <PremiumEmoji icon={displayIcon} className={`${base} ${emojiSizes[size]}`} />
     );
   }
 

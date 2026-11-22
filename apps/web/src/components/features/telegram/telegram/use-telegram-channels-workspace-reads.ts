@@ -2,7 +2,6 @@
 
 import { useQuery } from "@tanstack/react-query";
 import {
-  advertisingChannelsApi,
   currenciesApi,
   telegramChannelNetworksApi,
   telegramChannelsApi,
@@ -10,9 +9,7 @@ import {
 } from "@/lib/api";
 import { networkKeys, telegramChannelKeys } from "@/lib/query-keys";
 import {
-  type TelegramAccountFilter as AccountFilter,
   type TelegramChannelLifecycleFilter as ChannelLifecycleTab,
-  type TelegramChannelOwnershipFilter as ChannelFilter,
   type TelegramChannelsTab as TelegramTab,
 } from "@/components/features/telegram/telegram/telegram-channels-route-state";
 
@@ -21,8 +18,6 @@ const CHANNEL_CARD_READ_MODEL_VERSION = "content-horizon-v2";
 export function useTelegramChannelsWorkspaceReads({
   tab,
   lifecycleTab,
-  channelFilter,
-  accountFilter,
   networkFormOpen,
   editingNetwork,
   messageTemplatesOpen,
@@ -30,8 +25,6 @@ export function useTelegramChannelsWorkspaceReads({
 }: {
   tab: TelegramTab;
   lifecycleTab: ChannelLifecycleTab;
-  channelFilter: ChannelFilter;
-  accountFilter: AccountFilter;
   networkFormOpen: boolean;
   editingNetwork: TelegramChannelNetwork | null;
   messageTemplatesOpen: boolean;
@@ -45,15 +38,16 @@ export function useTelegramChannelsWorkspaceReads({
     queryKey: [
       ...telegramChannelKeys.lifecycleList(
         lifecycleTab,
-        channelFilter === "own",
+        true,
       ),
       CHANNEL_CARD_READ_MODEL_VERSION,
     ],
     queryFn: () =>
-      telegramChannelsApi.listWithCounts(lifecycleTab, channelFilter === "own"),
-    // Channel cards combine several analytical read models. Keep their result
-    // for a day and let domain mutations invalidate it when relevant data changes.
-    staleTime: 24 * 60 * 60_000,
+      telegramChannelsApi.listWithCounts(lifecycleTab, true, true),
+    // Keep rendering persisted cards while the active list is refreshed.
+    staleTime: 60_000,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
     enabled:
       tab === "channels" ||
       networkFormOpen ||
@@ -90,16 +84,6 @@ export function useTelegramChannelsWorkspaceReads({
     queryFn: currenciesApi.listLatestRates,
     enabled: tab === "networks",
   });
-  const {
-    data: people,
-    isLoading: peopleLoading,
-    error: peopleError,
-  } = useQuery({
-    queryKey: ["advertising-people"],
-    queryFn: advertisingChannelsApi.list,
-    enabled: tab === "accounts" && accountFilter === "people",
-  });
-
   return {
     channels,
     channelCounts,
@@ -110,8 +94,5 @@ export function useTelegramChannelsWorkspaceReads({
     networksError,
     currencySettings,
     rates,
-    people,
-    peopleLoading,
-    peopleError,
   };
 }

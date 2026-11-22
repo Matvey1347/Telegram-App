@@ -12,7 +12,8 @@ import type {
   ResolvedEmoji,
 } from "@telegram-system/shared";
 import type { TelegramChannel, TelegramChannelNetwork } from "@/lib/api";
-import { telegramSystemBotApi } from "@/lib/api";
+import { telegramChannelsApi, telegramSystemBotApi } from "@/lib/api";
+import { workspaceKeys } from "@/lib/query-keys";
 import {
   Button,
   Card,
@@ -27,7 +28,6 @@ import {
   renderTelegramChannelMessageTemplate,
 } from "./telegram-channel-message-template-format";
 import {
-  TelegramChannelMessageTemplateEditorHeader,
   TelegramChannelMessageTemplateEditorTabs,
   type TelegramChannelMessageTemplateEditorSection,
 } from "./telegram-channel-message-template-editor-tabs";
@@ -59,7 +59,6 @@ export function TelegramChannelMessageTemplateEditor({
   initial,
   onDraftChange,
   onClearDraft,
-  onBack,
   onSaved,
 }: {
   channels: TelegramChannel[];
@@ -73,7 +72,6 @@ export function TelegramChannelMessageTemplateEditor({
     preview: WorkspaceDraftPreview,
   ) => void;
   onClearDraft: () => void;
-  onBack: () => void;
   onSaved: () => void;
 }) {
   const sourceForm = initial
@@ -298,6 +296,12 @@ export function TelegramChannelMessageTemplateEditor({
     enabled: stableSourceIds.length > 0,
     staleTime: 30_000,
   });
+  const channelAvatarEmojiPacks = useQuery({
+    queryKey: workspaceKeys.telegramCustomEmojiPacks(),
+    queryFn: () => telegramChannelsApi.customEmojiPacks(),
+    enabled: stableSourceIds.length > 0,
+    staleTime: 5 * 60_000,
+  });
   const orderedSourceChannels = useMemo(() => {
     const byId = new Map(
       (sourceQuery.data?.channels || []).map((channel) => [
@@ -431,10 +435,6 @@ export function TelegramChannelMessageTemplateEditor({
 
   return (
     <div className="min-w-0 space-y-4">
-      <TelegramChannelMessageTemplateEditorHeader
-        onBack={onBack}
-        draftAutosaveEnabled={!savedTemplateId}
-      />
       <div className="grid min-w-0 items-start gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(300px,.75fr)]">
         <Card className="min-w-0 space-y-4">
           <div className="grid items-end gap-2 sm:grid-cols-[40px_minmax(0,1fr)]">
@@ -451,6 +451,7 @@ export function TelegramChannelMessageTemplateEditor({
                 }}
                 allowImages={false}
                 buttonLabel="Choose emoji"
+                iconOnly
               />
             </FormField>
             <FormField label="Name (optional)">
@@ -581,7 +582,25 @@ export function TelegramChannelMessageTemplateEditor({
               invite links.
             </p>
           ) : null}
-          <div className="flex flex-wrap justify-end gap-2 border-t border-neutral-800 pt-4">
+        </Card>
+        <div className="flex min-w-0 flex-col gap-3 xl:sticky xl:top-4">
+          {sourceQuery.isFetching ? (
+            <TelegramChannelMessageTemplatePreviewSkeleton />
+          ) : sourceQuery.isError ? (
+            <ErrorState text="Could not load current channel data for the preview." />
+          ) : stableSourceIds.length ? (
+            <TelegramPostPreview
+              channelTitle={title.trim() || "Generated channel list"}
+              text={renderedText}
+              imageUrls={[]}
+              customEmojiPacks={channelAvatarEmojiPacks.data?.packs ?? []}
+            />
+          ) : (
+            <Card className="text-sm text-neutral-400">
+              Select channels or a network to build the Telegram preview.
+            </Card>
+          )}
+          <div className="sticky bottom-0 flex flex-wrap justify-end gap-2 border-t border-neutral-800 bg-neutral-900/95 py-3 backdrop-blur-sm">
             <Button
               type="button"
               variant="secondary"
@@ -600,23 +619,6 @@ export function TelegramChannelMessageTemplateEditor({
               {save.isPending ? "Saving…" : "Save template"}
             </Button>
           </div>
-        </Card>
-        <div className="xl:sticky xl:top-4">
-          {sourceQuery.isFetching ? (
-            <TelegramChannelMessageTemplatePreviewSkeleton />
-          ) : sourceQuery.isError ? (
-            <ErrorState text="Could not load current channel data for the preview." />
-          ) : stableSourceIds.length ? (
-            <TelegramPostPreview
-              channelTitle={title.trim() || "Generated channel list"}
-              text={renderedText}
-              imageUrls={[]}
-            />
-          ) : (
-            <Card className="text-sm text-neutral-400">
-              Select channels or a network to build the Telegram preview.
-            </Card>
-          )}
         </div>
       </div>
     </div>

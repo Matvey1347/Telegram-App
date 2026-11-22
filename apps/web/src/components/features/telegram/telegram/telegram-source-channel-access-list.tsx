@@ -34,7 +34,7 @@ export function TelegramSourceChannelAccessList({
     queryKey: ["telegram-source-channels", sourceType, sourceId],
     queryFn,
     enabled: modalOpen,
-    staleTime: 5 * 60 * 1000,
+    staleTime: sourceType === "MTPROTO" ? 0 : 5 * 60_000,
   });
 
   return (

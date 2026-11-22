@@ -234,7 +234,7 @@ describe('Inbox follow-up notification destinations', () => {
       TelegramCrmInternalNotificationProjector['refreshTask']
     >[1] = {
       ...task,
-      metadata: { origin: 'MANUAL_INSTAGRAM', channel: 'INSTAGRAM' },
+      metadata: { origin: 'CRM', channel: 'INSTAGRAM' },
     };
     await service.refreshTask(tx as never, manualTask);
     expect(notifications.insertMany).toHaveBeenCalledWith(tx, [

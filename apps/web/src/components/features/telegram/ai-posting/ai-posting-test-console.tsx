@@ -1,8 +1,16 @@
 "use client";
 
+import type { AiPostingWatermarkPreviewSettings } from "./ai-posting-watermark-preview";
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Trash2 } from "lucide-react";
+import {
+  CheckCircle2,
+  Circle,
+  CircleX,
+  Loader2,
+  ListChecks,
+  Trash2,
+} from "lucide-react";
 import { api, streamProgressAction } from "@/lib/api";
 import {
   aiPostingTestRunKeys,
@@ -29,6 +37,8 @@ import { useOperationFeedback } from "@/providers/toast-provider";
 export function AiPostingTestConsole({
   channelId,
   channelTitle,
+  channelPhotoUrl,
+  watermarkPreview,
   customEmojiPacks,
   categoryIcons,
   preferenceIcons,
@@ -38,6 +48,8 @@ export function AiPostingTestConsole({
 }: {
   channelId: string;
   channelTitle: string;
+  channelPhotoUrl?: string | null;
+  watermarkPreview?: AiPostingWatermarkPreviewSettings;
   customEmojiPacks?: TelegramCustomEmojiPackSummary[];
   categoryIcons?: Record<string, ResolvedEmoji>;
   preferenceIcons?: Record<string, ResolvedEmoji>;
@@ -197,7 +209,7 @@ export function AiPostingTestConsole({
     }) => {
       setGenerationProgress({
         count: 1,
-        stages: {},
+        stages: { "0:planning": "RUNNING" },
         complete: 0,
         failed: false,
       });
@@ -307,7 +319,17 @@ export function AiPostingTestConsole({
       Math.min(5, Number(requestedCount) || dailyPostCount),
     );
     completedPublications.current.clear();
-    setGenerationProgress({ count, stages: {}, complete: 0, failed: false });
+    setGenerationProgress({
+      count,
+      stages: Object.fromEntries(
+        Array.from({ length: count }, (_, index) => [
+          `${index}:planning`,
+          "RUNNING",
+        ]),
+      ),
+      complete: 0,
+      failed: false,
+    });
     generationOperation.current = startOperation({
       id: `ai-posting-generate:${channelId}:${Date.now()}`,
       title: "Генерация AI Posting",
@@ -464,7 +486,6 @@ export function AiPostingTestConsole({
   return (
     <div className="space-y-4" aria-labelledby="ai-posting-test-title">
       <AiPostingGenerationControls
-        dailyPostCount={dailyPostCount}
         requestedCount={requestedCount}
         pending={generate.isPending}
         busy={
@@ -474,6 +495,27 @@ export function AiPostingTestConsole({
         settingsReady={settingsReady}
         onCountChange={setRequestedCount}
         onGenerate={startGeneration}
+        historyAction={(runs.data?.length ?? 0) > 0 ? (
+          <div className="flex flex-wrap items-center gap-2">
+            {previousRunCount > 0 && (
+              <Button variant="secondary" aria-expanded={historyExpanded}
+                onClick={() => setHistoryExpanded((expanded) => !expanded)}>
+                {historyExpanded ? "Скрыть" : `Показать · ${previousRunCount}`}
+              </Button>
+            )}
+            <Button
+              variant="danger"
+              disabled={
+                clearRuns.isPending ||
+                generate.isPending ||
+                regenerateFailure.isPending
+              }
+              onClick={() => setClearHistoryOpen(true)}
+            >
+              <Trash2 size={15} /> Очистить
+            </Button>
+          </div>
+        ) : null}
       />
       {progress && (
         <div
@@ -485,31 +527,68 @@ export function AiPostingTestConsole({
             {progress.failed ? " · есть ошибки" : ""}
           </strong>
           {Array.from({ length: progress.count }, (_, index) => (
-            <div key={index} className="mt-2 text-neutral-300">
-              <span>Публикация {index + 1}: </span>
-              {(["planning", "text", "review", "image"] as const).map(
-                (stage) => {
-                  const status = progress.stages[`${index}:${stage}`];
-                  const label = {
-                    planning: "Тема",
-                    text: "Текст",
-                    review: "Проверка",
-                    image: "Медиа",
-                  }[stage];
-                  return (
-                    <span key={stage} className="mr-2">
-                      {label}:{" "}
-                      {status === "COMPLETED"
+            <div
+              key={index}
+              className="mt-3 rounded-md border border-neutral-800 bg-neutral-950/60 p-3 text-neutral-300"
+            >
+              <div className="flex items-center gap-2 font-medium text-neutral-100">
+                <ListChecks
+                  aria-hidden="true"
+                  size={16}
+                  className="text-blue-300"
+                />
+                Публикация {index + 1}
+              </div>
+              <div className="mt-2 grid gap-1 pl-6 sm:grid-cols-2">
+                {(["planning", "text", "review", "image"] as const).map(
+                  (stage) => {
+                    const status = progress.stages[`${index}:${stage}`];
+                    const label = {
+                      planning: "Тема",
+                      text: "Текст",
+                      review: "Проверка",
+                      image: "Медиа",
+                    }[stage];
+                    const statusLabel =
+                      status === "COMPLETED"
                         ? "готово"
                         : status === "FAILED"
                           ? "ошибка"
                           : status === "RUNNING"
                             ? "в процессе"
-                            : "ожидает"}
-                    </span>
-                  );
-                },
-              )}
+                            : "ожидает";
+                    const StatusIcon =
+                      status === "COMPLETED"
+                        ? CheckCircle2
+                        : status === "FAILED"
+                          ? CircleX
+                          : status === "RUNNING"
+                            ? Loader2
+                            : Circle;
+                    const iconClass =
+                      status === "COMPLETED"
+                        ? "text-emerald-400"
+                        : status === "FAILED"
+                          ? "text-rose-400"
+                          : status === "RUNNING"
+                            ? "animate-spin text-blue-300"
+                            : "text-neutral-500";
+                    return (
+                      <span
+                        key={stage}
+                        className="inline-flex items-center gap-1.5 text-sm"
+                      >
+                        <StatusIcon
+                          aria-hidden="true"
+                          size={15}
+                          className={iconClass}
+                        />
+                        {label}: {statusLabel}
+                      </span>
+                    );
+                  },
+                )}
+              </div>
             </div>
           ))}
         </div>
@@ -535,42 +614,14 @@ export function AiPostingTestConsole({
           Не удалось загрузить историю тестов.
         </div>
       )}
-      {(runs.data ?? []).length > 0 && (
-        <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-          <h3 className="text-sm font-semibold text-neutral-200">
-            {historyExpanded ? "История генераций" : "Последняя генерация"}
-          </h3>
-          <div className="flex flex-wrap gap-2">
-            {previousRunCount > 0 && (
-              <Button
-                variant="secondary"
-                aria-expanded={historyExpanded}
-                onClick={() => setHistoryExpanded((expanded) => !expanded)}
-              >
-                {historyExpanded
-                  ? "Свернуть прошлые варианты"
-                  : `Показать прошлые варианты · ${previousRunCount}`}
-              </Button>
-            )}
-            <Button
-              variant="danger"
-              disabled={
-                clearRuns.isPending ||
-                generate.isPending ||
-                regenerateFailure.isPending
-              }
-              onClick={() => setClearHistoryOpen(true)}
-            >
-              <Trash2 size={15} /> Очистить прошлые варианты
-            </Button>
-          </div>
-        </div>
-      )}
       {displayedRuns.map((run) => (
         <AiPostingTestRunCard
           key={run.id}
           run={run}
           channelTitle={channelTitle}
+          channelId={channelId}
+          channelPhotoUrl={channelPhotoUrl}
+          watermarkPreview={watermarkPreview}
           customEmojiPacks={customEmojiPacks}
           categoryIcons={categoryIcons}
           preferenceIcons={preferenceIcons}

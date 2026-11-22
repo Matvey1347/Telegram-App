@@ -23,15 +23,18 @@ vi.mock(
   () => ({
     TelegramPostPreview: ({
       text,
+      channelPhotoUrl,
       onTextChange,
     }: {
       text: string;
+      channelPhotoUrl?: string | null;
       onTextChange?: (value: string) => void;
     }) =>
       onTextChange ? (
         <textarea
           aria-label="Редактировать текст публикации"
           value={text}
+          data-channel-photo={channelPhotoUrl}
           onChange={(event) => onTextChange(event.target.value)}
         />
       ) : (
@@ -72,7 +75,7 @@ describe("AiPostingTestConsole", () => {
 
     fireEvent.click(
       await screen.findByRole("button", {
-        name: "Сгенерировать на день",
+        name: "Сгенерировать",
       }),
     );
 
@@ -83,6 +86,29 @@ describe("AiPostingTestConsole", () => {
         expect.any(Function),
       ),
     );
+  });
+
+  it("shows an active planning spinner immediately while generation is waiting", async () => {
+    vi.mocked(streamProgressAction).mockImplementation(
+      () => new Promise(() => undefined),
+    );
+    renderWithProviders(
+      <AiPostingTestConsole
+        channelId="channel-1"
+        channelTitle="Channel"
+        dailyPostCount={1}
+        settingsReady
+      />,
+    );
+
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "Сгенерировать",
+      }),
+    );
+
+    expect(await screen.findByText("Тема: в процессе")).toBeInTheDocument();
+    expect(screen.getByText("Текст: ожидает")).toBeInTheDocument();
   });
 
   it("allows an ad hoc publication count", async () => {
@@ -101,7 +127,7 @@ describe("AiPostingTestConsole", () => {
       },
     );
     fireEvent.click(
-      screen.getByRole("button", { name: "Сгенерировать · 2 публикации" }),
+      screen.getByRole("button", { name: "Сгенерировать" }),
     );
     await waitFor(() =>
       expect(streamProgressAction).toHaveBeenCalledWith(
@@ -139,7 +165,7 @@ describe("AiPostingTestConsole", () => {
       screen.getByRole("spinbutton", { name: "Число публикаций" }),
     ).toHaveValue(1);
     fireEvent.click(
-      screen.getByRole("button", { name: "Сгенерировать · 1 публикацию" }),
+      screen.getByRole("button", { name: "Сгенерировать" }),
     );
     await waitFor(() =>
       expect(streamProgressAction).toHaveBeenCalledWith(
@@ -174,7 +200,7 @@ describe("AiPostingTestConsole", () => {
     );
     fireEvent.click(
       await screen.findByRole("button", {
-        name: "Сгенерировать на день",
+        name: "Сгенерировать",
       }),
     );
     expect(
@@ -200,20 +226,24 @@ describe("AiPostingTestConsole", () => {
       <AiPostingTestConsole
         channelId="channel-1"
         channelTitle="Channel"
+        channelPhotoUrl="https://media.example/channel.jpg"
         settingsReady
       />,
     );
 
-    expect(await screen.findByText("Последняя генерация")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Очистить" })).toBeInTheDocument();
+    expect(screen.queryByText("Последняя генерация")).not.toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Редактировать текст публикации" }))
+      .toHaveAttribute("data-channel-photo", "https://media.example/channel.jpg");
     expect(screen.getByText("Идея: A useful topic")).toBeInTheDocument();
     expect(screen.queryByText("Идея: An older topic")).not.toBeInTheDocument();
     fireEvent.click(
-      screen.getByRole("button", { name: /Показать прошлые варианты/ }),
+      screen.getByRole("button", { name: /Показать/ }),
     );
     expect(await screen.findByText("Идея: An older topic")).toBeInTheDocument();
 
     fireEvent.click(
-      screen.getByRole("button", { name: /Очистить прошлые варианты/ }),
+      screen.getByRole("button", { name: /Очистить/ }),
     );
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Очистить историю" }));
@@ -307,7 +337,7 @@ describe("AiPostingTestConsole", () => {
 
     expect(
       await screen.findByRole("button", {
-        name: "Сгенерировать на день",
+        name: "Сгенерировать",
       }),
     ).toBeDisabled();
     expect(api.post).not.toHaveBeenCalled();
@@ -324,7 +354,7 @@ describe("AiPostingTestConsole", () => {
     );
     fireEvent.click(
       await screen.findByRole("button", {
-        name: "Сгенерировать на день",
+        name: "Сгенерировать",
       }),
     );
     expect(
@@ -391,7 +421,7 @@ describe("AiPostingTestConsole", () => {
       />,
     );
 
-    await screen.findByText("Последняя генерация");
+    await screen.findByRole("button", { name: "Очистить" });
     expect(screen.queryByText(/Источники: 1 доступны/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Материал собран/)).not.toBeInTheDocument();
   });
@@ -418,7 +448,7 @@ describe("AiPostingTestConsole", () => {
       />,
     );
 
-    await screen.findByText("Последняя генерация");
+    await screen.findByRole("button", { name: "Очистить" });
     expect(screen.queryByText(/Источники: 0 доступны/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Недоступен/)).not.toBeInTheDocument();
   });
@@ -445,7 +475,7 @@ describe("AiPostingTestConsole", () => {
       />,
     );
 
-    await screen.findByText("Последняя генерация");
+    await screen.findByRole("button", { name: "Очистить" });
     expect(
       screen.queryByText(/Отклонён проверкой доступа/),
     ).not.toBeInTheDocument();
@@ -490,7 +520,7 @@ describe("AiPostingTestConsole", () => {
     );
 
     expect(
-      await screen.findByText("Все 3 публикации готовы с медиа."),
+      await screen.findByText("Публикация 1 из 3"),
     ).toBeInTheDocument();
     expect(screen.getByText(/Рубрика:/)).toBeInTheDocument();
     fireEvent.click(
@@ -522,7 +552,7 @@ describe("AiPostingTestConsole", () => {
     );
 
     expect(
-      await screen.findByText("2 из 3 публикаций готовы с медиа."),
+      await screen.findByText("Публикация 1 из 3"),
     ).toBeInTheDocument();
     expect(screen.getByText(/Рубрика:/)).toBeInTheDocument();
     fireEvent.click(
@@ -838,7 +868,7 @@ describe("AiPostingTestConsole", () => {
     let version = 1;
     vi.mocked(api.get).mockImplementation(async () => {
       const run = previewRun();
-      return { data: [{ ...run, version }] };
+      return { data: [{ ...run, version, publications: run.publications.map((post) => ({ ...post, topic: `Topic version ${version}` })) }] };
     });
     vi.mocked(api.post).mockImplementation(async () => {
       version = 2;
@@ -858,7 +888,7 @@ describe("AiPostingTestConsole", () => {
       "Действие не завершилось. Откройте запуск ниже",
     );
     await waitFor(() => expect(api.get).toHaveBeenCalledTimes(2));
-    expect(await screen.findByText(/запуск v2/)).toBeInTheDocument();
+    expect(await screen.findByText("Идея: Topic version 2")).toBeInTheDocument();
   });
 
   it("offers full regeneration for a failed publication topic", async () => {

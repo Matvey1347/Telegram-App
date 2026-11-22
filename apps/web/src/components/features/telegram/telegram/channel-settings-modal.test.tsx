@@ -192,7 +192,6 @@ describe("ChannelSettingsModal", () => {
               mutualPromotionInviteLinkIds: ["invite-vp"],
               adBaseCpm: 300,
               internalCpm: 200,
-              seedSubscribersCount: 100,
               autoSyncEnabled: true,
               preview: {
                 sourcesCount: 1,
@@ -217,30 +216,26 @@ describe("ChannelSettingsModal", () => {
       "true",
     );
     expect(screen.getByLabelText("Appearance URL")).toBeInTheDocument();
-    await waitFor(() => expect(screen.getByText("67%")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("80%")).toBeInTheDocument());
     expect(screen.getAllByTitle("Fully configured")).toHaveLength(3);
     expect(screen.getAllByTitle("Partially configured")).toHaveLength(2);
-    expect(screen.getByRole("tab", { name: "Schedule" })).toContainElement(
-      screen.getByTitle("Not configured"),
-    );
+    expect(screen.getByRole("tab", { name: "Schedule" })).toBeInTheDocument();
     expect(
       screen.getAllByRole("tab").map((tab) => tab.getAttribute("aria-label")),
     ).toEqual([
       "Appearance",
       "Economics",
       "Schedule",
-      "Seed",
       "Bot",
       "Sources",
     ]);
 
     await userEvent.click(screen.getByRole("tab", { name: "Economics" }));
     expect(screen.getByLabelText("Draft CPM")).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("tab", { name: "Seed" }));
-    expect(screen.getByText("Own / seed subscribers")).toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: "Seed" })).not.toBeInTheDocument();
   });
 
-  it("keeps one draft across tabs and saves no-seed together with other settings", async () => {
+  it("keeps one draft across tabs", async () => {
     mocks.analyticsSources.mockReset().mockResolvedValue({ sources: [] });
     mocks.updateQuiet.mockReset().mockResolvedValue({});
     mocks.getScheduleAssignment.mockReset().mockResolvedValue(null);
@@ -281,16 +276,6 @@ describe("ChannelSettingsModal", () => {
       "https://tgstat.com/new",
     );
 
-    await userEvent.click(screen.getByRole("tab", { name: "Seed" }));
-    await userEvent.click(screen.getByRole("button", { name: "No seed" }));
-    expect(screen.queryByText("Own / seed subscribers")).toBeNull();
-    expect(screen.getByText(/marked as configured/)).toBeInTheDocument();
-    expect(
-      screen
-        .getByRole("tab", { name: "Seed" })
-        .querySelector('[title="Fully configured"]'),
-    ).not.toBeNull();
-
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => expect(mocks.updateQuiet).toHaveBeenCalledOnce());
     expect(mocks.updateQuiet).toHaveBeenCalledWith(
@@ -299,11 +284,6 @@ describe("ChannelSettingsModal", () => {
         tgStatUrl: "https://tgstat.com/new",
         adBaseCpm: 450,
         internalCpm: 175,
-        seedDisabled: true,
-        seedSubscribersCount: 0,
-        knownFakeSubscribersCount: 0,
-        ownViewsPerPost: 0,
-        ownReactionsPerPost: 0,
       }),
     );
     expect(onClose).not.toHaveBeenCalled();

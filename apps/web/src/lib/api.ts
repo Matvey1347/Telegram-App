@@ -302,7 +302,6 @@ export const {
 
 const marketingApi = createMarketingApi({
   api,
-  crud,
   quietCrud,
   getPaginated,
   quietMutationConfig,
@@ -311,7 +310,6 @@ const marketingApi = createMarketingApi({
 
 export const {
   promosApi,
-  advertisingChannelsApi,
   adCampaignsApi,
   telegramSyncApi,
   adHypothesesApi,

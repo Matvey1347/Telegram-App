@@ -5,6 +5,7 @@ export type Publication = {
   title: string;
   text: string;
   imageUrl: string | null;
+  imagePreviewUrl?: string | null;
   mediaPreference?: { id: string; name: string } | null;
   imageSourceId: string | null;
   savedPostId: string | null;
@@ -106,9 +107,25 @@ export const failureMessage: Record<string, string> = {
     "Медиа не создано: расчётный максимум запроса превышает лимит AI. Проверьте лимит стоимости запроса в настройках AI.",
   AI_POSTING_IMAGE_REFERENCE_UNAVAILABLE:
     "Не удалось загрузить референсы выбранного предпочтения. Проверьте их и повторите создание медиа.",
-  AI_POSTING_IMAGE_AVATAR_UNAVAILABLE: "Не удалось загрузить аватар канала для изображения. Проверьте аватар канала и повторите создание медиа.",
+  AI_POSTING_IMAGE_AVATAR_UNAVAILABLE:
+    "Не удалось загрузить аватар канала для изображения. Проверьте аватар канала и повторите создание медиа.",
   AI_POSTING_IMAGE_PROVIDER_FAILED: "Не удалось создать медиа у AI-провайдера.",
+  AI_POSTING_IMAGE_DUPLICATE: "Это изображение уже использовалось в канале. Создайте новое медиа.",
   AI_POSTING_IMAGE_STORAGE_FAILED: "Не удалось сохранить медиа в медиатеке.",
+  AI_POSTING_IMAGE_STORAGE_CONFIG_MISSING:
+    "Не настроено хранилище медиа. Проверьте параметры B2 в окружении API.",
+  AI_POSTING_IMAGE_STORAGE_AUTH_FAILED:
+    "Хранилище медиа отклонило авторизацию API. Проверьте ключ B2 и его права.",
+  AI_POSTING_IMAGE_STORAGE_BUCKET_FAILED:
+    "API не смогло найти настроенную папку хранилища медиа. Проверьте имя bucket в B2.",
+  AI_POSTING_IMAGE_STORAGE_CHECK_FAILED:
+    "Не удалось проверить наличие файла в хранилище медиа.",
+  AI_POSTING_IMAGE_STORAGE_UPLOAD_PREPARE_FAILED:
+    "Хранилище не выдало адрес для загрузки медиа.",
+  AI_POSTING_IMAGE_STORAGE_UPLOAD_FAILED:
+    "Не удалось загрузить изображение в хранилище B2. Повторите создание медиа.",
+  AI_POSTING_IMAGE_STORAGE_CONTENT_TYPE_UNSUPPORTED:
+    "Формат изображения не поддерживается медиатекой.",
   AI_POSTING_NO_DRAFTS_CREATED:
     "AI не смог подготовить ни одной публикации. Откройте запуск ниже: там указаны причины и замечания проверки.",
   AI_POSTING_GENERATION_FAILED:

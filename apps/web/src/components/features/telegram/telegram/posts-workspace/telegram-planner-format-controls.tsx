@@ -35,6 +35,7 @@ export function PlannerFormatEmojiPicker({
         void handleEmojiChange(emoji).catch(onError);
       }}
       buttonLabel={t("telegram.posts.icon.addEmoji")}
+      iconOnly
       className={className}
       iconClassName={iconClassName}
     />

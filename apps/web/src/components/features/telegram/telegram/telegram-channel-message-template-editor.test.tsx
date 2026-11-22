@@ -32,7 +32,7 @@ vi.mock("./telegram-text-editor", () => ({
 }));
 
 describe("TelegramChannelMessageTemplateEditor", () => {
-  it("uses an icon-only back action", () => {
+  it("keeps the template emoji control available in the editor", () => {
     iconPickerSpy.mockClear();
     const client = new QueryClient({
       defaultOptions: { queries: { retry: false } },
@@ -44,15 +44,11 @@ describe("TelegramChannelMessageTemplateEditor", () => {
           networks={[]}
           onDraftChange={vi.fn()}
           onClearDraft={vi.fn()}
-          onBack={vi.fn()}
           onSaved={vi.fn()}
         />
       </QueryClientProvider>,
     );
 
-    expect(
-      screen.getByRole("button", { name: "Back to templates" }),
-    ).toBeInTheDocument();
     expect(screen.queryByText("Back to templates")).not.toBeInTheDocument();
     expect(iconPickerSpy).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -72,7 +68,6 @@ describe("TelegramChannelMessageTemplateEditor", () => {
           networks={[]}
           onDraftChange={vi.fn()}
           onClearDraft={vi.fn()}
-          onBack={vi.fn()}
           onSaved={vi.fn()}
         />
       </QueryClientProvider>,
@@ -117,7 +112,6 @@ describe("TelegramChannelMessageTemplateEditor", () => {
           networks={[]}
           onDraftChange={onDraftChange}
           onClearDraft={vi.fn()}
-          onBack={vi.fn()}
           onSaved={vi.fn()}
         />
       </QueryClientProvider>,

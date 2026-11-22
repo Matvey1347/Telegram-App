@@ -67,6 +67,29 @@ export function commonAdSlotOptions(
   });
 }
 
+export function commonAdSlotOptionsForDates(
+  channelIds: string[],
+  dates: string[],
+  byChannel: Record<string, TelegramPublicationSlotOccurrence[]>,
+): SlotOption[] {
+  const uniqueDates = [...new Set(dates)].sort();
+  if (!channelIds.length || !uniqueDates.length) return [];
+  const perDate = uniqueDates.map((date) =>
+    commonAdSlotOptions(channelIds, date, byChannel).filter(
+      (option) => option.state === "AVAILABLE",
+    ),
+  );
+  const sharedTimes = perDate.length
+    ? perDate[0]!.filter((option) =>
+        perDate.every((options) => options.some((candidate) => candidate.time === option.time)),
+      )
+    : [];
+  return sharedTimes.map((option) => ({
+    ...option,
+    detail: "Available in all channels and selected dates",
+  }));
+}
+
 function dayRange(date: string) {
   const start = /^\d{4}-\d{2}-\d{2}$/.test(date)
     ? new Date(`${date}T00:00:00.000Z`).getTime()
@@ -78,9 +101,18 @@ function dayRange(date: string) {
   };
 }
 
+function dateRange(dates: string[]) {
+  const sorted = [...new Set(dates)].sort();
+  if (!sorted.length) return dayRange("");
+  const first = dayRange(sorted[0]!);
+  const last = dayRange(sorted.at(-1)!);
+  return { from: first.from, to: last.to };
+}
+
 export function CommonAdSlotOptions({
   channelIds,
   date,
+  dates,
   selectedTime,
   onSelect,
   occurrencesByChannel,
@@ -88,7 +120,8 @@ export function CommonAdSlotOptions({
   action,
 }: {
   channelIds: string[];
-  date: string;
+  date?: string;
+  dates?: string[];
   selectedTime: string;
   onSelect: (time: string) => void;
   /** Lets a multi-channel editor reuse one availability query for its rows. */
@@ -97,7 +130,12 @@ export function CommonAdSlotOptions({
   action?: ReactNode;
 }) {
   const ids = useMemo(() => [...new Set(channelIds)].sort(), [channelIds]);
-  const range = useMemo(() => dayRange(date), [date]);
+  const selectedDates = useMemo(
+    () => [...new Set(dates ?? (date ? [date] : []))].sort(),
+    [date, dates],
+  );
+  const range = useMemo(() => dateRange(selectedDates), [selectedDates]);
+  const isSharedDates = selectedDates.length > 1;
   const query = useQuery({
     queryKey: telegramPublicationScheduleKeys.occurrencesByChannels(ids, range),
     queryFn: () =>
@@ -105,21 +143,23 @@ export function CommonAdSlotOptions({
     enabled:
       occurrencesByChannel === undefined && !loading &&
       ids.length > 0 &&
-      /^\d{4}-\d{2}-\d{2}$/.test(date),
+      selectedDates.length > 0 && selectedDates.every((item) => /^\d{4}-\d{2}-\d{2}$/.test(item)),
     staleTime: 60_000,
   });
   const options = useMemo(
-    () => commonAdSlotOptions(ids, date, occurrencesByChannel ?? query.data ?? {}),
-    [ids, date, occurrencesByChannel, query.data],
+    () => isSharedDates
+      ? commonAdSlotOptionsForDates(ids, selectedDates, occurrencesByChannel ?? query.data ?? {})
+      : commonAdSlotOptions(ids, selectedDates[0] ?? "", occurrencesByChannel ?? query.data ?? {}),
+    [ids, isSharedDates, selectedDates, occurrencesByChannel, query.data],
   );
   const availableOptions = options.filter(
     (option) => option.state === "AVAILABLE",
   );
-  if (!ids.length || !date) return null;
+  if (!ids.length || !selectedDates.length) return null;
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-xs text-neutral-500">Advertising slots · {date}</p>
+        <p className="text-xs text-neutral-500">{isSharedDates ? "Common advertising slots · all selected dates" : `Advertising slots · ${selectedDates[0]}`}</p>
         {action}
       </div>
       {loading || (occurrencesByChannel === undefined && query.isPending) ? (
@@ -160,7 +200,9 @@ export function CommonAdSlotOptions({
           </div>
         ) : (
           <p className="text-xs text-neutral-500">
-            No available advertising slots for this date.
+            {isSharedDates
+              ? "No advertising slots are available on every selected date."
+              : "No available advertising slots for this date."}
           </p>
         )
       ) : null}

@@ -6,6 +6,7 @@ import type {
   TelegramMessageTemplateGroupMode,
 } from "@telegram-system/shared";
 import { Input, Select } from "@/components/ui/primitives";
+import { IconAvatar } from "@/components/icons/icon-avatar";
 
 export function TelegramChannelMessageTemplateOrder({
   channels,
@@ -78,7 +79,19 @@ export function TelegramChannelMessageTemplateOrder({
         className="flex flex-wrap items-center gap-2 rounded-lg border border-neutral-800 px-2 py-1.5"
       >
         <span className="min-w-0 flex-1 truncate text-sm text-neutral-200">
-          {channel.emojiSource} {channel.title}
+          {channel.iconPresentation ? (
+            <IconAvatar
+              icon={channel.iconPresentation}
+              label={channel.title}
+              size="xs"
+              decorative
+              bordered={false}
+              className="mr-1 inline-flex !h-5 !w-5 !rounded-none !bg-transparent"
+            />
+          ) : (
+            `${channel.emojiSource} `
+          )}
+          {channel.title}
         </span>
         {groupChannels && groupMode === "CUSTOM" ? (
           <Input
@@ -138,9 +151,20 @@ export function TelegramChannelMessageTemplateOrder({
                 className="space-y-1.5 rounded-lg border border-neutral-800 p-2"
               >
                 <label className="flex items-center gap-2 text-sm text-neutral-200">
-                  <span aria-hidden="true">
-                    {first.networkGroups[0]?.emojiSource || "📂"}
-                  </span>
+                  {first.networkGroups[0]?.iconPresentation ? (
+                    <IconAvatar
+                      icon={first.networkGroups[0].iconPresentation}
+                      label={group.label}
+                      size="xs"
+                      decorative
+                      bordered={false}
+                      className="!h-5 !w-5 !rounded-none !bg-transparent"
+                    />
+                  ) : (
+                    <span aria-hidden="true">
+                      {first.networkGroups[0]?.emojiSource || "📂"}
+                    </span>
+                  )}
                   <Input
                     aria-label={`Group name for ${group.label}`}
                     className="h-8 flex-1"

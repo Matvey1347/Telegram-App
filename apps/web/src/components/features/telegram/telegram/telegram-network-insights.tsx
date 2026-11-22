@@ -155,6 +155,7 @@ export function NetworkTrafficAttributionSummary({
   currencySettings?: CurrencySettings | null;
 }) {
   const [open, setOpen] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   if (!traffic?.sources.length) return null;
   const attributionPeriod = formatTrafficAttributionPeriod(
     traffic.attributionPeriod,
@@ -188,28 +189,36 @@ export function NetworkTrafficAttributionSummary({
 
   return (
     <>
-      <button
-        type="button"
+      <section
         className="mt-1.5 w-full rounded-md border border-neutral-800/80 bg-neutral-950/55 px-2 py-1.5 text-left transition hover:border-neutral-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-        onClick={() => setOpen(true)}
-        aria-label={`Open traffic attribution for ${networkName}`}
       >
         <span className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
-          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-neutral-300">
+          <button type="button" onClick={() => setOpen(true)} aria-label={`Open traffic attribution for ${networkName}`} className="inline-flex items-center gap-1.5 text-xs font-medium text-neutral-300">
             <UsersRound
               size={14}
               className="text-violet-300"
               aria-hidden="true"
             />
             Traffic sources
-          </span>
+          </button>
           {audiencePeriod ? (
             <span
               title={audiencePeriod.title}
               className="text-[10px] text-neutral-500"
             >
               {audiencePeriod.label}
-            </span>
+              <button
+            type="button"
+            aria-expanded={expanded}
+            className="text-xs text-neutral-400 hover:text-white"
+            onClick={(event) => {
+              event.stopPropagation();
+              setExpanded((value) => !value);
+            }}
+          >
+            {expanded ? "Hide details" : "Show details"}
+          </button>
+        </span>
           ) : null}
         </span>
         {subscribers ? (
@@ -219,6 +228,7 @@ export function NetworkTrafficAttributionSummary({
               <span className="text-right text-neutral-500">Subs</span>
               <span className="text-right text-neutral-500">Requests</span>
               <span className="text-right text-neutral-500">Total</span>
+              {expanded ? (<>
               <span className="text-neutral-500">{startLabel}</span>
               <span className="text-right text-neutral-200">
                 {number(subscribers.previous)}
@@ -239,6 +249,7 @@ export function NetworkTrafficAttributionSummary({
               <span className="text-right text-neutral-200">
                 {currentTotal == null ? "—" : number(currentTotal)}
               </span>
+              </>) : null}
               <span className="text-neutral-500">Difference</span>
               <strong
                 className={`text-right ${subscribers.absoluteChange > 0 ? "text-emerald-300" : subscribers.absoluteChange < 0 ? "text-rose-300" : "text-neutral-300"}`}
@@ -287,7 +298,7 @@ export function NetworkTrafficAttributionSummary({
             </strong>
           </span>
         </span>
-      </button>
+      </section>
 
       {open ? (
         <TrafficAttributionModal
