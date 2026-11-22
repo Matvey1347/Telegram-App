@@ -7,15 +7,8 @@ import {
   type TelegramPostMediaItem,
   type TelegramPostButtonRows,
 } from "@telegram-system/shared";
-import {
-  telegramChannelsApi,
-  type PostGroup,
-  telegramContentHypothesesApi,
-} from "@/lib/api";
-import {
-  telegramPostKeys,
-  telegramContentHypothesisKeys,
-} from "@/lib/query-keys";
+import { telegramChannelsApi } from "@/lib/api";
+import { telegramPostKeys } from "@/lib/query-keys";
 import {
   managedPostScheduleUnchanged,
   managedPostScheduleUi,
@@ -47,8 +40,6 @@ type Input = Pick<
     | "setError"
     | "editing"
     | "title"
-    | "postGroupId"
-    | "newPostHypothesisIds"
     | "iconRef"
     | "longTextMode"
     | "buttonRows"
@@ -92,8 +83,6 @@ export function createTelegramPostPublication(input: Input) {
     setError,
     editing,
     title,
-    postGroupId,
-    newPostHypothesisIds,
     iconRef,
     longTextMode,
     buttonRows,
@@ -129,8 +118,6 @@ export function createTelegramPostPublication(input: Input) {
     const editingPost = editing;
     const saveMode = effectivePublishingMode;
     const saveTitle = title.trim();
-    const saveGroupId = postGroupId;
-    const saveHypothesisIds = newPostHypothesisIds;
     const saveIcon = iconRef.current;
     const saveLongTextMode = longTextMode;
     if (hasInvalidTelegramInlineButtons(buttonRows)) {
@@ -204,7 +191,7 @@ export function createTelegramPostPublication(input: Input) {
           id: pendingId,
           title: saveTitle,
           icon: saveIcon,
-          groupId: saveGroupId,
+          groupId: null,
           mode: saveMode,
         },
         ...current,
@@ -240,39 +227,6 @@ export function createTelegramPostPublication(input: Input) {
               true,
             );
         persisted = true;
-        if (saveGroupId && saveGroupId !== (editingPost?.groupId ?? null)) {
-          const group = await telegramChannelsApi.addPostsToGroup(
-            saveGroupId,
-            [post.id],
-            true,
-          );
-          queryClient.setQueryData<PostGroup[]>(
-            telegramPostKeys.postGroups(channelId),
-            (current) =>
-              current?.map((item) => (item.id === group.id ? group : item)),
-          );
-          post = { ...post, groupId: group.id, group };
-        } else if (editingPost?.groupId && !saveGroupId) {
-          const group = await telegramChannelsApi.removePostFromGroup(
-            editingPost.groupId,
-            post.id,
-            true,
-          );
-          queryClient.setQueryData<PostGroup[]>(
-            telegramPostKeys.postGroups(channelId),
-            (current) =>
-              current?.map((item) => (item.id === group.id ? group : item)),
-          );
-          post = { ...post, groupId: null, group: null };
-        }
-        if (!editingPost && saveHypothesisIds.length) {
-          await telegramContentHypothesesApi.assignToPost(channelId, post.id, {
-            hypothesisIds: saveHypothesisIds,
-          });
-          await queryClient.invalidateQueries({
-            queryKey: telegramContentHypothesisKeys.list(channelId),
-          });
-        }
         if (shouldRepublishPublished) {
           post = await telegramChannelsApi.publishManagedPost(
             channelId,

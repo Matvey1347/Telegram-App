@@ -1813,6 +1813,35 @@ describe('TelegramAdSalesService', () => {
     );
   });
 
+  it('replaces a future managed schedule when only the format changes', async () => {
+    const { service, prisma, telegramChannelsService } = createService();
+    const scheduledAt = new Date('2099-08-25T12:00:00.000Z');
+    const current = makePlacement({
+      status: TelegramAdPlacementStatus.SCHEDULED,
+      managedPostId: 'managed-post-1',
+      managedPost: { status: TelegramManagedPostStatus.SCHEDULED, scheduledAt },
+      scheduledAt,
+      telegramAdProductId: 'old-format',
+    });
+    prisma.telegramAdSalePlacement.findFirst.mockResolvedValue(current);
+    prisma.telegramAdProduct.findFirst.mockResolvedValue({
+      id: 'new-format', topDurationMinutes: 120, feedDurationHours: 48,
+      deleteAfterHours: 48, isPermanent: false,
+    });
+    prisma.telegramAdSalePlacement.update.mockResolvedValue(current);
+    await service.updatePlacement('user-1', 'sale-1', 'placement-1', {
+      telegramAdProductId: 'new-format',
+    });
+    expect(telegramChannelsService.scheduleManagedPost).toHaveBeenCalledWith(
+      'user-1', 'channel-1', 'managed-post-1', { scheduledAt: scheduledAt.toISOString() },
+    );
+    expect(prisma.telegramAdSalePlacement.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ telegramAdProductId: 'new-format', scheduledManagedAt: scheduledAt }),
+      }),
+    );
+  });
+
   it('projects exactly one notification for a fresh persisted MISSED transition', async () => {
     const { service, prisma, notificationProjector } = createService();
     const scheduled = makePlacement({

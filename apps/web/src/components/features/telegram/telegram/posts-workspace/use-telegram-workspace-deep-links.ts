@@ -6,7 +6,6 @@ import {
   expandDeepLinkedPostGroup,
 } from "@/components/features/telegram/telegram/managed-post-deep-link";
 import {
-  workspaceViewPreferenceKey,
   isBrokenPublishedPost,
 } from "./telegram-post-workspace-model";
 import type { TelegramPostWorkspaceProps } from "./telegram-post-workspace-model";
@@ -20,15 +19,15 @@ import type { useTelegramPostSelection } from "./use-telegram-post-selection";
 
 type Input = Pick<
   TelegramPostWorkspaceProps,
-  "initialPostId" | "onWorkspaceViewChange" | "channelId" | "initialGroupId"
+  "initialPostId" | "channelId"
 > &
   Pick<
     ReturnType<typeof useTelegramWorkspaceView>,
-    "setWorkspaceView" | "restoredPostIdRef"
+    "restoredPostIdRef"
   > &
   Pick<
     ReturnType<typeof useTelegramPostSidebarList>,
-    "changeWorkspaceView" | "allGroupIds"
+    "allGroupIds"
   > &
   Pick<
     ReturnType<typeof useTelegramPostWorkspaceQueries>,
@@ -51,12 +50,8 @@ type Input = Pick<
 export function useTelegramWorkspaceDeepLinks(input: Input) {
   const {
     initialPostId,
-    onWorkspaceViewChange,
     channelId,
-    initialGroupId,
-    setWorkspaceView,
     restoredPostIdRef,
-    changeWorkspaceView,
     allGroupIds,
     posts,
     postGroups,
@@ -69,30 +64,14 @@ export function useTelegramWorkspaceDeepLinks(input: Input) {
   } = input;
 
   useEffect(() => {
-    if (!initialPostId) return;
-    // The URL is the source of truth for a deep-linked post. Updating the
-    // workspace tab here must not navigate again, otherwise the postId that
-    // was just added by openPost() is immediately removed from the URL.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setWorkspaceView("posts");
-    onWorkspaceViewChange("posts");
-    window.localStorage.setItem(workspaceViewPreferenceKey(channelId), "posts");
-  }, [channelId, initialPostId, onWorkspaceViewChange]);
-
-  useEffect(() => {
-    if (!initialGroupId) return;
-    changeWorkspaceView("groups");
-  }, [initialGroupId]);
-
-  useEffect(() => {
-    if (!initialPostId || !posts.data?.length || postGroups.isLoading) return;
+    if (!initialPostId || postGroups.isLoading) return;
     // The detail request is authoritative for a URL-opened post. The list is
     // allowed to be stale while its query is being refreshed, so it must never
     // overwrite the schedule that came from the detail endpoint.
     const post =
       deepLinkedPost.data?.id === initialPostId
         ? deepLinkedPost.data
-        : posts.data.find((item) => item.id === initialPostId);
+        : posts.data?.find((item) => item.id === initialPostId);
     const detailScheduleChanged =
       deepLinkedPost.data?.id === initialPostId &&
       (editing?.scheduledAt !== deepLinkedPost.data.scheduledAt ||

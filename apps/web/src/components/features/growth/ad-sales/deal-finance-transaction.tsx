@@ -1,13 +1,14 @@
 "use client";
 
 import type { TelegramAdSale } from "@telegram-system/shared";
-import { CreditCard, Pencil, Trash2 } from "lucide-react";
-import { Button, IconButton } from "@/components/ui/primitives";
+import { CreditCard, Trash2 } from "lucide-react";
+import { IconButton } from "@/components/ui/primitives";
 import type { Account } from "@/lib/api";
 import { formatCompactMoney } from "@/lib/features/finance/money";
 import {
   PaymentEditor,
   type PaymentDraft,
+  type PlacementDraft,
 } from "./ad-sales-sale-detail-editors";
 import {
   RegisterPaymentForm,
@@ -23,8 +24,7 @@ export function DealFinanceTransaction({
   onPayment,
   onCreatePayment,
   onDeletePayment,
-  onSave,
-  saving,
+  placementSchedule,
 }: {
   sale: TelegramAdSale;
   payments: PaymentDraft[];
@@ -34,8 +34,7 @@ export function DealFinanceTransaction({
   onPayment: (id: string, patch: Partial<PaymentDraft>) => void;
   onCreatePayment?: (payload: RegisterPaymentPayload) => Promise<void>;
   onDeletePayment?: (id: string) => void;
-  onSave?: () => Promise<void>;
-  saving?: boolean;
+  placementSchedule?: PlacementDraft;
 }) {
   const linkedPaymentLabel = payments.length
     ? `${payments.map((payment) => formatCompactMoney(payment.amount, payment.currency)).join(" · ")} linked`
@@ -50,6 +49,14 @@ export function DealFinanceTransaction({
             <p className="text-sm text-neutral-500">{linkedPaymentLabel}</p>
           </div>
         </div>
+        <div className="flex shrink-0 items-center gap-2">
+        {onDeletePayment && payments.length === 1 ? (
+          <button type="button" aria-label="Delete transaction" title="Delete transaction"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-rose-800 text-rose-300 hover:bg-rose-950 focus-visible:outline focus-visible:outline-blue-500"
+            onClick={() => onDeletePayment(payments[0].id)}>
+            <Trash2 size={16} />
+          </button>
+        ) : null}
         <IconButton
           type="button"
           aria-label={
@@ -57,6 +64,7 @@ export function DealFinanceTransaction({
           }
           onClick={onToggle}
         />
+        </div>
       </div>
       {open && payments.length ? (
         <div className="mt-4 space-y-3 border-t border-neutral-800 pt-4">
@@ -66,39 +74,18 @@ export function DealFinanceTransaction({
                 payment={payment}
                 accounts={accounts}
                 showNotes={false}
+                showDateTime={false}
                 onChange={(patch) => onPayment(payment.id, patch)}
               />
             </div>
           ))}
-          {onDeletePayment || onSave ? (
-            <div className="flex w-full flex-col gap-2 border-t border-neutral-800 pt-3 sm:flex-row sm:justify-end">
-              {onDeletePayment
-                ? payments.map((payment) => (
-                    <Button
-                      key={payment.id}
-                      type="button"
-                      variant="danger"
-                      className="w-full sm:w-auto"
-                      onClick={() => onDeletePayment(payment.id)}
-                    >
-                      <Trash2 size={16} aria-hidden="true" />
-                      Delete transaction
-                    </Button>
-                  ))
-                : null}
-              {onSave ? (
-                <Button
-                  type="button"
-                  className="w-full sm:w-auto"
-                  disabled={saving}
-                  onClick={() => void onSave()}
-                >
-                  <Pencil size={16} aria-hidden="true" />
-                  {saving ? "Saving…" : "Update transaction"}
-                </Button>
-              ) : null}
-            </div>
-          ) : null}
+          {onDeletePayment && payments.length > 1 ? payments.map((payment) => (
+            <button key={payment.id} type="button" aria-label={`Delete transaction ${payment.amount} ${payment.currency}`}
+              className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-rose-800 text-rose-300"
+              onClick={() => onDeletePayment(payment.id)}>
+              <Trash2 size={16} />
+            </button>
+          )) : null}
         </div>
       ) : open && onCreatePayment ? (
         <div className="mt-4 border-t border-neutral-800 pt-4">
@@ -106,6 +93,7 @@ export function DealFinanceTransaction({
             sale={sale}
             accounts={accounts}
             defaultCurrency={sale.settlementCurrency}
+            defaultSchedule={placementSchedule}
             onCancel={onToggle}
             onSubmit={onCreatePayment}
           />

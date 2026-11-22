@@ -320,3 +320,14 @@ export type TelegramManagedPostsImportProgressItem = {
   errorParams?: import("../i18n/contracts").TranslationParams;
   message: string;
 };
+
+
+export type TelegramManagedPostEditorialPair = {
+  postId: string;
+  sphereId: string;
+  sphereName: string;
+  sphereIcon?: import("./resolved-emoji").ResolvedEmoji;
+  rubricId: string;
+  rubricName: string;
+  rubricIcon?: import("./resolved-emoji").ResolvedEmoji;
+};

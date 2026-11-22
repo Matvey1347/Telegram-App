@@ -5,15 +5,15 @@ describe('AI Posting chat company sources', () => {
   const channel = { findFirst: jest.fn() };
   const membership = { require: jest.fn(), refresh: jest.fn() };
   const source = { checkWebSource: jest.fn(), discoverNewsPages: jest.fn() };
-  const structure = { resolveForDraft: jest.fn() };
   const tx = {
     $executeRaw: jest.fn(),
     telegramAiPostingSettings: { findFirst: jest.fn(), updateMany: jest.fn() },
-    telegramContentHypothesis: { findFirst: jest.fn(), updateMany: jest.fn() },
+    telegramAiPostingRubric: { findFirst: jest.fn(), create: jest.fn() },
+    telegramAiPostingLength: { findMany: jest.fn() },
     telegramAiPostingSettingsVersion: { create: jest.fn() },
   };
   const prisma = { telegramChannel: channel, $transaction: jest.fn((fn) => fn(tx)) };
-  const service = new TelegramAiPostingChatSourcesService(prisma as never, membership as never, source as never, structure as never);
+  const service = new TelegramAiPostingChatSourcesService(prisma as never, membership as never, source as never);
   const originalFetch = global.fetch;
   const mockFetch = jest.fn();
   const result = (data: unknown) => new Response(JSON.stringify(data), { status: 200 });
@@ -27,9 +27,8 @@ describe('AI Posting chat company sources', () => {
     source.discoverNewsPages.mockResolvedValue([]);
     tx.telegramAiPostingSettings.findFirst.mockResolvedValue({ id: 'settings-a', configurationVersion: 2, configuration: { sources: [], categories: [], formats: [], imageMode: 'hybrid' } });
     tx.telegramAiPostingSettings.updateMany.mockResolvedValue({ count: 1 });
-    tx.telegramContentHypothesis.findFirst.mockResolvedValue(null);
-    tx.telegramContentHypothesis.updateMany.mockResolvedValue({ count: 1 });
-    structure.resolveForDraft.mockResolvedValue({ hypothesisId: 'hypothesis-a' });
+    tx.telegramAiPostingRubric.findFirst.mockResolvedValue(null);
+    tx.telegramAiPostingLength.findMany.mockResolvedValue([{ id: 'channel-a::short' }]);
     tx.telegramAiPostingSettingsVersion.create.mockResolvedValue({ id: 'version-a' });
     mockFetch.mockResolvedValueOnce(result({ search: [{ id: 'Q123', label: 'Company', description: 'Business' }] })).mockResolvedValueOnce(result({ entities: { Q123: { claims: { P856: [{ mainsnak: { datavalue: { value: 'https://company.example/?tracking=secret#section' } } }] } } } }));
   });
@@ -40,10 +39,10 @@ describe('AI Posting chat company sources', () => {
     expect(source.checkWebSource).toHaveBeenCalledWith('website', 'https://company.example/');
     expect(channel.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'channel-a', workspaceId: 'ws-a' } }));
   });
-  it('adds the verified source and hypothesis to the same scoped configuration version', async () => {
+  it('adds the verified source and rubric to the same scoped configuration version', async () => {
     const applied = await service.setup('user-a', 'channel-a', { query: 'Company', rubric: 'Company stories', description: 'Short cases' });
-    expect(applied).toMatchObject({ source: { type: 'website', value: 'https://company.example/', added: true }, rubric: { id: 'hypothesis-a', name: 'Company stories', added: true }, settingsVersion: 3 });
-    expect(tx.telegramAiPostingSettings.updateMany).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'settings-a', workspaceId: 'ws-a', configurationVersion: 2 }, data: expect.objectContaining({ configuration: expect.objectContaining({ categories: ['Company stories'], sources: [expect.objectContaining({ value: 'https://company.example/', useImages: false })] }) }) }));
+    expect(applied).toMatchObject({ source: { type: 'website', value: 'https://company.example/', added: true }, rubric: { id: expect.any(String), name: 'Company stories', added: true }, settingsVersion: 3 });
+    expect(tx.telegramAiPostingSettings.updateMany).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'settings-a', workspaceId: 'ws-a', configurationVersion: 2 }, data: expect.objectContaining({ configuration: expect.objectContaining({ rubrics: [expect.objectContaining({ name: 'Company stories' })], sources: [expect.objectContaining({ value: 'https://company.example/', useImages: false })] }) }) }));
     expect(tx.telegramAiPostingSettingsVersion.create).toHaveBeenCalled();
   });
   it('places the new source first and keeps unrelated sources', async () => {
@@ -81,7 +80,7 @@ describe('AI Posting chat company sources', () => {
   it('reuses an existing news page without a needless settings write', async () => {
     source.discoverNewsPages.mockResolvedValue(['https://company.example/news']);
     tx.telegramAiPostingSettings.findFirst.mockResolvedValue({ id: 'settings-a', configurationVersion: 8, configuration: { sources: [{ id: 'news', type: 'website', value: 'https://company.example/news', enabled: true, followNewsArticles: true }, { id: 'home', type: 'website', value: 'https://company.example/', enabled: true }], categories: ['Cases'], formats: [] } });
-    tx.telegramContentHypothesis.findFirst.mockResolvedValue({ id: 'hypothesis-a', name: 'Cases' });
+    tx.telegramAiPostingRubric.findFirst.mockResolvedValue({ id: 'hypothesis-a', name: 'Cases' });
     const result = await service.setup('user-a', 'channel-a', { query: 'Company', rubric: 'Cases' });
     expect(result.newsSource).toMatchObject({ id: 'news', added: false });
     expect(tx.telegramAiPostingSettings.updateMany).not.toHaveBeenCalled();
@@ -91,9 +90,9 @@ describe('AI Posting chat company sources', () => {
     await expect(service.discover('user-a', 'channel-a', 'Company')).rejects.toThrow('forbidden');
     expect(mockFetch).not.toHaveBeenCalled();
   });
-  it('reuses an existing source and hypothesis without changing the settings version', async () => {
+  it('reuses an existing source and rubric without changing the settings version', async () => {
     tx.telegramAiPostingSettings.findFirst.mockResolvedValue({ id: 'settings-a', configurationVersion: 8, configuration: { sources: [{ id: 'source-existing', type: 'website', value: 'https://company.example', enabled: true }], categories: ['Company stories'], formats: [] } });
-    tx.telegramContentHypothesis.findFirst.mockResolvedValue({ id: 'hypothesis-a', name: 'Company stories' });
+    tx.telegramAiPostingRubric.findFirst.mockResolvedValue({ id: 'hypothesis-a', name: 'Company stories' });
     const applied = await service.setup('user-a', 'channel-a', { query: 'Company', rubric: 'Company stories' });
     expect(applied).toMatchObject({ source: { id: 'source-existing', added: false }, rubric: { id: 'hypothesis-a', added: false }, settingsVersion: 8 });
     expect(tx.telegramAiPostingSettings.updateMany).not.toHaveBeenCalled();

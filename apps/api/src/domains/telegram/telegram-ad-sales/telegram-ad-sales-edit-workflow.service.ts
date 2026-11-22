@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { TelegramAdSaleEditWorkflowDto } from './dto';
+import { TelegramChannelsService } from '../telegram-channels/telegram-channels.service';
 import { TelegramAdSalesService } from './telegram-ad-sales.service';
 
 export type TelegramAdSaleEditProgress = {
@@ -8,6 +9,7 @@ export type TelegramAdSaleEditProgress = {
     | 'UPDATE_SALE'
     | 'UPDATE_PLACEMENT'
     | 'CREATE_POST'
+    | 'UPDATE_POST'
     | 'SCHEDULE_POST'
     | 'ATTACH_POST'
     | 'UPDATE_PAYMENT'
@@ -20,7 +22,10 @@ export type TelegramAdSaleEditProgress = {
 
 @Injectable()
 export class TelegramAdSalesEditWorkflowService {
-  constructor(private readonly sales: TelegramAdSalesService) {}
+  constructor(
+    private readonly sales: TelegramAdSalesService,
+    private readonly channels: TelegramChannelsService,
+  ) {}
 
   async save(
     userId: string,
@@ -38,6 +43,7 @@ export class TelegramAdSalesEditWorkflowService {
         currentSale.placements as unknown as Array<{
           id: string;
           managedPostId?: string | null;
+          telegramChannelId: string;
           status?: string;
         }>
       ).map((placement) => [placement.id, placement]),
@@ -55,6 +61,9 @@ export class TelegramAdSalesEditWorkflowService {
           ]
         : []),
       ...dto.placements.flatMap((placement) => [
+        ...(placement.managedPostDraft && originalPlacements.get(placement.id)?.managedPostId
+          ? [{ operation: 'UPDATE_POST' as const, message: 'Update advertising post', placementId: placement.id }]
+          : []),
         {
           operation: 'UPDATE_PLACEMENT' as const,
           message: 'Save placement price and schedule',
@@ -128,6 +137,25 @@ export class TelegramAdSalesEditWorkflowService {
     }
 
     for (const item of dto.placements) {
+      const original = originalPlacements.get(item.id);
+      if (item.managedPostDraft && original?.managedPostId) {
+        await this.channels.updateManagedPost(
+          userId,
+          original.telegramChannelId,
+          original.managedPostId,
+          {
+            title: item.managedPostDraft.title,
+            text: item.managedPostDraft.text,
+            imageUrls: item.managedPostDraft.imageUrls,
+            mediaItems: item.managedPostDraft.mediaItems,
+            buttonRows: item.managedPostDraft.buttonRows,
+            assignedMemberId: item.managedPostDraft.assignedMemberId ?? undefined,
+            icon: item.managedPostDraft.icon,
+            inPlaceOnly: true,
+          },
+        );
+        report('UPDATE_POST', 'Advertising post updated', item.id);
+      }
       const placement = await this.sales.updatePlacement(
         userId,
         saleId,
@@ -141,7 +169,6 @@ export class TelegramAdSalesEditWorkflowService {
           currency: item.currency,
           manualPriceReason: item.manualPriceReason,
           telegramAdProductId: item.telegramAdProductId,
-          managedPostId: item.managedPostId,
         },
       );
       report('UPDATE_PLACEMENT', 'Placement price and schedule saved', item.id);

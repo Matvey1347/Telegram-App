@@ -139,6 +139,9 @@ export class TelegramManagedPostCommandService {
       aiPostingReviewStatus?: string | null;
       aiPostingApprovedWithoutEdits?: boolean | null;
       aiPostingRecheckRequired?: boolean;
+      aiPostingSphereId?: string;
+      aiPostingRubricId?: string;
+      aiPostingLengthId?: string | null;
     },
   ) {
     return tx.telegramManagedPost.create({
@@ -161,6 +164,9 @@ export class TelegramManagedPostCommandService {
         aiPostingApprovedWithoutEdits:
           params.aiPostingApprovedWithoutEdits ?? null,
         aiPostingRecheckRequired: params.aiPostingRecheckRequired ?? false,
+        aiPostingSphereId: params.aiPostingSphereId,
+        aiPostingRubricId: params.aiPostingRubricId,
+        aiPostingLengthId: params.aiPostingLengthId,
       },
       include: this.managedPostInclude,
     });

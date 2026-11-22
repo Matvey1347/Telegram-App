@@ -14,14 +14,7 @@ export function telegramAiPostingPlanningContextText(
 ) {
   return JSON.stringify({
     schedule: context.schedule,
-    hypotheses: context.hypotheses
-      .map((h) => ({
-        name: h.name,
-        description: h.description,
-        conclusion: h.conclusion,
-        status: h.status,
-      }))
-      .slice(0, 40),
+
   });
 }
 
@@ -43,7 +36,7 @@ export function telegramAiPostingPlanPrompt(
     config.variedLength === false
       ? 'Prefer a consistent medium length, expanding only when the topic needs more explanation.'
       : 'Choose each publication length automatically from the topic complexity; use short, medium or long as appropriate and do not force a pattern.';
-  return `Return only JSON with {"topics":[string]}. Suggest exactly ${count} distinct Telegram post topics in ${language}. ${lengthPolicy} Avoid any duplicates or close paraphrases of existing, scheduled and previously evaluated test posts. Use editorial profile, allowed source material, publication calendar and hypotheses.\nCHANNEL DESCRIPTION\n${profile.slice(0, 3000)}\n${mandatoryChannelRules(config)}\n${typeof config.learningBlock === 'string' ? config.learningBlock.slice(0, 1500) : 'ЧТО РАБОТАЕТ В КАНАЛЕ\nДанных пока мало.'}\nCHANNEL DATA ${JSON.stringify(context.editorialProfile).slice(0, 1500)}\nCALENDAR ${calendar.slice(0, 1500)}\nSOURCES ${JSON.stringify(context.sourceContexts).slice(0, 3500)}\nEXISTING POSTS ${JSON.stringify(context.existingPosts).slice(0, 3000)}\nHISTORY — только для защиты от повторов\n${JSON.stringify(recentHistory).slice(0, 1500)}\nPREVIOUS TEST BATCHES ${JSON.stringify(previousDrafts).slice(0, 1500)}\nRUBRICS ${JSON.stringify(config.categories ?? [])}; FORMATS ${JSON.stringify(config.formats ?? [])}`;
+  return `Return only JSON with {"topics":[string]}. Suggest exactly ${count} distinct Telegram post topics in ${language}. ${lengthPolicy} Avoid any duplicates or close paraphrases of existing, scheduled and previously evaluated test posts. Use editorial profile, allowed source material, publication calendar, spheres and rubrics.\nCHANNEL DESCRIPTION\n${profile.slice(0, 3000)}\n${mandatoryChannelRules(config)}\n${typeof config.learningBlock === 'string' ? config.learningBlock.slice(0, 1500) : 'ЧТО РАБОТАЕТ В КАНАЛЕ\nДанных пока мало.'}\nCHANNEL DATA ${JSON.stringify(context.editorialProfile).slice(0, 1500)}\nCALENDAR ${calendar.slice(0, 1500)}\nSOURCES ${JSON.stringify(context.sourceContexts).slice(0, 3500)}\nEXISTING POSTS ${JSON.stringify(context.existingPosts).slice(0, 3000)}\nHISTORY — только для защиты от повторов\n${JSON.stringify(recentHistory).slice(0, 1500)}\nPREVIOUS TEST BATCHES ${JSON.stringify(previousDrafts).slice(0, 1500)}\nSPHERES ${JSON.stringify(config.spheres ?? []).slice(0, 3500)}; RUBRICS ${JSON.stringify(config.rubrics ?? []).slice(0, 3500)}`;
 }
 
 export function parseTelegramAiPostingTopics(reply: string) {

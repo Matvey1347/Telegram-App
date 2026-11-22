@@ -94,11 +94,6 @@ export function PlacementEditor(props: {
   channelName: string;
   channelPhotoUrl: string | null;
   products: TelegramAdProduct[];
-  priceChanged: boolean;
-  total: number;
-  hasPayment: boolean;
-  syncPayment: boolean;
-  onSync: (v: boolean) => void;
   onChange: (p: Partial<PlacementDraft>) => void;
   onLoadPosts: () => Promise<PlacementPostOption[]>;
   onSave: (
@@ -112,7 +107,7 @@ export function PlacementEditor(props: {
   systemBotConnected?: boolean;
 }) {
   const [postEditorOpen, setPostEditorOpen] = useState(
-    () => !props.placement.managedPostId && !props.draft.telegramPostId,
+    () => false,
   );
   const [postUrl, setPostUrl] = useState("");
   const [postSaving, setPostSaving] = useState(false);
@@ -136,6 +131,7 @@ export function PlacementEditor(props: {
         : null,
     );
   const [creatingPost, setCreatingPost] = useState(Boolean(managedPostDraft));
+  const [postEdited, setPostEdited] = useState(false);
   const hasLinkedPost = Boolean(
     props.placement.managedPostId || props.draft.telegramPostId,
   );
@@ -176,11 +172,11 @@ export function PlacementEditor(props: {
         setPostError("Choose Write by hand or import a post from the bot.");
         return;
       }
-      await props.onSave(managedPostDraft);
+      await props.onSave(!props.placement.managedPostId || postEdited ? managedPostDraft : undefined);
       return;
     }
     if (!postEditorOpen) {
-      await props.onSave(managedPostDraft ?? undefined);
+      await props.onSave();
       return;
     }
     const payload =
@@ -192,6 +188,10 @@ export function PlacementEditor(props: {
           ? { telegramPostId: selectedPostId }
           : null;
     if (!payload) {
+      if (!postUrl.trim() && !selectedPostId) {
+        await props.onSave();
+        return;
+      }
       setPostError("Select a post or paste its Telegram link.");
       return;
     }
@@ -390,6 +390,7 @@ export function PlacementEditor(props: {
                 draft={managedPostDraft}
                 onImported={(draft) => {
                   setManagedPostDraft(draft);
+                  setPostEdited(true);
                   setCreatingPost(true);
                   setPostEditorOpen(false);
                   setPostError("");
@@ -418,6 +419,7 @@ export function PlacementEditor(props: {
               onChange={(next) => {
                 if (next.draft) {
                   setManagedPostDraft(next.draft);
+                  setPostEdited(true);
                   setCreatingPost(true);
                 }
               }}
@@ -462,25 +464,6 @@ export function PlacementEditor(props: {
           </div>
         ) : null}
       </section>
-      {props.priceChanged && props.hasPayment ? (
-        <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-blue-900/60 bg-blue-950/25 p-4">
-          <input
-            type="checkbox"
-            checked={props.syncPayment}
-            onChange={(e) => props.onSync(e.target.checked)}
-            className="mt-1"
-          />
-          <span>
-            <span className="block font-medium text-blue-100">
-              Update the finance transaction too
-            </span>
-            <span className="mt-1 block text-sm text-blue-200/70">
-              Set the linked transaction to {props.total} {props.currency} and
-              recalculate allocations.
-            </span>
-          </span>
-        </label>
-      ) : null}
       <SaveFooter
         error={props.error}
         saving={props.saving || postSaving}
@@ -495,6 +478,7 @@ export function PaymentEditor(props: {
   accounts: Account[];
   onChange: (p: Partial<PaymentDraft>) => void;
   showNotes?: boolean;
+  showDateTime?: boolean;
 }) {
   const options = useMemo(
     () =>
@@ -509,7 +493,7 @@ export function PaymentEditor(props: {
     [props.accounts, props.payment.accountId],
   );
   return (
-    <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+    <div className="grid gap-3 md:grid-cols-2">
       <FormField label="Account">
         <CustomSelect
           value={props.payment.accountId}
@@ -535,7 +519,7 @@ export function PaymentEditor(props: {
           onChange={(e) => props.onChange({ amount: e.target.value })}
         />
       </FormField>
-      <FormField label="Paid date">
+      {props.showDateTime !== false ? <><FormField label="Paid date">
         <DateInput
           value={props.payment.paidDate}
           onChange={(e) => props.onChange({ paidDate: e.target.value })}
@@ -547,6 +531,7 @@ export function PaymentEditor(props: {
           onChange={(e) => props.onChange({ paidTime: e.target.value })}
         />
       </FormField>
+      </> : null}
       {props.showNotes !== false ? (
         <div className="md:col-span-2 lg:col-span-4">
           <FormField label="Notes">

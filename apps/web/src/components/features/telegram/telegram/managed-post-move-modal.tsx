@@ -30,7 +30,7 @@ export function MovePostModal({
   channels: TelegramChannel[];
   sourceChannelId: string;
   onClose: () => void;
-  onMoved: (result: BulkActionResult) => Promise<void>;
+  onMoved: (result: BulkActionResult, targetId: string) => Promise<void>;
 }) {
   const { t } = useI18n();
   const [targetId, setTargetId] = useState("");
@@ -89,7 +89,7 @@ export function MovePostModal({
                     item: response.results[0],
                     result: response,
                   });
-                  await onMoved(response);
+                  await onMoved(response, targetId);
                   window.setTimeout(() => setProgress(null), 2200);
                 } finally {
                   setBusy(false);

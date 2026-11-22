@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import type { PrismaService } from '../../../prisma/prisma.service';
+import { databasePostingLengthId, localPostingLengthId } from './telegram-ai-posting-length-id';
 
 type RecordValue = Record<string, unknown>;
 const record = (value: unknown): RecordValue =>
@@ -47,7 +48,7 @@ export class TelegramAiPostingContentModelService {
     });
     if (new Set(lengths.map((item) => item.id)).size !== lengths.length || new Set(lengths.map((item) => item.name.toLocaleLowerCase())).size !== lengths.length)
       throw new BadRequestException('AI_POSTING_LENGTH_DUPLICATE');
-    const dbLengthId = (lengthId: string) => `${channelId}::${lengthId}`;
+    const dbLengthId = (lengthId: string) => databasePostingLengthId(channelId, lengthId);
 
     const sphereRows = rows(configuration.spheres).map(record);
     const spheres = sphereRows.map((item) => {
@@ -159,13 +160,13 @@ export class TelegramAiPostingContentModelService {
       idea: idea ?? { audience: '', valueProposition: '', language: '' },
       spheres: spheres.map(({ workspaceId: _w, telegramChannelId: _c, createdAt: _created, updatedAt: _updated, ...item }) => item),
       lengths: lengths.map((item) => ({
-        id: item.id.slice(`${channelId}::`.length),
+        id: localPostingLengthId(channelId, item.id),
         name: item.name,
         emoji: item.emoji,
         minCharacters: item.minCharacters,
         maxCharacters: item.maxCharacters,
       })),
-      rubrics: rubrics.map(({ workspaceId: _w, telegramChannelId: _c, createdAt: _created, updatedAt: _updated, lengths: assigned, ...item }) => ({ ...item, lengthIds: assigned.map((length) => length.lengthId.slice(`${channelId}::`.length)) })),
+      rubrics: rubrics.map(({ workspaceId: _w, telegramChannelId: _c, createdAt: _created, updatedAt: _updated, lengths: assigned, ...item }) => ({ ...item, lengthIds: assigned.map((length) => localPostingLengthId(channelId, length.lengthId)) })),
     };
   }
 }

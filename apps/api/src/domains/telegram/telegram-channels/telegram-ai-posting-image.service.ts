@@ -95,6 +95,26 @@ function validBase64(value: string) {
   );
 }
 
+export function buildTelegramAiPostingImagePrompt(
+  input: { topic: string; prompt: string; channelUsername?: string | null; channelTitle?: string | null },
+  hasReference: boolean,
+) {
+  const candid =
+    input.channelUsername?.replace(/^@/, '').toLowerCase() === 'women_power' ||
+    /^жіноча сила(?:\s*🍃)?$/iu.test(input.channelTitle?.trim() ?? '');
+  return [
+    `Create an editorial visual for a Telegram post about ${input.topic}.`,
+    input.prompt,
+    hasReference
+      ? 'Use the attached reference as guidance for style, palette and composition. Create an original scene.'
+      : '',
+    candid
+      ? 'For photographic directions, use an unposed, everyday documentary frame. Show the emotion through a particular gesture, physical distance or ordinary action tied to the post. Use an ordinary setting with traces of use, available light, natural skin texture, restrained colors and an imperfect crop. People may look away, be mid-action or be partly out of frame. When a gesture or detail carries the idea, a face is optional. Avoid model poses, smiles for the camera, glamour retouching, stock-photo metaphors, staged props, glossy lighting, flawless skin and artificial bokeh. Keep explicitly requested non-photographic styles.'
+      : 'If the requested direction is photographic, preserve natural light, plausible anatomy and lived-in details. Avoid stock-photo poses and cosmetic retouching.',
+    'Avoid unnecessary text or watermarks.',
+  ].filter(Boolean).join(' ');
+}
+
 @Injectable()
 export class TelegramAiPostingImageService {
   constructor(
@@ -160,6 +180,8 @@ export class TelegramAiPostingImageService {
     userId: string;
     workspaceId: string;
     channelId: string;
+    channelUsername?: string | null;
+    channelTitle?: string | null;
     topic: string;
     imageMode: string;
     imageCandidates: Array<{
@@ -323,7 +345,7 @@ export class TelegramAiPostingImageService {
         category: 'TELEGRAM_POSTING_IMAGE',
         operationId: `${new Date().toISOString().slice(0, 10)}:${randomUUID()}`,
         mode: input.mode ?? 'MANUAL',
-        input: `Create a clean editorial illustration for a Telegram post about ${input.topic}. ${input.prompt}. ${referenceImage ? 'Use the attached reference sheet as visual guidance for style, palette and composition. Create an original image; do not copy its exact subject or layout.' : ''} Avoid unnecessary text or watermarks; follow the requested visual direction and provided reference images.`,
+        input: buildTelegramAiPostingImagePrompt(input, Boolean(referenceImage)),
         businessObjectId: input.channelId,
         aiPosting: input.aiPosting,
         ...(referenceImage

@@ -267,7 +267,7 @@ export class TelegramAiPostingGeneratorService {
     const sourceContext = await this.sources.collect({
       workspaceId,
       channelId,
-      config: { ...config, sources: sphereSources },
+      config: { ...config, sources: [...sphereSources, ...(Array.isArray(config.sources) ? config.sources : [])] },
       imageSelectionKey: testRunId,
     });
     const learningBlock = await readTelegramAiPostingLearningBlock(
@@ -312,6 +312,7 @@ export class TelegramAiPostingGeneratorService {
       userId,
       workspaceId,
       channelId,
+      false,
     );
     const previousRuns =
       (await this.prisma.telegramAiPostingTestRun.findMany({
@@ -362,6 +363,7 @@ export class TelegramAiPostingGeneratorService {
       onProgress?.(
         {
           stage,
+          runId: testRunId,
           status,
           ...(attempt === undefined ? {} : { attempt }),
           ...(publicationIndex === undefined ? {} : { publicationIndex }),
@@ -649,7 +651,8 @@ export class TelegramAiPostingGeneratorService {
             ? {
                 ...sourceContext,
                 sourceContexts: sourceContext.sourceContexts.filter((item) =>
-                  item.includes(`[website sphere-${selectedSphere.id}-`),
+                  !item.includes('[website sphere-') ||
+                  item.includes(`[website sphere-${String(selectedSphere.id).slice(0, 80)}-`),
                 ),
               }
             : sourceContext;
@@ -658,6 +661,8 @@ export class TelegramAiPostingGeneratorService {
               userId,
               workspaceId,
               channelId,
+              channelUsername: channel?.username,
+              channelTitle: channel?.title,
               topic,
               config: { ...generationConfig, editorialSelection },
               referenceImage: reference.image,
@@ -697,6 +702,22 @@ export class TelegramAiPostingGeneratorService {
             1,
           );
           results.push(generated);
+          onProgress?.(
+            {
+              stage: 'publication',
+              status: 'COMPLETED',
+              runId: testRunId,
+              publicationIndex,
+              publication: {
+                ...generated,
+                status: 'PENDING',
+                rejectionReason: null,
+                savedPostId: null,
+              },
+            },
+            progressSteps,
+            maximumProgressSteps,
+          );
           if (generated.mediaReadiness !== 'READY')
             failures.push({
               topic,

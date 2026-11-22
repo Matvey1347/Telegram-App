@@ -63,7 +63,6 @@ describe('TelegramAiPostingGeneratorService', () => {
     posts as never,
     revisions as never,
     images as never,
-    {} as never,
   );
   beforeEach(() => {
     jest.clearAllMocks();
@@ -460,12 +459,12 @@ describe('TelegramAiPostingGeneratorService', () => {
       'Required reader-facing language: Ukrainian (Українська)',
     );
     expect(onProgress).toHaveBeenCalledWith(
-      { stage: 'planning', status: 'RUNNING', attempt: 1 },
+      { stage: 'planning', status: 'RUNNING', runId: 'run-1', attempt: 1 },
       0,
       9,
     );
     expect(onProgress).toHaveBeenCalledWith(
-      { stage: 'text', status: 'RUNNING', publicationIndex: 0, attempt: 1 },
+      { stage: 'text', status: 'RUNNING', runId: 'run-1', publicationIndex: 0, attempt: 1 },
       1,
       9,
     );
@@ -480,13 +479,28 @@ describe('TelegramAiPostingGeneratorService', () => {
       'review:COMPLETED',
       'image:RUNNING',
       'image:COMPLETED',
+      'publication:COMPLETED',
     ]);
+    expect(onProgress).toHaveBeenCalledWith(
+      expect.objectContaining({
+        stage: 'publication',
+        status: 'COMPLETED',
+        runId: 'run-1',
+        publicationIndex: 0,
+        publication: expect.objectContaining({
+          title: 'A clear title',
+          imageUrl: 'https://media.example/ready.jpg',
+        }),
+      }),
+      4,
+      9,
+    );
     expect(result.generated[0]).toMatchObject({
       status: 'PENDING',
       title: 'A clear title',
-      text: '**A useful** post\n\nTest ! ![👤](tg://emoji?id=6030537299408725010)',
-      format: 'Known group',
-      category: 'Known hypothesis',
+      text: '💡 **A useful** post\n\nTest ! ![👤](tg://emoji?id=6030537299408725010)',
+      format: 'standard',
+      category: 'general',
       imageUrl: 'https://media.example/ready.jpg',
       mediaReadiness: 'READY',
       costs: { planning: null, text: null, image: '0', review: null },
@@ -523,7 +537,7 @@ describe('TelegramAiPostingGeneratorService', () => {
       'Include 1–3 relevant hashtags for the configured placement.',
     );
     expect(gateway.execute.mock.calls[1][0].input).toContain(
-      'Use 2–3 relevant emojis in a normal-length post, distributed through its body',
+      'Start the post body with exactly one relevant emoji that conveys the topic.',
     );
     expect(gateway.execute).toHaveBeenCalledTimes(3);
     expect(gateway.execute.mock.calls[0][0].aiPosting).toMatchObject({
@@ -828,7 +842,7 @@ describe('TelegramAiPostingGeneratorService', () => {
 
     const publication = result.generated[0];
     expect(publication.title).toBe('A clear title');
-    expect(publication.text).toBe('A useful post');
+    expect(publication.text).toBe('💡 A useful post');
     expect(publication.imageUrl).toBeNull();
     expect(publication.mediaReadiness).toBe('FAILED');
     expect(publication.mediaFailureCode).toBe(
@@ -1403,7 +1417,7 @@ describe('TelegramAiPostingGeneratorService', () => {
     ]);
     expect(images.resolve).toHaveBeenCalledWith(
       expect.objectContaining({
-        imageMode: 'ai',
+        imageMode: 'hybrid',
         referenceImage: Buffer.from('selected-preference-reference'),
       }),
     );

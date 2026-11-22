@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import type { TelegramAdProduct, TelegramAdSale } from "@telegram-system/shared";
 import { type SaleActionKey } from "./sale-status-actions";
 import { Modal, ModalBackButton } from "@/components/ui/primitives";
 import type { Account, TelegramChannel } from "@/lib/api";
 import { currenciesApi } from "@/lib/api";
-import { channelLocalDateKey, channelLocalTime, toNumber, zonedDateTimeToUtc } from "@/lib/features/growth/telegram-ad-sales";
+import { channelLocalDateKey, channelLocalTime, isValidZonedDateTimeInput, toNumber, zonedDateTimeToUtc } from "@/lib/features/growth/telegram-ad-sales";
 import { AdSaleSharedPostEditor } from "./ad-sale-shared-post-editor";
 import type { AdSaleApplyAllChanges } from "./ad-sale-deal-placement-actions";
 import type { RegisterPaymentPayload } from "./register-payment-form";
@@ -17,7 +17,6 @@ import { PlacementEditor, type PaymentDraft, type PlacementDraft, type Placement
 import { DealDetailsSkeleton, DealOverview } from "./ad-sales-deal-overview";
 
 type SaveDraft = {
-  paymentsOnly?: boolean;
   placements: Array<{
     id: string;
     scheduledAt: string;
@@ -27,8 +26,7 @@ type SaveDraft = {
     minimumPrice: number;
     currency: string;
     manualPriceReason: string | null;
-    telegramAdProductId: string | null;
-    managedPostId: string | null;
+    telegramAdProductId?: string | null;
     managedPostDraft?: PlacementManagedPostDraft;
     postAttachment?: { telegramPostUrl?: string; telegramPostId?: string };
   }>;
@@ -89,7 +87,6 @@ export function SaleDetailsModal(props: {
   const [payments, setPayments] = useState<PaymentDraft[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [paymentOpen, setPaymentOpen] = useState(false);
-  const [syncPayment, setSyncPayment] = useState(true);
   const [origin, setOrigin] = useState<TelegramAdSale["origin"]>("DIRECT");
   const [sellerMemberId, setSellerMemberId] = useState("");
   const [buyerContact, setBuyerContact] = useState("");
@@ -99,18 +96,13 @@ export function SaleDetailsModal(props: {
   const [initializedSaleId, setInitializedSaleId] = useState<string | null>(
     null,
   );
-  const preserveDraftOnSaleRefreshRef = useRef<string | null>(null);
   const [sharedPostOpen, setSharedPostOpen] = useState(false);
   const [paymentToDelete, setPaymentToDelete] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!props.open) {
-      preserveDraftOnSaleRefreshRef.current = null;
-      return;
-    }
-    if (!props.sale) return;
-    if (preserveDraftOnSaleRefreshRef.current === props.sale.id) return;
-    preserveDraftOnSaleRefreshRef.current = null;
+    if (!props.open || !props.sale) return;
+    // Initialize the form after the selected deal has loaded.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setOrigin(props.sale.origin);
     setSellerMemberId(
       props.sale.sellerMemberId ?? props.sale.assignedMemberId ?? "",
@@ -130,7 +122,6 @@ export function SaleDetailsModal(props: {
     setSharedPostOpen(false);
     setPaymentOpen(false);
     setPaymentToDelete(null);
-    setSyncPayment(true);
     setError("");
     setPlacements(
       props.sale.placements.map((p) => ({
@@ -147,6 +138,7 @@ export function SaleDetailsModal(props: {
         telegramPostId: p.telegramPostId ?? "",
       })),
     );
+    const paymentTimezone = props.sale.placements[0]?.timezone ?? "UTC";
     setPayments(
       (props.sale.payments ?? [])
         .filter((p) => p.status !== "VOIDED")
@@ -155,8 +147,8 @@ export function SaleDetailsModal(props: {
           accountId: p.accountId,
           amount: p.amount,
           currency: p.currency,
-          paidDate: p.paidAt.slice(0, 10),
-          paidTime: p.paidAt.slice(11, 16),
+          paidDate: props.sale!.placements[0] ? channelLocalDateKey(props.sale!.placements[0].scheduledAt, paymentTimezone) : channelLocalDateKey(p.paidAt, paymentTimezone),
+          paidTime: props.sale!.placements[0] ? channelLocalTime(props.sale!.placements[0].scheduledAt, paymentTimezone) : channelLocalTime(p.paidAt, paymentTimezone),
           notes: p.notes ?? "",
         })),
     );
@@ -174,24 +166,34 @@ export function SaleDetailsModal(props: {
   const draft = placements.find((p) => p.id === selectedId);
   const currency = payments[0]?.currency ?? sale.settlementCurrency;
   const total = placements.reduce((sum, p) => sum + toNumber(p.agreedPrice), 0);
+  const paymentTimezone = placements[0]?.timezone ?? "UTC";
   const originalTotal = sale.placements.reduce(
     (sum, p) => sum + toNumber(p.agreedPrice),
     0,
   );
   const priceChanged = Math.abs(total - originalTotal) > 0.001;
   const channels = new Map(props.channels.map((c) => [c.id, c]));
-  const changePlacement = (patch: Partial<PlacementDraft>) =>
+  const syncPaymentSchedule = (first: PlacementDraft) => {
+    setPayments((items) => items.map((payment) =>
+      ({ ...payment, paidDate: first.date, paidTime: first.time }),
+    ));
+  };
+  const changePlacement = (patch: Partial<PlacementDraft>) => {
     setPlacements((items) =>
       items.map((p) => (p.id === selectedId ? { ...p, ...patch } : p)),
     );
-  const changePayment = (id: string, patch: Partial<PaymentDraft>) =>
+    const first = placements[0];
+    if (first && first.id === selectedId && (patch.date !== undefined || patch.time !== undefined)) {
+      syncPaymentSchedule({ ...first, ...patch });
+    }
+  };
+  const changePayment = (id: string, patch: Partial<PaymentDraft>) => {
     setPayments((items) =>
       items.map((p) => (p.id === id ? { ...p, ...patch } : p)),
     );
+  };
 
-  const applyChangesToAllPlacements = async (
-    changes: AdSaleApplyAllChanges,
-  ) => {
+  const applyChangesToAllPlacements = (changes: AdSaleApplyAllChanges) => {
     try {
       const nextPlacements = placements.map((placementDraft) => {
         const placement = sale.placements.find(
@@ -210,12 +212,16 @@ export function SaleDetailsModal(props: {
         }
         return {
           ...placementDraft,
-          ...(changes.date ? { date: changes.date } : {}),
-          ...(changes.time ? { time: changes.time } : {}),
+          ...(changes.date !== undefined ? { date: changes.date } : {}),
+          ...(changes.time !== undefined ? { time: changes.time } : {}),
           ...(product ? { telegramAdProductId: product.id } : {}),
         };
       });
       setPlacements(nextPlacements);
+      if (changes.date !== undefined || changes.time !== undefined) {
+        const first = nextPlacements[0];
+        if (first) syncPaymentSchedule(first);
+      }
       setError("");
     } catch (cause) {
       setError(
@@ -228,111 +234,88 @@ export function SaleDetailsModal(props: {
     placementId?: string,
     managedPostDraft?: PlacementManagedPostDraft,
     postAttachment?: { telegramPostUrl?: string; telegramPostId?: string },
-    paymentsOnly = false,
   ) => {
-    const placementsToSave = paymentsOnly
-      ? []
-      : placementId
-      ? placements.filter((placement) => placement.id === placementId)
-      : placements.filter((placementDraft) => {
-          const original = sale.placements.find(
-            (item) => item.id === placementDraft.id,
-          );
-          if (!original) return true;
-          return (
-            placementDraft.date !==
-              channelLocalDateKey(original.scheduledAt, original.timezone) ||
-            placementDraft.time !==
-              channelLocalTime(original.scheduledAt, original.timezone) ||
-            placementDraft.telegramAdProductId !==
-              (original.telegramAdProductId ?? "") ||
-            toNumber(placementDraft.agreedPrice) !==
-              toNumber(original.agreedPrice)
-          );
-        });
-    const paymentsToSave = placementId
-      ? priceChanged && syncPayment
-        ? payments
-        : []
-      : payments.filter((paymentDraft) => {
-          const original = sale.payments?.find(
-            (item) => item.id === paymentDraft.id,
-          );
-          if (!original) return true;
-          return (
-            paymentDraft.accountId !== original.accountId ||
-            toNumber(paymentDraft.amount) !== toNumber(original.amount) ||
-            paymentDraft.paidDate !== original.paidAt.slice(0, 10) ||
-            paymentDraft.paidTime !== original.paidAt.slice(11, 16) ||
-            paymentDraft.notes !== (original.notes ?? "")
-          );
-        });
+    const placementsToSave = placements.filter((placementDraft) => {
+      const original = sale.placements.find((item) => item.id === placementDraft.id);
+      return !original ||
+        (placementDraft.id === placementId && Boolean(managedPostDraft || postAttachment)) ||
+        placementDraft.date !== channelLocalDateKey(original.scheduledAt, original.timezone) ||
+        placementDraft.time !== channelLocalTime(original.scheduledAt, original.timezone) ||
+        placementDraft.telegramAdProductId !== (original.telegramAdProductId ?? "") ||
+        toNumber(placementDraft.agreedPrice) !== toNumber(original.agreedPrice);
+    });
+    const nextPayments = payments.map((payment) => {
+      const original = sale.payments?.find((item) => item.id === payment.id);
+      return priceChanged && payments.length === 1 && original &&
+        toNumber(original.amount) === originalTotal &&
+        toNumber(payment.amount) === toNumber(original.amount)
+        ? { ...payment, amount: String(total) }
+        : payment;
+    });
+    const paymentsToSave = nextPayments.filter((payment) => {
+      const original = sale.payments?.find((item) => item.id === payment.id);
+      return !original || payment.accountId !== original.accountId ||
+        toNumber(payment.amount) !== toNumber(original.amount) ||
+        payment.paidDate !== channelLocalDateKey(original.paidAt, paymentTimezone) ||
+        payment.paidTime !== channelLocalTime(original.paidAt, paymentTimezone) ||
+        payment.notes !== (original.notes ?? "");
+    });
     setSaving(true);
     setError("");
     try {
-      if (paymentsOnly) {
-        preserveDraftOnSaleRefreshRef.current = sale.id;
+      if (placementsToSave.some((item) => !isValidZonedDateTimeInput(item.date, item.time)) ||
+          paymentsToSave.some((item) => !isValidZonedDateTimeInput(item.paidDate, item.paidTime))) {
+        throw new Error("Choose a valid date and time before saving.");
       }
       await props.onSave(sale, {
-        paymentsOnly,
-        origin: paymentsOnly ? sale.origin : origin,
-        sellerMemberId: paymentsOnly
-          ? (sale.sellerMemberId ?? sale.assignedMemberId ?? null)
-          : sellerMemberId || null,
-        buyerContact: paymentsOnly
-          ? sale.advertiserId
-            ? sale.advertiserTelegramSnapshot ??
-              sale.advertiserTelegram ??
-              sale.advertiserContact ??
-              sale.advertiserNameSnapshot ??
-              sale.advertiserName ??
-              ""
-            : ""
-          : buyerContact.trim(),
-        advertiserId: paymentsOnly ? sale.advertiserId : selectedAdvertiserId,
-        placements: placementsToSave.map((p) => ({
-          id: p.id,
-          scheduledAt: zonedDateTimeToUtc(
-            p.date,
-            p.time,
-            p.timezone,
-          ).toISOString(),
-          timezone: p.timezone,
-          agreedPrice: toNumber(p.agreedPrice),
-          recommendedPrice: toNumber(p.recommendedPrice),
-          minimumPrice: toNumber(p.minimumPrice),
-          currency,
-          manualPriceReason: p.manualPriceReason.trim() || null,
-          telegramAdProductId: p.telegramAdProductId || null,
-          managedPostId: p.managedPostId || null,
-          ...(managedPostDraft && p.id === placementId
-            ? { managedPostDraft }
-            : {}),
-          ...(postAttachment && p.id === placementId ? { postAttachment } : {}),
-        })),
-        payments: paymentsToSave.map((p, index) => {
-          const amount =
-            placementId && priceChanged && syncPayment && index === 0
-              ? total
-              : toNumber(p.amount);
+        origin,
+        sellerMemberId: sellerMemberId || null,
+        buyerContact: buyerContact.trim(),
+        advertiserId: selectedAdvertiserId,
+        placements: placementsToSave.map((p) => {
+          const original = sale.placements.find((item) => item.id === p.id);
+          const sameSchedule = original &&
+            p.date === channelLocalDateKey(original.scheduledAt, original.timezone) &&
+            p.time === channelLocalTime(original.scheduledAt, original.timezone);
+          const productId = p.telegramAdProductId || null;
+          return {
+            id: p.id,
+            scheduledAt: sameSchedule ? original.scheduledAt : zonedDateTimeToUtc(p.date, p.time, p.timezone).toISOString(),
+            timezone: p.timezone,
+            agreedPrice: toNumber(p.agreedPrice),
+            recommendedPrice: toNumber(p.recommendedPrice),
+            minimumPrice: toNumber(p.minimumPrice),
+            currency: original?.currency ?? sale.settlementCurrency,
+            manualPriceReason: p.manualPriceReason.trim() || null,
+            ...(productId !== (original?.telegramAdProductId ?? null) ? { telegramAdProductId: productId } : {}),
+            ...(managedPostDraft && p.id === placementId ? { managedPostDraft } : {}),
+            ...(postAttachment && p.id === placementId ? { postAttachment } : {}),
+          };
+        }),
+        payments: paymentsToSave.map((p) => {
+          const amount = toNumber(p.amount);
+          const original = sale.payments?.find((item) => item.id === p.id);
+          const sameTime = original && p.paidDate === channelLocalDateKey(original.paidAt, paymentTimezone) &&
+            p.paidTime === channelLocalTime(original.paidAt, paymentTimezone);
           return {
             id: p.id,
             accountId: p.accountId,
             amount,
-            currency:
-              props.accounts.find((a) => a.id === p.accountId)?.currency ??
-              p.currency,
-            paidAt: new Date(
-              `${p.paidDate}T${p.paidTime || "00:00"}:00`,
-            ).toISOString(),
+            currency: props.accounts.find((a) => a.id === p.accountId)?.currency ?? p.currency,
+            paidAt: sameTime ? original.paidAt : zonedDateTimeToUtc(p.paidDate, p.paidTime, paymentTimezone).toISOString(),
             notes: p.notes.trim() || null,
-            allocations: allocatePayment(amount, placements),
+            allocations: original?.allocations?.length &&
+              toNumber(original.amount) === amount && !priceChanged
+              ? original.allocations.map((allocation) => ({
+                  placementId: allocation.telegramAdSalePlacementId,
+                  amount: toNumber(allocation.amount),
+                }))
+              : allocatePayment(amount, placements),
           };
         }),
       });
-      if (!paymentsOnly) props.onClose();
+      props.onClose();
     } catch (cause) {
-      if (paymentsOnly) preserveDraftOnSaleRefreshRef.current = null;
       setError(
         cause instanceof Error ? cause.message : "Could not save changes.",
       );
@@ -397,11 +380,6 @@ export function SaleDetailsModal(props: {
           products={
             props.productsByChannelId[placement.telegramChannelId] ?? []
           }
-          priceChanged={priceChanged}
-          total={total}
-          hasPayment={payments.length > 0}
-          syncPayment={syncPayment}
-          onSync={setSyncPayment}
           onChange={changePlacement}
           onLoadPosts={() =>
             props.onLoadPlacementPosts?.(placement) ?? Promise.resolve([])
@@ -463,6 +441,7 @@ export function SaleDetailsModal(props: {
           }
           productsByChannelId={props.productsByChannelId}
           onApplyAll={applyChangesToAllPlacements}
+          drafts={placements}
           onTogglePayment={() => setPaymentOpen((v) => !v)}
           onCreatePayment={
             props.onCreatePayment
@@ -478,7 +457,6 @@ export function SaleDetailsModal(props: {
           }
           onAction={(action, placement) => props.onAction(sale, action, placement)}
           onSave={save}
-          onSavePayment={() => save(undefined, undefined, undefined, true)}
           saving={saving}
           error={error}
         />

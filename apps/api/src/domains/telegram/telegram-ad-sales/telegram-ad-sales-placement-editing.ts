@@ -125,6 +125,7 @@ export async function updatePlacement(
     | 'invalidateAvailabilityCache'
     | 'mapPlacement'
     | 'notificationProjector'
+    | 'notifyAdDeletionDueWorkChanged'
     | 'prisma'
     | 'telegramManagedPostPublicationService'
     | 'workspace'
@@ -164,12 +165,17 @@ export async function updatePlacement(
       : (product?.deleteAfterHours ?? null);
   const nextIsPermanent =
     dto.telegramAdProductId === undefined ? placement.isPermanentSnapshot : (product?.isPermanent ?? false);
+  const formatChanged =
+    dto.telegramAdProductId !== undefined &&
+    (product?.id ?? null) !== placement.telegramAdProductId;
+  const scheduleChanged = nextScheduledAt.getTime() !== placement.scheduledAt.getTime();
   const managedPostScheduleIsOutOfSync =
     placement.managedPost?.status === TelegramManagedPostStatus.SCHEDULED &&
     placement.managedPost.scheduledAt?.getTime() !== nextScheduledAt.getTime();
   const reschedulesManagedPost =
-    dto.scheduledAt !== undefined &&
-    (nextScheduledAt.getTime() !== placement.scheduledAt.getTime() || managedPostScheduleIsOutOfSync) &&
+    !placement.publishedAt &&
+    placement.managedPost?.status !== TelegramManagedPostStatus.PUBLISHED &&
+    (formatChanged || (dto.scheduledAt !== undefined && (scheduleChanged || managedPostScheduleIsOutOfSync))) &&
     (placement.status === TelegramAdPlacementStatus.SCHEDULED ||
       placement.managedPost?.status === TelegramManagedPostStatus.SCHEDULED) &&
     Boolean(placement.managedPostId);
@@ -187,8 +193,8 @@ export async function updatePlacement(
       ? {}
       : {
           scheduledAt: new Date(dto.scheduledAt),
-          ...(reschedulesManagedPost ? { scheduledManagedAt: nextScheduledAt } : {}),
         }),
+    ...(reschedulesManagedPost ? { scheduledManagedAt: nextScheduledAt } : {}),
     ...(dto.telegramAdProductId === undefined
       ? {}
       : {
@@ -198,7 +204,7 @@ export async function updatePlacement(
           deleteAfterHoursSnapshot: nextDeleteAfterHours,
           isPermanentSnapshot: nextIsPermanent,
         }),
-    ...((dto.scheduledAt !== undefined || dto.telegramAdProductId !== undefined) && placement.publishedAt
+    ...((scheduleChanged || formatChanged) && placement.publishedAt && !placement.deletedAt
       ? {
           plannedDeleteAt: calculateAdPlacementDeleteAt({
             scheduledAt: nextScheduledAt,
@@ -254,6 +260,7 @@ export async function updatePlacement(
         data,
       });
   await operations.notificationProjector?.publish(notificationIds);
+  if (data.plannedDeleteAt !== undefined) operations.notifyAdDeletionDueWorkChanged();
   operations.invalidateAvailabilityCache(workspaceId);
   return {
     ...operations.mapPlacement(updated),

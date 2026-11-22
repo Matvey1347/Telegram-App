@@ -7,6 +7,7 @@ import type { Account } from "@/lib/api";
 import {
   autoAllocatePayment,
   toNumber,
+  zonedDateTimeToUtc,
 } from "@/lib/features/growth/telegram-ad-sales";
 import {
   PaymentEditor,
@@ -26,6 +27,7 @@ export function RegisterPaymentForm({
   sale,
   accounts,
   defaultCurrency,
+  defaultSchedule,
   onCancel,
   onSubmit,
   busy = false,
@@ -33,6 +35,7 @@ export function RegisterPaymentForm({
   sale: TelegramAdSale;
   accounts: Account[];
   defaultCurrency: string;
+  defaultSchedule?: { date: string; time: string; timezone: string };
   onCancel: () => void;
   onSubmit: (payload: RegisterPaymentPayload) => Promise<void>;
   busy?: boolean;
@@ -47,8 +50,8 @@ export function RegisterPaymentForm({
     accountId: preferredAccount?.id ?? "",
     amount: initialAmount ? String(initialAmount) : "",
     currency: preferredAccount?.currency ?? defaultCurrency,
-    paidDate: localDate(now),
-    paidTime: localTime(now),
+    paidDate: defaultSchedule?.date || localDate(now),
+    paidTime: defaultSchedule?.time || localTime(now),
     notes: "",
   });
   const [submitting, setSubmitting] = useState(false);
@@ -72,6 +75,7 @@ export function RegisterPaymentForm({
     <div className="space-y-4">
       <PaymentEditor
         payment={payment}
+        showDateTime={!defaultSchedule}
         accounts={accounts}
         onChange={(patch) =>
           setPayment((current) => ({ ...current, ...patch }))
@@ -113,9 +117,9 @@ export function RegisterPaymentForm({
             !payment.paidTime
           }
           onClick={async () => {
-            const paidAt = new Date(
-              `${payment.paidDate}T${payment.paidTime}:00`,
-            );
+            const paidAt = defaultSchedule
+              ? zonedDateTimeToUtc(defaultSchedule.date, defaultSchedule.time, defaultSchedule.timezone)
+              : new Date(`${payment.paidDate}T${payment.paidTime}:00`);
             if (Number.isNaN(paidAt.getTime())) {
               setError("Choose a valid payment date and time.");
               return;

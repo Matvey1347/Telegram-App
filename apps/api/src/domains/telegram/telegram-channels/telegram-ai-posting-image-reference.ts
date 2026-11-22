@@ -1,7 +1,8 @@
 import sharp from 'sharp';
-import { TELEGRAM_AI_POSTING_MAX_MEDIA_REFERENCES } from '@telegram-system/shared';
-
-const MAX_REFERENCE_BYTES = 2 * 1024 * 1024;
+import {
+  TELEGRAM_AI_POSTING_MAX_MEDIA_REFERENCES,
+  TELEGRAM_AI_POSTING_MAX_REFERENCE_IMAGE_BYTES,
+} from '@telegram-system/shared';
 
 export async function createTelegramAiPostingReferenceSheet(
   urls: string[],
@@ -11,7 +12,10 @@ export async function createTelegramAiPostingReferenceSheet(
   if (!selected.length) return null;
   const inputs = await Promise.all(selected.map(download));
   if (
-    inputs.some((bytes) => !bytes.length || bytes.length > MAX_REFERENCE_BYTES)
+    inputs.some(
+      (bytes) =>
+        !bytes.length || bytes.length > TELEGRAM_AI_POSTING_MAX_REFERENCE_IMAGE_BYTES,
+    )
   )
     throw new Error('AI_POSTING_IMAGE_REFERENCE_INVALID');
   const columns = selected.length === 1 ? 1 : selected.length <= 4 ? 2 : 3;

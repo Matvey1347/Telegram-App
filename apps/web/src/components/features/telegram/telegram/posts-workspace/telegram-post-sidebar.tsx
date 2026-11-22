@@ -2,6 +2,8 @@
 
 import { wantsNewTab, managedPostStatusKey } from "../managed-post-identity";
 
+import { useState } from "react";
+import { IconAvatar } from "@/components/icons/icon-avatar";
 import { Card, LoadingState, EmptyState } from "@/components/ui/primitives";
 import {
   FileText,
@@ -115,6 +117,7 @@ export function TelegramPostSidebar({ model }: { model: Model }) {
     busy,
     setBulkDeleteOpen,
   } = model;
+  const [editorialOpen, setEditorialOpen] = useState<Record<string, boolean>>({});
   return (
     <Card className="min-w-0">
       <div className="mb-3 flex items-center justify-between gap-2">
@@ -189,14 +192,25 @@ export function TelegramPostSidebar({ model }: { model: Model }) {
               <PendingPostRow key={pending.id} pending={pending} />
             ))}
             {orderedSidebarSections.map((section) => {
-              const collapsed =
-                section.group && collapsedGroupIds.includes(section.group.id);
+              const expandable = Boolean(section.group || section.editorial);
+              const collapsed = section.editorial
+                ? !(editorialOpen[section.key] ?? (
+                    Boolean(postSearch.trim()) || section.posts.some((post) => post.id === editing?.id)
+                  ))
+                : Boolean(section.group && collapsedGroupIds.includes(section.group.id));
               const statusNumberingEnabled = Boolean(
                 section.group?.statusNumberingEnabled,
               );
-              const sectionReadOnly = section.posts.some(
-                (post) => post.readOnlyTelegramPost,
+              const sectionReadOnly = Boolean(section.editorial) || section.posts.some(
+                (post) => post.readOnlyTelegramPost || (!section.group && Boolean(post.groupId)),
               );
+              const toggleSection = () => {
+                if (section.editorial) {
+                  setEditorialOpen((current) => ({ ...current, [section.key]: collapsed }));
+                } else if (section.group) {
+                  toggleGroupCollapsed(section.group.id);
+                }
+              };
               const sectionPostIds = section.posts.map((post) => post.id);
               const allSectionSelected = sectionPostIds.every((id) =>
                 selectedPostIds.includes(id),
@@ -211,6 +225,7 @@ export function TelegramPostSidebar({ model }: { model: Model }) {
                   onDragOver={(event) => {
                     event.preventDefault();
                     if (
+                      sectionReadOnly ||
                       !draggedSidebarKey ||
                       draggedSidebarKey === section.key
                     ) {
@@ -237,12 +252,12 @@ export function TelegramPostSidebar({ model }: { model: Model }) {
                     );
                   }}
                   className={`${
-                    section.group
+                    expandable
                       ? "overflow-hidden rounded-lg border border-neutral-800 bg-neutral-950/40"
                       : "space-y-2"
                   } ${draggedSidebarKey === section.key ? "border-blue-500 opacity-60" : ""}`}
                 >
-                  {section.group ? (
+                  {expandable ? (
                     <div className="flex items-center gap-2 border-b border-neutral-800 px-2 py-2">
                       {!sectionReadOnly ? (
                         <GripVertical
@@ -252,7 +267,8 @@ export function TelegramPostSidebar({ model }: { model: Model }) {
                       ) : null}
                       <button
                         type="button"
-                        onClick={() => toggleGroupCollapsed(section.group!.id)}
+                        aria-expanded={!collapsed}
+                        onClick={toggleSection}
                         className="flex min-w-0 flex-1 items-center gap-2 text-left"
                       >
                         {collapsed ? (
@@ -266,15 +282,30 @@ export function TelegramPostSidebar({ model }: { model: Model }) {
                             className="shrink-0 text-neutral-400"
                           />
                         )}
-                        <PostIcon
-                          iconId={section.group.icon}
-                          icon={section.group.iconPresentation}
-                          label={telegramPostGroupTitle(section.group, t)}
-                          bare
-                        />
-                        <span className="truncate text-sm font-medium text-white">
-                          {telegramPostGroupTitle(section.group, t)}
-                        </span>
+                        {section.editorial ? (
+                          <span className="min-w-0 flex-1">
+                            <span className="flex items-center gap-2 text-xs text-neutral-400">
+                              <IconAvatar icon={section.editorial.sphereIcon} label={section.editorial.sphereName} size="xs" />
+                              <span className="break-words">{section.editorial.sphereName}</span>
+                            </span>
+                            <span className="mt-1 flex items-center gap-2 text-sm font-medium text-white">
+                              <IconAvatar icon={section.editorial.rubricIcon} label={section.editorial.rubricName} size="xs" />
+                              <span className="break-words">{section.editorial.rubricName}</span>
+                            </span>
+                          </span>
+                        ) : section.group ? (
+                          <>
+                            <PostIcon
+                              iconId={section.group.icon}
+                              icon={section.group.iconPresentation}
+                              label={telegramPostGroupTitle(section.group, t)}
+                              bare
+                            />
+                            <span className="truncate text-sm font-medium text-white">
+                              {telegramPostGroupTitle(section.group, t)}
+                            </span>
+                          </>
+                        ) : null}
                         <span className="text-xs text-neutral-500">
                           {section.posts.length + section.pendingPosts.length}
                         </span>
@@ -300,7 +331,7 @@ export function TelegramPostSidebar({ model }: { model: Model }) {
                   ) : null}
                   {!collapsed ? (
                     <div
-                      className={section.group ? "space-y-2 p-2" : "space-y-2"}
+                      className={expandable ? "space-y-2 p-2" : "space-y-2"}
                     >
                       {section.posts.map((post) => {
                         const isSaving = savingPostIds.includes(post.id);
@@ -350,13 +381,11 @@ export function TelegramPostSidebar({ model }: { model: Model }) {
                                     : "border-neutral-800 hover:bg-neutral-900"
                             }`}
                           >
-                            {!section.group ? (
-                              post.readOnlyTelegramPost ? null : (
-                                <GripVertical
-                                  size={15}
-                                  className="shrink-0 cursor-grab text-neutral-500"
-                                />
-                              )
+                            {!expandable && !sectionReadOnly ? (
+                              <GripVertical
+                                size={15}
+                                className="shrink-0 cursor-grab text-neutral-500"
+                              />
                             ) : null}
                             <div className="flex min-w-0 flex-1 items-center gap-2 text-left">
                               {isSaving ? (

@@ -1,4 +1,5 @@
 export const TELEGRAM_AI_POSTING_MAX_MEDIA_REFERENCES = 8;
+export const TELEGRAM_AI_POSTING_MAX_REFERENCE_IMAGE_BYTES = 10 * 1024 * 1024;
 
 export type TelegramAiPostingChatMessage = { id?: string; replyToMessageId?: string | null; role: 'user' | 'assistant'; text: string; suggestedTopic?: string };
 export type TelegramAiPostingChatAction = {
@@ -46,4 +47,10 @@ export type TelegramAiPostingAnalytics = {
     daily: { limit: string | null; spent: string; reserved: string; remaining: string | null; exhausted: boolean };
     monthly: { limit: string | null; spent: string; reserved: string; remaining: string | null; exhausted: boolean };
   };
+};
+
+export type TelegramAiPostingDraftClassification = {
+  sphereId: string;
+  rubricId: string;
+  lengthId?: string | null;
 };

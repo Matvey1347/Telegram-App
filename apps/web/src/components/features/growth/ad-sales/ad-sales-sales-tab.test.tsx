@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type {
   TelegramAdSale,
@@ -9,6 +9,15 @@ import {
   advertiserAvatarUrl,
   SalesTab,
 } from "./ad-sales-sales-tab";
+
+vi.mock("@/components/icons/icon-avatar", () => ({
+  IconAvatar: ({ label, icon }: { label?: string; icon?: { url?: string } }) => (
+    <span role="img" aria-label={label}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img alt={label} src={icon?.url} />
+    </span>
+  ),
+}));
 
 describe("SalesTab", () => {
   it("uses the persisted CRM avatar instead of constructing a public Telegram URL", () => {
@@ -129,7 +138,24 @@ describe("SalesTab", () => {
 
     render(
       <SalesTab
-        sales={[sale]}
+        sales={[sale, {
+          ...sale,
+          id: "booking-only",
+          advertiserSummary: null,
+          advertiserNameSnapshot: "Booking only",
+          advertiserTelegramSnapshot: null,
+          placements: [{
+            ...sale.placements[0],
+            id: "booking-only-placement",
+            status: "RESERVED",
+            managedPostId: null,
+            managedPost: null,
+            publishedAt: null,
+            telegramPostId: null,
+            telegramPost: null,
+            scheduledManagedAt: null,
+          }],
+        }]}
         channels={[
           {
             id: "channel-1",
@@ -170,16 +196,19 @@ describe("SalesTab", () => {
     expect(onOpenSale).not.toHaveBeenCalled();
     expect(screen.getByText("Mentor Self-development")).toBeTruthy();
     expect(screen.getByText("Business Patterns")).toBeTruthy();
-    expect(screen.getByText("Repeat sales")).toBeTruthy();
-    expect(screen.getByText("Matthew Kayden")).toBeTruthy();
-    expect(screen.getByText("Money received")).toBeTruthy();
-    expect(screen.getByText("2/2 posts linked")).toBeTruthy();
+    const buyer = within(screen.getByText("Buyer").closest("tr")!);
+    expect(buyer.getByText("Repeat sales")).toBeTruthy();
+    expect(buyer.getByText("Matthew Kayden")).toBeTruthy();
+    expect(buyer.getByText("Money received")).toBeTruthy();
+    expect(buyer.getByText("2/2 posts linked")).toBeTruthy();
+    expect(screen.getByText("Booking only")).toBeTruthy();
+    expect(screen.queryByText("0/1 posts linked")).toBeNull();
     expect(screen.queryByText("20/08/2026")).toBeNull();
-    expect(screen.getByText("4,100.00 UAH")).toBeTruthy();
-    expect(screen.getByLabelText("Views: 2000")).toBeTruthy();
-    expect(screen.getByLabelText("Reactions: 75")).toBeTruthy();
-    expect(screen.getByLabelText("Comments: 10")).toBeTruthy();
-    expect(screen.getByLabelText("Forwards: 30")).toBeTruthy();
+    expect(buyer.getByText("4,100.00 UAH")).toBeTruthy();
+    expect(buyer.getByLabelText("Views: 2000")).toBeTruthy();
+    expect(buyer.getByLabelText("Reactions: 75")).toBeTruthy();
+    expect(buyer.getByLabelText("Comments: 10")).toBeTruthy();
+    expect(buyer.getByLabelText("Forwards: 30")).toBeTruthy();
     expect(screen.queryByText(/USD/)).toBeNull();
     expect(screen.queryByText("Untitled Sale")).toBeNull();
     expect(screen.queryByText("Payment status")).toBeNull();

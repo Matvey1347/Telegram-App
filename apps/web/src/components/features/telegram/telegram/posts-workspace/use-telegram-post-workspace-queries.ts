@@ -76,6 +76,7 @@ export function useTelegramPostWorkspaceQueries(input: Input) {
   const posts = {
     ...postsPage,
     data: postsData,
+    editorialPairs: postsPage.data?.editorialPairs,
   };
 
   const authoritativeEditingPost =

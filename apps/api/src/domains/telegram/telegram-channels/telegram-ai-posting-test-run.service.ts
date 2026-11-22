@@ -14,7 +14,7 @@ import { TelegramManagedPostCommandService } from './telegram-managed-post-comma
 import { TelegramManagedPostRevisionStore } from './telegram-managed-post-revision.store';
 import { TelegramAiPostingImageService } from './telegram-ai-posting-image.service';
 import { saveRejectedTelegramAiPostingImage } from './telegram-ai-posting-image-avoidance.store';
-import { TelegramAiPostingStructureService } from './telegram-ai-posting-structure.service';
+import { resolveEditorialDraftClassification } from './telegram-managed-draft-editorial';
 import { telegramHtmlToManagedMarkup } from '@api/telegram/shared/markup/telegram-markup';
 import {
   applyTelegramAiPostingTestRunFormatting,
@@ -50,7 +50,6 @@ export class TelegramAiPostingTestRunService {
     private readonly posts: TelegramManagedPostCommandService,
     private readonly revisions: TelegramManagedPostRevisionStore,
     private readonly images: TelegramAiPostingImageService,
-    private readonly structure: TelegramAiPostingStructureService,
   ) {}
 
   async listRuns(userId: string, channelId: string) {
@@ -419,7 +418,9 @@ export class TelegramAiPostingTestRunService {
           configurationVersion: true,
           aiDailyBudget: true,
           aiMonthlyBudget: true,
-          telegramChannel: { select: { photoUrl: true } },
+          telegramChannel: {
+            select: { photoUrl: true, username: true, title: true },
+          },
         },
       });
       if (!settings)
@@ -476,6 +477,8 @@ export class TelegramAiPostingTestRunService {
           imageMode: 'ai',
           referenceImageUrls: preference?.references ?? [],
           channelAvatarUrl: settings.telegramChannel?.photoUrl,
+          channelUsername: settings.telegramChannel?.username,
+          channelTitle: settings.telegramChannel?.title,
           imageCandidates: [],
           prompt: [
             item.imagePrompt,
@@ -628,8 +631,6 @@ export class TelegramAiPostingTestRunService {
         throw new ConflictException('AI_POSTING_APPROVED_CONTENT_CHANGED');
       if (!item.text.trim() || item.text.length > (item.imageUrl ? 1024 : 4096))
         throw new ConflictException('AI_POSTING_EDIT_TEXT_INVALID');
-      const format = typeof item.format === 'string' ? item.format : '';
-      const category = typeof item.category === 'string' ? item.category : '';
       const prepared = await this.posts.prepareManagedPostCreate(
         userId,
         channelId,
@@ -646,77 +647,31 @@ export class TelegramAiPostingTestRunService {
         });
         if (!claim.count)
           throw new ConflictException('AI_POSTING_TEST_RUN_CHANGED');
-        const rows = await tx.$queryRaw<
-          Array<{ configuration: Prisma.JsonValue }>
-        >(Prisma.sql`
-          SELECT "configuration" FROM "TelegramAiPostingSettings"
-          WHERE "workspaceId" = ${workspaceId} AND "telegramChannelId" = ${channelId}
-          FOR SHARE
-        `);
-        const storedConfig = rows[0]?.configuration;
-        const config =
-          storedConfig &&
-          typeof storedConfig === 'object' &&
-          !Array.isArray(storedConfig)
-            ? storedConfig
-            : {};
-        const allowGroups = config.allowCreateGroups === true;
-        const allowHypotheses = config.allowCreateHypotheses === true;
-        const selectedName = (
-          name: string,
-          options: Prisma.JsonValue | undefined,
-          allowCreate: boolean,
-        ) => {
-          const normalized = name.trim().toLocaleLowerCase();
-          if (!normalized) return '';
-          const selected =
-            Array.isArray(options) &&
-            options.some(
-              (option) =>
-                typeof option === 'string' &&
-                option.trim().toLocaleLowerCase() === normalized,
-            );
-          return selected ||
-            (allowCreate && !['standard', 'general'].includes(normalized))
-            ? name
-            : '';
-        };
-        const groupName = selectedName(format, config.formats, allowGroups);
-        const hypothesisName = selectedName(
-          category,
-          config.categories,
-          allowHypotheses,
-        );
-        const structure =
-          groupName || hypothesisName
-            ? await this.structure.resolveForDraft(tx, {
-                workspaceId,
-                channelId,
-                memberId: prepared.assignedMemberId,
-                format: groupName,
-                category: hypothesisName,
-                allowGroups,
-                allowHypotheses,
-              })
-            : { groupId: null, hypothesisId: null };
+        const sphereId = item.editorialMetadata?.sphere?.id;
+        const rubricId = item.editorialMetadata?.rubric?.id;
+        const classification =
+          sphereId && rubricId
+            ? await resolveEditorialDraftClassification(
+                tx,
+                { workspaceId, telegramChannelId: channelId },
+                {
+                  sphereId,
+                  rubricId,
+                  lengthId: item.editorialMetadata?.length?.id,
+                },
+              )
+            : null;
         const post = await this.posts.createManagedPostRecord(tx, {
           ...prepared,
           aiPostingReviewStatus: 'APPROVED',
           aiPostingApprovedWithoutEdits: !item.ownerEdited,
           aiPostingRecheckRequired: false,
-          ...(structure.groupId ? { groupId: structure.groupId } : {}),
+          ...classification,
           imageUrls: item.imageUrl ? [item.imageUrl] : [],
           mediaItems: item.imageUrl
             ? [{ kind: 'PHOTO', url: item.imageUrl }]
             : [],
         });
-        if (structure.hypothesisId)
-          await tx.telegramManagedPostContentHypothesis.create({
-            data: {
-              managedPostId: post.id,
-              hypothesisId: structure.hypothesisId,
-            },
-          });
         await tx.aiOperation.updateMany({
           where: {
             workspaceId,

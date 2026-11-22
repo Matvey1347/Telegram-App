@@ -7,10 +7,12 @@ import { MemberSelect } from "@/components/features/workspace/member-select";
 import { CrmClientField } from "@/components/features/growth/crm/crm-client-field";
 import { TelegramEntityAvatar } from "@/components/features/telegram/telegram/telegram-entity-avatar";
 import { adSaleOriginOptions } from "./ad-sale-origin";
-import { allowedSaleActions, SaleStatusActions, type SaleActionKey } from "./sale-status-actions";
+import { allowedSaleActions, type SaleActionKey } from "./sale-status-actions";
 import { CustomSelect, FormField, IconButton, Skeleton } from "@/components/ui/primitives";
 import type { Account, TelegramChannel } from "@/lib/api";
 import { buildTelegramPostsUrl } from "@/lib/features/telegram/telegram-posts-url";
+import { hasLinkedPlacementPost } from "./ad-placement-lifecycle";
+import { isValidZonedDateTimeInput, zonedDateTimeToUtc } from "@/lib/features/growth/telegram-ad-sales";
 import { formatDateTime } from "@/lib/date-format";
 import { placementFormatLabel, placementRunWindow } from "./ad-placement-lifecycle";
 import { AdSalePostMetrics, PostMetrics } from "./ad-sale-post-metrics";
@@ -21,12 +23,12 @@ import { DealFinanceTransaction } from "./deal-finance-transaction";
 import { nativeAdSalePayment } from "./ad-sale-native-payment";
 import { formatCompactMoney } from "@/lib/features/finance/money";
 import { AdSalePlacementValue } from "./ad-sale-placement-value";
-import { PlacementDeletionCountdown, SaveFooter, type PaymentDraft } from "./ad-sales-sale-detail-editors";
+import { PlacementDeletionCountdown, SaveFooter, type PaymentDraft, type PlacementDraft } from "./ad-sales-sale-detail-editors";
 
 export function DealDetailsSkeleton() {
   return (
     <div aria-label="Loading deal" className="space-y-5">
-      <section className="grid gap-3 rounded-xl border border-neutral-800 bg-neutral-950/45 p-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] xl:items-end">
+      <section className="grid gap-3 rounded-xl border border-neutral-800 bg-neutral-950/45 p-4 xl:grid-cols-3 xl:items-end">
         {Array.from({ length: 3 }, (_, index) => (
           <div key={index} className="space-y-2">
             <Skeleton className="h-4 w-20" />
@@ -107,7 +109,8 @@ export function DealOverview(props: {
   onSelectAdvertiser: (advertiser: import("@telegram-system/shared").TelegramAdvertiser | null) => void;
   onPlacement: (v: string) => void;
   productsByChannelId: Record<string, TelegramAdProduct[]>;
-  onApplyAll: (changes: AdSaleApplyAllChanges) => Promise<void>;
+  onApplyAll: (changes: AdSaleApplyAllChanges) => void;
+  drafts: PlacementDraft[];
   onSharedPost?: () => void;
   onTogglePayment: () => void;
   onCreatePayment?: (payload: RegisterPaymentPayload) => Promise<void>;
@@ -115,7 +118,6 @@ export function DealOverview(props: {
   onDeletePayment?: (id: string) => void;
   onAction: (a: SaleActionKey, placement?: TelegramAdSale["placements"][number]) => Promise<void>;
   onSave: () => Promise<void>;
-  onSavePayment: () => Promise<void>;
   saving: boolean;
   error: string;
 }) {
@@ -139,7 +141,7 @@ export function DealOverview(props: {
   return (
     <div className="min-w-0 space-y-5">
       <section className="min-w-0 space-y-4 rounded-xl border border-neutral-800 bg-neutral-950/45 p-3 sm:p-4">
-        <div className="grid min-w-0 gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] xl:items-end">
+        <div className="grid min-w-0 gap-3 xl:grid-cols-3 xl:items-end">
           <CrmClientField
             contact={props.buyerContact}
             selectedAdvertiserId={props.selectedAdvertiserId}
@@ -162,11 +164,6 @@ export function DealOverview(props: {
               onChange={props.onSellerMember}
             />
           </FormField>
-          <SaleStatusActions
-            sale={props.sale}
-            onAction={props.onAction}
-            excludeActions={["delete-publications"]}
-          />
         </div>
         <AdSaleDealPlacementActions
           key={props.sale.id}
@@ -174,6 +171,7 @@ export function DealOverview(props: {
           productsByChannelId={props.productsByChannelId}
           saving={props.saving}
           onApplyAll={props.onApplyAll}
+          drafts={props.drafts}
           onSharedPost={props.onSharedPost} onOperatorAction={props.onAction}
         />
       </section>
@@ -199,7 +197,17 @@ export function DealOverview(props: {
           </div>
         </div>
         <div className="grid gap-3 md:grid-cols-2">
-          {props.sale.placements.map((p) => (
+          {props.sale.placements.map((placement) => {
+            const draft = props.drafts.find((item) => item.id === placement.id);
+            const linked = hasLinkedPlacementPost(placement);
+            const product = draft?.telegramAdProductId !== placement.telegramAdProductId
+              ? props.productsByChannelId[placement.telegramChannelId]?.find((item) => item.id === draft?.telegramAdProductId)
+              : undefined;
+            const scheduledAt = draft && isValidZonedDateTimeInput(draft.date, draft.time)
+              ? zonedDateTimeToUtc(draft.date, draft.time, draft.timezone).toISOString()
+              : placement.scheduledAt;
+            const p = { ...placement, scheduledAt };
+            return (
             <div
               key={p.id}
               role="button"
@@ -212,7 +220,7 @@ export function DealOverview(props: {
                   props.onPlacement(p.id);
                 }
               }}
-              className="cursor-pointer border-y border-neutral-800 py-4 text-left transition hover:border-neutral-700 sm:rounded-xl sm:border sm:bg-neutral-950 sm:p-4"
+              className={`cursor-pointer rounded-xl border border-neutral-800 bg-neutral-950 text-left transition hover:border-neutral-700 ${linked ? "p-4 sm:p-5" : "px-3 py-2.5"}`}
             >
               <div className="flex justify-between gap-3">
                 <div className="min-w-0">
@@ -238,15 +246,15 @@ export function DealOverview(props: {
                     {placementRunWindow(p) ??
                       `Scheduled ${formatDateTime(p.scheduledAt, undefined, p.timezone)}`}
                   </p>
-                  <PlacementDeletionCountdown placement={p} now={now} />
-                  {placementFormatLabel(p) ? (
+                  {linked ? <PlacementDeletionCountdown placement={p} now={now} /> : null}
+                  {product || placementFormatLabel(p) ? (
                     <p className="mt-1 text-xs text-neutral-400">
-                      Format {placementFormatLabel(p)}
-                      {p.isPermanentSnapshot
+                      Format {product?.name ?? placementFormatLabel(p)}
+                      {linked && ((product?.isPermanent ?? p.isPermanentSnapshot)
                         ? " · Permanent"
-                        : p.deleteAfterHoursSnapshot != null
-                          ? ` · Auto-delete after ${p.deleteAfterHoursSnapshot}h`
-                          : " · No auto-delete"}
+                        : (product ? product.deleteAfterHours : p.deleteAfterHoursSnapshot) != null
+                          ? ` · Auto-delete after ${product ? product.deleteAfterHours : p.deleteAfterHoursSnapshot}h`
+                          : " · No auto-delete")}
                     </p>
                   ) : null}
                 </div>
@@ -259,21 +267,18 @@ export function DealOverview(props: {
                   }}
                 />
               </div>
-              <div className="mt-4 flex min-w-0 flex-col gap-2 border-t border-neutral-800 pt-3 text-sm sm:flex-row sm:items-start sm:justify-between">
+              {linked && p.managedPost?.text ? (
+                <p className="mt-3 line-clamp-4 whitespace-pre-wrap break-words rounded-lg bg-neutral-900/70 px-3 py-2 text-sm text-neutral-300">
+                  {p.managedPost.text}
+                </p>
+              ) : null}
+              {linked ? <div className="mt-4 flex min-w-0 flex-col gap-2 border-t border-neutral-800 pt-3 text-sm sm:flex-row sm:items-start sm:justify-between">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                    <span
-                      className={
-                        p.publishedAt || p.telegramPostId || p.managedPostId
-                          ? "text-emerald-400"
-                          : "text-amber-300"
-                      }
-                    >
+                    <span className="text-emerald-400">
                       {p.publishedAt || p.telegramPostId
                         ? "Post published"
-                        : p.managedPostId
-                          ? "Post configured"
-                          : "No post selected"}
+                        : "Post configured"}
                     </span>
                     {p.managedPostId ||
                     p.telegramPostUrl ||
@@ -322,9 +327,9 @@ export function DealOverview(props: {
                   ) : null}
                 </div>
                 <AdSalePlacementValue sale={props.sale} placement={p} />
-              </div>
+              </div> : null}
             </div>
-          ))}
+          ); })}
         </div>
       </section>
       <DealFinanceTransaction
@@ -336,8 +341,7 @@ export function DealOverview(props: {
         onPayment={props.onPayment}
         onCreatePayment={props.onCreatePayment}
         onDeletePayment={props.onDeletePayment}
-        onSave={props.onSavePayment}
-        saving={props.saving}
+        placementSchedule={props.drafts[0]}
       />
       <SaveFooter
         error={props.error}

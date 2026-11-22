@@ -16,6 +16,7 @@ import { TelegramAiPostingAutopilotNotificationService } from './telegram-ai-pos
 import { classifyAutopilotError } from './telegram-ai-posting-autopilot-error';
 import { WorkspaceService } from '../../../common/workspace.service';
 import { notifyScheduledTaskDueWorkChanged } from '../../../common/scheduled-task-wake-notifier';
+import { editorialDraftWhere } from './telegram-managed-draft-editorial';
 import { markTelegramAiPostingRunForReview } from './telegram-ai-posting-review-queue';
 
 const LEASE_MS = 60 * 60_000;
@@ -451,16 +452,11 @@ export class TelegramAiPostingAutopilotService {
       errors[0],
     );
     // Stock is counted after scheduling so already available drafts are always consumed first.
-    let drafts = await this.prisma.telegramManagedPost.count({
-      where: {
-        workspaceId,
-        telegramChannelId: channelId,
-        status: 'DRAFT',
-        origin: 'SYSTEM',
-        text: { not: null },
-        adSalePlacements: { none: {} },
-      },
-    });
+    const readyDraftsWhere = {
+      ...editorialDraftWhere({ workspaceId, telegramChannelId: channelId }),
+      text: { not: null },
+    };
+    let drafts = await this.prisma.telegramManagedPost.count({ where: readyDraftsWhere });
     for (
       let pass = 0;
       drafts < settings.targetReadyDrafts &&
@@ -595,16 +591,7 @@ export class TelegramAiPostingAutopilotService {
         pass + 1,
       );
       if (settings.mode === 'REVIEW') break;
-      drafts = await this.prisma.telegramManagedPost.count({
-        where: {
-          workspaceId,
-          telegramChannelId: channelId,
-          status: 'DRAFT',
-          origin: 'SYSTEM',
-          text: { not: null },
-          adSalePlacements: { none: {} },
-        },
-      });
+      drafts = await this.prisma.telegramManagedPost.count({ where: readyDraftsWhere });
       try {
         const scheduledInWindow = await this.prisma.telegramManagedPost.count({
           where: {

@@ -90,6 +90,8 @@ export async function generateTelegramAiPostingDraft(
     userId: string;
     workspaceId: string;
     channelId: string;
+    channelUsername?: string | null;
+    channelTitle?: string | null;
     topic: string;
     config: Record<string, any>;
     referenceImage?: Buffer | null;
@@ -186,30 +188,6 @@ export async function generateTelegramAiPostingDraft(
       ];
       continue;
     }
-    const choose = (
-      value: unknown,
-      options: unknown,
-      allowNew: boolean,
-      fallback: string,
-    ) => {
-      const choices = Array.isArray(options)
-        ? options.filter(
-            (option): option is string =>
-              typeof option === 'string' && Boolean(option.trim()),
-          )
-        : [];
-      const proposed =
-        typeof value === 'string' ? value.trim().slice(0, 120) : '';
-      if (allowNew && proposed) return proposed;
-      return (
-        choices.find(
-          (choice) =>
-            choice.toLocaleLowerCase() === proposed.toLocaleLowerCase(),
-        ) ??
-        choices[0] ??
-        fallback
-      );
-    };
     const styleIndex =
       typeof value.imageStyleIndex === 'number' &&
       Number.isInteger(value.imageStyleIndex) &&
@@ -300,7 +278,7 @@ export async function generateTelegramAiPostingDraft(
       imagePrompt: [
         typeof value.imagePrompt === 'string' && value.imagePrompt.trim()
           ? value.imagePrompt.trim()
-          : `Editorial illustration for ${input.topic}`,
+          : `Editorial visual for ${input.topic}`,
         selectedPreference
           ? `Visual preference: ${selectedPreference.name}${selectedPreference.description ? `. ${selectedPreference.description}` : ''}`
           : '',
@@ -311,18 +289,8 @@ export async function generateTelegramAiPostingDraft(
         typeof value.imageSearchQuery === 'string'
           ? value.imageSearchQuery.trim().slice(0, 200)
           : '',
-      format: choose(
-        value.format,
-        input.config.formats,
-        input.config.allowCreateGroups === true,
-        'standard',
-      ),
-      category: choose(
-        value.category,
-        input.config.categories,
-        input.config.allowCreateHypotheses === true,
-        'general',
-      ),
+      format: 'standard',
+      category: rubric?.name ?? 'general',
       editorialMetadata: {
         sphere: sphere
           ? {
@@ -434,6 +402,8 @@ export async function generateTelegramAiPostingDraft(
     userId: input.userId,
     workspaceId: input.workspaceId,
     channelId: input.channelId,
+    channelUsername: input.channelUsername,
+    channelTitle: input.channelTitle,
     topic: input.topic,
     imageMode: input.config.imageMode ?? 'found',
     imageCandidates: input.context.imageCandidates,

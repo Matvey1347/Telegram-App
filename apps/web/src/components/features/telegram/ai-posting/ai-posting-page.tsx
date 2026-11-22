@@ -13,7 +13,7 @@ import {
   Modal,
 } from "@/components/ui/primitives";
 import { DateInput } from "@/components/ui/date-inputs";
-import { telegramChannelKeys } from "@/lib/query-keys";
+import { telegramChannelKeys, telegramPostKeys } from "@/lib/query-keys";
 import { api, telegramChannelsApi } from "@/lib/api";
 import { AiPostingChat } from "./ai-posting-chat";
 import { appendChannelEndingSignature } from "./channel-ending-signature";
@@ -243,6 +243,7 @@ export function AiPostingPage({
       ).data,
     onSuccess: async (_result, _variables, snapshot) => {
       if (!snapshot) return;
+      await client.invalidateQueries({ queryKey: telegramPostKeys.managedLists(snapshot.channelId) });
       await client.invalidateQueries(
         { queryKey: key(snapshot.channelId) },
         { throwOnError: true },

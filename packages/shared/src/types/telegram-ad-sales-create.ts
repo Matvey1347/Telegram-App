@@ -138,9 +138,11 @@ export type TelegramAdSaleEditWorkflowRequest = {
 
 export type TelegramAdSaleEditWorkflowProgress = {
   operation:
+    | "LOAD"
     | "UPDATE_SALE"
     | "UPDATE_PLACEMENT"
     | "CREATE_POST"
+    | "UPDATE_POST"
     | "SCHEDULE_POST"
     | "ATTACH_POST"
     | "UPDATE_PAYMENT"

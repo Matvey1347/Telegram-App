@@ -5,7 +5,6 @@ import { PrismaService } from '../../../prisma/prisma.service';
 import { WorkspaceAuthorizationService } from '../../workspace/workspace-authorization/workspace-authorization.service';
 import { acquirePostgresTransactionLock } from '../../../prisma/postgres-advisory-lock';
 import { TelegramAiPostingSourceService } from './telegram-ai-posting-source.service';
-import { TelegramAiPostingStructureService } from './telegram-ai-posting-structure.service';
 import { writeTelegramAiPostingSettingsVersion } from './telegram-ai-posting-settings-version.store';
 
 export type AiPostingCompanyCandidate = { entityId: string; name: string; description: string; website: string };
@@ -26,7 +25,6 @@ export class TelegramAiPostingChatSourcesService {
     private readonly prisma: PrismaService,
     private readonly authorization: WorkspaceAuthorizationService,
     private readonly sources: TelegramAiPostingSourceService,
-    private readonly structure: TelegramAiPostingStructureService,
   ) {}
 
   private async scope(userId: string, channelId: string, refresh = false) {
@@ -117,13 +115,17 @@ export class TelegramAiPostingChatSourcesService {
       const settings = await tx.telegramAiPostingSettings.findFirst({ where: { workspaceId: member.workspaceId, telegramChannelId: channelId }, select: { id: true, configuration: true, configurationVersion: true } });
       if (!settings) throw new NotFoundException('AI_POSTING_SETTINGS_REQUIRED');
       const configuration = record(settings.configuration);
-      if (!Array.isArray(configuration.sources) || !Array.isArray(configuration.categories) || !Array.isArray(configuration.formats)) throw new ConflictException('AI_POSTING_SETTINGS_INVALID');
-      const existingHypothesis = await tx.telegramContentHypothesis.findFirst({ where: { workspaceId: member.workspaceId, telegramChannelId: channelId, name: { equals: rubric, mode: 'insensitive' } }, select: { id: true, name: true } });
-      const resolved = await this.structure.resolveForDraft(tx, { workspaceId: member.workspaceId, channelId, memberId: member.id, format: '', category: rubric, allowGroups: false, allowHypotheses: true });
-      if (!resolved.hypothesisId) throw new ConflictException('AI_POSTING_RUBRIC_UNAVAILABLE');
-      const existingSource = configuration.sources.map(record).find((source: Record<string, any>) => source.type === 'website' && normalizedWebsite(source.value) === selected.website && typeof source.id === 'string');
+      const rubrics = Array.isArray(configuration.rubrics) ? configuration.rubrics.map(record) : [];
+      const existingRubric = await tx.telegramAiPostingRubric.findFirst({
+        where: { workspaceId: member.workspaceId, telegramChannelId: channelId, name: { equals: rubric, mode: 'insensitive' } },
+        select: { id: true, name: true },
+      });
+      const configuredSources = Array.isArray(configuration.sources) ? configuration.sources : [];
+      const rubricId = existingRubric?.id ?? randomUUID();
+      const canonicalRubric = existingRubric?.name ?? rubric;
+      const existingSource = configuredSources.map(record).find((source: Record<string, any>) => source.type === 'website' && normalizedWebsite(source.value) === selected.website && typeof source.id === 'string');
       const source = existingSource ? { ...existingSource, enabled: true } : { id: randomUUID(), type: 'website', value: selected.website, enabled: true, useImages: false };
-      const existingNews = newsPage ? configuration.sources.map(record).find((item: Record<string, any>) => item.type === 'website' && normalizedWebsite(item.value) === newsPage && typeof item.id === 'string') : undefined;
+      const existingNews = newsPage ? configuredSources.map(record).find((item: Record<string, any>) => item.type === 'website' && normalizedWebsite(item.value) === newsPage && typeof item.id === 'string') : undefined;
       const news = newsPage
         ? existingNews
           ? { ...existingNews, enabled: true, followNewsArticles: true }
@@ -131,11 +133,10 @@ export class TelegramAiPostingChatSourcesService {
         : null;
       const preferred = news ? [news, source] : !existingSource || existingSource.enabled === false ? [source] : [];
       const preferredIds = new Set(preferred.map((item) => item.id));
-      const nextSources = preferred.length ? [...preferred, ...configuration.sources.filter((item: unknown) => !preferredIds.has(record(item).id))] : configuration.sources;
-      const canonicalRubric = existingHypothesis?.name ?? rubric;
-      const hasCategory = configuration.categories.some((item: unknown) => typeof item === 'string' && item.toLocaleLowerCase() === canonicalRubric.toLocaleLowerCase());
-      const nextConfiguration = { ...configuration, sources: nextSources, categories: hasCategory ? configuration.categories : [...configuration.categories, canonicalRubric] };
-      const changed = !existingSource || existingSource.enabled === false || !hasCategory || Boolean(news && (!existingNews || existingNews.enabled === false || existingNews.followNewsArticles !== true || configuration.sources[0]?.id !== news.id || configuration.sources[1]?.id !== source.id));
+      const nextSources = preferred.length ? [...preferred, ...configuredSources.filter((item: unknown) => !preferredIds.has(record(item).id))] : configuredSources;
+      const nextRubric = { id: rubricId, name: canonicalRubric, description, goal: '', emoji: '📝', sphereId: null, lengthIds: [] };
+      const nextConfiguration = { ...configuration, sources: nextSources, rubrics: existingRubric ? rubrics : [...rubrics, nextRubric] };
+      const changed = !existingSource || existingSource.enabled === false || !existingRubric || Boolean(news && (!existingNews || existingNews.enabled === false || existingNews.followNewsArticles !== true || configuredSources[0]?.id !== news.id || configuredSources[1]?.id !== source.id));
       let settingsVersion = settings.configurationVersion;
       if (changed) {
         const updated = await tx.telegramAiPostingSettings.updateMany({ where: { id: settings.id, workspaceId: member.workspaceId, configurationVersion: settings.configurationVersion }, data: { configuration: nextConfiguration as Prisma.InputJsonObject, configurationVersion: { increment: 1 } } });
@@ -143,8 +144,20 @@ export class TelegramAiPostingChatSourcesService {
         settingsVersion++;
         await writeTelegramAiPostingSettingsVersion(tx, { settingsId: settings.id, version: settingsVersion, configuration: nextConfiguration as Prisma.InputJsonValue, changeSource: 'system', changedByMemberId: member.id });
       }
-      if (!existingHypothesis && description) await tx.telegramContentHypothesis.updateMany({ where: { id: resolved.hypothesisId, workspaceId: member.workspaceId, telegramChannelId: channelId }, data: { description } });
-      return { source: { id: source.id as string, type: 'website' as const, value: existingSource ? normalizedWebsite(existingSource.value) : selected.website, added: !existingSource, reEnabled: existingSource?.enabled === false }, newsSource: news ? { id: news.id as string, type: 'website' as const, value: newsPage!, added: !existingNews, reEnabled: existingNews?.enabled === false } : null, rubric: { id: resolved.hypothesisId, name: existingHypothesis?.name ?? rubric, added: !existingHypothesis }, settingsVersion };
+      if (!existingRubric) {
+        const lengths = await tx.telegramAiPostingLength.findMany({
+          where: { workspaceId: member.workspaceId, telegramChannelId: channelId },
+          select: { id: true },
+        });
+        await tx.telegramAiPostingRubric.create({
+          data: {
+            id: rubricId, name: rubric, description,
+            workspaceId: member.workspaceId, telegramChannelId: channelId,
+            lengths: { create: lengths.map(({ id: lengthId }) => ({ lengthId })) },
+          },
+        });
+      }
+      return { source: { id: source.id as string, type: 'website' as const, value: existingSource ? normalizedWebsite(existingSource.value) : selected.website, added: !existingSource, reEnabled: existingSource?.enabled === false }, newsSource: news ? { id: news.id as string, type: 'website' as const, value: newsPage!, added: !existingNews, reEnabled: existingNews?.enabled === false } : null, rubric: { id: rubricId, name: canonicalRubric, added: !existingRubric }, settingsVersion };
     });
   }
 }

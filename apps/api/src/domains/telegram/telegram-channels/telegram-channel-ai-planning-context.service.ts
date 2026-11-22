@@ -10,7 +10,7 @@ export class TelegramChannelAiPlanningContextService {
     private readonly hypotheses: TelegramContentHypothesesService,
   ) {}
 
-  async read(userId: string, workspaceId: string, channelId: string) {
+  async read(userId: string, workspaceId: string, channelId: string, includeHypotheses = true) {
     const [assignment, hypotheses] = await Promise.all([
       this.prisma.telegramChannelPublicationScheduleAssignment.findFirst({
         where: { workspaceId, channelId },
@@ -36,7 +36,7 @@ export class TelegramChannelAiPlanningContextService {
           },
         },
       }),
-      this.hypotheses.list(userId, channelId),
+      includeHypotheses ? this.hypotheses.list(userId, channelId) : Promise.resolve([]),
     ]);
     const selected = new Set(
       assignment?.selectedSlots.map((row) => row.slotId),

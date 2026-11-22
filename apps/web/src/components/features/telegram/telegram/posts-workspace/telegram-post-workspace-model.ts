@@ -2,7 +2,7 @@
 
 import { type ManagedPostStatusTab } from "@/components/features/telegram/telegram/managed-post-deep-link";
 import { type TelegramPostsRouteView } from "@/lib/features/telegram/telegram-posts-url";
-import { type TelegramPostPlannerSlot } from "@telegram-system/shared";
+import { type TelegramManagedPostEditorialPair, type TelegramPostPlannerSlot } from "@telegram-system/shared";
 import {
   type ResolvedEmoji,
   type TelegramManagedPost,
@@ -16,7 +16,6 @@ import {
 } from "@/lib/features/growth/telegram-ad-sales";
 import { type TranslationFunction } from "@/providers/i18n-provider";
 import { type ChannelImportMode } from "@/components/features/telegram/telegram/channel-import-navigation";
-import { type TelegramPostsWorkspaceView } from "@/components/features/telegram/telegram/telegram-posts-workspace-navigation";
 
 export type PublishingMode = "draft" | "publish" | "schedule";
 
@@ -26,8 +25,6 @@ export type PostViewMode = Exclude<
   TelegramPostsRouteView,
   "groups" | "hypotheses"
 >;
-
-export type InitialPostView = TelegramPostsRouteView | null;
 
 export type TelegramPostsPageProps = {
   routeChannelId?: string | null;
@@ -95,6 +92,7 @@ export function plannerFormatResolvedIcon(
 export type PostSidebarSection = {
   key: string;
   group: EffectivePostGroup | null;
+  editorial?: Pick<TelegramManagedPostEditorialPair, "sphereName" | "rubricName" | "sphereIcon" | "rubricIcon">;
   posts: TelegramManagedPost[];
   pendingPosts: PendingPostSave[];
 };
@@ -107,16 +105,11 @@ export const TELEGRAM_TEXT_MESSAGE_LIMIT = 4096;
 
 export const POST_OPEN_CLICK_DELAY_MS = 180;
 
-export const EMPTY_HYPOTHESIS_IDS: string[] = [];
-
 export const lastSelectedTelegramPostsChannelKey =
   "telegram-posts:last-selected-channel";
 
 export const postGroupPreferenceKey = (channelId: string) =>
   `telegram-posts-new-post-group:${channelId}`;
-
-export const workspaceViewPreferenceKey = (channelId: string) =>
-  `telegram-posts-workspace-view:${channelId}`;
 
 export function localNowParts(timezone: string) {
   const now = new Date();
@@ -220,16 +213,11 @@ export type TelegramPostWorkspaceProps = {
   } | null;
   workspaceTimezone: string;
   newPostToken: number;
-  newGroupRequested: boolean;
-  onNewGroupRequestHandled: () => void;
   importMode: ChannelImportMode | null;
   onImportModeChange: (mode: ChannelImportMode | null) => void;
   initialPostId: string;
-  initialGroupId: string;
-  initialPostView: InitialPostView;
+  initialPostView: PostViewMode;
   channels: TelegramChannel[];
-  onWorkspaceViewChange: (view: TelegramPostsWorkspaceView) => void;
   onRequestNewPost: () => void;
-  onRequestNewGroup: () => void;
   onPostSelect: (postId: string | null) => void;
 };

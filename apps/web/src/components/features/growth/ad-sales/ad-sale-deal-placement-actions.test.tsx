@@ -77,6 +77,7 @@ describe("AdSaleDealPlacementActions", () => {
             { id: "second-24", name: "1/24" },
           ],
         } as never}
+        drafts={[{ id: "placement", date: "2026-08-25", time: "18:00" }] as never}
         saving={false}
         onApplyAll={onApplyAll}
       />,
@@ -91,12 +92,11 @@ describe("AdSaleDealPlacementActions", () => {
     fireEvent.change(screen.getByLabelText("Time for all"), {
       target: { value: "19:30" },
     });
-    fireEvent.click(screen.getByRole("button", { name: /Apply all/ }));
-
-    expect(onApplyAll).toHaveBeenCalledWith({
-      formatName: "1/24",
-      date: "2026-08-28",
-      time: "19:30",
-    });
+    expect(screen.queryByRole("button", { name: /Apply all/ })).toBeNull();
+    expect(onApplyAll.mock.calls).toEqual([
+      [{ formatName: "1/24" }],
+      [{ date: "2026-08-28" }],
+      [{ time: "19:30" }],
+    ]);
   });
 });

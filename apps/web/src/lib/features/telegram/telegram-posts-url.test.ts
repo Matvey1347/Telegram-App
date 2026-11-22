@@ -33,23 +33,23 @@ describe("buildTelegramPostsUrl", () => {
     ).toBe("/telegram-posts/channel-1/ai-posting");
   });
 
-  it("keeps groups separate from editor and calendar urls", () => {
+  it("opens AI Posting for a retired group link", () => {
     expect(
       buildTelegramPostsUrl({
         channelId: "channel-1",
         groupId: "group-1",
         postView: "groups",
       }),
-    ).toBe("/telegram-posts/channel-1/groups?groupId=group-1");
+    ).toBe("/telegram-posts/channel-1/ai-posting");
   });
 
-  it("builds a canonical hypotheses url", () => {
+  it("opens AI Posting for a retired hypotheses link", () => {
     expect(
       buildTelegramPostsUrl({
         channelId: "channel-1",
         postView: "hypotheses",
       }),
-    ).toBe("/telegram-posts/channel-1/hypotheses");
+    ).toBe("/telegram-posts/channel-1/ai-posting");
   });
 
   it("preserves unrelated query params on canonical urls", () => {
@@ -77,14 +77,21 @@ describe("buildTelegramPostsLegacyRedirectUrl", () => {
     );
   });
 
-  it("does not redirect grouped legacy urls", () => {
+  it("preserves the explicit editor of a grouped legacy link", () => {
     expect(
       buildTelegramPostsLegacyRedirectUrl(
         new URLSearchParams(
           "channelId=channel-1&groupId=group-1&postView=editor&source=sidebar",
         ),
       ),
-    ).toBeNull();
+    ).toBe("/telegram-posts/channel-1/editor?source=sidebar");
+  });
+
+  it("defaults to AI Posting and keeps legacy links with a post in the editor", () => {
+    expect(buildTelegramPostsLegacyRedirectUrl(new URLSearchParams("channelId=channel-1")))
+      .toBe("/telegram-posts/channel-1/ai-posting");
+    expect(buildTelegramPostsLegacyRedirectUrl(new URLSearchParams("channelId=channel-1&groupId=old&postId=post-1")))
+      .toBe("/telegram-posts/channel-1/editor?postId=post-1");
   });
 
   it("redirects legacy AI Posting urls to the selected channel route", () => {

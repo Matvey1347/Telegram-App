@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AiPostingImagesSection } from "./ai-posting-images-section";
 import type { AiPostingMediaPreference } from "./ai-posting-media-preferences";
@@ -52,19 +53,22 @@ const preference: AiPostingMediaPreference = {
 function renderSection(
   overrides: Partial<Parameters<typeof AiPostingImagesSection>[0]> = {},
 ) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
-    <AiPostingImagesSection
-      mode="ai"
-      preferences={[preference]}
-      avoidances={[]}
-      channelAvatarUrl="https://media.example/channel.jpg"
-      useChannelAvatarInMedia={false}
-      onMode={vi.fn()}
-      onPreferences={vi.fn()}
-      onAvoidances={vi.fn()}
-      onUseChannelAvatarInMedia={vi.fn()}
-      {...overrides}
-    />,
+    <QueryClientProvider client={client}>
+      <AiPostingImagesSection
+        mode="ai"
+        preferences={[preference]}
+        avoidances={[]}
+        channelAvatarUrl="https://media.example/channel.jpg"
+        useChannelAvatarInMedia={false}
+        onMode={vi.fn()}
+        onPreferences={vi.fn()}
+        onAvoidances={vi.fn()}
+        onUseChannelAvatarInMedia={vi.fn()}
+        {...overrides}
+      />
+    </QueryClientProvider>,
   );
 }
 
@@ -150,7 +154,7 @@ describe("AiPostingImagesSection", () => {
     const user = userEvent.setup();
     const onPreferences = vi.fn();
     renderSection({ onPreferences });
-    const file = new File([new Uint8Array(2 * 1024 * 1024 + 1)], "large.png", {
+    const file = new File([new Uint8Array(10 * 1024 * 1024 + 1)], "large.png", {
       type: "image/png",
     });
     await user.click(
@@ -163,7 +167,7 @@ describe("AiPostingImagesSection", () => {
       { clipboardData: { files: [file] } },
     );
     expect(mocks.pushToast).toHaveBeenCalledWith(
-      "Media files must be 2 MB or smaller.",
+      "Media files must be 10 MB or smaller.",
       "error",
     );
     expect(mocks.upload).not.toHaveBeenCalled();

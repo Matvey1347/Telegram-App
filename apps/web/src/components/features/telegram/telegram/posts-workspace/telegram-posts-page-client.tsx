@@ -5,7 +5,6 @@ import { useWorkspaceTimezone } from "@/hooks/use-workspace-timezone";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useEffect, useMemo } from "react";
 import { type ChannelImportMode } from "@/components/features/telegram/telegram/channel-import-navigation";
-import { type TelegramPostsWorkspaceView } from "@/components/features/telegram/telegram/telegram-posts-workspace-navigation";
 import {
   parseTelegramPostsView,
   buildTelegramPostsLegacyRedirectUrl,
@@ -34,7 +33,6 @@ export function TelegramPostsPageClient({
   const router = useRouter();
   const searchParams = useSearchParams();
   const [newPostToken, setNewPostToken] = useState(0);
-  const [newGroupRequested, setNewGroupRequested] = useState(false);
   const [importMode, setImportMode] = useState<ChannelImportMode | null>(null);
   useEffect(() => {
     if (importMode) void ensureNamespaces(["telegram/posts/import"]);
@@ -43,32 +41,16 @@ export function TelegramPostsPageClient({
   const routeChannelIdValue = routeChannelId?.trim() || "";
   const channelId = routeChannelIdValue || searchParams.get("channelId") || "";
   const postId = searchParams.get("postId") || "";
-  const groupId = searchParams.get("groupId") || "";
-  const [pageWorkspaceView, setPageWorkspaceView] =
-    useState<TelegramPostsWorkspaceView>(
-      routePostView === "groups" || groupId
-        ? "groups"
-        : routePostView === "hypotheses"
-          ? "hypotheses"
-          : "posts",
-    );
-  const initialPostView =
-    routePostView ?? parseTelegramPostsView(searchParams.get("postView"));
+  const requestedView = routePostView ?? parseTelegramPostsView(searchParams.get("postView"));
   const currentRoutePostView: PostViewMode =
-    initialPostView === "calendar" || initialPostView === "ai-posting"
-      ? initialPostView
-      : "editor";
+    requestedView === "calendar" ? "calendar" : requestedView === "editor" || (!requestedView && postId) ? "editor" : "ai-posting";
   const routeNamespaces = useMemo<I18nNamespace[]>(
     () => [
       "ad-sales/common",
       "telegram/posts/common",
-      pageWorkspaceView === "groups"
-        ? "telegram/posts/groups"
-        : currentRoutePostView === "calendar"
-          ? "telegram/posts/calendar"
-          : "telegram/posts/editor",
+      currentRoutePostView === "calendar" ? "telegram/posts/calendar" : "telegram/posts/editor",
     ],
-    [currentRoutePostView, pageWorkspaceView],
+    [currentRoutePostView],
   );
   useEffect(() => {
     void ensureNamespaces(routeNamespaces);
@@ -94,14 +76,8 @@ export function TelegramPostsPageClient({
         includeTest: true,
       }),
   });
-  const availableChannels = channels.data || [];
-  const channel =
-    availableChannels.find((item) => item.id === channelId) ||
-    availableChannels[0];
-  useEffect(() => {
-    if (!legacyRedirectUrl) return;
-    router.replace(legacyRedirectUrl);
-  }, [legacyRedirectUrl, router]);
+  const availableChannels = useMemo(() => channels.data ?? [], [channels.data]);
+  const channel = availableChannels.find((item) => item.id === channelId);
 
   useEffect(() => {
     if (typeof window === "undefined" || !availableChannels.length) return;
@@ -122,6 +98,7 @@ export function TelegramPostsPageClient({
           lastSelectedTelegramPostsChannelKey,
           channelId,
         );
+        if (legacyRedirectUrl) router.replace(legacyRedirectUrl);
         return;
       }
 
@@ -133,8 +110,7 @@ export function TelegramPostsPageClient({
       router.replace(
         buildTelegramPostsUrl({
           channelId: fallbackChannelId,
-          groupId: params.get("groupId"),
-          postView: params.get("groupId") ? null : currentRoutePostView,
+          postView: currentRoutePostView,
           extraParams: params,
         }),
       );
@@ -148,8 +124,8 @@ export function TelegramPostsPageClient({
     router.replace(
       buildTelegramPostsUrl({
         channelId: fallbackChannelId,
-        groupId: params.get("groupId"),
-        postView: params.get("groupId") ? null : currentRoutePostView,
+        postId: postId || null,
+        postView: currentRoutePostView,
         extraParams: params,
       }),
     );
@@ -157,26 +133,10 @@ export function TelegramPostsPageClient({
     availableChannels,
     channelId,
     currentRoutePostView,
+    legacyRedirectUrl,
+    postId,
     router,
     searchParams,
-  ]);
-
-  useEffect(() => {
-    if (routeChannelIdValue || !channelId || groupId || initialPostView) return;
-    router.replace(
-      buildTelegramPostsUrl({
-        channelId,
-        postId: postId || null,
-        postView: "editor",
-      }),
-    );
-  }, [
-    channelId,
-    groupId,
-    initialPostView,
-    postId,
-    routeChannelIdValue,
-    router,
   ]);
 
   const navigateToChannel = (nextChannelId: string) => {
@@ -189,12 +149,7 @@ export function TelegramPostsPageClient({
     router.push(
       buildTelegramPostsUrl({
         channelId: nextChannelId,
-        postView:
-          pageWorkspaceView === "groups"
-            ? "groups"
-            : pageWorkspaceView === "hypotheses"
-              ? "hypotheses"
-              : currentRoutePostView,
+        postView: currentRoutePostView,
       }),
     );
   };
@@ -217,7 +172,10 @@ export function TelegramPostsPageClient({
         onChannelChange={navigateToChannel}
         onImportModeChange={setImportMode}
       />
-      {channels.isLoading ? <LoadingState /> : null}
+      {channels.isLoading || (!channel && availableChannels.length > 0) ? <LoadingState /> : null}
+      {channels.isError ? (
+        <EmptyState text={t("common.error.generic")} />
+      ) : null}
       {!channels.isLoading && !channels.error && !availableChannels.length ? (
         <EmptyState text={t("telegram.posts.noChannels")} />
       ) : null}
@@ -234,15 +192,11 @@ export function TelegramPostsPageClient({
             channelPublishingCapabilities={channel.publishingCapabilities}
             workspaceTimezone={workspaceTimezone}
             newPostToken={newPostToken}
-            newGroupRequested={newGroupRequested}
-            onNewGroupRequestHandled={() => setNewGroupRequested(false)}
             importMode={importMode}
             onImportModeChange={setImportMode}
             initialPostId={postId}
-            initialGroupId={groupId}
-            initialPostView={initialPostView}
+            initialPostView={currentRoutePostView}
             channels={availableChannels}
-            onWorkspaceViewChange={setPageWorkspaceView}
             onRequestNewPost={() => {
               router.replace(
                 buildTelegramPostsUrl({
@@ -250,18 +204,7 @@ export function TelegramPostsPageClient({
                   postView: "editor",
                 }),
               );
-              setPageWorkspaceView("posts");
               setNewPostToken((value) => value + 1);
-            }}
-            onRequestNewGroup={() => {
-              router.replace(
-                buildTelegramPostsUrl({
-                  channelId: channel.id,
-                  postView: "groups",
-                }),
-              );
-              setPageWorkspaceView("groups");
-              setNewGroupRequested(true);
             }}
             onPostSelect={(selectedPostId) => {
               router.replace(

@@ -1,5 +1,3 @@
-"use client";
-
 export type TelegramPostsRouteView =
   | "editor"
   | "calendar"
@@ -41,7 +39,6 @@ function appendQuery(pathname: string, params: URLSearchParams) {
 export function buildTelegramPostsUrl({
   channelId,
   postId,
-  groupId,
   postView,
   extraParams,
 }: TelegramPostsUrlInput) {
@@ -52,26 +49,21 @@ export function buildTelegramPostsUrl({
 
   const normalizedChannelId = trimValue(channelId);
   const normalizedPostId = trimValue(postId);
-  const normalizedGroupId = trimValue(groupId);
-
   if (normalizedPostId) params.set("postId", normalizedPostId);
 
-  if (normalizedChannelId && (postView === "groups" || normalizedGroupId)) {
-    if (normalizedGroupId) params.set("groupId", normalizedGroupId);
+  if (normalizedChannelId) {
+    const view =
+      postView === "editor" || postView === "calendar" || postView === "ai-posting"
+        ? postView
+        : normalizedPostId
+          ? "editor"
+          : "ai-posting";
     return appendQuery(
-      `/telegram-posts/${encodeURIComponent(normalizedChannelId)}/groups`,
+      `/telegram-posts/${encodeURIComponent(normalizedChannelId)}/${view}`,
       params,
     );
   }
 
-  if (normalizedChannelId && postView) {
-    return appendQuery(
-      `/telegram-posts/${encodeURIComponent(normalizedChannelId)}/${postView}`,
-      params,
-    );
-  }
-
-  if (normalizedChannelId) params.set("channelId", normalizedChannelId);
   if (postView) params.set("postView", postView);
   return appendQuery("/telegram-posts", params);
 }
@@ -80,18 +72,8 @@ export function buildTelegramPostsLegacyRedirectUrl(
   searchParams: URLSearchParams | Pick<URLSearchParams, "get" | "toString">,
 ) {
   const channelId = trimValue(searchParams.get("channelId"));
-  const groupId = trimValue(searchParams.get("groupId"));
-  const postView = searchParams.get("postView");
-  if (
-    !channelId ||
-    groupId ||
-    (postView !== "editor" &&
-      postView !== "calendar" &&
-      postView !== "ai-posting")
-  ) {
-    return null;
-  }
-
+  if (!channelId) return null;
+  const postView = parseTelegramPostsView(searchParams.get("postView"));
   return buildTelegramPostsUrl({
     channelId,
     postId: searchParams.get("postId"),

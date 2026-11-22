@@ -107,6 +107,7 @@ describe("AiPostingTestConsole", () => {
       }),
     );
 
+    fireEvent.click(screen.getByRole("button", { name: "Показать этапы" }));
     expect(await screen.findByText("Тема: в процессе")).toBeInTheDocument();
     expect(screen.getByText("Текст: ожидает")).toBeInTheDocument();
   });
@@ -204,11 +205,58 @@ describe("AiPostingTestConsole", () => {
       }),
     );
     expect(
-      await screen.findByText("Пишу текст · публикация 1/4"),
+      await screen.findByText("Публикация 1 из 4 · Пишу текст"),
     ).toBeInTheDocument();
-    expect(screen.getByText("Публикации: 0 из 4")).toBeInTheDocument();
+    expect(screen.getByText("Публикация 1 из 4 · в процессе")).toBeInTheDocument();
+    expect(screen.queryByText("Текст: в процессе")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Показать этапы" }));
     expect(screen.getByText("Текст: в процессе")).toBeInTheDocument();
     finish?.({ status: "COMPLETED" });
+  });
+
+  it("shows each completed publication before the batch stream finishes", async () => {
+    let emit: ((item: Record<string, unknown>, current: number, total: number) => void) | undefined;
+    let finish: ((value: unknown) => void) | undefined;
+    vi.mocked(streamProgressAction).mockImplementation(
+      async (_path, _payload, onProgress) => {
+        emit = onProgress as typeof emit;
+        return new Promise((resolve) => { finish = resolve; }) as never;
+      },
+    );
+    renderWithProviders(
+      <AiPostingTestConsole
+        channelId="channel-1"
+        channelTitle="Channel"
+        dailyPostCount={2}
+        settingsReady
+      />,
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Сгенерировать" }));
+    await waitFor(() => expect(emit).toBeDefined());
+    emit?.({
+      stage: "publication",
+      status: "COMPLETED",
+      runId: "live-run",
+      publicationIndex: 0,
+      publication: {
+        topic: "First topic",
+        title: "First title",
+        text: "First publication appears immediately",
+        imageUrl: null,
+        imageSourceId: null,
+        savedPostId: null,
+        status: "PENDING",
+        rejectionReason: null,
+        format: "standard",
+        category: "general",
+        costs: {},
+        operations: [],
+        ideaSources: [],
+      },
+    }, 4, 17);
+    expect(await screen.findByText("First publication appears immediately")).toBeInTheDocument();
+    expect(finish).toBeDefined();
+    finish?.({ generated: [] });
   });
 
   it("keeps the latest run visible, collapses prior runs and clears them on request", async () => {

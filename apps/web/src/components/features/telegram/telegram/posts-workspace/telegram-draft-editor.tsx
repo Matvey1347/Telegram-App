@@ -25,8 +25,6 @@ import {
 } from "@/components/features/telegram/telegram/managed-post-presentation";
 import { normalizeTelegramPostMediaItems } from "@telegram-system/shared";
 import { MemberSelect } from "@/components/features/workspace/member-select";
-import { ManagedPostHypothesisSelector } from "@/components/features/telegram/telegram/managed-post-hypothesis-selector";
-import { telegramPostGroupTitle } from "@/components/features/telegram/telegram/telegram-post-group-title";
 import { LazyTelegramTextEditor } from "@/components/features/telegram/telegram/lazy-telegram-text-editor";
 import { ManagedPostInternalLinksNotice } from "@/components/features/telegram/telegram/managed-post-internal-links-notice";
 import { TelegramPostMediaUpload } from "@/components/features/telegram/telegram/telegram-post-media-upload";
@@ -38,8 +36,6 @@ import {
 } from "@/components/features/telegram/telegram/post-from-bot/post-batch-format";
 import { TelegramPostSendToBotButton } from "@/components/features/telegram/telegram/telegram-post-send-to-bot-button";
 import {
-  EMPTY_HYPOTHESIS_IDS,
-  selectIconProps,
   type PublishingMode,
   localDateTimeParts,
 } from "./telegram-post-workspace-model";
@@ -72,11 +68,6 @@ type Model = Pick<
   | "assignedMemberId"
   | "setMemberSelectionTouched"
   | "setAssignedMemberId"
-  | "newPostHypothesisIds"
-  | "setNewPostHypothesisIds"
-  | "postGroupId"
-  | "changePostGroup"
-  | "postGroups"
   | "textEditorRef"
   | "text"
   | "setText"
@@ -161,11 +152,6 @@ export function TelegramDraftEditor({ model }: { model: Model }) {
     assignedMemberId,
     setMemberSelectionTouched,
     setAssignedMemberId,
-    newPostHypothesisIds,
-    setNewPostHypothesisIds,
-    postGroupId,
-    changePostGroup,
-    postGroups,
     textEditorRef,
     text,
     setText,
@@ -332,36 +318,6 @@ export function TelegramDraftEditor({ model }: { model: Model }) {
               disabled={busy}
             />
           </FormField>
-        </div>
-        <div className="grid w-full gap-3 md:grid-cols-2">
-          <ManagedPostHypothesisSelector
-            channelId={channelId}
-            postId={editing?.id}
-            value={editing ? EMPTY_HYPOTHESIS_IDS : newPostHypothesisIds}
-            onChange={setNewPostHypothesisIds}
-          />
-          <div className="min-w-0">
-            <FormField label={t("telegram.posts.editor.group")}>
-              <CustomSelect
-                value={postGroupId || ""}
-                onChange={changePostGroup}
-                placeholder={t("telegram.posts.editor.noGroup")}
-                options={[
-                  {
-                    value: "",
-                    label: t("telegram.posts.editor.noGroup"),
-                    iconEmoji: "📂",
-                  },
-                  ...(postGroups.data || []).map((group) => ({
-                    value: group.id,
-                    label: telegramPostGroupTitle(group, t),
-                    ...selectIconProps(group.iconPresentation),
-                    iconFallback: telegramPostGroupTitle(group, t),
-                  })),
-                ]}
-              />
-            </FormField>
-          </div>
         </div>
       </div>
       <FormField label={t("telegram.posts.editor.text")}>

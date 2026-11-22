@@ -4,6 +4,8 @@ import { randomUUID } from 'node:crypto';
 import { TelegramAiPostingStructureService } from './telegram-ai-posting-structure.service';
 import { TelegramAiPostingTestRunService } from './telegram-ai-posting-test-run.service';
 
+import { readManagedDraftEditorialPairs } from './telegram-managed-draft-editorial';
+
 const databaseUrl = process.env.AI_POSTING_TEST_DATABASE_URL ?? '';
 const isDisposableLocalDatabase = (() => {
   try {
@@ -168,7 +170,7 @@ const isDisposableLocalDatabase = (() => {
       ).toBe(1);
     });
 
-    it('saves an approved draft and links newly created records atomically', async () => {
+    it('saves an approved draft with taxonomy and ignores legacy structure settings', async () => {
       await prisma.telegramAiPostingSettings.create({
         data: {
           workspaceId,
@@ -179,6 +181,27 @@ const isDisposableLocalDatabase = (() => {
           },
         },
       });
+      const scope = { workspaceId, telegramChannelId: channelId };
+      const sphere = await prisma.telegramAiPostingSphere.create({
+        data: { ...scope, id: `${channelId}-sphere`, name: 'Wellbeing' },
+      });
+      const length = await prisma.telegramAiPostingLength.create({
+        data: {
+          ...scope,
+          id: `${channelId}::brief`,
+          name: 'Brief',
+          minCharacters: 0,
+        },
+      });
+      const rubric = await prisma.telegramAiPostingRubric.create({
+        data: {
+          ...scope,
+          id: `${channelId}-rubric`,
+          sphereId: sphere.id,
+          name: 'Habits',
+          lengths: { create: { lengthId: length.id } },
+        },
+      });
       const publication = {
         topic: 'Topic',
         title: 'Title',
@@ -186,6 +209,11 @@ const isDisposableLocalDatabase = (() => {
         imagePrompt: '',
         imageUrl: null,
         imageSourceId: null,
+        editorialMetadata: {
+          sphere: { id: sphere.id },
+          rubric: { id: rubric.id },
+          length: { id: 'brief' },
+        },
         format: 'Generated group',
         category: 'Generated hypothesis',
         reviewNotes: [],
@@ -229,7 +257,14 @@ const isDisposableLocalDatabase = (() => {
         ),
         createManagedPostRecord: (
           tx: Prisma.TransactionClient,
-          input: { groupId?: string | null; title: string; text: string },
+          input: {
+            groupId?: string | null;
+            title: string;
+            text: string;
+            aiPostingSphereId?: string;
+            aiPostingRubricId?: string;
+            aiPostingLengthId?: string | null;
+          },
         ) =>
           tx.telegramManagedPost.create({
             data: {
@@ -239,6 +274,9 @@ const isDisposableLocalDatabase = (() => {
               title: input.title,
               text: input.text,
               groupId: input.groupId,
+              aiPostingSphereId: input.aiPostingSphereId,
+              aiPostingRubricId: input.aiPostingRubricId,
+              aiPostingLengthId: input.aiPostingLengthId,
             },
           }),
       };
@@ -249,7 +287,6 @@ const isDisposableLocalDatabase = (() => {
         posts as never,
         { createManagedPostRevision: jest.fn() } as never,
         {} as never,
-        service,
       );
       await testRuns.reviewPublication(userId, channelId, run.id, 0, 1, 'save');
       const post = await prisma.telegramManagedPost.findFirstOrThrow({
@@ -263,64 +300,50 @@ const isDisposableLocalDatabase = (() => {
           contentHypotheses: { include: { hypothesis: true } },
         },
       });
-      expect(post.group?.title).toBe('Generated group');
-      expect(
-        post.contentHypotheses.map((item) => item.hypothesis.name),
-      ).toEqual(['Generated hypothesis']);
+      expect(post).toMatchObject({
+        aiPostingSphereId: sphere.id,
+        aiPostingRubricId: rubric.id,
+        aiPostingLengthId: length.id,
+        group: null,
+        contentHypotheses: [],
+      });
 
-      await prisma.telegramAiPostingSettings.update({
-        where: { telegramChannelId: channelId },
+      const group = await prisma.postGroup.create({
         data: {
-          configuration: {
-            allowCreateGroups: false,
-            allowCreateHypotheses: false,
-            formats: ['Advice'],
-            categories: ['Habits'],
-          },
+          ...scope,
+          title: 'System group',
+          isSystem: true,
+          createdByMemberId: memberId,
         },
       });
-      const second = {
-        ...publication,
-        title: 'Existing records',
-        format: 'Advice',
-        category: 'Habits',
+      const otherChannel = await prisma.telegramChannel.create({
+        data: { workspaceId, title: 'Other channel' },
+      });
+      const draft = {
+        ...scope,
+        assignedMemberId: memberId,
+        title: 'Reserve fixture',
       };
-      const secondRun = await prisma.telegramAiPostingTestRun.create({
-        data: {
-          workspaceId,
-          telegramChannelId: channelId,
-          requestedCount: 1,
-          settingsVersion: 1,
-          status: 'COMPLETED',
-          publications: [second],
-          failures: [],
-          operations: [],
-          feedback: [],
-        },
+      const protectedPost = await prisma.telegramManagedPost.create({
+        data: { ...draft, groupId: group.id, aiPostingSphereId: sphere.id, aiPostingRubricId: rubric.id },
       });
-      await testRuns.reviewPublication(
-        userId,
-        channelId,
-        secondRun.id,
-        0,
-        1,
-        'save',
-      );
-      const secondPost = await prisma.telegramManagedPost.findFirstOrThrow({
-        where: {
-          workspaceId,
-          telegramChannelId: channelId,
-          title: second.title,
-        },
-        include: {
-          group: true,
-          contentHypotheses: { include: { hypothesis: true } },
-        },
+      const foreignPost = await prisma.telegramManagedPost.create({
+        data: { ...draft, telegramChannelId: otherChannel.id, aiPostingSphereId: sphere.id, aiPostingRubricId: rubric.id },
       });
-      expect(secondPost.group?.title).toBe('Advice');
-      expect(
-        secondPost.contentHypotheses.map((item) => item.hypothesis.name),
-      ).toEqual(['Habits']);
+      const postIds = [post.id, protectedPost.id, foreignPost.id];
+
+      await expect(readManagedDraftEditorialPairs(prisma, scope, postIds))
+        .resolves.toEqual([{
+          postId: post.id, sphereId: sphere.id, sphereName: sphere.name,
+          rubricId: rubric.id, rubricName: rubric.name,
+          sphereIcon: expect.objectContaining({ type: 'unicode' }),
+          rubricIcon: expect.objectContaining({ type: 'unicode' }),
+        }]);
+
+      await prisma.telegramAiPostingRubric.delete({ where: { id: rubric.id } });
+      await expect(readManagedDraftEditorialPairs(prisma, scope, postIds))
+        .resolves.toEqual([]);
+
     });
   },
 );

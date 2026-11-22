@@ -41,7 +41,7 @@ describe('AI posting prompt context', () => {
     expect(
       publicationEmojiInstruction({ emojiPolicy: 'contextual' }),
     ).toContain(
-      'Use 2–3 relevant emojis in a normal-length post, distributed through its body',
+      'Use 2–3 relevant emojis total in a normal-length post, distributed through its body',
     );
     expect(publicationEmojiInstruction({ emojiPolicy: 'start' })).toContain(
       'exactly one relevant emoji at the very beginning',

@@ -1,14 +1,13 @@
 "use client";
 
 import { useMemo } from "react";
+import { groupEditorialDraftSections } from "./group-editorial-draft-sections";
 import { type TelegramManagedPost } from "@/lib/api";
-import { type TelegramPostsWorkspaceView } from "@/components/features/telegram/telegram/telegram-posts-workspace-navigation";
 import { buildTelegramPostsUrl } from "@/lib/features/telegram/telegram-posts-url";
 import {
   type PendingPostSave,
   type PostSidebarSection,
   type PostStatusTab,
-  workspaceViewPreferenceKey,
   type PostViewMode,
 } from "./telegram-post-workspace-model";
 import type { useTelegramWorkspaceSearch } from "./use-telegram-workspace-search";
@@ -41,11 +40,11 @@ type Input = Pick<
   > &
   Pick<
     TelegramPostWorkspaceProps,
-    "channelId" | "onWorkspaceViewChange" | "initialGroupId" | "initialPostId"
+    "channelId" | "initialPostId"
   > &
   Pick<
     ReturnType<typeof useTelegramWorkspaceView>,
-    "setWorkspaceView" | "router" | "postView" | "setPostView"
+    "router" | "setPostView"
   >;
 
 export function useTelegramPostSidebarList(input: Input) {
@@ -64,12 +63,8 @@ export function useTelegramPostSidebarList(input: Input) {
     setStatusTab,
     editing,
     channelId,
-    onWorkspaceViewChange,
-    initialGroupId,
     initialPostId,
-    setWorkspaceView,
     router,
-    postView,
     setPostView,
   } = input;
 
@@ -152,16 +147,18 @@ export function useTelegramPostSidebarList(input: Input) {
     const canonicalIndex = new Map(
       canonicalSidebarKeys.map((key, index) => [key, index]),
     );
-    return sections.sort(
+    sections.sort(
       (left, right) =>
         (canonicalIndex.get(left.key) ?? Number.MAX_SAFE_INTEGER) -
         (canonicalIndex.get(right.key) ?? Number.MAX_SAFE_INTEGER),
     );
+    return groupEditorialDraftSections(sections, posts.editorialPairs);
   }, [
     canonicalSidebarKeys,
     groupedPendingPostSaves.grouped,
     groupedVisiblePosts,
     postGroups.data,
+    posts.editorialPairs,
   ]);
 
   const orderedSidebarSections = useMemo(() => {
@@ -211,30 +208,12 @@ export function useTelegramPostSidebarList(input: Input) {
     window.localStorage.setItem(`telegram-posts-status:${channelId}`, next);
   };
 
-  const changeWorkspaceView = (next: TelegramPostsWorkspaceView) => {
-    setWorkspaceView(next);
-    onWorkspaceViewChange(next);
-    window.localStorage.setItem(workspaceViewPreferenceKey(channelId), next);
-    router.replace(
-      buildTelegramPostsUrl({
-        channelId,
-        groupId: next === "groups" ? initialGroupId || null : null,
-        postView:
-          next === "groups"
-            ? "groups"
-            : next === "hypotheses"
-              ? "hypotheses"
-              : postView,
-      }),
-    );
-  };
-
   const changePostView = (next: PostViewMode) => {
     setPostView(next);
     router.replace(
       buildTelegramPostsUrl({
         channelId,
-        postId: editing?.id || initialPostId || null,
+        postId: next === "editor" ? editing?.id || initialPostId || null : null,
         postView: next,
       }),
     );
@@ -252,7 +231,6 @@ export function useTelegramPostSidebarList(input: Input) {
     allGroupIds,
     collapsedGroupIds,
     changeStatusTab,
-    changeWorkspaceView,
     changePostView,
   };
 }

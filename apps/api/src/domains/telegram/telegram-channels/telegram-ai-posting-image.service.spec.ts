@@ -5,7 +5,7 @@ import {
   InternalServerErrorException,
   ServiceUnavailableException,
 } from '@nestjs/common';
-import { TelegramAiPostingImageService } from './telegram-ai-posting-image.service';
+import { buildTelegramAiPostingImagePrompt, TelegramAiPostingImageService } from './telegram-ai-posting-image.service';
 
 describe('TelegramAiPostingImageService', () => {
   const sources = { downloadImage: jest.fn(), searchOpenImages: jest.fn() };
@@ -70,6 +70,17 @@ describe('TelegramAiPostingImageService', () => {
     gateway.execute.mockResolvedValue(
       aiResponse(imageBytes.toString('base64')),
     );
+  });
+
+  it('gives the private women’s channel the documentary brief even without a username', () => {
+    const input = { topic: 'An awkward conversation', prompt: 'A photo in a kitchen', channelTitle: 'Жіноча сила🍃' };
+    const prompt = buildTelegramAiPostingImagePrompt(input, true);
+    expect(prompt).toContain('A photo in a kitchen');
+    expect(prompt).toContain('attached reference');
+    expect(prompt).toContain('unposed, everyday documentary frame');
+    expect(prompt).toContain('natural skin texture');
+    expect(buildTelegramAiPostingImagePrompt({ ...input, channelTitle: 'Other channel' }, false))
+      .not.toContain('everyday documentary frame');
   });
 
   it('does not store an image whose bytes already appeared in this run', async () => {

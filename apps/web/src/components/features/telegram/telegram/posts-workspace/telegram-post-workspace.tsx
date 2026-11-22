@@ -2,7 +2,6 @@
 
 import {
   TelegramPostsPageTabHead,
-  TelegramPostsWorkspaceNavigation,
   TelegramPostsViewNavigation,
 } from "@/components/features/telegram/telegram/telegram-posts-workspace-navigation";
 import {
@@ -17,12 +16,11 @@ import { normalizeTelegramPostMediaItems } from "@telegram-system/shared";
 import { formatDateTime } from "@/lib/date-format";
 import {
   TelegramCustomEmojiPacksModal,
-  ContentHypothesesWorkspace,
   AiPostingPage,
   TelegramPostPreview,
 } from "./telegram-post-workspace-lazy-views";
-import { PostGroupsWorkspace } from "../managed-post-groups-workspace";
 import { MovePostModal } from "../managed-post-move-modal";
+import { Plus } from "lucide-react";
 import { formatManagedPostRevisionReason } from "./telegram-post-workspace-model";
 import { useTelegramPostWorkspace } from "./use-telegram-post-workspace";
 import type { TelegramPostWorkspaceProps } from "./telegram-post-workspace-model";
@@ -33,14 +31,12 @@ import { TelegramManagedPostEditor } from "./telegram-managed-post-editor";
 export function TelegramPostWorkspace(props: TelegramPostWorkspaceProps) {
   const model = useTelegramPostWorkspace(props);
   const {
-    workspaceView,
     postView,
     channelTitle,
     channelPhotoUrl,
     t,
-    changeWorkspaceView,
     onRequestNewPost,
-    onRequestNewGroup,
+    onPostSelect,
     changePostView,
     deletingPlannerFormat,
     setDeletingPlannerFormat,
@@ -53,11 +49,6 @@ export function TelegramPostWorkspace(props: TelegramPostWorkspaceProps) {
     deletingPlannerSlotGroup,
     setDeletingPlannerSlotGroup,
     channels,
-    initialGroupId,
-    newGroupRequested,
-    onNewGroupRequestHandled,
-    selectPost,
-    onPostSelect,
     deletingPost,
     setDeletingPost,
     deletePosts,
@@ -83,43 +74,30 @@ export function TelegramPostWorkspace(props: TelegramPostWorkspaceProps) {
   return (
     <>
       <TelegramPostsPageTabHead
-        workspaceView={workspaceView}
         postView={postView}
         channelTitle={channelTitle}
         channelPhotoUrl={channelPhotoUrl}
         labels={{
-          groups: t("telegram.posts.tabs.groups"),
-          hypotheses: t("telegram.posts.hypotheses"),
           calendar: t("telegram.posts.tabs.calendar"),
-          posts: t("telegram.posts.tabs.posts"),
+          editor: t("telegram.posts.tabs.editor"),
         }}
       />
-      <TelegramPostsWorkspaceNavigation
-        view={workspaceView}
-        onViewChange={changeWorkspaceView}
-        onNewPost={onRequestNewPost}
-        onNewGroup={onRequestNewGroup}
-        showNewPost={postView !== "ai-posting"}
-        labels={{
-          posts: t("telegram.posts.tabs.posts"),
-          groups: t("telegram.posts.tabs.groups"),
-          hypotheses: t("telegram.posts.hypotheses"),
-          newPost: t("telegram.posts.newPost"),
-          newGroup: t("telegram.posts.newGroup"),
-        }}
-      >
-        {workspaceView === "posts" ? (
-          <TelegramPostsViewNavigation
-            view={postView}
-            onViewChange={changePostView}
-            labels={{
-              editor: t("telegram.posts.tabs.editor"),
-              calendar: t("telegram.posts.tabs.calendar"),
-              "ai-posting": "AI Posting",
-            }}
-          />
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <TelegramPostsViewNavigation
+          view={postView}
+          onViewChange={changePostView}
+          labels={{
+            editor: t("telegram.posts.tabs.editor"),
+            calendar: t("telegram.posts.tabs.calendar"),
+            "ai-posting": "AI Posting",
+          }}
+        />
+        {postView !== "ai-posting" ? (
+          <Button type="button" className="ml-auto" onClick={onRequestNewPost}>
+            <Plus size={16} /> {t("telegram.posts.newPost")}
+          </Button>
         ) : null}
-      </TelegramPostsWorkspaceNavigation>
+      </div>
       <TelegramCalendarImportModal model={model} />
       <ConfirmDeleteModal
         open={Boolean(deletingPlannerFormat)}
@@ -204,22 +182,7 @@ export function TelegramPostWorkspace(props: TelegramPostWorkspaceProps) {
           setDeletingPlannerSlotGroup(null);
         }}
       />
-      {workspaceView === "hypotheses" ? (
-        <ContentHypothesesWorkspace channelId={channelId} />
-      ) : workspaceView === "groups" ? (
-        <PostGroupsWorkspace
-          channelId={channelId}
-          channels={channels}
-          initialGroupId={initialGroupId}
-          newGroupRequested={newGroupRequested}
-          onNewGroupRequestHandled={onNewGroupRequestHandled}
-          onOpenPost={(post) => {
-            changeWorkspaceView("posts");
-            selectPost(post);
-            onPostSelect(post.id);
-          }}
-        />
-      ) : postView === "ai-posting" ? (
+      {postView === "ai-posting" ? (
         <AiPostingPage channelId={channelId} channelTitle={channelTitle} />
       ) : postView === "calendar" ? (
         <TelegramPostCalendar model={model} />
@@ -250,12 +213,13 @@ export function TelegramPostWorkspace(props: TelegramPostWorkspaceProps) {
           channels={channels}
           sourceChannelId={channelId}
           onClose={() => setMovingPost(null)}
-          onMoved={async (result) => {
+          onMoved={async (result, targetId) => {
             setMovingPost(null);
             await Promise.all([
               queryClient.invalidateQueries({
                 queryKey: telegramPostKeys.managedLists(channelId),
               }),
+              queryClient.invalidateQueries({ queryKey: telegramPostKeys.managedLists(targetId) }),
               queryClient.invalidateQueries({
                 queryKey: ["post-groups", channelId],
               }),
@@ -269,7 +233,10 @@ export function TelegramPostWorkspace(props: TelegramPostWorkspaceProps) {
               result.failedCount ? "error" : "success",
               7000,
             );
-            if (editing?.id === movingPost.id) reset();
+            if (result.successCount && editing?.id === movingPost.id) {
+              reset();
+              onPostSelect(null);
+            }
           }}
         />
       ) : null}

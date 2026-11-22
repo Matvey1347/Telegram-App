@@ -117,7 +117,7 @@ export function ToastStack({
                   </p>
                   {item.progress ? (
                     <span className="shrink-0 text-xs tabular-nums text-neutral-400">
-                      {item.progress.current}/{item.progress.total}
+                      {item.title === "Генерация AI Posting" ? `${Math.round(percentage)}%` : `${item.progress.current}/${item.progress.total}`}
                     </span>
                   ) : null}
                 </div>

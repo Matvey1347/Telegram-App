@@ -2807,6 +2807,7 @@ model TelegramAdSalePlacement {
   @@index([workspaceId])
   @@index([telegramChannelId, scheduledAt])
   @@index([workspaceId, telegramChannelId, scheduledAt], map: "TelegramAdSalePlacement_calendar_idx")
+  @@index([managedPostId])
   @@index([telegramAdSaleId])
   @@index([status, scheduledAt])
   @@index([workspaceId, status, scheduledAt])
@@ -6020,6 +6021,9 @@ model TelegramManagedPost {
   aiPostingReviewStatus        String?
   aiPostingApprovedWithoutEdits Boolean?
   aiPostingRecheckRequired     Boolean                                  @default(false)
+  aiPostingSphereId            String?
+  aiPostingRubricId            String?
+  aiPostingLengthId            String?
 
   workspace               Workspace                              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   telegramChannel         TelegramChannel                        @relation(fields: [telegramChannelId], references: [id], onDelete: Cascade)

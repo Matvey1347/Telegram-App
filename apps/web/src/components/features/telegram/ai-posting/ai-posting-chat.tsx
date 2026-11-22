@@ -8,10 +8,6 @@ import { useCallback, useState, type ReactNode } from "react";
 import { ArrowUp, MessageSquareReply, X } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import {
-  telegramContentHypothesisKeys,
-  telegramPostKeys,
-} from "@/lib/query-keys";
 import { Card } from "@/components/ui/primitives";
 import { Textarea } from "@/components/ui/primitives";
 import { AiPostingChatPublication } from "./ai-posting-chat-publication";
@@ -160,23 +156,9 @@ export function AiPostingChat({
       if (result.revisedPublication && !changed)
         await client.invalidateQueries({ queryKey: aiPostingTestRunKeys(channelId).runs });
       if (changed) {
-        await Promise.all([
-          client.invalidateQueries({
-            queryKey: ["telegram-ai-posting", channelId],
-          }),
-          client.invalidateQueries({
-            queryKey: ["telegram-ai-posting-hypotheses", channelId],
-          }),
-          client.invalidateQueries({
-            queryKey: ["telegram-ai-posting-post-groups", channelId],
-          }),
-          client.invalidateQueries({
-            queryKey: telegramContentHypothesisKeys.list(channelId),
-          }),
-          client.invalidateQueries({
-            queryKey: telegramPostKeys.postGroups(channelId),
-          }),
-        ]);
+        await client.invalidateQueries({
+          queryKey: ["telegram-ai-posting", channelId],
+        });
       }
     },
   });

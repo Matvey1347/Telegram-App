@@ -65,7 +65,7 @@ export function useTelegramWorkspaceSearch(input: Input) {
     visiblePosts.forEach((post) => {
       const group = effectivePostGroup(post);
       const groupId = effectivePostGroupId(post);
-      if (!groupId || !group) {
+      if (!groupId || !group || (!group.isSystem && !group.systemKey)) {
         ungrouped.push(post);
         return;
       }

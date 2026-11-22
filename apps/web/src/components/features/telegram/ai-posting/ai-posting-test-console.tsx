@@ -9,6 +9,7 @@ import {
   CircleX,
   Loader2,
   ListChecks,
+  ChevronDown,
   Trash2,
 } from "lucide-react";
 import { api, streamProgressAction } from "@/lib/api";
@@ -24,7 +25,6 @@ import { AiPostingTestRunCard } from "./ai-posting-test-run-card";
 import { AiPostingGenerationControls } from "./ai-posting-generation-controls";
 import { AiPostingTestConsoleError } from "./ai-posting-test-console-error";
 import {
-  telegramContentHypothesisKeys,
   telegramPostKeys,
 } from "@/lib/query-keys";
 import { Button, ConfirmDeleteModal } from "@/components/ui/primitives";
@@ -67,7 +67,12 @@ export function AiPostingTestConsole({
     stages: Record<string, string>;
     complete: number;
     failed: boolean;
+    current: number;
+    total: number;
+    publicationIndex: number;
   } | null>(null);
+  const [liveRun, setLiveRun] = useState<TestRun | null>(null);
+  const [progressExpanded, setProgressExpanded] = useState(false);
   const mediaOperation = useRef<ReturnType<typeof startOperation> | null>(null);
   const completedPublications = useRef(new Set<number>());
   const [reject, setReject] = useState<Record<string, string>>({});
@@ -104,19 +109,44 @@ export function AiPostingTestConsole({
           status: string;
           publicationIndex?: number;
           attempt?: number;
+          runId?: string;
+          publication?: Publication;
         }
       >(
         `/telegram-channels/${channelId}/ai-posting/generate/stream`,
         {
           count,
         },
-        (item) => {
+        (item, current, total) => {
+          if (
+            item.stage === "publication" &&
+            item.publication &&
+            item.runId &&
+            item.publicationIndex !== undefined
+          ) {
+            setLiveRun((previous) => {
+              const sameRun = previous?.id === item.runId;
+              const publications =
+                sameRun && previous ? [...previous.publications] : [];
+              publications[item.publicationIndex!] = item.publication!;
+              return {
+                id: item.runId!,
+                version: 1,
+                status: "RUNNING",
+                settingsVersion: 0,
+                requestedCount: count,
+                createdAt:
+                  sameRun && previous
+                    ? previous.createdAt
+                    : new Date().toISOString(),
+                publications,
+                failures: [],
+                feedback: [],
+              };
+            });
+          }
           const label =
             generationStageLabel[item.stage] ?? "Обрабатываю публикацию";
-          const post =
-            item.publicationIndex === undefined
-              ? ""
-              : ` · публикация ${item.publicationIndex + 1}/${count}`;
           const attempt = item.attempt ? ` · попытка ${item.attempt}` : "";
           const state =
             item.status === "COMPLETED"
@@ -133,20 +163,29 @@ export function AiPostingTestConsole({
           setGenerationProgress((previous) => {
             if (!previous) return previous;
             const key = `${item.publicationIndex ?? 0}:${item.stage}`;
+            const stages = { ...previous.stages, [key]: item.status };
+            if (item.stage === "planning") {
+              for (let index = 0; index < previous.count; index += 1) {
+                stages[`${index}:planning`] = item.status;
+              }
+            }
             return {
               ...previous,
-              stages: { ...previous.stages, [key]: item.status },
+              stages,
               complete:
                 item.stage === "image" && item.status === "COMPLETED"
                   ? completedPublications.current.size
                   : previous.complete,
               failed: previous.failed || item.status === "FAILED",
+              current,
+              total,
+              publicationIndex: item.publicationIndex ?? previous.publicationIndex,
             };
           });
           generationOperation.current?.update({
-            message: `${label}${post}${attempt}${state}`,
-            current: completedPublications.current.size,
-            total: count,
+            message: `Публикация ${Math.min((item.publicationIndex ?? 0) + 1, count)} из ${count} · ${label}${attempt}${state}`,
+            current,
+            total,
           });
         },
       ),
@@ -162,6 +201,7 @@ export function AiPostingTestConsole({
               ...previous,
               complete: ready,
               failed: failed > 0,
+              current: previous.total,
             }
           : previous,
       );
@@ -178,6 +218,7 @@ export function AiPostingTestConsole({
       });
       generationOperation.current = null;
       setHistoryExpanded(false);
+      setLiveRun(null);
       await client.invalidateQueries({
         queryKey: aiPostingTestRunKeys(channelId).runs,
       });
@@ -194,6 +235,7 @@ export function AiPostingTestConsole({
             : "Проверьте детали запуска и повторите попытку.",
       });
       generationOperation.current = null;
+      setLiveRun(null);
       await client.invalidateQueries({
         queryKey: aiPostingTestRunKeys(channelId).runs,
       });
@@ -212,6 +254,9 @@ export function AiPostingTestConsole({
         stages: { "0:planning": "RUNNING" },
         complete: 0,
         failed: false,
+        current: 0,
+        total: 1,
+        publicationIndex: 0,
       });
       generationOperation.current = startOperation({
         id: `ai-posting-retry:${channelId}:${run.id}:${failureIndex}:${Date.now()}`,
@@ -324,12 +369,17 @@ export function AiPostingTestConsole({
       stages: Object.fromEntries(
         Array.from({ length: count }, (_, index) => [
           `${index}:planning`,
-          "RUNNING",
+          index === 0 ? "RUNNING" : "PENDING",
         ]),
       ),
       complete: 0,
       failed: false,
+      current: 0,
+      total: 1 + count * 8,
+      publicationIndex: 0,
     });
+    setLiveRun(null);
+    setProgressExpanded(false);
     generationOperation.current = startOperation({
       id: `ai-posting-generate:${channelId}:${Date.now()}`,
       title: "Генерация AI Posting",
@@ -388,26 +438,9 @@ export function AiPostingTestConsole({
         queryKey: aiPostingTestRunKeys(channelId).runs,
       });
       if (variables.action === "save") {
-        await Promise.all([
-          client.invalidateQueries({
-            queryKey: ["telegram-ai-posting-hypotheses", channelId],
-          }),
-          client.invalidateQueries({
-            queryKey: ["telegram-ai-posting-post-groups", channelId],
-          }),
-          client.invalidateQueries({
-            queryKey: telegramContentHypothesisKeys.list(channelId),
-          }),
-          client.invalidateQueries({
-            queryKey: telegramContentHypothesisKeys.postOptions(channelId),
-          }),
-          client.invalidateQueries({
-            queryKey: telegramPostKeys.postGroups(channelId),
-          }),
-          client.invalidateQueries({
-            queryKey: telegramPostKeys.managedLists(channelId),
-          }),
-        ]);
+        await client.invalidateQueries({
+          queryKey: telegramPostKeys.managedLists(channelId),
+        });
       }
     },
     onError: async (cause, variables) => {
@@ -522,11 +555,38 @@ export function AiPostingTestConsole({
           role="status"
           className="rounded-lg border border-neutral-700 bg-neutral-900 p-3 text-sm"
         >
-          <strong>
-            Публикации: {progress.complete} из {progress.count}
-            {progress.failed ? " · есть ошибки" : ""}
-          </strong>
-          {Array.from({ length: progress.count }, (_, index) => (
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <strong>
+              Публикация {Math.min(progress.publicationIndex + 1, progress.count)} из {progress.count}
+              {progress.failed ? " · есть ошибки" : " · в процессе"}
+            </strong>
+            <span className="text-neutral-400">
+              {Math.min(100, Math.round((progress.current / Math.max(progress.total, 1)) * 100))}% · готово {progress.complete}
+            </span>
+          </div>
+          <div
+            className="mt-2 h-1.5 overflow-hidden rounded-full bg-neutral-800"
+            role="progressbar"
+            aria-label="Прогресс генерации AI Posting"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={Math.min(100, Math.round((progress.current / Math.max(progress.total, 1)) * 100))}
+          >
+            <div
+              className="h-full rounded-full bg-blue-500 transition-[width]"
+              style={{ width: `${Math.min(100, Math.round((progress.current / Math.max(progress.total, 1)) * 100))}%` }}
+            />
+          </div>
+          <button
+            type="button"
+            aria-expanded={progressExpanded}
+            onClick={() => setProgressExpanded((expanded) => !expanded)}
+            className="mt-2 inline-flex items-center gap-1 text-xs text-blue-300 hover:text-blue-200"
+          >
+            <ChevronDown size={14} className={progressExpanded ? "rotate-180" : ""} />
+            {progressExpanded ? "Скрыть этапы" : "Показать этапы"}
+          </button>
+          {progressExpanded && Array.from({ length: progress.count }, (_, index) => (
             <div
               key={index}
               className="mt-3 rounded-md border border-neutral-800 bg-neutral-950/60 p-3 text-neutral-300"
@@ -614,7 +674,7 @@ export function AiPostingTestConsole({
           Не удалось загрузить историю тестов.
         </div>
       )}
-      {displayedRuns.map((run) => (
+      {[...(liveRun ? [liveRun] : []), ...displayedRuns].map((run) => (
         <AiPostingTestRunCard
           key={run.id}
           run={run}

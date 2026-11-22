@@ -33,7 +33,7 @@ export function TelegramPostsHeaderWorkflows({
   const { locale, t } = useI18n();
   const queryClient = useQueryClient();
   const [postFromBotOpen, setPostFromBotOpen] = useState(false);
-  const activeChannel = channel ?? channels[0];
+  const activeChannel = channel;
 
   return (
     <>

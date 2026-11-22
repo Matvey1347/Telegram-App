@@ -174,12 +174,6 @@ describe('TelegramAiPostingTestRunService review lifecycle', () => {
     };
     const revisions = { createManagedPostRevision: jest.fn() };
     const images = { resolve: jest.fn() };
-    const structure = {
-      resolveForDraft: jest.fn().mockResolvedValue({
-        groupId: 'group-1',
-        hypothesisId: 'hypothesis-1',
-      }),
-    };
     const service = new TelegramAiPostingTestRunService(
       prisma as never,
       workspace as never,
@@ -187,7 +181,6 @@ describe('TelegramAiPostingTestRunService review lifecycle', () => {
       posts as never,
       revisions as never,
       images as never,
-      structure as never,
     );
     return {
       service,
@@ -197,7 +190,6 @@ describe('TelegramAiPostingTestRunService review lifecycle', () => {
       gateway,
       revisions,
       images,
-      structure,
       tx,
       get storedRun() {
         return storedRun;
@@ -264,91 +256,57 @@ describe('TelegramAiPostingTestRunService review lifecycle', () => {
     expect(saved.sourceDiagnostics).toEqual([diagnostic]);
   });
 
-  it('creates and attaches allowed groups and hypotheses inside the draft transaction', async () => {
-    const ctx = setup({ format: 'New group', category: 'New hypothesis' });
-    ctx.tx.$queryRaw.mockResolvedValue([
-      {
-        configuration: { allowCreateGroups: true, allowCreateHypotheses: true },
+  it('saves the valid sphere, rubric and length with the approved publication', async () => {
+    const ctx = setup({
+      editorialMetadata: {
+        sphere: { id: 'sphere' },
+        rubric: { id: 'rubric' },
+        length: { id: 'short' },
       },
-    ]);
+      format: 'Legacy group',
+      category: 'Legacy hypothesis',
+    });
+    const tags = {
+      aiPostingSphereId: 'sphere',
+      aiPostingRubricId: 'rubric',
+      aiPostingLengthId: 'channel-1::short',
+    };
+    ctx.tx.$queryRaw.mockResolvedValue([tags]);
+
     await act(ctx.service, 'approve');
     await act(ctx.service, 'save', 2);
-    expect(ctx.structure.resolveForDraft).toHaveBeenCalledWith(
-      ctx.tx,
-      expect.objectContaining({
-        workspaceId: 'workspace-1',
-        channelId: 'channel-1',
-        memberId: 'member-1',
-        format: 'New group',
-        category: 'New hypothesis',
-        allowGroups: true,
-        allowHypotheses: true,
-      }),
+
+    expect(ctx.tx.$queryRaw).toHaveBeenCalledWith(
+      expect.anything(),
+      'rubric',
+      'channel-1::short',
+      'sphere',
+      'workspace-1',
+      'channel-1',
     );
-    expect(ctx.posts.createManagedPostRecord).toHaveBeenCalledWith(
-      ctx.tx,
-      expect.objectContaining({ groupId: 'group-1' }),
-    );
+    const [, record] = ctx.posts.createManagedPostRecord.mock
+      .calls[0] as unknown as [unknown, Record<string, unknown>];
+    expect(record).toMatchObject(tags);
+    expect(record.groupId).toBeUndefined();
     expect(
       ctx.tx.telegramManagedPostContentHypothesis.create,
-    ).toHaveBeenCalledWith({
-      data: { managedPostId: 'managed-post-1', hypothesisId: 'hypothesis-1' },
-    });
+    ).not.toHaveBeenCalled();
   });
 
-  it('recognizes explicitly selected groups and hypotheses named standard or general', async () => {
-    const ctx = setup({ format: 'standard', category: 'general' });
-    ctx.tx.$queryRaw.mockResolvedValue([
-      { configuration: { formats: ['standard'], categories: ['general'] } },
-    ]);
-    await act(ctx.service, 'approve');
-    await act(ctx.service, 'save', 2);
-    expect(ctx.structure.resolveForDraft).toHaveBeenCalledWith(
-      ctx.tx,
-      expect.objectContaining({
-        format: 'standard',
-        category: 'general',
-        allowGroups: false,
-        allowHypotheses: false,
-      }),
-    );
-  });
-
-  it('does not create fallback names when auto creation is enabled', async () => {
-    const ctx = setup();
-    ctx.tx.$queryRaw.mockResolvedValue([
-      {
-        configuration: {
-          allowCreateGroups: true,
-          allowCreateHypotheses: true,
-          formats: [],
-          categories: [],
-        },
-      },
-    ]);
-    await act(ctx.service, 'approve');
-    await act(ctx.service, 'save', 2);
-    expect(ctx.structure.resolveForDraft).not.toHaveBeenCalled();
-  });
-
-  it('does not associate unselected names when automatic creation is disabled', async () => {
+  it('preserves an approved draft when its old rubric is no longer valid', async () => {
     const ctx = setup({
-      format: 'Unselected group',
-      category: 'Unselected hypothesis',
-    });
-    ctx.tx.$queryRaw.mockResolvedValue([
-      {
-        configuration: {
-          formats: ['Selected group'],
-          categories: ['Selected hypothesis'],
-          allowCreateGroups: false,
-          allowCreateHypotheses: false,
-        },
+      editorialMetadata: {
+        sphere: { id: 'sphere' },
+        rubric: { id: 'deleted' },
       },
-    ]);
+    });
     await act(ctx.service, 'approve');
     await act(ctx.service, 'save', 2);
-    expect(ctx.structure.resolveForDraft).not.toHaveBeenCalled();
+
+    const [, record] = ctx.posts.createManagedPostRecord.mock
+      .calls[0] as unknown as [unknown, Record<string, unknown>];
+    expect(record.aiPostingRubricId).toBeUndefined();
+    expect(record.title).toBe('Approved title');
   });
 
   it.each([

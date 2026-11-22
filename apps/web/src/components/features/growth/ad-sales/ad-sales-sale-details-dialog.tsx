@@ -115,14 +115,13 @@ export function AdSalesSaleDetailsDialog({
           : "";
         const buyerChanged = draft.buyerContact !== currentBuyer || draft.advertiserId !== sale.advertiserId;
         const saleChanges = {
-          ...(!draft.paymentsOnly && draft.origin !== sale.origin
+          ...(draft.origin !== sale.origin
             ? { origin: draft.origin }
             : {}),
-          ...(!draft.paymentsOnly &&
-          draft.sellerMemberId !== (sale.sellerMemberId ?? sale.assignedMemberId)
+          ...(draft.sellerMemberId !== (sale.sellerMemberId ?? sale.assignedMemberId)
             ? { sellerMemberId: draft.sellerMemberId }
             : {}),
-          ...(!draft.paymentsOnly && buyerChanged
+          ...(buyerChanged
             ? {
                 advertiserId: null,
                 advertiserName:
@@ -133,8 +132,7 @@ export function AdSalesSaleDetailsDialog({
                   : null,
               }
             : {}),
-          ...(!draft.paymentsOnly &&
-          draft.advertiserId &&
+          ...(draft.advertiserId &&
           draft.advertiserId !== sale.advertiserId
             ? { advertiserId: draft.advertiserId }
             : {}),
@@ -145,9 +143,7 @@ export function AdSalesSaleDetailsDialog({
         };
         const operation = startOperation({
           id: `ad-sale-edit:${sale.id}`,
-          title: draft.paymentsOnly
-            ? "Updating finance transaction"
-            : "Saving deal changes",
+          title: "Saving deal changes",
           message: "Sending changes to the server…",
           current: 0,
           total: 1,
@@ -184,11 +180,13 @@ export function AdSalesSaleDetailsDialog({
             updatedSale.placements.some(
               (saved) =>
                 saved.id === requested.id &&
-                Date.parse(saved.scheduledAt) === Date.parse(requested.scheduledAt),
+                Date.parse(saved.scheduledAt) === Date.parse(requested.scheduledAt) &&
+                (requested.telegramAdProductId === undefined ||
+                  saved.telegramAdProductId === requested.telegramAdProductId),
             ),
           );
           if (!datesSaved) {
-            throw new Error("The server did not save the requested publication date.");
+            throw new Error("The server did not save the requested publication date or format.");
           }
           await invalidateTelegramAdSalesDerivedQueries(queryClient, {
             availability: true,
@@ -203,12 +201,8 @@ export function AdSalesSaleDetailsDialog({
             ),
           });
           operation.succeed({
-            title: draft.paymentsOnly
-              ? "Finance transaction updated"
-              : "Deal changes saved",
-            message: draft.paymentsOnly
-              ? "The finance transaction was updated."
-              : "All placement, post, and payment changes are saved.",
+            title: "Deal changes saved",
+            message: "All placement, post, and payment changes are saved.",
           });
         } catch (error) {
           operation.fail({

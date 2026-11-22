@@ -78,6 +78,7 @@ export const generationStageLabel: Record<string, string> = {
   text: "Пишу текст",
   review: "Проверяю текст",
   image: "Подбираю медиа",
+  publication: "Публикация готова",
 };
 
 export function failureStageLabel(code: string) {

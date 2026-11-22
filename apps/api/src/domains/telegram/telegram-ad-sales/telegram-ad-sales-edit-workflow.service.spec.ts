@@ -8,6 +8,7 @@ function setup() {
       {
         id: 'placement-a',
         status: 'RESERVED',
+        telegramChannelId: 'channel-a',
         managedPostId: null,
       },
     ],
@@ -23,7 +24,8 @@ function setup() {
     attachManagedPost: jest.fn().mockResolvedValue(undefined),
     updatePayment: jest.fn().mockResolvedValue(undefined),
   } as unknown as jest.Mocked<TelegramAdSalesService>;
-  return { sales, service: new TelegramAdSalesEditWorkflowService(sales), sale };
+  const channels = { updateManagedPost: jest.fn().mockResolvedValue(undefined) };
+  return { sales, channels, service: new TelegramAdSalesEditWorkflowService(sales, channels as never), sale };
 }
 
 const placement = {
@@ -70,6 +72,20 @@ describe('TelegramAdSalesEditWorkflowService', () => {
     expect(sales.schedulePlacement).toHaveBeenCalledTimes(1);
     expect(sales.getSale).toHaveBeenCalledTimes(1);
     expect(progress).toEqual(['LOAD', 'UPDATE_PLACEMENT', 'CREATE_POST']);
+  });
+
+  it('updates the existing post and preserves its link before saving a new schedule', async () => {
+    const { sales, channels, service, sale } = setup();
+    Object.assign(sale.placements[0], { managedPostId: 'post-a', status: 'SCHEDULED' });
+    sales.updatePlacement.mockResolvedValueOnce({ managedPostId: 'post-a' } as never);
+    await service.save('user-a', 'sale-a', {
+      placements: [{ ...placement, managedPostId: null }],
+      payments: [],
+    }, () => undefined);
+    expect(channels.updateManagedPost).toHaveBeenCalledWith('user-a', 'channel-a', 'post-a',
+      expect.objectContaining({ inPlaceOnly: true, text: 'Text' }));
+    expect(sales.updatePlacement.mock.calls[0][3]).not.toHaveProperty('managedPostId');
+    expect(sales.createManagedPostFromPlacement).not.toHaveBeenCalled();
   });
 
   it('links a selected published post inside the same workflow', async () => {

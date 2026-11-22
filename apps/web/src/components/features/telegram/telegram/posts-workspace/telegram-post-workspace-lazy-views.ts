@@ -25,9 +25,3 @@ export const ManagedPostHistoryModal = dynamic(() =>
     (module) => module.ManagedPostHistoryModal,
   ),
 );
-
-export const ContentHypothesesWorkspace = dynamic(() =>
-  import("@/components/features/telegram/telegram/content-hypotheses-modal").then(
-    (module) => module.ContentHypothesesWorkspace,
-  ),
-);

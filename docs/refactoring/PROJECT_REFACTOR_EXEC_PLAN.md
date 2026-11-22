@@ -2446,3 +2446,39 @@ and channel, writes remain per claimed post, receipts are bounded to one per pos
 - Disposable PostgreSQL, mocked Telegram and browser query-cache tests are
   used for verification. Current scope and live limitations are recorded in
   [owner-transfer diagnosis](../qa/telegram-owner-transfer/DIAGNOSIS.md).
+
+### 2026-11-22 — Publication workspace and editorial grouping
+
+The publication workspace opens AI Posting, then offers Calendar and Editor.
+The editor remains the target for direct links from Ad Sales and Mutual
+Promotion. Legacy group and hypothesis records remain available to existing
+integration paths. New AI drafts and chat rubric setup use the channel's
+editorial taxonomy.
+
+The editor sidebar groups eligible drafts by the sphere and rubric pair.
+Each pair opens in place and uses the standard editor rows, search and bulk
+selection. Telegram originals, ads, mutual promotion, batch deliveries and
+reserved groups keep their existing presentation. Drafts with missing or
+obsolete taxonomy stay in the regular list. AI Posting has no separate
+reserve widget or reserve API.
+
+The «Жіноча сила» photo brief applies at initial image generation and during
+image regeneration. It uses documentary photography guidance while preserving
+the selected media preference and attached references.
+
+The reviewed local manifest covers 112 drafts and 16 pairs. A production replay
+manifest covers 114 drafts for the same channel. Both files are under
+`.codex/tmp/publications-women-power-*.json` and contain IDs, content hashes
+and editorial assignments. They are ignored by Git. Use
+`scripts/db/apply-ai-posting-draft-taxonomy.mjs MANIFEST` to check the local
+target. On production, run the same command with `--production` after the
+schema deploy. Add `--execute` only after verifying a complete match. Review
+any stale draft before updating its manifest entry. The transaction checks
+workspace, channel, status, origin, group, related deliveries and the reviewed
+content version. Repeating an applied manifest makes no writes.
+
+The existing managed post collection returns labels for assigned drafts from
+one scoped batch read. A channel with no assigned drafts skips that query.
+At 100 opened channels the upper bound is one additional DB read per existing
+full collection request. There are no new frontend requests, polling, jobs,
+writes or retention costs.

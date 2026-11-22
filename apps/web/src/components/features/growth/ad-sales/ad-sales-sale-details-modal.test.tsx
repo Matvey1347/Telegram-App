@@ -3,6 +3,10 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { SaleDetailsModal } from "./ad-sales-sale-details-modal";
 
+vi.mock("@/components/icons/icon-avatar", () => ({
+  IconAvatar: ({ label, icon }: { label?: string; icon?: { value?: string } }) => <span aria-label={label}>{icon?.value}</span>,
+}));
+
 vi.mock("@/components/features/workspace/member-select", () => ({
   MemberSelect: () => <div>Member selector</div>,
 }));
@@ -184,7 +188,7 @@ describe("SaleDetailsModal", () => {
     expect(screen.queryByRole("button", { name: "Reschedule" })).toBeNull();
   });
 
-  it("saves only the placement being edited", async () => {
+  it("skips unchanged placements when saving from the placement editor", async () => {
     const user = userEvent.setup();
     const onSave = vi.fn().mockResolvedValue(undefined);
     const sourceSale = sale as unknown as Record<string, unknown> & {
@@ -229,7 +233,7 @@ describe("SaleDetailsModal", () => {
       expect(onSave).toHaveBeenCalledWith(
         saleWithTwoPlacements,
         expect.objectContaining({
-          placements: [expect.objectContaining({ id: "placement-1" })],
+          placements: [],
         }),
       ),
     );
@@ -306,7 +310,7 @@ describe("SaleDetailsModal", () => {
 
     await user.clear(screen.getByLabelText("Time for all"));
     await user.type(screen.getByLabelText("Time for all"), "19:30");
-    await user.click(screen.getByRole("button", { name: /Apply all \(2\)/ }));
+    expect(screen.queryByRole("button", { name: /Apply all/ })).toBeNull();
 
     expect(onSave).not.toHaveBeenCalled();
     await user.click(screen.getByRole("button", { name: "Save changes" }));
@@ -344,7 +348,7 @@ describe("SaleDetailsModal", () => {
     await user.clear(amount);
     await user.type(amount, "125");
     expect(screen.queryByLabelText("Notes")).toBeNull();
-    expect(screen.getByRole("button", { name: "Update transaction" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Update transaction" })).toBeNull();
 
     await user.click(screen.getByRole("button", { name: "Save changes" }));
     await waitFor(() =>
@@ -358,7 +362,7 @@ describe("SaleDetailsModal", () => {
     );
   });
 
-  it("updates only the finance transaction from its own action", async () => {
+  it("saves changed placement date and payment together", async () => {
     const user = userEvent.setup();
     const onSave = vi.fn().mockResolvedValue(undefined);
     const onClose = vi.fn();
@@ -382,19 +386,20 @@ describe("SaleDetailsModal", () => {
     const amount = screen.getByRole("textbox", { name: "Amount (UAH)" });
     await user.clear(amount);
     await user.type(amount, "135");
-    await user.click(screen.getByRole("button", { name: "Update transaction" }));
+    await user.click(screen.getByRole("button", { name: "Select Date for all" }));
+    await user.click(screen.getAllByRole("button", { name: "27" }).at(-1)!);
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
 
     await waitFor(() =>
       expect(onSave).toHaveBeenCalledWith(
         sale,
         expect.objectContaining({
-          paymentsOnly: true,
-          placements: [],
-          payments: [expect.objectContaining({ id: "payment-1", amount: 135 })],
+          placements: [expect.objectContaining({ scheduledAt: "2026-08-27T16:00:00.000Z" })],
+          payments: [expect.objectContaining({ id: "payment-1", amount: 135, paidAt: "2026-08-27T16:00:00.000Z" })],
         }),
       ),
     );
-    expect(onClose).not.toHaveBeenCalled();
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 
   it("places publication deletion beside the deal save action", () => {
@@ -533,7 +538,7 @@ describe("SaleDetailsModal", () => {
           accountId: "account-1",
           amount: 310,
           currency: "UAH",
-          paidAt: expect.any(String),
+          paidAt: "2026-08-25T16:00:00.000Z",
           allocations: [{ placementId: "placement-1", amount: 102 }],
         }),
       ),
@@ -729,7 +734,7 @@ describe("SaleDetailsModal", () => {
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: /Psychology/ }));
+    await user.click(screen.getByRole("button", { name: "Edit placement Psychology" }));
     const postOptions = within(
       screen.getByLabelText("Advertising post options"),
     );
@@ -800,7 +805,7 @@ describe("SaleDetailsModal", () => {
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: /Psychology/ }));
+    await user.click(screen.getByRole("button", { name: "Edit placement Psychology" }));
     await user.click(
       within(screen.getByLabelText("Advertising post options")).getByRole(
         "tab",

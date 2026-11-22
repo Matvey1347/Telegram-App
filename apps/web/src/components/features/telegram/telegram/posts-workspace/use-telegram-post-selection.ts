@@ -65,7 +65,6 @@ type Input = Pick<
   > &
   Pick<
     ReturnType<typeof useTelegramPostSidebarList>,
-    | "changeWorkspaceView"
     | "changeStatusTab"
     | "allChannelPostsSelected"
     | "channelPostIds"
@@ -142,7 +141,6 @@ export function useTelegramPostSelection(input: Input) {
     editing,
     memberSelectionTouched,
     assignedMemberId,
-    changeWorkspaceView,
     changeStatusTab,
     allChannelPostsSelected,
     channelPostIds,
@@ -174,7 +172,6 @@ export function useTelegramPostSelection(input: Input) {
   const reset = () => {
     const now = localNowParts(workspaceTimezone);
     const nextGroupId = rememberedPostGroupId;
-    changeWorkspaceView("posts");
     restoredPostIdRef.current = "";
     setEditing(null);
     setTitle("");

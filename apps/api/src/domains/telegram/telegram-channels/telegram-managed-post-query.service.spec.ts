@@ -26,6 +26,7 @@ function setup(
 ) {
   const prisma = {
     $executeRaw: jest.fn(),
+    $queryRaw: jest.fn().mockResolvedValue([]),
     $transaction: jest.fn(),
     telegramManagedPost: {
       findMany: jest
@@ -245,6 +246,36 @@ describe('TelegramManagedPostQueryService unified read model', () => {
         take: expect.anything(),
       }),
     );
+  });
+
+  it('returns editorial labels with the existing list only when assigned drafts are present', async () => {
+    const { service, prisma } = setup([{
+      id: 'editorial-draft',
+      workspaceId: 'workspace-1',
+      telegramChannelId: 'channel-1',
+      telegramMessageIds: [],
+      telegramMessageUrls: [],
+      status: 'DRAFT',
+      aiPostingSphereId: 'sphere',
+      aiPostingRubricId: 'rubric',
+      assignedMember: null,
+    }], []);
+    const pair = {
+      postId: 'editorial-draft',
+      sphereId: 'sphere',
+      sphereName: 'A sphere',
+      rubricId: 'rubric',
+      rubricName: 'A rubric',
+    };
+    prisma.$queryRaw.mockResolvedValue([pair]);
+    const result = await service.managedPosts('user-1', 'channel-1', { all: true });
+    expect(result.editorialPairs).toMatchObject([pair]);
+    expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
+    expect(prisma.$queryRaw.mock.calls[0].slice(1)).toEqual([
+      'workspace-1', 'channel-1', ['editorial-draft'],
+    ]);
+    await service.managedPosts('user-1', 'channel-1');
+    expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
   });
 
   it('keeps collection GET pure and performs no source work for non-published filters', async () => {

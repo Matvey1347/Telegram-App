@@ -208,6 +208,10 @@ export function SalesTab(props: {
                   const linkedPosts = sale.placements.filter(
                     hasLinkedPlacementPost,
                   ).length;
+                  const publicationEnabled = sale.placements.some((placement) =>
+                    hasLinkedPlacementPost(placement) ||
+                    Boolean(placement.scheduledManagedAt),
+                  );
                   const soldBy = sale.sellerMember ?? sale.assignedMember;
                   const hasMultiplePlacementOutputs =
                     new Set(
@@ -239,10 +243,11 @@ export function SalesTab(props: {
                             <p className="truncate font-medium text-white">
                               {adSaleClientLabel(sale)}
                             </p>
-                            <p className="mt-1 text-xs text-neutral-500">
-                              {linkedPosts}/{sale.placements.length} posts
-                              linked
-                            </p>
+                            {publicationEnabled ? (
+                              <p className="mt-1 text-xs text-neutral-500">
+                                {linkedPosts}/{sale.placements.length} posts linked
+                              </p>
+                            ) : null}
                           </div>
                         </div>
                       </td>

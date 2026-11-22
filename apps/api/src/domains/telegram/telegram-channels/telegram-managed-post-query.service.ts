@@ -23,6 +23,7 @@ import {
   telegramPostUrl,
   type TelegramPostEngagementRow,
 } from './telegram-post-engagement';
+import { readManagedDraftEditorialPairs } from './telegram-managed-draft-editorial';
 import { managedPostNotFound } from './telegram-posts.errors';
 
 type ManagedPostMemberRow = {
@@ -326,7 +327,21 @@ export class TelegramManagedPostQueryService {
             : Math.max(0, pagination.take - managedTake),
         )
       : [];
-    const enriched = await this.enrichManaged(managedRows, channel);
+    const editorialPostIds = query.all
+      ? managedRows.flatMap((post) =>
+          post.status === 'DRAFT' && post.aiPostingSphereId && post.aiPostingRubricId
+            ? [post.id]
+            : [],
+        )
+      : [];
+    const [enriched, editorialPairs] = await Promise.all([
+      this.enrichManaged(managedRows, channel),
+      readManagedDraftEditorialPairs(
+        this.prisma,
+        { workspaceId, telegramChannelId: channelId },
+        editorialPostIds,
+      ),
+    ]);
     const member = syntheticRows.length
       ? await this.syntheticMember(userId, workspaceId, channel)
       : null;
@@ -337,11 +352,14 @@ export class TelegramManagedPostQueryService {
       ),
     ];
     const totalItems = resolvedManagedTotal + syntheticTotal;
-    return createPaginatedResponse(
-      await this.presentation.attachManagedPostIcons(items),
-      totalItems,
-      query.all ? { page: 1, pageSize: Math.max(1, totalItems) } : pagination,
-    );
+    return {
+      ...createPaginatedResponse(
+        await this.presentation.attachManagedPostIcons(items),
+        totalItems,
+        query.all ? { page: 1, pageSize: Math.max(1, totalItems) } : pagination,
+      ),
+      ...(editorialPairs.length ? { editorialPairs } : {}),
+    };
   }
 
   async managedPost(userId: string, channelId: string, postId: string) {

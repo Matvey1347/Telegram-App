@@ -5,6 +5,7 @@ import type {
   ManagedPostsSyncResult,
   PaginatedResponse,
   TelegramManagedPostCalendarResult,
+  TelegramManagedPostEditorialPair,
   TelegramManagedPostLookupRequest,
   TelegramManagedPostLookupResponse,
   TelegramPostPlannerApplyResult,
@@ -71,7 +72,7 @@ export function createTelegramManagedPostsApi({
       },
     ) =>
       (
-        await api.get<PaginatedResponse<TelegramManagedPost>>(
+        await api.get<PaginatedResponse<TelegramManagedPost> & { editorialPairs?: TelegramManagedPostEditorialPair[] }>(
           `/telegram-channels/${channelId}/managed-posts`,
           { params },
         )
