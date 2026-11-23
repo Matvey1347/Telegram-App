@@ -248,15 +248,17 @@ describe('TelegramBotRuntimeService environment isolation', () => {
       'local-token',
       local.webhookUrl,
       'webhook-secret',
+      ['message', 'callback_query', 'pre_checkout_query'],
     );
     expect(api.setWebhook).not.toHaveBeenCalledWith(
       'production-token',
       expect.anything(),
       expect.anything(),
+      expect.anything(),
     );
   });
 
-  it('records the reconciled Finance Mini App URL during startup', async () => {
+  it('refreshes the production Finance update subscription even with the correct webhook URL', async () => {
     environment.current.mockReturnValue(
       TelegramBotRuntimeEnvironment.PRODUCTION,
     );
@@ -268,7 +270,10 @@ describe('TelegramBotRuntimeService environment isolation', () => {
     registry.bootstrap.mockResolvedValue([
       { runtime: production, token: 'production-token' },
     ]);
-    api.getWebhookInfo.mockResolvedValue({ url: production.webhookUrl });
+    api.getWebhookInfo.mockResolvedValue({
+      url: production.webhookUrl,
+      allowed_updates: ['callback_query'],
+    });
     presentation.reconcile.mockResolvedValue({
       miniAppUrl: 'https://www.nexeloq.com/finance/bot-1',
     });
@@ -282,6 +287,12 @@ describe('TelegramBotRuntimeService environment isolation', () => {
 
     await service.onModuleInit();
 
+    expect(api.setWebhook).toHaveBeenCalledWith(
+      'production-token',
+      production.webhookUrl,
+      'webhook-secret',
+      ['message', 'callback_query', 'pre_checkout_query'],
+    );
     expect(prisma.telegramBotRuntimeInstance.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {

@@ -176,11 +176,17 @@ export class TelegramBotApiClient {
     });
   }
 
-  async setWebhook(token: string, url: string, secretToken: string) {
+  async setWebhook(
+    token: string,
+    url: string,
+    secretToken: string,
+    allowedUpdates?: readonly string[],
+  ) {
     return this.call<boolean>(token, 'setWebhook', {
       url,
       secret_token: secretToken,
       drop_pending_updates: false,
+      ...(allowedUpdates && { allowed_updates: allowedUpdates }),
     });
   }
 

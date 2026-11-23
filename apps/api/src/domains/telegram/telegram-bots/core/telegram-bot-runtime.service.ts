@@ -252,7 +252,12 @@ export class TelegramBotRuntimeService implements OnModuleInit {
     }
     this.registry.invalidate(runtime.id);
     try {
-      await this.botApi.setWebhook(token, url, secret);
+      await this.botApi.setWebhook(
+        token,
+        url,
+        secret,
+        this.allowedUpdates(runtime),
+      );
       const presentation = await this.presentation.reconcile(
         token,
         runtime.botIntegration.applicationType,
@@ -434,6 +439,7 @@ export class TelegramBotRuntimeService implements OnModuleInit {
           entry.token,
           expectedUrl,
           this.decryptSecret(runtime),
+          this.allowedUpdates(runtime),
         );
       }
       const presentation = await this.presentation.reconcile(
@@ -577,7 +583,12 @@ export class TelegramBotRuntimeService implements OnModuleInit {
         iv: runtime.pendingWebhookSecretIv,
         authTag: runtime.pendingWebhookSecretAuthTag,
       });
-      await this.botApi.setWebhook(token, runtime.pendingWebhookUrl, secret);
+      await this.botApi.setWebhook(
+        token,
+        runtime.pendingWebhookUrl,
+        secret,
+        this.allowedUpdates(runtime),
+      );
       const presentation = await this.presentation.reconcile(
         token,
         runtime.botIntegration.applicationType,
@@ -713,6 +724,16 @@ export class TelegramBotRuntimeService implements OnModuleInit {
     return token.length <= 8
       ? '••••••••'
       : `${token.slice(0, 4)}••••${token.slice(-4)}`;
+  }
+
+  private allowedUpdates(runtime: RegisteredTelegramBotRuntime['runtime']) {
+    if (
+      runtime.botIntegration.applicationType === TelegramBotApplicationType.FINANCE
+    ) {
+      // Telegram retains the previous update filter when a webhook omits it.
+      return ['message', 'callback_query', 'pre_checkout_query'] as const;
+    }
+    return undefined;
   }
 
   private async markError(
