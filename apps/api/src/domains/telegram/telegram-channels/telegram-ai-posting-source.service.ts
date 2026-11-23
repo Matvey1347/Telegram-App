@@ -3,6 +3,7 @@ import { isIP } from 'node:net';
 import { createHash } from 'node:crypto';
 import * as https from 'node:https';
 import { Injectable } from '@nestjs/common';
+import type { TelegramAiPostingImageCatalog } from '@telegram-system/shared';
 import { PrismaService } from '../../../prisma/prisma.service';
 import {
   isValidTelegramAiPostingSourceId,
@@ -492,12 +493,15 @@ export class TelegramAiPostingSourceService {
     };
   }
 
-  async searchOpenImages(query: string, page = 1): Promise<ImageCandidate[]> {
-    try {
-      const candidates = await this.searchOpenverse(query, page);
-      if (candidates.length) return candidates;
-    } catch {
-      // The second catalog can still supply licensed images.
+  async searchOpenImages(query: string, page = 1, catalog: TelegramAiPostingImageCatalog = 'auto'): Promise<ImageCandidate[]> {
+    if (catalog === 'wordpress-photos') return this.searchPhotoDirectory(query, page);
+    if (catalog === 'auto') {
+      try {
+        const candidates = await this.searchOpenverse(query, page);
+        if (candidates.length) return candidates;
+      } catch {
+        // The second catalog can still supply licensed images.
+      }
     }
     const url = new URL('https://commons.wikimedia.org/w/api.php');
     url.search = new URLSearchParams({
@@ -507,6 +511,7 @@ export class TelegramAiPostingSourceService {
       generator: 'search',
       gsrnamespace: '6',
       gsrlimit: '12',
+      gsroffset: String((page - 1) * 12),
       gsrsearch: `${query.slice(0, 180)} filetype:bitmap`,
       prop: 'imageinfo',
       iiprop: 'url|mime|extmetadata',
@@ -549,12 +554,41 @@ export class TelegramAiPostingSourceService {
     }).slice(0, 6);
   }
 
+  private async searchPhotoDirectory(query: string, page: number): Promise<ImageCandidate[]> {
+    const url = new URL('https://wordpress.org/photos/wp-json/wp/v2/photos');
+    url.search = new URLSearchParams({
+      search: query.slice(0, 180), per_page: '8', page: String(page),
+      _embed: 'wp:featuredmedia', _fields: 'featured_media,_links,_embedded',
+    }).toString();
+    const results = JSON.parse((await this.fetchPublic(url.toString(), 512 * 1024, 4_000)).toString('utf8')) as Array<{
+      _embedded?: { 'wp:featuredmedia'?: Array<{
+        source_url?: string;
+        media_details?: { sizes?: Record<string, { source_url?: string }> };
+      }> };
+    } | null>;
+    if (!Array.isArray(results)) return [];
+    return results.flatMap((entry): ImageCandidate[] => {
+      const photo = entry?._embedded?.['wp:featuredmedia']?.[0];
+      const value = photo?.media_details?.sizes?.medium_large?.source_url ?? photo?.source_url;
+      if (typeof value !== 'string') return [];
+      try {
+        const media = new URL(value);
+        return media.origin === 'https://pd.w.org' &&
+          !media.username && !media.password && /\.(?:jpe?g|png|webp)$/i.test(media.pathname)
+          ? [{ url: media.href, sourceId: 'wordpress-photos', sourceType: 'image-search' }]
+          : [];
+      } catch {
+        return [];
+      }
+    }).slice(0, 6);
+  }
+
   private async searchOpenverse(query: string, page: number): Promise<ImageCandidate[]> {
     const url = new URL('https://api.openverse.org/v1/images/');
     url.searchParams.set('q', query.slice(0, 200));
     url.searchParams.set('license', 'cc0,pdm');
     url.searchParams.set('page_size', '10');
-    url.searchParams.set('page', String(Math.max(1, Math.min(3, page))));
+    url.searchParams.set('page', String(page));
     const data: unknown = JSON.parse(
       (await this.fetchPublic(url.toString(), 512 * 1024, 4_000)).toString('utf8'),
     );
@@ -609,12 +643,15 @@ export class TelegramAiPostingSourceService {
   }
 
   async downloadImage(urlValue: string, maxBytes = 5 * 1024 * 1024) {
-    const bytes = await this.fetchPublic(urlValue, maxBytes);
+    const bytes = await this.fetchPublic(urlValue, maxBytes, 5_000, 2);
     if (bytes.length < 256) throw new Error('AI_POSTING_IMAGE_EMPTY');
     return bytes;
   }
 
-  private async fetchPublic(value: string, limit: number, timeoutMs = 8_000) {
+  private async fetchPublic(
+    value: string, limit: number, timeoutMs = 8_000, redirectsRemaining = 0,
+    deadline = Date.now() + timeoutMs,
+  ): Promise<Buffer> {
     const url = new URL(value);
     if (url.protocol !== 'https:' || url.username || url.password)
       throw new Error('AI_POSTING_SOURCE_URL_INVALID');
@@ -624,7 +661,8 @@ export class TelegramAiPostingSourceService {
       addresses.some((item) => !publicAddress(item.address))
     )
       throw new Error('AI_POSTING_SOURCE_HOST_BLOCKED');
-    const pinned = addresses[0];
+    const pinned = addresses.find(({ family }) => family === 4) ?? addresses[0];
+    if (Date.now() >= deadline) throw new Error('AI_POSTING_SOURCE_TIMEOUT');
     return new Promise<Buffer>((resolve, reject) => {
       const chunks: Buffer[] = [];
       let size = 0;
@@ -634,6 +672,7 @@ export class TelegramAiPostingSourceService {
           port: 443,
           path: `${url.pathname}${url.search}`,
           method: 'GET',
+          signal: AbortSignal.timeout(Math.max(1, deadline - Date.now())),
           servername: url.hostname,
           headers: {
             'User-Agent': 'Nexeloq/1.0 (https://www.nexeloq.com)',
@@ -652,8 +691,19 @@ export class TelegramAiPostingSourceService {
           }) as never,
         },
         (response) => {
+          const status = response.statusCode ?? 0;
+          if ([301, 302, 303, 307, 308].includes(status) && redirectsRemaining && response.headers.location) {
+            response.destroy();
+            try {
+              const next = new URL(response.headers.location, url);
+              resolve(this.fetchPublic(next.href, limit, timeoutMs, redirectsRemaining - 1, deadline));
+            } catch (error) {
+              reject(error);
+            }
+            return;
+          }
           if (
-            (response.statusCode ?? 0) < 200 ||
+            status < 200 ||
             (response.statusCode ?? 0) >= 300
           ) {
             response.destroy();

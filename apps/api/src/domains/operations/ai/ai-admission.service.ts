@@ -12,7 +12,7 @@ import type {
 } from '@telegram-system/shared';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { acquirePostgresTransactionLock } from '../../../prisma/postgres-advisory-lock';
-import { AiModelRegistry, TELEGRAM_POSTING_DRAFT_SCHEMA_ID } from './ai-model-registry';
+import { AiModelRegistry, TELEGRAM_POSTING_DRAFT_SCHEMA_ID, TELEGRAM_POSTING_REVIEW_SCHEMA_ID } from './ai-model-registry';
 import { AiDeploymentConfig } from './ai-deployment-config.service';
 import { budgetPeriods, reservationCost } from './ai-pricing';
 import { aiTranscriptionWavSeconds } from './ai-transcription-audio';
@@ -29,6 +29,7 @@ export type AiExecutionRequest = {
   chatPlan?: boolean;
   revisionDraft?: boolean;
   postingDraft?: boolean;
+  postingReview?: boolean;
   audio?: { mime: 'audio/wav'; data: Buffer };
   /** Restricts this experimental manual media batch to one approved source. */
   mediaPilotSourceId?: string;
@@ -61,6 +62,7 @@ export const operationFingerprint = (request: AiExecutionRequest) =>
         request.chatPlan === true,
         request.revisionDraft === true,
         ...(request.postingDraft ? [TELEGRAM_POSTING_DRAFT_SCHEMA_ID] : []),
+        ...(request.postingReview ? [TELEGRAM_POSTING_REVIEW_SCHEMA_ID] : []),
         request.businessObjectId ?? null,
         request.aiPosting
           ? {
@@ -160,6 +162,11 @@ export class AiAdmissionService {
         request.revisionDraft)
     )
       throw new BadRequestException('AI_POSTING_DRAFT_CATEGORY_INVALID');
+    if (request.postingReview && (
+      request.category !== 'TELEGRAM_POSTING_REVIEW' || !request.aiPosting ||
+      request.image || request.audio || request.chatPlan || request.revisionDraft || request.postingDraft
+    ))
+      throw new BadRequestException('AI_POSTING_REVIEW_CATEGORY_INVALID');
     const audioInvalid =
       request.audio !== undefined &&
       (request.category !== 'TELEGRAM_POSTING_PLAN' ||
@@ -322,7 +329,9 @@ export class AiAdmissionService {
                 }
               : request.postingDraft
                 ? { ...configured, schemaId: TELEGRAM_POSTING_DRAFT_SCHEMA_ID, promptVersion: 'telegram-posting-draft-v1' }
-                : configured;
+                : request.postingReview
+                  ? { ...configured, schemaId: TELEGRAM_POSTING_REVIEW_SCHEMA_ID, promptVersion: 'telegram-posting-editorial-review-v1' }
+                  : configured;
       if (
         !this.deployment.enabled ||
         !this.deployment.configured ||

@@ -42,6 +42,7 @@ function checkoutDto(): CreateTelegramAdSaleCheckoutDto {
 function setup(overrides?: { account?: unknown }) {
   const tx = {
     telegramAdSale: {
+      findFirst: jest.fn().mockResolvedValue(null),
       create: jest
         .fn()
         .mockResolvedValue({ id: 'sale-1', advertiserName: 'Advertiser' }),
@@ -154,6 +155,49 @@ function setup(overrides?: { account?: unknown }) {
 }
 
 describe('TelegramAdSalesCheckoutService', () => {
+  it('records an external sale, client and workspace income without placing ads', async () => {
+    const { service, prisma, tx, salesService } = setup();
+    const dto = { ...checkoutDto(), placements: [], externalChannelOwner: ' @publisher ', advertiserContact: '@same_client' };
+    await service.create('user-1', dto);
+
+    expect(tx.telegramAdSale.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        externalChannelOwner: '@publisher', externalAgreedAmount: new Prisma.Decimal(102),
+        advertiserId: 'advertiser-1', status: 'COMPLETED',
+      }),
+    });
+    expect(tx.transaction.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        accountId: 'account-1', workspaceId: 'workspace-1', telegramChannelId: null,
+        type: 'income', amount: new Prisma.Decimal(102),
+      }),
+    });
+    expect(tx.telegramAdSalePayment.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ transactionId: 'transaction-1', allocations: { create: [] } }),
+    });
+    expect(tx.telegramAdSalePlacement.create).not.toHaveBeenCalled();
+    expect(prisma.telegramChannel.findMany).not.toHaveBeenCalled();
+    expect(salesService.scheduleSale).not.toHaveBeenCalled();
+  });
+
+  it('rechecks the sale key under lock before recording another external payment', async () => {
+    const { service, tx } = setup();
+    tx.telegramAdSale.findFirst.mockResolvedValueOnce({ id: 'sale-1' });
+    await service.create('user-1', {
+      ...checkoutDto(), placements: [], externalChannelOwner: 'Publisher', advertiserContact: '@same_client',
+    });
+    expect(tx.transaction.create).not.toHaveBeenCalled();
+    expect(tx.telegramAdSale.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects an external sale that has placements or lacks a client', async () => {
+    const { service, prisma } = setup();
+    await expect(service.create('user-1', { ...checkoutDto(), externalChannelOwner: 'Publisher' }))
+      .rejects.toBeInstanceOf(BadRequestException);
+    await expect(service.create('user-1', { ...checkoutDto(), placements: [], externalChannelOwner: 'Publisher' }))
+      .rejects.toBeInstanceOf(BadRequestException);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
   it('transforms array-based checkout buttons into managed-post button rows', () => {
     const raw = checkoutDto();
     raw.placements[0].managedPostDraft = {

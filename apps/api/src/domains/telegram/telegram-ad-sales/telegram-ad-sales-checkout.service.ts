@@ -15,6 +15,7 @@ import {
 } from '@prisma/client';
 import {
   allocateTelegramAdSalesTotalPrice,
+  isExternalAdSaleClientContact,
   type TelegramAdSale,
   type TelegramAdSaleCheckoutWorkflowResponse,
 } from '@telegram-system/shared';
@@ -22,6 +23,7 @@ import { CurrencyConversionService } from '../../../common/currency-conversion.s
 import { ResponseCacheService } from '../../../common/response-cache.service';
 import { runBounded } from '../../../common/run-bounded';
 import { WorkspaceService } from '../../../common/workspace.service';
+import { acquirePostgresTransactionLock } from '../../../prisma/postgres-advisory-lock';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { FinanceCategoriesService } from '../../finance/finance-categories/finance-categories.service';
 import { ApplicationLoggerService } from '../../operations/application-logs/application-logger.service';
@@ -136,7 +138,7 @@ export class TelegramAdSalesCheckoutService {
       placementId?: string;
     }) => onProgress?.(item, ++current, total);
     const sale = await this.create(userId, dto);
-    report({ operation: 'CREATE_SALE', message: 'Sale and placements saved' });
+    report({ operation: 'CREATE_SALE', message: sale.externalChannelOwner ? 'Sale and payment saved' : 'Sale and placements saved' });
     const placementByTarget = new Map(
       sale.placements.map((placement) => [
         `${placement.telegramChannelId}:${placement.scheduledAt}`,
@@ -283,7 +285,18 @@ export class TelegramAdSalesCheckoutService {
     userId: string,
     dto: TelegramAdSalesReservationInput,
   ): Promise<TelegramAdSale> {
-    if (!dto.placements.length) {
+    const externalOwner = dto.externalChannelOwner?.trim();
+    if (dto.externalChannelOwner !== undefined && !externalOwner)
+      throw new BadRequestException('External channel owner is required');
+    if (externalOwner && (
+      dto.placements.length || !dto.payment || dto.financeSkipped || dto.priceAllocation ||
+      dto.settlementCurrency !== dto.payment.currency ||
+      !dto.payment.idempotencyKey?.trim() ||
+      !(dto.advertiserId || isExternalAdSaleClientContact(dto.advertiserTelegram || dto.advertiserContact || ""))
+    )) throw new BadRequestException('External sales require a client and a received payment, with no placements');
+    if (externalOwner && dto.payment && decimal(dto.payment.amount).decimalPlaces() > 2)
+      throw new BadRequestException('Payment amount must have at most two decimal places');
+    if (!externalOwner && !dto.placements.length) {
       throw new BadRequestException('At least one placement is required');
     }
     const { workspaceId, assignedMemberId } =
@@ -377,10 +390,10 @@ export class TelegramAdSalesCheckoutService {
             where: { id: payment.accountId, workspaceId, isActive: true },
           })
         : Promise.resolve(null),
-      this.prisma.telegramChannel.findMany({
+      channelIds.length ? this.prisma.telegramChannel.findMany({
         where: { id: { in: channelIds }, workspaceId },
         select: { id: true, currentSubscribersCount: true },
-      }),
+      }) : Promise.resolve([]),
       productsPromise,
       postsPromise,
       networksPromise,
@@ -513,9 +526,14 @@ export class TelegramAdSalesCheckoutService {
     );
     let advertiserId: string | null = null;
     const saleId = await this.prisma.$transaction(async (tx) => {
+      if (externalOwner && idempotencyKey) {
+        await acquirePostgresTransactionLock(tx, `external-ad-sale:${workspaceId}:${idempotencyKey}`);
+        const existing = await tx.telegramAdSale.findFirst({ where: { workspaceId, idempotencyKey }, select: { id: true } });
+        if (existing) return existing.id;
+      }
       const resolvedAdvertiser = await this.advertiserResolver.resolve(
         tx,
-        dto,
+        externalOwner ? { ...dto, createAdvertiser: !advertiser } : dto,
         {
           workspaceId,
           userId,
@@ -527,6 +545,10 @@ export class TelegramAdSalesCheckoutService {
       const sale = await tx.telegramAdSale.create({
         data: {
           workspaceId,
+          ...(externalOwner && payment ? {
+            externalChannelOwner: externalOwner,
+            externalAgreedAmount: decimal(payment.amount),
+          } : {}),
           advertiserId,
           advertiserName: dto.advertiserName.trim(),
           advertiserTelegram: dto.advertiserTelegram?.trim() || null,
@@ -543,8 +565,8 @@ export class TelegramAdSalesCheckoutService {
           settlementCurrency: dto.settlementCurrency,
           idempotencyKey,
           financeSkipped: dto.financeSkipped === true && !payment,
-          status: TelegramAdSaleStatus.RESERVED,
-          crmDealStage: TelegramAdCrmDealStage.SLOT_RESERVED,
+          status: externalOwner ? TelegramAdSaleStatus.COMPLETED : TelegramAdSaleStatus.RESERVED,
+          crmDealStage: externalOwner ? TelegramAdCrmDealStage.COMPLETED : TelegramAdCrmDealStage.SLOT_RESERVED,
           createdByUserId: userId,
           assignedMemberId,
           ...commissionSnapshot,
@@ -658,7 +680,9 @@ export class TelegramAdSalesCheckoutService {
             category: category.name,
             categoryId: category.id,
             description:
-              payment.notes?.trim() || `Telegram ad sale payment ${sale.id}`,
+              payment.notes?.trim() || (externalOwner
+                ? `External ad sale · ${externalOwner}`
+                : `Telegram ad sale payment ${sale.id}`),
             date: paidAt,
             assignedMemberId,
             createdByUserId: userId,
@@ -701,7 +725,7 @@ export class TelegramAdSalesCheckoutService {
       );
     }
 
-    this.responseCache.clearByPrefix(
+    if (channelIds.length) this.responseCache.clearByPrefix(
       `telegram-ad-sales:availability:${workspaceId}:`,
     );
     if (postIds.length) {

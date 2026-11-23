@@ -65,9 +65,9 @@ Analytics use the detailed `AiOperation` ledger, filtered by workspace, channel,
 
 Search and Hybrid modes try Openverse, with Wikimedia Commons as a fallback for empty or unavailable catalog results. Catalog results are restricted to public-domain or CC0 media. A selected preference supplies a general concept, a dedicated keyword and selection brief for search, a dedicated composition brief for generation, and up to eight references according to its Search, Generation or Both setting. In Hybrid mode, a Generation-only preference goes directly to generation. Available reference attachments are reused for a batch. If every configured attachment fails, the applicable media path reports a reference error.
 
-When references are available for search, up to three viable images enter one metered visual review. The review can select a matching image or reject the shortlist. Search can try a second query taken from an example in the search brief. Hybrid mode falls back to reference-guided generation when a preference allows generation and search finds no match. A Search-only preference leaves media empty when no usable asset is found. For references with a generation brief, the visual review can select a single reference for the edit request and describe the framing, light and texture even when the shortlist is empty. The channel's existing URL and SHA-256 checks remain in use. New AI Posting images also store a visual fingerprint in run history to recognize resized or re-encoded copies.
+When references are available for search, up to three viable images enter one metered visual review. The review can select a matching image or reject the shortlist. If the search rounds find no match, hybrid search slots keep the text and show that automatic search found no suitable photo. The separate search-first mode can request one generated image. A preference marked Search supplies guidance and references to searching only. Its generation fallback uses the post topic without those references. For references with a generation brief, the visual review can select a single reference for the edit request and describe the framing, light and texture even when the shortlist is empty. The channel's existing URL and SHA-256 checks remain in use. New AI Posting images also store a visual fingerprint in run history to recognize resized or re-encoded copies.
 
-An image search uses up to two keyword queries, two catalogs per query, and six candidate downloads when visual references or a search brief are present. Only one shortlist review and one generation can run per publication attempt, through the existing AI budget and usage ledger. This path adds no polling, timers or background database writes.
+New runs use up to five automatic search rounds, with at most three parallel queries and six candidate downloads per round. Each round can review one shortlist. Generation runs only where the selected mode allows it. All AI requests use the existing budget and usage ledger. This path adds no polling, timers or background database writes.
 
 ## Verification
 
@@ -113,6 +113,65 @@ are reconstructed from the stored draft order and unmatched failures.
 Batch drafting requests a provider-validated response with separate text and
 media fields. The existing editorial review still runs on the authored text.
 Generation streams send a keepalive every 15 seconds until the request ends.
-If the connection closes while work is in progress, history can be refreshed
-without starting another batch. The live preview keeps the original position
-of each result when a slot between two drafts is still empty or has failed.
+Manual batch generation returns HTTP 202 with a saved run ID before collecting
+sources. The API process continues that run independently of the browser.
+Reopening the console restores the saved stage and notification. A visible
+console checks one active run every five seconds and refreshes history when
+new previews are saved or the batch settles. Each preview keeps its original
+position. Repeated starts for the same channel return its active test run. The card and notification count settled publication slots. While sources are collected, the bar stays empty; the stage checklist shows finer progress.
+
+Stop marks a manual background run as canceled. Clear also stops manual
+background runs and removes test history after confirmation. Both prevent
+later stages from starting. An already submitted provider request can still
+finish and be billed. If the API process exits, an abandoned run can be stopped
+or cleared. After 30 minutes without a saved checkpoint, it is shown as
+interrupted. The API does not replay paid operations from a dead process.
+
+The resume read checks workspace membership and one run by ID and sends back
+only status and progress. A hidden, unmounted or idle console makes no interval
+reads. One visible detached run uses up to 12 checks per minute, or up to 1,200
+if 100 channels are actively watched in separate visible consoles. Checkpoints
+reuse receipt writes and add two writes per publication for media start and
+preview completion. Cancellation checks read one run before each paid media
+request or search round. Checkpoints use existing run JSON and history
+retention, with no per-channel worker, recurring timer, or idle database reads.
+
+### Search rounds and publication expenses
+
+An image assigned to search tries up to five rounds using WordPress Photo
+Directory, Openverse and Wikimedia Commons. Later rounds use shorter English
+phrases, different catalogs and later result pages. Only fresh, reusable results
+are downloaded, and each round sends at most three candidates to visual
+review. Empty rounds do not incur a model call. An exhausted hybrid search consumes no image
+generation slot. Budget rejections and uncertain settlements stop paid
+processing, and the text stays available if media processing fails.
+
+The test-run publication stores the last nine search-round summaries and
+actual usage operations in its existing JSON. The cost panel groups stage
+totals, text attempts, editorial decisions and media operations, and displays
+token counts and confirmed cost where recorded. Planning shows both its
+full batch request and the allocated share in the individual publication.
+
+There is no additional polling, cross-workspace query or storage table.
+Per search publication the upper bound is six catalog lookups (at most
+ten HTTP catalog requests including fallbacks), eighteen bounded image
+downloads and three visual checks. Work starts only for an active
+publication. At one simultaneous search per 100 active channels these
+bounds scale to 1,000 catalog requests, 1,800 image downloads and 300
+visual checks. Early matches stop further rounds. Idle Neon activity and
+Railway process count are unchanged.
+
+
+Draft prompts pass a compact snapshot of the assigned editorial requirements,
+nearby topics, and relevant source excerpts. Each publication starts at most
+two text-model requests, including a caption-shortening call if needed. The
+editor returns a structured verdict. A malformed verdict can be checked once
+more on the same draft without spending on another text generation. All
+requests use existing category settings and are included in the existing
+usage ledger. At one publication per 100 active channels the upper bound is
+200 text requests and 300 editorial checks, with no work while idle.
+
+The active console tracks the run ID returned on acceptance and refreshes
+history as previews appear or the run completes. History and progress reads
+bypass the HTTP response cache. Expanding image search adds bounded work only
+to active search slots, with no changes to idle reads, retention, or workers.

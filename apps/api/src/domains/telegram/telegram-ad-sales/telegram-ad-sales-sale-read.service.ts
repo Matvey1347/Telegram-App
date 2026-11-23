@@ -24,6 +24,8 @@ const SALE_LIST_SELECT = {
   workspaceId: true,
   advertiserId: true,
   advertiserName: true,
+  externalChannelOwner: true,
+  externalAgreedAmount: true,
   advertiserTelegram: true,
   advertiserContact: true,
   advertiserNameSnapshot: true,
@@ -305,7 +307,7 @@ export class TelegramAdSalesSaleReadService {
     const activePayments = paymentRows.filter(
       (payment) => payment.status !== TelegramAdSalePaymentStatus.VOIDED,
     );
-    const totalAgreed = sale.placements.reduce(
+    const totalAgreed = sale.externalAgreedAmount ?? sale.placements.reduce(
       (sum, placement) => sum.add(placement.agreedPrice),
       decimal(0),
     );
@@ -339,6 +341,7 @@ export class TelegramAdSalesSaleReadService {
       workspaceId: sale.workspaceId,
       advertiserId: sale.advertiserId,
       advertiserName: sale.advertiserName,
+      externalChannelOwner: sale.externalChannelOwner ?? null,
       advertiserTelegram: sale.advertiserTelegram,
       advertiserContact: sale.advertiserContact,
       advertiserNameSnapshot: sale.advertiserNameSnapshot,

@@ -12,6 +12,7 @@ export function AdSaleModalSummary({
   clientAvatarUrl,
   scheduleGroups,
   dateLabel,
+  externalChannelOwner,
   financeSkipped,
   amount,
   currency,
@@ -23,6 +24,7 @@ export function AdSaleModalSummary({
   /** Compatibility for older summary call sites; placement totals are no longer displayed. */
   placementCount?: number;
   dateLabel?: string;
+  externalChannelOwner?: string;
   financeSkipped: boolean;
   amount: number;
   currency: string;
@@ -53,6 +55,9 @@ export function AdSaleModalSummary({
           value={advertiser || "Not selected"}
         />
       </dl>
+      {externalChannelOwner !== undefined ? (
+        <div className="lg:mt-3"><SummaryRow icon={Users} label="Channel owner" value={externalChannelOwner || "Not selected"} /></div>
+      ) : (
       <div className="hidden space-y-2 lg:mt-3 lg:block">
         {visibleScheduleGroups.length ? visibleScheduleGroups.map((group) => (
           <div key={group.date} className="rounded-lg border border-neutral-800 bg-neutral-900/50 px-3 py-2">
@@ -77,6 +82,7 @@ export function AdSaleModalSummary({
           <SummaryRow icon={CalendarDays} label="Date" value="Not selected" />
         )}
       </div>
+      )}
       <div className="hidden border-t border-neutral-800 pt-4 lg:mt-5 lg:block">
         {!financeSkipped ? (
           <p className="text-xs text-neutral-500">Sale total</p>

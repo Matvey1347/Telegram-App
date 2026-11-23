@@ -111,6 +111,125 @@ describe('TelegramAiPostingImageService', () => {
     expect(gateway.execute).not.toHaveBeenCalled();
   });
 
+  it('searches another catalog after the visual review rejects the first set and retains both costs', async () => {
+    const fresh = await sharp({
+      create: { width: 480, height: 480, channels: 3, background: '#bb5522' },
+    }).png().toBuffer();
+    sources.downloadImage.mockResolvedValueOnce(imageBytes).mockResolvedValueOnce(fresh);
+    sources.searchOpenImages.mockImplementation((_query, _page, catalog) => [{
+      url: catalog ? 'https://upload.wikimedia.org/alternate.png' : 'https://example.org/first.png',
+      sourceId: catalog ? 'wikimedia-commons' : 'openverse',
+      sourceType: 'image-search',
+    }]);
+    gateway.execute.mockResolvedValueOnce({
+      operation: { ...operation(), operationId: 'search-1', actualCost: '0.001' },
+      result: { reply: '{"candidateIndex":0,"rejectionReason":"Does not show the subject"}' },
+    }).mockResolvedValueOnce({
+      operation: { ...operation(), operationId: 'search-2', actualCost: '0.002' },
+      result: { reply: '{"candidateIndex":1,"candidateObservation":"Woman writing in a notebook"}' },
+    });
+    const result = await service.resolve({
+      ...request('found'),
+      searchQuery: 'woman writing notebook, hands writing desk',
+      searchDescription: 'A candid photograph at a desk',
+    });
+
+    expect(result.image?.sourceId).toBe('wikimedia-commons');
+    expect(result.mediaSearch?.rounds.map((round) => round.outcome)).toEqual(['NO_MATCH', 'SELECTED']);
+    expect(result.mediaSearch?.rounds[0].observation).toBe('Does not show the subject');
+    expect(result.searchOperations?.map((op) => [op.attempt, op.actualCost])).toEqual([[1, '0.001'], [2, '0.002']]);
+    expect(gateway.execute.mock.calls.map(([call]) => call.category)).toEqual([
+      'TELEGRAM_POSTING_REVIEW', 'TELEGRAM_POSTING_REVIEW',
+    ]);
+  });
+
+  it('avoids a paid reference-only review when every search page is empty', async () => {
+    const result = await service.resolve({
+      ...request('found'),
+      searchPageOffset: 2,
+      referenceImage: imageBytes,
+      generationDescription: 'Use a natural editorial style',
+      searchDescription: 'A licensed outdoor photograph',
+    });
+
+    expect(sources.searchOpenImages).toHaveBeenCalledWith('A distinct topic', 3);
+    expect(result).toMatchObject({ readiness: 'MISSING', failureCode: 'AI_POSTING_IMAGE_SEARCH_EXHAUSTED' });
+    expect(result.mediaSearch?.rounds.map((round) => round.outcome)).toEqual([
+      'NO_RESULTS', 'NO_RESULTS', 'NO_RESULTS',
+    ]);
+    expect(gateway.execute).not.toHaveBeenCalled();
+  });
+
+  it('creates an image after exhausting external search on a publication', async () => {
+    const result = await service.resolve({
+      ...request('found'),
+      fallbackToGeneration: true,
+      preferencePurpose: 'SEARCH',
+      searchQuery: 'woman writing notebook, hands writing desk',
+    });
+
+    expect(result.image?.sourceId).toBe('openai-image-generation');
+    expect(result.mediaSearch?.rounds).toHaveLength(3);
+    expect(sources.searchOpenImages).toHaveBeenCalledWith('woman writing notebook', 2);
+    expect(gateway.execute).toHaveBeenCalledTimes(1);
+    expect(gateway.execute).toHaveBeenCalledWith(expect.objectContaining({ category: 'TELEGRAM_POSTING_IMAGE' }));
+    expect(result.operation).toMatchObject({ mediaStep: 'GENERATE' });
+  });
+
+  it('broadens an exhausted hybrid search without consuming a generation slot', async () => {
+    const result = await service.resolve({
+      ...request('hybrid'),
+      fallbackToGeneration: false,
+      searchQuery: 'household budget receipts, woman notebook calculator, everyday expenses tracking',
+    });
+
+    expect(result).toMatchObject({
+      readiness: 'MISSING', failureCode: 'AI_POSTING_IMAGE_SEARCH_EXHAUSTED',
+    });
+    expect(result.mediaSearch?.rounds.map(({ outcome }) => outcome)).toEqual([
+      'NO_RESULTS', 'NO_RESULTS', 'NO_RESULTS',
+    ]);
+    expect(sources.searchOpenImages).toHaveBeenCalledWith('household receipts', 1);
+    expect(sources.searchOpenImages).toHaveBeenCalledWith('receipts', 1, 'wikimedia');
+    expect(gateway.execute).not.toHaveBeenCalled();
+  });
+
+  it('automatically broadens the English search and returns a real photo on the fifth round', async () => {
+    sources.searchOpenImages.mockImplementation(async (query, _page, catalog) =>
+      catalog === 'wordpress-photos' && query === 'shopping'
+        ? [{ url: 'https://pd.w.org/shopping.jpg', sourceId: 'wordpress-photos', sourceType: 'image-search' }]
+        : [],
+    );
+    const result = await service.resolve({
+      ...request('hybrid'),
+      fallbackToGeneration: false,
+      searchQuery: 'woman shopping, clothing store, jackets on rack',
+      usePhotoDirectory: true,
+    });
+
+    expect(result.image?.sourceId).toBe('wordpress-photos');
+    expect(result.mediaSearch?.rounds.map(({ outcome }) => outcome)).toEqual([
+      'NO_RESULTS', 'NO_RESULTS', 'NO_RESULTS', 'NO_RESULTS', 'SELECTED',
+    ]);
+    expect(gateway.execute).not.toHaveBeenCalled();
+  });
+
+  it('uses a valid visual decision with missing usage without paying for another review', async () => {
+    sources.searchOpenImages.mockResolvedValue([
+      { url: 'https://example.org/first.png', sourceId: 'openverse', sourceType: 'image-search' },
+    ]);
+    gateway.execute.mockResolvedValue({
+      operation: { ...operation('UNKNOWN'), actualCost: null, pricingStatus: 'UNKNOWN', errorCategory: 'USAGE_MISSING' },
+      result: { reply: '{"candidateIndex":1,"candidateObservation":"Documentary photo"}' },
+    });
+
+    const result = await service.resolve({ ...request('found'), searchDescription: 'A documentary photo' });
+
+    expect(result.image?.sourceId).toBe('openverse');
+    expect(result.searchOperations?.[0].actualCost).toBeNull();
+    expect(gateway.execute).toHaveBeenCalledTimes(1);
+  });
+
   it('uses a found image only after reviewing the shortlist against the references', async () => {
     const second = await sharp({
       create: { width: 480, height: 480, channels: 3, background: '#a86543' },
@@ -135,7 +254,7 @@ describe('TelegramAiPostingImageService', () => {
       searchQuery: 'woman walking evening street film photography',
     });
 
-    expect(result).toMatchObject({ image: { sourceId: 'openverse' }, searchOperation: { category: 'TELEGRAM_POSTING_REVIEW' } });
+    expect(result).toMatchObject({ image: { sourceId: 'openverse' }, searchOperations: [expect.objectContaining({ category: 'TELEGRAM_POSTING_REVIEW', mediaStep: 'SEARCH_REVIEW' })] });
     expect(sources.searchOpenImages).toHaveBeenCalledWith('woman walking evening street film photography', 1);
     expect(gateway.execute).toHaveBeenCalledTimes(1);
     expect(gateway.execute).toHaveBeenCalledWith(expect.objectContaining({
@@ -157,7 +276,7 @@ describe('TelegramAiPostingImageService', () => {
     const result = await service.resolve({ ...request('hybrid'), referenceImage, preferencePurpose: 'BOTH' });
     expect(result).toMatchObject({
       image: { sourceId: 'openai-image-generation' },
-      searchOperation: { category: 'TELEGRAM_POSTING_REVIEW' },
+      searchOperations: [expect.objectContaining({ category: 'TELEGRAM_POSTING_REVIEW', mediaStep: 'SEARCH_REVIEW' })],
       operation: { category: 'TELEGRAM_POSTING_IMAGE' },
     });
     expect(gateway.execute).toHaveBeenNthCalledWith(2, expect.objectContaining({

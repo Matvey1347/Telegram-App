@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
+import { AI_POSTING_BACKGROUND_RUN_FILTER, AI_POSTING_STALE_RUN_MS, serializeTelegramAiPostingRunProgress } from './telegram-ai-posting-progress';
 import { WorkspaceService } from '../../../common/workspace.service';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { AiGateway } from '../../operations/ai/ai-gateway';
@@ -70,6 +71,7 @@ export class TelegramAiPostingTestRunService {
         version: true,
         status: true,
         createdAt: true,
+        updatedAt: true,
         publications: true,
         failures: true,
         operations: true,
@@ -84,6 +86,7 @@ export class TelegramAiPostingTestRunService {
       const decoded = decodeAiPostingRunPublications(run.publications);
       return {
         ...run,
+        ...serializeTelegramAiPostingRunProgress(run),
         publications: decoded.publications.map((value) => {
           if (!value || typeof value !== 'object' || Array.isArray(value))
             return value;
@@ -101,15 +104,36 @@ export class TelegramAiPostingTestRunService {
     });
   }
 
+  async readRunProgress(userId: string, channelId: string, runId: string) {
+    const workspaceId = await this.workspace.resolveWorkspaceIdForUser(userId);
+    const run = await this.prisma.telegramAiPostingTestRun.findFirst({
+      where: { id: runId, workspaceId, telegramChannelId: channelId },
+      select: { status: true, updatedAt: true, requestedCount: true, publications: true },
+    });
+    if (!run) throw new NotFoundException('AI Posting test run not found');
+    return serializeTelegramAiPostingRunProgress(run);
+  }
+
+  async stopRun(userId: string, channelId: string, runId: string) {
+    const workspaceId = await this.workspace.resolveWorkspaceIdForUser(userId);
+    await this.prisma.telegramAiPostingTestRun.updateMany({
+      where: { id: runId, workspaceId, telegramChannelId: channelId,
+        status: 'RUNNING', ...AI_POSTING_BACKGROUND_RUN_FILTER },
+      data: { status: 'CANCELED', version: { increment: 1 } },
+    });
+    return this.readRunProgress(userId, channelId, runId);
+  }
+
   async clearHistory(userId: string, channelId: string) {
     const workspaceId = await this.workspace.resolveWorkspaceIdForUser(userId);
-    const staleRunCutoff = new Date(Date.now() - 30 * 60_000);
+    const staleRunCutoff = new Date(Date.now() - AI_POSTING_STALE_RUN_MS);
     const result = await this.prisma.telegramAiPostingTestRun.deleteMany({
       where: {
         workspaceId,
         telegramChannelId: channelId,
         OR: [
           { status: { not: 'RUNNING' } },
+          { status: 'RUNNING', ...AI_POSTING_BACKGROUND_RUN_FILTER },
           { status: 'RUNNING', updatedAt: { lt: staleRunCutoff } },
         ],
       },
@@ -474,7 +498,11 @@ export class TelegramAiPostingTestRunService {
           workspaceId,
           channelId,
           topic: item.topic,
-          imageMode: config.imageMode === 'hybrid' ? 'hybrid' : 'ai',
+          imageMode: item.mediaMode ?? (!item.imageUrl && item.mediaReadiness === 'MISSING' && config.imageMode === 'hybrid'
+            ? 'found'
+            : config.imageMode === 'hybrid' || config.imageMode === 'found' ? config.imageMode : 'ai'),
+          searchPageOffset: item.mediaSearch?.nextPageOffset,
+          fallbackToGeneration: config.imageMode !== 'hybrid',
           referenceImageUrls: preference?.references ?? [],
           preferencePurpose: preference?.purpose,
           visualPreference: preference?.description || preference?.name,
@@ -537,9 +565,15 @@ export class TelegramAiPostingTestRunService {
         throw error;
       }
       const operations = run.operations as unknown as Run[];
-      for (const operation of [resolved.searchOperation, resolved.operation]) {
+      if (resolved.mediaSearch) {
+        item.mediaSearch = {
+          ...resolved.mediaSearch,
+          rounds: [...(item.mediaSearch?.rounds ?? []), ...resolved.mediaSearch.rounds].slice(-9),
+        };
+      }
+      for (const operation of [...(resolved.searchOperations ?? []), resolved.operation]) {
         if (!operation) continue;
-        operations.push(operation);
+        operations.push({ ...operation, publicationIndex: item.publicationIndex ?? index });
         item.operations.push(operation);
         item.costs.image = addKnownCost(
           item.costs.image,
@@ -567,6 +601,8 @@ export class TelegramAiPostingTestRunService {
           'PARTIAL',
           sourceDiagnostics,
         );
+        if (resolved.readiness === 'MISSING')
+          return { ...run, version: expectedVersion + 1, publications, status: 'PARTIAL', sourceDiagnostics };
         throw new BadGatewayException(item.mediaFailureCode);
       }
       if (preference)

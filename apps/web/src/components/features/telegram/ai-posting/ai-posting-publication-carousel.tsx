@@ -31,10 +31,11 @@ import {
   failureStageLabel,
   mediaReadiness,
   money,
-  totalCost,
   type Publication,
   type TestRun,
 } from "./ai-posting-test-console-model";
+
+import { AiPostingPublicationCosts } from "./ai-posting-publication-costs";
 
 type ReviewAction =
   | "approve"
@@ -118,7 +119,6 @@ export function AiPostingPublicationCarousel({
     buttonRows: [],
   };
   const changedText = post ? hasUnsavedText(run, index, post) : false;
-  const totalPublicationCost = post ? totalCost(post.costs) : null;
   const disabled = pending || saved;
 
   if (!slots.length) return null;
@@ -175,6 +175,9 @@ export function AiPostingPublicationCarousel({
       </section>
     );
   }
+
+  const canContinueSearch = Boolean(post.mediaSearch || post.mediaMode === "found" ||
+    (post.mediaReadiness === "MISSING" && !post.mediaMode && post.imageSearchQuery));
 
   const rememberAndRegenerateMedia = async () => {
     const correction = (imageFeedback[key] ?? "").trim();
@@ -279,11 +282,12 @@ export function AiPostingPublicationCarousel({
                     ? "AI-провайдер не подтвердил результат подготовки медиа. Текст сохранён."
                     : (post.mediaFailureCode && failureMessage[post.mediaFailureCode]) ||
                       "Текст сохранён. Не удалось подготовить медиа.")
-                : "Текст готов, но медиа не найдено. Превью неполное; подготовка доступна по кнопке."}
+                : (canContinueSearch ? failureMessage.AI_POSTING_IMAGE_SEARCH_EXHAUSTED :
+                    "Текст готов, но медиа не найдено. Превью неполное; подготовка доступна по кнопке.")}
             </p>
           )}
 
-          {mediaReadiness(post) !== "READY" && (
+          {mediaReadiness(post) !== "READY" && !canContinueSearch && (
             <Button
               variant="primary"
               disabled={disabled || changedText}
@@ -294,40 +298,12 @@ export function AiPostingPublicationCarousel({
               Повторить создание медиа
             </Button>
           )}
-          <details className="rounded-lg border border-neutral-800 p-3">
-            <summary className="flex cursor-pointer items-center justify-between gap-3 text-sm">
-              <span>Модели и расходы</span>
-              <strong className="text-neutral-200">
-                Итого:{" "}
-                {totalPublicationCost === null
-                  ? "стоимость не рассчитана"
-                  : money(totalPublicationCost)}
-              </strong>
-            </summary>
-            <div className="mt-2 space-y-1 text-xs text-neutral-400">
-              {post.operations.map((op, operationIndex) => (
-                <p key={`${op.stage}-${operationIndex}`}>
-                  {op.stage}: {op.model} ·{" "}
-                  {op.actualCost === null
-                    ? op.pricingStatus === "NOT_SENT"
-                      ? "$0.00 (не отправлен)"
-                      : "UNKNOWN/UNPRICED"
-                    : `$${op.actualCost}`}{" "}
-                  · {op.status}
-                </p>
-              ))}
-              {Object.entries(post.costs).map(([stage, cost]) => (
-                <p key={stage}>
-                  Итого {stage}: {money(cost)}
-                </p>
-              ))}
-            </div>
-          </details>
+          <AiPostingPublicationCosts post={post} />
 
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+          <div className="flex flex-wrap gap-2 [&>button]:grow">
             <Button
               variant="primary"
-              className="min-h-10 w-full whitespace-normal"
+              className="min-h-10 whitespace-normal"
               disabled={disabled || changedText || post.status === "REJECTED"}
               onClick={() => onAction({ run, index, action: "approve" })}
             >
@@ -336,7 +312,7 @@ export function AiPostingPublicationCarousel({
             <TelegramPostSendToBotButton
               recoveryKey={`ai-posting-preview:${run.id}:${index}`}
               variant="primary"
-              className="min-h-10 w-full whitespace-normal"
+              className="min-h-10 min-w-fit whitespace-nowrap px-4"
               draft={botDraft}
               prepareDraft={channelId && post.imageUrl && watermarkPreview ? async () => {
                 if (!post.imagePreviewUrl)
@@ -357,7 +333,7 @@ export function AiPostingPublicationCarousel({
             <Button
               type="button"
               variant="secondary"
-              className="min-h-10 w-full whitespace-normal"
+              className="min-h-10 whitespace-normal"
               aria-expanded={editsOpen}
               onClick={onToggleEdits}
             >

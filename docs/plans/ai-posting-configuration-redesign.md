@@ -129,8 +129,9 @@ Updated: 2026-11-14
 Hybrid mode stores the channel's search share in `hybridSearchPercent`. Old
 settings use 70%. The share assigns image work to search or AI generation
 before media processing and carries the rounding remainder across batches.
-Search assignments keep their text when the image search finds no suitable
-result. Manual media replacement remains available for those publications.
+A hybrid search assignment automatically tries up to five rounds across public
+catalogs. If all rounds run out of suitable photos, the draft keeps its text.
+The separate search-first mode can fall back to one generated image.
 
 An empty draft can be retried from its slot in the original review batch.
 Its topic stays the same, other publications remain intact, and the usage

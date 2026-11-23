@@ -2675,6 +2675,8 @@ model TelegramAdInventoryDailySnapshot {
 model TelegramAdSale {
   id                         String                 @id @default(cuid())
   workspaceId                String
+  externalChannelOwner       String?                @db.VarChar(160)
+  externalAgreedAmount       Decimal?               @db.Decimal(24, 8)
   advertiserId               String?
   advertiserName             String
   advertiserTelegram         String?

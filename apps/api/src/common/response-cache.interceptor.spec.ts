@@ -73,6 +73,8 @@ describe('ResponseCacheInterceptor', () => {
   });
 
   it.each([
+    '/telegram-channels/channel-1/ai-posting/test-runs',
+    '/api/telegram-channels/channel-1/ai-posting/test-runs/run-1/progress',
     '/telegram-crm/conversations/conversation-1/messages?pageSize=50',
     '/api/telegram-crm/conversations/conversation-1/messages?pageSize=50',
     '/telegram-crm/conversations?contactId=contact-1',

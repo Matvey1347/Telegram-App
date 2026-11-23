@@ -343,6 +343,7 @@ const seedProductChannelId = adSaleSeedSlot?.channelId;
     adSaleCheckoutIdempotencyKeyRef.current = idempotencyKey;
     const workflow = await telegramAdSalesApi.checkoutSaleWorkflow(
       {
+        externalChannelOwner: payload.externalChannelOwner,
         advertiserId: payload.advertiserId,
         createAdvertiser: payload.createAdvertiser,
         advertiserName: payload.advertiserName,
@@ -422,20 +423,20 @@ const seedProductChannelId = adSaleSeedSlot?.channelId;
         });
       }
       await invalidateTelegramAdSalesDerivedQueries(queryClient, {
-        availability: true,
+        availability: reserved.placements.length > 0,
         analytics: true,
         finance: true,
         dashboard: true,
-        managedPosts: true,
-        channelSummaries: true,
+        managedPosts: reserved.placements.length > 0,
+        channelSummaries: reserved.placements.length > 0,
         crmContacts: true,
-        publicationCalendar: true,
+        publicationCalendar: reserved.placements.length > 0,
         channelIds: reserved.placements.map(
           (placement) => placement.telegramChannelId,
         ),
       });
       if (
-        seedSlot?.state === "PAST" &&
+        reserved.placements.length > 0 && seedSlot?.state === "PAST" &&
         !payload.placements.some((placement) => placement.telegramPostId)
       ) {
         const placement =
@@ -528,7 +529,9 @@ const seedProductChannelId = adSaleSeedSlot?.channelId;
     const operation = startOperation({
       id: `ad-sale-create:${Date.now()}`,
       title: "Creating ad sale",
-      message: "Saving the sale and reserving its placements...",
+      message: payload.externalChannelOwner
+        ? "Saving the sale and recording the payment..."
+        : "Saving the sale and reserving its placements...",
       current: 0,
       total: totalOperations,
     });

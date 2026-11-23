@@ -111,6 +111,7 @@ export class ResponseCacheInterceptor implements NestInterceptor {
     if (/\/operator-publication-evidence(?:\/|$)/u.test(url)) return true;
     if (
       /^\/(?:api\/)?(?:telegram-crm|telegram-ad-sales)(?:\?|\/|$)/.test(url) ||
+      /^\/(?:api\/)?telegram-channels\/[^/]+\/ai-posting\/test-runs(?:[/?]|$)/.test(url) ||
       /^\/(?:api\/)?operations\/ai(?:\?|\/|$)/.test(url) ||
       /^\/(?:api\/)?operations\/notifications(?:\?|\/|$)/.test(url)
     ) {

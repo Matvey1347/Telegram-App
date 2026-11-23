@@ -1,4 +1,5 @@
 import { ConflictException } from '@nestjs/common';
+import type { TelegramAiPostingImageSearch, TelegramAiPostingOperationContext } from '@telegram-system/shared';
 import { Prisma } from '@prisma/client';
 import type { PrismaService } from '../../../prisma/prisma.service';
 import {
@@ -6,8 +7,9 @@ import {
   encodeAiPostingRunPublications,
 } from './telegram-ai-posting-run-data';
 
-export type TelegramAiPostingTestRunOperation = {
+export type TelegramAiPostingTestRunOperation = TelegramAiPostingOperationContext & {
   stage: string;
+  publicationIndex?: number;
   attempt: number;
   operationId: string;
   category: string;
@@ -25,6 +27,8 @@ export type TestPublication = {
   text: string;
   imagePrompt: string;
   imageSearchQuery?: string;
+  mediaMode?: 'found' | 'ai' | 'hybrid';
+  mediaSearch?: TelegramAiPostingImageSearch;
   mediaPreference?: { id: string; name: string } | null;
   imageUrl: string | null;
   imageFingerprint?: string | null;

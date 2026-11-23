@@ -6,12 +6,6 @@ import type { AiPostingWatermarkPreviewSettings } from "./ai-posting-watermark-p
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  CheckCircle2,
-  Circle,
-  CircleX,
-  Loader2,
-  ListChecks,
-  ChevronDown,
   Trash2,
 } from "lucide-react";
 import { api, streamProgressAction } from "@/lib/api";
@@ -23,6 +17,8 @@ import {
   type Publication,
   type TestRun,
 } from "./ai-posting-test-console-model";
+import { AiPostingRunProgress } from "./ai-posting-run-progress";
+import { useRestoredAiPostingRun } from "./use-restored-ai-posting-run";
 import { AiPostingTestRunCard } from "./ai-posting-test-run-card";
 import { AiPostingGenerationControls } from "./ai-posting-generation-controls";
 import { AiPostingTestConsoleError } from "./ai-posting-test-console-error";
@@ -33,6 +29,8 @@ import { Button, ConfirmDeleteModal } from "@/components/ui/primitives";
 import type {
   ResolvedEmoji,
   TelegramCustomEmojiPackSummary,
+  TelegramAiPostingRunProgress,
+  TelegramAiPostingRunAccepted,
 } from "@telegram-system/shared";
 import { useOperationFeedback } from "@/providers/toast-provider";
 
@@ -64,19 +62,8 @@ export function AiPostingTestConsole({
   const generationOperation = useRef<ReturnType<typeof startOperation> | null>(
     null,
   );
-  const [progress, setGenerationProgress] = useState<{
-    count: number;
-    stages: Record<string, string>;
-    complete: number;
-    failed: boolean;
-    current: number;
-    total: number;
-    publicationIndex: number;
-  } | null>(null);
-  const [liveRun, setLiveRun] = useState<TestRun | null>(null);
-  const [progressExpanded, setProgressExpanded] = useState(false);
+  const [progress, setGenerationProgress] = useState<TelegramAiPostingRunProgress | null>(null);
   const mediaOperation = useRef<ReturnType<typeof startOperation> | null>(null);
-  const completedPublications = useRef(new Set<number>());
   const [reject, setReject] = useState<Record<string, string>>({});
   const [imageFeedback, setImageFeedback] = useState<Record<string, string>>(
     {},
@@ -96,6 +83,7 @@ export function AiPostingTestConsole({
   const [feedback, setFeedback] = useState<Record<string, string>>({});
   const [historyExpanded, setHistoryExpanded] = useState(false);
   const [clearHistoryOpen, setClearHistoryOpen] = useState(false);
+  const [acceptedRun, setAcceptedRun] = useState<(TestRun & { channelId: string }) | null>(null);
   const runs = useQuery({
     queryKey: aiPostingTestRunKeys(channelId).runs,
     queryFn: async () =>
@@ -104,147 +92,26 @@ export function AiPostingTestConsole({
   });
   const generate = useMutation({
     mutationFn: async (count: number) =>
-      streamProgressAction<
-        TestRun,
-        {
-          stage: string;
-          status: string;
-          publicationIndex?: number;
-          attempt?: number;
-          runId?: string;
-          publication?: Publication;
-        }
-      >(
-        `/telegram-channels/${channelId}/ai-posting/generate/stream`,
-        {
-          count,
-        },
-        (item, current, total) => {
-          if (
-            item.stage === "publication" &&
-            item.publication &&
-            item.runId &&
-            item.publicationIndex !== undefined
-          ) {
-            const { publication: draft, publicationIndex, runId } = item;
-            setLiveRun((previous) => {
-              const sameRun = previous?.id === runId;
-              const publications = [
-                ...(sameRun && previous
-                  ? previous.publications.filter((post) => post.publicationIndex !== publicationIndex)
-                  : []),
-                { ...draft, publicationIndex },
-              ].sort((a, b) => (a.publicationIndex ?? 0) - (b.publicationIndex ?? 0));
-              return {
-                id: runId,
-                version: 1,
-                status: "RUNNING",
-                settingsVersion: 0,
-                requestedCount: count,
-                createdAt:
-                  sameRun && previous
-                    ? previous.createdAt
-                    : new Date().toISOString(),
-                publications,
-                failures: [],
-                feedback: [],
-              };
-            });
-          }
-          const label =
-            generationStageLabel[item.stage] ?? "Обрабатываю публикацию";
-          const attempt = item.attempt ? ` · попытка ${item.attempt}` : "";
-          const state =
-            item.status === "COMPLETED"
-              ? " · готово"
-              : item.status === "FAILED"
-                ? " · ошибка"
-                : "";
-          if (
-            item.stage === "image" &&
-            item.status === "COMPLETED" &&
-            item.publicationIndex !== undefined
-          )
-            completedPublications.current.add(item.publicationIndex);
-          setGenerationProgress((previous) => {
-            if (!previous) return previous;
-            const key = `${item.publicationIndex ?? 0}:${item.stage}`;
-            const stages = { ...previous.stages, [key]: item.status };
-            if (item.stage === "planning") {
-              for (let index = 0; index < previous.count; index += 1) {
-                stages[`${index}:planning`] = item.status;
-              }
-            }
-            return {
-              ...previous,
-              stages,
-              complete:
-                item.stage === "image" && item.status === "COMPLETED"
-                  ? completedPublications.current.size
-                  : previous.complete,
-              failed: previous.failed || item.status === "FAILED",
-              current,
-              total,
-              publicationIndex: item.publicationIndex ?? previous.publicationIndex,
-            };
-          });
-          generationOperation.current?.update({
-            message: `Публикация ${Math.min((item.publicationIndex ?? 0) + 1, count)} из ${count} · ${label}${attempt}${state}`,
-            current,
-            total,
-          });
-        },
-      ),
-    onSuccess: async (result, count) => {
-      const created = result.generated?.length ?? 0;
-      const failed = result.failures?.length ?? 0;
-      const ready =
-        result.generated?.filter((post) => post.mediaReadiness === "READY")
-          .length ?? 0;
-      setGenerationProgress((previous) =>
-        previous
-          ? {
-              ...previous,
-              complete: ready,
-              failed: failed > 0,
-              current: previous.total,
-            }
-          : previous,
-      );
-      const finish = failed
-        ? generationOperation.current?.fail
-        : generationOperation.current?.succeed;
-      finish?.({
-        title: failed
-          ? "Генерация завершена с ошибками"
-          : "Генерация завершена",
-        message: failed
-          ? `Подготовлено ${created} из ${count}, ошибок: ${failed}.`
-          : `Подготовлено публикаций: ${created}.`,
+      (await api.post<TelegramAiPostingRunAccepted>(
+        `/telegram-channels/${channelId}/ai-posting/generate/background`, { count },
+      )).data,
+    onSuccess: async ({ runId }, count) => {
+      if (runId) setAcceptedRun({
+        id: runId, channelId, status: "RUNNING", canStop: true, requestedCount: count,
+        settingsVersion: 0, version: 0, createdAt: new Date().toISOString(),
+        publications: [], failures: [], feedback: [],
       });
-      generationOperation.current = null;
+      setGenerationProgress(null);
       setHistoryExpanded(false);
-      setLiveRun(null);
-      await client.invalidateQueries({
-        queryKey: aiPostingTestRunKeys(channelId).runs,
-      });
+      await client.invalidateQueries({ queryKey: aiPostingTestRunKeys(channelId).runs });
     },
-    onError: async (cause) => {
-      setGenerationProgress((previous) =>
-        previous ? { ...previous, failed: true } : previous,
-      );
-      generationOperation.current?.fail({
-        title: "Не удалось сгенерировать публикации",
-        message:
-          cause instanceof Error && cause.message
-            ? (failureMessage[cause.message] ?? cause.message)
-            : "Проверьте детали запуска и повторите попытку.",
-      });
-      generationOperation.current = null;
-      setLiveRun(null);
-      await client.invalidateQueries({
-        queryKey: aiPostingTestRunKeys(channelId).runs,
-      });
+  });
+  const stopRun = useMutation({
+    mutationFn: (runId: string) =>
+      api.post(`/telegram-channels/${channelId}/ai-posting/test-runs/${runId}/stop`),
+    onSuccess: async () => {
+      setGenerationProgress(null);
+      await client.invalidateQueries({ queryKey: aiPostingTestRunKeys(channelId).root });
     },
   });
   const regenerateFailure = useMutation({
@@ -291,11 +158,13 @@ export function AiPostingTestConsole({
               ? " · готово"
               : item.status === "FAILED"
                 ? " · ошибка"
-                : "";
+                : item.status === "MISSING" ? " · подходящего медиа нет" : "";
           setGenerationProgress((previous) =>
             previous
               ? {
                   ...previous,
+                  stage: item.stage,
+                  attempt: item.attempt,
                   stages: {
                     ...previous.stages,
                     [`0:${item.stage}`]: item.status,
@@ -359,6 +228,8 @@ export function AiPostingTestConsole({
       (await api.delete(`/telegram-channels/${channelId}/ai-posting/test-runs`))
         .data as { deletedCount: number },
     onSuccess: async () => {
+      setAcceptedRun(null);
+      setGenerationProgress(null);
       setHistoryExpanded(false);
       await client.invalidateQueries({
         queryKey: aiPostingTestRunKeys(channelId).runs,
@@ -370,28 +241,6 @@ export function AiPostingTestConsole({
       1,
       Math.min(5, Number(requestedCount) || dailyPostCount),
     );
-    completedPublications.current.clear();
-    setGenerationProgress({
-      count,
-      stages: Object.fromEntries(
-        Array.from({ length: count }, (_, index) => [
-          `${index}:planning`,
-          index === 0 ? "RUNNING" : "PENDING",
-        ]),
-      ),
-      complete: 0,
-      failed: false,
-      current: 0,
-      total: 1 + count * 8,
-      publicationIndex: 0,
-    });
-    setLiveRun(null);
-    setProgressExpanded(false);
-    generationOperation.current = startOperation({
-      id: `ai-posting-generate:${channelId}:${Date.now()}`,
-      title: "Генерация AI Posting",
-      message: `Подбираю темы для ${count} публикаций…`,
-    });
     generate.mutate(count);
   };
   const act = useMutation({
@@ -427,10 +276,14 @@ export function AiPostingTestConsole({
         )
       ).data as TestRun;
     },
-    onSuccess: async (_data, variables) => {
+    onSuccess: async (data, variables) => {
       if (variables.action === "regenerate-image") {
         mediaOperation.current?.update({ current: 1, total: 1 });
-        mediaOperation.current?.succeed({
+        const missing = data.publications?.[variables.index]?.mediaFailureCode === "AI_POSTING_IMAGE_SEARCH_EXHAUSTED";
+        mediaOperation.current?.succeed(missing ? {
+          title: "Раунд поиска завершён",
+          message: failureMessage.AI_POSTING_IMAGE_SEARCH_EXHAUSTED,
+        } : {
           title: "Медиа готово",
           message: "Публикация 1 из 1 · Медиа добавлено к этой публикации.",
         });
@@ -506,6 +359,7 @@ export function AiPostingTestConsole({
   });
   const error =
     generate.error ||
+    stopRun.error ||
     regenerateFailure.error ||
     clearRuns.error ||
     act.error ||
@@ -519,23 +373,35 @@ export function AiPostingTestConsole({
     const localText = edits[`${run.id}:${index}`];
     return localText !== undefined && localText !== post.text;
   };
-  const previousRunCount = Math.max(0, (runs.data?.length ?? 0) - 1);
+  const pendingRun = acceptedRun?.channelId === channelId ? acceptedRun : null;
+  const historyHasAcceptedRun = runs.data?.some(({ id }) => id === pendingRun?.id);
+  const runList = pendingRun && !historyHasAcceptedRun ? [pendingRun, ...(runs.data ?? [])] : (runs.data ?? []);
+  const previousRunCount = Math.max(0, runList.length - 1);
+  const activeRun = runList.find((run) => run.status === "RUNNING" && run.id === pendingRun?.id)
+    ?? runList.find((run) => run.status === "RUNNING" && run.canStop)
+    ?? runList.find((run) => run.status === "RUNNING");
+  const tracking = useRestoredAiPostingRun(
+    channelId,
+    regenerateFailure.isPending ? undefined : activeRun,
+  );
+  const trackedRun = tracking?.run;
   const displayedRuns = historyExpanded
-    ? (runs.data ?? [])
-    : (runs.data ?? []).slice(0, 1);
+    ? runList
+    : runList.filter((run, index) => index === 0 || run.id === trackedRun?.id || run.id === pendingRun?.id);
   return (
     <div className="space-y-4" aria-labelledby="ai-posting-test-title">
       <AiPostingGenerationControls
         requestedCount={requestedCount}
         pending={generate.isPending}
         busy={
+          Boolean(trackedRun?.canStop && trackedRun.status === "RUNNING") ||
           regenerateFailure.isPending ||
           (act.isPending && act.variables?.action === "regenerate-image")
         }
         settingsReady={settingsReady}
         onCountChange={setRequestedCount}
         onGenerate={startGeneration}
-        historyAction={(runs.data?.length ?? 0) > 0 ? (
+        historyAction={runList.length > 0 ? (
           <div className="flex flex-wrap items-center gap-2">
             {previousRunCount > 0 && (
               <Button variant="secondary" aria-expanded={historyExpanded}
@@ -557,122 +423,18 @@ export function AiPostingTestConsole({
           </div>
         ) : null}
       />
-      {progress && (
-        <div
-          role="status"
-          className="rounded-lg border border-neutral-700 bg-neutral-900 p-3 text-sm"
-        >
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <strong>
-              Публикация {Math.min(progress.publicationIndex + 1, progress.count)} из {progress.count}
-              {progress.failed ? " · есть ошибки" : " · в процессе"}
-            </strong>
-            <span className="text-neutral-400">
-              {Math.min(100, Math.round((progress.current / Math.max(progress.total, 1)) * 100))}% · готово {progress.complete}
-            </span>
-          </div>
-          <div
-            className="mt-2 h-1.5 overflow-hidden rounded-full bg-neutral-800"
-            role="progressbar"
-            aria-label="Прогресс генерации AI Posting"
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={Math.min(100, Math.round((progress.current / Math.max(progress.total, 1)) * 100))}
-          >
-            <div
-              className="h-full rounded-full bg-blue-500 transition-[width]"
-              style={{ width: `${Math.min(100, Math.round((progress.current / Math.max(progress.total, 1)) * 100))}%` }}
-            />
-          </div>
-          <button
-            type="button"
-            aria-expanded={progressExpanded}
-            onClick={() => setProgressExpanded((expanded) => !expanded)}
-            className="mt-2 inline-flex items-center gap-1 text-xs text-blue-300 hover:text-blue-200"
-          >
-            <ChevronDown size={14} className={progressExpanded ? "rotate-180" : ""} />
-            {progressExpanded ? "Скрыть этапы" : "Показать этапы"}
-          </button>
-          {progressExpanded && Array.from({ length: progress.count }, (_, index) => (
-            <div
-              key={index}
-              className="mt-3 rounded-md border border-neutral-800 bg-neutral-950/60 p-3 text-neutral-300"
-            >
-              <div className="flex items-center gap-2 font-medium text-neutral-100">
-                <ListChecks
-                  aria-hidden="true"
-                  size={16}
-                  className="text-blue-300"
-                />
-                Публикация {index + 1}
-              </div>
-              <div className="mt-2 grid gap-1 pl-6 sm:grid-cols-2">
-                {(["planning", "text", "review", "image"] as const).map(
-                  (stage) => {
-                    const status = progress.stages[`${index}:${stage}`];
-                    const label = {
-                      planning: "Тема",
-                      text: "Текст",
-                      review: "Проверка",
-                      image: "Медиа",
-                    }[stage];
-                    const statusLabel =
-                      status === "COMPLETED"
-                        ? "готово"
-                        : status === "FAILED"
-                          ? "ошибка"
-                          : status === "RUNNING"
-                            ? "в процессе"
-                            : "ожидает";
-                    const StatusIcon =
-                      status === "COMPLETED"
-                        ? CheckCircle2
-                        : status === "FAILED"
-                          ? CircleX
-                          : status === "RUNNING"
-                            ? Loader2
-                            : Circle;
-                    const iconClass =
-                      status === "COMPLETED"
-                        ? "text-emerald-400"
-                        : status === "FAILED"
-                          ? "text-rose-400"
-                          : status === "RUNNING"
-                            ? "animate-spin text-blue-300"
-                            : "text-neutral-500";
-                    return (
-                      <span
-                        key={stage}
-                        className="inline-flex items-center gap-1.5 text-sm"
-                      >
-                        <StatusIcon
-                          aria-hidden="true"
-                          size={15}
-                          className={iconClass}
-                        />
-                        {label}: {statusLabel}
-                      </span>
-                    );
-                  },
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
+      {progress && !trackedRun && (
+        <AiPostingRunProgress progress={progress} active={regenerateFailure.isPending} />
       )}
       <AiPostingTestConsoleError code={errorCode} status={errorStatus} />
-      {!generate.isPending &&
-        (runs.data ?? []).some((run) => run.status === "RUNNING") && (
-          <div className="flex flex-wrap items-center gap-2 text-sm text-amber-200">
-            <p role="status">
-              Запуск ещё не завершён. Сервер может продолжать обработку после закрытия соединения.
-            </p>
-            <Button type="button" variant="secondary" disabled={runs.isFetching}
-              onClick={() => void runs.refetch()}>
-              Обновить статус
-            </Button>
-          </div>
-        )}
+      {tracking?.refreshError && (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-900 bg-amber-950/20 p-3 text-sm text-amber-200">
+          <p role="status">Не удалось обновить прогресс запуска.</p>
+          <Button type="button" variant="secondary" onClick={() => void tracking.refresh()}>
+            Обновить статус
+          </Button>
+        </div>
+      )}
       {runs.isLoading && (
         <div className="rounded-lg border border-neutral-800 p-4 text-sm text-neutral-400">
           Загружаем историю тестов…
@@ -686,10 +448,12 @@ export function AiPostingTestConsole({
           Не удалось загрузить историю тестов.
         </div>
       )}
-      {[...(liveRun ? [liveRun] : []), ...displayedRuns.filter((run) => run.id !== liveRun?.id)].map((run) => (
+      {displayedRuns.map((run) => (
         <AiPostingTestRunCard
           key={run.id}
-          run={run}
+          run={run.id === trackedRun?.id ? trackedRun : run}
+          onStop={run.canStop ? () => stopRun.mutate(run.id) : undefined}
+          stopPending={stopRun.isPending}
           channelTitle={channelTitle}
           channelId={channelId}
           channelPhotoUrl={channelPhotoUrl}
@@ -741,7 +505,7 @@ export function AiPostingTestConsole({
           }
         />
       ))}
-      {!runs.isLoading && !runs.isError && !runs.data?.length && (
+      {!runs.isLoading && !runs.isError && !runList.length && (
         <p className="rounded-lg border border-dashed border-neutral-700 p-6 text-center text-sm text-neutral-400">
           Тестовых запусков пока нет.
         </p>
@@ -752,7 +516,7 @@ export function AiPostingTestConsole({
         onConfirm={() => clearRuns.mutateAsync()}
         entityName="прошлые варианты генерации AI Posting"
         label="Очистить историю"
-        description="Удалятся записи прошлых тестовых запусков и их превью. Сохранённые черновики и публикации не затрагиваются; текущий запуск останется, а зависшие запуски старше 30 минут будут удалены."
+        description="Активный тестовый запуск остановится. История тестов, включая зависшие попытки, и превью будут удалены. Сохранённые черновики и публикации останутся."
       />
     </div>
   );

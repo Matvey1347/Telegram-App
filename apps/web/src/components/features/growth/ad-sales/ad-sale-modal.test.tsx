@@ -118,6 +118,38 @@ async function revealPlacements() {
 }
 
 describe("AdSaleModal", () => {
+  it("records the client, owner and received amount for external channels without scheduling", async () => {
+    const onSubmit = vi.fn().mockResolvedValue({});
+    renderModal({ onSubmit });
+    const channelChoice = screen.getByRole("group", { name: "Channels used for the sale" });
+    expect(channelChoice.compareDocumentPosition(screen.getByText("Client and sale origin")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const myChannels = screen.getByRole("button", { name: "My channels" });
+    const externalChannels = screen.getByRole("button", { name: "External channels" });
+    expect(myChannels).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(externalChannels);
+    expect(externalChannels).toHaveAttribute("aria-pressed", "true");
+    expect(myChannels).toHaveAttribute("aria-pressed", "false");
+    expect(screen.queryByText("Where and when will it run?")).not.toBeInTheDocument();
+    expect(screen.queryByRole("switch", { name: "Financial transaction" })).not.toBeInTheDocument();
+    fireEvent.change(screen.getByRole("textbox", { name: "Client contact" }), { target: { value: "client@example.com" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Channel owner" }), { target: { value: "@publisher" } });
+    const amount = screen.getByRole("textbox", { name: "Amount received" });
+    fireEvent.change(amount, { target: { value: "12.345" } });
+    const submit = screen.getByRole("button", { name: "Create sale" });
+    expect(submit).toBeDisabled();
+    fireEvent.change(amount, { target: { value: "125,50" } });
+    await waitFor(() => expect(submit).toBeEnabled());
+    fireEvent.click(submit);
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
+      externalChannelOwner: "@publisher",
+      advertiserContact: "client@example.com",
+      createAdvertiser: true,
+      paymentAmount: 125.5,
+      accountId: expect.any(String),
+      financeSkipped: false,
+      placements: [],
+    })));
+  });
   beforeEach(() => {
     window.localStorage.clear();
   });
@@ -199,20 +231,24 @@ describe("AdSaleModal", () => {
     expect(screen.getByRole("button", { name: /New sales External/ })).toBeInTheDocument();
   });
 
-  it("keeps one current server draft and removes the saved-draft selector", async () => {
+  it("returns to server drafts and saves subsequent edits to the selected draft", async () => {
     const onSaveDraft = vi.fn().mockResolvedValue("saved-draft-1");
     renderModal({
       savedDrafts: [
         {
           id: "saved-draft-1",
           title: "Existing saved sale",
-          payload: {},
+          payload: { advertiserContact: "@saved_sale", placements: [] },
+          createdAt: "2026-11-20T12:00:00Z",
+          updatedAt: "2026-11-20T12:00:00Z",
         },
       ] as never,
       onSaveDraft,
     });
 
     expect(screen.queryByText("Saved drafts")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Back to saved drafts" }));
+    fireEvent.click(screen.getByRole("button", { name: /Continue draft Existing saved sale/i }));
     const save = screen.getByRole("button", { name: "Save draft" });
     fireEvent.click(save);
     await waitFor(() => expect(onSaveDraft).toHaveBeenCalledTimes(1));
@@ -327,6 +363,9 @@ describe("AdSaleModal", () => {
       window.localStorage.getItem("telegram-ad-sales:draft:default"),
     ).toContain('"networkTotalPrice":"100"');
     expect(screen.getByText("Placement source")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Back to saved drafts" }));
+    expect(screen.getByText("Saved drafts")).toBeInTheDocument();
+    expect(screen.queryByText("Placement source")).toBeNull();
   });
 
   it("shows only channel avatars in a draft preview with multiple channels", async () => {

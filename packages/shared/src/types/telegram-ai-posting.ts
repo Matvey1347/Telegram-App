@@ -113,3 +113,52 @@ export function telegramAiPostingRunSlots(run: {
   }
   return slots.map((slot) => slot ?? pending.shift() ?? {});
 }
+
+export type TelegramAiPostingMediaStep = 'SEARCH_REVIEW' | 'REFERENCE_REVIEW' | 'GENERATE';
+
+export type TelegramAiPostingImageCatalog = 'auto' | 'wikimedia' | 'wordpress-photos';
+
+export type TelegramAiPostingImageSearchRound = {
+  queries: Array<{ text: string; page: number; catalog: TelegramAiPostingImageCatalog; candidates: number; unavailable?: boolean }>;
+  inspected: number;
+  usable: number;
+  outcome: 'SELECTED' | 'NO_RESULTS' | 'NO_USABLE_IMAGES' | 'NO_MATCH' | 'REVIEW_UNAVAILABLE';
+  observation?: string;
+};
+
+export type TelegramAiPostingImageSearch = {
+  rounds: TelegramAiPostingImageSearchRound[];
+  brief?: string;
+  nextPageOffset: number;
+};
+
+export type TelegramAiPostingOperationContext = {
+  cachedInputTokens?: number | null;
+  mediaStep?: TelegramAiPostingMediaStep;
+  textStep?: 'SHORTEN';
+  editorialOutcome?: 'APPROVED' | 'REVISE' | 'INVALID';
+  editorialNote?: string;
+};
+
+export type TelegramAiPostingRunProgress = {
+  count: number;
+  current: number;
+  total: number;
+  complete: number;
+  failed: boolean;
+  publicationIndex: number;
+  processed?: number;
+  stage?: string;
+  attempt?: number;
+  stages: Record<string, string>;
+};
+
+export type TelegramAiPostingRunProgressRead = {
+  status: string;
+  progress?: TelegramAiPostingRunProgress;
+  canStop?: boolean;
+  preparedCount?: number;
+  updatedAt?: string;
+};
+
+export type TelegramAiPostingRunAccepted = { runId: string };

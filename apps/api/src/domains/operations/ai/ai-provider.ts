@@ -4,7 +4,7 @@ import type {
   AiTokenUsage,
 } from '@telegram-system/shared';
 import { AiDeploymentConfig } from './ai-deployment-config.service';
-import { AiModelRegistry, TELEGRAM_POSTING_DRAFT_SCHEMA_ID } from './ai-model-registry';
+import { AiModelRegistry, TELEGRAM_POSTING_DRAFT_SCHEMA_ID, TELEGRAM_POSTING_REVIEW_SCHEMA_ID } from './ai-model-registry';
 import { aiRecord, parseUsage } from './ai-pricing';
 
 export type AiProviderOutcome = {
@@ -183,7 +183,8 @@ export class AiProvider {
         };
       }
       const postingDraft = config.schemaId === TELEGRAM_POSTING_DRAFT_SCHEMA_ID;
-      const schema = this.registry.schema(config.category, Boolean(image), chatPlan, revisionDraft, postingDraft);
+      const postingReview = config.schemaId === TELEGRAM_POSTING_REVIEW_SCHEMA_ID;
+      const schema = this.registry.schema(config.category, Boolean(image), chatPlan, revisionDraft, postingDraft, postingReview);
       const payload = {
         model: config.modelId,
         input: image
@@ -278,7 +279,7 @@ export class AiProvider {
       } catch {
         return { ...metadata, errorCategory: 'OUTPUT_INVALID_JSON' };
       }
-      if (!this.registry.validate(config.category, result, Boolean(image), chatPlan, revisionDraft, postingDraft))
+      if (!this.registry.validate(config.category, result, Boolean(image), chatPlan, revisionDraft, postingDraft, postingReview))
         return { ...metadata, errorCategory: 'OUTPUT_SCHEMA_INVALID' };
       return { ...metadata, result, errorCategory: null };
     } catch {

@@ -71,6 +71,7 @@ export function CrmAdSaleLauncher({
       try {
         const result = await telegramAdSalesApi.checkoutSaleWorkflow(
           {
+            externalChannelOwner: payload.externalChannelOwner,
             advertiserId: payload.advertiserId,
             createAdvertiser: payload.createAdvertiser,
             advertiserName: payload.advertiserName,
@@ -123,7 +124,9 @@ export function CrmAdSaleLauncher({
           queryClient.invalidateQueries({ queryKey: telegramCrmKeys.analytics() }),
           queryClient.invalidateQueries({ queryKey: telegramAdSalesKeys.listRoot() }),
           invalidateTelegramAdSalesDerivedQueries(queryClient, {
-            publicationCalendar: true,
+            finance: !payload.financeSkipped,
+            dashboard: !payload.financeSkipped,
+            publicationCalendar: result.sale.placements.length > 0,
           }),
         ]);
         return result;

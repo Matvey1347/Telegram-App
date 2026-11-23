@@ -7,11 +7,13 @@ import {
   Button,
   CustomSelect,
   FormField,
+  Input,
   Modal,
   ModalBackButton,
 } from "@/components/ui/primitives";
 import { MemberSelect } from "@/components/features/workspace/member-select";
 import { ModalDraftPicker } from "@/components/ui/modal-draft-picker";
+import { normalizeAdSaleModalDraft } from "./ad-sale-modal-draft";
 import { adSaleOriginOptions } from "./ad-sale-origin";
 import { AdSalePlacementScope } from "./ad-sale-placement-scope";
 import { AdSaleNetworkPricing } from "./ad-sale-network-pricing";
@@ -22,7 +24,7 @@ import { AdSalePlacementCard } from "./ad-sale-placement-card";
 import { FormSectionNumber } from "../form-section-number";
 import { AdSaleModalSummary } from "./ad-sale-modal-summary";
 import { addAdSalePlacementDate } from "@/lib/features/growth/ad-sales-bulk-date-builder";
-import { Plus, Save } from "lucide-react";
+import { Handshake, Plus, Radio, Save } from "lucide-react";
 import {
   useAdSaleModalController,
   type AdSaleModalProps,
@@ -53,7 +55,8 @@ export function AdSaleModal(props: AdSaleModalProps) {
   const [savedDraftId, setSavedDraftId] = useState<string | undefined>();
   const [savingDraft, setSavingDraft] = useState(false);
   const [expandPlacementSettings, setExpandPlacementSettings] = useState(false);
-  const [editingSavedDraft, setEditingSavedDraft] = useState(false);
+  const [returnToDrafts, setReturnToDrafts] = useState(false);
+  const [viewingSavedDrafts, setViewingSavedDrafts] = useState(false);
   const [separateTimesByDate, setSeparateTimesByDate] = useState(false);
   const [separateFormatsByDate, setSeparateFormatsByDate] = useState(false);
   const previousPostModeRef = useRef<"shared" | "individual">("shared");
@@ -65,6 +68,7 @@ export function AdSaleModal(props: AdSaleModalProps) {
     }
   }, [open]);
   const {
+    externalSale, setExternalSale, externalChannelOwner, setExternalChannelOwner, externalAmount, setExternalAmount,
     setAdvertiserTelegram,
     advertiserContact,
     setAdvertiserContact,
@@ -118,6 +122,7 @@ export function AdSaleModal(props: AdSaleModalProps) {
     createNewDraft,
     showDraftPicker,
     currentDraft,
+    restoreDraft,
   } = useAdSaleModalController({
     ...props,
     productsByChannelId: providedProductsByChannelId,
@@ -128,13 +133,21 @@ export function AdSaleModal(props: AdSaleModalProps) {
     try {
       const id = await onSaveDraft(
         currentDraft,
-        savedDraftId ?? savedDrafts[0]?.id,
+        savedDraftId,
       );
       setSavedDraftId(id);
     } finally {
       setSavingDraft(false);
     }
   };
+  const storedDrafts = savedDrafts.flatMap((draft) => {
+    const form = normalizeAdSaleModalDraft(draft.payload);
+    return form ? [{
+      id: draft.id, createdAt: draft.createdAt, updatedAt: draft.updatedAt,
+      schemaVersion: 1, form, preview: { title: draft.title ?? undefined },
+    }] : [];
+  });
+  const pickerDrafts = viewingSavedDrafts ? [...pendingDrafts, ...storedDrafts] : pendingDrafts;
   const createSale = async () => {
     const published = await submit();
     if (published && savedDraftId && onDeleteSavedDraft) {
@@ -172,16 +185,19 @@ export function AdSaleModal(props: AdSaleModalProps) {
       <Modal
         open={open}
         onClose={() => {
-          setEditingSavedDraft(false);
+          setReturnToDrafts(false);
+          setViewingSavedDrafts(false);
+          setSavedDraftId(undefined);
           onClose();
         }}
         title="New ad sale"
         headerAction={headerAction}
         leadingHeaderAction={
-          editingSavedDraft ? <ModalBackButton
+          !pickerDrafts.length && (returnToDrafts || storedDrafts.length > 0) ? <ModalBackButton
             label="Back to saved drafts"
             onClick={() => {
-              setEditingSavedDraft(false);
+              setReturnToDrafts(false);
+              setViewingSavedDrafts(true);
               showDraftPicker();
             }}
           />
@@ -189,8 +205,8 @@ export function AdSaleModal(props: AdSaleModalProps) {
         }
         size="2xl"
         extraViewportSpace
-        footer={!pendingDrafts.length ? (
-          <div className="grid grid-flow-col auto-cols-fr gap-2 [&>button]:whitespace-normal [&>button]:px-2">
+        footer={!pickerDrafts.length ? (
+          <div className="grid grid-flow-col auto-cols-fr gap-2 [&>button]:whitespace-normal sm:flex sm:justify-end [&>button]:sm:px-5">
             {onSaveDraft ? (
               <Button
                 type="button"
@@ -214,19 +230,35 @@ export function AdSaleModal(props: AdSaleModalProps) {
           </div>
         ) : undefined}
       >
-        {pendingDrafts.length ? (
+        {pickerDrafts.length ? (
           <ModalDraftPicker
-            drafts={pendingDrafts}
+            drafts={pickerDrafts}
             titleFor={(draft) =>
               draft.advertiserContact || "Unfinished Ad Sale draft"
             }
             onContinue={(draft) => {
-              setEditingSavedDraft(true);
-              continueDraft(draft);
+              setReturnToDrafts(true);
+              setViewingSavedDrafts(false);
+              const stored = storedDrafts.find(({ id }) => id === draft.id);
+              setSavedDraftId(stored?.id);
+              if (stored) {
+                createNewDraft();
+                restoreDraft(stored.form);
+              } else {
+                continueDraft(draft);
+              }
             }}
-            onDelete={deleteDraft}
+            onDelete={(draft) => {
+              if (storedDrafts.some(({ id }) => id === draft.id)) {
+                void onDeleteSavedDraft?.(draft.id);
+              } else {
+                deleteDraft(draft);
+              }
+            }}
             onCreateNew={() => {
-              setEditingSavedDraft(false);
+              setReturnToDrafts(true);
+              setViewingSavedDrafts(false);
+              setSavedDraftId(undefined);
               createNewDraft();
             }}
           />
@@ -234,6 +266,27 @@ export function AdSaleModal(props: AdSaleModalProps) {
           <>
             <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_300px] lg:items-start">
               <div className="flex min-w-0 flex-col gap-4">
+                <div
+                  role="group"
+                  aria-label="Channels used for the sale"
+                  className="grid grid-cols-2 gap-2 sm:flex"
+                >
+                  {[
+                    { label: "My channels", external: false, icon: Radio },
+                    { label: "External channels", external: true, icon: Handshake },
+                  ].map(({ label, external, icon: Icon }) => (
+                    <button
+                      key={label}
+                      type="button"
+                      aria-pressed={externalSale === external}
+                      onClick={() => setExternalSale(external)}
+                      className="flex min-h-14 min-w-0 cursor-pointer items-center justify-center gap-2 rounded-xl border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm font-semibold text-neutral-200 hover:bg-neutral-800 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 aria-pressed:border-blue-600 aria-pressed:bg-blue-950/55 aria-pressed:text-blue-100 sm:min-w-44 sm:justify-start sm:px-4"
+                    >
+                      <Icon size={20} aria-hidden="true" className="shrink-0" />
+                      <span>{label}</span>
+                    </button>
+                  ))}
+                </div>
                 <section className="order-1 min-w-0 space-y-3 rounded-xl border border-neutral-800 bg-neutral-900/50 p-4">
                   <SectionHeading
                     number="1"
@@ -247,6 +300,7 @@ export function AdSaleModal(props: AdSaleModalProps) {
                       onContactChange={setAdvertiserContact}
                       onTelegramChange={setAdvertiserTelegram}
                       onSearchAdvertisers={onSearchAdvertisers}
+                      allowOtherContactMethods={externalSale}
                       resolveExistingOnNewContact
                       onSelect={(advertiser) => {
                         setSelectedAdvertiser(advertiser);
@@ -286,6 +340,15 @@ export function AdSaleModal(props: AdSaleModalProps) {
                   </div>
                 </section>
 
+                {externalSale ? (
+                  <section className="order-2 min-w-0 space-y-3 rounded-xl border border-neutral-800 bg-neutral-900/50 p-4">
+                    <SectionHeading number="2" title="External channels" />
+                    <FormField label="Channel owner" required>
+                      <Input aria-label="Channel owner" value={externalChannelOwner} maxLength={160}
+                        onChange={(event) => setExternalChannelOwner(event.target.value)} />
+                    </FormField>
+                  </section>
+                ) : (
                 <div className="order-2 min-w-0 space-y-4 rounded-xl border border-neutral-800 bg-neutral-900/50 p-4">
                   <SectionHeading
                     number="2"
@@ -446,10 +509,11 @@ export function AdSaleModal(props: AdSaleModalProps) {
                   </div>
                 </div>
 
+                )}
                 <section className="order-4 min-w-0 rounded-xl border border-neutral-800 bg-neutral-900/50 p-4">
                   <div className="flex flex-col gap-2 min-[420px]:flex-row min-[420px]:items-center min-[420px]:justify-between">
                     <SectionHeading number="3" title="Payment and financial tracking" />
-                    <InlineSwitch label="Payment" ariaLabel="Financial transaction" checked={!financeSkipped} onChange={(checked) => setFinanceSkipped(!checked)} />
+                    {!externalSale && <InlineSwitch label="Payment" ariaLabel="Financial transaction" checked={!financeSkipped} onChange={(checked) => setFinanceSkipped(!checked)} />}
                   </div>
                   <div className="mt-4 space-y-3">
                     {!financeSkipped ? (
@@ -479,7 +543,12 @@ export function AdSaleModal(props: AdSaleModalProps) {
                               }))}
                           />
                         </FormField>
-                        <AdSaleNetworkPricing
+                        {externalSale ? (
+                          <FormField label={`Amount received (${paymentCurrency})`} required>
+                            <Input aria-label="Amount received" value={externalAmount} inputMode="decimal"
+                              onChange={(event) => setExternalAmount(event.target.value)} />
+                          </FormField>
+                        ) : <AdSaleNetworkPricing
                           mode={networkPricing.mode}
                           totalPrice={networkPricing.totalPrice}
                           recommendedTotal={networkPricing.recommendedTotal}
@@ -488,13 +557,13 @@ export function AdSaleModal(props: AdSaleModalProps) {
                           placementCount={placements.length}
                           quotesReady={quotePreview.hasResolvedQuote}
                           onTotalPriceChange={networkPricing.setTotalPrice}
-                        />
+                        />}
                       </div>
                     ) : null}
                   </div>
                 </section>
 
-                {postMode !== "none" ? (
+                {externalSale ? null : postMode !== "none" ? (
                 <section className="order-5 min-w-0 space-y-3 border-0 bg-transparent p-0 sm:rounded-xl sm:border sm:border-neutral-800 sm:bg-neutral-900/50 sm:p-4">
                   <div className="flex flex-col gap-2 min-[520px]:flex-row min-[520px]:items-start min-[520px]:justify-between">
                   <div className="hidden sm:block"><SectionHeading number="4" title="Advertising post" /></div>
@@ -547,7 +616,8 @@ export function AdSaleModal(props: AdSaleModalProps) {
                       ? props.initialAdvertiser.photoUrl
                       : null
                 }
-                scheduleGroups={scheduleGroups}
+                scheduleGroups={externalSale ? [] : scheduleGroups}
+                externalChannelOwner={externalSale ? externalChannelOwner : undefined}
                 financeSkipped={financeSkipped}
                 amount={paymentAmount}
                 currency={paymentCurrency}
@@ -560,7 +630,7 @@ export function AdSaleModal(props: AdSaleModalProps) {
                 {submissionError}
               </p>
             ) : null}
-            {quotePreview.limitExceeded ? (
+            {!externalSale && quotePreview.limitExceeded ? (
               <p className="mt-4 rounded-lg border border-amber-700 bg-amber-950/30 px-3 py-2 text-sm text-amber-200">
                 This selection requires{" "}
                 {quotePreview.requestCount.toLocaleString()} price quotes.

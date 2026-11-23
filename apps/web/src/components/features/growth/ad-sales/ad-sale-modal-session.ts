@@ -72,6 +72,9 @@ export function useAdSaleModalSession(
     networkPricing,
   }: AdSalePlacementSession,
 ) {
+  const [externalSale, setExternalSale] = useState(false);
+  const [externalChannelOwner, setExternalChannelOwner] = useState("");
+  const [externalAmount, setExternalAmount] = useState("");
   const [advertiserTelegram, setAdvertiserTelegram] = useState("");
   const [advertiserContact, setAdvertiserContact] = useState("");
   const [selectedAdvertiser, setSelectedAdvertiser] =
@@ -124,6 +127,7 @@ export function useAdSaleModalSession(
         ]
       : [];
     return {
+      externalSale: false, externalChannelOwner: "", externalAmount: "",
       advertiserTelegram: initialAdvertiser?.telegramUsername ?? "",
       advertiserContact:
         initialAdvertiser?.telegramUsername ??
@@ -169,6 +173,9 @@ export function useAdSaleModalSession(
       storedDraft?: WorkspaceFormDraft<AdSaleModalDraft>,
     ) => {
       initialDraftRef.current = storedDraft ? null : draft;
+      setExternalSale(draft.externalSale ?? false);
+      setExternalChannelOwner(draft.externalChannelOwner ?? "");
+      setExternalAmount(draft.externalAmount ?? "");
       setAdvertiserTelegram(draft.advertiserTelegram);
       setAdvertiserContact(draft.advertiserContact);
       setSelectedAdvertiser(
@@ -205,6 +212,7 @@ export function useAdSaleModalSession(
 
   const currentDraft = useMemo<AdSaleModalDraft>(
     () => ({
+      externalSale, externalChannelOwner, externalAmount,
       advertiserTelegram,
       advertiserContact,
       selectedAdvertiserId,
@@ -223,6 +231,7 @@ export function useAdSaleModalSession(
       networkTotalPrice: networkPricing.totalPrice,
     }),
     [
+      externalSale, externalChannelOwner, externalAmount,
       accountId,
       advertiserContact,
       advertiserTelegram,
@@ -255,7 +264,7 @@ export function useAdSaleModalSession(
       hasMeaningfulAdSaleDraft(draft, initialDraftRef.current),
     previewFor: (draft) => ({
       title: draft.advertiserContact || "Unfinished Ad Sale draft",
-      subtitle: `${draft.selectedChannelIds.length || draft.placements.length} channels`,
+      subtitle: draft.externalSale ? draft.externalChannelOwner || "External channels" : `${draft.selectedChannelIds.length || draft.placements.length} channels`,
       avatars: channels
         .filter((channel) =>
           (draft.selectedChannelIds.length
@@ -282,6 +291,7 @@ export function useAdSaleModalSession(
   }, [accounts, assignedMemberId, open]);
 
   return {
+    externalSale, setExternalSale, externalChannelOwner, setExternalChannelOwner, externalAmount, setExternalAmount,
     advertiserTelegram,
     setAdvertiserTelegram,
     advertiserContact,

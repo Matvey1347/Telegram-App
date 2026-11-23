@@ -36,6 +36,7 @@ export type AdSaleModalProps = {
   ) => Promise<TelegramAdQuotePreviewBatchResponse>;
   onSearchAdvertisers: (query: string) => Promise<TelegramAdvertiser[]>;
   onSubmit: (payload: {
+    externalChannelOwner?: string;
     advertiserId?: string | null;
     createAdvertiser?: boolean;
     advertiserName: string;

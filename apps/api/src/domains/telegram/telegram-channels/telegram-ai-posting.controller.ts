@@ -3,13 +3,15 @@ import {
   Controller,
   Delete,
   Get,
+  Header,
+  HttpCode,
   Param,
   Post,
   Put,
   Res,
   UseGuards,
 } from '@nestjs/common';
-import { TELEGRAM_AI_POSTING_MAX_MEDIA_GUIDANCE_LENGTH, TELEGRAM_AI_POSTING_MAX_MEDIA_REFERENCES, type TelegramAiPostingReferenceAnalysisInput } from '@telegram-system/shared';
+import { TELEGRAM_AI_POSTING_MAX_MEDIA_GUIDANCE_LENGTH, TELEGRAM_AI_POSTING_MAX_MEDIA_REFERENCES, type TelegramAiPostingReferenceAnalysisInput, type TelegramAiPostingRunAccepted } from '@telegram-system/shared';
 import { TelegramAiPostingReferenceAnalysisService } from './telegram-ai-posting-reference-analysis.service';
 import type { Response } from 'express';
 import { ArrayMaxSize, ArrayMinSize, IsArray, IsIn, IsInt, IsObject, IsOptional, IsString, IsUrl, Max, MaxLength, Min } from 'class-validator';
@@ -124,17 +126,50 @@ export class TelegramAiPostingController {
         this.generator.generate(user.sub, id, dto.count, 'MANUAL', undefined, onProgress),
     });
   }
-  @Get('test-runs') runs(
+  @Post('generate/background')
+  @HttpCode(202)
+  generateInBackground(
+    @CurrentUser() user: JwtUser,
+    @Param('channelId') id: string,
+    @Body() dto: GenerateTelegramAiPostingDto,
+  ): Promise<TelegramAiPostingRunAccepted> {
+    return new Promise((resolve, reject) => {
+      void this.generator
+        .generate(user.sub, id, dto.count, 'MANUAL', undefined, undefined, undefined, undefined, (runId) => resolve({ runId }))
+        .catch(reject);
+    });
+  }
+  @Get('test-runs')
+  @Header('Cache-Control', 'no-store')
+  runs(
     @CurrentUser() user: JwtUser,
     @Param('channelId') id: string,
   ) {
     return this.testRuns.listRuns(user.sub, id);
+  }
+  @Get('test-runs/:runId/progress')
+  @Header('Cache-Control', 'no-store')
+  runProgress(
+    @CurrentUser() user: JwtUser,
+    @Param('channelId') id: string,
+    @Param('runId') runId: string,
+  ) {
+    return this.testRuns.readRunProgress(user.sub, id, runId);
   }
   @Delete('test-runs') clearTestRuns(
     @CurrentUser() user: JwtUser,
     @Param('channelId') id: string,
   ) {
     return this.testRuns.clearHistory(user.sub, id);
+  }
+  @Post('test-runs/:runId/stop')
+  @HttpCode(200)
+  stopTestRun(
+    @CurrentUser() user: JwtUser,
+    @Param('channelId') id: string,
+    @Param('runId') runId: string,
+  ) {
+    return this.testRuns.stopRun(user.sub, id, runId);
   }
   @Post('test-runs/:runId/regenerate-failure/stream') regenerateFailure(
     @CurrentUser() user: JwtUser,

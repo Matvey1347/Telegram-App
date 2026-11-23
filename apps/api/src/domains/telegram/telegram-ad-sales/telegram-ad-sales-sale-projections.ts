@@ -78,6 +78,7 @@ export function mapSale(
   const detailed = operations.buildSaleSummary(sale);
   return {
     ...sale,
+    externalAgreedAmount: undefined,
     financeSkipped: sale.financeSkipped && detailed.payments.length === 0,
     assignedMember: sale.assignedMember
       ? {
@@ -254,7 +255,7 @@ export function buildSaleSummary(
   const payments = (sale.payments ?? []).filter(
     (payment: any) => payment.status !== TelegramAdSalePaymentStatus.VOIDED,
   );
-  const totalAgreedAmount = placements.reduce(
+  const totalAgreedAmount = sale.externalAgreedAmount ?? placements.reduce(
     (sum: Prisma.Decimal, placement: any) => sum.add(decimal(placement.agreedPrice)),
     decimal(0),
   );

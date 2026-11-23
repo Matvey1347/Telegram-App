@@ -2,6 +2,9 @@ import type { TelegramAdSaleOrigin } from "@telegram-system/shared";
 import { expandAdSaleDateRange } from "@/lib/features/growth/ad-sales-bulk-date-builder";
 import type { SalePlacementDraft } from "./ad-sale-types";
 export type AdSaleModalDraft = {
+  externalSale?: boolean;
+  externalChannelOwner?: string;
+  externalAmount?: string;
   advertiserTelegram: string;
   advertiserContact: string;
   selectedAdvertiserId: string | null;
@@ -32,6 +35,9 @@ export function normalizeAdSaleModalDraft(
   }));
   return {
     ...(draft as AdSaleModalDraft),
+    externalSale: draft.externalSale === true,
+    externalChannelOwner: draft.externalChannelOwner ?? "",
+    externalAmount: draft.externalAmount ?? "",
     advertiserTelegram: draft.advertiserTelegram ?? "",
     advertiserContact: draft.advertiserContact ?? "",
     selectedAdvertiserId: draft.selectedAdvertiserId ?? null,
@@ -75,6 +81,7 @@ export function hasMeaningfulAdSaleDraft(
   if (initialValue)
     return JSON.stringify(draft) !== JSON.stringify(initialValue);
   return Boolean(
+    draft.externalChannelOwner?.trim() || draft.externalAmount ||
     draft.advertiserContact.trim() ||
     draft.selectedNetworkId ||
     draft.selectedChannelIds.length ||

@@ -294,6 +294,8 @@ export class TelegramAdSaleCheckoutPriceAllocationDto {
 }
 
 export class CreateTelegramAdSaleCheckoutDto extends CreateTelegramAdSaleDto {
+  @IsOptional() @IsString() @MaxLength(160) externalChannelOwner?: string;
+
   @IsArray()
   @ArrayMaxSize(100)
   @ValidateNested({ each: true })

@@ -560,7 +560,7 @@ describe('TelegramAiPostingTestRunService review lifecycle', () => {
     });
   });
 
-  it('clears history for the active workspace/channel and preserves recent running work', async () => {
+  it('clears history and cancels background tests without deleting recent autopilot runs', async () => {
     const ctx = setup();
     await expect(
       ctx.service.clearHistory('user-1', 'channel-1'),
@@ -575,8 +575,25 @@ describe('TelegramAiPostingTestRunService review lifecycle', () => {
       telegramChannelId: 'channel-1',
       OR: [
         { status: { not: 'RUNNING' } },
+        { status: 'RUNNING', publications: { path: ['background'], equals: true } },
         { status: 'RUNNING', updatedAt: { lt: expect.any(Date) } },
       ],
+    });
+  });
+
+  it('only stops running background tests owned by the selected workspace and channel', async () => {
+    const ctx = setup();
+    ctx.prisma.telegramAiPostingTestRun.findFirst.mockResolvedValueOnce({
+      ...ctx.storedRun, status: 'CANCELED', publications: [],
+    });
+    await expect(ctx.service.stopRun('user-1', 'channel-1', 'run-1'))
+      .resolves.toEqual({ status: 'CANCELED' });
+    expect(ctx.prisma.telegramAiPostingTestRun.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 'run-1', workspaceId: 'workspace-1', telegramChannelId: 'channel-1',
+        status: 'RUNNING', publications: { path: ['background'], equals: true },
+      },
+      data: { status: 'CANCELED', version: { increment: 1 } },
     });
   });
 

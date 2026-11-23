@@ -140,6 +140,7 @@ Before adding a primitive or domain wrapper, search for an existing selector, da
 
 - Import: `@/components/features/growth/ad-sales/ad-sale-modal`
 - Use for ad sale creation/editing.
+- External channel sales record the buyer, channel owner and received payment on a selected financial account. The checkout creates no owned-channel slots or scheduled posts.
 - Existing tests cover selected post loading, format pricing and selector retry behavior.
 
 ### `CrossPromotionPlanSummary`

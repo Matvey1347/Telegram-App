@@ -37,7 +37,15 @@ export type TelegramAdSaleCheckoutPlacement = {
   } | null;
 };
 
+export function isExternalAdSaleClientContact(value: string) {
+  const contact = value.trim();
+  return /^@?[a-z0-9_]{5,32}$/i.test(contact) ||
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact) ||
+    (/^\+?[\d ()-]+$/.test(contact) && /^\d{7,15}$/.test(contact.replace(/\D/g, "")));
+}
+
 export type TelegramAdSaleCheckoutRequest = {
+  externalChannelOwner?: string;
   advertiserId?: string | null;
   createAdvertiser?: boolean;
   advertiserName: string;

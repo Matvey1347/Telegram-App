@@ -1,7 +1,7 @@
 /* In-memory transport/transaction mocks intentionally implement only exercised Prisma/fetch branches. */
 /* eslint-disable @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call */
 import { Prisma } from '@prisma/client';
-import { AiModelRegistry } from './ai-model-registry';
+import { AiModelRegistry, TELEGRAM_POSTING_REVIEW_SCHEMA_ID } from './ai-model-registry';
 import {
   budgetPeriods,
   parseUsage,
@@ -200,6 +200,28 @@ describe('internal AI fixed Responses provider (mocked only)', () => {
       reasoning: { effort: 'none' },
       instructions: 'Trusted server policy',
     });
+  });
+  it('requests a directly structured editorial decision and keeps visual review on its own schema', async () => {
+    const provider = new AiProvider(deployment as any, registry);
+    const category = 'TELEGRAM_POSTING_REVIEW' as const;
+    const verdict = { approved: false, reasons: ['Missing concrete example'] };
+    fetchMock.mockResolvedValueOnce(response({ input_tokens: 300 }))
+      .mockResolvedValueOnce(response({
+        ...completed,
+        output: [{ content: [{ type: 'output_text', text: JSON.stringify(verdict) }] }],
+      }));
+
+    const result = await provider.execute('Short editorial review', {
+      ...registry.category(category), schemaId: TELEGRAM_POSTING_REVIEW_SCHEMA_ID,
+    });
+
+    expect(result.result).toEqual(verdict);
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body).text.format).toMatchObject({
+      name: TELEGRAM_POSTING_REVIEW_SCHEMA_ID,
+      strict: true,
+      schema: { required: ['approved', 'reasons'] },
+    });
+    expect(registry.schema(category, true).id).toBe('telegram_posting_visual_review_v1');
   });
   it('counts a bounded image before a structured vision result and rejects unsupported models', async () => {
     const provider = new AiProvider(deployment as any, registry);

@@ -62,6 +62,7 @@ export function CrmClientField(props: {
   onSelect: (advertiser: TelegramAdvertiser | null) => void;
   onSearchAdvertisers: (query: string) => Promise<TelegramAdvertiser[]>;
   resolveExistingOnNewContact?: boolean;
+  allowOtherContactMethods?: boolean;
 }) {
   const [mode, setMode] = useState<"new" | "existing">(
     props.selectedAdvertiserId ? "existing" : "new",
@@ -241,7 +242,7 @@ export function CrmClientField(props: {
         {mode === "new" ? (
           <Input
             className="h-[42px]"
-            aria-label="Telegram username"
+            aria-label={props.allowOtherContactMethods ? "Client contact" : "Telegram username"}
             value={props.contact}
             onChange={(event) => {
               const value = event.target.value;
@@ -249,7 +250,7 @@ export function CrmClientField(props: {
               props.onTelegramChange(canonicalTelegramUsername(value));
               props.onSelect(null);
             }}
-            placeholder="@username or username"
+            placeholder={props.allowOtherContactMethods ? "@username, email or phone" : "@username or username"}
           />
         ) : (
           <CustomSelect

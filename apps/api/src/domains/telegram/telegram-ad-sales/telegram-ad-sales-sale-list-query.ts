@@ -19,6 +19,7 @@ export function buildTelegramAdSaleListWhere(
         OR: [
           { id: { contains: search, mode: 'insensitive' } },
           { title: { contains: search, mode: 'insensitive' } },
+          { externalChannelOwner: { contains: search, mode: 'insensitive' } },
           { advertiserName: { contains: search, mode: 'insensitive' } },
           {
             advertiserTelegram: { contains: search, mode: 'insensitive' },

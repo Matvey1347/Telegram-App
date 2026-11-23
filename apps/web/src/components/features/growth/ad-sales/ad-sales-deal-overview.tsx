@@ -165,7 +165,10 @@ export function DealOverview(props: {
             />
           </FormField>
         </div>
-        <AdSaleDealPlacementActions
+        {props.sale.externalChannelOwner && (
+          <p className="text-sm text-neutral-300">External channels · {props.sale.externalChannelOwner}</p>
+        )}
+        {!props.sale.externalChannelOwner && <AdSaleDealPlacementActions
           key={props.sale.id}
           sale={props.sale}
           productsByChannelId={props.productsByChannelId}
@@ -173,15 +176,15 @@ export function DealOverview(props: {
           onApplyAll={props.onApplyAll}
           drafts={props.drafts}
           onSharedPost={props.onSharedPost} onOperatorAction={props.onAction}
-        />
+        />}
       </section>
       <section>
         <div className="mb-3 mt-4 flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h4 className="font-semibold text-white">Placements</h4>
-            <p className="text-sm text-neutral-500">
+            <h4 className="font-semibold text-white">{props.sale.externalChannelOwner ? "External sale" : "Placements"}</h4>
+            {!props.sale.externalChannelOwner && <p className="text-sm text-neutral-500">
               Choose the placement you want to edit.
-            </p>
+            </p>}
           </div>
           <div className="text-left sm:text-right">
             <span className="block text-[10px] font-medium uppercase tracking-wider text-neutral-600">

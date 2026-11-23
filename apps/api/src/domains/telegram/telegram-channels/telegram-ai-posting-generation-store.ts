@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { acquirePostgresTransactionLock } from '../../../prisma/postgres-advisory-lock';
 import type { PrismaService } from '../../../prisma/prisma.service';
 import { decodeAiPostingRunPublications } from './telegram-ai-posting-run-data';
+import { AI_POSTING_BACKGROUND_RUN_FILTER, AI_POSTING_STALE_RUN_MS, TelegramAiPostingRunStopped } from './telegram-ai-posting-progress';
 import {
   writeTelegramAiPostingTestRun,
   type TestPublication,
@@ -53,9 +54,23 @@ export async function createTelegramAiPostingGenerationRun(
   count: number,
   settingsVersion: number,
   hybrid: boolean,
+  background = false,
 ) {
   const create = async (client: Prisma.TransactionClient) => {
     const scope = { workspaceId, telegramChannelId: channelId };
+    if (background) {
+      const pendingScope = { ...scope, ...AI_POSTING_BACKGROUND_RUN_FILTER, status: 'RUNNING' };
+      const staleSince = new Date(Date.now() - AI_POSTING_STALE_RUN_MS);
+      await client.telegramAiPostingTestRun.updateMany({
+        where: { ...pendingScope, updatedAt: { lt: staleSince } },
+        data: { status: 'INTERRUPTED', version: { increment: 1 } },
+      });
+      const active = await client.telegramAiPostingTestRun.findFirst({
+        where: pendingScope,
+        select: { id: true, version: true },
+      });
+      if (active) return { ...active, editorialOffset: 0, existing: true };
+    }
     const { _sum } = await client.telegramAiPostingTestRun.aggregate({
       where: scope,
       _sum: { requestedCount: true },
@@ -66,16 +81,16 @@ export async function createTelegramAiPostingGenerationRun(
         requestedCount: count,
         settingsVersion,
         status: 'RUNNING',
-        publications: [],
+        publications: background ? { items: [], background: true } : [],
         failures: [],
         operations: [],
         feedback: [],
       },
       select: { id: true, version: true },
     });
-    return { ...run, editorialOffset: _sum.requestedCount ?? 0 };
+    return { ...run, editorialOffset: _sum.requestedCount ?? 0, existing: false };
   };
-  if (!hybrid) return create(prisma);
+  if (!hybrid && !background) return create(prisma);
   return prisma.$transaction(async (tx) => {
     await acquirePostgresTransactionLock(
       tx,
@@ -96,6 +111,13 @@ export type TelegramAiPostingRetrySlot = {
   publicationIndex: number;
   imageMode?: 'found' | 'ai';
 };
+
+export async function assertTelegramAiPostingRunActive(prisma: PrismaService, workspaceId: string, id: string) {
+  const active = await prisma.telegramAiPostingTestRun.findFirst({
+    where: { id, workspaceId, status: 'RUNNING' }, select: { id: true },
+  });
+  if (!active) throw new TelegramAiPostingRunStopped();
+}
 
 export async function claimTelegramAiPostingRetrySlot(
   prisma: PrismaService,

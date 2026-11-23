@@ -68,6 +68,35 @@ describe('TelegramAiPostingSourceService', () => {
     expect(fetch.mock.calls[1][0]).toContain('https://commons.wikimedia.org/w/api.php?');
   });
 
+  it('reads the requested page of CC0 photos and accepts only the official photo CDN', async () => {
+    const { service } = make();
+    const photo = (source_url: string) => ({ _embedded: { 'wp:featuredmedia': [{ source_url }] } });
+    const publicPhoto = 'https://pd.w.org/2026/08/shopping.jpg';
+    const fetch = jest.spyOn(service as any, 'fetchPublic').mockResolvedValue(Buffer.from(
+      JSON.stringify([null, photo(publicPhoto), photo('https://untrusted.example/photo.jpg')]),
+    ));
+
+    await expect(service.searchOpenImages('woman shopping', 2, 'wordpress-photos')).resolves.toEqual([
+      { url: publicPhoto, sourceId: 'wordpress-photos', sourceType: 'image-search' },
+    ]);
+    const url = new URL(String(fetch.mock.calls[0][0]));
+    expect(url.hostname).toBe('wordpress.org');
+    expect(url.searchParams.get('search')).toBe('woman shopping');
+    expect(url.searchParams.get('page')).toBe('2');
+  });
+
+  it('fetches an independent later Wikimedia search page without calling Openverse', async () => {
+    const { service } = make();
+    const fetch = jest.spyOn(service as any, 'fetchPublic').mockResolvedValue(Buffer.from('{}'));
+
+    await expect(service.searchOpenImages('woman writing', 3, 'wikimedia')).resolves.toEqual([]);
+
+    expect(fetch).toHaveBeenCalledTimes(1);
+    const url = new URL(String(fetch.mock.calls[0][0]));
+    expect(url.hostname).toBe('commons.wikimedia.org');
+    expect(url.searchParams.get('gsroffset')).toBe('24');
+  });
+
   it('checks that a feed is reachable and has entries', async () => {
     const { service } = make();
     jest

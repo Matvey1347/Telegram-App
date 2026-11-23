@@ -1,6 +1,7 @@
 import { BadGatewayException, ConflictException } from '@nestjs/common';
 import { TelegramAiPostingGeneratorService } from './telegram-ai-posting-generator.service';
 import { TelegramAiPostingTestRunService } from './telegram-ai-posting-test-run.service';
+import { TelegramAiPostingController } from './telegram-ai-posting.controller';
 import { renderTelegramAiPostingText } from './telegram-ai-posting-render';
 import { telegramAiPostingPlanPrompt } from './telegram-ai-posting-topic-plan';
 import { telegramAiPostingGenerationFailures } from './telegram-ai-posting-generation-outcome';
@@ -85,6 +86,103 @@ describe('TelegramAiPostingGeneratorService', () => {
     ).rejects.toBeInstanceOf(ConflictException);
     expect(prisma.telegramAiPostingSettings.findFirst).not.toHaveBeenCalled();
     expect(gateway.execute).not.toHaveBeenCalled();
+  });
+
+  it('returns an accepted run before source collection finishes and settles it afterward', async () => {
+    prisma.telegramAiPostingSettings.findFirst.mockResolvedValue({
+      configuration: {}, configurationVersion: 1,
+    });
+    prisma.telegramAiPostingTestRun.findFirst.mockResolvedValue(null);
+    let rejectSource!: (reason: Error) => void;
+    sources.collect.mockImplementationOnce(() => new Promise((_resolve, reject) => {
+      rejectSource = reject;
+    }));
+    const controller = new TelegramAiPostingController(
+      {} as never, service, testRuns, {} as never, {} as never, {} as never,
+    );
+
+    await expect(controller.generateInBackground({ sub: 'user-1' } as never, 'channel-1', { count: 1 }))
+      .resolves.toEqual({ runId: 'run-1' });
+    expect(prisma.telegramAiPostingTestRun.update).not.toHaveBeenCalled();
+    const settled = new Promise<unknown>((resolve) => {
+      prisma.telegramAiPostingTestRun.update.mockImplementationOnce(async (args) => {
+        resolve(args);
+        return {};
+      });
+    });
+    rejectSource(new Error('Source collection failed'));
+    await expect(settled).resolves.toMatchObject({
+      where: { id: 'run-1', status: 'RUNNING' }, data: { status: 'FAILED' },
+    });
+  });
+
+  it('accepts an existing active batch without issuing new source or model requests', async () => {
+    prisma.telegramAiPostingSettings.findFirst.mockResolvedValue({
+      configuration: {}, configurationVersion: 1,
+    });
+    prisma.telegramAiPostingTestRun.findFirst.mockResolvedValueOnce({ id: 'active-run', version: 1 });
+    const controller = new TelegramAiPostingController(
+      {} as never, service, testRuns, {} as never, {} as never, {} as never,
+    );
+
+    await expect(controller.generateInBackground({ sub: 'user-1' } as never, 'channel-1', { count: 1 }))
+      .resolves.toEqual({ runId: 'active-run' });
+    expect(prisma.telegramAiPostingTestRun.create).not.toHaveBeenCalled();
+    expect(sources.collect).not.toHaveBeenCalled();
+    expect(gateway.execute).not.toHaveBeenCalled();
+  });
+
+  it('continues a background batch to completion after returning the run ID', async () => {
+    prisma.telegramAiPostingSettings.findFirst.mockResolvedValue({
+      configuration: { language: 'en', imageMode: 'ai' }, configurationVersion: 1,
+    });
+    prisma.telegramAiPostingTestRun.findFirst.mockResolvedValue(null);
+    prisma.telegramAiPostingTestRun.updateMany.mockResolvedValue({ count: 1 });
+    planningContext.read.mockResolvedValue({ schedule: null, hypotheses: [] });
+    let finishSources!: () => void;
+    sources.collect.mockImplementationOnce(() => new Promise((resolve) => {
+      finishSources = () => resolve({
+        editorialProfile: { language: 'English' }, sourceContexts: [],
+        existingPosts: [], history: [], imageCandidates: [], sourceRefs: [],
+      });
+    }));
+    const replies = [
+      '{"topics":["A distinct editorial topic"]}',
+      '{"title":"A clear title","text":"A useful post","imagePrompt":"Editorial image"}',
+      '{"approved":true,"reasons":[]}',
+    ];
+    gateway.execute.mockImplementation(({ category }) => ({
+      operation: {
+        category, model: 'test-model', status: 'SUCCEEDED', actualCost: '0',
+        pricingStatus: 'PRICED', inputTokens: 10, outputTokens: 10,
+      },
+      result: { reply: replies.shift() },
+    }));
+    images.resolve.mockResolvedValue({
+      image: { url: 'https://media.example/ready.jpg', sourceId: 'source-1' }, readiness: 'READY',
+    });
+    const controller = new TelegramAiPostingController(
+      {} as never, service, testRuns, {} as never, {} as never, {} as never,
+    );
+    const settled = new Promise<unknown>((resolve) => {
+      prisma.telegramAiPostingTestRun.update.mockImplementationOnce(async (args) => {
+        resolve(args);
+        return {};
+      });
+    });
+
+    await expect(controller.generateInBackground({ sub: 'user-1' } as never, 'channel-1', { count: 1 }))
+      .resolves.toEqual({ runId: 'run-1' });
+    expect(gateway.execute).not.toHaveBeenCalled();
+    finishSources();
+    await expect(settled).resolves.toMatchObject({
+      where: { id: 'run-1', status: 'RUNNING' },
+      data: {
+        status: 'COMPLETED',
+        publications: { items: [{ title: 'A clear title', imageUrl: 'https://media.example/ready.jpg' }] },
+      },
+    });
+    expect(gateway.execute).toHaveBeenCalledTimes(3);
   });
 
   it('loads the assigned main invite link for the generated channel ending', async () => {
@@ -409,9 +507,25 @@ describe('TelegramAiPostingGeneratorService', () => {
       },
       result: { reply: replies.shift() },
     }));
-    images.resolve.mockResolvedValue({
-      image: { url: 'https://media.example/ready.jpg', sourceId: 'source-1' },
-      readiness: 'READY',
+    images.resolve.mockImplementation(async () => {
+      expect(prisma.telegramAiPostingTestRun.updateMany).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            publications: expect.objectContaining({
+              progress: expect.objectContaining({
+                stage: 'image',
+                stages: {
+                  '0:planning': 'COMPLETED',
+                  '0:text': 'COMPLETED',
+                  '0:review': 'COMPLETED',
+                  '0:image': 'RUNNING',
+                },
+              }),
+            }),
+          }),
+        }),
+      );
+      return { image: { url: 'https://media.example/ready.jpg', sourceId: 'source-1' }, readiness: 'READY' };
     });
     prisma.telegramChannel.findFirst.mockResolvedValue({ language: '' });
     prisma.telegramPost.findMany.mockResolvedValue([
@@ -536,7 +650,7 @@ describe('TelegramAiPostingGeneratorService', () => {
       'Стиль: Warm and concise',
     );
     expect(gateway.execute.mock.calls[1][0].input).toContain(
-      'Include 1–3 relevant hashtags for the configured placement.',
+      'Add 1–3 relevant hashtags.',
     );
     expect(gateway.execute.mock.calls[1][0].input).toContain(
       'Start the post body with exactly one relevant emoji that conveys the topic.',
@@ -759,7 +873,6 @@ describe('TelegramAiPostingGeneratorService', () => {
       '{"topics":["A distinct editorial topic"]}',
       '{"title":"A title","text":"A short caption","imagePrompt":"Editorial illustration","imageSearchQuery":"illustration","imageStyleIndex":0,"format":"standard","category":"general"}',
       'not valid json',
-      '{"title":"A revised title","text":"A revised short caption","imagePrompt":"Editorial illustration","imageSearchQuery":"illustration","imageStyleIndex":0,"format":"standard","category":"general"}',
       '{"approved":true,"reasons":[]}',
     ];
     gateway.execute.mockImplementation((request: { category: string }) => ({
@@ -786,8 +899,13 @@ describe('TelegramAiPostingGeneratorService', () => {
     const result = await service.generate('user-1', 'channel-1', 1);
 
     expect(result.generated).toHaveLength(1);
-    expect(result.generated[0].title).toBe('A revised title');
+    expect(result.generated[0].title).toBe('A title');
     expect(result.generated[0].mediaReadiness).toBe('READY');
+    const calls = gateway.execute.mock.calls.map(([call]) => call);
+    expect(calls.filter((call) => call.category === 'TELEGRAM_POSTING_TEXT')).toHaveLength(1);
+    const checks = calls.filter((call) => call.category === 'TELEGRAM_POSTING_REVIEW');
+    expect(checks).toHaveLength(2);
+    expect(checks.every((call) => call.postingReview && call.input.includes('A short caption'))).toBe(true);
   });
 
   it('preserves generated text and records a failed image operation and its cost', async () => {
@@ -968,6 +1086,31 @@ describe('TelegramAiPostingGeneratorService', () => {
     );
   });
 
+  it('reads the persisted stage in the selected channel and stops tracking stale runs', async () => {
+    const progress = {
+      count: 4, current: 5, total: 33, complete: 1, failed: false,
+      publicationIndex: 1, stage: 'text', stages: { '1:text': 'RUNNING' },
+    };
+    const row = {
+      status: 'RUNNING', updatedAt: new Date(), requestedCount: 4,
+      publications: { items: [], progress },
+    };
+    prisma.telegramAiPostingTestRun.findFirst
+      .mockResolvedValueOnce(row)
+      .mockResolvedValueOnce({ ...row, updatedAt: new Date(Date.now() - 31 * 60_000) })
+      .mockResolvedValueOnce(null);
+
+    await expect(testRuns.readRunProgress('user-1', 'channel-1', 'run-1'))
+      .resolves.toEqual({ status: 'RUNNING', progress, updatedAt: row.updatedAt.toISOString() });
+    expect(prisma.telegramAiPostingTestRun.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'run-1', workspaceId: 'ws-1', telegramChannelId: 'channel-1' } }),
+    );
+    await expect(testRuns.readRunProgress('user-1', 'channel-1', 'run-1'))
+      .resolves.toEqual({ status: 'INTERRUPTED' });
+    await expect(testRuns.readRunProgress('user-1', 'other-channel', 'run-1'))
+      .rejects.toThrow('AI Posting test run not found');
+  });
+
   it('regenerates only the selected publication image and preserves its text and siblings', async () => {
     const selected = {
       topic: 'Selected topic',
@@ -1059,7 +1202,7 @@ describe('TelegramAiPostingGeneratorService', () => {
       ),
     ).toBe(true);
     expect(images.resolve).toHaveBeenCalledWith(
-      expect.objectContaining({ imageMode: 'ai' }),
+      expect.objectContaining({ imageMode: 'found', fallbackToGeneration: true }),
     );
     const imageUpdateCalls = prisma.telegramAiPostingTestRun.updateMany.mock
       .calls as unknown as Array<
@@ -1401,7 +1544,7 @@ describe('TelegramAiPostingGeneratorService', () => {
       expect.objectContaining({ publicationIndex: 0, title: 'First' }),
       expect.objectContaining({
         publicationIndex: 1, title: 'Recovered',
-        costs: { planning: '0.005', text: '0.04', review: '0.01', image: '0' },
+        costs: { planning: '0.005', text: '0.03', review: '0.01', image: '0' },
       }),
     ]);
   });
@@ -1481,6 +1624,7 @@ describe('TelegramAiPostingGeneratorService', () => {
     expect(images.resolve).toHaveBeenCalledWith(
       expect.objectContaining({
         imageMode: 'found',
+        fallbackToGeneration: false,
         referenceImage: Buffer.from('selected-preference-reference'),
       }),
     );

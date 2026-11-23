@@ -1,3 +1,4 @@
+import { isExternalAdSaleClientContact } from "@telegram-system/shared";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { telegramAdSalesApi } from "@/lib/api";
@@ -45,7 +46,7 @@ export function useAdSaleModalController(options: AdSaleModalProps) {
     "shared",
   );
   const [placements, setPlacements] = useState<SalePlacementDraft[]>([]);
-  const paymentAmount = useMemo(
+  const placementAmount = useMemo(
     () =>
       placements.reduce(
         (sum, placement) => sum + toNumber(placement.agreedPrice),
@@ -60,10 +61,11 @@ export function useAdSaleModalController(options: AdSaleModalProps) {
   });
   // prettier-ignore
   const {
+    externalSale, setExternalSale, externalChannelOwner, setExternalChannelOwner, externalAmount, setExternalAmount,
     advertiserTelegram, setAdvertiserTelegram, advertiserContact, setAdvertiserContact,
     selectedAdvertiser, setSelectedAdvertiser, selectedAdvertiserId, setSelectedAdvertiserId,
     advertiserMatches, setAdvertiserMatches, assignedMemberId, setAssignedMemberId,
-    saleOrigin, setSaleOrigin, financeSkipped, setFinanceSkipped,
+    saleOrigin, setSaleOrigin, financeSkipped: skipPlacementFinance, setFinanceSkipped,
     accountId, setAccountId, accountManuallySelectedRef,
     channelSelectionMode, setChannelSelectionMode, selectedNetworkId, setSelectedNetworkId,
     selectedChannelIds, setSelectedChannelIds, placementDateRange, setPlacementDateRange,
@@ -83,6 +85,8 @@ export function useAdSaleModalController(options: AdSaleModalProps) {
     setPlacements,
     networkPricing,
   });
+  const financeSkipped = !externalSale && skipPlacementFinance;
+  const paymentAmount = externalSale ? Number(externalAmount.replace(",", ".")) || 0 : placementAmount;
   const effectiveChannelIds = useMemo(
     () =>
       expandNetworkChannelIds({
@@ -105,7 +109,7 @@ export function useAdSaleModalController(options: AdSaleModalProps) {
     queryKey: telegramAdSalesKeys.productsByChannels(missingProductChannelIds),
     queryFn: () =>
       telegramAdSalesApi.listProductsByChannels(missingProductChannelIds),
-    enabled: open && missingProductChannelIds.length > 0,
+    enabled: open && !externalSale && missingProductChannelIds.length > 0,
     staleTime: 60_000,
   });
   const productsByChannelId = useMemo(
@@ -278,14 +282,17 @@ export function useAdSaleModalController(options: AdSaleModalProps) {
   const quotePreview = useAdSaleQuotePreview({
     open,
     currency: paymentCurrency,
-    quoteRequests: financeSkipped ? [] : quoteRequests,
+    quoteRequests: financeSkipped || externalSale ? [] : quoteRequests,
     productsByChannelId,
     requestPreview: onRequestQuotePreview,
     setPlacements,
   });
 
-  const canSubmit =
-    (financeSkipped || !quotePreview.limitExceeded) &&
+  const canSubmit = externalSale ? Boolean(
+    externalChannelOwner.trim() && selectedAccount?.isActive &&
+    /^\d+(?:[.,]\d{1,2})?$/.test(externalAmount.trim()) && Number.isFinite(paymentAmount) && paymentAmount > 0 &&
+    (selectedAdvertiserId || isExternalAdSaleClientContact(advertiserContact))
+  ) : (financeSkipped || !quotePreview.limitExceeded) &&
     (financeSkipped || quotePreview.errors.length === 0) &&
     (financeSkipped || quotePreview.hasResolvedQuote) &&
     (financeSkipped || !!accountId) &&
@@ -320,6 +327,7 @@ export function useAdSaleModalController(options: AdSaleModalProps) {
       const derivedAdvertiserName =
         selectedAdvertiser?.displayName || normalizedContact || "Direct sale";
       const result = await onSubmit({
+        ...(externalSale ? { externalChannelOwner: externalChannelOwner.trim() } : {}),
         advertiserId: selectedAdvertiserId,
         createAdvertiser: !selectedAdvertiserId && hasAdvertiserDetails,
         advertiserName: derivedAdvertiserName,
@@ -334,8 +342,8 @@ export function useAdSaleModalController(options: AdSaleModalProps) {
         accountId: financeSkipped ? undefined : accountId,
         paymentAmount: financeSkipped ? undefined : paymentAmount,
         paymentCurrency,
-        priceAllocation: financeSkipped ? undefined : networkPricing.allocation,
-        placements: placements.map((placement) => ({
+        priceAllocation: financeSkipped || externalSale ? undefined : networkPricing.allocation,
+        placements: (externalSale ? [] : placements).map((placement) => ({
           channelId: placement.channelId,
           productId: placement.productId || undefined,
           inventoryOpportunityKey:
@@ -415,6 +423,7 @@ export function useAdSaleModalController(options: AdSaleModalProps) {
     );
   // prettier-ignore
   return {
+    externalSale, setExternalSale, externalChannelOwner, setExternalChannelOwner, externalAmount, setExternalAmount,
     advertiserTelegram, setAdvertiserTelegram, advertiserContact, setAdvertiserContact,
     selectedAdvertiser, setSelectedAdvertiser, selectedAdvertiserId, setSelectedAdvertiserId,
     advertiserMatches, setAdvertiserMatches, assignedMemberId, setAssignedMemberId,

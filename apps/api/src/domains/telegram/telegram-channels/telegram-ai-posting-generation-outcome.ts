@@ -1,10 +1,11 @@
 import { BadGatewayException, HttpException } from '@nestjs/common';
+import type { TelegramAiPostingOperationContext } from '@telegram-system/shared';
 import { Prisma } from '@prisma/client';
 import type { TelegramAiPostingSourceService } from './telegram-ai-posting-source.service';
 
 export const MAX_TELEGRAM_AI_POSTING_BATCH_SIZE = 5;
 
-export type TelegramAiPostingRunOperation = {
+export type TelegramAiPostingRunOperation = TelegramAiPostingOperationContext & {
   stage: string;
   publicationIndex?: number;
   attempt: number;

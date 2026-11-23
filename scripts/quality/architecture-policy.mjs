@@ -93,6 +93,13 @@ allowPattern(
   "User-triggered five-minute browser-login challenge polls only while approval is pending.",
   "Keep bounded and user-triggered; replace only if an event-driven browser channel is introduced.",
 );
+allowPattern(
+  "frontend-polling",
+  "apps/web/src/components/features/telegram/ai-posting/use-restored-ai-posting-run.ts",
+  1,
+  "A visible AI Posting console checks one persisted, active run every five seconds when its original stream is unavailable.",
+  "Stop at completion, a stale server checkpoint, repeated request failure or unmount. Replace if a shared resumable stream becomes available.",
+);
 const pageSlice =
   "Frontend page decomposition: move queries, mutations and API access into a feature container.";
 const pageHookAllowances = [

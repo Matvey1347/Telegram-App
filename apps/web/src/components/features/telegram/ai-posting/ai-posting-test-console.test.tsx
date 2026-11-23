@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { api, streamProgressAction } from "@/lib/api";
 import { renderWithProviders } from "@/test/render-with-providers";
@@ -80,36 +80,34 @@ describe("AiPostingTestConsole", () => {
     );
 
     await waitFor(() =>
-      expect(streamProgressAction).toHaveBeenCalledWith(
-        "/telegram-channels/channel-1/ai-posting/generate/stream",
+      expect(api.post).toHaveBeenCalledWith(
+        "/telegram-channels/channel-1/ai-posting/generate/background",
         { count: 3 },
-        expect.any(Function),
       ),
     );
   });
 
-  it("shows an active planning spinner immediately while generation is waiting", async () => {
-    vi.mocked(streamProgressAction).mockImplementation(
-      () => new Promise(() => undefined),
-    );
-    renderWithProviders(
-      <AiPostingTestConsole
-        channelId="channel-1"
-        channelTitle="Channel"
-        dailyPostCount={1}
-        settingsReady
-      />,
-    );
-
-    fireEvent.click(
-      await screen.findByRole("button", {
-        name: "Сгенерировать",
-      }),
-    );
-
-    fireEvent.click(screen.getByRole("button", { name: "Показать этапы" }));
-    expect(await screen.findByText("Тема: в процессе")).toBeInTheDocument();
-    expect(screen.getByText("Текст: ожидает")).toBeInTheDocument();
+  it("shows source collection and can stop the active run after reopening", async () => {
+    const run = {
+      ...previewRun(), status: "RUNNING", canStop: true, publications: [],
+      progress: { count: 1, current: 0, total: 9, complete: 0, failed: false, publicationIndex: 0, stage: "sources", stages: {} },
+    };
+    let stopped = false;
+    vi.mocked(api.get).mockImplementation(async (url) => {
+      const state = stopped ? { ...run, status: "CANCELED", progress: undefined, canStop: false } : run;
+      return { data: url.endsWith("/progress") ? state : [state] };
+    });
+    vi.mocked(api.post).mockImplementation(async () => {
+      stopped = true;
+      return { data: { status: "CANCELED" } };
+    });
+    renderWithProviders(<AiPostingTestConsole channelId="channel-1" channelTitle="Channel" settingsReady />);
+    expect(await screen.findByText("Собираю материалы для публикаций")).toBeInTheDocument();
+    expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "0");
+    fireEvent.click(screen.getByRole("button", { name: "Остановить" }));
+    expect(await screen.findByText("Остановлено")).toBeInTheDocument();
+    expect(api.post).toHaveBeenCalledWith("/telegram-channels/channel-1/ai-posting/test-runs/run-diagnostics/stop");
+    expect(streamProgressAction).not.toHaveBeenCalled();
   });
 
   it("allows an ad hoc publication count", async () => {
@@ -131,10 +129,9 @@ describe("AiPostingTestConsole", () => {
       screen.getByRole("button", { name: "Сгенерировать" }),
     );
     await waitFor(() =>
-      expect(streamProgressAction).toHaveBeenCalledWith(
-        "/telegram-channels/channel-1/ai-posting/generate/stream",
+      expect(api.post).toHaveBeenCalledWith(
+        "/telegram-channels/channel-1/ai-posting/generate/background",
         { count: 2 },
-        expect.any(Function),
       ),
     );
   });
@@ -169,108 +166,29 @@ describe("AiPostingTestConsole", () => {
       screen.getByRole("button", { name: "Сгенерировать" }),
     );
     await waitFor(() =>
-      expect(streamProgressAction).toHaveBeenCalledWith(
-        "/telegram-channels/channel-count-memory/ai-posting/generate/stream",
+      expect(api.post).toHaveBeenCalledWith(
+        "/telegram-channels/channel-count-memory/ai-posting/generate/background",
         { count: 1 },
-        expect.any(Function),
       ),
     );
   });
 
-  it("shows the live generation alert with stage and publication number", async () => {
-    let finish: ((value: { status: string }) => void) | undefined;
-    vi.mocked(streamProgressAction).mockImplementation(
-      async (_path, _payload, onProgress) => {
-        onProgress(
-          { stage: "text", status: "RUNNING", publicationIndex: 0 },
-          1,
-          3,
-        );
-        return new Promise((resolve) => {
-          finish = resolve;
-        }) as never;
-      },
-    );
-    renderWithProviders(
-      <AiPostingTestConsole
-        channelId="channel-1"
-        channelTitle="Channel"
-        dailyPostCount={4}
-        settingsReady
-      />,
-    );
-    fireEvent.click(
-      await screen.findByRole("button", {
-        name: "Сгенерировать",
-      }),
-    );
-    expect(
-      await screen.findByText("Публикация 1 из 4 · Пишу текст"),
-    ).toBeInTheDocument();
-    expect(screen.getByText("Публикация 1 из 4 · в процессе")).toBeInTheDocument();
-    expect(screen.queryByText("Текст: в процессе")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Показать этапы" }));
-    expect(screen.getByText("Текст: в процессе")).toBeInTheDocument();
-    finish?.({ status: "COMPLETED" });
-  });
-
-  it("keeps streaming previews after a skipped slot, with only arrows and a counter", async () => {
-    let emit: ((item: Record<string, unknown>, current: number, total: number) => void) | undefined;
-    let finish: ((value: unknown) => void) | undefined;
-    vi.mocked(streamProgressAction).mockImplementation(
-      async (_path, _payload, onProgress) => {
-        emit = onProgress as typeof emit;
-        return new Promise((resolve) => { finish = resolve; }) as never;
-      },
-    );
-    renderWithProviders(
-      <AiPostingTestConsole
-        channelId="channel-1"
-        channelTitle="Channel"
-        dailyPostCount={4}
-        settingsReady
-      />,
-    );
-    fireEvent.click(await screen.findByRole("button", { name: "Сгенерировать" }));
-    await waitFor(() => expect(emit).toBeDefined());
-    emit?.({
-      stage: "publication",
-      status: "COMPLETED",
-      runId: "live-run",
-      publicationIndex: 0,
-      publication: {
-        topic: "First topic",
-        title: "First title",
-        text: "First publication appears immediately",
-        imageUrl: null,
-        imageSourceId: null,
-        savedPostId: null,
-        status: "PENDING",
-        rejectionReason: null,
-        format: "standard",
-        category: "general",
-        costs: {},
-        operations: [],
-        ideaSources: [],
-      },
-    }, 4, 17);
-    expect(await screen.findByText("First publication appears immediately")).toBeInTheDocument();
-    emit?.({
-      stage: "publication",
-      status: "COMPLETED",
-      runId: "live-run",
-      publicationIndex: 2,
-      publication: { ...previewRun().publications[0], text: "Third publication after a gap" },
-    }, 8, 33);
+  it("keeps saved previews in their original slots while the server works", async () => {
+    const first = { ...previewRun().publications[0], publicationIndex: 0, text: "First preview", savedPostId: "saved-1" };
+    const third = { ...first, publicationIndex: 2, text: "Third preview" };
+    const run = { ...previewRun(), status: "RUNNING", requestedCount: 4, publications: [first, third] };
+    vi.mocked(api.get).mockImplementation(async (url) => ({
+      data: url.endsWith("/progress") ? { status: "RUNNING" } : [run],
+    }));
+    renderWithProviders(<AiPostingTestConsole channelId="channel-1" channelTitle="Channel" settingsReady />);
+    expect(await screen.findByText("First preview")).toBeInTheDocument();
     expect(screen.queryByRole("group", { name: "Публикации запуска" })).not.toBeInTheDocument();
     const next = screen.getByRole("button", { name: "Следующая публикация" });
     fireEvent.click(next);
     expect(screen.getByText("Публикация 2 из 4")).toBeInTheDocument();
     expect(screen.getByText("Публикация ещё обрабатывается")).toBeInTheDocument();
     fireEvent.click(next);
-    expect(await screen.findByText("Third publication after a gap")).toBeInTheDocument();
-    expect(finish).toBeDefined();
-    finish?.({ generated: [] });
+    expect(await screen.findByText("Third preview")).toBeInTheDocument();
   });
 
   it("offers to recreate an empty text in its original batch", async () => {
@@ -298,6 +216,45 @@ describe("AiPostingTestConsole", () => {
       { failureIndex: 0, expectedVersion: run.version },
       expect.any(Function),
     ));
+  });
+
+  it("explains text iterations and the next media search round with their costs", async () => {
+    const preview = previewRun();
+    const run: TestRun = {
+      ...preview,
+      sourceDiagnostics: undefined,
+      status: "PARTIAL",
+      publications: [{
+        ...preview.publications[0],
+        mediaReadiness: "MISSING",
+        mediaMode: "found",
+        costs: { planning: "0.001", review: "0", text: "0.02", image: "0.003" },
+        operations: [
+          { stage: "text", attempt: 1, model: "text-model", status: "SUCCEEDED", actualCost: "0.015", inputTokens: 15000 },
+          { stage: "text", attempt: 2, model: "text-model", status: "SUCCEEDED", actualCost: "0.005", cachedInputTokens: 10000 },
+          { stage: "image", attempt: 1, mediaStep: "SEARCH_REVIEW", model: "review-model", status: "SUCCEEDED", actualCost: "0.003" },
+        ],
+        mediaSearch: {
+          nextPageOffset: 2,
+          brief: "Снимок с естественным светом",
+          rounds: [{
+            queries: [{ text: "woman notebook desk", page: 2, catalog: "wikimedia", candidates: 3 }],
+            inspected: 3, usable: 2, outcome: "NO_MATCH",
+            observation: "Кадр не подходит к теме",
+          }],
+        },
+      }],
+    };
+    vi.mocked(api.get).mockResolvedValue({ data: [run] });
+    renderWithProviders(<AiPostingTestConsole channelId="channel-1" channelTitle="Channel" settingsReady />);
+
+    fireEvent.click(await screen.findByText("Модели и расходы"));
+    expect(screen.getByText("Текст · Попыток: 2")).toBeInTheDocument();
+    expect(screen.getByText(/из кэша 10000/)).toBeInTheDocument();
+    expect(screen.getByText(/Оценка найденных изображений/)).toHaveTextContent("$0.003");
+    expect(screen.getByText(/Wikimedia Commons · woman notebook desk · стр. 2/)).toBeInTheDocument();
+    expect(screen.getByText("Поиск 1 · Кандидаты не прошли проверку")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Продолжить подбор изображения" })).not.toBeInTheDocument();
   });
 
   it("shows completion as a green badge beside the run date and keeps the generator compact", async () => {
@@ -449,7 +406,7 @@ describe("AiPostingTestConsole", () => {
   });
 
   it("explains disabled AI and links to configuration", async () => {
-    vi.mocked(streamProgressAction).mockRejectedValue(new Error("AI_DISABLED"));
+    vi.mocked(api.post).mockRejectedValue(new Error("AI_DISABLED"));
     renderWithProviders(
       <AiPostingTestConsole
         channelId="channel-1"
@@ -503,6 +460,108 @@ describe("AiPostingTestConsole", () => {
     ],
     failures: [],
     feedback: [],
+  });
+
+  it("restores a running card and loading alert on mount, then refreshes through completion", async () => {
+    vi.useFakeTimers();
+    try {
+      const run = { ...previewRun(), requestedCount: 2, status: "RUNNING", publications: [] };
+      const progress = {
+        count: 2, current: 3, total: 17, complete: 0, failed: false,
+        publicationIndex: 0, stage: "text", stages: { "0:text": "RUNNING" },
+      };
+      let ticks = 0;
+      vi.mocked(api.get).mockImplementation(async (url) => {
+        if (!String(url).endsWith("/progress")) {
+          return { data: [ticks >= 3 ? previewRun() : { ...run, progress }] };
+        }
+        ticks++;
+        return {
+          data: ticks >= 3 ? { status: "COMPLETED" } : {
+            status: "RUNNING",
+            progress: ticks === 1 ? progress : {
+              ...progress, current: 4, complete: 1, processed: 1, publicationIndex: 1, stage: "image",
+              stages: { "0:text": "COMPLETED", "0:image": "COMPLETED", "1:image": "RUNNING" },
+            },
+          },
+        };
+      });
+      renderWithProviders(<AiPostingTestConsole channelId="channel-1" channelTitle="Channel" settingsReady />);
+      await act(() => vi.advanceTimersByTimeAsync(50));
+      expect(screen.getByText("В процессе")).toBeInTheDocument();
+      expect(screen.getByText("Пишу текст")).toBeInTheDocument();
+      expect(screen.getByText(/Публикация 1 из 2 · Пишу текст/)).toBeInTheDocument();
+      expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "0");
+      fireEvent.click(screen.getByRole("button", { name: "Показать этапы" }));
+
+      await act(() => vi.advanceTimersByTimeAsync(5_100));
+      expect(screen.getByText("Медиа: в процессе")).toBeInTheDocument();
+      expect(screen.getByText(/Публикация 2 из 2 · Подбираю медиа/)).toBeInTheDocument();
+      expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "50");
+
+      await act(() => vi.advanceTimersByTimeAsync(5_100));
+      await act(() => vi.advanceTimersByTimeAsync(50));
+      expect(screen.getByText("Completed")).toBeInTheDocument();
+      expect(screen.getByRole("textbox", { name: "Редактировать текст публикации" })).toHaveValue("Post text");
+      expect(screen.queryByText(/Публикация 2 из 2 · Подбираю медиа/)).not.toBeInTheDocument();
+      await act(() => vi.advanceTimersByTimeAsync(15_000));
+      expect(ticks).toBe(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("loads results without reloading when the accepted run is initially absent from history", async () => {
+    vi.useFakeTimers();
+    try {
+      let progressReads = 0;
+      vi.mocked(api.post).mockResolvedValue({ data: { runId: "run-diagnostics" } });
+      vi.mocked(api.get).mockImplementation(async (url) => {
+        if (!url.endsWith("/progress")) {
+          return { data: progressReads >= 2 ? [previewRun()] : [] };
+        }
+        progressReads++;
+        expect(url).toContain("/run-diagnostics/progress");
+        return { data: { status: progressReads >= 2 ? "COMPLETED" : "RUNNING" } };
+      });
+      renderWithProviders(<AiPostingTestConsole channelId="channel-1" channelTitle="Channel" settingsReady />);
+      await act(() => vi.advanceTimersByTimeAsync(50));
+      fireEvent.click(screen.getByRole("button", { name: "Сгенерировать" }));
+      await act(() => vi.advanceTimersByTimeAsync(50));
+      expect(screen.getByText("В процессе")).toBeInTheDocument();
+      expect(progressReads).toBe(1);
+      await act(() => vi.advanceTimersByTimeAsync(5_100));
+      expect(screen.getByText("Completed")).toBeInTheDocument();
+      expect(screen.getByRole("textbox", { name: "Редактировать текст публикации" })).toHaveValue("Post text");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps 50 percent for two settled slots after remount and ignores an older progress response", async () => {
+    const run = {
+      ...previewRun(), status: "RUNNING", requestedCount: 4, publications: [],
+      updatedAt: "2026-11-23T18:30:10.000Z",
+      progress: { count: 4, current: 7, total: 33, complete: 2, processed: 2,
+        failed: false, publicationIndex: 2, stage: "text", stages: {} },
+    };
+    vi.mocked(api.get).mockImplementation(async (url) => ({
+      data: url.endsWith("/progress")
+        ? { status: "RUNNING", updatedAt: "2026-11-23T18:30:00.000Z", progress: {
+          ...run.progress, current: 3, complete: 0, processed: 0, publicationIndex: 0,
+        } }
+        : [run],
+    }));
+    const render = () => renderWithProviders(
+      <AiPostingTestConsole channelId="channel-1" channelTitle="Channel" settingsReady />,
+    );
+    const first = render();
+    expect(await screen.findByRole("progressbar")).toHaveAttribute("aria-valuenow", "50");
+    first.unmount();
+    render();
+    expect(await screen.findByRole("progressbar")).toHaveAttribute("aria-valuenow", "50");
+    expect(screen.getByText("50% · готово 2 из 4")).toBeInTheDocument();
+    expect(screen.getByText("2/4")).toBeInTheDocument();
   });
 
   it("does not show source diagnostics in the generation history", async () => {

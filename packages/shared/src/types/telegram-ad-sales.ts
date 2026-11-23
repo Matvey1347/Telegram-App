@@ -513,6 +513,7 @@ export type TelegramAdSaleChannelBreakdown = {
 };
 
 export type TelegramAdSale = {
+  externalChannelOwner?: string | null;
   id: string;
   workspaceId: string;
   advertiserId: string | null;

@@ -242,6 +242,9 @@ export function SalesTab(props: {
                             <p className="truncate font-medium text-white">
                               {adSaleClientLabel(sale)}
                             </p>
+                            {sale.externalChannelOwner && (
+                              <p className="mt-1 text-xs text-neutral-400">External channels · {sale.externalChannelOwner}</p>
+                            )}
                             {publicationEnabled ? (
                               <p className="mt-1 text-xs text-neutral-500">
                                 {linkedPosts}/{sale.placements.length} posts

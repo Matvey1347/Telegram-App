@@ -1,3 +1,4 @@
+import type { TelegramAiPostingImageSearch, TelegramAiPostingOperationContext, TelegramAiPostingRunProgress, TelegramAiPostingRunProgressRead } from "@telegram-system/shared";
 import type { AiPostingFeedbackSuggestion } from "./ai-posting-feedback-suggestion";
 
 export type Publication = {
@@ -22,9 +23,17 @@ export type Publication = {
   mediaReadiness?: "READY" | "MISSING" | "FAILED";
   mediaFailureCode?: string;
   imageCostUnknown?: boolean;
+  mediaSearch?: TelegramAiPostingImageSearch;
+  imageSearchQuery?: string;
+  imagePrompt?: string;
+  mediaMode?: "found" | "ai" | "hybrid";
   costs: Record<string, string | null>;
-  operations: Array<{
+  operations: Array<TelegramAiPostingOperationContext & {
     stage: string;
+    attempt?: number;
+    category?: string;
+    inputTokens?: number | null;
+    outputTokens?: number | null;
     model: string;
     actualCost: string | null;
     pricingStatus?: string;
@@ -41,10 +50,9 @@ export type SourceDiagnostic = {
   reason?: string;
 };
 
-export type TestRun = {
+export type TestRun = TelegramAiPostingRunProgressRead & {
   id: string;
   version: number;
-  status: string;
   settingsVersion: number;
   requestedCount?: number;
   createdAt: string;
@@ -77,12 +85,21 @@ export const sourceStatusLabel: Record<SourceDiagnostic["status"], string> = {
 };
 
 export const generationStageLabel: Record<string, string> = {
+  sources: "Собираю материалы для публикаций",
   planning: "Подбираю темы",
   text: "Пишу текст",
   review: "Проверяю текст",
   image: "Подбираю медиа",
   publication: "Публикация готова",
+  "slot-failed": "Не удалось подготовить публикацию",
 };
+
+export function publicationBatchProgress(progress: TelegramAiPostingRunProgress) {
+  const total = Math.max(1, progress.count);
+  // Earlier snapshots saved the current slot and ready count, but not settled slots.
+  const current = Math.min(total, progress.processed ?? Math.max(progress.complete, progress.publicationIndex));
+  return { current, total, percent: Math.round((current / total) * 100) };
+}
 
 export function failureStageLabel(code: string) {
   if (/^AI_POSTING_PLANNING_/.test(code)) return "план тем";
@@ -95,6 +112,7 @@ export function failureStageLabel(code: string) {
 
 export const failureMessage: Record<string, string> = {
   AI_POSTING_TEXT_EMPTY: "Текст пустой.",
+  AI_POSTING_IMAGE_SEARCH_EXHAUSTED: "Текст сохранён. Автоматический поиск не нашёл подходящего фото.",
   AI_POSTING_DRAFT_INVALID:
     "Модель вернула ответ не в формате публикации. Текст не был сохранён.",
   AI_POSTING_TOPIC_REPETITION:
@@ -192,7 +210,7 @@ export function visibleLengthBand(markup: string) {
 
 export const aiPostingTestRunKeys = (id: string) => {
   const root = ["telegram-ai-posting", id] as const;
-  return { root, runs: [...root, "test-runs"] as const };
+  return { root, runs: [...root, "test-runs"] as const, progress: (runId: string) => [...root, "run-progress", runId] as const };
 };
 
 export function money(value: string | null | undefined) {
